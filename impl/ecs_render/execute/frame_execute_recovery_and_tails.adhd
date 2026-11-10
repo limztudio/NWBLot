@@ -2,8 +2,31 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderExecuteFrameExecuteRecoveryAndTailsAdhdModule(in u64 value){
-    return value != 0u;
+#include <impl/ecs_render/execute/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ShouldExecuteFrameRecoveryTask(in b8 hasAcceptedPackets, in b8 timingNeedsRetirement){
+    return hasAcceptedPackets || timingNeedsRetirement;
+}
+
+usize SelectShadowPrepareFixedStateBufferCapacity(in b8 hasCsgTraceContextBuffer){
+    if(hasCsgTraceContextBuffer)
+        return s_ShadowPrepareCsgStateBufferCapacity;
+    return s_ShadowPrepareFixedStateBufferCapacity;
+}
+
+b8 IsDeferredTransferTailAvailable(
+    in b8 finalPresentationValid,
+    in b8 deferredGraphScheduled,
+    in b8 tailTaskValid,
+    in b8 tailTaskCompiled,
+    in b8 queuePresent,
+    in b8 queueSupportsTransfer
+){
+    return finalPresentationValid && deferredGraphScheduled && tailTaskValid && tailTaskCompiled && queuePresent && queueSupportsTransfer;
 }
 
 
@@ -11,27 +34,28 @@ b8 ImplEcsRenderExecuteFrameExecuteRecoveryAndTailsAdhdModule(in u64 value){
 
 
 native{
-#include <impl/ecs_render/execute/frame_execute_lifecycle.adhd.h>
 #include <impl/global.adhd.h>
-#include <impl/ecs_render/execute/types.adhd.h>
-#include <core/graphics/gpu_timing_types.h>
-#include <core/task/gpu/compiled_graph.h>
-#include <core/task/gpu/task_graph.h>
-#include <global/span.h>
 #include <impl/ecs_render/execute/deferred_frame_topology_validator.adhd.h>
+#include <impl/ecs_render/execute/execute_internal.adhd.h>
 #include <impl/ecs_render/execute/frame_diagnostics.adhd.h>
-#include <impl/ecs_render/renderer_frame_pipeline.adhd.h>
-#include <impl/ecs_render/execute/frame_execute_timing_state.adhd.h>
-#include <impl/ecs_render/shadow/shadow_prepare_packet_validator.adhd.h>
-#include <impl/ecs_render/shadow/shadow_visibility_merge_validator.adhd.h>
-#include <impl/ecs_render/execute/frame_execute_recovery.adhd.h>
-#include <core/task/gpu/scheduler.h>
-#include <impl/ecs_render/execute/frame_execute_timing_state.adhd.h>
-#include <impl/ecs_render/kernel/timing_names.adhd.h>
-#include <impl/ecs_render/execute/frame_execute_state_lifecycles.adhd.h>
-#include <impl/ecs_render/shared/frame_types.adhd.h>
+#include <impl/ecs_render/execute/frame_execute_lifecycle.adhd.h>
 #include <impl/ecs_render/execute/frame_execute_present_tails.adhd.h>
 #include <impl/ecs_render/execute/frame_execute_recovery.adhd.h>
+#include <impl/ecs_render/execute/frame_execute_state_lifecycles.adhd.h>
+#include <impl/ecs_render/execute/frame_execute_timing_state.adhd.h>
+#include <impl/ecs_render/execute/types.adhd.h>
+#include <impl/ecs_render/kernel/timing_names.adhd.h>
+#include <impl/ecs_render/renderer_frame_pipeline.adhd.h>
+#include <impl/ecs_render/shadow/shadow_prepare_packet_validator.adhd.h>
+#include <impl/ecs_render/shadow/shadow_visibility_merge_validator.adhd.h>
+#include <impl/ecs_render/shared/frame_types.adhd.h>
+
+#include <core/graphics/gpu_timing_types.h>
+#include <core/task/gpu/compiled_graph.h>
+#include <core/task/gpu/scheduler.h>
+#include <core/task/gpu/task_graph.h>
+
+#include <global/span.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,117 +65,6 @@ NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#ifndef NWB_IMPL_ECS_RENDER_EXECUTE_INTERNAL_DECLS_H
-#define NWB_IMPL_ECS_RENDER_EXECUTE_INTERNAL_DECLS_H
-class RendererFramePipeline;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GraphicsPrefixTimingResolver final : NoCopy{
-public:
-    explicit GraphicsPrefixTimingResolver(const RendererFramePipeline& pipeline)noexcept
-        : m_pipeline(pipeline)
-    {}
-
-
-public:
-    void resolve(
-        const Core::GpuCompiledGraph::ReadView& compiledPlan,
-        Span<Core::GpuTimingSubmissionTicket* const> ownedTickets,
-        Span<Core::GpuTimingSubmissionTicket*> timingTickets,
-        Span<Core::GpuTaskId> timingTasks,
-        b8& asyncSpansOnePacket,
-        GraphicsPrefixTimingResolutionResult& outResult
-    )const noexcept;
-
-
-private:
-    const RendererFramePipeline& m_pipeline;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererFramePipeline;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class OpaqueEmulationMergeValidator final : NoCopy{
-public:
-    explicit OpaqueEmulationMergeValidator(const RendererFramePipeline& pipeline)noexcept
-        : m_pipeline(pipeline)
-    {}
-
-
-public:
-    void validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, Span<const Core::GpuTaskId> timingTasks, b8 timingBindingsValid, b8 hasOpaqueCsgFrameWork, OpaqueEmulationMergeValidationResult& outResult)const noexcept;
-
-
-private:
-    const RendererFramePipeline& m_pipeline;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererFramePipeline;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Surfel-GI plus caustics merge validation owns packet-merge checks for GI tasks.
-struct SurfelCausticsMergeValidationResult{
-    const Core::GpuPhysicalQueueInfo* hardwareCausticsQueue = nullptr;
-    const Core::GpuPhysicalQueueInfo* surfelGiQueue = nullptr;
-    const Core::GpuPhysicalQueueInfo* surfelGiPreparationQueue = nullptr;
-    const Core::GpuPhysicalQueueInfo* surfelGiSnapshotCopyQueue = nullptr;
-    const Core::GpuPhysicalQueueInfo* surfelGiCounterReadbackQueue = nullptr;
-    b8 surfelGiOutputClearMergedIntoGiPacket = false;
-    b8 surfelGiPreparedPrefixMergedIntoGiPacket = false;
-    b8 surfelGiInitializationLifecycleMergedIntoPreparationPacket = false;
-    b8 causticPhotonMergedIntoCausticsPacket = false;
-    b8 causticGeometryMergedIntoCausticsPacket = false;
-    b8 causticResolvePrepareMergedIntoCausticsPacket = false;
-    b8 causticResolveWaveletsMergedIntoCausticsPacket = false;
-    b8 causticResolveUpsampleMergedIntoCausticsPacket = false;
-    b8 causticIrradianceClearMergedIntoCausticsPacket = false;
-    b8 causticAccumulatorBootstrapClearMergedIntoCausticsPacket = false;
-    b8 causticAccumulatorDecayMergedIntoCausticsPacket = false;
-    b8 surfelGiSnapshotCopyAndTimingPacketsAreDistinct = false;
-    b8 surfelCounterReadbackFollowsPresentation = false;
-    b8 laggedLightingHistoryFollowsPresentation = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class SurfelCausticsMergeValidator final : NoCopy{
-public:
-    explicit SurfelCausticsMergeValidator(const RendererFramePipeline& pipeline)noexcept
-        : m_pipeline(pipeline)
-    {}
-
-
-public:
-    void validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, Core::GpuTaskId causticsTask, Core::GpuTaskId terminalPresentationTask, b8 captureLaggedLightingHistory, SurfelCausticsMergeValidationResult& outResult)const noexcept;
-
-
-private:
-    const RendererFramePipeline& m_pipeline;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#endif
 
 
 void FrameExecuteCpuRestore::RestorePrefixCpuState(RendererMeshSystem& meshSystem, RendererDeferredSystem& deferredSystem)noexcept{
@@ -231,7 +144,7 @@ b8 FrameExecuteRecovery::executeFrameRecoveryTask(){
 }
 
 b8 FrameExecuteRecovery::recoverPendingFrameSubmission(){
-    return (m_renderer.m_deferredLightingSubmissionTransaction.hasAcceptedPackets() || m_frameTimingTransaction.needsRetirement()) ? executeFrameRecoveryTask() : true;
+    return ShouldExecuteFrameRecoveryTask(m_renderer.m_deferredLightingSubmissionTransaction.hasAcceptedPackets(), m_frameTimingTransaction.needsRetirement()) ? executeFrameRecoveryTask() : true;
 }
 
 b8 FrameExecuteRecovery::recoverPendingFrameThenDiscardUnaccepted(){
@@ -551,7 +464,7 @@ void FrameExecuteStateLifecycleSet::collectShadowPrepareStateBuffers(RendererFra
     renderer.m_meshSystem.collectRetainedAccelerationStateBuffers(meshAccelerationStateBuffers);
     const auto& acceptedTraceGeometry = renderer.m_raytracingSystem.acceptedShadowTraceGeometryBuffers();
     const auto& preparedTraceGeometry = renderer.m_raytracingSystem.preparedShadowTraceGeometryBuffers();
-    const usize shadowPrepareFixedCapacity = rayTracingGraphResources.csgTraceContextBuffer ? s_ShadowPrepareCsgStateBufferCapacity : s_ShadowPrepareFixedStateBufferCapacity;
+    const usize shadowPrepareFixedCapacity = SelectShadowPrepareFixedStateBufferCapacity(static_cast<b8>(rayTracingGraphResources.csgTraceContextBuffer));
     shadowPrepareLiveStateBuffers.reserve(AddSize(AddSize(acceptedTraceGeometry.size(), preparedTraceGeometry.size()), AddSize(meshAccelerationStateBuffers.size(), shadowPrepareFixedCapacity)));
     const auto appendStateBuffer = [this](const Core::BufferHandle& buffer)noexcept{
         if(buffer)
@@ -715,13 +628,14 @@ b8 FrameExecutePresentTails::executeSurfelCounterReadback(const Core::GpuPhysica
         return true;
 
     // No normal-frame consumer; record only after Present.
-    const b8 readbackTailAvailable =
-        m_finalPresentationSubmissionToken.valid()
-        && renderer.m_deferredLightingTaskGraphScheduled
-        && m_compiledPlan.findTask(renderer.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask).valid()
-        && readbackQueue
-        && (static_cast<u8>(readbackQueue->capabilities) & static_cast<u8>(Core::GpuQueueCapability::Transfer)) != 0u
-    ;
+    const b8 readbackTailAvailable = IsDeferredTransferTailAvailable(
+        m_finalPresentationSubmissionToken.valid(),
+        renderer.m_deferredLightingTaskGraphScheduled,
+        true,
+        m_compiledPlan.findTask(renderer.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask).valid(),
+        readbackQueue != nullptr,
+        readbackQueue && (static_cast<u8>(readbackQueue->capabilities) & static_cast<u8>(Core::GpuQueueCapability::Transfer)) != 0u
+    );
     if(!readbackTailAvailable){
         renderer.m_deferredLightingSubmissionTransaction.rejectTask(
             renderer.m_deferredLightingTaskGraph,
@@ -781,14 +695,14 @@ void FrameExecutePresentTails::executeLaggedLightingHistoryCapture(DeferredFrame
     }
     else if(captureDeclared){
         // The history copy depends on Present; publication needs accepted presentation.
-        if(
-            !m_finalPresentationSubmissionToken.valid()
-            || !renderer.m_deferredLightingTaskGraphScheduled
-            || !renderer.m_deferredLaggedLightingHistoryTask.valid()
-            || !m_compiledPlan.findTask(renderer.m_deferredLaggedLightingHistoryTask).valid()
-            || !historyQueue
-            || (static_cast<u8>(historyQueue->capabilities) & static_cast<u8>(Core::GpuQueueCapability::Transfer)) == 0u
-        ){
+        if(!IsDeferredTransferTailAvailable(
+            m_finalPresentationSubmissionToken.valid(),
+            renderer.m_deferredLightingTaskGraphScheduled,
+            renderer.m_deferredLaggedLightingHistoryTask.valid(),
+            m_compiledPlan.findTask(renderer.m_deferredLaggedLightingHistoryTask).valid(),
+            historyQueue != nullptr,
+            historyQueue && (static_cast<u8>(historyQueue->capabilities) & static_cast<u8>(Core::GpuQueueCapability::Transfer)) != 0u
+        )){
             if(renderer.m_deferredLightingTaskGraphScheduled){
                 if(!renderer.m_deferredLightingSubmissionTransaction.discardUnaccepted(renderer.m_deferredLightingTaskGraph, renderer.m_deferredLightingCompiledGraph, renderer.m_deferredLightingRecordedGraph.recordingAttemptGeneration()))
                     renderer.m_graphics.requestDeviceRecreation();
@@ -854,9 +768,6 @@ void FrameExecutePresentTails::executeLaggedLightingHistoryCapture(DeferredFrame
 
 
 NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 }
 
 

@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/refraction/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 #include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
 #include <impl/ecs_render/raytrace/raytracing_system.adhd.h>
@@ -212,8 +218,12 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderRefractionTaskGraphRefractionResolveAdhdModule(in u64 value){
-    return value != 0u;
+b8 IsRefractionHardwareDispatchReady(in b8 hardwareEnabled, in b8 hasPreparationFlag, in b8 preparationReady){
+    return hardwareEnabled && hasPreparationFlag && preparationReady;
+}
+
+usize ComputeRefractionResolveResourceUseCapacity(in usize inputCount, in usize sceneUseCount, in usize csgUseCount){
+    return inputCount + s_RefractionFixedUseCapacity + sceneUseCount + csgUseCount;
 }
 
 

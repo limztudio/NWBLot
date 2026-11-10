@@ -2,14 +2,180 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "rt_shadow_internal_types.adhd"
+#include <impl/ecs_render/shadow/rt_shadow_internal_types.adhd>
+#include <impl/ecs_render/shadow/types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderShadowRtShadowPrepareGraphAdhdModule(in u64 value){
-    return value != 0u;
+const StringView s_ShadowPrepareSwBvhKeysClearSuffix = ":shadow_prepare_sw_bvh_keys_clear";
+const StringView s_ShadowPrepareSwBvhParentClearSuffix = ":shadow_prepare_sw_bvh_parent_clear";
+const StringView s_ShadowPrepareSwBvhCounterClearSuffix = ":shadow_prepare_sw_bvh_counter_clear";
+const StringView s_ShadowPrepareSwBvhBuildSuffix = ":shadow_prepare_sw_bvh_build";
+const usize s_ShadowPrepareSwBvhBuildResourceUseCount = 7u;
+const usize s_ShadowTraceBucketsPerMesh = s_ShadowTraceMemberCount * 2u;
+const usize s_MinimumShadowMaterialTypedByteCount = 4u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ValidateShadowPreparePlanOwnership(
+    in b8 sceneTlasBuildGraphOwned,
+    in b8 hasSceneTlas,
+    in b8 meshBlasBuildsGraphOwned,
+    in usize preparedMeshBlasBuildCount,
+    in b8 meshSwBvhBuildsGraphOwned,
+    in usize preparedMeshSwBvhBuildCount
+){
+    if(sceneTlasBuildGraphOwned && !hasSceneTlas){
+        warning("RendererSystem: frozen scene TLAS build has no imported acceleration structure");
+        return false;
+    }
+    if(meshBlasBuildsGraphOwned && preparedMeshBlasBuildCount == 0u){
+        warning("RendererSystem: frozen BLAS build plan has no operations");
+        return false;
+    }
+    if(meshBlasBuildsGraphOwned && !hasSceneTlas){
+        warning("RendererSystem: frozen BLAS build plan has no scene TLAS");
+        return false;
+    }
+    if(meshSwBvhBuildsGraphOwned && preparedMeshSwBvhBuildCount == 0u){
+        warning("RendererSystem: frozen software BVH build plan has no operations");
+        return false;
+    }
+    return true;
+}
+
+b8 ResolveMeshBlasGeometryBuildInputStatesGraphOwned(
+    in b8 meshBlasBuildsGraphOwned,
+    in b8 softwareTraceResourcesPrepared,
+    in b8 meshSwBvhBuildsGraphOwned
+){
+    return meshBlasBuildsGraphOwned && !softwareTraceResourcesPrepared && !meshSwBvhBuildsGraphOwned;
+}
+
+b8 CanDeclareShadowPrepareSceneSwBvhRefit(
+    in b8 buildPlanFrozen,
+    in usize preparedMeshSwBvhBuildCount,
+    in b8 pureSoftwareMeshSwBvhBuildsGraphOwned
+){
+    return buildPlanFrozen && (preparedMeshSwBvhBuildCount == 0u || pureSoftwareMeshSwBvhBuildsGraphOwned);
+}
+
+usize ResolveExpectedAccelStructFinalizeResourceUseCount(in b8 sceneTlasBuildGraphOwned, in usize preparedMeshBlasBuildCount){
+    usize tlasCount = 0u;
+    if(sceneTlasBuildGraphOwned)
+        tlasCount = 1u;
+    return tlasCount + preparedMeshBlasBuildCount;
+}
+
+b8 ValidateAccelStructFinalizeResourceUses(
+    in b8 sceneTlasBuildGraphOwned,
+    in b8 sceneTlasValid,
+    in usize preparedMeshBlasBuildCount,
+    in usize actualUseCount
+){
+    const usize expectedCount = ResolveExpectedAccelStructFinalizeResourceUseCount(sceneTlasBuildGraphOwned, preparedMeshBlasBuildCount);
+    if((sceneTlasBuildGraphOwned && !sceneTlasValid) || actualUseCount != expectedCount){
+        warning("RendererSystem: frozen acceleration-structure build has no final-state graph resources");
+        return false;
+    }
+    return true;
+}
+
+usize ResolveShadowPrepareResourceUseReserveCount(
+    in b8 hasCsgTraceContext,
+    in usize shadowTraceGeometryCount,
+    in usize softwareBvhBuildStateCount,
+    in usize liveMeshBlasGraphStateCount,
+    in usize preparedMeshBlasBuildCount
+){
+    usize csgCount = 0u;
+    if(hasCsgTraceContext)
+        csgCount = 1u;
+    return s_ShadowPrepareResourceUseCapacity
+        + csgCount
+        + shadowTraceGeometryCount
+        + softwareBvhBuildStateCount
+        + liveMeshBlasGraphStateCount
+        + preparedMeshBlasBuildCount * 2u;
+}
+
+b8 ValidateShadowMaterialContextUploadBatch(
+    in b8 instanceMaterialsBlobValid,
+    in b8 instancesBlobValid,
+    in b8 materialTypedBlobValid,
+    in b8 instanceMaterialsImported,
+    in b8 instancesImported,
+    in b8 materialTypedImported
+){
+    if(instanceMaterialsBlobValid != instancesBlobValid || instanceMaterialsBlobValid != materialTypedBlobValid){
+        warning("RendererSystem: incomplete frozen shadow material-context upload batch");
+        return false;
+    }
+    if(instanceMaterialsBlobValid && (!instanceMaterialsImported || !instancesImported || !materialTypedImported)){
+        warning("RendererSystem: frozen shadow material-context batch has no imported destination");
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateSceneBvhUploadBatch(
+    in b8 nodesBlobValid,
+    in b8 instancesBlobValid,
+    in b8 nodesImported,
+    in b8 instancesImported
+){
+    if(nodesBlobValid != instancesBlobValid){
+        warning("RendererSystem: incomplete frozen software scene-BVH upload pair");
+        return false;
+    }
+    if(nodesBlobValid && (!nodesImported || !instancesImported)){
+        warning("RendererSystem: frozen software scene-BVH pair has no imported destination");
+        return false;
+    }
+    return true;
+}
+
+Expected<usize> TryComputeShadowTraceBucketCapacity(in usize meshCount){
+    if(meshCount > usize.max / s_ShadowTraceBucketsPerMesh)
+        return MakeUnexpected(Failure());
+    return meshCount * s_ShadowTraceBucketsPerMesh;
+}
+
+Expected<usize> TryComputeAcceptedShadowTraceBufferCapacity(in usize acceptedCount, in usize preparedCount, in usize maxCapacity){
+    if(acceptedCount > usize.max - preparedCount)
+        return MakeUnexpected(Failure());
+    const usize total = acceptedCount + preparedCount;
+    if(total > maxCapacity)
+        return MakeUnexpected(Failure());
+    return total;
+}
+
+b8 IsValidPreparedShadowMaterialContextRoute(in PreparedShadowMaterialContextRoute route){
+    return route == PreparedShadowMaterialContextRoute::Hardware || route == PreparedShadowMaterialContextRoute::Software;
+}
+
+b8 CanReusePreparedShadowMaterialContext(
+    in PreparedShadowMaterialContextRoute route,
+    in b8 staticScene,
+    in b8 sceneHasTransparentOccluder,
+    in b8 hwHashValid,
+    in u64 hwHash,
+    in b8 swHashValid,
+    in u64 swHash,
+    in u64 expectedHash,
+    in b8 buffersReady
+){
+    if(!staticScene || !buffersReady)
+        return false;
+    if(route == PreparedShadowMaterialContextRoute::Hardware)
+        return !sceneHasTransparentOccluder && hwHashValid && hwHash == expectedHash;
+    if(route == PreparedShadowMaterialContextRoute::Software)
+        return swHashValid && swHash == expectedHash;
+    return false;
 }
 
 
@@ -75,27 +241,20 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
 
     // Hardware TLAS builds retain their preflight instance stream; the first Graphics packet owns the native build.
     const b8 sceneTlasBuildGraphOwned = context.rayTracing.preparedSceneTlasBuildReady();
-    if(sceneTlasBuildGraphOwned && !rayTracingShadowResources.sceneTlas){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen scene TLAS build has no imported acceleration structure"));
-        return false;
-    }
     const b8 meshBlasBuildsGraphOwned = context.rayTracing.preparedMeshBlasBuildsReady();
     const Span<const PreparedMeshBlasBuild> preparedMeshBlasBuilds = context.rayTracing.preparedMeshBlasBuilds();
-    if(meshBlasBuildsGraphOwned && preparedMeshBlasBuilds.empty()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen BLAS build plan has no operations"));
-        return false;
-    }
-    if(meshBlasBuildsGraphOwned && !rayTracingShadowResources.sceneTlas){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen BLAS build plan has no scene TLAS"));
-        return false;
-    }
     const b8 meshSwBvhBuildsGraphOwned = context.rayTracing.preparedMeshSwBvhBuildsReady();
     const Span<const PreparedMeshSwBvhBuild> preparedMeshSwBvhBuilds = context.rayTracing.preparedMeshSwBvhBuilds();
-    if(meshSwBvhBuildsGraphOwned && preparedMeshSwBvhBuilds.empty()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software BVH build plan has no operations"));
+    if(!ValidateShadowPreparePlanOwnership(
+        sceneTlasBuildGraphOwned,
+        static_cast<b8>(rayTracingShadowResources.sceneTlas),
+        meshBlasBuildsGraphOwned,
+        preparedMeshBlasBuilds.size(),
+        meshSwBvhBuildsGraphOwned,
+        preparedMeshSwBvhBuilds.size()
+    ))
         return false;
-    }
-    const b8 meshBlasGeometryBuildInputStatesGraphOwned = meshBlasBuildsGraphOwned && !softwareTraceResourcesPrepared && !meshSwBvhBuildsGraphOwned;
+    const b8 meshBlasGeometryBuildInputStatesGraphOwned = ResolveMeshBlasGeometryBuildInputStatesGraphOwned(meshBlasBuildsGraphOwned, softwareTraceResourcesPrepared, meshSwBvhBuildsGraphOwned);
     // Software preparation uses typed sentinel clears before each mesh build.
     const b8 pureSoftwareMeshSwBvhBuildsGraphOwnedCandidate = meshSwBvhBuildsGraphOwned && !context.rayTracing.shadowVisibilityHardwareSupported();
 
@@ -133,7 +292,7 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
 
     if(const auto& sceneRefit = context.rayTracing.preparedSceneSwBvhRefit(); sceneRefit){
         // A scene refit requires every frozen mesh build to be declared before it.
-        if(!context.rayTracing.preparedMeshSwBvhBuildPlanFrozen() || (!preparedMeshSwBvhBuilds.empty() && !pureSoftwareMeshSwBvhBuildsGraphOwned))
+        if(!CanDeclareShadowPrepareSceneSwBvhRefit(context.rayTracing.preparedMeshSwBvhBuildPlanFrozen(), preparedMeshSwBvhBuilds.size(), pureSoftwareMeshSwBvhBuildsGraphOwned))
             return false;
         const auto refitTasks = DeclareSoftwareSceneRefit(sceneRefit, uploads.sceneBvhNodes, shadowPrepareDependency, context.graph, scratchArena);
         if(!refitTasks){
@@ -257,11 +416,8 @@ b8 ShadowAccelerationFinalizeBuilder::declare(
     const Core::GpuTaskId& prepareTask,
     Core::GpuTaskId& outTask
 ){
-    const usize expectedFinalizeResourceUseCount = (sceneTlasBuildGraphOwned ? 1u : 0u) + preparedMeshBlasBuildCount;
-    if((sceneTlasBuildGraphOwned && !sceneTlas.valid()) || accelStructFinalizeResourceUses.size() != expectedFinalizeResourceUseCount){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen acceleration-structure build has no final-state graph resources"));
+    if(!ValidateAccelStructFinalizeResourceUses(sceneTlasBuildGraphOwned, sceneTlas.valid(), preparedMeshBlasBuildCount, accelStructFinalizeResourceUses.size()))
         return false;
-    }
     Core::GpuGraphResourceSetId accelStructFinalizeSet;
     if(!accelStructFinalizeResourceUses.empty()){
         Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> accelStructFinalizeResources{ scratchArena };
@@ -614,8 +770,14 @@ b8 ShadowPrepareResourcePlanner::prepare(const ShadowPrepareResourceInputs& inpu
     const auto& shadowPrepareTraceGeometryResources = geometryResources.m_remainingTraceGeometry;
     ECSRenderDetail::MeshBlasGraphStateVector liveMeshBlasGraphStates{ scratchArena };
     m_meshSystem.collectBlasGraphStates(liveMeshBlasGraphStates);
-    resourceUses.reserve(s_ShadowPrepareResourceUseCapacity + (uploads.csgTraceContext.valid() ? 1u : 0u) + shadowTraceGeometryResources.size() + softwareBvhBuildStateResources.size() + liveMeshBlasGraphStates.size() + preparedMeshBlasBuilds.size() * 2u);
-    accelStructFinalizeResourceUses.reserve((sceneTlasBuildGraphOwned ? 1u : 0u) + preparedMeshBlasBuilds.size());
+    resourceUses.reserve(ResolveShadowPrepareResourceUseReserveCount(
+        uploads.csgTraceContext.valid(),
+        shadowTraceGeometryResources.size(),
+        softwareBvhBuildStateResources.size(),
+        liveMeshBlasGraphStates.size(),
+        preparedMeshBlasBuilds.size()
+    ));
+    accelStructFinalizeResourceUses.reserve(ResolveExpectedAccelStructFinalizeResourceUseCount(sceneTlasBuildGraphOwned, preparedMeshBlasBuilds.size()));
     geometryResources.prepareStorage(meshBlasGeometryBuildInputStatesGraphOwned);
     // Shadow Preparation owns post-transition boundaries; Compute readers wait on this packet.
     resourceUses.push_back(ReadWriteUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
@@ -1074,15 +1236,16 @@ b8 ShadowPrepareUploadChainBuilder::declareShadowMaterialContextUploads(const Sh
     const Core::GpuUploadBlobId shadowInstancesBlob = shadowMaterialContextUploads->instance;
     const Core::GpuUploadBlobId shadowMaterialTypedBlob = shadowMaterialContextUploads->materialTyped;
     chain.shadowMaterialContextBatchGraphOwned = shadowInstanceMaterialsBlob.valid();
-    if(chain.shadowMaterialContextBatchGraphOwned != shadowInstancesBlob.valid() || chain.shadowMaterialContextBatchGraphOwned != shadowMaterialTypedBlob.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: incomplete frozen shadow material-context upload batch"));
+    if(!ValidateShadowMaterialContextUploadBatch(
+        shadowInstanceMaterialsBlob.valid(),
+        shadowInstancesBlob.valid(),
+        shadowMaterialTypedBlob.valid(),
+        chain.shadowInstanceMaterials.valid(),
+        chain.shadowInstances.valid(),
+        chain.shadowMaterialTyped.valid()
+    ))
         return false;
-    }
     if(chain.shadowMaterialContextBatchGraphOwned){
-        if(!chain.shadowInstanceMaterials.valid() || !chain.shadowInstances.valid() || !chain.shadowMaterialTyped.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen shadow material-context batch has no imported destination"));
-            return false;
-        }
         if(
             !__hidden_shadow_prepare_upload_chain::AppendChainedUploadBufferTask(
                 m_graph,
@@ -1141,15 +1304,14 @@ b8 ShadowPrepareUploadChainBuilder::declareSceneBvhUploads(const ShadowPrepareUp
     const Core::GpuUploadBlobId sceneBvhNodesBlob = sceneBvhUploads->node;
     const Core::GpuUploadBlobId sceneBvhInstancesBlob = sceneBvhUploads->instance;
     chain.sceneBvhBatchGraphOwned = sceneBvhNodesBlob.valid();
-    if(chain.sceneBvhBatchGraphOwned != sceneBvhInstancesBlob.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: incomplete frozen software scene-BVH upload pair"));
+    if(!ValidateSceneBvhUploadBatch(
+        sceneBvhNodesBlob.valid(),
+        sceneBvhInstancesBlob.valid(),
+        chain.sceneBvhNodes.valid(),
+        chain.sceneBvhInstances.valid()
+    ))
         return false;
-    }
     if(chain.sceneBvhBatchGraphOwned){
-        if(!chain.sceneBvhNodes.valid() || !chain.sceneBvhInstances.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software scene-BVH pair has no imported destination"));
-            return false;
-        }
         if(
             !__hidden_shadow_prepare_upload_chain::AppendChainedUploadBufferTask(
                 m_graph,
@@ -1223,19 +1385,19 @@ b8 ShadowSoftwareBvhBuildChain::declare(
     for(const PreparedMeshSwBvhGraphResources& resources : pureSoftwareMeshSwBvhGraphResources){
         const PreparedMeshSwBvhBuild& build = resources.build;
         if(!build.performRefit){
-            if(!appendPureSoftwareBvhClear(addPureSoftwareBvhClear(DeriveName(build.meshName, AStringView(":shadow_prepare_sw_bvh_keys_clear")), "Shadow Prepare SW-BVH Sort-Key Clear", resources.sortKeys, BvhNodeIndex::Invalid))
-                || !appendPureSoftwareBvhClear(addPureSoftwareBvhClear(DeriveName(build.meshName, AStringView(":shadow_prepare_sw_bvh_parent_clear")), "Shadow Prepare SW-BVH Parent Clear", resources.parent, BvhNodeIndex::Invalid))
+            if(!appendPureSoftwareBvhClear(addPureSoftwareBvhClear(DeriveName(build.meshName, s_ShadowPrepareSwBvhKeysClearSuffix), "Shadow Prepare SW-BVH Sort-Key Clear", resources.sortKeys, BvhNodeIndex::Invalid))
+                || !appendPureSoftwareBvhClear(addPureSoftwareBvhClear(DeriveName(build.meshName, s_ShadowPrepareSwBvhParentClearSuffix), "Shadow Prepare SW-BVH Parent Clear", resources.parent, BvhNodeIndex::Invalid))
             ){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare pure software BVH sentinel clears"));
                 return false;
             }
         }
-        if(!appendPureSoftwareBvhClear(addPureSoftwareBvhClear(DeriveName(build.meshName, AStringView(":shadow_prepare_sw_bvh_counter_clear")), "Shadow Prepare SW-BVH Counter Clear", resources.visitCounter, 0u))){
+        if(!appendPureSoftwareBvhClear(addPureSoftwareBvhClear(DeriveName(build.meshName, s_ShadowPrepareSwBvhCounterClearSuffix), "Shadow Prepare SW-BVH Counter Clear", resources.visitCounter, 0u))){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare pure software BVH counter clear"));
             return false;
         }
 
-        const Array<Core::GpuTaskResourceUse, 7u> buildResourceUses{
+        const Array<Core::GpuTaskResourceUse, s_ShadowPrepareSwBvhBuildResourceUseCount> buildResourceUses{
             ReadUse(resources.position, Core::ResourceStates::ShaderResource),
             ReadUse(resources.triangleIndex, Core::ResourceStates::ShaderResource),
             ReadWriteUse(resources.node, Core::ResourceStates::UnorderedAccess),
@@ -1244,7 +1406,7 @@ b8 ShadowSoftwareBvhBuildChain::declare(
             ReadWriteUse(resources.sortPayload, Core::ResourceStates::UnorderedAccess),
             ReadWriteUse(resources.visitCounter, Core::ResourceStates::UnorderedAccess),
         };
-        const auto buildIdentity = DeriveName(build.meshName, AStringView(":shadow_prepare_sw_bvh_build"));
+        const auto buildIdentity = DeriveName(build.meshName, s_ShadowPrepareSwBvhBuildSuffix);
         if(!buildIdentity){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare pure software BVH build callback"));
             return false;
@@ -1442,11 +1604,11 @@ b8 FreezePreparedShadowTraceGeometryBuffers(
 ){
     outPrepared.clear();
     using namespace __hidden_shadow_trace_geometry;
-    constexpr usize s_BucketsPerMesh = LengthOf(s_BufferMembers) * 2u;
-    if(MultiplyOverflows<usize>(meshes.size(), s_BucketsPerMesh))
+    const auto bucketCapacity = TryComputeShadowTraceBucketCapacity(meshes.size());
+    if(!bucketCapacity)
         return false;
 
-    BufferIndex bufferIndex(scratchArena, meshes.size() * s_BucketsPerMesh);
+    BufferIndex bufferIndex(scratchArena, *bucketCapacity);
     for(usize meshIndex = 0u; meshIndex < meshes.size(); ++meshIndex){
         const MeshSnapshot& mesh = meshes[meshIndex];
         for(u32 memberIndex = 0u; memberIndex < LengthOf(s_BufferMembers); ++memberIndex)
@@ -1552,17 +1714,13 @@ b8 FreezePreparedShadowTraceGeometryBuffers(
         return false;
     }
 
-    if(AddOverflows<usize>(acceptedBuffers.size(), outPrepared.size())){
-        outPrepared.clear();
-        return false;
-    }
-    const usize acceptedCapacity = acceptedBuffers.size() + outPrepared.size();
-    if(acceptedCapacity > acceptedBuffers.max_size()){
+    const auto acceptedCapacity = TryComputeAcceptedShadowTraceBufferCapacity(acceptedBuffers.size(), outPrepared.size(), acceptedBuffers.max_size());
+    if(!acceptedCapacity){
         outPrepared.clear();
         return false;
     }
     // Acceptance publishes non-normalized handles; reserve the full union to stay allocation-free.
-    acceptedBuffers.reserve(acceptedCapacity);
+    acceptedBuffers.reserve(*acceptedCapacity);
     return true;
 }
 
@@ -1580,20 +1738,24 @@ Expected<u64> ShadowMaterialContextPreparer::prepare(
 ){
     using namespace RayTracingSoftwareBvhDetail;
 
-    if(route != PreparedShadowMaterialContextRoute::Hardware && route != PreparedShadowMaterialContextRoute::Software)
+    if(!IsValidPreparedShadowMaterialContextRoute(route))
         return MakeUnexpected(Failure{});
     if(shadowMaterialTypedBytes.empty())
-        shadowMaterialTypedBytes.resize(sizeof(u32), 0u);
+        shadowMaterialTypedBytes.resize(s_MinimumShadowMaterialTypedByteCount, 0u);
     const usize materialTypedUploadBytes = ECSRenderDetail::ResolveMaterialTypedUploadByteCount(shadowMaterialTypedBytes);
     const u64 materialContextHash = ComputeShadowMaterialContextHash(instanceMaterials, shadowInstanceData, shadowMaterialTypedBytes);
     const b8 hardware = route == PreparedShadowMaterialContextRoute::Hardware;
-    const b8 canReuseMaterialContext =
-        staticScene
-        && (!hardware || !m_system.m_rayTracingState.m_sceneHasTransparentOccluder)
-        && (hardware ? m_system.m_rayTracingState.m_hwShadowMaterialContextHashValid : m_system.m_rayTracingState.m_swShadowMaterialContextHashValid)
-        && (hardware ? m_system.m_rayTracingState.m_hwShadowMaterialContextHash : m_system.m_rayTracingState.m_swShadowMaterialContextHash) == materialContextHash
-        && HasPreparedShadowMaterialContextBuffers(m_system.m_rayTracingState, instanceMaterials.size(), shadowInstanceData.size(), materialTypedUploadBytes)
-    ;
+    const b8 canReuseMaterialContext = CanReusePreparedShadowMaterialContext(
+        route,
+        staticScene,
+        m_system.m_rayTracingState.m_sceneHasTransparentOccluder,
+        m_system.m_rayTracingState.m_hwShadowMaterialContextHashValid,
+        m_system.m_rayTracingState.m_hwShadowMaterialContextHash,
+        m_system.m_rayTracingState.m_swShadowMaterialContextHashValid,
+        m_system.m_rayTracingState.m_swShadowMaterialContextHash,
+        materialContextHash,
+        HasPreparedShadowMaterialContextBuffers(m_system.m_rayTracingState, instanceMaterials.size(), shadowInstanceData.size(), materialTypedUploadBytes)
+    );
     if(!hardware && canReuseMaterialContext && !m_system.capturePreparedShadowMaterialContextCacheReuse(materialContextHash, instanceMaterials.size(), shadowInstanceData.size(), materialTypedUploadBytes))
         return MakeUnexpected(Failure{});
     if(!canReuseMaterialContext){

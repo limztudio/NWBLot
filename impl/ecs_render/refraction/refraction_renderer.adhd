@@ -59,8 +59,12 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderRefractionRefractionRendererAdhdModule(in u64 value){
-    return value != 0u;
+b8 CanRecordRefractionPass(in b8 resourcesValid, in b8 bindlessValid, in u32 width, in u32 height){
+    return resourcesValid && bindlessValid && width != 0u && height != 0u;
+}
+
+u32 ComputeRefractionTileDispatchGroups(in u32 dimension, in u32 groupSize){
+    return DivideUpWrappingU32(dimension, groupSize);
 }
 
 

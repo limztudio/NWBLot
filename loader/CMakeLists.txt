@@ -1,5 +1,5 @@
 nwb_declare_static_library(nwb_loader_runtime_constants)
-nwb_target_adhd_sources(nwb_loader_runtime_constants NAMESPACE "NWB::LoaderDetail" SOURCES "${CMAKE_CURRENT_LIST_DIR}/runtime_constants.adhd")
+nwb_target_adhd_sources(nwb_loader_runtime_constants NAMESPACE "NWB::LoaderDetail" SOURCES "${CMAKE_CURRENT_LIST_DIR}/*.adhd")
 
 nwb_declare_static_library(nwb_loader)
 target_sources(nwb_loader PRIVATE

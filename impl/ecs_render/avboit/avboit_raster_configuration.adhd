@@ -42,8 +42,13 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderAvboitAvboitRasterConfigurationAdhdModule(in u64 value){
-    return value != 0u;
+b8 AreAvboitTargetFormatsSupported(
+    in b8 lowRasterKnown,
+    in b8 accumColorKnown,
+    in b8 accumExtinctionKnown,
+    in b8 transmittanceKnown
+){
+    return lowRasterKnown && accumColorKnown && accumExtinctionKnown && transmittanceKnown;
 }
 
 

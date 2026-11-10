@@ -2,14 +2,25 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/shared/frame_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
-#include <impl/ecs_render/shared/frame_types.adhd.h>
 #include <core/task/gpu/compiled_graph.h>
 
 #include <global/span.h>
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 class AvboitComputeEmulationValidator final : NoCopy{
@@ -44,8 +55,20 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderAvboitAvboitComputeEmulationValidatorAdhdModule(in u64 value){
-    return value != 0u;
+b8 CanOrderReusedAvboitGeometry(in b8 localProducerValid, in usize sharedPhaseCount, in b8 sourceMatchesConsumer){
+    return !localProducerValid && sharedPhaseCount == 0u && !sourceMatchesConsumer;
+}
+
+b8 HasValidAvboitSharedPhaseBounds(
+    in usize phaseCount,
+    in usize sharedTaskCapacity,
+    in b8 regularComputeEmulationValid,
+    in b8 streamTaskValid
+){
+    return phaseCount <= sharedTaskCapacity
+        && IsSupportedSharedComputeEmulationPhaseCount(phaseCount)
+        && !regularComputeEmulationValid
+        && streamTaskValid;
 }
 
 

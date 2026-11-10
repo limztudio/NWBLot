@@ -73,8 +73,16 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderRefractionRtRefractionStateAdhdModule(in u64 value){
-    return value != 0u;
+usize SelectRefractionVariantIndex(in b8 enabled){
+    if(enabled)
+        return 1u;
+    return 0u;
+}
+
+u32 SelectRefractionCertifiedInstanceIndex(in b8 csg, in u32 certifiedInstanceIndex){
+    if(csg)
+        return s_RtInvalidSlot;
+    return certifiedInstanceIndex;
 }
 
 

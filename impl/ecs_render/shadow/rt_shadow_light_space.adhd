@@ -2,14 +2,156 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "rt_shadow_internal_types.adhd"
+#include <impl/ecs_render/shadow/rt_shadow_internal_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderShadowRtShadowLightSpaceAdhdModule(in u64 value){
-    return value != 0u;
+const usize s_LightSpaceComputePipelineTableCount = 12u;
+const usize s_LightSpaceCsgStorageBufferCount = 2u;
+const usize s_LightSpaceDiagnosticResourceUseCount = 2u;
+const usize s_LightSpaceMeshletCasterBufferPairCount = 2u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ShouldPreflightLightSpaceShadows(
+    in b8 hasCsg,
+    in b8 hardwareSupported,
+    in SoftwareShadowBackend backend,
+    in b8 sceneEligible
+){
+    if(hasCsg)
+        return true;
+    if(hardwareSupported || backend == SoftwareShadowBackend::SoftwareTrace || !sceneEligible)
+        return false;
+    return true;
+}
+
+b8 CanBuildLightSpaceShadowPlan(
+    in b8 hasCsg,
+    in b8 hardwareSupported,
+    in SoftwareShadowBackend backend,
+    in b8 sceneEligible,
+    in b8 hasPreparedTargets,
+    in b8 swBvhTraversalReady,
+    in b8 softShadowReady,
+    in b8 softTransparentReady,
+    in usize casterCount,
+    in usize lightCount
+){
+    if(!hasCsg && (hardwareSupported || backend == SoftwareShadowBackend::SoftwareTrace))
+        return false;
+    if(!sceneEligible || !hasPreparedTargets || (!hardwareSupported && !swBvhTraversalReady))
+        return false;
+    if(!softShadowReady || !softTransparentReady || casterCount == 0u || lightCount > cast<usize>(s_SceneMaxLights))
+        return false;
+    return true;
+}
+
+void ResolveLightSpaceCullDispatchGroups(
+    in u32 drawCount,
+    in u32 cullGroupSize,
+    in u32 maxGroupsX,
+    mut u32 outGroupsX,
+    mut u32 outGroupsZ
+){
+    const u32 groups = DivideUp(drawCount, cullGroupSize);
+    outGroupsX = Min(groups, maxGroupsX);
+    outGroupsZ = DivideUp(groups, maxGroupsX);
+}
+
+u32 ResolveLightSpaceCaptureDrawCount(in u32 viewLightFlags, in u32 casterDrawCount){
+    if((viewLightFlags & cast<u32>(LightSpaceFlag::Point)) != 0u)
+        return casterDrawCount;
+    return 1u;
+}
+
+u32 ResolveLightSpaceCaptureBatchCount(in u32 captureCount, in u32 firstDraw){
+    return Min(captureCount - firstDraw, s_LightSpaceMaxIndirectDraws);
+}
+
+void ResolveLightSpaceShadeDispatchGroups(
+    in u32 totalPixels,
+    in u32 shadeGroupSize,
+    in u32 maxGroupsX,
+    mut u32 outGroupsX,
+    mut u32 outGroupsY
+){
+    const u32 groups = DivideUp(totalPixels, shadeGroupSize);
+    outGroupsX = Min(groups, maxGroupsX);
+    outGroupsY = DivideUp(groups, maxGroupsX);
+}
+
+void ResolveLightSpaceResolveDispatchGroups(
+    in u32 width,
+    in u32 height,
+    in u32 receiverFactor,
+    in u32 groupSize,
+    mut u32 outGroupsX,
+    mut u32 outGroupsY
+){
+    const u32 halfWidth = DivideUp(width, receiverFactor);
+    const u32 halfHeight = DivideUp(height, receiverFactor);
+    outGroupsX = DivideUp(halfWidth, groupSize);
+    outGroupsY = DivideUp(halfHeight, groupSize);
+}
+
+b8 IsLightSpaceCsgResolvePipelineIndex(in u32 index, in b8 hardwareCsg){
+    return hardwareCsg
+        && index >= s_LightSpaceFirstCsgResolvePipelineIndex
+        && index <= s_LightSpaceLastCsgResolvePipelineIndex;
+}
+
+b8 IsValidLightSpaceStorageByteSize(in u64 byteSize, in u64 maximumRange){
+    return byteSize != 0u && byteSize <= maximumRange && byteSize <= cast<u64>(u32.max);
+}
+
+b8 LightSpaceExactStorageMatches(
+    in LightSpacePlan plan,
+    in u64 countByteSize,
+    in u64 eventByteSize,
+    in u64 viewByteSize,
+    in u64 drawArgumentByteSize,
+    in u32 depthWidth,
+    in u32 depthArraySize
+){
+    return countByteSize == plan.countByteSize
+        && eventByteSize == plan.eventByteSize
+        && viewByteSize == plan.viewByteSize
+        && drawArgumentByteSize == plan.drawArgumentByteSize
+        && depthWidth == plan.textureResolution
+        && depthArraySize == plan.viewCount;
+}
+
+b8 IsValidSoftwareLightSpaceCasterIndexBuffer(
+    in u64 indexCount,
+    in b8 hasIndexBuffer,
+    in b8 isIndexBufferUsage,
+    in u64 bufferByteSize
+){
+    return indexCount != 0u
+        && indexCount <= cast<u64>(u32.max)
+        && hasIndexBuffer
+        && isIndexBufferUsage
+        && bufferByteSize >= indexCount * 4ull;
+}
+
+b8 UsesLightSpaceCaptureReuseCadence(in SoftwareShadowCaptureCadence cadence){
+    return cadence == SoftwareShadowCaptureCadence::ReuseOneFrame
+        || cadence == SoftwareShadowCaptureCadence::ReuseTwoFrames;
+}
+
+usize ResolveLightSpaceCsgContextUploadPrefixBytes(
+    in b8 initialize,
+    in usize totalContextBytes,
+    in usize rayFailureOffset
+){
+    if(initialize)
+        return totalContextBytes;
+    return rayFailureOffset;
 }
 
 
@@ -83,7 +225,7 @@ void RendererRayTracingSystem::preflightLightSpaceShadowResources(){
     }
     state.m_resourcesPrepared = false;
     state.m_csgRequired = false;
-    if(!state.m_csg.snapshot.hasCsg && (m_shadowVisibilityHardwareSupported || state.m_settings.backend == SoftwareShadowBackend::SoftwareTrace || !state.m_sceneEligible))
+    if(!ShouldPreflightLightSpaceShadows(state.m_csg.snapshot.hasCsg, m_shadowVisibilityHardwareSupported, state.m_settings.backend, state.m_sceneEligible))
         return;
     // Use the same scene ordering and shadow-slot allocator as the later prefix. That prefix may only select a fitting generation.
     Array<SceneLightGpuData, NWB_SCENE_MAX_LIGHTS> lights{};
@@ -102,12 +244,18 @@ void RendererRayTracingSystem::preflightLightSpaceShadowResources(){
 Expected<LightSpacePlan> RendererRayTracingSystem::buildLightSpaceShadowPlan(const Span<const SceneLightGpuData> lights)const noexcept{
     const auto& state = m_lightSpaceShadow;
     const usize lightCount = lights.size();
-    if(
-        (!state.m_csg.snapshot.hasCsg && (m_shadowVisibilityHardwareSupported || state.m_settings.backend == SoftwareShadowBackend::SoftwareTrace))
-        || !state.m_sceneEligible || !m_shadowVisibilityPreparedTargets || (!m_shadowVisibilityHardwareSupported && !m_preparedSceneSwBvhTraversal.ready())
-        || !m_rayTracingState.m_softShadowReady || !m_rayTracingState.m_softTransparentReady
-        || state.m_casters.empty() || lightCount > NWB_SCENE_MAX_LIGHTS
-    )
+    if(!CanBuildLightSpaceShadowPlan(
+        state.m_csg.snapshot.hasCsg,
+        m_shadowVisibilityHardwareSupported,
+        state.m_settings.backend,
+        state.m_sceneEligible,
+        m_shadowVisibilityPreparedTargets != nullptr,
+        m_preparedSceneSwBvhTraversal.ready(),
+        m_rayTracingState.m_softShadowReady,
+        m_rayTracingState.m_softTransparentReady,
+        state.m_casters.size(),
+        lightCount
+    ))
         return MakeUnexpected(Failure{});
     const auto drawCount = LightSpaceShadowDrawCount(state.m_casters);
     if(!drawCount)
@@ -388,8 +536,16 @@ b8 RecordLightSpaceCull(const LightSpaceShadowSnapshot& snapshot, Core::CommandL
         push.meshletBoundsSlot = caster.meshletBoundsSlot;
         push.meshletCount = caster.meshletCount;
         commandList.setPushConstants(&push, sizeof(push));
-        const u32 groups = DivideUp(*drawCount, static_cast<u32>(NWB_LIGHT_SPACE_CULL_GROUP_SIZE));
-        commandList.dispatch(Min(groups, static_cast<u32>(NWB_LIGHT_SPACE_CULL_MAX_GROUPS_X)), snapshot.plan.viewCount, DivideUp(groups, static_cast<u32>(NWB_LIGHT_SPACE_CULL_MAX_GROUPS_X)));
+        u32 groupsX = 0u;
+        u32 groupsZ = 0u;
+        ResolveLightSpaceCullDispatchGroups(
+            *drawCount,
+            static_cast<u32>(NWB_LIGHT_SPACE_CULL_GROUP_SIZE),
+            static_cast<u32>(NWB_LIGHT_SPACE_CULL_MAX_GROUPS_X),
+            groupsX,
+            groupsZ
+        );
+        commandList.dispatch(groupsX, snapshot.plan.viewCount, groupsZ);
         push.casterDrawOffset += *drawCount;
     }
     return true;
@@ -438,9 +594,9 @@ b8 RecordLightSpaceCapture(const LightSpaceShadowSnapshot& snapshot, const u32 v
         heap.bindGraphics(commandList, *pipeline);
         push.instanceIndex = caster.instanceIndex;
         commandList.setPushConstants(&push, sizeof(push));
-        const u32 captureCount = (snapshot.plan.views[viewIndex].light[3] & NWB_LIGHT_SPACE_FLAG_POINT) != 0u ? *drawCount : 1u;
+        const u32 captureCount = ResolveLightSpaceCaptureDrawCount(snapshot.plan.views[viewIndex].light[3], *drawCount);
         for(u32 firstDraw = 0u; firstDraw < captureCount;){
-            const u32 batchCount = Min(captureCount - firstDraw, s_LightSpaceMaxIndirectDraws);
+            const u32 batchCount = ResolveLightSpaceCaptureBatchCount(captureCount, firstDraw);
             commandList.drawIndexedIndirect(argumentOffset + firstDraw * NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES, batchCount);
             firstDraw += batchCount;
         }
@@ -458,9 +614,15 @@ b8 RecordLightSpaceShade(const LightSpaceShadowSnapshot& snapshot, Core::Command
     commandList.setComputeState(Core::ComputeState{}.setPipeline(pipeline.get()));
     heap.bindCompute(commandList, *pipeline);
     commandList.setPushConstants(&push, sizeof(push));
-    const u32 groups = DivideUp(push.width, static_cast<u32>(NWB_LIGHT_SPACE_SHADE_GROUP_SIZE));
-    const u32 groupsX = Min(groups, static_cast<u32>(NWB_LIGHT_SPACE_SHADE_MAX_GROUPS_X));
-    const u32 groupsY = DivideUp(groups, static_cast<u32>(NWB_LIGHT_SPACE_SHADE_MAX_GROUPS_X));
+    u32 groupsX = 0u;
+    u32 groupsY = 0u;
+    ResolveLightSpaceShadeDispatchGroups(
+        push.width,
+        static_cast<u32>(NWB_LIGHT_SPACE_SHADE_GROUP_SIZE),
+        static_cast<u32>(NWB_LIGHT_SPACE_SHADE_MAX_GROUPS_X),
+        groupsX,
+        groupsY
+    );
     commandList.dispatch(groupsX, groupsY, 1u);
     return true;
 }
@@ -486,10 +648,16 @@ b8 RecordLightSpaceResolve(
     else
         heap.bindCompute(commandList, *pipeline);
     commandList.setPushConstants(&push, sizeof(push));
-    const u32 halfWidth = DivideUp(push.width, push.receiverFactor);
-    const u32 halfHeight = DivideUp(push.height, push.receiverFactor);
-    const u32 groupsX = DivideUp(halfWidth, static_cast<u32>(NWB_LIGHT_SPACE_GROUP_SIZE));
-    const u32 groupsY = DivideUp(halfHeight, static_cast<u32>(NWB_LIGHT_SPACE_GROUP_SIZE));
+    u32 groupsX = 0u;
+    u32 groupsY = 0u;
+    ResolveLightSpaceResolveDispatchGroups(
+        push.width,
+        push.height,
+        push.receiverFactor,
+        static_cast<u32>(NWB_LIGHT_SPACE_GROUP_SIZE),
+        groupsX,
+        groupsY
+    );
     {
         const auto& scope = transparent ? RendererGpuTimingScope::s_LightSpaceShadowMapTransparent : RendererGpuTimingScope::s_LightSpaceShadowMapOpaque;
         Core::GpuTimingMeasure measure(timing, scope, commandList.getDevice(), commandList);
@@ -541,7 +709,7 @@ b8 LightSpaceResourceSet::ensureLightSpaceShadowPipelines(){
         return false;
     using ComputeShaderMember = const Core::Assets::AssetRef<ComputeShader> ShadowSubsystem::*;
     const ComputeShaderMember csgResolveMember = hardwareCsg ? &ShadowSubsystem::lightSpaceResolveHwCs : &ShadowSubsystem::lightSpaceResolveCs;
-    const Array<ComputeShaderMember, 12u> computeMembers = {
+    const Array<ComputeShaderMember, s_LightSpaceComputePipelineTableCount> computeMembers = {
         &ShadowSubsystem::lightSpaceViewCs,
         &ShadowSubsystem::lightSpaceResolveCs,
         &ShadowSubsystem::lightSpaceResolveCs,
@@ -555,7 +723,7 @@ b8 LightSpaceResourceSet::ensureLightSpaceShadowPipelines(){
         &ShadowSubsystem::lightSpaceFallbackCs,
         &ShadowSubsystem::lightSpaceCullCs
     };
-    const Array<AStringView, 12u> computeVariants = {
+    const Array<AStringView, s_LightSpaceComputePipelineTableCount> computeVariants = {
         Core::ShaderArchive::s_DefaultVariant,
         s_LightSpaceNoCsgOccluder0,
         s_LightSpaceNoCsgOccluder1,
@@ -569,7 +737,7 @@ b8 LightSpaceResourceSet::ensureLightSpaceShadowPipelines(){
         s_LightSpaceCsgOccluder1,
         Core::ShaderArchive::s_DefaultVariant
     };
-    const Array<NotNull<Core::ComputePipelineHandle*>, 12u> outputs = { MakeNotNull(&snapshot.viewPipeline), MakeNotNull(&snapshot.opaqueResolve), MakeNotNull(&snapshot.transparentResolve),
+    const Array<NotNull<Core::ComputePipelineHandle*>, s_LightSpaceComputePipelineTableCount> outputs = { MakeNotNull(&snapshot.viewPipeline), MakeNotNull(&snapshot.opaqueResolve), MakeNotNull(&snapshot.transparentResolve),
         MakeNotNull(&snapshot.opaqueFallback), MakeNotNull(&snapshot.transparentFallback), MakeNotNull(&snapshot.shadePipeline), MakeNotNull(&snapshot.csgShadePipeline),
         MakeNotNull(&snapshot.csgOpaqueResolve), MakeNotNull(&snapshot.csgTransparentResolve), MakeNotNull(&snapshot.csgOpaqueFallback), MakeNotNull(&snapshot.csgTransparentFallback), MakeNotNull(&snapshot.cullPipeline) };
     static_assert(computeMembers.size() == outputs.size());
@@ -596,7 +764,7 @@ b8 LightSpaceResourceSet::ensureLightSpaceShadowPipelines(){
             continue;
         if(*outputs[index])
             continue;
-        const b8 includeAccelStruct = hardwareCsg && index >= s_LightSpaceFirstCsgResolvePipelineIndex && index <= s_LightSpaceLastCsgResolvePipelineIndex;
+        const b8 includeAccelStruct = IsLightSpaceCsgResolvePipelineIndex(index, hardwareCsg);
         if(!RendererComputePipelineDetail::CreateHeapComputePipeline(device, state.m_shaders[index], snapshot.layout, includeAccelStruct, *outputs[index]))
             return false;
     }
@@ -632,10 +800,10 @@ b8 LightSpaceResourceSet::ensureLightSpaceShadowStorage(const LightSpacePlan& pl
     const Array<u64, 4u> sizes = { plan.countByteSize, plan.eventByteSize, plan.viewByteSize, plan.drawArgumentByteSize };
     const u64 maximumRange = device.getMaxStorageBufferRange();
     NWB_ASSERT(
-        sizes[0] != 0u && sizes[0] <= maximumRange && sizes[0] <= Limit<u32>::s_Max
-        && sizes[1] != 0u && sizes[1] <= maximumRange && sizes[1] <= Limit<u32>::s_Max
-        && sizes[2] != 0u && sizes[2] <= maximumRange && sizes[2] <= Limit<u32>::s_Max
-        && sizes[3] != 0u && sizes[3] <= maximumRange && sizes[3] <= Limit<u32>::s_Max
+        IsValidLightSpaceStorageByteSize(sizes[0], maximumRange)
+        && IsValidLightSpaceStorageByteSize(sizes[1], maximumRange)
+        && IsValidLightSpaceStorageByteSize(sizes[2], maximumRange)
+        && IsValidLightSpaceStorageByteSize(sizes[3], maximumRange)
     );
     if(m_state.m_csg.snapshot.hasCsg){
         auto& diagnostics = m_state.m_diagnostics;
@@ -656,14 +824,14 @@ b8 LightSpaceResourceSet::ensureLightSpaceShadowStorage(const LightSpacePlan& pl
                 return false;
         }
         const u64 contextSize = m_state.m_csg.bytes.size();
-        if(contextSize == 0u || contextSize > maximumRange || contextSize > Limit<u32>::s_Max)
+        if(!IsValidLightSpaceStorageByteSize(contextSize, maximumRange))
             return false;
         if(!snapshot.csgContext || snapshot.csgContext->getCreationDescription().byteSize < contextSize || !snapshot.csgOpaqueDepth || snapshot.csgOpaqueDepth->getCreationDescription().byteSize < plan.countByteSize){
-            Array<Core::BufferHandle, 2u> csgBuffers{};
-            Array<Core::GpuDescriptorHandle, 2u> csgDescriptors{};
+            Array<Core::BufferHandle, s_LightSpaceCsgStorageBufferCount> csgBuffers{};
+            Array<Core::GpuDescriptorHandle, s_LightSpaceCsgStorageBufferCount> csgDescriptors{};
             Core::GpuDescriptorRetirementGuard retireCsg(heap, Span<const Core::GpuDescriptorHandle>(csgDescriptors));
-            const Array<u64, 2u> csgSizes = { contextSize, plan.countByteSize };
-            const Array<Name, 2u> csgNames = { Name(s_LightSpaceResourceCsgContext), Name(s_LightSpaceResourceCsgOpaqueDepth) };
+            const Array<u64, s_LightSpaceCsgStorageBufferCount> csgSizes = { contextSize, plan.countByteSize };
+            const Array<Name, s_LightSpaceCsgStorageBufferCount> csgNames = { Name(s_LightSpaceResourceCsgContext), Name(s_LightSpaceResourceCsgOpaqueDepth) };
             for(u32 index = 0u; index < csgBuffers.size(); ++index){
                 Core::BufferDesc desc;
                 desc
@@ -697,12 +865,15 @@ b8 LightSpaceResourceSet::ensureLightSpaceShadowStorage(const LightSpacePlan& pl
     }
     if(
         snapshot.counts && snapshot.events && snapshot.views && snapshot.drawArguments && snapshot.depth
-        && snapshot.counts->getCreationDescription().byteSize == plan.countByteSize
-        && snapshot.events->getCreationDescription().byteSize == plan.eventByteSize
-        && snapshot.views->getCreationDescription().byteSize == plan.viewByteSize
-        && snapshot.drawArguments->getCreationDescription().byteSize == plan.drawArgumentByteSize
-        && snapshot.depth->getCreationDescription().width == plan.textureResolution
-        && snapshot.depth->getCreationDescription().arraySize == plan.viewCount
+        && LightSpaceExactStorageMatches(
+            plan,
+            snapshot.counts->getCreationDescription().byteSize,
+            snapshot.events->getCreationDescription().byteSize,
+            snapshot.views->getCreationDescription().byteSize,
+            snapshot.drawArguments->getCreationDescription().byteSize,
+            snapshot.depth->getCreationDescription().width,
+            snapshot.depth->getCreationDescription().arraySize
+        )
     )
         return true;
     Array<Core::BufferHandle, s_LightSpaceBufferCount> buffers{};
@@ -893,7 +1064,12 @@ b8 LightSpaceShadowSceneGather::finishSoftware(const Span<const SceneSwBvhInstan
         const u64 indexCount = static_cast<u64>(instances[index].primitiveCount) * s_RayTracingTriangleIndexCount;
         LightSpaceShadowCaster& caster = m_softwareCasters[index];
         const Core::BufferHandle& indexBuffer = caster.triangleIndexBuffer;
-        if(indexCount == 0u || indexCount > Limit<u32>::s_Max || !indexBuffer || !indexBuffer->getCreationDescription().isIndexBuffer || indexBuffer->getCreationDescription().byteSize < indexCount * sizeof(u32))
+        if(!IsValidSoftwareLightSpaceCasterIndexBuffer(
+            indexCount,
+            static_cast<b8>(indexBuffer),
+            indexBuffer ? indexBuffer->getCreationDescription().isIndexBuffer : false,
+            indexBuffer ? indexBuffer->getCreationDescription().byteSize : 0u
+        ))
             m_state.m_sceneEligible = false;
         const b8 csgReceiver = csg.hasCsg && (csg.receiverRanges[index].flags & NWB_CSG_RAY_RECEIVER_ACTIVE) != 0u;
         if(csgReceiver)
@@ -971,7 +1147,7 @@ void LightSpaceShadowSceneGather::publishSoftwareCaptureIdentity(
     const auto& csg = m_state.m_csg.snapshot;
     if(csg.hasCsg){
         Fnv64AppendValue(m_captureSceneIdentity, csg.identity);
-        if(m_state.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseOneFrame || m_state.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseTwoFrames){
+        if(UsesLightSpaceCaptureReuseCadence(m_state.m_settings.captureCadence)){
             m_captureSceneIdentity = BuildLightSpaceCsgCaptureIdentity(m_state.m_csg, materials, instances, materialBytes, textures);
             m_captureSceneTrusted = m_state.m_csg.captureGeometryTrusted;
         }
@@ -996,7 +1172,7 @@ void LightSpaceShadowSceneGather::publishHardwareCaptureIdentity(
     for(const auto& caster : m_state.m_casters)
         RayTracingSceneIdentityBuilder().updateHardwareCaster(caster.meshletCount, caster.meshletDescSlot, caster.meshletBoundsSlot, captureIdentity);
     b8 captureTrusted = staticScene && contentComplete;
-    if(m_state.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseOneFrame || m_state.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseTwoFrames){
+    if(UsesLightSpaceCaptureReuseCadence(m_state.m_settings.captureCadence)){
         captureIdentity = BuildLightSpaceCsgCaptureIdentity(m_state.m_csg, materials, instances, materialBytes, textures);
         captureTrusted = m_state.m_csg.captureGeometryTrusted && contentComplete;
     }
@@ -1248,7 +1424,7 @@ Expected<Core::GpuTaskId> DeclareLightSpaceShadowDiagnostics(const LightSpaceSha
     if(!readbackResult)
         return MakeUnexpected(Failure{});
     const Core::GpuGraphResourceId readback = *readbackResult;
-    const Array<Core::GpuTaskResourceUse, 2u> uses{ ReadWriteUse(context, Core::ResourceStates::UnorderedAccess), WriteUse(readback, Core::ResourceStates::CopyDest), };
+    const Array<Core::GpuTaskResourceUse, s_LightSpaceDiagnosticResourceUseCount> uses{ ReadWriteUse(context, Core::ResourceStates::UnorderedAccess), WriteUse(readback, Core::ResourceStates::CopyDest), };
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Tiny;
     scheduling.allowPacketMerge = true;
@@ -1329,7 +1505,7 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(const LightSpaceShad
         if(!snapshot.diagnostics || snapshot.csgContextBytes.size() < NWB_CSG_RAY_CONTEXT_BYTES)
             return MakeUnexpected(Failure{});
         const b8 initialize = !snapshot.diagnostics->contextInitialized.valid();
-        const usize prefixBytes = initialize ? snapshot.csgContextBytes.size() : NWB_CSG_SHADOW_RAY_FAILURE_OFFSET;
+        const usize prefixBytes = ResolveLightSpaceCsgContextUploadPrefixBytes(initialize, snapshot.csgContextBytes.size(), NWB_CSG_SHADOW_RAY_FAILURE_OFFSET);
         const auto csgBytesResult = graph.copyUploadData(snapshot.csgContextBytes.data(), prefixBytes, alignof(u32));
         if(!csgBytesResult)
             return MakeUnexpected(Failure{});
@@ -1406,7 +1582,7 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(const LightSpaceShad
     for(const auto& caster : snapshot.casters){
         if(caster.meshletCount == 0u)
             continue;
-        const Array<ReferenceWrapper<const Core::BufferHandle>, 2u> buffers = { caster.meshletDescBuffer, caster.meshletBoundsBuffer };
+        const Array<ReferenceWrapper<const Core::BufferHandle>, s_LightSpaceMeshletCasterBufferPairCount> buffers = { caster.meshletDescBuffer, caster.meshletBoundsBuffer };
         for(const Core::BufferHandle& buffer : buffers){
             if(!buffer)
                 return MakeUnexpected(Failure{});

@@ -4,7 +4,6 @@
 
 #include <impl/ecs_render/kernel/timing_policy.adhd>
 #include <impl/ecs_render/shared/frame_types.adhd>
-#include <impl/ecs_render/kernel/task_timing_telemetry_labels.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -156,6 +155,16 @@ void ResolveRendererTaskTimingFeedbackPolicyTransition(in RendererTaskTimingFeed
         currentPolicy = transition.previousPolicy;
 }
 
+b8 IsAcceptedRendererTaskTimingSubmission(
+    in b8 feedbackActive,
+    in b8 tokenValid,
+    in b8 hasPhysicalQueueIdentity,
+    in b8 queueClassMatches,
+    in b8 physicalQueueMatches
+){
+    return feedbackActive && tokenValid && hasPhysicalQueueIdentity && queueClassMatches && physicalQueueMatches;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -187,6 +196,7 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
 b8 RendererTaskTimingFeedbackState::trackSample(
     const Core::GpuTimingSampleAttribution attribution,
     const Name& scopeName,
@@ -215,7 +225,7 @@ void RendererTaskTimingFeedbackState::acceptSubmission(const Core::GpuTimingSamp
 
     const Core::GpuPhysicalQueueId acceptedQueue{ .index = token.physicalQueueIndex, .deviceGeneration = token.deviceGeneration, };
     pending.submissionResolved = true;
-    pending.accepted = feedbackActive && token.valid() && token.hasPhysicalQueueIdentity() && token.queue == pending.key.queue && acceptedQueue == pending.expectedQueue;
+    pending.accepted = IsAcceptedRendererTaskTimingSubmission(feedbackActive, token.valid(), token.hasPhysicalQueueIdentity(), token.queue == pending.key.queue, acceptedQueue == pending.expectedQueue);
 }
 
 void RendererTaskTimingFeedbackState::discardRecording(const Core::GpuTimingSampleAttribution attribution)noexcept{
@@ -899,9 +909,6 @@ Core::GpuTaskDesc TaskDesc(const Name& identity, const AStringView label, const 
 
 
 NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 }
 
 

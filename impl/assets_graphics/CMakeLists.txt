@@ -2,19 +2,10 @@ nwb_declare_static_library(nwb_assets_graphics_types)
 nwb_target_adhd_sources(nwb_assets_graphics_types
     NAMESPACE "NWB::Impl"
     SOURCES
-        "${CMAKE_CURRENT_LIST_DIR}/bvh_subsystem.adhd"
+        "${CMAKE_CURRENT_LIST_DIR}/*_subsystem.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/components.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/cook_types.adhd"
-        "${CMAKE_CURRENT_LIST_DIR}/csg_subsystem.adhd"
-        "${CMAKE_CURRENT_LIST_DIR}/deferred_subsystem.adhd"
-        "${CMAKE_CURRENT_LIST_DIR}/gi_subsystem.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/graphics_component_binary_codec.adhd"
-        "${CMAKE_CURRENT_LIST_DIR}/mesh_subsystem.adhd"
-        "${CMAKE_CURRENT_LIST_DIR}/reflection_subsystem.adhd"
-        "${CMAKE_CURRENT_LIST_DIR}/refractive_subsystem.adhd"
-        "${CMAKE_CURRENT_LIST_DIR}/renderer_subsystem.adhd"
-        "${CMAKE_CURRENT_LIST_DIR}/shadow_subsystem.adhd"
-        "${CMAKE_CURRENT_LIST_DIR}/transparent_subsystem.adhd"
 )
 target_link_libraries(nwb_assets_graphics_types PUBLIC nwb_assets nwb_ecs nwb_ecs_scene nwb_assets_scene_types nwb_assets_csg nwb_assets_sampler_types nwb_assets_shader_types nwb_ecs_mesh_components nwb_ecs_model_components nwb_ecs_render_components)
 

@@ -2,8 +2,89 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderMaterialPipelineAndResourcesAdhdModule(in u64 value){
-    return value != 0u;
+#include <impl/ecs_render/material/pipeline_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_PreparedMaterialGeometryLabel = "Prepared Material Geometry";
+const StringView s_PreparedMaterialSampledTextureLabel = "Prepared Material Sampled Texture";
+const StringView s_ObjectGeometryCacheLabel = "Object Geometry Cache";
+const StringView s_ObjectGeometryDecodeMarkerLabel = "Object Geometry Decode";
+const StringView s_ObjectGeometryReadyMarkerLabel = "Object Geometry Ready";
+const StringView s_Texture2dAssetKindLabel = "Texture2D";
+const StringView s_SamplerAssetKindLabel = "sampler";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+StringView SelectMaterialPassPixelShaderVariant(
+    in b8 csgClipPipeline,
+    in b8 avboitCsgClipPipeline,
+    in StringView csgShaderVariant,
+    in StringView materialShaderVariant
+){
+    if(csgClipPipeline && !avboitCsgClipPipeline)
+        return csgShaderVariant;
+    return materialShaderVariant;
+}
+
+StringView SelectMaterialPassMeshShaderVariant(
+    in b8 csgClipPipeline,
+    in StringView csgShaderVariant,
+    in StringView materialShaderVariant
+){
+    if(csgClipPipeline)
+        return csgShaderVariant;
+    return materialShaderVariant;
+}
+
+b8 IsSharedComputeEmulationProgram(
+    in MaterialPipelineCsgMode csgMode,
+    in Name sharedMeshShaderAssetName,
+    in AssetRef<MeshShader> materialMeshShader,
+    in StringView meshShaderVariant,
+    in StringView defaultVariant
+){
+    return csgMode == MaterialPipelineCsgMode::None && UsesSharedMaterialMeshShader(sharedMeshShaderAssetName, materialMeshShader, meshShaderVariant, defaultVariant);
+}
+
+b8 ValidateMaterialEvaluatorModuleMatch(in StringView existingAssignment, in StringView expectedAssignment, in Name materialKey){
+    if(existingAssignment == expectedAssignment)
+        return true;
+
+    error(
+        "RendererSystem: material '{}' uses a different CSG evaluator module than its active cutters"
+        , materialKey.resolvedText()
+    );
+    return false;
+}
+
+void LogCsgEvaluatorModuleResolveFailed(in Name materialKey){
+    error("RendererSystem: failed to resolve CSG evaluator module for material '{}'", materialKey.resolvedText());
+}
+
+void LogMaterialResourceLoadFailed(in Name materialName, in StringView resourceKindLabel, in Name assetName){
+    error(
+        "RendererSystem: material '{}' failed to load {} asset '{}'"
+        , materialName.resolvedText()
+        , resourceKindLabel
+        , assetName.resolvedText()
+    );
+}
+
+b8 IsAliasFreeCaptureCountConsistent(in usize drawCount, in usize outputBufferCount, in usize outputHeapSlotCount){
+    return drawCount != 0u && drawCount == outputBufferCount && outputBufferCount == outputHeapSlotCount;
+}
+
+b8 IsValidSharedComputeEmulationDrawWindow(in usize computeDrawCount, in usize minimumDrawCount, in usize allowedMaxDrawCount){
+    return computeDrawCount >= minimumDrawCount && computeDrawCount <= allowedMaxDrawCount;
+}
+
+u64 ComputeObjectGeometryInstanceByteOffset(in u32 instanceIndex, in usize instanceByteStride){
+    return cast<u64>(instanceIndex) * cast<u64>(instanceByteStride);
 }
 
 
@@ -11,6 +92,7 @@ b8 ImplEcsRenderMaterialPipelineAndResourcesAdhdModule(in u64 value){
 
 
 native{
+#include <impl/ecs_render/material/material_internal.adhd.h>
 #include <impl/ecs_render/material/material_system.adhd.h>
 #include <impl/ecs_render/material/pipeline_types.adhd.h>
 #include <impl/ecs_render/material/csg_shader_variant_builder.adhd.h>
@@ -36,7 +118,6 @@ native{
 #include <impl/assets/graphics/mesh/object_geometry_constants.h>
 #include <impl/assets_graphics/mesh_subsystem.adhd.h>
 #include <impl/ecs_render/kernel/compute_pipeline_utils.adhd.h>
-#include <impl/ecs_render/material/renderer_material_state.adhd.h>
 #include <impl/ecs_render/shader/shader_system.adhd.h>
 #include <impl/assets_graphics/components.adhd.h>
 #include <global/algorithm.h>
@@ -68,186 +149,13 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_IMPL_BEGIN
 
 
-
-#ifndef NWB_IMPL_ECS_RENDER_MATERIAL_INTERNAL_DECLS_H
-#define NWB_IMPL_ECS_RENDER_MATERIAL_INTERNAL_DECLS_H
-class MaterialPassGatherer final : NoCopy{
-public:
-    MaterialPassGatherer(RendererMaterialSystem& system, Core::ECS::World& world, RendererMeshSystem& meshSystem, RendererCsgSystem& csgSystem, CsgShapeRegistry& csgShapeRegistry, const RendererOpticalVolumeSelection& opticalVolumes)noexcept
-        : m_system(system), m_world(world), m_meshSystem(meshSystem), m_csgSystem(csgSystem), m_csgShapeRegistry(csgShapeRegistry), m_opticalVolumes(opticalVolumes)
-    {}
-
-
-public:
-    void gather(
-        Core::Framebuffer* framebuffer,
-        const MaterialPipelinePass::Enum pass,
-        const b8 transparent,
-        const CsgFrameState& csgFrameState,
-        const RendererResourceLookupMode::Enum lookupMode,
-        const MeshViewGpuData* const csgWorkRegionMeshViewState,
-        MaterialPassDrawItemPartitions& drawItems,
-        InstanceGpuDataVector& instanceData,
-        CsgFrameGpuData& csgFrameData,
-    #if defined(NWB_DEBUG)
-        ECSRenderDetail::MaterialTypedInstanceRangeVector& materialTypedRanges,
-    #endif
-        MaterialTypedByteDataVector& materialTypedBytes
-    );
-
-
-private:
-    RendererMaterialSystem& m_system;
-    Core::ECS::World& m_world;
-    RendererMeshSystem& m_meshSystem;
-    RendererCsgSystem& m_csgSystem;
-    CsgShapeRegistry& m_csgShapeRegistry;
-    const RendererOpticalVolumeSelection& m_opticalVolumes;
-};
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class MaterialTypedStager final : NoCopy{
-public:
-    MaterialTypedStager(RendererMaterialSystem& system, Core::ECS::World& world, RendererResourceLookupMode::Enum lookupMode, MaterialTypedByteDataVector& bytes, usize capacity);
-
-
-public:
-    [[nodiscard]] Expected<MaterialTypedByteRange> constant(const MaterialSurfaceInfo& materialInfo);
-    [[nodiscard]] Expected<MaterialTypedByteRange> mutableInstance(Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo);
-
-
-private:
-    [[nodiscard]] Expected<MaterialTypedByteRange> defaultMutable(const MaterialSurfaceInfo& materialInfo);
-    using RangeMap = HashMap<MaterialTypedByteRangeKey, MaterialTypedByteRangeCache, Core::Alloc::ScratchArena, ECSRenderDetail::MaterialTypedByteRangeKeyHasher, EqualTo<MaterialTypedByteRangeKey>>;
-
-
-private:
-    RendererMaterialSystem& m_system;
-    Core::ECS::World& m_world;
-    RendererResourceLookupMode::Enum m_lookupMode;
-    MaterialTypedByteDataVector& m_bytes;
-    RangeMap m_ranges;
-    ECSRenderDetail::MaterialTypedByteContentRangeMap m_mutableRanges;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct MaterialPipelineBuildInputs{
-    RendererMaterialSystem& system;
-    RendererShaderSystem& shaderSystem;
-    RendererMaterialState& materialState;
-    MaterialPipelineResources& resources;
-    const MaterialSurfaceInfo& materialInfo;
-    const MaterialPipelineKey& pipelineKey;
-    Core::Framebuffer& framebuffer;
-    Core::Device& device;
-    Core::GpuDescriptorHeap& heap;
-    const Core::RenderState& renderState;
-    const Core::BindingLayoutHandle& materialPassBindingLayout;
-    const Name& materialKey;
-    Name sharedMeshShaderAssetName;
-    Name passPixelShaderName;
-    Name passPixelShaderDebugName;
-    AStringView pixelShaderVariant;
-    AStringView meshShaderVariant;
-    AStringView avboitCsgShaderVariant;
-    MaterialPipelinePass::Enum pass;
-    b8 avboitCsgClipPipeline;
-};
-
-class MaterialPipelineBuilder final : NoCopy{
-public:
-    explicit MaterialPipelineBuilder(const MaterialPipelineBuildInputs& inputs)noexcept : m_inputs(inputs){}
-
-
-public:
-    [[nodiscard]] b8 buildMesh();
-    [[nodiscard]] b8 buildIndexed();
-    [[nodiscard]] b8 buildCompute();
-
-
-private:
-    [[nodiscard]] b8 loadPassPixelShader();
-
-
-private:
-    const MaterialPipelineBuildInputs& m_inputs;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ECSRenderMaterialShaderVariants{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] inline Expected<Core::GraphicsString> BuildCsgClipShaderVariantName(Core::GraphicsArena& arena, const AStringView baseVariant, const Span<const ShaderVariantDefineAssignment> defineAssignments){
-    const auto variant = CsgShaderVariantBuilder().buildClipVariant(baseVariant, Core::ShaderArchive::s_DefaultVariant, defineAssignments);
-    if(!variant)
-        return MakeUnexpected(Failure{});
-    return Core::GraphicsString(AStringView(*variant), arena);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererMaterialResourceResolver final{
-public:
-    [[nodiscard]] static b8 Resolve(MaterialSurfaceInfo& materialInfo, RendererMaterialResourceState& resources, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager);
-    static void Release(Core::GraphicsRuntime& graphics, RendererMaterialResourceState& resources);
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_material_pass{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr Core::GpuTimingScopeDefinition s_NoneGpuTimingScope;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] inline const Core::GpuTimingScopeDefinition& MaterialPassGpuTimingScope(const MaterialPipelinePass::Enum pass)noexcept{
-    switch(pass){
-    case MaterialPipelinePass::AvboitOccupancy: return RendererGpuTimingScope::s_AvboitOccupancy;
-    case MaterialPipelinePass::AvboitExtinction: return RendererGpuTimingScope::s_AvboitExtinction;
-    case MaterialPipelinePass::AvboitAccumulate: return RendererGpuTimingScope::s_AvboitAccumulate;
-    default: return s_NoneGpuTimingScope;
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-#endif
-
 
 
 namespace __hidden_material_pipeline{
@@ -307,16 +215,14 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
     if(csgClipPipeline){
         const auto csgProjectEvaluatorModuleInclude = __hidden_material_pipeline::ResolveCsgProjectEvaluatorModuleInclude(m_arena, m_csgShapeRegistry, pipelineKey.csgEvaluatorVariant);
         if(!csgProjectEvaluatorModuleInclude){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to resolve CSG evaluator module for material '{}'"), ConvertString(materialKey.resolvedText()));
+            LogCsgEvaluatorModuleResolveFailed(materialKey);
             return failMaterialPipeline();
         }
         csgProjectEvaluatorModuleAssignment = CsgShaderVariantBuilder().buildEvaluatorAssignment(AStringView(*csgProjectEvaluatorModuleInclude));
         if(!csgProjectEvaluatorModuleAssignment.empty()){
             const Expected<AStringView> existingEvaluatorModuleAssignment = CsgShaderVariantBuilder().findDefineAssignment(shaderVariant, s_CsgProjectEvaluatorModuleDefineName, Core::ShaderArchive::s_DefaultVariant);
-            if(existingEvaluatorModuleAssignment && *existingEvaluatorModuleAssignment != AStringView(csgProjectEvaluatorModuleAssignment)){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' uses a different CSG evaluator module than its active cutters"), ConvertString(materialKey.resolvedText()));
+            if(existingEvaluatorModuleAssignment && !ValidateMaterialEvaluatorModuleMatch(*existingEvaluatorModuleAssignment, AStringView(csgProjectEvaluatorModuleAssignment), materialKey))
                 return failMaterialPipeline();
-            }
             if(!existingEvaluatorModuleAssignment)
                 materialProjectEvaluatorModuleAssignmentToAdd = csgProjectEvaluatorModuleAssignment;
             avboitProjectEvaluatorModuleAssignmentToAdd = csgProjectEvaluatorModuleAssignment;
@@ -348,8 +254,8 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
         }
         avboitCsgShaderVariant = Move(*variant);
     }
-    const AStringView pixelShaderVariant = csgClipPipeline && !avboitCsgClipPipeline ? AStringView(csgShaderVariant) : shaderVariant;
-    const AStringView meshShaderVariant = csgClipPipeline ? AStringView(csgShaderVariant) : shaderVariant;
+    const AStringView pixelShaderVariant = SelectMaterialPassPixelShaderVariant(csgClipPipeline, avboitCsgClipPipeline, AStringView(csgShaderVariant), shaderVariant);
+    const AStringView meshShaderVariant = SelectMaterialPassMeshShaderVariant(csgClipPipeline, AStringView(csgShaderVariant), shaderVariant);
 
     const Name sharedMeshShaderAssetName = m_shaderSystem.resolveSubsystemAsset<MeshSubsystem>(&MeshSubsystem::sharedMs);
     const Name objectVertexShaderAssetName = m_shaderSystem.resolveSubsystemAsset<MeshSubsystem>(&MeshSubsystem::objectVs);
@@ -588,9 +494,13 @@ b8 MaterialPipelineBuilder::buildCompute(){
 
     m_inputs.resources.renderPath = RenderPath::ComputeEmulation;
     // The shared mesh_compute program is independent of authored materials.
-    m_inputs.resources.sharedGeometryComputeProgram = m_inputs.pipelineKey.csgMode == MaterialPipelineCsgMode::None
-        && UsesSharedMaterialMeshShader(m_inputs.sharedMeshShaderAssetName, m_inputs.materialInfo.meshShader, m_inputs.meshShaderVariant, Core::ShaderArchive::s_DefaultVariant)
-    ;
+    m_inputs.resources.sharedGeometryComputeProgram = IsSharedComputeEmulationProgram(
+        m_inputs.pipelineKey.csgMode,
+        m_inputs.sharedMeshShaderAssetName,
+        m_inputs.materialInfo.meshShader,
+        m_inputs.meshShaderVariant,
+        Core::ShaderArchive::s_DefaultVariant
+    );
     m_inputs.resources.indexedGeometryOutput = m_inputs.resources.sharedGeometryComputeProgram;
     return true;
 }
@@ -1026,14 +936,14 @@ b8 RendererMaterialResourceResolver::Resolve(MaterialSurfaceInfo& materialInfo, 
         case MaterialResourceKind::SampledImage2D:
             heapSlot = __hidden_material_surface::ResolveTextureAssetSlot(resources, resourceReference.textureAsset, graphicsModule, assetManager);
             if(!heapSlot){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' failed to load Texture2D asset '{}'"), ConvertString(materialInfo.materialName.resolvedText()), ConvertString(resourceReference.textureAsset.name().resolvedText()));
+                LogMaterialResourceLoadFailed(materialInfo.materialName, s_Texture2dAssetKindLabel, resourceReference.textureAsset.name());
                 return false;
             }
             break;
         case MaterialResourceKind::Sampler:
             heapSlot = __hidden_material_surface::ResolveSamplerAssetSlot(resources, resourceReference.samplerAsset, graphicsModule, assetManager);
             if(!heapSlot){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' failed to load sampler asset '{}'"), ConvertString(materialInfo.materialName.resolvedText()), ConvertString(resourceReference.samplerAsset.name().resolvedText()));
+                LogMaterialResourceLoadFailed(materialInfo.materialName, s_SamplerAssetKindLabel, resourceReference.samplerAsset.name());
                 return false;
             }
             break;
@@ -1326,7 +1236,7 @@ Expected<Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>> GatherPrep
             const Name identity = buffer->getCreationDescription().debugName;
             if(!identity)
                 return MakeUnexpected(Failure{});
-            const auto importedResource = graph.importBuffer(buffer, BufferResourceDesc(identity, "Prepared Material Geometry"));
+            const auto importedResource = graph.importBuffer(buffer, BufferResourceDesc(identity, s_PreparedMaterialGeometryLabel));
             if(!importedResource)
                 return MakeUnexpected(Failure{});
             resource = *importedResource;
@@ -1382,7 +1292,7 @@ Expected<Core::GpuGraphResourceSetId> GatherPreparedMaterialSampledTextureResour
     if(!sampledTextures)
         return MakeUnexpected(Failure{});
 
-    const auto members = ImportMaterialSampledTextureResources(*sampledTextures, "Prepared Material Sampled Texture", graph, scratchArena);
+    const auto members = ImportMaterialSampledTextureResources(*sampledTextures, s_PreparedMaterialSampledTextureLabel, graph, scratchArena);
     if(!members)
         return MakeUnexpected(Failure{});
     if(members->empty())
@@ -1455,7 +1365,7 @@ b8 AliasFreeComputeEmulationGraphPlan::capture(const MaterialPassDrawItemsView& 
         reset();
         return false;
     }
-    captured = drawItems.size() == outputBuffers.size() && outputBuffers.size() == outputHeapSlots.size() && !drawItems.empty();
+    captured = IsAliasFreeCaptureCountConsistent(drawItems.size(), outputBuffers.size(), outputHeapSlots.size());
     return captured;
 }
 
@@ -1502,7 +1412,7 @@ void RegularSharedComputeEmulationGraphPlan::reset()noexcept{
 
 b8 RegularSharedComputeEmulationGraphPlan::capture(const MaterialPassDrawItemsView& sourceDrawItems, const usize allowedMaxDrawCount)noexcept{
     reset();
-    if(!IsSupportedSharedComputeEmulationDrawCount(allowedMaxDrawCount) || sourceDrawItems.computeDrawItems.size() < s_SharedComputeEmulationMinimumDrawCount || sourceDrawItems.computeDrawItems.size() > allowedMaxDrawCount)
+    if(!IsSupportedSharedComputeEmulationDrawCount(allowedMaxDrawCount) || !IsValidSharedComputeEmulationDrawWindow(sourceDrawItems.computeDrawItems.size(), s_SharedComputeEmulationMinimumDrawCount, allowedMaxDrawCount))
         return false;
 
     drawCount = sourceDrawItems.computeDrawItems.size();
@@ -1697,7 +1607,7 @@ b8 ObjectGeometryCacheGraph::prepare(
             }
         }
         if(!retained){
-            Core::GpuGraphResourceDesc bufferDesc = BufferResourceDesc(cache.buffer->getCreationDescription().debugName, "Object Geometry Cache");
+            Core::GpuGraphResourceDesc bufferDesc = BufferResourceDesc(cache.buffer->getCreationDescription().debugName, s_ObjectGeometryCacheLabel);
             bufferDesc.setInitialState(cache.initialized ? ECSRenderDetail::s_ObjectGeometryRasterState : Core::ResourceStates::Common).setExternalFinalState(ECSRenderDetail::s_ObjectGeometryRasterState);
             Entry entry{draw, {}, {}};
             const auto importedResource = m_graph.importBuffer(cache.buffer, bufferDesc);
@@ -1722,13 +1632,13 @@ b8 ObjectGeometryCacheGraph::prepare(
                 }
                 if(!instances.valid())
                     return false;
-                uses.push_back(ReadBufferUse(instances, Core::BufferRange(static_cast<u64>(draw.instanceIndex) * sizeof(InstanceGpuData), sizeof(InstanceGpuData))));
+                uses.push_back(ReadBufferUse(instances, Core::BufferRange(ComputeObjectGeometryInstanceByteOffset(draw.instanceIndex, sizeof(InstanceGpuData)), sizeof(InstanceGpuData))));
                 uses.push_back(WriteUse(entry.resource, Core::ResourceStates::UnorderedAccess));
                 uses.push_back(ReadUse(entry.resource, ECSRenderDetail::s_ObjectGeometryRasterState));
                 const auto identity = ToName(StringFormat(scratchArena, "render.object_geometry.decode_{}", m_entries.size()));
                 if(!identity || !*identity)
                     return false;
-                Core::GpuTaskDesc desc = TaskDesc(**identity, "Object Geometry Decode");
+                Core::GpuTaskDesc desc = TaskDesc(**identity, s_ObjectGeometryDecodeMarkerLabel);
                 desc.setDependencies({ &dependency, 1u }).setResourceUses(uses);
                 const auto entryProducerResult = m_graph.addTask<DecodeTask>(desc, DecodeTask::Payload{ m_materialSystem, m_meshSystem, draw, frameBindings, timingTicket, rebindableTimingTicket, });
                 if(!entryProducerResult){
@@ -1768,7 +1678,7 @@ b8 ObjectGeometryCacheGraph::prepare(
         dependency = {};
         return false;
     }
-    Core::GpuTaskDesc ready = TaskDesc(**readyIdentity, "Object Geometry Ready");
+    Core::GpuTaskDesc ready = TaskDesc(**readyIdentity, s_ObjectGeometryReadyMarkerLabel);
     ready.setDependencies(producers).setResourceUses(cacheReads);
     const auto dependencyResult = m_graph.addTask<ReadyTask>(ready, ReadyTask::Payload{});
     if(!dependencyResult){
@@ -1880,7 +1790,13 @@ b8 OpaqueRegularSharedComputeEmulationGraphTask::Record(const Payload& payload, 
 };
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 }
 
 

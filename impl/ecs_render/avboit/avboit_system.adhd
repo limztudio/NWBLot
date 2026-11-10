@@ -218,8 +218,13 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderAvboitAvboitSystemAdhdModule(in u64 value){
-    return value != 0u;
+b8 HasTransparentCsgWork(in b8 hasTransparentStaticWork, in b8 hasTransparentSkinnedWork){
+    return hasTransparentStaticWork || hasTransparentSkinnedWork;
+}
+
+u32 ComputeAvboitIntegrationDispatchGroups(in u32 lowWidth, in u32 lowHeight, in u32 groupSizeX){
+    const u32 pixelCount = lowWidth * lowHeight;
+    return DivideUpWrappingU32(pixelCount, groupSizeX);
 }
 
 

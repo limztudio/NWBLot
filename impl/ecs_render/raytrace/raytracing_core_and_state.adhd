@@ -2,8 +2,77 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderRaytraceCoreAndStateAdhdModule(in u64 value){
-    return value != 0u;
+#include <impl/ecs_render/raytrace/raytrace_internal.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_RefractionDiagnosticVariantCount = 2u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 CanEnableSurfelSceneTrace(in b8 backendReady, in u32 instanceCount, in u32 meshCount){
+    return backendReady && instanceCount > 0u && meshCount > 0u;
+}
+
+b8 AreSurfelSplitGraphPipelinesReady(
+    in b8 ageFreeReady,
+    in b8 hashBuildReady,
+    in b8 spawnReady,
+    in b8 useHwTrace,
+    in b8 useCsgTrace,
+    in b8 traceCsgHwReady,
+    in b8 traceHwReady,
+    in b8 traceCsgSwReady,
+    in b8 traceSwReady,
+    in b8 resolveReady,
+    in b8 upsampleReady,
+    in b8 traceBuildArgsReady
+){
+    b8 traceReady = false;
+    if(useHwTrace){
+        if(useCsgTrace)
+            traceReady = traceCsgHwReady;
+        else
+            traceReady = traceHwReady;
+    }
+    else{
+        if(useCsgTrace)
+            traceReady = traceCsgSwReady;
+        else
+            traceReady = traceSwReady;
+    }
+    return ageFreeReady && hashBuildReady && spawnReady && traceReady && resolveReady && upsampleReady && traceBuildArgsReady;
+}
+
+RayTraceMaterialContextSlots PackRayTraceMaterialContextSlots(
+    in u32 sceneBvhNodes,
+    in u32 sceneInstances,
+    in u32 instanceMaterial,
+    in u32 materialTyped,
+    in u32 meshInstances,
+    in b8 opticalValid,
+    in u32 opticalSlot,
+    in u32 opticalInstanceCount,
+    in b8 hasCsgContext,
+    in u32 csgContextSlot
+){
+    RayTraceMaterialContextSlots slots;
+    slots.sceneBvhNodes = sceneBvhNodes;
+    slots.sceneInstances = sceneInstances;
+    slots.instanceMaterial = instanceMaterial;
+    slots.materialTyped = materialTyped;
+    slots.meshInstances = meshInstances;
+    if(opticalValid){
+        slots.opticalScene = opticalSlot;
+        slots.opticalInstanceCount = opticalInstanceCount;
+    }
+    if(hasCsgContext)
+        slots.csgContext = csgContextSlot;
+    return slots;
 }
 
 
@@ -12,6 +81,7 @@ b8 ImplEcsRenderRaytraceCoreAndStateAdhdModule(in u64 value){
 
 native{
 #include <impl/ecs_render/raytrace/raytracing_system.adhd.h>
+#include <impl/ecs_render/raytrace/raytrace_internal.adhd.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd.h>
 #include <global/simdmath.h>
 #include <impl/global.adhd.h>
@@ -68,110 +138,7 @@ native{
 NWB_IMPL_BEGIN
 
 
-#ifndef NWB_IMPL_ECS_RENDER_RAYTRACE_INTERNAL_DECLS_H
-#define NWB_IMPL_ECS_RENDER_RAYTRACE_INTERNAL_DECLS_H
-class RendererShaderSystem;
-class RayTraceMaterialResources;
-
-
-class SoftwareBvhBuilder final : NoCopy{
-public:
-    SoftwareBvhBuilder(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaderSystem, RtSceneBvhState& state)noexcept
-        : m_arena(arena)
-        , m_graphics(graphics)
-        , m_shaderSystem(shaderSystem)
-        , m_state(state)
-    {}
-
-
-public:
-    void releaseSwBvhScratchHeapHandles();
-    [[nodiscard]] b8 ensureSceneBvhBuffers(u32 instanceCount, RayTraceMaterialResources& materials);
-    [[nodiscard]] b8 ensureMeshSwBvhResources(u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle);
-    [[nodiscard]] b8 meshSwBvhResourcesReady(const Core::BufferHandle& nodeBuffer, const Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle nodeHeapHandle, Core::GpuDescriptorHandle parentHeapHandle)noexcept;
-    [[nodiscard]] b8 buildMeshSwBvhPrepared(
-        u32 positionHeapSlot,
-        u32 triangleIndexHeapSlot,
-        u32 primitiveCount,
-        const Float3Int& aabbMin,
-        const Float3Int& aabbMax,
-        Core::GpuDescriptorHandle nodeHeapHandle,
-        Core::GpuDescriptorHandle parentHeapHandle,
-        Core::CommandList& commandList,
-        Core::BufferHandle& nodeBuffer,
-        Core::BufferHandle& parentBuffer
-    );
-    [[nodiscard]] b8 refitMeshSwBvhPrepared(
-        u32 positionHeapSlot,
-        u32 triangleIndexHeapSlot,
-        u32 primitiveCount,
-        Core::GpuDescriptorHandle nodeHeapHandle,
-        Core::GpuDescriptorHandle parentHeapHandle,
-        Core::CommandList& commandList,
-        Core::BufferHandle& nodeBuffer,
-        Core::BufferHandle& parentBuffer
-    );
-
-
-private:
-    [[nodiscard]] b8 ensureBvhSortPipeline();
-    [[nodiscard]] b8 ensureBvhSortBuffers(usize paddedCount);
-    [[nodiscard]] b8 bvhBitonicSort(Core::CommandList& commandList, u32 elementCount, u32 paddedCount);
-    [[nodiscard]] b8 ensureBvhBuildPipeline();
-    [[nodiscard]] b8 ensureBvhVisitCounterBuffer(usize primitiveCount);
-    [[nodiscard]] b8 createMeshBvhStorage(usize primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle);
-
-
-private:
-    Core::Alloc::GlobalArena& m_arena;
-    Core::GraphicsRuntime& m_graphics;
-    RendererShaderSystem& m_shaderSystem;
-    RtSceneBvhState& m_state;
-};
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class TlasStaticSceneIdentity final{
-public:
-    [[nodiscard]] static u64 Compute(Span<const Core::RayTracingInstanceDesc> instances)noexcept;
-
-private:
-    static void Append(const Core::RayTracingInstanceDesc& instance, u64& inOutHash)noexcept;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class MeshHeapHandleGather final{
-public:
-    MeshHeapHandleGather(Core::GpuDescriptorHeap& heap, RtMeshHeapHandleCache& cache)noexcept : m_heap(heap), m_cache(cache){}
-    void begin()noexcept;
-    [[nodiscard]] Expected<Core::GpuDescriptorHandle> acquire(const Core::BufferHandle& bufferHandle);
-    void sweep();
-
-private:
-    Core::GpuDescriptorHeap& m_heap;
-    RtMeshHeapHandleCache& m_cache;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ECSRenderDetail{ struct MeshRayTracingResourceSnapshot; };
-
-class PreparedMeshBlasBuilder final{
-public:
-    [[nodiscard]] static Expected<PreparedMeshBlasBuild> Resolve(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources)noexcept;
-    [[nodiscard]] static b8 Matches(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources, const PreparedMeshBlasBuild& build)noexcept;
-    [[nodiscard]] static b8 Record(const PreparedMeshBlasBuild& build, b8 meshBlasGeometryBuildInputStatesGraphOwned, Core::CommandList& commandList);
-};
-
-#endif
-
 
 
 b8 RendererRayTracingSystem::preflightShadowVisibilityResources(DeferredFrameTargets& targets, Core::Alloc::ScratchArena& scratchArena){
@@ -281,7 +248,7 @@ b8 RendererRayTracingSystem::preflightShadowVisibilityResources(DeferredFrameTar
         // Hardware surfel GI reuses the TLAS, per-mesh geometry, and instance records built for shadows and caustics.
         // Gated on the HW shadow backend being ready + a non-empty TLAS.
         // Non-fatal: a failure leaves GI off this frame (lighting uses hemiAmbient).
-        if(backendReady && m_rayTracingState.m_tlasInstanceCount > 0u && m_rayTracingState.m_shadowMeshCount > 0u){
+        if(CanEnableSurfelSceneTrace(backendReady, m_rayTracingState.m_tlasInstanceCount, m_rayTracingState.m_shadowMeshCount)){
             m_rayTracingState.m_surfelEnabled = true;
             m_rayTracingState.m_surfelUseHwTrace = true;
             if(!prepareSurfelResources(targets))
@@ -314,7 +281,7 @@ b8 RendererRayTracingSystem::preflightShadowVisibilityResources(DeferredFrameTar
         return false;
 
     // Enable surfel GI on the SW path once the scene BVH is resident; pool resources live on state so resize never resets them.
-    if(m_rayTracingState.m_sceneBvhInstanceCount > 0u && m_rayTracingState.m_swShadowMeshCount > 0u){
+    if(CanEnableSurfelSceneTrace(true, m_rayTracingState.m_sceneBvhInstanceCount, m_rayTracingState.m_swShadowMeshCount)){
         m_rayTracingState.m_surfelEnabled = true;
         m_rayTracingState.m_surfelUseHwTrace = false;   // SW branch: the surfel trace walks the SW scene BVH
         if(!prepareSurfelResources(targets))
@@ -633,14 +600,20 @@ RayTracingDeferredGraphResourceSnapshot RendererRayTracingSystem::snapshotDeferr
         .sceneTlas = state.m_tlas,
         .causticAccumulatorInitialized = state.m_causticAccumulatorInitialized,
         .surfelUsesHardwareTrace = state.m_surfelUseHwTrace,
-        .surfelSplitGraphPipelinesReady =
-            state.m_surfelAgeFreePipeline
-            && state.m_surfelHashBuildPipeline
-            && state.m_surfelSpawnPipeline
-            && (state.m_surfelUseHwTrace ? (state.m_surfelUseCsgTrace ? state.m_surfelTraceCsgHwPipeline : state.m_surfelTraceHwPipeline) : (state.m_surfelUseCsgTrace ? state.m_surfelTraceCsgPipeline : state.m_surfelTracePipeline))
-            && state.m_surfelResolvePipeline
-            && state.m_surfelUpsamplePipeline
-            && state.m_surfelTraceBuildArgsPipeline,
+        .surfelSplitGraphPipelinesReady = AreSurfelSplitGraphPipelinesReady(
+            static_cast<b8>(state.m_surfelAgeFreePipeline),
+            static_cast<b8>(state.m_surfelHashBuildPipeline),
+            static_cast<b8>(state.m_surfelSpawnPipeline),
+            state.m_surfelUseHwTrace,
+            state.m_surfelUseCsgTrace,
+            static_cast<b8>(state.m_surfelTraceCsgHwPipeline),
+            static_cast<b8>(state.m_surfelTraceHwPipeline),
+            static_cast<b8>(state.m_surfelTraceCsgPipeline),
+            static_cast<b8>(state.m_surfelTracePipeline),
+            static_cast<b8>(state.m_surfelResolvePipeline),
+            static_cast<b8>(state.m_surfelUpsamplePipeline),
+            static_cast<b8>(state.m_surfelTraceBuildArgsPipeline)
+        ),
     };
 }
 
@@ -705,8 +678,8 @@ void RendererRayTracingState::restorePreparedLightingCpuState(const RayTracingFr
 
 void RendererRayTracingState::invalidateResources()noexcept{
     m_hardwareTransparentShadow = HardwareTransparentShadowState{};
-    for(u32 csg = 0u; csg < 2u; ++csg){
-        for(u32 dense = 0u; dense < 2u; ++dense){
+    for(u32 csg = 0u; csg < s_RefractionDiagnosticVariantCount; ++csg){
+        for(u32 dense = 0u; dense < s_RefractionDiagnosticVariantCount; ++dense){
             m_refractionDiagnosticHwShaders[csg][dense].reset();
             m_refractionDiagnosticHwPipelines[csg][dense].reset();
             m_refractionDiagnosticHwPipelineFailed[csg][dense] = false;
@@ -1091,7 +1064,6 @@ Expected<RayTraceMaterialContextSlots> RendererRayTracingSystem::snapshotRayTrac
     if(!m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer || !m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid() || m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer)
         return MakeUnexpected(Failure{});
 
-    RayTraceMaterialContextSlots slots;
     const auto resolveStorageSlot = [](const Core::Buffer* buffer, const Core::GpuDescriptorHandle handle)noexcept -> Expected<u32>{
         if(!buffer)
             return 0u;
@@ -1105,49 +1077,56 @@ Expected<RayTraceMaterialContextSlots> RendererRayTracingSystem::snapshotRayTrac
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material-context heap registration is incomplete"));
         return MakeUnexpected(Failure{});
     }
-    slots.sceneBvhNodes = *sceneBvhNodes;
     const auto sceneInstances = resolveStorageSlot(m_rayTracingState.m_sceneInstanceBuffer.get(), m_rayTracingState.m_sceneInstanceHeapHandle);
     if(!sceneInstances){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material-context heap registration is incomplete"));
         return MakeUnexpected(Failure{});
     }
-    slots.sceneInstances = *sceneInstances;
     const auto instanceMaterial = resolveStorageSlot(m_rayTracingState.m_shadowInstanceMaterialBuffer.get(), m_rayTracingState.m_shadowInstanceMaterialHeapHandle);
     if(!instanceMaterial){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material-context heap registration is incomplete"));
         return MakeUnexpected(Failure{});
     }
-    slots.instanceMaterial = *instanceMaterial;
     const auto materialTyped = resolveStorageSlot(m_rayTracingState.m_shadowMaterialTypedBuffer.get(), m_rayTracingState.m_shadowMaterialTypedHeapHandle);
     if(!materialTyped){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material-context heap registration is incomplete"));
         return MakeUnexpected(Failure{});
     }
-    slots.materialTyped = *materialTyped;
     const auto meshInstances = resolveStorageSlot(m_rayTracingState.m_shadowInstanceBuffer.get(), m_rayTracingState.m_shadowInstanceHeapHandle);
     if(!meshInstances){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material-context heap registration is incomplete"));
         return MakeUnexpected(Failure{});
     }
-    slots.meshInstances = *meshInstances;
 
     // Optical metadata follows the selected backend's instance order and retains its preflighted descriptor.
     const RayTracingOpticalSceneSnapshot opticalScene = m_shadowVisibilityHardwareSupported ? m_hardwareOpticalScene.snapshot() : m_softwareOpticalScene.snapshot();
-    if(opticalScene.valid()){
-        slots.opticalScene = opticalScene.descriptor.slot();
-        slots.opticalInstanceCount = opticalScene.upload->instanceCount;
-    }
+    const b8 opticalValid = opticalScene.valid();
+    const u32 opticalSlot = opticalValid ? opticalScene.descriptor.slot() : 0u;
+    const u32 opticalInstanceCount = opticalValid ? opticalScene.upload->instanceCount : 0u;
 
-    if(m_shadowVisibilityTraceResourcesPreflighted && m_lightSpaceShadow.m_csg.snapshot.hasCsg){
+    const b8 hasCsgContext = m_shadowVisibilityTraceResourcesPreflighted && m_lightSpaceShadow.m_csg.snapshot.hasCsg;
+    u32 csgContextSlot = 0u;
+    if(hasCsgContext){
         const auto csgContext = resolveStorageSlot(m_rayTracingState.m_csgTraceContextBuffer.get(), m_rayTracingState.m_csgTraceContextHeapHandle);
         if(!csgContext || !m_rayTracingState.m_csgTraceContextBuffer){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: current CSG ray context is unavailable"));
             return MakeUnexpected(Failure{});
         }
-        slots.csgContext = *csgContext;
+        csgContextSlot = *csgContext;
     }
 
-    return slots;
+    return PackRayTraceMaterialContextSlots(
+        *sceneBvhNodes,
+        *sceneInstances,
+        *instanceMaterial,
+        *materialTyped,
+        *meshInstances,
+        opticalValid,
+        opticalSlot,
+        opticalInstanceCount,
+        hasCsgContext,
+        csgContextSlot
+    );
 }
 
 void RayTraceMaterialResources::releaseRayTraceMaterialContextHeapHandles(){
@@ -1585,6 +1564,9 @@ TraceResourceSetUses MakeTraceResourceSetUses(const Core::GpuGraphResourceSetId 
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_END

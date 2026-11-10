@@ -2,8 +2,42 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderCsgResourcesAndPeelAdhdModule(in u64 value){
-    return value != 0u;
+#include <impl/ecs_render/csg/clip_bounds.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 HasValidCsgGraphResourceCapacities(
+    in usize receiverRangeCapacity,
+    in usize cutterCapacity,
+    in usize receiverRangeCount,
+    in usize cutterCount
+){
+    return receiverRangeCapacity >= receiverRangeCount && cutterCapacity >= cutterCount;
+}
+
+b8 IsFiniteCsgWorldToClipMatrix(in MatrixSingle worldToClip){
+    return IsFiniteCsgMatrix(worldToClip);
+}
+
+u32 ComputeCsgIntervalDispatchGroups(in u32 workExtent, in u32 groupSize){
+    return DivideUp(workExtent, groupSize);
+}
+
+b8 ShouldAdvanceRayTraceReadToken(in b8 previousValid, in b8 matchesQueue, in u64 tokenValue, in u64 previousValue){
+    return !previousValid || !matchesQueue || tokenValue > previousValue;
+}
+
+usize AccumulateShadowCutterCapacity(in usize currentCapacity, in u32 drawStateCutterCount){
+    const usize clampedCount = Min(cast<usize>(drawStateCutterCount), cast<usize>(s_CsgRayMaxCutters));
+    if(currentCapacity > usize.max - clampedCount)
+        return usize.max;
+    return currentCapacity + clampedCount;
+}
+
+b8 HasActiveShadowCsgRange(in CsgShadowReceiverRangeGpu range){
+    return (range.flags & s_CsgRayReceiverActive) != 0u;
 }
 
 
@@ -11,64 +45,65 @@ b8 ImplEcsRenderCsgResourcesAndPeelAdhdModule(in u64 value){
 
 
 native{
-#include <impl/ecs_render/csg/opaque_csg_interval_stage.adhd.h>
-#include <impl/ecs_render/csg/csg_system.adhd.h>
-#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
-#include <impl/ecs_render/kernel/descriptor_register_utils.adhd.h>
-#include <impl/ecs_render/raytrace/rt_private.adhd.h>
-#include <impl/ecs_render/shared/renderer_push_constants_private.adhd.h>
-#include <impl/ecs_csg/module.adhd.h>
-#include <core/common/log.h>
-#include <core/graphics/runtime/runtime.h>
-#include <impl/ecs_render/mesh/mesh_system.adhd.h>
-#include <impl/ecs_scene/components.adhd.h>
-#include <impl/ecs_render/csg/csg_snapshot_identity_builder.adhd.h>
-#include <impl/ecs_render/material/material_surface_lookup.adhd.h>
-#include <impl/ecs_render/material/renderer_pipeline_types.adhd.h>
-#include <impl/ecs_render/components.adhd.h>
-#include <impl/ecs_mesh/system.adhd.h>
-#include <impl/ecs_scene/module.adhd.h>
-#include <core/ecs/world.h>
-#include <impl/ecs_render/shared/renderer_frame_bindings.adhd.h>
-#include <impl/ecs_render/csg/renderer_csg_state.adhd.h>
-#include <impl/ecs_render/kernel/timing_names.adhd.h>
-#include <impl/assets_graphics/csg_subsystem.adhd.h>
-#include <impl/ecs_render/kernel/compute_pipeline_utils.adhd.h>
-#include <impl/ecs_render/material/renderer_render_state_private.adhd.h>
-#include <impl/ecs_render/shader/shader_system.adhd.h>
 #include <impl/assets_graphics/components.adhd.h>
-#include <core/graphics/shader_archive.h>
-#include <impl/ecs_render/csg/format_private.adhd.h>
-#include <impl/ecs_render/kernel/renderer_constants_private.adhd.h>
-#include <impl/ecs_render/csg/graph_types.adhd.h>
-#include <core/graphics/backend_selection.h>
-#include <impl/ecs_render/raytrace/raytracing_system.adhd.h>
-#include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd.h>
-#include <impl/ecs_render/csg/shadow_cutter_snapshot.adhd.h>
-#include <global/hash_utils.h>
-#include <impl/ecs_render/deferred/graph_resource_import_builder.adhd.h>
-#include <impl/ecs_render/kernel/task_graph_resource_utils.adhd.h>
-#include <impl/ecs_render/material/renderer_draw_types.adhd.h>
-#include <impl/ecs_render/material/task_graph_object_geometry_cache.adhd.h>
-#include <impl/ecs_render/material/task_graph_resource_sets.adhd.h>
-#include <impl/ecs_render/csg/renderer_csg_types.adhd.h>
-#include <impl/ecs_render/csg/types.adhd.h>
-#include <impl/ecs_render/csg/opaque_csg_interval_clear_builder.adhd.h>
-#include <core/graphics/backend_selection/backend.h>
-#include <impl/ecs_render/csg/task_graph_opaque_compute_tasks.adhd.h>
-#include <impl/ecs_render/shared/frame_types.adhd.h>
-#include <impl/ecs_render/material/material_system.adhd.h>
-#include <core/graphics/gpu_timing.h>
-#include <impl/ecs_render/csg/task_graph_opaque_interval_tasks.adhd.h>
+#include <impl/assets_graphics/csg_subsystem.adhd.h>
+#include <impl/ecs_csg/module.adhd.h>
+#include <impl/ecs_mesh/system.adhd.h>
+#include <impl/ecs_render/avboit/avboit_system.adhd.h>
+#include <impl/ecs_render/components.adhd.h>
+#include <impl/ecs_render/csg/csg_snapshot_identity_builder.adhd.h>
 #include <impl/ecs_render/csg/csg_system.adhd.h>
+#include <impl/ecs_render/csg/format_private.adhd.h>
+#include <impl/ecs_render/csg/frame_graph_transparent_csg_tasks.adhd.h>
+#include <impl/ecs_render/csg/graph_types.adhd.h>
+#include <impl/ecs_render/csg/opaque_csg_interval_clear_builder.adhd.h>
+#include <impl/ecs_render/csg/opaque_csg_interval_stage.adhd.h>
+#include <impl/ecs_render/csg/renderer_csg_state.adhd.h>
+#include <impl/ecs_render/csg/renderer_csg_types.adhd.h>
+#include <impl/ecs_render/csg/shadow_cutter_snapshot.adhd.h>
+#include <impl/ecs_render/csg/task_graph_opaque_compute_tasks.adhd.h>
+#include <impl/ecs_render/csg/task_graph_opaque_interval_tasks.adhd.h>
 #include <impl/ecs_render/csg/task_graph_transparent_interval_tasks.adhd.h>
 #include <impl/ecs_render/csg/transparent_csg_interval_builder.adhd.h>
-#include <impl/ecs_render/avboit/avboit_system.adhd.h>
+#include <impl/ecs_render/csg/types.adhd.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
+#include <impl/ecs_render/deferred/graph_resource_import_builder.adhd.h>
+#include <impl/ecs_render/kernel/compute_pipeline_utils.adhd.h>
+#include <impl/ecs_render/kernel/descriptor_register_utils.adhd.h>
+#include <impl/ecs_render/kernel/renderer_constants_private.adhd.h>
 #include <impl/ecs_render/kernel/task_graph_clear_timing.adhd.h>
+#include <impl/ecs_render/kernel/task_graph_resource_utils.adhd.h>
+#include <impl/ecs_render/kernel/timing_names.adhd.h>
+#include <impl/ecs_render/material/material_surface_lookup.adhd.h>
+#include <impl/ecs_render/material/material_system.adhd.h>
 #include <impl/ecs_render/material/material_typed_private.adhd.h>
+#include <impl/ecs_render/material/renderer_draw_types.adhd.h>
+#include <impl/ecs_render/material/renderer_pipeline_types.adhd.h>
+#include <impl/ecs_render/material/renderer_render_state_private.adhd.h>
+#include <impl/ecs_render/material/task_graph_object_geometry_cache.adhd.h>
+#include <impl/ecs_render/material/task_graph_resource_sets.adhd.h>
+#include <impl/ecs_render/mesh/mesh_system.adhd.h>
 #include <impl/ecs_render/mesh/renderer_mesh_types.adhd.h>
+#include <impl/ecs_render/raytrace/raytracing_system.adhd.h>
+#include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd.h>
+#include <impl/ecs_render/raytrace/rt_private.adhd.h>
+#include <impl/ecs_render/shader/shader_system.adhd.h>
+#include <impl/ecs_render/shared/frame_types.adhd.h>
+#include <impl/ecs_render/shared/renderer_frame_bindings.adhd.h>
+#include <impl/ecs_render/shared/renderer_push_constants_private.adhd.h>
+#include <impl/ecs_scene/components.adhd.h>
+#include <impl/ecs_scene/module.adhd.h>
+
+#include <core/common/log.h>
+#include <core/ecs/world.h>
+#include <core/graphics/backend_selection.h>
+#include <core/graphics/backend_selection/backend.h>
+#include <core/graphics/gpu_timing.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/graphics/shader_archive.h>
+
+#include <global/hash_utils.h>
 #include <global/limit.h>
-#include <impl/ecs_render/csg/frame_graph_transparent_csg_tasks.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -78,6 +113,7 @@ NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 namespace __hidden_csg_resources{
 
@@ -157,7 +193,7 @@ b8 CsgGraphResourceSnapshot::frameReady(const CsgFrameGpuDataView& csgFrameData)
     if(!csgFrameData.hasWork())
         return true;
 
-    return bindingValid() && receiverRangeCapacity >= csgFrameData.receiverRanges.size() && cutterCapacity >= csgFrameData.cutters.size();
+    return bindingValid() && HasValidCsgGraphResourceCapacities(receiverRangeCapacity, cutterCapacity, csgFrameData.receiverRanges.size(), csgFrameData.cutters.size());
 }
 
 Expected<u32> CsgGraphResourceSnapshot::findClipContextHeapSlot()const noexcept{
@@ -530,12 +566,12 @@ Expected<CsgReceiverRangeGpuData> RendererCsgSystem::appendCsgReceiverClipData(
     SIMDMatrix worldToClipSimd{};
     if(csgWorkRegionMeshViewState){
         worldToClipSimd = LoadFloat(csgWorkRegionMeshViewState->worldToClip);
-        meshViewReady = !MatrixIsNaN(worldToClipSimd) && !MatrixIsInfinite(worldToClipSimd);
+        meshViewReady = IsFiniteCsgWorldToClipMatrix(worldToClipSimd);
     }
     else{
         if(const auto acceptedWorldToClip = m_meshSystem.snapshotAcceptedMeshViewWorldToClip()){
             worldToClipSimd = LoadFloat(*acceptedWorldToClip);
-            meshViewReady = !MatrixIsNaN(worldToClipSimd) && !MatrixIsInfinite(worldToClipSimd);
+            meshViewReady = IsFiniteCsgWorldToClipMatrix(worldToClipSimd);
         }
     }
 
@@ -774,7 +810,7 @@ static void DispatchCsgIntervalCompute(
     if(pushConstants.workExtentX == 0u || pushConstants.workExtentY == 0u)
         return;
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-    commandList.dispatch(DivideUp(pushConstants.workExtentX, static_cast<u32>(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_X)), DivideUp(pushConstants.workExtentY, static_cast<u32>(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_Y)), 1u);
+    commandList.dispatch(ComputeCsgIntervalDispatchGroups(pushConstants.workExtentX, static_cast<u32>(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_X)), ComputeCsgIntervalDispatchGroups(pushConstants.workExtentY, static_cast<u32>(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_Y)), 1u);
 }
 
 
@@ -1270,7 +1306,7 @@ void RendererRayTracingSystem::confirmRayTraceContextReadSubmission(const Core::
     auto& readTokens = m_rayTracingState.m_rayTraceContextReadSubmissionTokens;
     NWB_ASSERT(token.hasPhysicalQueueIdentity() && token.physicalQueueIndex < readTokens.size());
     auto& previous = readTokens[token.physicalQueueIndex];
-    if(!previous.valid() || !previous.matchesPhysicalQueue(token.physicalQueueIndex, token.deviceGeneration) || token.value > previous.value)
+    if(ShouldAdvanceRayTraceReadToken(previous.valid(), previous.matchesPhysicalQueue(token.physicalQueueIndex, token.deviceGeneration), token.value, previous.value))
         previous = token;
 }
 
@@ -1441,7 +1477,7 @@ b8 BuildCsgShadowSnapshot(const CsgShapeRegistry& shapeRegistry, const Span<cons
             continue;
         drawStates[index] = *drawState;
         hasReceiver = true;
-        cutterCapacity = AddSaturating<usize>(cutterCapacity, Min<usize>(drawStates[index].cutterCount, NWB_CSG_RAY_MAX_CUTTERS));
+        cutterCapacity = AccumulateShadowCutterCapacity(cutterCapacity, drawStates[index].cutterCount);
     }
     if(!hasReceiver)
         return true;
@@ -1458,7 +1494,7 @@ b8 BuildCsgShadowSnapshot(const CsgShapeRegistry& shapeRegistry, const Span<cons
         range = CsgShadowReceiverRangeGpu{};
         if(drawStates[index].active){
             __hidden_shadow_cutter_snapshot::AppendReceiverCutters(receiver, drawStates[index], receiverLookup, shapeRegistry, outSnapshot, range);
-            outSnapshot.hasCsg = outSnapshot.hasCsg || (range.flags & NWB_CSG_RAY_RECEIVER_ACTIVE) != 0u;
+            outSnapshot.hasCsg = outSnapshot.hasCsg || HasActiveShadowCsgRange(range);
         }
         CsgSnapshotIdentityBuilder().updateShadowReceiverSnapshotRangeHashes(range, outSnapshot.contentIdentity, outSnapshot.identity);
     }

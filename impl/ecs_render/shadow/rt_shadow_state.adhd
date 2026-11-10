@@ -265,17 +265,46 @@ struct RtSoftShadowState{
 
 
 NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderShadowRtShadowStateAdhdModule(in u64 value){
-    return value != 0u;
+u32 SelectSoftShadowOpaqueSampleCount(in b8 temporalHistoryUsable, in u32 temporalSampleCount, in u32 bootstrapSampleCount){
+    if(temporalHistoryUsable)
+        return temporalSampleCount;
+    return bootstrapSampleCount;
+}
+
+u32 ToggleSoftShadowHistoryFrontFlag(in u32 frontIsA){
+    if(frontIsA != 0u)
+        return 0u;
+    return 1u;
+}
+
+u32 SelectSoftShadowHistorySlot(in b8 frontIsA, in u32 slotWhenFrontA, in u32 slotWhenFrontB){
+    if(frontIsA)
+        return slotWhenFrontA;
+    return slotWhenFrontB;
+}
+
+b8 CanRunSoftShadowCombinedTemporalMerge(
+    in b8 pipelineReady,
+    in b8 softShadowReady,
+    in b8 softTransparentReady,
+    in b8 softShadowTemporalReady,
+    in b8 softTransparentTemporalReady,
+    in b8 bindlessValid,
+    in u32 softShadowSlotMask
+){
+    return pipelineReady
+        && softShadowReady
+        && softTransparentReady
+        && softShadowTemporalReady
+        && softTransparentTemporalReady
+        && bindlessValid
+        && softShadowSlotMask != 0u;
 }
 
 

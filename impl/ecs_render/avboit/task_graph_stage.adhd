@@ -2,9 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/shared/frame_types.adhd>
+#include <impl/ecs_render/avboit/graph_types.adhd>
+#include <impl/ecs_render/avboit/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
-#include <impl/ecs_render/shared/frame_types.adhd.h>
-#include <impl/ecs_render/avboit/graph_types.adhd.h>
 
 #include <core/graphics/gpu_timing.h>
 #include <core/task/gpu/compiler.h>
@@ -93,8 +99,40 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderAvboitTaskGraphStageAdhdModule(in u64 value){
-    return value != 0u;
+b8 IsAvboitTransparentTaskShapeValid(
+    in b8 hasTransparentRenderers,
+    in b8 depthWarpValid,
+    in b8 extinctionValid,
+    in b8 integrationValid,
+    in b8 accumulationValid,
+    in b8 accumulationFinalizeValid
+){
+    if(hasTransparentRenderers)
+        return depthWarpValid && extinctionValid && integrationValid && accumulationValid && accumulationFinalizeValid;
+    return !depthWarpValid && !extinctionValid && !integrationValid && !accumulationValid && !accumulationFinalizeValid;
+}
+
+Expected<usize> TryResolveAvboitRequiredTimingBindingCount(
+    in b8 validationValid,
+    in b8 hasTransparentTasks,
+    in b8 hasExtinctionComputeEmulation,
+    in b8 hasAccumulationComputeEmulation,
+    in usize bindingCount,
+    in usize bindingCapacity
+){
+    if(!validationValid || bindingCount > bindingCapacity)
+        return MakeUnexpected(Failure());
+    usize requiredBindingCount = 1u;
+    if(hasTransparentTasks){
+        requiredBindingCount += s_AvboitTransparentTimingTicketCount;
+        if(hasExtinctionComputeEmulation)
+            requiredBindingCount += 1u;
+        if(hasAccumulationComputeEmulation)
+            requiredBindingCount += 1u;
+    }
+    if(requiredBindingCount > s_AvboitTaskGraphTimingTicketCapacity || requiredBindingCount > bindingCapacity - bindingCount)
+        return MakeUnexpected(Failure());
+    return requiredBindingCount;
 }
 
 

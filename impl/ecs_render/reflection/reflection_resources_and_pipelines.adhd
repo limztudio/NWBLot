@@ -2,8 +2,41 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderReflectionResourcesAndPipelinesAdhdModule(in u64 value){
-    return value != 0u;
+const u64 s_ReflectionRayQueueElementBytes = 4u;
+
+u32 ReflectionDepthPyramidTimingQueryCount(in u32 queriesPerRange, in u32 maxDepthMips){
+    return queriesPerRange * maxDepthMips;
+}
+
+u64 ReflectionRayQueueByteSize(in u32 capacity){
+    return cast<u64>(capacity) * s_ReflectionRayQueueElementBytes;
+}
+
+u64 ReflectionIndirectArgumentsByteSize(in u32 argumentCount, in u32 argumentStrideBytes){
+    return cast<u64>(argumentCount) * cast<u64>(argumentStrideBytes);
+}
+
+b8 ReflectionRequiresOpticalTransport(in b8 boundsComplete, in u32 transparentCount){
+    return !boundsComplete || transparentCount != 0u;
+}
+
+b8 ReflectionFeedbackExtentOrDeviceChanged(
+    in u32 width,
+    in u32 height,
+    in u16 deviceGeneration,
+    in u32 cachedWidth,
+    in u32 cachedHeight,
+    in u16 cachedDeviceGeneration
+){
+    return width != cachedWidth || height != cachedHeight || deviceGeneration != cachedDeviceGeneration;
+}
+
+b8 IsReflectionSpatialFilterActive(in b8 spatialFilterEnabled, in u32 spatialRadius, in u32 maxSpatialRadius, in b8 traceActive){
+    return spatialFilterEnabled && spatialRadius > 0u && spatialRadius <= maxSpatialRadius && traceActive;
+}
+
+u32 ReflectionSpatialRadiusPipelineIndex(in u32 spatialRadius){
+    return spatialRadius - 1u;
 }
 
 
@@ -11,6 +44,7 @@ b8 ImplEcsRenderReflectionResourcesAndPipelinesAdhdModule(in u64 value){
 
 
 native{
+#include <impl/ecs_render/reflection/reflection_internal.adhd.h>
 #include <impl/ecs_render/reflection/reflection_system.adhd.h>
 #include <impl/ecs_render/reflection/task_graph_reflection.adhd.h>
 #include <impl/ecs_render/kernel/descriptor_register_utils.adhd.h>
@@ -50,60 +84,6 @@ NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#ifndef NWB_IMPL_ECS_RENDER_REFLECTION_INTERNAL_DECLS_H
-#define NWB_IMPL_ECS_RENDER_REFLECTION_INTERNAL_DECLS_H
-namespace RendererTaskGraphDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] Expected<Core::GpuGraphResourceId> ImportReflectionTexture(
-    Core::GpuTaskGraph& graph,
-    const Core::TextureHandle& texture,
-    AStringView resourceLabel = "Reflection Output",
-    b8 firstWrite = true
-);
-[[nodiscard]] Core::GpuTaskDesc ReflectionTaskDesc(Name identity, AStringView label, const Core::GpuTaskId& dependency)noexcept;
-
-[[nodiscard]] Expected<Core::GpuTaskId> DeclareReflectionDepthPyramidTasks(
-    const ReflectionDepthPyramidSnapshot& pyramid,
-    Core::GpuGraphResourceId opaqueDepth,
-    Core::GpuTaskId dependency,
-    Core::GpuTaskGraph& graph,
-    Core::GraphicsRuntime& graphics,
-    Core::GpuGraphResourceId& outDepthPyramid
-);
-
-[[nodiscard]] Expected<Core::GpuTaskId> DeclareReflectionPostprocessTasks(
-    const ReflectionFrameSnapshot& resources,
-    const ReflectionGraphInputs& inputs,
-    Core::GpuTaskId dependency,
-    Core::GpuTaskGraph& graph,
-    Core::GraphicsRuntime& graphics,
-    Core::Alloc::ScratchArena& scratchArena,
-    ReflectionGraphResult& result
-);
-
-[[nodiscard]] Expected<Core::GpuTaskId> DeclareReflectionStatisticsAndFinalizeTasks(
-    const ReflectionFrameSnapshot& resources,
-    const ReflectionGraphInputs& inputs,
-    b8 feedbackReserved,
-    Core::GpuTaskId dependency,
-    Core::GpuTaskGraph& graph,
-    ReflectionGraphResult& result
-);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#endif
 
 
 namespace __hidden_reflection_system{
@@ -161,7 +141,7 @@ b8 RendererReflectionSystem::prepareResources(const u32 width, const u32 height,
         if(!m_graphics.gpuTiming().prepareScopeQueries(scope->identity, device, s_ReflectionGpuTimingQueriesPerRange))
             return false;
     }
-    if(!m_graphics.gpuTiming().prepareScopeQueries(ReflectionGpuTimingScope::s_DepthPyramid.identity, device, s_ReflectionGpuTimingQueriesPerRange * s_ReflectionMaxDepthMips))
+    if(!m_graphics.gpuTiming().prepareScopeQueries(ReflectionGpuTimingScope::s_DepthPyramid.identity, device, ReflectionDepthPyramidTimingQueryCount(s_ReflectionGpuTimingQueriesPerRange, s_ReflectionMaxDepthMips)))
         return false;
     if(m_resources.valid() && m_resources.parameters.width == width && m_resources.parameters.height == height)
         return
@@ -201,7 +181,7 @@ b8 RendererReflectionSystem::prepareResources(const u32 width, const u32 height,
         m_resources.glassRadiance = Move(*glassRadianceResult);
     else
         m_resources.glassRadiance.reset();
-    auto queueResult = createBuffer(s_ReflectionRayQueueBufferName, static_cast<u64>(capacity) * sizeof(u32), false, false);
+    auto queueResult = createBuffer(s_ReflectionRayQueueBufferName, ReflectionRayQueueByteSize(capacity), false, false);
     if(queueResult)
         m_resources.queue = Move(*queueResult);
     else
@@ -212,7 +192,7 @@ b8 RendererReflectionSystem::prepareResources(const u32 width, const u32 height,
     else
         m_resources.counters.reset();
     const u32 argumentCount = ResolveReflectionIndirectArgumentCount(capacity, csgHardwareWork && m_pipelines.csgBuildArgsPipeline());
-    auto indirectArgsResult = createBuffer(s_ReflectionIndirectArgsBufferName, static_cast<u64>(argumentCount) * s_ReflectionIndirectArgumentBytes, false, true);
+    auto indirectArgsResult = createBuffer(s_ReflectionIndirectArgsBufferName, ReflectionIndirectArgumentsByteSize(argumentCount, s_ReflectionIndirectArgumentBytes), false, true);
     if(indirectArgsResult)
         m_resources.indirectArgs = Move(*indirectArgsResult);
     else
@@ -334,7 +314,7 @@ ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
     )
         return {};
     ReflectionFrameSnapshot snapshot = m_resources;
-    const b8 opticalTransport = !scene.opticalScene.boundsComplete || scene.opticalScene.transparentCount != 0u;
+    const b8 opticalTransport = ReflectionRequiresOpticalTransport(scene.opticalScene.boundsComplete, scene.opticalScene.transparentCount);
     if(scene.valid()){
         const b8 csg = static_cast<b8>(scene.csgTraceContextBuffer);
         if(!opticalTransport)
@@ -374,7 +354,7 @@ ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
     );
     if(parameters.hardwareEnabled != 0u && parameters.maxHardwareRays > 0u && scene.csgTraceContextBuffer){
         const u32 argumentCount = ResolveReflectionIndirectArgumentCount(parameters.maxHardwareRays, true);
-        if(!m_pipelines.csgBuildArgsPipeline() || snapshot.indirectArgs->getCreationDescription().byteSize < static_cast<u64>(argumentCount) * s_ReflectionIndirectArgumentBytes)
+        if(!m_pipelines.csgBuildArgsPipeline() || snapshot.indirectArgs->getCreationDescription().byteSize < ReflectionIndirectArgumentsByteSize(argumentCount, s_ReflectionIndirectArgumentBytes))
             return {};
         snapshot.buildArgsPipeline = m_pipelines.csgBuildArgsPipeline();
     }
@@ -459,7 +439,7 @@ b8 RendererReflectionSystem::prepareQueue(const u32 capacity){
         return true;
     Core::BufferDesc desc;
     desc
-        .setByteSize(static_cast<u64>(capacity) * sizeof(u32))
+        .setByteSize(ReflectionRayQueueByteSize(capacity))
         .setCanHaveUAVs(true)
         .setCanHaveRawViews(true)
         .setDebugName(s_ReflectionRayQueueBufferName)
@@ -482,7 +462,7 @@ b8 RendererReflectionSystem::prepareQueue(const u32 capacity){
 b8 RendererReflectionSystem::prepareArguments(const u32 capacity, const b8 sliced){
     using namespace __hidden_reflection_system;
     const u32 argumentCount = ResolveReflectionIndirectArgumentCount(capacity, sliced);
-    const u64 byteSize = static_cast<u64>(argumentCount) * s_ReflectionIndirectArgumentBytes;
+    const u64 byteSize = ReflectionIndirectArgumentsByteSize(argumentCount, s_ReflectionIndirectArgumentBytes);
     if(m_resources.indirectArgs && m_resources.indirectArgs->getCreationDescription().byteSize >= byteSize)
         return true;
     Core::BufferDesc desc;
@@ -536,7 +516,7 @@ b8 RendererReflectionFeedback::prepareResources(const u32 width, const u32 heigh
         }
         m_control = Move(*controlResult);
     }
-    const b8 changed = width != m_extent.width || height != m_extent.height || deviceGeneration != m_deviceGeneration;
+    const b8 changed = ReflectionFeedbackExtentOrDeviceChanged(width, height, deviceGeneration, m_extent.width, m_extent.height, m_deviceGeneration);
     const b8 active = enabled && settings.traceMode == ReflectionTraceMode::Hybrid && settings.maxHardwareRaysPerFrame > 0u;
     if(active && (changed || !m_banks[0].valid() || !m_banks[1].valid())){
         auto firstBank = prepareBank(extent.byteCount, s_ReflectionScreenFeedback0Name);
@@ -650,8 +630,8 @@ b8 RendererReflectionPostprocess::prepareResources(const u32 width, const u32 he
         )
             return false;
     }
-    if(settings.spatialFilterEnabled && settings.spatialRadius > 0u && active){
-        const u32 radiusIndex = settings.spatialRadius - 1u;
+    if(IsReflectionSpatialFilterActive(settings.spatialFilterEnabled, settings.spatialRadius, NWB_REFLECTION_SPATIAL_MAX_RADIUS, active)){
+        const u32 radiusIndex = ReflectionSpatialRadiusPipelineIndex(settings.spatialRadius);
         if(
             !preparePipeline(&ReflectionSubsystem::spatialCs, ResolveReflectionSpatialVariant(radiusIndex), m_spatialPipelines[radiusIndex], m_spatialShaders[radiusIndex])
             || !prepareImage(m_spatial, s_ReflectionSpatialDescriptorIndex, s_ReflectionOpaqueSpatialName)
@@ -672,9 +652,9 @@ ReflectionPostprocessSnapshot RendererReflectionPostprocess::snapshot(const Refl
     result.previous = result.history.previousBank == 0u ? base : m_history;
     result.spatial = m_spatial;
     result.temporalPipeline = m_temporalPipeline;
-    result.spatialEnabled = settings.spatialFilterEnabled && settings.spatialRadius > 0u && settings.spatialRadius <= NWB_REFLECTION_SPATIAL_MAX_RADIUS && settings.traceMode != ReflectionTraceMode::Disabled;
+    result.spatialEnabled = IsReflectionSpatialFilterActive(settings.spatialFilterEnabled, settings.spatialRadius, NWB_REFLECTION_SPATIAL_MAX_RADIUS, settings.traceMode != ReflectionTraceMode::Disabled);
     if(result.spatialEnabled)
-        result.spatialPipeline = m_spatialPipelines[settings.spatialRadius - 1u];
+        result.spatialPipeline = m_spatialPipelines[ReflectionSpatialRadiusPipelineIndex(settings.spatialRadius)];
     return result;
 }
 

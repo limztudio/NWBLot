@@ -2,8 +2,56 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderKernelTaskTimingTelemetryLabelsAdhdModule(in u64 value){
-    return value != 0u;
+b8 ShouldAppendPhysicalQueueRuntimeTelemetry(
+    in u64 acceptedPacketCount,
+    in u64 rejectedPacketCount,
+    in u64 incomingLogicalOwnershipTransferCount,
+    in u64 outgoingLogicalOwnershipTransferCount,
+    in u64 incomingLogicalOwnershipTransferSignatureCount,
+    in u64 outgoingLogicalOwnershipTransferSignatureCount,
+    in u64 incomingRepeatedOwnershipTransferSignatureCount,
+    in u64 outgoingRepeatedOwnershipTransferSignatureCount,
+    in u64 concurrentSharingAdviceResourceCount
+){
+    if(acceptedPacketCount != 0u || rejectedPacketCount != 0u)
+        return true;
+    return
+        incomingLogicalOwnershipTransferCount != 0u
+        || outgoingLogicalOwnershipTransferCount != 0u
+        || incomingLogicalOwnershipTransferSignatureCount != 0u
+        || outgoingLogicalOwnershipTransferSignatureCount != 0u
+        || incomingRepeatedOwnershipTransferSignatureCount != 0u
+        || outgoingRepeatedOwnershipTransferSignatureCount != 0u
+        || concurrentSharingAdviceResourceCount != 0u
+    ;
+}
+
+b8 CanBuildFrameGraphRuntimeStatistics(in b8 statisticsValid, in u64 captureFrameIndex, in u64 sourceFrameIndex){
+    return statisticsValid && captureFrameIndex == sourceFrameIndex;
+}
+
+b8 HasMatchingPhysicalQueueTelemetryEpochs(
+    in u64 compileGraphGeneration,
+    in u64 recordingGraphGeneration,
+    in u64 submissionGraphGeneration,
+    in u64 compilePlanGeneration,
+    in u64 recordingPlanGeneration,
+    in u64 submissionPlanGeneration,
+    in u64 recordingAttemptGeneration,
+    in u64 submissionAttemptGeneration,
+    in u16 compileDeviceGeneration,
+    in u16 recordingDeviceGeneration,
+    in u16 submissionDeviceGeneration
+){
+    return
+        compileGraphGeneration == recordingGraphGeneration
+        && compileGraphGeneration == submissionGraphGeneration
+        && compilePlanGeneration == recordingPlanGeneration
+        && compilePlanGeneration == submissionPlanGeneration
+        && recordingAttemptGeneration == submissionAttemptGeneration
+        && compileDeviceGeneration == recordingDeviceGeneration
+        && compileDeviceGeneration == submissionDeviceGeneration
+    ;
 }
 
 
@@ -37,6 +85,7 @@ NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 namespace __hidden_renderer_frame_pipeline_telemetry{
 
@@ -208,17 +257,17 @@ b8 RendererGraphRuntimeLabel::Append(
             const Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& queueRuntimeStatistics = physicalQueueRuntimeStatistics[queueIndex];
             const Core::Telemetry::FrameGraphPhysicalQueueSubmissionRuntimeStatistics& queueStatistics = queueRuntimeStatistics.submission;
             const Core::Telemetry::FrameGraphPhysicalQueueCompileRuntimeStatistics& queueCompileStatistics = queueRuntimeStatistics.compile;
-            const b8 hasTerminalSubmissionWork = queueStatistics.acceptedPacketCount != 0u || queueStatistics.rejectedPacketCount != 0u;
-            const b8 hasLogicalOwnershipTelemetry =
-                queueCompileStatistics.incomingLogicalOwnershipTransferCount != 0u
-                || queueCompileStatistics.outgoingLogicalOwnershipTransferCount != 0u
-                || queueCompileStatistics.incomingLogicalOwnershipTransferSignatureCount != 0u
-                || queueCompileStatistics.outgoingLogicalOwnershipTransferSignatureCount != 0u
-                || queueCompileStatistics.incomingRepeatedOwnershipTransferSignatureCount != 0u
-                || queueCompileStatistics.outgoingRepeatedOwnershipTransferSignatureCount != 0u
-                || queueCompileStatistics.concurrentSharingAdviceResourceCount != 0u
-            ;
-            if(!hasTerminalSubmissionWork && !hasLogicalOwnershipTelemetry)
+            if(!ShouldAppendPhysicalQueueRuntimeTelemetry(
+                queueStatistics.acceptedPacketCount,
+                queueStatistics.rejectedPacketCount,
+                queueCompileStatistics.incomingLogicalOwnershipTransferCount,
+                queueCompileStatistics.outgoingLogicalOwnershipTransferCount,
+                queueCompileStatistics.incomingLogicalOwnershipTransferSignatureCount,
+                queueCompileStatistics.outgoingLogicalOwnershipTransferSignatureCount,
+                queueCompileStatistics.incomingRepeatedOwnershipTransferSignatureCount,
+                queueCompileStatistics.outgoingRepeatedOwnershipTransferSignatureCount,
+                queueCompileStatistics.concurrentSharingAdviceResourceCount
+            ))
                 continue;
             const Core::Telemetry::FrameGraphPhysicalQueueRecordingRuntimeStatistics& queueRecordingStatistics = queueRuntimeStatistics.recording;
             const Core::GpuCommandArenaStatistics commandArenaStatistics = device.getCommandArenaStatistics(queueInfo.id);
@@ -513,7 +562,7 @@ template<typename Result, typename Statistics>
 
 
 Core::Telemetry::FrameGraphRuntimeStatistics ECSRenderDetail::BuildFrameGraphRuntimeStatistics(const Core::GpuTaskGraphRuntimeStatistics& statistics, const u64 captureFrameIndex, const u64 sourceFrameIndex)noexcept{
-    if(captureFrameIndex != sourceFrameIndex || !statistics.valid())
+    if(!CanBuildFrameGraphRuntimeStatistics(statistics.valid(), captureFrameIndex, sourceFrameIndex))
         return {};
 
     const Core::GpuTaskGraphCompileStatistics& compileStatistics = statistics.compile;
@@ -618,13 +667,19 @@ Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics ECSRenderDetail::Build
         !compileStatistics.valid()
         || !recordingStatistics.valid()
         || !submissionStatistics.valid()
-        || compileStatistics.graphGeneration != recordingStatistics.graphGeneration
-        || compileStatistics.graphGeneration != submissionStatistics.graphGeneration
-        || compileStatistics.planGeneration != recordingStatistics.planGeneration
-        || compileStatistics.planGeneration != submissionStatistics.planGeneration
-        || recordingStatistics.recordingAttemptGeneration != submissionStatistics.recordingAttemptGeneration
-        || compileStatistics.deviceGeneration != recordingStatistics.deviceGeneration
-        || compileStatistics.deviceGeneration != submissionStatistics.deviceGeneration
+        || !HasMatchingPhysicalQueueTelemetryEpochs(
+            compileStatistics.graphGeneration,
+            recordingStatistics.graphGeneration,
+            submissionStatistics.graphGeneration,
+            compileStatistics.planGeneration,
+            recordingStatistics.planGeneration,
+            submissionStatistics.planGeneration,
+            recordingStatistics.recordingAttemptGeneration,
+            submissionStatistics.recordingAttemptGeneration,
+            compileStatistics.deviceGeneration,
+            recordingStatistics.deviceGeneration,
+            submissionStatistics.deviceGeneration
+        )
         || compileStatistics.queue != recordingStatistics.queue
         || compileStatistics.queue != submissionStatistics.queue
         || compileStatistics.queueClass != recordingStatistics.queueClass
@@ -672,9 +727,6 @@ Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics ECSRenderDetail::Build
 
 
 NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 }
 
 

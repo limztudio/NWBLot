@@ -5,6 +5,9 @@
 #include "light_space_plan.adhd"
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 #include <impl/ecs_render/shadow/light_space_csg.adhd.h>
 #include <impl/ecs_render/shadow/light_space_plan.adhd.h>
@@ -199,9 +202,6 @@ Expected<u32> LightSpaceShadowDrawCount(in Span<LightSpaceShadowCaster> casters)
             return MakeUnexpected(Failure());
     }
     return cast<u32>(drawCount);
-}
-b8 ImplEcsRenderShadowLightSpaceShadowAdhdModule(in u64 value){
-    return value != 0u;
 }
 
 

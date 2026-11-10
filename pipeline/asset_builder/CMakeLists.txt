@@ -9,9 +9,7 @@ target_sources(nwb_pipeline_asset_builder PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/*.inl"
     "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
 )
-nwb_target_adhd_sources(nwb_pipeline_asset_builder NAMESPACE "NWB::Pipeline::AssetBuilder" SOURCES
-    "${CMAKE_CURRENT_LIST_DIR}/constants.adhd"
-)
+nwb_target_adhd_sources(nwb_pipeline_asset_builder NAMESPACE "NWB::Pipeline::AssetBuilder" SOURCES "${CMAKE_CURRENT_LIST_DIR}/*.adhd")
 target_link_libraries(nwb_pipeline_asset_builder PUBLIC nwb_assets_volume_cook nwb_cpu_task)
 target_compile_definitions(nwb_pipeline_asset_builder PRIVATE NWB_COOK=1)
 

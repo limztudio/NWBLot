@@ -2,8 +2,48 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderCausticRtCausticsRenderAndTasksAdhdModule(in u64 value){
-    return value != 0u;
+#include <impl/ecs_render/caustic/settings.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> CausticWaveletVariantKind{
+    Generic = 0u,
+    StepOne = 1u,
+    StepTwo = 2u,
+    Direct = 3u,
+    kCount
+}
+
+b8 IsCausticPrepareOutputHalfB(in u32 resolvePassCount){
+    return (resolvePassCount % 2u) == 0u;
+}
+
+b8 IsCausticWaveletInputHalfB(in u32 resolvePassCount, in u32 passIndex){
+    return ((resolvePassCount + passIndex) % 2u) == 0u;
+}
+
+u32 ResolveCausticWaveletStepWidth(in u32 passIndex){
+    return 1u << passIndex;
+}
+
+CausticWaveletVariantKind ClassifyCausticWaveletStepWidth(in u32 stepWidth, in u32 ldsMaxStep){
+    if(stepWidth == s_CausticWaveletStepOneWidth)
+        return CausticWaveletVariantKind::StepOne;
+    if(stepWidth == s_CausticWaveletStepTwoWidth)
+        return CausticWaveletVariantKind::StepTwo;
+    if(stepWidth > ldsMaxStep)
+        return CausticWaveletVariantKind::Direct;
+    return CausticWaveletVariantKind::Generic;
+}
+
+u32 ComputeCausticHalfTargetExtent(in u32 extent){
+    return DivideUpWrappingU32(extent, 2u);
+}
+
+u32 ComputeCausticFullDispatchGroups(in u32 extent){
+    return DivideUp(extent, s_CausticResolveGroupSize);
 }
 
 
@@ -12,41 +52,42 @@ b8 ImplEcsRenderCausticRtCausticsRenderAndTasksAdhdModule(in u64 value){
 
 native{
 #include <impl/global.adhd.h>
-#include <impl/ecs_render/caustic/graph_types.adhd.h>
-#include <impl/ecs_render/caustic/caustic_resolve_state.adhd.h>
-#include <impl/ecs_render/raytrace/graph_snapshots.adhd.h>
-#include <impl/ecs_render/shared/renderer_frame_bindings.adhd.h>
-#include <core/graphics/gpu_timing.h>
-#include <core/task/gpu/task_graph.h>
-#include <impl/ecs_render/caustic/caustics_graph_coordinator.adhd.h>
-#include <impl/ecs_render/mesh/mesh_system.adhd.h>
-#include <impl/ecs_render/raytrace/raytracing_system.adhd.h>
-#include <impl/ecs_render/raytrace/task_graph_scene_resources.adhd.h>
-#include <impl/ecs_render/shared/frame_types.adhd.h>
-#include <impl/ecs_render/raytrace/rt_private.adhd.h>
-#include <impl/ecs_render/kernel/task_graph_scheduling.adhd.h>
-#include <impl/ecs_render/kernel/task_graph_resource_utils.adhd.h>
-#include <core/task/gpu/capture/command_ir.h>
-#include <global/timer.h>
 #include <impl/assets/graphics/caustic/resolve_binding_slots.h>
-#include <impl/ecs_render/kernel/renderer_constants_private.adhd.h>
-#include <core/graphics/backend_selection/backend.h>
-#include <global/algorithm.h>
-#include <impl/ecs_render/caustic/hardware_caustics_stage_builder.adhd.h>
 #include <impl/assets_graphics/refractive_subsystem.adhd.h>
-#include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd.h>
-#include <core/graphics/rhi/gpu_descriptor_heap.h>
-#include <impl/ecs_render/caustic/caustic_emission_target_buffer.adhd.h>
-#include <impl/ecs_render/caustic/caustic_resolve_state.adhd.h>
 #include <impl/ecs_render/caustic/caustic_activity_resources.adhd.h>
-#include <impl/ecs_render/kernel/descriptor_register_utils.adhd.h>
-#include <core/graphics/runtime/runtime.h>
-#include <impl/ecs_render/raytrace/ray_trace_material_resources.adhd.h>
-#include <impl/ecs_render/optics/coincident_volumes.adhd.h>
+#include <impl/ecs_render/caustic/caustic_emission_target_buffer.adhd.h>
 #include <impl/ecs_render/caustic/caustic_emission_target_builder.adhd.h>
 #include <impl/ecs_render/caustic/caustic_light_selector.adhd.h>
-#include <impl/ecs_render/caustic/caustic_activity_resources.adhd.h>
+#include <impl/ecs_render/caustic/caustic_resolve_state.adhd.h>
+#include <impl/ecs_render/caustic/caustics_graph_coordinator.adhd.h>
+#include <impl/ecs_render/caustic/graph_types.adhd.h>
+#include <impl/ecs_render/caustic/hardware_caustics_stage_builder.adhd.h>
+#include <impl/ecs_render/caustic/rt_caustics_internal.adhd.h>
+#include <impl/ecs_render/kernel/descriptor_register_utils.adhd.h>
+#include <impl/ecs_render/kernel/renderer_constants_private.adhd.h>
+#include <impl/ecs_render/kernel/task_graph_resource_utils.adhd.h>
+#include <impl/ecs_render/kernel/task_graph_scheduling.adhd.h>
+#include <impl/ecs_render/mesh/mesh_system.adhd.h>
+#include <impl/ecs_render/optics/coincident_volumes.adhd.h>
+#include <impl/ecs_render/raytrace/graph_snapshots.adhd.h>
+#include <impl/ecs_render/raytrace/ray_trace_material_resources.adhd.h>
+#include <impl/ecs_render/raytrace/raytracing_system.adhd.h>
+#include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd.h>
+#include <impl/ecs_render/raytrace/rt_private.adhd.h>
+#include <impl/ecs_render/raytrace/task_graph_scene_resources.adhd.h>
+#include <impl/ecs_render/shared/frame_types.adhd.h>
+#include <impl/ecs_render/shared/renderer_frame_bindings.adhd.h>
+
+#include <core/graphics/backend_selection/backend.h>
+#include <core/graphics/gpu_timing.h>
+#include <core/graphics/rhi/gpu_descriptor_heap.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/task/gpu/capture/command_ir.h>
+#include <core/task/gpu/task_graph.h>
+
+#include <global/algorithm.h>
 #include <global/hash_utils.h>
+#include <global/timer.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -56,167 +97,6 @@ NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#ifndef NWB_IMPL_ECS_RENDER_CAUSTIC_RT_CAUSTICS_INTERNAL_DECLS_H
-#define NWB_IMPL_ECS_RENDER_CAUSTIC_RT_CAUSTICS_INTERNAL_DECLS_H
-class RendererRayTracingSystem;
-
-struct DeferredFrameTargets;
-
-
-// Shared prepare plus five-wavelet plus upsample plus timing-close resolve declaration.
-using CausticsResolveStageUses = Span<const Core::GpuTaskResourceUse>;
-
-struct CausticsResolveChainStageUseInputs{
-    CausticsResolveStageUses prepare{};
-    Array<CausticsResolveStageUses, NWB_CAUSTIC_RESOLVE_PASS_COUNT> wavelets{};
-    CausticsResolveStageUses upsample{};
-};
-
-struct CausticsResolveStageNaming{
-    Name identity;
-    AStringView label;
-    TStringView warnText;
-};
-
-struct CausticsResolveChainInputs : public CausticsResolveChainStageUseInputs{
-    DeferredFrameTargets& targets;
-    Core::GpuTaskId geometryTask;
-    Core::GpuTaskSchedulingHint baseScheduling;
-    Span<const Core::GpuTaskExternalStateSource> stateSources{};
-    b8 applyStateSourcesToPrepareOnly = true;
-    b8& producerDispatched;
-    Core::GpuTimingSubmissionTicket& timingTicket;
-    Optional<Core::GpuTimingMeasure>& resolveTiming;
-
-
-public:
-    CausticsResolveChainInputs(DeferredFrameTargets& targetsIn, b8& producerDispatchedIn, Core::GpuTimingSubmissionTicket& timingTicketIn, Optional<Core::GpuTimingMeasure>& resolveTimingIn)noexcept
-        : targets(targetsIn)
-        , producerDispatched(producerDispatchedIn)
-        , timingTicket(timingTicketIn)
-        , resolveTiming(resolveTimingIn)
-    {}
-};
-
-struct CausticsResolveChainStageTasks{
-    Core::GpuTaskId causticResolvePrepareTask;
-    Array<Core::GpuTaskId, NWB_CAUSTIC_RESOLVE_PASS_COUNT> causticResolveWaveletTasks{};
-    Core::GpuTaskId causticResolveUpsampleTask;
-};
-
-struct CausticsResolveChainResult : public CausticsResolveChainStageTasks{
-    Core::GpuTaskId causticsTask;
-};
-
-struct CausticsResolveChainNaming{
-    CausticsResolveStageNaming prepare;
-    Array<CausticsResolveStageNaming, NWB_CAUSTIC_RESOLVE_PASS_COUNT> wavelets{};
-    CausticsResolveStageNaming upsample;
-    CausticsResolveStageNaming timingClose;
-};
-
-struct CausticsStagePrefixInputs{
-    DeferredFrameTargets& targets;
-    const ECSRenderDetail::MeshViewBufferSnapshot& meshViewSnapshot;
-    const b8& shadowPreparationReady;
-    Core::GpuTimingSubmissionTicket& timingTicket;
-    Optional<Core::GpuTimingMeasure>& photonTiming;
-    Span<const Core::GpuTaskId> initialDependencies{};
-    Span<const Core::GpuExternalCompletionId> externalDependencies{};
-    Span<const Core::GpuTaskExternalStateSource> irradianceClearStateSources{};
-    Span<const Core::GpuTaskExternalStateSource> accumulatorStateSources{};
-    Core::GpuGraphResourceId causticIrradiance;
-    Core::GpuGraphResourceId causticAccumulator;
-    b8 causticAccumulatorInitialized = false;
-    b8 hardwareCaustics = false;
-};
-
-
-struct CausticsGeometryAndResolveInputs{
-    DeferredFrameTargets& targets;
-    b8& producerDispatched;
-    Core::GpuTimingSubmissionTicket& timingTicket;
-    Optional<Core::GpuTimingMeasure>& resolveTiming;
-    CausticsStageTargets stageTargets;
-    Core::GpuGraphResourceId worldPosition;
-    Core::GpuGraphResourceId depth;
-    Core::GpuGraphResourceId causticIrradiance;
-    Core::GpuTaskId photonTask;
-    Core::GpuTaskSchedulingHint baseScheduling;
-    Span<const Core::GpuTaskExternalStateSource> geometryStateSources{};
-    Span<const Core::GpuTaskExternalStateSource> resolveStateSources{};
-    b8 hardwareCaustics = false;
-};
-
-struct CausticsGeometryAndResolveResult : public CausticsResolveChainResult{
-    Core::GpuTaskId causticGeometryTask;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class CausticsResolveChainBuilder final : NoCopy{
-public:
-    CausticsResolveChainBuilder(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem)noexcept
-        : m_graph(graph)
-        , m_raytracingSystem(raytracingSystem)
-    {}
-
-
-public:
-    [[nodiscard]] Expected<CausticsStageTargets> importStageTargets(const DeferredFrameTargets& targets, b8 hardwareCaustics);
-    [[nodiscard]] Expected<CausticsStagePrefixResult> declarePrefixTasks(const CausticsStagePrefixInputs& inputs);
-    [[nodiscard]] Expected<CausticsGeometryAndResolveResult> declareGeometryAndResolve(const CausticsGeometryAndResolveInputs& inputs);
-    [[nodiscard]] Expected<CausticsResolveChainResult> declare(const CausticsResolveChainInputs& inputs, const CausticsResolveChainNaming& naming);
-    [[nodiscard]] Expected<CausticsResolveChainResult> declareHardware(const CausticsResolveChainInputs& inputs);
-    [[nodiscard]] Expected<CausticsResolveChainResult> declareSoftware(const CausticsResolveChainInputs& inputs);
-
-
-private:
-    Core::GpuTaskGraph& m_graph;
-    RendererRayTracingSystem& m_raytracingSystem;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererShaderSystem;
-struct RtCausticState;
-
-
-class CausticPipelineSet final : NoCopy{
-public:
-    CausticPipelineSet(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaderSystem, RtCausticState& caustic, const b8& hasCsg)noexcept
-        : m_arena(arena)
-        , m_graphics(graphics)
-        , m_shaderSystem(shaderSystem)
-        , m_caustic(caustic)
-        , m_hasCsg(hasCsg)
-    {}
-
-
-public:
-    [[nodiscard]] b8 ensureSwCausticPipeline();
-    [[nodiscard]] b8 ensureCausticResolvePipeline();
-    [[nodiscard]] b8 ensureCausticGeometryDownsamplePipeline();
-    [[nodiscard]] b8 ensureCausticAccumulatorDecayPipeline();
-    [[nodiscard]] b8 ensureCausticRtPipeline();
-
-
-private:
-    Core::Alloc::GlobalArena& m_arena;
-    Core::GraphicsRuntime& m_graphics;
-    RendererShaderSystem& m_shaderSystem;
-    RtCausticState& m_caustic;
-    const b8& m_hasCsg;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#endif
 
 
 namespace RayTracingCausticsTaskDetail{
@@ -348,7 +228,7 @@ void RendererRayTracingSystem::dispatchCausticResolvePrepare(Core::CommandList& 
     RayTracingCausticsTaskDetail::EnableCausticResolveBarriers(commandList, targets);
     const RayTracingDispatchGroups groups = ResolveRayTracingDispatchGroups(targets.width, targets.height, s_CausticResolveDownscaleFactor, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
     const f32 effectiveIntensity = EffectiveCausticIntensity(s_DefaultCausticTemporalDecay);
-    const b8 prepareToHalfB = (static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT) % 2u) == 0u;
+    const b8 prepareToHalfB = IsCausticPrepareOutputHalfB(static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT));
     const RayTracingCausticsTaskDetail::CausticResolvePassResources halfA = RayTracingCausticsTaskDetail::MakeCausticHistoryResolvePassResources(targets);
     const RayTracingCausticsTaskDetail::CausticResolvePassResources halfB = RayTracingCausticsTaskDetail::MakeCausticHalfResolvePassResources(targets);
     RayTracingCausticsTaskDetail::DispatchCausticResolvePass(
@@ -431,8 +311,8 @@ b8 RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& targets)
     // Fresh accumulators reseed the temporal EMA.
     m_rayTracingState.m_causticAccumulatorInitialized = false;
 
-    const u32 halfWidth = DivideUpWrapping(targets.width, 2u);
-    const u32 halfHeight = DivideUpWrapping(targets.height, 2u);
+    const u32 halfWidth = ComputeCausticHalfTargetExtent(targets.width);
+    const u32 halfHeight = ComputeCausticHalfTargetExtent(targets.height);
 
     Core::TextureDesc irradianceDesc;
     irradianceDesc
@@ -814,7 +694,7 @@ b8 RendererRayTracingSystem::dispatchCausticAccumulatorDecay(Core::CommandList& 
     NWB_ASSERT(heap.isInitialized());
     heap.bindCompute(commandList, *m_rayTracingState.m_causticAccumulatorDecayPipeline.get());
     commandList.setPushConstants(&decayPush, sizeof(decayPush));
-    commandList.dispatch(DivideUp(targets.width, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE)), DivideUp(targets.height, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE)), 1u);
+    commandList.dispatch(ComputeCausticFullDispatchGroups(targets.width), ComputeCausticFullDispatchGroups(targets.height), 1u);
     return true;
 }
 
@@ -850,15 +730,16 @@ void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(Core::CommandLi
     const RayTracingDispatchGroups groups = ResolveRayTracingDispatchGroups(targets.width, targets.height, s_CausticResolveDownscaleFactor, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
     const f32 effectiveIntensity = EffectiveCausticIntensity(s_DefaultCausticTemporalDecay);
     // Alternate the prepare output and its counterpart while doubling the wavelet sampling distance.
-    const b8 inputIsHalfB = ((static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT) + passIndex) % 2u) == 0u;
+    const b8 inputIsHalfB = IsCausticWaveletInputHalfB(static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT), passIndex);
     const RayTracingCausticsTaskDetail::CausticResolvePassResources halfA = RayTracingCausticsTaskDetail::MakeCausticHistoryResolvePassResources(targets);
     const RayTracingCausticsTaskDetail::CausticResolvePassResources halfB = RayTracingCausticsTaskDetail::MakeCausticHalfResolvePassResources(targets);
-    const u32 stepWidth = 1u << passIndex;
+    const u32 stepWidth = ResolveCausticWaveletStepWidth(passIndex);
     const CausticResolveState& resolve = m_rayTracingState.m_causticResolve;
+    const CausticWaveletVariantKind::Enum waveletKind = ClassifyCausticWaveletStepWidth(stepWidth, static_cast<u32>(NWB_CAUSTIC_RESOLVE_LDS_MAX_STEP));
     const CausticResolveStageState& wavelet =
-        stepWidth == s_CausticWaveletStepOneWidth ? resolve.m_waveletStepOne
-        : stepWidth == s_CausticWaveletStepTwoWidth ? resolve.m_waveletStepTwo
-        : stepWidth > NWB_CAUSTIC_RESOLVE_LDS_MAX_STEP ? resolve.m_waveletDirect
+        waveletKind == CausticWaveletVariantKind::StepOne ? resolve.m_waveletStepOne
+        : waveletKind == CausticWaveletVariantKind::StepTwo ? resolve.m_waveletStepTwo
+        : waveletKind == CausticWaveletVariantKind::Direct ? resolve.m_waveletDirect
         : resolve.m_wavelet;
     NWB_ASSERT(wavelet.m_pipeline);
     RayTracingCausticsTaskDetail::DispatchCausticResolvePass(
@@ -886,8 +767,8 @@ void RendererRayTracingSystem::dispatchCausticResolveUpsample(Core::CommandList&
     RayTracingCausticsTaskDetail::EnableCausticResolveBarriers(commandList, targets);
     commandList.setEnableUavBarriersForTexture(targets.causticIrradiance.get(), true);
 
-    const u32 fullGroupsX = DivideUp(targets.width, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
-    const u32 fullGroupsY = DivideUp(targets.height, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
+    const u32 fullGroupsX = ComputeCausticFullDispatchGroups(targets.width);
+    const u32 fullGroupsY = ComputeCausticFullDispatchGroups(targets.height);
 
     // Normalize temporal accumulation to retain non-temporal brightness.
     const f32 effectiveIntensity = EffectiveCausticIntensity(s_DefaultCausticTemporalDecay);

@@ -2,8 +2,25 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderRendererFrameGraphBuilderAdhdModule(in u64 value){
-    return value != 0u;
+b8 HasDedicatedAsyncComputeQueueFamily(in u32 graphicsFamilyIndex, in u32 computeFamilyIndex){
+    return computeFamilyIndex != u32.max && computeFamilyIndex != graphicsFamilyIndex;
+}
+
+b8 ShouldUseLaggedLightingHistoryInGraph(
+    in b8 dedicatedAsyncCompute,
+    in b8 frameLaggedAsyncLightingEnabled,
+    in b8 laggedLightingHistoryReady,
+    in b8 laggedLightingHistoryReadReady
+){
+    return dedicatedAsyncCompute && frameLaggedAsyncLightingEnabled && laggedLightingHistoryReady && laggedLightingHistoryReadReady;
+}
+
+b8 ShouldCaptureLaggedLightingHistoryInGraph(in b8 includeCapture, in b8 dedicatedAsyncCompute, in b8 frameLaggedAsyncLightingEnabled){
+    return includeCapture && dedicatedAsyncCompute && frameLaggedAsyncLightingEnabled;
+}
+
+b8 ShouldMergeOpaqueGbufferAcrossConsumerFrontier(in b8 regularOwned, in b8 sharedOwned, in b8 csgReceiverOwned){
+    return regularOwned || sharedOwned || csgReceiverOwned;
 }
 
 
@@ -167,10 +184,10 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     const auto& device = m_graphics.getDevice();
     const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
     const u32 computeFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Compute);
-    const b8 dedicatedAsyncCompute = computeFamilyIndex != Limit<u32>::s_Max && computeFamilyIndex != graphicsFamilyIndex;
-    const b8 useLaggedLightingHistory = dedicatedAsyncCompute && features.frameLaggedAsyncLightingEnabled && features.laggedLightingHistoryReady && features.laggedLightingHistoryReadReady;
+    const b8 dedicatedAsyncCompute = HasDedicatedAsyncComputeQueueFamily(graphicsFamilyIndex, computeFamilyIndex);
+    const b8 useLaggedLightingHistory = ShouldUseLaggedLightingHistoryInGraph(dedicatedAsyncCompute, features.frameLaggedAsyncLightingEnabled, features.laggedLightingHistoryReady, features.laggedLightingHistoryReadReady);
     const b8 declaresHardwareCaustics = features.hardwareCaustics;
-    const b8 capturesLaggedLightingHistory = includeLaggedLightingHistoryCapture && dedicatedAsyncCompute && features.frameLaggedAsyncLightingEnabled;
+    const b8 capturesLaggedLightingHistory = ShouldCaptureLaggedLightingHistoryInGraph(includeLaggedLightingHistoryCapture, dedicatedAsyncCompute, features.frameLaggedAsyncLightingEnabled);
     const DeferredLaggedLightingHistoryResources* const history = useLaggedLightingHistory ? &deferredTargets.laggedLightingHistory : nullptr;
     const DeferredLaggedLightingHistoryResources* const captureHistory = capturesLaggedLightingHistory ? &deferredTargets.laggedLightingHistory : nullptr;
     if(!presentationFrame.valid())
@@ -1334,7 +1351,7 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
     gbufferScheduling.mergeWithPrevious = true;
 
     // Explicit immediate predecessor. Keep its UAV-to-vertex/index handoff in the primary-Graphics packet despite cross-queue consumers.
-    gbufferScheduling.allowMergeAcrossConsumerFrontier = opaqueComputeEmulationOutputStatesGraphOwned || opaqueSharedComputeEmulationOutputStatesGraphOwned || opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned;
+    gbufferScheduling.allowMergeAcrossConsumerFrontier = ShouldMergeOpaqueGbufferAcrossConsumerFrontier(opaqueComputeEmulationOutputStatesGraphOwned, opaqueSharedComputeEmulationOutputStatesGraphOwned, opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned);
     Core::GpuTaskDesc gbufferDesc;
     gbufferDesc
         .setIdentity(Name(s_FrameGraphNameRenderGraphicsPrefixGbuffer))

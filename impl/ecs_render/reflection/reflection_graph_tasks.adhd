@@ -2,8 +2,50 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderReflectionGraphTasksAdhdModule(in u64 value){
-    return value != 0u;
+const usize s_ReflectionSurfaceReadCount = 9u;
+
+b8 ReflectionUsesSlicedCsgPushConstants(in b8 hasCsgTraceContextBuffer, in b8 isHardwareStage, in b8 isBuildArgsStage){
+    return hasCsgTraceContextBuffer && (isHardwareStage || isBuildArgsStage);
+}
+
+u32 ReflectionCsgSliceRayOffset(in u32 slice, in u32 raysPerSlice){
+    return slice * raysPerSlice;
+}
+
+u32 ReflectionCsgSliceIndirectByteOffset(in u32 slice, in u32 argumentStrideBytes){
+    return slice * argumentStrideBytes;
+}
+
+b8 IsFinalReflectionCsgHardwareSlice(in u32 slice, in u32 sliceCount){
+    return slice + 1u == sliceCount;
+}
+
+b8 ReflectionTraceModeUsesScreenInputs(in u32 traceMode, in u32 screenMode, in u32 hybridMode){
+    return traceMode == screenMode || traceMode == hybridMode;
+}
+
+b8 ShouldWriteReflectionFeedback(in b8 feedbackReserved, in b8 feedbackEligible, in u32 hardwareEnabled){
+    return feedbackReserved && feedbackEligible && hardwareEnabled != 0u;
+}
+
+u64 ReflectionFeedbackEntryByteCount(in u32 totalByteCount, in u64 headerBytes){
+    return cast<u64>(totalByteCount) - headerBytes;
+}
+
+b8 IsTrustedReflectionContentStamp(in b8 sceneStampTrusted, in b8 csgEmpty, in b8 useLaggedLightingHistory){
+    return sceneStampTrusted && csgEmpty && !useLaggedLightingHistory;
+}
+
+u32 ReflectionDepthPyramidSourceMipIndex(in u32 mipIndex){
+    if(mipIndex == 0u)
+        return 0u;
+    return mipIndex - 1u;
+}
+
+u64 ResolveReflectionStatisticsFeedbackSequence(in b8 feedbackReserved, in u64 plannedSequence){
+    if(feedbackReserved)
+        return plannedSequence;
+    return 0u;
 }
 
 
@@ -11,6 +53,7 @@ b8 ImplEcsRenderReflectionGraphTasksAdhdModule(in u64 value){
 
 
 native{
+#include <impl/ecs_render/reflection/reflection_internal.adhd.h>
 #include <impl/ecs_render/reflection/reflection_system.adhd.h>
 #include <impl/ecs_render/reflection/task_graph_reflection.adhd.h>
 #include <impl/ecs_render/kernel/descriptor_register_utils.adhd.h>
@@ -50,60 +93,6 @@ NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#ifndef NWB_IMPL_ECS_RENDER_REFLECTION_INTERNAL_DECLS_H
-#define NWB_IMPL_ECS_RENDER_REFLECTION_INTERNAL_DECLS_H
-namespace RendererTaskGraphDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] Expected<Core::GpuGraphResourceId> ImportReflectionTexture(
-    Core::GpuTaskGraph& graph,
-    const Core::TextureHandle& texture,
-    AStringView resourceLabel = "Reflection Output",
-    b8 firstWrite = true
-);
-[[nodiscard]] Core::GpuTaskDesc ReflectionTaskDesc(Name identity, AStringView label, const Core::GpuTaskId& dependency)noexcept;
-
-[[nodiscard]] Expected<Core::GpuTaskId> DeclareReflectionDepthPyramidTasks(
-    const ReflectionDepthPyramidSnapshot& pyramid,
-    Core::GpuGraphResourceId opaqueDepth,
-    Core::GpuTaskId dependency,
-    Core::GpuTaskGraph& graph,
-    Core::GraphicsRuntime& graphics,
-    Core::GpuGraphResourceId& outDepthPyramid
-);
-
-[[nodiscard]] Expected<Core::GpuTaskId> DeclareReflectionPostprocessTasks(
-    const ReflectionFrameSnapshot& resources,
-    const ReflectionGraphInputs& inputs,
-    Core::GpuTaskId dependency,
-    Core::GpuTaskGraph& graph,
-    Core::GraphicsRuntime& graphics,
-    Core::Alloc::ScratchArena& scratchArena,
-    ReflectionGraphResult& result
-);
-
-[[nodiscard]] Expected<Core::GpuTaskId> DeclareReflectionStatisticsAndFinalizeTasks(
-    const ReflectionFrameSnapshot& resources,
-    const ReflectionGraphInputs& inputs,
-    b8 feedbackReserved,
-    Core::GpuTaskId dependency,
-    Core::GpuTaskGraph& graph,
-    ReflectionGraphResult& result
-);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#endif
 
 
 namespace RendererTaskGraphDetail{
@@ -183,7 +172,7 @@ public:
             state.setIndirectParams(resources.indirectArgs.get());
         commandList.setComputeState(state);
         payload.graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *pipeline, hardware ? resources.scene.tlasHeapHandle : Core::GpuDescriptorHandle::Invalid());
-        const b8 sliced = resources.scene.csgTraceContextBuffer && (hardware || payload.stage == DispatchStage::BuildArgs);
+        const b8 sliced = ReflectionUsesSlicedCsgPushConstants(static_cast<b8>(resources.scene.csgTraceContextBuffer), hardware, payload.stage == DispatchStage::BuildArgs);
         const ReflectionCsgDispatchPushConstants csgParameters = MakeReflectionCsgDispatchPushConstants(resources.frameParametersSlot, 0u);
         if(sliced)
             commandList.setPushConstants(&csgParameters, sizeof(csgParameters));
@@ -258,13 +247,13 @@ public:
         state.setPipeline(pipeline).setIndirectParams(resources.indirectArgs.get());
         commandList.setComputeState(state);
         payload.graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *pipeline, resources.scene.tlasHeapHandle);
-        const ReflectionCsgDispatchPushConstants parameters = MakeReflectionCsgDispatchPushConstants(resources.frameParametersSlot, payload.slice * s_ReflectionTraceSliceRays);
+        const ReflectionCsgDispatchPushConstants parameters = MakeReflectionCsgDispatchPushConstants(resources.frameParametersSlot, ReflectionCsgSliceRayOffset(payload.slice, s_ReflectionTraceSliceRays));
         commandList.setPushConstants(&parameters, sizeof(parameters));
         if(payload.slice == 0u && !payload.dispatch->timing->begin(ReflectionGpuTimingScope::s_Hardware, payload.graphics.getDevice(), commandList))
             return false;
 
-        commandList.dispatchIndirect(payload.slice * s_ReflectionIndirectArgumentBytes);
-        if(payload.slice + 1u == payload.sliceCount)
+        commandList.dispatchIndirect(ReflectionCsgSliceIndirectByteOffset(payload.slice, s_ReflectionIndirectArgumentBytes));
+        if(IsFinalReflectionCsgHardwareSlice(payload.slice, payload.sliceCount))
             return payload.dispatch->timing->recordEnd(commandList);
         return true;
     }
@@ -278,7 +267,7 @@ public:
             NWB_LOGGER_WARNING(NWB_TEXT("Reflection: failed to confirm accepted hardware timing begin"));
             payload.dispatch->timing->discard();
         }
-        if(payload.slice + 1u == payload.sliceCount && !payload.dispatch->timing->confirmEndSubmission(token, true)){
+        if(IsFinalReflectionCsgHardwareSlice(payload.slice, payload.sliceCount) && !payload.dispatch->timing->confirmEndSubmission(token, true)){
             NWB_LOGGER_WARNING(NWB_TEXT("Reflection: failed to confirm accepted hardware timing end"));
             payload.dispatch->timing->discard();
         }
@@ -325,12 +314,12 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
     using namespace __hidden_task_graph_reflection;
     if(!resources.valid() || inputs.surfaceReads.empty())
         return MakeUnexpected(Failure{});
-    const b8 screen = resources.parameters.traceMode == NWB_REFLECTION_MODE_SCREEN || resources.parameters.traceMode == NWB_REFLECTION_MODE_HYBRID;
+    const b8 screen = ReflectionTraceModeUsesScreenInputs(resources.parameters.traceMode, NWB_REFLECTION_MODE_SCREEN, NWB_REFLECTION_MODE_HYBRID);
     if(screen && (!inputs.opaqueDepth.valid() || !inputs.opaqueColor.valid()))
         return MakeUnexpected(Failure{});
     ReflectionFeedbackReservation feedbackReservation(resources.feedback.control, resources.feedback.plan);
     const b8 feedbackReserved = feedbackReservation.valid();
-    const b8 feedbackWrites = feedbackReserved && resources.feedback.plan.eligible && resources.parameters.hardwareEnabled != 0u;
+    const b8 feedbackWrites = ShouldWriteReflectionFeedback(feedbackReserved, resources.feedback.plan.eligible, resources.parameters.hardwareEnabled);
     const b8 buildArguments = resources.hasHardwareWork();
     const DispatchStage::Enum feedbackPublicationStage = buildArguments ? DispatchStage::BuildArgs : DispatchStage::Classify;
     // A stale feedback lease disables this optimization; rendering remains available.
@@ -419,7 +408,7 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
     }
     if(feedbackWrites){
         Core::GpuTaskResourceUse entryWrite = WriteUse(feedbackCurrent, Core::ResourceStates::UnorderedAccess);
-        entryWrite.range.bufferRange = Core::BufferRange(s_ReflectionFeedbackHeaderBytes, resources.feedback.extent.byteCount - s_ReflectionFeedbackHeaderBytes);
+        entryWrite.range.bufferRange = Core::BufferRange(s_ReflectionFeedbackHeaderBytes, ReflectionFeedbackEntryByteCount(resources.feedback.extent.byteCount, s_ReflectionFeedbackHeaderBytes));
         uses.push_back(entryWrite);
         if(feedbackPrevious.valid())
             uses.push_back(ReadUse(feedbackPrevious));
@@ -535,7 +524,7 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
     reflectionContentStamp.geometry = sceneResources.contentStamp.geometry;
     reflectionContentStamp.material = sceneResources.contentStamp.material;
     // CSG evaluation and lagged screen lighting do not have a matching content stamp for this first history policy.
-    reflectionContentStamp.trusted = sceneResources.contentStamp.trusted && csgFrameState.empty() && !useLaggedLightingHistory;
+    reflectionContentStamp.trusted = IsTrustedReflectionContentStamp(sceneResources.contentStamp.trusted, csgFrameState.empty(), useLaggedLightingHistory);
     const ReflectionFrameSnapshot reflectionResources = m_reflectionSystem.snapshotFrameResources(
         deferredTargets,
         meshViewBufferSnapshot,
@@ -554,7 +543,7 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
         }
         sceneReads = Move(*sceneReadsResult);
     }
-    const Array<Core::GpuTaskResourceUse, 9> reflectionSurfaceReads = {
+    const Array<Core::GpuTaskResourceUse, s_ReflectionSurfaceReadCount> reflectionSurfaceReads = {
         ReadUse(specularRoughness),
         ReadUse(refractionSpecularRoughness),
         ReadUse(normal),
@@ -844,8 +833,9 @@ Expected<Core::GpuTaskId> DeclareReflectionDepthPyramidTasks(
     }
     outDepthPyramid = *depthPyramidResult;
     for(u32 mipIndex = 0u; mipIndex < pyramid.mipCount; ++mipIndex){
+        const u32 sourceMipIndex = ReflectionDepthPyramidSourceMipIndex(mipIndex);
         const ReflectionDepthPyramidMip& destination = pyramid.mips[mipIndex];
-        const ReflectionDepthPyramidMip& source = pyramid.mips[mipIndex == 0u ? 0u : mipIndex - 1u];
+        const ReflectionDepthPyramidMip& source = pyramid.mips[sourceMipIndex];
         const ReflectionDepthReducePushConstants parameters = MakeReflectionDepthReducePushConstants(
             mipIndex == 0u ? pyramid.sourceDepthSlot : source.sampledSlot,
             destination.storageSlot,
@@ -855,7 +845,7 @@ Expected<Core::GpuTaskId> DeclareReflectionDepthPyramidTasks(
             destination.height
         );
         const Array<Core::GpuTaskResourceUse, 2u> depthUses = {
-            ReadTextureUse(mipIndex == 0u ? opaqueDepth : outDepthPyramid, Core::TextureSubresourceSet(mipIndex == 0u ? 0u : mipIndex - 1u, 1u, 0u, 1u)),
+            ReadTextureUse(mipIndex == 0u ? opaqueDepth : outDepthPyramid, Core::TextureSubresourceSet(sourceMipIndex, 1u, 0u, 1u)),
             WriteTextureUse(outDepthPyramid, Core::TextureSubresourceSet(mipIndex, 1u, 0u, 1u), Core::ResourceStates::UnorderedAccess),
         };
         Core::GpuTaskDesc depthDesc = ReflectionTaskDesc(destination.taskIdentity, s_ReflectionDepthReduceTaskLabel, dependency);
@@ -951,7 +941,7 @@ Expected<Core::GpuTaskId> DeclareReflectionStatisticsAndFinalizeTasks(
     using namespace __hidden_task_graph_postprocess;
     if(resources.parameters.diagnosticsEnabled != 0u && resources.statistics.control){
         ReflectionStatistics metadata = resources.statistics.metadata;
-        metadata.feedbackSequence = feedbackReserved ? resources.feedback.plan.sequence : 0u;
+        metadata.feedbackSequence = ResolveReflectionStatisticsFeedbackSequence(feedbackReserved, resources.feedback.plan.sequence);
         ReflectionStatisticsReservation reservation(resources.statistics.control, metadata);
         if(reservation.valid()){
             const Core::BufferHandle& readback = resources.statistics.buffers[reservation.slotIndex()];

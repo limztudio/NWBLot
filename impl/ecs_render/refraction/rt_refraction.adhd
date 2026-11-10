@@ -2,8 +2,50 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderRefractionRtRefractionAdhdModule(in u64 value){
-    return value != 0u;
+#include <impl/ecs_render/refraction/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_RefractionResolveClearLabel = "AVBOIT Refraction Resolve Clear";
+const StringView s_RefractionTileListLabel = "Refraction Tile List";
+const StringView s_RefractionTileArgumentsLabel = "Refraction Tile Arguments";
+const StringView s_RefractionTileArgumentsClearLabel = "Refraction Tile Arguments Clear";
+const StringView s_RefractionClassifyTilesLabel = "Refraction Classify Tiles";
+const StringView s_RefractionDiagnosticsCountersLabel = "Refraction Diagnostic Counters";
+const StringView s_RefractionDiagnosticsClearLabel = "Refraction Diagnostics Clear";
+const StringView s_RefractionResolveLabel = "AVBOIT Refraction Resolve";
+const StringView s_RefractionStatisticsReadbackLabel = "Refraction Statistics Readback";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 CanEnableRefractionHardwareTracing(
+    in b8 hardwareTracingEnabled,
+    in b8 shadowVisibilityHardwareSupported,
+    in b8 traceResourcesPreflighted,
+    in b8 backendPipelinePreflighted,
+    in b8 rayQuerySupported,
+    in b8 hasAccelStructLayout,
+    in b8 hasTlas,
+    in b8 tlasHandleValid,
+    in b8 hasMaterialContextSlotsBuffer
+){
+    return hardwareTracingEnabled
+        && shadowVisibilityHardwareSupported
+        && traceResourcesPreflighted
+        && backendPipelinePreflighted
+        && rayQuerySupported
+        && hasAccelStructLayout
+        && hasTlas
+        && tlasHandleValid
+        && hasMaterialContextSlotsBuffer;
+}
+
+b8 CanRecordRefractionStatisticsReadback(in b8 hasSource, in b8 hasDestination, in b8 reservationValid){
+    return hasSource && hasDestination && reservationValid;
 }
 
 
@@ -94,11 +136,13 @@ b8 RefractionRenderer::prepareRefractionResources(){
     const b8 csg = m_system.m_lightSpaceShadow.m_csg.snapshot.hasCsg;
     const auto ensurePipeline = [&](const b8 hardware, const b8 dense) -> b8{
         const b8 diagnostics = m_diagnosticsEnabled;
-        Core::ComputePipelineHandle& hardwarePipeline = diagnostics ? m_system.m_rayTracingState.m_refractionDiagnosticHwPipelines[csg ? 1u : 0u][dense ? 1u : 0u]
+        const usize csgVariantIndex = SelectRefractionVariantIndex(csg);
+        const usize densityVariantIndex = SelectRefractionVariantIndex(dense);
+        Core::ComputePipelineHandle& hardwarePipeline = diagnostics ? m_system.m_rayTracingState.m_refractionDiagnosticHwPipelines[csgVariantIndex][densityVariantIndex]
             : (csg ? (dense ? m_system.m_rayTracingState.m_refractionDenseCsgHwPipeline : m_system.m_rayTracingState.m_refractionCsgHwPipeline) : (dense ? m_system.m_rayTracingState.m_refractionDenseHwPipeline : m_system.m_rayTracingState.m_refractionHwPipeline));
-        Core::ShaderHandle& hardwareShader = diagnostics ? m_system.m_rayTracingState.m_refractionDiagnosticHwShaders[csg ? 1u : 0u][dense ? 1u : 0u]
+        Core::ShaderHandle& hardwareShader = diagnostics ? m_system.m_rayTracingState.m_refractionDiagnosticHwShaders[csgVariantIndex][densityVariantIndex]
             : (csg ? (dense ? m_system.m_rayTracingState.m_refractionDenseCsgHwShader : m_system.m_rayTracingState.m_refractionCsgHwShader) : (dense ? m_system.m_rayTracingState.m_refractionDenseHwShader : m_system.m_rayTracingState.m_refractionHwShader));
-        b8& hardwareFailed = diagnostics ? m_system.m_rayTracingState.m_refractionDiagnosticHwPipelineFailed[csg ? 1u : 0u][dense ? 1u : 0u]
+        b8& hardwareFailed = diagnostics ? m_system.m_rayTracingState.m_refractionDiagnosticHwPipelineFailed[csgVariantIndex][densityVariantIndex]
             : (csg ? (dense ? m_system.m_rayTracingState.m_refractionDenseCsgHwPipelineFailed : m_system.m_rayTracingState.m_refractionCsgHwPipelineFailed) : (dense ? m_system.m_rayTracingState.m_refractionDenseHwPipelineFailed : m_system.m_rayTracingState.m_refractionHwPipelineFailed));
         Core::ComputePipelineHandle& pipeline = hardware ? hardwarePipeline : (dense ? m_system.m_rayTracingState.m_refractionDenseScreenPipeline : m_system.m_rayTracingState.m_refractionScreenPipeline);
         Core::ShaderHandle& shader = hardware ? hardwareShader : (dense ? m_system.m_rayTracingState.m_refractionDenseScreenShader : m_system.m_rayTracingState.m_refractionScreenShader);
@@ -122,12 +166,17 @@ b8 RefractionRenderer::prepareRefractionResources(){
     // A separate shader keeps ray-tracing capabilities off unsupported devices.
     if(!ensurePipeline(false, false) || !ensurePipeline(false, true))
         return false;
-    const b8 hardwareReady = m_system.m_rayTracingState.m_refractionHardwareTracingEnabled && m_system.shadowVisibilityHardwareSupported()
-        && m_system.m_shadowVisibilityTraceResourcesPreflighted && m_system.m_shadowVisibilityBackendPipelinePreflighted
-        && m_system.m_graphics.queryFeatureSupport(Core::Feature::RayQuery)
-        && heap.hasAccelStructLayout()
-        && m_system.m_rayTracingState.m_tlas && m_system.m_rayTracingState.m_tlasHeapHandle.valid()
-        && m_system.m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer;
+    const b8 hardwareReady = CanEnableRefractionHardwareTracing(
+        m_system.m_rayTracingState.m_refractionHardwareTracingEnabled,
+        m_system.shadowVisibilityHardwareSupported(),
+        m_system.m_shadowVisibilityTraceResourcesPreflighted,
+        m_system.m_shadowVisibilityBackendPipelinePreflighted,
+        m_system.m_graphics.queryFeatureSupport(Core::Feature::RayQuery),
+        heap.hasAccelStructLayout(),
+        m_system.m_rayTracingState.m_tlas != nullptr,
+        m_system.m_rayTracingState.m_tlasHeapHandle.valid(),
+        m_system.m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer != nullptr
+    );
     if(hardwareReady && RayTraceMaterialResources(m_system.m_graphics, m_system.m_rayTracingState, m_system.m_rayTracingState).ensureRayTraceMaterialContextSlotsHeapHandle() && ensurePipeline(true, false) && ensurePipeline(true, true))
         m_system.m_rayTracingState.m_refractionUseHardwareTrace = true;
     return true;
@@ -146,12 +195,13 @@ RayTracingRefractionGraphResources RefractionRenderer::snapshotRefractionGraphRe
     resources.viewHeapSlot = view.heapHandle.slot();
     resources.usesHardwareTrace = m_system.m_rayTracingState.m_refractionUseHardwareTrace;
     const b8 csg = m_system.m_lightSpaceShadow.m_csg.snapshot.hasCsg;
+    const usize csgVariantIndex = SelectRefractionVariantIndex(csg);
     resources.pipeline = resources.usesHardwareTrace
-        ? (m_diagnosticsEnabled ? m_system.m_rayTracingState.m_refractionDiagnosticHwPipelines[csg ? 1u : 0u][0]
+        ? (m_diagnosticsEnabled ? m_system.m_rayTracingState.m_refractionDiagnosticHwPipelines[csgVariantIndex][0u]
             : (csg ? m_system.m_rayTracingState.m_refractionCsgHwPipeline : m_system.m_rayTracingState.m_refractionHwPipeline))
         : m_system.m_rayTracingState.m_refractionScreenPipeline;
     resources.densePipeline = resources.usesHardwareTrace
-        ? (m_diagnosticsEnabled ? m_system.m_rayTracingState.m_refractionDiagnosticHwPipelines[csg ? 1u : 0u][1]
+        ? (m_diagnosticsEnabled ? m_system.m_rayTracingState.m_refractionDiagnosticHwPipelines[csgVariantIndex][1u]
             : (csg ? m_system.m_rayTracingState.m_refractionDenseCsgHwPipeline : m_system.m_rayTracingState.m_refractionDenseHwPipeline))
         : m_system.m_rayTracingState.m_refractionDenseScreenPipeline;
     if(m_diagnosticsEnabled){
@@ -171,13 +221,13 @@ RayTracingRefractionGraphResources RefractionRenderer::snapshotRefractionGraphRe
         resources.tlasHeapHandle = m_system.m_rayTracingState.m_tlasHeapHandle;
         resources.materialContextSlotsBuffer = m_system.m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer;
         resources.materialContextSlotsHeapSlot = m_system.m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.slot();
-        resources.certifiedInstanceIndex = csg ? Limit<u32>::s_Max : m_system.m_rayTracingState.m_refractionCertifiedInstanceIndex;
+        resources.certifiedInstanceIndex = SelectRefractionCertifiedInstanceIndex(csg, m_system.m_rayTracingState.m_refractionCertifiedInstanceIndex);
     }
     return resources;
 }
 
 b8 RefractionRenderer::recordRefractionTileClassification(Core::CommandList& commandList, const DeferredFrameTargets& targets, const RayTracingRefractionGraphResources& resources)const{
-    if(!resources.valid() || !targets.bindless.valid() || !targets.avboit.refractionTileListDescriptor.valid() || !targets.avboit.refractionTileArgumentsDescriptor.valid() || targets.width == 0u || targets.height == 0u)
+    if(!CanRecordRefractionPass(resources.valid(), targets.bindless.valid(), targets.width, targets.height) || !targets.avboit.refractionTileListDescriptor.valid() || !targets.avboit.refractionTileArgumentsDescriptor.valid())
         return false;
     const auto push = ResolveRefractionPushConstants(
         targets.width,
@@ -199,7 +249,7 @@ b8 RefractionRenderer::recordRefractionTileClassification(Core::CommandList& com
     commandList.setPushConstants(&push, sizeof(push));
     Core::GpuTimingMeasure timing(m_system.m_graphics.gpuTiming(), RendererGpuTimingScope::s_RefractionClassifyTiles, m_system.m_graphics.getDevice(), commandList);
 
-    commandList.dispatch(DivideUpWrapping(targets.width, NWB_REFRACTION_GROUP_SIZE), DivideUpWrapping(targets.height, NWB_REFRACTION_GROUP_SIZE), 1u);
+    commandList.dispatch(ComputeRefractionTileDispatchGroups(targets.width, NWB_REFRACTION_GROUP_SIZE), ComputeRefractionTileDispatchGroups(targets.height, NWB_REFRACTION_GROUP_SIZE), 1u);
     // Finalization consumes the completed counter and replaces both mutually exclusive argument records.
     commandList.setBufferState(targets.avboit.refractionTileArguments.get(), Core::ResourceStates::UnorderedAccess, true);
     commandList.commitBarriers();
@@ -212,7 +262,7 @@ b8 RefractionRenderer::recordRefractionTileClassification(Core::CommandList& com
 }
 
 b8 RefractionRenderer::recordRefractionResolve(Core::CommandList& commandList, const DeferredFrameTargets& targets, const RayTracingRefractionGraphResources& resources)const{
-    if(!resources.valid() || !targets.bindless.valid() || targets.width == 0u || targets.height == 0u)
+    if(!CanRecordRefractionPass(resources.valid(), targets.bindless.valid(), targets.width, targets.height))
         return false;
 
     // The graph owns transitions and frozen declarations; this records without rebuilds.
@@ -263,7 +313,7 @@ b8 RefractionTargetBuilder::createImages(DeferredFrameTargets& createdTargets, A
     auto refractionInstanceResult = AvboitTargetFactory::CreateRenderTarget(m_graphics, createdTargets.width, createdTargets.height, Core::Format::RG32_FLOAT, "engine/avboit/refraction_instance", transparentBlack, true);
     auto refractionSpecularRoughnessResult = AvboitTargetFactory::CreateRenderTarget(m_graphics, createdTargets.width, createdTargets.height, Core::Format::RGBA16_FLOAT, "engine/avboit/refraction_specular_roughness", Core::Color(0.f, 0.f, 0.f, 1.f), true);
     Core::TextureDesc refractionDepthDesc = createdTargets.depth->getCreationDescription();
-    refractionDepthDesc.setName("engine/avboit/refraction_depth").setInitialState(Core::ResourceStates::Common).setKeepInitialState(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
+    refractionDepthDesc.setName(s_RefractionDepthTargetName).setInitialState(Core::ResourceStates::Common).setKeepInitialState(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
     auto refractionDepthResult = m_graphics.createTexture(refractionDepthDesc);
     if(refractionDepthResult)
         avboitTargets.refractionDepth = Move(*refractionDepthResult);
@@ -273,7 +323,7 @@ b8 RefractionTargetBuilder::createImages(DeferredFrameTargets& createdTargets, A
     refractionResolveDesc.setWidth(createdTargets.width).setHeight(createdTargets.height)
         .setFormat(Core::Format::RGBA16_FLOAT).setIsUAV(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setName("engine/avboit/refraction_resolve").setClearValue(transparentBlack)
+        .setName(s_RefractionResolveTargetName).setClearValue(transparentBlack)
         .setInitialState(Core::ResourceStates::Common).setKeepInitialState(true)
     ;
     auto refractionResolveResult = m_graphics.createTexture(refractionResolveDesc);
@@ -315,10 +365,10 @@ b8 RefractionTargetBuilder::createTileBuffers(const u64 tileCount, AvboitFrameTa
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer).setDebugName(name).enableAutomaticStateTracking(Core::ResourceStates::Common);
         return m_graphics.createBuffer(desc);
     };
-    auto tileList = createTileBuffer(tileCount * sizeof(u32), Name(s_RenderIdentityEngineRefractionTileList), false);
-    auto tileArguments = createTileBuffer(NWB_REFRACTION_TILE_ARGUMENT_BYTES, Name(s_RenderIdentityEngineRefractionTileArguments), true);
+    auto tileList = createTileBuffer(ComputeRefractionTileListByteSize(tileCount), s_RenderIdentityEngineRefractionTileList, false);
+    auto tileArguments = createTileBuffer(NWB_REFRACTION_TILE_ARGUMENT_BYTES, s_RenderIdentityEngineRefractionTileArguments, true);
     if(!tileList || !tileArguments){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create refraction tile scheduling buffers"));
+        LogFailedRefractionTileBuffers();
         return false;
     }
     avboitTargets.refractionTileList = Move(*tileList);
@@ -337,7 +387,7 @@ void RefractionStatisticsState::accept(const StatisticsReservationKey& key, cons
     Slot* slot = beginAcceptWithinLock(key, token, hardwareReady);
     if(!slot)
         return;
-    slot->metadata.csgHardwareEnabled = slot->metadata.csgHardwareEnabled && hardwareReady;
+    slot->metadata.csgHardwareEnabled = ResolveAcceptedRefractionCsgHardwareEnabled(slot->metadata.csgHardwareEnabled, hardwareReady);
 }
 
 void RefractionStatisticsState::complete(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const Span<const u32> counters)noexcept{
@@ -401,7 +451,7 @@ void RefractionStatisticsReadback::pollCompleted(){
 
 RefractionStatisticsReadbackSnapshot RefractionStatisticsReadback::snapshot(const RefractionStatistics& metadata)const noexcept{
     RefractionStatisticsReadbackSnapshot result;
-    if(!m_control || !m_counters || !m_counterDescriptor.valid() || !m_buffers[0])
+    if(!CanSnapshotRefractionStatisticsReadback(m_control != nullptr, m_counters != nullptr, m_counterDescriptor.valid(), m_buffers[0] != nullptr))
         return result;
     populateSnapshot(metadata, result);
     result.counters = m_counters;
@@ -448,7 +498,7 @@ b8 RefractionClearStatisticsGraphTask::Record(const Payload& payload, Core::Comm
 
 
 b8 RefractionStatisticsReadbackGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-    if(!payload.source || !payload.destination || !payload.reservation.valid())
+    if(!CanRecordRefractionStatisticsReadback(payload.source != nullptr, payload.destination != nullptr, payload.reservation.valid()))
         return false;
     if(context.commandIrCapture && !context.commandIrCapture->captureCopyBuffer(context.task, context.packet, context.queue, payload.sourceResource, 0u, payload.destinationResource, 0u, NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE))
         return false;
@@ -458,7 +508,7 @@ b8 RefractionStatisticsReadbackGraphTask::Record(const Payload& payload, Core::C
 }
 
 void RefractionStatisticsReadbackGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
-    const b8 hardwareReady = payload.hardwareEnabled && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
+    const b8 hardwareReady = IsRefractionHardwareDispatchReady(payload.hardwareEnabled, payload.hardwarePreparationReady != nullptr, payload.hardwarePreparationReady ? *payload.hardwarePreparationReady : false);
     payload.reservation.acceptReservation(token, hardwareReady);
 }
 
@@ -468,7 +518,7 @@ void RefractionStatisticsReadbackGraphTask::Accepted(Payload& payload, const Cor
 
 b8 RefractionResolveGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
     RayTracingRefractionGraphResources resources = payload.resources;
-    if(resources.usesHardwareTrace && (!payload.hardwarePreparationReady || !*payload.hardwarePreparationReady)){
+    if(resources.usesHardwareTrace && !IsRefractionHardwareDispatchReady(true, payload.hardwarePreparationReady != nullptr, payload.hardwarePreparationReady ? *payload.hardwarePreparationReady : false)){
         // A nonfatal TLAS miss still accepts. Use the screen pipeline (its inputs subset this task's) instead of a stale TLAS.
         resources.pipeline = resources.screenFallbackPipeline;
         resources.densePipeline = resources.denseScreenFallbackPipeline;
@@ -481,7 +531,7 @@ b8 RefractionResolveGraphTask::Record(const Payload& payload, Core::CommandList&
 
 void RefractionResolveGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
     // Only an accepted packet publishes diagnostics. Rejected retries leave the latch; selection/recording stays stateless.
-    const b8 usedHardware = payload.resources.usesHardwareTrace && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
+    const b8 usedHardware = IsRefractionHardwareDispatchReady(payload.resources.usesHardwareTrace, payload.hardwarePreparationReady != nullptr, payload.hardwarePreparationReady ? *payload.hardwarePreparationReady : false);
     if(usedHardware)
         payload.system.confirmRayTraceContextReadSubmission(token);
     b8* const dispatchLogged = payload.resources.usesHardwareTrace && !usedHardware ? payload.screenFallbackDispatchLogged : payload.dispatchLogged;
@@ -527,7 +577,7 @@ Expected<Core::GpuTaskId> FrameGraphRefractionResolve::declare(const FrameGraphR
 
     if(!refractionActive || !refractionResources.valid()){
         Core::GpuTaskDesc clearDesc;
-        clearDesc.setIdentity(Name(s_RenderNameRenderAvboitRefractionResolveClear)).setMarkerLabel("AVBOIT Refraction Resolve Clear").setDependencies({ &inputs.avboitFinalTask, 1u });
+        clearDesc.setIdentity(s_RenderNameRenderAvboitRefractionResolveClear).setMarkerLabel(s_RefractionResolveClearLabel).setDependencies({ &inputs.avboitFinalTask, 1u });
         Core::GpuClearTextureTaskDesc clear;
         clear.destination = refractionResolve;
         clear.subresources = ECSRenderDetail::s_FramebufferSubresources;
@@ -545,15 +595,15 @@ Expected<Core::GpuTaskId> FrameGraphRefractionResolve::declare(const FrameGraphR
         sceneReads = Move(*sceneReadsResult);
     }
 
-    const auto tileListResult = m_graph.importBuffer(deferredTargets.avboit.refractionTileList, BufferResourceDesc(Name(s_RenderNameRenderRefractionTileList), "Refraction Tile List"));
-    const auto tileArgumentsResult = m_graph.importBuffer(deferredTargets.avboit.refractionTileArguments, BufferResourceDesc(Name(s_RenderNameRenderRefractionTileArguments), "Refraction Tile Arguments"));
+    const auto tileListResult = m_graph.importBuffer(deferredTargets.avboit.refractionTileList, BufferResourceDesc(s_RenderNameRenderRefractionTileList, s_RefractionTileListLabel));
+    const auto tileArgumentsResult = m_graph.importBuffer(deferredTargets.avboit.refractionTileArguments, BufferResourceDesc(s_RenderNameRenderRefractionTileArguments, s_RefractionTileArgumentsLabel));
     if(!tileListResult || !tileArgumentsResult)
         return MakeUnexpected(Failure{});
     const Core::GpuGraphResourceId tileList = *tileListResult;
     const Core::GpuGraphResourceId tileArguments = *tileArgumentsResult;
     const Core::GpuTaskResourceUse tileClearUse = WriteUse(tileArguments, Core::ResourceStates::CopyDest);
     Core::GpuTaskDesc tileClearDesc;
-    tileClearDesc.setIdentity(Name(s_RenderNameRenderAvboitRefractionTileArgumentsClear)).setMarkerLabel("Refraction Tile Arguments Clear").setDependencies({ &inputs.avboitFinalTask, 1u }).setResourceUses({ &tileClearUse, 1u });
+    tileClearDesc.setIdentity(s_RenderNameRenderAvboitRefractionTileArgumentsClear).setMarkerLabel(s_RefractionTileArgumentsClearLabel).setDependencies({ &inputs.avboitFinalTask, 1u }).setResourceUses({ &tileClearUse, 1u });
     const auto tileClearTask = m_graph.addTask<RefractionClearTileArgumentsGraphTask>(tileClearDesc, RefractionClearTileArgumentsGraphTask::Payload{ m_graphics, deferredTargets.avboit.refractionTileArguments, tileArguments });
     if(!tileClearTask)
         return MakeUnexpected(Failure{});
@@ -567,20 +617,20 @@ Expected<Core::GpuTaskId> FrameGraphRefractionResolve::declare(const FrameGraphR
     refractionTileScheduling.mergeWithPrevious = true;
     refractionTileScheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc tileDesc;
-    tileDesc.setIdentity(Name(s_RenderNameRenderAvboitRefractionClassifyTiles)).setMarkerLabel("Refraction Classify Tiles").setScheduling(refractionTileScheduling).setDependencies({ &*tileClearTask, 1u }).setResourceUses(tileUses);
+    tileDesc.setIdentity(s_RenderNameRenderAvboitRefractionClassifyTiles).setMarkerLabel(s_RefractionClassifyTilesLabel).setScheduling(refractionTileScheduling).setDependencies({ &*tileClearTask, 1u }).setResourceUses(tileUses);
     const auto tileTask = m_graph.addTask<RefractionClassifyTilesGraphTask>(tileDesc, RefractionClassifyTilesGraphTask::Payload{ m_raytracingSystem, deferredTargets, refractionResources });
     if(!tileTask)
         return MakeUnexpected(Failure{});
     Core::GpuGraphResourceId refractionCounters;
     Core::GpuTaskId refractionDiagnosticClear;
     if(refractionResources.statistics.control){
-        const auto counters = m_graph.importBuffer(refractionResources.statistics.counters, BufferResourceDesc(Name(s_RefractionCounters), "Refraction Diagnostic Counters").setExternalFinalState(Core::ResourceStates::UnorderedAccess));
+        const auto counters = m_graph.importBuffer(refractionResources.statistics.counters, BufferResourceDesc(s_RefractionCounters, s_RefractionDiagnosticsCountersLabel).setExternalFinalState(Core::ResourceStates::UnorderedAccess));
         if(!counters)
             return MakeUnexpected(Failure{});
         refractionCounters = *counters;
         const Core::GpuTaskResourceUse clearUse = WriteUse(refractionCounters, Core::ResourceStates::CopyDest);
         Core::GpuTaskDesc clearDesc;
-        clearDesc.setIdentity(Name(s_RenderNameRenderRefractionDiagnosticsClear)).setMarkerLabel("Refraction Diagnostics Clear").setScheduling(refractionTileScheduling).setDependencies({ &*tileTask, 1u }).setResourceUses({ &clearUse, 1u });
+        clearDesc.setIdentity(s_RenderNameRenderRefractionDiagnosticsClear).setMarkerLabel(s_RefractionDiagnosticsClearLabel).setScheduling(refractionTileScheduling).setDependencies({ &*tileTask, 1u }).setResourceUses({ &clearUse, 1u });
         const auto clearTask = m_graph.addTask<RefractionClearStatisticsGraphTask>(clearDesc, RefractionClearStatisticsGraphTask::Payload{ refractionResources.statistics.counters, refractionCounters });
         if(!clearTask)
             return MakeUnexpected(Failure{});
@@ -602,7 +652,7 @@ Expected<Core::GpuTaskId> FrameGraphRefractionResolve::declare(const FrameGraphR
         avboitForegroundExtinction,
     };
     // Mesh view, bindless slots, scene shading, lights, the resolve output, and tile scheduling buffers.
-    refractionUses.reserve(refractionInputs.size() + s_RefractionFixedUseCapacity + sceneReads.uses.size() + sceneReads.csgUses.size());
+    refractionUses.reserve(ComputeRefractionResolveResourceUseCapacity(refractionInputs.size(), sceneReads.uses.size(), sceneReads.csgUses.size()));
     for(const auto input : refractionInputs)
         refractionUses.push_back(ReadUse(input));
     refractionUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
@@ -624,8 +674,8 @@ Expected<Core::GpuTaskId> FrameGraphRefractionResolve::declare(const FrameGraphR
     }
     const Array<Core::GpuTaskId, 3> refractionDependencies = { inputs.reflectionCompletionTask, refractionDiagnosticClear.valid() ? refractionDiagnosticClear : *tileTask, inputs.surfelGiTask };
     Core::GpuTaskDesc refractionDesc;
-    refractionDesc.setIdentity(Name(s_RenderNameRenderAvboitRefractionResolve))
-        .setMarkerLabel("AVBOIT Refraction Resolve")
+    refractionDesc.setIdentity(s_RenderNameRenderAvboitRefractionResolve)
+        .setMarkerLabel(s_RefractionResolveLabel)
         .setScheduling(refractionTileScheduling)
         .setDependencies(refractionDependencies)
         .setResourceUses(refractionUses)
@@ -652,7 +702,7 @@ Expected<Core::GpuTaskId> FrameGraphRefractionResolve::declare(const FrameGraphR
             const Core::BufferHandle& readback = refractionResources.statistics.buffers[reservation.slotIndex()];
             if(!readback)
                 return MakeUnexpected(Failure{});
-            const auto readbackResource = m_graph.importBuffer(readback, BufferResourceDesc(readback->getCreationDescription().debugName, "Refraction Statistics Readback").setExternalFinalState(Core::ResourceStates::CopyDest));
+            const auto readbackResource = m_graph.importBuffer(readback, BufferResourceDesc(readback->getCreationDescription().debugName, s_RefractionStatisticsReadbackLabel).setExternalFinalState(Core::ResourceStates::CopyDest));
             if(!readbackResource)
                 return MakeUnexpected(Failure{});
             const Array<Core::GpuTaskResourceUse, 2> copyUses = {
@@ -660,7 +710,7 @@ Expected<Core::GpuTaskId> FrameGraphRefractionResolve::declare(const FrameGraphR
                 WriteUse(*readbackResource, Core::ResourceStates::CopyDest),
             };
             Core::GpuTaskDesc copyDesc;
-            copyDesc.setIdentity(Name(s_RenderNameRenderRefractionStatistics)).setMarkerLabel("Refraction Statistics Readback").setScheduling(refractionTileScheduling).setDependencies({ &*refractionResolveTask, 1u }).setResourceUses(copyUses);
+            copyDesc.setIdentity(s_RenderNameRenderRefractionStatistics).setMarkerLabel(s_RefractionStatisticsReadbackLabel).setScheduling(refractionTileScheduling).setDependencies({ &*refractionResolveTask, 1u }).setResourceUses(copyUses);
             refractionResolveTask = m_graph.addTask<RefractionStatisticsReadbackGraphTask>(
                 copyDesc,
                 RefractionStatisticsReadbackGraphTask::Payload{

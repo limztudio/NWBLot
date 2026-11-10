@@ -2,8 +2,49 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderRaytraceSoftwareBvhAdhdModule(in u64 value){
-    return value != 0u;
+#include <impl/ecs_render/raytrace/raytrace_internal.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_MaxBvhBitonicSortSteps = 160u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 CanDispatchPreparedMeshSwBvh(in u32 primitiveCount, in u32 positionHeapSlot, in u32 triangleIndexHeapSlot){
+    return primitiveCount != 0u && positionHeapSlot != s_RtInvalidSlot && triangleIndexHeapSlot != s_RtInvalidSlot;
+}
+
+u32 BuildBvhBitonicSortSteps(
+    in u32 elementCount,
+    in u32 paddedCount,
+    in u32 keysHeapSlot,
+    in u32 payloadHeapSlot,
+    mut FixedVector<BvhSortPushConstants, s_MaxBvhBitonicSortSteps> outSteps
+){
+    outSteps.clear();
+    if(paddedCount < s_BvhSortGroupSize)
+        return 0u;
+
+    const u32 groupCount = paddedCount / s_BvhSortGroupSize;
+    outSteps.push_back(MakeBvhSortPushConstants(elementCount, 0u, 0u, s_BvhSortModeLocalTile, keysHeapSlot, payloadHeapSlot));
+
+    u32 sequenceSize = s_BvhSortGroupSize << 1u;
+    while(sequenceSize <= paddedCount){
+        u32 compareDistance = sequenceSize >> 1u;
+        while(compareDistance >= s_BvhSortGroupSize){
+            outSteps.push_back(MakeBvhSortPushConstants(elementCount, compareDistance, sequenceSize, s_BvhSortModeGlobal, keysHeapSlot, payloadHeapSlot));
+            compareDistance >>= 1u;
+        }
+        outSteps.push_back(MakeBvhSortPushConstants(elementCount, 0u, sequenceSize, s_BvhSortModeGlobalTail, keysHeapSlot, payloadHeapSlot));
+        if(sequenceSize == paddedCount)
+            break;
+        sequenceSize <<= 1u;
+    }
+    return groupCount;
 }
 
 
@@ -12,6 +53,7 @@ b8 ImplEcsRenderRaytraceSoftwareBvhAdhdModule(in u64 value){
 
 native{
 #include <impl/ecs_render/raytrace/raytracing_system.adhd.h>
+#include <impl/ecs_render/raytrace/raytrace_internal.adhd.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd.h>
 #include <global/simdmath.h>
 #include <impl/global.adhd.h>
@@ -68,110 +110,7 @@ native{
 NWB_IMPL_BEGIN
 
 
-#ifndef NWB_IMPL_ECS_RENDER_RAYTRACE_INTERNAL_DECLS_H
-#define NWB_IMPL_ECS_RENDER_RAYTRACE_INTERNAL_DECLS_H
-class RendererShaderSystem;
-class RayTraceMaterialResources;
-
-
-class SoftwareBvhBuilder final : NoCopy{
-public:
-    SoftwareBvhBuilder(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaderSystem, RtSceneBvhState& state)noexcept
-        : m_arena(arena)
-        , m_graphics(graphics)
-        , m_shaderSystem(shaderSystem)
-        , m_state(state)
-    {}
-
-
-public:
-    void releaseSwBvhScratchHeapHandles();
-    [[nodiscard]] b8 ensureSceneBvhBuffers(u32 instanceCount, RayTraceMaterialResources& materials);
-    [[nodiscard]] b8 ensureMeshSwBvhResources(u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle);
-    [[nodiscard]] b8 meshSwBvhResourcesReady(const Core::BufferHandle& nodeBuffer, const Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle nodeHeapHandle, Core::GpuDescriptorHandle parentHeapHandle)noexcept;
-    [[nodiscard]] b8 buildMeshSwBvhPrepared(
-        u32 positionHeapSlot,
-        u32 triangleIndexHeapSlot,
-        u32 primitiveCount,
-        const Float3Int& aabbMin,
-        const Float3Int& aabbMax,
-        Core::GpuDescriptorHandle nodeHeapHandle,
-        Core::GpuDescriptorHandle parentHeapHandle,
-        Core::CommandList& commandList,
-        Core::BufferHandle& nodeBuffer,
-        Core::BufferHandle& parentBuffer
-    );
-    [[nodiscard]] b8 refitMeshSwBvhPrepared(
-        u32 positionHeapSlot,
-        u32 triangleIndexHeapSlot,
-        u32 primitiveCount,
-        Core::GpuDescriptorHandle nodeHeapHandle,
-        Core::GpuDescriptorHandle parentHeapHandle,
-        Core::CommandList& commandList,
-        Core::BufferHandle& nodeBuffer,
-        Core::BufferHandle& parentBuffer
-    );
-
-
-private:
-    [[nodiscard]] b8 ensureBvhSortPipeline();
-    [[nodiscard]] b8 ensureBvhSortBuffers(usize paddedCount);
-    [[nodiscard]] b8 bvhBitonicSort(Core::CommandList& commandList, u32 elementCount, u32 paddedCount);
-    [[nodiscard]] b8 ensureBvhBuildPipeline();
-    [[nodiscard]] b8 ensureBvhVisitCounterBuffer(usize primitiveCount);
-    [[nodiscard]] b8 createMeshBvhStorage(usize primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle);
-
-
-private:
-    Core::Alloc::GlobalArena& m_arena;
-    Core::GraphicsRuntime& m_graphics;
-    RendererShaderSystem& m_shaderSystem;
-    RtSceneBvhState& m_state;
-};
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class TlasStaticSceneIdentity final{
-public:
-    [[nodiscard]] static u64 Compute(Span<const Core::RayTracingInstanceDesc> instances)noexcept;
-
-private:
-    static void Append(const Core::RayTracingInstanceDesc& instance, u64& inOutHash)noexcept;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class MeshHeapHandleGather final{
-public:
-    MeshHeapHandleGather(Core::GpuDescriptorHeap& heap, RtMeshHeapHandleCache& cache)noexcept : m_heap(heap), m_cache(cache){}
-    void begin()noexcept;
-    [[nodiscard]] Expected<Core::GpuDescriptorHandle> acquire(const Core::BufferHandle& bufferHandle);
-    void sweep();
-
-private:
-    Core::GpuDescriptorHeap& m_heap;
-    RtMeshHeapHandleCache& m_cache;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ECSRenderDetail{ struct MeshRayTracingResourceSnapshot; };
-
-class PreparedMeshBlasBuilder final{
-public:
-    [[nodiscard]] static Expected<PreparedMeshBlasBuild> Resolve(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources)noexcept;
-    [[nodiscard]] static b8 Matches(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources, const PreparedMeshBlasBuild& build)noexcept;
-    [[nodiscard]] static b8 Record(const PreparedMeshBlasBuild& build, b8 meshBlasGeometryBuildInputStatesGraphOwned, Core::CommandList& commandList);
-};
-
-#endif
-
 
 
 void SoftwareBvhBuilder::releaseSwBvhScratchHeapHandles(){
@@ -338,8 +277,15 @@ b8 SoftwareBvhBuilder::bvhBitonicSort(Core::CommandList& commandList, u32 elemen
     NWB_ASSERT(RayTracingDetail::IsHeapHandle(m_state.m_bvhSortKeysHeapHandle, Core::GpuDescriptorClass::StorageBuffer));
     NWB_ASSERT(RayTracingDetail::IsHeapHandle(m_state.m_bvhSortPayloadHeapHandle, Core::GpuDescriptorClass::StorageBuffer));
 
-    // Padded count is power-of-two and group-aligned.
-    if(paddedCount < static_cast<u32>(NWB_BVH_SORT_GROUP_SIZE))
+    FixedVector<BvhSortPushConstants, s_MaxBvhBitonicSortSteps> sortSteps;
+    const u32 groupCount = BuildBvhBitonicSortSteps(
+        elementCount,
+        paddedCount,
+        m_state.m_bvhSortKeysHeapHandle.slot(),
+        m_state.m_bvhSortPayloadHeapHandle.slot(),
+        sortSteps
+    );
+    if(groupCount == 0u)
         return false;
 
     const NotNull<Core::Buffer*> keysBuffer(m_state.m_bvhSortKeysBuffer.get());
@@ -353,41 +299,16 @@ b8 SoftwareBvhBuilder::bvhBitonicSort(Core::CommandList& commandList, u32 elemen
     commandList.setBufferState(payloadBuffer.get(), Core::ResourceStates::UnorderedAccess, false, sortRange);
     commandList.commitBarriers();
 
-    const u32 groupCount = paddedCount / static_cast<u32>(NWB_BVH_SORT_GROUP_SIZE);
-    const u32 keysHeapSlot = m_state.m_bvhSortKeysHeapHandle.slot();
-    const u32 payloadHeapSlot = m_state.m_bvhSortPayloadHeapHandle.slot();
-
-    const auto dispatchSort = [this, &commandList](const BvhSortPushConstants& pushConstants, const u32 groups){
+    for(const BvhSortPushConstants& pushConstants : sortSteps){
         Core::ComputeState computeState;
         computeState.setPipeline(m_state.m_bvhSortPipeline.get());
         commandList.setComputeState(computeState);
         m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *m_state.m_bvhSortPipeline.get());
         commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-        commandList.dispatch(groups, 1u, 1u);
-    };
-    const auto bvhSortBarrier = [&commandList, keysBuffer, payloadBuffer, sortRange](){
+        commandList.dispatch(groupCount, 1u, 1u);
         commandList.setBufferState(keysBuffer.get(), Core::ResourceStates::UnorderedAccess, false, sortRange);
         commandList.setBufferState(payloadBuffer.get(), Core::ResourceStates::UnorderedAccess, false, sortRange);
         commandList.commitBarriers();
-    };
-
-    {
-        const BvhSortPushConstants pushConstants = MakeBvhSortPushConstants(elementCount, 0u, 0u, NWB_BVH_SORT_MODE_LOCAL_TILE, keysHeapSlot, payloadHeapSlot);
-        dispatchSort(pushConstants, groupCount);
-        bvhSortBarrier();
-    }
-
-    // Merge inter-tile globally and intra-tile in groupshared tails.
-    for(u32 sequenceSize = static_cast<u32>(NWB_BVH_SORT_GROUP_SIZE) << 1u; sequenceSize <= paddedCount; sequenceSize <<= 1u){
-        for(u32 compareDistance = sequenceSize >> 1u; compareDistance >= static_cast<u32>(NWB_BVH_SORT_GROUP_SIZE); compareDistance >>= 1u){
-            const BvhSortPushConstants pushConstants = MakeBvhSortPushConstants(elementCount, compareDistance, sequenceSize, NWB_BVH_SORT_MODE_GLOBAL, keysHeapSlot, payloadHeapSlot);
-            dispatchSort(pushConstants, groupCount);
-            bvhSortBarrier();
-        }
-
-        const BvhSortPushConstants tailPushConstants = MakeBvhSortPushConstants(elementCount, 0u, sequenceSize, NWB_BVH_SORT_MODE_GLOBAL_TAIL, keysHeapSlot, payloadHeapSlot);
-        dispatchSort(tailPushConstants, groupCount);
-        bvhSortBarrier();
     }
     return true;
 }
@@ -496,9 +417,9 @@ b8 SoftwareBvhBuilder::ensureBvhVisitCounterBuffer(usize primitiveCount){
 
 b8 SoftwareBvhBuilder::ensureSceneBvhBuffers(u32 instanceCount, RayTraceMaterialResources& materials){
     // Binary scene BVH keeps CPU topology; runtime scenes refit its bounds from live mesh roots.
-    const usize requiredNodes = static_cast<usize>(instanceCount) * 2u - 1u;
+    const usize requiredNodes = ComputeBinaryBvhNodeCount(static_cast<usize>(instanceCount));
     if(!m_state.m_sceneBvhNodeBuffer || m_state.m_sceneBvhNodeCapacity < requiredNodes){
-        const usize capacity = ::NextGrowingCapacity(m_state.m_sceneBvhNodeCapacity, requiredNodes, s_SceneBvhInitialInstanceCapacity * 2u - 1u);
+        const usize capacity = ::NextGrowingCapacity(m_state.m_sceneBvhNodeCapacity, requiredNodes, ComputeBinaryBvhNodeCount(s_SceneBvhInitialInstanceCapacity));
 
         Core::BufferDesc nodeBufferDesc;
         nodeBufferDesc
@@ -600,7 +521,7 @@ b8 SoftwareBvhBuilder::createMeshBvhStorage(usize primitiveCount, Core::BufferHa
     }
 
     // Per-mesh binary LBVH needs 2N-1 persistent nodes.
-    const usize nodeCount = primitiveCount * 2u - 1u;
+    const usize nodeCount = ComputeBinaryBvhNodeCount(primitiveCount);
 
     Core::BufferDesc nodeBufferDesc;
     nodeBufferDesc
@@ -710,7 +631,7 @@ b8 SoftwareBvhBuilder::buildMeshSwBvhPrepared(
     Core::BufferHandle& nodeBuffer,
     Core::BufferHandle& parentBuffer
 ){
-    if(primitiveCount == 0u || positionHeapSlot == Limit<u32>::s_Max || triangleIndexHeapSlot == Limit<u32>::s_Max || !meshSwBvhResourcesReady(nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle))
+    if(!CanDispatchPreparedMeshSwBvh(primitiveCount, positionHeapSlot, triangleIndexHeapSlot) || !meshSwBvhResourcesReady(nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle))
         return false;
 
     const u32 paddedCount = ResolveBvhPaddedSortCount(primitiveCount);
@@ -790,7 +711,7 @@ b8 SoftwareBvhBuilder::refitMeshSwBvhPrepared(
     Core::BufferHandle& nodeBuffer,
     Core::BufferHandle& parentBuffer
 ){
-    if(primitiveCount == 0u || positionHeapSlot == Limit<u32>::s_Max || triangleIndexHeapSlot == Limit<u32>::s_Max || !meshSwBvhResourcesReady(nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle))
+    if(!CanDispatchPreparedMeshSwBvh(primitiveCount, positionHeapSlot, triangleIndexHeapSlot) || !meshSwBvhResourcesReady(nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle))
         return false;
 
     const NotNull<Core::Buffer*> keysBuffer(m_state.m_bvhSortKeysBuffer.get());
@@ -933,8 +854,7 @@ b8 RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(Core::Alloc::Scratch
             !mesh.meshName
             || !mesh.positionBuffer
             || !mesh.triangleIndexBuffer
-            || mesh.meshletPrimitiveIndexCount == 0u
-            || (mesh.meshletPrimitiveIndexCount % s_RayTracingTriangleIndexCount) != 0u
+            || !HasValidMeshTriangleIndexCount(mesh.meshletPrimitiveIndexCount)
             || !bvh.meshSwBvhResourcesReady(mesh.swBvhNodeBuffer, mesh.swBvhParentBuffer, mesh.swBvhNodeHeapHandle, mesh.swBvhParentHeapHandle)
             || !RayTracingDetail::IsHeapHandle(mesh.swBvhPositionHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
             || !RayTracingDetail::IsHeapHandle(mesh.swBvhTriangleIndexHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
@@ -944,9 +864,9 @@ b8 RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(Core::Alloc::Scratch
             return false;
         }
 
-        const u32 primitiveCount = mesh.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount;
+        const u32 primitiveCount = ComputeMeshTrianglePrimitiveCount(mesh.meshletPrimitiveIndexCount);
         const b8 firstBuild = !mesh.swBvhTopologyBuilt || !mesh.swBvhBuildAccepted;
-        const b8 performRefit = mesh.runtimeMesh && !firstBuild && mesh.swBvhRefitsSinceRebuild < AdaptiveRefitsBeforeRebuild(primitiveCount);
+        const b8 performRefit = ShouldRefitRuntimeMeshAcceleration(mesh.runtimeMesh, firstBuild, mesh.swBvhRefitsSinceRebuild, primitiveCount);
         const Core::BufferDesc& positionDesc = mesh.positionBuffer->getCreationDescription();
         const Core::BufferDesc& indexDesc = mesh.triangleIndexBuffer->getCreationDescription();
         const Core::BufferDesc& nodeDesc = mesh.swBvhNodeBuffer->getCreationDescription();
@@ -984,7 +904,7 @@ b8 RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(Core::Alloc::Scratch
             .visitCounterByteSize = counterDesc.byteSize,
             .primitiveCount = primitiveCount,
             .refitsBeforeBuild = mesh.swBvhRefitsSinceRebuild,
-            .refitsAfterBuild = performRefit ? (mesh.swBvhRefitsSinceRebuild + 1u) : 0u,
+            .refitsAfterBuild = AdvanceAccelerationRefitCount(performRefit, mesh.swBvhRefitsSinceRebuild),
             .runtimeMesh = mesh.runtimeMesh,
             .buildPending = mesh.swBvhBuildPending,
             .firstBuild = firstBuild,
@@ -1085,12 +1005,12 @@ b8 RendererRayTracingSystem::preparePendingMeshSwBvhResources(Core::Alloc::Scrat
             allResourcesReady = false;
             continue;
         }
-        if(meshResources.meshletPrimitiveIndexCount == 0u || (meshResources.meshletPrimitiveIndexCount % s_RayTracingTriangleIndexCount) != 0u){
+        if(!HasValidMeshTriangleIndexCount(meshResources.meshletPrimitiveIndexCount)){
             allResourcesReady = false;
             continue;
         }
 
-        const u32 primitiveCount = meshResources.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount;
+        const u32 primitiveCount = ComputeMeshTrianglePrimitiveCount(meshResources.meshletPrimitiveIndexCount);
         const auto boundResources = m_meshSystem.ensureRayTracingInputHeapHandles(meshResources);
         if(!boundResources){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software BVH input heap registration failed for mesh '{}'"), ConvertString(meshResources.meshName.resolvedText()));
@@ -1169,7 +1089,7 @@ Expected<SoftwareSceneRefitHandle> SoftwareSceneRefitResources::prepare(
     if(
         inputs.empty() || meshNodes.size() != instanceCount || instanceCount > Limit<u32>::s_Max / sizeof(SoftwareSceneRefitInstanceGpu)
         || !sceneNodes || !sceneDescriptor.valid() || sceneDescriptor.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-        || static_cast<u64>(instanceCount) * 2u - 1u != nodeCount || !ensurePipeline(shaderSystem)
+        || ComputeBinaryBvhNodeCount(instanceCount) != static_cast<usize>(nodeCount) || !ensurePipeline(shaderSystem)
     )
         return MakeUnexpected(Failure{});
     auto& device = m_graphics.getDevice();
@@ -1425,7 +1345,7 @@ b8 PreparedSceneBvhUpload::captureCacheReuse(const RendererRayTracingState& stat
     if(instanceCount == 0u)
         return false;
 
-    const usize requiredNodeCount = static_cast<usize>(instanceCount) * 2u - 1u;
+    const usize requiredNodeCount = ComputeBinaryBvhNodeCount(static_cast<usize>(instanceCount));
     const b8 validStorage = StorageReady(state, requiredNodeCount, instanceCount);
     if(!state.m_sceneSwBvhStaticSceneHashValid || state.m_sceneSwBvhStaticSceneHash != staticSceneHash || state.m_sceneBvhInstanceCount != instanceCount || !validStorage)
         return false;
@@ -1696,6 +1616,9 @@ void PreparedSceneSwBvhTraversal::clear()noexcept{
     m_preparedSceneSwBvhMaterialMutationVersion = 0u;
     m_preparedSceneSwBvhReady = false;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_END

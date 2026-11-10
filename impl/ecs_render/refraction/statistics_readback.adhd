@@ -2,8 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/refraction/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
-#include <impl/ecs_render/refraction/types.adhd.h>
 #include <impl/ecs_render/shared/statistics_readback_state.adhd.h>
 
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
@@ -78,8 +83,17 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderRefractionStatisticsReadbackAdhdModule(in u64 value){
-    return value != 0u;
+b8 ResolveAcceptedRefractionCsgHardwareEnabled(in b8 csgHardwareEnabled, in b8 hardwareReady){
+    return csgHardwareEnabled && hardwareReady;
+}
+
+b8 CanSnapshotRefractionStatisticsReadback(
+    in b8 hasControl,
+    in b8 hasCounters,
+    in b8 counterDescriptorValid,
+    in b8 hasPrimaryReadbackBuffer
+){
+    return hasControl && hasCounters && counterDescriptorValid && hasPrimaryReadbackBuffer;
 }
 
 

@@ -106,8 +106,8 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderAvboitTaskGraphOccupancyTasksAdhdModule(in u64 value){
-    return value != 0u;
+b8 CanRecordAvboitPrePass(in b8 transparentCsgStreamsUploaded, in b8 snapshotCaptured){
+    return transparentCsgStreamsUploaded == snapshotCaptured;
 }
 
 

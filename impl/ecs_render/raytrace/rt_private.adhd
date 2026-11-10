@@ -96,13 +96,13 @@ struct RenderableRayTracingMeshResources{
 };
 
 [[nodiscard]] Expected<RenderableRayTracingMeshResources, RenderableMeshResolution::Enum> ResolveRenderableMeshResources(MeshSystem& meshSystem, RendererMeshSystem& rendererMeshSystem, Core::ECS::EntityID entity);
-[[nodiscard]] b8 IsHeapHandle(const Core::GpuDescriptorHandle handle, const Core::GpuDescriptorClass::Enum descriptorClass)noexcept;
+[[nodiscard]] b8 IsHeapHandle(Core::GpuDescriptorHandle handle, Core::GpuDescriptorClass::Enum descriptorClass)noexcept;
 [[nodiscard]] Expected<Core::GpuDescriptorHandle> RegisterHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorClass::Enum descriptorClass, b8 writable);
 [[nodiscard]] b8 EnsureHeapBuffer(Core::GpuDescriptorClass::Enum descriptorClass, b8 writable, Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorHandle& inOutHandle);
 [[nodiscard]] b8 ReplaceHeapBuffer(Core::GpuDescriptorClass::Enum descriptorClass, b8 writable, Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorHandle& inOutHandle);
 void RetireHeapHandle(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& handle);
 [[nodiscard]] Core::ComputeState MakeComputePassState(const Core::ComputePipelineHandle& pipeline)noexcept;
-u32 BuildSceneBvhNode(const u32 lo, const u32 hi, const Span<const SceneBvhPrimitiveCalculation> primitiveBounds, const Span<const u32> instanceLeafCost, const Span<u32> indices, Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena>& nodes);
+u32 BuildSceneBvhNode(u32 lo, u32 hi, Span<const SceneBvhPrimitiveCalculation> primitiveBounds, Span<const u32> instanceLeafCost, Span<u32> indices, Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena>& nodes);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -115,17 +115,6 @@ u32 BuildSceneBvhNode(const u32 lo, const u32 hi, const Span<const SceneBvhPrimi
 
 
 NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ImplEcsRenderRaytraceRtPrivateAdhdModule(in u64 value){
-    return value != 0u;
 }
 
 

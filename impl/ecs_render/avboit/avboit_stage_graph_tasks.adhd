@@ -2,14 +2,107 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "avboit_stage_internal_types.adhd"
+#include <impl/ecs_render/avboit/avboit_stage_internal_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderAvboitStageGraphTasksAdhdModule(in u64 value){
-    return value != 0u;
+const StringView s_AvboitClearLowRasterLabel = "AVBOIT Clear Low Raster";
+const StringView s_AvboitClearAccumColorLabel = "AVBOIT Clear Accumulation Color";
+const StringView s_AvboitClearAccumExtinctionLabel = "AVBOIT Clear Accumulation Extinction";
+const StringView s_AvboitClearForegroundLabel = "AVBOIT Clear Foreground";
+const StringView s_AvboitClearCoverageLabel = "AVBOIT Clear Coverage";
+const StringView s_AvboitClearDepthWarpLabel = "AVBOIT Clear Depth Warp";
+const StringView s_AvboitClearControlLabel = "AVBOIT Clear Control";
+const StringView s_AvboitClearExtinctionLabel = "AVBOIT Clear Extinction";
+const StringView s_AvboitClearExtinctionOverflowLabel = "AVBOIT Clear Extinction Overflow";
+const StringView s_AvboitClearTransmittanceLabel = "AVBOIT Clear Transmittance";
+const StringView s_AvboitAccumulationFinalizeLabel = "AVBOIT Accumulation Finalize";
+const StringView s_RefractionCaptureUploadLabel = "Refraction Capture Upload";
+const StringView s_RefractionCaptureBufferLabel = "Refraction Capture Buffer";
+const StringView s_RefractionCaptureTextureLabel = "Refraction Capture Texture";
+const StringView s_RefractionCaptureCapsLabel = "Refraction Capture Caps";
+const StringView s_RefractionCaptureClearLabel = "Refraction Capture Clear";
+const StringView s_RefractionCaptureFinalizeLabel = "Refraction Capture Finalize";
+const StringView s_RefractionCaptureGeometryLabel = "Refraction Capture Geometry";
+const StringView s_RefractionCaptureMaterialTexturesLabel = "Refraction Capture Material Textures";
+const StringView s_RefractionCaptureGenerateLabel = "Refraction Capture Generate";
+const StringView s_RefractionCaptureRasterLabel = "Refraction Capture Raster";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 AreAllAvboitClearResourcesValid(
+    in b8 lowRasterValid,
+    in b8 accumColorValid,
+    in b8 accumExtinctionValid,
+    in b8 foregroundColorValid,
+    in b8 foregroundExtinctionValid,
+    in b8 transmittanceValid,
+    in b8 coverageValid,
+    in b8 depthWarpValid,
+    in b8 controlValid,
+    in b8 extinctionValid,
+    in b8 extinctionOverflowValid
+){
+    return lowRasterValid
+        && accumColorValid
+        && accumExtinctionValid
+        && foregroundColorValid
+        && foregroundExtinctionValid
+        && transmittanceValid
+        && coverageValid
+        && depthWarpValid
+        && controlValid
+        && extinctionValid
+        && extinctionOverflowValid;
+}
+
+b8 AreAvboitDepthWarpResourcesValid(
+    in b8 coverageValid,
+    in b8 depthWarpValid,
+    in b8 controlValid,
+    in b8 currentBindlessSlotsValid
+){
+    return coverageValid && depthWarpValid && controlValid && currentBindlessSlotsValid;
+}
+
+b8 AreAvboitIntegrationResourcesValid(
+    in b8 extinctionTaskValid,
+    in b8 extinctionValid,
+    in b8 controlValid,
+    in b8 extinctionOverflowValid,
+    in b8 transmittanceValid,
+    in b8 currentBindlessSlotsValid
+){
+    return extinctionTaskValid
+        && extinctionValid
+        && controlValid
+        && extinctionOverflowValid
+        && transmittanceValid
+        && currentBindlessSlotsValid;
+}
+
+b8 CanRecordRefractionCaptureCapTask(
+    in b8 hasPipeline,
+    in b8 csgBindingValid,
+    in b8 hasFramebuffer,
+    in b8 slotsDescriptorValid,
+    in b8 receiverIndicesEmpty
+){
+    return hasPipeline && csgBindingValid && hasFramebuffer && slotsDescriptorValid && !receiverIndicesEmpty;
+}
+
+usize ComputeRefractionCaptureCapUseCapacity(in usize commonUseCount, in usize csgUseCount){
+    return commonUseCount + csgUseCount + s_RefractionCaptureCapExtraUseCapacity;
+}
+
+StringView SelectRefractionCaptureDrawMarkerLabel(in b8 generate){
+    if(generate)
+        return s_RefractionCaptureGenerateLabel;
+    return s_RefractionCaptureRasterLabel;
 }
 
 
@@ -427,19 +520,19 @@ Expected<AvboitClearChainResult> AvboitClearChainBuilder::declare(const AvboitCl
     // Keep native order: uploads, serial target clears, then occupancy; graph owns all CopyDest ops.
     Core::GpuTaskId avboitClearTask = inputs.uploadTask;
     if(inputs.clearTargets){
-        if(
-            !inputs.lowRaster.valid()
-            || !inputs.accumColor.valid()
-            || !inputs.accumExtinction.valid()
-            || !inputs.foregroundColor.valid()
-            || !inputs.foregroundExtinction.valid()
-            || !inputs.transmittance.valid()
-            || !inputs.coverage.valid()
-            || !inputs.depthWarp.valid()
-            || !inputs.control.valid()
-            || !inputs.extinction.valid()
-            || !inputs.extinctionOverflow.valid()
-        )
+        if(!AreAllAvboitClearResourcesValid(
+            inputs.lowRaster.valid(),
+            inputs.accumColor.valid(),
+            inputs.accumExtinction.valid(),
+            inputs.foregroundColor.valid(),
+            inputs.foregroundExtinction.valid(),
+            inputs.transmittance.valid(),
+            inputs.coverage.valid(),
+            inputs.depthWarp.valid(),
+            inputs.control.valid(),
+            inputs.extinction.valid(),
+            inputs.extinctionOverflow.valid()
+        ))
             return MakeUnexpected(Failure{});
 
         Core::GpuTaskSchedulingHint avboitClearScheduling;
@@ -467,7 +560,7 @@ Expected<AvboitClearChainResult> AvboitClearChainBuilder::declare(const AvboitCl
         const Core::GpuClearTextureTaskRecordHooks avboitClearEndHooks{ .context = &clearTimingState, .afterClear = &EndGraphClearTimingRecord, .discarded = &DiscardGraphClearTimingRecord, };
         const Core::Color transparentBlack(0.f, 0.f, 0.f, 0.f);
         const auto avboitClearTaskResult = m_graph.addClearTextureTask(
-            makeAvboitClearTaskDesc(Name(s_AvboitClearLowRasterIdentity), "AVBOIT Clear Low Raster", inputs.uploadTask),
+            makeAvboitClearTaskDesc(s_AvboitClearLowRasterIdentity, s_AvboitClearLowRasterLabel, inputs.uploadTask),
             makeAvboitFloatClearDesc(inputs.lowRaster, transparentBlack, avboitClearBeginHooks)
         );
         if(!avboitClearTaskResult){
@@ -476,14 +569,14 @@ Expected<AvboitClearChainResult> AvboitClearChainBuilder::declare(const AvboitCl
         }
         avboitClearTask = *avboitClearTaskResult;
         m_avboitSystem.taskGraphStage().m_clearFirstTask = avboitClearTask;
-        const auto avboitClearTaskResult2 = m_graph.addClearTextureTask(makeAvboitClearTaskDesc(Name(s_AvboitClearAccumColorIdentity), "AVBOIT Clear Accumulation Color", avboitClearTask), makeAvboitFloatClearDesc(inputs.accumColor, transparentBlack));
+        const auto avboitClearTaskResult2 = m_graph.addClearTextureTask(makeAvboitClearTaskDesc(s_AvboitClearAccumColorIdentity, s_AvboitClearAccumColorLabel, avboitClearTask), makeAvboitFloatClearDesc(inputs.accumColor, transparentBlack));
         if(!avboitClearTaskResult2){
             avboitClearTask = {};
             return MakeUnexpected(Failure{});
         }
         avboitClearTask = *avboitClearTaskResult2;
         const auto avboitClearTaskResult3 = m_graph.addClearTextureTask(
-            makeAvboitClearTaskDesc(Name(s_AvboitClearAccumExtinctionIdentity), "AVBOIT Clear Accumulation Extinction", avboitClearTask),
+            makeAvboitClearTaskDesc(s_AvboitClearAccumExtinctionIdentity, s_AvboitClearAccumExtinctionLabel, avboitClearTask),
             makeAvboitFloatClearDesc(inputs.accumExtinction, transparentBlack)
         );
         if(!avboitClearTaskResult3){
@@ -494,7 +587,7 @@ Expected<AvboitClearChainResult> AvboitClearChainBuilder::declare(const AvboitCl
         const Array<Core::GpuGraphResourceId, 2u> foregroundClearTargets = { inputs.foregroundColor, inputs.foregroundExtinction };
         for(const auto target : foregroundClearTargets){
             const auto avboitClearTaskResult4 = m_graph.addClearTextureTask(
-                makeAvboitClearTaskDesc(target == inputs.foregroundColor ? Name(s_AvboitClearForegroundColorIdentity) : Name(s_AvboitClearForegroundExtinctionIdentity), "AVBOIT Clear Foreground", avboitClearTask),
+                makeAvboitClearTaskDesc(target == inputs.foregroundColor ? s_AvboitClearForegroundColorIdentity : s_AvboitClearForegroundExtinctionIdentity, s_AvboitClearForegroundLabel, avboitClearTask),
                 makeAvboitFloatClearDesc(target, transparentBlack)
             );
             if(!avboitClearTaskResult4){
@@ -513,15 +606,15 @@ Expected<AvboitClearChainResult> AvboitClearChainBuilder::declare(const AvboitCl
             return true;
         };
         if(
-            !appendAvboitBufferClear(Name(s_AvboitClearCoverageIdentity), "AVBOIT Clear Coverage", inputs.coverage, 0u)
-            || !appendAvboitBufferClear(Name(s_AvboitClearDepthWarpIdentity), "AVBOIT Clear Depth Warp", inputs.depthWarp, 0u)
-            || !appendAvboitBufferClear(Name(s_AvboitClearControlIdentity), "AVBOIT Clear Control", inputs.control, 0u)
-            || !appendAvboitBufferClear(Name(s_AvboitClearExtinctionIdentity), "AVBOIT Clear Extinction", inputs.extinction, 0u)
-            || !appendAvboitBufferClear(Name(s_AvboitClearExtinctionOverflowIdentity), "AVBOIT Clear Extinction Overflow", inputs.extinctionOverflow, NWB_AVBOIT_OVERFLOW_INVALID)
+            !appendAvboitBufferClear(s_AvboitClearCoverageIdentity, s_AvboitClearCoverageLabel, inputs.coverage, 0u)
+            || !appendAvboitBufferClear(s_AvboitClearDepthWarpIdentity, s_AvboitClearDepthWarpLabel, inputs.depthWarp, 0u)
+            || !appendAvboitBufferClear(s_AvboitClearControlIdentity, s_AvboitClearControlLabel, inputs.control, 0u)
+            || !appendAvboitBufferClear(s_AvboitClearExtinctionIdentity, s_AvboitClearExtinctionLabel, inputs.extinction, 0u)
+            || !appendAvboitBufferClear(s_AvboitClearExtinctionOverflowIdentity, s_AvboitClearExtinctionOverflowLabel, inputs.extinctionOverflow, NWB_AVBOIT_OVERFLOW_INVALID)
         )
             return MakeUnexpected(Failure{});
         const auto avboitClearTaskResult5 = m_graph.addClearTextureTask(
-            makeAvboitClearTaskDesc(Name(s_AvboitClearTransmittanceIdentity), "AVBOIT Clear Transmittance", avboitClearTask),
+            makeAvboitClearTaskDesc(s_AvboitClearTransmittanceIdentity, s_AvboitClearTransmittanceLabel, avboitClearTask),
             makeAvboitFloatClearDesc(inputs.transmittance, Core::Color(1.f, 1.f, 1.f, 1.f), avboitClearEndHooks)
         );
         if(!avboitClearTaskResult5){
@@ -586,9 +679,7 @@ Expected<AvboitDepthWarpStageResult> AvboitComputeEffectChainBuilder::declareDep
     const Core::GpuTaskTimingMetadata avboitComputeStageTiming = __hidden_avboit_compute_effect_chain_builder::AvboitComputeStageTimingMetadata(inputs.targets);
     Core::GpuTaskId completionTask = inputs.occupancyTask;
     if(inputs.hasTransparentRenderers){
-        if(!inputs.coverage.valid() || !inputs.depthWarp.valid() || !inputs.control.valid())
-            return MakeUnexpected(Failure{});
-        if(!inputs.currentBindlessSlots.valid())
+        if(!AreAvboitDepthWarpResourcesValid(inputs.coverage.valid(), inputs.depthWarp.valid(), inputs.control.valid(), inputs.currentBindlessSlots.valid()))
             return MakeUnexpected(Failure{});
         const Array<Core::GpuTaskResourceUse, 4> depthWarpResourceUses = {
             ReadUse(inputs.coverage, Core::ResourceStates::UnorderedAccess),
@@ -629,11 +720,14 @@ Expected<AvboitDepthWarpStageResult> AvboitComputeEffectChainBuilder::declareDep
 b8 AvboitComputeEffectChainBuilder::declareIntegration(const AvboitIntegrationStageInputs& inputs){
     using namespace RendererTaskGraphDetail;
 
-    if(!inputs.extinctionTask.valid())
-        return false;
-    if(!inputs.extinction.valid() || !inputs.control.valid() || !inputs.extinctionOverflow.valid())
-        return false;
-    if(!inputs.transmittance.valid() || !inputs.currentBindlessSlots.valid())
+    if(!AreAvboitIntegrationResourcesValid(
+        inputs.extinctionTask.valid(),
+        inputs.extinction.valid(),
+        inputs.control.valid(),
+        inputs.extinctionOverflow.valid(),
+        inputs.transmittance.valid(),
+        inputs.currentBindlessSlots.valid()
+    ))
         return false;
 
     const Core::GpuTaskSchedulingHint avboitComputeScheduling = __hidden_avboit_compute_effect_chain_builder::ComputeEffectScheduling();
@@ -870,8 +964,8 @@ b8 AvboitAccumulationRecordBuilder::declare(
     accumulationFinalizeScheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc accumulationFinalizeDesc;
     accumulationFinalizeDesc
-        .setIdentity(Name(s_RenderIdentityRenderAvboitAccumulationFinalize))
-        .setMarkerLabel("AVBOIT Accumulation Finalize")
+        .setIdentity(s_RenderIdentityRenderAvboitAccumulationFinalize)
+        .setMarkerLabel(s_AvboitAccumulationFinalizeLabel)
         .setScheduling(accumulationFinalizeScheduling)
         .setDependencies({ &stage.m_accumulationTask, 1u })
         .setResourceUses(accumulationFinalizeResourceUses)
@@ -898,7 +992,7 @@ namespace RendererTaskGraphDetail{
 
 b8 AvboitPreGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
     // A CSG upload without its frozen stream would detach clears and consumers.
-    if(payload.transparentCsgStreamsUploaded != payload.transparentCsgSnapshot.captured)
+    if(!CanRecordAvboitPrePass(payload.transparentCsgStreamsUploaded, payload.transparentCsgSnapshot.captured))
         return false;
 
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
@@ -1076,7 +1170,7 @@ b8 AvboitRefractionCaptureResources::appendUpload(const Name identity, const Cor
     if(!blobResult)
         return false;
     const Core::GpuUploadBlobId blob = *blobResult;
-    Core::GpuTaskDesc desc = TaskDesc(identity, "Refraction Capture Upload", dependency);
+    Core::GpuTaskDesc desc = TaskDesc(identity, s_RefractionCaptureUploadLabel, dependency);
     const auto producedTask = graph.addUploadBufferTask(desc, Core::GpuUploadBufferTaskDesc{ .source = blob, .destination = destination, .finalState = Core::ResourceStates::Common, });
     if(!producedTask){
         dependency = {};
@@ -1096,8 +1190,8 @@ b8 AvboitRefractionCaptureResources::appendCsg(
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& csgUses
 ){
     auto& graph = m_graph;
-    const auto importBuffer = [&](const Core::BufferHandle& buffer){ return FindOrImportBuffer(graph, buffer, "Refraction Capture Buffer"); };
-    const auto importTexture = [&](const Core::TextureHandle& texture){ return FindOrImportTexture(graph, texture, "Refraction Capture Texture"); };
+    const auto importBuffer = [&](const Core::BufferHandle& buffer){ return FindOrImportBuffer(graph, buffer, s_RefractionCaptureBufferLabel); };
+    const auto importTexture = [&](const Core::TextureHandle& texture){ return FindOrImportTexture(graph, texture, s_RefractionCaptureTextureLabel); };
     csgUses.reserve(s_RefractionCaptureCsgUseCapacity);
     const auto clipContext = csgSystem.prepareCsgClipContextSlotData(targets, csgFrameData, csgResources, frameBindings);
     if(!clipContext)
@@ -1179,7 +1273,13 @@ public:
 
 public:
     [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
-        if(!payload.csgResources.refractionCapFillPipeline || !payload.csgResources.bindingValid() || !payload.targets.avboit.refractionFramebuffer || !payload.targets.bindless.slotsBufferDescriptor.valid() || payload.receiverIndices.empty())
+        if(!CanRecordRefractionCaptureCapTask(
+            payload.csgResources.refractionCapFillPipeline != nullptr,
+            payload.csgResources.bindingValid(),
+            payload.targets.avboit.refractionFramebuffer != nullptr,
+            payload.targets.bindless.slotsBufferDescriptor.valid(),
+            payload.receiverIndices.empty()
+        ))
             return false;
         commandList.endRenderPass();
         payload.csgSystem.renderRefractionIntervalCaps(commandList, payload.targets, payload.csgResources, payload.workRect, payload.receiverIndices);
@@ -1217,7 +1317,7 @@ Expected<Core::GpuTaskId> AvboitRefractionCapBuilder::Declare(const AvboitRefrac
     if(!csgResources.refractionCapFillPipeline)
         return MakeUnexpected(Failure{});
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses{scratchArena};
-    uses.reserve(commonUses.size() + csgUses.size() + s_RefractionCaptureCapExtraUseCapacity);
+    uses.reserve(ComputeRefractionCaptureCapUseCapacity(commonUses.size(), csgUses.size()));
     uses.assign(commonUses.begin(), commonUses.end());
     uses.insert(uses.end(), csgUses.begin(), csgUses.end());
     uses.push_back(ReadUse(opaqueDepth));
@@ -1226,7 +1326,7 @@ Expected<Core::GpuTaskId> AvboitRefractionCapBuilder::Declare(const AvboitRefrac
     uses.push_back(ReadWriteUse(tintCoverage, Core::ResourceStates::RenderTarget));
     uses.push_back(ReadWriteUse(instance, Core::ResourceStates::RenderTarget));
     uses.push_back(ReadWriteUse(specularRoughness, Core::ResourceStates::RenderTarget));
-    Core::GpuTaskDesc desc = TaskDesc(Name(s_RenderIdentityRenderRefractionCaptureCaps), "Refraction Capture Caps", dependency);
+    Core::GpuTaskDesc desc = TaskDesc(s_RenderIdentityRenderRefractionCaptureCaps, s_RefractionCaptureCapsLabel, dependency);
     desc.setResourceUses(uses);
     if(inputs.sampledTextureSetUse)
         desc.setResourceSetUses({ inputs.sampledTextureSetUse, 1u });
@@ -1269,11 +1369,11 @@ namespace __hidden_refraction_capture{
 
 
 [[nodiscard]] Expected<Core::GpuGraphResourceId> ImportTexture(Core::GpuTaskGraph& graph, const Core::TextureHandle& texture){
-    return FindOrImportTexture(graph, texture, "Refraction Capture Texture");
+    return FindOrImportTexture(graph, texture, s_RefractionCaptureTextureLabel);
 }
 
 [[nodiscard]] Expected<Core::GpuGraphResourceId> ImportBuffer(Core::GpuTaskGraph& graph, const Core::BufferHandle& buffer){
-    return FindOrImportBuffer(graph, buffer, "Refraction Capture Buffer");
+    return FindOrImportBuffer(graph, buffer, s_RefractionCaptureBufferLabel);
 }
 
 struct CaptureDrawTask{
@@ -1410,7 +1510,7 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
     const Core::GpuGraphResourceId specularRoughness = *specularRoughnessResult;
 
     const auto appendClear = [&](const Name identity, const Core::GpuGraphResourceId destination, const b8 isDepth, const Core::Color color = Core::Color(0.f, 0.f, 0.f, 0.f)){
-        Core::GpuTaskDesc desc = TaskDesc(identity, "Refraction Capture Clear", dependency);
+        Core::GpuTaskDesc desc = TaskDesc(identity, s_RefractionCaptureClearLabel, dependency);
         Core::GpuClearTextureTaskDesc clear;
         clear.destination = destination;
         clear.subresources = Core::TextureSubresourceSet(0u, 1u, 0u, 1u);
@@ -1437,7 +1537,7 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
 
     const auto finalize = [&](){
         const Array<Core::GpuTaskResourceUse, 5u> uses = { ReadUse(depth), ReadUse(normalIor), ReadUse(tintCoverage), ReadUse(instance), ReadUse(specularRoughness) };
-        Core::GpuTaskDesc desc = TaskDesc(Name(s_RenderIdentityRenderRefractionCaptureFinalize), "Refraction Capture Finalize", dependency);
+        Core::GpuTaskDesc desc = TaskDesc(s_RenderIdentityRenderRefractionCaptureFinalize, s_RefractionCaptureFinalizeLabel, dependency);
         desc.setResourceUses(uses);
         return graph.addTask<FinalizeTask>(desc, FinalizeTask::Payload{});
     };
@@ -1472,17 +1572,17 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
         return MakeUnexpected(Failure{});
 
     const Array<MaterialPassDrawItemsView, 2u> drawSets = {drawItems.regular, drawItems.csg};
-    const auto geometrySet = GatherPreparedMaterialGeometryResourceSet(drawSets, Name(s_RenderIdentityRenderRefractionCaptureGeometry), "Refraction Capture Geometry", graph, scratchArena);
+    const auto geometrySet = GatherPreparedMaterialGeometryResourceSet(drawSets, s_RenderIdentityRenderRefractionCaptureGeometry, s_RefractionCaptureGeometryLabel, graph, scratchArena);
     if(!geometrySet)
         return MakeUnexpected(Failure{});
-    const auto sampledTextureSet = GatherPreparedMaterialSampledTextureResourceSet(materialSystem, drawSets, Name(s_RenderIdentityRenderRefractionCaptureMaterialTextures), "Refraction Capture Material Textures", graph, scratchArena);
+    const auto sampledTextureSet = GatherPreparedMaterialSampledTextureResourceSet(materialSystem, drawSets, s_RenderIdentityRenderRefractionCaptureMaterialTextures, s_RefractionCaptureMaterialTexturesLabel, graph, scratchArena);
     if(!sampledTextureSet)
         return MakeUnexpected(Failure{});
     const Array<Core::GpuTaskResourceSetUse, 2u> setUses = {{
         {.resourceSet = *geometrySet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read},
         {.resourceSet = *sampledTextureSet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read},
     }};
-    const usize setUseCount = sampledTextureSet->valid() ? s_RefractionCaptureGeometryAndTextureSetUseCount : 1u;
+    const usize setUseCount = ResolveRefractionCaptureSetUseCount(sampledTextureSet->valid());
 
     materialSystem.prepareMaterialPassInstanceUploadData(csgResources, instances);
     const b8 producesReusableGeometry = generatedGeometry.capture(drawItems, instances, frameBindings, meshViewState, MaterialPipelinePass::AvboitRefractionCapture);
@@ -1527,7 +1627,7 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
         if(items.empty())
             return true;
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses{scratchArena};
-        uses.reserve(commonUses.size() + (csg ? csgUses.size() : 0u) + s_RefractionCaptureDrawExtraUseCapacity);
+        uses.reserve(ComputeRefractionCaptureDrawUseCapacity(commonUses.size(), csg, csgUses.size()));
         uses.assign(commonUses.begin(), commonUses.end());
         if(csg)
             uses.insert(uses.end(), csgUses.begin(), csgUses.end());
@@ -1547,7 +1647,7 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
             dependency = {};
             return false;
         }
-        Core::GpuTaskDesc desc = TaskDesc(**identity, generate ? "Refraction Capture Generate" : "Refraction Capture Raster", dependency);
+        Core::GpuTaskDesc desc = TaskDesc(**identity, SelectRefractionCaptureDrawMarkerLabel(generate), dependency);
         desc.setResourceUses(uses).setResourceSetUses({ setUses.data(), setUseCount });
         CaptureDrawTask::Payload payload{arena, materialSystem};
         payload.avboitTargets = targets.avboit;
@@ -1615,6 +1715,8 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
 
 };
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_END

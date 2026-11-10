@@ -56,8 +56,10 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderAvboitAvboitTargetFactoryAdhdModule(in u64 value){
-    return value != 0u;
+const Name s_AvboitTransmittanceVolumeTargetName = "engine/avboit/transmittance_volume";
+
+u64 ComputeAvboitU32WordBytes(in u64 wordCount){
+    return wordCount * 4u;
 }
 
 

@@ -2,8 +2,45 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderMeshRuntimeCacheAndSnapshotsAdhdModule(in u64 value){
-    return value != 0u;
+const StringView s_MeshShadowTraceSwParentSuffix = ":shadow_trace_sw_parent";
+
+enum<u8> MeshSwBvhBufferPairState{
+    Unused = 0,
+    Complete = 1,
+    Incomplete = 2,
+    kCount
+}
+
+MeshSwBvhBufferPairState ClassifyMeshSwBvhBufferPair(in b8 hasNodeBuffer, in b8 hasParentBuffer){
+    if(!hasNodeBuffer && !hasParentBuffer)
+        return MeshSwBvhBufferPairState::Unused;
+    if(hasNodeBuffer && hasParentBuffer)
+        return MeshSwBvhBufferPairState::Complete;
+    return MeshSwBvhBufferPairState::Incomplete;
+}
+
+b8 HasReadyRuntimeMeshletBoundsState(
+    in b8 runtimeMesh,
+    in u64 runtimeGeometryContentRevision,
+    in u32 meshletCount,
+    in b8 hasMeshletDescBuffer,
+    in b8 hasRuntimeMeshletBoundsBuffer,
+    in b8 descriptorStorageReady,
+    in b8 boundsStorageReady
+){
+    return runtimeMesh && runtimeGeometryContentRevision != 0u && meshletCount != 0u && hasMeshletDescBuffer && hasRuntimeMeshletBoundsBuffer && descriptorStorageReady && boundsStorageReady;
+}
+
+b8 ShouldFreeUnreferencedSwBvhHandle(in b8 heapInitialized, in b8 handleValid, in b8 matchesRef0, in b8 matchesRef1){
+    return heapInitialized && handleValid && !matchesRef0 && !matchesRef1;
+}
+
+b8 ShouldFreeUnreferencedSwBvhHandle(in b8 heapInitialized, in b8 handleValid, in b8 matchesRef0, in b8 matchesRef1, in b8 matchesRef2, in b8 matchesRef3){
+    return heapInitialized && handleValid && !matchesRef0 && !matchesRef1 && !matchesRef2 && !matchesRef3;
+}
+
+usize ReservedRetainedAccelerationBufferCapacity(in usize meshCount, in usize buffersPerMesh){
+    return meshCount * buffersPerMesh;
 }
 
 
@@ -11,6 +48,7 @@ b8 ImplEcsRenderMeshRuntimeCacheAndSnapshotsAdhdModule(in u64 value){
 
 
 native{
+#include <impl/ecs_render/mesh/mesh_resources_internal.adhd.h>
 #include <impl/ecs_render/mesh/renderer_mesh_types.adhd.h>
 #include <impl/global.adhd.h>
 #include <impl/ecs_render/mesh/mesh_system.adhd.h>
@@ -58,69 +96,6 @@ NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#ifndef NWB_IMPL_ECS_RENDER_MESH_RESOURCES_INTERNAL_DECLS_H
-#define NWB_IMPL_ECS_RENDER_MESH_RESOURCES_INTERNAL_DECLS_H
-class MeshSoftwareBvhBindings final{
-public:
-    [[nodiscard]] b8 ensure(Core::GraphicsRuntime& graphics, MeshResources& mesh)const;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class MeshEmulationResources final{
-public:
-    [[nodiscard]] b8 prepare(Core::GraphicsRuntime& graphics, MeshResources& mesh)const;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererMeshSystem;
-struct MeshResources;
-
-class MeshDescriptorTransaction final : NoCopy{
-public:
-    MeshDescriptorTransaction(RendererMeshSystem& meshSystem, MeshResources& mesh)noexcept;
-    ~MeshDescriptorTransaction()noexcept(false);
-
-
-public:
-    void release()noexcept{ m_active = false; }
-
-
-private:
-    RendererMeshSystem& m_meshSystem;
-    MeshResources& m_mesh;
-    b8 m_active = true;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererMeshSystem;
-
-class RuntimeMeshResourceCache final : NoCopy{
-public:
-    explicit RuntimeMeshResourceCache(RendererMeshSystem& system)noexcept : m_system(system){}
-
-
-public:
-    [[nodiscard]] Expected<NotNull<MeshResources*>> create(const RuntimeMeshDesc& desc);
-    [[nodiscard]] Expected<NotNull<MeshResources*>> find(const RuntimeMeshDesc& desc)noexcept;
-
-
-private:
-    RendererMeshSystem& m_system;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#endif
 
 
 namespace __hidden_mesh_resources{
@@ -170,7 +145,6 @@ template<typename PayloadT>
     }
     return Move(*buffer);
 }
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -541,14 +515,15 @@ Expected<NotNull<MeshResources*>> RuntimeMeshResourceCache::find(const RuntimeMe
 [[nodiscard]] b8 MeshRayTracingSnapshotPolicy::BoundsReady(const MeshResources& mesh)noexcept{
     const Core::GpuDescriptorHandle descriptor = mesh.geometryHeapHandles[NWB_MESH_BINDING_MESHLET_DESC];
     const Core::GpuDescriptorHandle bounds = mesh.runtimeMeshletLocalBoundsHeapHandle;
-    if(
-        !mesh.runtimeMesh || mesh.runtimeGeometryContentRevision == 0u || mesh.meshletCount == 0u
-        || !mesh.meshletDescBuffer || !mesh.runtimeMeshletLocalBoundsBuffer
-        || !descriptor.valid() || descriptor.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-        || !bounds.valid() || bounds.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-    )
-        return false;
-    return true;
+    return HasReadyRuntimeMeshletBoundsState(
+        mesh.runtimeMesh,
+        mesh.runtimeGeometryContentRevision,
+        mesh.meshletCount,
+        mesh.meshletDescBuffer != nullptr,
+        mesh.runtimeMeshletLocalBoundsBuffer != nullptr,
+        descriptor.valid() && descriptor.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer,
+        bounds.valid() && bounds.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+    );
 }
 
 [[nodiscard]] b8 MeshRayTracingSnapshotPolicy::MeshletMatches(const MeshResources& mesh, const ECSRenderDetail::MeshRayTracingResourceSnapshot& snapshot)noexcept{
@@ -729,28 +704,28 @@ b8 RendererMeshSystem::commitRayTracingResourceSnapshot(const ECSRenderDetail::M
         const Core::GpuDescriptorHandle currentNodeHandle = found != m_meshState.m_meshes.end() ? found.value().swBvhNodeHeapHandle : Core::GpuDescriptorHandle::Invalid();
         const Core::GpuDescriptorHandle currentParentHandle = found != m_meshState.m_meshes.end() ? found.value().swBvhParentHeapHandle : Core::GpuDescriptorHandle::Invalid();
         const Core::GpuDescriptorHandle candidateNodeHandle = desired.swBvhNodeHeapHandle;
-        if(
-            heap.isInitialized()
-            && candidateNodeHandle.valid()
-            && candidateNodeHandle != expected.swBvhNodeHeapHandle
-            && candidateNodeHandle != expected.swBvhParentHeapHandle
-            && candidateNodeHandle != currentNodeHandle
-            && candidateNodeHandle != currentParentHandle
-        ){
+        if(ShouldFreeUnreferencedSwBvhHandle(
+            heap.isInitialized(),
+            candidateNodeHandle.valid(),
+            candidateNodeHandle == expected.swBvhNodeHeapHandle,
+            candidateNodeHandle == expected.swBvhParentHeapHandle,
+            candidateNodeHandle == currentNodeHandle,
+            candidateNodeHandle == currentParentHandle
+        )){
             heap.free(candidateNodeHandle);
             desired.swBvhNodeHeapHandle = Core::GpuDescriptorHandle::Invalid();
             if(desired.swBvhParentHeapHandle == candidateNodeHandle)
                 desired.swBvhParentHeapHandle = Core::GpuDescriptorHandle::Invalid();
         }
         const Core::GpuDescriptorHandle candidateParentHandle = desired.swBvhParentHeapHandle;
-        if(
-            heap.isInitialized()
-            && candidateParentHandle.valid()
-            && candidateParentHandle != expected.swBvhNodeHeapHandle
-            && candidateParentHandle != expected.swBvhParentHeapHandle
-            && candidateParentHandle != currentNodeHandle
-            && candidateParentHandle != currentParentHandle
-        ){
+        if(ShouldFreeUnreferencedSwBvhHandle(
+            heap.isInitialized(),
+            candidateParentHandle.valid(),
+            candidateParentHandle == expected.swBvhNodeHeapHandle,
+            candidateParentHandle == expected.swBvhParentHeapHandle,
+            candidateParentHandle == currentNodeHandle,
+            candidateParentHandle == currentParentHandle
+        )){
             heap.free(candidateParentHandle);
             desired.swBvhParentHeapHandle = Core::GpuDescriptorHandle::Invalid();
         }
@@ -758,15 +733,21 @@ b8 RendererMeshSystem::commitRayTracingResourceSnapshot(const ECSRenderDetail::M
     }
 
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    if(heap.isInitialized() && expected.swBvhNodeHeapHandle.valid() && expected.swBvhNodeHeapHandle != desired.swBvhNodeHeapHandle && expected.swBvhNodeHeapHandle != desired.swBvhParentHeapHandle)
+    if(ShouldFreeUnreferencedSwBvhHandle(
+        heap.isInitialized(),
+        expected.swBvhNodeHeapHandle.valid(),
+        expected.swBvhNodeHeapHandle == desired.swBvhNodeHeapHandle,
+        expected.swBvhNodeHeapHandle == desired.swBvhParentHeapHandle
+    ))
         heap.free(expected.swBvhNodeHeapHandle);
-    if(
-        heap.isInitialized()
-        && expected.swBvhParentHeapHandle.valid()
-        && expected.swBvhParentHeapHandle != expected.swBvhNodeHeapHandle
-        && expected.swBvhParentHeapHandle != desired.swBvhNodeHeapHandle
-        && expected.swBvhParentHeapHandle != desired.swBvhParentHeapHandle
-    )
+    if(ShouldFreeUnreferencedSwBvhHandle(
+        heap.isInitialized(),
+        expected.swBvhParentHeapHandle.valid(),
+        expected.swBvhParentHeapHandle == expected.swBvhNodeHeapHandle,
+        expected.swBvhParentHeapHandle == desired.swBvhNodeHeapHandle,
+        expected.swBvhParentHeapHandle == desired.swBvhParentHeapHandle,
+        false
+    ))
         heap.free(expected.swBvhParentHeapHandle);
 
     MeshResources& mesh = found.value();
@@ -836,13 +817,14 @@ Expected<ECSRenderDetail::MeshSoftwareBvhParentBuildStateVector> RendererMeshSys
     states.reserve(m_meshState.m_meshes.size());
     for(auto meshIt = m_meshState.m_meshes.begin(); meshIt != m_meshState.m_meshes.end(); ++meshIt){
         const MeshResources& mesh = meshIt.value();
-        if(!mesh.swBvhNodeBuffer && !mesh.swBvhParentBuffer)
+        const MeshSwBvhBufferPairState::Enum pairState = ClassifyMeshSwBvhBufferPair(mesh.swBvhNodeBuffer != nullptr, mesh.swBvhParentBuffer != nullptr);
+        if(pairState == MeshSwBvhBufferPairState::Unused)
             continue;
-        if(!mesh.swBvhNodeBuffer || !mesh.swBvhParentBuffer){
+        if(pairState != MeshSwBvhBufferPairState::Complete){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererMeshSystem: incomplete software BVH state for a live mesh"));
             return MakeUnexpected(Failure{});
         }
-        const auto identity = DeriveName(mesh.meshName, AStringView(":shadow_trace_sw_parent"));
+        const auto identity = DeriveName(mesh.meshName, s_MeshShadowTraceSwParentSuffix);
         if(!identity)
             return MakeUnexpected(Failure{});
         states.push_back({ .buffer = mesh.swBvhParentBuffer, .identity = *identity, });
@@ -852,7 +834,7 @@ Expected<ECSRenderDetail::MeshSoftwareBvhParentBuildStateVector> RendererMeshSys
 
 void RendererMeshSystem::collectRetainedAccelerationStateBuffers(ECSRenderDetail::MeshRetainedAccelerationStateBufferVector& outBuffers)const{
     outBuffers.clear();
-    outBuffers.reserve(m_meshState.m_meshes.size() * s_RetainedAccelerationBuffersPerMesh);
+    outBuffers.reserve(ReservedRetainedAccelerationBufferCapacity(m_meshState.m_meshes.size(), s_RetainedAccelerationBuffersPerMesh));
     for(auto meshIt = m_meshState.m_meshes.begin(); meshIt != m_meshState.m_meshes.end(); ++meshIt){
         const MeshResources& mesh = meshIt.value();
         // Retain every live BLAS source and backing buffer across preparation packets.

@@ -2,6 +2,26 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/avboit/avboit.adhd>
+#include <impl/ecs_render/avboit/avboit_compute_emulation_validator.adhd>
+#include <impl/ecs_render/avboit/avboit_frame_targets.adhd>
+#include <impl/ecs_render/avboit/avboit_raster_configuration.adhd>
+#include <impl/ecs_render/avboit/avboit_system.adhd>
+#include <impl/ecs_render/avboit/avboit_target_factory.adhd>
+#include <impl/ecs_render/avboit/compute_effect_record_inputs.adhd>
+#include <impl/ecs_render/avboit/compute_emulation_record.adhd>
+#include <impl/ecs_render/avboit/geometry_types.adhd>
+#include <impl/ecs_render/avboit/graph_types.adhd>
+#include <impl/ecs_render/avboit/task_graph_occupancy_tasks.adhd>
+#include <impl/ecs_render/avboit/types.adhd>
+#include <impl/ecs_render/refraction/refraction_target_builder.adhd>
+#include <impl/ecs_render/refraction/types.adhd>
+#include <impl/ecs_render/shared/frame_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 #include <impl/global.adhd.h>
 #include <impl/ecs_csg/frame_state.adhd.h>
@@ -135,9 +155,8 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-}
 
-native{
+
 #include <impl/global.adhd.h>
 #include <impl/ecs_csg/frame_state.adhd.h>
 #include <impl/ecs_render/avboit/compute_emulation_record.adhd.h>
@@ -173,13 +192,11 @@ native{
 #include <impl/ecs_render/csg/csg_system.adhd.h>
 #include <impl/ecs_render/material/material_system.adhd.h>
 #include <core/graphics/backend_selection/backend.h>
-#include <impl/ecs_render/avboit/compute_emulation_record.adhd.h>
 #include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
 #include <impl/ecs_render/kernel/timing_names.adhd.h>
 #include <impl/ecs_render/avboit/avboit_compute_emulation_validator.adhd.h>
 #include <impl/ecs_render/avboit/avboit_system.adhd.h>
 #include <impl/assets_graphics/transparent_subsystem.adhd.h>
-#include <impl/ecs_render/avboit/avboit_system.adhd.h>
 #include <impl/ecs_render/kernel/compute_pipeline_utils.adhd.h>
 #include <impl/ecs_render/kernel/renderer_format_private.adhd.h>
 #include <impl/ecs_render/shader/shader_system.adhd.h>
@@ -812,9 +829,6 @@ private:
 
 
 class RendererMaterialSystem;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1491,15 +1505,35 @@ inline Expected<AvboitPassUploadResult> AvboitPassUploadHelper::gather(
 }
 
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderAvboitStageInternalTypesAdhdModule(in u64 value){
-    return value != 0u;
+b8 CanPublishAvboitReusableGeometryProducer(in b8 captured, in b8 taskValid){
+    return captured && taskValid;
+}
+
+usize ResolveRefractionCaptureSetUseCount(in b8 sampledTextureSetValid){
+    if(sampledTextureSetValid)
+        return s_RefractionCaptureGeometryAndTextureSetUseCount;
+    return 1u;
+}
+
+usize ComputeRefractionCaptureDrawUseCapacity(in usize commonUseCount, in b8 csg, in usize csgUseCount){
+    usize total = commonUseCount + s_RefractionCaptureDrawExtraUseCapacity;
+    if(csg)
+        total += csgUseCount;
+    return total;
 }
 
 

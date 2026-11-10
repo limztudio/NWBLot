@@ -2,8 +2,76 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderOpticsOpticalSceneResourcesAndUploadAdhdModule(in u64 value){
-    return value != 0u;
+b8 CanPublishOpticalSceneSnapshot(in b8 prepared, in b8 runtimeBoundsRequired, in b8 hasRuntimeBoundsSnapshot){
+    return prepared && (!runtimeBoundsRequired || hasRuntimeBoundsSnapshot);
+}
+
+b8 CanPlanRayTracingOpticalUpload(
+    in b8 retired,
+    in b8 quarantined,
+    in u64 reservedSequence,
+    in b8 hasBuffer,
+    in b8 hasUploadBytes,
+    in b8 primaryQueueValid,
+    in u64 primaryQueueGeneration,
+    in u64 bufferGeneration,
+    in u64 nextSequence
+){
+    return
+        !retired
+        && !quarantined
+        && reservedSequence == 0u
+        && hasBuffer
+        && hasUploadBytes
+        && primaryQueueValid
+        && primaryQueueGeneration == bufferGeneration
+        && nextSequence != u64.max
+    ;
+}
+
+b8 CanReserveRayTracingOpticalUpload(
+    in b8 matchesBuffer,
+    in b8 reused,
+    in u64 reservedSequence,
+    in u64 planAcceptedSequence,
+    in u64 acceptedSequence,
+    in u64 planSequence,
+    in u64 nextSequence
+){
+    return matchesBuffer && !reused && reservedSequence == 0u && planAcceptedSequence == acceptedSequence && planSequence < nextSequence;
+}
+
+b8 ValidAcceptedOpticalSubmissionToken(
+    in b8 tokenValid,
+    in b8 isGraphicsQueue,
+    in b8 matchesPhysicalQueue,
+    in b8 hasPreviousAcceptedToken,
+    in u64 tokenValue,
+    in u64 previousTokenValue
+){
+    return tokenValid && isGraphicsQueue && matchesPhysicalQueue && (!hasPreviousAcceptedToken || tokenValue > previousTokenValue);
+}
+
+b8 ValidOpticalUploadRecordState(
+    in b8 hasDestination,
+    in b8 hasUpload,
+    in b8 hasBytes,
+    in usize blobByteSize,
+    in usize uploadByteSize,
+    in b8 reservationValid,
+    in b8 commandIrCapture,
+    in b8 matchesQueue
+){
+    return
+        hasDestination
+        && hasUpload
+        && hasBytes
+        && blobByteSize != 0u
+        && blobByteSize == uploadByteSize
+        && reservationValid
+        && !commandIrCapture
+        && matchesQueue
+    ;
 }
 
 
@@ -12,6 +80,7 @@ b8 ImplEcsRenderOpticsOpticalSceneResourcesAndUploadAdhdModule(in u64 value){
 
 native{
 #include <impl/ecs_render/optics/optical_scene.adhd.h>
+#include <impl/ecs_render/optics/optical_scene_internal.adhd.h>
 #include <impl/ecs_render/optics/task_graph_optical_scene_upload.adhd.h>
 #include <impl/ecs_render/optics/optical_bounds_evaluator.adhd.h>
 #include <impl/ecs_render/optics/optical_scene_identity_builder.adhd.h>
@@ -52,34 +121,6 @@ NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#ifndef NWB_IMPL_ECS_RENDER_OPTICS_OPTICAL_SCENE_INTERNAL_DECLS_H
-#define NWB_IMPL_ECS_RENDER_OPTICS_OPTICAL_SCENE_INTERNAL_DECLS_H
-class OpticalBoundsFinalizeGraph final{
-public:
-    [[nodiscard]] static Expected<RayTracingOpticalSceneGraphBuffer> Declare(
-        const RayTracingOpticalSceneSnapshot& resources,
-        Core::GpuGraphResourceId source,
-        Core::GpuTaskId priorReadersDrained,
-        Core::GpuTaskGraph& graph,
-        Core::Alloc::ScratchArena& scratchArena
-    );
-
-private:
-    struct Task;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(OpticalBoundaryMode::Unspecified == NWB_RT_OPTICAL_BOUNDARY_UNSPECIFIED);
-static_assert(OpticalBoundaryMode::ClosedNested == NWB_RT_OPTICAL_BOUNDARY_CLOSED_NESTED);
-static_assert(OpticalBoundaryMode::ClosedPriority == NWB_RT_OPTICAL_BOUNDARY_CLOSED_PRIORITY);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#endif
 
 
 void RayTracingOpticalSceneResources::invalidate(){
@@ -205,7 +246,7 @@ b8 RayTracingOpticalSceneResources::prepareRuntimeBounds(const RayTracingOptical
 }
 
 RayTracingOpticalSceneSnapshot RayTracingOpticalSceneResources::snapshot()const noexcept{
-    if(!m_prepared || (m_runtimeBoundsRequired && !m_runtimeBoundsSnapshot))
+    if(!CanPublishOpticalSceneSnapshot(m_prepared, m_runtimeBoundsRequired, static_cast<b8>(m_runtimeBoundsSnapshot)))
         return {};
     RayTracingOpticalSceneSnapshot result = m_resources;
     if(m_runtimeBoundsSnapshot){
@@ -252,7 +293,17 @@ RayTracingOpticalUploadPlan RayTracingOpticalUploadState::plan(const RayTracingO
     NothrowScopedLock lock(m_mutex);
 
     RayTracingOpticalUploadPlan result;
-    if(m_retired || m_quarantined || m_reservedSequence != 0u || !m_buffer || !upload || upload->bytes.empty() || !m_primaryQueue.valid() || m_primaryQueue.deviceGeneration != m_buffer->getDeviceGeneration() || m_nextSequence == Limit<u64>::s_Max)
+    if(!CanPlanRayTracingOpticalUpload(
+        m_retired,
+        m_quarantined,
+        m_reservedSequence,
+        static_cast<b8>(m_buffer),
+        upload && !upload->bytes.empty(),
+        m_primaryQueue.valid(),
+        m_primaryQueue.deviceGeneration,
+        m_buffer ? m_buffer->getDeviceGeneration() : 0u,
+        m_nextSequence
+    ))
         return result;
 
     result.buffer = m_buffer;
@@ -270,7 +321,7 @@ RayTracingOpticalUploadPlan RayTracingOpticalUploadState::plan(const RayTracingO
 b8 RayTracingOpticalUploadState::reserve(const RayTracingOpticalUploadPlan& plan)noexcept{
     NothrowScopedLock lock(m_mutex);
 
-    if(!matchesBuffer(plan) || plan.reused || m_reservedSequence != 0u || plan.acceptedSequence != m_acceptedSequence || plan.sequence >= m_nextSequence)
+    if(!CanReserveRayTracingOpticalUpload(matchesBuffer(plan), plan.reused, m_reservedSequence, plan.acceptedSequence, m_acceptedSequence, plan.sequence, m_nextSequence))
         return false;
 
     m_reservedSequence = plan.sequence;
@@ -300,7 +351,14 @@ b8 RayTracingOpticalUploadState::accept(const RayTracingOpticalUploadPlan& plan,
         return false;
     m_reservedSequence = 0u;
     m_reservedUpload = nullptr;
-    if(!token.valid() || token.queue != Core::CommandQueue::Graphics || !token.matchesPhysicalQueue(m_primaryQueue.index, m_primaryQueue.deviceGeneration) || (m_acceptedToken.valid() && token.value <= m_acceptedToken.value)){
+    if(!ValidAcceptedOpticalSubmissionToken(
+        token.valid(),
+        token.queue == Core::CommandQueue::Graphics,
+        token.matchesPhysicalQueue(m_primaryQueue.index, m_primaryQueue.deviceGeneration),
+        m_acceptedToken.valid(),
+        token.value,
+        m_acceptedToken.value
+    )){
         // This callback follows native acceptance. Discard cannot prove the old bytes survived an unknown write.
         m_quarantined = true;
         return false;
@@ -370,7 +428,16 @@ public:
 public:
     [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         const auto bytes = context.declarations.uploadBlobData(payload.source);
-        if(!payload.destination || !payload.upload || !bytes || bytes->size() == 0u || bytes->size() != payload.upload->bytes.size() || !payload.reservation.valid() || context.commandIrCapture || context.queue != payload.queue)
+        if(!ValidOpticalUploadRecordState(
+            static_cast<b8>(payload.destination),
+            static_cast<b8>(payload.upload),
+            static_cast<b8>(bytes),
+            bytes ? bytes->size() : 0u,
+            payload.upload ? payload.upload->bytes.size() : 0u,
+            payload.reservation.valid(),
+            context.commandIrCapture,
+            context.queue == payload.queue
+        ))
             return false;
 
         commandList.endRenderPass();

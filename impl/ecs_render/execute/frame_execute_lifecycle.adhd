@@ -2,12 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/execute/frame_execute_recovery_and_tails.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 native{
 #include <impl/ecs_render/renderer_frame_pipeline.adhd.h>
 #include <impl/ecs_render/shadow/light_space_shadow.adhd.h>
@@ -125,17 +119,46 @@ public:
 
 
 NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderExecuteFrameExecuteLifecycleAdhdModule(in u64 value){
-    return value != 0u;
+b8 IsShadowPrepareStateCandidatePrepared(in b8 candidateBuilt, in b8 candidateValid, in b8 candidateEmpty, in b8 candidateRequired){
+    if(!candidateBuilt)
+        return false;
+    if(candidateValid && !candidateEmpty)
+        return true;
+    return !candidateRequired;
+}
+
+b8 CanCommitShadowPrepareStateCandidate(in b8 candidateValid, in b8 candidateEmpty, in b8 candidateRequired){
+    if(!candidateValid)
+        return false;
+    if(candidateEmpty && candidateRequired)
+        return false;
+    return true;
+}
+
+b8 IsValidDeferredFrameTimingEnvelopeBegin(
+    in b8 taskValid,
+    in b8 taskCompiled,
+    in b8 queueGraphicsOnPrimary,
+    in b8 beginPacketValid,
+    in u32 beginPacketIndex,
+    in b8 envelopeValid,
+    in b8 envelopeStartsAtBeginPacket
+){
+    return
+        taskValid
+        && taskCompiled
+        && queueGraphicsOnPrimary
+        && beginPacketValid
+        && beginPacketIndex == 0u
+        && envelopeValid
+        && envelopeStartsAtBeginPacket
+    ;
 }
 
 
@@ -143,27 +166,28 @@ b8 ImplEcsRenderExecuteFrameExecuteLifecycleAdhdModule(in u64 value){
 
 
 native{
-#include <impl/ecs_render/execute/frame_execute_lifecycle.adhd.h>
 #include <impl/global.adhd.h>
-#include <impl/ecs_render/execute/types.adhd.h>
-#include <core/graphics/gpu_timing_types.h>
-#include <core/task/gpu/compiled_graph.h>
-#include <core/task/gpu/task_graph.h>
-#include <global/span.h>
 #include <impl/ecs_render/execute/deferred_frame_topology_validator.adhd.h>
+#include <impl/ecs_render/execute/execute_internal.adhd.h>
 #include <impl/ecs_render/execute/frame_diagnostics.adhd.h>
-#include <impl/ecs_render/renderer_frame_pipeline.adhd.h>
-#include <impl/ecs_render/execute/frame_execute_timing_state.adhd.h>
-#include <impl/ecs_render/shadow/shadow_prepare_packet_validator.adhd.h>
-#include <impl/ecs_render/shadow/shadow_visibility_merge_validator.adhd.h>
-#include <impl/ecs_render/execute/frame_execute_recovery.adhd.h>
-#include <core/task/gpu/scheduler.h>
-#include <impl/ecs_render/execute/frame_execute_timing_state.adhd.h>
-#include <impl/ecs_render/kernel/timing_names.adhd.h>
-#include <impl/ecs_render/execute/frame_execute_state_lifecycles.adhd.h>
-#include <impl/ecs_render/shared/frame_types.adhd.h>
+#include <impl/ecs_render/execute/frame_execute_lifecycle.adhd.h>
 #include <impl/ecs_render/execute/frame_execute_present_tails.adhd.h>
 #include <impl/ecs_render/execute/frame_execute_recovery.adhd.h>
+#include <impl/ecs_render/execute/frame_execute_state_lifecycles.adhd.h>
+#include <impl/ecs_render/execute/frame_execute_timing_state.adhd.h>
+#include <impl/ecs_render/execute/types.adhd.h>
+#include <impl/ecs_render/kernel/timing_names.adhd.h>
+#include <impl/ecs_render/renderer_frame_pipeline.adhd.h>
+#include <impl/ecs_render/shadow/shadow_prepare_packet_validator.adhd.h>
+#include <impl/ecs_render/shadow/shadow_visibility_merge_validator.adhd.h>
+#include <impl/ecs_render/shared/frame_types.adhd.h>
+
+#include <core/graphics/gpu_timing_types.h>
+#include <core/task/gpu/compiled_graph.h>
+#include <core/task/gpu/scheduler.h>
+#include <core/task/gpu/task_graph.h>
+
+#include <global/span.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -173,117 +197,6 @@ NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#ifndef NWB_IMPL_ECS_RENDER_EXECUTE_INTERNAL_DECLS_H
-#define NWB_IMPL_ECS_RENDER_EXECUTE_INTERNAL_DECLS_H
-class RendererFramePipeline;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GraphicsPrefixTimingResolver final : NoCopy{
-public:
-    explicit GraphicsPrefixTimingResolver(const RendererFramePipeline& pipeline)noexcept
-        : m_pipeline(pipeline)
-    {}
-
-
-public:
-    void resolve(
-        const Core::GpuCompiledGraph::ReadView& compiledPlan,
-        Span<Core::GpuTimingSubmissionTicket* const> ownedTickets,
-        Span<Core::GpuTimingSubmissionTicket*> timingTickets,
-        Span<Core::GpuTaskId> timingTasks,
-        b8& asyncSpansOnePacket,
-        GraphicsPrefixTimingResolutionResult& outResult
-    )const noexcept;
-
-
-private:
-    const RendererFramePipeline& m_pipeline;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererFramePipeline;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class OpaqueEmulationMergeValidator final : NoCopy{
-public:
-    explicit OpaqueEmulationMergeValidator(const RendererFramePipeline& pipeline)noexcept
-        : m_pipeline(pipeline)
-    {}
-
-
-public:
-    void validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, Span<const Core::GpuTaskId> timingTasks, b8 timingBindingsValid, b8 hasOpaqueCsgFrameWork, OpaqueEmulationMergeValidationResult& outResult)const noexcept;
-
-
-private:
-    const RendererFramePipeline& m_pipeline;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererFramePipeline;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Surfel-GI plus caustics merge validation owns packet-merge checks for GI tasks.
-struct SurfelCausticsMergeValidationResult{
-    const Core::GpuPhysicalQueueInfo* hardwareCausticsQueue = nullptr;
-    const Core::GpuPhysicalQueueInfo* surfelGiQueue = nullptr;
-    const Core::GpuPhysicalQueueInfo* surfelGiPreparationQueue = nullptr;
-    const Core::GpuPhysicalQueueInfo* surfelGiSnapshotCopyQueue = nullptr;
-    const Core::GpuPhysicalQueueInfo* surfelGiCounterReadbackQueue = nullptr;
-    b8 surfelGiOutputClearMergedIntoGiPacket = false;
-    b8 surfelGiPreparedPrefixMergedIntoGiPacket = false;
-    b8 surfelGiInitializationLifecycleMergedIntoPreparationPacket = false;
-    b8 causticPhotonMergedIntoCausticsPacket = false;
-    b8 causticGeometryMergedIntoCausticsPacket = false;
-    b8 causticResolvePrepareMergedIntoCausticsPacket = false;
-    b8 causticResolveWaveletsMergedIntoCausticsPacket = false;
-    b8 causticResolveUpsampleMergedIntoCausticsPacket = false;
-    b8 causticIrradianceClearMergedIntoCausticsPacket = false;
-    b8 causticAccumulatorBootstrapClearMergedIntoCausticsPacket = false;
-    b8 causticAccumulatorDecayMergedIntoCausticsPacket = false;
-    b8 surfelGiSnapshotCopyAndTimingPacketsAreDistinct = false;
-    b8 surfelCounterReadbackFollowsPresentation = false;
-    b8 laggedLightingHistoryFollowsPresentation = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class SurfelCausticsMergeValidator final : NoCopy{
-public:
-    explicit SurfelCausticsMergeValidator(const RendererFramePipeline& pipeline)noexcept
-        : m_pipeline(pipeline)
-    {}
-
-
-public:
-    void validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, Core::GpuTaskId causticsTask, Core::GpuTaskId terminalPresentationTask, b8 captureLaggedLightingHistory, SurfelCausticsMergeValidationResult& outResult)const noexcept;
-
-
-private:
-    const RendererFramePipeline& m_pipeline;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#endif
 
 
 b8 DeferredFrameTopologyValidator::validate(
@@ -391,15 +304,15 @@ b8 DeferredFrameTopologyValidator::validate(
     if(
         !deferredGraphScheduled
         || !m_pipeline.m_deferredLightingTaskGraphScheduled
-        || !m_pipeline.m_deferredFrameTimingBeginTask.valid()
-        || !taskIsCompiled(m_pipeline.m_deferredFrameTimingBeginTask)
-        || !frameTimingBeginQueue
-        || frameTimingBeginQueue->queueClass != Core::CommandQueue::Graphics
-        || frameTimingBeginQueue->id != primaryGraphicsQueue
-        || !frameTimingBeginPacket.valid()
-        || frameTimingBeginPacket.index != 0u
-        || !frameTimingEnvelope.valid()
-        || frameTimingEnvelope.first != frameTimingBeginPacket
+        || !IsValidDeferredFrameTimingEnvelopeBegin(
+            m_pipeline.m_deferredFrameTimingBeginTask.valid(),
+            taskIsCompiled(m_pipeline.m_deferredFrameTimingBeginTask),
+            frameTimingBeginQueue && frameTimingBeginQueue->queueClass == Core::CommandQueue::Graphics && frameTimingBeginQueue->id == primaryGraphicsQueue,
+            frameTimingBeginPacket.valid(),
+            frameTimingBeginPacket.index,
+            frameTimingEnvelope.valid(),
+            frameTimingEnvelope.first == frameTimingBeginPacket
+        )
         || !m_pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask.valid()
         || !taskIsCompiled(m_pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask)
         || deferredCompiledPlan.tasksSharePacket(m_pipeline.m_deferredFrameTimingBeginTask, m_pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask)
@@ -716,8 +629,7 @@ void OpaqueEmulationMergeValidator::validate(const Core::GpuCompiledGraph::ReadV
             !pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalCombineTask.valid()
             || !pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalSampleTask.valid()
             || !opaqueCsgIntervalSampleComputeEmulationQueue
-            || opaqueCsgIntervalSampleComputeEmulationQueue->queueClass
-                != Core::CommandQueue::Graphics
+            || opaqueCsgIntervalSampleComputeEmulationQueue->queueClass != Core::CommandQueue::Graphics
             || !compiledPlan.taskPrecedesOrSharesPacket(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalCombineTask, pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask)
             || !compiledPlan.tasksSharePacket(pipeline.m_graphicsPrefixGraph.m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask, pipeline.m_graphicsPrefixGraph.m_graphicsPrefixCsgIntervalSampleTask)
         )
@@ -830,8 +742,7 @@ b8 FrameExecuteLifecycle::PrepareShadowPrepareTask(void* const rawContext, const
     if(!context || !finalState)
         return false;
     const b8 candidateBuilt = context->renderer->m_shadowPreparePersistentState.buildMergedBufferSubset(*finalState, context->buffers, context->scratchArena, *context->stateCandidate);
-    const b8 candidatePresent = context->stateCandidate->valid() && !context->stateCandidate->empty();
-    context->statePrepared = candidateBuilt && (candidatePresent || !context->stateCandidateRequired);
+    context->statePrepared = IsShadowPrepareStateCandidatePrepared(candidateBuilt, context->stateCandidate->valid(), context->stateCandidate->empty(), context->stateCandidateRequired);
     return context->statePrepared;
 }
 
@@ -845,7 +756,7 @@ b8 FrameExecuteLifecycle::AcceptShadowPrepareTask(void* const rawContext, [[mayb
         return false;
 
     RendererFramePipeline& renderer = *context->renderer;
-    if(!context->stateCandidate->valid() || (context->stateCandidate->empty() && context->stateCandidateRequired)){
+    if(!CanCommitShadowPrepareStateCandidate(context->stateCandidate->valid(), context->stateCandidate->empty(), context->stateCandidateRequired)){
         context->stateReady = false;
         renderer.m_raytracingSystem.discardPreflightShadowVisibilityResources();
         return false;
@@ -1065,9 +976,6 @@ b8 FrameExecuteLifecycle::AcceptDeferredLightingTask(void* const rawContext, [[m
 
 
 NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 }
 
 

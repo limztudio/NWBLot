@@ -2,8 +2,80 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderDeferredGraphStagesAdhdModule(in u64 value){
-    return value != 0u;
+usize ComputeOpaqueGbufferResourceUseCapacity(
+    in b8 hasOpaqueDrawItems,
+    in b8 hasCsgFrameGpuWork,
+    in b8 hasOpaqueCsgFrameWork,
+    in usize opaqueDrawUseCount,
+    in usize noOpaqueDrawUseCount,
+    in usize csgFrameUseCount
+){
+    usize count = noOpaqueDrawUseCount;
+    if(hasOpaqueDrawItems)
+        count = opaqueDrawUseCount;
+    if(hasCsgFrameGpuWork)
+        count += csgFrameUseCount;
+    if(hasOpaqueCsgFrameWork)
+        count += csgFrameUseCount;
+    return count;
+}
+
+usize ComputePostGbufferNormalizeUseCapacity(in usize baseCapacity, in b8 geometrySetGraphOwned, in usize geometryResourceCount){
+    if(geometrySetGraphOwned)
+        return baseCapacity;
+    return baseCapacity + geometryResourceCount;
+}
+
+b8 ValidDeferredOutputLayerTextureShape(
+    in b8 isSampledImageClass,
+    in u32 width,
+    in u32 height,
+    in u32 expectedWidth,
+    in u32 expectedHeight,
+    in b8 isTexture2D,
+    in b8 isRgba16Float,
+    in u32 sampleCount,
+    in u32 mipLevels,
+    in u32 arraySize,
+    in b8 coversEntireTexture
+){
+    return
+        isSampledImageClass
+        && width == expectedWidth
+        && height == expectedHeight
+        && isTexture2D
+        && isRgba16Float
+        && sampleCount == 1u
+        && mipLevels == 1u
+        && arraySize == 1u
+        && coversEntireTexture
+    ;
+}
+
+usize ResolveDeferredLightingDependencyCount(
+    in b8 laggedBindlessSlotsGraphOwned,
+    in b8 useLaggedLightingHistory,
+    in b8 hasTransparentRenderers,
+    in usize transparentLaggedSelectorCount,
+    in usize opaqueLaggedSelectorCount,
+    in usize transparentLaggedCount,
+    in usize liveDependencyCount
+){
+    if(laggedBindlessSlotsGraphOwned){
+        if(hasTransparentRenderers)
+            return transparentLaggedSelectorCount;
+        return opaqueLaggedSelectorCount;
+    }
+    if(useLaggedLightingHistory){
+        if(hasTransparentRenderers)
+            return transparentLaggedCount;
+        return 1u;
+    }
+    return liveDependencyCount;
+}
+
+b8 ShouldAcceptDeferredOutputLayer(in b8 hasContributor, in u64 frameGeneration, in b8 tokenValid){
+    return hasContributor && frameGeneration != 0u && tokenValid;
 }
 
 
@@ -13,6 +85,7 @@ b8 ImplEcsRenderDeferredGraphStagesAdhdModule(in u64 value){
 native{
 #include <impl/global.adhd.h>
 #include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
+#include <impl/ecs_render/deferred/deferred_internal.adhd.h>
 #include <core/graphics/api.h>
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
 #include <core/graphics/gpu_timing.h>
@@ -93,294 +166,7 @@ native{
 NWB_IMPL_BEGIN
 
 
-
-#ifndef NWB_IMPL_ECS_RENDER_DEFERRED_INTERNAL_DECLS_H
-#define NWB_IMPL_ECS_RENDER_DEFERRED_INTERNAL_DECLS_H
-struct DeferredBindlessDescriptorSources{
-    Core::Sampler& sampler;
-    Core::Sampler& avboitLinearSampler;
-    Core::Buffer& sceneShadingBuffer;
-    Core::Buffer& lightBuffer;
-};
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Registers every deferred frame target in the global descriptor heap, in the fixed order the slot table expects.
-class DeferredBindlessDescriptorRegistrar final : NoCopy{
-public:
-    DeferredBindlessDescriptorRegistrar(Core::GpuDescriptorHeap& heap, DeferredFrameTargets& targets, const DeferredBindlessDescriptorSources& sources)noexcept
-        : m_heap(heap)
-        , m_targets(targets)
-        , m_bindless(targets.bindless)
-        , m_sources(sources)
-    {}
-
-
-public:
-    [[nodiscard]] Expected<void> registerAll();
-
-
-private:
-    [[nodiscard]] Expected<void> registerLightingTargets();
-    [[nodiscard]] Expected<void> registerTransparencyTargets();
-    [[nodiscard]] Expected<void> registerSceneBuffers();
-    [[nodiscard]] Expected<void> registerCsgIntervalTargets();
-    [[nodiscard]] Expected<void> registerCausticResolveTargets();
-    [[nodiscard]] Expected<void> registerSoftShadowTargets();
-
-
-private:
-    Core::GpuDescriptorHeap& m_heap;
-    DeferredFrameTargets& m_targets;
-    DeferredBindlessFrameResources& m_bindless;
-    const DeferredBindlessDescriptorSources& m_sources;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererDeferredSystem;
-struct DeferredFrameTargets;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ECSRenderDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename Record>
-[[nodiscard]] b8 RecordDeferredGraphTask(RendererDeferredSystem& deferredSystem, DeferredFrameTargets& targets, Core::GpuTimingSubmissionTicket& timingTicket, Core::CommandList& commandList, Record&& record)noexcept(
-    noexcept(record(deferredSystem, targets, commandList))
-    && IsNothrowConvertible_V<decltype(record(deferredSystem, targets, commandList)), b8>
-){
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(timingTicket);
-    return record(deferredSystem, targets, commandList);
-}
-
-// The payload overload takes references: deferred system, frame targets, timing ticket; missing bindings fail.
-template<typename Payload, typename Record>
-[[nodiscard]] b8 RecordDeferredGraphTask(const Payload& payload, Core::CommandList& commandList, Record&& record)noexcept(noexcept(RecordDeferredGraphTask(payload.deferredSystem, payload.targets, payload.timingTicket, commandList, Forward<Record>(record)))){
-    return RecordDeferredGraphTask(payload.deferredSystem, payload.targets, payload.timingTicket, commandList, Forward<Record>(record));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class DeferredGraphResourceImportResult;
-
-
-class DeferredCsgTextureImports final{
-public:
-    void capture(Core::GpuTaskGraph& graph, const DeferredFrameTargets& deferredTargets);
-    [[nodiscard]] b8 valid()const noexcept;
-    void publish(DeferredGraphResourceImportResult& result)const noexcept;
-
-
-private:
-    Expected<Core::GpuGraphResourceId> m_csgCapBackNormal = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_csgIntervalDepth = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_csgIntervalId = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_csgReceiverEventData = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_csgReceiverEventCount = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_csgReceiverSpanData = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_csgReceiverSpanCount = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_csgRemovedIntervalDepth = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_csgRemovedIntervalCapNormal = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_csgRemovedIntervalData = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_csgRemovedIntervalCount = MakeUnexpected(Failure{});
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class DeferredGraphResourceImportResult;
-
-
-class DeferredAvboitResourceImports final{
-public:
-    void capture(Core::GpuTaskGraph& graph, const DeferredFrameTargets& deferredTargets, b8 clearTargets);
-    [[nodiscard]] b8 validRefractionInputs()const noexcept;
-    [[nodiscard]] b8 validRefractionSpecular()const noexcept;
-    [[nodiscard]] b8 validAvboitInputs()const noexcept;
-    void publish(DeferredGraphResourceImportResult& result)const noexcept;
-
-
-private:
-    Expected<Core::GpuGraphResourceId> m_avboitLowRaster = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitAccumColor = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitAccumExtinction = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_refractionDepth = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_refractionNormalIor = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_refractionTintCoverage = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_refractionInstance = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_refractionSpecularRoughness = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_refractionResolve = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitForegroundColor = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitForegroundExtinction = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitTransmittance = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitCoverage = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitDepthWarp = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitControl = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitExtinction = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitExtinctionOverflow = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitMaterialDomain = MakeUnexpected(Failure{});
-    Expected<Core::GpuGraphResourceId> m_avboitCsgDomain = MakeUnexpected(Failure{});
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace RendererTaskGraphDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct FrameTimingEndGraphTask{
-    // Frame timing must end on the same primary physical queue that recorded its beginning.
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::None, true };
-
-
-public:
-    // The transaction owns the timing reservation opened by the frame-timing prelude.
-    struct Payload{
-        Core::GpuTimingFrameTransaction& frameTimingTransaction;
-    };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
-        return payload.frameTimingTransaction.recordEnd(commandList);
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ECSRenderDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct FrameRecoveryGraphTask{
-    // Frame timing must end on the same primary physical queue that recorded its beginning.
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::None, true };
-
-
-public:
-    // The transaction owns the timing reservation this recovery tail may retire.
-    // The armed/retire flags are caller-owned outputs the tail clears.
-    struct Payload{
-        Core::GpuTimingFrameTransaction& frameTimingTransaction;
-        b8& armed;
-        b8& retiresFrameTiming;
-    };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
-        return payload.armed && (!payload.retiresFrameTiming || payload.frameTimingTransaction.recordEnd(commandList));
-    }
-
-    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
-        if(payload.armed && payload.retiresFrameTiming && !payload.frameTimingTransaction.confirmEndSubmission(token, false)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to retire frame recovery timing query"));
-            payload.frameTimingTransaction.discard();
-        }
-        payload.armed = false;
-        payload.retiresFrameTiming = false;
-    }
-
-    static void Discarded(Payload& payload)noexcept{
-        if(payload.armed)
-            payload.frameTimingTransaction.discard();
-        payload.armed = false;
-        payload.retiresFrameTiming = false;
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace RendererTaskGraphDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct PostGbufferNormalizeGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
-
-
-public:
-    // The raytracing system, timing-ticket slot, and shadow task slot are required.
-    // Async timing stays optional: timing spans one packet on the compute route.
-    struct Payload{
-        RendererRayTracingSystem& raytracingSystem;
-        Optional<Core::GpuTimingMeasure>* asyncPrefixTiming = nullptr;
-        Core::GpuTimingSubmissionTicket*& timingTicket;
-        const Core::GpuTaskId& shadowVisibilityTask;
-    };
-
-
-public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-        const Core::GpuPhysicalQueueInfo* const shadowVisibilityQueue = ECSRenderDetail::QueueForTask(context, payload.shadowVisibilityTask);
-        if(!shadowVisibilityQueue)
-            return false;
-
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-        // Explicit uses below lower G-buffer, scene, and trace-geometry states first.
-        if(shadowVisibilityQueue->queueClass == Core::CommandQueue::Compute && payload.asyncPrefixTiming && *payload.asyncPrefixTiming){
-            (*payload.asyncPrefixTiming)->finishTiming(commandList);
-            payload.asyncPrefixTiming->reset();
-        }
-        return true;
-    }
-
-    static void Accepted(Payload& payload, [[maybe_unused]] const Core::QueueSubmissionToken& token)noexcept{
-        payload.raytracingSystem.confirmPreparedShadowTraceGeometryNormalization();
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-#endif
-
 
 
 namespace ECSRenderDetail{
@@ -763,7 +549,14 @@ Expected<OpaqueGbufferMaterialResources> OpaqueGbufferMaterialResourceCollector:
 void OpaqueGbufferResourceUseBuilder::Append(const OpaqueGbufferResourceUseInputs& inputs, Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& uses){
     using namespace RendererTaskGraphDetail;
 
-    uses.reserve((inputs.hasOpaqueDrawItems ? s_OpaqueDrawResourceUseCount : s_NoOpaqueDrawResourceUseCount) + (inputs.hasCsgFrameGpuWork ? s_OpaqueCsgFrameResourceUseCount : 0u) + (inputs.hasOpaqueCsgFrameWork ? s_OpaqueCsgFrameResourceUseCount : 0u));
+    uses.reserve(ComputeOpaqueGbufferResourceUseCapacity(
+        inputs.hasOpaqueDrawItems,
+        inputs.hasCsgFrameGpuWork,
+        inputs.hasOpaqueCsgFrameWork,
+        s_OpaqueDrawResourceUseCount,
+        s_NoOpaqueDrawResourceUseCount,
+        s_OpaqueCsgFrameResourceUseCount
+    ));
     uses.push_back(ReadUse(inputs.resources.meshView, Core::ResourceStates::ConstantBuffer));
     if(inputs.hasOpaqueDrawItems){
         uses.push_back(ReadBufferUse(inputs.resources.materialInstances, inputs.materialInstanceRange));
@@ -1160,17 +953,19 @@ Expected<DeferredGraphSuffixResult> DeferredGraphSuffixBuilder::declare(
                 return MakeUnexpected(Failure{});
             const Core::TextureDesc& desc = texture->getDescription();
             const Core::TextureDesc& outputDesc = inputs.presentationFrame.backBuffer.texture->getDescription();
-            if(
-                outputLayer.sampledImage.descriptorClass() != Core::GpuDescriptorClass::SampledImage
-                || desc.width != outputDesc.width
-                || desc.height != outputDesc.height
-                || desc.dimension != Core::TextureDimension::Texture2D
-                || desc.format != Core::Format::RGBA16_FLOAT
-                || desc.sampleCount != 1u
-                || desc.mipLevels != 1u
-                || desc.arraySize != 1u
-                || !version.range.textureSubresources.isEntireTexture(desc)
-            )
+            if(!ValidDeferredOutputLayerTextureShape(
+                outputLayer.sampledImage.descriptorClass() == Core::GpuDescriptorClass::SampledImage,
+                desc.width,
+                desc.height,
+                outputDesc.width,
+                outputDesc.height,
+                desc.dimension == Core::TextureDimension::Texture2D,
+                desc.format == Core::Format::RGBA16_FLOAT,
+                desc.sampleCount,
+                desc.mipLevels,
+                desc.arraySize,
+                version.range.textureSubresources.isEntireTexture(desc)
+            ))
                 return MakeUnexpected(Failure{});
         }
     }
@@ -1460,7 +1255,7 @@ Expected<Core::GpuTaskId> PostGbufferNormalizeBuilder::declare(const PostGbuffer
 
     const b8 shadowTraceGeometryStatesGraphOwned = inputs.shadowTraceGeometrySet.valid();
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> normalizeResourceUses{ scratchArena };
-    normalizeResourceUses.reserve(s_NormalizeResourceUseCapacity + (shadowTraceGeometryStatesGraphOwned ? 0u : inputs.shadowTraceGeometryResources.size()));
+    normalizeResourceUses.reserve(ComputePostGbufferNormalizeUseCapacity(s_NormalizeResourceUseCapacity, shadowTraceGeometryStatesGraphOwned, inputs.shadowTraceGeometryResources.size()));
     normalizeResourceUses.push_back(ReadUse(inputs.resources.meshView, Core::ResourceStates::ConstantBuffer));
     normalizeResourceUses.push_back(ReadUse(inputs.resources.normal, Core::ResourceStates::ShaderResource));
     normalizeResourceUses.push_back(ReadUse(inputs.resources.worldPosition, Core::ResourceStates::ShaderResource));
@@ -1547,7 +1342,6 @@ Expected<DeferredLightingStageResult> DeferredLightingStageBuilder::declare(cons
     const Array<Core::GpuTaskId, 4u> softwareLightingDependencies = { inputs.shadowVisibilityTask, inputs.softwareCausticsTask, inputs.surfelGiTask, inputs.avboitFinalTask, };
     // Lagged Lighting reads prefix inputs plus history; finalizer restores depth layout first.
     const Array<Core::GpuTaskId, 2u> laggedLightingDependencies = { inputs.graphicsPrefixTask, inputs.avboitFinalTask, };
-    const usize laggedLightingDependencyCount = hasTransparentRenderers ? s_TransparentLaggedLightingDependencyCount : 1u;
     const Array<Core::GpuTaskId, 1u> laggedLightingSelectorUploadDependencies = { inputs.graphicsPrefixTask };
     const b8 laggedBindlessSlotsGraphOwned = useLaggedLightingHistory && !history->slotsUploaded;
     Core::GpuTaskId historySlotsUploadTask;
@@ -1588,10 +1382,15 @@ Expected<DeferredLightingStageResult> DeferredLightingStageBuilder::declare(cons
         : (useLaggedLightingHistory ? laggedLightingDependencies.data() : softwareLightingDependencies.data())
     ;
     const Core::GpuTaskId* const resolvedLightingDependencies = laggedBindlessSlotsGraphOwned ? laggedLightingWithSelectorDependencies.data() : lightingDependencies;
-    const usize lightingDependencyCount = laggedBindlessSlotsGraphOwned
-        ? (hasTransparentRenderers ? s_TransparentLaggedSelectorDependencyCount : s_OpaqueLaggedSelectorDependencyCount)
-        : (useLaggedLightingHistory ? laggedLightingDependencyCount : hardwareLightingDependencies.size())
-    ;
+    const usize lightingDependencyCount = ResolveDeferredLightingDependencyCount(
+        laggedBindlessSlotsGraphOwned,
+        useLaggedLightingHistory,
+        hasTransparentRenderers,
+        s_TransparentLaggedSelectorDependencyCount,
+        s_OpaqueLaggedSelectorDependencyCount,
+        s_TransparentLaggedLightingDependencyCount,
+        hardwareLightingDependencies.size()
+    );
 
     const Array<Core::GpuExternalCompletionId, 1u> laggedLightingExternalDependencies = { inputs.historyReadReadyCompletion, };
     const Core::GpuExternalCompletionId* const lightingExternalDependencies = useLaggedLightingHistory ? laggedLightingExternalDependencies.data() : nullptr;
@@ -1680,7 +1479,7 @@ void DeferredPresentGraphTask::Accepted(Payload& payload, const Core::QueueSubmi
 }
 
 void DeferredPresentGraphTask::AcceptOutputLayer(Core::IGpuTaskGraphOutputLayerContributor* const contributor, const u64 frameGeneration, const Core::QueueSubmissionToken& token){
-    if(contributor && frameGeneration != 0u && token.valid())
+    if(ShouldAcceptDeferredOutputLayer(contributor != nullptr, frameGeneration, token.valid()))
         contributor->acceptTaskGraphOutputLayer(frameGeneration, token);
 }
 
@@ -1764,7 +1563,13 @@ Expected<DeferredFrameTailResult> DeferredFrameTailBuilder::declare(const Deferr
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 }
 
 

@@ -83,8 +83,20 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderAvboitAvboitFrameTargetsAdhdModule(in u64 value){
-    return value != 0u;
+b8 AreAvboitTargetDimensionsValid(
+    in u32 fullWidth,
+    in u32 fullHeight,
+    in u32 lowWidth,
+    in u32 lowHeight,
+    in u32 virtualSliceCount,
+    in u32 physicalSliceCount
+){
+    return fullWidth > 0u
+        && fullHeight > 0u
+        && lowWidth > 0u
+        && lowHeight > 0u
+        && virtualSliceCount > 0u
+        && physicalSliceCount > 0u;
 }
 
 

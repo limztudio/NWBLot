@@ -241,8 +241,12 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsRenderAvboitComputeEmulationRecordAdhdModule(in u64 value){
-    return value != 0u;
+b8 HasValidAvboitComputeEmulationRecordInputs(in b8 hasFramebufferMember, in b8 regularCaptured, in b8 csgCaptured){
+    return hasFramebufferMember && regularCaptured != csgCaptured;
+}
+
+b8 HasValidAvboitSharedComputeEmulationRecordInputs(in b8 hasFramebuffer, in b8 planCaptured, in usize drawIndex, in usize drawCount){
+    return hasFramebuffer && planCaptured && drawIndex < drawCount;
 }
 
 

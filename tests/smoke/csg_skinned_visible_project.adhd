@@ -9,6 +9,11 @@
 #include "smoke_skinned_scene_helpers.adhd"
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <loader/project_entry.h>
 
 #include <impl/assets_model/asset.adhd.h>
@@ -115,6 +120,11 @@ inline constexpr Float4 s_CsgSkinnedWarmDirectionalLightColor = Float4(1.0f, 0.9
     return QuaternionNormalize(QuaternionMultiply(receiverRotation, BuildCsgSkinnedCutterLocalRotation(animationTime)));
 }
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -352,6 +362,11 @@ class CsgSkinnedVisibleSmokeProject : IProjectEntryCallbacks{
 }
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     return { NWB::Tests::Smoke::s_CsgSkinnedFrameClientWidth, NWB::Tests::Smoke::s_CsgSkinnedFrameClientHeight };
 }
@@ -371,6 +386,11 @@ TStringView NWB::QueryProjectWindowTitle()noexcept{
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<NWB::Tests::Smoke::CsgSkinnedVisibleSmokeProject>(context);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

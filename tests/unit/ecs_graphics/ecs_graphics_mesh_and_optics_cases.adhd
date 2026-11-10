@@ -6,6 +6,11 @@
 #include <tests/unit/ecs_graphics/suite.adhd>
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <tests/common/floating_point_environment_guard.adhd.h>
 
 #include <impl/assets/graphics/mesh/object_geometry_constants.h>
@@ -260,6 +265,11 @@ using Impl::s_RefractionCertifiedBoundsMargin;
 
 
 NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -1031,6 +1041,11 @@ void VerifyRefractiveBoundsIsolation_TouchingTheCertifiedMarginIsNotIsolated(){
 }
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace EcsGraphicsOutputLayerColorDetail{
 
 
@@ -1060,6 +1075,11 @@ namespace EcsGraphicsOutputLayerColorDetail{
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 NWB_ADHD_GTEST(MeshAccelerationUpdateTests, UnknownRuntimeContentsNeverReuseAcceptedMeshAcceleration, VerifyMeshAccelerationUpdateTests_UnknownRuntimeContentsNeverReuseAcceptedMeshAcceleration)

@@ -6,6 +6,11 @@
 #include <tests/common/gtest_macros.adhd>
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/assets_csg/shape_module_writer.adhd.h>
 #include <impl/assets_graphics/components.adhd.h>
 #include <impl/assets_graphics/cook_types.adhd.h>
@@ -202,6 +207,11 @@ public:
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -1087,6 +1097,11 @@ NWB_ADHD_GTEST_F(GatherInputs, MergedPayloadIdentitySurvivesLaterIdenticalDuplic
 NWB_ADHD_GTEST(MaterialAvboitShaderGenerator, MissingInterfaceRejectsTransparentEntryWithoutChangingShaderNames, VerifyMaterialAvboitShaderGenerator_MissingInterfaceRejectsTransparentEntryWithoutChangingShaderNames)
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace NWB::Tests::AssetsGraphicsFixture{
 #if defined(NWB_FINAL)
 TEST(AssetsGraphics, CsgShapeCookRejectsGeneratedModuleIncludeCollisions){
@@ -1094,6 +1109,11 @@ TEST(AssetsGraphics, CsgShapeCookRejectsGeneratedModuleIncludeCollisions){
 }
 #endif
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

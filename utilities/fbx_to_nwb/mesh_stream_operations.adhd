@@ -9,6 +9,11 @@
 
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <utilities/global.h>
 
 namespace NWB::FbxToNwb{
@@ -19,6 +24,11 @@ using UtilitySourceVertexRefVector = DefaultVector<SourceVertexRef, Core::Alloc:
 using UtilityU32Vector = DefaultVector<u32, Core::Alloc::GlobalArena, QueryUtilityGlobalArena<s_UtilityArena>>;
 using ScratchU32Vector = Vector<u32, Core::Alloc::ScratchArena>;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

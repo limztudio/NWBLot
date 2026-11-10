@@ -5,6 +5,11 @@
 #include "transparent_multi_scene_and_setup.adhd"
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <loader/project_entry.h>
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
 #include <impl/assets_csg/shape_id.adhd.h>
@@ -60,6 +65,11 @@ inline constexpr u32 s_CausticSphereTemporalPhaseCount = Impl::s_CausticTemporal
     return world;
 }
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -381,6 +391,11 @@ class TransparentMultiSmokeProjectImpl : IProjectEntryCallbacks{
 
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     return { 1280, 900 };
 }
@@ -400,6 +415,11 @@ TStringView NWB::QueryProjectWindowTitle()noexcept{
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<NWB::Tests::Smoke::TransparentMultiSmokeProjectImpl>(context);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

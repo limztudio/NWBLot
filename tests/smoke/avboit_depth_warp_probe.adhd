@@ -85,6 +85,11 @@ class DepthWarpProbeProject : IProjectEntryCallbacks{
 }
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     return { 320u, 240u };
 }
@@ -96,6 +101,11 @@ TStringView NWB::QueryProjectWindowTitle()noexcept{
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<NWB::Tests::Smoke::DepthWarpProbeProject>(context);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

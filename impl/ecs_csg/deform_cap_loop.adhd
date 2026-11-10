@@ -9,6 +9,11 @@
 
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <core/alloc/scratch.h>
 
 namespace NWB::Impl{
@@ -17,6 +22,11 @@ using ScratchCsgDeformTriangleVector = Vector<CsgDeformTriangle, Core::Alloc::Sc
 using ScratchCsgDeformCutLoopEdgeVector = Vector<CsgDeformCutLoopEdge, Core::Alloc::ScratchArena>;
 using ScratchCsgDeformLoopVertexVector = Vector<u32, Core::Alloc::ScratchArena>;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

@@ -8,6 +8,11 @@
 #include "gpu_timing_test_names.adhd"
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <core/alloc/scratch.h>
 #include <core/graphics/rhi/gpu_crash_diagnostics.h>
 #include <core/graphics/runtime/runtime_setup_upload_graph.h>
@@ -179,6 +184,11 @@ namespace BufferImageCopyPitchFields = Core::GraphicsBackend::VulkanDetail::Buff
 
 
 NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -640,6 +650,11 @@ void VerifyGpuTextureTransferLayoutTests_CompressedPaddedSlicesPreserveTouchedBy
 }
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_BEGIN
 
 
@@ -725,7 +740,7 @@ b8 RunConcurrentCrashMarkerGrowthCheck(
 }
 
 #if defined(NWB_GRAPHICS_BACKEND_VULKAN) && NWB_GRAPHICS_BACKEND_VULKAN
-namespace{
+namespace __hidden_resource_calibrated_timestamps_mock{
 
 static u32 s_CountCalls = 0u;
 static u32 s_ListCalls = 0u;
@@ -752,7 +767,8 @@ VKAPI_ATTR VkResult VKAPI_CALL GetTimestamps([[maybe_unused]] VkDevice device, [
     return VK_SUCCESS;
 }
 
-}
+};
+using namespace __hidden_resource_calibrated_timestamps_mock;
 
 CalibratedTimestampProbeResult RunCalibratedTimestampProbe(const b8 retryFirstCount, const b8 hasDeviceDomain){
     s_CountCalls = 0u;
@@ -788,16 +804,41 @@ CalibratedTimestampProbeResult RunCalibratedTimestampProbe(const b8 retryFirstCo
 
 
 NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 NWB_ADHD_GTEST(QueueBarrierScopePolicy, TransferQueueRemovesUnsupportedShaderAccess, VerifyQueueBarrierScopePolicy_TransferQueueRemovesUnsupportedShaderAccess)
 NWB_ADHD_GTEST(GpuBlasOpacityMicromapPolicyTests, AttachmentSkipsAbsentAndHandlesEmptyUsageCounts, VerifyGpuBlasOpacityMicromapPolicyTests_AttachmentSkipsAbsentAndHandlesEmptyUsageCounts)
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_GRAPHICS_BACKEND_VULKAN) && NWB_GRAPHICS_BACKEND_VULKAN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 TEST(CalibratedTimestampProbe, RetriesIncompleteEnumerationBeforeDeviceQuery){ VerifyCalibratedTimestampProbe_RetriesIncompleteEnumerationBeforeDeviceQuery(); }
 TEST(CalibratedTimestampProbe, MissingDeviceDomainDoesNotQueryTimestamps){ VerifyCalibratedTimestampProbe_MissingDeviceDomainDoesNotQueryTimestamps(); }
 TEST(GpuClusterOperation, NativeInputRebindsUnionPointersAfterCopy){ VerifyGpuClusterOperation_NativeInputRebindsUnionPointersAfterCopy(); }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 NWB_ADHD_GTEST(GpuCrashMarkerTracker, CopiesExactNonTerminatedViewAndEmbeddedNullBytes, VerifyGpuCrashMarkerTracker_CopiesExactNonTerminatedViewAndEmbeddedNullBytes)
 NWB_ADHD_GTEST(GpuCrashMarkerTracker, SharedDeviceTrackerPreservesHistoryAcrossCommandListTrackerReset, VerifyGpuCrashMarkerTracker_SharedDeviceTrackerPreservesHistoryAcrossCommandListTrackerReset)

@@ -6,6 +6,11 @@
 #include <tests/unit/global/global_tests.adhd>
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <core/alloc/scratch.h>
 #include <core/common/name_symbols.h>
 
@@ -170,6 +175,11 @@ public:
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -1553,6 +1563,11 @@ NWB_ADHD_GTEST(Global, UniquePublicationPreservesWinnersAcrossRaces, VerifyGloba
 NWB_ADHD_GTEST(Global, StagedPairFailureIdentifiesEachWorkPath, VerifyGlobal_StagedPairFailureIdentifiesEachWorkPath)
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 TEST(Global, FileWritesRejectBufferedDeviceFailure){
     VerifyGlobal_FileWritesRejectBufferedDeviceFailure();
@@ -1610,6 +1625,11 @@ TEST(GlobalFilesystemCleanup, RootAndChildrenBeyondPathMaxUseRelativeDescriptors
     VerifyGlobalFilesystemCleanup_RootAndChildrenBeyondPathMaxUseRelativeDescriptors();
 }
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

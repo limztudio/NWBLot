@@ -5,6 +5,11 @@
 #include "stress_crowd_scenes.adhd"
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <loader/project_entry.h>
 #include <impl/assets_material/asset.adhd.h>
 #include <impl/ecs_scene/module.adhd.h>
@@ -69,6 +74,11 @@ inline constexpr b8 s_StressContinuousBenchmarkRendering = false;
     return world;
 }
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -675,6 +685,11 @@ class StressTestSmokeProjectImpl : IProjectEntryCallbacks{
 
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     return { 1280, 900 };
 }
@@ -692,6 +707,11 @@ TStringView NWB::QueryProjectWindowTitle()noexcept{
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<NWB::Tests::Smoke::StressTestSmokeProjectImpl>(context);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

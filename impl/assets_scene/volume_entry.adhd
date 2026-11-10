@@ -2,13 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const b8 s_SceneCookEntryLogBuildFailure = true;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[source]
 native{
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -96,7 +93,7 @@ static b8 RegisterEntityCookEntry(Core::Assets::CookEntryRegistry& registry){
             return ParseEntityCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
         },
         &BuildEntityAsset,
-        s_SceneCookEntryLogBuildFailure,
+        true,
         registry
     );
 }
@@ -122,7 +119,7 @@ static b8 RegisterProjectCookEntry(Core::Assets::CookEntryRegistry& registry){
             return ParseProjectCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
         },
         &BuildProjectAsset,
-        s_SceneCookEntryLogBuildFailure,
+        true,
         registry
     );
 }
@@ -172,7 +169,7 @@ static b8 RegisterSceneCookEntry(Core::Assets::CookEntryRegistry& registry){
             return ParseSceneCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
         },
         &BuildSceneAsset,
-        s_SceneCookEntryLogBuildFailure,
+        true,
         registry
     );
 }
@@ -223,6 +220,8 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

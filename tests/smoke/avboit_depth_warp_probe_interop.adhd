@@ -5,6 +5,11 @@
 #include "avboit_integration_and_refraction_tile_probes.adhd"
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace NWB::Tests::Smoke{
 inline constexpr u32 s_DepthWarpGuardWords = 4u;
 inline constexpr u32 s_DepthWarpWords = s_AvboitMaxVirtualCount + s_DepthWarpGuardWords;
@@ -152,6 +157,11 @@ public:
     virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
 };
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

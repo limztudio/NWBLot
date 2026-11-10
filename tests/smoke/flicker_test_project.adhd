@@ -9,6 +9,11 @@
 #include "smoke_skinned_scene_helpers.adhd"
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <loader/project_entry.h>
 
 #include <impl/assets_material/asset.adhd.h>
@@ -65,6 +70,11 @@ inline constexpr f32 s_FlickerSpinSpeed = s_SmokeSpinSpeed;
 inline constexpr f32 s_FlickerManualYawSpeed = 0.6f;
 inline constexpr f32 s_FlickerMaxSpinDelta = 1.0f / 15.0f;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -196,6 +206,11 @@ class FlickerTestSmokeProject : IProjectEntryCallbacks{
 }
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     return { 1280, 900 };
 }
@@ -207,6 +222,11 @@ TStringView NWB::QueryProjectWindowTitle()noexcept{
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<NWB::Tests::Smoke::FlickerTestSmokeProject>(context);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

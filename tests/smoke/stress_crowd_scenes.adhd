@@ -15,6 +15,11 @@
 #include "stress_frame_graph_snapshot.adhd"
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <loader/project_entry.h>
 #include <impl/assets_csg/shape_id.adhd.h>
 #include <impl/assets_material/asset.adhd.h>
@@ -47,6 +52,11 @@ inline constexpr b8 s_StressHardwareShadowBoundaryBenchmark = true;
 inline constexpr b8 s_StressHardwareShadowBoundaryBenchmark = false;
 #endif
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

@@ -2,14 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const Name s_FontCookEntryAssetTypeName = "font";
-const b8 s_FontLogCookBuildFailure = false;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+[source]
 native{
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -39,8 +35,6 @@ namespace __hidden_font_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static_assert(Font::AssetTypeName() == s_FontCookEntryAssetTypeName, "Font cook entry asset type drifted");
-
 static b8 RegisterFontCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<FontCookEntry, Font, FontAssetCodec>(
         FontBinaryPayload::s_FontAssetKindLabel,
@@ -51,7 +45,7 @@ static b8 RegisterFontCookEntry(Core::Assets::CookEntryRegistry& registry){
             return ParseFontCookMetadataValue(virtualPath, path, asset, context.cookArena);
         },
         [](FontCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildFontAsset(Move(entry), arena); },
-        s_FontLogCookBuildFailure,
+        false,
         registry
     );
 }
@@ -82,6 +76,8 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

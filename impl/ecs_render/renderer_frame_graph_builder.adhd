@@ -28,6 +28,11 @@ b8 ShouldMergeOpaqueGbufferAcrossConsumerFrontier(in b8 regularOwned, in b8 shar
 
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/ecs_render/renderer_frame_pipeline.adhd.h>
 #include <impl/ecs_render/module.adhd.h>
 #include <impl/ecs_scene/components.adhd.h>
@@ -1481,6 +1486,11 @@ void GraphicsPrefixGraphCoordinator::resetGraphicsPrefixTaskState()noexcept{
 
 
 NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

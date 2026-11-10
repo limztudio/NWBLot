@@ -6,6 +6,11 @@
 #include <tests/unit/telemetry/perf_case_types.adhd>
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <tests/common/test_context.adhd.h>
 
 #include <logger/telemetry/report.h>
@@ -331,6 +336,11 @@ inline void ExpectJsonNumberField(ScratchArena& scratchArena, const AStringView 
 
 
 NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -826,6 +836,11 @@ void VerifyAllocationOwnerTelemetry_ResolvesLoadedOwnerSymbolsByFullIdentityAndP
 }
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace TelemetryTestDetail{
 
 
@@ -834,12 +849,12 @@ namespace TelemetryTestDetail{
 
 namespace TestCases = NWB::Tests::TelemetryCases;
 
-namespace{
+namespace __hidden_telemetry_suite_owner_sequence{
 Atomic<u64> g_AllocationOwnerSequence{ 0u };
-}
+};
 
 u64 NextAllocationOwnerSequence()noexcept{
-    return g_AllocationOwnerSequence.fetch_add(1u, MemoryOrder::relaxed);
+    return __hidden_telemetry_suite_owner_sequence::g_AllocationOwnerSequence.fetch_add(1u, MemoryOrder::relaxed);
 }
 
 const Telemetry::EventRecord* FindOwnerEvent(const Telemetry::EventView& events, const Name& owner, const Core::Perf::MemorySource::Enum source)noexcept{
@@ -1434,6 +1449,11 @@ Telemetry::EncodedFrameGraphRuntimeStatistics EncodeTestFrameGraphRuntimeStatist
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 NWB_ADHD_GTEST(AllocationOwnerTelemetry, RejectsMalformedMemoryPayloadsWithoutInvalidatingPriorValue, VerifyAllocationOwnerTelemetry_RejectsMalformedMemoryPayloadsWithoutInvalidatingPriorValue)

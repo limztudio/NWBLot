@@ -167,6 +167,11 @@ class Project : IProjectEntryCallbacks, IInputEventHandler{
 }
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     return { s_DefaultProjectFrameClientWidth, s_DefaultProjectFrameClientHeight };
 }
@@ -183,6 +188,11 @@ b8 NWB::ConfigureProjectRuntime(ProjectStartupContext& context)noexcept{
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<Testbed::Project>(context);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

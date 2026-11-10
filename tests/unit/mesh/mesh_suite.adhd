@@ -8,6 +8,11 @@
 #include <tests/unit/mesh/skinning_name_cases.adhd>
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/ecs_mesh/skinning/deformation_state.adhd.h>
 #include <impl/ecs_mesh/skinning/graph_resource_uses.adhd.h>
 #include <impl/ecs_mesh/skinning/skin_payload.adhd.h>
@@ -98,6 +103,11 @@ using MeshTestsDetail::MakePlan;
 
 
 NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -840,6 +850,11 @@ void VerifyMesh_RejectsDegenerateTangentFrameTriangle(){
 }
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_BEGIN
 
 
@@ -891,6 +906,11 @@ Impl::MeshSkinningGraphDispatchPlan MakePlan(const u32 offset, const u64 generat
 
 
 NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 NWB_ADHD_GTEST(SkinningGraphResourceUses, DeduplicatesRepeatedAndPermutedInputsWithoutChangingFirstOccurrence, VerifySkinningGraphResourceUses_DeduplicatesRepeatedAndPermutedInputsWithoutChangingFirstOccurrence)
@@ -909,11 +929,31 @@ NWB_ADHD_GTEST(SkinningPayload, PaletteCanExceedSkeletonWithoutInverseBindMatric
 NWB_ADHD_GTEST(SkinningPayload, RuntimeScratchAllocationDoesNotScaleWithInfluenceCount, VerifySkinningPayload_RuntimeScratchAllocationDoesNotScaleWithInfluenceCount)
 NWB_ADHD_GTEST(SkinningPayload, PayloadScopeDestructionReclaimsScratchUsageAcrossMeshes, VerifySkinningPayload_PayloadScopeDestructionReclaimsScratchUsageAcrossMeshes)
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_FINAL)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 TEST(SkinningPayload, RuntimePayloadRejectsInvalidDynamicInputs){ VerifySkinningPayload_RuntimePayloadRejectsInvalidDynamicInputs(); }
 TEST(SkinningPayload, InverseBindBoundsAndPartialFailuresLeaveNoActivePayload){ VerifySkinningPayload_InverseBindBoundsAndPartialFailuresLeaveNoActivePayload(); }
 TEST(SkinningPayload, StaticInfluenceEncodingRejectsInvalidMeshEditsAndRecovers){ VerifySkinningPayload_StaticInfluenceEncodingRejectsInvalidMeshEditsAndRecovers(); }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 NWB_ADHD_GTEST(SkinningDeformation, MissingResourceRejectsWithoutCandidateOrArenaPublication, VerifySkinningDeformation_MissingResourceRejectsWithoutCandidateOrArenaPublication)
 NWB_ADHD_GTEST(Mesh, DegenerateUvsUseStableTangentFallback, VerifyMesh_DegenerateUvsUseStableTangentFallback)

@@ -61,6 +61,11 @@ PopupOptions BuildCompoundPopupReservationOptions(){
 
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/ecs_ui/toolkit/builder.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/builder_coordinators.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/ui_scope_descriptor_factory.adhd.h>
@@ -1334,6 +1339,11 @@ b8 Builder::paintSlider(const Item& item, const LayoutBox& box){
 
 
 NWB_IMPL_UI_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

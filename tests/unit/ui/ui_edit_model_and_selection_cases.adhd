@@ -12,6 +12,11 @@
 
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <tests/common/test_context.adhd.h>
 
 #include <impl/ecs_ui/toolkit/edit/commands.adhd.h>
@@ -310,6 +315,11 @@ inline void UiKeepEditTestArenaAlive(const TestArena&)noexcept{}
 [[nodiscard]] inline f64 UiFloatModelInfinity()noexcept{ return ::Limit<f64>::s_Infinity; }
 [[nodiscard]] inline f64 UiFloatModelQuietNaN()noexcept{ return ::Limit<f64>::s_QuietNaN; }
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

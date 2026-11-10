@@ -54,6 +54,11 @@ b8 IsValidVirtualListWheelRows(in f32 wheelRows){
 
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/ecs_ui/toolkit/builder.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/builder_coordinators.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/ui_scope_descriptor_factory.adhd.h>
@@ -1354,6 +1359,11 @@ ListResult ListCoordinator::virtualList(const AStringView stableKey, const IList
 
 
 NWB_IMPL_UI_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

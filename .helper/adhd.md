@@ -205,8 +205,9 @@ f32 ComputePaddedWidth(in ElementBox box){
   - `method` (`class` / `interface`): `[reflect]` (never `[inline]` or `[noinline]`)
   - `parallel` / `parallel_for`: `[core(Any|Heavy|Light|MainThread)]`, `[priority(Normal|Critical|Background)]`
   - `assert` / `info` / `warning` / `error`: `[essential]`
+  - top-level `native`: `[header]` / `[source]`
 - **C++ Interop (`native` Blocks)**:
-  - **Top-level `native{ ... }`**: Emits raw C++ `#include` directives and forward declarations into the generated `.adhd.h` header.
+  - **Top-level `native{ ... }` / `[header] native{ ... }` / `[source] native{ ... }`**: Emits raw C++ blocks into `.adhd.h` (`[header]` or leading `native{}`) or `.adhd.cpp` (`[source]` or trailing `native{}`). Separate `native{` and `}` from their inner contents with two blank lines, a 128-slash separator, and two blank lines.
   - **Statement-level `native(in x, mut y = this.member){ ... }`**: Binds `.adhd` variables/fields into a scoped C++ block (`in` as `const` reference/value, `mut` as mutable reference) while preserving `.adhd` mutability and concurrency analysis.
 
 ---

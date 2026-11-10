@@ -59,6 +59,11 @@ b8 HasMatchingPhysicalQueueTelemetryEpochs(
 
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/ecs_render/kernel/task_timing_feedback.adhd.h>
 #include <impl/ecs_render/kernel/renderer_graph_runtime_label.adhd.h>
 #include <impl/ecs_render/shared/frame_types.adhd.h>
@@ -727,6 +732,11 @@ Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics ECSRenderDetail::Build
 
 
 NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

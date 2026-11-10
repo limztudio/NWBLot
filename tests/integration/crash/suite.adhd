@@ -9,6 +9,11 @@
 #include "name_cases.adhd"
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <core/crash/module.h>
 #include <core/crash/internal.h>
 #include <core/crash/package_internal.h>
@@ -135,6 +140,11 @@ private:
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -887,6 +897,11 @@ void VerifyCrash_LinuxSignalHandlerWritesCrashPackage(){
 }
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace NWB::Tests::CrashCases{
 
 Core::Crash::CrashDetail::PlatformKind::Enum CurrentCrashPlatformKind()noexcept{
@@ -953,6 +968,11 @@ void CrashArchiveUpload::TearDown(){
 }
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 NWB_ADHD_GTEST_F(CrashArchiveUpload, PreservesNativeMissingDirectoryError, VerifyCrashArchiveUpload_PreservesNativeMissingDirectoryError)
@@ -962,6 +982,11 @@ NWB_ADHD_GTEST(Crash, RequestAdmissionRejectsCorruptCountsAndUnterminatedText, V
 NWB_ADHD_GTEST(Crash, AckAdmissionRequiresBoundedTerminatedIdentity, VerifyCrash_AckAdmissionRequiresBoundedTerminatedIdentity)
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_PLATFORM_WINDOWS)
 TEST(Crash, InstallRejectsUnrepresentableConfigurationBeforeCreatingSpool){ VerifyCrash_InstallRejectsUnrepresentableConfigurationBeforeCreatingSpool(); }
 TEST(Crash, AttachmentFailureDoesNotClaimTheHandlerAcceptedARequest){ VerifyCrash_AttachmentFailureDoesNotClaimTheHandlerAcceptedARequest(); }
@@ -981,6 +1006,11 @@ TEST(Crash, DesktopInstalledHandlerWritesGpuCrashTextOnlyPackage){ VerifyCrash_D
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 TEST(Crash, LinuxSignalHandlerWritesCrashPackage){ VerifyCrash_LinuxSignalHandlerWritesCrashPackage(); }
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

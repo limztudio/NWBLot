@@ -6,6 +6,11 @@
 #include <tests/unit/ecs_graphics/suite.adhd>
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/assets/graphics/scene/binding_slots.h>
 #include <impl/assets/graphics/shadow/light_space_constants.h>
 #include <impl/assets_mesh/meshlet_ref_encode.adhd.h>
@@ -414,6 +419,11 @@ inline constexpr usize s_SceneShadowSlotCount = NWB_SCENE_SHADOW_SLOT_COUNT;
 
 
 NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -1672,9 +1682,29 @@ NWB_ADHD_GTEST(EcsGraphics, MaterialPipelineCacheRejectsReplacedCsgEvaluatorIncl
 NWB_ADHD_GTEST(EcsGraphics, NonUniformScaleCannotBecomeRigidJointRotation, VerifyEcsGraphics_NonUniformScaleCannotBecomeRigidJointRotation)
 NWB_ADHD_GTEST(EcsGraphics, InvalidSkeletonParentsAndJointCountsAreRejected, VerifyEcsGraphics_InvalidSkeletonParentsAndJointCountsAreRejected)
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_FINAL)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 TEST(EcsGraphics, MeshSkinningPayloadValidatesSkeletonAndPalette){ VerifyEcsGraphics_MeshSkinningPayloadValidatesSkeletonAndPalette(); }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 NWB_ADHD_GTEST(EcsGraphics, FrameGraphPhysicalQueueRuntimeStatisticsRejectsMixedSnapshots, VerifyEcsGraphics_FrameGraphPhysicalQueueRuntimeStatisticsRejectsMixedSnapshots)
 NWB_ADHD_GTEST(EcsGraphics, FrameGraphPacketSubmissionStatisticsRejectsInvalidQueueOrOwner, VerifyEcsGraphics_FrameGraphPacketSubmissionStatisticsRejectsInvalidQueueOrOwner)

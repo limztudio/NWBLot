@@ -6,6 +6,11 @@
 #include <tests/unit/metascript/suite.adhd>
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <core/metascript/lexer.h>
 #include <core/metascript/literal_decoder.h>
 #include <core/metascript/parser.h>
@@ -228,6 +233,11 @@ using Tests::ReflectionContainerFixture;
 
 
 NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -868,7 +878,17 @@ NWB_ADHD_GTEST(Metascript, ReportedReaderFailureRemainsAnExplicitParseError, Ver
 NWB_ADHD_GTEST(Metascript, SuccessfulZeroReaderCountIsEndOfFileInsteadOfReadFailure, VerifyMetascript_SuccessfulZeroReaderCountIsEndOfFileInsteadOfReadFailure)
 NWB_ADHD_GTEST(Metascript, OversizedReaderResultIsRejectedBeforeUsingItsBuffer, VerifyMetascript_OversizedReaderResultIsRejectedBeforeUsingItsBuffer)
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_METASCRIPT_GENERATED_TESTS)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 NWB_ADHD_GTEST(AdhdReflection, RejectsInvalidContainerEntriesWithoutPublishingEmptyNames, VerifyAdhdReflection_RejectsInvalidContainerEntriesWithoutPublishingEmptyNames)
 NWB_ADHD_GTEST(AdhdCompactString, SearchAndBoundariesUseCanonicalStoredText, VerifyAdhdCompactString_SearchAndBoundariesUseCanonicalStoredText)
@@ -890,7 +910,17 @@ NWB_ADHD_GTEST(AdhdCompiler, StringAndCompactSubstrPreserveOwnershipAndSingleEva
 NWB_ADHD_GTEST(AdhdCompiler, HighByteFrontBackAndIndexMaintainUnsignedSemanticsAndMutation, VerifyAdhdCompiler_HighByteFrontBackAndIndexMaintainUnsignedSemanticsAndMutation)
 NWB_ADHD_GTEST(AdhdCompiler, SimdLaneComparisonAndFiniteChecksIgnoreInactiveAndShortCircuitedSignalingNaNs, VerifyAdhdCompiler_SimdLaneComparisonAndFiniteChecksIgnoreInactiveAndShortCircuitedSignalingNaNs)
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

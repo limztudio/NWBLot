@@ -7,6 +7,11 @@
 #include <tests/unit/global/contract_name_cases.adhd>
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <core/alloc/scratch.h>
 
 #include <global/algorithm.h>
@@ -159,6 +164,11 @@ public:
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -353,6 +363,11 @@ void VerifyGlobalContractBoundaries_ConvertingCopyFromAConstReferenceOwnerRetain
 }
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_contract_boundary_tests{
 
 
@@ -403,6 +418,11 @@ void VerifyCapturedOutputWithClosedDescriptors(const u32 mask){
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 NWB_ADHD_GTEST(GlobalContractBoundaries, SignedAdditionClampsNegativeOverflowToTheLowerBound, VerifyGlobalContractBoundaries_SignedAdditionClampsNegativeOverflowToTheLowerBound)
@@ -416,7 +436,17 @@ NWB_ADHD_GTEST(GlobalContractBoundaries, ThrowingNotNullConversionPropagatesAndP
 NWB_ADHD_GTEST(GlobalContractBoundaries, ConvertingCopyFromAConstReferenceOwnerRetainsItsValueDeleterAndLifetime, VerifyGlobalContractBoundaries_ConvertingCopyFromAConstReferenceOwnerRetainsItsValueDeleterAndLifetime)
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 TEST(GlobalContractBoundaries, RedirectedProcessPreservesCombinedOutputAndExitStatusWithClosedStandardDescriptors){
     VerifyGlobalContractBoundaries_RedirectedProcessPreservesCombinedOutputAndExitStatusWithClosedStandardDescriptors();
 }
@@ -424,7 +454,17 @@ TEST(GlobalContractBoundaries, RedirectedProcessPreservesCombinedOutputAndExitSt
 TEST(GlobalContractBoundaries, CapturedProcessPreservesStdoutAndFailureStatusWithClosedStandardDescriptors){
     VerifyGlobalContractBoundaries_CapturedProcessPreservesStdoutAndFailureStatusWithClosedStandardDescriptors();
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

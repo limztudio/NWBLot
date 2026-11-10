@@ -14,6 +14,11 @@
 #include "smoke_skinned_scene_helpers.adhd"
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/assets/graphics/reflection/frame_constants.h>
 #include <impl/ecs_csg/components.adhd.h>
 #include <impl/ecs_csg/shape_registry.adhd.h>
@@ -43,6 +48,11 @@ inline constexpr u32 s_ReflectionTraceSliceRays = NWB_REFLECTION_TRACE_SLICE_RAY
 inline constexpr f32 s_ReflectionHalfPi = s_PIDIV2;
 inline constexpr f32 s_ReflectionPi = s_PI;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

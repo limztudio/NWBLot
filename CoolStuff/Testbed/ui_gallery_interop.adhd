@@ -5,6 +5,11 @@
 #include "ui_gallery_constants.adhd"
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/assets_scene/asset.adhd.h>
 #include <impl/assets_ui_skin/asset.adhd.h>
 #include <impl/ecs_ui/paint_context.adhd.h>
@@ -87,6 +92,11 @@ private:
 using UiNestedPopupSource = UiFilteredListSource<UiNestedPopupLabelResolver, s_NestedPopupLabelCount, s_NestedPopupDisabledKey>;
 using UiSearchComboSource = UiFilteredListSource<UiSearchComboLabelResolver, s_SearchComboLabelCount, s_SearchComboDisabledKey>;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

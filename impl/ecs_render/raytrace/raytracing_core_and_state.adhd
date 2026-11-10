@@ -80,6 +80,11 @@ RayTraceMaterialContextSlots PackRayTraceMaterialContextSlots(
 
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/ecs_render/raytrace/raytracing_system.adhd.h>
 #include <impl/ecs_render/raytrace/raytrace_internal.adhd.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd.h>
@@ -1570,6 +1575,11 @@ TraceResourceSetUses MakeTraceResourceSetUses(const Core::GpuGraphResourceSetId 
 
 
 NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

@@ -9,6 +9,11 @@
 #include "case_types.adhd"
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <core/common/module.h>
 
 #include <global/array.h>
@@ -334,6 +339,11 @@ NWB_NOINLINE SIMDVectorDouble DoubleMultiplyThenAdd(SIMDVectorDouble first, SIMD
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -1571,6 +1581,11 @@ void VerifyMath_DoubleFixedRoundingIgnoresAmbientDirectedModesAndKeepsNearestTie
 }
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace NWB::Tests::MathStorageCasesDetail{
 
 
@@ -1653,6 +1668,11 @@ NWB_NOINLINE SIMDVectorDouble DoubleMultiplyThenAdd(const SIMDVectorDouble first
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 NWB_ADHD_GTEST(Math, SignedZeroStorageEqualityProducesEqualHashes, VerifyMath_SignedZeroStorageEqualityProducesEqualHashes)
@@ -1694,9 +1714,29 @@ NWB_ADHD_GTEST(MathTriangleIntersection, ProjectionRoundoffAllowancePreservesSma
 NWB_ADHD_GTEST(MathTriangleIntersection, ProjectionRoundoffAllowancePreservesTranslatedOneUlpGaps, VerifyMathTriangleIntersection_ProjectionRoundoffAllowancePreservesTranslatedOneUlpGaps)
 NWB_ADHD_GTEST(Math, VectorPowerPreservesMixedSpecialsAndAdjacentSrgbRoundingWithSeededState, VerifyMath_VectorPowerPreservesMixedSpecialsAndAdjacentSrgbRoundingWithSeededState)
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 TEST(Math, VectorPowerKeepsDenormalInputStatusWithInvalidTrapEnabled){ VerifyMath_VectorPowerKeepsDenormalInputStatusWithInvalidTrapEnabled(); }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 NWB_ADHD_GTEST(Math, MultiplyExpressionsPreserveCompilerRoundingPolicyAndSignedZero, VerifyMath_MultiplyExpressionsPreserveCompilerRoundingPolicyAndSignedZero)
 NWB_ADHD_GTEST(Math, OrderedDoubleClampPreservesZeroNanAndSubnormalPayloads, VerifyMath_OrderedDoubleClampPreservesZeroNanAndSubnormalPayloads)

@@ -32,6 +32,7 @@ public:
         , m_stmtParser(cursor, m_typeParser, m_exprParser)
         , m_activeSource(activeSource)
         , m_preprocessor(preprocessor)
+        , m_pendingImplicitSourceNativeBlocks(cursor.arena())
     {
         m_exprParser.setStmtParser(&m_stmtParser);
     }
@@ -78,6 +79,7 @@ private:
     StmtParser m_stmtParser;
     MStringView m_activeSource;
     const Preprocessor* m_preprocessor = nullptr;
+    MVector<MStringView> m_pendingImplicitSourceNativeBlocks;
 };
 
 

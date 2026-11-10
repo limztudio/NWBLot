@@ -5,6 +5,11 @@
 #include "gi_test_scenes.adhd"
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <loader/project_entry.h>
 
 #include <impl/assets_material/asset.adhd.h>
@@ -22,6 +27,11 @@ native{
 #include <global/simd/frame.h>
 #include <global/simd/quaternion.h>
 #include <global/simdmath.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -432,6 +442,11 @@ class GiTestSmokeProjectImpl : IProjectEntryCallbacks{
 }
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     return { 1280, 900 };
 }
@@ -443,6 +458,11 @@ TStringView NWB::QueryProjectWindowTitle()noexcept{
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<NWB::Tests::Smoke::GiTestSmokeProjectImpl>(context);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

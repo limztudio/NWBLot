@@ -7,6 +7,11 @@
 #include <tests/unit/common/name_cases.adhd>
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <core/common/frame_data.h>
 #include <core/common/log.h>
 #include <core/common/name_symbols.h>
@@ -184,6 +189,11 @@ namespace NameSymbols = Core::Common::NameSymbols;
 
 
 NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -657,6 +667,11 @@ void VerifyFrameData_CopiesIndependentWindowState(){
 }
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_BEGIN
 
 
@@ -700,15 +715,40 @@ void CallbackUnregisterLogger::handle(const TStringView text, const Core::Common
 
 
 NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 NWB_ADHD_GTEST(NameSymbolDecodeTests, UnknownAndBoundaryNarrowTokensDoNotAllocate, VerifyNameSymbolDecodeTests_UnknownAndBoundaryNarrowTokensDoNotAllocate)
 NWB_ADHD_GTEST(NameSymbolDecodeTests, ResolvesNarrowSpansWithoutChangingUnresolvedText, VerifyNameSymbolDecodeTests_ResolvesNarrowSpansWithoutChangingUnresolvedText)
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_UNICODE)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 TEST(NameSymbolDecodeTests, UnknownAndBoundaryWideTokensDoNotAllocate){ VerifyNameSymbolDecodeTests_UnknownAndBoundaryWideTokensDoNotAllocate(); }
 TEST(NameSymbolDecodeTests, ResolvesWideSpansWithoutChangingUnresolvedText){ VerifyNameSymbolDecodeTests_ResolvesWideSpansWithoutChangingUnresolvedText(); }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 NWB_ADHD_GTEST(NameSymbolDecodeTests, EscapedDocumentRoundTripsAndMalformedRecordsStayUnpublished, VerifyNameSymbolDecodeTests_EscapedDocumentRoundTripsAndMalformedRecordsStayUnpublished)
 NWB_ADHD_GTEST(NameSymbolDecodeTests, RejectsNoncurrentDocumentHeaderBeforePublishingSymbols, VerifyNameSymbolDecodeTests_RejectsNoncurrentDocumentHeaderBeforePublishingSymbols)

@@ -75,6 +75,11 @@ class UiLayerSmokeProject : IProjectEntryCallbacks{
 }
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     return { 960u, 540u };
 }
@@ -95,6 +100,11 @@ UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(ProjectR
         return nullptr;
     return MakeUnique<Tests::Smoke::UiLayerSmokeProject>(*world, context);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

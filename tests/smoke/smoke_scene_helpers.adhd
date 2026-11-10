@@ -6,6 +6,11 @@
 #include "smoke_project_helpers.adhd"
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <loader/project_entry.h>
 
 #include <impl/assets_material/asset.adhd.h>
@@ -46,6 +51,11 @@ struct SmokeRenderSystems{
 Impl::RendererSystem& AddSmokeRenderSystems(Core::ECS::World& world, ProjectRuntimeContext& context)noexcept;
 [[nodiscard]] NotNullUniquePtr<Core::ECS::World> CreateSmokeRenderWorldOrDie(TStringView projectName, ProjectRuntimeContext& context);
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -448,6 +458,11 @@ void DestroyCapturedSmokeRenderWorld(mut ProjectRuntimeContext context, mut NotN
 }
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace NWB::Tests::Smoke{
 Impl::RendererSystem& AddSmokeRenderSystems(Core::ECS::World& world, ProjectRuntimeContext& context)noexcept{
     SetupSmokeRenderSystems(world, context);
@@ -460,6 +475,11 @@ NotNullUniquePtr<Core::ECS::World> CreateSmokeRenderWorldOrDie(const TStringView
     return world;
 }
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

@@ -6,6 +6,11 @@
 #include <tests/common/test_context.adhd>
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <core/graphics/rhi/coopvec.h>
 #include <core/graphics/rhi/hardware_ray_tracing_policy.h>
 #include <core/graphics/rhi/presentation.h>
@@ -114,6 +119,11 @@ using Core::IsValidHardwareRayTracingPolicy;
 
 
 NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -434,6 +444,11 @@ void VerifyPresentationReceipt_ResetAtLifetimeBoundaryRemovesEarlierAcquisitionE
 }
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_BEGIN
 
 
@@ -446,7 +461,7 @@ namespace Tests::GraphicsPresentationDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace{
+namespace __hidden_presentation_coop_vector_query{
 
 static u32 s_EmptyPropertyQueryCalls = 0u;
 
@@ -457,15 +472,15 @@ static VkResult VKAPI_CALL QueryNoCooperativeVectorProperties(VkPhysicalDevice, 
     return VK_SUCCESS;
 }
 
-}
+};
 
 CooperativeVectorQueryHarness::CooperativeVectorQueryHarness()noexcept{
     context.extensions.nvCooperativeVector = true;
     context.coopVecFeatures.cooperativeVector = VK_TRUE;
     context.coopVecFeatures.cooperativeVectorTraining = VK_TRUE;
     context.coopVecProperties.cooperativeVectorTrainingFloat16Accumulation = VK_TRUE;
-    context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV = &QueryNoCooperativeVectorProperties;
-    s_EmptyPropertyQueryCalls = 0u;
+    context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV = &__hidden_presentation_coop_vector_query::QueryNoCooperativeVectorProperties;
+    __hidden_presentation_coop_vector_query::s_EmptyPropertyQueryCalls = 0u;
 }
 
 Expected<Core::CooperativeVectorDeviceFeatures> CooperativeVectorQueryHarness::queryEmptyDriverList(){
@@ -473,7 +488,7 @@ Expected<Core::CooperativeVectorDeviceFeatures> CooperativeVectorQueryHarness::q
 }
 
 u32 CooperativeVectorQueryHarness::callCount()const noexcept{
-    return s_EmptyPropertyQueryCalls;
+    return __hidden_presentation_coop_vector_query::s_EmptyPropertyQueryCalls;
 }
 
 VkQueue MakeDummyVkQueue(const usize handleValue)noexcept{
@@ -491,6 +506,11 @@ VkQueue MakeDummyVkQueue(const usize handleValue)noexcept{
 
 
 NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 NWB_ADHD_GTEST(CooperativeVectorFeatureQuery, EmptyDriverPropertyListDoesNotReadOrPublishFormats, VerifyCooperativeVectorFeatureQuery_EmptyDriverPropertyListDoesNotReadOrPublishFormats)

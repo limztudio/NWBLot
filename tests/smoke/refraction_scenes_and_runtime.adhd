@@ -5,6 +5,11 @@
 #include "refraction_gallery_scene.adhd"
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <loader/project_entry.h>
 
 #include <impl/ecs_scene/module.adhd.h>
@@ -77,6 +82,11 @@ inline void LogRefractionQueryDiagnosticsCounters(const StatisticsT& statistics,
     return world;
 }
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -882,6 +892,11 @@ class RefractionSmokeProjectImpl : IProjectEntryCallbacks{
 
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     NWB::Core::Alloc::ScratchArena arena(Tests::Smoke::s_SmokeEnvironmentArena);
     const auto extent = ReadEnvironmentVariable(arena, "NWB_REFRACTION_SMOKE_EXTENT");
@@ -901,6 +916,11 @@ TStringView NWB::QueryProjectWindowTitle()noexcept{ return NWB_TEXT("NWB Refract
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<NWB::Tests::Smoke::RefractionSmokeProjectImpl>(context);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

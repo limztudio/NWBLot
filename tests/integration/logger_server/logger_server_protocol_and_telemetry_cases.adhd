@@ -6,6 +6,11 @@
 #include <tests/common/gtest_macros.adhd>
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/crash/package_names.h>
@@ -159,6 +164,11 @@ public:
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -765,7 +775,17 @@ void VerifyLoggerClipboardText_ByteCountRejectsOverflowBeforeNativeAllocation(){
 
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_PLATFORM_WINDOWS)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace NWB::Tests::LoggerCrashCases{
 
 DumpBytes ExceptionDump(Core::Alloc::GlobalArena& arena, const MINIDUMP_STREAM_TYPE secondStream, const ULONG secondStreamBytes){
@@ -800,7 +820,17 @@ DumpBytes ExceptionDump(Core::Alloc::GlobalArena& arena, const MINIDUMP_STREAM_T
 }
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 NWB_ADHD_GTEST_F(LoggerProtocolTests, MessagePayloadReadsUnalignedBytesAndPreservesEmbeddedNulls, VerifyLoggerProtocolTests_MessagePayloadReadsUnalignedBytesAndPreservesEmbeddedNulls)
@@ -816,7 +846,17 @@ NWB_ADHD_GTEST_F(LoggerProducerContracts, SimultaneousProcessedFilesKeepIndepend
 NWB_ADHD_GTEST_F(LoggerProducerContracts, MissingArchiveRetainsNativeReadFailureInOwningRejection, VerifyLoggerProducerContracts_MissingArchiveRetainsNativeReadFailureInOwningRejection)
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_PLATFORM_WINDOWS)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 TEST(LogRowPainter, EmptyErrorRowsUseAlternatingColorsAndRestoreDeviceContext){ VerifyLogRowPainter_EmptyErrorRowsUseAlternatingColorsAndRestoreDeviceContext(); }
 TEST(LogRowPainter, LongTextWrapsWithinHiddenParentClientWidth){ VerifyLogRowPainter_LongTextWrapsWithinHiddenParentClientWidth(); }
 
@@ -833,7 +873,17 @@ TEST(LoggerClipboardText, EmptyInputOwnsOneTerminatedNativeString){ VerifyLogger
 TEST(LoggerClipboardText, MultipleUnicodeMessagesPreserveOrderCrLfAndTerminator){ VerifyLoggerClipboardText_MultipleUnicodeMessagesPreserveOrderCrLfAndTerminator(); }
 TEST(LoggerClipboardText, NativeOwnershipFreesUntransferredMemoryAndReleasesTransferredMemory){ VerifyLoggerClipboardText_NativeOwnershipFreesUntransferredMemoryAndReleasesTransferredMemory(); }
 TEST(LoggerClipboardText, ByteCountRejectsOverflowBeforeNativeAllocation){ VerifyLoggerClipboardText_ByteCountRejectsOverflowBeforeNativeAllocation(); }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

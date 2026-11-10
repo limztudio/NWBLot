@@ -12,6 +12,11 @@
 #include "smoke_scene_helpers.adhd"
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <loader/project_entry.h>
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
 #include <impl/assets_csg/shape_id.adhd.h>
@@ -50,6 +55,11 @@ inline constexpr b8 s_TransparentMultiFrameLaggedAsyncLighting = false;
 inline constexpr f32 s_TransparentMultiHalfPi = s_PIDIV2;
 inline constexpr f32 s_TransparentMultiTwoPi = s_2PI;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

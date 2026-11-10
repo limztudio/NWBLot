@@ -7,6 +7,11 @@
 #include <tests/unit/global/global_tests.adhd>
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <tests/unit/global/scope_case_types.adhd.h>
 #include <tests/unit/global/terminal_case_types.adhd.h>
 
@@ -225,6 +230,11 @@ inline void ExpectRejectedCopy(void* destination, const usize capacity, const vo
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -1113,6 +1123,11 @@ NWB_ADHD_GTEST(SIMDMemory, ZeroLengthAllowsNullOnePastAndInaccessiblePointersWit
 NWB_ADHD_GTEST(SIMDMemory, InvalidCapacityNullAlignmentHugeCountsAndOverlapAbortBeforeRangeAccess, VerifySIMDMemory_InvalidCapacityNullAlignmentHugeCountsAndOverlapAbortBeforeRangeAccess)
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_PLATFORM_WINDOWS)
 TEST(CpuTopologyTests, DiscoveryHonorsAProcessAffinityRestriction){
     VerifyCpuTopologyTests_DiscoveryHonorsAProcessAffinityRestriction();
@@ -1128,6 +1143,11 @@ TEST(CpuTopologyTests, DiscoveryHonorsInheritedLinuxAffinityIncludingHighProcess
     VerifyCpuTopologyTests_DiscoveryHonorsInheritedLinuxAffinityIncludingHighProcessorIndices();
 }
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

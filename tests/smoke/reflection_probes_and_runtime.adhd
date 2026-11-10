@@ -5,6 +5,11 @@
 #include "reflection_suite_scenes.adhd"
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <loader/project_entry.h>
 
 #include <impl/assets/graphics/reflection/depth_constants.h>
@@ -125,6 +130,11 @@ public:
     return world;
 }
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -1499,6 +1509,11 @@ class ReflectionSmokeProjectImpl : IProjectEntryCallbacks{
 
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     NWB::Core::Alloc::ScratchArena arena(Tests::Smoke::s_SmokeEnvironmentArena);
     const auto extent = Tests::Smoke::ReadSmokeEnvironmentText(arena, "NWB_REFLECTION_SMOKE_EXTENT");
@@ -1515,6 +1530,11 @@ TStringView NWB::QueryProjectWindowTitle()noexcept{
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<NWB::Tests::Smoke::ReflectionSmokeProjectImpl>(context);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

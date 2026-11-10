@@ -9,12 +9,22 @@
 
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace NWB::Impl{
 using ScratchSceneBvhIndexVector = Vector<u32, Core::Alloc::ScratchArena>;
 using ScratchSceneBvhNodeCalculationVector = Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena>;
 using ScratchSceneBvhNodeGpuVector = Vector<NwbBvhNodeGpu, Core::Alloc::ScratchArena>;
 using MutableSceneBvhIndexSpan = Span<u32>;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

@@ -6,7 +6,17 @@
 #include <tests/common/gtest_macros.adhd>
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace NWB::Tests::CrashCases{
 extern Array<u8, 256u * 1024u> g_ForeignSignalStack;
 void OriginalSignalOwner(int)noexcept;
@@ -14,7 +24,17 @@ void ForeignSignalOwner(int)noexcept;
 [[noreturn]] void OriginalTerminateOwner()noexcept;
 [[noreturn]] void ForeignTerminateOwner()noexcept;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -460,7 +480,17 @@ void VerifyCrash_FlushReportsFailsWhenUploadingRecoveryIsBlocked(){
 }
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace NWB::Tests::CrashCases{
 alignas(MaxAlign) Array<u8, 256u * 1024u> g_ForeignSignalStack = {};
 void OriginalSignalOwner(const int)noexcept{}
@@ -468,7 +498,17 @@ void ForeignSignalOwner(const int)noexcept{}
 [[noreturn]] void OriginalTerminateOwner()noexcept{ _exit(123); }
 [[noreturn]] void ForeignTerminateOwner()noexcept{ _exit(124); }
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 NWB_ADHD_GTEST(Crash, MetadataRejectsTruncationAndEmbeddedNullWithoutChangingPublishedValue, VerifyCrash_MetadataRejectsTruncationAndEmbeddedNullWithoutChangingPublishedValue)
@@ -481,6 +521,11 @@ NWB_ADHD_GTEST(Crash, CrashSpoolRetentionProtectsActivePendingPackage, VerifyCra
 NWB_ADHD_GTEST(Crash, FlushReportsFailsWhenUploadingRecoveryIsBlocked, VerifyCrash_FlushReportsFailsWhenUploadingRecoveryIsBlocked)
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
 TEST(Crash, SpoolAdmissionPreservesFilesystemCategoryAndCodeAfterUnlock){ VerifyCrash_SpoolAdmissionPreservesFilesystemCategoryAndCodeAfterUnlock(); }
 TEST(Crash, FailedExecutableAdmissionReleasesResourcesAndObservesFailureAfterUnlock){ VerifyCrash_FailedExecutableAdmissionReleasesResourcesAndObservesFailureAfterUnlock(); }
@@ -490,6 +535,11 @@ TEST(Crash, FailedExecutableAdmissionReleasesResourcesAndObservesFailureAfterUnl
 TEST(Crash, UninstallRestoresDisabledAlternateStackAndPriorSignalAndTerminateOwners){ VerifyCrash_UninstallRestoresDisabledAlternateStackAndPriorSignalAndTerminateOwners(); }
 TEST(Crash, UninstallPreservesNewerForeignNativeHookOwners){ VerifyCrash_UninstallPreservesNewerForeignNativeHookOwners(); }
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

@@ -6,6 +6,11 @@
 #include <tests/unit/ecs_graphics/suite.adhd>
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/assets/graphics/gi/surfel/surfel_binding_slots.h>
 #include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
 #include <impl/ecs_render/gi/lifecycle_types.adhd.h>
@@ -340,6 +345,11 @@ using EcsGraphicsShadowSurfelDetail::MakeFeedbackPolicy;
 
 
 NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -1363,6 +1373,11 @@ void VerifyRendererTaskTimingFeedbackState_DeviceGenerationChangeDropsEntryBefor
 }
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace EcsGraphicsShadowSurfelDetail{
 
 
@@ -1557,6 +1572,11 @@ namespace EcsGraphicsSurfelSpawnPolicyDetail{
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 NWB_ADHD_GTEST(ShadowMaterialContext, TypedByteCountPreservesAlignmentAndWrapping, VerifyShadowMaterialContext_TypedByteCountPreservesAlignmentAndWrapping)

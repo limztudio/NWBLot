@@ -3,6 +3,11 @@
 
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/ecs_render/optics/optical_scene_upload.adhd.h>
 #include <impl/ecs_render/optics/optical_bounds_finalize.adhd.h>
 
@@ -16,6 +21,11 @@ using OpticalUploadHandle = RayTracingOpticalSceneUploadHandle;
 using OpticalUploadControlHandle = RayTracingOpticalUploadControlHandle;
 using OpticalDescriptorHandle = Core::GpuDescriptorHandle;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

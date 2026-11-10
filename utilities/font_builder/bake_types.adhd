@@ -5,6 +5,11 @@
 #include <impl/assets_font_atlas/types.adhd>
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace NWB::FontBuilderUtility{
 using NWB::Impl::s_FontAtlasMinBakePpem;
 using NWB::Impl::s_FontAtlasMaxBakePpem;
@@ -22,6 +27,11 @@ using NWB::Impl::FontAtlasGlyph;
 using NWB::Impl::FontAtlasGroupCompactBounds;
 namespace FontAtlasRasterMode = NWB::Impl::FontAtlasRasterMode;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

@@ -6,6 +6,11 @@
 #include "scene_constants.adhd"
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <loader/project_entry.h>
 
 #include <impl/assets_graphics/bindless/runtime_abi.adhd.h>
@@ -66,6 +71,11 @@ inline constexpr TStringView s_WindowTitle = NWB_TEXT("NWB Testbed");
 
 [[nodiscard]] NotNullUniquePtr<World> CreateInitialWorldOrDie(ProjectRuntimeContext& context);
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -279,6 +289,11 @@ void AttachProjectUiPaintEntity<ProjectT>(mut NotNullUniquePtr<World> world, mut
 }
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NotNullUniquePtr<World> Testbed::CreateInitialWorldOrDie(ProjectRuntimeContext& context){
     auto world = CreateInitialProjectWorld(context);
     if(!world){
@@ -287,6 +302,11 @@ NotNullUniquePtr<World> Testbed::CreateInitialWorldOrDie(ProjectRuntimeContext& 
     }
     return MakeNotNullUnique(Move(*world));
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

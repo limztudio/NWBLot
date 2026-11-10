@@ -8,6 +8,11 @@
 #include "case_types.adhd"
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <core/common/module.h>
 
 #include <global/bit.h>
@@ -205,6 +210,11 @@ using AabbTransformBounds = decltype(::AabbTests::Transform(::MatrixIdentity(), 
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -1805,6 +1815,11 @@ void VerifyCurrentMathContractBoundaries_DoubleQuaternionExtractionKeepsBranchTi
 }
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace NWB::Tests::MathSuiteDetail{
 
 
@@ -1844,6 +1859,11 @@ void TrapPriorityHandler(const i32, siginfo_t* const information, void*)noexcept
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 NWB_ADHD_GTEST(MathBoxNormal, FiniteSquaredLengthDoesNotOverflowInUnusedReductionLanes, VerifyMathBoxNormal_FiniteSquaredLengthDoesNotOverflowInUnusedReductionLanes)
@@ -1903,9 +1923,29 @@ NWB_ADHD_GTEST(MathNativeMask, PartialAndFullComparisonsPreserveSignalingLaneExc
 NWB_ADHD_GTEST(MathNativeReduction, MultipleNaNsInactiveSignalingLanesAndOrderedCancellationPreserveBitsAndExceptions, VerifyMathNativeReduction_MultipleNaNsInactiveSignalingLanesAndOrderedCancellationPreserveBitsAndExceptions)
 NWB_ADHD_GTEST(MathNativeReduction, ReciprocalLengthsPreserveZeroDivisionSubnormalSquaresAndNonfiniteInactiveLanes, VerifyMathNativeReduction_ReciprocalLengthsPreserveZeroDivisionSubnormalSquaresAndNonfiniteInactiveLanes)
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_PLATFORM_LINUX) && defined(NWB_HAS_AVX2)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 TEST(MathNativeReduction, PackedDot3KeepsInvalidPriorityWhenAnotherActiveLaneOverflows){ VerifyMathNativeReduction_PackedDot3KeepsInvalidPriorityWhenAnotherActiveLaneOverflows(); }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 NWB_ADHD_GTEST(CurrentMathContractBoundaries, SingleRigidExtractionPreservesNonzeroRotationAndDualTranslationDirection, VerifyCurrentMathContractBoundaries_SingleRigidExtractionPreservesNonzeroRotationAndDualTranslationDirection)
 NWB_ADHD_GTEST(CurrentMathContractBoundaries, DoubleQuaternionExtractionKeepsBranchTiesAndIgnoresNonrotationLanes, VerifyCurrentMathContractBoundaries_DoubleQuaternionExtractionKeepsBranchTiesAndIgnoresNonrotationLanes)

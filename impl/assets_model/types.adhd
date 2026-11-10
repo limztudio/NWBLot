@@ -9,6 +9,11 @@
 
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace NWB::Impl{
 using ScratchArena = Core::Alloc::ScratchArena;
 using ScratchModelSkeletonObjectBinaryVector = Vector<ModelSkeletonObjectBinary, Core::Alloc::ScratchArena>;
@@ -16,6 +21,11 @@ using ScratchModelStaticMeshObjectBinaryVector = Vector<ModelStaticMeshObjectBin
 using ScratchModelSkinnedMeshObjectBinaryVector = Vector<ModelSkinnedMeshObjectBinary, Core::Alloc::ScratchArena>;
 using ScratchModelObjectNameMap = HashMap<Name, u8, Core::Alloc::ScratchArena>;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

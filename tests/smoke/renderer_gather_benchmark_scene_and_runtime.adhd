@@ -9,6 +9,11 @@
 #include "smoke_skinned_scene_helpers.adhd"
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <loader/project_entry.h>
 #include <impl/ecs_render/module.adhd.h>
 #include <impl/ecs_mesh/skinning/system.adhd.h>
@@ -61,6 +66,11 @@ public:
     virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
 };
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -494,6 +504,11 @@ class RendererGatherBenchmarkProjectImpl : IProjectEntryCallbacks{
 
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){ return { 960u, 720u }; }
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{ return NWB_TEXT("NWB Renderer Gather Benchmark"); }
@@ -501,6 +516,11 @@ TStringView NWB::QueryProjectWindowTitle()noexcept{ return NWB_TEXT("NWB Rendere
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<NWB::Tests::Smoke::RendererGatherBenchmarkProjectImpl>(context);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

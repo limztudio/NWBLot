@@ -11,6 +11,11 @@
 
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/ecs_ui/toolkit/edit/numeric_types.adhd.h>
 
 #include <global/bit.h>
@@ -483,6 +488,11 @@ inline void TakeUiPaintGlyphPage(SharedGlyphPage& dst, ::Expected<SharedGlyphPag
     dst = ::Move(*src);
 }
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -2038,6 +2048,11 @@ NWB_ADHD_GTEST(UiNumericFormatTests, InsufficientCallerStorageReportsSizeErrorWi
 NWB_ADHD_GTEST(UiNumericFormatTests, NonfiniteFloatFormattingIsRejected, VerifyUiNumericFormatTests_NonfiniteFloatFormattingIsRejected)
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_ui_numeric_model_lifetime_tests{
 TYPED_TEST(NumericLifetimeTests, SameValueExternalReplacementFencesHistorySelectionAndComposition){ ::__hidden_ui_glyph_sdf_tests::VerifyNumericLifetimeTests_SameValueExternalReplacementFencesHistorySelectionAndComposition(*this); }
 TYPED_TEST(NumericLifetimeTests, SameTextDraftReplacementFencesWithoutChangingTheCommittedValue){ ::__hidden_ui_glyph_sdf_tests::VerifyNumericLifetimeTests_SameTextDraftReplacementFencesWithoutChangingTheCommittedValue(*this); }
@@ -2046,6 +2061,11 @@ TYPED_TEST(NumericLifetimeTests, RestorationDropsPreeditAndUndoWhileUsingCanonic
 TYPED_TEST(NumericLifetimeTests, ExternalReplacementControlsLaterAbandonRestoration){ ::__hidden_ui_glyph_sdf_tests::VerifyNumericLifetimeTests_ExternalReplacementControlsLaterAbandonRestoration(*this); }
 TYPED_TEST(NumericLifetimeTests, CapacityAndInvalidUtf8FailuresPreserveEveryDraftField){ ::__hidden_ui_glyph_sdf_tests::VerifyNumericLifetimeTests_CapacityAndInvalidUtf8FailuresPreserveEveryDraftField(*this); }
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 NWB_ADHD_GTEST_F(IntegerLifetimeTests, ReversedAndUnknownIntegerBoundsAreAtomic, VerifyIntegerLifetimeTests_ReversedAndUnknownIntegerBoundsAreAtomic)

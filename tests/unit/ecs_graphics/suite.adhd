@@ -8,6 +8,11 @@
 #include <tests/unit/ecs_graphics/name_cases.adhd>
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <tests/common/test_context.adhd.h>
 
 #include <impl/assets/graphics/mesh/runtime_constants.h>
@@ -316,6 +321,11 @@ inline constexpr u64 s_EmulationFirstVertexIndex = NWB_MESH_EMULATION_FIRST_VERT
 
 
 NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -1465,6 +1475,11 @@ void VerifyEcsGraphics_CsgReceiverWorkRegionFallsBackConservativelyAndClampsLarg
 }
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace EcsGraphicsSuiteDetail{
 
 
@@ -1499,6 +1514,11 @@ b8 RegisterCustomCsgShape(CsgShadowSnapshotContext& context, const Name name){
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 NWB_ADHD_GTEST(CausticEmissionTargetBuilderTests, SupportedVolumesDoNotRetireFirstUnsupportedIdentity, VerifyCausticEmissionTargetBuilderTests_SupportedVolumesDoNotRetireFirstUnsupportedIdentity)

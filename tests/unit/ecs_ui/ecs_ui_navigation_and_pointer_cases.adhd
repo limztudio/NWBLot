@@ -6,6 +6,11 @@
 #include <tests/unit/ecs_ui/suite.adhd>
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/ecs_ui/edit_clipboard_controller.adhd.h>
 #include <impl/ecs_ui/layer_types.adhd.h>
 #include <impl/ecs_ui/text_edit_session.adhd.h>
@@ -242,6 +247,11 @@ namespace UiPointerPhase = NWB::Impl::Ui::PointerPhase;
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -1499,6 +1509,11 @@ void VerifyUiMultilineNativeTests_LaterOversizedCommitPreservesEarlierAcceptedNa
 }
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_ui_edit_navigation_guard_tests{
 
 
@@ -1647,6 +1662,11 @@ b8 UiEditPointerCaptureTests::publishPart(const b8 gesture){
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 NWB_ADHD_GTEST_F(UiEditNavigationHostTests, CandidateGeometryCannotReplacePublishedYHitsBeforeAcceptance, VerifyUiEditNavigationHostTests_CandidateGeometryCannotReplacePublishedYHitsBeforeAcceptance)

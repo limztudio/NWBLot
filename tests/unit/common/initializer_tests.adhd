@@ -6,6 +6,11 @@
 #include <tests/unit/common/initializer_case_types.adhd>
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <core/common/module.h>
 
 #include <global/terminal_entry.h>
@@ -45,6 +50,11 @@ private:
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -185,6 +195,11 @@ void VerifyCommonInitializerLifetime_GuardUnwindFinalizesAllItemsBeforeTheTermin
 }
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_common_initializer_tests{
 
 
@@ -221,6 +236,11 @@ void InitializerProbe::finalize()noexcept{
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 NWB_ADHD_GTEST(CommonInitializerLifetime, FailedInitializationRollsBackOnlyTheSuccessfulPrefixAndAllowsReacquire, VerifyCommonInitializerLifetime_FailedInitializationRollsBackOnlyTheSuccessfulPrefixAndAllowsReacquire)
@@ -229,6 +249,11 @@ NWB_ADHD_GTEST(CommonInitializerLifetime, NestedGuardsFinalizeOnlyTheLastOwnerAn
 NWB_ADHD_GTEST(CommonInitializerLifetime, GuardUnwindFinalizesAllItemsBeforeTheTerminalEntryHandlesTheOriginalFailure, VerifyCommonInitializerLifetime_GuardUnwindFinalizesAllItemsBeforeTheTerminalEntryHandlesTheOriginalFailure)
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // This executable owns its initializer guards so the last release is exercised directly.
 int main(int argc, char** argv){
     using namespace __hidden_common_initializer_tests;
@@ -239,6 +264,11 @@ int main(int argc, char** argv){
         return RUN_ALL_TESTS();
     }, [](const InitializerFailure&)noexcept{ return -1; }, []()noexcept{ return -1; });
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

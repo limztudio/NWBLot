@@ -6,6 +6,11 @@
 #include <tests/unit/ecs_graphics/suite.adhd>
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/assets/graphics/reflection/frame_constants.h>
 #include <impl/ecs_mesh/system.adhd.h>
 #include <impl/ecs_render/deferred/scene_shading_upload_tracker.adhd.h>
@@ -207,6 +212,11 @@ namespace PreparedShadowMaterialContextRoute = Impl::PreparedShadowMaterialConte
 
 
 NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

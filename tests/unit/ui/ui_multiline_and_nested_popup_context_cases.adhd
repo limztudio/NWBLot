@@ -11,6 +11,11 @@
 
 
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
 #include <impl/ecs_ui/toolkit/edit/single_line_text.adhd.h>
 #include <impl/ecs_ui/toolkit/context.adhd.h>
@@ -550,6 +555,11 @@ inline void CollectUiMultilineViewSolidRects(const DrawSnapshot& snapshot, const
     ::NWB::UiMultilineViewTests::CollectSolidRects(snapshot, color, output);
 }
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

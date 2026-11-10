@@ -47,7 +47,7 @@ static_assert(alignof(SamplerBinaryHeader) == s_SamplerPackedAlignBytes, "Sample
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline b8 IsValidSamplerDescription(const Core::SamplerDesc& description)noexcept{
+[[nodiscard]] NWB_INLINE b8 IsValidSamplerDescription(const Core::SamplerDesc& description)noexcept{
     return IsValidSamplerDescriptionParameters(
         description.borderColor.r,
         description.borderColor.g,

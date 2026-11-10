@@ -1,0 +1,545 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/gtest_macros.adhd>
+#include <tests/common/test_context.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/edit_box_host.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/vertical_navigation.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/popup.adhd.h>
+
+#include <tests/unit/ui/fixture_text_shaping.adhd.h>
+#include <tests/unit/ui/name_cases.adhd.h>
+#include <tests/unit/ui/native_input.adhd.h>
+
+#include <core/os/clipboard_service.h>
+#include <core/os/text_input_service.h>
+
+#include <global/simd/vector.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::EcsUi{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB::Core;
+using namespace NWB::Impl;
+
+
+class FakeTextInput final : public QueuedTextInputService{
+public:
+    using QueuedTextInputService::emitCommit;
+    using QueuedTextInputService::caretRect;
+    using QueuedTextInputService::surroundingText;
+
+    explicit FakeTextInput(Alloc::GlobalArena& arena) : QueuedTextInputService(arena){}
+    virtual ~FakeTextInput()noexcept override = default;
+
+    [[nodiscard]] virtual TextInputCapabilities capabilities()const noexcept override{ return { true, true, true, true }; }
+    [[nodiscard]] TextInputAdmission::Enum commit(const AStringView text){ return emitCommit(activeSession(), text); }
+    [[nodiscard]] TextInputAdmission::Enum preedit(const AStringView text){ return emitPreedit(activeSession(), text, 0u, text.size()); }
+    [[nodiscard]] TextInputAdmission::Enum preedit(const AStringView text, const usize anchor, const usize caret, const b8 visible = true){
+        return emitPreedit(activeSession(), text, anchor, caret, visible);
+    }
+    [[nodiscard]] TextInputAdmission::Enum erase(const usize before, const usize after, const u64 revision, const TextInputDeletionBasis::Enum basis){
+        return emitDeleteSurrounding(activeSession(), before, after, revision, basis);
+    }
+    [[nodiscard]] virtual TextInputAdmission::Enum startNativeSession(TextInputSessionToken, const TextInputSessionDesc&)noexcept override{
+        ++starts;
+        return TextInputAdmission::Accepted;
+    }
+    virtual void endNativeSession(const TextInputSessionToken)noexcept override{ ++ends; }
+
+    u32 starts = 0u;
+    u32 ends = 0u;
+};
+
+class FakeClipboard final : public QueuedClipboardService{
+public:
+    using QueuedClipboardService::completeNativeRequest;
+
+    explicit FakeClipboard(Alloc::GlobalArena& arena, const b8 inDelayed = false)
+        : QueuedClipboardService(arena), document(arena), startedText(arena), delayed(inDelayed)
+    {}
+    virtual ~FakeClipboard()noexcept override = default;
+
+    [[nodiscard]] virtual ClipboardCapabilities capabilities(const ClipboardChannel::Enum channel)const noexcept override{
+        return channel == ClipboardChannel::Clipboard ? ClipboardCapabilities{ true, true } : ClipboardCapabilities{};
+    }
+    [[nodiscard]] b8 deliver(ClipboardRequestToken token, ClipboardStatus::Enum status, AStringView text = {});
+    [[nodiscard]] b8 complete(const ClipboardRequestToken token, const AStringView text){
+        return completeNativeRequest(token, ClipboardStatus::Success, text);
+    }
+    virtual void startNativeRequest(ClipboardRequestToken token, ClipboardOperation::Enum operation, ClipboardChannel::Enum channel, AStringView text)override;
+
+    AString<Alloc::GlobalArena> document;
+    AString<Alloc::GlobalArena> startedText;
+    ClipboardRequestToken startedToken;
+    ClipboardOperation::Enum startedOperation = ClipboardOperation::ReadText;
+    b8 delayed = false;
+};
+
+[[nodiscard]] b8 PrepareEditView(const Ui::EditModel& model, Ui::TextLayoutBuilder& layoutBuilder, Ui::EditBoxView& view);
+
+[[nodiscard]] inline b8 DeclareEcsUiWidget(Ui::Context& context, const AStringView key, const Ui::WidgetKind::Enum kind, Ui::WidgetState& outWidget){
+    const auto widget = context.declare(key, kind);
+    if(!widget)
+        return false;
+    outWidget = **widget;
+    return true;
+}
+
+[[nodiscard]] inline b8 DeclareEcsUiPartWidget(Ui::Context& context, const Ui::WidgetState& owner, const AStringView key, const Ui::WidgetKind::Enum kind, Ui::WidgetState& outWidget){
+    const auto widget = context.declarePart(owner, key, kind);
+    if(!widget)
+        return false;
+    outWidget = **widget;
+    return true;
+}
+
+class UiEditBoxHostTests : public testing::Test{
+public:
+    UiEditBoxHostTests()
+        : m_arena(Name(NWB::Tests::UiCases::s_EcsUiEditBoxHost))
+        , m_context(m_arena), m_textInput(m_arena), m_clipboard(m_arena)
+        , m_host(m_arena, m_context, m_textInput, m_clipboard)
+        , m_model(m_arena), m_shaper(m_arena), m_layoutBuilder(m_arena, m_shaper)
+    {}
+
+    virtual void SetUp()override{ ASSERT_TRUE(m_textInput.setFocused(true)); }
+    [[nodiscard]] b8 prepare(Ui::EditModel& model, const Ui::EditBoxOptions& options = {}, const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 30.0f }, Ui::IEditActionSink* actions = nullptr);
+    [[nodiscard]] b8 commit();
+    [[nodiscard]] b8 frame(Ui::EditModel& model, const Ui::EditBoxOptions& options = {}){ return prepare(model, options) && commit(); }
+    [[nodiscard]] Ui::Point atByte(const usize byte)const noexcept{
+        return { static_cast<f32>(byte) * 10.0f + m_placement.textOrigin.x + 1.0f, m_placement.textOrigin.y + 5.0f };
+    }
+    [[nodiscard]] b8 dispatch(const Ui::InputEvent& event);
+    [[nodiscard]] b8 dispatchPointer(const Ui::PointerInput& input);
+    [[nodiscard]] b8 dispatchType(const Ui::InputEventType::Enum type){ return dispatch({ .type = type }); }
+    [[nodiscard]] b8 dispatchPoint(const Ui::Point position, const Ui::InputEventType::Enum type, const b8 shift = false){
+        return dispatch({ .position = position, .type = type, .shift = shift });
+    }
+    [[nodiscard]] b8 key(Core::Key::Enum value, b8 shift = false, b8 control = false){
+        return dispatch({ .key = value, .type = Ui::InputEventType::KeyDown, .shift = shift, .control = control }) && dispatch({ .key = value, .type = Ui::InputEventType::KeyUp, .shift = shift, .control = control });
+    }
+    [[nodiscard]] b8 activate(){ return frame(m_model) && key(Core::Key::Tab) && frame(m_model) && m_textInput.activeSession().valid(); }
+    [[nodiscard]] b8 emptyFrame();
+
+    Alloc::GlobalArena m_arena;
+    Ui::Context m_context;
+    FakeTextInput m_textInput;
+    FakeClipboard m_clipboard;
+    UiEditBoxHost m_host;
+    Ui::EditModel m_model;
+    Tests::UiFixtureText::FixtureShaper m_shaper;
+    Ui::TextLayoutBuilder m_layoutBuilder;
+    Ui::WidgetState m_widget;
+    Ui::EditBoxPlacement m_placement;
+    Ui::WidgetState m_otherWidget;
+    u64 m_generation = 0u;
+    Ui::EditBoxResult m_result;
+    b8 m_includeButton = false;
+};
+
+struct ActionRecord{
+    AString<Alloc::GlobalArena> text;
+    Ui::EditAction::Enum action = Ui::EditAction::Submit;
+    explicit ActionRecord(Alloc::GlobalArena& arena)noexcept : text(arena){}
+};
+
+class RecordingActions final : public Ui::IEditActionSink{
+public:
+    explicit RecordingActions(Alloc::GlobalArena& arena) : committed(arena), records(arena), m_arena(arena){ committed.assign("0"); }
+    virtual ~RecordingActions()noexcept override = default;
+
+    [[nodiscard]] virtual b8 apply(Ui::EditModel& draft, Ui::EditAction::Enum action, b8 readOnly)override;
+    [[nodiscard]] Alloc::GlobalArena& arena()noexcept{ return m_arena; }
+    void resetIfConfigured()noexcept{ if(resetHost) resetHost->reset(); }
+    void clear()noexcept{ records.clear(); }
+
+    AString<Alloc::GlobalArena> committed;
+    Ui::PaintVector<ActionRecord> records;
+    UiEditBoxHost* resetHost = nullptr;
+    b8 canonicalizeSubmit = false;
+    b8 failSubmit = false;
+    b8 rejectBlur = false;
+
+private:
+    Alloc::GlobalArena& m_arena;
+};
+
+class UiEditActionHostTests : public UiEditBoxHostTests{
+public:
+    UiEditActionHostTests() : m_actions(m_arena){ m_includeButton = true; }
+
+    [[nodiscard]] b8 actionFrame(const Ui::EditBoxOptions& options = {}){
+        return prepare(m_model, options, { 10.0f, 20.0f, 180.0f, 30.0f }, &m_actions) && commit();
+    }
+    [[nodiscard]] b8 activateActions();
+    [[nodiscard]] b8 commitNative(const AStringView text){ return m_textInput.commit(text) == TextInputAdmission::Accepted; }
+    [[nodiscard]] b8 replaceNative(const AStringView text){ return key(Core::Key::A, false, true) && commitNative(text); }
+    [[nodiscard]] b8 focusOther(){ return key(Core::Key::Tab) && m_context.input().focus() == m_otherWidget.id; }
+    [[nodiscard]] b8 focusEditor(){ return key(Core::Key::Tab) && m_context.input().focus() == m_widget.id; }
+    [[nodiscard]] usize actionCount(Ui::EditAction::Enum action)const noexcept;
+    void enableHostResetOnSubmit()noexcept{ m_actions.resetHost = &m_host; }
+
+    RecordingActions m_actions;
+};
+
+using ClipboardOperationEnum = NWB::Core::ClipboardOperation::Enum;
+using ClipboardStatusEnum = NWB::Core::ClipboardStatus::Enum;
+using KeyEnum = NWB::Core::Key::Enum;
+using UiDisplayMetrics = NWB::Impl::Ui::DisplayMetrics;
+using UiEditActionEnum = NWB::Impl::Ui::EditAction::Enum;
+using UiEditBoxOptions = NWB::Impl::Ui::EditBoxOptions;
+using UiEditBoxResult = NWB::Impl::Ui::EditBoxResult;
+using UiEditBoxStyle = NWB::Impl::Ui::EditBoxStyle;
+using UiInsets = NWB::Impl::Ui::Insets;
+using UiEditBoxView = NWB::Impl::Ui::EditBoxView;
+using UiEditModel = NWB::Impl::Ui::EditModel;
+using UiHitTarget = NWB::Impl::Ui::HitTarget;
+using UiIEditActionSink = NWB::Impl::Ui::IEditActionSink;
+using UiInputEvent = NWB::Impl::Ui::InputEvent;
+using UiInputRoutingResult = NWB::Impl::Ui::InputRoutingResult;
+using UiInputSource = NWB::Impl::Ui::InputSource;
+using UiPoint = NWB::Impl::Ui::Point;
+using UiPointerInput = NWB::Impl::Ui::PointerInput;
+using UiPopupToken = NWB::Impl::Ui::PopupToken;
+using UiRect = NWB::Impl::Ui::Rect;
+using UiShapeRequest = NWB::Impl::Ui::ShapeRequest;
+using UiTextLayoutBuilder = NWB::Impl::Ui::TextLayoutBuilder;
+using UiWidgetId = NWB::Impl::Ui::WidgetId;
+using UiWidgetRoot = NWB::Impl::Ui::WidgetRoot;
+using UiWidgetState = NWB::Impl::Ui::WidgetState;
+namespace UiEditAction = NWB::Impl::Ui::EditAction;
+namespace UiEditClipboardAction = NWB::Impl::Ui::EditClipboardAction;
+namespace UiInputCommand = NWB::Impl::Ui::InputCommand;
+namespace UiInputEventType = NWB::Impl::Ui::InputEventType;
+namespace UiWidgetKind = NWB::Impl::Ui::WidgetKind;
+using UiTestSupport::NativeInput;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+namespace UiEditHostFixtureSupport = NWB::Tests::EcsUi;
+namespace UiEditBoxTestSupport = NWB::Tests::EcsUi;
+namespace UiEditActionTestSupport = NWB::Tests::EcsUi;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_EcsUiViewportWidth = 500.0f;
+const f32 s_EcsUiViewportHeight = 200.0f;
+const usize s_EcsUiInputMaxEvents = 256u;
+
+UiRect MakeEcsUiRect(in f32 x, in f32 y, in f32 width, in f32 height){
+    UiRect rect = UiRect();
+    rect.x = x;
+    rect.y = y;
+    rect.width = width;
+    rect.height = height;
+    return rect;
+}
+
+UiPoint MakeEcsUiPoint(in f32 x, in f32 y){
+    UiPoint point = UiPoint();
+    point.x = x;
+    point.y = y;
+    return point;
+}
+
+UiInputSource MakeEcsUiInputSource(in u32 device, in u32 control){
+    UiInputSource source = UiInputSource();
+    source.device = device;
+    source.control = control;
+    return source;
+}
+
+b8 DeliverEcsUiFakeClipboard(mut FakeClipboard self, in ClipboardRequestToken token, in ClipboardStatusEnum status, in StringView text){
+    if(!self.completeNativeRequest(token, status, text)){
+        return false;
+    }
+    if(status == ClipboardStatus::Success && self.startedOperation == ClipboardOperation::WriteText && token == self.startedToken){
+        self.document = self.startedText;
+    }
+    return true;
+}
+
+void StartEcsUiFakeClipboardRequest(mut FakeClipboard self, in ClipboardRequestToken token, in ClipboardOperationEnum operation, in StringView text){
+    self.startedToken = token;
+    self.startedOperation = operation;
+    self.startedText.assign(text.data(), text.size());
+    StringView payload = StringView();
+    if(operation == ClipboardOperation::ReadText){
+        payload = StringView(self.document);
+    }
+    if(!self.delayed && !DeliverEcsUiFakeClipboard(self, token, ClipboardStatus::Success, payload)){
+        EXPECT_TRUE(false);
+    }
+}
+
+b8 PrepareEcsUiEditView(in UiEditModel model, mut UiTextLayoutBuilder layoutBuilder, mut UiEditBoxView view){
+    if(!view.snapshot(model)){
+        return false;
+    }
+    UiShapeRequest desc = UiShapeRequest();
+    desc.text = view.displayText();
+    auto layout = layoutBuilder.layout(desc);
+    if(!layout){
+        return false;
+    }
+    return view.adoptLayout(layout.value());
+}
+
+b8 BeginEcsUiRootFrame(mut UiEditBoxHostTests self){
+    ++self.m_generation;
+    if(!self.m_context.beginFrame(self.m_generation)){
+        return false;
+    }
+    UiDisplayMetrics metrics = UiDisplayMetrics();
+    metrics.logicalWidth = s_EcsUiViewportWidth;
+    metrics.logicalHeight = s_EcsUiViewportHeight;
+    metrics.pixelScaleX = 1.0f;
+    metrics.pixelScaleY = 1.0f;
+    self.m_host.beginFrame(self.m_generation, metrics);
+    UiWidgetRoot rootSurface = UiWidgetRoot();
+    rootSurface.value = 17u;
+    rootSurface.generation = 1u;
+    return self.m_context.beginRoot(rootSurface);
+}
+
+b8 BeginEcsUiEditFrame(mut UiEditBoxHostTests self){
+    return BeginEcsUiRootFrame(self) && DeclareEcsUiWidget(self.m_context, "edit", UiWidgetKind::EditBox, self.m_widget);
+}
+
+b8 PublishEcsUiEditBox(mut UiEditBoxHostTests self, mut UiEditModel model, in UiEditBoxOptions options, in UiRect bounds, in UiPoint previousScroll){
+    UiEditBoxView view = UiEditBoxView(self.m_arena);
+    if(!PrepareEcsUiEditView(model, self.m_layoutBuilder, view)){
+        return false;
+    }
+    const UiRect viewport = MakeEcsUiRect(0.0f, 0.0f, s_EcsUiViewportWidth, s_EcsUiViewportHeight);
+    const auto placement = view.arrange(bounds, UiInsets(), viewport, previousScroll);
+    if(!placement){
+        return false;
+    }
+    self.m_placement = placement.value();
+    if(!self.m_host.publish(self.m_widget, view, self.m_placement, options)){
+        return false;
+    }
+    UiHitTarget target = UiHitTarget();
+    target.rectangle = bounds;
+    target.clip = viewport;
+    target.enabled = options.enabled;
+    target.focusable = options.enabled;
+    target.pointerGesture = options.enabled;
+    target.textEditable = true;
+    return self.m_context.addTarget(self.m_widget, target);
+}
+
+b8 FinishEcsUiEditBoxPrepare(mut UiEditBoxHostTests self, mut UiEditModel model, in UiEditBoxOptions options, in UiRect bounds){
+    if(!self.m_result.valid || !PublishEcsUiEditBox(self, model, options, bounds, UiPoint())){
+        return false;
+    }
+    if(self.m_includeButton){
+        if(!DeclareEcsUiWidget(self.m_context, "other", UiWidgetKind::Button, self.m_otherWidget)){
+            return false;
+        }
+        UiHitTarget other = UiHitTarget();
+        other.rectangle = MakeEcsUiRect(230.0f, 20.0f, 100.0f, 30.0f);
+        other.clip = MakeEcsUiRect(0.0f, 0.0f, s_EcsUiViewportWidth, s_EcsUiViewportHeight);
+        other.focusable = true;
+        other.activatable = true;
+        if(!self.m_context.addTarget(self.m_otherWidget, other)){
+            return false;
+        }
+    }
+    if(!self.m_context.endRoot() || !self.m_context.finishFrame()){
+        return false;
+    }
+    self.m_host.finishFrame();
+    return true;
+}
+
+b8 PrepareEcsUiEditBoxFrame(mut UiEditBoxHostTests self, mut UiEditModel model, in UiEditBoxOptions options, in UiRect bounds){
+    if(!BeginEcsUiEditFrame(self)){
+        return false;
+    }
+    self.m_result = self.m_host.edit(self.m_widget, options, model);
+    return FinishEcsUiEditBoxPrepare(self, model, options, bounds);
+}
+
+b8 PrepareEcsUiEditActionsFrame(mut UiEditBoxHostTests self, mut UiEditModel model, in UiEditBoxOptions options, in UiRect bounds, mut UiIEditActionSink actions){
+    if(!BeginEcsUiEditFrame(self)){
+        return false;
+    }
+    self.m_result = self.m_host.editActions(self.m_widget, options, UiPopupToken(), model, actions);
+    return FinishEcsUiEditBoxPrepare(self, model, options, bounds);
+}
+
+b8 CommitEcsUiEditFrame(mut UiEditBoxHostTests self){
+    if(!self.m_context.commitFrame(self.m_generation)){
+        return false;
+    }
+    self.m_host.commitFrame(self.m_generation);
+    return true;
+}
+
+b8 DispatchEcsUiEditEvent(mut UiEditBoxHostTests self, in UiInputEvent event){
+    self.m_host.collectNative();
+    const UiWidgetId previousCapture = self.m_context.input().capture();
+    const auto normalized = self.m_context.input().queue(NativeInput(event));
+    if(!normalized){
+        return false;
+    }
+    const b8 submit = self.m_host.prepareSubmit(normalized.value());
+    const UiInputRoutingResult result = self.m_context.input().process();
+    self.m_host.input(normalized.value(), previousCapture, submit);
+    return !result.activationOverflow && !result.gestureOverflow;
+}
+
+b8 DispatchEcsUiEditPointer(mut UiEditBoxHostTests self, in UiPointerInput input){
+    self.m_host.collectNative();
+    const UiWidgetId previousCapture = self.m_context.input().capture();
+    const auto normalized = self.m_context.input().queuePointer(input);
+    if(!normalized){
+        return false;
+    }
+    const UiInputRoutingResult result = self.m_context.input().process();
+    if(result.pointerRouted){
+        self.m_host.input(normalized.value(), previousCapture, false);
+    }
+    return !result.activationOverflow && !result.gestureOverflow;
+}
+
+b8 EmptyEcsUiEditFrame(mut UiEditBoxHostTests self){
+    if(!BeginEcsUiRootFrame(self) || !self.m_context.endRoot() || !self.m_context.finishFrame()){
+        return false;
+    }
+    self.m_host.finishFrame();
+    return CommitEcsUiEditFrame(self);
+}
+
+b8 ApplyEcsUiRecordingAction(mut RecordingActions self, mut UiEditModel draft, in UiEditActionEnum action, in b8 readOnly){
+    ActionRecord record = ActionRecord(self.arena());
+    record.action = action;
+    record.text.assign(draft.text().data(), draft.text().size());
+    self.records.push_back(record);
+    if(self.failSubmit && action == UiEditAction::Submit){
+        return false;
+    }
+    if(action == UiEditAction::Submit){
+        self.resetIfConfigured();
+        if(readOnly){
+            return true;
+        }
+        self.committed.assign(draft.text().data(), draft.text().size());
+        return !self.canonicalizeSubmit || draft.setText(StringView(self.committed));
+    }
+    if(action == UiEditAction::Blur && !readOnly && !self.rejectBlur){
+        self.committed.assign(draft.text().data(), draft.text().size());
+    }
+    return draft.setText(StringView(self.committed));
+}
+
+b8 ActivateEcsUiEditActions(mut UiEditActionHostTests self){
+    if(!self.actionFrame() || !self.key(Key::Tab) || !self.actionFrame() || !self.m_textInput.activeSession().valid()){
+        return false;
+    }
+    self.m_actions.clear();
+    return true;
+}
+
+usize CountEcsUiRecordedActions(in UiEditActionHostTests self, in UiEditActionEnum action){
+    usize count = 0u;
+    for(usize i = 0u; i < self.m_actions.records.size(); ++i){
+        if(self.m_actions.records[i].action == action){
+            ++count;
+        }
+    }
+    return count;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::EcsUi{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 FakeClipboard::deliver(const ClipboardRequestToken token, const ClipboardStatus::Enum status, const AStringView text){
+    return DeliverEcsUiFakeClipboard(*this, token, status, text);
+}
+
+void FakeClipboard::startNativeRequest(const ClipboardRequestToken token, const ClipboardOperation::Enum operation, const ClipboardChannel::Enum, const AStringView text){
+    StartEcsUiFakeClipboardRequest(*this, token, operation, text);
+}
+
+b8 PrepareEditView(const Ui::EditModel& model, Ui::TextLayoutBuilder& layoutBuilder, Ui::EditBoxView& view){
+    return PrepareEcsUiEditView(model, layoutBuilder, view);
+}
+
+b8 UiEditBoxHostTests::prepare(Ui::EditModel& model, const Ui::EditBoxOptions& options, const Ui::Rect& bounds, Ui::IEditActionSink* actions){
+    return actions ? PrepareEcsUiEditActionsFrame(*this, model, options, bounds, *actions) : PrepareEcsUiEditBoxFrame(*this, model, options, bounds);
+}
+
+b8 UiEditBoxHostTests::commit(){ return CommitEcsUiEditFrame(*this); }
+b8 UiEditBoxHostTests::dispatch(const Ui::InputEvent& event){ return DispatchEcsUiEditEvent(*this, event); }
+b8 UiEditBoxHostTests::dispatchPointer(const Ui::PointerInput& input){ return DispatchEcsUiEditPointer(*this, input); }
+b8 UiEditBoxHostTests::emptyFrame(){ return EmptyEcsUiEditFrame(*this); }
+b8 RecordingActions::apply(Ui::EditModel& draft, const Ui::EditAction::Enum action, const b8 readOnly){ return ApplyEcsUiRecordingAction(*this, draft, action, readOnly); }
+b8 UiEditActionHostTests::activateActions(){ return ActivateEcsUiEditActions(*this); }
+usize UiEditActionHostTests::actionCount(const Ui::EditAction::Enum action)const noexcept{ return CountEcsUiRecordedActions(*this, action); }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

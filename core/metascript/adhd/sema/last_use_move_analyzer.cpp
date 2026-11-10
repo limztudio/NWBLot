@@ -248,6 +248,39 @@ void LastUseMoveAnalyzer::analyze(const Span<Stmt* const> statements, const Span
             continue;
 
         Stmt* lastStmt = statements[lastUseIndex];
+        auto tryMarkLastUseValueOrIdent = [&](Expr* candidate)noexcept{
+            if(!candidate || candidate->isMutArg)
+                return;
+            if(candidate->kind == ExprKind::Identifier && candidate->text == local.name){
+                candidate->moveAtLastUse = true;
+            }
+            else if(
+                candidate->kind == ExprKind::Call
+                && candidate->arguments.empty()
+                && candidate->lhs
+                && candidate->lhs->kind == ExprKind::MemberAccess
+                && !candidate->lhs->isPointerMemberAccess
+                && candidate->lhs->text == "value"
+                && candidate->lhs->lhs
+                && candidate->lhs->lhs->kind == ExprKind::Identifier
+                && candidate->lhs->lhs->text == local.name
+            ){
+                candidate->lhs->lhs->moveAtLastUse = true;
+            }
+        };
+
+        if(
+            lastStmt->kind == StmtKind::ExprStmt
+            && lastStmt->expr
+            && lastStmt->expr->kind == ExprKind::Binary
+            && lastStmt->expr->op == TokenType::Equal
+            && !lastStmt->expr->isNotNullRebind
+            && !__hidden_adhd_type_checker_infer::ExprReferencesIdentifier(lastStmt->expr->lhs, local.name)
+        ){
+            tryMarkLastUseValueOrIdent(lastStmt->expr->rhs);
+            continue;
+        }
+
         const b8 isDirectCallStmt = (lastStmt->kind == StmtKind::ExprStmt && lastStmt->expr && lastStmt->expr->kind == ExprKind::Call)
             || (lastStmt->kind == StmtKind::Return && lastStmt->expr && lastStmt->expr->kind == ExprKind::Call)
             || (lastStmt->kind == StmtKind::VarDecl && lastStmt->name != local.name && lastStmt->expr && lastStmt->expr->kind == ExprKind::Call);
@@ -260,10 +293,8 @@ void LastUseMoveAnalyzer::analyze(const Span<Stmt* const> statements, const Span
                 ++argRefCount;
         }
         if(argRefCount == 1u){
-            for(Expr* arg : lastStmt->expr->arguments){
-                if(arg && !arg->isMutArg && arg->kind == ExprKind::Identifier && arg->text == local.name)
-                    arg->moveAtLastUse = true;
-            }
+            for(Expr* arg : lastStmt->expr->arguments)
+                tryMarkLastUseValueOrIdent(arg);
         }
     }
 }

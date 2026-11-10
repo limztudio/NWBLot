@@ -115,13 +115,10 @@ Optional<Name> ExtractParentVirtualPath(in StringView virtualPathText){
     if(!parentText.has_value())
         return Optional<Name>();
 
-    const StringView parentSlice = parentText.value();
-    Optional<Name> parentName = Optional<Name>();
-    native(in parentSlice, mut parentName){
-        if(const auto parsed = Name::FromText(parentSlice); parsed && *parsed)
-            parentName = *parsed;
-    }
-    return parentName;
+    const Expected<Name> parsed = ParseName(parentText.value());
+    if(!parsed.has_value())
+        return Optional<Name>();
+    return Optional<Name>(parsed.value());
 }
 
 b8 MatchesExpectedDependencyAssetType(in Name actualType, in Name expectedType, in b8 registryMatches){

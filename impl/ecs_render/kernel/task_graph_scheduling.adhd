@@ -36,7 +36,7 @@ namespace RendererTaskGraphDetail{
 void EnableSameFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& scheduling, const b8 preserveDirectDependency = true)noexcept;
 
 // Cross-family routes stay second opt-in. The compiler checks resources against sharing contracts and lowers paired barriers.
-inline void EnableCrossFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& scheduling)noexcept{
+NWB_INLINE void EnableCrossFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& scheduling)noexcept{
     scheduling.allowCrossFamilySameClassQueueRouting = true;
 }
 
@@ -91,6 +91,81 @@ void MakeSharedComputeEmulationPhaseTaskDesc(
         phaseLabelPrefix " Shared Compute Emulation Generate E", \
         phaseLabelPrefix " Shared Compute Emulation Raster E", \
     }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace RendererTaskGraphDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void EnableSameFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& scheduling, const b8 preserveDirectDependency)noexcept{
+    scheduling.allowSameClassQueueRouting = true;
+    scheduling.preferNonPrimarySameClassQueue = true;
+    scheduling.preserveSameClassQueueWithDirectDependency = preserveDirectDependency;
+}
+
+Core::GpuTaskSchedulingHint SharedComputeEmulationChainScheduling()noexcept{
+    Core::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = Core::GpuTaskCostHint::Medium;
+    scheduling.forceSubmissionBoundary = false;
+    scheduling.allowPacketMerge = true;
+    scheduling.mergeWithPrevious = true;
+    scheduling.allowMergeAcrossConsumerFrontier = true;
+    return scheduling;
+}
+
+void MakeSharedComputeEmulationPhaseTaskDesc(
+    const Name identity,
+    const AStringView markerLabel,
+    const Core::GpuTaskId& dependency,
+    const Span<const Core::GpuTaskResourceUse> resourceUses,
+    const Span<const Core::GpuTaskResourceSetUse> resourceSetUses,
+    Core::GpuTaskDesc& desc
+)noexcept{
+    desc
+        .setIdentity(identity)
+        .setMarkerLabel(markerLabel)
+        .setScheduling(SharedComputeEmulationChainScheduling())
+        .setDependencies({ &dependency, 1u })
+        .setResourceUses(resourceUses)
+        .setResourceSetUses({ resourceSetUses.empty() ? nullptr : resourceSetUses.data(), resourceSetUses.size() })
+    ;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

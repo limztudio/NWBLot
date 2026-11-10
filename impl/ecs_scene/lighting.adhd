@@ -26,21 +26,21 @@ NWB_IMPL_SCENE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Core::ECS::EntityID CreateDirectionalLightEntity(Core::ECS::World& world, const f32 pitchRadians, const f32 yawRadians, const f32 rollRadians, const Float4& color, const f32 intensity){
+[[nodiscard]] NWB_INLINE Core::ECS::EntityID CreateDirectionalLightEntity(Core::ECS::World& world, const f32 pitchRadians, const f32 yawRadians, const f32 rollRadians, const Float4& color, const f32 intensity){
     auto lightEntity = world.createEntity();
     lightEntity.addComponent<TransformComponent>() = MakeEulerTransformComponent(pitchRadians, yawRadians, rollRadians);
     lightEntity.addComponent<LightComponent>() = MakeDirectionalLightComponent(LoadFloat(color), intensity);
     return lightEntity.id();
 }
 
-[[nodiscard]] inline Core::ECS::EntityID CreatePointLightEntity(Core::ECS::World& world, const Float4& position, const Float4& color, const f32 intensity, const f32 range){
+[[nodiscard]] NWB_INLINE Core::ECS::EntityID CreatePointLightEntity(Core::ECS::World& world, const Float4& position, const Float4& color, const f32 intensity, const f32 range){
     auto lightEntity = world.createEntity();
     lightEntity.addComponent<TransformComponent>() = MakePositionTransformComponent(LoadFloat(position));
     lightEntity.addComponent<LightComponent>() = MakePointLightComponent(LoadFloat(color), intensity, range);
     return lightEntity.id();
 }
 
-[[nodiscard]] inline Core::ECS::EntityID CreateSpotLightEntity(
+[[nodiscard]] NWB_INLINE Core::ECS::EntityID CreateSpotLightEntity(
     Core::ECS::World& world,
     const Float4& position,
     const f32 pitchRadians,
@@ -81,7 +81,7 @@ static_assert(IsStandardLayout_V<SceneLight>, "SceneLight must stay layout-stabl
 static_assert(IsTriviallyCopyable_V<SceneLight>, "SceneLight must stay cheap to pass through scene preparation");
 static_assert(alignof(SceneLight) >= alignof(Float4), "SceneLight must keep storage vectors aligned");
 
-[[nodiscard]] inline usize GatherSceneLights(Core::ECS::World& world, const SIMDVectorSingle defaultForward, const Span<SceneLight> outLights)noexcept{
+[[nodiscard]] NWB_INLINE usize GatherSceneLights(Core::ECS::World& world, const SIMDVectorSingle defaultForward, const Span<SceneLight> outLights)noexcept{
     const usize maxLights = outLights.size();
     if(maxLights == 0u)
         return 0u;

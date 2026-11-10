@@ -36,19 +36,7 @@ native{
 #include <impl/assets_graphics/components.adhd.h>
 #include <impl/assets_graphics/transparent_subsystem.adhd.h>
 #include <impl/ecs_csg/frame_state.adhd.h>
-#include <impl/ecs_render/avboit/avboit.adhd.h>
-#include <impl/ecs_render/avboit/avboit_compute_emulation_validator.adhd.h>
-#include <impl/ecs_render/avboit/avboit_frame_targets.adhd.h>
-#include <impl/ecs_render/avboit/avboit_raster_configuration.adhd.h>
-#include <impl/ecs_render/avboit/avboit_system.adhd.h>
-#include <impl/ecs_render/avboit/avboit_target_factory.adhd.h>
-#include <impl/ecs_render/avboit/compute_effect_record_inputs.adhd.h>
-#include <impl/ecs_render/avboit/compute_emulation_record.adhd.h>
-#include <impl/ecs_render/avboit/geometry_types.adhd.h>
-#include <impl/ecs_render/avboit/graph_types.adhd.h>
 #include <impl/ecs_render/avboit/phase_identities.adhd.h>
-#include <impl/ecs_render/avboit/task_graph_occupancy_tasks.adhd.h>
-#include <impl/ecs_render/avboit/types.adhd.h>
 #include <impl/ecs_render/csg/csg_graph_resource_snapshot.adhd.h>
 #include <impl/ecs_render/csg/csg_system.adhd.h>
 #include <impl/ecs_render/csg/frame_graph_transparent_csg_tasks.adhd.h>
@@ -79,10 +67,7 @@ native{
 #include <impl/ecs_render/mesh/instance_gpu_data.adhd.h>
 #include <impl/ecs_render/mesh/mesh_view_private.adhd.h>
 #include <impl/ecs_render/mesh/renderer_mesh_types.adhd.h>
-#include <impl/ecs_render/refraction/refraction_target_builder.adhd.h>
-#include <impl/ecs_render/refraction/types.adhd.h>
 #include <impl/ecs_render/shader/shader_system.adhd.h>
-#include <impl/ecs_render/shared/frame_types.adhd.h>
 #include <impl/ecs_render/shared/renderer_frame_bindings.adhd.h>
 #include <impl/ecs_render/shared/task_graph_draw_snapshots.adhd.h>
 
@@ -319,7 +304,7 @@ public:
 
 // The interval producer wrote these aliases; the graph lowers their same-UAV handoff.
 template<typename UseVector>
-inline void AppendCsgRemovedIntervalUses(
+NWB_INLINE void AppendCsgRemovedIntervalUses(
     const Core::GpuGraphResourceId removedIntervalDepth,
     const Core::GpuGraphResourceId removedIntervalCapNormal,
     const Core::GpuGraphResourceId removedIntervalData,
@@ -379,7 +364,7 @@ protected:
 };
 
 template<typename ComputeEmulationTaskT, typename SharedComputeEmulationTaskT, typename RasterTaskT>
-[[nodiscard]] inline b8 DeclareAvboitRasterRecordPhase(
+[[nodiscard]] NWB_INLINE b8 DeclareAvboitRasterRecordPhase(
     Core::GpuTaskGraph& graph,
     Core::GraphicsRuntime& graphics,
     RendererMaterialSystem& materialSystem,

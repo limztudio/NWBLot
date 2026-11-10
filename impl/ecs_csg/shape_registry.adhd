@@ -37,7 +37,7 @@ static_assert(alignof(Expected<CsgShapeBounds>) >= alignof(CsgShapeBounds));
 using CsgShapeBoundsCallback = Expected<CsgShapeBounds>(*)(const SIMDMatrix& shapeToWorld, Span<const u8> parameterBytes)noexcept;
 using CsgShapeSignedDistanceCallback = Expected<f32>(*)(SIMDVectorSingle shapePosition, const CsgShapeInlineParameters& parameters)noexcept;
 
-[[nodiscard]] inline Expected<CsgShapeBounds> BuildCsgShapeWorldBoundsFromLocal(const SIMDMatrix& shapeToWorld, const CsgShapeLocalBounds& localBounds)noexcept{
+[[nodiscard]] NWB_INLINE Expected<CsgShapeBounds> BuildCsgShapeWorldBoundsFromLocal(const SIMDMatrix& shapeToWorld, const CsgShapeLocalBounds& localBounds)noexcept{
     const Expected<CsgShapeLocalBounds> worldBounds = TryTransformCsgShapeLocalBounds(shapeToWorld, localBounds);
     if(!worldBounds)
         return MakeUnexpected(Failure{});
@@ -352,7 +352,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline b8 RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry){
+NWB_INLINE b8 RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry){
     b8 result = true;
 
     result = static_cast<b8>(registry.registerShape<CsgBoxShape>(true)) && result;

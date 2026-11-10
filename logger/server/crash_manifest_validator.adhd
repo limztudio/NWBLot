@@ -206,7 +206,7 @@ Expected<CrashPackageSummary, CrashIngestFailure> CrashManifestValidator::Valida
     AString<Core::Alloc::ScratchArena> manifest{scratchArena};
     const auto read = ReadTextFile(packageDirectory / Core::Crash::PackageNames::s_ManifestFileName, manifest);
     if(!read)
-        return MakeUnexpected(CrashIngestFailure{ .detail = "missing manifest.json", .code = read.error(), });
+        return MakeUnexpected(MakeCrashIngestCodeFailure("missing manifest.json", read.error()));
 
     const AStringView manifestText(manifest.data(), manifest.size());
     const auto manifestFormat = FindGeneratedJsonStringValue(scratchArena, manifestText, Core::Crash::PackageNames::s_ManifestFormatKey);
@@ -257,7 +257,7 @@ Expected<CrashPackageSummary, CrashIngestFailure> CrashManifestValidator::Valida
         || !artifactStrategy
         || !requireString(Core::Crash::PackageNames::s_ManifestHandlerLifetimeKey)
     ){
-        return MakeUnexpected(CrashIngestFailure{ .detail = "manifest.json is missing required fields", });
+        return MakeUnexpected(MakeCrashIngestFailure("manifest.json is missing required fields"));
     }
 
     outSummary.crashId = Move(*crashId);
@@ -273,10 +273,10 @@ Expected<CrashPackageSummary, CrashIngestFailure> CrashManifestValidator::Valida
     outSummary.artifactStrategy = Move(*artifactStrategy);
 
     if(*manifestFormat != Core::Crash::PackageNames::s_ManifestFormatValue)
-        return MakeUnexpected(CrashIngestFailure{ .detail = "manifest.json has unsupported crash package format", });
+        return MakeUnexpected(MakeCrashIngestFailure("manifest.json has unsupported crash package format"));
 
     if(!HasNonEmptyRequiredManifestSummary(outSummary.crashId, outSummary.platform, outSummary.reasonKind, outSummary.artifactStrategy, outSummary.event))
-        return MakeUnexpected(CrashIngestFailure{ .detail = "manifest.json contains empty required fields", });
+        return MakeUnexpected(MakeCrashIngestFailure("manifest.json contains empty required fields"));
 
     return outSummary;
 }

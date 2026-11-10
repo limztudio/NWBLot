@@ -46,6 +46,7 @@ using NWB::IProjectEntryCallbacks;
 using NWB::ProjectRuntimeContext;
 using NWB::Core::IInputEventHandler;
 using NWB::Core::KeyboardInputResult;
+using CpuTaskAdmissionErrorCode = NWB::Core::CpuTaskAdmissionError::Enum;
 using NWB::Core::ECS::Entity;
 using NWB::Core::ECS::World;
 using NWB::Impl::ActiveSceneSubsystems;
@@ -170,11 +171,9 @@ b8 CreateStartupCameraAndLightsOnWorld(mut World world){
     const f32x4 cameraPosition(0.0f, s_CharacterCameraTargetY, s_CameraStartDepth, 0.0f);
     activeCamera.camera = CreateSceneCameraEntity(world, cameraPosition);
     assert(activeCamera.camera.valid());
-    const EntityID cameraEntity = activeCamera.camera;
-    native(mut world, in cameraEntity){
-        auto& cameraTransform = *MakeNotNull(world.tryGetComponent<TransformComponent>(cameraEntity));
-        StoreFloat(QuaternionRotationRollPitchYaw(0.0f, s_PI, 0.0f), cameraTransform.rotation);
-    }
+    Entity cameraEntity = world.entity(activeCamera.camera);
+    mut TransformComponent cameraTransform = cameraEntity.getComponent<TransformComponent>();
+    cameraTransform.rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, s_PI, 0.0f, 0.0f)));
     const EntityID directionalLight = CreateDirectionalLightEntity(
         world,
         s_DefaultDirectionalLightPitch,
@@ -209,16 +208,16 @@ void SyncWorldModelRuntimes(mut NotNullUniquePtr<World> world){
 }
 
 b8 TickProjectWorld(mut NotNullUniquePtr<World> world, in f32 safeDelta){
+    b8 ticked = true;
     u32 errorCode = 0u;
-    b8 updatedOk = true;
-    native(mut world, in safeDelta, mut updatedOk, mut errorCode){
-        const auto updated = world->tick(safeDelta);
-        if(!updated){
-            updatedOk = false;
+    native(mut world, in safeDelta, mut ticked, mut errorCode){
+        const Expected<void, CpuTaskAdmissionErrorCode> updated = world->tick(safeDelta);
+        if(!updated.has_value()){
+            ticked = false;
             errorCode = static_cast<u32>(updated.error());
         }
     }
-    if(!updatedOk){
+    if(!ticked){
         error("Project: world update rejected CPU work: {}", errorCode);
         return false;
     }
@@ -249,16 +248,27 @@ void ApplyFlyCameraTransform(
     in f32 deltaSeconds
 ){
     const FlyCameraMotion motion = FlyCameraMotion();
-    VectorSingle currentRotation = VectorSingle(0.0f);
-    VectorSingle currentPosition = VectorSingle(0.0f);
-    native(in transform, mut currentRotation, mut currentPosition){
-        currentRotation = LoadFloat(transform.rotation);
-        currentPosition = LoadFloat(transform.position);
-    }
+    const f32x4 rotationValue = transform.rotation;
+    const f32x4 positionValue = transform.position;
+    const VectorSingle currentRotation = VectorSingle(rotationValue);
+    const VectorSingle currentPosition = VectorSingle(positionValue);
     const VectorSingle resolvedRotation = motion.resolveStepRotation(currentRotation, mouseDelta);
     const VectorSingle resolvedPosition = motion.resolvePosition(currentPosition, moveAxes, resolvedRotation, deltaSeconds, boosted);
     transform.rotation = f32x4(resolvedRotation);
     transform.position = f32x4(resolvedPosition);
+}
+
+void ApplyFlyCameraInputToWorld(
+    mut World world,
+    in VectorSingle moveAxes,
+    in b8 boosted,
+    in VectorSingle mouseDelta,
+    in f32 deltaSeconds
+){
+    const SceneCameraView cameraView = ResolveSceneCameraView(world);
+    assert(cameraView.valid());
+    Entity cameraEntity = world.entity(cameraView.entity);
+    ApplyFlyCameraTransform(cameraEntity.getComponent<TransformComponent>(), moveAxes, boosted, mouseDelta, deltaSeconds);
 }
 
 void ApplyFlyCameraInputToMainCamera(
@@ -269,9 +279,7 @@ void ApplyFlyCameraInputToMainCamera(
     in f32 deltaSeconds
 ){
     native(mut world, in moveAxes, in boosted, in mouseDelta, in deltaSeconds){
-        const SceneCameraView cameraView = ResolveSceneCameraView(*world);
-        NWB_ASSERT(cameraView.valid());
-        ApplyFlyCameraTransform(*MakeNotNull(cameraView.transform), moveAxes, boosted, mouseDelta, deltaSeconds);
+        ApplyFlyCameraInputToWorld(*world, moveAxes, boosted, mouseDelta, deltaSeconds);
     }
 }
 

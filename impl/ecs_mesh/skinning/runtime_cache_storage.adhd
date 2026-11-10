@@ -101,8 +101,13 @@ static constexpr TStringView s_AssetLoadContext = NWB_TEXT("MeshSkinningRuntimeC
 
 
 [[nodiscard]] b8 BuildRuntimeZippedPayload(const Mesh& mesh, const Span<const SkinInfluence4> skinStream, Core::Alloc::ScratchArena& scratchArena, MeshSkinningRuntimeInstance& instance){
+    const Expected<MeshletRefTotalCounts> totalCounts = TrySumRuntimeMeshletRefCounts(mesh.meshlets());
+    if(!totalCounts.has_value())
+        return false;
     Vector<MeshletPositionStreamRef, Core::Alloc::ScratchArena> runtimePositionRefs{scratchArena};
     Vector<MeshletAttributeStreamRef, Core::Alloc::ScratchArena> runtimeAttributeRefs{scratchArena};
+    runtimePositionRefs.resize(totalCounts->positionRefCount);
+    runtimeAttributeRefs.resize(totalCounts->attributeRefCount);
     instance.meshletPositionRefDeltas.clear();
     instance.meshletAttributeRefDeltas.clear();
     instance.attributeSkins.clear();
@@ -120,8 +125,8 @@ static constexpr TStringView s_AssetLoadContext = NWB_TEXT("MeshSkinningRuntimeC
         instance.restNormals,
         instance.restTangents,
         instance.meshlets,
-        runtimePositionRefs,
-        runtimeAttributeRefs
+        Span<MeshletPositionStreamRef>(runtimePositionRefs.data(), runtimePositionRefs.size()),
+        Span<MeshletAttributeStreamRef>(runtimeAttributeRefs.data(), runtimeAttributeRefs.size())
     ))
         return false;
 

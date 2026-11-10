@@ -150,49 +150,49 @@ Expected<void, CrashIngestFailure> CrashArchiveExtractor::Extract(Core::Alloc::S
     CrashBytes archiveBytes{scratchArena};
     const auto read = ReadBinaryFile(archivePath, archiveBytes);
     if(!read)
-        return MakeUnexpected(CrashIngestFailure{ .detail = "failed to read crash archive", .code = read.error(), });
+        return MakeUnexpected(MakeCrashIngestCodeFailure("failed to read crash archive", read.error()));
 
     usize cursor = 0u;
     auto line = NextLfByteLine(archiveBytes, cursor);
     if(!line || *line != Core::Crash::PackageNames::s_ArchiveHeaderLine)
-        return MakeUnexpected(CrashIngestFailure{ .detail = "invalid crash archive header", });
+        return MakeUnexpected(MakeCrashIngestFailure("invalid crash archive header"));
 
     const auto emptied = EnsureEmptyDirectory(packageDirectory);
     if(!emptied)
-        return MakeUnexpected(CrashIngestFailure{ .detail = "failed to create extracted crash package directory", .code = emptied.error(), });
+        return MakeUnexpected(MakeCrashIngestCodeFailure("failed to create extracted crash package directory", emptied.error()));
 
     usize fileCount = 0u;
     while(cursor < archiveBytes.size()){
         line = NextLfByteLine(archiveBytes, cursor);
         if(!line)
-            return MakeUnexpected(CrashIngestFailure{ .detail = "truncated crash archive file header", });
+            return MakeUnexpected(MakeCrashIngestFailure("truncated crash archive file header"));
 
         const auto header = ParseFileHeader(*line);
         if(!header)
-            return MakeUnexpected(CrashIngestFailure{ .detail = "malformed crash archive file header", });
+            return MakeUnexpected(MakeCrashIngestFailure("malformed crash archive file header"));
 
         const usize fileSize = header->fileSize;
         if(cursor > archiveBytes.size() || fileSize > archiveBytes.size() - cursor)
-            return MakeUnexpected(CrashIngestFailure{ .detail = "truncated crash archive file payload", });
+            return MakeUnexpected(MakeCrashIngestFailure("truncated crash archive file payload"));
 
         const auto written = WriteExtractedFile(scratchArena, packageDirectory, header->relativePath, BinaryByteView{ archiveBytes.data() + cursor, fileSize });
         if(!written)
-            return MakeUnexpected(CrashIngestFailure{ .detail = "failed to write extracted crash package file", .code = written.error(), });
+            return MakeUnexpected(MakeCrashIngestCodeFailure("failed to write extracted crash package file", written.error()));
         cursor += fileSize;
 
         const auto separator = NextLfByteLine(archiveBytes, cursor);
         if(!separator || !separator->empty())
-            return MakeUnexpected(CrashIngestFailure{ .detail = s_CrashIngestMalformedFileFooterDetail, });
+            return MakeUnexpected(MakeCrashIngestFailure(s_CrashIngestMalformedFileFooterDetail));
 
         const auto endMarker = NextLfByteLine(archiveBytes, cursor);
         if(!endMarker || *endMarker != Core::Crash::PackageNames::s_ArchiveEntryEndLine)
-            return MakeUnexpected(CrashIngestFailure{ .detail = s_CrashIngestMalformedFileFooterDetail, });
+            return MakeUnexpected(MakeCrashIngestFailure(s_CrashIngestMalformedFileFooterDetail));
 
         ++fileCount;
     }
 
     if(fileCount == 0u)
-        return MakeUnexpected(CrashIngestFailure{ .detail = "crash archive contained no files", });
+        return MakeUnexpected(MakeCrashIngestFailure("crash archive contained no files"));
 
     return {};
 }

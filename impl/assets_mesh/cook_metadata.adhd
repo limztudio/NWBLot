@@ -54,7 +54,7 @@ namespace MeshCookMetadata{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline ScratchString MakeIndexedLabel(const AStringView baseLabel, const usize index, Core::Alloc::ScratchArena& arena){
+[[nodiscard]] NWB_INLINE ScratchString MakeIndexedLabel(const AStringView baseLabel, const usize index, Core::Alloc::ScratchArena& arena){
     Array<char, s_DecimalTextBufferBytes> indexBuffer{};
     const AStringView indexText = FormatDecimal(index, indexBuffer);
     NWB_ASSERT(!indexText.empty());
@@ -76,7 +76,7 @@ template<typename PathArenaT>
     AStringView fieldName
 );
 
-[[nodiscard]] inline Expected<f32, MetadataF32ValueFailure::Enum> ValidateMetadataFiniteF32Value(const Core::Metascript::Value& value)noexcept{
+[[nodiscard]] NWB_INLINE Expected<f32, MetadataF32ValueFailure::Enum> ValidateMetadataFiniteF32Value(const Core::Metascript::Value& value)noexcept{
     const b8 isNumeric = value.isNumeric();
     return ValidateMetadataFiniteF32Number(isNumeric, isNumeric ? value.toDouble() : 0.0);
 }
@@ -102,7 +102,7 @@ b8 FillMetadataFloatListField(
     VectorT& outValues
 );
 
-[[nodiscard]] inline Expected<u32, MetadataU32ValueFailure::Enum> ValidateMetadataU32Value(const Core::Metascript::Value& value)noexcept{
+[[nodiscard]] NWB_INLINE Expected<u32, MetadataU32ValueFailure::Enum> ValidateMetadataU32Value(const Core::Metascript::Value& value)noexcept{
     const b8 isNumeric = value.isNumeric();
     return ValidateMetadataU32Number(isNumeric, isNumeric ? value.toDouble() : 0.0);
 }
@@ -521,7 +521,7 @@ b8 ValidateSourceVertexRefStreams(
     usize colorCount
 );
 #if defined(NWB_COOK)
-inline Expected<SourceMeshStreams> ParseCommonSourceMeshStreams(
+NWB_INLINE Expected<SourceMeshStreams> ParseCommonSourceMeshStreams(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const TStringView metaKind,

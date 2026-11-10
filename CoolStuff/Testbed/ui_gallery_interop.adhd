@@ -36,16 +36,17 @@ native{
 #include <core/assets/manager.h>
 #include <core/common/log.h>
 
-#include <global/numeric_text.h>
-
 namespace Testbed{
 using NWB::Core::Alloc::GlobalArena;
 using NWB::Core::Alloc::ScratchArena;
 using NWB::Core::Assets::AssetManager;
+using NWB::Core::Assets::AssetRef;
 using NWB::Impl::ActiveSceneSubsystems;
+using NWB::Impl::Texture;
 using NWB::Impl::UiPaintContext;
 using NWB::Impl::UiSkin;
 using NWB::Impl::UiSubsystem;
+using ScratchString = AString<ScratchArena>;
 using namespace NWB::Impl::Ui;
 
 // C++ interface adapter required because ISearchableListDataSource::filtered() returns const IListDataSource&.
@@ -109,57 +110,53 @@ using UiSearchComboSource = UiFilteredListSource<UiSearchComboLabelResolver, s_S
 
 
 b8 DeclareSelectedKeyLabel(mut Builder ui, mut ScratchArena scratchArena, in u64 selectedKey){
-    b8 declared = false;
-    native(mut ui, mut scratchArena, in selectedKey, mut declared){
-        const auto text = StringFormat(scratchArena, s_SelectedTextFormat, selectedKey);
-        declared = ui.label(s_SelectedKey, { text.data(), text.size() });
-    }
-    return declared;
+    const ScratchString text = StringFormat(scratchArena, s_SelectedTextFormat, selectedKey);
+    return ui.label(s_SelectedKey, StringView(text));
 }
 
 b8 DeclareCommittedNumericLabel(mut Builder ui, mut ScratchArena scratchArena, in i64 integerValue, in f64 floatValue){
-    b8 declared = false;
-    native(mut ui, mut scratchArena, in integerValue, in floatValue, mut declared){
-        const auto text = StringFormat(scratchArena, "Committed: {} / {}", integerValue, floatValue);
-        declared = ui.label("committed", { text.data(), text.size() });
-    }
-    return declared;
+    const ScratchString text = StringFormat(scratchArena, "Committed: {} / {}", integerValue, floatValue);
+    return ui.label("committed", StringView(text));
 }
 
 b8 DeclarePopupToolsStatusLabel(mut Builder ui, mut ScratchArena scratchArena, in u64 commandKey, in u32 anchorClicks){
-    b8 declared = false;
-    native(mut ui, mut scratchArena, in commandKey, in anchorClicks, mut declared){
-        const auto text = StringFormat(scratchArena, "Command: {} / Clicks: {}", commandKey, anchorClicks);
-        declared = ui.label(s_SelectedKey, { text.data(), text.size() });
-    }
-    return declared;
+    const ScratchString text = StringFormat(scratchArena, "Command: {} / Clicks: {}", commandKey, anchorClicks);
+    return ui.label(s_SelectedKey, StringView(text));
 }
 
 b8 DeclareProgressPercentLabel(mut Builder ui, mut ScratchArena scratchArena, in f64 percent){
-    b8 declared = false;
-    native(mut ui, mut scratchArena, in percent, mut declared){
-        const auto text = StringFormat(scratchArena, "Completed: {:.0f}%", percent);
-        declared = ui.label("value", { text.data(), text.size() });
-    }
-    return declared;
+    const ScratchString text = StringFormat(scratchArena, "Completed: {:.0f}%", percent);
+    return ui.label("value", StringView(text));
 }
 
 b8 DeclareGallerySectionLabel(mut Builder ui, mut ScratchArena scratchArena, in u32 sectionNumber, in u32 sectionCount, in StringView sectionName){
-    b8 declared = false;
-    native(mut ui, mut scratchArena, in sectionNumber, in sectionCount, in sectionName, mut declared){
-        const auto text = StringFormat(scratchArena, "UI samples {}/{}: {}", sectionNumber, sectionCount, sectionName);
-        declared = ui.label("section", { text.data(), text.size() });
-    }
-    return declared;
+    const ScratchString text = StringFormat(scratchArena, "UI samples {}/{}: {}", sectionNumber, sectionCount, sectionName);
+    return ui.label("section", StringView(text));
 }
 
 b8 DeclareCounterLabel(mut Builder ui, mut ScratchArena scratchArena, in u32 count){
-    b8 declared = false;
-    native(mut ui, mut scratchArena, in count, mut declared){
-        const auto text = StringFormat(scratchArena, "Count: {}", count);
-        declared = ui.label("count", { text.data(), text.size() });
+    const ScratchString text = StringFormat(scratchArena, "Count: {}", count);
+    return ui.label("count", StringView(text));
+}
+
+usize WriteVirtualListRowLabelBytes(in u64 rowKey, mut Array<u8, s_VirtualListLabelCapacity> outLabel){
+    if(rowKey == 0u)
+        return 0u;
+    outLabel[0u] = 82u;
+    outLabel[1u] = 111u;
+    outLabel[2u] = 119u;
+    outLabel[3u] = 32u;
+    Array<u8, s_VirtualListMaxDecimalDigits> digits;
+    usize digitCount = 0u;
+    u64 remaining = rowKey;
+    while(remaining > 0u && digitCount < s_VirtualListMaxDecimalDigits){
+        digits[digitCount] = cast<u8>(48u + (remaining % 10u));
+        remaining /= 10u;
+        ++digitCount;
     }
-    return declared;
+    for(usize offset = 0u; offset < digitCount; ++offset)
+        outLabel[s_VirtualListRowPrefixLength + offset] = digits[(digitCount - 1u) - offset];
+    return s_VirtualListRowPrefixLength + digitCount;
 }
 
 StringView FormatVirtualListRowLabel(in u64 rowKey, in Array<u8, s_VirtualListLabelCapacity> labelStorage){
@@ -167,36 +164,30 @@ StringView FormatVirtualListRowLabel(in u64 rowKey, in Array<u8, s_VirtualListLa
         return "";
     StringView result = "";
     native(in rowKey, in labelStorage, mut result){
-        char* const label = reinterpret_cast<char*>(const_cast<u8*>(labelStorage.data()));
-        label[0] = 'R';
-        label[1] = 'o';
-        label[2] = 'w';
-        label[3] = ' ';
-        Array<char, s_VirtualListMaxDecimalDigits> digits{};
-        const AStringView formatted = FormatDecimal(static_cast<usize>(rowKey), digits);
-        for(usize offset = 0u; offset < formatted.size(); ++offset)
-            label[s_VirtualListRowPrefixLength + offset] = formatted[offset];
-        result = StringView(label, s_VirtualListRowPrefixLength + formatted.size());
+        auto& mutableStorage = const_cast<Array<u8, s_VirtualListLabelCapacity>&>(labelStorage);
+        const usize length = WriteVirtualListRowLabelBytes(rowKey, mutableStorage);
+        result = StringView(reinterpret_cast<const char*>(mutableStorage.data()), length);
     }
     return result;
 }
 
 b8 LoadUiGallerySkinImageSource(mut GlobalArena arena, in AssetManager assets, in ActiveSceneSubsystems sceneSubsystems, mut SharedImageSource outSource){
-    b8 loaded = false;
-    native(mut arena, in assets, in sceneSubsystems, mut outSource, mut loaded){
+    AssetRef<Texture> textureRef = AssetRef<Texture>();
+    native(in assets, in sceneSubsystems, mut textureRef){
         const UiSubsystem* const uiSubsystem = sceneSubsystems.findSubsystem<UiSubsystem>();
         if(uiSubsystem && uiSubsystem->basicSkin.valid()){
             auto skin = assets.loadTypedSync<UiSkin>(uiSubsystem->basicSkin.name(), NWB_TEXT("UiImageGallery"));
-            if(skin){
-                auto source = LoadImageSource(arena, assets, (*skin)->texture());
-                if(source){
-                    outSource = Move(*source);
-                    loaded = true;
-                }
-            }
+            if(skin)
+                textureRef = (*skin)->texture();
         }
     }
-    return loaded;
+    if(!textureRef.valid())
+        return false;
+    Expected<SharedImageSource> source = LoadImageSource(arena, assets, textureRef);
+    if(!source.has_value())
+        return false;
+    outSource = source.value();
+    return true;
 }
 
 

@@ -30,7 +30,7 @@ namespace RendererComputePipelineDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline b8 EnsurePushConstantBindingLayout(
+[[nodiscard]] NWB_INLINE b8 EnsurePushConstantBindingLayout(
     Core::Alloc::GlobalArena& arena,
     Core::GraphicsBackend::Device& device,
     const u32 pushConstantBytes,
@@ -51,7 +51,7 @@ namespace RendererComputePipelineDetail{
     return static_cast<b8>(layoutResult);
 }
 
-[[nodiscard]] inline b8 CreateHeapComputePipeline(
+[[nodiscard]] NWB_INLINE b8 CreateHeapComputePipeline(
     Core::GraphicsBackend::Device& device,
     const Core::ShaderHandle& shader,
     const Core::BindingLayoutHandle& bindingLayout,
@@ -75,7 +75,7 @@ namespace RendererComputePipelineDetail{
 }
 
 template<typename SubsystemT>
-[[nodiscard]] inline b8 EnsurePushConstantComputePipeline(
+[[nodiscard]] NWB_INLINE b8 EnsurePushConstantComputePipeline(
     Core::Alloc::GlobalArena& arena,
     Core::GraphicsBackend::Device& device,
     RendererShaderSystem& shaderSystem,

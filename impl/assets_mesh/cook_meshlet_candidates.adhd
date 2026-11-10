@@ -38,7 +38,7 @@ namespace MeshletCandidateSearch{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Expected<MeshletFrontierCandidate> FindBestDisconnectedMeshletCandidate(
+[[nodiscard]] NWB_INLINE Expected<MeshletFrontierCandidate> FindBestDisconnectedMeshletCandidate(
     const MeshletTrianglePrecompute& trianglePrecompute,
     const usize searchOffset,
     const Span<const u32> triangleIndices,

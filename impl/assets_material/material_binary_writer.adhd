@@ -8,28 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Impl{
-interface IShader;
-using MaterialStageShaderArray = Array<Core::Assets::AssetRef<IShader>, 14u>;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class MaterialBinaryWriter{
     private MaterialTypedLayoutBlockBinary packTypedLayoutBlock(in MaterialTypedLayoutBlock block)const{
         MaterialTypedLayoutBlockBinary blockBinary;
@@ -164,7 +142,7 @@ class MaterialBinaryWriter{
         this.appendOptionalAvboitPixelShader(avboitExtinctionPixelShader, outBinary);
     }
 
-    public b8 serialize(
+    public b8 serialize<TStageShader>(
         in StringView shaderVariant,
         in Name materialInterface,
         in u64 typedLayoutHash,
@@ -172,7 +150,7 @@ class MaterialBinaryWriter{
         in Span<MaterialTypedLayoutField> typedLayoutFields,
         in Span<u8> typedBlockBytes,
         in Span<MaterialResourceReference> resourceReferences,
-        in MaterialStageShaderArray stageShaders,
+        in Array<AssetRef<TStageShader>, s_MaterialShaderStageCount> stageShaders,
         in u32 stageShaderCount,
         in b8 transparent,
         in b8 twoSided,

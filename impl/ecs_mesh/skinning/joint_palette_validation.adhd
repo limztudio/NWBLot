@@ -8,27 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Impl{
-using ScratchSkeletonJointMatrixVector = Vector<SkeletonJointMatrix, Core::Alloc::ScratchArena>;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 ValidateMeshSkinningInfluenceRecord(
     in u64 handleValue,
     in usize vertexIndex,
@@ -96,6 +75,68 @@ b8 ValidateMeshSkinningRuntimeResourceCounts(in u64 handleValue, in usize skinSi
     return true;
 }
 
+b8 IsRigidSkeletonJointMatrix(in MatrixSingle matrix){
+    if(!IsFiniteSkeletonJointMatrix(matrix) || !IsAffineSkeletonJointRow3(matrix[3u]))
+        return false;
+    const VectorSingle row0 = matrix[0u];
+    const VectorSingle row1 = matrix[1u];
+    const VectorSingle row2 = matrix[2u];
+    const VectorSingle lengthSqDiff = Abs(VectorSingle(LengthSq(row0.xyz), LengthSq(row1.xyz), LengthSq(row2.xyz), 1.0f) - VectorSingle(1.0f));
+    const VectorSingle dotAndDeterminantDiff = Abs(VectorSingle(Dot(row0.xyz, row1.xyz), Dot(row0.xyz, row2.xyz), Dot(row1.xyz, row2.xyz), Dot(row0.xyz, Cross(row1.xyz, row2.xyz))) - VectorSingle(0.0f, 0.0f, 0.0f, 1.0f));
+    return IsFinite(lengthSqDiff.xyz)
+        && IsFinite(dotAndDeterminantDiff)
+        && lengthSqDiff.x <= s_SkeletonRigidJointEpsilon
+        && lengthSqDiff.y <= s_SkeletonRigidJointEpsilon
+        && lengthSqDiff.z <= s_SkeletonRigidJointEpsilon
+        && dotAndDeterminantDiff.x <= s_SkeletonRigidJointEpsilon
+        && dotAndDeterminantDiff.y <= s_SkeletonRigidJointEpsilon
+        && dotAndDeterminantDiff.z <= s_SkeletonRigidJointEpsilon
+        && dotAndDeterminantDiff.w <= s_SkeletonRigidJointEpsilon;
+}
+
+VectorSingle BuildQuaternionFromRotationMatrix(in MatrixSingle matrix){
+    const VectorSingle r0 = matrix[0u];
+    const VectorSingle r1 = matrix[1u];
+    const VectorSingle r2 = matrix[2u];
+    const f32 r00 = r0.x;
+    const f32 r01 = r0.y;
+    const f32 r02 = r0.z;
+    const f32 r10 = r1.x;
+    const f32 r11 = r1.y;
+    const f32 r12 = r1.z;
+    const f32 r20 = r2.x;
+    const f32 r21 = r2.y;
+    const f32 r22 = r2.z;
+
+    VectorSingle tensor(0.0f);
+    if(r22 <= 0.0f){
+        if(r11 - r00 <= 0.0f)
+            tensor = VectorSingle(1.0f + r00 - r11 - r22, r01 + r10, r02 + r20, r21 - r12);
+        else
+            tensor = VectorSingle(r01 + r10, 1.0f - r00 + r11 - r22, r12 + r21, r02 - r20);
+    }
+    else{
+        if(r11 + r00 <= 0.0f)
+            tensor = VectorSingle(r02 + r20, r12 + r21, 1.0f - r00 - r11 + r22, r10 - r01);
+        else
+            tensor = VectorSingle(r21 - r12, r02 - r20, r10 - r01, 1.0f + r00 + r11 + r22);
+    }
+    return tensor / VectorSingle(Length(tensor));
+}
+
+Expected<SkeletonJointMatrix> TryBuildRigidDualQuaternionPayload(in MatrixSingle matrix){
+    if(!IsRigidSkeletonJointMatrix(matrix))
+        return MakeUnexpected(Failure());
+    const VectorSingle real = BuildQuaternionFromRotationMatrix(matrix);
+    if(!IsFinite(real))
+        return MakeUnexpected(Failure());
+    const VectorSingle translation(matrix[0u].w, matrix[1u].w, matrix[2u].w, 0.0f);
+    const VectorSingle dual = QuaternionMultiply(translation, real) * 0.5f;
+    if(!IsFinite(dual))
+        return MakeUnexpected(Failure());
+    return SkeletonJointMatrix(real.x, real.y, real.z, real.w, dual.x, dual.y, dual.z, dual.w, 0.0f, 0.0f, 0.0f, 0.0f);
+}
+
 Expected<SkeletonJointMatrix> TryBuildSkinJointPaletteEntry(
     in u64 handleValue,
     in usize jointIndex,
@@ -120,22 +161,42 @@ Expected<SkeletonJointMatrix> TryBuildSkinJointPaletteEntry(
     if(!useDualQuaternionPayload)
         return SkeletonJointMatrix(jointMatrix.value());
 
-    const MatrixSingle resolvedMatrix = jointMatrix.value();
-    SkeletonJointMatrix storedJointMatrix(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
-    b8 builtDualQuaternion = false;
-    native(in resolvedMatrix, mut storedJointMatrix, mut builtDualQuaternion){
-        const auto dualQuaternion = ::MatrixTryBuildRigidDualQuaternion(resolvedMatrix, s_SkeletonAffineEpsilon, s_SkeletonRigidJointEpsilon);
-        if(dualQuaternion){
-            ::StoreFloat(dualQuaternion->real, storedJointMatrix.rows[0]);
-            ::StoreFloat(dualQuaternion->dual, storedJointMatrix.rows[1]);
-            builtDualQuaternion = true;
-        }
-    }
-    if(!builtDualQuaternion){
+    const Expected<SkeletonJointMatrix> storedJointMatrix = TryBuildRigidDualQuaternionPayload(jointMatrix.value());
+    if(!storedJointMatrix.has_value()){
         error("MeshSkinningSystem: runtime mesh '{}' joint palette entry {} failed dual-quaternion payload build", handleValue, jointIndex);
         return MakeUnexpected(Failure());
     }
-    return storedJointMatrix;
+    return storedJointMatrix.value();
+}
+
+b8 FillSkinJointPaletteSpan(
+    in u64 handleValue,
+    in Span<SkeletonJointMatrix> sourceJoints,
+    in Span<SkeletonJointMatrix> inverseBindMatrices,
+    in u32 skinningMode,
+    mut Span<SkeletonJointMatrix> outJointPalette
+){
+    const usize jointCount = sourceJoints.size();
+    if(outJointPalette.size() < jointCount)
+        return false;
+    const b8 useDualQuaternionPayload = skinningMode == cast<u32>(SkeletonSkinningMode::DualQuaternion);
+    const b8 hasInverseBindMatrices = !inverseBindMatrices.empty();
+
+    for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
+        const Expected<SkeletonJointMatrix> storedJointMatrix = TryBuildSkinJointPaletteEntry(
+            handleValue,
+            jointIndex,
+            sourceJoints,
+            hasInverseBindMatrices,
+            inverseBindMatrices,
+            useDualQuaternionPayload
+        );
+        if(!storedJointMatrix.has_value())
+            return false;
+        outJointPalette[jointIndex] = storedJointMatrix.value();
+    }
+
+    return true;
 }
 
 b8 BuildSkinJointPaletteToGlobalVector(
@@ -161,72 +222,10 @@ b8 BuildSkinJointPaletteToGlobalVector(
     ))
         return false;
 
-    const usize jointCount = sourceJoints.size();
-    const b8 useDualQuaternionPayload = skinningMode == cast<u32>(SkeletonSkinningMode::DualQuaternion);
-    const b8 hasInverseBindMatrices = !inverseBindMatrices.empty();
-    outJointPalette.reserve(jointCount);
-
-    for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
-        const Expected<SkeletonJointMatrix> storedJointMatrix = TryBuildSkinJointPaletteEntry(
-            handleValue,
-            jointIndex,
-            sourceJoints,
-            hasInverseBindMatrices,
-            inverseBindMatrices,
-            useDualQuaternionPayload
-        );
-        if(!storedJointMatrix.has_value()){
-            outJointPalette.clear();
-            return false;
-        }
-        outJointPalette.push_back(storedJointMatrix.value());
-    }
-
-    return true;
-}
-
-b8 BuildSkinJointPaletteToScratchVector(
-    in u64 handleValue,
-    in u32 skeletonJointCount,
-    in usize skinCount,
-    in Span<SkeletonJointMatrix> sourceJoints,
-    in Span<SkeletonJointMatrix> inverseBindMatrices,
-    in u32 skinningMode,
-    mut ScratchSkeletonJointMatrixVector outJointPalette
-){
-    outJointPalette.clear();
-
-    if(skinCount == 0u || sourceJoints.empty())
-        return true;
-    if(!ValidateSkinJointPaletteInputs(
-        handleValue,
-        skeletonJointCount,
-        skinCount,
-        sourceJoints.size(),
-        inverseBindMatrices.size(),
-        skinningMode
-    ))
+    outJointPalette.resize(sourceJoints.size(), MakeIdentitySkeletonJointMatrix());
+    if(!FillSkinJointPaletteSpan(handleValue, sourceJoints, inverseBindMatrices, skinningMode, outJointPalette)){
+        outJointPalette.clear();
         return false;
-
-    const usize jointCount = sourceJoints.size();
-    const b8 useDualQuaternionPayload = skinningMode == cast<u32>(SkeletonSkinningMode::DualQuaternion);
-    const b8 hasInverseBindMatrices = !inverseBindMatrices.empty();
-    outJointPalette.reserve(jointCount);
-
-    for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
-        const Expected<SkeletonJointMatrix> storedJointMatrix = TryBuildSkinJointPaletteEntry(
-            handleValue,
-            jointIndex,
-            sourceJoints,
-            hasInverseBindMatrices,
-            inverseBindMatrices,
-            useDualQuaternionPayload
-        );
-        if(!storedJointMatrix.has_value()){
-            outJointPalette.clear();
-            return false;
-        }
-        outJointPalette.push_back(storedJointMatrix.value());
     }
 
     return true;
@@ -250,61 +249,8 @@ b8 ValidateMeshSkinningInfluenceStream(
     return true;
 }
 
-b8 BuildRuntimeSkinPayloadFromPoseInto(
-    in u64 handleValue,
-    in u32 skeletonJointCount,
-    in Span<SkinInfluence4> skin,
-    in Span<SkeletonJointMatrix> inverseBindMatrices,
-    in SkeletonPoseComponent skeletonPose,
-    mut ScratchSkeletonJointMatrixVector inOutPoseJoints,
-    mut ScratchSkeletonJointMatrixVector outJointMatrices,
-    mut usize outSkinInfluenceCount,
-    mut u32 outResolvedSkinningMode
-){
-    outSkinInfluenceCount = 0u;
-    outJointMatrices.clear();
-    inOutPoseJoints.clear();
-    const Expected<u32> skinningMode = TryBuildStoredJointPaletteScratchVectorFromSkeletonPose(skeletonPose, inOutPoseJoints);
-    if(!skinningMode.has_value()){
-        inOutPoseJoints.clear();
-        error("MeshSkinningSystem: runtime mesh '{}' skeleton pose is invalid", handleValue);
-        return false;
-    }
-    outResolvedSkinningMode = skinningMode.value();
-    if(!BuildSkinJointPaletteToScratchVector(handleValue, skeletonJointCount, skin.size(), inOutPoseJoints, inverseBindMatrices, outResolvedSkinningMode, outJointMatrices)){
-        inOutPoseJoints.clear();
-        return false;
-    }
-    if(!outJointMatrices.empty())
-        outSkinInfluenceCount = skin.size();
-    return true;
-}
-
-b8 BuildRuntimeSkinPayloadFromJointPaletteInto(
-    in u64 handleValue,
-    in u32 skeletonJointCount,
-    in Span<SkinInfluence4> skin,
-    in Span<SkeletonJointMatrix> inverseBindMatrices,
-    in b8 hasJointPaletteComponent,
-    in u32 jointPaletteSkinningMode,
-    in Span<SkeletonJointMatrix> jointPaletteJoints,
-    mut ScratchSkeletonJointMatrixVector inOutPoseJoints,
-    mut ScratchSkeletonJointMatrixVector outJointMatrices,
-    mut usize outSkinInfluenceCount,
-    mut u32 outResolvedSkinningMode
-){
-    outSkinInfluenceCount = 0u;
-    outJointMatrices.clear();
-    inOutPoseJoints.clear();
-    outResolvedSkinningMode = cast<u32>(SkeletonSkinningMode::LinearBlend);
-    if(hasJointPaletteComponent){
-        outResolvedSkinningMode = jointPaletteSkinningMode;
-        if(!BuildSkinJointPaletteToScratchVector(handleValue, skeletonJointCount, skin.size(), jointPaletteJoints, inverseBindMatrices, outResolvedSkinningMode, outJointMatrices))
-            return false;
-    }
-    if(!outJointMatrices.empty())
-        outSkinInfluenceCount = skin.size();
-    return true;
+void LogInvalidMeshSkinningSkeletonPose(in u64 handleValue){
+    error("MeshSkinningSystem: runtime mesh '{}' skeleton pose is invalid", handleValue);
 }
 
 

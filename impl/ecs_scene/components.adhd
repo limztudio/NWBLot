@@ -8,8 +8,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const f32 s_SceneMatrixDecomposeEpsilon = 0.0001f;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 IsValidSceneLightRotation(in VectorSingle rotation){
-    if(!IsFinite(rotation.x) || !IsFinite(rotation.y) || !IsFinite(rotation.z) || !IsFinite(rotation.w))
+    if(!IsFinite(rotation))
         return false;
     const f32 rotationLengthSquared = LengthSq(rotation);
     return IsFinite(rotationLengthSquared) && rotationLengthSquared > s_NormalizeLengthSquaredEpsilon;
@@ -22,13 +28,7 @@ b8 TryBuildSceneLightVectors(
     mut VectorSingle outDirection
 ){
     const VectorSingle colorIntensity(light.colorIntensity);
-    if(
-        !IsFinite(colorIntensity.x)
-        || !IsFinite(colorIntensity.y)
-        || !IsFinite(colorIntensity.z)
-        || !IsFinite(colorIntensity.w)
-        || !(colorIntensity.w > 0.0f)
-    )
+    if(!IsFinite(colorIntensity) || !(colorIntensity.w > 0.0f))
         return false;
 
     const VectorSingle rotation(transform.rotation);
@@ -108,28 +108,141 @@ Expected<CameraProjection> TryResolveCameraComponentProjection(
 }
 
 MatrixSingle LoadTransformMatrix(in TransformComponent transform){
-    MatrixSingle result(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
-    native(in transform, mut result){
-        result = ::MatrixAffineTransformation(::LoadFloat(transform.scale), ::VectorZero(), ::LoadFloat(transform.rotation), ::LoadFloat(transform.position));
+    return MatrixAffineTransformation(
+        VectorSingle(transform.scale),
+        VectorSingle(0.0f, 0.0f, 0.0f, 0.0f),
+        VectorSingle(transform.rotation),
+        VectorSingle(transform.position)
+    );
+}
+
+void RankSceneAxes(in f32 x, in f32 y, in f32 z, mut usize outA, mut usize outB, mut usize outC){
+    if(x < y){
+        if(y < z){
+            outA = 2u;
+            outB = 1u;
+            outC = 0u;
+        }
+        else{
+            outA = 1u;
+            if(x < z){
+                outB = 2u;
+                outC = 0u;
+            }
+            else{
+                outB = 0u;
+                outC = 2u;
+            }
+        }
     }
-    return result;
+    else{
+        if(x < z){
+            outA = 2u;
+            outB = 0u;
+            outC = 1u;
+        }
+        else{
+            outA = 0u;
+            if(y < z){
+                outB = 2u;
+                outC = 1u;
+            }
+            else{
+                outB = 1u;
+                outC = 2u;
+            }
+        }
+    }
+}
+
+VectorSingle BuildSceneQuaternionFromRotationMatrix(in MatrixSingle matrix){
+    const VectorSingle r0 = matrix[0u];
+    const VectorSingle r1 = matrix[1u];
+    const VectorSingle r2 = matrix[2u];
+    const f32 r00 = r0.x;
+    const f32 r01 = r0.y;
+    const f32 r02 = r0.z;
+    const f32 r10 = r1.x;
+    const f32 r11 = r1.y;
+    const f32 r12 = r1.z;
+    const f32 r20 = r2.x;
+    const f32 r21 = r2.y;
+    const f32 r22 = r2.z;
+
+    VectorSingle tensor(0.0f);
+    if(r22 <= 0.0f){
+        if(r11 - r00 <= 0.0f)
+            tensor = VectorSingle(1.0f + r00 - r11 - r22, r01 + r10, r02 + r20, r21 - r12);
+        else
+            tensor = VectorSingle(r01 + r10, 1.0f - r00 + r11 - r22, r12 + r21, r02 - r20);
+    }
+    else{
+        if(r11 + r00 <= 0.0f)
+            tensor = VectorSingle(r02 + r20, r12 + r21, 1.0f - r00 - r11 + r22, r10 - r01);
+        else
+            tensor = VectorSingle(r21 - r12, r02 - r20, r10 - r01, 1.0f + r00 + r11 + r22);
+    }
+    return tensor / VectorSingle(Length(tensor));
 }
 
 b8 TryDecomposeAndAssignTransformComponent(in MatrixSingle matrix, mut TransformComponent outTransform){
-    VectorSingle translation(0.0f, 0.0f, 0.0f, 0.0f);
-    VectorSingle rotation(0.0f, 0.0f, 0.0f, 1.0f);
-    VectorSingle scale(1.0f, 1.0f, 1.0f, 0.0f);
-    b8 decomposed = false;
-    native(in matrix, mut translation, mut rotation, mut scale, mut decomposed){
-        if(const auto decomposition = ::MatrixDecompose(matrix)){
-            translation = decomposition->translation;
-            rotation = decomposition->rotation;
-            scale = decomposition->scale;
-            decomposed = true;
-        }
+    const MatrixSingle canonicalBasis(
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f
+    );
+    const MatrixSingle transposed = Transpose(matrix);
+    MatrixSingle basisAsRows(
+        transposed[0u].xyz,
+        transposed[1u].xyz,
+        transposed[2u].xyz,
+        VectorSingle(0.0f, 0.0f, 0.0f, 1.0f)
+    );
+    Array<f32, 3> scaleComponents;
+    scaleComponents[0u] = Length(basisAsRows[0u].xyz);
+    scaleComponents[1u] = Length(basisAsRows[1u].xyz);
+    scaleComponents[2u] = Length(basisAsRows[2u].xyz);
+
+    usize a = 0u;
+    usize b = 1u;
+    usize c = 2u;
+    RankSceneAxes(scaleComponents[0u], scaleComponents[1u], scaleComponents[2u], a, b, c);
+
+    if(scaleComponents[a] < s_SceneMatrixDecomposeEpsilon)
+        basisAsRows[a] = canonicalBasis[a];
+    basisAsRows[a] = Normalize(basisAsRows[a].xyz);
+
+    if(scaleComponents[b] < s_SceneMatrixDecomposeEpsilon){
+        usize aa = 0u;
+        usize bb = 1u;
+        usize cc = 2u;
+        const VectorSingle absoluteBasis = Abs(basisAsRows[a]);
+        RankSceneAxes(absoluteBasis.x, absoluteBasis.y, absoluteBasis.z, aa, bb, cc);
+        basisAsRows[b] = Cross(basisAsRows[a].xyz, canonicalBasis[cc].xyz);
     }
-    if(!decomposed)
+    basisAsRows[b] = Normalize(basisAsRows[b].xyz);
+
+    if(scaleComponents[c] < s_SceneMatrixDecomposeEpsilon)
+        basisAsRows[c] = Cross(basisAsRows[a].xyz, basisAsRows[b].xyz);
+    basisAsRows[c] = Normalize(basisAsRows[c].xyz);
+
+    MatrixSingle rotationMatrix = Transpose(basisAsRows);
+    f32 determinant = MatrixDeterminant(rotationMatrix).x;
+    if(determinant < 0.0f){
+        scaleComponents[a] = -scaleComponents[a];
+        basisAsRows[a] = -basisAsRows[a];
+        rotationMatrix = Transpose(basisAsRows);
+        determinant = -determinant;
+    }
+
+    const f32 determinantError = determinant - 1.0f;
+    if(!(determinantError * determinantError <= s_SceneMatrixDecomposeEpsilon))
         return false;
+
+    const VectorSingle scale(scaleComponents[0u], scaleComponents[1u], scaleComponents[2u], 0.0f);
+    const VectorSingle rotation = BuildSceneQuaternionFromRotationMatrix(rotationMatrix);
+    const VectorSingle translation = transposed[3u];
     AssignDecomposedTransformComponent(translation, rotation, scale, outTransform);
     return true;
 }

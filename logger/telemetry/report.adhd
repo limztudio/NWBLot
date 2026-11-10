@@ -33,39 +33,8 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_TelemetryReportEventKindCount = static_cast<usize>(Core::Telemetry::EventKind::MemoryFrame) + 1u;
-inline constexpr usize s_TelemetryMemorySourceCount = static_cast<usize>(Core::Perf::MemorySource::HeapBacking) + 1u;
-
-struct TelemetryReportSummary{
-    u64 eventCount = 0u;
-    Array<u64, s_TelemetryReportEventKindCount> eventKindCounts{};
-    u64 parseFailureCount = 0u;
-
-    u64 minFrameIndex = 0u;
-    u64 maxFrameIndex = 0u;
-
-    u64 cpuTimingEventCount = 0u;
-    u64 cpuTimingSampleCount = 0u;
-    f64 cpuTimingSeconds = 0.0;
-    f64 maxCpuTimingSeconds = 0.0;
-
-    u64 gpuTimingEventCount = 0u;
-    u64 gpuTimingSampleCount = 0u;
-    f64 gpuTimingSeconds = 0.0;
-    f64 maxGpuTimingSeconds = 0.0;
-
-    u64 memoryEventCount = 0u;
-    Array<TelemetryMemorySummary, s_TelemetryMemorySourceCount> memorySources;
-
-    u64 frameGraphFrameCount = 0u;
-    u64 frameGraphNodeCount = 0u;
-    u64 frameGraphEdgeCount = 0u;
-    u32 maxFrameGraphNodeCount = 0u;
-    u32 maxFrameGraphEdgeCount = 0u;
-    b8 gpuTimingSecondsValid = true;
-    b8 cpuTimingSecondsValid = true;
-    b8 hasFrameRange = false;
-};
+static_assert(s_TelemetryReportEventKindCount == static_cast<usize>(Core::Telemetry::EventKind::MemoryFrame) + 1u);
+static_assert(s_TelemetryMemorySourceCount == static_cast<usize>(Core::Perf::MemorySource::HeapBacking) + 1u);
 
 struct TelemetryReport{
     TelemetryReportSummary summary;
@@ -145,6 +114,36 @@ usize SelectTelemetryEventKindBucket(in usize kindIndex, in usize kindCount, in 
     return unknownBucket;
 }
 
+b8 IsFiniteTimingSecondsTotal(in f64 total){
+    return (bit_cast<u64>(total) & s_LogTelemetryReportTimingSecondsExponentMask) != s_LogTelemetryReportTimingSecondsExponentMask;
+}
+
+void RecordTelemetryFrameRange(in u64 frameIndex, mut TelemetryReportSummary summary){
+    if(!summary.hasFrameRange){
+        summary.hasFrameRange = true;
+        summary.minFrameIndex = frameIndex;
+        summary.maxFrameIndex = frameIndex;
+        return;
+    }
+
+    if(frameIndex < summary.minFrameIndex)
+        summary.minFrameIndex = frameIndex;
+    if(frameIndex > summary.maxFrameIndex)
+        summary.maxFrameIndex = frameIndex;
+}
+
+void AccumulateTelemetryFrameGraphSummary(in usize nodeCount, in usize edgeCount, mut TelemetryReportSummary summary){
+    ++summary.frameGraphFrameCount;
+    summary.frameGraphNodeCount += cast<u64>(nodeCount);
+    summary.frameGraphEdgeCount += cast<u64>(edgeCount);
+    const u32 boundedNodeCount = cast<u32>(nodeCount);
+    const u32 boundedEdgeCount = cast<u32>(edgeCount);
+    if(boundedNodeCount > summary.maxFrameGraphNodeCount)
+        summary.maxFrameGraphNodeCount = boundedNodeCount;
+    if(boundedEdgeCount > summary.maxFrameGraphEdgeCount)
+        summary.maxFrameGraphEdgeCount = boundedEdgeCount;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -162,7 +161,6 @@ native{
 #include <core/telemetry/diagnostic.h>
 #include <core/telemetry/text_log.h>
 
-#include <global/bit.h>
 #include <global/csv_text.h>
 #include <global/name_hash_text.h>
 
@@ -196,17 +194,7 @@ namespace TelemetryReportDetail{
 }
 
 void RecordFrameRange(const u64 frameIndex, TelemetryReportSummary& summary)noexcept{
-    if(!summary.hasFrameRange){
-        summary.hasFrameRange = true;
-        summary.minFrameIndex = frameIndex;
-        summary.maxFrameIndex = frameIndex;
-        return;
-    }
-
-    if(frameIndex < summary.minFrameIndex)
-        summary.minFrameIndex = frameIndex;
-    if(frameIndex > summary.maxFrameIndex)
-        summary.maxFrameIndex = frameIndex;
+    RecordTelemetryFrameRange(frameIndex, summary);
 }
 
 [[nodiscard]] AStringView EventKindText(const Core::Telemetry::EventKind::Enum kind)noexcept{
@@ -264,7 +252,7 @@ void AddTiming(const Core::Telemetry::PerfTimingPayload& payload, TelemetryRepor
         summary.cpuTimingSampleCount += payload.stats.sampleCount;
         if(summary.cpuTimingSecondsValid){
             const f64 total = summary.cpuTimingSeconds + payload.stats.seconds;
-            if((BitCast<u64>(total) & s_LogTelemetryReportTimingSecondsExponentMask) != s_LogTelemetryReportTimingSecondsExponentMask)
+            if(IsFiniteTimingSecondsTotal(total))
                 summary.cpuTimingSeconds = total;
             else
                 summary.cpuTimingSecondsValid = false;
@@ -277,7 +265,7 @@ void AddTiming(const Core::Telemetry::PerfTimingPayload& payload, TelemetryRepor
         summary.gpuTimingSampleCount += payload.stats.sampleCount;
         if(summary.gpuTimingSecondsValid){
             const f64 total = summary.gpuTimingSeconds + payload.stats.seconds;
-            if((BitCast<u64>(total) & s_LogTelemetryReportTimingSecondsExponentMask) != s_LogTelemetryReportTimingSecondsExponentMask)
+            if(IsFiniteTimingSecondsTotal(total))
                 summary.gpuTimingSeconds = total;
             else
                 summary.gpuTimingSecondsValid = false;
@@ -288,15 +276,7 @@ void AddTiming(const Core::Telemetry::PerfTimingPayload& payload, TelemetryRepor
 }
 
 void AddFrameGraph(const Core::Telemetry::FrameGraphPayload& payload, TelemetryReportSummary& summary)noexcept{
-    ++summary.frameGraphFrameCount;
-    summary.frameGraphNodeCount += payload.nodes.size();
-    summary.frameGraphEdgeCount += payload.edges.size();
-    const u32 nodeCount = static_cast<u32>(payload.nodes.size());
-    const u32 edgeCount = static_cast<u32>(payload.edges.size());
-    if(nodeCount > summary.maxFrameGraphNodeCount)
-        summary.maxFrameGraphNodeCount = nodeCount;
-    if(edgeCount > summary.maxFrameGraphEdgeCount)
-        summary.maxFrameGraphEdgeCount = edgeCount;
+    AccumulateTelemetryFrameGraphSummary(payload.nodes.size(), payload.edges.size(), summary);
 }
 
 

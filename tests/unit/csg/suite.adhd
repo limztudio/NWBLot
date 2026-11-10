@@ -101,8 +101,15 @@ namespace CsgDeformViabilityReason = Impl::CsgDeformViabilityReason;
 
 using CsgShapeTypeId = Impl::CsgShapeTypeId;
 using CsgShapeRegistry = Impl::CsgShapeRegistry;
+using CsgShapeInlineParameters = Impl::CsgShapeInlineParameters;
+using CsgShapeLocalBounds = Impl::CsgShapeLocalBounds;
 using CsgPlaneShapeParameters = Impl::CsgPlaneShapeParameters;
 using CsgBoxShapeParameters = Impl::CsgBoxShapeParameters;
+using Impl::s_CsgShapeParameterRegisterBytes;
+using Impl::s_CsgShapeInlineParameterMaxBytes;
+using Impl::s_CsgZeroShapeParameter;
+using Impl::MakeCsgShapeInlineParameters;
+using Impl::MakeCsgSymmetricLocalBounds;
 
 using CsgCutterComponent = Impl::CsgCutterComponent;
 using StaticCsgMeshComponent = Impl::StaticCsgMeshComponent;
@@ -693,6 +700,46 @@ void VerifyCsg_ReceiverLookupExcludesIncompleteInactiveUntypedAndWrongPassInputs
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+Name GetTestProjectSlabShapeName(){
+    return Name(s_CsgInputNameProjectCsgSlab);
+}
+
+u32 GetTestProjectSlabShapeParameterBytes(){
+    return s_CsgShapeParameterRegisterBytes;
+}
+
+CsgShapeInlineParameters MakeTestProjectSlabShapeDefaultParameters(){
+    return MakeCsgShapeInlineParameters(VectorSet(0.5f, 1.0f, 1.0f, 0.0f), LoadFloat(s_CsgZeroShapeParameter));
+}
+
+Expected<CsgShapeLocalBounds> ComputeTestProjectSlabShapeBounds(in CsgShapeInlineParameters parameters){
+    return MakeCsgSymmetricLocalBounds(LoadFloat(parameters.parameter0));
+}
+
+f32 EvaluateTestProjectSlabShapeSignedDistance(in SIMDVectorSingle shapePosition, in CsgShapeInlineParameters parameters){
+    return VectorGetX(shapePosition) + parameters.parameter0.x;
+}
+
+Name GetOversizedProjectShapeName(){
+    return Name(s_CsgInputNameProjectCsgOversized);
+}
+
+u32 GetOversizedProjectShapeParameterBytes(){
+    return cast<u32>(s_CsgShapeInlineParameterMaxBytes) + 1u;
+}
+
+CsgShapeInlineParameters MakeOversizedProjectShapeDefaultParameters(){
+    return CsgShapeInlineParameters();
+}
+
+Expected<CsgShapeLocalBounds> ComputeOversizedProjectShapeBounds(){
+    return MakeUnexpected(Failure());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [source]
 native{
 
@@ -713,39 +760,39 @@ namespace CsgTestsDetail{
 
 
 Name TestProjectSlabShape::shapeTypeName()const noexcept{
-    return Name(Tests::CsgCases::s_CsgInputNameProjectCsgSlab);
+    return Tests::CsgCases::GetTestProjectSlabShapeName();
 }
 
 u32 TestProjectSlabShape::parameterByteSize()const noexcept{
-    return Impl::s_CsgShapeParameterRegisterBytes;
+    return Tests::CsgCases::GetTestProjectSlabShapeParameterBytes();
 }
 
 Impl::CsgShapeInlineParameters TestProjectSlabShape::defaultParameters()const noexcept{
-    return Impl::MakeCsgShapeInlineParameters(VectorSet(0.5f, 1.0f, 1.0f, 0.0f), LoadFloat(Impl::s_CsgZeroShapeParameter));
+    return Tests::CsgCases::MakeTestProjectSlabShapeDefaultParameters();
 }
 
 Expected<Impl::CsgShapeLocalBounds> TestProjectSlabShape::computeLocalBounds(const Impl::CsgShapeInlineParameters& parameters)const noexcept{
-    return Impl::MakeCsgSymmetricLocalBounds(LoadFloat(parameters.parameter0));
+    return Tests::CsgCases::ComputeTestProjectSlabShapeBounds(parameters);
 }
 
 f32 TestProjectSlabShape::evaluateSignedDistance(const SIMDVectorSingle shapePosition, const Impl::CsgShapeInlineParameters& parameters)const noexcept{
-    return VectorGetX(shapePosition) + parameters.parameter0.x;
+    return Tests::CsgCases::EvaluateTestProjectSlabShapeSignedDistance(shapePosition, parameters);
 }
 
 Name OversizedProjectShape::shapeTypeName()const noexcept{
-    return Name(Tests::CsgCases::s_CsgInputNameProjectCsgOversized);
+    return Tests::CsgCases::GetOversizedProjectShapeName();
 }
 
 u32 OversizedProjectShape::parameterByteSize()const noexcept{
-    return static_cast<u32>(Impl::s_CsgShapeInlineParameterMaxBytes) + 1u;
+    return Tests::CsgCases::GetOversizedProjectShapeParameterBytes();
 }
 
 Impl::CsgShapeInlineParameters OversizedProjectShape::defaultParameters()const noexcept{
-    return {};
+    return Tests::CsgCases::MakeOversizedProjectShapeDefaultParameters();
 }
 
 Expected<Impl::CsgShapeLocalBounds> OversizedProjectShape::computeLocalBounds(const Impl::CsgShapeInlineParameters&)const noexcept{
-    return MakeUnexpected(Failure{});
+    return Tests::CsgCases::ComputeOversizedProjectShapeBounds();
 }
 
 f32 OversizedProjectShape::evaluateSignedDistance(const SIMDVectorSingle, const Impl::CsgShapeInlineParameters&)const noexcept{

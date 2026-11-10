@@ -8,30 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/alloc/scratch.h>
-
-namespace NWB::Impl{
-using ScratchMeshletU32Vector = Vector<u32, Core::Alloc::ScratchArena>;
-using ScratchMeshletAttribGpuVector = Vector<AttribGpu, Core::Alloc::ScratchArena>;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 Expected<usize> TryComputeMeshletRefDeltaByteCount(in u32 refCount, in MeshletRefDeltaWidth width){
     if(!MeshletRefDeltaWidthValid(width))
         return MakeUnexpected(Failure());
@@ -253,10 +229,12 @@ b8 DecodeMeshletTriangleIndicesInto(
     in Span<u8> positionRefDeltas,
     in Span<u8> primitiveIndices,
     in usize positionCount,
-    mut ScratchMeshletU32Vector outIndices
+    mut Span<u32> outIndices
 ){
     const usize localVertexRefCount = localVertexRefs.size();
     const usize primitiveIndexCount = primitiveIndices.size();
+    if(outIndices.size() < primitiveIndexCount)
+        return false;
 
     for(usize meshletIndex = 0u; meshletIndex < meshlets.size(); ++meshletIndex){
         const MeshletDesc meshlet = meshlets[meshletIndex];
@@ -293,10 +271,12 @@ b8 DecodeMeshletTriangleAttributesInto(
     in Span<u8> primitiveIndices,
     in Span<f16x4u> normalStream,
     in Span<f32x2u> uv0Stream,
-    mut ScratchMeshletAttribGpuVector outAttributes
+    mut Span<AttribGpu> outAttributes
 ){
     const usize localVertexRefCount = localVertexRefs.size();
     const usize primitiveIndexCount = primitiveIndices.size();
+    if(outAttributes.size() < primitiveIndexCount)
+        return false;
 
     for(usize meshletIndex = 0u; meshletIndex < meshlets.size(); ++meshletIndex){
         const MeshletDesc meshlet = meshlets[meshletIndex];

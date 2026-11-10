@@ -62,7 +62,7 @@ namespace MeshletTriangleGeometry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Expected<MeshletTrianglePrecompute> PrecomputeMeshletTriangleData(const Path& nwbFilePath, [[maybe_unused]] const TStringView metaKind, const Span<const u32> indices, const MeshCookEntry& entry, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] NWB_INLINE Expected<MeshletTrianglePrecompute> PrecomputeMeshletTriangleData(const Path& nwbFilePath, [[maybe_unused]] const TStringView metaKind, const Span<const u32> indices, const MeshCookEntry& entry, Core::Alloc::ScratchArena& scratchArena){
     MeshletTrianglePrecompute data(entry.positions.get_allocator().arena());
     const AString<Core::Alloc::ScratchArena> filePathText = PathToString<char>(scratchArena, nwbFilePath);
     if(!ValidateAndPrecomputeMeshletTriangleStreams(

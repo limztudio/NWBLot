@@ -127,9 +127,9 @@ public:
 
     [[nodiscard]] const InputVector<ControlAction>& controlActions()const noexcept{ return m_controlActions; }
 
-    [[nodiscard]] WidgetId hover()const noexcept{ return m_hoverState.target(); }
+    [[nodiscard]] WidgetId hover()const noexcept{ return m_hoverState.target; }
 
-    [[nodiscard]] u64 hoverActivityGeneration()const noexcept{ return m_hoverState.activityGeneration(); }
+    [[nodiscard]] u64 hoverActivityGeneration()const noexcept{ return m_hoverState.activityGeneration; }
 
     [[nodiscard]] WidgetId focus()const noexcept{ return m_commandSources.focus(); }
 
@@ -149,15 +149,15 @@ public:
 
     [[nodiscard]] b8 secondaryDown()const noexcept{ return m_pointerState.secondaryDown(); }
 
-    [[nodiscard]] b8 pointerKnown()const noexcept{ return m_hoverState.known(); }
+    [[nodiscard]] b8 pointerKnown()const noexcept{ return m_hoverState.known; }
 
     // Only an explicitly hover-capable source supplies cursor geometry; contact gestures keep their own position.
-    [[nodiscard]] const Point& pointerPosition()const noexcept{ return m_hoverState.position(); }
+    [[nodiscard]] const Point& pointerPosition()const noexcept{ return m_hoverState.position; }
 
     [[nodiscard]] b8 windowFocused()const noexcept{ return m_windowFocused; }
 
     [[nodiscard]] b8 wantsPointer()const noexcept{
-        return m_pointerState.wants(hasPopup(), m_hoverState.target());
+        return m_pointerState.wants(hasPopup(), m_hoverState.target);
     }
     [[nodiscard]] b8 wantsCommands()const noexcept{
         return m_commandSources.wants(m_popupState.records());
@@ -242,9 +242,7 @@ void ApplyRouterFocusLostEvent(
     mut b8 outWindowFocused,
     mut InputRoutingResult inOutResult
 ){
-    if(inOutFocusLossGeneration == u64.max)
-        TerminateInvariant();
-    ++inOutFocusLossGeneration;
+    AdvanceNonWrappingRevision(inOutFocusLossGeneration);
     outWindowFocused = false;
     if(hasActivePopup || capture.valid() || primaryConsumed || secondaryConsumed)
         inOutResult.pointerConsumed = true;
@@ -367,7 +365,7 @@ InputRoutingResult InputRouter::process(){
     FinalizeRouterProcessResult(
         wantsPointer(),
         wantsCommands(),
-        m_hoverState.target(),
+        m_hoverState.target,
         m_commandSources.focus(),
         m_pointerState.capture(),
         result
@@ -437,7 +435,7 @@ void InputRouter::cancelDeviceInput(const u64 device)noexcept{
     if(MatchesInputDeviceSource(m_pointerState.activeSource(), device))
         terminatePointerSource(m_pointerState.activeSource());
     m_admission.cancelDevice(device, m_pointerState.sources(), m_commandSources.records());
-    if(MatchesInputDeviceSource(m_hoverState.source(), device))
+    if(MatchesInputDeviceSource(m_hoverState.source, device))
         m_hoverState.forgetSource();
 }
 
@@ -473,7 +471,7 @@ void InputRouter::retireQueuedReleases()noexcept{
     b8 unfinishedHoverSource = false;
     RetireRouterQueuedReleases(
         m_admission.events(),
-        m_hoverState.source(),
+        m_hoverState.source,
         m_commandSources.records(),
         m_pointerState.sources(),
         m_pointerState.gestures(),
@@ -515,7 +513,7 @@ void InputRouter::routePointerSource(const InputEvent& event, InputRoutingResult
             event.source,
             result
         );
-        if(m_hoverState.source() == event.source)
+        if(m_hoverState.source == event.source)
             m_hoverState.forgetSource();
         return;
     }
@@ -531,11 +529,11 @@ void InputRouter::routePointerSource(const InputEvent& event, InputRoutingResult
         m_pointerState.primaryDown(),
         m_pointerState.primaryConsumed(),
         m_pointerState.secondaryConsumed(),
-        m_hoverState.position(),
-        m_hoverState.known(),
-        m_hoverState.source(),
-        m_hoverState.identity(),
-        m_hoverState.target(),
+        m_hoverState.position,
+        m_hoverState.known,
+        m_hoverState.source,
+        m_hoverState.identity,
+        m_hoverState.target,
         m_pointerState.sources(),
         m_pointerState.activeSource(),
         m_pointerState.interactionPosition(),
@@ -564,7 +562,7 @@ void InputRouter::terminatePointerSource(const InputSource source)noexcept{
     b8 unfinishedHoverSource = false;
     TerminateRouterPointerSource(
         source,
-        m_hoverState.source(),
+        m_hoverState.source,
         m_pointerState.sources(),
         m_pointerState.gestures(),
         m_pointerState.gestureSequence(),
@@ -639,8 +637,8 @@ void InputRouter::reconcileTargets()noexcept{
         m_targetTable.lookup(),
         m_popupState.records(),
         m_windowFocused,
-        m_hoverState.known(),
-        m_hoverState.position(),
+        m_hoverState.known,
+        m_hoverState.position,
         m_commandSources.records(),
         m_actions,
         m_controlActions,
@@ -656,8 +654,8 @@ void InputRouter::reconcileTargets()noexcept{
         m_pointerState.captureControl(),
         m_pointerState.submitArmed(),
         m_pointerState.secondaryOwner(),
-        m_hoverState.identity(),
-        m_hoverState.target(),
+        m_hoverState.identity,
+        m_hoverState.target,
         changedHoverOwner
     );
     if(changedHoverOwner)
@@ -665,7 +663,8 @@ void InputRouter::reconcileTargets()noexcept{
 }
 
 void InputRouter::updateHover()noexcept{
-    m_hoverState.setTarget(m_targetTable.targets(), m_targetTable.lookup(), m_popupState.records(), m_hoverState.known() ? findHitTarget(m_hoverState.position()) : nullptr);
+    const HitTarget* const hovered = m_hoverState.known ? findHitTarget(m_hoverState.position) : nullptr;
+    m_hoverState.setTarget(m_targetTable.targets(), m_targetTable.lookup(), m_popupState.records(), hovered != nullptr, hovered != nullptr ? *hovered : HitTarget{});
 }
 
 void InputRouter::cancelInteraction()noexcept{
@@ -677,8 +676,8 @@ void InputRouter::cancelInteraction()noexcept{
         m_pointerState.gestures(),
         m_commandSources.records(),
         m_pointerState.gestureSequence(),
-        m_hoverState.target(),
-        m_hoverState.identity(),
+        m_hoverState.target,
+        m_hoverState.identity,
         m_commandSources.focus(),
         m_pointerState.capture(),
         m_pointerState.capturePopup(),
@@ -686,7 +685,7 @@ void InputRouter::cancelInteraction()noexcept{
         m_commandSources.control(),
         m_commandSources.declaration(),
         m_pointerState.captureDeclaration(),
-        m_hoverState.known(),
+        m_hoverState.known,
         m_pointerState.secondaryOwner(),
         m_pointerState.submitArmed()
     );
@@ -730,7 +729,7 @@ void InputRouter::routeCommand(const InputEvent& event, InputRoutingResult& resu
         m_nextActionSequence,
         m_pointerState.submitArmed(),
         m_pointerState.secondaryOwner(),
-        m_hoverState.target(),
+        m_hoverState.target,
         m_commandSources.focus(),
         m_commandSources.declaration(),
         m_commandSources.control(),

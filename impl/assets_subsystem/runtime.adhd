@@ -121,13 +121,35 @@ b8 LoadBinary(const Span<const u8> binary, ISubsystem& outSubsystem){
     Vector<NameHash, Core::Alloc::ScratchArena> subsystemHashes(scratchArena);
     Vector<u64, Core::Alloc::ScratchArena> fieldCounts(scratchArena);
     Vector<NameHash, Core::Alloc::ScratchArena> assetHashes(scratchArena);
-    if(!SubsystemBinaryCodec().read(
+    usize cursor = 0u;
+    usize subsystemCount = 0u;
+    usize fieldCount = 0u;
+    usize assetCount = 0u;
+    const SubsystemBinaryCodec codec;
+    if(!codec.readCounts(binary, outSubsystem.assetType(), expectedFieldCount, cursor, subsystemCount, fieldCount, assetCount))
+        return false;
+    if(!CanStoreValueCount(subsystemHashes, subsystemCount)){
+        NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::loadBinary failed: malformed 'subsystems' payload"));
+        return false;
+    }
+    if(!CanStoreValueCount(fieldCounts, fieldCount)){
+        NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::loadBinary failed: malformed 'field counts' payload"));
+        return false;
+    }
+    if(!CanStoreValueCount(assetHashes, assetCount)){
+        NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::loadBinary failed: malformed 'assets' payload"));
+        return false;
+    }
+    subsystemHashes.resize(subsystemCount);
+    fieldCounts.resize(fieldCount);
+    assetHashes.resize(assetCount);
+    if(!codec.readPayloads(
         binary,
-        outSubsystem.assetType(),
-        expectedFieldCount,
-        subsystemHashes,
-        fieldCounts,
-        assetHashes
+        cursor,
+        static_cast<u64>(assetCount),
+        Span<NameHash>(subsystemHashes),
+        Span<u64>(fieldCounts),
+        Span<NameHash>(assetHashes)
     ) || !UnpackSubsystemRefHashes(Span<const NameHash>(subsystemHashes), outSubsystem.subsystems))
         return false;
 

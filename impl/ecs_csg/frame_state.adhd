@@ -56,11 +56,11 @@ static_assert(IsTriviallyCopyable_V<CsgFrameBuildDesc>, "CsgFrameBuildDesc must 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline b8 HasCsgFrameCandidates(Core::ECS::World& world)noexcept{
+[[nodiscard]] NWB_INLINE b8 HasCsgFrameCandidates(Core::ECS::World& world)noexcept{
     return world.view<CsgCutterComponent>().candidateCount() > 0u && (world.view<StaticCsgMeshComponent>().candidateCount() > 0u || world.view<SkinnedCsgMeshComponent>().candidateCount() > 0u);
 }
 
-[[nodiscard]] inline Expected<CsgResolvedReceiver> ResolveCsgReceiverComponent(Core::ECS::World& world, const Core::ECS::EntityID entity)noexcept{
+[[nodiscard]] NWB_INLINE Expected<CsgResolvedReceiver> ResolveCsgReceiverComponent(Core::ECS::World& world, const Core::ECS::EntityID entity)noexcept{
     if(const StaticCsgMeshComponent* receiver = world.tryGetComponent<StaticCsgMeshComponent>(entity))
         return MakeCsgResolvedReceiver(receiver->asReceiver(), CsgReceiverKind::Static);
     if(const SkinnedCsgMeshComponent* receiver = world.tryGetComponent<SkinnedCsgMeshComponent>(entity))
@@ -204,7 +204,7 @@ namespace CsgFrameStateDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline b8 ReceiverVisible(Core::ECS::World& world, const Core::ECS::EntityID entity, const CsgReceiverKind::Enum receiverKind, const CsgReceiverComponent& receiver, const CsgFrameBuildDesc& desc){
+[[nodiscard]] NWB_INLINE b8 ReceiverVisible(Core::ECS::World& world, const Core::ECS::EntityID entity, const CsgReceiverKind::Enum receiverKind, const CsgReceiverComponent& receiver, const CsgFrameBuildDesc& desc){
     if(!desc.receiverVisible)
         return true;
 
@@ -212,7 +212,7 @@ namespace CsgFrameStateDetail{
 }
 
 template<typename ReceiverT>
-inline void GatherReceiverState(Core::ECS::World& world, const CsgReceiverKind::Enum receiverKind, const CsgFrameReceiverLookup& receiverLookup, const CsgFrameBuildDesc& desc, CsgFrameState& inOutState){
+NWB_INLINE void GatherReceiverState(Core::ECS::World& world, const CsgReceiverKind::Enum receiverKind, const CsgFrameReceiverLookup& receiverLookup, const CsgFrameBuildDesc& desc, CsgFrameState& inOutState){
     auto receiverView = world.view<ReceiverT>();
     receiverView.each([&](const Core::ECS::EntityID entity, ReceiverT& typedReceiver){
         const CsgReceiverComponent receiver = typedReceiver.asReceiver();
@@ -243,7 +243,7 @@ inline void GatherReceiverState(Core::ECS::World& world, const CsgReceiverKind::
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline CsgFrameState BuildCsgFrameState(Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena, const CsgFrameBuildDesc& desc = CsgFrameBuildDesc{}){
+[[nodiscard]] NWB_INLINE CsgFrameState BuildCsgFrameState(Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena, const CsgFrameBuildDesc& desc = CsgFrameBuildDesc{}){
     CsgFrameState state;
 
     if(!HasCsgFrameCandidates(world))

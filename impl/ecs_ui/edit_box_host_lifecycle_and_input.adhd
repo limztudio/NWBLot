@@ -37,9 +37,7 @@ b8 ShouldCancelUnfocusedUiEditTransfers(
 }
 
 u64 AdvanceUiEditSelectionSequence(mut u64 inOutSelectionSequence){
-    if(inOutSelectionSequence == u64.max)
-        TerminateInvariant();
-    ++inOutSelectionSequence;
+    AdvanceNonWrappingRevision(inOutSelectionSequence);
     return inOutSelectionSequence;
 }
 

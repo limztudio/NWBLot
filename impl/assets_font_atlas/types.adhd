@@ -8,25 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <global/sha256.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 Expected<FontAtlasRasterMode> TryParseFontAtlasRasterMode(in StringView text){
     if(text == s_FontAtlasRasterModeBitmap)
         return FontAtlasRasterMode::Bitmap;
@@ -212,13 +193,14 @@ b8 IsFontAtlasDigestNonZero(in Span<u8> digestBytes){
 }
 
 b8 DoesFontAtlasDigestMatchBytes(in Span<u8> dataBytes, in Span<u8> expectedSha256Bytes){
-    b8 matches = false;
-    native(in dataBytes, in expectedSha256Bytes, mut matches){
-        const Sha256Digest computed = ComputeSha256({ dataBytes.data(), dataBytes.size() });
-        if(expectedSha256Bytes.size() == sizeof(computed.bytes))
-            matches = NWB_MEMCMP(computed.bytes, expectedSha256Bytes.data(), sizeof(computed.bytes)) == 0;
+    const Array<u8, 32> computed = ComputeFontSha256Bytes(dataBytes);
+    if(expectedSha256Bytes.size() != computed.size())
+        return false;
+    for(usize index = 0u; index < computed.size(); ++index){
+        if(computed[index] != expectedSha256Bytes[index])
+            return false;
     }
-    return matches;
+    return true;
 }
 
 

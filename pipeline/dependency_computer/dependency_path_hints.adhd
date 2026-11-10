@@ -80,23 +80,23 @@ class DependencyPathHints{
     }
 
     public void collectValue(in MetascriptValue value){
+        if(value.isString()){
+            this.record(value.asString());
+            return;
+        }
+        if(value.isList()){
+            const usize itemCount = value.asList().size();
+            for(usize i = 0u; i < itemCount; ++i)
+                this.collectValue(value.asList()[i]);
+            return;
+        }
+        if(!value.isMap())
+            return;
         native(mut texts = this.m_texts, in value){
             (void)texts;
-            if(value.isString()){
-                const Core::Metascript::MStringView str = value.asString();
-                this->record(AStringView(str.data(), str.size()));
-                return;
-            }
-            if(value.isList()){
-                for(const Core::Metascript::Value& item : value.asList())
-                    this->collectValue(item);
-                return;
-            }
-            if(value.isMap()){
-                for(const auto& [key, fieldValue] : value.asMap()){
-                    this->record(AStringView(key.data(), key.size()));
-                    this->collectValue(fieldValue);
-                }
+            for(const auto& [key, fieldValue] : value.asMap()){
+                this->record(AStringView(key.data(), key.size()));
+                this->collectValue(fieldValue);
             }
         }
     }

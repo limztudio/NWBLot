@@ -3,6 +3,8 @@
 
 
 const Name s_LogTelemetryArenaNameLoggerTelemetryReport = "logger/telemetry/report";
+const usize s_TelemetryReportEventKindCount = 6u;
+const usize s_TelemetryMemorySourceCount = 3u;
 
 class TelemetryMemorySummary{
     public u64 eventCount = 0u;
@@ -11,6 +13,37 @@ class TelemetryMemorySummary{
     public i64 totalUsedDeltaBytes = 0;
     // An unrepresentable sum stays invalid for this report; individual records retain their original deltas.
     public b8 totalUsedDeltaValid = true;
+}
+
+class TelemetryReportSummary{
+    public u64 eventCount = 0u;
+    public Array<u64, s_TelemetryReportEventKindCount> eventKindCounts;
+    public u64 parseFailureCount = 0u;
+
+    public u64 minFrameIndex = 0u;
+    public u64 maxFrameIndex = 0u;
+
+    public u64 cpuTimingEventCount = 0u;
+    public u64 cpuTimingSampleCount = 0u;
+    public f64 cpuTimingSeconds = 0.0;
+    public f64 maxCpuTimingSeconds = 0.0;
+
+    public u64 gpuTimingEventCount = 0u;
+    public u64 gpuTimingSampleCount = 0u;
+    public f64 gpuTimingSeconds = 0.0;
+    public f64 maxGpuTimingSeconds = 0.0;
+
+    public u64 memoryEventCount = 0u;
+    public Array<TelemetryMemorySummary, s_TelemetryMemorySourceCount> memorySources;
+
+    public u64 frameGraphFrameCount = 0u;
+    public u64 frameGraphNodeCount = 0u;
+    public u64 frameGraphEdgeCount = 0u;
+    public u32 maxFrameGraphNodeCount = 0u;
+    public u32 maxFrameGraphEdgeCount = 0u;
+    public b8 gpuTimingSecondsValid = true;
+    public b8 cpuTimingSecondsValid = true;
+    public b8 hasFrameRange = false;
 }
 
 

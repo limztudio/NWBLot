@@ -90,11 +90,11 @@ struct CausticResolvePassResources{
 
 void EnableCausticResolveBarriers(Core::CommandList& commandList, DeferredFrameTargets& targets);
 
-[[nodiscard]] inline CausticResolvePassResources MakeCausticHistoryResolvePassResources(DeferredFrameTargets& targets)noexcept{
+[[nodiscard]] NWB_INLINE CausticResolvePassResources MakeCausticHistoryResolvePassResources(DeferredFrameTargets& targets)noexcept{
     return { targets.causticHistory.get(), targets.bindless.causticHistory.slot(), targets.bindless.causticHistoryStorage.slot() };
 }
 
-[[nodiscard]] inline CausticResolvePassResources MakeCausticHalfResolvePassResources(DeferredFrameTargets& targets)noexcept{
+[[nodiscard]] NWB_INLINE CausticResolvePassResources MakeCausticHalfResolvePassResources(DeferredFrameTargets& targets)noexcept{
     return { targets.causticResolveHalf.get(), targets.bindless.causticResolveHalf.slot(), targets.bindless.causticResolveHalfStorage.slot() };
 }
 

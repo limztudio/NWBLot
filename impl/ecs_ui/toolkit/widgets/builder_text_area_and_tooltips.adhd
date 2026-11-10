@@ -305,7 +305,7 @@ b8 TextAreaCoordinator::paintTextArea(const Item& item, const LayoutBox& box){
     if(!stepResult)
         return false;
     const Point step = *stepResult;
-    const ControlToken token = state.m_scrollInput.prepare(item.state, m_builder.m_context.popupToken(), state.instanceGeneration(), state.revision(), *frame.model, item.editOptions.enabled, item.editOptions.readOnly, *viewport, step);
+    const ControlToken token = state.m_scrollInput.prepare(item.state, m_builder.m_context.popupToken(), state.instanceGeneration(), state.revision(), frame.model->stamp(), item.editOptions.enabled, item.editOptions.readOnly, *viewport, step);
     m_builder.m_context.input().fenceControl(item.state.id, item.state.declarationGeneration, token);
     if(!applyTextAreaScrollInput(item, frame, token))
         return false;
@@ -313,7 +313,7 @@ b8 TextAreaCoordinator::paintTextArea(const Item& item, const LayoutBox& box){
     if(!arranged)
         return false;
     const EditBoxPlacement& placement = *arranged;
-    if(!TryUpdateScrollViewportOffsets({ placement.scroll, placement.scrollY }, state.m_scrollInput.m_placement))
+    if(!TryUpdateScrollViewportOffsets({ placement.scroll, placement.scrollY }, state.m_scrollInput.placement))
         return false;
     if(!item.editView.paint(m_builder.m_text, m_builder.m_paint, *m_builder.m_skin, placement, item.editStyle, item.editFlags) || !m_builder.textAreaMatches(frame))
         return false;

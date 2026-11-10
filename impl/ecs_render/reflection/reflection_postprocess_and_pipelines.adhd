@@ -1,0 +1,465 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ReflectionFeedbackExtentOrDeviceChanged(
+    in u32 width,
+    in u32 height,
+    in u16 deviceGeneration,
+    in u32 cachedWidth,
+    in u32 cachedHeight,
+    in u16 cachedDeviceGeneration
+){
+    return width != cachedWidth || height != cachedHeight || deviceGeneration != cachedDeviceGeneration;
+}
+
+b8 IsReflectionFeedbackActive(in b8 enabled, in b8 hybridTraceMode, in u32 maxHardwareRaysPerFrame){
+    return enabled && hybridTraceMode && maxHardwareRaysPerFrame > 0u;
+}
+
+b8 IsReflectionSpatialFilterActive(in b8 spatialFilterEnabled, in u32 spatialRadius, in u32 maxSpatialRadius, in b8 traceActive){
+    return spatialFilterEnabled && spatialRadius > 0u && spatialRadius <= maxSpatialRadius && traceActive;
+}
+
+u32 ReflectionSpatialRadiusPipelineIndex(in u32 spatialRadius){
+    return spatialRadius - 1u;
+}
+
+b8 CanPrepareReflectionHardwarePipelines(in b8 prepareHardware, in b8 rayQuerySupported, in b8 hasAccelStructLayout){
+    return prepareHardware && rayQuerySupported && hasAccelStructLayout;
+}
+
+b8 ResolveAcceptedReflectionOpticalTransport(in b8 metadataOpticalTransportEnabled, in b8 hardwareReady){
+    return metadataOpticalTransportEnabled && hardwareReady;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets/graphics/reflection/depth_constants.h>
+#include <impl/assets/graphics/reflection/frame_constants.h>
+#include <impl/assets/graphics/reflection/spatial_constants.h>
+#include <impl/assets/graphics/reflection/temporal_constants.h>
+#include <impl/assets_graphics/reflection_subsystem.adhd.h>
+#include <impl/ecs_render/kernel/compute_pipeline_utils.adhd.h>
+#include <impl/ecs_render/kernel/descriptor_register_utils.adhd.h>
+#include <impl/ecs_render/kernel/timing_names.adhd.h>
+#include <impl/ecs_render/reflection/feedback_resources.adhd.h>
+#include <impl/ecs_render/reflection/postprocess_resources.adhd.h>
+#include <impl/ecs_render/reflection/reflection_internal.adhd.h>
+#include <impl/ecs_render/reflection/reflection_pipelines.adhd.h>
+#include <impl/ecs_render/reflection/reflection_system.adhd.h>
+#include <impl/ecs_render/reflection/statistics_readback.adhd.h>
+#include <impl/ecs_render/reflection/types.adhd.h>
+#include <impl/ecs_render/shader/shader_system.adhd.h>
+#include <impl/ecs_render/shared/statistics_readback_detail.adhd.h>
+
+#include <core/common/log.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/graphics/shader_archive.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void RendererReflectionFeedback::invalidateResources(){
+    if(m_control)
+        m_control->reset(0u);
+    releaseBuffers();
+    m_extent = {};
+    m_deviceGeneration = 0u;
+}
+
+b8 RendererReflectionFeedback::prepareResources(const u32 width, const u32 height, const ReflectionSettings& settings, const b8 enabled){
+    const Expected<ReflectionFeedbackExtent> extentResult = TryComputeReflectionFeedbackExtent(width, height);
+    if(!extentResult){
+        NWB_LOGGER_ERROR(NWB_TEXT("Reflection feedback: invalid extent or feedback address range ({}x{})"), width, height);
+        return false;
+    }
+    const ReflectionFeedbackExtent& extent = *extentResult;
+    auto& device = m_graphics.getDevice();
+    const u16 deviceGeneration = device.getDeviceGeneration();
+    if(!m_control){
+        auto controlResult = CreateStatisticsControl<ReflectionFeedbackControl>(m_arena, deviceGeneration);
+        if(!controlResult){
+            NWB_LOGGER_ERROR(NWB_TEXT("Reflection feedback: failed to allocate acceptance control"));
+            return false;
+        }
+        m_control = Move(*controlResult);
+    }
+    const b8 changed = ReflectionFeedbackExtentOrDeviceChanged(width, height, deviceGeneration, m_extent.width, m_extent.height, m_deviceGeneration);
+    const b8 active = IsReflectionFeedbackActive(enabled, settings.traceMode == ReflectionTraceMode::Hybrid, settings.maxHardwareRaysPerFrame);
+    if(active && (changed || !m_banks[0].valid() || !m_banks[1].valid())){
+        auto firstBank = prepareBank(extent.byteCount, s_ReflectionScreenFeedback0Name);
+        if(!firstBank)
+            return false;
+        Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+        Core::GpuDescriptorRetirementGuard retireFirst(heap, firstBank->descriptor);
+        auto secondBank = prepareBank(extent.byteCount, s_ReflectionScreenFeedback1Name);
+        if(!secondBank)
+            return false;
+        Core::GpuDescriptorRetirementGuard retireSecond(heap, secondBank->descriptor);
+        releaseBuffers();
+        m_banks[0] = Move(*firstBank);
+        m_banks[1] = Move(*secondBank);
+        retireFirst.release();
+        retireSecond.release();
+    }
+    else if(changed)
+        releaseBuffers();
+    if(changed)
+        m_control->reset(deviceGeneration);
+    m_extent = extent;
+    m_deviceGeneration = deviceGeneration;
+    return true;
+}
+
+ReflectionFeedbackSnapshot RendererReflectionFeedback::snapshot(const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, const b8 enabled, const u64 graphicsFrameIndex)const noexcept{
+    ReflectionFeedbackSnapshot result;
+    if(!m_control)
+        return result;
+    result.control = m_control;
+    result.plan = m_control->plan(stamp, settings, enabled, graphicsFrameIndex);
+    result.extent = m_extent;
+    result.current = m_banks[result.plan.currentBank];
+    result.previous = m_banks[result.plan.previousBank];
+    return result;
+}
+
+void RendererReflectionFeedback::releaseBuffers(){
+    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
+    for(ReflectionFeedbackBinding& bank : m_banks){
+        if(bank.descriptor.valid() && heap.isInitialized())
+            heap.free(bank.descriptor);
+        bank = {};
+    }
+}
+
+Expected<ReflectionFeedbackBinding> RendererReflectionFeedback::prepareBank(const u32 byteCount, const Name name){
+    auto& device = m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Reflection feedback: descriptor heap is unavailable during preflight"));
+        return MakeUnexpected(Failure{});
+    }
+    Core::BufferDesc desc;
+    desc.setByteSize(byteCount).setCanHaveRawViews(true).setCanHaveUAVs(true).setDebugName(name).enableAutomaticStateTracking(Core::ResourceStates::Common);
+    auto bufferResult = m_graphics.createBuffer(desc);
+    if(!bufferResult){
+        NWB_LOGGER_ERROR(NWB_TEXT("Reflection feedback: failed to create {}-byte buffer"), byteCount);
+        return MakeUnexpected(Failure{});
+    }
+    Core::BufferHandle buffer = Move(*bufferResult);
+    const Expected<Core::GpuDescriptorHandle> descriptor = RendererDescriptorRegisterDetail::RegisterDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::RawBufferUav(0u, buffer.get()));
+    if(!descriptor){
+        NWB_LOGGER_ERROR(NWB_TEXT("Reflection feedback: failed to register storage buffer"));
+        return MakeUnexpected(Failure{});
+    }
+    return ReflectionFeedbackBinding{Move(buffer), *descriptor};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void RendererReflectionPostprocess::invalidateResources(){
+    releaseTargets();
+    m_temporalPipeline = nullptr;
+    for(Core::ComputePipelineHandle& pipeline : m_spatialPipelines)
+        pipeline = nullptr;
+    m_temporalShader = nullptr;
+    for(Core::ShaderHandle& shader : m_spatialShaders)
+        shader = nullptr;
+    m_layout = nullptr;
+}
+
+b8 RendererReflectionPostprocess::prepareResources(const u32 width, const u32 height, const ReflectionSettings& settings){
+    if(settings.spatialRadius > NWB_REFLECTION_SPATIAL_MAX_RADIUS)
+        return false;
+    auto& device = m_graphics.getDevice();
+    if(width != m_width || height != m_height){
+        releaseTargets();
+        m_width = width;
+        m_height = height;
+        if(m_control)
+            m_control->reset(device.getDeviceGeneration());
+    }
+    if(!m_control){
+        auto controlResult = CreateStatisticsControl<ReflectionHistoryControl>(m_arena, device.getDeviceGeneration());
+        if(!controlResult){
+            NWB_LOGGER_ERROR(NWB_TEXT("Reflection history: failed to allocate acceptance control"));
+            return false;
+        }
+        m_control = Move(*controlResult);
+    }
+    const b8 active = settings.traceMode != ReflectionTraceMode::Disabled;
+    if(settings.temporalEnabled && active){
+        if(
+            !preparePipeline(&ReflectionSubsystem::temporalCs, Core::ShaderArchive::s_DefaultVariant, m_temporalPipeline, m_temporalShader)
+            || !prepareImage(m_history, s_ReflectionHistoryDescriptorIndex, s_ReflectionOpaqueHistoryName)
+            || !m_graphics.gpuTiming().prepareScopeQueries(ReflectionGpuTimingScope::s_Temporal.identity, device, s_ReflectionGpuTimingQueriesPerRange)
+        )
+            return false;
+    }
+    if(IsReflectionSpatialFilterActive(settings.spatialFilterEnabled, settings.spatialRadius, NWB_REFLECTION_SPATIAL_MAX_RADIUS, active)){
+        const u32 radiusIndex = ReflectionSpatialRadiusPipelineIndex(settings.spatialRadius);
+        if(
+            !preparePipeline(&ReflectionSubsystem::spatialCs, ResolveReflectionSpatialVariant(radiusIndex), m_spatialPipelines[radiusIndex], m_spatialShaders[radiusIndex])
+            || !prepareImage(m_spatial, s_ReflectionSpatialDescriptorIndex, s_ReflectionOpaqueSpatialName)
+            || !m_graphics.gpuTiming().prepareScopeQueries(ReflectionGpuTimingScope::s_Spatial.identity, device, s_ReflectionGpuTimingQueriesPerRange)
+        )
+            return false;
+    }
+    return true;
+}
+
+ReflectionPostprocessSnapshot RendererReflectionPostprocess::snapshot(const ReflectionRadianceBinding& base, const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, const u64 graphicsFrameIndex)const noexcept{
+    ReflectionPostprocessSnapshot result;
+    if(!m_control)
+        return result;
+    result.control = m_control;
+    result.history = m_control->plan(stamp, settings, graphicsFrameIndex);
+    result.current = result.history.currentBank == 0u ? base : m_history;
+    result.previous = result.history.previousBank == 0u ? base : m_history;
+    result.spatial = m_spatial;
+    result.temporalPipeline = m_temporalPipeline;
+    result.spatialEnabled = IsReflectionSpatialFilterActive(settings.spatialFilterEnabled, settings.spatialRadius, NWB_REFLECTION_SPATIAL_MAX_RADIUS, settings.traceMode != ReflectionTraceMode::Disabled);
+    if(result.spatialEnabled)
+        result.spatialPipeline = m_spatialPipelines[ReflectionSpatialRadiusPipelineIndex(settings.spatialRadius)];
+    return result;
+}
+
+void RendererReflectionPostprocess::releaseTargets(){
+    if(m_control)
+        m_control->reset(0u);
+    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
+    for(Core::GpuDescriptorHandle& descriptor : m_descriptors)
+        RendererDescriptorRegisterDetail::RetireDescriptor(heap, descriptor);
+    m_history = {};
+    m_spatial = {};
+    m_width = 0u;
+    m_height = 0u;
+}
+
+b8 RendererReflectionPostprocess::preparePipeline(
+    const Core::Assets::AssetRef<ComputeShader> ReflectionSubsystem::* shaderMember,
+    const AStringView variant,
+    Core::ComputePipelineHandle& pipeline,
+    Core::ShaderHandle& shader
+){
+    const Name shaderName = m_shaders.resolveSubsystemAsset<ReflectionSubsystem>(shaderMember);
+    return RendererComputePipelineDetail::EnsurePushConstantComputePipeline(
+        m_arena,
+        m_graphics.getDevice(),
+        m_shaders,
+        shaderMember,
+        variant,
+        shaderName,
+        NWB_REFLECTION_TEMPORAL_PUSH_CONSTANT_BYTES,
+        false,
+        m_layout,
+        shader,
+        pipeline
+    );
+}
+
+b8 RendererReflectionPostprocess::prepareImage(ReflectionRadianceBinding& image, const u32 descriptorIndex, const Name name){
+    if(image.texture)
+        return true;
+    Core::TextureDesc desc;
+    desc.setWidth(m_width).setHeight(m_height).setFormat(Core::Format::RGBA16_FLOAT).setIsUAV(true).setName(name).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setInitialState(Core::ResourceStates::Common).setKeepInitialState(true);
+    auto textureResult = m_graphics.createTexture(desc);
+    if(!textureResult)
+        return false;
+    Core::TextureHandle texture = Move(*textureResult);
+    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
+    const Expected<Core::GpuDescriptorHandle> sampled = RendererDescriptorRegisterDetail::RegisterSampledTexture(heap, Core::GpuDescriptorClass::SampledImage, texture);
+    const Expected<Core::GpuDescriptorHandle> storage = RendererDescriptorRegisterDetail::RegisterStorageTexture(heap, texture);
+    if(!sampled || !storage){
+        if(sampled)
+            heap.free(*sampled);
+        if(storage)
+            heap.free(*storage);
+        return false;
+    }
+    m_descriptors[descriptorIndex] = *sampled;
+    m_descriptors[descriptorIndex + 1u] = *storage;
+    image = ReflectionRadianceBinding{Move(texture), sampled->slot(), storage->slot()};
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 RendererReflectionPipelines::prepare(const b8 prepareHardware, const b8 prepareCsgHardware, ReflectionFrameSnapshot& resources){
+    auto& device = m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(
+        !RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(u32), Core::ShaderType::Compute, m_bindingLayout)
+        || !RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, NWB_REFLECTION_DEPTH_PUSH_CONSTANT_BYTES, Core::ShaderType::Compute, m_depthBindingLayout)
+    )
+        return false;
+    const auto preparePipeline = [&](
+        Core::ComputePipelineHandle& pipeline,
+        Core::ShaderHandle& shader,
+        const Core::Assets::AssetRef<ComputeShader> ReflectionSubsystem::* member,
+        const Name debugName,
+        const b8 hardware,
+        const Core::BindingLayoutHandle& bindingLayout,
+        const AStringView variant = Core::ShaderArchive::s_DefaultVariant
+    ){
+        if(pipeline)
+            return true;
+        if(!m_shaders.loadShader<ComputeShader>(member, variant, debugName, shader))
+            return false;
+        return RendererComputePipelineDetail::CreateHeapComputePipeline(device, shader, bindingLayout, hardware, pipeline);
+    };
+    if(
+        !preparePipeline(resources.classifyPipeline, m_classifyShader, &ReflectionSubsystem::classifyCs, Name(s_RenderNameECSRenderReflectionClassify), false, m_bindingLayout)
+        || !preparePipeline(resources.buildArgsPipeline, m_buildArgsShader, &ReflectionSubsystem::buildArgsCs, Name(s_RenderNameECSRenderReflectionBuildArgs), false, m_bindingLayout, s_ReflectionBuildArgsVariant)
+        || !preparePipeline(resources.depthPyramid.pipeline, m_depthShader, &ReflectionSubsystem::depthReduceCs, Name(s_RenderNameECSRenderReflectionDepthReduce), false, m_depthBindingLayout)
+    )
+        return false;
+    const b8 rayQueryReady = CanPrepareReflectionHardwarePipelines(true, m_graphics.queryFeatureSupport(Core::Feature::RayQuery), heap.hasAccelStructLayout());
+    if(
+        CanPrepareReflectionHardwarePipelines(prepareHardware, rayQueryReady, true)
+        && (!preparePipeline(resources.hardwarePipeline, m_hardwareShader, &ReflectionSubsystem::resolveHwCs, Name(s_RenderNameECSRenderReflectionOpticalHardware), true, m_bindingLayout, s_ReflectionHwOpticalVariant) || !preparePipeline(
+            m_plainHardwarePipeline, m_plainHardwareShader,
+            &ReflectionSubsystem::resolveHwCs, Name(s_RenderNameECSRenderReflectionHardware), true, m_bindingLayout,
+            s_ReflectionHwPlainVariant
+        ) || !preparePipeline(m_unspecifiedHardwarePipeline, m_unspecifiedHardwareShader, &ReflectionSubsystem::resolveHwCs, Name(s_RenderNameECSRenderReflectionUnspecifiedOpticalHardware), true, m_bindingLayout, s_ReflectionHwUnspecifiedVariant))
+    )
+        return false;
+    const b8 csgHardware = CanPrepareReflectionHardwarePipelines(prepareCsgHardware, rayQueryReady, true);
+    if(csgHardware && !RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, NWB_REFLECTION_CSG_PUSH_CONSTANT_BYTES, Core::ShaderType::Compute, m_csgBindingLayout))
+        return false;
+    if(
+        csgHardware
+        && (!preparePipeline(m_csgBuildArgsPipeline, m_csgBuildArgsShader, &ReflectionSubsystem::buildArgsCs, Name(s_RenderNameECSRenderReflectionCsgBuildArgs), false, m_csgBindingLayout, s_ReflectionCsgBuildArgsVariant) || !preparePipeline(
+            m_csgHardwarePipeline, m_csgHardwareShader,
+            &ReflectionSubsystem::resolveHwCs, Name(s_RenderNameECSRenderReflectionCsgOpticalHardware), true, m_csgBindingLayout,
+            s_ReflectionHwCsgOpticalVariant
+        ) || !preparePipeline(m_csgPlainHardwarePipeline, m_csgPlainHardwareShader, &ReflectionSubsystem::resolveHwCs, Name(s_RenderNameECSRenderReflectionCsgHardware), true, m_csgBindingLayout, s_ReflectionHwCsgPlainVariant) || !preparePipeline(
+            m_csgUnspecifiedHardwarePipeline, m_csgUnspecifiedHardwareShader,
+            &ReflectionSubsystem::resolveHwCs, Name(s_RenderNameECSRenderReflectionCsgUnspecifiedOpticalHardware), true, m_csgBindingLayout,
+            s_ReflectionHwCsgUnspecifiedVariant
+        ))
+    )
+        return false;
+    return true;
+}
+
+void RendererReflectionPipelines::invalidate(ReflectionFrameSnapshot& resources){
+    resources.classifyPipeline = nullptr;
+    resources.buildArgsPipeline = nullptr;
+    resources.hardwarePipeline = nullptr;
+    resources.depthPyramid.pipeline = nullptr;
+    m_classifyShader = nullptr;
+    m_buildArgsShader = nullptr;
+    m_hardwareShader = nullptr;
+    m_plainHardwareShader = nullptr;
+    m_plainHardwarePipeline = nullptr;
+    m_unspecifiedHardwareShader = nullptr;
+    m_unspecifiedHardwarePipeline = nullptr;
+    m_csgBuildArgsShader = nullptr;
+    m_csgBuildArgsPipeline = nullptr;
+    m_csgHardwareShader = nullptr;
+    m_csgPlainHardwareShader = nullptr;
+    m_csgUnspecifiedHardwareShader = nullptr;
+    m_csgHardwarePipeline = nullptr;
+    m_csgPlainHardwarePipeline = nullptr;
+    m_csgUnspecifiedHardwarePipeline = nullptr;
+    m_depthShader = nullptr;
+    m_bindingLayout = nullptr;
+    m_depthBindingLayout = nullptr;
+    m_csgBindingLayout = nullptr;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void ReflectionStatisticsState::accept(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const b8 hardwareReady, const ReflectionHistoryOutcome* history, const ReflectionFeedbackOutcome* feedback)noexcept{
+    NothrowScopedLock lock(m_mutex);
+
+    Slot* slot = beginAcceptWithinLock(key, token, hardwareReady);
+    if(!slot)
+        return;
+    slot->metadata.opticalTransportEnabled = ResolveAcceptedReflectionOpticalTransport(slot->metadata.opticalTransportEnabled, hardwareReady);
+    if(history)
+        ApplyReflectionStatisticsHistoryOutcome(*history, slot->metadata);
+    if(feedback)
+        ApplyReflectionStatisticsFeedbackOutcome(*feedback, slot->metadata);
+}
+
+void ReflectionStatisticsState::complete(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const Span<const u32> counters)noexcept{
+    constexpr usize s_RequiredCounterCount = NWB_REFLECTION_COUNTER_SIZE / sizeof(u32);
+    completeSlot<s_RequiredCounterCount>(
+        key,
+        token,
+        counters,
+        [](ReflectionStatistics& latest, const ReflectionStatistics& metadata, const Span<const u32> completedCounters)noexcept{
+            CopyReflectionDiagnosticCounters(completedCounters, metadata, latest);
+        });
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ReflectionStatisticsReadback::prepareResources(){
+    if(m_buffers[0])
+        return true;
+    static constexpr Array<Name, s_StatisticsReadbackSlotCount> s_Names = { s_ReflectionStatisticsReadback0Name, s_ReflectionStatisticsReadback1Name, s_ReflectionStatisticsReadback2Name, };
+    return ECSRenderDetail::PrepareStatisticsReadbackControlAndBuffers<NWB_REFLECTION_COUNTER_SIZE>(
+        s_Names,
+        NWB_TEXT("Reflection statistics: failed to allocate readback control"),
+        m_arena,
+        m_graphics,
+        m_control,
+        m_buffers
+    );
+}
+
+void ReflectionStatisticsReadback::pollCompleted(){
+    ECSRenderDetail::PollCompletedStatisticsReadback<NWB_REFLECTION_COUNTER_SIZE>(m_buffers, NWB_TEXT("Reflection statistics: failed to map a completed readback"), m_control, m_graphics);
+}
+
+ReflectionStatisticsReadbackSnapshot ReflectionStatisticsReadback::snapshot(const ReflectionStatistics& metadata)const noexcept{
+    ReflectionStatisticsReadbackSnapshot result;
+    if(!m_control || !m_buffers[0])
+        return result;
+    populateSnapshot(metadata, result);
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

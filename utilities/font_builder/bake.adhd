@@ -60,36 +60,18 @@ public:
 
 using RasterGlyphs = Core::Assets::AssetVector<RasterGlyph>;
 using MetadataString = ::AString<Core::Alloc::ScratchArena>;
+using Impl::FontAtlasPayload;
+using Impl::FontAtlasGroup;
+using Impl::FontAtlasGlyph;
+using Impl::FontAtlasGroupCompactBounds;
+using Impl::ComputeFontAtlasGroupCompactBounds;
+using Impl::OffsetFontAtlasGroupGlyph;
+using Core::Assets::AssetBytes;
 
 [[nodiscard]] b8 ValidateOptions(const BakeOptions& options);
 // Options must already pass ValidateOptions.
 [[nodiscard]] Expected<Impl::FontAtlasPayload> Bake(const BakeOptions& options, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratch, Core::Assets::AssetBytes& outSourceFontBytes);
 [[nodiscard]] b8 PackGlyphs(const BakeOptions& options, Span<const RasterGlyph> glyphs, Core::Alloc::ScratchArena& scratch, Impl::FontAtlasPayload& outPayload);
-inline void CompactAtlasGroups(Impl::FontAtlasPayload& payload){
-    for(usize groupIndex = 0u; groupIndex < payload.groups.size(); ++groupIndex){
-        auto& group = payload.groups[groupIndex];
-        const Impl::FontAtlasGroupCompactBounds bounds = Impl::ComputeFontAtlasGroupCompactBounds(
-            payload.glyphs,
-            static_cast<u32>(groupIndex),
-            group.width,
-            group.height,
-            group.channelCount,
-            payload.guardTexels
-        );
-        if(bounds.unchanged)
-            continue;
-
-        Core::Assets::AssetBytes compactPixels(group.pixels.get_allocator().arena());
-        FontAtlasPacker{}.compactGroupPixels(bounds, group.width, group.channelCount, group.pixels, compactPixels);
-        for(auto& glyph : payload.glyphs)
-            Impl::OffsetFontAtlasGroupGlyph(static_cast<u32>(groupIndex), bounds.firstX, bounds.firstY, glyph);
-        group.width = bounds.width;
-        group.height = bounds.height;
-        group.channelCount = bounds.channelCount;
-        group.pixels = Move(compactPixels);
-    }
-}
-void BuildFontMetadata(const Impl::FontAtlasPayload& payload, MetadataString& outText);
 [[nodiscard]] Expected<Core::Assets::AssetBytes, AStringView> BuildPreparedFont(Span<const u8> sourceFontBytes, const Impl::FontAtlasPayload& atlas, Core::Alloc::ScratchArena& scratch);
 [[nodiscard]] Expected<Core::Assets::AssetBytes, AStringView> ReadFontSourceInput(const Path& path, Core::Assets::AssetArena& arena);
 [[nodiscard]] b8 WriteOutputs(const BakeOptions& options, Span<const u8> sourceFontBytes, const Impl::FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratch);
@@ -115,6 +97,62 @@ StringView ResolveBakeFontAtlasRasterModeText(in FontAtlasRasterMode mode){
     if(mode == FontAtlasRasterMode::Bitmap)
         return s_FontAtlasRasterModeBitmap;
     return s_FontAtlasRasterModeOutline;
+}
+
+void CompactAtlasGroups(mut FontAtlasPayload payload){
+    for(usize groupIndex = 0u; groupIndex < payload.groups.size(); ++groupIndex){
+        mut FontAtlasGroup group = payload.groups[groupIndex];
+        const FontAtlasGroupCompactBounds bounds = ComputeFontAtlasGroupCompactBounds(
+            payload.glyphs,
+            cast<u32>(groupIndex),
+            group.width,
+            group.height,
+            group.channelCount,
+            payload.guardTexels
+        );
+        if(bounds.unchanged)
+            continue;
+
+        AssetBytes compactPixels(group.pixels.get_allocator().arena());
+        FontAtlasPacker().compactGroupPixels(bounds, group.width, group.channelCount, group.pixels, compactPixels);
+        for(usize glyphIndex = 0u; glyphIndex < payload.glyphs.size(); ++glyphIndex)
+            OffsetFontAtlasGroupGlyph(cast<u32>(groupIndex), bounds.firstX, bounds.firstY, payload.glyphs[glyphIndex]);
+        group.width = bounds.width;
+        group.height = bounds.height;
+        group.channelCount = bounds.channelCount;
+        group.pixels = compactPixels;
+    }
+}
+
+void BuildFontMetadata(in FontAtlasPayload payload, mut MetadataString outText){
+    outText.assign("font face;\r\n\r\nfont_atlas atlas;\r\natlas.font = face;\r\n");
+    StringAppendFormat(outText, "atlas.bake_ppem = {};\r\n", payload.bakePpem);
+    StringAppendFormat(outText, "atlas.spread_pixels = {};\r\n", payload.spreadPixels);
+    StringAppendFormat(outText, "atlas.raster_mode = \"{}\";\r\n", ResolveBakeFontAtlasRasterModeText(payload.rasterMode));
+    StringAppendFormat(outText, "atlas.ascender_units = {:#.9g};\r\n", payload.ascenderUnits);
+    StringAppendFormat(outText, "atlas.descender_units = {:#.9g};\r\n", payload.descenderUnits);
+    StringAppendFormat(outText, "atlas.line_gap_units = {:#.9g};\r\n", payload.lineGapUnits);
+    outText.append("atlas.glyphs = [\r\n");
+    for(in FontAtlasGlyph glyph : payload.glyphs){
+        if(glyph.drawable == 0u){
+            StringAppendFormat(outText, "    {{ \"advance_units\": {:#.9g} }},\r\n", glyph.advanceUnits);
+            continue;
+        }
+        StringAppendFormat(
+            outText,
+            "    {{ \"group\": {}, \"channel\": {}, \"x\": {}, \"y\": {}, \"width\": {}, \"height\": {}, \"plane_left\": {:#.9g}, \"plane_top\": {:#.9g}, \"advance_units\": {:#.9g} }},\r\n",
+            glyph.group,
+            glyph.channel,
+            glyph.x,
+            glyph.y,
+            glyph.width,
+            glyph.height,
+            glyph.planeLeft,
+            glyph.planeTop,
+            glyph.advanceUnits
+        );
+    }
+    outText.append("];\r\n\r\nasset_bunch bunch = [face, atlas];\r\n");
 }
 
 
@@ -179,32 +217,6 @@ Expected<Impl::FontAtlasPayload> Bake(const BakeOptions& options, Core::Assets::
         return MakeUnexpected(Failure{});
     outSourceFontBytes = source.takeBytes();
     return candidate;
-}
-
-void BuildFontMetadata(const Impl::FontAtlasPayload& payload, MetadataString& outText){
-    outText = "font face;\r\n";
-    outText += "\r\nfont_atlas atlas;\r\natlas.font = face;\r\n";
-    StringAppendFormat(outText, "atlas.bake_ppem = {};\r\n", payload.bakePpem);
-    StringAppendFormat(outText, "atlas.spread_pixels = {};\r\n", payload.spreadPixels);
-    StringAppendFormat(outText, "atlas.raster_mode = \"{}\";\r\n", ResolveBakeFontAtlasRasterModeText(payload.rasterMode));
-    StringAppendFormat(outText, "atlas.ascender_units = {:#.9g};\r\n", payload.ascenderUnits);
-    StringAppendFormat(outText, "atlas.descender_units = {:#.9g};\r\n", payload.descenderUnits);
-    StringAppendFormat(outText, "atlas.line_gap_units = {:#.9g};\r\n", payload.lineGapUnits);
-    outText += "atlas.glyphs = [\r\n";
-    for(const auto& glyph : payload.glyphs){
-        if(glyph.drawable == 0u){
-            StringAppendFormat(outText, "    {{ \"advance_units\": {:#.9g} }},\r\n", glyph.advanceUnits);
-            continue;
-        }
-        StringAppendFormat(
-            outText,
-            "    {{ \"group\": {}, \"channel\": {}, \"x\": {}, \"y\": {}, \"width\": {}, \"height\": {}, "
-            "\"plane_left\": {:#.9g}, \"plane_top\": {:#.9g}, \"advance_units\": {:#.9g} }},\r\n",
-            glyph.group, glyph.channel, glyph.x, glyph.y, glyph.width, glyph.height,
-            glyph.planeLeft, glyph.planeTop, glyph.advanceUnits
-        );
-    }
-    outText += "];\r\n\r\nasset_bunch bunch = [face, atlas];\r\n";
 }
 
 Expected<Core::Assets::AssetBytes, AStringView> BuildPreparedFont(const Span<const u8> sourceFontBytes, const Impl::FontAtlasPayload& atlas, Core::Alloc::ScratchArena& scratch){

@@ -8,30 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/alloc/scratch.h>
-
-namespace NWB::Impl{
-using ScratchPositionRefVector = Vector<MeshletPositionStreamRef, Core::Alloc::ScratchArena>;
-using ScratchAttributeRefVector = Vector<MeshletAttributeStreamRef, Core::Alloc::ScratchArena>;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 Expected<MeshletRefTotalCounts> TrySumRuntimeMeshletRefCounts(in Span<MeshletDesc> meshlets){
     MeshletRefTotalCounts counts;
     for(in MeshletDesc meshlet : meshlets){
@@ -112,14 +88,16 @@ b8 TryDecodeRuntimeZippedMeshletStreams(
     mut Vector<f16x4u> outRestNormals,
     mut Vector<f16x4u> outRestTangents,
     mut Vector<MeshletDesc> outMeshlets,
-    mut ScratchPositionRefVector outPositionRefs,
-    mut ScratchAttributeRefVector outAttributeRefs
+    mut Span<MeshletPositionStreamRef> outPositionRefs,
+    mut Span<MeshletAttributeStreamRef> outAttributeRefs
 ){
     const Expected<MeshletRefTotalCounts> totalCounts = TrySumRuntimeMeshletRefCounts(sourceMeshlets);
     if(!totalCounts.has_value())
         return false;
     const usize positionRefCount = totalCounts.value().positionRefCount;
     const usize attributeRefCount = totalCounts.value().attributeRefCount;
+    if(outPositionRefs.size() < positionRefCount || outAttributeRefs.size() < attributeRefCount)
+        return false;
 
     outRestPositions.clear();
     outRestNormals.clear();
@@ -129,14 +107,14 @@ b8 TryDecodeRuntimeZippedMeshletStreams(
     outRestPositions.reserve(positionRefCount);
     outRestNormals.reserve(attributeRefCount);
     outRestTangents.reserve(attributeRefCount);
-    outPositionRefs.reserve(positionRefCount);
-    outAttributeRefs.reserve(attributeRefCount);
 
+    usize writtenPositionRefCount = 0u;
+    usize writtenAttributeRefCount = 0u;
     for(usize meshletIndex = 0u; meshletIndex < sourceMeshlets.size(); ++meshletIndex){
         const MeshletDesc sourceMeshlet = sourceMeshlets[meshletIndex];
         MeshletDesc runtimeMeshlet = sourceMeshlet;
-        runtimeMeshlet.positionRefOffset = cast<u32>(outPositionRefs.size());
-        runtimeMeshlet.attributeRefOffset = cast<u32>(outAttributeRefs.size());
+        runtimeMeshlet.positionRefOffset = cast<u32>(writtenPositionRefCount);
+        runtimeMeshlet.attributeRefOffset = cast<u32>(writtenAttributeRefCount);
         outMeshlets.push_back(runtimeMeshlet);
 
         for(u32 localPositionIndex = 0u; localPositionIndex < MeshletPositionCount(sourceMeshlet); ++localPositionIndex){
@@ -151,9 +129,10 @@ b8 TryDecodeRuntimeZippedMeshletStreams(
             if(!sourceRef.has_value())
                 return false;
 
-            const MeshletPositionStreamRef runtimeRef = MakeRuntimeMeshletPositionStreamRef(sourceRef.value(), outPositionRefs.size());
+            const MeshletPositionStreamRef runtimeRef = MakeRuntimeMeshletPositionStreamRef(sourceRef.value(), writtenPositionRefCount);
             outRestPositions.push_back(sourcePositions[cast<usize>(sourceRef.value().position)]);
-            outPositionRefs.push_back(runtimeRef);
+            outPositionRefs[writtenPositionRefCount] = runtimeRef;
+            ++writtenPositionRefCount;
         }
 
         for(u32 localAttributeIndex = 0u; localAttributeIndex < MeshletAttributeCount(sourceMeshlet); ++localAttributeIndex){
@@ -173,8 +152,9 @@ b8 TryDecodeRuntimeZippedMeshletStreams(
             outRestNormals.push_back(sourceNormals[cast<usize>(sourceRef.value().normal)]);
             outRestTangents.push_back(sourceTangents[cast<usize>(sourceRef.value().tangent)]);
 
-            const MeshletAttributeStreamRef runtimeRef = MakeRuntimeMeshletAttributeStreamRef(sourceRef.value(), outAttributeRefs.size());
-            outAttributeRefs.push_back(runtimeRef);
+            const MeshletAttributeStreamRef runtimeRef = MakeRuntimeMeshletAttributeStreamRef(sourceRef.value(), writtenAttributeRefCount);
+            outAttributeRefs[writtenAttributeRefCount] = runtimeRef;
+            ++writtenAttributeRefCount;
         }
     }
     return true;

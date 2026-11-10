@@ -226,8 +226,8 @@ b8 SkeletonAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
     if(!skeleton.validatePayload(scratchArena))
         return false;
 
-    Vector<NameHash, Core::Alloc::ScratchArena> jointNameHashes(scratchArena);
-    return SerializeSkeletonBinaryPayload(skeleton.joints(), skeleton.jointIndices(), jointNameHashes, outBinary);
+    Vector<NameHash, Core::Alloc::ScratchArena> jointNameHashes(skeleton.joints().size(), NameHash{}, scratchArena);
+    return SerializeSkeletonBinaryPayload(skeleton.joints(), skeleton.jointIndices(), Span<NameHash>(jointNameHashes.data(), jointNameHashes.size()), outBinary);
 }
 
 Expected<SkeletonCookEntry> ParseSkeletonCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){

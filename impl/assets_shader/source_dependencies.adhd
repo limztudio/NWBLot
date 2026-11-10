@@ -38,7 +38,7 @@ namespace ShaderSourceDependencies{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Expected<::Path<Core::Alloc::ScratchArena>> ResolveIncludeFile(
+[[nodiscard]] NWB_INLINE Expected<::Path<Core::Alloc::ScratchArena>> ResolveIncludeFile(
     const AStringView includeName,
     const ShaderBinaryPayload::IncludeKind::Enum kind,
     const TStringView sourceDirectory,

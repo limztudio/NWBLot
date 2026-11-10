@@ -32,7 +32,7 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Core::Format::Enum SelectSupportedFormat(Core::Device& device, const Span<const Core::Format::Enum> candidates, const Core::FormatSupport::Mask requiredSupport)noexcept{
+[[nodiscard]] NWB_INLINE Core::Format::Enum SelectSupportedFormat(Core::Device& device, const Span<const Core::Format::Enum> candidates, const Core::FormatSupport::Mask requiredSupport)noexcept{
     for(const Core::Format::Enum format : candidates){
         if((device.queryFormatSupport(format) & requiredSupport) == requiredSupport)
             return format;
@@ -41,7 +41,7 @@ namespace ECSRenderDetail{
     return Core::Format::UNKNOWN;
 }
 
-[[nodiscard]] inline b8 CreateClampSampler(Core::Device& device, const b8 linearFiltering, Core::SamplerHandle& sampler){
+[[nodiscard]] NWB_INLINE b8 CreateClampSampler(Core::Device& device, const b8 linearFiltering, Core::SamplerHandle& sampler){
     if(sampler)
         return true;
 

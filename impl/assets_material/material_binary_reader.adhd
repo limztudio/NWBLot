@@ -8,28 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Impl{
-interface IShader;
-using MaterialStageShaderArray = Array<Core::Assets::AssetRef<IShader>, 14u>;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class MaterialBinaryReader{
     private MaterialTypedLayoutBlock unpackTypedLayoutBlock(in MaterialTypedLayoutBlockBinary blockBinary)const{
         MaterialTypedLayoutBlock block;
@@ -351,10 +329,10 @@ class MaterialBinaryReader{
         return true;
     }
 
-    private b8 readStageShaders(
+    private b8 readStageShaders<TStageShader>(
         in Span<u8> binary,
         mut usize inOutCursor,
-        mut MaterialStageShaderArray outStageShaders,
+        mut Array<AssetRef<TStageShader>, s_MaterialShaderStageCount> outStageShaders,
         mut u32 outStageShaderCount
     )const{
         for(usize i = 0u; i < s_MaterialShaderStageCount; ++i)
@@ -405,7 +383,7 @@ class MaterialBinaryReader{
         return true;
     }
 
-    public b8 deserialize(
+    public b8 deserialize<TStageShader>(
         in Span<u8> binary,
         mut String outShaderVariant,
         mut Name outMaterialInterface,
@@ -414,7 +392,7 @@ class MaterialBinaryReader{
         mut Vector<MaterialTypedLayoutField> outTypedLayoutFields,
         mut Vector<u8> outTypedBlockBytes,
         mut Vector<MaterialResourceReference> outResourceReferences,
-        mut MaterialStageShaderArray outStageShaders,
+        mut Array<AssetRef<TStageShader>, s_MaterialShaderStageCount> outStageShaders,
         mut u32 outStageShaderCount,
         mut b8 outTransparent,
         mut b8 outTwoSided,

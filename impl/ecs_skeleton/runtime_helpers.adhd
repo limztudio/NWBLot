@@ -27,12 +27,23 @@ namespace SkeletonRuntime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Expected<u32> BuildStoredJointPaletteFromSkeletonPose(const SkeletonPoseComponent& pose, Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena>& outJointPalette)noexcept{
+[[nodiscard]] NWB_INLINE Expected<u32> BuildStoredJointPaletteFromSkeletonPose(const SkeletonPoseComponent& pose, Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena>& outJointPalette)noexcept{
     return TryBuildStoredJointPaletteVectorFromSkeletonPose(pose, outJointPalette);
 }
 
-[[nodiscard]] inline Expected<u32> BuildStoredJointPaletteFromSkeletonPose(const SkeletonPoseComponent& pose, Vector<SkeletonJointMatrix, Core::Alloc::ScratchArena>& outJointPalette)noexcept{
-    return TryBuildStoredJointPaletteScratchVectorFromSkeletonPose(pose, outJointPalette);
+[[nodiscard]] NWB_INLINE Expected<u32> BuildStoredJointPaletteFromSkeletonPose(const SkeletonPoseComponent& pose, Vector<SkeletonJointMatrix, Core::Alloc::ScratchArena>& outJointPalette)noexcept{
+    outJointPalette.clear();
+    if(!HasSkeletonPoseData(pose))
+        return static_cast<u32>(SkeletonSkinningMode::LinearBlend);
+    if(!ValidSkeletonPoseTopology(pose))
+        return MakeUnexpected(Failure{});
+    outJointPalette.resize(pose.localJoints.size(), MakeIdentitySkeletonJointMatrix());
+    const Expected<u32> resolvedMode = TryFillStoredJointPaletteSpanFromSkeletonPose(pose, Span<SkeletonJointMatrix>(outJointPalette.data(), outJointPalette.size()));
+    if(!resolvedMode.has_value()){
+        outJointPalette.clear();
+        return MakeUnexpected(Failure{});
+    }
+    return resolvedMode.value();
 }
 
 

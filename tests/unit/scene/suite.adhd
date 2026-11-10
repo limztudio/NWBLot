@@ -146,7 +146,7 @@ public:
     virtual b8 readAssetBinary(const Name& virtualPath, AssetBytes& outBinary)const override;
 
 
-private:
+public:
     AssetArena& m_arena;
     AssetVector<Entry> m_entries;
 };
@@ -199,9 +199,22 @@ using SkinningSubsystem = Impl::SkinningSubsystem;
 using TransparentSubsystem = Impl::TransparentSubsystem;
 using UiSubsystem = Impl::UiSubsystem;
 using ActiveSceneSubsystems = Impl::ActiveSceneSubsystems;
+using ProjectHeaderBinary = Impl::ProjectHeaderBinary;
+using SceneHeaderBinary = Impl::SceneHeaderBinary;
+using SceneAssetEntryBinary = Impl::SceneAssetEntryBinary;
+using EntityHeaderBinary = Impl::EntityHeaderBinary;
+using SceneSubsystemRef = Impl::SceneAsset::SubsystemRef;
+using SceneSubsystemRefSpan = Span<const Impl::SceneAsset::SubsystemRef>;
+using SceneAssetMap = Impl::SceneAsset::AssetMap;
+using SceneEntityRef = Impl::SceneAsset::EntityRef;
+using SceneEntityRefSpan = Span<const Impl::SceneAsset::EntityRef>;
+using EntityComponentRef = Impl::EntityAsset::ComponentRef;
+using EntityComponentRefSpan = Span<const Impl::EntityAsset::ComponentRef>;
+using ConstByteSpan = Span<const u8>;
 using Impl::s_DefaultProjectVirtualPath;
 
 using MapAssetBinarySource = Tests::SceneAssetTestHelpers::MapAssetBinarySource;
+using MapAssetBinaryEntry = Tests::SceneAssetTestHelpers::MapAssetBinarySource::Entry;
 using Tests::SceneAssetTestHelpers::MakeProjectBinary;
 using Tests::SceneAssetTestHelpers::MakeSceneBinary;
 using Tests::SceneAssetTestHelpers::MakeEntityBinary;
@@ -577,6 +590,80 @@ void VerifySceneSubsystemAssets_DeduplicatesSubsystemRefsAndPreservesPreviousSce
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+AssetBytes BuildTestProjectBinary(in Name startScene, mut AssetArena arena){
+    ProjectHeaderBinary header = ProjectHeaderBinary();
+    header.startSceneHash = startScene.hash();
+
+    AssetBytes binary(arena);
+    binary.reserve(sizeof(header));
+    AppendPOD(binary, header);
+    return binary;
+}
+
+AssetBytes BuildTestSceneBinary(in SceneSubsystemRefSpan subsystems, in SceneAssetMap assets, in SceneEntityRefSpan entities, mut AssetArena arena){
+    SceneHeaderBinary header = SceneHeaderBinary();
+    header.subsystemCount = cast<u64>(subsystems.size());
+    header.entityCount = cast<u64>(entities.size());
+    header.assetCount = cast<u64>(assets.size());
+
+    AssetBytes binary(arena);
+    binary.reserve(sizeof(header) + subsystems.size() * sizeof(NameHash) + entities.size() * sizeof(NameHash) + assets.size() * sizeof(SceneAssetEntryBinary));
+    AppendPOD(binary, header);
+    for(in SceneSubsystemRef ref : subsystems){
+        AppendPOD(binary, ref.name().hash());
+    }
+    for(in SceneEntityRef ref : entities){
+        AppendPOD(binary, ref.name().hash());
+    }
+    for(in auto assetEntry : assets){
+        SceneAssetEntryBinary entry = SceneAssetEntryBinary();
+        entry.nicknameHash = assetEntry.first.hash();
+        entry.assetHash = assetEntry.second.name().hash();
+        AppendPOD(binary, entry);
+    }
+    return binary;
+}
+
+AssetBytes BuildTestEntityBinary(in EntityComponentRefSpan components, mut AssetArena arena){
+    EntityHeaderBinary header = EntityHeaderBinary();
+    header.componentCount = cast<u64>(components.size());
+
+    AssetBytes binary(arena);
+    binary.reserve(sizeof(header) + components.size() * sizeof(NameHash));
+    AppendPOD(binary, header);
+    for(in EntityComponentRef ref : components){
+        AppendPOD(binary, ref.name().hash());
+    }
+    return binary;
+}
+
+void SetMapAssetBinary(in Name virtualPath, in ConstByteSpan binary, mut MapAssetBinarySource source){
+    for(mut MapAssetBinaryEntry entry : source.m_entries){
+        if(entry.path == virtualPath){
+            entry.binary.assign(binary.begin(), binary.end());
+            return;
+        }
+    }
+    AssetBytes copy(source.m_arena);
+    copy.assign(binary.begin(), binary.end());
+    source.m_entries.emplace_back(virtualPath, copy);
+}
+
+b8 ReadMapAssetBinary(in Name virtualPath, in MapAssetBinarySource source, mut AssetBytes outBinary){
+    outBinary.clear();
+    for(in MapAssetBinaryEntry entry : source.m_entries){
+        if(entry.path == virtualPath){
+            outBinary.assign(entry.binary.begin(), entry.binary.end());
+            return true;
+        }
+    }
+    return false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [source]
 native{
 
@@ -597,70 +684,23 @@ namespace Tests::SceneAssetTestHelpers{
 
 
 AssetBytes MakeProjectBinary(const Name& startScene, AssetArena& arena){
-    ProjectHeaderBinary header;
-    header.startSceneHash = startScene.hash();
-
-    AssetBytes binary(arena);
-    binary.reserve(sizeof(header));
-    AppendPOD(binary, header);
-    return binary;
+    return Tests::SceneAssetCases::BuildTestProjectBinary(startScene, arena);
 }
 
 AssetBytes MakeSceneBinary(const Span<const SceneAsset::SubsystemRef> subsystems, const SceneAsset::AssetMap& assets, const Span<const SceneAsset::EntityRef> entities, AssetArena& arena){
-    SceneHeaderBinary header;
-    header.subsystemCount = static_cast<u64>(subsystems.size());
-    header.entityCount = static_cast<u64>(entities.size());
-    header.assetCount = static_cast<u64>(assets.size());
-
-    AssetBytes binary(arena);
-    binary.reserve(sizeof(header) + subsystems.size() * sizeof(NameHash) + entities.size() * sizeof(NameHash) + assets.size() * sizeof(SceneAssetEntryBinary));
-    AppendPOD(binary, header);
-    for(const SceneAsset::SubsystemRef& ref : subsystems)
-        AppendPOD(binary, ref.name().hash());
-    for(const SceneAsset::EntityRef& ref : entities)
-        AppendPOD(binary, ref.name().hash());
-    for(const auto& [nickname, ref] : assets){
-        SceneAssetEntryBinary entry;
-        entry.nicknameHash = nickname.hash();
-        entry.assetHash = ref.name().hash();
-        AppendPOD(binary, entry);
-    }
-    return binary;
+    return Tests::SceneAssetCases::BuildTestSceneBinary(subsystems, assets, entities, arena);
 }
 
 AssetBytes MakeEntityBinary(const Span<const EntityAsset::ComponentRef> components, AssetArena& arena){
-    EntityHeaderBinary header;
-    header.componentCount = static_cast<u64>(components.size());
-
-    AssetBytes binary(arena);
-    binary.reserve(sizeof(header) + components.size() * sizeof(NameHash));
-    AppendPOD(binary, header);
-    for(const EntityAsset::ComponentRef& ref : components)
-        AppendPOD(binary, ref.name().hash());
-    return binary;
+    return Tests::SceneAssetCases::BuildTestEntityBinary(components, arena);
 }
 
 void MapAssetBinarySource::setBinary(const Name& virtualPath, const Span<const u8> binary){
-    AssetBytes copy(m_arena);
-    copy.assign(binary.begin(), binary.end());
-    for(Entry& entry : m_entries){
-        if(entry.path == virtualPath){
-            entry.binary = Move(copy);
-            return;
-        }
-    }
-    m_entries.emplace_back(virtualPath, Move(copy));
+    Tests::SceneAssetCases::SetMapAssetBinary(virtualPath, binary, *this);
 }
 
 b8 MapAssetBinarySource::readAssetBinary(const Name& virtualPath, AssetBytes& outBinary)const{
-    outBinary.clear();
-    for(const Entry& entry : m_entries){
-        if(entry.path == virtualPath){
-            outBinary.assign(entry.binary.begin(), entry.binary.end());
-            return true;
-        }
-    }
-    return false;
+    return Tests::SceneAssetCases::ReadMapAssetBinary(virtualPath, *this, outBinary);
 }
 
 

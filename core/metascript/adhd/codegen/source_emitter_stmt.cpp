@@ -289,11 +289,13 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
         emitIndent(out, indent);
         out.append("{\r\n");
         b8 hasDerefShadowBindings = false;
+        b8 hasPrefixStatements = false;
         for(usize i = 0u; i < stmt.nativeBindings.size(); ++i){
             const NativeBinding& binding = stmt.nativeBindings[i];
             if(binding.sourceExpr && binding.sourceExpr->kind == ExprKind::Identifier && binding.sourceExpr->text == binding.aliasName){
                 if(binding.sourceExpr->derefNotNull){
                     hasDerefShadowBindings = true;
+                    hasPrefixStatements = true;
                     emitIndent(out, indent + 1u);
                     if(binding.mode == ParamPassingMode::In)
                         out.append("[[maybe_unused]] const auto* __adhd_native_ptr_");
@@ -304,7 +306,8 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
                     emitExpr(out, *binding.sourceExpr);
                     out.append(");\r\n");
                 }
-                else if(stmt.nativeCode.find('#') != MStringView::npos){
+                else if(stmt.nativeCode.find("#if") != MStringView::npos){
+                    hasPrefixStatements = true;
                     emitIndent(out, indent + 1u);
                     out.append("(void)");
                     out.append(binding.aliasName.data(), binding.aliasName.size());
@@ -312,6 +315,7 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
                 }
                 continue;
             }
+            hasPrefixStatements = true;
             emitIndent(out, indent + 1u);
             if(binding.mode == ParamPassingMode::In)
                 out.append("[[maybe_unused]] const auto& ");
@@ -323,14 +327,17 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
                 emitExpr(out, *binding.sourceExpr);
             out.append(");\r\n");
         }
-        const u32 bodyIndent = hasDerefShadowBindings ? (indent + 2u) : (indent + 1u);
+        const MStringView trimmedNative = TrimView(stmt.nativeCode);
+        const b8 wrapPragmaCompound = hasPrefixStatements && trimmedNative.starts_with("#pragma");
+        const u32 derefIndent = hasDerefShadowBindings ? (indent + 2u) : (indent + 1u);
+        const u32 bodyIndent = wrapPragmaCompound ? (derefIndent + 1u) : derefIndent;
         if(hasDerefShadowBindings){
             emitIndent(out, indent + 1u);
             out.append("{\r\n");
             for(usize i = 0u; i < stmt.nativeBindings.size(); ++i){
                 const NativeBinding& binding = stmt.nativeBindings[i];
                 if(binding.sourceExpr && binding.sourceExpr->kind == ExprKind::Identifier && binding.sourceExpr->text == binding.aliasName && binding.sourceExpr->derefNotNull){
-                    emitIndent(out, bodyIndent);
+                    emitIndent(out, derefIndent);
                     if(binding.mode == ParamPassingMode::In)
                         out.append("[[maybe_unused]] const auto& ");
                     else
@@ -342,14 +349,21 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
                 }
             }
         }
+        if(wrapPragmaCompound){
+            emitIndent(out, derefIndent);
+            out.append("{\r\n");
+        }
         emitIndent(out, bodyIndent);
-        const MStringView trimmedNative = TrimView(stmt.nativeCode);
         AppendTextDiscardCrAndExpandLf(out, trimmedNative);
         const usize lastNl = trimmedNative.rfind('\n');
         const MStringView lastLine = TrimView(lastNl == MStringView::npos ? trimmedNative : trimmedNative.substr(lastNl + 1u));
         if(!trimmedNative.empty() && trimmedNative.back() != ';' && trimmedNative.back() != '}' && (lastLine.empty() || lastLine[0] != '#'))
             out.push_back(';');
         out.append("\r\n");
+        if(wrapPragmaCompound){
+            emitIndent(out, derefIndent);
+            out.append("}\r\n");
+        }
         if(hasDerefShadowBindings){
             emitIndent(out, indent + 1u);
             out.append("}\r\n");

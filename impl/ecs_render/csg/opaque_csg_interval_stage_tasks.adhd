@@ -520,7 +520,7 @@ struct OpaqueIntervalReadiness{
     OpaqueCsgIntervalReadinessState state;
 };
 
-[[nodiscard]] inline OpaqueIntervalReadiness ResolveOpaqueIntervalReadiness(const CsgOpaqueIntervalRecordInputs& payload, RendererMaterialSystem& materialSystem)noexcept{
+[[nodiscard]] NWB_INLINE OpaqueIntervalReadiness ResolveOpaqueIntervalReadiness(const CsgOpaqueIntervalRecordInputs& payload, RendererMaterialSystem& materialSystem)noexcept{
     OpaqueIntervalReadiness readiness{};
     const b8 frameSetupReady = FrameSetupReady(payload.meshViewSetupReady, payload.sceneShadingSetupReady);
     if(frameSetupReady){
@@ -548,7 +548,7 @@ struct OpaqueIntervalReadiness{
 }
 
 template<typename Dispatch>
-[[nodiscard]] inline b8 RecordOpaqueInterval(const CsgOpaqueIntervalRecordInputs& payload, Core::CommandList& commandList, Dispatch dispatch){
+[[nodiscard]] NWB_INLINE b8 RecordOpaqueInterval(const CsgOpaqueIntervalRecordInputs& payload, Core::CommandList& commandList, Dispatch dispatch){
     if(!payload.opaqueDrawSnapshot.captured)
         return false;
 

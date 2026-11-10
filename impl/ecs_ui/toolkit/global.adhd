@@ -32,9 +32,7 @@ native{
 
 
 void AdvanceRevision(mut u64 inOutRevision){
-    if(inOutRevision == u64.max)
-        TerminateInvariant();
-    ++inOutRevision;
+    AdvanceNonWrappingRevision(inOutRevision);
 }
 
 

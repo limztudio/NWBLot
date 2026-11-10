@@ -192,21 +192,16 @@ UiSkinRegion MakeRegion(in Name name, in u32 ordinal){
     return region;
 }
 
-void SetRegions(mut UiSkin skin, mut RegionVector regions){
-    native(mut skin, mut regions){
-        skin.setAtlas(Core::Assets::AssetRef<Texture>("test/skin/texture"), 8192u, 1u, 1.0f, Move(regions));
-    }
+void SetRegions(mut UiSkin skin, in RegionVector regions){
+    RegionVector movedRegions = regions;
+    skin.setAtlas(AssetRef<Texture>("test/skin/texture"), 8192u, 1u, 1.0f, movedRegions);
 }
 
 Name RegionName(in u32 index){
-    Name result = s_NameNone;
-    native(in index, mut result){
-        NameHash hash{};
-        hash.qwords[0u] = 1u + (index * 271u) % s_UiSkinMaxRegionCount;
-        hash.qwords[s_NameHashLaneCount - 1u] = index + 1u;
-        result = Name(hash);
-    }
-    return result;
+    NameHash hash = NameHash();
+    hash.qwords[0u] = 1u + (index * 271u) % s_UiSkinMaxRegionCount;
+    hash.qwords[s_NameHashLaneCount - 1u] = index + 1u;
+    return Name(hash);
 }
 
 usize FindRegionAddress(in UiSkin skin, in Name name){
@@ -255,9 +250,7 @@ void CopyWithoutRegion(in UiSkin source, in Name removed, mut ToolkitSkinArena t
         if(region.name != removed)
             regions.push_back(region);
     }
-    native(in source, mut regions, mut outSkin){
-        outSkin.setAtlas(source.texture(), source.atlasWidth(), source.atlasHeight(), source.referenceDensity(), Move(regions));
-    }
+    outSkin.setAtlas(source.texture(), source.atlasWidth(), source.atlasHeight(), source.referenceDensity(), regions);
 }
 
 b8 CanParseMetadata(in StringView metadata, mut SkinTestArena testArena){
@@ -276,14 +269,15 @@ b8 CanParseMetadata(in StringView metadata, mut SkinTestArena testArena){
 
 AssetBytes MakeBinary(in UiSkinHeaderBinary header, in UiSkinRegionBinary region, mut SkinTestArena testArena){
     AssetBytes binary(testArena.arena);
-    native(in header, in region, mut binary){
-        binary.reserve(sizeof(header) + sizeof(region) + s_ColorRoleCount * sizeof(UiSkinColor) + sizeof(UiSkinTypography));
-        AppendPOD(binary, header);
-        AppendPOD(binary, region);
-        for(const UiSkinColor& color : UiSkinPalette{}.colors)
-            AppendPOD(binary, color);
-        AppendPOD(binary, UiSkinTypography{});
+    binary.reserve(sizeof(header) + sizeof(region) + s_ColorRoleCount * sizeof(UiSkinColor) + sizeof(UiSkinTypography));
+    AppendPOD(binary, header);
+    AppendPOD(binary, region);
+    const UiSkinPalette palette = UiSkinPalette();
+    for(in UiSkinColor color : palette.colors){
+        AppendPOD(binary, color);
     }
+    const UiSkinTypography typography = UiSkinTypography();
+    AppendPOD(binary, typography);
     return binary;
 }
 
@@ -359,13 +353,12 @@ AssetBytes MakeTypographyBinary(in UiSkinColor color, in f32 defaultFontSize, mu
     const UiSkinHeaderBinary header = ValidHeader();
     AssetBytes binary = MakeBinary(header, ValidRegion(), testArena);
     binary.resize(s_UiSkinHeaderBinarySize + s_UiSkinRegionBinarySize);
-    native(in color, in defaultFontSize, mut binary){
-        for(usize index = 0u; index < s_ColorRoleCount; ++index)
-            AppendPOD(binary, color);
-        UiSkinTypography typography;
-        typography.defaultFontSize = defaultFontSize;
-        AppendPOD(binary, typography);
+    for(usize index = 0u; index < s_ColorRoleCount; ++index){
+        AppendPOD(binary, color);
     }
+    UiSkinTypography typography = UiSkinTypography();
+    typography.defaultFontSize = defaultFontSize;
+    AppendPOD(binary, typography);
     return binary;
 }
 
@@ -385,12 +378,9 @@ void VerifyAssetsUiSkinRegionIndex_MaximumCountPreservesAuthoredOrderAcrossHashO
     }
     EXPECT_EQ(FindRegionAddress(skin, s_NameNone), 0u);
     EXPECT_EQ(FindRegionAddress(skin, s_UiLookupNameMissing), 0u);
-    Name afterName = s_NameNone;
-    native(mut afterName){
-        NameHash after{};
-        after.qwords[0u] = Limit<u64>::s_Max;
-        afterName = Name(after);
-    }
+    NameHash after = NameHash();
+    after.qwords[0u] = u64.max;
+    const Name afterName = Name(after);
     EXPECT_EQ(FindRegionAddress(skin, afterName), 0u);
 }
 
@@ -414,25 +404,19 @@ void VerifyAssetsUiSkinRegionIndex_EqualLeadingHashLanesStillResolveDistinctName
     UiSkin skin(owner.arena, Name(s_SkinPath));
     RegionVector regions(owner.arena);
     for(u32 index = 0u; index < 129u; ++index){
-        Name hashName = s_NameNone;
-        native(in index, mut hashName){
-            NameHash hash{};
-            hash.qwords[0u] = 123u;
-            hash.qwords[s_NameHashLaneCount - 1u] = 129u - index;
-            hashName = Name(hash);
-        }
+        NameHash hash = NameHash();
+        hash.qwords[0u] = 123u;
+        hash.qwords[s_NameHashLaneCount - 1u] = 129u - index;
+        const Name hashName = Name(hash);
         regions.push_back(MakeRegion(hashName, index));
     }
     SetRegions(skin, regions);
     ASSERT_TRUE(skin.validatePayload());
     for(usize index = 0u; index < skin.regions().size(); ++index)
         EXPECT_EQ(FindRegionAddress(skin, skin.regions()[index].name), RegionElementAddress(skin, index));
-    Name missingName = s_NameNone;
-    native(in skin, mut missingName){
-        NameHash missing = skin.regions()[0u].name.hash();
-        missing.qwords[s_NameHashLaneCount - 1u] = 130u;
-        missingName = Name(missing);
-    }
+    NameHash missing = skin.regions()[0u].name.hash();
+    missing.qwords[s_NameHashLaneCount - 1u] = 130u;
+    const Name missingName = Name(missing);
     EXPECT_EQ(FindRegionAddress(skin, missingName), 0u);
 }
 
@@ -831,10 +815,8 @@ void VerifyAssetsUiSkin_RejectsOverLimitCountsBeforeReadingOrCopyingRegions(){
     UiSkinHeaderBinary header = ValidHeader();
     header.regionCount = s_UiSkinMaxRegionCount + 1u;
     AssetBytes binary(testArena.arena);
-    native(in header, mut binary){
-        binary.reserve(sizeof(header));
-        AppendPOD(binary, header);
-    }
+    binary.reserve(sizeof(header));
+    AppendPOD(binary, header);
     EXPECT_FALSE(skin.loadBinary(binary));
     EXPECT_TRUE(logger.sawErrorContaining(s_ErrLoadRegionLimit));
     ASSERT_EQ(skin.regions().size(), 1u);
@@ -864,9 +846,7 @@ void VerifyAssetsUiSkin_RejectsOverLimitCountsBeforeReadingOrCopyingRegions(){
     for(u32 index = 0u; index <= s_UiSkinMaxRegionCount; ++index)
         oversized.push_back(skin.regions().front());
     UiSkin constructed(testArena.arena, skin.virtualPath());
-    native(in skin, mut oversized, mut constructed){
-        constructed.setAtlas(skin.texture(), skin.atlasWidth(), skin.atlasHeight(), skin.referenceDensity(), Move(oversized));
-    }
+    constructed.setAtlas(skin.texture(), skin.atlasWidth(), skin.atlasHeight(), skin.referenceDensity(), oversized);
     EXPECT_FALSE(constructed.validatePayload());
     EXPECT_TRUE(logger.sawErrorContaining(s_ErrValidateRegionLimit));
 }

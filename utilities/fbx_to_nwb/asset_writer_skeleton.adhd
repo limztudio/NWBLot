@@ -200,20 +200,8 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const Span<ufbx_node* const
 
 Expected<PositionAlignedSkinnedMesh> BuildPositionAlignedSkinnedMesh(const SourceMeshStreams& sourceMesh, Core::Alloc::ScratchArena&){
     PositionAlignedSkinnedMesh result;
-    SourceMeshStreams& outMesh = result.mesh;
-    UtilityVector<MeshSkinInfluence>& outPositionSkin = result.skin;
-
-    if(!ValidateSkinnedModelSourceMeshRefs(CountSourceMeshStreams(sourceMesh), sourceMesh.vertexRefs, sourceMesh.indices))
+    if(!PopulatePositionAlignedSkinnedMesh(sourceMesh, result.mesh, result.skin))
         return MakeUnexpected(Failure{});
-
-    outMesh.normals = sourceMesh.normals;
-    outMesh.tangents = sourceMesh.tangents;
-    outMesh.uv0 = sourceMesh.uv0;
-    outMesh.colors = sourceMesh.colors;
-    outMesh.indices = sourceMesh.indices;
-    if(!BuildPositionAlignedSkinnedMeshStreams(sourceMesh.positions, sourceMesh.skin, sourceMesh.vertexRefs, outMesh.positions, outPositionSkin, outMesh.vertexRefs))
-        return MakeUnexpected(Failure{});
-
     return result;
 }
 

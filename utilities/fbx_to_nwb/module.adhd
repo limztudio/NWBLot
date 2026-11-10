@@ -163,18 +163,6 @@ Expected<MeshBuildResult> BuildMesh(
     Core::Alloc::ScratchArena& scratchArena
 );
 
-[[nodiscard]] inline SourceMeshStreamCounts CountSourceMeshStreams(const SourceMeshStreams& mesh)noexcept{
-    return MakeSourceMeshStreamCounts(
-        mesh.positions.size(),
-        mesh.normals.size(),
-        mesh.tangents.size(),
-        mesh.uv0.size(),
-        mesh.colors.size(),
-        mesh.skin.size(),
-        mesh.vertexRefs.size(),
-        mesh.indices.size()
-    );
-}
 [[nodiscard]] Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const ScratchPath& inputPath, const ScratchPath& outputPath, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena);
 
 b8 WriteNwbAsset(
@@ -201,6 +189,51 @@ NWB_FBX_TO_NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+SourceMeshStreamCounts CountSourceMeshStreams(in SourceMeshStreams mesh){
+    return MakeSourceMeshStreamCounts(
+        mesh.positions.size(),
+        mesh.normals.size(),
+        mesh.tangents.size(),
+        mesh.uv0.size(),
+        mesh.colors.size(),
+        mesh.skin.size(),
+        mesh.vertexRefs.size(),
+        mesh.indices.size()
+    );
+}
+
+void ReserveSourceMeshStreamsCapacity(in usize estimatedTriangleCorners, in b8 wantsSkinning, mut SourceMeshStreams outMesh){
+    outMesh.positions.reserve(estimatedTriangleCorners);
+    outMesh.normals.reserve(estimatedTriangleCorners);
+    outMesh.uv0.reserve(estimatedTriangleCorners);
+    outMesh.colors.reserve(estimatedTriangleCorners);
+    outMesh.tangents.reserve(estimatedTriangleCorners);
+    outMesh.indices.reserve(estimatedTriangleCorners);
+    outMesh.vertexRefs.reserve(estimatedTriangleCorners);
+    if(wantsSkinning)
+        outMesh.skin.reserve(estimatedTriangleCorners);
+}
+
+b8 DropSourceMeshTangentStream(mut SourceMeshStreams inOutMesh){
+    return DropSourceMeshTangentsStreams(inOutMesh.vertexRefs, inOutMesh.tangents, inOutMesh.vertexRefs, inOutMesh.indices);
+}
+
+b8 PopulatePositionAlignedSkinnedMesh(in SourceMeshStreams sourceMesh, mut SourceMeshStreams outMesh, mut UtilitySkinInfluenceVector outPositionSkin){
+    if(!ValidateSkinnedModelSourceMeshRefs(CountSourceMeshStreams(sourceMesh), sourceMesh.vertexRefs, sourceMesh.indices))
+        return false;
+
+    outMesh.normals = sourceMesh.normals;
+    outMesh.tangents = sourceMesh.tangents;
+    outMesh.uv0 = sourceMesh.uv0;
+    outMesh.colors = sourceMesh.colors;
+    outMesh.indices = sourceMesh.indices;
+    return BuildPositionAlignedSkinnedMeshStreams(sourceMesh.positions, sourceMesh.skin, sourceMesh.vertexRefs, outMesh.positions, outPositionSkin, outMesh.vertexRefs);
 }
 
 

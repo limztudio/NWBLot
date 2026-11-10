@@ -66,7 +66,7 @@ public:
 
 
 // Caller resolves instances from binding handles; queries retain no GPU buffers.
-[[nodiscard]] inline Expected<SkinnedRuntimeMeshIdentity> ResolveSkinnedRuntimeMeshIdentity(const Core::ECS::EntityID entity, const RuntimeMeshHandle runtimeMesh, const MeshSkinningRuntimeInstance* const instance){
+[[nodiscard]] NWB_INLINE Expected<SkinnedRuntimeMeshIdentity> ResolveSkinnedRuntimeMeshIdentity(const Core::ECS::EntityID entity, const RuntimeMeshHandle runtimeMesh, const MeshSkinningRuntimeInstance* const instance){
     if(!instance)
         return MakeUnexpected(Failure{});
     const Expected<SkinnedRuntimeMeshIdentity> identity = TryResolveSkinnedRuntimeMeshIdentity(entity, runtimeMesh, instance->entity, instance->dirtyFlags, instance->sourceName, instance->handle.value, instance->editRevision);
@@ -79,7 +79,7 @@ public:
     return *identity;
 }
 // Success retains raster and optional RT roles.
-[[nodiscard]] inline Expected<RuntimeMeshDesc> BuildSkinnedRuntimeMeshDesc(const Core::ECS::EntityID entity, const RuntimeMeshHandle runtimeMesh, const MeshSkinningRuntimeInstance* const instance, const b8 boundsFresh, const b8 conesFresh){
+[[nodiscard]] NWB_INLINE Expected<RuntimeMeshDesc> BuildSkinnedRuntimeMeshDesc(const Core::ECS::EntityID entity, const RuntimeMeshHandle runtimeMesh, const MeshSkinningRuntimeInstance* const instance, const b8 boundsFresh, const b8 conesFresh){
     const auto identity = ResolveSkinnedRuntimeMeshIdentity(entity, runtimeMesh, instance);
     if(!identity)
         return MakeUnexpected(Failure{});
@@ -206,11 +206,11 @@ private:
 namespace MeshSkinningGraphDetail{
     [[nodiscard]] Core::GpuTaskSchedulingHint MakeSerialMergeScheduling(Core::GpuTaskCostHint::Enum cost)noexcept;
 
-    [[nodiscard]] inline Core::GpuTaskSchedulingHint JointPaletteUploadScheduling()noexcept{
+    [[nodiscard]] NWB_INLINE Core::GpuTaskSchedulingHint JointPaletteUploadScheduling()noexcept{
         return MakeSerialMergeScheduling(Core::GpuTaskCostHint::Tiny);
     }
 
-    [[nodiscard]] inline Core::GpuTaskSchedulingHint SkinningDispatchScheduling()noexcept{
+    [[nodiscard]] NWB_INLINE Core::GpuTaskSchedulingHint SkinningDispatchScheduling()noexcept{
         return MakeSerialMergeScheduling(Core::GpuTaskCostHint::Small);
     }
 };
@@ -223,7 +223,7 @@ namespace MeshSkinningGraphDetail{
 using SkinningPlanRecorder = b8 (MeshSkinningSystem::*)(const MeshSkinningGraphDispatchPlan&, const Core::GpuTaskRecordContext&, Core::CommandList&);
 
 template<SkinningPlanRecorder Recorder>
-[[nodiscard]] inline b8 RecordSkinningPlans(
+[[nodiscard]] NWB_INLINE b8 RecordSkinningPlans(
     MeshSkinningSystem& system,
     const Span<const MeshSkinningGraphDispatchPlan> plans,
     const Core::GpuTaskRecordContext& context,

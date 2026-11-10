@@ -31,17 +31,17 @@ namespace RendererDescriptorRegisterDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline b8 IsDescriptorClass(const Core::GpuDescriptorHandle handle, const Core::GpuDescriptorClass::Enum descriptorClass)noexcept{
+[[nodiscard]] NWB_INLINE b8 IsDescriptorClass(const Core::GpuDescriptorHandle handle, const Core::GpuDescriptorClass::Enum descriptorClass)noexcept{
     return handle.valid() && handle.descriptorClass() == descriptorClass;
 }
 
-inline void RetireDescriptor(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& inOutHandle)noexcept{
+NWB_INLINE void RetireDescriptor(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& inOutHandle)noexcept{
     if(inOutHandle.valid() && heap.isInitialized())
         heap.free(inOutHandle);
     inOutHandle = Core::GpuDescriptorHandle::Invalid();
 }
 
-[[nodiscard]] inline Expected<Core::GpuDescriptorHandle> RegisterDescriptor(Core::GpuDescriptorHeap& heap, const Core::GpuDescriptorClass::Enum descriptorClass, const Core::DescriptorWriteItem& item){
+[[nodiscard]] NWB_INLINE Expected<Core::GpuDescriptorHandle> RegisterDescriptor(Core::GpuDescriptorHeap& heap, const Core::GpuDescriptorClass::Enum descriptorClass, const Core::DescriptorWriteItem& item){
     const Expected<Core::GpuDescriptorHandle> allocated = heap.allocate(descriptorClass);
     if(!allocated)
         return MakeUnexpected(allocated.error());
@@ -55,7 +55,7 @@ inline void RetireDescriptor(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorH
     return MakeUnexpected(Failure{});
 }
 
-[[nodiscard]] inline b8 AssignDescriptor(Core::GpuDescriptorHeap& heap, const Core::GpuDescriptorClass::Enum descriptorClass, const Core::DescriptorWriteItem& item, Core::GpuDescriptorHandle& outHandle){
+[[nodiscard]] NWB_INLINE b8 AssignDescriptor(Core::GpuDescriptorHeap& heap, const Core::GpuDescriptorClass::Enum descriptorClass, const Core::DescriptorWriteItem& item, Core::GpuDescriptorHandle& outHandle){
     const Expected<Core::GpuDescriptorHandle> descriptor = RegisterDescriptor(heap, descriptorClass, item);
     if(!descriptor)
         return false;
@@ -63,7 +63,7 @@ inline void RetireDescriptor(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorH
     return true;
 }
 
-[[nodiscard]] inline b8 ReplaceDescriptor(Core::GpuDescriptorHeap& heap, const Core::GpuDescriptorClass::Enum descriptorClass, const Core::DescriptorWriteItem& item, Core::GpuDescriptorHandle& inOutHandle){
+[[nodiscard]] NWB_INLINE b8 ReplaceDescriptor(Core::GpuDescriptorHeap& heap, const Core::GpuDescriptorClass::Enum descriptorClass, const Core::DescriptorWriteItem& item, Core::GpuDescriptorHandle& inOutHandle){
     const Expected<Core::GpuDescriptorHandle> descriptor = RegisterDescriptor(heap, descriptorClass, item);
     if(!descriptor)
         return false;
@@ -75,7 +75,7 @@ inline void RetireDescriptor(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorH
     return true;
 }
 
-[[nodiscard]] inline Expected<Core::GpuDescriptorHandle> RegisterSampledTexture(
+[[nodiscard]] NWB_INLINE Expected<Core::GpuDescriptorHandle> RegisterSampledTexture(
     Core::GpuDescriptorHeap& heap,
     const Core::GpuDescriptorClass::Enum descriptorClass,
     const Core::TextureHandle& texture,
@@ -86,7 +86,7 @@ inline void RetireDescriptor(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorH
     return RegisterDescriptor(heap, descriptorClass, Core::DescriptorWriteItem::TextureSrv(0u, texture.get(), format, subresources, dimension));
 }
 
-[[nodiscard]] inline b8 AssignSampledTexture(
+[[nodiscard]] NWB_INLINE b8 AssignSampledTexture(
     Core::GpuDescriptorHeap& heap,
     const Core::GpuDescriptorClass::Enum descriptorClass,
     const Core::TextureHandle& texture,
@@ -102,7 +102,7 @@ inline void RetireDescriptor(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorH
     return true;
 }
 
-[[nodiscard]] inline Expected<Core::GpuDescriptorHandle> RegisterStorageTexture(
+[[nodiscard]] NWB_INLINE Expected<Core::GpuDescriptorHandle> RegisterStorageTexture(
     Core::GpuDescriptorHeap& heap,
     const Core::TextureHandle& texture,
     const Core::Format::Enum format = Core::Format::UNKNOWN,
@@ -111,7 +111,7 @@ inline void RetireDescriptor(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorH
     return RegisterDescriptor(heap, Core::GpuDescriptorClass::StorageImage, Core::DescriptorWriteItem::TextureUav(0u, texture.get(), format, Core::s_AllSubresources, dimension));
 }
 
-[[nodiscard]] inline b8 AssignStorageTexture(
+[[nodiscard]] NWB_INLINE b8 AssignStorageTexture(
     Core::GpuDescriptorHeap& heap,
     const Core::TextureHandle& texture,
     const Core::Format::Enum format,
@@ -125,23 +125,23 @@ inline void RetireDescriptor(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorH
     return true;
 }
 
-[[nodiscard]] inline Expected<Core::GpuDescriptorHandle> RegisterSampler(Core::GpuDescriptorHeap& heap, Core::Sampler& sampler){
+[[nodiscard]] NWB_INLINE Expected<Core::GpuDescriptorHandle> RegisterSampler(Core::GpuDescriptorHeap& heap, Core::Sampler& sampler){
     return RegisterDescriptor(heap, Core::GpuDescriptorClass::Sampler, Core::DescriptorWriteItem::Sampler(0u, &sampler));
 }
 
-[[nodiscard]] inline Expected<Core::GpuDescriptorHandle> RegisterStructuredBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer){
+[[nodiscard]] NWB_INLINE Expected<Core::GpuDescriptorHandle> RegisterStructuredBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer){
     return RegisterDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::StructuredBufferSrv(0u, &buffer));
 }
 
-[[nodiscard]] inline b8 AssignStructuredBufferUav(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorHandle& outHandle){
+[[nodiscard]] NWB_INLINE b8 AssignStructuredBufferUav(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorHandle& outHandle){
     return AssignDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::StructuredBufferUav(0u, &buffer), outHandle);
 }
 
-[[nodiscard]] inline Expected<Core::GpuDescriptorHandle> RegisterConstantBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer){
+[[nodiscard]] NWB_INLINE Expected<Core::GpuDescriptorHandle> RegisterConstantBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer){
     return RegisterDescriptor(heap, Core::GpuDescriptorClass::UniformBuffer, Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer));
 }
 
-[[nodiscard]] inline Expected<Core::GpuDescriptorHandle> RegisterConstantBuffer(Core::GpuDescriptorHeap& heap, const Core::BufferHandle& buffer){
+[[nodiscard]] NWB_INLINE Expected<Core::GpuDescriptorHandle> RegisterConstantBuffer(Core::GpuDescriptorHeap& heap, const Core::BufferHandle& buffer){
     return RegisterDescriptor(heap, Core::GpuDescriptorClass::UniformBuffer, Core::DescriptorWriteItem::ConstantBuffer(0u, buffer.get()));
 }
 

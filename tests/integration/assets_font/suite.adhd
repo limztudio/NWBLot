@@ -233,11 +233,9 @@ b8 LoadLatin(mut FontTestArena testArena, mut Font outFont){
 
 AssetBytes MakeBinary(in FontBinaryHeader header, in AssetBytes source, mut FontTestArena testArena){
     AssetBytes binary(testArena.arena);
-    native(in header, in source, mut binary){
-        binary.reserve(sizeof(header) + source.size());
-        AppendPOD(binary, header);
-        binary.insert(binary.end(), source.begin(), source.end());
-    }
+    binary.reserve(sizeof(header) + source.size());
+    AppendPOD(binary, header);
+    binary.insert(binary.end(), source.begin(), source.end());
     return binary;
 }
 
@@ -266,23 +264,16 @@ b8 WriteCase(in StringView filename, in AssetBytes binary, mut SourceTestArena t
 }
 
 b8 ReadPreparedInto(in Path path, in b8 includePixels, mut AssetArena arena, mut PreparedFontSource outSource){
-    b8 ok = false;
-    native(in path, in includePixels, mut arena, mut outSource, mut ok){
-        auto result = ReadPreparedFontSource(path, includePixels, arena);
-        if(!result)
-            return false;
-        outSource = Move(*result);
-        ok = true;
+    auto result = ReadPreparedFontSource(path, includePixels, arena);
+    if(!result.has_value()){
+        return false;
     }
-    return ok;
+    outSource = result.value();
+    return true;
 }
 
 b8 CanReadPrepared(in Path path, in b8 includePixels, mut AssetArena arena){
-    b8 ok = false;
-    native(in path, in includePixels, mut arena, mut ok){
-        ok = ReadPreparedFontSource(path, includePixels, arena).has_value();
-    }
-    return ok;
+    return ReadPreparedFontSource(path, includePixels, arena).has_value();
 }
 
 void VerifyAssetsFont_SfntDirectoryRejectsTruncatedRecordsAndUnsupportedTableCounts(){
@@ -491,18 +482,14 @@ void VerifyAssetsFont_OversizedCountIsRejectedBeforeSourceAllocation(){
     FontBinaryHeader header = FontBinaryHeader();
     header.byteCount = cast<u64>(s_FontMaxSourceBytes) + 1u;
     AssetBytes binary(testArena.arena);
-    native(in header, mut binary){
-        AppendPOD(binary, header);
-    }
+    AppendPOD(binary, header);
     Font font(testArena.arena, s_FontCaseProjectFontsTest);
     EXPECT_FALSE(font.loadBinary(binary));
     EXPECT_TRUE(font.fontBytes().empty());
     EXPECT_TRUE(logger.sawErrorContaining(s_ErrSourceSizeRange));
     header.byteCount = u64.max;
     binary.clear();
-    native(in header, mut binary){
-        AppendPOD(binary, header);
-    }
+    AppendPOD(binary, header);
     EXPECT_FALSE(font.loadBinary(binary));
     EXPECT_TRUE(font.fontBytes().empty());
 }
@@ -853,6 +840,32 @@ void VerifyPreparedFontSource_InvalidSerializationInputsRejectWithoutAllocating(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void InitializeSourceFixture(mut AssetArena arena, mut SourceFixture fixture){
+    fixture.groups.reserve(SourceFixture::s_GroupCount);
+    for(u32 index = 0u; index < SourceFixture::s_GroupCount; ++index){
+        fixture.groups.emplace_back(arena);
+        mut PreparedFontImageGroup group = fixture.groups.back();
+        group.width = 3u;
+        group.height = 5u;
+        group.channelCount = index + 1u;
+        group.pixels.resize(group.width * group.height * group.channelCount);
+        for(usize byte = 0u; byte < group.pixels.size(); ++byte){
+            group.pixels[byte] = cast<u8>(index * 53u + byte * 17u);
+        }
+        group.sha256 = ComputeSha256(BinaryByteView(group.pixels.data(), group.pixels.size()));
+        PreparedFontImageView view = PreparedFontImageView();
+        view.width = group.width;
+        view.height = group.height;
+        view.channelCount = group.channelCount;
+        view.pixels = BinaryByteView(group.pixels.data(), group.pixels.size());
+        fixture.views[index] = view;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [source]
 native{
 
@@ -865,19 +878,7 @@ namespace NWB::Tests::FontCases{
 SourceFixture::SourceFixture(Core::Assets::AssetArena& arena)
     : groups(arena)
 {
-    groups.reserve(s_GroupCount);
-    for(u32 index = 0u; index < s_GroupCount; ++index){
-        groups.emplace_back(arena);
-        PreparedFontImageGroup& group = groups.back();
-        group.width = 3u;
-        group.height = 5u;
-        group.channelCount = index + 1u;
-        group.pixels.resize(group.width * group.height * group.channelCount);
-        for(usize byte = 0u; byte < group.pixels.size(); ++byte)
-            group.pixels[byte] = static_cast<u8>(index * 53u + byte * 17u);
-        group.sha256 = ComputeSha256({ group.pixels.data(), group.pixels.size() });
-        views[index] = { group.width, group.height, group.channelCount, { group.pixels.data(), group.pixels.size() } };
-    }
+    InitializeSourceFixture(arena, *this);
 }
 
 };

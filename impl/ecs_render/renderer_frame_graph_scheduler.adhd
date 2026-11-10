@@ -21,6 +21,7 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/deferred/import_types.adhd.h>
 #include <impl/ecs_render/execute/frame_diagnostics.adhd.h>
 #include <impl/ecs_render/kernel/renderer_gpu_timing_scope_reservations.adhd.h>
 #include <impl/ecs_render/kernel/timing_names.adhd.h>

@@ -22,10 +22,6 @@ using SceneScratchArena = Core::Alloc::ScratchArena;
 using SceneScratchNameHashVector = Vector<NameHash, Core::Alloc::ScratchArena>;
 using SceneScratchNameHashSet = HashSet<NameHash, Core::Alloc::ScratchArena, Hasher<NameHash>, EqualTo<NameHash>>;
 using SceneScratchAssetEntryBinaryVector = Vector<SceneAssetEntryBinary, Core::Alloc::ScratchArena>;
-
-[[nodiscard]] inline constexpr b8 LessSceneAssetEntryBinary(const SceneAssetEntryBinary& lhs, const SceneAssetEntryBinary& rhs)noexcept{
-    return LessNameHash(lhs.nicknameHash, rhs.nicknameHash);
-}
 };
 
 
@@ -63,6 +59,17 @@ class SceneHeaderBinary{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 LessSceneAssetEntryBinary(in SceneAssetEntryBinary lhs, in SceneAssetEntryBinary rhs){
+    for(usize i = 0u; i < 8u; ++i){
+        if(lhs.nicknameHash.qwords[i] < rhs.nicknameHash.qwords[i])
+            return true;
+        if(lhs.nicknameHash.qwords[i] > rhs.nicknameHash.qwords[i])
+            return false;
+    }
+    return false;
+}
 
 b8 IsAllowedEntityAssetField(in StringView fieldName){
     return fieldName == s_EntityComponentsField;

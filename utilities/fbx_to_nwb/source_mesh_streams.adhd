@@ -170,15 +170,7 @@ SourceMeshBuildContext::SourceMeshBuildContext(SourceMeshStreams& sourceMesh, Co
 
 
 void FbxSourceMeshStreams::ReserveSourceMeshStreams(const usize estimatedTriangleCorners, const b8 wantsSkinning, SourceMeshStreams& outMesh){
-    outMesh.positions.reserve(estimatedTriangleCorners);
-    outMesh.normals.reserve(estimatedTriangleCorners);
-    outMesh.uv0.reserve(estimatedTriangleCorners);
-    outMesh.colors.reserve(estimatedTriangleCorners);
-    outMesh.tangents.reserve(estimatedTriangleCorners);
-    outMesh.indices.reserve(estimatedTriangleCorners);
-    outMesh.vertexRefs.reserve(estimatedTriangleCorners);
-    if(wantsSkinning)
-        outMesh.skin.reserve(estimatedTriangleCorners);
+    ReserveSourceMeshStreamsCapacity(estimatedTriangleCorners, wantsSkinning, outMesh);
 }
 
 void FbxSourceMeshStreams::ReserveSourceMeshBuildContext(const usize estimatedTriangleCorners, const b8 wantsSkinning, SourceMeshBuildContext& inOutContext){
@@ -193,7 +185,7 @@ void FbxSourceMeshStreams::ReserveSourceMeshBuildContext(const usize estimatedTr
 }
 
 b8 FbxSourceMeshStreams::DropSourceMeshTangents(Core::Alloc::ScratchArena&, SourceMeshStreams& inOutMesh){
-    return DropSourceMeshTangentsStreams(inOutMesh.vertexRefs, inOutMesh.tangents, inOutMesh.vertexRefs, Span<u32>(inOutMesh.indices));
+    return DropSourceMeshTangentStream(inOutMesh);
 }
 
 b8 FbxSourceMeshStreams::EnsureTriangleIndexScratchCapacity(const ufbx_mesh& mesh, UtilityScratchVector<u32>& inOutTriangleIndices){

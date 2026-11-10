@@ -8,27 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Impl{
-using ScratchPoseJointMatrixVector = Vector<SkeletonJointMatrix, Core::Alloc::ScratchArena>;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const f32 s_SkeletonAffineEpsilon = 0.000001f;
 const f32 s_SkeletonJointDeterminantEpsilon = 0.000000000001f;
 const f32 s_SkeletonRigidJointEpsilon = 0.001f;
@@ -106,13 +85,7 @@ b8 IsAffineSkeletonJointRow3(in VectorSingle row3){
 }
 
 b8 IsInvertibleSkeletonJointMatrix(in MatrixSingle matrix, in f32 determinantEpsilon){
-    if(!IsFiniteSkeletonJointMatrix(matrix) || !IsAffineSkeletonJointRow3(matrix[3u]))
-        return false;
-    const VectorSingle row0 = matrix[0u];
-    const VectorSingle row1 = matrix[1u];
-    const VectorSingle row2 = matrix[2u];
-    const f32 determinant = Dot(row0.xyz, Cross(row1.xyz, row2.xyz));
-    return IsFinite(determinant) && Abs(determinant) > determinantEpsilon;
+    return MatrixIsInvertibleAffine(matrix, s_SkeletonAffineEpsilon, determinantEpsilon);
 }
 
 Expected<MatrixSingle> TryResolveSkinningJointMatrix(
@@ -184,6 +157,24 @@ Expected<SkeletonJointMatrix> TryResolveSkeletonPoseJointMatrixAt(
     return SkeletonJointMatrix(resolved.value());
 }
 
+Expected<u32> TryFillStoredJointPaletteSpanFromSkeletonPose(
+    in SkeletonPoseComponent pose,
+    mut Span<SkeletonJointMatrix> outJointPalette
+){
+    if(!HasSkeletonPoseData(pose))
+        return cast<u32>(SkeletonSkinningMode::LinearBlend);
+    if(!ValidSkeletonPoseTopology(pose) || outJointPalette.size() < pose.localJoints.size())
+        return MakeUnexpected(Failure());
+    const usize jointCount = pose.localJoints.size();
+    for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
+        const Expected<SkeletonJointMatrix> resolved = TryResolveSkeletonPoseJointMatrixAt(pose, jointIndex, outJointPalette);
+        if(!resolved.has_value())
+            return MakeUnexpected(Failure());
+        outJointPalette[jointIndex] = resolved.value();
+    }
+    return pose.skinningMode;
+}
+
 Expected<u32> TryBuildStoredJointPaletteVectorFromSkeletonPose(
     in SkeletonPoseComponent pose,
     mut Vector<SkeletonJointMatrix> outJointPalette
@@ -193,35 +184,13 @@ Expected<u32> TryBuildStoredJointPaletteVectorFromSkeletonPose(
         return cast<u32>(SkeletonSkinningMode::LinearBlend);
     if(!ValidSkeletonPoseTopology(pose))
         return MakeUnexpected(Failure());
-    const usize jointCount = pose.localJoints.size();
-    outJointPalette.reserve(jointCount);
-    for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
-        const Expected<SkeletonJointMatrix> resolved = TryResolveSkeletonPoseJointMatrixAt(pose, jointIndex, outJointPalette);
-        if(!resolved.has_value())
-            return MakeUnexpected(Failure());
-        outJointPalette.push_back(resolved.value());
-    }
-    return pose.skinningMode;
-}
-
-Expected<u32> TryBuildStoredJointPaletteScratchVectorFromSkeletonPose(
-    in SkeletonPoseComponent pose,
-    mut ScratchPoseJointMatrixVector outJointPalette
-){
-    outJointPalette.clear();
-    if(!HasSkeletonPoseData(pose))
-        return cast<u32>(SkeletonSkinningMode::LinearBlend);
-    if(!ValidSkeletonPoseTopology(pose))
+    outJointPalette.resize(pose.localJoints.size(), MakeIdentitySkeletonJointMatrix());
+    const Expected<u32> resolvedMode = TryFillStoredJointPaletteSpanFromSkeletonPose(pose, outJointPalette);
+    if(!resolvedMode.has_value()){
+        outJointPalette.clear();
         return MakeUnexpected(Failure());
-    const usize jointCount = pose.localJoints.size();
-    outJointPalette.reserve(jointCount);
-    for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
-        const Expected<SkeletonJointMatrix> resolved = TryResolveSkeletonPoseJointMatrixAt(pose, jointIndex, outJointPalette);
-        if(!resolved.has_value())
-            return MakeUnexpected(Failure());
-        outJointPalette.push_back(resolved.value());
     }
-    return pose.skinningMode;
+    return resolvedMode.value();
 }
 
 

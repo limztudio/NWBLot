@@ -54,6 +54,19 @@ public:
     void setRemoveTarget(IInputEventHandler& target)noexcept{ m_removeTarget = &target; }
     void setAddTarget(IInputEventHandler& target)noexcept{ m_addTarget = &target; }
 
+    void flushRemoveTarget(){
+        if(m_removeTarget){
+            m_dispatcher.removeHandler(*m_removeTarget);
+            m_removeTarget = nullptr;
+        }
+    }
+    void flushAddTarget(){
+        if(m_addTarget){
+            m_dispatcher.addHandlerToBack(*m_addTarget);
+            m_addTarget = nullptr;
+        }
+    }
+
 
 public:
     InputDispatcher& m_dispatcher;
@@ -86,8 +99,13 @@ public:
 public:
     virtual KeyboardInputResult keyboardUpdate(i32, i32, i32, i32)override;
 
+    void resetOwner()noexcept{
+        auto* const owner = &m_owner;
+        owner->reset();
+    }
 
-private:
+
+public:
     InputDispatcher& m_dispatcher;
     Optional<SelfDestroyingKeyHandler>& m_owner;
 };
@@ -104,7 +122,7 @@ public:
     virtual KeyboardInputResult keyboardUpdate(i32, i32, i32, i32)override;
 
 
-private:
+public:
     InputDispatcher& m_dispatcher;
     Optional<FocusHandler>& m_victim;
 };
@@ -169,6 +187,19 @@ public:
     void setAddOnLeave(IInputEventHandler& target)noexcept{ m_addOnLeave = &target; }
     void setRemoveOnCaptureLoss(IInputEventHandler& target)noexcept{ m_removeOnCaptureLoss = &target; }
 
+    void flushAddOnLeave(){
+        if(m_addOnLeave){
+            m_dispatcher.addHandlerToBack(*m_addOnLeave);
+            m_addOnLeave = nullptr;
+        }
+    }
+    void flushRemoveOnCaptureLoss(){
+        if(m_removeOnCaptureLoss){
+            m_dispatcher.removeHandler(*m_removeOnCaptureLoss);
+            m_removeOnCaptureLoss = nullptr;
+        }
+    }
+
 
 public:
     InputDispatcher& m_dispatcher;
@@ -198,6 +229,7 @@ namespace Tests::Input{
 
 
 using InputDispatcher = Core::InputDispatcher;
+using KeyboardInputResult = Core::KeyboardInputResult;
 namespace Key = Core::Key;
 namespace InputAction = Core::InputAction;
 namespace MouseButton = Core::MouseButton;
@@ -599,6 +631,87 @@ void VerifyInputDispatcher_PointerLifecycleDoesNotSynthesizeFocusOrKeyboardRelea
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void HandleInputFocusUpdate(in b8 focused, mut FocusHandler handler){
+    ASSERT_LT(handler.m_focusCount, handler.m_focusValues.size());
+    handler.m_focusValues[handler.m_focusCount] = focused;
+    ++handler.m_focusCount;
+    handler.flushRemoveTarget();
+    handler.flushAddTarget();
+    if(handler.m_removeSelf){
+        handler.m_dispatcher.removeHandler(handler);
+    }
+}
+
+KeyboardInputResult HandleInputFocusKey(in i32 action, mut FocusHandler handler){
+    if(action == InputAction::Release){
+        ++handler.m_keyReleases;
+    }
+    else{
+        ++handler.m_keyPresses;
+    }
+    if(handler.m_loseFocusOnPress && action == InputAction::Press){
+        handler.m_dispatcher.windowFocusUpdate(false);
+        if(handler.m_regainFocusOnPress){
+            handler.m_dispatcher.windowFocusUpdate(true);
+        }
+    }
+    if(handler.m_removeSelfOnPress && action != InputAction::Release){
+        handler.m_dispatcher.removeHandler(handler);
+    }
+    if(handler.m_consumeKeys && action != InputAction::Release){
+        ++handler.m_textPolicyQueries;
+    }
+    return KeyboardInputResult(handler.m_consumeKeys, handler.m_blockText);
+}
+
+b8 HandleInputFocusMouseButton(in i32 action, mut FocusHandler handler){
+    if(action == InputAction::Release){
+        ++handler.m_buttonReleases;
+    }
+    else{
+        ++handler.m_buttonPresses;
+    }
+    return handler.m_consumeButtons;
+}
+
+KeyboardInputResult HandleSelfDestroyingKey(mut SelfDestroyingKeyHandler handler){
+    handler.m_dispatcher.removeHandler(handler);
+    handler.resetOwner();
+    return KeyboardInputResult(true, true);
+}
+
+KeyboardInputResult HandleDestroyOtherKey(mut DestroyOtherKeyHandler handler){
+    if(handler.m_victim.has_value()){
+        handler.m_dispatcher.removeHandler(handler.m_victim.value());
+        handler.m_victim.reset();
+    }
+    return KeyboardInputResult(false, false);
+}
+
+void HandlePointerLeave(mut PointerLifecycleHandler handler){
+    ++handler.m_leaves;
+    handler.flushAddOnLeave();
+}
+
+void HandlePointerCaptureLost(mut PointerLifecycleHandler handler){
+    ++handler.m_captureLosses;
+    handler.flushRemoveOnCaptureLoss();
+}
+
+KeyboardInputResult HandlePointerLifecycleKey(in i32 action, mut PointerLifecycleHandler handler){
+    if(action == InputAction::Release){
+        ++handler.m_keyReleases;
+    }
+    else{
+        ++handler.m_keyPresses;
+    }
+    return KeyboardInputResult(false, false);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [source]
 native{
 
@@ -619,59 +732,23 @@ namespace InputDispatcherTestsImpl{
 
 
 void FocusHandler::windowFocusUpdate(const b8 focused){
-    ASSERT_LT(m_focusCount, m_focusValues.size());
-    m_focusValues[m_focusCount] = focused;
-    ++m_focusCount;
-    if(m_removeTarget){
-        m_dispatcher.removeHandler(*m_removeTarget);
-        m_removeTarget = nullptr;
-    }
-    if(m_addTarget){
-        m_dispatcher.addHandlerToBack(*m_addTarget);
-        m_addTarget = nullptr;
-    }
-    if(m_removeSelf)
-        m_dispatcher.removeHandler(*this);
+    Tests::Input::HandleInputFocusUpdate(focused, *this);
 }
 
 KeyboardInputResult FocusHandler::keyboardUpdate(i32, i32, const i32 action, i32){
-    if(action == InputAction::Release)
-        ++m_keyReleases;
-    else
-        ++m_keyPresses;
-    if(m_loseFocusOnPress && action == InputAction::Press){
-        m_dispatcher.windowFocusUpdate(false);
-        if(m_regainFocusOnPress)
-            m_dispatcher.windowFocusUpdate(true);
-    }
-    if(m_removeSelfOnPress && action != InputAction::Release)
-        m_dispatcher.removeHandler(*this);
-    if(m_consumeKeys && action != InputAction::Release)
-        ++m_textPolicyQueries;
-    return { m_consumeKeys, m_blockText };
+    return Tests::Input::HandleInputFocusKey(action, *this);
 }
 
 b8 FocusHandler::mouseButtonUpdate(i32, const i32 action, i32)noexcept{
-    if(action == InputAction::Release)
-        ++m_buttonReleases;
-    else
-        ++m_buttonPresses;
-    return m_consumeButtons;
+    return Tests::Input::HandleInputFocusMouseButton(action, *this);
 }
 
 KeyboardInputResult SelfDestroyingKeyHandler::keyboardUpdate(i32, i32, i32, i32){
-    m_dispatcher.removeHandler(*this);
-    auto* const owner = &m_owner;
-    owner->reset();
-    return { true, true };
+    return Tests::Input::HandleSelfDestroyingKey(*this);
 }
 
 KeyboardInputResult DestroyOtherKeyHandler::keyboardUpdate(i32, i32, i32, i32){
-    if(m_victim){
-        m_dispatcher.removeHandler(*m_victim);
-        m_victim.reset();
-    }
-    return false;
+    return Tests::Input::HandleDestroyOtherKey(*this);
 }
 
 KeyboardInputResult ReplacingKeyHandler::keyboardUpdate(i32, i32, i32, i32){
@@ -701,27 +778,15 @@ void ThrowingHandler::pointerLeave(){
 }
 
 void PointerLifecycleHandler::pointerLeave(){
-    ++m_leaves;
-    if(m_addOnLeave){
-        m_dispatcher.addHandlerToBack(*m_addOnLeave);
-        m_addOnLeave = nullptr;
-    }
+    Tests::Input::HandlePointerLeave(*this);
 }
 
 void PointerLifecycleHandler::pointerCaptureLost(){
-    ++m_captureLosses;
-    if(m_removeOnCaptureLoss){
-        m_dispatcher.removeHandler(*m_removeOnCaptureLoss);
-        m_removeOnCaptureLoss = nullptr;
-    }
+    Tests::Input::HandlePointerCaptureLost(*this);
 }
 
 KeyboardInputResult PointerLifecycleHandler::keyboardUpdate(i32, i32, const i32 action, i32)noexcept{
-    if(action == InputAction::Release)
-        ++m_keyReleases;
-    else
-        ++m_keyPresses;
-    return false;
+    return Tests::Input::HandlePointerLifecycleKey(action, *this);
 }
 
 

@@ -12,7 +12,7 @@ b8 ValidateSkeletonRuntimePayload(
     in b8 hasValidVirtualPath,
     in Span<SkeletonJoint> joints,
     in HashMap<Name, u32> jointIndices,
-    mut ScratchSkeletonByteVector scratchNamedJoints
+    mut Span<u8> scratchNamedJoints
 ){
     if(!hasValidVirtualPath)
         return false;
@@ -65,8 +65,8 @@ static_assert(sizeof(SkeletonJointBinary) == s_SkeletonJointBinaryBytes, "Skelet
 
 
 b8 Skeleton::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
-    Vector<u8, Core::Alloc::ScratchArena> namedJoints(scratchArena);
-    return ValidateSkeletonRuntimePayload(checkVirtualPath(NWB_TEXT("Skeleton::validatePayload")), m_joints, m_jointIndices, namedJoints);
+    Vector<u8, Core::Alloc::ScratchArena> namedJoints(m_joints.size(), 0u, scratchArena);
+    return ValidateSkeletonRuntimePayload(checkVirtualPath(NWB_TEXT("Skeleton::validatePayload")), m_joints, m_jointIndices, Span<u8>(namedJoints.data(), namedJoints.size()));
 }
 
 b8 Skeleton::loadBinary(const Span<const u8> binary){

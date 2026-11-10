@@ -72,7 +72,7 @@ struct SurfelGiAsyncPassPayload{
 
 // Hash-build, spawn, trace-args, trace, and resolve share one async-guard preamble; only the render call differs.
 template<typename PayloadT>
-[[nodiscard]] inline b8 SurfelAsyncRecordReady(const PayloadT& payload, const Core::GpuTaskRecordContext& context)noexcept(
+[[nodiscard]] NWB_INLINE b8 SurfelAsyncRecordReady(const PayloadT& payload, const Core::GpuTaskRecordContext& context)noexcept(
     noexcept(static_cast<b8>(!payload.deferredLightingResources.valid()))
     && noexcept(RequiresActiveSurfelAsyncTiming(DeclVal<const Core::GpuPhysicalQueueInfo*>()->queueClass == Core::CommandQueue::Compute, payload.asyncTiming.has_value()))
 ){
@@ -86,7 +86,7 @@ template<typename PayloadT>
 }
 
 template<b8 DispatchHashBuild, b8 DispatchSpawn, b8 DispatchTraceBuildArgs, b8 DispatchTrace, b8 DispatchResolve>
-[[nodiscard]] inline b8 RecordSurfelGiAsyncPass(const SurfelGiAsyncPassPayload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+[[nodiscard]] NWB_INLINE b8 RecordSurfelGiAsyncPass(const SurfelGiAsyncPassPayload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     if(!SurfelAsyncRecordReady(payload, context))
         return false;
 

@@ -100,7 +100,7 @@ namespace SceneAssetCook{
 
 
 template<typename AssetT, typename EntryT>
-[[nodiscard]] inline Expected<AssetT> BuildComponentAssetFromEntry(const EntryT& entry, Core::Assets::AssetArena& arena){
+[[nodiscard]] NWB_INLINE Expected<AssetT> BuildComponentAssetFromEntry(const EntryT& entry, Core::Assets::AssetArena& arena){
     AssetT asset(arena, entry.virtualPath);
     asset.component = entry.component;
     if(!asset.validatePayload())
@@ -115,7 +115,7 @@ template<
     const AStringView& DiagnosticPrefix,
     typename CodecT = typename AssetT::AssetCodecType
 >
-[[nodiscard]] inline b8 RegisterComponentCookEntry(Core::Assets::CookEntryRegistry& registry){
+[[nodiscard]] NWB_INLINE b8 RegisterComponentCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<EntryT, AssetT, CodecT>(
         s_ComponentAssetKindLabel,
         [](const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
@@ -133,7 +133,7 @@ template<
 }
 
 template<typename EntryT, Core::Assets::ParseMetadataValueFn<EntryT> ParseValFn, const AStringView& DiagnosticPrefix>
-[[nodiscard]] inline b8 ExtractLeafComponentDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector&){
+[[nodiscard]] NWB_INLINE b8 ExtractLeafComponentDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector&){
     return Core::Assets::ParseCookDependencyEntry<EntryT, ParseValFn>(context, DiagnosticPrefix).has_value();
 }
 

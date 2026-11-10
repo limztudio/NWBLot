@@ -87,7 +87,10 @@ namespace Tests::ModelCases{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using EmptyAssetSource = ModelTests::EmptyAssetSource;
 using RuntimeContext = ModelTests::RuntimeContext;
+using AssetBytes = Core::Assets::AssetBytes;
+using Entity = Core::ECS::Entity;
 using World = Core::ECS::World;
 using Model = Impl::Model;
 using ModelComponent = Impl::ModelComponent;
@@ -482,6 +485,40 @@ void VerifyModelRuntimeFailedReplacementClearsOnlyThatOwner(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 ReadEmptyAssetBinary(mut usize readCount, mut AssetBytes outBinary){
+    outBinary.clear();
+    ++readCount;
+    return false;
+}
+
+EntityID MakeModelRuntimeOwner(mut RuntimeContext context){
+    Entity entity = context.testWorld.world.createEntity();
+    mut ModelComponent component = entity.addComponent<ModelComponent>();
+    component.model = AssetRef<Model>(RuntimeContext::s_ModelPath);
+    mut ModelRuntimeComponent runtime = entity.addComponent<ModelRuntimeComponent>();
+    runtime.model = component.model.name();
+    entity.addComponent<TransformComponent>();
+    return entity.id();
+}
+
+EntityID MakeModelRuntimeObject(in EntityID owner, mut RuntimeContext context){
+    Entity entity = context.testWorld.world.createEntity();
+    mut ModelObjectComponent object = entity.addComponent<ModelObjectComponent>();
+    object.owner = owner;
+    object.model = Name(RuntimeContext::s_ModelPath);
+    object.object = Name(s_ModelFixtureNameObject);
+    entity.addComponent<TransformComponent>();
+    if(HasComponentPresent<ModelRuntimeComponent>(context.testWorld.world, owner)){
+        mut ModelRuntimeComponent runtime = context.testWorld.world.entity(owner).getComponent<ModelRuntimeComponent>();
+        ++runtime.objectCount;
+    }
+    return entity.id();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [source]
 native{
 
@@ -502,31 +539,15 @@ namespace ModelTests{
 
 
 b8 EmptyAssetSource::readAssetBinary(const Name&, Core::Assets::AssetBytes& outBinary)const noexcept{
-    outBinary.clear();
-    ++readCount;
-    return false;
+    return Tests::ModelCases::ReadEmptyAssetBinary(readCount, outBinary);
 }
 
 Core::ECS::EntityID RuntimeContext::makeOwner(){
-    auto entity = testWorld.world.createEntity();
-    auto& component = entity.addComponent<Impl::ModelComponent>();
-    component.model = Core::Assets::AssetRef<Impl::Model>(s_ModelPath);
-    auto& runtime = entity.addComponent<Impl::ModelRuntimeComponent>();
-    runtime.model = component.model.name();
-    entity.addComponent<Impl::Scene::TransformComponent>();
-    return entity.id();
+    return Tests::ModelCases::MakeModelRuntimeOwner(*this);
 }
 
 Core::ECS::EntityID RuntimeContext::makeObject(const Core::ECS::EntityID owner){
-    auto entity = testWorld.world.createEntity();
-    auto& object = entity.addComponent<Impl::ModelObjectComponent>();
-    object.owner = owner;
-    object.model = Name(s_ModelPath);
-    object.object = Name(NWB::Tests::ModelCases::s_ModelFixtureNameObject);
-    entity.addComponent<Impl::Scene::TransformComponent>();
-    if(auto* const runtime = testWorld.world.tryGetComponent<Impl::ModelRuntimeComponent>(owner))
-        ++runtime->objectCount;
-    return entity.id();
+    return Tests::ModelCases::MakeModelRuntimeObject(owner, *this);
 }
 
 

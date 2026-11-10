@@ -138,9 +138,7 @@ b8 MatchesUiEditNativeSurroundingState(
 }
 
 u64 AdvanceUiEditFocusGeneration(mut u64 inOutFocusGeneration){
-    if(inOutFocusGeneration == u64.max)
-        TerminateInvariant();
-    ++inOutFocusGeneration;
+    AdvanceNonWrappingRevision(inOutFocusGeneration);
     return inOutFocusGeneration;
 }
 

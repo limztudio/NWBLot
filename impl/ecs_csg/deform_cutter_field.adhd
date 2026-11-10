@@ -2,77 +2,64 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/global.adhd.h>
-
-#include <impl/ecs_csg/deform_types.adhd.h>
-#include <impl/ecs_csg/deform_wall_clip.adhd.h>
-#include <impl/ecs_csg/shape_registry.adhd.h>
-#include <core/alloc/scratch.h>
-
-#include <global/simd/vector.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
+#include <impl/ecs_csg/deform_clip_plan.adhd>
+#include <impl/ecs_csg/shape_registry_validation.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Owns cutter dispatch and per-vertex distances with the shared epsilon snap; walls and caps agree.
-namespace CsgDeformCutterField{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] inline Expected<void, CsgDeformViabilityReason::Enum> ShapeDistances(
-    const CsgDeformShape& shape,
-    const Span<const CsgDeformVertex> vertices,
-    const f32 boundaryEpsilon,
-    const CsgShapeRegistry* shapeRegistry,
-    Vector<f32, Core::Alloc::ScratchArena>& outDistances
+Expected<b8, CsgDeformViabilityReason> ComputeCsgDeformShapeDistances(
+    in CsgDeformShape shape,
+    in Span<CsgDeformVertex> vertices,
+    in f32 boundaryEpsilon,
+    in u32 registryParameterByteSize,
+    in Optional<Func<Expected<f32>(in VectorSingle, in CsgShapeInlineParameters)>> registryDistanceCallback,
+    mut Vector<f32> outDistances
 ){
-    u32 registryParameterByteSize = 0u;
-    Optional<InplaceFunction<0u, Expected<f32>(const SIMDVectorSingle, const CsgShapeInlineParameters&)>> registryDistanceCallback;
-    if(shapeRegistry){
-        const auto shapeType = shapeRegistry->findShapeType(shape.shapeType);
-        if(shapeType && shapeType->desc.signedDistanceCallback){
-            registryParameterByteSize = shapeType->desc.parameterByteSize;
-            registryDistanceCallback = shapeType->desc.signedDistanceCallback;
-        }
+    CsgShapeInlineParameters inlineParameters = MakeCsgShapeInlineParameters(VectorSingle(shape.parameter0), VectorSingle(shape.parameter1));
+    CsgBuiltInShapeKind builtInKind = CsgBuiltInShapeKind::Plane;
+
+    if(registryDistanceCallback.has_value()){
+        const Expected<FixedVector<u8, s_CsgShapeInlineParameterMaxBytes>> packedParameterBytes = PackCsgShapeDefaultParameterBytes(registryParameterByteSize, inlineParameters);
+        if(!packedParameterBytes.has_value())
+            return MakeUnexpected(CsgDeformViabilityReason::InvalidCutter);
+        inlineParameters = ReadCsgShapeInlineParameters(packedParameterBytes.value());
     }
-    const auto computed = ComputeCsgDeformShapeDistances(shape, vertices, boundaryEpsilon, registryParameterByteSize, registryDistanceCallback, outDistances);
-    if(!computed)
-        return MakeUnexpected(computed.error());
-    return {};
-}
+    else{
+        const Expected<CsgBuiltInShapeKind> resolvedBuiltInKind = TryResolveBuiltInCsgShapeKind(shape.shapeType);
+        if(!resolvedBuiltInKind.has_value())
+            return MakeUnexpected(CsgDeformViabilityReason::InvalidCutter);
+        builtInKind = resolvedBuiltInKind.value();
+    }
 
+    const usize vertexCount = vertices.size();
+    outDistances.clear();
+    outDistances.resize(vertexCount, s_KeepDistanceZero);
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    const MatrixSingle worldToShape(shape.worldToShape);
+    for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
+        const CsgDeformVertex vertex = vertices[vertexIndex];
+        const VectorSingle shapePosition = TransformCsgDeformVertexPosition(vertex, worldToShape);
 
+        f32 distance = 0.0f;
+        if(registryDistanceCallback.has_value()){
+            const Func<Expected<f32>(in VectorSingle, in CsgShapeInlineParameters)> callback = registryDistanceCallback.value();
+            const Expected<f32> evaluated = callback(shapePosition, inlineParameters);
+            if(!evaluated.has_value())
+                return MakeUnexpected(CsgDeformViabilityReason::InvalidCutter);
+            distance = evaluated.value();
+        }
+        else
+            distance = EvaluateBuiltInCsgShapeSignedDistance(builtInKind, shapePosition, inlineParameters);
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+        const Expected<f32, CsgDeformViabilityReason> snapped = TrySnapCsgDeformSignedDistance(distance, boundaryEpsilon);
+        if(!snapped.has_value())
+            return MakeUnexpected(snapped.error());
+        outDistances[vertexIndex] = snapped.value();
+    }
+    return true;
 }
 
 

@@ -11,6 +11,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
 
 
@@ -19,6 +20,7 @@ native{
 
 #include <core/alloc/scratch.h>
 #include <core/graphics/rhi/gpu_crash_diagnostics.h>
+#include <core/graphics/rhi/raytracing.h>
 #include <core/graphics/runtime/runtime_setup_upload_graph.h>
 #include <core/graphics/runtime/runtime_standalone_graph.h>
 #include <core/graphics/vulkan/blas_opacity_micromap_policy.h>
@@ -135,6 +137,9 @@ using QueueBarrierScopePolicy = Core::GraphicsBackend::QueueBarrierScopePolicy;
 namespace GpuQueueCapability = Core::GpuQueueCapability;
 using BlasOpacityMicromapPolicy = Core::GraphicsBackend::VulkanDetail::BlasOpacityMicromapPolicy;
 using OpacityMicromapIndexFormat = decltype(Core::GraphicsBackend::VulkanDetail::BlasOpacityMicromapPolicy::ResolveOpacityMicromapIndexFormat(Core::Format::UNKNOWN, {}))::value_type;
+namespace RayTracingClusterOperationType = Core::RayTracingClusterOperationType;
+using RayTracingClusterOperationTypeEnum = Core::RayTracingClusterOperationType::Enum;
+using RayTracingClusterOperationParams = Core::RayTracingClusterOperationParams;
 
 using GpuCrashTracker = Core::GpuCrashTracker;
 using GpuCrashMarkerTracker = Core::GpuCrashMarkerTracker;
@@ -296,33 +301,50 @@ void VerifyCalibratedTimestampProbe_MissingDeviceDomainDoesNotQueryTimestamps(){
 }
 
 void VerifyGpuClusterOperation_NativeInputRebindsUnionPointersAfterCopy(){
-    native{
+    Array<RayTracingClusterOperationTypeEnum, 5> opTypes = Array<RayTracingClusterOperationTypeEnum, 5>();
+    opTypes[0u] = RayTracingClusterOperationType::Move;
+    opTypes[1u] = RayTracingClusterOperationType::ClasBuild;
+    opTypes[2u] = RayTracingClusterOperationType::ClasBuildTemplates;
+    opTypes[3u] = RayTracingClusterOperationType::ClasInstantiateTemplates;
+    opTypes[4u] = RayTracingClusterOperationType::BlasBuild;
+    for(in RayTracingClusterOperationTypeEnum opType : opTypes){
+        RayTracingClusterOperationParams params = RayTracingClusterOperationParams();
+        params.type = opType;
+        params.maxArgCount = 7u;
+        b8 builtOk = false;
+        u32 maxAccelerationStructureCount = 0u;
+        usize activeInputAddress = 0u;
+        usize moveFieldAddress = 1u;
+        usize blasFieldAddress = 1u;
+        usize clusterFieldAddress = 1u;
+        native(in params, mut builtOk, mut maxAccelerationStructureCount, mut activeInputAddress, mut moveFieldAddress, mut blasFieldAddress, mut clusterFieldAddress){
 #if defined(NWB_GRAPHICS_BACKEND_VULKAN) && NWB_GRAPHICS_BACKEND_VULKAN
-        using namespace NWB::Core;
-        using namespace NWB::Core::GraphicsBackend;
-        for(const auto opType : {
-            RayTracingClusterOperationType::Move,
-            RayTracingClusterOperationType::ClasBuild,
-            RayTracingClusterOperationType::ClasBuildTemplates,
-            RayTracingClusterOperationType::ClasInstantiateTemplates,
-            RayTracingClusterOperationType::BlasBuild
-        }){
-            RayTracingClusterOperationParams params;
-            params.type = opType;
-            params.maxArgCount = 7u;
-            const auto built = VulkanDetail::ClusterOperationInput::Build(params, NWB_TEXT("test cluster input"));
-            ASSERT_TRUE(built);
-            auto copied = *built;
-            const auto nativeInfo = copied.nativeInfo();
-            EXPECT_EQ(nativeInfo.maxAccelerationStructureCount, 7u);
-            if(opType == RayTracingClusterOperationType::Move)
-                EXPECT_EQ(nativeInfo.opInput.pMoveObjects, &copied.move);
-            else if(opType == RayTracingClusterOperationType::BlasBuild)
-                EXPECT_EQ(nativeInfo.opInput.pClustersBottomLevel, &copied.blas);
-            else
-                EXPECT_EQ(nativeInfo.opInput.pTriangleClusters, &copied.cluster);
-        }
+            const auto built = Core::GraphicsBackend::VulkanDetail::ClusterOperationInput::Build(params, NWB_TEXT("test cluster input"));
+            builtOk = built.has_value();
+            if(built){
+                auto copied = *built;
+                const auto nativeInfo = copied.nativeInfo();
+                maxAccelerationStructureCount = nativeInfo.maxAccelerationStructureCount;
+                if(params.type == Core::RayTracingClusterOperationType::Move)
+                    activeInputAddress = reinterpret_cast<usize>(nativeInfo.opInput.pMoveObjects);
+                else if(params.type == Core::RayTracingClusterOperationType::BlasBuild)
+                    activeInputAddress = reinterpret_cast<usize>(nativeInfo.opInput.pClustersBottomLevel);
+                else
+                    activeInputAddress = reinterpret_cast<usize>(nativeInfo.opInput.pTriangleClusters);
+                moveFieldAddress = reinterpret_cast<usize>(&copied.move);
+                blasFieldAddress = reinterpret_cast<usize>(&copied.blas);
+                clusterFieldAddress = reinterpret_cast<usize>(&copied.cluster);
+            }
 #endif
+        }
+        ASSERT_TRUE(builtOk);
+        EXPECT_EQ(maxAccelerationStructureCount, 7u);
+        if(opType == RayTracingClusterOperationType::Move)
+            EXPECT_EQ(activeInputAddress, moveFieldAddress);
+        else if(opType == RayTracingClusterOperationType::BlasBuild)
+            EXPECT_EQ(activeInputAddress, blasFieldAddress);
+        else
+            EXPECT_EQ(activeInputAddress, clusterFieldAddress);
     }
 }
 
@@ -657,6 +679,7 @@ void VerifyGpuTextureTransferLayoutTests_CompressedPaddedSlicesPreserveTouchedBy
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
 
 
@@ -830,6 +853,7 @@ NWB_ADHD_GTEST(GpuBlasOpacityMicromapPolicyTests, AttachmentSkipsAbsentAndHandle
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
 
 

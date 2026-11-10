@@ -9,6 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
 
 
@@ -125,6 +126,10 @@ using TelemetryRecorderReportDetail::s_RuntimeStatisticsNone;
 using TelemetryRecorderReportDetail::s_RuntimeStatisticsNullJson;
 using TelemetryRecorderReportDetail::s_ResourceWithNullStatisticsJson;
 
+using FloatingPointEnvironment = ::FloatingPointEnvironment;
+using FloatingPointEnvironmentGuard = Tests::FloatingPointEnvironmentGuard;
+using GenericScopeRecord = TelemetryRecorderReportDetail::GenericScopeRecord;
+using ::HoldFloatingPointExceptions;
 using Core::Telemetry::BuildPerfTimingPayload;
 using Core::Telemetry::BuildFrameGraphPayload;
 
@@ -473,26 +478,43 @@ void VerifyTelemetry_PerfTimingRejectsNonfiniteDurationsAtBuildAndWireAdmission(
     }
 }
 
+TimingScopeId RecorderReport_MakeTimingScopeId(in u32 index, in u32 generation){
+    TimingScopeId scope = TimingScopeId();
+    scope.index = index;
+    scope.generation = generation;
+    return scope;
+}
+
 void VerifyTelemetry_GenericScopeHelpersPreserveBorrowedPointerValuesAndImplicitNameFailures(){
-    native{
-        using TelemetryRecorderReportDetail::GenericScopeRecord;
+    GenericScopeRecord record = GenericScopeRecord();
+    record.name = s_TelemetryCasePerfGenericScope;
+    record.generation = 3u;
+    const TimingScopeId scope = RecorderReport_MakeTimingScopeId(0u, 3u);
+    const TimingScopeId wrongGeneration = RecorderReport_MakeTimingScopeId(0u, 4u);
+    const TimingScopeId wrongIndex = RecorderReport_MakeTimingScopeId(1u, 3u);
+
+    usize recordAddress = 0u;
+    usize foundAddress = 1u;
+    usize wrongGenerationAddress = 1u;
+    usize wrongIndexAddress = 1u;
+    Name resolvedName = s_NameNone;
+    native(mut record, in scope, in wrongGeneration, in wrongIndex, mut recordAddress, mut foundAddress, mut wrongGenerationAddress, mut wrongIndexAddress, mut resolvedName){
         using TelemetryRecorderReportDetail::BorrowedScopePointer;
         using TelemetryRecorderReportDetail::ThrowingScopeRecord;
 
-        GenericScopeRecord record{ s_TelemetryCasePerfGenericScope, 3u };
+        recordAddress = reinterpret_cast<usize>(&record);
         const Array<BorrowedScopePointer, 1u> ownerStorage{ BorrowedScopePointer{ &record } };
         const Span<const BorrowedScopePointer> owners(ownerStorage);
-        const TimingScopeId scope{ 0u, 3u };
         static_assert(IsSame_V<decltype(FindNamedScope<TimingScopeId>(owners, scope)), GenericScopeRecord*>);
         static_assert(noexcept(FindNamedScope<TimingScopeId>(owners, scope)));
-        EXPECT_EQ(FindNamedScope<TimingScopeId>(owners, scope), &record);
-        EXPECT_EQ(FindNamedScope<TimingScopeId>(owners, TimingScopeId{ 0u, 4u }), nullptr);
-        EXPECT_EQ(FindNamedScope<TimingScopeId>(owners, TimingScopeId{ 1u, 3u }), nullptr);
+        foundAddress = reinterpret_cast<usize>(FindNamedScope<TimingScopeId>(owners, scope));
+        wrongGenerationAddress = reinterpret_cast<usize>(FindNamedScope<TimingScopeId>(owners, wrongGeneration));
+        wrongIndexAddress = reinterpret_cast<usize>(FindNamedScope<TimingScopeId>(owners, wrongIndex));
 
         const Array<NotNull<GenericScopeRecord*>, 1u> recordStorage{ MakeNotNull(&record) };
         const Span<const NotNull<GenericScopeRecord*>> records(recordStorage);
         static_assert(noexcept(ScopeNameAt(records, 0u)));
-        EXPECT_EQ(ScopeNameAt(records, 0u), record.name);
+        resolvedName = ScopeNameAt(records, 0u);
 
         ThrowingScopeRecord throwing{};
         const Array<NotNull<ThrowingScopeRecord*>, 1u> throwingRecordStorage{ MakeNotNull(&throwing) };
@@ -502,6 +524,11 @@ void VerifyTelemetry_GenericScopeHelpersPreserveBorrowedPointerValuesAndImplicit
         static_assert(!noexcept(ScopeNameAt(throwingRecords, 0u)));
         EXPECT_THROW({ const Name value = ScopeNameAt(throwingRecords, 0u); EXPECT_EQ(value, s_NameNone); }, u32);
     }
+
+    EXPECT_EQ(foundAddress, recordAddress);
+    EXPECT_EQ(wrongGenerationAddress, 0u);
+    EXPECT_EQ(wrongIndexAddress, 0u);
+    EXPECT_EQ(resolvedName, record.name);
 }
 
 void VerifyTelemetry_PerfTimingViewRejectsIndexAtScopeCount(){
@@ -1429,46 +1456,60 @@ void VerifyTelemetry_TelemetryReportMarksAbsentRuntimeStatistics(){
 }
 
 void VerifyTelemetry_TelemetryReportRetainsFiniteRecordsWhenTimingTotalsOverflow(){
-    native{
-#pragma STDC FENV_ACCESS ON
-        const auto originalEnvironment = HoldFloatingPointExceptions();
-        ASSERT_TRUE(originalEnvironment.has_value());
-        Tests::FloatingPointEnvironmentGuard restoreEnvironment(originalEnvironment.value());
-        ASSERT_TRUE(SetFloatingPointRoundingMode(FE_TONEAREST));
+    const Expected<FloatingPointEnvironment> originalEnvironment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(originalEnvironment.has_value());
+    const FloatingPointEnvironmentGuard restoreEnvironment = FloatingPointEnvironmentGuard(originalEnvironment.value());
 
-        TelemetryTestArena testArena;
-        TelemetryRecorder recorder(testArena.arena);
-        recorder.setCaptureOptions(CaptureAll());
+    TelemetryTestArena testArena = TelemetryTestArena();
+    TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
+    recorder.setCaptureOptions(CaptureAll());
 
-        TimingStats timing = MakeTestTimingStats();
-        timing.seconds = Limit<f64>::s_Max * 0.75;
-        timing.minSeconds = timing.seconds;
-        timing.maxSeconds = timing.seconds;
-        timing.lastSeconds = timing.seconds;
-        timing.sampleCount = 1u;
-        timing.firstSampleFrameIndex = 70u;
-        timing.lastSampleFrameIndex = 70u;
-        for(const auto source : { PerfTimingSource::Cpu, PerfTimingSource::Gpu }){
-            ASSERT_TRUE(RecordPerfTiming(recorder, source, s_TelemetryCaseLargeFirst, "large_first", timing));
-            ASSERT_TRUE(RecordPerfTiming(recorder, source, s_TelemetryCaseLargeSecond, "large_second", timing));
-        }
-
-        const auto report = BuildTelemetryReport(recorder.view(), testArena.arena, testArena.scratchArena);
-        ASSERT_TRUE(report.has_value());
-        EXPECT_EQ(report.value().summary.eventCount, 4u);
-        EXPECT_EQ(report.value().summary.parseFailureCount, 0u);
-        EXPECT_EQ(report.value().summary.cpuTimingEventCount, 2u);
-        EXPECT_EQ(report.value().summary.gpuTimingEventCount, 2u);
-
-        const AStringView json = ReportJsonView(report.value());
-        EXPECT_TRUE(Contains(json, "\"cpuTimingSeconds\": null"));
-        EXPECT_TRUE(Contains(json, "\"gpuTimingSeconds\": null"));
-        const AStringView csv = ReportPerfCsvView(report.value());
-        EXPECT_TRUE(Contains(csv, "cpu,large_first,"));
-        EXPECT_TRUE(Contains(csv, "cpu,large_second,"));
-        EXPECT_TRUE(Contains(csv, "gpu,large_first,"));
-        EXPECT_TRUE(Contains(csv, "gpu,large_second,"));
+    TimingStats timing = MakeTestTimingStats();
+    timing.seconds = f64.max * 0.75;
+    timing.minSeconds = timing.seconds;
+    timing.maxSeconds = timing.seconds;
+    timing.lastSeconds = timing.seconds;
+    timing.sampleCount = 1u;
+    timing.firstSampleFrameIndex = 70u;
+    timing.lastSampleFrameIndex = 70u;
+    Array<PerfTimingSourceEnum, 2> sources = Array<PerfTimingSourceEnum, 2>();
+    sources[0u] = PerfTimingSource::Cpu;
+    sources[1u] = PerfTimingSource::Gpu;
+    for(in PerfTimingSourceEnum source : sources){
+        ASSERT_TRUE(RecordPerfTiming(recorder, source, s_TelemetryCaseLargeFirst, "large_first", timing));
+        ASSERT_TRUE(RecordPerfTiming(recorder, source, s_TelemetryCaseLargeSecond, "large_second", timing));
     }
+
+    TelemetryReport report = TelemetryReport(testArena.arena);
+    b8 roundingApplied = false;
+    b8 reportBuilt = false;
+    native(in recorder, mut testArena, mut report, mut roundingApplied, mut reportBuilt){
+        {
+#pragma STDC FENV_ACCESS ON
+            roundingApplied = SetFloatingPointRoundingMode(FE_TONEAREST).has_value();
+            if(roundingApplied){
+                auto builtReport = BuildTelemetryReport(recorder.view(), testArena.arena, testArena.scratchArena);
+                reportBuilt = builtReport.has_value();
+                if(builtReport.has_value())
+                    report = Move(builtReport.value());
+            }
+        }
+    }
+    ASSERT_TRUE(roundingApplied);
+    ASSERT_TRUE(reportBuilt);
+    EXPECT_EQ(report.summary.eventCount, 4u);
+    EXPECT_EQ(report.summary.parseFailureCount, 0u);
+    EXPECT_EQ(report.summary.cpuTimingEventCount, 2u);
+    EXPECT_EQ(report.summary.gpuTimingEventCount, 2u);
+
+    const StringView json = ReportJsonView(report);
+    EXPECT_TRUE(json.contains("\"cpuTimingSeconds\": null"));
+    EXPECT_TRUE(json.contains("\"gpuTimingSeconds\": null"));
+    const StringView csv = ReportPerfCsvView(report);
+    EXPECT_TRUE(csv.contains("cpu,large_first,"));
+    EXPECT_TRUE(csv.contains("cpu,large_second,"));
+    EXPECT_TRUE(csv.contains("gpu,large_first,"));
+    EXPECT_TRUE(csv.contains("gpu,large_second,"));
 }
 
 void VerifyTelemetry_TextLogPayloadPreservesUnicodeAndEmbeddedNullBytes(){
@@ -1562,6 +1603,7 @@ void VerifyTelemetry_TextLogPayloadEmptyAndInvalidTypeReplacePreviousBytes(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
 
 

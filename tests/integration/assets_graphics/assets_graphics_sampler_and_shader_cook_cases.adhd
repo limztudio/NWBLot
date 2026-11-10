@@ -9,6 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
 
 
@@ -116,6 +117,17 @@ static void ExpectNoShaderCompilerWorkDirectories(const Path& cacheDirectory){
         return MakeUnexpected(Failure{});
     return path;
 }
+
+using SpirvLookupError = Core::SpirvEntryPointLookupResult::Enum;
+using Core::IsValidSpirvModuleWords;
+using Core::ResolveSpirvEntryPointName;
+using Impl::ShaderBinaryPayload::TryComputeShaderExpandedCombinationCount;
+inline constexpr ShaderStageMask s_PixelStage = Core::ShaderType::Pixel;
+inline constexpr ShaderStageMask s_ComputeStage = Core::ShaderType::Compute;
+inline constexpr ShaderStageMask s_AmplificationStage = Core::ShaderType::Amplification;
+inline constexpr ShaderStageMask s_MeshStage = Core::ShaderType::Mesh;
+inline constexpr SpirvLookupError s_SpirvNotFound = Core::SpirvEntryPointLookupResult::NotFound;
+inline constexpr SpirvLookupError s_SpirvInvalid = Core::SpirvEntryPointLookupResult::InvalidSpirv;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -342,58 +354,79 @@ void VerifyAssetsGraphics_SamplerCookerRequiresTheAssetField(){
     }
 }
 
+u32 PackSpirvAsciiWord(in u8 a, in u8 b, in u8 c, in u8 d){
+    return cast<u32>(a) | (cast<u32>(b) << 8u) | (cast<u32>(c) << 16u) | (cast<u32>(d) << 24u);
+}
+
 void VerifyAssetsGraphics_SamplerCookerRejectsFixedBorderColorAndUnsupportedReductionMetadata(){
-    native{
-        static constexpr Array<AStringView, 3u> s_UnsupportedAssignments = { "asset.border_color = [0.0, 0.0, 0.0, 0.0];\n", "asset.reduction = \"minimum\";\n", "asset.reduction = \"maximum\";\n" };
+    Vector<StringView> unsupportedAssignments = Vector<StringView>();
+    unsupportedAssignments.reserve(3u);
+    unsupportedAssignments.push_back("asset.border_color = [0.0, 0.0, 0.0, 0.0];\n");
+    unsupportedAssignments.push_back("asset.reduction = \"minimum\";\n");
+    unsupportedAssignments.push_back("asset.reduction = \"maximum\";\n");
 
-        for(const AStringView assignment : s_UnsupportedAssignments){
-            CapturingLogger logger;
-            NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
-            TestArena testArena;
-            TestAString metadata(s_SamplerTestMetadata);
-            const AStringView reductionAssignment = "asset.reduction = \"standard\";\n";
-            if(assignment.starts_with(s_ReductionAssignmentPrefix)){
-                const usize reductionPosition = metadata.find(reductionAssignment);
-                ASSERT_NE(reductionPosition, TestAString::npos);
-                metadata.replace(reductionPosition, reductionAssignment.size(), assignment);
-            }
-            else
-                metadata += assignment;
+    const StringView reductionAssignment = "asset.reduction = \"standard\";\n";
+    for(in StringView assignment : unsupportedAssignments){
+        const ScopedTestTrace trace(assignment);
+        CapturingLogger logger = CapturingLogger();
+        LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
+        TestArena testArena = TestArena();
+        String metadata(s_SamplerTestMetadata);
+        if(assignment.starts_with(s_ReductionAssignmentPrefix)){
+            const usize reductionPosition = metadata.find(reductionAssignment);
+            ASSERT_LT(reductionPosition, metadata.size());
+            String updated(metadata.substr(0u, reductionPosition));
+            updated.append(assignment);
+            updated.append(metadata.substr(reductionPosition + reductionAssignment.size()));
+            metadata = updated;
+        }
+        else
+            metadata.append(assignment);
 
+        ScratchArena scratchArena(s_CodecScratchArena);
+        const StringView metadataView = metadata;
+        b8 parsedMetadata = true;
+        native(in metadataView, mut testArena, mut scratchArena, mut parsedMetadata){
             NWB::Core::Metascript::Document document(testArena.arena);
-            ASSERT_TRUE(document.parse(AStringView(metadata)));
+            ASSERT_TRUE(document.parse(metadataView));
             const Path assetRoot = AssetsGraphicsTestCaseRoot(testArena, s_UnsupportedSamplerMetadataCase) / s_AssetsDirectory;
             const Path metadataPath = assetRoot / s_SamplersDirectory / s_LinearClampMetadataFilename;
-            NWB::Core::Alloc::ScratchArena scratchArena(s_CodecScratchArena);
-            EXPECT_FALSE(NWB::Impl::ParseSamplerCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena)) << assignment;
-            const TStringView expectedDiagnostic = assignment.starts_with(s_ReductionAssignmentPrefix) ? NWB_TEXT("unsupported reduction type") : NWB_TEXT("unsupported asset field 'border_color'");
-            EXPECT_TRUE(logger.sawErrorContaining(expectedDiagnostic)) << assignment;
+            parsedMetadata = NWB::Impl::ParseSamplerCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena).has_value();
         }
+        EXPECT_FALSE(parsedMetadata);
+        StringView expectedDiagnostic = "unsupported asset field 'border_color'";
+        if(assignment.starts_with(s_ReductionAssignmentPrefix))
+            expectedDiagnostic = "unsupported reduction type";
+        EXPECT_TRUE(SawCapturedError(logger, expectedDiagnostic));
     }
 }
 
 void VerifyAssetsGraphics_SamplerCookerRejectsDeprecatedVersionMetadata(){
-    native{
-#if defined(NWB_FINAL)
-        CapturingLogger logger;
-        NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+    if(AssetsGraphicsTestConfigurationName() != "fin")
+        return;
 
-        TestArena testArena;
-        TestAString metadata(s_SamplerTestMetadata);
-        const usize firstFieldPosition = metadata.find("asset.min_filter");
-        ASSERT_NE(firstFieldPosition, TestAString::npos);
-        metadata.replace(firstFieldPosition, 0u, "asset.version = 1;\n");
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
+    TestArena testArena = TestArena();
+    const String baseMetadata(s_SamplerTestMetadata);
+    const usize firstFieldPosition = baseMetadata.find("asset.min_filter");
+    ASSERT_LT(firstFieldPosition, baseMetadata.size());
+    String metadata(baseMetadata.substr(0u, firstFieldPosition));
+    metadata.append("asset.version = 1;\n");
+    metadata.append(baseMetadata.substr(firstFieldPosition));
 
+    ScratchArena scratchArena(s_CodecScratchArena);
+    const StringView metadataView = metadata;
+    b8 parsedMetadata = true;
+    native(in metadataView, mut testArena, mut scratchArena, mut parsedMetadata){
         NWB::Core::Metascript::Document document(testArena.arena);
-        ASSERT_TRUE(document.parse(AStringView(metadata.data(), metadata.size())));
-
+        ASSERT_TRUE(document.parse(metadataView));
         const Path assetRoot = AssetsGraphicsTestCaseRoot(testArena, s_UnsupportedSamplerMetadataCase) / s_AssetsDirectory;
         const Path metadataPath = assetRoot / s_SamplersDirectory / s_LinearClampMetadataFilename;
-        NWB::Core::Alloc::ScratchArena scratchArena(s_CodecScratchArena);
-        EXPECT_FALSE(NWB::Impl::ParseSamplerCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena));
-        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field 'version'")));
-#endif
+        parsedMetadata = NWB::Impl::ParseSamplerCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena).has_value();
     }
+    EXPECT_FALSE(parsedMetadata);
+    EXPECT_TRUE(SawCapturedError(logger, "unsupported asset field 'version'"));
 }
 
 void VerifyAssetsGraphics_ShaderArchiveVariantLookupIsExact(){
@@ -455,51 +488,90 @@ void VerifyAssetsGraphics_ShaderArchiveRejectsNullAndTruncatedByteViewsWhileAdmi
 }
 
 void VerifyAssetsGraphics_WrongStageAndMalformedEntryInstructionsAreRejected(){
-    native{
-        const Array<u32, 10u> words = { 0x07230203u, 0x00010500u, 0u, 16u, 0u, (5u << 16u) | 15u, 4u, 1u, PackSpirvStringWord('m', 'a', 'i', 'n'), 0u, };
+    const u32 mainWord = PackSpirvAsciiWord(109u, 97u, 105u, 110u);
+    Array<u32, 10u> words = Array<u32, 10u>();
+    words[0u] = 0x07230203u;
+    words[1u] = 0x00010500u;
+    words[3u] = 16u;
+    words[5u] = (5u << 16u) | 15u;
+    words[6u] = 4u;
+    words[7u] = 1u;
+    words[8u] = mainWord;
 
-        EXPECT_TRUE(NWB::Core::IsValidSpirvModuleWords(words));
-        const auto entryPointResult1 = NWB::Core::ResolveSpirvEntryPointName(words, s_ShaderEntryMain, NWB::Core::ShaderType::Pixel);
-        ASSERT_TRUE(entryPointResult1);
+    EXPECT_TRUE(IsValidSpirvModuleWords(words));
+    const Expected<StringView, SpirvLookupError> entryPointResult1 = ResolveSpirvEntryPointName(words, s_ShaderEntryMain, s_PixelStage);
+    ASSERT_TRUE(entryPointResult1.has_value());
 
-        const auto entryPointResult2 = NWB::Core::ResolveSpirvEntryPointName(words, s_ShaderEntryMain, NWB::Core::ShaderType::Compute);
-        ASSERT_FALSE(entryPointResult2);
-        EXPECT_EQ(entryPointResult2.error(), NWB::Core::SpirvEntryPointLookupResult::NotFound);
+    const Expected<StringView, SpirvLookupError> entryPointResult2 = ResolveSpirvEntryPointName(words, s_ShaderEntryMain, s_ComputeStage);
+    ASSERT_FALSE(entryPointResult2.has_value());
+    EXPECT_EQ(entryPointResult2.error(), s_SpirvNotFound);
 
-        const Array<u32, 9u> invalidWords = { 0x07230203u, 0x00010500u, 0u, 16u, 0u, (5u << 16u) | 15u, 4u, 1u, PackSpirvStringWord('m', 'a', 'i', 'n'), };
+    Array<u32, 9u> invalidWords = Array<u32, 9u>();
+    invalidWords[0u] = 0x07230203u;
+    invalidWords[1u] = 0x00010500u;
+    invalidWords[3u] = 16u;
+    invalidWords[5u] = (5u << 16u) | 15u;
+    invalidWords[6u] = 4u;
+    invalidWords[7u] = 1u;
+    invalidWords[8u] = mainWord;
 
-        const auto entryPointResult3 = NWB::Core::ResolveSpirvEntryPointName(invalidWords, s_ShaderEntryMain, NWB::Core::ShaderType::Pixel);
-        ASSERT_FALSE(entryPointResult3);
-        EXPECT_EQ(entryPointResult3.error(), NWB::Core::SpirvEntryPointLookupResult::InvalidSpirv);
-        EXPECT_FALSE(NWB::Core::IsValidSpirvModuleWords(invalidWords));
+    const Expected<StringView, SpirvLookupError> entryPointResult3 = ResolveSpirvEntryPointName(invalidWords, s_ShaderEntryMain, s_PixelStage);
+    ASSERT_FALSE(entryPointResult3.has_value());
+    EXPECT_EQ(entryPointResult3.error(), s_SpirvInvalid);
+    EXPECT_FALSE(IsValidSpirvModuleWords(invalidWords));
 
-        const Array<u32, 9u> malformedOtherStageEntryWords = { 0x07230203u, 0x00010500u, 0u, 16u, 0u, (4u << 16u) | 15u, 0u, 1u, PackSpirvStringWord('m', 'a', 'i', 'n'), };
+    Array<u32, 9u> malformedOtherStageEntryWords = Array<u32, 9u>();
+    malformedOtherStageEntryWords[0u] = 0x07230203u;
+    malformedOtherStageEntryWords[1u] = 0x00010500u;
+    malformedOtherStageEntryWords[3u] = 16u;
+    malformedOtherStageEntryWords[5u] = (4u << 16u) | 15u;
+    malformedOtherStageEntryWords[7u] = 1u;
+    malformedOtherStageEntryWords[8u] = mainWord;
 
-        EXPECT_FALSE(NWB::Core::IsValidSpirvModuleWords(malformedOtherStageEntryWords));
-        const auto entryPointResult4 = NWB::Core::ResolveSpirvEntryPointName(malformedOtherStageEntryWords, s_ShaderEntryMain, NWB::Core::ShaderType::Pixel);
-        ASSERT_FALSE(entryPointResult4);
-        EXPECT_EQ(entryPointResult4.error(), NWB::Core::SpirvEntryPointLookupResult::InvalidSpirv);
-    }
+    EXPECT_FALSE(IsValidSpirvModuleWords(malformedOtherStageEntryWords));
+    const Expected<StringView, SpirvLookupError> entryPointResult4 = ResolveSpirvEntryPointName(malformedOtherStageEntryWords, s_ShaderEntryMain, s_PixelStage);
+    ASSERT_FALSE(entryPointResult4.has_value());
+    EXPECT_EQ(entryPointResult4.error(), s_SpirvInvalid);
 }
 
 void VerifyAssetsGraphics_SpirvExecutionModelsAcceptMeshStageAliasesAndRejectUnknown(){
-    native{
-        constexpr Array<SpirvModelStageCase, 4u> s_Models = {{
-            { .stage = Core::ShaderType::Amplification, .model = 5267u }, { .stage = Core::ShaderType::Mesh, .model = 5268u },
-            { .stage = Core::ShaderType::Amplification, .model = 5364u }, { .stage = Core::ShaderType::Mesh, .model = 5365u },
-        }};
-        Array<u32, 10u> words = { 0x07230203u, 0x00010500u, 0u, 16u, 0u, (5u << 16u) | 15u, 0u, 1u, PackSpirvStringWord('m', 'a', 'i', 'n'), 0u, };
-        for(const SpirvModelStageCase& model : s_Models){
-            words[6u] = model.model;
-            const auto entry = Core::ResolveSpirvEntryPointName(words, s_ShaderEntryMain, model.stage);
-            ASSERT_TRUE(entry) << model.model;
-            EXPECT_EQ(*entry, s_ShaderEntryMain);
-        }
-        words[6u] = Limit<u32>::s_Max;
-        const auto unknown = Core::ResolveSpirvEntryPointName(words, s_ShaderEntryMain, Core::ShaderType::Pixel);
-        ASSERT_FALSE(unknown);
-        EXPECT_EQ(unknown.error(), Core::SpirvEntryPointLookupResult::NotFound);
+    Vector<SpirvModelStageCase> models = Vector<SpirvModelStageCase>();
+    models.reserve(4u);
+    SpirvModelStageCase model0 = SpirvModelStageCase();
+    model0.stage = s_AmplificationStage;
+    model0.model = 5267u;
+    models.push_back(model0);
+    SpirvModelStageCase model1 = SpirvModelStageCase();
+    model1.stage = s_MeshStage;
+    model1.model = 5268u;
+    models.push_back(model1);
+    SpirvModelStageCase model2 = SpirvModelStageCase();
+    model2.stage = s_AmplificationStage;
+    model2.model = 5364u;
+    models.push_back(model2);
+    SpirvModelStageCase model3 = SpirvModelStageCase();
+    model3.stage = s_MeshStage;
+    model3.model = 5365u;
+    models.push_back(model3);
+
+    Array<u32, 10u> words = Array<u32, 10u>();
+    words[0u] = 0x07230203u;
+    words[1u] = 0x00010500u;
+    words[3u] = 16u;
+    words[5u] = (5u << 16u) | 15u;
+    words[7u] = 1u;
+    words[8u] = PackSpirvAsciiWord(109u, 97u, 105u, 110u);
+    for(in SpirvModelStageCase model : models){
+        const ScopedTestTrace trace(model.model);
+        words[6u] = model.model;
+        const Expected<StringView, SpirvLookupError> entry = ResolveSpirvEntryPointName(words, s_ShaderEntryMain, model.stage);
+        ASSERT_TRUE(entry.has_value());
+        EXPECT_EQ(entry.value(), s_ShaderEntryMain);
     }
+    words[6u] = u32.max;
+    const Expected<StringView, SpirvLookupError> unknown = ResolveSpirvEntryPointName(words, s_ShaderEntryMain, s_PixelStage);
+    ASSERT_FALSE(unknown.has_value());
+    EXPECT_EQ(unknown.error(), s_SpirvNotFound);
 }
 
 void VerifyAssetsGraphics_SpirvEntryPointViewsRebindCopiedWordsAndRejectMalformedMatches(){
@@ -606,20 +678,28 @@ void VerifyAssetsGraphics_CompilerArgumentCapacitiesRejectOverflow(){
 }
 
 void VerifyAssetsGraphics_ShaderCombinationCountsPreserveStateOnOverflow(){
-    native{
-        usize reserveCount = Limit<usize>::s_Max - 1u;
-        EXPECT_TRUE(Impl::ShaderBinaryPayload::TryAccumulateInheritedShaderDefineReserve(1u, reserveCount));
-        EXPECT_EQ(reserveCount, Limit<usize>::s_Max);
-        EXPECT_FALSE(Impl::ShaderBinaryPayload::TryAccumulateInheritedShaderDefineReserve(1u, reserveCount));
-        EXPECT_EQ(reserveCount, Limit<usize>::s_Max);
-        const auto expanded = Impl::ShaderBinaryPayload::TryComputeShaderExpandedCombinationCount(Limit<usize>::s_Max / 2u, 2u);
-        ASSERT_TRUE(expanded);
-        EXPECT_EQ(*expanded, (Limit<usize>::s_Max / 2u) * 2u);
-        EXPECT_FALSE(Impl::ShaderBinaryPayload::TryComputeShaderExpandedCombinationCount(Limit<usize>::s_Max / 2u + 1u, 2u));
-        const auto empty = Impl::ShaderBinaryPayload::TryComputeShaderExpandedCombinationCount(Limit<usize>::s_Max, 0u);
-        ASSERT_TRUE(empty);
-        EXPECT_EQ(*empty, 0u);
+    usize reserveCount = usize.max - 1u;
+    b8 firstAccumulated = false;
+    native(mut reserveCount, mut firstAccumulated){
+        firstAccumulated = Impl::ShaderBinaryPayload::TryAccumulateInheritedShaderDefineReserve(1u, reserveCount);
     }
+    EXPECT_TRUE(firstAccumulated);
+    EXPECT_EQ(reserveCount, usize.max);
+
+    b8 secondAccumulated = true;
+    native(mut reserveCount, mut secondAccumulated){
+        secondAccumulated = Impl::ShaderBinaryPayload::TryAccumulateInheritedShaderDefineReserve(1u, reserveCount);
+    }
+    EXPECT_FALSE(secondAccumulated);
+    EXPECT_EQ(reserveCount, usize.max);
+
+    const Expected<usize> expanded = TryComputeShaderExpandedCombinationCount(usize.max / 2u, 2u);
+    ASSERT_TRUE(expanded.has_value());
+    EXPECT_EQ(expanded.value(), (usize.max / 2u) * 2u);
+    EXPECT_FALSE(TryComputeShaderExpandedCombinationCount(usize.max / 2u + 1u, 2u).has_value());
+    const Expected<usize> empty = TryComputeShaderExpandedCombinationCount(usize.max, 0u);
+    ASSERT_TRUE(empty.has_value());
+    EXPECT_EQ(empty.value(), 0u);
 }
 
 void VerifyAssetsGraphics_ConcreteShaderAdmissionRejectsWrongStageAndPreservesLoadedState(){

@@ -9,6 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
 
 
@@ -109,6 +110,7 @@ inline constexpr MStringView s_SimdSpecCtorMemberLiftSource =
     "}\r\n";
 
 inline constexpr MStringView s_SimdSpecExternalIfaceAndTrailingNativeSource =
+    "[header]\r\n"
     "native{\r\n"
     "interface IExternalCallback;\r\n"
     "}\r\n"
@@ -119,6 +121,7 @@ inline constexpr MStringView s_SimdSpecExternalIfaceAndTrailingNativeSource =
     "        return dt > 0.0f && ExternalEnum::Active != 0;\r\n"
     "    }\r\n"
     "}\r\n"
+    "[source]\r\n"
     "native{\r\n"
     "void RegisterRunner(CallbackRunner& runner);\r\n"
     "}\r\n";
@@ -883,6 +886,7 @@ void VerifyAdhdCompiler_KeepsDynamicLaneIndicesDynamicWhileFoldingConstantIndice
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
 
 

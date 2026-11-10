@@ -9,6 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
 
 
@@ -196,6 +197,30 @@ public:
         EXPECT_TRUE(filesystem->unmount());
     }
 
+    void addRawInput(const AStringView input){
+        m_options.inputs.emplace_back(input, m_testArena.arena);
+    }
+
+    void duplicateFirstInput(){
+        m_options.inputs.push_back(m_options.inputs.front());
+    }
+
+    void enableTestMerge()noexcept{
+        m_options.mergePayloads = &MergeGatheredTestBytes;
+    }
+
+    [[nodiscard]] usize mergeCallCount()const noexcept{
+        return s_GatherMergeCalls;
+    }
+
+    void resetMergeCallCount()noexcept{
+        s_GatherMergeCalls = 0u;
+    }
+
+    [[nodiscard]] b8 hasFatalFailure()const noexcept{
+        return HasFatalFailure();
+    }
+
 
 public:
     NWB::Core::Alloc::ScratchArena m_scratchArena{ Name(s_AssetCaseTestsAssetsGraphicsGatherInputs) };
@@ -205,6 +230,12 @@ public:
     NWB::Path m_root{ m_testArena.arena };
     Pipeline::AssetGatherer::AssetGatherOptions m_options{ m_testArena.arena };
 };
+
+using Core::Assets::AssetsVolumeCookDetail::s_AssetVolumeName;
+using Impl::IsUnpaddedRendererOpticalVolumeGroup;
+using Pipeline::AssetBuilder::BuildAssets;
+using Pipeline::AssetBuilder::ValidateAssetBuilderPathInputs;
+using Pipeline::AssetGatherer::GatherAssets;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -379,31 +410,24 @@ void VerifyAssetsGraphics_SkeletonBinaryRejectsNonFinitePosesInvalidParentsAndRe
 }
 
 void VerifyBuildInputSelection_MissingRootTakesPriorityOverMissingOutput(mut BuildInputSelection self){
-    native(mut self){
-        namespace Builder = NWB::Pipeline::AssetBuilder;
-        EXPECT_FALSE(Builder::ValidateAssetBuilderPathInputs(false, false));
-        EXPECT_TRUE(self.m_logger.sawErrorContaining(NWB_TEXT("no asset roots specified")));
-        EXPECT_FALSE(self.m_logger.sawErrorContaining(NWB_TEXT("output directory is empty")));
-        EXPECT_FALSE(Builder::ValidateAssetBuilderPathInputs(true, false));
-        EXPECT_TRUE(self.m_logger.sawErrorContaining(NWB_TEXT("output directory is empty")));
-        EXPECT_EQ(self.m_logger.errorCount(), 2u);
-    }
+    EXPECT_FALSE(ValidateAssetBuilderPathInputs(false, false));
+    EXPECT_TRUE(SawCapturedError(self.m_logger, "no asset roots specified"));
+    EXPECT_FALSE(SawCapturedError(self.m_logger, "output directory is empty"));
+    EXPECT_FALSE(ValidateAssetBuilderPathInputs(true, false));
+    EXPECT_TRUE(SawCapturedError(self.m_logger, "output directory is empty"));
+    EXPECT_EQ(self.m_logger.errorCount(), 2u);
 }
 
 void VerifyBuildInputSelection_EmptyBuildDomainIsRejectedBeforeInputDiscovery(mut BuildInputSelection self){
-    native(mut self){
-        namespace Assets = NWB::Core::Assets;
-        namespace Builder = NWB::Pipeline::AssetBuilder;
-        self.m_options.assetType.clear();
-        EXPECT_FALSE(Builder::BuildAssets(self.m_options, self.m_scratchArena));
-        EXPECT_TRUE(self.m_logger.sawErrorContaining(NWB_TEXT("unsupported --asset-type ''")));
-        EXPECT_EQ(self.m_logger.errorCount(), 1u);
+    self.m_options.assetType.clear();
+    EXPECT_FALSE(BuildAssets(self.m_options, self.m_scratchArena));
+    EXPECT_TRUE(SawCapturedError(self.m_logger, "unsupported --asset-type ''"));
+    EXPECT_EQ(self.m_logger.errorCount(), 1u);
 
-        ASSERT_TRUE(self.m_options.assetType.assign(Assets::AssetsVolumeCookDetail::s_AssetVolumeName));
-        EXPECT_FALSE(Builder::BuildAssets(self.m_options, self.m_scratchArena));
-        EXPECT_TRUE(self.m_logger.sawErrorContaining(NWB_TEXT("no asset roots specified")));
-        EXPECT_EQ(self.m_logger.errorCount(), 2u);
-    }
+    ASSERT_TRUE(self.m_options.assetType.assign(s_AssetVolumeName));
+    EXPECT_FALSE(BuildAssets(self.m_options, self.m_scratchArena));
+    EXPECT_TRUE(SawCapturedError(self.m_logger, "no asset roots specified"));
+    EXPECT_EQ(self.m_logger.errorCount(), 2u);
 }
 
 void VerifyBuildInputSelection_ExactInputsPreserveDiscoveredOrderAndDuplicateRecords(mut BuildInputSelection self){
@@ -545,14 +569,12 @@ void VerifyBuildInputSelection_RootResolutionFailureRetainsSourceIndexWithoutPub
 }
 
 void VerifyAssetsGraphics_RendererOpticalVolumeGroupRejectsOnlyAsciiEdgePadding(){
-    native{
-        EXPECT_FALSE(NWB::Impl::IsUnpaddedRendererOpticalVolumeGroup(""));
-        EXPECT_FALSE(NWB::Impl::IsUnpaddedRendererOpticalVolumeGroup(" \t "));
-        EXPECT_FALSE(NWB::Impl::IsUnpaddedRendererOpticalVolumeGroup(" group"));
-        EXPECT_FALSE(NWB::Impl::IsUnpaddedRendererOpticalVolumeGroup("group\n"));
-        EXPECT_TRUE(NWB::Impl::IsUnpaddedRendererOpticalVolumeGroup("group\tname"));
-        EXPECT_TRUE(NWB::Impl::IsUnpaddedRendererOpticalVolumeGroup("\xc2\xa0group"));
-    }
+    EXPECT_FALSE(IsUnpaddedRendererOpticalVolumeGroup(""));
+    EXPECT_FALSE(IsUnpaddedRendererOpticalVolumeGroup(" \t "));
+    EXPECT_FALSE(IsUnpaddedRendererOpticalVolumeGroup(" group"));
+    EXPECT_FALSE(IsUnpaddedRendererOpticalVolumeGroup("group\n"));
+    EXPECT_TRUE(IsUnpaddedRendererOpticalVolumeGroup("group\tname"));
+    EXPECT_TRUE(IsUnpaddedRendererOpticalVolumeGroup("\xc2\xa0group"));
 }
 
 void VerifyAssetsGraphics_RendererComponentCookAndSerializePreservesOpticalFields(){
@@ -888,29 +910,28 @@ void VerifyAssetsGraphics_CsgRegistryRejectsQuotedIncludeControlBytesWithoutRepl
 }
 
 void VerifyAssetsGraphics_CsgShapeCookRejectsGeneratedModuleIncludeCollisions(){
-    native{
-#if defined(NWB_FINAL)
-        CapturingLogger logger;
-        NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+    if(AssetsGraphicsTestConfigurationName() != "fin")
+        return;
 
-        TestArena testArena;
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
+    TestArena testArena = TestArena();
+    Expected<GraphicsTestPath> rootResult = PrepareAssetsGraphicsCaseRoot(testArena, "csg_module_include_collision");
+    ASSERT_TRUE(rootResult.has_value());
+    const GraphicsTestPath root = rootResult.value();
+
+    ScratchArena scratchArena(s_ShaderScratchArena);
+    b8 emitted = true;
+    native(in root, mut testArena, mut scratchArena, mut emitted){
         using namespace NWB::Impl::AssetsCsgCook;
-
         CsgShapeCookEntryVector entries(testArena.arena);
         AppendCsgShapeCookEntry(Name(s_AssetCaseProjectCsgFirstShape), Name(s_AssetCaseProjectCsgFirstModule), "project/csg/generated/shared.slangi", testArena.arena, entries);
         AppendCsgShapeCookEntry(Name(s_AssetCaseProjectCsgSecondShape), Name(s_AssetCaseProjectCsgSecondModule), "project/csg/generated/SHARED.slangi", testArena.arena, entries);
-
-        auto rootResult = PrepareAssetsGraphicsCaseRoot(testArena, "csg_module_include_collision");
-        ASSERT_TRUE(rootResult);
-        Path root = Move(*rootResult);
-
-        NWB::Core::Alloc::ScratchArena scratchArena(s_ShaderScratchArena);
-        EXPECT_FALSE(CsgShapeModuleWriter().emit(root / s_CacheDirectory, "tests", entries, scratchArena));
-        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("generated include")));
-
-        EXPECT_TRUE(RemoveAllIfExists(root));
-#endif
+        emitted = CsgShapeModuleWriter().emit(root / s_CacheDirectory, "tests", entries, scratchArena).has_value();
     }
+    EXPECT_FALSE(emitted);
+    EXPECT_TRUE(SawCapturedError(logger, "generated include"));
+    EXPECT_TRUE(RemoveAllIfExists(root));
 }
 
 void VerifyAssetsGraphics_DecodedShaderIndexOwnsVariantTextAfterEncodedBytesAreOverwritten(){
@@ -942,94 +963,120 @@ void VerifyAssetsGraphics_DecodedShaderIndexOwnsVariantTextAfterEncodedBytesAreO
 }
 
 void VerifyGatherInputs_MissingOutputIsRejectedBeforeInputDiscovery(mut GatherInputs self){
-    native(mut self){
-        self.m_options.outputDirectory.clear();
-        self.m_options.inputs.emplace_back("missing-gather-input", self.m_testArena.arena);
-        EXPECT_FALSE(Pipeline::AssetGatherer::GatherAssets(self.m_options, self.m_scratchArena));
-        EXPECT_TRUE(self.m_logger.sawErrorContaining(NWB_TEXT("output directory is empty")));
-        EXPECT_FALSE(self.m_logger.sawErrorContaining(NWB_TEXT("failed to inspect input")));
-        EXPECT_EQ(self.m_logger.errorCount(), 1u);
-    }
+    self.m_options.outputDirectory.clear();
+    self.addRawInput("missing-gather-input");
+    EXPECT_FALSE(GatherAssets(self.m_options, self.m_scratchArena));
+    EXPECT_TRUE(SawCapturedError(self.m_logger, "output directory is empty"));
+    EXPECT_FALSE(SawCapturedError(self.m_logger, "failed to inspect input"));
+    EXPECT_EQ(self.m_logger.errorCount(), 1u);
 }
 
 void VerifyGatherInputs_InputListEncodingRejectsUnrepresentablePathsWithoutLosingDuplicates(mut GatherInputs self){
-    native(mut self){
+    String encodedText = String();
+    native(mut self, mut encodedText){
         namespace Assets = NWB::Core::Assets;
         Assets::AssetVector<Assets::AssetString> inputs(self.m_testArena.arena);
         inputs.emplace_back("valid path", self.m_testArena.arena);
         inputs.emplace_back("valid path", self.m_testArena.arena);
         const auto encoded = Assets::EncodeAssetInputList(inputs, self.m_scratchArena);
         ASSERT_TRUE(encoded);
-        EXPECT_EQ(AStringView(*encoded), "valid path\nvalid path\n");
+        encodedText.assign(encoded->data(), encoded->size());
+    }
+    EXPECT_EQ(encodedText, "valid path\nvalid path\n");
 
-        for(const AStringView invalid : { AStringView(), AStringView("line\nbreak"), AStringView("carriage\rreturn"), AStringView("nul\0byte", 8u) }){
+    for(u32 invalidIndex = 0u; invalidIndex < 4u; ++invalidIndex){
+        b8 accepted = true;
+        native(in invalidIndex, mut self, mut accepted){
+            namespace Assets = NWB::Core::Assets;
+            Assets::AssetVector<Assets::AssetString> inputs(self.m_testArena.arena);
+            inputs.emplace_back("valid path", self.m_testArena.arena);
+            inputs.emplace_back("valid path", self.m_testArena.arena);
+            AStringView invalid = AStringView();
+            if(invalidIndex == 1u)
+                invalid = "line\nbreak";
+            else if(invalidIndex == 2u)
+                invalid = "carriage\rreturn";
+            else if(invalidIndex == 3u)
+                invalid = AStringView("nul\0byte", 8u);
             inputs.back().assign(invalid);
-            EXPECT_FALSE(Assets::EncodeAssetInputList(inputs, self.m_scratchArena));
+            accepted = Assets::EncodeAssetInputList(inputs, self.m_scratchArena).has_value();
         }
+        EXPECT_FALSE(accepted);
     }
 }
 
 void VerifyGatherInputs_IdenticalDuplicatesKeepExactPayloadsWithoutMergeCalls(mut GatherInputs self){
-    native(mut self){
-        ASSERT_NO_FATAL_FAILURE(self.writeInputs("a", 64u, 257u, 7u));
-        ASSERT_NO_FATAL_FAILURE(self.writeInputs("b", 64u, 257u, 7u));
-        self.m_options.inputs.push_back(self.m_options.inputs.front());
-        self.m_options.mergePayloads = &MergeGatheredTestBytes;
-        ASSERT_TRUE(Pipeline::AssetGatherer::GatherAssets(self.m_options, self.m_scratchArena));
-        EXPECT_EQ(s_GatherMergeCalls, 0u);
-        ASSERT_NO_FATAL_FAILURE(self.verifyPayloads(64u, 257u, 7u));
-    }
+    self.writeInputs("a", 64u, 257u, 7u);
+    ASSERT_FALSE(self.hasFatalFailure());
+    self.writeInputs("b", 64u, 257u, 7u);
+    ASSERT_FALSE(self.hasFatalFailure());
+    self.duplicateFirstInput();
+    self.enableTestMerge();
+    ASSERT_TRUE(GatherAssets(self.m_options, self.m_scratchArena));
+    EXPECT_EQ(self.mergeCallCount(), 0u);
+    self.verifyPayloads(64u, 257u, 7u);
+    ASSERT_FALSE(self.hasFatalFailure());
 }
 
 void VerifyGatherInputs_ConflictingDuplicatesPreservePublishedVolume(mut GatherInputs self){
-    native(mut self){
-        ASSERT_NO_FATAL_FAILURE(self.writeInputs("a", 4u, 8u, 3u));
-        ASSERT_TRUE(Pipeline::AssetGatherer::GatherAssets(self.m_options, self.m_scratchArena));
-        ASSERT_NO_FATAL_FAILURE(self.writeInputs("b", 4u, 8u, 9u));
-        EXPECT_FALSE(Pipeline::AssetGatherer::GatherAssets(self.m_options, self.m_scratchArena));
-        EXPECT_GT(self.m_logger.errorCount(), 0u);
-        ASSERT_NO_FATAL_FAILURE(self.verifyPayloads(4u, 8u, 3u));
-    }
+    self.writeInputs("a", 4u, 8u, 3u);
+    ASSERT_FALSE(self.hasFatalFailure());
+    ASSERT_TRUE(GatherAssets(self.m_options, self.m_scratchArena));
+    self.writeInputs("b", 4u, 8u, 9u);
+    ASSERT_FALSE(self.hasFatalFailure());
+    EXPECT_FALSE(GatherAssets(self.m_options, self.m_scratchArena));
+    EXPECT_GT(self.m_logger.errorCount(), 0u);
+    self.verifyPayloads(4u, 8u, 3u);
+    ASSERT_FALSE(self.hasFatalFailure());
 }
 
 void VerifyGatherInputs_DuplicateManifestPathsPreservePublishedVolume(mut GatherInputs self){
-    native(mut self){
+    self.writeInputs("a", 1u, 8u, 3u);
+    ASSERT_FALSE(self.hasFatalFailure());
+    ASSERT_TRUE(GatherAssets(self.m_options, self.m_scratchArena));
+    const Expected<Name> name = GatherInputAssetName(0u);
+    ASSERT_TRUE(name.has_value());
+    const Name duplicateName = name.value();
+    b8 wroteVolume = true;
+    native(in duplicateName, mut self, mut wroteVolume){
         namespace Assets = NWB::Core::Assets;
         namespace Pack = Assets::AssetsVolumeCookDetail;
-        ASSERT_NO_FATAL_FAILURE(self.writeInputs("a", 1u, 8u, 3u));
-        ASSERT_TRUE(Pipeline::AssetGatherer::GatherAssets(self.m_options, self.m_scratchArena));
         Pack::AssetVolumePackManifest manifest(self.m_testArena.arena);
         ASSERT_TRUE(Pack::ReserveAssetVolumePackManifest(2u, manifest));
-        const auto name = GatherInputAssetName(0u);
-        ASSERT_TRUE(name);
         const Array<u8, 1u> first{ 7u };
         const Array<u8, 1u> second{ 8u };
-        ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(*name, first, manifest, 1u));
-        ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(*name, second, manifest, 1u));
+        ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(duplicateName, first, manifest, 1u));
+        ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(duplicateName, second, manifest, 1u));
         Assets::ResolvedCookPaths paths(self.m_testArena.arena);
         paths.outputDirectory = self.m_root / s_GatherOutputDirectory;
-        EXPECT_FALSE(Pack::WriteAssetVolume(paths, "tests", manifest, self.m_testArena.arena, self.m_scratchArena));
-        EXPECT_GT(self.m_logger.errorCount(), 0u);
-        ASSERT_NO_FATAL_FAILURE(self.verifyPayloads(1u, 8u, 3u));
+        wroteVolume = Pack::WriteAssetVolume(paths, "tests", manifest, self.m_testArena.arena, self.m_scratchArena).has_value();
     }
+    EXPECT_FALSE(wroteVolume);
+    EXPECT_GT(self.m_logger.errorCount(), 0u);
+    self.verifyPayloads(1u, 8u, 3u);
+    ASSERT_FALSE(self.hasFatalFailure());
 }
 
 void VerifyGatherInputs_MergedPayloadIdentitySurvivesLaterIdenticalDuplicate(mut GatherInputs self){
-    native(mut self){
-        ASSERT_NO_FATAL_FAILURE(self.writeInputs("a", 1u, 2u, 5u));
-        ASSERT_NO_FATAL_FAILURE(self.writeInputs("b", 1u, 2u, 5u));
-        ASSERT_NO_FATAL_FAILURE(self.writeInputs("c", 1u, 4u, 5u));
-        // Equal payloads collapse while the distinct third payload is appended once.
-        self.m_options.mergePayloads = &MergeGatheredTestBytes;
-        ASSERT_TRUE(Pipeline::AssetGatherer::GatherAssets(self.m_options, self.m_scratchArena));
-        EXPECT_EQ(s_GatherMergeCalls, 1u);
-        ASSERT_NO_FATAL_FAILURE(self.verifyPayloads(1u, 6u, 5u));
-        ASSERT_NO_FATAL_FAILURE(self.writeInputs("d", 1u, 6u, 5u));
-        s_GatherMergeCalls = 0u;
-        ASSERT_TRUE(Pipeline::AssetGatherer::GatherAssets(self.m_options, self.m_scratchArena));
-        EXPECT_EQ(s_GatherMergeCalls, 1u);
-        ASSERT_NO_FATAL_FAILURE(self.verifyPayloads(1u, 6u, 5u));
-    }
+    self.writeInputs("a", 1u, 2u, 5u);
+    ASSERT_FALSE(self.hasFatalFailure());
+    self.writeInputs("b", 1u, 2u, 5u);
+    ASSERT_FALSE(self.hasFatalFailure());
+    self.writeInputs("c", 1u, 4u, 5u);
+    ASSERT_FALSE(self.hasFatalFailure());
+    // Equal payloads collapse while the distinct third payload is appended once.
+    self.enableTestMerge();
+    ASSERT_TRUE(GatherAssets(self.m_options, self.m_scratchArena));
+    EXPECT_EQ(self.mergeCallCount(), 1u);
+    self.verifyPayloads(1u, 6u, 5u);
+    ASSERT_FALSE(self.hasFatalFailure());
+    self.writeInputs("d", 1u, 6u, 5u);
+    ASSERT_FALSE(self.hasFatalFailure());
+    self.resetMergeCallCount();
+    ASSERT_TRUE(GatherAssets(self.m_options, self.m_scratchArena));
+    EXPECT_EQ(self.mergeCallCount(), 1u);
+    self.verifyPayloads(1u, 6u, 5u);
+    ASSERT_FALSE(self.hasFatalFailure());
 }
 
 void VerifyMaterialAvboitShaderGenerator_MissingInterfaceRejectsTransparentEntryWithoutChangingShaderNames(){
@@ -1104,6 +1151,7 @@ NWB_ADHD_GTEST(MaterialAvboitShaderGenerator, MissingInterfaceRejectsTransparent
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
 
 

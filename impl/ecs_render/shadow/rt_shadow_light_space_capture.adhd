@@ -1,0 +1,579 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/shadow/rt_shadow_internal_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void ResolveLightSpaceCullDispatchGroups(in u32 drawCount, in u32 cullGroupSize, in u32 maxGroupsX, mut u32 outGroupsX, mut u32 outGroupsZ){
+    const u32 groups = DivideUp(drawCount, cullGroupSize);
+    outGroupsX = Min(groups, maxGroupsX);
+    outGroupsZ = DivideUp(groups, maxGroupsX);
+}
+
+u32 ResolveLightSpaceCaptureDrawCount(in u32 viewLightFlags, in u32 casterDrawCount){
+    if((viewLightFlags & cast<u32>(LightSpaceFlag::Point)) != 0u)
+        return casterDrawCount;
+    return 1u;
+}
+
+u32 ResolveLightSpaceCaptureBatchCount(in u32 captureCount, in u32 firstDraw){
+    return Min(captureCount - firstDraw, s_LightSpaceMaxIndirectDraws);
+}
+
+void ResolveLightSpaceShadeDispatchGroups(in u32 totalPixels, in u32 shadeGroupSize, in u32 maxGroupsX, mut u32 outGroupsX, mut u32 outGroupsY){
+    const u32 groups = DivideUp(totalPixels, shadeGroupSize);
+    outGroupsX = Min(groups, maxGroupsX);
+    outGroupsY = DivideUp(groups, maxGroupsX);
+}
+
+void ResolveLightSpaceResolveDispatchGroups(in u32 width, in u32 height, in u32 receiverFactor, in u32 groupSize, mut u32 outGroupsX, mut u32 outGroupsY){
+    const u32 halfWidth = DivideUp(width, receiverFactor);
+    const u32 halfHeight = DivideUp(height, receiverFactor);
+    outGroupsX = DivideUp(halfWidth, groupSize);
+    outGroupsY = DivideUp(halfHeight, groupSize);
+}
+
+b8 IsValidSoftwareLightSpaceCasterIndexBuffer(in u64 indexCount, in b8 hasIndexBuffer, in b8 isIndexBufferUsage, in u64 bufferByteSize){
+    return indexCount != 0u && indexCount <= cast<u64>(u32.max) && hasIndexBuffer && isIndexBufferUsage && bufferByteSize >= indexCount * 4ull;
+}
+
+b8 UsesLightSpaceCaptureReuseCadence(in SoftwareShadowCaptureCadence cadence){
+    return cadence == SoftwareShadowCaptureCadence::ReuseOneFrame || cadence == SoftwareShadowCaptureCadence::ReuseTwoFrames;
+}
+
+usize ResolveLightSpaceSceneBufferReserveCount(in usize capacity, in b8 csgGathering){
+    if(csgGathering)
+        return capacity * s_SceneBuffersPerCsgCandidate;
+    return capacity * s_SceneBuffersPerCandidate;
+}
+
+u32 ResolveLightSpaceMeshletSlot(in u32 meshletCount, in u32 heapSlot){
+    if(meshletCount != 0u)
+        return heapSlot;
+    return 0u;
+}
+
+void PopulateLightSpaceCullCasterPush(in LightSpaceShadowCaster caster, mut LightSpaceShadowPush outPush){
+    outPush.instanceIndex = caster.instanceIndex;
+    outPush.meshletDescSlot = caster.meshletDescSlot;
+    outPush.meshletBoundsSlot = caster.meshletBoundsSlot;
+    outPush.meshletCount = caster.meshletCount;
+}
+
+void PopulateLightSpaceResolvePush(in u32 frameIndex, in u32 sampleCount, in u32 outputSlot, mut LightSpaceShadowPush outPush){
+    outPush.frameIndex = frameIndex;
+    outPush.sampleCount = sampleCount;
+    outPush.outputSlot = outputSlot;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+u64 BuildLightSpaceCsgCaptureIdentity(
+    const LightSpaceCsgState& state,
+    const Span<const NwbRtInstanceMaterialGpu> materials, const Span<const InstanceGpuData> instances,
+    const Span<const u8> materialBytes,
+    const Span<const Core::TextureHandle> textures
+)noexcept{
+    NWB_ASSERT(materials.size() == instances.size());
+    u64 identity = LightSpaceCaptureIdentityBuilder().buildCsgBaseIdentity(
+        state.captureGeometryIdentity,
+        state.snapshot.contentIdentity,
+        materials,
+        instances,
+        materialBytes,
+        textures.size()
+    );
+    for(const Core::TextureHandle& texture : textures)
+        Fnv64AppendValue(identity, texture.get());
+    return identity;
+}
+
+void BeginLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& world, const usize capacity, const b8 hardware){
+    state.gathering = HasCsgFrameCandidates(world);
+    state.hardware = hardware;
+    state.snapshot.hasCsg = false;
+    state.snapshot.identity = 0u;
+    state.snapshot.contentIdentity = 0u;
+    state.captureGeometryIdentity = s_Fnv64OffsetBasis;
+    state.captureGeometryTrusted = true;
+    state.snapshot.receiverRanges.clear();
+    state.snapshot.cutters.clear();
+    state.receivers.clear();
+    state.instances.clear();
+    state.dynamicBounds.clear();
+    state.bytes.clear();
+    state.solidTriangleMasks.clear();
+    if(!state.gathering)
+        return;
+    state.receivers.reserve(capacity);
+    state.instances.reserve(capacity);
+    state.dynamicBounds.reserve(capacity);
+    state.solidTriangleMasks.reserve(capacity);
+}
+
+void AppendLightSpaceCsgReceiver(
+    LightSpaceCsgState& state,
+    const Core::ECS::EntityID entity,
+    const b8 transparent,
+    const SIMDMatrix& objectToWorld,
+    const SIMDMatrix& worldToObject,
+    const SIMDVectorSingle localMin,
+    const SIMDVectorSingle localMax,
+    const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh
+){
+    if(!state.gathering)
+        return;
+    LightSpaceCaptureIdentityBuilder().updateReceiverGeometry(
+        entity,
+        transparent,
+        mesh.meshName,
+        reinterpret_cast<u64>(mesh.positionBuffer.get()),
+        reinterpret_cast<u64>(mesh.triangleIndexBuffer.get()),
+        reinterpret_cast<u64>(mesh.attributeBuffer.get()),
+        mesh.meshletCount,
+        reinterpret_cast<u64>(mesh.meshletDescBuffer.get()),
+        reinterpret_cast<u64>(mesh.meshletLocalBoundsBuffer.get()),
+        mesh.meshletDescHeapHandle.value,
+        mesh.meshletLocalBoundsHeapHandle.value,
+        reinterpret_cast<u64>(mesh.runtimeLocalBoundsBuffer.get()),
+        mesh.runtimeLocalBoundsHeapHandle.value,
+        reinterpret_cast<u64>(mesh.swBvhNodeBuffer.get()),
+        mesh.swBvhNodeHeapHandle.value,
+        mesh.meshletPrimitiveIndexCount,
+        mesh.runtimeMeshVersion,
+        mesh.runtimeGeometryContentRevision,
+        mesh.runtimeMesh,
+        state.captureGeometryIdentity,
+        state.captureGeometryTrusted
+    );
+
+    CsgShadowReceiverInput receiver;
+    receiver.entity = entity;
+    receiver.receiverPass = transparent ? CsgReceiverPass::Transparent : CsgReceiverPass::Opaque;
+    SIMDVectorSingle worldMin{};
+    SIMDVectorSingle worldMax{};
+    receiver.boundsValid = false;
+    if(CsgReceiverBoundsCanCull(mesh.csgLocalBounds) && !mesh.runtimeMesh){
+        const auto worldBounds = AabbTests::Transform(objectToWorld, localMin, localMax);
+        if(worldBounds){
+            worldMin = worldBounds->minBounds;
+            worldMax = worldBounds->maxBounds;
+            receiver.boundsValid = true;
+        }
+    }
+    StoreFloat(worldMin, receiver.worldMin);
+    StoreFloat(worldMax, receiver.worldMax);
+    state.receivers.push_back(receiver);
+
+    const b8 hasRuntimeBounds = mesh.runtimeLocalBoundsBuffer && mesh.runtimeLocalBoundsHeapHandle.valid();
+    if(hasRuntimeBounds)
+        state.dynamicBounds.push_back(mesh.runtimeLocalBoundsBuffer);
+    state.instances.push_back(BuildLightSpaceCsgInstanceGpu(
+        worldToObject,
+        localMin,
+        localMax,
+        mesh.meshletPrimitiveIndexCount,
+        hasRuntimeBounds,
+        hasRuntimeBounds ? mesh.runtimeLocalBoundsHeapHandle.slot() : s_LightSpaceInvalidGpuDescriptorSlot,
+        state.hardware,
+        mesh.swBvhNodeHeapHandle.valid(),
+        mesh.swBvhNodeHeapHandle.valid() ? mesh.swBvhNodeHeapHandle.slot() : s_LightSpaceInvalidGpuDescriptorSlot
+    ));
+    state.solidTriangleMasks.push_back(mesh.solidTriangleWords);
+}
+
+b8 FinishLightSpaceCsgGather(const CsgShapeRegistry& registry, LightSpaceCsgState& state, Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena){
+    if(!state.gathering)
+        return true;
+    if(state.receivers.size() != state.instances.size())
+        return false;
+    if(!BuildCsgShadowSnapshot(registry, state.receivers, world, scratchArena, state.snapshot))
+        return false;
+    if(!state.snapshot.hasCsg)
+        return true;
+    static_assert(sizeof(LightSpaceCsgContextHeader) == NWB_CSG_RAY_CONTEXT_BYTES);
+    static_assert(sizeof(u32) == NWB_CSG_RAY_MEMBERSHIP_WORD_BYTES);
+    if(!LightSpaceCsgContextPacker().pack(
+        Span<const CsgShadowReceiverRangeGpu>(state.snapshot.receiverRanges.data(), state.snapshot.receiverRanges.size()),
+        Span<const CsgCutterGpuData>(state.snapshot.cutters.data(), state.snapshot.cutters.size()),
+        Span<const LightSpaceCsgInstanceGpu>(state.instances.data(), state.instances.size()),
+        Span<const Span<const u32>>(state.solidTriangleMasks.data(), state.solidTriangleMasks.size()),
+        state.bytes
+    ))
+        return false;
+    LightSpaceCaptureIdentityBuilder().updateCsgInstances(
+        Span<const LightSpaceCsgInstanceGpu>(state.instances.data(), state.instances.size()),
+        state.snapshot.identity
+    );
+    LightSpaceShadowLogReporter{}.reportUnsupportedLimitations(
+        Span<const CsgShadowReceiverRangeGpu>(state.snapshot.receiverRanges.data(), state.snapshot.receiverRanges.size()),
+        state.limitationLogged
+    );
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void LightSpaceShadowSceneGather::begin(const usize capacity, const b8 hardware){
+    BeginLightSpaceCsgGather(m_state.m_csg, m_world, capacity, hardware);
+    if(!hardware)
+        m_state.m_sceneBuffers.reserve(ResolveLightSpaceSceneBufferReserveCount(capacity, m_state.m_csg.gathering));
+}
+
+void LightSpaceShadowSceneGather::reserveSoftwareCasters(const usize capacity){
+    m_softwareCasters.reserve(capacity);
+}
+
+void LightSpaceShadowSceneGather::appendSoftwareReceiver(
+    const Core::ECS::EntityID entity, const b8 transparent, const SIMDMatrix& objectToWorld, const SIMDMatrix& worldToObject,
+    const SIMDVectorSingle localMin, const SIMDVectorSingle localMax, const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh
+){
+    RayTracingSoftwareBvhDetail::AppendLightSpaceSceneBuffers(mesh, m_state.m_csg.gathering, m_state.m_sceneBuffers);
+    if(m_state.m_csg.gathering)
+        AppendLightSpaceCsgReceiver(m_state.m_csg, entity, transparent, objectToWorld, worldToObject, localMin, localMax, mesh);
+}
+
+void LightSpaceShadowSceneGather::appendSoftwareCaster(const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh){
+    m_softwareCasters.push_back({
+        .triangleIndexBuffer = mesh.triangleIndexBuffer,
+        .meshletDescBuffer = mesh.meshletDescBuffer,
+        .meshletBoundsBuffer = mesh.meshletLocalBoundsBuffer,
+        .meshletCount = mesh.meshletCount,
+        .meshletDescSlot = ResolveLightSpaceMeshletSlot(mesh.meshletCount, mesh.meshletDescHeapHandle.slot()),
+        .meshletBoundsSlot = ResolveLightSpaceMeshletSlot(mesh.meshletCount, mesh.meshletLocalBoundsHeapHandle.slot()),
+    });
+}
+
+void LightSpaceShadowSceneGather::appendHardwareReceiver(
+    const Core::ECS::EntityID entity, const b8 transparent, const u32 instanceIndex, const SIMDMatrix& objectToWorld,
+    const SIMDVectorSingle localMin, const SIMDVectorSingle localMax, const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh
+){
+    if(!m_state.m_csg.gathering)
+        return;
+    SIMDVectorSingle determinant;
+    const SIMDMatrix worldToObject = MatrixInverse(&determinant, objectToWorld);
+    AppendLightSpaceCsgReceiver(m_state.m_csg, entity, transparent, objectToWorld, worldToObject, localMin, localMax, mesh);
+    m_state.m_casters.push_back({
+        .triangleIndexBuffer = mesh.triangleIndexBuffer,
+        .meshletDescBuffer = mesh.meshletDescBuffer,
+        .meshletBoundsBuffer = mesh.meshletLocalBoundsBuffer,
+        .instanceIndex = instanceIndex,
+        .indexCount = mesh.meshletPrimitiveIndexCount,
+        .meshletCount = mesh.meshletCount,
+        .meshletDescSlot = ResolveLightSpaceMeshletSlot(mesh.meshletCount, mesh.meshletDescHeapHandle.slot()),
+        .meshletBoundsSlot = ResolveLightSpaceMeshletSlot(mesh.meshletCount, mesh.meshletLocalBoundsHeapHandle.slot()),
+        .transparent = transparent,
+        .csg = false,
+    });
+    RayTracingSoftwareBvhDetail::AppendLightSpaceSceneBuffers(mesh, true, m_state.m_sceneBuffers);
+}
+
+b8 LightSpaceShadowSceneGather::finishSoftware(const Span<const SceneSwBvhInstanceGpu> instances, const Span<NwbRtInstanceMaterialGpu> materials, const b8 contentComplete){
+    if(!FinishLightSpaceCsgGather(m_registry, m_state.m_csg, m_world, m_scratchArena))
+        return false;
+    const auto& csg = m_state.m_csg.snapshot;
+    const u32 instanceCount = static_cast<u32>(instances.size());
+    m_state.m_sceneEligible = contentComplete && instanceCount <= NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK;
+    m_state.m_casters.clear();
+    m_state.m_casters.reserve(instanceCount);
+    for(u32 index = 0u; index < instanceCount; ++index){
+        const u64 indexCount = static_cast<u64>(instances[index].primitiveCount) * s_RayTracingTriangleIndexCount;
+        LightSpaceShadowCaster& caster = m_softwareCasters[index];
+        const Core::BufferHandle& indexBuffer = caster.triangleIndexBuffer;
+        if(!IsValidSoftwareLightSpaceCasterIndexBuffer(
+            indexCount,
+            static_cast<b8>(indexBuffer),
+            indexBuffer ? indexBuffer->getCreationDescription().isIndexBuffer : false,
+            indexBuffer ? indexBuffer->getCreationDescription().byteSize : 0u
+        ))
+            m_state.m_sceneEligible = false;
+        const b8 csgReceiver = csg.hasCsg && (csg.receiverRanges[index].flags & NWB_CSG_RAY_RECEIVER_ACTIVE) != 0u;
+        if(csgReceiver)
+            materials[index].flags |= NWB_RT_INSTANCE_MATERIAL_FLAG_CSG_SHADOW;
+        caster.instanceIndex = index;
+        caster.indexCount = static_cast<u32>(indexCount);
+        caster.transparent = (materials[index].flags & RtInstanceMaterialFlag::Transparent) != 0u;
+        caster.csg = csgReceiver;
+        m_state.m_casters.push_back(Move(caster));
+    }
+    return true;
+}
+
+b8 LightSpaceShadowSceneGather::finishHardware(const Span<Core::RayTracingInstanceDesc> instances, const Span<NwbRtInstanceMaterialGpu> materials, const b8 contentComplete, b8& sceneHasTransparentOccluder){
+    if(!FinishLightSpaceCsgGather(m_registry, m_state.m_csg, m_world, m_scratchArena))
+        return false;
+    const auto& csg = m_state.m_csg.snapshot;
+    if(csg.hasCsg){
+        if(csg.receiverRanges.size() != instances.size())
+            return false;
+        for(u32 index = 0u; index < static_cast<u32>(instances.size()); ++index){
+            if((csg.receiverRanges[index].flags & NWB_CSG_RAY_RECEIVER_ACTIVE) == 0u)
+                continue;
+            const b8 transparent = (materials[index].flags & RtInstanceMaterialFlag::Transparent) != 0u;
+            instances[index].setInstanceMask(ResolveRayTracingCsgInstanceMask(transparent));
+            materials[index].flags |= NWB_RT_INSTANCE_MATERIAL_FLAG_CSG_SHADOW;
+            m_state.m_casters[index].csg = true;
+        }
+        sceneHasTransparentOccluder = true;
+    }
+    m_state.m_sceneEligible = csg.hasCsg && contentComplete;
+    if(!csg.hasCsg){
+        m_state.m_casters.clear();
+        m_state.m_sceneBuffers.clear();
+    }
+    return true;
+}
+
+void LightSpaceShadowSceneGather::appendSoftwareCaptureIdentity(
+    const Core::ECS::EntityID entity, const b8 runtimeMesh, const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh,
+    const NwbRtInstanceMaterialGpu& material, const InstanceGpuData& instance, const RayTracingOpticalInstanceGpu& opticalInstance
+){
+    Fnv64AppendValue(m_captureSceneIdentity, entity.id);
+    Fnv64AppendValue(m_captureSceneIdentity, mesh.positionBuffer.get());
+    Fnv64AppendValue(m_captureSceneIdentity, mesh.triangleIndexBuffer.get());
+    Fnv64AppendValue(m_captureSceneIdentity, mesh.attributeBuffer.get());
+    Fnv64AppendValue(m_captureSceneIdentity, mesh.meshletCount);
+    Fnv64AppendValue(m_captureSceneIdentity, mesh.meshletDescBuffer.get());
+    Fnv64AppendValue(m_captureSceneIdentity, mesh.meshletLocalBoundsBuffer.get());
+    Fnv64AppendValue(m_captureSceneIdentity, mesh.meshletDescHeapHandle.value);
+    Fnv64AppendValue(m_captureSceneIdentity, mesh.meshletLocalBoundsHeapHandle.value);
+    RayTracingSceneIdentityBuilder().updateSoftwareCapture(
+        mesh.meshletPrimitiveIndexCount,
+        mesh.runtimeMeshVersion,
+        mesh.runtimeGeometryContentRevision,
+        material,
+        instance.translation.w,
+        instance.geometryHeapSlots,
+        opticalInstance,
+        m_captureSceneIdentity
+    );
+    if(runtimeMesh && mesh.runtimeGeometryContentRevision == 0u)
+        m_captureSceneTrusted = false;
+}
+
+void LightSpaceShadowSceneGather::publishSoftwareCaptureIdentity(
+    const u32 instanceCount, const Span<const NwbRtInstanceMaterialGpu> materials, const Span<const InstanceGpuData> instances,
+    const Span<const u8> materialBytes, const Span<const Core::TextureHandle> textures, const b8 contentComplete
+){
+    RayTracingSceneIdentityBuilder().appendMaterialBytes(instanceCount, materialBytes, m_captureSceneIdentity);
+    for(const auto& texture : textures)
+        Fnv64AppendValue(m_captureSceneIdentity, texture.get());
+    m_state.m_sceneTextures.assign(textures.begin(), textures.end());
+    const auto& csg = m_state.m_csg.snapshot;
+    if(csg.hasCsg){
+        Fnv64AppendValue(m_captureSceneIdentity, csg.identity);
+        if(UsesLightSpaceCaptureReuseCadence(m_state.m_settings.captureCadence)){
+            m_captureSceneIdentity = BuildLightSpaceCsgCaptureIdentity(m_state.m_csg, materials, instances, materialBytes, textures);
+            m_captureSceneTrusted = m_state.m_csg.captureGeometryTrusted;
+        }
+    }
+    m_state.m_captureSceneIdentity = m_captureSceneIdentity;
+    m_state.m_captureSceneTrusted = m_captureSceneTrusted && contentComplete;
+}
+
+void LightSpaceShadowSceneGather::publishHardwareCaptureIdentity(
+    const u64 materialHash, const u64 tlasHash, const b8 staticScene, const b8 contentComplete,
+    const Span<const NwbRtInstanceMaterialGpu> materials, const Span<const InstanceGpuData> instances,
+    const Span<const u8> materialBytes, const Span<const Core::TextureHandle> textures
+){
+    const auto& csg = m_state.m_csg.snapshot;
+    if(!csg.hasCsg)
+        return;
+    u64 captureIdentity = materialHash;
+    Fnv64AppendValue(captureIdentity, tlasHash);
+    Fnv64AppendValue(captureIdentity, csg.identity);
+    for(const auto& buffer : m_state.m_sceneBuffers)
+        Fnv64AppendValue(captureIdentity, buffer.get());
+    for(const auto& caster : m_state.m_casters)
+        RayTracingSceneIdentityBuilder().updateHardwareCaster(caster.meshletCount, caster.meshletDescSlot, caster.meshletBoundsSlot, captureIdentity);
+    b8 captureTrusted = staticScene && contentComplete;
+    if(UsesLightSpaceCaptureReuseCadence(m_state.m_settings.captureCadence)){
+        captureIdentity = BuildLightSpaceCsgCaptureIdentity(m_state.m_csg, materials, instances, materialBytes, textures);
+        captureTrusted = m_state.m_csg.captureGeometryTrusted && contentComplete;
+    }
+    m_state.m_captureSceneIdentity = captureIdentity;
+    m_state.m_captureSceneTrusted = captureTrusted;
+    m_state.m_sceneTextures.assign(textures.begin(), textures.end());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 RecordLightSpaceViews(const LightSpaceShadowSnapshot& snapshot, Core::CommandList& commandList, Core::GpuDescriptorHeap& heap){
+    if(!snapshot.ready || !snapshot.viewPipeline || !snapshot.drawArguments || snapshot.plan.viewCount == 0u)
+        return false;
+    commandList.setComputeState(Core::ComputeState{}.setPipeline(snapshot.viewPipeline.get()));
+    heap.bindCompute(commandList, *snapshot.viewPipeline);
+    commandList.setPushConstants(&snapshot.push, sizeof(snapshot.push));
+    commandList.dispatch(DivideUp(snapshot.plan.viewCount, static_cast<u32>(NWB_LIGHT_SPACE_VIEW_GROUP_SIZE)), 1u, 1u);
+    return true;
+}
+
+b8 RecordLightSpaceCull(const LightSpaceShadowSnapshot& snapshot, Core::CommandList& commandList, Core::GpuDescriptorHeap& heap){
+    if(!snapshot.ready || !snapshot.cullPipeline || !snapshot.drawArguments || snapshot.casters.empty() || snapshot.plan.viewCount == 0u)
+        return false;
+    commandList.setComputeState(Core::ComputeState{}.setPipeline(snapshot.cullPipeline.get()));
+    heap.bindCompute(commandList, *snapshot.cullPipeline);
+    LightSpaceShadowPush push = snapshot.push;
+    push.casterDrawOffset = 0u;
+    for(const auto& caster : snapshot.casters){
+        const auto drawCount = LightSpaceShadowDrawCount(Span<const LightSpaceShadowCaster>(&caster, 1u));
+        if(!drawCount)
+            return false;
+        PopulateLightSpaceCullCasterPush(caster, push);
+        commandList.setPushConstants(&push, sizeof(push));
+        u32 groupsX = 0u;
+        u32 groupsZ = 0u;
+        ResolveLightSpaceCullDispatchGroups(*drawCount, static_cast<u32>(NWB_LIGHT_SPACE_CULL_GROUP_SIZE), static_cast<u32>(NWB_LIGHT_SPACE_CULL_MAX_GROUPS_X), groupsX, groupsZ);
+        commandList.dispatch(groupsX, snapshot.plan.viewCount, groupsZ);
+        push.casterDrawOffset += *drawCount;
+    }
+    return true;
+}
+
+b8 RecordLightSpaceCapture(const LightSpaceShadowSnapshot& snapshot, const u32 viewIndex, const b8 transparent, Core::CommandList& commandList, Core::GpuDescriptorHeap& heap){
+    static_assert(sizeof(Core::DrawIndexedIndirectArguments) == NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES);
+    if(!snapshot.ready || !snapshot.drawArguments || viewIndex >= snapshot.plan.viewCount)
+        return false;
+    const auto& framebuffer = transparent ? snapshot.transparentFramebuffers[viewIndex] : snapshot.opaqueFramebuffers[viewIndex];
+    const auto& pipeline = transparent ? snapshot.transparentCapture : snapshot.opaqueCapture;
+    if(!framebuffer || !pipeline)
+        return false;
+    for(const auto& caster : snapshot.casters){
+        if(!LightSpaceCasterEligibleForCapturePass(caster.transparent, caster.csg, transparent, caster.indexCount, snapshot.push.csgFlags))
+            continue;
+        if(!caster.triangleIndexBuffer || !caster.triangleIndexBuffer->getCreationDescription().isIndexBuffer)
+            return false;
+    }
+    Core::RenderPassParameters parameters;
+    parameters.depthClearValue = 1.f;
+    parameters.depthAttachmentActions.loadAction = transparent ? Core::RenderPassLoadAction::Load : Core::RenderPassLoadAction::Clear;
+    commandList.beginRenderPass(*framebuffer, parameters);
+    const u32 resolution = snapshot.plan.views[viewIndex].map[0];
+    Core::ViewportState viewport;
+    viewport.addViewport(Core::Viewport(static_cast<f32>(resolution), static_cast<f32>(resolution)));
+    viewport.addScissorRect(Core::Rect(0, static_cast<i32>(resolution), 0, static_cast<i32>(resolution)));
+    Core::GraphicsState graphics;
+    graphics.setPipeline(pipeline.get()).setFramebuffer(framebuffer.get()).setViewport(viewport).setIndirectParams(snapshot.drawArguments.get());
+
+    LightSpaceShadowPush push = snapshot.push;
+    push.viewIndex = viewIndex;
+    u32 drawOffset = viewIndex * snapshot.push.captureDrawCount;
+    for(const LightSpaceShadowCaster& caster : snapshot.casters){
+        const auto drawCount = LightSpaceShadowDrawCount(Span<const LightSpaceShadowCaster>(&caster, 1u));
+        if(!drawCount){
+            commandList.endRenderPass();
+            return false;
+        }
+        const u32 argumentOffset = drawOffset * NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES;
+        drawOffset += *drawCount;
+        if(!LightSpaceCasterEligibleForCapturePass(caster.transparent, caster.csg, transparent, caster.indexCount, snapshot.push.csgFlags))
+            continue;
+        graphics.setIndexBuffer(Core::IndexBufferBinding{}.setBuffer(caster.triangleIndexBuffer.get()).setFormat(Core::Format::R32_UINT));
+        commandList.setGraphicsState(graphics);
+        heap.bindGraphics(commandList, *pipeline);
+        push.instanceIndex = caster.instanceIndex;
+        commandList.setPushConstants(&push, sizeof(push));
+        const u32 captureCount = ResolveLightSpaceCaptureDrawCount(snapshot.plan.views[viewIndex].light[3], *drawCount);
+        for(u32 firstDraw = 0u; firstDraw < captureCount;){
+            const u32 batchCount = ResolveLightSpaceCaptureBatchCount(captureCount, firstDraw);
+            commandList.drawIndexedIndirect(argumentOffset + firstDraw * NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES, batchCount);
+            firstDraw += batchCount;
+        }
+    }
+    commandList.endRenderPass();
+    return true;
+}
+
+b8 RecordLightSpaceShade(const LightSpaceShadowSnapshot& snapshot, Core::CommandList& commandList, Core::GpuDescriptorHeap& heap){
+    const auto& pipeline = (snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_ENABLED) != 0u ? snapshot.csgShadePipeline : snapshot.shadePipeline;
+    if(!snapshot.ready || !pipeline || snapshot.plan.totalPixels == 0u)
+        return false;
+    LightSpaceShadowPush push = snapshot.push;
+    push.width = snapshot.plan.totalPixels;
+    commandList.setComputeState(Core::ComputeState{}.setPipeline(pipeline.get()));
+    heap.bindCompute(commandList, *pipeline);
+    commandList.setPushConstants(&push, sizeof(push));
+    u32 groupsX = 0u;
+    u32 groupsY = 0u;
+    ResolveLightSpaceShadeDispatchGroups(push.width, static_cast<u32>(NWB_LIGHT_SPACE_SHADE_GROUP_SIZE), static_cast<u32>(NWB_LIGHT_SPACE_SHADE_MAX_GROUPS_X), groupsX, groupsY);
+    commandList.dispatch(groupsX, groupsY, 1u);
+    return true;
+}
+
+b8 RecordLightSpaceResolve(
+    const LightSpaceShadowSnapshot& snapshot,
+    const u32 frameIndex, const u32 sampleCount, const u32 outputSlot, const b8 transparent,
+    Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, Core::GpuTimingRecorder& timing, Core::Texture& outputTexture
+){
+    const b8 csg = (snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_ENABLED) != 0u;
+    const b8 hardwareCsg = (snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_HW_COMPOSE) != 0u;
+    const auto& pipeline = csg ? (transparent ? snapshot.csgTransparentResolve : snapshot.csgOpaqueResolve) : (transparent ? snapshot.transparentResolve : snapshot.opaqueResolve);
+    const auto& fallback = csg ? (transparent ? snapshot.csgTransparentFallback : snapshot.csgOpaqueFallback) : (transparent ? snapshot.transparentFallback : snapshot.opaqueFallback);
+    if(!snapshot.ready || !pipeline || sampleCount == 0u || (hardwareCsg ? !snapshot.csgTlasDescriptor.valid() : !fallback))
+        return false;
+    LightSpaceShadowPush push = snapshot.push;
+    PopulateLightSpaceResolvePush(frameIndex, sampleCount, outputSlot, push);
+    commandList.setComputeState(Core::ComputeState{}.setPipeline(pipeline.get()));
+    if(hardwareCsg)
+        heap.bindCompute(commandList, *pipeline, snapshot.csgTlasDescriptor);
+    else
+        heap.bindCompute(commandList, *pipeline);
+    commandList.setPushConstants(&push, sizeof(push));
+    u32 groupsX = 0u;
+    u32 groupsY = 0u;
+    ResolveLightSpaceResolveDispatchGroups(push.width, push.height, push.receiverFactor, static_cast<u32>(NWB_LIGHT_SPACE_GROUP_SIZE), groupsX, groupsY);
+    {
+        const auto& scope = transparent ? RendererGpuTimingScope::s_LightSpaceShadowMapTransparent : RendererGpuTimingScope::s_LightSpaceShadowMapOpaque;
+        Core::GpuTimingMeasure measure(timing, scope, commandList.getDevice(), commandList);
+
+        commandList.dispatch(groupsX, groupsY, 1u);
+    }
+    if(hardwareCsg)
+        return true;
+    // Alpha is initialized by the map dispatch before the fallback reads it through the same UAV binding.
+    commandList.setTextureState(&outputTexture, Core::TextureSubresourceSet{}, Core::ResourceStates::UnorderedAccess, true);
+    commandList.commitBarriers();
+    commandList.setComputeState(Core::ComputeState{}.setPipeline(fallback.get()));
+    heap.bindCompute(commandList, *fallback);
+    commandList.setPushConstants(&push, sizeof(push));
+    {
+        const auto& scope = transparent ? RendererGpuTimingScope::s_LightSpaceShadowFallbackTransparent : RendererGpuTimingScope::s_LightSpaceShadowFallbackOpaque;
+        Core::GpuTimingMeasure measure(timing, scope, commandList.getDevice(), commandList);
+
+        commandList.dispatch(groupsX, groupsY, 1u);
+    }
+    return true;
+}
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

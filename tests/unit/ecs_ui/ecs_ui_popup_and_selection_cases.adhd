@@ -9,6 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
 
 
@@ -219,6 +220,7 @@ namespace EpochMutation = __hidden_ui_selection_epoch_tests::EpochMutation;
 using UiSelectionEpochTests = __hidden_ui_selection_epoch_tests::UiSelectionEpochTests;
 
 using TestArena = NWB::Tests::TestArena<>;
+using ScopedTestTrace = NWB::Tests::ScopedTestTrace;
 using TextInputEvent = NWB::Core::TextInputEvent;
 namespace TextInputPollResult = NWB::Core::TextInputPollResult;
 namespace TextInputEventKind = NWB::Core::TextInputEventKind;
@@ -226,6 +228,8 @@ using UiEditLimits = NWB::Impl::Ui::EditLimits;
 using UiEditClipboardController = NWB::Impl::UiEditClipboardController;
 using UiEditClipboardResult = NWB::Impl::UiEditClipboardResult;
 namespace UiEditClipboardStatus = NWB::Impl::UiEditClipboardStatus;
+using UiPaintComponent = NWB::Impl::UiPaintComponent;
+using UiPaintContext = NWB::Impl::UiPaintContext;
 using UiTextEditOwner = NWB::Impl::UiTextEditOwner;
 using UiTextEditResult = NWB::Impl::UiTextEditResult;
 using UiTextEditSession = NWB::Impl::UiTextEditSession;
@@ -381,35 +385,33 @@ void VerifyUiPopupInputTests_NestedFocusLossCancelsTheWholeFamilyWithoutRestorin
 }
 
 void VerifyPaintSlot_ClearAndRemoveReaddDoNotRestoreTheRunningCallback(){
-    native{
-        using namespace __hidden_paint_slot_tests;
-        PaintSlotFixture fixture;
-        auto& world = fixture.world;
-        auto& context = fixture.context;
-        auto entity = world.createEntity();
-        const ECS::EntityID id = entity.id();
-        auto& component = entity.addComponent<UiPaintComponent>();
-        component.paint = [id](UiPaintContext& ctx){ ctx.world.entity(id).getComponent<UiPaintComponent>().paint.reset(); };
-        component.paint.invoke(context);
-        EXPECT_FALSE(static_cast<b8>(entity.getComponent<UiPaintComponent>().paint));
+    PaintSlotFixture fixture = PaintSlotFixture();
+    auto entity = fixture.world.createEntity();
+    const auto id = entity.id();
+    entity.addComponent<UiPaintComponent>().paint = lambda[in id](mut UiPaintContext ctx) -> void{
+        ctx.world.entity(id).getComponent<UiPaintComponent>().paint.reset();
+    };
+    entity.getComponent<UiPaintComponent>().paint.invoke(fixture.context);
+    EXPECT_FALSE(cast<b8>(entity.getComponent<UiPaintComponent>().paint));
 
-        entity.getComponent<UiPaintComponent>().paint = [id](UiPaintContext& ctx){
-            auto current = ctx.world.entity(id);
-            current.removeComponent<UiPaintComponent>();
-            current.addComponent<UiPaintComponent>();
-        };
-        entity.getComponent<UiPaintComponent>().paint.invoke(context);
-        EXPECT_FALSE(static_cast<b8>(entity.getComponent<UiPaintComponent>().paint));
+    entity.getComponent<UiPaintComponent>().paint = lambda[in id](mut UiPaintContext ctx) -> void{
+        auto current = ctx.world.entity(id);
+        current.removeComponent<UiPaintComponent>();
+        current.addComponent<UiPaintComponent>();
+    };
+    entity.getComponent<UiPaintComponent>().paint.invoke(fixture.context);
+    EXPECT_FALSE(cast<b8>(entity.getComponent<UiPaintComponent>().paint));
 
+    native(mut entity, mut fixture, in id){
         entity.getComponent<UiPaintComponent>().paint = [id](UiPaintContext& ctx){
             auto current = ctx.world.entity(id);
             current.removeComponent<UiPaintComponent>();
             current.addComponent<UiPaintComponent>();
             throw 42;
         };
-        EXPECT_THROW(entity.getComponent<UiPaintComponent>().paint.invoke(context), i32);
-        EXPECT_FALSE(static_cast<b8>(entity.getComponent<UiPaintComponent>().paint));
+        EXPECT_THROW(entity.getComponent<UiPaintComponent>().paint.invoke(fixture.context), i32);
     }
+    EXPECT_FALSE(cast<b8>(entity.getComponent<UiPaintComponent>().paint));
 }
 
 void VerifyPaintSlot_ReplacementAndRelocationKeepTheCurrentOwner(){
@@ -999,14 +1001,12 @@ void VerifyUiSelectionDeletionTests_ReadOnlyPolicyRetiresCollectedSelectionDelet
 }
 
 void VerifyUiSelectionDeletionTests_OrderedHostFencesApplicationTextSelectionAndExternalOwnershipEpochs(mut UiSelectionDeletionTests self){
-    native(mut self){
-        SCOPED_TRACE(DeletionMutation::SelectionRoundTrip);
-        self.hostRejected(DeletionMutation::SelectionRoundTrip);
-        SCOPED_TRACE(DeletionMutation::TextUndoRoundTrip);
-        self.hostRejected(DeletionMutation::TextUndoRoundTrip);
-        SCOPED_TRACE(DeletionMutation::ExternalReset);
-        self.hostRejected(DeletionMutation::ExternalReset);
-    }
+    const ScopedTestTrace traceSelection = ScopedTestTrace(DeletionMutation::SelectionRoundTrip);
+    self.hostRejected(DeletionMutation::SelectionRoundTrip);
+    const ScopedTestTrace traceUndo = ScopedTestTrace(DeletionMutation::TextUndoRoundTrip);
+    self.hostRejected(DeletionMutation::TextUndoRoundTrip);
+    const ScopedTestTrace traceReset = ScopedTestTrace(DeletionMutation::ExternalReset);
+    self.hostRejected(DeletionMutation::ExternalReset);
 }
 
 void VerifyUiSelectionDeletionTests_RejectedCommitPreservesStandaloneDeletionPrefixAndDropsFollowingEvents(mut UiSelectionDeletionTests self){
@@ -1600,6 +1600,7 @@ void VerifyUiTextEditSession_DestructionReleasesServiceWithoutBorrowingTheDestro
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
 
 

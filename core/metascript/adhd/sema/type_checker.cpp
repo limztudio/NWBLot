@@ -11,7 +11,6 @@
 
 #include "borrow_lifetime_analyzer.h"
 #include "callable_declaration_linker.h"
-#include "native_linkage_analyzer.h"
 #include "type_layout_analyzer.h"
 
 
@@ -146,8 +145,6 @@ const ScopedVarInfo* TypeChecker::FindScopedVar(const Span<const ScopedVarInfo> 
 
 b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>& errors){
     b8 ok = true;
-
-    NativeLinkageAnalyzer::ClassifyTranslationUnit(unit);
 
     if(!m_symbols.build(unit, errors))
         ok = false;

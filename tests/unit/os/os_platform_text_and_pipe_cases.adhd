@@ -1,14 +1,17 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
 #include <tests/common/gtest_macros.adhd>
 #include <tests/common/capturing_logger.adhd>
 #include <tests/common/test_context.adhd>
 #include <tests/unit/os/suite.adhd>
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
 
 
@@ -24,13 +27,6 @@ native{
 #include <core/os/text_input_text.h>
 
 #include <gtest/gtest.h>
-
-#if defined(NWB_PLATFORM_WINDOWS)
-#include <core/os/win32/text_input.h>
-#include <core/os/win32/text_input_context.h>
-#include <windows.h>
-#include <imm.h>
-#endif
 
 #if defined(NWB_PLATFORM_LINUX)
 #include <core/os/linux/pipe_io.h>
@@ -106,6 +102,10 @@ inline void AppendGlobalString(GlobalString& target, const AStringView text){
     target.append(text.data(), text.size());
 }
 
+inline void ReplaceGlobalString(GlobalString& target, const usize pos, const usize count, const AStringView text){
+    target.replace(pos, count, text.data(), text.size());
+}
+
 inline void ClearAndShrinkGlobalString(GlobalString& target){
     target.clear();
     target.shrink_to_fit();
@@ -114,41 +114,6 @@ inline void ClearAndShrinkGlobalString(GlobalString& target){
 [[nodiscard]] inline constexpr usize GetX11PreeditMaxBytes()noexcept{
     return X11PreeditBuffer::s_MaxBytes;
 }
-
-#if defined(NWB_PLATFORM_WINDOWS)
-inline constexpr WStringView s_Win32ClassName = L"NWBTextInputUnitTest";
-
-class Win32TextInputFixture : public testing::Test{
-public:
-    static LRESULT CALLBACK WindowProc(const HWND window, const UINT message, const WPARAM wParam, const LPARAM lParam);
-
-    Win32TextInputFixture()
-        : m_loggerGuard(m_logger, Common::LoggerBreakPolicy::ReportOnly)
-    {}
-
-    virtual void SetUp()override;
-    virtual void TearDown()override;
-
-public:
-    NWB::Tests::CapturingLogger m_logger;
-    Common::LoggerRegistrationGuard m_loggerGuard;
-    NWB::Tests::TestArena<> m_arena;
-    GlobalUniquePtr<ITextInputService> m_service;
-    HWND m_window = nullptr;
-    TextInputSessionToken m_token;
-    usize m_sceneCharacterCount = 0u;
-    usize m_contextForwardCount = 0u;
-    isize m_lastContextForwardedFlags = 0;
-    LRESULT m_lastContextDefaultResult = 0;
-    TextInputSessionToken m_cancelledDuringContextToken;
-    u32 m_sceneCodePoint = 0u;
-    b8 m_cancelOnNextContextForward = false;
-    b8 m_contextFocusLossSucceeded = false;
-    b8 m_contextFocusRestoreSucceeded = false;
-};
-#else
-class Win32TextInputFixture{};
-#endif
 
 #if defined(NWB_PLATFORM_LINUX)
 inline constexpr u32 s_SelectionChangeTimeoutMS = 3000u;
@@ -165,7 +130,13 @@ struct OwnedPipe final : NoCopy{
         CloseClipboardPipe(m_writeFd);
     }
 
+    void reset()noexcept{
+        CloseClipboardPipe(m_readFd);
+        CloseClipboardPipe(m_writeFd);
+    }
+
     [[nodiscard]] b8 open()noexcept{
+        reset();
         const auto pipe = OpenClipboardPipe();
         if(!pipe)
             return false;
@@ -181,6 +152,40 @@ struct OwnedPipe final : NoCopy{
     }
 };
 
+struct ClipboardPipeContext{
+    NWB::Tests::TestArena<> arena;
+    OwnedPipe pipe;
+    ClipboardTextAccumulator received;
+    ClipboardPipeWriter writer;
+    GlobalString input;
+    GlobalString expected;
+
+    ClipboardPipeContext()
+        : received(arena.arena)
+        , writer(arena.arena)
+        , input(arena.arena)
+        , expected(arena.arena)
+    {}
+
+    [[nodiscard]] b8 openPipe()noexcept{ return pipe.open(); }
+    void closeWriteEnd()noexcept{ CloseClipboardPipe(pipe.m_writeFd); }
+    void closeReadEnd()noexcept{ CloseClipboardPipe(pipe.m_readFd); }
+    [[nodiscard]] i32 releaseWriteFd()noexcept{ return static_cast<i32>(pipe.releaseWrite()); }
+    [[nodiscard]] isize writeRaw(const AStringView bytes)noexcept{ return static_cast<isize>(write(pipe.m_writeFd, bytes.data(), bytes.size())); }
+    [[nodiscard]] Expected<b8, ClipboardPipeReadFailure> readPipe(){ return ReadClipboardPipe(pipe.m_readFd, received); }
+    [[nodiscard]] AStringView receivedText()const noexcept{ return received.text(); }
+    void clearReceived()noexcept{ received.clear(); }
+    [[nodiscard]] b8 beginWriter(const i32 fd, const AStringView text){ return writer.begin(static_cast<int>(fd), text); }
+    [[nodiscard]] ClipboardStatus::Enum advanceWriter()noexcept{ return writer.advance(); }
+    [[nodiscard]] b8 writerFinished()const noexcept{ return writer.finished(); }
+    [[nodiscard]] i32 queryFdFlags(const i32 fd)const noexcept{ return static_cast<i32>(fcntl(static_cast<int>(fd), F_GETFL)); }
+    [[nodiscard]] b8 hasNonblockFlag(const i32 flags)const noexcept{ return (flags & O_NONBLOCK) != 0; }
+    [[nodiscard]] i32 pollPipeWritable(const i32 fd)const noexcept{
+        pollfd writable{ .fd = static_cast<int>(fd), .events = POLLOUT, .revents = 0 };
+        return static_cast<i32>(poll(&writable, 1u, 0));
+    }
+};
+
 class X11ClipboardFixture : public testing::Test{
 public:
     virtual void SetUp()override;
@@ -188,7 +193,15 @@ public:
 
     [[nodiscard]] b8 pumpAll();
     [[nodiscard]] b8 awaitCompletion(ClipboardRequestToken token, IClipboardService& service, ClipboardCompletion& completion);
+    [[nodiscard]] b8 awaitServiceCompletion(const usize index, const ClipboardRequestToken token, ClipboardCompletion& completion){ return awaitCompletion(token, *m_services[index], completion); }
     [[nodiscard]] b8 writeText(usize index, ClipboardChannel::Enum channel, AStringView text);
+    [[nodiscard]] b8 canReadPrimarySelection()const noexcept{ return m_services[0]->capabilities(ClipboardChannel::PrimarySelection).readText; }
+    [[nodiscard]] Expected<ClipboardRequestToken, ClipboardAdmission::Enum> requestRead(const usize index, const ClipboardChannel::Enum channel){ return m_services[index]->requestReadText(channel); }
+    [[nodiscard]] Expected<ClipboardRequestToken, ClipboardAdmission::Enum> requestWrite(const usize index, const ClipboardChannel::Enum channel, const AStringView text){ return m_services[index]->requestWriteText(channel, text); }
+    [[nodiscard]] b8 pumpService(const usize index){ return m_services[index]->pump(); }
+    [[nodiscard]] b8 cancelService(const usize index, const ClipboardRequestToken token){ return m_services[index]->cancel(token); }
+    [[nodiscard]] ClipboardPollResult::Enum pollService(const usize index, const ClipboardRequestToken token, ClipboardCompletion& completion){ return m_services[index]->poll(token, completion); }
+    [[nodiscard]] b8 waitForSelectionRequest();
 
 public:
     NWB::Tests::TestArena<> m_arena;
@@ -197,7 +210,53 @@ public:
     b8 m_sawSelectionRequest = false;
 };
 #else
-class X11ClipboardFixture{};
+struct ClipboardPipeReadFailure{
+    ClipboardStatus::Enum status = ClipboardStatus::NativeFailure;
+    b8 finished = false;
+};
+
+struct ClipboardPipeContext{
+    NWB::Tests::TestArena<> arena;
+    GlobalString input;
+    GlobalString expected;
+
+    ClipboardPipeContext()
+        : input(arena.arena)
+        , expected(arena.arena)
+    {}
+
+    [[nodiscard]] b8 openPipe()noexcept{ return false; }
+    void closeWriteEnd()noexcept{}
+    void closeReadEnd()noexcept{}
+    [[nodiscard]] i32 releaseWriteFd()noexcept{ return -1; }
+    [[nodiscard]] isize writeRaw(const AStringView)noexcept{ return -1; }
+    [[nodiscard]] Expected<b8, ClipboardPipeReadFailure> readPipe()noexcept{ return MakeUnexpected(ClipboardPipeReadFailure{}); }
+    [[nodiscard]] AStringView receivedText()const noexcept{ return {}; }
+    void clearReceived()noexcept{}
+    [[nodiscard]] b8 beginWriter(const i32, const AStringView)noexcept{ return false; }
+    [[nodiscard]] ClipboardStatus::Enum advanceWriter()noexcept{ return ClipboardStatus::NativeFailure; }
+    [[nodiscard]] b8 writerFinished()const noexcept{ return true; }
+    [[nodiscard]] i32 queryFdFlags(const i32)const noexcept{ return -1; }
+    [[nodiscard]] b8 hasNonblockFlag(const i32)const noexcept{ return false; }
+    [[nodiscard]] i32 pollPipeWritable(const i32)const noexcept{ return -1; }
+};
+
+class X11ClipboardFixture{
+public:
+    [[nodiscard]] b8 pumpAll()noexcept{ return false; }
+    [[nodiscard]] b8 awaitServiceCompletion(const usize, const ClipboardRequestToken, ClipboardCompletion&)noexcept{ return false; }
+    [[nodiscard]] b8 writeText(const usize, const ClipboardChannel::Enum, const AStringView)noexcept{ return false; }
+    [[nodiscard]] b8 canReadPrimarySelection()const noexcept{ return false; }
+    [[nodiscard]] Expected<ClipboardRequestToken, ClipboardAdmission::Enum> requestRead(const usize, const ClipboardChannel::Enum)noexcept{ return MakeUnexpected(ClipboardAdmission::Unsupported); }
+    [[nodiscard]] Expected<ClipboardRequestToken, ClipboardAdmission::Enum> requestWrite(const usize, const ClipboardChannel::Enum, const AStringView)noexcept{ return MakeUnexpected(ClipboardAdmission::Unsupported); }
+    [[nodiscard]] b8 pumpService(const usize)noexcept{ return false; }
+    [[nodiscard]] b8 cancelService(const usize, const ClipboardRequestToken)noexcept{ return false; }
+    [[nodiscard]] ClipboardPollResult::Enum pollService(const usize, const ClipboardRequestToken, ClipboardCompletion&)noexcept{ return ClipboardPollResult::InvalidRequest; }
+    [[nodiscard]] b8 waitForSelectionRequest()noexcept{ return false; }
+
+public:
+    b8 m_sawSelectionRequest = false;
+};
 #endif
 
 
@@ -207,16 +266,22 @@ class X11ClipboardFixture{};
 };
 
 namespace NWB::Tests::OS{
+#if defined(NWB_PLATFORM_LINUX)
+using NWB::Core::ClipboardPipeReadFailure;
+#else
+using __hidden_os_platform_cases_support::ClipboardPipeReadFailure;
+#endif
 using __hidden_os_platform_cases_support::PreeditTestContext;
 using __hidden_os_platform_cases_support::WaylandStateContext;
 using __hidden_os_platform_cases_support::MakeSessionToken;
 using __hidden_os_platform_cases_support::MakeWaylandProvenance;
 using __hidden_os_platform_cases_support::AppendGlobalString;
+using __hidden_os_platform_cases_support::ReplaceGlobalString;
 using __hidden_os_platform_cases_support::ClearAndShrinkGlobalString;
 using __hidden_os_platform_cases_support::GetX11PreeditMaxBytes;
-using __hidden_os_platform_cases_support::Win32TextInputFixture;
+using __hidden_os_platform_cases_support::ClipboardPipeContext;
 using __hidden_os_platform_cases_support::X11ClipboardFixture;
-}
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -257,7 +322,9 @@ void VerifyX11TextInputDispatchFence_RetirementWithoutNativeStackCanReleaseImmed
     EXPECT_FALSE(fence.leave());
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void VerifyX11FilteredKeyHistory_ForwardedPressAndReleaseCannotReplayAfterThePhysicalRelease(){
     X11FilteredKeyHistory history = X11FilteredKeyHistory();
@@ -418,7 +485,9 @@ void VerifyX11FilteredKeyHistory_SessionChangesDoNotRefreshRetiredStampExpiratio
     EXPECT_FALSE(history.isForwardedDuplicate(23u, false, 100u, 50u, false, 1001u));
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void VerifyX11PreeditBuffer_CharacterReplacementSplicesCompleteBmpAndSupplementaryScalars(){
     PreeditTestContext ctx = PreeditTestContext();
@@ -492,7 +561,9 @@ void VerifyX11PreeditBuffer_BoundedPreeditRejectsGrowthWithoutDiscardingText(){
     EXPECT_TRUE(ctx.preedit.replace(0u, 1u, "y", 1u));
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void VerifyWaylandTextInputState_ShortUtf8ReverseSelectionRetainsScalarByteEndpoints(){
     const StringView text = "A\xED\x95\x9C\xF0\x9F\x98\x80Z";
@@ -815,897 +886,344 @@ void VerifyWaylandTextInputState_RingEvictionStillAdmitsDelayedCommitButMarksDel
     EXPECT_FALSE(CanApplyWaylandTextInputDeletion(ctx.tracker.resolve(199u, token), 100u, ctx.wire, 3u, 6u, 2u, 1u));
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-void VerifyWin32TextInputFixture_RepeatedExplicitContextReleasePreservesActiveNativeSession(mut Win32TextInputFixture self){
-    native(mut self){
-#if defined(NWB_PLATFORM_WINDOWS)
-        const HIMC nativeContext = ImmGetContext(self.m_window);
-        ASSERT_NE(nativeContext, nullptr);
-        Win32TextInputContextGuard context(self.m_window, nativeContext);
-        ASSERT_TRUE(context.release());
-        ASSERT_TRUE(context.release());
-        EXPECT_EQ(self.m_service->activeSession(), self.m_token);
-        EXPECT_EQ(SendMessageW(self.m_window, WM_CHAR, 'R', 0), 0);
-        TextInputEvent event(self.m_arena.arena);
-        ASSERT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Event);
-        EXPECT_EQ(event.text, "R");
-#else
-        (void)self;
-#endif
-    }
-}
-
-void VerifyWin32TextInputFixture_ContextScopeUnwindPreservesOriginalThrownMarkerAndNativeSession(mut Win32TextInputFixture self){
-    native(mut self){
-#if defined(NWB_PLATFORM_WINDOWS)
-        struct UnwindMarker final{};
-        b8 caughtOriginal = false;
-        try{
-            const HIMC nativeContext = ImmGetContext(self.m_window);
-            ASSERT_NE(nativeContext, nullptr);
-            Win32TextInputContextGuard context(self.m_window, nativeContext);
-            throw UnwindMarker{};
-        }
-        catch(const UnwindMarker&){
-            caughtOriginal = true;
-        }
-        EXPECT_TRUE(caughtOriginal);
-        EXPECT_EQ(self.m_service->activeSession(), self.m_token);
-        EXPECT_EQ(SendMessageW(self.m_window, WM_CHAR, 'U', 0), 0);
-        TextInputEvent event(self.m_arena.arena);
-        ASSERT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Event);
-        EXPECT_EQ(event.text, "U");
-#else
-        (void)self;
-#endif
-    }
-}
-
-void VerifyWin32TextInputFixture_SurrogatePairRemainsPerServiceUntilComplete(mut Win32TextInputFixture self){
-    native(mut self){
-#if defined(NWB_PLATFORM_WINDOWS)
-        EXPECT_EQ(SendMessageW(self.m_window, WM_CHAR, 0xd83du, 0), 0);
-        TextInputEvent event(self.m_arena.arena);
-        EXPECT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Pending);
-        EXPECT_EQ(SendMessageW(self.m_window, WM_CHAR, 0xde00u, 0), 0);
-        ASSERT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Event);
-        EXPECT_EQ(event.text, "\xF0\x9F\x98\x80");
-        EXPECT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Pending);
-#else
-        (void)self;
-#endif
-    }
-}
-
-void VerifyWin32TextInputFixture_AggregateCharacterCountsIgnoreHighFlagsAndKeepScalarBoundaries(mut Win32TextInputFixture self){
-    native(mut self){
-#if defined(NWB_PLATFORM_WINDOWS)
-        EXPECT_EQ(SendMessageW(self.m_window, WM_CHAR, 'A', 0x40000003), 0);
-        EXPECT_EQ(SendMessageW(self.m_window, WM_SYSCHAR, 0xd55cu, 0x20000002), 0);
-        EXPECT_EQ(SendMessageW(self.m_window, WM_UNICHAR, 0x1f600u, 2), 0);
-        EXPECT_EQ(SendMessageW(self.m_window, WM_CHAR, 0xd83du, 2), 0);
-        EXPECT_EQ(SendMessageW(self.m_window, WM_CHAR, 0xde00u, 2), 0);
-        TextInputEvent event(self.m_arena.arena);
-        ASSERT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Event);
-        EXPECT_EQ(event.text, "AAA");
-        ASSERT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Event);
-        EXPECT_EQ(event.text, "\xED\x95\x9C\xED\x95\x9C");
-        for(usize index = 0u; index < 2u; ++index){
-            ASSERT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Event);
-            EXPECT_EQ(event.text, "\xF0\x9F\x98\x80\xF0\x9F\x98\x80");
-        }
-        EXPECT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Pending);
-#else
-        (void)self;
-#endif
-    }
-}
-
-void VerifyWin32TextInputFixture_MaximumAggregateSupplementaryCommitBatchesWithoutEventOverflow(mut Win32TextInputFixture self){
-    native(mut self){
-#if defined(NWB_PLATFORM_WINDOWS)
-        EXPECT_EQ(SendMessageW(self.m_window, WM_UNICHAR, 0x1f600u, 0xffff), 0);
-        ASSERT_EQ(self.m_service->activeSession(), self.m_token);
-        TextInputEvent event(self.m_arena.arena);
-        usize totalBytes = 0u;
-        u64 sequence = 0u;
-        while(totalBytes < 0xffffu * 4u){
-            ASSERT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Event);
-            ASSERT_EQ(event.kind, TextInputEventKind::Commit);
-            ASSERT_FALSE(event.text.empty());
-            EXPECT_LE(event.text.size(), s_TextInputMaxEventTextBytes);
-            ASSERT_EQ(event.text.size() % 4u, 0u);
-            EXPECT_GT(event.sequence, sequence);
-            sequence = event.sequence;
-            for(usize offset = 0u; offset < event.text.size(); offset += 4u)
-                ASSERT_EQ(AStringView(event.text.data() + offset, 4u), "\xF0\x9F\x98\x80");
-            totalBytes += event.text.size();
-        }
-        EXPECT_EQ(totalBytes, 0xffffu * 4u);
-        EXPECT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Pending);
-#else
-        (void)self;
-#endif
-    }
-}
-
-void VerifyWin32TextInputFixture_AggregateCommitOverflowDiscardsAlreadyQueuedPrefix(mut Win32TextInputFixture self){
-    native(mut self){
-#if defined(NWB_PLATFORM_WINDOWS)
-        EXPECT_EQ(SendMessageW(self.m_window, WM_CHAR, 'x', 5), 0);
-        EXPECT_EQ(SendMessageW(self.m_window, WM_UNICHAR, 0x1f600u, 0xffff), 0);
-        EXPECT_FALSE(self.m_service->activeSession().valid());
-        TextInputEvent event(self.m_arena.arena);
-        ASSERT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Event);
-        EXPECT_EQ(event.kind, TextInputEventKind::Cancelled);
-        EXPECT_EQ(event.cancelReason, TextInputCancelReason::Overflow);
-        EXPECT_TRUE(event.text.empty());
-        EXPECT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::InvalidSession);
-#else
-        (void)self;
-#endif
-    }
-}
-
-void VerifyWin32TextInputFixture_IsolatedLowSurrogateCancelsWithExplicitFailure(mut Win32TextInputFixture self){
-    native(mut self){
-#if defined(NWB_PLATFORM_WINDOWS)
-        EXPECT_EQ(SendMessageW(self.m_window, WM_CHAR, 0xde00u, 0), 0);
-        EXPECT_FALSE(self.m_service->activeSession().valid());
-        TextInputEvent event(self.m_arena.arena);
-        ASSERT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Event);
-        EXPECT_EQ(event.kind, TextInputEventKind::Cancelled);
-        EXPECT_EQ(event.cancelReason, TextInputCancelReason::NativeFailure);
-        EXPECT_TRUE(event.text.empty());
-#if NWB_OCCUR_WARNING
-        EXPECT_TRUE(self.m_logger.sawMessageContaining(NWB_TEXT("Text input: native delivery rejected")));
-        EXPECT_EQ(self.m_logger.lastType(), Common::LogType::Warning);
-#endif
-#else
-        (void)self;
-#endif
-    }
-}
-
-void VerifyWin32TextInputFixture_FocusLossClearsPendingSurrogateBeforeReplacement(mut Win32TextInputFixture self){
-    native(mut self){
-#if defined(NWB_PLATFORM_WINDOWS)
-        EXPECT_EQ(SendMessageW(self.m_window, WM_CHAR, 0xd83du, 0), 0);
-        ASSERT_TRUE(self.m_service->setFocused(false));
-        TextInputEvent event(self.m_arena.arena);
-        ASSERT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Event);
-        EXPECT_EQ(event.cancelReason, TextInputCancelReason::FocusLost);
-        EXPECT_FALSE(DispatchWin32TextInputMessage(*self.m_service, WM_CHAR, 'x', 0));
-        ASSERT_TRUE(self.m_service->setFocused(true));
-        const auto tokenAdmission = self.m_service->begin({});
-        ASSERT_TRUE(tokenAdmission);
-        self.m_token = *tokenAdmission;
-        ASSERT_TRUE(self.m_token.valid());
-        EXPECT_EQ(SendMessageW(self.m_window, WM_CHAR, 'B', 0), 0);
-        ASSERT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Event);
-        EXPECT_EQ(event.text, "B");
-#else
-        (void)self;
-#endif
-    }
-}
-
-void VerifyWin32TextInputFixture_EndDiscardAndReplacementCannotReusePartialUtf16(mut Win32TextInputFixture self){
-    native(mut self){
-#if defined(NWB_PLATFORM_WINDOWS)
-        EXPECT_EQ(SendMessageW(self.m_window, WM_CHAR, 0xd83du, 0), 0);
-        ASSERT_TRUE(self.m_service->end(self.m_token));
-        const auto tokenAdmission = self.m_service->begin({});
-        ASSERT_TRUE(tokenAdmission);
-        self.m_token = *tokenAdmission;
-        ASSERT_TRUE(self.m_token.valid());
-        EXPECT_EQ(SendMessageW(self.m_window, WM_CHAR, 0xde00u, 0), 0);
-        TextInputEvent event(self.m_arena.arena);
-        ASSERT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Event);
-        EXPECT_EQ(event.kind, TextInputEventKind::Cancelled);
-#else
-        (void)self;
-#endif
-    }
-}
-
-void VerifyWin32TextInputFixture_ControlCharactersStayOutOfCommittedDocumentText(mut Win32TextInputFixture self){
-    native(mut self){
-#if defined(NWB_PLATFORM_WINDOWS)
-        for(const WPARAM character : { static_cast<WPARAM>(0x08u), static_cast<WPARAM>(0x09u), static_cast<WPARAM>(0x0du), static_cast<WPARAM>(0x1bu), static_cast<WPARAM>(0x7fu) })
-            EXPECT_EQ(SendMessageW(self.m_window, WM_CHAR, character, 0), 0);
-        TextInputEvent event(self.m_arena.arena);
-        EXPECT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Pending);
-        EXPECT_EQ(SendMessageW(self.m_window, WM_UNICHAR, UNICODE_NOCHAR, 0), TRUE);
-        EXPECT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Pending);
-#else
-        (void)self;
-#endif
-    }
-}
-
-void VerifyWin32TextInputFixture_ImeCharIsConsumedWithoutDuplicateCommitAndFollowingTypingSurvives(mut Win32TextInputFixture self){
-    native(mut self){
-#if defined(NWB_PLATFORM_WINDOWS)
-        EXPECT_EQ(SendMessageW(self.m_window, WM_IME_STARTCOMPOSITION, 0u, 0), 0);
-        EXPECT_EQ(SendMessageW(self.m_window, WM_IME_CHAR, 0xd55cu, 0), 0);
-        EXPECT_EQ(SendMessageW(self.m_window, WM_IME_ENDCOMPOSITION, 0u, 0), 0);
-        TextInputEvent event(self.m_arena.arena);
-        ASSERT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Event);
-        EXPECT_EQ(event.kind, TextInputEventKind::Preedit);
-        EXPECT_TRUE(event.text.empty());
-        EXPECT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Pending);
-        EXPECT_EQ(SendMessageW(self.m_window, WM_CHAR, 0xd55cu, 0), 0);
-        ASSERT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Event);
-        EXPECT_EQ(event.kind, TextInputEventKind::Commit);
-        EXPECT_EQ(event.text, "\xED\x95\x9C");
-#else
-        (void)self;
-#endif
-    }
-}
-
-void VerifyWin32TextInputFixture_CompositionWithoutCurrentStartCannotDeliverAcrossSessionBoundary(mut Win32TextInputFixture self){
-    native(mut self){
-#if defined(NWB_PLATFORM_WINDOWS)
-        EXPECT_EQ(SendMessageW(self.m_window, WM_IME_STARTCOMPOSITION, 0u, 0), 0);
-        ASSERT_TRUE(self.m_service->end(self.m_token));
-        const auto tokenAdmission = self.m_service->begin({});
-        ASSERT_TRUE(tokenAdmission);
-        self.m_token = *tokenAdmission;
-        ASSERT_TRUE(self.m_token.valid());
-        EXPECT_EQ(SendMessageW(self.m_window, WM_IME_COMPOSITION, 0u, GCS_RESULTSTR), 0);
-        TextInputEvent event(self.m_arena.arena);
-        EXPECT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Pending);
-#else
-        (void)self;
-#endif
-    }
-}
-
-void VerifyWin32TextInputFixture_BridgeRejectsUnsupportedForeignServiceBeforeDowncast(mut Win32TextInputFixture self){
-    native(mut self){
-#if defined(NWB_PLATFORM_WINDOWS)
-        auto unsupportedResult = CreateTextInputService(self.m_arena.arena, nullptr);
-        ASSERT_TRUE(unsupportedResult);
-        const GlobalUniquePtr<ITextInputService> unsupported = Move(*unsupportedResult);
-        EXPECT_FALSE(DispatchWin32TextInputMessage(*unsupported, WM_CHAR, 'x', 0));
-        EXPECT_FALSE(DispatchWin32TextInputMessage(*self.m_service, WM_MOUSEMOVE, 0u, 0));
-        EXPECT_FALSE(ResolveWin32TextInputContextMessage(*unsupported, WM_IME_SETCONTEXT, TRUE, 456));
-        EXPECT_FALSE(ResolveWin32TextInputContextMessage(*self.m_service, WM_MOUSEMOVE, 0u, 456));
-        TextInputEvent event(self.m_arena.arena);
-        EXPECT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Pending);
-#else
-        (void)self;
-#endif
-    }
-}
-
-void VerifyWin32TextInputFixture_ImeContextVisibilityTracksSessionAfterActivationAndPreservesOtherFlags(mut Win32TextInputFixture self){
-    native(mut self){
-#if defined(NWB_PLATFORM_WINDOWS)
-        ASSERT_TRUE(self.m_service->end(self.m_token));
-        const isize flags = static_cast<isize>(ISC_SHOWUICOMPOSITIONWINDOW | ISC_SHOWUICANDIDATEWINDOW | (ISC_SHOWUICANDIDATEWINDOW << 2u) | (1u << 20u));
-        const usize before = self.m_contextForwardCount;
-        const LRESULT inactiveResult = SendMessageW(self.m_window, WM_IME_SETCONTEXT, TRUE, static_cast<LPARAM>(flags));
-        EXPECT_EQ(self.m_contextForwardCount, before + 1u);
-        EXPECT_EQ(self.m_lastContextForwardedFlags, flags);
-        EXPECT_EQ(inactiveResult, self.m_lastContextDefaultResult);
-
-        const auto begun = self.m_service->begin({});
-        ASSERT_TRUE(begun);
-        self.m_token = *begun;
-        EXPECT_EQ(self.m_contextForwardCount, before + 2u);
-        EXPECT_EQ(self.m_lastContextForwardedFlags, flags & ~static_cast<isize>(ISC_SHOWUICOMPOSITIONWINDOW));
-        const LRESULT activeResult = SendMessageW(self.m_window, WM_IME_SETCONTEXT, TRUE, static_cast<LPARAM>(flags));
-        EXPECT_EQ(self.m_contextForwardCount, before + 3u);
-        EXPECT_EQ(self.m_lastContextForwardedFlags, flags & ~static_cast<isize>(ISC_SHOWUICOMPOSITIONWINDOW));
-        EXPECT_EQ(activeResult, self.m_lastContextDefaultResult);
-        ASSERT_TRUE(self.m_service->end(self.m_token));
-        EXPECT_EQ(self.m_contextForwardCount, before + 4u);
-        EXPECT_EQ(self.m_lastContextForwardedFlags, flags);
-#else
-        (void)self;
-#endif
-    }
-}
-
-void VerifyWin32TextInputFixture_ImeContextReplayNeverReactivatesAfterFocusLossOrNativeDeactivation(mut Win32TextInputFixture self){
-    native(mut self){
-#if defined(NWB_PLATFORM_WINDOWS)
-        ASSERT_TRUE(self.m_service->end(self.m_token));
-        const isize flags = static_cast<isize>(ISC_SHOWUICOMPOSITIONWINDOW | ISC_SHOWUICANDIDATEWINDOW | (1u << 20u));
-        SendMessageW(self.m_window, WM_IME_SETCONTEXT, TRUE, static_cast<LPARAM>(flags));
-        const auto begun = self.m_service->begin({});
-        ASSERT_TRUE(begun);
-        self.m_token = *begun;
-        const usize beforeFocusLoss = self.m_contextForwardCount;
-        ASSERT_TRUE(self.m_service->setFocused(false));
-        EXPECT_EQ(self.m_contextForwardCount, beforeFocusLoss);
-        const LRESULT deactivationResult = SendMessageW(self.m_window, WM_IME_SETCONTEXT, FALSE, static_cast<LPARAM>(flags));
-        EXPECT_EQ(self.m_contextForwardCount, beforeFocusLoss + 1u);
-        EXPECT_EQ(self.m_lastContextForwardedFlags, flags);
-        EXPECT_EQ(deactivationResult, self.m_lastContextDefaultResult);
-
-        ASSERT_TRUE(self.m_service->setFocused(true));
-        const auto second = self.m_service->begin({});
-        ASSERT_TRUE(second);
-        self.m_token = *second;
-        EXPECT_EQ(self.m_contextForwardCount, beforeFocusLoss + 1u);
-        ASSERT_TRUE(self.m_service->end(self.m_token));
-        EXPECT_EQ(self.m_contextForwardCount, beforeFocusLoss + 1u);
-#else
-        (void)self;
-#endif
-    }
-}
-
-void VerifyWin32TextInputFixture_ReentrantFocusCancellationRestoresNativeImeVisibilityAndKeepsCancelEvent(mut Win32TextInputFixture self){
-    native(mut self){
-#if defined(NWB_PLATFORM_WINDOWS)
-        ASSERT_TRUE(self.m_service->end(self.m_token));
-        const isize flags = static_cast<isize>(ISC_SHOWUICOMPOSITIONWINDOW | ISC_SHOWUICANDIDATEWINDOW | (1u << 20u));
-        SendMessageW(self.m_window, WM_IME_SETCONTEXT, TRUE, static_cast<LPARAM>(flags));
-        const usize before = self.m_contextForwardCount;
-        self.m_cancelOnNextContextForward = true;
-        const auto begun = self.m_service->begin({});
-        ASSERT_FALSE(begun);
-        EXPECT_EQ(begun.error(), TextInputAdmission::Unavailable);
-        EXPECT_FALSE(begun.has_value());
-        EXPECT_FALSE(self.m_cancelOnNextContextForward);
-        EXPECT_TRUE(self.m_contextFocusLossSucceeded);
-        EXPECT_TRUE(self.m_contextFocusRestoreSucceeded);
-        EXPECT_TRUE(self.m_cancelledDuringContextToken.valid());
-        EXPECT_EQ(self.m_contextForwardCount, before + 2u);
-        EXPECT_EQ(self.m_lastContextForwardedFlags, flags);
-
-        TextInputEvent event(self.m_arena.arena);
-        ASSERT_EQ(self.m_service->poll(self.m_cancelledDuringContextToken, event), TextInputPollResult::Event);
-        EXPECT_EQ(event.kind, TextInputEventKind::Cancelled);
-        EXPECT_EQ(event.cancelReason, TextInputCancelReason::FocusLost);
-        EXPECT_EQ(self.m_service->poll(self.m_cancelledDuringContextToken, event), TextInputPollResult::InvalidSession);
-        EXPECT_EQ(self.m_sceneCharacterCount, 0u);
-#else
-        (void)self;
-#endif
-    }
-}
-
-void VerifyWin32TextInputFixture_SceneFallbackCannotJoinSurrogatesAcrossSessionOwnership(mut Win32TextInputFixture self){
-    native(mut self){
-#if defined(NWB_PLATFORM_WINDOWS)
-        ASSERT_TRUE(self.m_service->end(self.m_token));
-        Expected<u32> codePoint = MakeUnexpected(Failure{});
-        EXPECT_FALSE((codePoint = DecodeWin32FallbackCharInput(*self.m_service, 0xd83du)));
-
-        const auto tokenAdmission = self.m_service->begin({});
-        ASSERT_TRUE(tokenAdmission);
-        self.m_token = *tokenAdmission;
-        ASSERT_TRUE(self.m_token.valid());
-        ASSERT_TRUE(self.m_service->end(self.m_token));
-        EXPECT_FALSE((codePoint = DecodeWin32FallbackCharInput(*self.m_service, 0xde00u)));
-
-        ASSERT_TRUE((codePoint = DecodeWin32FallbackCharInput(*self.m_service, 'A')));
-        EXPECT_EQ(*codePoint, static_cast<u32>('A'));
-#else
-        (void)self;
-#endif
-    }
-}
-
-void VerifyWin32TextInputFixture_SceneFallbackFocusResetDiscardsPartialPair(mut Win32TextInputFixture self){
-    native(mut self){
-#if defined(NWB_PLATFORM_WINDOWS)
-        ASSERT_TRUE(self.m_service->end(self.m_token));
-        EXPECT_FALSE(DecodeWin32FallbackCharInput(*self.m_service, 0xd83du));
-        ASSERT_TRUE(self.m_service->setFocused(false));
-        ASSERT_TRUE(ResetWin32FallbackCharInput(*self.m_service));
-        ASSERT_TRUE(self.m_service->setFocused(true));
-        ASSERT_TRUE(ResetWin32FallbackCharInput(*self.m_service));
-        EXPECT_FALSE(DecodeWin32FallbackCharInput(*self.m_service, 0xde00u));
-#else
-        (void)self;
-#endif
-    }
-}
-
-void VerifyWin32TextInputFixture_SceneFallbackDecoderNeverConsumesActivePair(mut Win32TextInputFixture self){
-    native(mut self){
-#if defined(NWB_PLATFORM_WINDOWS)
-        EXPECT_EQ(SendMessageW(self.m_window, WM_CHAR, 0xd83du, 0), 0);
-        EXPECT_FALSE(DecodeWin32FallbackCharInput(*self.m_service, 0xde00u));
-
-        EXPECT_EQ(SendMessageW(self.m_window, WM_CHAR, 0xde00u, 0), 0);
-        TextInputEvent event(self.m_arena.arena);
-        ASSERT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Event);
-        EXPECT_EQ(event.text, "\xF0\x9F\x98\x80");
-#else
-        (void)self;
-#endif
-    }
-}
-
-void VerifyWin32TextInputFixture_SceneFallbackSurrogateStateIsPerServiceAndValidatesUnits(mut Win32TextInputFixture self){
-    native(mut self){
-#if defined(NWB_PLATFORM_WINDOWS)
-        ASSERT_TRUE(self.m_service->end(self.m_token));
-        auto secondResult = CreateTextInputService(self.m_arena.arena, self.m_window);
-        ASSERT_TRUE(secondResult);
-        const GlobalUniquePtr<ITextInputService> second = Move(*secondResult);
-        ASSERT_NE(second.get(), nullptr);
-        ASSERT_TRUE(second->setFocused(true));
-        EXPECT_FALSE(DecodeWin32FallbackCharInput(*self.m_service, 0xd83du));
-        EXPECT_FALSE(DecodeWin32FallbackCharInput(*second, 0xde00u));
-        Expected<u32> codePoint = DecodeWin32FallbackCharInput(*self.m_service, 0xde00u);
-        ASSERT_TRUE(codePoint);
-        EXPECT_EQ(*codePoint, 0x1f600u);
-        EXPECT_FALSE(DecodeWin32FallbackCharInput(*self.m_service, 0x110000u));
-
-        EXPECT_FALSE(DecodeWin32FallbackCharInput(*self.m_service, 0u));
-        EXPECT_FALSE(DecodeWin32FallbackCharInput(*self.m_service, 0xd83du));
-        ASSERT_TRUE((codePoint = DecodeWin32FallbackCharInput(*self.m_service, 'B')));
-        EXPECT_EQ(*codePoint, static_cast<u32>('B'));
-        EXPECT_FALSE(DecodeWin32FallbackCharInput(*self.m_service, 0xde00u));
-#else
-        (void)self;
-#endif
-    }
-}
-
-void VerifyWin32TextInputFixture_SceneFallbackBridgeRejectsForeignServiceAndWrongThread(mut Win32TextInputFixture self){
-    native(mut self){
-#if defined(NWB_PLATFORM_WINDOWS)
-        ASSERT_TRUE(self.m_service->end(self.m_token));
-        auto unsupportedResult = CreateTextInputService(self.m_arena.arena, nullptr);
-        ASSERT_TRUE(unsupportedResult);
-        const GlobalUniquePtr<ITextInputService> unsupported = Move(*unsupportedResult);
-        EXPECT_FALSE(DecodeWin32FallbackCharInput(*unsupported, 'A'));
-
-        EXPECT_FALSE(ResetWin32FallbackCharInput(*unsupported));
-        Thread worker([&]() {
-            EXPECT_FALSE(DecodeWin32FallbackCharInput(*self.m_service, 'A'));
-            EXPECT_FALSE(ResetWin32FallbackCharInput(*self.m_service));
-        });
-        worker.join();
-        Expected<u32> codePoint = DecodeWin32FallbackCharInput(*self.m_service, 'C');
-        ASSERT_TRUE(codePoint);
-        EXPECT_EQ(*codePoint, static_cast<u32>('C'));
-#else
-        (void)self;
-#endif
-    }
-}
-
-void VerifyWin32TextInputFixture_InsertCharCreatesProvisionalPreeditWithoutCommitAndHonorsNoMoveCaret(mut Win32TextInputFixture self){
-    native(mut self){
-#if defined(NWB_PLATFORM_WINDOWS)
-        EXPECT_EQ(SendMessageW(self.m_window, WM_IME_STARTCOMPOSITION, 0u, 0), 0);
-        EXPECT_EQ(SendMessageW(self.m_window, WM_IME_COMPOSITION, 0xd55cu, CS_INSERTCHAR | CS_NOMOVECARET), 0);
-        TextInputEvent event(self.m_arena.arena);
-        ASSERT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Event);
-        EXPECT_EQ(event.kind, TextInputEventKind::Preedit);
-        EXPECT_EQ(event.text, "\xED\x95\x9C");
-        EXPECT_EQ(event.anchorByte, 0u);
-        EXPECT_EQ(event.caretByte, 0u);
-        EXPECT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Pending);
-        EXPECT_EQ(SendMessageW(self.m_window, WM_IME_COMPOSITION, 'A', CS_INSERTCHAR), 0);
-        ASSERT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Event);
-        EXPECT_EQ(event.kind, TextInputEventKind::Preedit);
-        EXPECT_EQ(event.text, "A\xED\x95\x9C");
-        EXPECT_EQ(event.caretByte, 1u);
-        EXPECT_EQ(SendMessageW(self.m_window, WM_IME_ENDCOMPOSITION, 0u, 0), 0);
-        ASSERT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Event);
-        EXPECT_EQ(event.kind, TextInputEventKind::Preedit);
-        EXPECT_TRUE(event.text.empty());
-        EXPECT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Pending);
-#else
-        (void)self;
-#endif
-    }
-}
-
-void VerifyWin32TextInputFixture_InsertCharSupplementaryPairProducesOneUtf8PreeditAndCancellationClearsIt(mut Win32TextInputFixture self){
-    native(mut self){
-#if defined(NWB_PLATFORM_WINDOWS)
-        EXPECT_EQ(SendMessageW(self.m_window, WM_IME_STARTCOMPOSITION, 0u, 0), 0);
-        TextInputEvent event(self.m_arena.arena);
-        ASSERT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Event);
-        EXPECT_EQ(SendMessageW(self.m_window, WM_IME_COMPOSITION, 0xd83du, CS_INSERTCHAR), 0);
-        EXPECT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Pending);
-        EXPECT_EQ(SendMessageW(self.m_window, WM_IME_COMPOSITION, 0xde00u, CS_INSERTCHAR), 0);
-        ASSERT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Event);
-        EXPECT_EQ(event.kind, TextInputEventKind::Preedit);
-        EXPECT_EQ(event.text, "\xF0\x9F\x98\x80");
-        EXPECT_EQ(event.caretByte, 4u);
-        EXPECT_EQ(SendMessageW(self.m_window, WM_IME_COMPOSITION, 0u, 0), 0);
-        ASSERT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Event);
-        EXPECT_EQ(event.kind, TextInputEventKind::Preedit);
-        EXPECT_TRUE(event.text.empty());
-        EXPECT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Pending);
-#else
-        (void)self;
-#endif
-    }
-}
-
-void VerifyWin32TextInputFixture_KeyboardFocusMessagesCancelQueuedWorkWithoutActivationChange(mut Win32TextInputFixture self){
-    native(mut self){
-#if defined(NWB_PLATFORM_WINDOWS)
-        EXPECT_EQ(SendMessageW(self.m_window, WM_CHAR, 'A', 0), 0);
-        EXPECT_EQ(SendMessageW(self.m_window, WM_IME_STARTCOMPOSITION, 0u, 0), 0);
-        EXPECT_EQ(SendMessageW(self.m_window, WM_IME_COMPOSITION, 0xd55cu, CS_INSERTCHAR), 0);
-        EXPECT_EQ(SendMessageW(self.m_window, WM_KILLFOCUS, 0u, 0), 0);
-        EXPECT_FALSE(self.m_service->activeSession().valid());
-        TextInputEvent event(self.m_arena.arena);
-        ASSERT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Event);
-        EXPECT_EQ(event.kind, TextInputEventKind::Cancelled);
-        EXPECT_EQ(event.cancelReason, TextInputCancelReason::FocusLost);
-        EXPECT_TRUE(event.text.empty());
-        EXPECT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::InvalidSession);
-        const auto unavailableBegin = self.m_service->begin({});
-        ASSERT_FALSE(unavailableBegin);
-        EXPECT_EQ(unavailableBegin.error(), TextInputAdmission::Unavailable);
-        EXPECT_EQ(SendMessageW(self.m_window, WM_SETFOCUS, 0u, 0), 0);
-        const auto tokenAdmission = self.m_service->begin({});
-        ASSERT_TRUE(tokenAdmission);
-        self.m_token = *tokenAdmission;
-        ASSERT_TRUE(self.m_token.valid());
-        EXPECT_EQ(SendMessageW(self.m_window, WM_CHAR, 'B', 0), 0);
-        ASSERT_EQ(self.m_service->poll(self.m_token, event), TextInputPollResult::Event);
-        EXPECT_EQ(event.kind, TextInputEventKind::Commit);
-        EXPECT_EQ(event.text, "B");
-#else
-        (void)self;
-#endif
-    }
-}
-
-void VerifyWin32TextInputFixture_InactiveKeyboardFocusMessagesResetSceneSurrogateState(mut Win32TextInputFixture self){
-    native(mut self){
-#if defined(NWB_PLATFORM_WINDOWS)
-        ASSERT_TRUE(self.m_service->end(self.m_token));
-        EXPECT_FALSE(DecodeWin32FallbackCharInput(*self.m_service, 0xd83du));
-        EXPECT_EQ(SendMessageW(self.m_window, WM_KILLFOCUS, 0u, 0), 0);
-        EXPECT_EQ(SendMessageW(self.m_window, WM_SETFOCUS, 0u, 0), 0);
-        EXPECT_FALSE(DecodeWin32FallbackCharInput(*self.m_service, 0xde00u));
-#else
-        (void)self;
-#endif
-    }
-}
-
-void VerifyWin32TextInputFixture_UnfocusedSceneFallbackRefusesLateWindowCharacterAndClearsPartialPair(mut Win32TextInputFixture self){
-    native(mut self){
-#if defined(NWB_PLATFORM_WINDOWS)
-        ASSERT_TRUE(self.m_service->end(self.m_token));
-        EXPECT_EQ(SendMessageW(self.m_window, WM_CHAR, 0xd83du, 0), 0);
-        EXPECT_EQ(self.m_sceneCharacterCount, 0u);
-        // Direct focus state update leaves fallback reset to the refusal guard, as a defensive late-message case.
-        ASSERT_TRUE(self.m_service->setFocused(false));
-        EXPECT_EQ(SendMessageW(self.m_window, WM_CHAR, 'A', 0), 0);
-        EXPECT_EQ(self.m_sceneCharacterCount, 0u);
-        ASSERT_TRUE(self.m_service->setFocused(true));
-        EXPECT_EQ(SendMessageW(self.m_window, WM_CHAR, 0xde00u, 0), 0);
-        EXPECT_EQ(self.m_sceneCharacterCount, 0u);
-        EXPECT_EQ(SendMessageW(self.m_window, WM_CHAR, 'B', 0), 0);
-        EXPECT_EQ(self.m_sceneCharacterCount, 1u);
-        EXPECT_EQ(self.m_sceneCodePoint, static_cast<u32>('B'));
-#else
-        (void)self;
-#endif
-    }
-}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void VerifyClipboardPipe_PartialUnicodeStaysPendingUntilValidEof(){
-    native{
-#if defined(NWB_PLATFORM_LINUX)
-        using namespace __hidden_os_platform_cases_support;
-        NWB::Tests::TestArena arena;
-        OwnedPipe pipe;
-        ASSERT_TRUE(pipe.open());
-        ClipboardTextAccumulator received(arena.arena);
-        Expected<b8, ClipboardPipeReadFailure> finished = MakeUnexpected(ClipboardPipeReadFailure{});
-        ASSERT_EQ(write(pipe.m_writeFd, "\xED", 1u), 1);
-        ASSERT_TRUE((finished = ReadClipboardPipe(pipe.m_readFd, received)));
-        EXPECT_FALSE(*finished);
-        ASSERT_EQ(write(pipe.m_writeFd, "\x95\x9C\xF0\x9F", 4u), 4);
-        ASSERT_TRUE((finished = ReadClipboardPipe(pipe.m_readFd, received)));
-        EXPECT_FALSE(*finished);
-        ASSERT_EQ(write(pipe.m_writeFd, "\x98\x80", 2u), 2);
-        CloseClipboardPipe(pipe.m_writeFd);
-        ASSERT_TRUE((finished = ReadClipboardPipe(pipe.m_readFd, received)));
-        EXPECT_TRUE(*finished);
-        EXPECT_EQ(received.text(), "\xED\x95\x9C\xF0\x9F\x98\x80");
-#endif
-    }
+    ClipboardPipeContext ctx = ClipboardPipeContext();
+    ASSERT_TRUE(ctx.openPipe());
+    ASSERT_EQ(ctx.writeRaw("\xED"), 1);
+    const Expected<b8, ClipboardPipeReadFailure> step1 = ctx.readPipe();
+    ASSERT_TRUE(step1.has_value());
+    EXPECT_FALSE(step1.value());
+
+    ASSERT_EQ(ctx.writeRaw("\x95\x9C\xF0\x9F"), 4);
+    const Expected<b8, ClipboardPipeReadFailure> step2 = ctx.readPipe();
+    ASSERT_TRUE(step2.has_value());
+    EXPECT_FALSE(step2.value());
+
+    ASSERT_EQ(ctx.writeRaw("\x98\x80"), 2);
+    ctx.closeWriteEnd();
+    const Expected<b8, ClipboardPipeReadFailure> step3 = ctx.readPipe();
+    ASSERT_TRUE(step3.has_value());
+    EXPECT_TRUE(step3.value());
+    EXPECT_EQ(ctx.receivedText(), "\xED\x95\x9C\xF0\x9F\x98\x80");
 }
 
 void VerifyClipboardPipe_TruncatedUnicodeIsRejectedAtEof(){
-    native{
-#if defined(NWB_PLATFORM_LINUX)
-        using namespace __hidden_os_platform_cases_support;
-        NWB::Tests::TestArena arena;
-        OwnedPipe pipe;
-        ASSERT_TRUE(pipe.open());
-        ClipboardTextAccumulator received(arena.arena);
-        ASSERT_EQ(write(pipe.m_writeFd, "\xF0\x9F", 2u), 2);
-        CloseClipboardPipe(pipe.m_writeFd);
-        Expected<b8, ClipboardPipeReadFailure> finished = ReadClipboardPipe(pipe.m_readFd, received);
-        ASSERT_FALSE(finished);
-        EXPECT_EQ(finished.error().status, ClipboardStatus::InvalidText);
-        EXPECT_TRUE(finished.error().finished);
-#endif
-    }
+    ClipboardPipeContext ctx = ClipboardPipeContext();
+    ASSERT_TRUE(ctx.openPipe());
+    ASSERT_EQ(ctx.writeRaw("\xF0\x9F"), 2);
+    ctx.closeWriteEnd();
+    const Expected<b8, ClipboardPipeReadFailure> finished = ctx.readPipe();
+    ASSERT_FALSE(finished.has_value());
+    EXPECT_EQ(finished.error().status, ClipboardStatus::InvalidText);
+    EXPECT_TRUE(finished.error().finished);
 }
 
 void VerifyClipboardPipe_WriterOwnsLargeInputAndResumesAfterFullPipe(){
-    native{
-#if defined(NWB_PLATFORM_LINUX)
-        using namespace __hidden_os_platform_cases_support;
-        NWB::Tests::TestArena arena;
-        OwnedPipe pipe;
-        ASSERT_TRUE(pipe.open());
-        GlobalString input(2u * 1024u * 1024u, 'x', arena.arena);
-        const GlobalString expected = input;
-        ClipboardPipeWriter writer(arena.arena);
-        const int writeFd = pipe.releaseWrite();
-        ASSERT_TRUE(writer.begin(writeFd, input));
-        input.assign("caller changed bytes");
-        const int writerFlags = fcntl(writeFd, F_GETFL);
-        ASSERT_GE(writerFlags, 0);
-        ASSERT_NE(writerFlags & O_NONBLOCK, 0);
-        for(usize attempt = 0u; attempt < 64u; ++attempt)
-            ASSERT_EQ(writer.advance(), ClipboardStatus::Success);
-        ASSERT_FALSE(writer.finished());
-        pollfd writable{ .fd = writeFd, .events = POLLOUT, .revents = 0 };
-        ASSERT_EQ(poll(&writable, 1u, 0), 0);
+    ClipboardPipeContext ctx = ClipboardPipeContext();
+    ASSERT_TRUE(ctx.openPipe());
+    FillGlobalString(ctx.input, 2u * 1024u * 1024u, 0x78u);
+    AssignGlobalString(ctx.expected, ViewGlobalString(ctx.input));
+    const i32 writeFd = ctx.releaseWriteFd();
+    ASSERT_TRUE(ctx.beginWriter(writeFd, ViewGlobalString(ctx.input)));
+    AssignGlobalString(ctx.input, "caller changed bytes");
 
-        ClipboardTextAccumulator received(arena.arena);
-        b8 finished = false;
-        for(usize attempt = 0u; attempt < 4096u && !finished; ++attempt){
-            const auto read = ReadClipboardPipe(pipe.m_readFd, received);
-            ASSERT_TRUE(read);
-            finished = *read;
-            ASSERT_EQ(writer.advance(), ClipboardStatus::Success);
-        }
-        EXPECT_TRUE(finished);
-        EXPECT_TRUE(writer.finished());
-        EXPECT_EQ(received.text(), expected);
-#endif
+    const i32 writerFlags = ctx.queryFdFlags(writeFd);
+    ASSERT_GE(writerFlags, 0);
+    ASSERT_TRUE(ctx.hasNonblockFlag(writerFlags));
+    for(usize attempt = 0u; attempt < 64u; ++attempt)
+        ASSERT_EQ(ctx.advanceWriter(), ClipboardStatus::Success);
+    ASSERT_FALSE(ctx.writerFinished());
+    ASSERT_EQ(ctx.pollPipeWritable(writeFd), 0);
+
+    b8 finished = false;
+    for(usize attempt = 0u; attempt < 4096u && !finished; ++attempt){
+        const Expected<b8, ClipboardPipeReadFailure> read = ctx.readPipe();
+        ASSERT_TRUE(read.has_value());
+        finished = read.value();
+        ASSERT_EQ(ctx.advanceWriter(), ClipboardStatus::Success);
     }
+    EXPECT_TRUE(finished);
+    EXPECT_TRUE(ctx.writerFinished());
+    EXPECT_EQ(ctx.receivedText(), ViewGlobalString(ctx.expected));
 }
 
 void VerifyClipboardPipe_ClosedReaderFailsWithoutSigpipeOrChangingThreadMask(){
-    native{
+    ClipboardPipeContext ctx = ClipboardPipeContext();
+    ASSERT_TRUE(ctx.openPipe());
+    ctx.closeReadEnd();
+    i32 beforeStatus = -1;
+    i32 beforeSigpipe = -1;
+    native(mut beforeStatus, mut beforeSigpipe){
 #if defined(NWB_PLATFORM_LINUX)
-        using namespace __hidden_os_platform_cases_support;
-        NWB::Tests::TestArena arena;
-        OwnedPipe pipe;
-        ASSERT_TRUE(pipe.open());
-        CloseClipboardPipe(pipe.m_readFd);
         sigset_t before;
-        ASSERT_EQ(pthread_sigmask(SIG_BLOCK, nullptr, &before), 0);
-        ClipboardPipeWriter writer(arena.arena);
-        ASSERT_TRUE(writer.begin(pipe.releaseWrite(), "reader is gone"));
-        EXPECT_EQ(writer.advance(), ClipboardStatus::NativeFailure);
-        EXPECT_TRUE(writer.finished());
-        sigset_t after;
-        ASSERT_EQ(pthread_sigmask(SIG_BLOCK, nullptr, &after), 0);
-        EXPECT_EQ(sigismember(&before, SIGPIPE), sigismember(&after, SIGPIPE));
+        beforeStatus = static_cast<i32>(pthread_sigmask(SIG_BLOCK, nullptr, &before));
+        if(beforeStatus == 0)
+            beforeSigpipe = static_cast<i32>(sigismember(&before, SIGPIPE));
 #endif
     }
+    ASSERT_EQ(beforeStatus, 0);
+    ASSERT_TRUE(ctx.beginWriter(ctx.releaseWriteFd(), "reader is gone"));
+    EXPECT_EQ(ctx.advanceWriter(), ClipboardStatus::NativeFailure);
+    EXPECT_TRUE(ctx.writerFinished());
+
+    i32 afterStatus = -1;
+    i32 afterSigpipe = -2;
+    native(mut afterStatus, mut afterSigpipe){
+#if defined(NWB_PLATFORM_LINUX)
+        sigset_t after;
+        afterStatus = static_cast<i32>(pthread_sigmask(SIG_BLOCK, nullptr, &after));
+        if(afterStatus == 0)
+            afterSigpipe = static_cast<i32>(sigismember(&after, SIGPIPE));
+#endif
+    }
+    ASSERT_EQ(afterStatus, 0);
+    EXPECT_EQ(beforeSigpipe, afterSigpipe);
 }
 
 void VerifyClipboardPipe_WriterCanBeReusedForEmptyAndShorterTransfers(){
-    native{
-#if defined(NWB_PLATFORM_LINUX)
-        using namespace __hidden_os_platform_cases_support;
-        NWB::Tests::TestArena arena;
-        ClipboardPipeWriter writer(arena.arena);
-        ClipboardTextAccumulator received(arena.arena);
-        Expected<b8, ClipboardPipeReadFailure> finished = MakeUnexpected(ClipboardPipeReadFailure{});
-        OwnedPipe first;
-        ASSERT_TRUE(first.open());
-        ASSERT_TRUE(writer.begin(first.releaseWrite(), "old long contents"));
-        ASSERT_EQ(writer.advance(), ClipboardStatus::Success);
-        ASSERT_TRUE(writer.finished());
-        ASSERT_TRUE((finished = ReadClipboardPipe(first.m_readFd, received)));
-        ASSERT_TRUE(*finished);
-        EXPECT_EQ(received.text(), "old long contents");
+    ClipboardPipeContext ctx = ClipboardPipeContext();
+    ASSERT_TRUE(ctx.openPipe());
+    ASSERT_TRUE(ctx.beginWriter(ctx.releaseWriteFd(), "old long contents"));
+    ASSERT_EQ(ctx.advanceWriter(), ClipboardStatus::Success);
+    ASSERT_TRUE(ctx.writerFinished());
+    const Expected<b8, ClipboardPipeReadFailure> firstFinished = ctx.readPipe();
+    ASSERT_TRUE(firstFinished.has_value());
+    ASSERT_TRUE(firstFinished.value());
+    EXPECT_EQ(ctx.receivedText(), "old long contents");
 
-        OwnedPipe empty;
-        ASSERT_TRUE(empty.open());
-        ASSERT_TRUE(writer.begin(empty.releaseWrite(), {}));
-        ASSERT_EQ(writer.advance(), ClipboardStatus::Success);
-        ASSERT_TRUE(writer.finished());
-        received.clear();
-        ASSERT_TRUE((finished = ReadClipboardPipe(empty.m_readFd, received)));
-        EXPECT_TRUE(*finished);
-        EXPECT_TRUE(received.text().empty());
+    ASSERT_TRUE(ctx.openPipe());
+    ASSERT_TRUE(ctx.beginWriter(ctx.releaseWriteFd(), StringView()));
+    ASSERT_EQ(ctx.advanceWriter(), ClipboardStatus::Success);
+    ASSERT_TRUE(ctx.writerFinished());
+    ctx.clearReceived();
+    const Expected<b8, ClipboardPipeReadFailure> emptyFinished = ctx.readPipe();
+    ASSERT_TRUE(emptyFinished.has_value());
+    EXPECT_TRUE(emptyFinished.value());
+    EXPECT_TRUE(ctx.receivedText().empty());
 
-        OwnedPipe last;
-        ASSERT_TRUE(last.open());
-        ASSERT_TRUE(writer.begin(last.releaseWrite(), "new"));
-        ASSERT_EQ(writer.advance(), ClipboardStatus::Success);
-        ASSERT_TRUE(writer.finished());
-        received.clear();
-        ASSERT_TRUE((finished = ReadClipboardPipe(last.m_readFd, received)));
-        EXPECT_TRUE(*finished);
-        EXPECT_EQ(received.text(), "new");
-#endif
-    }
+    ASSERT_TRUE(ctx.openPipe());
+    ASSERT_TRUE(ctx.beginWriter(ctx.releaseWriteFd(), "new"));
+    ASSERT_EQ(ctx.advanceWriter(), ClipboardStatus::Success);
+    ASSERT_TRUE(ctx.writerFinished());
+    ctx.clearReceived();
+    const Expected<b8, ClipboardPipeReadFailure> lastFinished = ctx.readPipe();
+    ASSERT_TRUE(lastFinished.has_value());
+    EXPECT_TRUE(lastFinished.value());
+    EXPECT_EQ(ctx.receivedText(), "new");
 }
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
 void VerifyX11ClipboardFixture_PropertyAbsenceAndRetiredWindowPreserveDifferentNativeResults(mut X11ClipboardFixture self){
-    native(mut self){
+    b8 createdOk = false;
+    b8 retiredNonZero = false;
+    b8 absentOk = false;
+    u64 absentType = 1u;
+    usize absentCount = 1u;
+    b8 destroyedOk = false;
+    b8 failedHasValue = true;
+    u8 failedErrorCode = 0u;
+    u8 expectedBadWindow = 1u;
+    native(mut self, mut createdOk, mut retiredNonZero, mut absentOk, mut absentType, mut absentCount, mut destroyedOk, mut failedHasValue, mut failedErrorCode, mut expectedBadWindow){
 #if defined(NWB_PLATFORM_LINUX)
+        expectedBadWindow = static_cast<u8>(BadWindow);
         Window retired = 0u;
         {
-            X11CheckedOperation created(*self.m_displays[0]);
+            NWB::Core::X11CheckedOperation created(*self.m_displays[0]);
             retired = XCreateSimpleWindow(self.m_displays[0], DefaultRootWindow(self.m_displays[0]), 0, 0, 1, 1, 0, 0, 0);
-            ASSERT_TRUE(created.succeeded());
-            ASSERT_NE(retired, 0u);
+            createdOk = created.succeeded();
+            retiredNonZero = retired != 0u;
         }
-        {
-            const auto absent = ReadX11Property(*self.m_displays[0], retired, XA_STRING, false, 16u);
-            ASSERT_TRUE(absent);
-            EXPECT_EQ(absent->type, 0u);
-            EXPECT_EQ(absent->count, 0u);
+        if(createdOk && retiredNonZero){
+            const auto absent = NWB::Core::ReadX11Property(*self.m_displays[0], retired, XA_STRING, false, 16u);
+            absentOk = absent.has_value();
+            if(absent){
+                absentType = static_cast<u64>(absent->type);
+                absentCount = absent->count;
+            }
+            {
+                NWB::Core::X11CheckedOperation destroyed(*self.m_displays[0]);
+                XDestroyWindow(self.m_displays[0], retired);
+                destroyedOk = destroyed.succeeded();
+            }
+            const auto failed = NWB::Core::ReadX11Property(*self.m_displays[0], retired, XA_STRING, false, 16u);
+            failedHasValue = failed.has_value();
+            if(!failed)
+                failedErrorCode = failed.error().errorCode;
         }
-        {
-            X11CheckedOperation destroyed(*self.m_displays[0]);
-            XDestroyWindow(self.m_displays[0], retired);
-            ASSERT_TRUE(destroyed.succeeded());
-        }
-        const auto failed = ReadX11Property(*self.m_displays[0], retired, XA_STRING, false, 16u);
-        ASSERT_FALSE(failed);
-        EXPECT_EQ(failed.error().errorCode, static_cast<u8>(BadWindow));
-#else
-        (void)self;
 #endif
     }
+    ASSERT_TRUE(createdOk);
+    ASSERT_TRUE(retiredNonZero);
+    ASSERT_TRUE(absentOk);
+    EXPECT_EQ(absentType, 0u);
+    EXPECT_EQ(absentCount, 0u);
+    ASSERT_TRUE(destroyedOk);
+    ASSERT_FALSE(failedHasValue);
+    EXPECT_EQ(failedErrorCode, expectedBadWindow);
 }
 
 void VerifyX11ClipboardFixture_WritingPrimarySelectionDoesNotOverwriteClipboardUtf8(mut X11ClipboardFixture self){
-    native(mut self){
-#if defined(NWB_PLATFORM_LINUX)
-        const AStringView clipboard = "clipboard \xec\x95\x88\xeb\x85\x95 \xf0\x9f\x99\x82";
-        const AStringView primary = "primary caf\xc3\xa9";
-        ASSERT_TRUE(self.m_services[0]->capabilities(ClipboardChannel::PrimarySelection).readText);
-        ASSERT_TRUE(self.writeText(0u, ClipboardChannel::Clipboard, clipboard));
-        ASSERT_TRUE(self.writeText(0u, ClipboardChannel::PrimarySelection, primary));
-        ClipboardCompletion completion(self.m_arena.arena);
-        const auto clipTokenAdmission = self.m_services[1]->requestReadText(ClipboardChannel::Clipboard);
-        ASSERT_TRUE(clipTokenAdmission);
-        const ClipboardRequestToken clipToken = *clipTokenAdmission;
-        ASSERT_TRUE(self.awaitCompletion(clipToken, *self.m_services[1], completion));
-        ASSERT_EQ(completion.status, ClipboardStatus::Success);
-        EXPECT_EQ(completion.text, clipboard);
-        const auto primaryTokenAdmission = self.m_services[1]->requestReadText(ClipboardChannel::PrimarySelection);
-        ASSERT_TRUE(primaryTokenAdmission);
-        const ClipboardRequestToken primaryToken = *primaryTokenAdmission;
-        ASSERT_TRUE(self.awaitCompletion(primaryToken, *self.m_services[1], completion));
-        ASSERT_EQ(completion.status, ClipboardStatus::Success);
-        EXPECT_EQ(completion.text, primary);
-#else
-        (void)self;
-#endif
-    }
+    const StringView clipboard = "clipboard \xec\x95\x88\xeb\x85\x95 \xf0\x9f\x99\x82";
+    const StringView primary = "primary caf\xc3\xa9";
+    ASSERT_TRUE(self.canReadPrimarySelection());
+    ASSERT_TRUE(self.writeText(0u, ClipboardChannel::Clipboard, clipboard));
+    ASSERT_TRUE(self.writeText(0u, ClipboardChannel::PrimarySelection, primary));
+
+    StandaloneClipboardCompletion out = StandaloneClipboardCompletion();
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> clipAdmission = self.requestRead(1u, ClipboardChannel::Clipboard);
+    ASSERT_TRUE(clipAdmission.has_value());
+    ASSERT_TRUE(self.awaitServiceCompletion(1u, clipAdmission.value(), out.completion));
+    ASSERT_EQ(out.completion.status, ClipboardStatus::Success);
+    EXPECT_EQ(out.completion.text, clipboard);
+
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> primaryAdmission = self.requestRead(1u, ClipboardChannel::PrimarySelection);
+    ASSERT_TRUE(primaryAdmission.has_value());
+    ASSERT_TRUE(self.awaitServiceCompletion(1u, primaryAdmission.value(), out.completion));
+    ASSERT_EQ(out.completion.status, ClipboardStatus::Success);
+    EXPECT_EQ(out.completion.text, primary);
 }
 
 void VerifyX11ClipboardFixture_IncrementalReadRetainsSnapshotAfterOwnerLosesSelection(mut X11ClipboardFixture self){
-    native(mut self){
+    ClipboardPipeContext scratchCtx = ClipboardPipeContext();
+    FillGlobalString(scratchCtx.input, 200000u, 0x78u);
+    ReplaceGlobalString(scratchCtx.input, 65534u, 1u, "\xf0\x9f\x99\x82");
+    const StringView originalView = ViewGlobalString(scratchCtx.input);
+    ASSERT_TRUE(self.writeText(0u, ClipboardChannel::Clipboard, originalView));
+    self.m_sawSelectionRequest = false;
+
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> tokenAdmission = self.requestRead(1u, ClipboardChannel::Clipboard);
+    ASSERT_TRUE(tokenAdmission.has_value());
+    const ClipboardRequestToken token = tokenAdmission.value();
+    ASSERT_TRUE(self.waitForSelectionRequest());
+    ASSERT_TRUE(self.m_sawSelectionRequest);
+
+    u64 replacementWindow = 0u;
+    b8 ownerReplaced = false;
+    native(mut self, mut replacementWindow, mut ownerReplaced){
 #if defined(NWB_PLATFORM_LINUX)
         using namespace __hidden_os_platform_cases_support;
-        GlobalString original(200000u, 'x', self.m_arena.arena);
-        original.replace(65534u, 1u, "\xf0\x9f\x99\x82");
-        ASSERT_TRUE(self.writeText(0u, ClipboardChannel::Clipboard, original));
-        self.m_sawSelectionRequest = false;
-        ClipboardCompletion completion(self.m_arena.arena);
-        const auto tokenAdmission = self.m_services[1]->requestReadText(ClipboardChannel::Clipboard);
-        ASSERT_TRUE(tokenAdmission);
-        const ClipboardRequestToken token = *tokenAdmission;
-        const Timer deadline = TimerAddMS(TimerNow(), s_SelectionChangeTimeoutMS);
-        while(!self.m_sawSelectionRequest && TimerNow() < deadline){
-            ASSERT_TRUE(self.pumpAll());
-            SleepMS(s_PollIntervalMS);
-        }
-        ASSERT_TRUE(self.m_sawSelectionRequest);
         const Window replacement = XCreateSimpleWindow(self.m_displays[1], DefaultRootWindow(self.m_displays[1]), 0, 0, 1, 1, 0, 0, 0);
-        ASSERT_NE(replacement, 0u);
-        const Atom clipboard = XInternAtom(self.m_displays[1], s_ClipboardAtomName.data(), False);
-        XSetSelectionOwner(self.m_displays[1], clipboard, replacement, CurrentTime);
+        replacementWindow = static_cast<u64>(replacement);
+        if(replacement != 0u){
+            const Atom clipboard = XInternAtom(self.m_displays[1], s_ClipboardAtomName.data(), False);
+            XSetSelectionOwner(self.m_displays[1], clipboard, replacement, CurrentTime);
+            XSync(self.m_displays[1], False);
+            ownerReplaced = XGetSelectionOwner(self.m_displays[1], clipboard) == replacement;
+        }
+#endif
+    }
+    ASSERT_NE(replacementWindow, 0u);
+    ASSERT_TRUE(ownerReplaced);
+
+    StandaloneClipboardCompletion out = StandaloneClipboardCompletion();
+    ASSERT_TRUE(self.awaitServiceCompletion(1u, token, out.completion));
+    EXPECT_EQ(out.completion.status, ClipboardStatus::Success);
+    EXPECT_EQ(out.completion.text, originalView);
+
+    native(mut self, in replacementWindow){
+#if defined(NWB_PLATFORM_LINUX)
+        XDestroyWindow(self.m_displays[1], static_cast<Window>(replacementWindow));
         XSync(self.m_displays[1], False);
-        ASSERT_EQ(XGetSelectionOwner(self.m_displays[1], clipboard), replacement);
-        ASSERT_TRUE(self.awaitCompletion(token, *self.m_services[1], completion));
-        EXPECT_EQ(completion.status, ClipboardStatus::Success);
-        EXPECT_EQ(completion.text, original);
-        XDestroyWindow(self.m_displays[1], replacement);
-        XSync(self.m_displays[1], False);
-#else
-        (void)self;
 #endif
     }
 }
 
 void VerifyX11ClipboardFixture_CancelledRequestWindowCannotCompleteFreshRequest(mut X11ClipboardFixture self){
-    native(mut self){
-#if defined(NWB_PLATFORM_LINUX)
-        ASSERT_TRUE(self.writeText(0u, ClipboardChannel::Clipboard, "first"));
-        const auto cancelledAdmission = self.m_services[1]->requestReadText(ClipboardChannel::Clipboard);
-        ASSERT_TRUE(cancelledAdmission);
-        const ClipboardRequestToken cancelled = *cancelledAdmission;
-        ASSERT_TRUE(self.m_services[1]->pump());
-        ASSERT_TRUE(self.m_services[1]->cancel(cancelled));
-        ASSERT_TRUE(self.writeText(0u, ClipboardChannel::Clipboard, "after cancellation"));
-        ClipboardCompletion completion(self.m_arena.arena);
-        const auto freshAdmission = self.m_services[1]->requestReadText(ClipboardChannel::Clipboard);
-        ASSERT_TRUE(freshAdmission);
-        const ClipboardRequestToken fresh = *freshAdmission;
-        ASSERT_TRUE(self.awaitCompletion(fresh, *self.m_services[1], completion));
-        EXPECT_EQ(completion.status, ClipboardStatus::Success);
-        EXPECT_EQ(completion.text, "after cancellation");
-        EXPECT_EQ(self.m_services[1]->poll(cancelled, completion), ClipboardPollResult::InvalidRequest);
-#else
-        (void)self;
-#endif
-    }
+    ASSERT_TRUE(self.writeText(0u, ClipboardChannel::Clipboard, "first"));
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> cancelledAdmission = self.requestRead(1u, ClipboardChannel::Clipboard);
+    ASSERT_TRUE(cancelledAdmission.has_value());
+    const ClipboardRequestToken cancelled = cancelledAdmission.value();
+    ASSERT_TRUE(self.pumpService(1u));
+    ASSERT_TRUE(self.cancelService(1u, cancelled));
+    ASSERT_TRUE(self.writeText(0u, ClipboardChannel::Clipboard, "after cancellation"));
+
+    StandaloneClipboardCompletion out = StandaloneClipboardCompletion();
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> freshAdmission = self.requestRead(1u, ClipboardChannel::Clipboard);
+    ASSERT_TRUE(freshAdmission.has_value());
+    ASSERT_TRUE(self.awaitServiceCompletion(1u, freshAdmission.value(), out.completion));
+    EXPECT_EQ(out.completion.status, ClipboardStatus::Success);
+    EXPECT_EQ(out.completion.text, "after cancellation");
+    EXPECT_EQ(self.pollService(1u, cancelled, out.completion), ClipboardPollResult::InvalidRequest);
 }
 
 void VerifyX11ClipboardFixture_QueuedOwnershipLossCannotClearNewlyReacquiredText(mut X11ClipboardFixture self){
-    native(mut self){
+    ASSERT_TRUE(self.writeText(0u, ClipboardChannel::Clipboard, "before ownership loss"));
+
+    u64 temporaryWindow = 0u;
+    b8 temporaryOwned = false;
+    b8 queuedLoss = false;
+    b8 selectionMatched = false;
+    StandaloneClipboardCompletion out = StandaloneClipboardCompletion();
+
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> writeAdmission = self.requestWrite(0u, ClipboardChannel::Clipboard, "after reacquisition");
+    ASSERT_TRUE(writeAdmission.has_value());
+    const ClipboardRequestToken writeToken = writeAdmission.value();
+    ASSERT_TRUE(writeToken.valid());
+
+    b8 reacquiredOk = false;
+    b8 ownerMovedAway = false;
+    b8 lossDispatched = false;
+    native(mut self, in writeToken, mut out, mut temporaryWindow, mut temporaryOwned, mut queuedLoss, mut selectionMatched, mut reacquiredOk, mut ownerMovedAway, mut lossDispatched){
 #if defined(NWB_PLATFORM_LINUX)
         using namespace __hidden_os_platform_cases_support;
-        ASSERT_TRUE(self.writeText(0u, ClipboardChannel::Clipboard, "before ownership loss"));
         const Atom clipboard = XInternAtom(self.m_displays[1], s_ClipboardAtomName.data(), False);
         const Window temporaryOwner = XCreateSimpleWindow(self.m_displays[1], DefaultRootWindow(self.m_displays[1]), 0, 0, 1, 1, 0, 0, 0);
-        ASSERT_NE(temporaryOwner, 0u);
-        XSetSelectionOwner(self.m_displays[1], clipboard, temporaryOwner, CurrentTime);
-        XSync(self.m_displays[1], False);
-        ASSERT_EQ(XGetSelectionOwner(self.m_displays[1], clipboard), temporaryOwner);
-
-        // Retain the genuine loss event until the new ownership is established.
-        XEvent ownershipLoss{};
-        b8 queuedLoss = false;
-        const Timer lossDeadline = TimerAddMS(TimerNow(), s_SelectionChangeTimeoutMS);
-        while(!queuedLoss && TimerNow() < lossDeadline){
-            queuedLoss = XCheckTypedEvent(self.m_displays[0], SelectionClear, &ownershipLoss) != False;
-            if(!queuedLoss)
-                SleepMS(s_PollIntervalMS);
+        temporaryWindow = static_cast<u64>(temporaryOwner);
+        if(temporaryOwner != 0u){
+            XSetSelectionOwner(self.m_displays[1], clipboard, temporaryOwner, CurrentTime);
+            XSync(self.m_displays[1], False);
+            temporaryOwned = XGetSelectionOwner(self.m_displays[1], clipboard) == temporaryOwner;
         }
-        ASSERT_TRUE(queuedLoss);
-        ASSERT_EQ(ownershipLoss.xselectionclear.selection, clipboard);
+        XEvent ownershipLoss{};
+        if(temporaryOwned){
+            const Timer lossDeadline = TimerAddMS(TimerNow(), s_SelectionChangeTimeoutMS);
+            while(!queuedLoss && TimerNow() < lossDeadline){
+                queuedLoss = XCheckTypedEvent(self.m_displays[0], SelectionClear, &ownershipLoss) != False;
+                if(!queuedLoss)
+                    SleepMS(s_PollIntervalMS);
+            }
+            selectionMatched = ownershipLoss.xselectionclear.selection == clipboard;
+        }
+        if(queuedLoss && selectionMatched){
+            reacquiredOk = self.awaitCompletion(writeToken, *self.m_services[0], out.completion) && out.completion.status == NWB::Core::ClipboardStatus::Success;
+            ownerMovedAway = XGetSelectionOwner(self.m_displays[1], clipboard) != temporaryOwner;
+            lossDispatched = NWB::Core::DispatchX11ClipboardEvent(*self.m_services[0], ownershipLoss);
+        }
+#endif
+    }
+    ASSERT_NE(temporaryWindow, 0u);
+    ASSERT_TRUE(temporaryOwned);
+    ASSERT_TRUE(queuedLoss);
+    ASSERT_TRUE(selectionMatched);
+    ASSERT_TRUE(reacquiredOk);
+    ASSERT_TRUE(ownerMovedAway);
+    ASSERT_TRUE(lossDispatched);
+    ASSERT_TRUE(self.pumpAll());
 
-        ClipboardCompletion completion(self.m_arena.arena);
-        const auto writeAdmission = self.m_services[0]->requestWriteText(ClipboardChannel::Clipboard, "after reacquisition");
-        ASSERT_TRUE(writeAdmission);
-        const ClipboardRequestToken write = *writeAdmission;
-        ASSERT_TRUE(write.valid());
-        ASSERT_TRUE(self.awaitCompletion(write, *self.m_services[0], completion));
-        ASSERT_EQ(completion.status, ClipboardStatus::Success);
-        ASSERT_NE(XGetSelectionOwner(self.m_displays[1], clipboard), temporaryOwner);
-        ASSERT_TRUE(DispatchX11ClipboardEvent(*self.m_services[0], ownershipLoss));
-        ASSERT_TRUE(self.pumpAll());
-        const auto readAdmission = self.m_services[1]->requestReadText(ClipboardChannel::Clipboard);
-        ASSERT_TRUE(readAdmission);
-        const ClipboardRequestToken read = *readAdmission;
-        ASSERT_TRUE(self.awaitCompletion(read, *self.m_services[1], completion));
-        EXPECT_EQ(completion.status, ClipboardStatus::Success);
-        EXPECT_EQ(completion.text, "after reacquisition");
-        XDestroyWindow(self.m_displays[1], temporaryOwner);
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> readAdmission = self.requestRead(1u, ClipboardChannel::Clipboard);
+    ASSERT_TRUE(readAdmission.has_value());
+    ASSERT_TRUE(self.awaitServiceCompletion(1u, readAdmission.value(), out.completion));
+    EXPECT_EQ(out.completion.status, ClipboardStatus::Success);
+    EXPECT_EQ(out.completion.text, "after reacquisition");
+
+    native(mut self, in temporaryWindow){
+#if defined(NWB_PLATFORM_LINUX)
+        XDestroyWindow(self.m_displays[1], static_cast<Window>(temporaryWindow));
         XSync(self.m_displays[1], False);
-#else
-        (void)self;
 #endif
     }
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_ADHD_GTEST(X11TextInputDispatchFence, CallbackCancellationDefersContextUntilOuterNativeCallReturns, VerifyX11TextInputDispatchFence_CallbackCancellationDefersContextUntilOuterNativeCallReturns)
 NWB_ADHD_GTEST(X11TextInputDispatchFence, RetirementWithoutNativeStackCanReleaseImmediately, VerifyX11TextInputDispatchFence_RetirementWithoutNativeStackCanReleaseImmediately)
@@ -1756,118 +1274,24 @@ NWB_ADHD_GTEST(WaylandTextInputState, RingEvictionStillAdmitsDelayedCommitButMar
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_WINDOWS)
-namespace __hidden_os_platform_cases_support{
-
-LRESULT CALLBACK Win32TextInputFixture::WindowProc(const HWND window, const UINT message, const WPARAM wParam, const LPARAM lParam){
-    if(message == WM_NCCREATE){
-        const auto& creation = *MakeNotNull(reinterpret_cast<const CREATESTRUCTW*>(lParam));
-        SetLastError(ERROR_SUCCESS);
-        const LONG_PTR previous = SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(creation.lpCreateParams));
-        if(previous == 0 && GetLastError() != ERROR_SUCCESS)
-            return FALSE;
-    }
-    auto* const fixture = reinterpret_cast<Win32TextInputFixture*>(GetWindowLongPtrW(window, GWLP_USERDATA));
-    if(fixture && fixture->m_service){
-        const auto forwardedLParam = ResolveWin32TextInputContextMessage(*fixture->m_service, message, wParam, lParam);
-        if(forwardedLParam){
-            ++fixture->m_contextForwardCount;
-            fixture->m_lastContextForwardedFlags = *forwardedLParam;
-            if(fixture->m_cancelOnNextContextForward){
-                fixture->m_cancelOnNextContextForward = false;
-                fixture->m_cancelledDuringContextToken = fixture->m_service->activeSession();
-                fixture->m_contextFocusLossSucceeded = fixture->m_service->setFocused(false);
-                fixture->m_contextFocusRestoreSucceeded = fixture->m_service->setFocused(true);
-            }
-            fixture->m_lastContextDefaultResult = DefWindowProcW(window, message, wParam, static_cast<LPARAM>(*forwardedLParam));
-            return fixture->m_lastContextDefaultResult;
-        }
-        if(message == WM_UNICHAR && wParam == UNICODE_NOCHAR)
-            return TRUE;
-        if(DispatchWin32TextInputMessage(*fixture->m_service, message, wParam, lParam))
-            return 0;
-        if(message == WM_CHAR){
-            const auto codePoint = DecodeWin32FallbackCharInput(*fixture->m_service, static_cast<u32>(wParam));
-            if(codePoint){
-                ++fixture->m_sceneCharacterCount;
-                fixture->m_sceneCodePoint = *codePoint;
-            }
-            return 0;
-        }
-    }
-    return DefWindowProcW(window, message, wParam, lParam);
-}
-
-void Win32TextInputFixture::SetUp(){
-    const HINSTANCE instance = GetModuleHandleW(nullptr);
-    WNDCLASSW nativeClass = {};
-    nativeClass.lpfnWndProc = WindowProc;
-    nativeClass.hInstance = instance;
-    nativeClass.lpszClassName = s_Win32ClassName.data();
-    const ATOM registered = RegisterClassW(&nativeClass);
-    ASSERT_TRUE(registered != 0u || GetLastError() == ERROR_CLASS_ALREADY_EXISTS);
-    m_window = CreateWindowExW(0u, s_Win32ClassName.data(), L"", WS_POPUP, 0, 0, 100, 100, nullptr, nullptr, instance, this);
-    ASSERT_NE(m_window, nullptr);
-    auto serviceResult = CreateTextInputService(m_arena.arena, m_window);
-    ASSERT_TRUE(serviceResult);
-    m_service = Move(*serviceResult);
-    ASSERT_NE(m_service.get(), nullptr);
-    ASSERT_TRUE(m_service->setFocused(true));
-    const TextInputSessionDesc desc{ { 10, 15, 2, 18 }, {}, 0u, 0u };
-    const auto begun = m_service->begin(desc);
-    ASSERT_TRUE(begun);
-    m_token = *begun;
-    ASSERT_TRUE(m_token.valid());
-}
-
-void Win32TextInputFixture::TearDown(){
-    m_service.reset();
-    if(m_window){
-        EXPECT_NE(DestroyWindow(m_window), FALSE);
-        m_window = nullptr;
-    }
-    EXPECT_EQ(m_logger.errorCount(), 0u);
-    EXPECT_NE(m_logger.lastType(), Common::LogType::Fatal);
-}
-
-};
-
-TEST_F(Win32TextInputFixture, RepeatedExplicitContextReleasePreservesActiveNativeSession){ VerifyWin32TextInputFixture_RepeatedExplicitContextReleasePreservesActiveNativeSession(*this); }
-TEST_F(Win32TextInputFixture, ContextScopeUnwindPreservesOriginalThrownMarkerAndNativeSession){ VerifyWin32TextInputFixture_ContextScopeUnwindPreservesOriginalThrownMarkerAndNativeSession(*this); }
-TEST_F(Win32TextInputFixture, SurrogatePairRemainsPerServiceUntilComplete){ VerifyWin32TextInputFixture_SurrogatePairRemainsPerServiceUntilComplete(*this); }
-TEST_F(Win32TextInputFixture, AggregateCharacterCountsIgnoreHighFlagsAndKeepScalarBoundaries){ VerifyWin32TextInputFixture_AggregateCharacterCountsIgnoreHighFlagsAndKeepScalarBoundaries(*this); }
-TEST_F(Win32TextInputFixture, MaximumAggregateSupplementaryCommitBatchesWithoutEventOverflow){ VerifyWin32TextInputFixture_MaximumAggregateSupplementaryCommitBatchesWithoutEventOverflow(*this); }
-TEST_F(Win32TextInputFixture, AggregateCommitOverflowDiscardsAlreadyQueuedPrefix){ VerifyWin32TextInputFixture_AggregateCommitOverflowDiscardsAlreadyQueuedPrefix(*this); }
-TEST_F(Win32TextInputFixture, IsolatedLowSurrogateCancelsWithExplicitFailure){ VerifyWin32TextInputFixture_IsolatedLowSurrogateCancelsWithExplicitFailure(*this); }
-TEST_F(Win32TextInputFixture, FocusLossClearsPendingSurrogateBeforeReplacement){ VerifyWin32TextInputFixture_FocusLossClearsPendingSurrogateBeforeReplacement(*this); }
-TEST_F(Win32TextInputFixture, EndDiscardAndReplacementCannotReusePartialUtf16){ VerifyWin32TextInputFixture_EndDiscardAndReplacementCannotReusePartialUtf16(*this); }
-TEST_F(Win32TextInputFixture, ControlCharactersStayOutOfCommittedDocumentText){ VerifyWin32TextInputFixture_ControlCharactersStayOutOfCommittedDocumentText(*this); }
-TEST_F(Win32TextInputFixture, ImeCharIsConsumedWithoutDuplicateCommitAndFollowingTypingSurvives){ VerifyWin32TextInputFixture_ImeCharIsConsumedWithoutDuplicateCommitAndFollowingTypingSurvives(*this); }
-TEST_F(Win32TextInputFixture, CompositionWithoutCurrentStartCannotDeliverAcrossSessionBoundary){ VerifyWin32TextInputFixture_CompositionWithoutCurrentStartCannotDeliverAcrossSessionBoundary(*this); }
-TEST_F(Win32TextInputFixture, BridgeRejectsUnsupportedForeignServiceBeforeDowncast){ VerifyWin32TextInputFixture_BridgeRejectsUnsupportedForeignServiceBeforeDowncast(*this); }
-TEST_F(Win32TextInputFixture, ImeContextVisibilityTracksSessionAfterActivationAndPreservesOtherFlags){ VerifyWin32TextInputFixture_ImeContextVisibilityTracksSessionAfterActivationAndPreservesOtherFlags(*this); }
-TEST_F(Win32TextInputFixture, ImeContextReplayNeverReactivatesAfterFocusLossOrNativeDeactivation){ VerifyWin32TextInputFixture_ImeContextReplayNeverReactivatesAfterFocusLossOrNativeDeactivation(*this); }
-TEST_F(Win32TextInputFixture, ReentrantFocusCancellationRestoresNativeImeVisibilityAndKeepsCancelEvent){ VerifyWin32TextInputFixture_ReentrantFocusCancellationRestoresNativeImeVisibilityAndKeepsCancelEvent(*this); }
-TEST_F(Win32TextInputFixture, SceneFallbackCannotJoinSurrogatesAcrossSessionOwnership){ VerifyWin32TextInputFixture_SceneFallbackCannotJoinSurrogatesAcrossSessionOwnership(*this); }
-TEST_F(Win32TextInputFixture, SceneFallbackFocusResetDiscardsPartialPair){ VerifyWin32TextInputFixture_SceneFallbackFocusResetDiscardsPartialPair(*this); }
-TEST_F(Win32TextInputFixture, SceneFallbackDecoderNeverConsumesActivePair){ VerifyWin32TextInputFixture_SceneFallbackDecoderNeverConsumesActivePair(*this); }
-TEST_F(Win32TextInputFixture, SceneFallbackSurrogateStateIsPerServiceAndValidatesUnits){ VerifyWin32TextInputFixture_SceneFallbackSurrogateStateIsPerServiceAndValidatesUnits(*this); }
-TEST_F(Win32TextInputFixture, SceneFallbackBridgeRejectsForeignServiceAndWrongThread){ VerifyWin32TextInputFixture_SceneFallbackBridgeRejectsForeignServiceAndWrongThread(*this); }
-TEST_F(Win32TextInputFixture, InsertCharCreatesProvisionalPreeditWithoutCommitAndHonorsNoMoveCaret){ VerifyWin32TextInputFixture_InsertCharCreatesProvisionalPreeditWithoutCommitAndHonorsNoMoveCaret(*this); }
-TEST_F(Win32TextInputFixture, InsertCharSupplementaryPairProducesOneUtf8PreeditAndCancellationClearsIt){ VerifyWin32TextInputFixture_InsertCharSupplementaryPairProducesOneUtf8PreeditAndCancellationClearsIt(*this); }
-TEST_F(Win32TextInputFixture, KeyboardFocusMessagesCancelQueuedWorkWithoutActivationChange){ VerifyWin32TextInputFixture_KeyboardFocusMessagesCancelQueuedWorkWithoutActivationChange(*this); }
-TEST_F(Win32TextInputFixture, InactiveKeyboardFocusMessagesResetSceneSurrogateState){ VerifyWin32TextInputFixture_InactiveKeyboardFocusMessagesResetSceneSurrogateState(*this); }
-TEST_F(Win32TextInputFixture, UnfocusedSceneFallbackRefusesLateWindowCharacterAndClearsPartialPair){ VerifyWin32TextInputFixture_UnfocusedSceneFallbackRefusesLateWindowCharacterAndClearsPartialPair(*this); }
-#endif
-
 #if defined(NWB_PLATFORM_LINUX)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_os_platform_cases_support{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void X11ClipboardFixture::SetUp(){
     const auto isolated = EnvironmentVariableEquals(m_arena.arena, "NWB_X11_CLIPBOARD_TEST_ISOLATED", "1");
@@ -1937,6 +1361,20 @@ b8 X11ClipboardFixture::writeText(const usize index, const ClipboardChannel::Enu
     return request && request->valid() && awaitCompletion(*request, *m_services[index], completion) && completion.status == ClipboardStatus::Success;
 }
 
+b8 X11ClipboardFixture::waitForSelectionRequest(){
+    const Timer deadline = TimerAddMS(TimerNow(), s_SelectionChangeTimeoutMS);
+    while(!m_sawSelectionRequest && TimerNow() < deadline){
+        if(!pumpAll())
+            return false;
+        SleepMS(s_PollIntervalMS);
+    }
+    return m_sawSelectionRequest;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 TEST(ClipboardPipe, PartialUnicodeStaysPendingUntilValidEof){ VerifyClipboardPipe_PartialUnicodeStaysPendingUntilValidEof(); }
@@ -1950,6 +1388,11 @@ TEST_F(X11ClipboardFixture, WritingPrimarySelectionDoesNotOverwriteClipboardUtf8
 TEST_F(X11ClipboardFixture, IncrementalReadRetainsSnapshotAfterOwnerLosesSelection){ VerifyX11ClipboardFixture_IncrementalReadRetainsSnapshotAfterOwnerLosesSelection(*this); }
 TEST_F(X11ClipboardFixture, CancelledRequestWindowCannotCompleteFreshRequest){ VerifyX11ClipboardFixture_CancelledRequestWindowCannotCompleteFreshRequest(*this); }
 TEST_F(X11ClipboardFixture, QueuedOwnershipLossCannotClearNewlyReacquiredText){ VerifyX11ClipboardFixture_QueuedOwnershipLossCannotClearNewlyReacquiredText(*this); }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
 
 

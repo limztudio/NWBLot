@@ -12,6 +12,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
 
 
@@ -89,6 +90,12 @@ inline constexpr AStringView s_ArchiveHeaderText = CrashNames::s_ArchiveHeaderTe
 inline constexpr AStringView s_UploadAttemptFileName = CrashNames::s_UploadAttemptFileName;
 inline constexpr AStringView s_RetryPendingState = CrashNames::s_UploadAttemptRetryPendingState;
 inline constexpr AStringView s_RetryInterruptedState = CrashNames::s_UploadAttemptRetryInterruptedState;
+inline constexpr AStringView s_ManifestFileName = CrashNames::s_ManifestFileName;
+inline constexpr AStringView s_CallstackFileName = CrashNames::s_CallstackFileName;
+inline constexpr AStringView s_ProcMapsFileName = CrashNames::s_ProcMapsFileName;
+inline constexpr AStringView s_GpuCrashReportFileName = CrashNames::s_GpuCrashReportFileName;
+inline constexpr AStringView s_GpuDetectiveCaptureFileName = CrashNames::s_GpuDetectiveCaptureFileName;
+inline constexpr AStringView s_AftermathGpuDumpFileName = CrashNames::s_AftermathGpuDumpFileName;
 inline constexpr u32 s_MaxCrashMetadata = static_cast<u32>(Core::Crash::CrashDetail::s_MaxMetadata);
 inline constexpr u32 s_MaxCrashBreadcrumbs = static_cast<u32>(Core::Crash::CrashDetail::s_MaxBreadcrumbs);
 inline constexpr u32 s_MaxCrashCallstackFrames = static_cast<u32>(Core::Crash::CrashDetail::s_MaxCallstackFrames);
@@ -237,6 +244,37 @@ void ExpectDirectoryReady(in CrashTestPath path, in u32 timeoutMs){
     }
 }
 
+b8 IsWindowsCrashPlatform(){
+    b8 isWindows = false;
+    native(mut isWindows){
+        isWindows = CurrentCrashPlatformKind() == Core::Crash::CrashDetail::PlatformKind::Windows;
+    }
+    return isWindows;
+}
+
+b8 IsDesktopLinuxCrashPlatform(){
+    b8 isDesktopLinux = false;
+    native(mut isDesktopLinux){
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+        isDesktopLinux = true;
+#endif
+    }
+    return isDesktopLinux;
+}
+
+b8 IsDesktopCrashPlatform(){
+    return IsWindowsCrashPlatform() || IsDesktopLinuxCrashPlatform();
+}
+
+String FormatProcessGroup(mut GlobalArena arena, in StringView prefix){
+    String outGroup = String();
+    native(in prefix, mut arena, mut outGroup){
+        const auto formatted = StringFormat(arena, "{}{}", prefix, CurrentProcessId());
+        outGroup.assign(formatted.data(), formatted.size());
+    }
+    return outGroup;
+}
+
 void VerifyCrashArchiveUpload_PreservesNativeMissingDirectoryError(mut CrashArchiveUpload self){
     const CrashTestPath missing = self.m_root / "missing";
     ScratchArena scratchArena(s_ArchiveOperationScratch);
@@ -250,8 +288,10 @@ void VerifyCrashArchiveUpload_PreservesNativeMissingDirectoryError(mut CrashArch
 }
 
 void VerifyCrashArchiveUpload_ResultOwnsBytesAfterWorkingScratchExpires(mut CrashArchiveUpload self){
-    native(mut self){
-        ASSERT_TRUE(WriteTextFile(self.m_root / "payload.txt", AStringView("payload survives scratch")));
+    const CrashTestPath payloadPath = self.m_root / "payload.txt";
+    String archiveText = String();
+    native(in payloadPath, mut self, mut archiveText){
+        ASSERT_TRUE(WriteTextFile(payloadPath, AStringView("payload survives scratch")));
         Optional<Core::Crash::CrashDetail::CrashBytesT<GlobalArena>> archive;
         {
             ScratchArena scratchArena(s_ArchiveOperationScratch);
@@ -260,11 +300,11 @@ void VerifyCrashArchiveUpload_ResultOwnsBytesAfterWorkingScratchExpires(mut Cras
             archive.emplace(Move(*produced));
         }
         ASSERT_TRUE(archive);
-        const AStringView bytes(reinterpret_cast<const char*>(archive->data()), archive->size());
-        EXPECT_EQ(bytes.find(s_ArchiveHeaderText), 0u);
-        EXPECT_LT(bytes.find("payload.txt"), bytes.size());
-        EXPECT_LT(bytes.find("payload survives scratch"), bytes.size());
+        archiveText.assign(reinterpret_cast<const char*>(archive->data()), archive->size());
     }
+    EXPECT_EQ(archiveText.find(s_ArchiveHeaderText), 0u);
+    EXPECT_LT(archiveText.find("payload.txt"), archiveText.size());
+    EXPECT_LT(archiveText.find("payload survives scratch"), archiveText.size());
 }
 
 void VerifyCrashArchiveUpload_UnsupportedProtocolPreservesFailureAndPendingRetry(mut CrashArchiveUpload self){
@@ -362,112 +402,76 @@ void VerifyCrash_AckAdmissionRequiresBoundedTerminatedIdentity(){
 }
 
 void VerifyCrash_InstallRejectsUnrepresentableConfigurationBeforeCreatingSpool(){
-    native{
+    if(!IsWindowsCrashPlatform())
+        return;
+
+    CrashTestArena testArena = CrashTestArena();
+    Vector<StringView> casePrefixes = Vector<StringView>();
+    casePrefixes.reserve(5u);
+    casePrefixes.push_back("crash_install_text_");
+    casePrefixes.push_back("crash_install_path_");
+    casePrefixes.push_back("crash_install_nul_");
+    casePrefixes.push_back("crash_install_path_nul_");
+    casePrefixes.push_back("crash_install_handler_nul_");
+
+    for(usize caseIndex = 0u; caseIndex < casePrefixes.size(); ++caseIndex){
+        const String group = FormatProcessGroup(testArena.arena, casePrefixes[caseIndex]);
+        const CrashTestPath root = TestCaseDirectory(testArena.arena, group);
+        ExpectIsDirectory(root, false);
+        const CrashTestPath spool = SpoolDirectory(testArena.arena, group);
+        b8 installed = true;
+        native(in caseIndex, in spool, mut installed){
 #if defined(NWB_PLATFORM_WINDOWS)
-        CrashTestArena testArena;
-        auto& arena = testArena.arena;
-        PersistentArena installArena(s_InstallArena, PersistentArena::StructureAlignedSize(64u * 1024u));
-        const auto group = StringFormat(arena, "crash_install_text_{}", CurrentProcessId());
-        const auto root = TestCaseDirectory(arena, group);
-        const auto existing = IsDirectory(root);
-        ASSERT_TRUE(existing);
-        ASSERT_FALSE(*existing);
-        Core::Crash::CrashConfig config(installArena);
-        config.applicationName = s_CrashTests;
-        config.spoolDirectory = SpoolDirectory(arena, group);
-        Array<char, Core::Crash::CrashDetail::s_MaxUrlText> longUrl;
-        longUrl.fill('u');
-        config.logServerUrl = AStringView(longUrl.data(), longUrl.size());
-        const b8 installed = Core::Crash::InstallCrashHandler(config);
+            PersistentArena installArena(s_InstallArena, PersistentArena::StructureAlignedSize(64u * 1024u));
+            Core::Crash::CrashConfig config(installArena);
+            config.applicationName = s_CrashTests;
+            config.spoolDirectory = spool;
+            Array<char, Core::Crash::CrashDetail::s_MaxUrlText> longUrl;
+            longUrl.fill('u');
+            Array<char, 96u> segment;
+            segment.fill('p');
+            const Array<char, 3u> embedded{ 'a', '\0', 'b' };
+            if(caseIndex == 0u)
+                config.logServerUrl = AStringView(longUrl.data(), longUrl.size());
+            else if(caseIndex == 1u){
+                for(u32 i = 0u; i < 12u; ++i)
+                    config.spoolDirectory /= AStringView(segment.data(), segment.size());
+            }
+            else if(caseIndex == 2u)
+                config.applicationName = AStringView(embedded.data(), embedded.size());
+            else if(caseIndex == 3u)
+                config.spoolDirectory /= AStringView(embedded.data(), embedded.size());
+            else
+                config.handlerExecutablePath = AStringView(embedded.data(), embedded.size());
+            installed = Core::Crash::InstallCrashHandler(config);
+#endif
+        }
         if(installed)
             UninstallCrashHandler();
         EXPECT_FALSE(installed);
-        const auto rootAfter = IsDirectory(root);
-        ASSERT_TRUE(rootAfter);
-        EXPECT_FALSE(*rootAfter);
-
-        const auto pathGroup = StringFormat(arena, "crash_install_path_{}", CurrentProcessId());
-        const auto pathRoot = TestCaseDirectory(arena, pathGroup);
-        const auto pathExisting = IsDirectory(pathRoot);
-        ASSERT_TRUE(pathExisting);
-        ASSERT_FALSE(*pathExisting);
-        config.logServerUrl = {};
-        config.spoolDirectory = SpoolDirectory(arena, pathGroup);
-        Array<char, 96u> segment;
-        segment.fill('p');
-        for(u32 i = 0u; i < 12u; ++i)
-            config.spoolDirectory /= AStringView(segment.data(), segment.size());
-        const b8 longPathInstalled = Core::Crash::InstallCrashHandler(config);
-        if(longPathInstalled)
-            UninstallCrashHandler();
-        EXPECT_FALSE(longPathInstalled);
-        const auto pathRootAfter = IsDirectory(pathRoot);
-        ASSERT_TRUE(pathRootAfter);
-        EXPECT_FALSE(*pathRootAfter);
-
-        const auto nulGroup = StringFormat(arena, "crash_install_nul_{}", CurrentProcessId());
-        const auto nulRoot = TestCaseDirectory(arena, nulGroup);
-        const auto nulExisting = IsDirectory(nulRoot);
-        ASSERT_TRUE(nulExisting);
-        ASSERT_FALSE(*nulExisting);
-        const Array<char, 3u> embedded{ 'a', '\0', 'b' };
-        config.spoolDirectory = SpoolDirectory(arena, nulGroup);
-        config.applicationName = AStringView(embedded.data(), embedded.size());
-        const b8 nulInstalled = Core::Crash::InstallCrashHandler(config);
-        if(nulInstalled)
-            UninstallCrashHandler();
-        EXPECT_FALSE(nulInstalled);
-        const auto nulRootAfter = IsDirectory(nulRoot);
-        ASSERT_TRUE(nulRootAfter);
-        EXPECT_FALSE(*nulRootAfter);
-
-        const auto pathNulGroup = StringFormat(arena, "crash_install_path_nul_{}", CurrentProcessId());
-        const auto pathNulRoot = TestCaseDirectory(arena, pathNulGroup);
-        const auto pathNulExisting = IsDirectory(pathNulRoot);
-        ASSERT_TRUE(pathNulExisting);
-        ASSERT_FALSE(*pathNulExisting);
-        config.applicationName = s_CrashTests;
-        config.spoolDirectory = SpoolDirectory(arena, pathNulGroup);
-        config.spoolDirectory /= AStringView(embedded.data(), embedded.size());
-        const b8 pathNulInstalled = Core::Crash::InstallCrashHandler(config);
-        if(pathNulInstalled)
-            UninstallCrashHandler();
-        EXPECT_FALSE(pathNulInstalled);
-        const auto pathNulRootAfter = IsDirectory(pathNulRoot);
-        ASSERT_TRUE(pathNulRootAfter);
-        EXPECT_FALSE(*pathNulRootAfter);
-
-        const auto handlerNulGroup = StringFormat(arena, "crash_install_handler_nul_{}", CurrentProcessId());
-        const auto handlerNulRoot = TestCaseDirectory(arena, handlerNulGroup);
-        const auto handlerNulExisting = IsDirectory(handlerNulRoot);
-        ASSERT_TRUE(handlerNulExisting);
-        ASSERT_FALSE(*handlerNulExisting);
-        config.spoolDirectory = SpoolDirectory(arena, handlerNulGroup);
-        config.handlerExecutablePath = AStringView(embedded.data(), embedded.size());
-        const b8 handlerNulInstalled = Core::Crash::InstallCrashHandler(config);
-        if(handlerNulInstalled)
-            UninstallCrashHandler();
-        EXPECT_FALSE(handlerNulInstalled);
-        const auto handlerNulRootAfter = IsDirectory(handlerNulRoot);
-        ASSERT_TRUE(handlerNulRootAfter);
-        EXPECT_FALSE(*handlerNulRootAfter);
-#endif
+        ExpectIsDirectory(root, false);
     }
 }
 
 void VerifyCrash_AttachmentFailureDoesNotClaimTheHandlerAcceptedARequest(){
-    native{
+    if(!IsWindowsCrashPlatform())
+        return;
+
+    CrashTestArena testArena = CrashTestArena();
+    const String group = FormatProcessGroup(testArena.arena, "crash_attachment_admission_");
+    const StringView groupView = group;
+    ExpectIsDirectory(TestCaseDirectory(testArena.arena, groupView), false);
+    const CrashTestPath spool = SpoolDirectory(testArena.arena, groupView);
+    ScratchArena scratchArena(s_OperationScratch);
+    b8 attachmentRejected = false;
+    b8 handlerAcceptedFailure = false;
+    native(in groupView, in spool, mut testArena, mut scratchArena, mut attachmentRejected, mut handlerAcceptedFailure){
 #if defined(NWB_PLATFORM_WINDOWS)
-        CrashTestArena testArena;
         auto& arena = testArena.arena;
         PersistentArena installArena(s_InstallArena, PersistentArena::StructureAlignedSize(64u * 1024u));
-        const auto group = StringFormat(arena, "crash_attachment_admission_{}", CurrentProcessId());
-        const auto existing = IsDirectory(TestCaseDirectory(arena, group));
-        ASSERT_TRUE(existing);
-        ASSERT_FALSE(*existing);
         Core::Crash::CrashConfig config(installArena);
         config.applicationName = s_CrashTests;
-        config.spoolDirectory = SpoolDirectory(arena, group);
+        config.spoolDirectory = spool;
         ASSERT_TRUE(Core::Crash::InstallCrashHandler(config));
         ScopeExit uninstall([]()noexcept{ UninstallCrashHandler(); });
 
@@ -480,7 +484,6 @@ void VerifyCrash_AttachmentFailureDoesNotClaimTheHandlerAcceptedARequest(){
         const Array<Core::Crash::GpuCrashDumpKind::Enum, 2u> kinds{ Core::Crash::GpuCrashDumpKind::Aftermath, Core::Crash::GpuCrashDumpKind::RadeonGpuDetective };
         const Array<AStringView, 2u> names{ CrashNames::s_AftermathGpuDumpFileName, CrashNames::s_GpuDetectiveCaptureFileName };
         const Array<u8, 4u> binary{ 0x61u, 0x00u, 0x62u, 0xffu };
-        ScratchArena scratchArena(s_OperationScratch);
         for(usize index = 0u; index < kinds.size(); ++index){
             Array<char, Core::Crash::CrashDetail::s_MaxShortText> crashId = {};
             const u64 sequence = Core::Crash::CrashDetail::g_State.crashSequence.load(MemoryOrder::relaxed);
@@ -488,7 +491,7 @@ void VerifyCrash_AttachmentFailureDoesNotClaimTheHandlerAcceptedARequest(){
             const auto captured = Core::Crash::CaptureGpuCrashDump("report", AStringView(reinterpret_cast<const char*>(binary.data()), binary.size()), kinds[index]);
             ASSERT_TRUE(captured.packageWritten());
             Vector<u8, ScratchArena> data(scratchArena);
-            ASSERT_TRUE(ReadBinaryFile(PackageDirectory(arena, group, CrashNames::s_PendingDirectoryName, FixedBufferView(crashId)) / names[index], data));
+            ASSERT_TRUE(ReadBinaryFile(PackageDirectory(arena, groupView, CrashNames::s_PendingDirectoryName, FixedBufferView(crashId)) / names[index], data));
             ASSERT_EQ(data.size(), binary.size());
             for(usize byte = 0u; byte < binary.size(); ++byte)
                 EXPECT_EQ(data[byte], binary[byte]);
@@ -513,34 +516,45 @@ void VerifyCrash_AttachmentFailureDoesNotClaimTheHandlerAcceptedARequest(){
             Array<char, Core::Crash::CrashDetail::s_MaxShortText> crashId = {};
             const u64 sequence = Core::Crash::CrashDetail::g_State.crashSequence.load(MemoryOrder::relaxed);
             BuildCrashIdForProcess(CurrentProcessId(), sequence, crashId);
-            return WriteTextFile(PackageDirectory(arena, group, CrashNames::s_PendingDirectoryName, FixedBufferView(crashId)), AStringView("block package directory"));
+            return WriteTextFile(PackageDirectory(arena, groupView, CrashNames::s_PendingDirectoryName, FixedBufferView(crashId)), AStringView("block package directory"));
         };
         ASSERT_TRUE(blockNextPackage());
         const auto attachmentFailure = Core::Crash::CaptureGpuCrashDump("gpu report", {}, Core::Crash::GpuCrashDumpKind::None);
         EXPECT_EQ(attachmentFailure.status, Core::Crash::CrashDumpStatus::AttachmentWriteFailed);
-        EXPECT_FALSE(attachmentFailure.requestAccepted());
+        attachmentRejected = !attachmentFailure.requestAccepted();
 
         ASSERT_TRUE(blockNextPackage());
         const auto handlerFailure = Core::Crash::CaptureCrashDump("manual", "blocked handler package");
         EXPECT_EQ(handlerFailure.status, Core::Crash::CrashDumpStatus::PackageWriteFailed);
-        EXPECT_TRUE(handlerFailure.requestAccepted());
+        handlerAcceptedFailure = handlerFailure.requestAccepted();
 #endif
     }
+    EXPECT_TRUE(attachmentRejected);
+    EXPECT_TRUE(handlerAcceptedFailure);
 }
 
 void VerifyCrash_ConcurrentManualCaptureDoesNotClaimAnUnsentRequestWasQueued(){
-    native{
+    if(!IsWindowsCrashPlatform())
+        return;
+
+    CrashTestArena testArena = CrashTestArena();
+    const String group = FormatProcessGroup(testArena.arena, "crash_manual_contention_");
+    const StringView groupView = group;
+    ExpectIsDirectory(TestCaseDirectory(testArena.arena, groupView), false);
+    const CrashTestPath spool = SpoolDirectory(testArena.arena, groupView);
+    b8 active = false;
+    b8 firstWritten = false;
+    b8 secondRejected = false;
+    u32 suppressedBefore = 0u;
+    u32 suppressedWhileBusy = 0u;
+    u32 suppressedAfter = 0u;
+    b8 consumedSuppressed = false;
+    native(in spool, mut active, mut firstWritten, mut secondRejected, mut suppressedBefore, mut suppressedWhileBusy, mut suppressedAfter, mut consumedSuppressed){
 #if defined(NWB_PLATFORM_WINDOWS)
-        CrashTestArena testArena;
-        auto& arena = testArena.arena;
         PersistentArena installArena(s_InstallArena, PersistentArena::StructureAlignedSize(64u * 1024u));
-        const auto group = StringFormat(arena, "crash_manual_contention_{}", CurrentProcessId());
-        const auto existing = IsDirectory(TestCaseDirectory(arena, group));
-        ASSERT_TRUE(existing);
-        ASSERT_FALSE(*existing);
         Core::Crash::CrashConfig config(installArena);
         config.applicationName = s_CrashTests;
-        config.spoolDirectory = SpoolDirectory(arena, group);
+        config.spoolDirectory = spool;
         ASSERT_TRUE(Core::Crash::InstallCrashHandler(config));
         ScopeExit uninstall([]()noexcept{ UninstallCrashHandler(); });
 
@@ -557,46 +571,54 @@ void VerifyCrash_ConcurrentManualCaptureDoesNotClaimAnUnsentRequestWasQueued(){
         JoiningThread writer([&](){ first = Core::Crash::CaptureCrashDump("first", "held in transport"); });
         for(u32 attempt = 0u; attempt < 2000u && Core::Crash::CrashDetail::g_State.transportInFlight.load(MemoryOrder::acquire) == 0u; ++attempt)
             SleepMS(1u);
-        const b8 active = Core::Crash::CrashDetail::g_State.transportInFlight.load(MemoryOrder::acquire) != 0u;
+        active = Core::Crash::CrashDetail::g_State.transportInFlight.load(MemoryOrder::acquire) != 0u;
         Core::Crash::CrashDumpResult second;
-        const u32 suppressedBefore = Core::Crash::CrashDetail::g_State.suppressedPlatformCrashCaptures.load(MemoryOrder::acquire);
+        suppressedBefore = Core::Crash::CrashDetail::g_State.suppressedPlatformCrashCaptures.load(MemoryOrder::acquire);
         if(active){
             second = Core::Crash::CaptureCrashDump("second", "transport already owned");
             CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Fatal, .category = "contention", .message = "not sent", .terminatesProcess = true });
         }
-        const u32 suppressedWhileBusy = Core::Crash::CrashDetail::g_State.suppressedPlatformCrashCaptures.load(MemoryOrder::acquire);
+        suppressedWhileBusy = Core::Crash::CrashDetail::g_State.suppressedPlatformCrashCaptures.load(MemoryOrder::acquire);
         const DWORD resumeResult = ResumeThread(handlerThread);
         resume.release();
         writer.join();
         ASSERT_NE(resumeResult, static_cast<DWORD>(-1));
-        ASSERT_TRUE(active);
-        EXPECT_TRUE(first.packageWritten());
-        EXPECT_EQ(second.status, Core::Crash::CrashDumpStatus::RequestFailed);
-        EXPECT_FALSE(second.requestAccepted());
-        EXPECT_EQ(suppressedWhileBusy, suppressedBefore);
+        firstWritten = first.packageWritten();
+        secondRejected = second.status == Core::Crash::CrashDumpStatus::RequestFailed && !second.requestAccepted();
         CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Fatal, .category = "available", .message = "sent", .terminatesProcess = true });
-        EXPECT_EQ(Core::Crash::CrashDetail::g_State.suppressedPlatformCrashCaptures.load(MemoryOrder::acquire), suppressedBefore + 1u);
-        EXPECT_TRUE(Core::Crash::CrashDetail::TryConsumeSuppressedPlatformCrashCapture());
+        suppressedAfter = Core::Crash::CrashDetail::g_State.suppressedPlatformCrashCaptures.load(MemoryOrder::acquire);
+        consumedSuppressed = Core::Crash::CrashDetail::TryConsumeSuppressedPlatformCrashCapture();
 #endif
     }
+    ASSERT_TRUE(active);
+    EXPECT_TRUE(firstWritten);
+    EXPECT_TRUE(secondRejected);
+    EXPECT_EQ(suppressedWhileBusy, suppressedBefore);
+    EXPECT_EQ(suppressedAfter, suppressedBefore + 1u);
+    EXPECT_TRUE(consumedSuppressed);
 }
 
 void VerifyCrash_ManualContextTimeoutRetainsOwnedDumpAndReusableHandlerAfterSourceStorageExpires(){
-    native{
+    if(!IsWindowsCrashPlatform())
+        return;
+
+    CrashTestArena testArena = CrashTestArena();
+    ScratchArena scratchArena(s_OperationScratch);
+    const StringView group = "crash_manual_owned_context_test";
+    RemoveTestArtifacts(testArena.arena, group);
+    const CrashTestPath spool = SpoolDirectory(testArena.arena, group);
+    String crashIdText = String();
+    b8 reusableAfterTimeout = false;
+    native(in spool, mut scratchArena, mut crashIdText, mut reusableAfterTimeout){
 #if defined(NWB_PLATFORM_WINDOWS)
-        CrashTestArena testArena;
-        auto& arena = testArena.arena;
-        ScratchArena scratchArena(s_OperationScratch);
+        CrashRequest request = {};
         PersistentArena installArena(s_InstallArena, PersistentArena::StructureAlignedSize(64u * 1024u));
-        constexpr AStringView s_Group("crash_manual_owned_context_test");
-        RemoveTestArtifacts(arena, s_Group);
         Core::Crash::CrashConfig config(installArena);
         config.applicationName = AStringView(s_CrashTests);
-        config.spoolDirectory = SpoolDirectory(arena, s_Group);
+        config.spoolDirectory = spool;
         ASSERT_TRUE(Core::Crash::InstallCrashHandler(config));
         ScopeExit uninstall([]()noexcept{ UninstallCrashHandler(); });
 
-        CrashRequest request;
         u32 capturedContextFlags = 0u;
         u64 capturedInstructionPointer = 0u;
         {
@@ -637,9 +659,8 @@ void VerifyCrash_ManualContextTimeoutRetainsOwnedDumpAndReusableHandlerAfterSour
         resume.release();
         ASSERT_EQ(WaitForSingleObject(Core::Crash::CrashDetail::g_State.crashHandledEvent, Core::Crash::CrashDetail::s_ManualCrashDumpWaitMilliseconds), WAIT_OBJECT_0);
 
-        const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, AStringView(request.crashId.data()));
-        EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_SymbolicationFileName, AStringView("minidump captured;")));
-        EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_ManifestFileName, AStringView("\"has_exception_context\": true")));
+        crashIdText.assign(request.crashId.data());
+        const CrashTestPath packageDirectory = spool / CrashNames::s_PendingDirectoryName / AStringView(request.crashId.data());
         Vector<u8, ScratchArena> dumpBytes(scratchArena);
         const auto read = ReadBinaryFile(packageDirectory / CrashNames::s_ProcessDumpFileName, dumpBytes);
         ASSERT_TRUE(read);
@@ -671,27 +692,42 @@ void VerifyCrash_ManualContextTimeoutRetainsOwnedDumpAndReusableHandlerAfterSour
 #elif defined(_M_ARM64) || defined(__aarch64__)
         EXPECT_EQ(dumpedContext.Pc, capturedInstructionPointer);
 #endif
-        EXPECT_TRUE(Core::Crash::CaptureCrashDump(AStringView("after_timeout"), AStringView("handler remains reusable")).packageWritten());
+        reusableAfterTimeout = Core::Crash::CaptureCrashDump(AStringView("after_timeout"), AStringView("handler remains reusable")).packageWritten();
         UninstallCrashHandler();
         uninstall.release();
-        RemoveTestArtifacts(arena, s_Group);
 #endif
     }
+    const CrashTestPath packageDirectory = PackageDirectory(testArena.arena, group, s_PendingBucket, crashIdText);
+    EXPECT_TRUE(TextFileContains(packageDirectory / "symbolication.txt", "minidump captured;"));
+    EXPECT_TRUE(TextFileContains(packageDirectory / s_ManifestFileName, "\"has_exception_context\": true"));
+    EXPECT_TRUE(reusableAfterTimeout);
+    RemoveTestArtifacts(testArena.arena, group);
 }
 
 void VerifyCrash_ManualNativeContextAdmissionRejectsWrongVersionSizeArchitectureAndLinkedRecords(){
-    native{
+    if(!IsWindowsCrashPlatform())
+        return;
+
+    CrashRequest request = CrashRequest();
+    native(mut request){
 #if defined(NWB_PLATFORM_WINDOWS)
         Core::Crash::CrashDetail::ManualDumpContextStorage storage;
         Core::Crash::CrashDetail::CrashDumpRequestOptions options;
         Core::Crash::CrashDetail::CaptureManualDumpContext(options, storage);
-        auto request = Core::Crash::CrashDetail::BuildCrashDumpRequest(Core::Crash::CrashDetail::CrashReasonKind::ManualDump, 0u, options);
-        ASSERT_TRUE(CrashProtocol::IsCurrentCrashRequest(request));
-        request.version = 1u;
-        EXPECT_FALSE(CrashProtocol::IsCurrentCrashRequest(request));
-        request.version = Core::Crash::CrashDetail::s_RequestVersion + 1u;
-        EXPECT_FALSE(CrashProtocol::IsCurrentCrashRequest(request));
-        request.version = Core::Crash::CrashDetail::s_RequestVersion;
+        request = Core::Crash::CrashDetail::BuildCrashDumpRequest(Core::Crash::CrashDetail::CrashReasonKind::ManualDump, 0u, options);
+#endif
+    }
+    ASSERT_TRUE(CrashProtocol::IsCurrentCrashRequest(request));
+    const u32 validVersion = request.version;
+    request.version = 1u;
+    EXPECT_FALSE(CrashProtocol::IsCurrentCrashRequest(request));
+    request.version = validVersion + 1u;
+    EXPECT_FALSE(CrashProtocol::IsCurrentCrashRequest(request));
+    request.version = validVersion;
+
+    native(mut request){
+#if defined(NWB_PLATFORM_WINDOWS)
+        Core::Crash::CrashDetail::ManualDumpContextStorage storage;
         --request.manualContextSize;
         EXPECT_FALSE(CrashProtocol::IsCurrentCrashRequest(request));
         request.manualContextSize = sizeof(CONTEXT);
@@ -708,64 +744,71 @@ void VerifyCrash_ManualNativeContextAdmissionRejectsWrongVersionSizeArchitecture
 }
 
 void VerifyCrash_DesktopHandlerDoesNotRetainUnrelatedInheritableHandles(){
-    native{
+    if(!IsWindowsCrashPlatform())
+        return;
+
+    CrashTestArena testArena = CrashTestArena();
+    const StringView group = "crash_handler_handle_inheritance_test";
+    RemoveTestArtifacts(testArena.arena, group);
+    const CrashTestPath testDirectory = TestCaseDirectory(testArena.arena, group);
+    const CrashTestPath sentinelPath = testDirectory / "inheritable_handle_sentinel.tmp";
+    const CrashTestPath spool = SpoolDirectory(testArena.arena, group);
+    b8 installed = false;
+    b8 closedSentinel = false;
+    b8 deletedSentinel = false;
+    native(in testDirectory, in sentinelPath, in spool, mut installed, mut closedSentinel, mut deletedSentinel){
 #if defined(NWB_PLATFORM_WINDOWS)
-        CrashTestArena testArena;
-        auto& arena = testArena.arena;
-        PersistentArena installArena(s_InstallArena, PersistentArena::StructureAlignedSize(64u * 1024u));
-        constexpr AStringView s_Group("crash_handler_handle_inheritance_test");
-        RemoveTestArtifacts(arena, s_Group);
-
-        const CrashTestPath testDirectory = TestCaseDirectory(arena, s_Group);
         ASSERT_TRUE(EnsureDirectories(testDirectory));
-
-        const CrashTestPath sentinelPath = testDirectory / "inheritable_handle_sentinel.tmp";
         SECURITY_ATTRIBUTES securityAttributes = {};
         securityAttributes.nLength = sizeof(securityAttributes);
         securityAttributes.bInheritHandle = TRUE;
         const HANDLE sentinelHandle = CreateFileW(sentinelPath.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, &securityAttributes, CREATE_ALWAYS, FILE_ATTRIBUTE_TEMPORARY, nullptr);
         ASSERT_NE(sentinelHandle, INVALID_HANDLE_VALUE);
 
+        PersistentArena installArena(s_InstallArena, PersistentArena::StructureAlignedSize(64u * 1024u));
         Core::Crash::CrashConfigT<PersistentArena> config(installArena);
         config.applicationName = AStringView(s_CrashTests);
         config.version = AStringView(s_ApplicationVersion);
         config.buildId = AStringView("handle-inheritance-test");
-        config.spoolDirectory = SpoolDirectory(arena, s_Group);
+        config.spoolDirectory = spool;
 
-        const b8 installed = Core::Crash::InstallCrashHandler(config);
-        EXPECT_TRUE(installed);
-        EXPECT_TRUE(CloseHandle(sentinelHandle));
-        EXPECT_TRUE(DeleteFileW(sentinelPath.c_str()));
-        if(installed)
-            UninstallCrashHandler();
-
-        RemoveTestArtifacts(arena, s_Group);
+        installed = Core::Crash::InstallCrashHandler(config);
+        closedSentinel = CloseHandle(sentinelHandle) != FALSE;
+        deletedSentinel = DeleteFileW(sentinelPath.c_str()) != FALSE;
 #endif
     }
+    EXPECT_TRUE(installed);
+    EXPECT_TRUE(closedSentinel);
+    EXPECT_TRUE(deletedSentinel);
+    if(installed)
+        UninstallCrashHandler();
+    RemoveTestArtifacts(testArena.arena, group);
 }
 
 void VerifyCrash_LinuxManualDumpUnwindsBeyondTheLeafWithoutFramePointers(){
-    native{
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-        CrashTestArena testArena;
-        auto& arena = testArena.arena;
-        PersistentArena installArena(s_InstallArena, PersistentArena::StructureAlignedSize(64u * 1024u));
-        constexpr AStringView s_Group("crash_desktop_handler_runtime_test");
-        RemoveTestArtifacts(arena, s_Group);
+    if(!IsDesktopLinuxCrashPlatform())
+        return;
 
+    CrashTestArena testArena = CrashTestArena();
+    const StringView group = "crash_desktop_handler_runtime_test";
+    RemoveTestArtifacts(testArena.arena, group);
+    const CrashTestPath spool = SpoolDirectory(testArena.arena, group);
+    String crashIdText = String();
+    native(in spool, mut crashIdText){
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+        PersistentArena installArena(s_InstallArena, PersistentArena::StructureAlignedSize(64u * 1024u));
         Core::Crash::CrashConfigT<PersistentArena> config(installArena);
         config.applicationName = AStringView(s_CrashTests);
         config.version = AStringView(s_ApplicationVersion);
         config.buildId = AStringView("desktop-handler-runtime-test");
-        config.spoolDirectory = SpoolDirectory(arena, s_Group);
+        config.spoolDirectory = spool;
 
         {
             ScopedLock lock(Core::Crash::CrashDetail::g_State.mutex);
             Core::Crash::CrashDetail::g_State.crashSequence.store(1u, MemoryOrder::relaxed);
         }
 
-        const b8 installed = Core::Crash::InstallCrashHandler(config);
-        ASSERT_TRUE(installed);
+        ASSERT_TRUE(Core::Crash::InstallCrashHandler(config));
 
         Core::Crash::CrashDetail::CrashDumpRequestOptions options;
         options.waitMilliseconds = Core::Crash::CrashDetail::s_PlatformCrashHandlerWaitMilliseconds;
@@ -779,40 +822,44 @@ void VerifyCrash_LinuxManualDumpUnwindsBeyondTheLeafWithoutFramePointers(){
 
         Array<char, Core::Crash::CrashDetail::s_MaxShortText> crashId = {};
         BuildCrashIdForProcess(CurrentProcessId(), 1u, crashId);
-
-        const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, FixedBufferView(crashId));
-        ExpectDirectoryReady(packageDirectory, s_PackageReadyTimeoutMS);
-        ExpectIsRegularFile(packageDirectory / CrashNames::s_CallstackFileName, true);
-        // Frame #1 proves unwinding walked past the leaf frame without frame pointers.
-        EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_CallstackFileName, AStringView("#1 0x")));
-        UninstallCrashHandler();
-        RemoveTestArtifacts(arena, s_Group);
+        const AStringView idView = FixedBufferView(crashId);
+        crashIdText.assign(idView.data(), idView.size());
 #endif
     }
+
+    const CrashTestPath packageDirectory = PackageDirectory(testArena.arena, group, s_PendingBucket, crashIdText);
+    ExpectDirectoryReady(packageDirectory, s_PackageReadyTimeoutMS);
+    ExpectIsRegularFile(packageDirectory / s_CallstackFileName, true);
+    // Frame #1 proves unwinding walked past the leaf frame without frame pointers.
+    EXPECT_TRUE(TextFileContains(packageDirectory / s_CallstackFileName, "#1 0x"));
+    UninstallCrashHandler();
+    RemoveTestArtifacts(testArena.arena, group);
 }
 
 void VerifyCrash_DesktopInstalledHandlerWritesGpuCrashTextOnlyPackage(){
-    native{
-#if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
-        CrashTestArena testArena;
-        auto& arena = testArena.arena;
-        PersistentArena installArena(s_InstallArena, PersistentArena::StructureAlignedSize(64u * 1024u));
-        constexpr AStringView s_Group("crash_gpu_text_only_runtime_test");
-        RemoveTestArtifacts(arena, s_Group);
+    if(!IsDesktopCrashPlatform())
+        return;
 
+    CrashTestArena testArena = CrashTestArena();
+    const StringView group = "crash_gpu_text_only_runtime_test";
+    RemoveTestArtifacts(testArena.arena, group);
+    const CrashTestPath spool = SpoolDirectory(testArena.arena, group);
+    String crashIdText = String();
+    native(in spool, mut crashIdText){
+#if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
+        PersistentArena installArena(s_InstallArena, PersistentArena::StructureAlignedSize(64u * 1024u));
         Core::Crash::CrashConfigT<PersistentArena> config(installArena);
         config.applicationName = AStringView(s_CrashTests);
         config.version = AStringView(s_ApplicationVersion);
         config.buildId = AStringView("gpu-text-only-runtime-test");
-        config.spoolDirectory = SpoolDirectory(arena, s_Group);
+        config.spoolDirectory = spool;
 
         {
             ScopedLock lock(Core::Crash::CrashDetail::g_State.mutex);
             Core::Crash::CrashDetail::g_State.crashSequence.store(1u, MemoryOrder::relaxed);
         }
 
-        const b8 installed = Core::Crash::InstallCrashHandler(config);
-        ASSERT_TRUE(installed);
+        ASSERT_TRUE(Core::Crash::InstallCrashHandler(config));
 
         Core::Crash::CrashDetail::CrashDumpRequestOptions options;
         options.waitMilliseconds = Core::Crash::CrashDetail::s_PlatformCrashHandlerWaitMilliseconds;
@@ -826,28 +873,34 @@ void VerifyCrash_DesktopInstalledHandlerWritesGpuCrashTextOnlyPackage(){
 
         Array<char, Core::Crash::CrashDetail::s_MaxShortText> crashId = {};
         BuildCrashIdForProcess(CurrentProcessId(), 1u, crashId);
-
-        const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, FixedBufferView(crashId));
-        ExpectDirectoryReady(packageDirectory, s_PackageReadyTimeoutMS);
-        ExpectIsRegularFile(packageDirectory / CrashNames::s_GpuCrashReportFileName, true);
-        ExpectPathExists(packageDirectory / CrashNames::s_GpuDetectiveCaptureFileName, false);
-        ExpectPathExists(packageDirectory / CrashNames::s_AftermathGpuDumpFileName, false);
-        EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_GpuCrashReportFileName, AStringView("minimal GPU crash report")));
-        UninstallCrashHandler();
-        RemoveTestArtifacts(arena, s_Group);
+        const AStringView idView = FixedBufferView(crashId);
+        crashIdText.assign(idView.data(), idView.size());
 #endif
     }
+
+    const CrashTestPath packageDirectory = PackageDirectory(testArena.arena, group, s_PendingBucket, crashIdText);
+    ExpectDirectoryReady(packageDirectory, s_PackageReadyTimeoutMS);
+    ExpectIsRegularFile(packageDirectory / s_GpuCrashReportFileName, true);
+    ExpectPathExists(packageDirectory / s_GpuDetectiveCaptureFileName, false);
+    ExpectPathExists(packageDirectory / s_AftermathGpuDumpFileName, false);
+    EXPECT_TRUE(TextFileContains(packageDirectory / s_GpuCrashReportFileName, "minimal GPU crash report"));
+    UninstallCrashHandler();
+    RemoveTestArtifacts(testArena.arena, group);
 }
 
 void VerifyCrash_LinuxSignalHandlerWritesCrashPackage(){
-    native{
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-        CrashTestArena testArena;
-        auto& arena = testArena.arena;
-        constexpr AStringView s_Group("crash_linux_signal_runtime_test");
-        RemoveTestArtifacts(arena, s_Group);
+    if(!IsDesktopLinuxCrashPlatform())
+        return;
 
-        const CrashTestPath spoolDirectory = SpoolDirectory(arena, s_Group);
+    CrashTestArena testArena = CrashTestArena();
+    const StringView group = "crash_linux_signal_runtime_test";
+    RemoveTestArtifacts(testArena.arena, group);
+    const CrashTestPath spoolDirectory = SpoolDirectory(testArena.arena, group);
+    b8 childSpawned = false;
+    b8 signaledBySegv = false;
+    String crashIdText = String();
+    native(in spoolDirectory, mut childSpawned, mut signaledBySegv, mut crashIdText){
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
         const pid_t childPid = fork();
         ASSERT_GE(childPid, 0);
         if(childPid == 0){
@@ -871,6 +924,7 @@ void VerifyCrash_LinuxSignalHandlerWritesCrashPackage(){
         }
 
         if(childPid > 0){
+            childSpawned = true;
             int status = 0;
             while(waitpid(childPid, &status, 0) < 0){
                 if(errno == EINTR)
@@ -878,32 +932,35 @@ void VerifyCrash_LinuxSignalHandlerWritesCrashPackage(){
                 break;
             }
 
-            EXPECT_TRUE(WIFSIGNALED(status));
-            EXPECT_EQ(WTERMSIG(status), SIGSEGV);
-
+            signaledBySegv = WIFSIGNALED(status) && WTERMSIG(status) == SIGSEGV;
             Array<char, Core::Crash::CrashDetail::s_MaxShortText> crashId = {};
             BuildCrashIdForProcess(static_cast<u32>(childPid), 1u, crashId);
-
-            const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, FixedBufferView(crashId));
-            constexpr u32 s_MissingPackageReadyTimeoutMS = 1000u;
-            ExpectDirectoryReady(packageDirectory, s_MissingPackageReadyTimeoutMS);
-            ExpectIsRegularFile(packageDirectory / CrashNames::s_ManifestFileName, true);
-            ExpectIsRegularFile(packageDirectory / CrashNames::s_CallstackFileName, true);
-            // The faulting callstack must reach past the leaf frame without frame pointers.
-            EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_CallstackFileName, AStringView("#1 0x")));
-            ExpectIsRegularFile(packageDirectory / CrashNames::s_ProcMapsFileName, true);
-            EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_ManifestFileName, AStringView("\"reason_kind\": \"signal\"")));
+            const AStringView idView = FixedBufferView(crashId);
+            crashIdText.assign(idView.data(), idView.size());
         }
-
-        RemoveTestArtifacts(arena, s_Group);
 #endif
     }
+
+    if(childSpawned){
+        EXPECT_TRUE(signaledBySegv);
+        const CrashTestPath packageDirectory = PackageDirectory(testArena.arena, group, s_PendingBucket, crashIdText);
+        const u32 missingPackageReadyTimeoutMs = 1000u;
+        ExpectDirectoryReady(packageDirectory, missingPackageReadyTimeoutMs);
+        ExpectIsRegularFile(packageDirectory / s_ManifestFileName, true);
+        ExpectIsRegularFile(packageDirectory / s_CallstackFileName, true);
+        // The faulting callstack must reach past the leaf frame without frame pointers.
+        EXPECT_TRUE(TextFileContains(packageDirectory / s_CallstackFileName, "#1 0x"));
+        ExpectIsRegularFile(packageDirectory / s_ProcMapsFileName, true);
+        EXPECT_TRUE(TextFileContains(packageDirectory / s_ManifestFileName, "\"reason_kind\": \"signal\""));
+    }
+    RemoveTestArtifacts(testArena.arena, group);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
 
 
@@ -997,6 +1054,7 @@ NWB_ADHD_GTEST(Crash, AckAdmissionRequiresBoundedTerminatedIdentity, VerifyCrash
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
 
 

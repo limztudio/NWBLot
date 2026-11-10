@@ -1,0 +1,664 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/gtest_macros.adhd>
+#include "ui_fixture_widget_base.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/widgets/list.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiComboTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Impl::Ui;
+using namespace UiWidgetTests;
+
+inline constexpr Rect s_ComboPanelBounds{ 10.0f, 10.0f, 320.0f, 240.0f };
+inline constexpr AStringView s_ComboPanelKey = "panel";
+inline constexpr AStringView s_ComboKey = "combo";
+inline constexpr AStringView s_SecondComboKey = "other";
+// The combo popup list part and the list's own row container share the "rows" text.
+inline constexpr AStringView s_ComboRowsKey = "rows";
+inline constexpr AStringView s_ListRowsKey = "rows";
+
+
+// Arithmetic combo source with stable keys across reorder and removal.
+class ComboSource : public IListDataSource{
+public:
+    virtual ~ComboSource()noexcept override = default;
+
+
+public:
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ observeCallback(); return generation; }
+    [[nodiscard]] virtual u64 revision()const override{ observeCallback(); return contentRevision; }
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{ observeCallback(); return count; }
+    [[nodiscard]] virtual u64 key(u64 index)const noexcept override;
+    [[nodiscard]] virtual Expected<u64> indexOf(u64 value)const noexcept override;
+    [[nodiscard]] virtual Expected<u64> findEnabled(u64 start, b8 backwards)const noexcept override;
+    [[nodiscard]] virtual StringView text(u64 index)const override;
+    [[nodiscard]] virtual b8 enabled(u64 index)const noexcept override;
+    void resetCounters()const noexcept;
+
+
+protected:
+    virtual void observeCallback()const noexcept{}
+    [[nodiscard]] u64 rawKey(const u64 index)const noexcept{
+        return UiWidgetTests::ArithmeticFixtureRowKey(count, removed, reverse, index);
+    }
+
+
+public:
+    u64 count = 100000u;
+    u64 generation = 701u;
+    u64 contentRevision = 1u;
+    u64 removed = 0u;
+    u64 disabled = 0u;
+    mutable u64 keyCalls = 0u;
+    mutable u64 lookupCalls = 0u;
+    mutable u64 searchCalls = 0u;
+    mutable u64 textCalls = 0u;
+    mutable u64 enabledCalls = 0u;
+    b8 reverse = false;
+};
+
+[[nodiscard]] ComboOptions Options()noexcept;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ComboFixture : public WidgetFixture{
+public:
+    using WidgetFixture::press;
+
+
+public:
+    [[nodiscard]] b8 declareCombo(const u64 generation, const ComboOptions& options = Options(), const Rect& bounds = s_ComboPanelBounds){
+        return declareSource(generation, m_source, m_state, options, bounds);
+    }
+    [[nodiscard]] b8 declareSource(u64 generation, const IListDataSource& source, ComboState& state, const ComboOptions& options = Options(), const Rect& bounds = s_ComboPanelBounds);
+    [[nodiscard]] b8 prepare(const u64 generation, const ComboOptions& options = Options(), const Rect& bounds = s_ComboPanelBounds){
+        return declareCombo(generation, options, bounds) && finishPanel();
+    }
+    [[nodiscard]] b8 accept(const u64 generation, const ComboOptions& options = Options(), const Rect& bounds = s_ComboPanelBounds){
+        return prepare(generation, options, bounds) && m_context.commitFrame(generation);
+    }
+    [[nodiscard]] WidgetId popup(const AStringView key = s_ComboKey)const{ return UiTestSupport::RequireWidgetId(id(key, s_ComboPanelKey), "popup"); }
+    [[nodiscard]] WidgetId list(const AStringView key = s_ComboKey)const{ return UiTestSupport::RequireWidgetId(id(key, s_ComboPanelKey), s_ComboRowsKey); }
+    [[nodiscard]] WidgetId row(const u64 key, const AStringView combo = s_ComboKey)const{
+        return UiTestSupport::RequireWidgetPartId(UiTestSupport::RequireWidgetId(list(combo), s_ListRowsKey), key);
+    }
+    [[nodiscard]] b8 openByPointer(u64 generation);
+
+
+public:
+    ComboSource m_source;
+    ComboState m_state;
+    ComboResult m_result;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiListBehaviorTestSupport{
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RangeSource final : public IListDataSource{
+public:
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return generation; }
+    [[nodiscard]] virtual u64 revision()const noexcept override{ return revisionValue; }
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{ return count; }
+
+    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
+        ++keyCalls;
+        if(index >= count)
+            return 0u;
+        return reversed ? count - index : index + 1u;
+    }
+
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const noexcept override{
+        u64 index = 0u;
+        ++lookupCalls;
+        if(changeRevisionOnLookup){
+            changeRevisionOnLookup = false;
+            ++revisionValue;
+        }
+        if(key == 0u || key > count)
+            return MakeUnexpected(Failure{});
+        index = badLookup ? count : wrongLookup ? 0u : reversed ? count - key : key - 1u;
+        return index;
+    }
+
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{
+        u64 index = 0u;
+        ++findCalls;
+        if(start >= count)
+            return MakeUnexpected(Failure{});
+        if(badFind){
+            index = count;
+            return index;
+        }
+        index = start;
+        if(index >= disabledBegin && index < disabledEnd){
+            if(reverse){
+                if(disabledBegin == 0u)
+                    return MakeUnexpected(Failure{});
+                index = disabledBegin - 1u;
+            }
+            else{
+                if(disabledEnd >= count)
+                    return MakeUnexpected(Failure{});
+                index = disabledEnd;
+            }
+        }
+        return index;
+    }
+
+    [[nodiscard]] virtual StringView text(u64)const noexcept override{ return "row"; }
+
+    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{
+        ++enabledCalls;
+        return index < count && (index < disabledBegin || index >= disabledEnd);
+    }
+
+    void clearCalls()noexcept{
+        keyCalls = 0u;
+        lookupCalls = 0u;
+        findCalls = 0u;
+        enabledCalls = 0u;
+    }
+
+
+public:
+    u64 generation = 41u;
+    mutable u64 revisionValue = 1u;
+    u64 count = 10u;
+    u64 disabledBegin = Limit<u64>::s_Max;
+    u64 disabledEnd = Limit<u64>::s_Max;
+    b8 reversed = false;
+    b8 badLookup = false;
+    b8 wrongLookup = false;
+    b8 badFind = false;
+    mutable b8 changeRevisionOnLookup = false;
+    mutable u64 keyCalls = 0u;
+    mutable u64 lookupCalls = 0u;
+    mutable u64 findCalls = 0u;
+    mutable u64 enabledCalls = 0u;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] ControlAction Action(const ListState& state, const RangeSource& source, ControlActionKind::Enum kind)noexcept;
+void ExpectResult(const ListResult& actual, const ListResult& expected);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiListTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Impl;
+using namespace Impl::Ui;
+using namespace UiWidgetTests;
+
+inline constexpr AStringView s_PanelKey = "panel";
+inline constexpr AStringView s_ListKey = "list";
+inline constexpr AStringView s_PopupKey = "popup";
+inline constexpr AStringView s_UpperPopupKey = "upper";
+inline constexpr AStringView s_RowsKey = "rows";
+inline constexpr AStringView s_ScrollbarKey = "scrollbar";
+inline constexpr AStringView s_FirstRowText = "Ax";
+
+
+// Arithmetic list source that computes rows on demand without allocating per row.
+class ArithmeticSource final : public IListDataSource{
+public:
+    virtual ~ArithmeticSource()noexcept override = default;
+
+
+public:
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override;
+    [[nodiscard]] virtual u64 revision()const noexcept override;
+    [[nodiscard]] virtual u64 rowCount()const noexcept override;
+    [[nodiscard]] virtual u64 key(u64 index)const noexcept override;
+    [[nodiscard]] virtual Expected<u64> indexOf(u64 value)const noexcept override;
+    [[nodiscard]] virtual Expected<u64> findEnabled(u64 start, b8 backwards)const noexcept override;
+    [[nodiscard]] virtual StringView text(u64 index)const noexcept override;
+    [[nodiscard]] virtual b8 enabled(u64 index)const noexcept override;
+
+
+private:
+    [[nodiscard]] u64 rawKey(const u64 index)const noexcept{
+        return UiWidgetTests::ArithmeticFixtureRowKey(count, removed, reverse, index);
+    }
+    void invalidateText()const noexcept{ temporary.fill('?'); }
+
+
+public:
+    u64 count = 100000u;
+    u64 generation = 301u;
+    u64 contentRevision = 1u;
+    u64 removed = 0u;
+    u64 disabled = 0u;
+    u64 specialIndex = Limit<u64>::s_Max;
+    StringView specialText = "A\xCC\x81\xCC\x81 g\xCC\xA3\nPrevious\nNext";
+    mutable u64 keyCalls = 0u;
+    mutable u64 lookupCalls = 0u;
+    mutable u64 textCalls = 0u;
+    mutable Array<u64, 32u> textCallsByIndex{};
+    b8 reverse = false;
+    b8 duplicate = false;
+    b8 malformedLookup = false;
+    mutable Array<char, 128u> temporary{};
+};
+
+[[nodiscard]] ListOptions Options()noexcept;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiListBuilderTests : public WidgetFixture{
+public:
+    [[nodiscard]] b8 prepare(const u64 generation, const ListOptions& options = Options()){
+        return prepareSource(generation, m_source, m_state, options);
+    }
+    [[nodiscard]] b8 prepareSource(u64 generation, const IListDataSource& source, ListState& state, const ListOptions& options = Options(), const DisplayMetrics& display = { 800.0f, 600.0f, 1.0f, 1.0f });
+    [[nodiscard]] b8 accept(const u64 generation, const ListOptions& options = Options()){
+        return prepare(generation, options) && m_context.commitFrame(generation);
+    }
+    [[nodiscard]] b8 preparePopups(u64 generation, PopupState& lowerPopup, ListState& lowerState, PopupState* upperPopup = nullptr, ListState* upperState = nullptr);
+    [[nodiscard]] WidgetId row(const u64 key)const{
+        return UiTestSupport::RequireWidgetPartId(UiTestSupport::RequireWidgetId(id(s_ListKey, s_PanelKey), s_RowsKey), key);
+    }
+    [[nodiscard]] b8 wheel(f64 delta = -1.0);
+
+
+public:
+    ArithmeticSource m_source;
+    ListState m_state;
+    ListResult m_result;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+ComboOptions MakeComboFixtureOptions(){
+    ComboOptions options = ComboOptions();
+    options.width.policy = LayoutSizePolicy::Fixed;
+    options.width.value = 220.0f;
+    options.height.policy = LayoutSizePolicy::Fixed;
+    options.height.value = 32.0f;
+    options.popupHeight = 144.0f;
+    options.placeholder = "Choose";
+    return options;
+}
+
+ListOptions MakeListFixtureOptions(){
+    ListOptions options = ListOptions();
+    options.width.policy = LayoutSizePolicy::Fixed;
+    options.width.value = 280.0f;
+    options.height.policy = LayoutSizePolicy::Fixed;
+    options.height.value = 120.0f;
+    return options;
+}
+
+ControlAction MakeUiListControlAction(in u64 instanceGeneration, in u64 contentGeneration, in u64 contentRevision, in ControlActionKindEnum kind){
+    ControlAction action = ControlAction();
+    action.control.instanceGeneration = instanceGeneration;
+    action.control.contentGeneration = contentGeneration;
+    action.control.contentRevision = contentRevision;
+    action.kind = kind;
+    return action;
+}
+
+void ExpectUiListResult(in ListResult actual, in ListResult expected){
+    EXPECT_EQ(actual.valid, expected.valid);
+    EXPECT_EQ(actual.selectionChanged, expected.selectionChanged);
+    EXPECT_EQ(actual.activated, expected.activated);
+    EXPECT_EQ(actual.focused, expected.focused);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiComboTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u64 ComboSource::key(const u64 index)const noexcept{
+    observeCallback();
+    ++keyCalls;
+    return rawKey(index);
+}
+
+Expected<u64> ComboSource::indexOf(const u64 value)const noexcept{
+    observeCallback();
+    ++lookupCalls;
+    return UiWidgetTests::FindArithmeticFixtureRowIndex(count, removed, reverse, value);
+}
+
+Expected<u64> ComboSource::findEnabled(const u64 start, const b8 backwards)const noexcept{
+    observeCallback();
+    ++searchCalls;
+    return UiWidgetTests::FindSingleDisabledFixtureRow(count, removed, reverse, start, backwards, disabled);
+}
+
+StringView ComboSource::text(const u64 index)const{
+    observeCallback();
+    ++textCalls;
+    return index % 2u == 0u ? "First" : "Second";
+}
+
+b8 ComboSource::enabled(const u64 index)const noexcept{
+    observeCallback();
+    ++enabledCalls;
+    return index < count && rawKey(index) != disabled;
+}
+
+void ComboSource::resetCounters()const noexcept{
+    keyCalls = 0u;
+    lookupCalls = 0u;
+    searchCalls = 0u;
+    textCalls = 0u;
+    enabledCalls = 0u;
+}
+
+ComboOptions Options()noexcept{
+    return ::__hidden_ui_glyph_sdf_tests::MakeComboFixtureOptions();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ComboFixture::declareSource(const u64 generation, const IListDataSource& source, ComboState& state, const ComboOptions& options, const Rect& bounds){
+    if(!begin(generation) || !m_builder.beginPanel(s_ComboPanelKey, bounds))
+        return false;
+    m_result = m_builder.comboBox(s_ComboKey, source, state, options);
+    return m_result.valid;
+}
+
+b8 ComboFixture::openByPointer(const u64 generation){
+    const HitTarget* field = target(id(s_ComboKey, s_ComboPanelKey));
+    if(!field)
+        return false;
+    click(Center(field->rectangle));
+    return accept(generation) && m_state.isOpen();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiListBehaviorTestSupport{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+ControlAction Action(const ListState& state, const RangeSource& source, const ControlActionKind::Enum kind)noexcept{
+    return ::__hidden_ui_glyph_sdf_tests::MakeUiListControlAction(state.inputGeneration(), source.instanceGeneration(), source.revision(), kind);
+}
+
+void ExpectResult(const ListResult& actual, const ListResult& expected){
+    ::__hidden_ui_glyph_sdf_tests::ExpectUiListResult(actual, expected);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiListTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u64 ArithmeticSource::instanceGeneration()const noexcept{
+    invalidateText();
+    return generation;
+}
+
+u64 ArithmeticSource::revision()const noexcept{
+    invalidateText();
+    return contentRevision;
+}
+
+u64 ArithmeticSource::rowCount()const noexcept{
+    invalidateText();
+    return count;
+}
+
+u64 ArithmeticSource::key(const u64 index)const noexcept{
+    invalidateText();
+    ++keyCalls;
+    if(duplicate)
+        return 1u;
+    return rawKey(index);
+}
+
+Expected<u64> ArithmeticSource::indexOf(const u64 value)const noexcept{
+    invalidateText();
+    ++lookupCalls;
+    if(malformedLookup)
+        return count;
+    return UiWidgetTests::FindArithmeticFixtureRowIndex(count, removed, reverse, value);
+}
+
+Expected<u64> ArithmeticSource::findEnabled(const u64 start, const b8 backwards)const noexcept{
+    invalidateText();
+    return UiWidgetTests::FindSingleDisabledFixtureRow(count, removed, reverse, start, backwards, disabled);
+}
+
+StringView ArithmeticSource::text(const u64 index)const noexcept{
+    ++textCalls;
+    if(index < textCallsByIndex.size())
+        ++textCallsByIndex[index];
+    if(index == specialIndex){
+        for(usize byte = 0u; byte < specialText.size(); ++byte)
+            temporary[byte] = specialText[byte];
+        return { temporary.data(), specialText.size() };
+    }
+    temporary[0u] = static_cast<char>('A' + index % 26u);
+    temporary[1u] = 'x';
+    return { temporary.data(), 2u };
+}
+
+b8 ArithmeticSource::enabled(const u64 index)const noexcept{
+    invalidateText();
+    return rawKey(index) != disabled;
+}
+
+ListOptions Options()noexcept{
+    return ::__hidden_ui_glyph_sdf_tests::MakeListFixtureOptions();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 UiListBuilderTests::prepareSource(const u64 generation, const IListDataSource& source, ListState& state, const ListOptions& options, const DisplayMetrics& display){
+    if(!begin(generation, display) || !m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 260.0f }))
+        return false;
+    m_result = m_builder.virtualList(s_ListKey, source, state, options);
+    return m_result.valid && finishPanel();
+}
+
+b8 UiListBuilderTests::preparePopups(const u64 generation, PopupState& lowerPopup, ListState& lowerState, PopupState* upperPopup, ListState* upperState){
+    if(!begin(generation) || !m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 260.0f }))
+        return false;
+    if(!m_builder.virtualList(s_ListKey, m_source, m_state, Options()).valid || !m_builder.endPanel())
+        return false;
+    PopupOptions popup;
+    popup.anchor = { 350.0f, 10.0f, 10.0f, 10.0f };
+    popup.size = { 320.0f, 180.0f };
+    if(m_builder.beginPopup(s_PopupKey, lowerPopup, popup)){
+        if(!m_builder.virtualList(s_ListKey, m_source, lowerState, Options()).valid || !m_builder.endPopup())
+            return false;
+    }
+    if(upperPopup && upperState){
+        popup.anchor = { 400.0f, 220.0f, 10.0f, 10.0f };
+        if(m_builder.beginPopup(s_UpperPopupKey, *upperPopup, popup)){
+            if(!m_builder.virtualList(s_ListKey, m_source, *upperState, Options()).valid || !m_builder.endPopup())
+                return false;
+        }
+    }
+    return m_context.endRoot() && m_context.finishFrame();
+}
+
+b8 UiListBuilderTests::wheel(const f64 delta){
+    const HitTarget* accepted = target(id(s_ListKey, s_PanelKey));
+    if(!accepted)
+        return false;
+    InputEvent event;
+    event.type = InputEventType::PointerWheel;
+    event.position = Center(accepted->rectangle);
+    event.scrollY = delta;
+    return send(event).pointerConsumed;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

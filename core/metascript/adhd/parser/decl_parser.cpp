@@ -43,7 +43,6 @@ b8 DeclParser::ValidateMemberOperatorArity(const MStringView opName, const usize
 }
 
 b8 DeclParser::parseTranslationUnit(TranslationUnit& outUnit){
-    m_seenLocalAdhdDecl = false;
     while(!m_cursor.check(TokenType::EndOfFile)){
         if(!parseTopLevelDeclaration(outUnit))
             return false;
@@ -80,29 +79,43 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
     }
 
     if(m_cursor.matchIdentifier("native")){
-        if(!attributes.empty()){
-            const ParsedAttribute& attr = attributes[0];
-            const MStringView prohibitedAttrErr = KeywordSemantics::FindProhibitedNativeAttributeError(attr.name);
-            m_cursor.error(attr.line, attr.column, prohibitedAttrErr.empty() ? MStringView("attributes are not permitted on top-level 'native' blocks") : prohibitedAttrErr);
+        b8 hasExplicitTarget = false;
+        b8 explicitIsSource = false;
+        for(const ParsedAttribute& attr : attributes){
+            b8 attrIsSource = false;
+            if(!KeywordSemantics::TryParseTopLevelNativeAttribute(attr.name, attrIsSource)){
+                m_cursor.error(attr.line, attr.column, "unsupported attribute on top-level 'native' block; only '[header]' or '[source]' is permitted");
+                return false;
+            }
+            if(!attr.arguments.empty()){
+                m_cursor.error(attr.line, attr.column, "top-level 'native' target attribute does not accept arguments");
+                return false;
+            }
+            if(hasExplicitTarget){
+                m_cursor.error(attr.line, attr.column, "duplicate or conflicting target attribute on top-level 'native' block");
+                return false;
+            }
+            hasExplicitTarget = true;
+            explicitIsSource = attrIsSource;
+        }
+        if(!hasExplicitTarget){
+            m_cursor.error(span.line, span.column, "top-level 'native' block must specify '[header]' or '[source]'");
             return false;
         }
         MStringView code;
         if(!m_cursor.consumeBalancedBracesRaw(code))
             return false;
-        NativeBlockDecl block{};
-        block.code = code;
-        block.isImported = isImported;
-        block.hasPrecedingLocalDecl = !isImported && m_seenLocalAdhdDecl;
-        outUnit.nativeBlocks.push_back(block);
+        if(!isImported){
+            if(explicitIsSource)
+                outUnit.sourceNativeBlocks.push_back(code);
+            else
+                outUnit.topLevelNativeBlocks.push_back(code);
+        }
+        else if(!explicitIsSource){
+            outUnit.hasImportedNativeBlocks = true;
+        }
         return true;
     }
-
-    for(NativeBlockDecl& block : outUnit.nativeBlocks){
-        if(block.isImported == isImported)
-            block.hasFollowingLocalDecl = true;
-    }
-    if(!isImported)
-        m_seenLocalAdhdDecl = true;
 
     if(m_cursor.matchIdentifier("const")){
         if(!attributes.empty()){

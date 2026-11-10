@@ -11,6 +11,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
 
 
@@ -263,6 +264,7 @@ using CausticEmissionTargetBuilder = Impl::CausticEmissionTargetBuilder;
 namespace OpticalBoundaryMode = Impl::OpticalBoundaryMode;
 using CausticLightSelector = Impl::CausticLightSelector;
 using SceneLightGpuData = Impl::SceneLightGpuData;
+using MutableSceneLightGpuDataSpan = Impl::MutableSceneLightGpuDataSpan;
 using CausticQualitySettings = Impl::CausticQualitySettings;
 using CausticResolveActivityLayout = Impl::CausticResolveActivityLayout;
 using Impl::ValidateCausticQualitySettings;
@@ -294,6 +296,15 @@ using CsgShapeTypeDesc = Impl::CsgShapeTypeDesc;
 using CsgBoxShapeParameters = Impl::CsgBoxShapeParameters;
 namespace CsgReceiverPass = Impl::CsgReceiverPass;
 namespace SoftwareShadowCaptureCadence = Impl::SoftwareShadowCaptureCadence;
+using SoftwareShadowCaptureCadenceEnum = Impl::SoftwareShadowCaptureCadence::Enum;
+using LightSpaceCsgState = Impl::LightSpaceCsgState;
+using NwbRtInstanceMaterialGpu = Impl::NwbRtInstanceMaterialGpu;
+using InstanceGpuData = Impl::InstanceGpuData;
+using LightSpaceCaptureHistory = Impl::LightSpaceCaptureHistory;
+using LightSpaceCaptureIdentity = Impl::LightSpaceCaptureIdentity;
+using LightSpaceCaptureTicket = Impl::LightSpaceCaptureTicket;
+using Impl::BeginLightSpaceCsgGather;
+using Impl::FinishLightSpaceCsgGather;
 using Impl::RegisterBuiltInCsgShapeTypes;
 using Impl::CsgReceiverBoundsCanCull;
 using Impl::ResolveCsgClipWorkBounds;
@@ -360,28 +371,29 @@ void VerifyCausticEmissionTargetBuilderTests_SupportedVolumesDoNotRetireFirstUns
 }
 
 void VerifyCausticLightSelectorTests_MissingInputsPreserveSlotsAndPointLightsCannotWin(){
-    native{
-        Array<SceneLightGpuData, 3> lights{};
-        lights[0].params.y = 0.0f;
-        lights[1].params.y = 1.0f;
-        lights[2].params.y = 2.0f;
-        for(auto& light : lights)
-            light.params.w = -1.0f;
-        const Array<f32, 3> importance{ 10.0f, 100.0f, 5.0f };
-        Impl::MutableSceneLightGpuDataSpan lightSpan(lights.data(), lights.size());
-        const Span<const f32> allImportance(importance.data(), importance.size());
-        const Span<const f32> shortImportance(importance.data(), importance.size() - 1u);
-        const CausticLightSelector selector;
+    Array<SceneLightGpuData, 3> lights = Array<SceneLightGpuData, 3>();
+    lights[0u].params.y = 0.0f;
+    lights[1u].params.y = 1.0f;
+    lights[2u].params.y = 2.0f;
+    for(mut SceneLightGpuData light : lights)
+        light.params.w = -1.0f;
+    Array<f32, 3> importance = Array<f32, 3>();
+    importance[0u] = 10.0f;
+    importance[1u] = 100.0f;
+    importance[2u] = 5.0f;
+    MutableSceneLightGpuDataSpan lightSpan = MutableSceneLightGpuDataSpan(lights.data(), lights.size());
+    const Span<f32> allImportance = importance;
+    const Span<f32> shortImportance = allImportance.subspan(0u, 2u);
+    const CausticLightSelector selector = CausticLightSelector();
 
-        EXPECT_EQ(selector.assignSlots(allImportance, 0u, lightSpan), 0u);
-        EXPECT_EQ(selector.assignSlots(shortImportance, 1u, lightSpan), 0u);
-        for(const auto& light : lights)
-            EXPECT_EQ(light.params.w, -1.0f);
-        EXPECT_EQ(selector.assignSlots(allImportance, 1u, lightSpan), 2u);
-        EXPECT_EQ(lights[0].params.w, 0.0f);
-        EXPECT_EQ(lights[1].params.w, -1.0f);
-        EXPECT_EQ(lights[2].params.w, 1.0f);
-    }
+    EXPECT_EQ(selector.assignSlots(allImportance, 0u, lightSpan), 0u);
+    EXPECT_EQ(selector.assignSlots(shortImportance, 1u, lightSpan), 0u);
+    for(in SceneLightGpuData light : lights)
+        EXPECT_EQ(light.params.w, -1.0f);
+    EXPECT_EQ(selector.assignSlots(allImportance, 1u, lightSpan), 2u);
+    EXPECT_EQ(lights[0u].params.w, 0.0f);
+    EXPECT_EQ(lights[1u].params.w, -1.0f);
+    EXPECT_EQ(lights[2u].params.w, 1.0f);
 }
 
 void VerifyCausticQualitySettings_RejectsUnsupportedPhotonGridDivisors(){
@@ -1076,64 +1088,72 @@ void VerifyCsgShadowSnapshot_MissingSolidMembershipCannotPublishAnActiveRayConte
 }
 
 void VerifyCsgShadowSnapshot_BoundedCaptureReuseAllowsOnlyTransformLagAndRefreshesWithinItsCadence(){
-    native{
-        using namespace NWB::Impl;
-        struct CaptureCase{
-            SoftwareShadowCaptureCadence::Enum cadence;
-            u32 refreshInterval;
-        };
-        const Array<CaptureCase, 3> cases = {{
-            { SoftwareShadowCaptureCadence::EveryFrame, 1u },
-            { SoftwareShadowCaptureCadence::ReuseOneFrame, 2u },
-            { SoftwareShadowCaptureCadence::ReuseTwoFrames, 3u },
-        }};
-        for(const auto& captureCase : cases){
-            CsgShadowSnapshotContext context;
-            ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
-            const EntityID receiver = context.addReceiver(s_CsgShadowReceiverGroup, true);
-            const EntityID cutterEntity = context.addCutter(s_CsgBoxShapeName);
-            auto* cutter = context.testWorld.world.tryGetComponent<CsgCutterComponent>(cutterEntity);
-            ASSERT_NE(cutter, nullptr);
-            LightSpaceCsgState state(context.testWorld.arena);
-            ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
-            mesh.runtimeMesh = true;
-            mesh.runtimeMeshVersion = 3u;
-            mesh.runtimeGeometryContentRevision = 7u;
-            mesh.meshletPrimitiveIndexCount = 3u;
-            mesh.solidTriangleWords = s_OpenTriangleWords;
-            NwbRtInstanceMaterialGpu material;
-            InstanceGpuData instance;
-            LightSpaceCaptureHistory history;
-            u64 previousExact = 0u;
-            u64 previousContent = 0u;
-            for(u32 frame = 0u; frame < 7u; ++frame){
-                const f32 x = static_cast<f32>(frame) * 0.25f;
+    Array<SoftwareShadowCaptureCadenceEnum, 3> cadences = Array<SoftwareShadowCaptureCadenceEnum, 3>();
+    cadences[0u] = SoftwareShadowCaptureCadence::EveryFrame;
+    cadences[1u] = SoftwareShadowCaptureCadence::ReuseOneFrame;
+    cadences[2u] = SoftwareShadowCaptureCadence::ReuseTwoFrames;
+    Array<u32, 3> refreshIntervals = Array<u32, 3>();
+    refreshIntervals[0u] = 1u;
+    refreshIntervals[1u] = 2u;
+    refreshIntervals[2u] = 3u;
+    for(usize caseIndex = 0u; caseIndex < 3u; ++caseIndex){
+        const SoftwareShadowCaptureCadenceEnum cadence = cadences[caseIndex];
+        const u32 refreshInterval = refreshIntervals[caseIndex];
+        CsgShadowSnapshotContext context = CsgShadowSnapshotContext();
+        ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
+        const EntityID receiver = context.addReceiver(s_CsgShadowReceiverGroup, true);
+        const EntityID cutterEntity = context.addCutter(s_CsgBoxShapeName);
+        ASSERT_TRUE(context.testWorld.world.entity(cutterEntity).hasComponent<CsgCutterComponent>());
+        LightSpaceCsgState state = LightSpaceCsgState(context.testWorld.arena);
+        MeshRayTracingResourceSnapshot mesh = MeshRayTracingResourceSnapshot();
+        mesh.runtimeMesh = true;
+        mesh.runtimeMeshVersion = 3u;
+        mesh.runtimeGeometryContentRevision = 7u;
+        mesh.meshletPrimitiveIndexCount = 3u;
+        mesh.solidTriangleWords = s_OpenTriangleWords;
+        Array<NwbRtInstanceMaterialGpu, 1> materials = Array<NwbRtInstanceMaterialGpu, 1>();
+        Array<InstanceGpuData, 1> instances = Array<InstanceGpuData, 1>();
+        LightSpaceCaptureHistory history = LightSpaceCaptureHistory();
+        u64 previousExact = 0u;
+        u64 previousContent = 0u;
+        for(u32 frame = 0u; frame < 7u; ++frame){
+            const f32 x = cast<f32>(frame) * 0.25f;
+            BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, true);
+            native(in x, in receiver, in cutterEntity, in mesh, mut context, mut state, mut instances){
+                using namespace NWB::Impl;
+                auto& cutter = context.testWorld.world.entity(cutterEntity).getComponent<CsgCutterComponent>();
                 // Move only lane X.
                 const SIMDMatrix inverseShift = MatrixTranslation(-x, 0.0f, 0.0f);
-                StoreFloat(MatrixTranslation(x, 0.0f, 0.0f), cutter->shapeToWorld);
-                StoreFloat(inverseShift, cutter->worldToShape);
-                instance.translation.x = x;
-                StoreFloat(QuaternionRotationRollPitchYaw(0.0f, x, 0.0f), instance.rotation);
-                BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, true);
+                StoreFloat(MatrixTranslation(x, 0.0f, 0.0f), cutter.shapeToWorld);
+                StoreFloat(inverseShift, cutter.worldToShape);
+                instances[0].translation.x = x;
+                StoreFloat(QuaternionRotationRollPitchYaw(0.0f, x, 0.0f), instances[0].rotation);
                 AppendLightSpaceCsgReceiver(state, receiver, false, MatrixTranslation(x, 0.0f, 0.0f), inverseShift, LoadFloatInt(mesh.csgLocalBounds.minBounds), LoadFloatInt(mesh.csgLocalBounds.maxBounds), mesh);
-                ASSERT_TRUE(FinishLightSpaceCsgGather(context.registry, state, context.testWorld.world, context.scratch));
-                ASSERT_TRUE(state.snapshot.hasCsg);
-                ASSERT_TRUE(state.captureGeometryTrusted);
-                const u64 content = BuildLightSpaceCsgCaptureIdentity(state, Span<const NwbRtInstanceMaterialGpu>(&material, 1u), Span<const InstanceGpuData>(&instance, 1u), Span<const u8>{}, Span<const Core::TextureHandle>{});
-                if(frame != 0u){
-                    EXPECT_NE(state.snapshot.identity, previousExact);
-                    EXPECT_EQ(content, previousContent);
-                }
-                previousExact = state.snapshot.identity;
-                previousContent = content;
-                history.beginFrame();
-                const LightSpaceCaptureIdentity identity{ content, 11u, 13u, state.captureGeometryTrusted };
-                const auto ticket = history.prepare(identity, captureCase.cadence);
-                EXPECT_EQ(ticket.reuse, (frame % captureCase.refreshInterval) != 0u);
-                if(!ticket.reuse)
-                    history.recordCapture(ticket);
-                ASSERT_TRUE(history.accept(ticket));
             }
+            ASSERT_TRUE(FinishLightSpaceCsgGather(context.registry, state, context.testWorld.world, context.scratch));
+            ASSERT_TRUE(state.snapshot.hasCsg);
+            ASSERT_TRUE(state.captureGeometryTrusted);
+            u64 content = 0u;
+            native(in state, in materials, in instances, mut content){
+                content = Impl::BuildLightSpaceCsgCaptureIdentity(state, materials, instances, Span<const u8>{}, Span<const Core::TextureHandle>{});
+            }
+            if(frame != 0u){
+                EXPECT_NE(state.snapshot.identity, previousExact);
+                EXPECT_EQ(content, previousContent);
+            }
+            previousExact = state.snapshot.identity;
+            previousContent = content;
+            history.beginFrame();
+            LightSpaceCaptureIdentity identity = LightSpaceCaptureIdentity();
+            identity.scene = content;
+            identity.lighting = 11u;
+            identity.layout = 13u;
+            identity.trusted = state.captureGeometryTrusted;
+            const LightSpaceCaptureTicket ticket = history.prepare(identity, cadence);
+            EXPECT_EQ(ticket.reuse, (frame % refreshInterval) != 0u);
+            if(!ticket.reuse)
+                history.recordCapture(ticket);
+            ASSERT_TRUE(history.accept(ticket));
         }
     }
 }
@@ -1206,40 +1226,50 @@ void VerifyCsgShadowSnapshot_CaptureReuseRefreshesForContentTopologyMembershipAn
 }
 
 void VerifyCsgShadowSnapshot_UnknownOrPendingRuntimePoseCannotReuseAnAcceptedCapture(){
-    native{
-        using namespace NWB::Impl;
-        for(const auto cadence : { SoftwareShadowCaptureCadence::ReuseOneFrame, SoftwareShadowCaptureCadence::ReuseTwoFrames }){
-            CsgShadowSnapshotContext context;
-            ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
-            const EntityID receiver = context.addReceiver(s_CsgShadowReceiverGroup, true);
-            const EntityID cutter = context.addCutter(s_CsgBoxShapeName);
-            ASSERT_TRUE(cutter.valid());
-            LightSpaceCsgState state(context.testWorld.arena);
-            ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
-            mesh.runtimeMesh = true;
-            mesh.meshletPrimitiveIndexCount = 3u;
-            mesh.solidTriangleWords = s_OpenTriangleWords;
-            NwbRtInstanceMaterialGpu material;
-            InstanceGpuData instance;
-            LightSpaceCaptureHistory history;
-            for(const u64 revision : { 7uLL, 0uLL, 0uLL, 8uLL }){
-                mesh.runtimeGeometryContentRevision = revision;
-                BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, false);
-                AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), MatrixIdentity(), LoadFloatInt(mesh.csgLocalBounds.minBounds), LoadFloatInt(mesh.csgLocalBounds.maxBounds), mesh);
-                ASSERT_TRUE(FinishLightSpaceCsgGather(context.registry, state, context.testWorld.world, context.scratch));
-                EXPECT_EQ(state.captureGeometryTrusted, revision != 0u);
-                const LightSpaceCaptureIdentity identity{
-                    BuildLightSpaceCsgCaptureIdentity(state, Span<const NwbRtInstanceMaterialGpu>(&material, 1u), Span<const InstanceGpuData>(&instance, 1u), Span<const u8>{}, Span<const Core::TextureHandle>{}),
-                    11u,
-                    13u,
-                    state.captureGeometryTrusted
-                };
-                history.beginFrame();
-                const auto ticket = history.prepare(identity, cadence);
-                EXPECT_FALSE(ticket.reuse);
-                history.recordCapture(ticket);
-                ASSERT_TRUE(history.accept(ticket));
+    Array<SoftwareShadowCaptureCadenceEnum, 2> cadences = Array<SoftwareShadowCaptureCadenceEnum, 2>();
+    cadences[0u] = SoftwareShadowCaptureCadence::ReuseOneFrame;
+    cadences[1u] = SoftwareShadowCaptureCadence::ReuseTwoFrames;
+    Array<u64, 4> revisions = Array<u64, 4>();
+    revisions[0u] = 7uLL;
+    revisions[1u] = 0uLL;
+    revisions[2u] = 0uLL;
+    revisions[3u] = 8uLL;
+    for(in SoftwareShadowCaptureCadenceEnum cadence : cadences){
+        CsgShadowSnapshotContext context = CsgShadowSnapshotContext();
+        ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
+        const EntityID receiver = context.addReceiver(s_CsgShadowReceiverGroup, true);
+        const EntityID cutter = context.addCutter(s_CsgBoxShapeName);
+        ASSERT_TRUE(cutter.valid());
+        LightSpaceCsgState state = LightSpaceCsgState(context.testWorld.arena);
+        MeshRayTracingResourceSnapshot mesh = MeshRayTracingResourceSnapshot();
+        mesh.runtimeMesh = true;
+        mesh.meshletPrimitiveIndexCount = 3u;
+        mesh.solidTriangleWords = s_OpenTriangleWords;
+        Array<NwbRtInstanceMaterialGpu, 1> materials = Array<NwbRtInstanceMaterialGpu, 1>();
+        Array<InstanceGpuData, 1> instances = Array<InstanceGpuData, 1>();
+        LightSpaceCaptureHistory history = LightSpaceCaptureHistory();
+        for(in u64 revision : revisions){
+            mesh.runtimeGeometryContentRevision = revision;
+            BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, false);
+            native(in receiver, in mesh, mut state){
+                Impl::AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), MatrixIdentity(), LoadFloatInt(mesh.csgLocalBounds.minBounds), LoadFloatInt(mesh.csgLocalBounds.maxBounds), mesh);
             }
+            ASSERT_TRUE(FinishLightSpaceCsgGather(context.registry, state, context.testWorld.world, context.scratch));
+            EXPECT_EQ(state.captureGeometryTrusted, revision != 0u);
+            u64 sceneContent = 0u;
+            native(in state, in materials, in instances, mut sceneContent){
+                sceneContent = Impl::BuildLightSpaceCsgCaptureIdentity(state, materials, instances, Span<const u8>{}, Span<const Core::TextureHandle>{});
+            }
+            LightSpaceCaptureIdentity identity = LightSpaceCaptureIdentity();
+            identity.scene = sceneContent;
+            identity.lighting = 11u;
+            identity.layout = 13u;
+            identity.trusted = state.captureGeometryTrusted;
+            history.beginFrame();
+            const LightSpaceCaptureTicket ticket = history.prepare(identity, cadence);
+            EXPECT_FALSE(ticket.reuse);
+            history.recordCapture(ticket);
+            ASSERT_TRUE(history.accept(ticket));
         }
     }
 }
@@ -1482,6 +1512,7 @@ void VerifyEcsGraphics_CsgReceiverWorkRegionFallsBackConservativelyAndClampsLarg
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
 
 

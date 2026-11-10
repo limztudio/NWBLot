@@ -12,6 +12,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
 
 
@@ -328,18 +329,16 @@ b8 LoadMetadata(mut MetadataTestArena testArena, mut MetascriptDocument document
 }
 
 void VerifyAssetsFontAtlas_EmptyAndPaddingBoundaryDigestsRejectMalformedText(){
-    native{
-        const auto emptyHash = ParseSha256("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
-        ASSERT_TRUE(emptyHash);
-        EXPECT_EQ(ComputeSha256({}), *emptyHash);
-        // A 56-byte input requires a second block for the SHA-256 padding.
-        const auto paddedHash = ParseSha256("248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1");
-        ASSERT_TRUE(paddedHash);
-        static constexpr AStringView s_MultiBlock = "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq";
-        EXPECT_EQ(ComputeSha256({ reinterpret_cast<const u8*>(s_MultiBlock.data()), s_MultiBlock.size() }), *paddedHash);
-        EXPECT_FALSE(ParseSha256("BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD"));
-        EXPECT_FALSE(ParseSha256("ba78"));
-    }
+    const Expected<Sha256Digest> emptyHash = ParseSha256("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+    ASSERT_TRUE(emptyHash.has_value());
+    EXPECT_EQ(ComputeSha256(BinaryByteView()), emptyHash.value());
+    // A 56-byte input requires a second block for the SHA-256 padding.
+    const Expected<Sha256Digest> paddedHash = ParseSha256("248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1");
+    ASSERT_TRUE(paddedHash.has_value());
+    const StringView multiBlock = "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq";
+    EXPECT_EQ(HashAscii(multiBlock), paddedHash.value());
+    EXPECT_FALSE(ParseSha256("BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD").has_value());
+    EXPECT_FALSE(ParseSha256("ba78").has_value());
 }
 
 void VerifyAssetsFontAtlas_EmptyGlyphRetainsAdvanceAndFirstOutOfRangeLookupMissesAfterLoad(){

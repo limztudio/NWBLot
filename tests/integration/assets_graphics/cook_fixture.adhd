@@ -1,0 +1,455 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "fixture_sources.adhd"
+#include <tests/common/capturing_logger.adhd>
+#include <tests/common/test_context.adhd>
+#include <tests/common/gtest_macros.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <pipeline/asset_builder/build.adhd.h>
+#include <pipeline/asset_gatherer/gather.adhd.h>
+
+#include <impl/assets/graphics/mesh/runtime_constants.h>
+#include <impl/assets_csg/cook.adhd.h>
+#include <impl/assets_graphics/gather.adhd.h>
+#include <impl/assets_material/cook.adhd.h>
+#include <impl/assets_mesh/asset.adhd.h>
+#include <impl/assets_mesh/meshlet_ref_encode.adhd.h>
+#include <impl/assets_model/asset.adhd.h>
+#include <impl/assets_sampler/asset.adhd.h>
+#include <impl/assets_sampler/cook.adhd.h>
+#include <impl/assets_shader/asset.adhd.h>
+#include <impl/assets_shader/cook.adhd.h>
+#include <impl/assets_texture/asset.adhd.h>
+#include <impl/assets_texture/cook.adhd.h>
+#include <impl/ecs_csg/shape_registry.adhd.h>
+
+#include <core/alloc/scratch.h>
+#include <core/assets/bunch/cook.h>
+#include <core/assets/cook_entry_registry.h>
+#include <core/assets/paths.h>
+#include <core/common/module.h>
+#include <core/filesystem/factory.h>
+#include <core/global.h>
+#include <core/graphics/api.h>
+#include <core/graphics/shader_archive.h>
+#include <core/graphics/spirv_entry_point.h>
+#include <core/metascript/parser.h>
+#include <core/task/cpu/scheduler.h>
+
+#include <global/assert.h>
+#include <global/binary.h>
+#include <global/compile.h>
+#include <global/cpu_topology.h>
+#include <global/filesystem.h>
+#include <global/hash_utils.h>
+#include <global/simd/convert.h>
+#include <global/simdmath.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::AssetsGraphicsFixture{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct AssetsGraphicsTestArenaTag{};
+
+using TestArena = NWB::Tests::TestArena<AssetsGraphicsTestArenaTag>;
+using GraphicsTestPath = NWB::Path;
+using AssetArena = NWB::Core::Assets::AssetArena;
+using AssetBytes = NWB::Core::Assets::AssetBytes;
+using AssetString = NWB::Core::Assets::AssetString;
+using ScratchArena = NWB::Core::Alloc::ScratchArena;
+using GlobalArena = NWB::Core::Alloc::GlobalArena;
+using LoggerRegistrationGuard = NWB::Core::Common::LoggerRegistrationGuard;
+inline constexpr auto s_BreakOnFatal = NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal;
+inline constexpr auto s_ReportOnly = NWB::Core::Common::LoggerBreakPolicy::ReportOnly;
+
+struct CookCase{
+    Path root;
+    Path outputDirectory;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename T>
+NWB::Core::Assets::AssetVector<T> MakeAssetVector(TestArena& testArena)noexcept(noexcept(NWB::Core::Assets::AssetVector<T>(testArena.arena))){
+    return NWB::Core::Assets::AssetVector<T>(testArena.arena);
+}
+
+inline NWB::Core::Assets::AssetBytes MakeAssetBytes(TestArena& testArena)noexcept(noexcept(NWB::Core::Assets::AssetBytes(testArena.arena))){
+    return NWB::Core::Assets::AssetBytes(testArena.arena);
+}
+
+#if defined(NWB_FINAL)
+TestAString BuildTriangleMeta(const AStringView assetHeader, const AStringView normalField, const AStringView tangentField, const AStringView vertexRefsField, const AStringView suffix);
+inline TestAString BuildMeshTriangleMeta(const AStringView normalField, const AStringView tangentField, const AStringView vertexRefsField){
+    return BuildTriangleMeta("mesh asset;\n\n", normalField, tangentField, vertexRefsField, "");
+}
+#endif
+Path AssetsGraphicsTestRepoRoot(TestArena& testArena);
+Path AssetsGraphicsTestCaseRoot(TestArena& testArena, const AStringView caseName);
+Expected<Path> PrepareAssetsGraphicsCaseRoot(TestArena& testArena, const AStringView caseName);
+Expected<CookCase> PrepareAssetsGraphicsCookCase(TestArena& testArena, const AStringView caseName);
+b8 BuildPreparedGraphicsAssetRoots(TestArena& testArena, const Path& root, const Path& outputDirectory, const InitializerList<Path> assetRoots, const u32 workerThreadCount = 0u);
+b8 CookPreparedGraphicsAssetRoots(TestArena& testArena, const Path& root, const Path& outputDirectory, const InitializerList<Path> assetRoots, const u32 workerThreadCount = 0u);
+Expected<TestAString> ReadSmokeAssetMeta(TestArena& testArena, AStringView assetDirectory, AStringView assetFilename);
+
+template<typename EntryT>
+Expected<EntryT> ParseShaderMetadataFile(const Path& metadataPath, TestArena& testArena, NWB::Core::Alloc::ScratchArena& scratchArena, NWB::Impl::ShaderCook& shaderCook){
+    NWB::Core::Metascript::Document document(testArena.arena);
+    NWB::Impl::ShaderCook::CookString source(testArena.arena);
+    if(!NWB::Core::Assets::ParseMetadataDocumentText(metadataPath, "Meta", [&document](const AStringView text){ return document.parse(text); }, source, document))
+        return MakeUnexpected(Failure{});
+
+    if constexpr(IsSame_V<EntryT, NWB::Impl::ShaderCook::ShaderEntry>)
+        return shaderCook.parseShaderMeta(metadataPath, document, scratchArena);
+    else{
+        static_assert(IsSame_V<EntryT, NWB::Impl::ShaderCook::IncludeEntry>);
+        return shaderCook.parseIncludeMeta(metadataPath, document, scratchArena);
+    }
+}
+
+// Only volumes selecting graphics metadata or materials include a shader archive index.
+template<typename AssetCodecT>
+Expected<UniquePtr<NWB::Core::Assets::IAsset>> LoadCookedAsset(const Path& outputDirectory, const Name assetName, const usize expectedVolumeFileCount, TestArena& testArena){
+    NWB::Core::Filesystem::VolumeMountDesc mountDesc(testArena.arena);
+    mountDesc.volumeName = "graphics";
+    mountDesc.mountDirectory = outputDirectory;
+    auto filesystemResult = NWB::Core::Filesystem::CreateFilesystem(testArena.arena, mountDesc);
+    const b8 loadedVolume = static_cast<b8>(filesystemResult);
+    EXPECT_TRUE(loadedVolume);
+    if(!loadedVolume)
+        return MakeUnexpected(filesystemResult.error());
+    UniquePtr<NWB::Core::Filesystem::IFilesystem> filesystem = Move(*filesystemResult);
+
+    if(expectedVolumeFileCount != 0u)
+        EXPECT_EQ(filesystem->fileCount(), expectedVolumeFileCount);
+
+    NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
+    const b8 loadedBinary = filesystem->readFile(assetName, binary);
+    EXPECT_TRUE(loadedBinary);
+    EXPECT_FALSE(binary.empty());
+    if(!loadedBinary || binary.empty())
+        return MakeUnexpected(Failure{});
+
+    AssetCodecT codec;
+    auto deserialized = codec.deserialize(assetName, binary, testArena.arena);
+    EXPECT_TRUE(deserialized);
+    return deserialized;
+}
+inline Expected<UniquePtr<NWB::Core::Assets::IAsset>> LoadCookedMaterial(TestArena& testArena, const Path& outputDirectory, const Name assetName){
+    return LoadCookedAsset<NWB::Impl::MaterialAssetCodec>(outputDirectory, assetName, 0u, testArena);
+}
+
+template<typename T>
+b8 OverwritePOD(const usize offset, const T value, const Span<u8> binary)noexcept(noexcept(NWB_MEMCPY(binary.data() + offset, sizeof(value), &value, sizeof(value))) && IsNothrowDestructible_V<T>){
+    if(offset > binary.size() || sizeof(value) > binary.size() - offset)
+        return false;
+
+    NWB_MEMCPY(binary.data() + offset, sizeof(value), &value, sizeof(value));
+    return true;
+}
+
+b8 EncodeTestMeshletRefs(
+    const Span<const NWB::Impl::MeshletPositionStreamRef> positionRefs,
+    const Span<const NWB::Impl::MeshletAttributeStreamRef> attributeRefs,
+    const b8 skinRequired,
+    const Span<NWB::Impl::MeshletDesc> meshlets,
+    NWB::Core::Assets::AssetVector<u8>& outPositionRefDeltas,
+    NWB::Core::Assets::AssetVector<u8>& outAttributeRefDeltas
+);
+[[nodiscard]] Expected<MaterialBinaryTypedLayoutOffsets> FindMaterialBinaryTypedLayoutOffsets(Span<const u8> binary)noexcept;
+template<typename CodecT>
+void CheckCodecRejectsBinary(const CodecT& codec, const Name& virtualPath, const Span<const u8> binary, TestArena& testArena){
+    EXPECT_FALSE(codec.deserialize(virtualPath, binary, testArena.arena));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void AppendTestMeta(in StringView text, mut TestAString inOutMeta){
+    native(in text, mut inOutMeta){
+        inOutMeta.append(text.data(), text.size());
+    }
+}
+
+b8 PrepareCleanDirectory(in GraphicsTestPath directory){
+    b8 ok = false;
+    native(in directory, mut ok){
+        if(RemoveAllIfExists(directory))
+            ok = EnsureDirectories(directory).has_value();
+    }
+    return ok;
+}
+
+b8 WriteTextFile(in GraphicsTestPath filePath, in StringView text){
+    b8 ok = false;
+    native(in filePath, in text, mut ok){
+        if(EnsureDirectories(filePath.parentPath()))
+            ok = ::WriteTextFile(filePath, text);
+    }
+    return ok;
+}
+
+StringView AssetsGraphicsTestConfigurationName(){
+    StringView name = "opt";
+    native(mut name){
+#if defined(NWB_DEBUG)
+        name = "dbg";
+#elif defined(NWB_FINAL)
+        name = "fin";
+#endif
+    }
+    return name;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::AssetsGraphicsFixture{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Path AssetsGraphicsTestRepoRoot(TestArena& testArena){
+    return NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
+}
+
+#if defined(NWB_FINAL)
+TestAString BuildTriangleMeta(const AStringView assetHeader, const AStringView normalField, const AStringView tangentField, const AStringView vertexRefsField, const AStringView suffix){
+    TestAString meta;
+    meta.reserve(1536u);
+    AppendTestMeta(assetHeader, meta);
+    AppendTestMeta(NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS, meta);
+    AppendTestMeta(normalField, meta);
+    AppendTestMeta(tangentField, meta);
+    AppendTestMeta(NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0, meta);
+    AppendTestMeta(NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_COLORS, meta);
+    AppendTestMeta(vertexRefsField, meta);
+    AppendTestMeta(NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES, meta);
+    AppendTestMeta(suffix, meta);
+    return meta;
+}
+#endif
+
+Path AssetsGraphicsTestCaseRoot(TestArena& testArena, const AStringView caseName){
+    // Use a short config-and-case key so object-cache paths stay below Windows MAX_PATH.
+    TestAString caseKey;
+    caseKey.reserve(1u + s_HexU32DigitCount);
+    caseKey += AssetsGraphicsTestConfigurationName()[0u];
+    AppendHexU32(static_cast<u32>(ComputeFnv64Text(caseName)), caseKey);
+    return AssetsGraphicsTestRepoRoot(testArena) / "__build_obj" / "tests" / caseKey;
+}
+
+Expected<Path> PrepareAssetsGraphicsCaseRoot(TestArena& testArena, const AStringView caseName){
+    Path root = AssetsGraphicsTestCaseRoot(testArena, caseName);
+    if(!PrepareCleanDirectory(root))
+        return MakeUnexpected(Failure{});
+    return root;
+}
+
+Expected<CookCase> PrepareAssetsGraphicsCookCase(TestArena& testArena, const AStringView caseName){
+    auto root = PrepareAssetsGraphicsCaseRoot(testArena, caseName);
+    if(!root)
+        return MakeUnexpected(root.error());
+    Path outputDirectory = *root / "cooked";
+    return CookCase{ Move(*root), Move(outputDirectory) };
+}
+
+b8 BuildPreparedGraphicsAssetRoots(
+    TestArena& testArena,
+    const Path& root,
+    const Path& outputDirectory,
+    const InitializerList<Path> assetRoots,
+    const u32 workerThreadCount
+){
+    NWB::Core::CpuTaskScheduler cookCpuTaskScheduler(workerThreadCount);
+    NWB::Pipeline::AssetBuilder::AssetBuildOptions options(testArena.arena, cookCpuTaskScheduler);
+    const Path normalRoot = root.lexicallyNormal();
+    const auto materialExists = FileExists(root / s_AssetsDirectory / s_ShadersDirectory / "material_mesh.nwb");
+    if(!materialExists)
+        return false;
+    b8 useCaseRootAsRepoRoot = !*materialExists;
+    for(const Path& assetRoot : assetRoots){
+        const Path normalAssetRoot = assetRoot.lexicallyNormal();
+        if(normalAssetRoot != normalRoot && !PathHasDirectoryAncestor(normalAssetRoot, normalRoot)){
+            useCaseRootAsRepoRoot = false;
+            break;
+        }
+    }
+    options.repoRoot = useCaseRootAsRepoRoot ? root : AssetsGraphicsTestRepoRoot(testArena);
+    options.assetRoots.reserve(assetRoots.size());
+    for(const Path& assetRoot : assetRoots){
+        auto parentDirectoryName = PathToString(testArena.arena, assetRoot.lexicallyNormal().parentPath().filenameView());
+        CanonicalizeTextInPlace(parentDirectoryName);
+
+        const AStringView virtualRoot = parentDirectoryName == s_EngineDirectory ? NWB::Core::Assets::s_EngineVirtualRoot : NWB::Core::Assets::s_ProjectVirtualRoot;
+
+        options.assetRoots.emplace_back(assetRoot, virtualRoot);
+    }
+    options.outputDirectory = outputDirectory;
+    if(!options.configuration.assign(s_TestsConfiguration) || !options.assetType.assign(s_GraphicsDirectory))
+        return false;
+
+    NWB::Core::Alloc::ScratchArena scratchArena(s_BuildScratchArena);
+    return NWB::Pipeline::AssetBuilder::BuildAssets(options, scratchArena);
+}
+
+b8 CookPreparedGraphicsAssetRoots(
+    TestArena& testArena,
+    const Path& root,
+    const Path& outputDirectory,
+    const InitializerList<Path> assetRoots,
+    const u32 workerThreadCount
+){
+    const Path builtDirectory = root / "built";
+    if(!BuildPreparedGraphicsAssetRoots(testArena, root, builtDirectory, assetRoots, workerThreadCount))
+        return false;
+
+    NWB::Pipeline::AssetGatherer::AssetGatherOptions gatherOptions(testArena.arena);
+    gatherOptions.inputs.emplace_back(PathToString(testArena.arena, builtDirectory));
+    gatherOptions.outputDirectory = PathToString(testArena.arena, outputDirectory);
+    gatherOptions.configuration = s_TestsConfiguration.data();
+    gatherOptions.mergePayloads = &NWB::Impl::MergeGatheredGraphicsAsset;
+    NWB::Core::Alloc::ScratchArena scratchArena(s_GatherScratchArena);
+    return NWB::Pipeline::AssetGatherer::GatherAssets(gatherOptions, scratchArena);
+}
+
+Expected<TestAString> ReadSmokeAssetMeta(TestArena& testArena, const AStringView assetDirectory, const AStringView assetFilename){
+    TestAString metaText;
+    if(!ReadTextFile(AssetsGraphicsTestRepoRoot(testArena) / s_TestsConfiguration / "smoke" / s_AssetsDirectory / assetDirectory / assetFilename, metaText))
+        return MakeUnexpected(Failure{});
+    return metaText;
+}
+
+b8 EncodeTestMeshletRefs(
+    const Span<const NWB::Impl::MeshletPositionStreamRef> positionRefs,
+    const Span<const NWB::Impl::MeshletAttributeStreamRef> attributeRefs,
+    const b8 skinRequired,
+    const Span<NWB::Impl::MeshletDesc> meshlets,
+    NWB::Core::Assets::AssetVector<u8>& outPositionRefDeltas,
+    NWB::Core::Assets::AssetVector<u8>& outAttributeRefDeltas
+){
+    return NWB::Impl::EncodeMeshletRefDeltas(positionRefs, attributeRefs, skinRequired, [](const usize, const TStringView)noexcept{ return false; }, meshlets, outPositionRefDeltas, outAttributeRefDeltas);
+}
+
+Expected<MaterialBinaryTypedLayoutOffsets> FindMaterialBinaryTypedLayoutOffsets(const Span<const u8> binary)noexcept{
+    usize cursor = 0u;
+    const auto magic = ReadPOD<u32>(binary, cursor);
+    if(!magic || *magic != NWB::Impl::s_MaterialBinaryMagic)
+        return MakeUnexpected(Failure{});
+
+    const auto shaderVariantView = ReadString(binary, cursor);
+    if(!shaderVariantView || shaderVariantView->empty())
+        return MakeUnexpected(Failure{});
+
+    const auto materialInterfaceHash = ReadPOD<NameHash>(binary, cursor);
+    if(!materialInterfaceHash || !Name(*materialInterfaceHash))
+        return MakeUnexpected(Failure{});
+
+    const usize typedLayoutBegin = cursor;
+    const auto layoutHash = ReadPOD<u64>(binary, cursor);
+    if(!layoutHash || *layoutHash == 0u)
+        return MakeUnexpected(Failure{});
+    const auto blockCount = ReadPOD<u32>(binary, cursor);
+    if(!blockCount)
+        return MakeUnexpected(Failure{});
+    const auto fieldCount = ReadPOD<u32>(binary, cursor);
+    if(!fieldCount)
+        return MakeUnexpected(Failure{});
+
+    if(*blockCount > (binary.size() - cursor) / NWB::Impl::s_MaterialTypedLayoutBlockBytes)
+        return MakeUnexpected(Failure{});
+    cursor += static_cast<usize>(*blockCount) * NWB::Impl::s_MaterialTypedLayoutBlockBytes;
+
+    if(*fieldCount > (binary.size() - cursor) / NWB::Impl::s_MaterialTypedLayoutFieldBytes)
+        return MakeUnexpected(Failure{});
+    const usize fieldBytes = static_cast<usize>(*fieldCount) * NWB::Impl::s_MaterialTypedLayoutFieldBytes;
+    if(!SkipBytes(binary, fieldBytes, cursor))
+        return MakeUnexpected(Failure{});
+
+    return MaterialBinaryTypedLayoutOffsets{ .layoutHashOffset = typedLayoutBegin, .blockByteCountOffset = cursor };
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

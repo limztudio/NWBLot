@@ -3,12 +3,14 @@
 
 
 #include <tests/common/gtest_macros.adhd>
-#include <tests/unit/global/global_tests.adhd>
+#include <tests/common/test_context.adhd>
+#include <tests/unit/global/name_case_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
 
 
@@ -16,85 +18,29 @@ native{
 
 
 #include <core/alloc/scratch.h>
-#include <core/common/name_symbols.h>
 
-#include <global/atomic.h>
-#include <global/binary.h>
 #include <global/containers.h>
-#include <global/diagnostics.h>
 #include <global/environment.h>
 #include <global/filesystem/cleanup.h>
 #include <global/filesystem/directory_iterator.h>
-#include <global/filesystem/exclusive_publication.h>
-#include <global/filesystem/file_staging.h>
 #include <global/filesystem/operations.h>
+#include <global/filesystem/operations_file_io.h>
 #include <global/filesystem/path.h>
 #include <global/filesystem/path_identity.h>
 #include <global/filesystem/retention.h>
 #include <global/filesystem/staged_file_writer.h>
 #include <global/filesystem/utility.h>
 #include <global/limit.h>
-#include <global/name_hash_text.h>
+#include <global/numeric_text.h>
 #include <global/process_capture.h>
 #include <global/process_execution.h>
 #include <global/process_memory_map.h>
 #include <global/shared_library.h>
-#include <global/termination.h>
-#include <global/text_utils.h>
-#include <global/thread.h>
 
 #if defined(NWB_PLATFORM_LINUX)
 #include <sys/wait.h>
 #include <unistd.h>
 #endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_name_identity_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr AStringView s_RecursiveInnerName = "identity/recursive_inner";
-
-#if !defined(NWB_DEBUG)
-inline constexpr AStringView s_RuntimeGenerated = "runtime/generated";
-#endif
-
-struct NameSymbolCallbackProbe{
-public:
-    NameDetail::NameSymbolRecorderState previousRecorder = NameDetail::SymbolRecorderState();
-    NameDetail::NameSymbolResolverState previousResolver = NameDetail::SymbolResolverState();
-    u32 recordCount = 0u;
-    u32 resolveCount = 0u;
-
-
-public:
-    NameSymbolCallbackProbe()noexcept{
-        SetNameSymbolRecordCallback([](const NameHash&, AStringView, void* context)noexcept{
-            ++MakeNotNull(static_cast<NameSymbolCallbackProbe*>(context))->recordCount;
-        }, this
-        );
-        SetNameSymbolResolveCallback([](char*, usize, const NameHash&, void* context)noexcept{
-            ++MakeNotNull(static_cast<NameSymbolCallbackProbe*>(context))->resolveCount;
-            return false;
-        }, this
-        );
-    }
-    ~NameSymbolCallbackProbe()noexcept{
-        SetNameSymbolRecordCallback(previousRecorder.callback, previousRecorder.userData);
-        SetNameSymbolResolveCallback(previousResolver.callback, previousResolver.userData);
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -190,361 +136,83 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void VerifyGlobal_DerivedNamesReportInvalidInputsAndPreserveCanonicalBinaryIdentity(){
-    const Name base = s_DerivedNameTestBase;
-    EXPECT_FALSE(DeriveName(s_NameNone, StringView("suffix")).has_value());
-    EXPECT_FALSE(DeriveName(base, StringView()).has_value());
-    EXPECT_FALSE(FinishDerivedNameHash(NameHash()).has_value());
-    const Expected<Name> lower = DeriveName(base, StringView("suffix"));
-    const Expected<Name> upper = DeriveName(base, StringView("SUFFIX"));
-    ASSERT_TRUE(lower.has_value());
-    ASSERT_TRUE(upper.has_value());
-    EXPECT_NE(lower.value(), s_NameNone);
-    EXPECT_EQ(lower.value(), upper.value());
-    native(in base){
-        constexpr Array<char, 3u> s_EmbeddedNull = { 'a', '\0', 'b' };
-        EXPECT_FALSE(DeriveName(base, AStringView(s_EmbeddedNull.data(), s_EmbeddedNull.size())));
-    }
-}
-
-void VerifyGlobal_ConstexprNameViewsPreserveBoundedIdentityAndSymbolCallbacks(){
-    native{
-        using namespace __hidden_name_identity_tests;
-        constexpr AStringView s_Source = "Identity\\Bounded.trailing";
-        constexpr AStringView s_Bounded = s_Source.substr(0u, 16u);
-        constexpr Name s_ViewName{s_Bounded};
-        constexpr Name s_LiteralName{"identity/bounded"};
-        constexpr Array<char, 3u> s_EmbeddedNull = { 'a', '\0', 'b' };
-        constexpr auto s_InvalidName = Name::FromText(AStringView(s_EmbeddedNull.data(), s_EmbeddedNull.size()));
-        static_assert(s_ViewName == s_LiteralName);
-        static_assert(!s_InvalidName && s_InvalidName.error() == NameTextError::EmbeddedNull);
-        static_assert(Name{AStringView{}} != s_NameNone);
-        static_assert(Name{static_cast<const char*>(nullptr)} == s_NameNone);
-
-        NameSymbolCallbackProbe probe;
-        EXPECT_EQ(s_ViewName.identityHash(), s_LiteralName.identityHash());
-        EXPECT_EQ(probe.recordCount, 0u);
-        const Name runtimeView{s_Bounded};
-        EXPECT_EQ(runtimeView, s_LiteralName);
-        EXPECT_EQ(probe.recordCount, 1u);
-        EXPECT_EQ(probe.resolveCount, 0u);
-    }
-}
-
-void VerifyGlobal_BinaryIdentityLanesDoNotRecordNameSymbols(){
-    native{
-        constexpr Name s_First{"Identity\\First"};
-        NWB::Core::Common::NameSymbols::InstallRuntimeRegistry();
-        NWB::Core::Common::NameSymbols::ClearRuntimeSymbols();
-
-        for(u32 lane = 0u; lane < s_NameHashLaneCount; ++lane){
-            NameHash changed = s_First.identityHash();
-            changed.qwords[lane] ^= 1u;
-            const Name binary{changed};
-            EXPECT_EQ(binary.identityHash(), changed);
-            EXPECT_NE(binary.identityHash(), s_First.identityHash());
-        }
-        EXPECT_EQ(NWB::Core::Common::NameSymbols::EntryCount(), 0u);
-
-#if defined(NWB_BUILD_SYMBOLS)
-        EXPECT_EQ(s_First.hash(), ComputeNameHash(MakeNotNull("identity/first")));
-        EXPECT_EQ(NWB::Core::Common::NameSymbols::EntryCount(), 1u);
-#endif
-    }
-}
-
-void VerifyGlobal_NameBinaryIdentityNeverInvokesInstalledSymbolCallbacks(){
-    native{
-        using namespace __hidden_name_identity_tests;
-        constexpr Name s_Literal{"identity/callback_probe"};
-        const Name binary{ComputeNameHash(MakeNotNull("identity/binary_probe"))};
-        NameSymbolCallbackProbe probe;
-        EXPECT_EQ(s_Literal.identityHash(), ComputeNameHash(MakeNotNull("identity/callback_probe")));
-        EXPECT_EQ(binary.identityHash(), ComputeNameHash(MakeNotNull("identity/binary_probe")));
-        EXPECT_EQ(s_NameNone.identityHash(), NameHash{});
-        EXPECT_EQ(probe.recordCount, 0u);
-        EXPECT_EQ(probe.resolveCount, 0u);
-
-        const Name recorded{AStringView("identity/recorded_probe")};
-        EXPECT_EQ(probe.recordCount, 1u);
-        Array<char, 32u> resolved = {};
-        EXPECT_FALSE(NameDetail::ResolveNameSymbolText(resolved.data(), LengthOf(resolved), recorded.identityHash()));
-        EXPECT_EQ(probe.recordCount, 1u);
-        EXPECT_EQ(probe.resolveCount, 1u);
-#if defined(NWB_BUILD_SYMBOLS)
-        EXPECT_EQ(s_Literal.hash(), s_Literal.identityHash());
-        EXPECT_EQ(probe.recordCount, 2u);
-#endif
-    }
-}
-
-void VerifyGlobal_NameResolvedTextPreservesSymbolLookupAndHashFallback(){
-    native{
-        using namespace __hidden_name_identity_tests;
-        NWB::Core::Common::NameSymbols::InstallRuntimeRegistry();
-        NWB::Core::Common::NameSymbols::ClearRuntimeSymbols();
-
-        const Name runtimeName{AStringView("Runtime\\Generated")};
-        Array<char, NameHashTextCodec::s_TextLength + 1u> hashText = {};
-        NameHashTextCodec::Format(hashText.data(), sizeof(hashText), runtimeName.identityHash());
-        const AStringView hashView(hashText.data(), NameHashTextCodec::s_TextLength);
-        const Name binaryName{runtimeName.identityHash()};
-        const DiagnosticEventText formattedName = MakeDiagnosticEventText("{}", binaryName);
-#if defined(NWB_DEBUG)
-        EXPECT_EQ(binaryName.resolvedText(), hashView);
-        EXPECT_EQ(formattedName.view(), hashView);
-#else
-        EXPECT_EQ(binaryName.resolvedText(), s_RuntimeGenerated);
-        EXPECT_EQ(formattedName.view(), hashView);
-        EXPECT_NE(binaryName.resolvedText(), hashView);
-        EXPECT_NE(binaryName.resolvedText(), binaryName.logText());
-#endif
-
-        NWB::Core::Common::NameSymbols::ClearRuntimeSymbols();
-        EXPECT_EQ(binaryName.resolvedText(), hashView);
-        EXPECT_STREQ(binaryName.c_str(), hashText.data());
-    }
-}
-
-void VerifyGlobal_DiagnosticNameTextNeverInvokesForeignSymbolCallbacks(){
-    native{
-        using namespace __hidden_name_identity_tests;
-        constexpr Name s_Authored{"Diagnostic\\Authored"};
-        const Name binary{ComputeNameHash(MakeNotNull("diagnostic/binary"))};
-        NameSymbolCallbackProbe probe;
-        SetNameSymbolRecordCallback([](const NameHash&, AStringView, void* context){
-            ++MakeNotNull(static_cast<NameSymbolCallbackProbe*>(context))->recordCount;
-            throw 17u;
-        }, &probe
-        );
-        SetNameSymbolResolveCallback([](char*, usize, const NameHash&, void* context)->b8{
-            ++MakeNotNull(static_cast<NameSymbolCallbackProbe*>(context))->resolveCount;
-            throw 29u;
-        }, &probe
-        );
-
-        EXPECT_EQ(MakeDiagnosticEventText(AStringView("{}"), s_Authored).view(), s_Authored.logText());
-        Array<char, NameHashTextCodec::s_TextLength + 1u> hashText = {};
-        NameHashTextCodec::Format(hashText.data(), sizeof(hashText), binary.identityHash());
-        EXPECT_EQ(MakeDiagnosticEventText(AStringView("{}"), binary).view(), AStringView(hashText.data()));
-        EXPECT_EQ(probe.recordCount, 0u);
-        EXPECT_EQ(probe.resolveCount, 0u);
-    }
-}
-
-void VerifyGlobal_NameResolvedTextIsBoundedByStoredAndResolverBuffers(){
-    native{
-        using namespace __hidden_name_identity_tests;
-        NameSymbolCallbackProbe probe;
-        Array<char, NameDetail::s_DebugNameCapacity + 1u> source = {};
-        for(char& character : source)
-            character = 'x';
-        const auto nameResult = Name::FromText(AStringView(source.data(), source.size()));
-        ASSERT_TRUE(nameResult);
-        const Name name = *nameResult;
-#if defined(NWB_DEBUG)
-        EXPECT_EQ(name.resolvedText().size(), NameDetail::s_DebugNameCapacity - 1u);
-#else
-        SetNameSymbolResolveCallback([](char* outText, const usize outTextSize, const NameHash&, void*)noexcept{
-            for(usize i = 0u; i < outTextSize; ++i)
-                outText[i] = 'x';
-            return true;
-        });
-        const AStringView resolved = name.resolvedText();
-        EXPECT_EQ(resolved.size(), NameDetail::s_SymbolTextBufferLength - 1u);
-        EXPECT_EQ(resolved.back(), 'x');
-        EXPECT_EQ(resolved.data()[resolved.size()], '\0');
-#endif
-    }
-}
-
-void VerifyGlobal_NameHashTextDistinguishesNullEmptyAndEmbeddedNull(){
-    native{
-        using namespace __hidden_name_identity_tests;
-        constexpr auto s_NullNarrow = ComputeNameHash(static_cast<const char*>(nullptr));
-        constexpr auto s_NullWide = ComputeNameHash(static_cast<const wchar*>(nullptr));
-        static_assert(!s_NullNarrow && s_NullNarrow.error() == NameTextError::NullText);
-        static_assert(!s_NullWide && s_NullWide.error() == NameTextError::NullText);
-        constexpr auto s_EmptyPointer = ComputeNameHash("");
-        constexpr auto s_EmptyWidePointer = ComputeNameHash(L"");
-        constexpr auto s_EmptyView = ComputeNameHash(AStringView{});
-        constexpr auto s_EmptyWideView = ComputeNameHash(WStringView{});
-        static_assert(s_EmptyPointer && s_EmptyWidePointer && s_EmptyView && s_EmptyWideView);
-        static_assert(*s_EmptyPointer == *s_EmptyView && *s_EmptyWidePointer == *s_EmptyWideView);
-        static_assert(*s_EmptyView == ComputeNameHash(MakeNotNull("")));
-        static_assert(*s_EmptyView != NameHash{});
-        constexpr Array<char, 4u> s_Narrow = { 'a', '\0', 'b', '\0' };
-        constexpr Array<wchar, 4u> s_Wide = { L'a', L'\0', L'b', L'\0' };
-        constexpr auto s_NarrowPointer = ComputeNameHash(s_Narrow.data());
-        constexpr auto s_WidePointer = ComputeNameHash(s_Wide.data());
-        constexpr auto s_NarrowBounded = ComputeNameHash(AStringView(s_Narrow.data(), 3u));
-        constexpr auto s_WideBounded = ComputeNameHash(WStringView(s_Wide.data(), 3u));
-        static_assert(s_NarrowPointer && s_WidePointer);
-        static_assert(*s_NarrowPointer == ComputeNameHash(MakeNotNull("a")));
-        static_assert(*s_WidePointer == ComputeNameHash(MakeNotNull(L"a")));
-        static_assert(!s_NarrowBounded && s_NarrowBounded.error() == NameTextError::EmbeddedNull);
-        static_assert(!s_WideBounded && s_WideBounded.error() == NameTextError::EmbeddedNull);
-        constexpr auto s_Validated = ComputeNameHash(NameText<char>{AStringView("Identity\\Text")});
-        constexpr auto s_ValidatedWide = ComputeNameHash(NameText<wchar>{WStringView(L"identity/text")});
-        static_assert(s_Validated == s_ValidatedWide);
-        static_assert(s_Validated == ComputeNameHash(MakeNotNull("identity/text")));
-
-        NameSymbolCallbackProbe probe;
-        const auto nullHash = ComputeNameHash(static_cast<const char*>(nullptr));
-        ASSERT_FALSE(nullHash);
-        EXPECT_EQ(nullHash.error(), NameTextError::NullText);
-        const auto boundedHash = ComputeNameHash(AStringView(s_Narrow.data(), 3u));
-        ASSERT_FALSE(boundedHash);
-        EXPECT_EQ(boundedHash.error(), NameTextError::EmbeddedNull);
-        EXPECT_EQ(probe.recordCount, 0u);
-        EXPECT_EQ(probe.resolveCount, 0u);
-    }
-}
-
-void VerifyGlobal_RuntimeNameTextAdmissionPreservesIdentityAndCallbackBoundaries(){
-    native{
-        using namespace __hidden_name_identity_tests;
-        static_assert(!noexcept(Name::FromText(AStringView{})));
-        static_assert(Name{static_cast<const wchar*>(nullptr)} == s_NameNone);
-        constexpr Array<char, 3u> s_InvalidNarrow = { 'a', '\0', 'b' };
-        constexpr Array<wchar, 3u> s_InvalidWide = { L'a', L'\0', L'b' };
-        constexpr auto s_InvalidWideName = Name::FromText(WStringView(s_InvalidWide.data(), s_InvalidWide.size()));
-        static_assert(!s_InvalidWideName && s_InvalidWideName.error() == NameTextError::EmbeddedNull);
-        NameSymbolCallbackProbe probe;
-        const auto invalidNarrow = Name::FromText(AStringView(s_InvalidNarrow.data(), s_InvalidNarrow.size()));
-        ASSERT_FALSE(invalidNarrow);
-        EXPECT_EQ(invalidNarrow.error(), NameTextError::EmbeddedNull);
-        const auto invalidWide = Name::FromText(WStringView(s_InvalidWide.data(), s_InvalidWide.size()));
-        ASSERT_FALSE(invalidWide);
-        EXPECT_EQ(invalidWide.error(), NameTextError::EmbeddedNull);
-        EXPECT_EQ(probe.recordCount, 0u);
-        EXPECT_EQ(probe.resolveCount, 0u);
-
-        const auto empty = Name::FromText(AStringView{});
-        ASSERT_TRUE(empty);
-        EXPECT_NE(*empty, s_NameNone);
-        EXPECT_EQ(empty->identityHash(), ComputeNameHash(MakeNotNull("")));
-        EXPECT_EQ(probe.recordCount, 1u);
-        const auto narrow = Name::FromText(AStringView("Identity\\Runtime"));
-        ASSERT_TRUE(narrow);
-        EXPECT_EQ(narrow->identityHash(), ComputeNameHash(MakeNotNull("identity/runtime")));
-        EXPECT_EQ(probe.recordCount, 2u);
-        const auto wide = Name::FromText(WStringView(L"identity/runtime"));
-        ASSERT_TRUE(wide);
-        EXPECT_EQ(wide->identityHash(), narrow->identityHash());
-        EXPECT_EQ(probe.recordCount, 3u);
-        EXPECT_EQ(probe.resolveCount, 0u);
-    }
-}
-
-void VerifyGlobal_OptionalNameTextPreservesAbsenceAndOwnedContainerErrors(){
-    native{
-        using namespace __hidden_name_identity_tests;
-        constexpr Array<char, 3u> s_Invalid = { 'a', '\0', 'b' };
-        NWB::Tests::TestArena<> testArena;
-        BasicString<char, NWB::Core::Alloc::GlobalArena> owned(testArena.arena);
-        owned.assign(s_Invalid.data(), s_Invalid.size());
-        AInteropString generic(s_Invalid.data(), s_Invalid.size());
-        NameSymbolCallbackProbe probe;
-        const auto emptyNarrow = ToName(AStringView{});
-        ASSERT_TRUE(emptyNarrow);
-        EXPECT_FALSE(*emptyNarrow);
-        const auto emptyWide = ToName(WStringView{});
-        ASSERT_TRUE(emptyWide);
-        EXPECT_FALSE(*emptyWide);
-        const auto invalidView = ToName(AStringView(s_Invalid.data(), s_Invalid.size()));
-        ASSERT_FALSE(invalidView);
-        EXPECT_EQ(invalidView.error(), NameTextError::EmbeddedNull);
-        const auto invalidOwned = ToName(owned);
-        ASSERT_FALSE(invalidOwned);
-        EXPECT_EQ(invalidOwned.error(), NameTextError::EmbeddedNull);
-        const auto invalidGeneric = ToName(generic);
-        ASSERT_FALSE(invalidGeneric);
-        EXPECT_EQ(invalidGeneric.error(), NameTextError::EmbeddedNull);
-        EXPECT_EQ(probe.recordCount, 0u);
-        EXPECT_EQ(probe.resolveCount, 0u);
-
-        const auto valid = ToName(AStringView("Identity\\Optional"));
-        ASSERT_TRUE(valid);
-        ASSERT_TRUE(*valid);
-        EXPECT_EQ((**valid).identityHash(), ComputeNameHash(MakeNotNull("identity/optional")));
-        EXPECT_EQ(probe.recordCount, 1u);
-        EXPECT_EQ(probe.resolveCount, 0u);
-    }
-}
-
-void VerifyGlobal_RuntimeNameFactoryPreservesRecursiveRecorderGuard(){
-    NameRecursiveProbe probe = NameRecursiveProbe();
-    native(mut probe){
-        using namespace __hidden_name_identity_tests;
-        using RecursiveProbe = NWB::Tests::GlobalCases::NameRecursiveProbe;
-        NameSymbolCallbackProbe restoreCallbacks;
-        SetNameSymbolRecordCallback([](const NameHash&, AStringView, void* context)noexcept{
-            auto& state = *MakeNotNull(static_cast<RecursiveProbe*>(context));
-            ++state.recordCount;
-            const auto nested = Name::FromText(AStringView(s_RecursiveInnerName));
-            state.nestedAccepted = nested && nested->identityHash() == ComputeNameHash(MakeNotNull(s_RecursiveInnerName.data()));
-        }, &probe
-        );
-        const auto first = Name::FromText(AStringView("identity/recursive_first"));
-        ASSERT_TRUE(first);
-        EXPECT_TRUE(probe.nestedAccepted);
-        EXPECT_EQ(probe.recordCount, 1u);
-        const auto second = Name::FromText(AStringView("identity/recursive_second"));
-        ASSERT_TRUE(second);
-        EXPECT_TRUE(probe.nestedAccepted);
-        EXPECT_EQ(probe.recordCount, 2u);
-        EXPECT_EQ(restoreCallbacks.recordCount, 0u);
-        EXPECT_EQ(restoreCallbacks.resolveCount, 0u);
-    }
-}
-
-void VerifyGlobal_NameHashDebugTextRejectsInvalidHex(){
-    native{
-        const NameHash source = ComputeNameHash(MakeNotNull("global_name_hash_debug_text"));
-        Array<char, NameHashTextCodec::s_TextLength + 1u> hashText = {};
-        NameHashTextCodec::Format(hashText.data(), sizeof(hashText), source);
-        hashText[0u] = 'g';
-        EXPECT_FALSE(NameHashTextCodec::Decode(AStringView(hashText.data())));
-    }
-}
-
 void VerifyGlobal_EnvironmentVariableNamesSupportSlicesAndRejectEmbeddedNull(){
-    native{
+    const StringView slicedPathName = StringView("PATH.trailing").substr(0u, 4u);
+    b8 readExpectedOk = false;
+    b8 readSlicedOk = false;
+    b8 expectedPresent = false;
+    b8 slicedMatchesExpected = false;
+    Expected<b8, ErrorCode> exactMatch = false;
+    Expected<b8, ErrorCode> mutatedMatch = true;
+    Expected<b8, ErrorCode> hasValueResult = false;
+    b8 expectedNonEmpty = false;
+    b8 invalidReadRejected = false;
+    b8 invalidEqualsSameError = false;
+    b8 invalidHasValueSameError = false;
+
+    native(
+        in slicedPathName,
+        mut readExpectedOk,
+        mut readSlicedOk,
+        mut expectedPresent,
+        mut slicedMatchesExpected,
+        mut exactMatch,
+        mut mutatedMatch,
+        mut hasValueResult,
+        mut expectedNonEmpty,
+        mut invalidReadRejected,
+        mut invalidEqualsSameError,
+        mut invalidHasValueSameError
+    ){
         using namespace __hidden_process_filesystem_boundary_tests;
         NWB::Tests::TestArena<> testArena;
         const auto expected = ReadEnvironmentVariable(testArena.arena, AStringView(s_PathEnvironment));
-        const auto actual = ReadEnvironmentVariable(testArena.arena, AStringView("PATH.trailing").substr(0u, 4u));
-        ASSERT_TRUE(expected);
-        ASSERT_TRUE(actual);
-        ASSERT_TRUE(*expected);
-        EXPECT_EQ(*actual, *expected);
-        auto different = **expected;
-        different += 'x';
-        const auto matches = EnvironmentVariableEquals(testArena.arena, s_PathEnvironment, AStringView(**expected));
-        ASSERT_TRUE(matches);
-        EXPECT_TRUE(*matches);
-        const auto differs = EnvironmentVariableEquals(testArena.arena, s_PathEnvironment, AStringView(different));
-        ASSERT_TRUE(differs);
-        EXPECT_FALSE(*differs);
-        const auto hasValue = HasEnvironmentValue(testArena.arena, s_PathEnvironment);
-        ASSERT_TRUE(hasValue);
-        EXPECT_EQ(*hasValue, !(**expected).empty());
+        const auto actual = ReadEnvironmentVariable(testArena.arena, slicedPathName);
+        readExpectedOk = expected.has_value();
+        readSlicedOk = actual.has_value();
+        if(expected && actual && *expected){
+            expectedPresent = true;
+            slicedMatchesExpected = *actual == *expected;
+            expectedNonEmpty = !(**expected).empty();
+            auto different = **expected;
+            different += 'x';
+            exactMatch = EnvironmentVariableEquals(testArena.arena, s_PathEnvironment, AStringView(**expected));
+            mutatedMatch = EnvironmentVariableEquals(testArena.arena, s_PathEnvironment, AStringView(different));
+            hasValueResult = HasEnvironmentValue(testArena.arena, s_PathEnvironment);
+        }
         const Array<char, 6u> invalidName = { 'P', 'A', 'T', 'H', '\0', 'X' };
         const auto invalid = ReadEnvironmentVariable(testArena.arena, AStringView(invalidName.data(), invalidName.size()));
-        ASSERT_FALSE(invalid);
-        EXPECT_EQ(invalid.error(), MakeErrorCode(ErrorCondition::invalid_argument));
+        invalidReadRejected = !invalid && invalid.error() == MakeErrorCode(ErrorCondition::invalid_argument);
         const auto invalidEquals = EnvironmentVariableEquals(testArena.arena, AStringView(invalidName.data(), invalidName.size()), "unused");
-        ASSERT_FALSE(invalidEquals);
-        EXPECT_EQ(invalidEquals.error(), invalid.error());
         const auto invalidHasValue = HasEnvironmentValue(testArena.arena, AStringView(invalidName.data(), invalidName.size()));
-        ASSERT_FALSE(invalidHasValue);
-        EXPECT_EQ(invalidHasValue.error(), invalid.error());
+        if(!invalid){
+            invalidEqualsSameError = !invalidEquals && invalidEquals.error() == invalid.error();
+            invalidHasValueSameError = !invalidHasValue && invalidHasValue.error() == invalid.error();
+        }
     }
+
+    ASSERT_TRUE(readExpectedOk);
+    ASSERT_TRUE(readSlicedOk);
+    ASSERT_TRUE(expectedPresent);
+    EXPECT_TRUE(slicedMatchesExpected);
+    ASSERT_TRUE(exactMatch.has_value());
+    EXPECT_TRUE(exactMatch.value());
+    ASSERT_TRUE(mutatedMatch.has_value());
+    EXPECT_FALSE(mutatedMatch.value());
+    ASSERT_TRUE(hasValueResult.has_value());
+    EXPECT_EQ(hasValueResult.value(), expectedNonEmpty);
+    EXPECT_TRUE(invalidReadRejected);
+    EXPECT_TRUE(invalidEqualsSameError);
+    EXPECT_TRUE(invalidHasValueSameError);
 }
 
 void VerifyGlobal_DirectoryRetentionPreservesPredicateErrorAndRetainsUnadmittedEntries(){
-    native{
+    b8 retentionFailedWithExpectedError = false;
+    Expected<b8, ErrorCode> firstExists = false;
+    Expected<b8, ErrorCode> secondExists = false;
+    b8 removedRoot = false;
+
+    native(mut retentionFailedWithExpectedError, mut firstExists, mut secondExists, mut removedRoot){
         NWB::Tests::TestArena<> testArena;
         const ::Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/retention_predicate_error");
         ASSERT_TRUE(EnsureEmptyDirectory(root));
@@ -552,20 +220,27 @@ void VerifyGlobal_DirectoryRetentionPreservesPredicateErrorAndRetainsUnadmittedE
         ASSERT_TRUE(WriteTextFile(root / "b", "retained"));
         const ErrorCode expectedError = MakeErrorCode(ErrorCondition::permission_denied);
         const auto retained = ApplyDirectoryRetention(testArena.arena, root, 1u, [&](const auto&)noexcept->Expected<b8, ErrorCode>{ return MakeUnexpected(expectedError); });
-        ASSERT_FALSE(retained);
-        EXPECT_EQ(retained.error(), expectedError);
-        const auto first = FileExists(root / "a");
-        const auto second = FileExists(root / "b");
-        ASSERT_TRUE(first);
-        ASSERT_TRUE(second);
-        EXPECT_TRUE(*first);
-        EXPECT_TRUE(*second);
-        EXPECT_TRUE(RemoveAllIfExists(root));
+        retentionFailedWithExpectedError = !retained && retained.error() == expectedError;
+        firstExists = FileExists(root / "a");
+        secondExists = FileExists(root / "b");
+        removedRoot = RemoveAllIfExists(root).has_value();
     }
+
+    EXPECT_TRUE(retentionFailedWithExpectedError);
+    ASSERT_TRUE(firstExists.has_value());
+    ASSERT_TRUE(secondExists.has_value());
+    EXPECT_TRUE(firstExists.value());
+    EXPECT_TRUE(secondExists.value());
+    EXPECT_TRUE(removedRoot);
 }
 
 void VerifyGlobal_FileWriteSizeRejectionPreservesExistingOutput(){
-    native{
+    b8 oversizedWriteAccepted = true;
+    b8 readBackOk = false;
+    String retainedText = "";
+    b8 removedRoot = false;
+
+    native(mut oversizedWriteAccepted, mut readBackOk, mut retainedText, mut removedRoot){
         using namespace __hidden_process_filesystem_boundary_tests;
         NWB::Tests::TestArena<> testArena;
         const ::Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/oversized_file_write");
@@ -573,121 +248,183 @@ void VerifyGlobal_FileWriteSizeRejectionPreservesExistingOutput(){
         ASSERT_TRUE(EnsureEmptyDirectory(root));
         ASSERT_TRUE(WriteTextFile(outputPath, "retained"));
 
-        EXPECT_FALSE(WriteBinaryFile(outputPath, OversizedBinarySource{}));
+        oversizedWriteAccepted = WriteBinaryFile(outputPath, OversizedBinarySource{});
         NWB::Tests::TestAString retained(testArena.arena);
-        ASSERT_TRUE(ReadTextFile(outputPath, retained));
-        EXPECT_EQ(retained, "retained");
-        EXPECT_TRUE(RemoveAllIfExists(root));
+        readBackOk = ReadTextFile(outputPath, retained).has_value();
+        retainedText.assign(AStringView(retained));
+        removedRoot = RemoveAllIfExists(root).has_value();
     }
+
+    EXPECT_FALSE(oversizedWriteAccepted);
+    ASSERT_TRUE(readBackOk);
+    EXPECT_EQ(StringView(retainedText), StringView("retained"));
+    EXPECT_TRUE(removedRoot);
 }
 
 void VerifyGlobal_DirectoryCreationRejectsExistingFileWithoutChangingIt(){
-    native{
+    Expected<b8, ErrorCode> unchangedDirectory = true;
+    Expected<b8, ErrorCode> collidedCreate = true;
+    b8 ensureBlockerAccepted = true;
+    b8 readBackOk = false;
+    String retainedText = "";
+    b8 removedRoot = false;
+
+    native(mut unchangedDirectory, mut collidedCreate, mut ensureBlockerAccepted, mut readBackOk, mut retainedText, mut removedRoot){
         NWB::Tests::TestArena<> testArena;
         const ::Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/directory_creation_file_collision");
         const auto blocker = root / "existing.txt";
         ASSERT_TRUE(EnsureEmptyDirectory(root));
         ASSERT_TRUE(WriteTextFile(blocker, AStringView("retained")));
 
-        const auto unchangedDirectory = CreateDirectories(root);
-        ASSERT_TRUE(unchangedDirectory);
-        EXPECT_FALSE(*unchangedDirectory);
-        const auto created = CreateDirectories(blocker);
-        EXPECT_FALSE(created);
-        if(!created)
-            EXPECT_NE(created.error().value(), 0);
-        EXPECT_FALSE(EnsureDirectories(blocker));
+        unchangedDirectory = CreateDirectories(root);
+        collidedCreate = CreateDirectories(blocker);
+        ensureBlockerAccepted = EnsureDirectories(blocker).has_value();
         NWB::Tests::TestAString retained(testArena.arena);
-        ASSERT_TRUE(ReadTextFile(blocker, retained));
-        EXPECT_EQ(retained, "retained");
-        EXPECT_TRUE(RemoveAllIfExists(root));
+        readBackOk = ReadTextFile(blocker, retained).has_value();
+        retainedText.assign(AStringView(retained));
+        removedRoot = RemoveAllIfExists(root).has_value();
     }
+
+    ASSERT_TRUE(unchangedDirectory.has_value());
+    EXPECT_FALSE(unchangedDirectory.value());
+    EXPECT_FALSE(collidedCreate.has_value());
+    if(!collidedCreate.has_value())
+        EXPECT_NE(collidedCreate.error().value(), 0);
+    EXPECT_FALSE(ensureBlockerAccepted);
+    ASSERT_TRUE(readBackOk);
+    EXPECT_EQ(StringView(retainedText), StringView("retained"));
+    EXPECT_TRUE(removedRoot);
 }
 
 void VerifyGlobal_FileWritesRejectBufferedDeviceFailure(){
-    native{
+    b8 linuxSupported = false;
+    b8 textWriteSucceeded = true;
+    b8 binaryWriteSucceeded = true;
+    Array<u8, 3> payload = Array<u8, 3>();
+    payload[0u] = 1u;
+    payload[1u] = 2u;
+    payload[2u] = 3u;
+
+    native(in payload, mut linuxSupported, mut textWriteSucceeded, mut binaryWriteSucceeded){
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+        linuxSupported = true;
         NWB::Tests::TestArena<> testArena;
         const ::Path<NWB::Core::Alloc::GlobalArena> fullDevice(testArena.arena, "/dev/full");
-        const Array<u8, 3u> payload = { 1u, 2u, 3u };
-        EXPECT_FALSE(WriteTextFile(fullDevice, "buffered output"));
-        EXPECT_FALSE(WriteBinaryFile(fullDevice, Span<const u8>(payload)));
+        textWriteSucceeded = WriteTextFile(fullDevice, "buffered output");
+        binaryWriteSucceeded = WriteBinaryFile(fullDevice, Span<const u8>(payload));
+#else
+        static_cast<void>(payload);
 #endif
     }
+
+    if(!linuxSupported)
+        return;
+
+    EXPECT_FALSE(textWriteSucceeded);
+    EXPECT_FALSE(binaryWriteSucceeded);
 }
 
 void VerifyGlobal_PathNativeComponentsMatchOwningIterationAndRemainValidAfterAdvance(){
-    native{
+    usize componentCount = 0u;
+    b8 allComponentsMatched = true;
+    b8 incrementedPastEndStaysAtEnd = false;
+    b8 emptyPathBeginEqualsEnd = false;
+
+    native(mut componentCount, mut allComponentsMatched, mut incrementedPastEndStaysAtEnd, mut emptyPathBeginEqualsEnd){
         NWB::Tests::TestArena<> testArena;
 #if defined(NWB_PLATFORM_WINDOWS)
-        const ::Path<NWB::Core::Alloc::GlobalArena> path(testArena.arena, "C:\\Root//./í•œê¸€/File.TXT/");
-        constexpr Array<TStringView, 5u> s_Expected = { NWB_TEXT("C:\\"), NWB_TEXT("Root"), NWB_TEXT("."), NWB_TEXT("í•œê¸€"), NWB_TEXT("File.TXT") };
+        const ::Path<NWB::Core::Alloc::GlobalArena> path(testArena.arena, "C:\\Root//./\xED\x95\x9C\xEA\xB8\x80/File.TXT/");
+        constexpr Array<TStringView, 5u> s_Expected = { NWB_TEXT("C:\\"), NWB_TEXT("Root"), NWB_TEXT("."), NWB_TEXT("\xED\x95\x9C\xEA\xB8\x80"), NWB_TEXT("File.TXT") };
 #else
-        const ::Path<NWB::Core::Alloc::GlobalArena> path(testArena.arena, "/Root//./í•œê¸€/File.TXT/");
-        constexpr Array<TStringView, 5u> s_Expected = { NWB_TEXT("/"), NWB_TEXT("Root"), NWB_TEXT("."), NWB_TEXT("í•œê¸€"), NWB_TEXT("File.TXT") };
+        const ::Path<NWB::Core::Alloc::GlobalArena> path(testArena.arena, "/Root//./\xED\x95\x9C\xEA\xB8\x80/File.TXT/");
+        constexpr Array<TStringView, 5u> s_Expected = { NWB_TEXT("/"), NWB_TEXT("Root"), NWB_TEXT("."), NWB_TEXT("\xED\x95\x9C\xEA\xB8\x80"), NWB_TEXT("File.TXT") };
 #endif
         auto componentIt = path.begin();
         const TStringView first = componentIt.nativeComponent();
-        usize componentIndex = 0u;
         while(componentIt != path.end()){
-            ASSERT_LT(componentIndex, LengthOf(s_Expected));
+            if(componentCount >= LengthOf(s_Expected)){
+                allComponentsMatched = false;
+                break;
+            }
             const TStringView borrowed = componentIt.nativeComponent();
-            EXPECT_EQ(borrowed, s_Expected[componentIndex]);
             const auto owned = *componentIt;
-            EXPECT_EQ(owned.native(), borrowed);
             auto next = componentIt;
             ++next;
-            EXPECT_EQ(componentIt.nativeComponent(), borrowed);
+            const b8 stepOk =
+                borrowed == s_Expected[componentCount]
+                && owned.native() == borrowed
+                && componentIt.nativeComponent() == borrowed
+            ;
             componentIt = next;
-            EXPECT_EQ(borrowed, s_Expected[componentIndex]);
-            EXPECT_EQ(first, s_Expected[0u]);
-            ++componentIndex;
+            allComponentsMatched = allComponentsMatched && stepOk && borrowed == s_Expected[componentCount] && first == s_Expected[0u];
+            ++componentCount;
         }
-        EXPECT_EQ(componentIndex, LengthOf(s_Expected));
         ++componentIt;
-        EXPECT_EQ(componentIt, path.end());
+        incrementedPastEndStaysAtEnd = componentIt == path.end();
 
         const ::Path<NWB::Core::Alloc::GlobalArena> empty(testArena.arena);
-        EXPECT_EQ(empty.begin(), empty.end());
+        emptyPathBeginEqualsEnd = empty.begin() == empty.end();
     }
+
+    EXPECT_EQ(componentCount, 5u);
+    EXPECT_TRUE(allComponentsMatched);
+    EXPECT_TRUE(incrementedPastEndStaysAtEnd);
+    EXPECT_TRUE(emptyPathBeginEqualsEnd);
 }
 
 void VerifyGlobal_PathNativeComponentViewsBorrowSourceStorageWithoutAllocating(){
     const Name owner = s_GlobalCaseTestsPathNativeComponentViews;
-    native(in owner){
+    b8 firstPointsToStart = false;
+    b8 allSlicesWithinBounds = true;
+    b8 secondDiffersFromFirst = false;
+    b8 retainedMatchesFirstComponent = false;
+    ArenaMemoryStats before = ArenaMemoryStats();
+    ArenaMemoryStats after = ArenaMemoryStats();
+
+    native(in owner, mut firstPointsToStart, mut allSlicesWithinBounds, mut secondDiffersFromFirst, mut retainedMatchesFirstComponent, mut before, mut after){
         NWB::Core::Alloc::GlobalArena arena(owner);
-        const ::Path<NWB::Core::Alloc::GlobalArena> path(arena, "First_component_long_enough_to_require_owning_storage/Second_component_with_Unicode_í•œê¸€_ðŸ˜€/Third_component");
+        const ::Path<NWB::Core::Alloc::GlobalArena> path(arena, "First_component_long_enough_to_require_owning_storage/Second_component_with_Unicode_\xED\x95\x9C\xEA\xB8\x80_\xF0\x9F\x98\x80/Third_component");
         const TStringView nativeView = path.native();
-        const ArenaMemoryStats before = arena.memoryStats();
+        before = arena.memoryStats();
         TStringView retained;
         {
             auto componentIt = path.begin();
             retained = componentIt.nativeComponent();
-            EXPECT_EQ(retained.data(), nativeView.data());
+            firstPointsToStart = retained.data() == nativeView.data();
             for(usize repetition = 0u; repetition < 32u; ++repetition){
-                usize componentCount = 0u;
+                usize count = 0u;
                 for(auto it = path.begin(); it != path.end(); ++it){
                     const TStringView component = it.nativeComponent();
-                    EXPECT_GE(component.data(), nativeView.data());
-                    EXPECT_LE(component.data() + component.size(), nativeView.data() + nativeView.size());
-                    ++componentCount;
+                    allSlicesWithinBounds = allSlicesWithinBounds && component.data() >= nativeView.data() && (component.data() + component.size()) <= (nativeView.data() + nativeView.size());
+                    ++count;
                 }
-                EXPECT_EQ(componentCount, 3u);
+                allSlicesWithinBounds = allSlicesWithinBounds && count == 3u;
             }
             ++componentIt;
-            EXPECT_NE(componentIt.nativeComponent().data(), retained.data());
+            secondDiffersFromFirst = componentIt.nativeComponent().data() != retained.data();
         }
-        EXPECT_EQ(retained, TStringView(NWB_TEXT("First_component_long_enough_to_require_owning_storage")));
-        const ArenaMemoryStats after = arena.memoryStats();
-        EXPECT_EQ(after.allocationCount, before.allocationCount);
-        EXPECT_EQ(after.reallocationCount, before.reallocationCount);
-        EXPECT_EQ(after.deallocationCount, before.deallocationCount);
-        EXPECT_EQ(after.usedBytes, before.usedBytes);
+        retainedMatchesFirstComponent = retained == TStringView(NWB_TEXT("First_component_long_enough_to_require_owning_storage"));
+        after = arena.memoryStats();
     }
+
+    EXPECT_TRUE(firstPointsToStart);
+    EXPECT_TRUE(allSlicesWithinBounds);
+    EXPECT_TRUE(secondDiffersFromFirst);
+    EXPECT_TRUE(retainedMatchesFirstComponent);
+    EXPECT_EQ(after.allocationCount, before.allocationCount);
+    EXPECT_EQ(after.reallocationCount, before.reallocationCount);
+    EXPECT_EQ(after.deallocationCount, before.deallocationCount);
+    EXPECT_EQ(after.usedBytes, before.usedBytes);
 }
 
 void VerifyGlobal_MovePathReplacesExistingDestinationWithoutRetainingSource(){
-    native{
+    b8 movedMatchesDestination = false;
+    b8 readDestinationOk = false;
+    String destinationText = "";
+    Expected<b8, ErrorCode> sourceExistsAfterMove = true;
+    b8 removedRoot = false;
+
+    native(mut movedMatchesDestination, mut readDestinationOk, mut destinationText, mut sourceExistsAfterMove, mut removedRoot){
         using namespace __hidden_process_filesystem_boundary_tests;
         NWB::Tests::TestArena<> testArena;
         const ::Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/move_path_to_directory");
@@ -695,80 +432,128 @@ void VerifyGlobal_MovePathReplacesExistingDestinationWithoutRetainingSource(){
         const ::Path<NWB::Core::Alloc::GlobalArena> destinationDirectory = root / "moved";
         const ::Path<NWB::Core::Alloc::GlobalArena> destination = destinationDirectory / s_SourceFilename;
 
-        EXPECT_TRUE(EnsureEmptyDirectory(root));
-        EXPECT_TRUE(WriteTextFile(source, AStringView("fresh")));
-        EXPECT_TRUE(EnsureDirectories(destinationDirectory));
-        EXPECT_TRUE(WriteTextFile(destination, AStringView("old")));
+        ASSERT_TRUE(EnsureEmptyDirectory(root));
+        ASSERT_TRUE(WriteTextFile(source, AStringView("fresh")));
+        ASSERT_TRUE(EnsureDirectories(destinationDirectory));
+        ASSERT_TRUE(WriteTextFile(destination, AStringView("old")));
 
         const auto movedPath = MovePathToDirectory(source, destinationDirectory);
-        ASSERT_TRUE(movedPath);
-        EXPECT_EQ(*movedPath, destination);
+        movedMatchesDestination = movedPath.has_value() && *movedPath == destination;
 
         BasicString<char, NWB::Core::Alloc::GlobalArena> movedText{testArena.arena};
-        EXPECT_TRUE(ReadTextFile(destination, movedText));
-        EXPECT_EQ(AStringView(movedText.data(), movedText.size()), AStringView("fresh"));
-        const auto sourceExists = FileExists(source);
-        ASSERT_TRUE(sourceExists);
-        EXPECT_FALSE(*sourceExists);
-
-        EXPECT_TRUE(RemoveAllIfExists(root));
+        readDestinationOk = ReadTextFile(destination, movedText).has_value();
+        destinationText.assign(AStringView(movedText.data(), movedText.size()));
+        sourceExistsAfterMove = FileExists(source);
+        removedRoot = RemoveAllIfExists(root).has_value();
     }
+
+    ASSERT_TRUE(movedMatchesDestination);
+    ASSERT_TRUE(readDestinationOk);
+    EXPECT_EQ(StringView(destinationText), StringView("fresh"));
+    ASSERT_TRUE(sourceExistsAfterMove.has_value());
+    EXPECT_FALSE(sourceExistsAfterMove.value());
+    EXPECT_TRUE(removedRoot);
 }
 
 void VerifyGlobal_PathViewAccessorsAndSelfAliasingMutationsPreserveBoundariesWithoutExtraAllocations(){
-    native{
+    b8 viewAccessorsMatched = false;
+    b8 multiDotListed = false;
+    b8 hiddenListed = true;
+    u64 baselineUsedBytes = 0u;
+    u64 afterViewsUsedBytes = 1u;
+    b8 selfAliasingMutationsMatched = false;
+
+    native(mut viewAccessorsMatched, mut multiDotListed, mut hiddenListed, mut baselineUsedBytes, mut afterViewsUsedBytes, mut selfAliasingMutationsMatched){
         NWB::Tests::TestArena<> testArena;
         const ::Path<NWB::Core::Alloc::GlobalArena> emptyPath(testArena.arena);
         const ::Path<NWB::Core::Alloc::GlobalArena> rootSlash(testArena.arena, NWB_TEXT("///"));
         const ::Path<NWB::Core::Alloc::GlobalArena> hiddenPath(testArena.arena, NWB_TEXT("dir/.hidden///"));
         const ::Path<NWB::Core::Alloc::GlobalArena> multiDotPath(testArena.arena, NWB_TEXT("alpha/beta/archive.tar.NWB"));
-        const usize baselineUsedBytes = testArena.arena.memoryStats().usedBytes;
+        baselineUsedBytes = testArena.arena.memoryStats().usedBytes;
 
-        EXPECT_TRUE(emptyPath.parentPathView().empty());
-        EXPECT_TRUE(emptyPath.filenameView().empty());
-        EXPECT_TRUE(emptyPath.stemView().empty());
-        EXPECT_TRUE(emptyPath.extensionView().empty());
-        EXPECT_EQ(rootSlash.parentPathView(), TStringView(NWB_TEXT("/")));
-        EXPECT_TRUE(rootSlash.filenameView().empty());
-        EXPECT_EQ(hiddenPath.parentPathView(), TStringView(NWB_TEXT("dir")));
-        EXPECT_EQ(hiddenPath.filenameView(), TStringView(NWB_TEXT(".hidden")));
-        EXPECT_EQ(hiddenPath.stemView(), TStringView(NWB_TEXT(".hidden")));
-        EXPECT_TRUE(hiddenPath.extensionView().empty());
-        EXPECT_EQ(multiDotPath.parentPathView(), TStringView(NWB_TEXT("alpha/beta")));
-        EXPECT_EQ(multiDotPath.filenameView(), TStringView(NWB_TEXT("archive.tar.NWB")));
-        EXPECT_EQ(multiDotPath.stemView(), TStringView(NWB_TEXT("archive.tar")));
-        EXPECT_EQ(multiDotPath.extensionView(), TStringView(NWB_TEXT(".NWB")));
+        viewAccessorsMatched =
+            emptyPath.parentPathView().empty()
+            && emptyPath.filenameView().empty()
+            && emptyPath.stemView().empty()
+            && emptyPath.extensionView().empty()
+            && rootSlash.parentPathView() == TStringView(NWB_TEXT("/"))
+            && rootSlash.filenameView().empty()
+            && hiddenPath.parentPathView() == TStringView(NWB_TEXT("dir"))
+            && hiddenPath.filenameView() == TStringView(NWB_TEXT(".hidden"))
+            && hiddenPath.stemView() == TStringView(NWB_TEXT(".hidden"))
+            && hiddenPath.extensionView().empty()
+            && multiDotPath.parentPathView() == TStringView(NWB_TEXT("alpha/beta"))
+            && multiDotPath.filenameView() == TStringView(NWB_TEXT("archive.tar.NWB"))
+            && multiDotPath.stemView() == TStringView(NWB_TEXT("archive.tar"))
+            && multiDotPath.extensionView() == TStringView(NWB_TEXT(".NWB"))
+        ;
 
         constexpr Array<AStringView, 2u> s_AllowedExtensions = { ".nwb", ".slang" };
-        EXPECT_TRUE(PathHasListedExtension(multiDotPath, s_AllowedExtensions));
-        EXPECT_FALSE(PathHasListedExtension(hiddenPath, s_AllowedExtensions));
-        EXPECT_EQ(testArena.arena.memoryStats().usedBytes, baselineUsedBytes);
+        multiDotListed = PathHasListedExtension(multiDotPath, s_AllowedExtensions);
+        hiddenListed = PathHasListedExtension(hiddenPath, s_AllowedExtensions);
+        afterViewsUsedBytes = testArena.arena.memoryStats().usedBytes;
 
         ::Path<NWB::Core::Alloc::GlobalArena> aliased(
             testArena.arena,
             NWB_TEXT("alpha_segment_0123456789/beta_segment_0123456789/gamma_segment_0123456789/delta.ext")
         );
         aliased += aliased.extensionView();
-        EXPECT_EQ(aliased.filenameView(), TStringView(NWB_TEXT("delta.ext.ext")));
+        const b8 step1 = aliased.filenameView() == TStringView(NWB_TEXT("delta.ext.ext"));
         aliased.replaceExtension(aliased.stemView());
-        EXPECT_EQ(aliased.filenameView(), TStringView(NWB_TEXT("delta.ext.delta.ext")));
+        const b8 step2 = aliased.filenameView() == TStringView(NWB_TEXT("delta.ext.delta.ext"));
         aliased /= aliased.parentPathView();
-        EXPECT_EQ(aliased.filenameView(), TStringView(NWB_TEXT("gamma_segment_0123456789")));
+        const b8 step3 = aliased.filenameView() == TStringView(NWB_TEXT("gamma_segment_0123456789"));
 
         ::Path<NWB::Core::Alloc::GlobalArena> extension(testArena.arena, NWB_TEXT("name.ext"));
         extension.replaceExtension(extension.extensionView());
-        EXPECT_EQ(extension.native(), TStringView(NWB_TEXT("name.ext")));
         ::Path<NWB::Core::Alloc::GlobalArena> filename(testArena.arena, NWB_TEXT("name.ext"));
         filename.replaceExtension(filename.filenameView());
-        EXPECT_EQ(filename.native(), TStringView(NWB_TEXT("name.name.ext")));
         ::Path<NWB::Core::Alloc::GlobalArena> self(testArena.arena, NWB_TEXT("name.ext"));
         self.replaceExtension(self);
-        EXPECT_EQ(self.native(), TStringView(NWB_TEXT("name.name.ext")));
+
+        selfAliasingMutationsMatched =
+            step1
+            && step2
+            && step3
+            && extension.native() == TStringView(NWB_TEXT("name.ext"))
+            && filename.native() == TStringView(NWB_TEXT("name.name.ext"))
+            && self.native() == TStringView(NWB_TEXT("name.name.ext"))
+        ;
     }
+
+    EXPECT_TRUE(viewAccessorsMatched);
+    EXPECT_TRUE(multiDotListed);
+    EXPECT_FALSE(hiddenListed);
+    EXPECT_EQ(afterViewsUsedBytes, baselineUsedBytes);
+    EXPECT_TRUE(selfAliasingMutationsMatched);
 }
 
 void VerifyGlobal_AreSameExistingPathAndAtomicWriteHandleHardLinksAndRejectDirectoryTargets(){
-    native{
+    Expected<b8, ErrorCode> sameSelf = false;
+    Expected<b8, ErrorCode> sameDistinct = true;
+    Expected<b8, ErrorCode> sameMissing = true;
+    b8 hardLinkCreated = false;
+    Expected<b8, ErrorCode> sameHardLink = false;
+    b8 atomicWriteToDirectoryAccepted = true;
+    Expected<b8, ErrorCode> dirStillExists = false;
+    b8 atomicUpdateSucceeded = false;
+    b8 readBackOk = false;
+    String updatedText = "";
+    b8 removedRoot = false;
+
+    native(
+        mut sameSelf,
+        mut sameDistinct,
+        mut sameMissing,
+        mut hardLinkCreated,
+        mut sameHardLink,
+        mut atomicUpdateSucceeded,
+        mut atomicWriteToDirectoryAccepted,
+        mut dirStillExists,
+        mut readBackOk,
+        mut updatedText,
+        mut removedRoot
+    ){
         NWB::Tests::TestArena<> testArena;
         const ::Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/same_existing_and_atomic_write");
         const ::Path<NWB::Core::Alloc::GlobalArena> firstFile = root / "first.txt";
@@ -782,47 +567,59 @@ void VerifyGlobal_AreSameExistingPathAndAtomicWriteHandleHardLinksAndRejectDirec
         ASSERT_TRUE(StagedFileWriter(secondFile).writeTextAtomic(AStringView("distinct")));
         ASSERT_TRUE(EnsureDirectories(directoryTarget));
 
-        const auto sameSelf = PathIdentity(firstFile, firstFile).sameExisting();
-        const auto sameDistinct = PathIdentity(firstFile, secondFile).sameExisting();
-        const auto sameMissing = PathIdentity(firstFile, missingFile).sameExisting();
-        ASSERT_TRUE(sameSelf);
-        ASSERT_TRUE(sameDistinct);
-        ASSERT_TRUE(sameMissing);
-        EXPECT_TRUE(*sameSelf);
-        EXPECT_FALSE(*sameDistinct);
-        EXPECT_FALSE(*sameMissing);
+        sameSelf = PathIdentity(firstFile, firstFile).sameExisting();
+        sameDistinct = PathIdentity(firstFile, secondFile).sameExisting();
+        sameMissing = PathIdentity(firstFile, missingFile).sameExisting();
 
 #if defined(NWB_PLATFORM_WINDOWS)
-        if(CreateHardLink(hardLinkFile.c_str(), firstFile.c_str(), nullptr) != 0){
-            const auto sameHardLink = PathIdentity(firstFile, hardLinkFile).sameExisting();
-            ASSERT_TRUE(sameHardLink);
-            EXPECT_TRUE(*sameHardLink);
-        }
+        hardLinkCreated = CreateHardLink(hardLinkFile.c_str(), firstFile.c_str(), nullptr) != 0;
 #else
-        if(::link(firstFile.c_str(), hardLinkFile.c_str()) == 0){
-            const auto sameHardLink = PathIdentity(firstFile, hardLinkFile).sameExisting();
-            ASSERT_TRUE(sameHardLink);
-            EXPECT_TRUE(*sameHardLink);
-        }
+        hardLinkCreated = ::link(firstFile.c_str(), hardLinkFile.c_str()) == 0;
 #endif
+        if(hardLinkCreated)
+            sameHardLink = PathIdentity(firstFile, hardLinkFile).sameExisting();
 
-        EXPECT_FALSE(StagedFileWriter(directoryTarget).writeTextAtomic(AStringView("must_fail")));
-        const auto dirStillExists = IsDirectory(directoryTarget);
-        ASSERT_TRUE(dirStillExists);
-        EXPECT_TRUE(*dirStillExists);
+        atomicWriteToDirectoryAccepted = StagedFileWriter(directoryTarget).writeTextAtomic(AStringView("must_fail"));
+        dirStillExists = IsDirectory(directoryTarget);
 
-        ASSERT_TRUE(StagedFileWriter(firstFile).writeTextAtomic(AStringView("updated_atomically")));
+        atomicUpdateSucceeded = StagedFileWriter(firstFile).writeTextAtomic(AStringView("updated_atomically"));
         ::AString<NWB::Core::Alloc::GlobalArena> readBack(testArena.arena);
-        ASSERT_TRUE(ReadTextFile(firstFile, readBack));
-        EXPECT_EQ(AStringView(readBack.data(), readBack.size()), AStringView("updated_atomically"));
-
-        EXPECT_TRUE(RemoveAllIfExists(root));
+        readBackOk = ReadTextFile(firstFile, readBack).has_value();
+        updatedText.assign(AStringView(readBack.data(), readBack.size()));
+        removedRoot = RemoveAllIfExists(root).has_value();
     }
+
+    ASSERT_TRUE(sameSelf.has_value());
+    ASSERT_TRUE(sameDistinct.has_value());
+    ASSERT_TRUE(sameMissing.has_value());
+    EXPECT_TRUE(sameSelf.value());
+    EXPECT_FALSE(sameDistinct.value());
+    EXPECT_FALSE(sameMissing.value());
+    if(hardLinkCreated){
+        ASSERT_TRUE(sameHardLink.has_value());
+        EXPECT_TRUE(sameHardLink.value());
+    }
+    EXPECT_FALSE(atomicWriteToDirectoryAccepted);
+    ASSERT_TRUE(dirStillExists.has_value());
+    EXPECT_TRUE(dirStillExists.value());
+    ASSERT_TRUE(atomicUpdateSucceeded);
+    ASSERT_TRUE(readBackOk);
+    EXPECT_EQ(StringView(updatedText), StringView("updated_atomically"));
+    EXPECT_TRUE(removedRoot);
 }
 
 void VerifyGlobal_RecursiveDirectoryIteratorDoesNotFollowDirectorySymlinks(){
-    native{
+    b8 linuxSupported = false;
+    Expected<b8, ErrorCode> followed = false;
+    Expected<b8, ErrorCode> noFollow = true;
+    b8 iteratorCreated = false;
+    usize entryCount = 0u;
+    b8 allEntriesNonEmpty = true;
+    b8 removedRoot = false;
+
+    native(mut linuxSupported, mut followed, mut noFollow, mut iteratorCreated, mut entryCount, mut allEntriesNonEmpty, mut removedRoot){
 #if defined(NWB_PLATFORM_LINUX)
+        linuxSupported = true;
         NWB::Tests::TestArena<> testArena;
         const ::Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/recursive_directory_iterator_links");
         const ::Path<NWB::Core::Alloc::GlobalArena> regularFile = root / "regular.txt";
@@ -832,30 +629,42 @@ void VerifyGlobal_RecursiveDirectoryIteratorDoesNotFollowDirectorySymlinks(){
         ASSERT_TRUE(WriteTextFile(regularFile, AStringView("regular")));
         ASSERT_EQ(::symlink(".", directoryLink.c_str()), 0);
 
-        const auto followed = IsDirectory(directoryLink);
-        const auto noFollow = IsDirectoryNoFollow(directoryLink);
-        ASSERT_TRUE(followed);
-        ASSERT_TRUE(noFollow);
-        EXPECT_TRUE(*followed);
-        EXPECT_FALSE(*noFollow);
+        followed = IsDirectory(directoryLink);
+        noFollow = IsDirectoryNoFollow(directoryLink);
 
         const auto directory = RecursiveDirectoryIterator<NWB::Core::Alloc::GlobalArena>::Create(root);
-        ASSERT_TRUE(directory);
-
-        usize entryCount = 0u;
-        for(const auto& entry : *directory){
-            EXPECT_FALSE(entry.path().empty());
-            ++entryCount;
+        iteratorCreated = directory.has_value();
+        if(directory){
+            for(const auto& entry : *directory){
+                allEntriesNonEmpty = allEntriesNonEmpty && !entry.path().empty();
+                ++entryCount;
+            }
         }
-        EXPECT_EQ(entryCount, 2u);
-
-        EXPECT_TRUE(RemoveAllIfExists(root));
+        removedRoot = RemoveAllIfExists(root).has_value();
 #endif
     }
+
+    if(!linuxSupported)
+        return;
+
+    ASSERT_TRUE(followed.has_value());
+    ASSERT_TRUE(noFollow.has_value());
+    EXPECT_TRUE(followed.value());
+    EXPECT_FALSE(noFollow.value());
+    ASSERT_TRUE(iteratorCreated);
+    EXPECT_TRUE(allEntriesNonEmpty);
+    EXPECT_EQ(entryCount, 2u);
+    EXPECT_TRUE(removedRoot);
 }
 
 void VerifyGlobal_ProcessArgumentValidationPreservesExistingOutput(){
-    native{
+    b8 embeddedNullRunAccepted = true;
+    b8 emptyArgvRunAccepted = true;
+    b8 readBackOk = false;
+    String retainedOutput = "";
+    b8 removedRoot = false;
+
+    native(mut embeddedNullRunAccepted, mut emptyArgvRunAccepted, mut readBackOk, mut retainedOutput, mut removedRoot){
         NWB::Tests::TestArena<> testArena;
         const ::Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/invalid_process_arguments");
         const auto outputPath = root / "output.txt";
@@ -865,20 +674,35 @@ void VerifyGlobal_ProcessArgumentValidationPreservesExistingOutput(){
 
         const Array<char, 3u> invalidArgument = { 'a', '\0', 'b' };
         const Array<AStringView, 2u> arguments = { "unused_program", AStringView(invalidArgument.data(), invalidArgument.size()) };
-        EXPECT_FALSE(RunProcessRedirectedToFile(testArena.arena, arguments, AStringView(outputPathText)));
-        EXPECT_FALSE(RunProcessRedirectedToFile(testArena.arena, {}, AStringView(outputPathText)));
+        embeddedNullRunAccepted = RunProcessRedirectedToFile(testArena.arena, arguments, AStringView(outputPathText)).has_value();
+        emptyArgvRunAccepted = RunProcessRedirectedToFile(testArena.arena, {}, AStringView(outputPathText)).has_value();
         NWB::Tests::TestAString output(testArena.arena);
-        ASSERT_TRUE(ReadTextFile(outputPath, output));
-        EXPECT_EQ(output, "retained");
-        EXPECT_TRUE(RemoveAllIfExists(root));
+        readBackOk = ReadTextFile(outputPath, output).has_value();
+        retainedOutput.assign(AStringView(output));
+        removedRoot = RemoveAllIfExists(root).has_value();
     }
+
+    EXPECT_FALSE(embeddedNullRunAccepted);
+    EXPECT_FALSE(emptyArgvRunAccepted);
+    ASSERT_TRUE(readBackOk);
+    EXPECT_EQ(StringView(retainedOutput), StringView("retained"));
+    EXPECT_TRUE(removedRoot);
 }
 
 void VerifyGlobal_WindowsProcessInputsSupportBoundedViews(){
     const StringView trailingSuffix = s_GlobalProcessTrailingSuffix;
     const StringView combinedFilename = s_GlobalProcessCombinedOutputFilename;
-    native(in trailingSuffix, in combinedFilename){
+    b8 windowsSupported = false;
+    Expected<b8, ErrorCode> executableAvailable = false;
+    b8 runSucceeded = false;
+    i32 exitCodeValue = 0;
+    b8 readOutputOk = false;
+    String outputText = "";
+    b8 removedRoot = false;
+
+    native(in trailingSuffix, in combinedFilename, mut windowsSupported, mut executableAvailable, mut runSucceeded, mut exitCodeValue, mut readOutputOk, mut outputText, mut removedRoot){
 #if defined(NWB_PLATFORM_WINDOWS)
+        windowsSupported = true;
         NWB::Tests::TestArena<> testArena;
         auto executableResult = ReadEnvironmentVariable(testArena.arena, "ComSpec");
         ASSERT_TRUE(executableResult);
@@ -891,9 +715,7 @@ void VerifyGlobal_WindowsProcessInputsSupportBoundedViews(){
         const usize executableNameLength = executableNameText.size();
         searchPathText += trailingSuffix;
         executableNameText += trailingSuffix;
-        const auto executableAvailable = ExecutableAvailableInPath(testArena.arena, AStringView(searchPathText).substr(0u, searchPathLength), AStringView(executableNameText).substr(0u, executableNameLength));
-        ASSERT_TRUE(executableAvailable);
-        EXPECT_TRUE(*executableAvailable);
+        executableAvailable = ExecutableAvailableInPath(testArena.arena, AStringView(searchPathText).substr(0u, searchPathLength), AStringView(executableNameText).substr(0u, executableNameLength));
 
         const ::Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/bounded_process");
         const auto outputPath = root / combinedFilename;
@@ -905,112 +727,183 @@ void VerifyGlobal_WindowsProcessInputsSupportBoundedViews(){
         executableText += trailingSuffix;
         const Array<AStringView, 3u> arguments = { AStringView(executableText).substr(0u, executableLength), "/c", "echo stdout&echo stderr 1>&2&exit /b 23" };
         const auto exitCode = RunProcessRedirectedToFile(testArena.arena, arguments, AStringView(outputPathText).substr(0u, outputPathLength));
-        ASSERT_TRUE(exitCode);
-        EXPECT_EQ(*exitCode, 23);
+        runSucceeded = exitCode.has_value();
+        if(exitCode)
+            exitCodeValue = *exitCode;
         ::AString<NWB::Core::Alloc::GlobalArena> output(testArena.arena);
-        ASSERT_TRUE(ReadTextFile(outputPath, output));
-        EXPECT_NE(AStringView(output).find("stdout"), AStringView::npos);
-        EXPECT_NE(AStringView(output).find("stderr"), AStringView::npos);
-        EXPECT_TRUE(RemoveAllIfExists(root));
+        readOutputOk = ReadTextFile(outputPath, output).has_value();
+        outputText.assign(AStringView(output));
+        removedRoot = RemoveAllIfExists(root).has_value();
 #else
-        (void)trailingSuffix;
-        (void)combinedFilename;
+        static_cast<void>(trailingSuffix);
+        static_cast<void>(combinedFilename);
 #endif
     }
+
+    if(!windowsSupported)
+        return;
+
+    ASSERT_TRUE(executableAvailable.has_value());
+    EXPECT_TRUE(executableAvailable.value());
+    ASSERT_TRUE(runSucceeded);
+    EXPECT_EQ(exitCodeValue, 23);
+    ASSERT_TRUE(readOutputOk);
+    EXPECT_LT(outputText.find("stdout"), outputText.size());
+    EXPECT_LT(outputText.find("stderr"), outputText.size());
+    EXPECT_TRUE(removedRoot);
 }
 
 void VerifyGlobal_CaptureProcessOutputAdmitsEmptySuccessAndPreservesExitFailure(){
     const StringView binSh = s_GlobalProcessBinSh;
     const StringView cFlag = s_GlobalProcessCFlag;
-    native(in binSh, in cFlag){
+    b8 linuxSupported = false;
+    b8 invalidRejected = false;
+    b8 emptyCaptureSucceeded = false;
+    b8 emptyOutputWasEmpty = false;
+    b8 failedChildRejected = false;
+    i32 failedExitCode = 0;
+    String retainedChildStdout = "";
+
+    native(in binSh, in cFlag, mut linuxSupported, mut invalidRejected, mut emptyCaptureSucceeded, mut emptyOutputWasEmpty, mut failedChildRejected, mut failedExitCode, mut retainedChildStdout){
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+        linuxSupported = true;
         NWB::Tests::TestArena<> testArena;
         NWB::Tests::TestAString output(testArena.arena);
         const auto invalid = CaptureProcessOutput(output, testArena.arena, {});
-        ASSERT_FALSE(invalid);
-        EXPECT_EQ(invalid.error().kind, ProcessCaptureFailureKind::InvalidArguments);
-        EXPECT_EQ(invalid.error().nativeError, ErrorCondition::invalid_argument);
+        invalidRejected = !invalid && invalid.error().kind == ProcessCaptureFailureKind::InvalidArguments && invalid.error().nativeError == ErrorCondition::invalid_argument;
         const Array<AStringView, 3u> emptyArguments = { binSh, cFlag, "exit 0" };
-        ASSERT_TRUE(CaptureProcessOutput(output, testArena.arena, emptyArguments));
-        EXPECT_TRUE(output.empty());
+        emptyCaptureSucceeded = CaptureProcessOutput(output, testArena.arena, emptyArguments).has_value();
+        emptyOutputWasEmpty = output.empty();
         const Array<AStringView, 3u> failedArguments = { binSh, cFlag, "printf retained; exit 23" };
         const auto failed = CaptureProcessOutput(output, testArena.arena, failedArguments);
-        ASSERT_FALSE(failed);
-        EXPECT_EQ(failed.error().kind, ProcessCaptureFailureKind::ChildExitedUnsuccessfully);
-        EXPECT_EQ(failed.error().exitCode, 23);
-        EXPECT_EQ(AStringView(output), "retained");
+        if(!failed){
+            failedChildRejected = failed.error().kind == ProcessCaptureFailureKind::ChildExitedUnsuccessfully;
+            failedExitCode = failed.error().exitCode;
+        }
+        retainedChildStdout.assign(AStringView(output));
 #else
-        (void)binSh;
-        (void)cFlag;
+        static_cast<void>(binSh);
+        static_cast<void>(cFlag);
 #endif
     }
+
+    if(!linuxSupported)
+        return;
+
+    EXPECT_TRUE(invalidRejected);
+    ASSERT_TRUE(emptyCaptureSucceeded);
+    EXPECT_TRUE(emptyOutputWasEmpty);
+    ASSERT_TRUE(failedChildRejected);
+    EXPECT_EQ(failedExitCode, 23);
+    EXPECT_EQ(StringView(retainedChildStdout), StringView("retained"));
 }
 
 void VerifyGlobal_CaptureProcessOutputAppendFailureClosesPipeAndReapsChildBeforeUnwinding(){
     const StringView binSh = s_GlobalProcessBinSh;
     const StringView cFlag = s_GlobalProcessCFlag;
     const u32 captureTimeoutMS = s_GlobalProcessCaptureTimeoutMS;
-    native(in binSh, in cFlag, in captureTimeoutMS){
+    b8 linuxSupported = false;
+    i64 childPidValue = 0;
+    i64 waitResultValue = 0;
+    b8 waitReportedNoChild = false;
+
+    native(in binSh, in cFlag, in captureTimeoutMS, mut linuxSupported, mut childPidValue, mut waitResultValue, mut waitReportedNoChild){
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
         using namespace __hidden_process_execution_boundary_tests;
+        linuxSupported = true;
         const Array<AStringView, 3u> argv = { binSh, cFlag, "printf '%s\\n' \"$$\"; exec 1>&-; while :; do :; done" };
         NWB::Tests::TestArena<> testArena;
         ThrowingCaptureOutput output;
         EXPECT_THROW(EXPECT_FALSE(CaptureProcessOutput(output, testArena.arena, argv, 64u, 64u, captureTimeoutMS)), RuntimeException);
-        ASSERT_GT(output.childPid, 0);
-        int status = 0;
-        errno = 0;
-        const pid_t waitResult = ::waitpid(output.childPid, &status, WNOHANG);
-        const int waitError = errno;
-        if(waitResult == 0)
-            ProcessExecutionDetail::KillAndReapProcess(output.childPid);
-        EXPECT_EQ(waitResult, -1);
-        EXPECT_EQ(waitError, ECHILD);
+        childPidValue = static_cast<i64>(output.childPid);
+        if(output.childPid > 0){
+            int status = 0;
+            errno = 0;
+            const pid_t waitResult = ::waitpid(output.childPid, &status, WNOHANG);
+            const int waitError = errno;
+            if(waitResult == 0)
+                ProcessExecutionDetail::KillAndReapProcess(output.childPid);
+            waitResultValue = static_cast<i64>(waitResult);
+            waitReportedNoChild = waitError == ECHILD;
+        }
 #else
-        (void)binSh;
-        (void)cFlag;
-        (void)captureTimeoutMS;
+        static_cast<void>(binSh);
+        static_cast<void>(cFlag);
+        static_cast<void>(captureTimeoutMS);
 #endif
     }
+
+    if(!linuxSupported)
+        return;
+
+    ASSERT_GT(childPidValue, 0);
+    EXPECT_EQ(waitResultValue, -1);
+    EXPECT_TRUE(waitReportedNoChild);
 }
 
 void VerifyGlobal_CaptureProcessOutputReapsTruncatedChild(){
     const StringView binSh = s_GlobalProcessBinSh;
     const StringView cFlag = s_GlobalProcessCFlag;
     const u32 captureTimeoutMS = s_GlobalProcessCaptureTimeoutMS;
-    native(in binSh, in cFlag, in captureTimeoutMS){
+    b8 linuxSupported = false;
+    b8 truncatedFailed = false;
+    b8 outputMarkedTruncated = false;
+    String capturedPrefix = "";
+    u64 pidMaxLimit = 0u;
+
+    native(in binSh, in cFlag, in captureTimeoutMS, mut linuxSupported, mut truncatedFailed, mut outputMarkedTruncated, mut capturedPrefix, mut pidMaxLimit){
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+        linuxSupported = true;
+        pidMaxLimit = static_cast<u64>(Limit<pid_t>::s_Max);
         const Array<AStringView, 3u> argv = { binSh, cFlag, "printf '%s\\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' \"$$\"; exec 1>&-; while :; do :; done" };
         NWB::Tests::TestArena<> testArena;
         NWB::Tests::TestAString output(testArena.arena);
         const auto captured = CaptureProcessOutput(output, testArena.arena, argv, 16u, 64u, captureTimeoutMS);
-        ASSERT_FALSE(captured);
-        EXPECT_TRUE(captured.error().outputTruncated);
+        truncatedFailed = !captured.has_value();
+        if(!captured)
+            outputMarkedTruncated = captured.error().outputTruncated;
+        capturedPrefix.assign(AStringView(output));
+#else
+        static_cast<void>(binSh);
+        static_cast<void>(cFlag);
+        static_cast<void>(captureTimeoutMS);
+#endif
+    }
 
-        const usize lineEnd = output.find('\n');
-        ASSERT_NE(lineEnd, NWB::Tests::TestAString::npos);
+    if(!linuxSupported)
+        return;
 
-        const auto childPidValue = ParseU64(AStringView(output.data(), lineEnd));
-        ASSERT_TRUE(childPidValue);
-        ASSERT_GT(*childPidValue, 0u);
-        ASSERT_LE(*childPidValue, static_cast<u64>(Limit<pid_t>::s_Max));
+    ASSERT_TRUE(truncatedFailed);
+    EXPECT_TRUE(outputMarkedTruncated);
+    const StringView prefixView = capturedPrefix;
+    const usize lineEnd = prefixView.find("\n");
+    ASSERT_LT(lineEnd, prefixView.size());
+    const Expected<u64> childPidParsed = ParseU64(prefixView.substr(0u, lineEnd));
+    ASSERT_TRUE(childPidParsed.has_value());
+    const u64 parsedPid = childPidParsed.value();
+    ASSERT_GT(parsedPid, 0u);
+    ASSERT_LE(parsedPid, pidMaxLimit);
 
-        const pid_t childPid = static_cast<pid_t>(*childPidValue);
+    i64 waitResultValue = 0;
+    b8 waitReportedNoChild = false;
+    native(in parsedPid, mut waitResultValue, mut waitReportedNoChild){
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+        const pid_t childPid = static_cast<pid_t>(parsedPid);
         int status = 0;
         errno = 0;
         const pid_t waitResult = ::waitpid(childPid, &status, WNOHANG);
         const int waitError = errno;
         if(waitResult == 0)
             ProcessExecutionDetail::KillAndReapProcess(childPid);
-
-        EXPECT_EQ(waitResult, -1);
-        EXPECT_EQ(waitError, ECHILD);
+        waitResultValue = static_cast<i64>(waitResult);
+        waitReportedNoChild = waitError == ECHILD;
 #else
-        (void)binSh;
-        (void)cFlag;
-        (void)captureTimeoutMS;
+        static_cast<void>(parsedPid);
 #endif
     }
+
+    EXPECT_EQ(waitResultValue, -1);
+    EXPECT_TRUE(waitReportedNoChild);
 }
 
 void VerifyGlobal_CaptureProcessOutputTimesOutWithContinuousOutput(){
@@ -1018,533 +911,203 @@ void VerifyGlobal_CaptureProcessOutputTimesOutWithContinuousOutput(){
     const StringView cFlag = s_GlobalProcessCFlag;
     const u32 continuousTimeoutMS = s_GlobalProcessContinuousOutputTimeoutMS;
     const u32 maxElapsedMS = s_GlobalProcessMaximumCaptureElapsedMS;
-    native(in binSh, in cFlag, in continuousTimeoutMS, in maxElapsedMS){
+    b8 linuxSupported = false;
+    b8 haveTimestamps = false;
+    b8 timedOutMatched = false;
+    u64 startMS = 0u;
+    u64 finishMS = 0u;
+
+    native(in binSh, in cFlag, in continuousTimeoutMS, mut linuxSupported, mut haveTimestamps, mut timedOutMatched, mut startMS, mut finishMS){
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+        linuxSupported = true;
         const Array<AStringView, 3u> argv = { binSh, cFlag, "while :; do printf x; done" };
         NWB::Tests::TestArena<> testArena;
         NWB::Tests::TestAString output(testArena.arena);
         const auto startMilliseconds = ProcessExecutionDetail::MonotonicMilliseconds();
-        ASSERT_TRUE(startMilliseconds);
         const auto captured = CaptureProcessOutput(output, testArena.arena, argv, 64u, 64u, continuousTimeoutMS);
-        ASSERT_FALSE(captured);
-        EXPECT_EQ(captured.error().kind, ProcessCaptureFailureKind::TimedOut);
-        EXPECT_EQ(captured.error().nativeError, ErrorCondition::timed_out);
         const auto finishMilliseconds = ProcessExecutionDetail::MonotonicMilliseconds();
-        ASSERT_TRUE(finishMilliseconds);
-        ASSERT_GE(*finishMilliseconds, *startMilliseconds);
-        const u64 elapsedMilliseconds = *finishMilliseconds - *startMilliseconds;
-        EXPECT_LT(elapsedMilliseconds, maxElapsedMS);
+        haveTimestamps = startMilliseconds.has_value() && finishMilliseconds.has_value();
+        if(haveTimestamps){
+            startMS = *startMilliseconds;
+            finishMS = *finishMilliseconds;
+        }
+        timedOutMatched = !captured && captured.error().kind == ProcessCaptureFailureKind::TimedOut && captured.error().nativeError == ErrorCondition::timed_out;
 #else
-        (void)binSh;
-        (void)cFlag;
-        (void)continuousTimeoutMS;
-        (void)maxElapsedMS;
+        static_cast<void>(binSh);
+        static_cast<void>(cFlag);
+        static_cast<void>(continuousTimeoutMS);
 #endif
     }
+
+    if(!linuxSupported)
+        return;
+
+    ASSERT_TRUE(haveTimestamps);
+    EXPECT_TRUE(timedOutMatched);
+    ASSERT_GE(finishMS, startMS);
+    const u64 elapsedMS = finishMS - startMS;
+    EXPECT_LT(elapsedMS, cast<u64>(maxElapsedMS));
 }
 
 void VerifyGlobal_RedirectedNonzeroExitAndInvalidArgumentsPreserveCapturedStreams(){
     const StringView binSh = s_GlobalProcessBinSh;
     const StringView cFlag = s_GlobalProcessCFlag;
     const StringView combinedFilename = s_GlobalProcessCombinedOutputFilename;
-    native(in binSh, in cFlag, in combinedFilename){
+    const StringView boundedScript = StringView("printf stdout; printf stderr >&2; exit 23; printf ignored").substr(0u, 41u);
+    b8 linuxSupported = false;
+    b8 runSucceeded = false;
+    i32 exitCodeValue = 0;
+    b8 emptyRedirectAccepted = true;
+    b8 readBackOk = false;
+    String capturedCombined = "";
+    b8 removedRoot = false;
+
+    native(in binSh, in cFlag, in combinedFilename, in boundedScript, mut linuxSupported, mut runSucceeded, mut exitCodeValue, mut emptyRedirectAccepted, mut readBackOk, mut capturedCombined, mut removedRoot){
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+        linuxSupported = true;
         NWB::Tests::TestArena<> testArena;
         const ::Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/redirected_process");
         const ::Path<NWB::Core::Alloc::GlobalArena> outputPath = root / combinedFilename;
         ASSERT_TRUE(EnsureEmptyDirectory(root));
         ASSERT_TRUE(WriteTextFile(outputPath, AStringView("stale")));
 
-        const Array<AStringView, 3u> argv = { binSh, cFlag, AStringView("printf stdout; printf stderr >&2; exit 23; printf ignored").substr(0u, 41u) };
+        const Array<AStringView, 3u> argv = { binSh, cFlag, boundedScript };
         const auto outputPathText = PathToString<char>(testArena.arena, outputPath);
         const auto exitCode = RunProcessRedirectedToFile(testArena.arena, argv, AStringView(outputPathText));
-        ASSERT_TRUE(exitCode);
-        EXPECT_EQ(*exitCode, 23);
-        EXPECT_FALSE(RunProcessRedirectedToFile(testArena.arena, {}, AStringView(outputPathText)));
+        runSucceeded = exitCode.has_value();
+        if(exitCode)
+            exitCodeValue = *exitCode;
+        emptyRedirectAccepted = RunProcessRedirectedToFile(testArena.arena, {}, AStringView(outputPathText)).has_value();
 
         NWB::Tests::TestAString output;
-        ASSERT_TRUE(ReadTextFile(outputPath, output));
-        EXPECT_EQ(AStringView(output.data(), output.size()), AStringView("stdoutstderr"));
-        EXPECT_TRUE(RemoveAllIfExists(root));
+        readBackOk = ReadTextFile(outputPath, output).has_value();
+        capturedCombined.assign(AStringView(output.data(), output.size()));
+        removedRoot = RemoveAllIfExists(root).has_value();
 #else
-        (void)binSh;
-        (void)cFlag;
-        (void)combinedFilename;
+        static_cast<void>(binSh);
+        static_cast<void>(cFlag);
+        static_cast<void>(combinedFilename);
+        static_cast<void>(boundedScript);
 #endif
     }
+
+    if(!linuxSupported)
+        return;
+
+    ASSERT_TRUE(runSucceeded);
+    EXPECT_EQ(exitCodeValue, 23);
+    EXPECT_FALSE(emptyRedirectAccepted);
+    ASSERT_TRUE(readBackOk);
+    EXPECT_EQ(StringView(capturedCombined), StringView("stdoutstderr"));
+    EXPECT_TRUE(removedRoot);
 }
 
 void VerifyGlobal_SharedLibraryAcceptsBoundedNamesAndRejectsInvalidSymbols(){
-    native{
+    b8 windowsSupported = false;
+    b8 openedKernel = false;
+    b8 resolvedPidMatches = false;
+    b8 invalidSymbolRejected = false;
+    b8 missingSymbolRejected = false;
+    b8 remainedOpen = false;
+
+    native(mut windowsSupported, mut openedKernel, mut resolvedPidMatches, mut invalidSymbolRejected, mut missingSymbolRejected, mut remainedOpen){
 #if defined(NWB_PLATFORM_WINDOWS)
+        windowsSupported = true;
         NWB::Tests::TestArena<> testArena;
         SharedLibrary library;
         constexpr TStringView s_LibraryName = NWB_TEXT("kernel32.dll.trailing");
-        ASSERT_TRUE(library.open(testArena.arena, s_LibraryName.substr(0u, 12u)));
-        using CurrentProcessIdFn = DWORD(WINAPI*)();
-        const auto currentProcessId = library.resolve<CurrentProcessIdFn>(testArena.arena, AStringView("GetCurrentProcessId.trailing").substr(0u, 19u));
-        ASSERT_TRUE(currentProcessId);
-        EXPECT_EQ((*currentProcessId)(), ::GetCurrentProcessId());
+        openedKernel = library.open(testArena.arena, s_LibraryName.substr(0u, 12u)).has_value();
+        if(openedKernel){
+            using CurrentProcessIdFn = DWORD(WINAPI*)();
+            const auto currentProcessId = library.resolve<CurrentProcessIdFn>(testArena.arena, AStringView("GetCurrentProcessId.trailing").substr(0u, 19u));
+            resolvedPidMatches = currentProcessId.has_value() && (*currentProcessId)() == ::GetCurrentProcessId();
 
-        const Array<char, 3u> invalidSymbol = { 'G', '\0', 'e' };
-        const auto invalid = library.resolve<CurrentProcessIdFn>(testArena.arena, AStringView(invalidSymbol.data(), invalidSymbol.size()));
-        ASSERT_FALSE(invalid);
-        EXPECT_EQ(invalid.error().code, MakeErrorCode(ErrorCondition::invalid_argument));
-        const auto missing = library.resolve<CurrentProcessIdFn>(testArena.arena, "nwb_missing_symbol_bec2119d19ec4c48");
-        ASSERT_FALSE(missing);
-        EXPECT_NE(missing.error().code.value(), 0);
-        EXPECT_TRUE(library.isOpen());
+            const Array<char, 3u> invalidSymbol = { 'G', '\0', 'e' };
+            const auto invalid = library.resolve<CurrentProcessIdFn>(testArena.arena, AStringView(invalidSymbol.data(), invalidSymbol.size()));
+            invalidSymbolRejected = !invalid && invalid.error().code == MakeErrorCode(ErrorCondition::invalid_argument);
+            const auto missing = library.resolve<CurrentProcessIdFn>(testArena.arena, "nwb_missing_symbol_bec2119d19ec4c48");
+            missingSymbolRejected = !missing && missing.error().code.value() != 0;
+            remainedOpen = library.isOpen();
+        }
 #endif
     }
+
+    if(!windowsSupported)
+        return;
+
+    ASSERT_TRUE(openedKernel);
+    EXPECT_TRUE(resolvedPidMatches);
+    EXPECT_TRUE(invalidSymbolRejected);
+    EXPECT_TRUE(missingSymbolRejected);
+    EXPECT_TRUE(remainedOpen);
 }
 
 void VerifyGlobal_SharedLibraryInvalidNamePreservesNativeFailureStatusWithoutOpening(){
-    native{
+    SharedLibrary library = SharedLibrary();
+    b8 emptyNameRejected = false;
+    b8 openAfterEmpty = true;
+    b8 missingLibraryFailed = false;
+    i32 missingErrorCode = 0;
+    b8 nonWindowsBuild = false;
+    StringView missingDetailView = StringView();
+
+    native(mut library, mut emptyNameRejected, mut openAfterEmpty, mut missingLibraryFailed, mut missingErrorCode, mut nonWindowsBuild, mut missingDetailView){
         NWB::Tests::TestArena<> testArena;
-        SharedLibrary library;
         const auto invalid = library.open(testArena.arena, TStringView{});
-        ASSERT_FALSE(invalid);
-        EXPECT_EQ(invalid.error().code, MakeErrorCode(ErrorCondition::invalid_argument));
-        EXPECT_FALSE(library.isOpen());
+        emptyNameRejected = !invalid && invalid.error().code == MakeErrorCode(ErrorCondition::invalid_argument);
+        openAfterEmpty = library.isOpen();
         const auto missing = library.open(testArena.arena, NWB_TEXT("nwb_contract_missing_library_6ee251a68fe246b0"));
-        ASSERT_FALSE(missing);
-        EXPECT_NE(missing.error().code.value(), 0);
+        missingLibraryFailed = !missing.has_value();
+        if(!missing){
+            missingErrorCode = missing.error().code.value();
 #if !defined(NWB_PLATFORM_WINDOWS)
-        EXPECT_FALSE(missing.error().detail.view().empty());
+            nonWindowsBuild = true;
+            missingDetailView = missing.error().detail.view();
 #endif
-        EXPECT_FALSE(library.isOpen());
+        }
     }
+
+    EXPECT_TRUE(emptyNameRejected);
+    EXPECT_FALSE(openAfterEmpty);
+    ASSERT_TRUE(missingLibraryFailed);
+    EXPECT_NE(missingErrorCode, 0);
+    if(nonWindowsBuild)
+        EXPECT_FALSE(missingDetailView.empty());
+    EXPECT_FALSE(library.isOpen());
 }
 
 void VerifyGlobal_MemoryMapLookupUsesHalfOpenRangesAndRejectsMissingAddresses(){
-    native{
-        NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
-        constexpr AStringView s_Maps = "00001000-00002000 r-xp 00000020 00:00 0 /tmp/first.so\n" "00003000-00004000 r--p 00000000 00:00 0 /tmp/second.so\n";
-        ::Vector<LinuxProcessMemoryMapEntry, NWB::Core::Alloc::ScratchArena> entries(scratchArena);
-        entries.reserve(2u);
-        ParseLinuxProcessMemoryMaps(s_Maps, entries);
-        ASSERT_EQ(entries.size(), 2u);
-        const auto first = FindLinuxProcessMemoryMapForAddress(entries, 0x1000u);
-        const auto last = FindLinuxProcessMemoryMapForAddress(entries, 0x3fffu);
-        ASSERT_TRUE(first);
-        ASSERT_TRUE(last);
-        EXPECT_EQ(first->path, AStringView("/tmp/first.so"));
-        EXPECT_EQ(last->path, AStringView("/tmp/second.so"));
-        EXPECT_FALSE(FindLinuxProcessMemoryMapForAddress(entries, 0x2000u));
-    }
+    const StringView mapsText = "00001000-00002000 r-xp 00000020 00:00 0 /tmp/first.so\n00003000-00004000 r--p 00000000 00:00 0 /tmp/second.so\n";
+    Vector<LinuxProcessMemoryMapEntry> entries = Vector<LinuxProcessMemoryMapEntry>();
+    entries.reserve(2u);
+    ParseLinuxProcessMemoryMaps(mapsText, entries);
+    ASSERT_EQ(entries.size(), 2u);
+
+    const Expected<LinuxProcessMemoryMapEntry> first = FindLinuxProcessMemoryMapForAddress(entries, 0x1000u);
+    const Expected<LinuxProcessMemoryMapEntry> last = FindLinuxProcessMemoryMapForAddress(entries, 0x3fffu);
+    ASSERT_TRUE(first.has_value());
+    ASSERT_TRUE(last.has_value());
+    EXPECT_EQ(first.value().path, StringView("/tmp/first.so"));
+    EXPECT_EQ(last.value().path, StringView("/tmp/second.so"));
+    EXPECT_FALSE(FindLinuxProcessMemoryMapForAddress(entries, 0x2000u).has_value());
 }
 
 void VerifyGlobal_MemoryMapRejectsMalformedOffsetsWithoutDiscardingValidNeighbors(){
-    native{
-        NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
-        constexpr AStringView s_Maps = "1000-2000 r-xp 0 00:00 0 /valid\n" "2000-3000 r-xp invalid 00:00 0 /bad\n" "3000-4000 r-xp 10000000000000000 00:00 0 /overflow\n" "4000-5000 r--p 20 00:00 0\n";
-        ::Vector<LinuxProcessMemoryMapEntry, NWB::Core::Alloc::ScratchArena> entries(scratchArena);
-        ParseLinuxProcessMemoryMaps(s_Maps, entries);
-        ASSERT_EQ(entries.size(), 2u);
-        EXPECT_EQ(entries[0].fileOffset, 0u);
-        EXPECT_EQ(entries[1].fileOffset, 0x20u);
-        EXPECT_TRUE(entries[1].path.empty());
-        EXPECT_FALSE(FindLinuxProcessMemoryMapForAddress(entries, 0x2000u));
-        EXPECT_FALSE(FindLinuxProcessMemoryMapForAddress(entries, 0x3000u));
-    }
+    const StringView mapsText = "1000-2000 r-xp 0 00:00 0 /valid\n2000-3000 r-xp invalid 00:00 0 /bad\n3000-4000 r-xp 10000000000000000 00:00 0 /overflow\n4000-5000 r--p 20 00:00 0\n";
+    Vector<LinuxProcessMemoryMapEntry> entries = Vector<LinuxProcessMemoryMapEntry>();
+    ParseLinuxProcessMemoryMaps(mapsText, entries);
+    ASSERT_EQ(entries.size(), 2u);
+    EXPECT_EQ(entries[0u].fileOffset, 0u);
+    EXPECT_EQ(entries[1u].fileOffset, 0x20u);
+    EXPECT_TRUE(entries[1u].path.empty());
+    EXPECT_FALSE(FindLinuxProcessMemoryMapForAddress(entries, 0x2000u).has_value());
+    EXPECT_FALSE(FindLinuxProcessMemoryMapForAddress(entries, 0x3000u).has_value());
 }
 
-void VerifyGlobalFilesystemCleanup_UnwindRetiresPopulatedTreeAndRepeatedMissingCleanupSucceeds(){
-    native{
-        using TestPath = ::Path<NWB::Core::Alloc::GlobalArena>;
-        NWB::Tests::TestArena<> arena;
-        const TestPath root(arena.arena, "global_test_artifacts/cleanup_unwind");
-        ASSERT_TRUE(EnsureEmptyDirectory(root));
-        ASSERT_TRUE(EnsureDirectories(root / "a" / "b"));
-        ASSERT_TRUE(WriteTextFile(root / "a" / "b" / "payload", "nested"));
-        ASSERT_TRUE(WriteTextFile(root / ".hidden", "hidden"));
-        ASSERT_TRUE(WriteTextFile(root / "sibling", "sibling"));
-        static_assert(noexcept(RemoveAllForCleanup(root)));
-        struct Marker final{};
-        b8 caught = false;
-        ErrorCode cleanupError;
-        try{
-            ScopeExit cleanup([&]()noexcept{
-                const auto removed = RemoveAllForCleanup(root);
-                if(!removed)
-                    cleanupError = removed.error();
-            });
-            throw Marker{};
-        }
-        catch(const Marker&){
-            caught = true;
-        }
-        EXPECT_TRUE(caught);
-        EXPECT_FALSE(cleanupError);
-        const auto exists = FileExists(root);
-        ASSERT_TRUE(exists);
-        EXPECT_FALSE(*exists);
-        EXPECT_TRUE(RemoveAllForCleanup(root));
-    }
-}
 
-void VerifyGlobalFilesystemCleanup_DotAndDotDotLeavesAreRejectedWithoutRemovingTheirContents(){
-    native{
-        using TestPath = ::Path<NWB::Core::Alloc::GlobalArena>;
-        using TestString = NWB::Tests::TestAString;
-        NWB::Tests::TestArena<> arena;
-        const TestPath root(arena.arena, "global_test_artifacts/cleanup_dot_rejection");
-        const TestPath child = root / "child";
-        const TestPath retained = root / "retained";
-        ASSERT_TRUE(EnsureEmptyDirectory(root));
-        ASSERT_TRUE(EnsureDirectories(child));
-        ASSERT_TRUE(WriteTextFile(retained, "retained"));
-        const auto dot = RemoveAllForCleanup(child / ".");
-        const auto dotDot = RemoveAllForCleanup(child / "..");
-        ASSERT_FALSE(dot);
-        ASSERT_FALSE(dotDot);
-        EXPECT_NE(dot.error().value(), 0);
-        EXPECT_NE(dotDot.error().value(), 0);
-        TestString text(arena.arena);
-        ASSERT_TRUE(ReadTextFile(retained, text));
-        EXPECT_EQ(text, "retained");
-        EXPECT_TRUE(RemoveAllForCleanup(root));
-    }
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void VerifyGlobalFilesystemCleanup_DirectoryAndRootLinksWithTrailingSeparatorsDoNotRemoveTheirTarget(){
-    native{
-        using TestPath = ::Path<NWB::Core::Alloc::GlobalArena>;
-        using TestString = NWB::Tests::TestAString;
-        NWB::Tests::TestArena<> arena;
-        const TestPath root(arena.arena, "global_test_artifacts/cleanup_links");
-        const TestPath tree = root / "tree";
-        const TestPath outside = root / "retained";
-        const TestPath link = tree / "link";
-        const TestPath rootLink = root / "root_link";
-        ASSERT_TRUE(EnsureEmptyDirectory(root));
-        ASSERT_TRUE(EnsureDirectories(tree));
-        ASSERT_TRUE(EnsureDirectories(outside));
-        ASSERT_TRUE(WriteTextFile(outside / "payload", "retained"));
-#if defined(NWB_PLATFORM_WINDOWS)
-        const auto absoluteOutside = AbsolutePath(outside);
-        ASSERT_TRUE(absoluteOutside);
-        if(!CreateSymbolicLinkW(link.c_str(), absoluteOutside->c_str(), SYMBOLIC_LINK_FLAG_DIRECTORY | SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE)){
-            const DWORD error = GetLastError();
-            ASSERT_TRUE(RemoveAllForCleanup(root));
-            if(error == ERROR_PRIVILEGE_NOT_HELD)
-                GTEST_SKIP() << "Directory symlink creation requires host permission";
-            FAIL() << "CreateSymbolicLinkW failed: " << error;
-        }
-        ASSERT_TRUE(CreateSymbolicLinkW(rootLink.c_str(), absoluteOutside->c_str(), SYMBOLIC_LINK_FLAG_DIRECTORY | SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE));
-#else
-        ASSERT_EQ(::symlink("../retained", link.c_str()), 0);
-        ASSERT_EQ(::symlink("retained", rootLink.c_str()), 0);
-#endif
-        ASSERT_TRUE(RemoveAllForCleanup(tree));
-        auto trailing = PathToString(arena.arena, rootLink);
-        trailing += '/';
-        ASSERT_TRUE(RemoveAllForCleanup(TestPath(arena.arena, trailing)));
-        TestString retained(arena.arena);
-        ASSERT_TRUE(ReadTextFile(outside / "payload", retained));
-        EXPECT_EQ(retained, "retained");
-        EXPECT_TRUE(RemoveAllForCleanup(root));
-    }
-}
 
-void VerifyGlobalFilesystemCleanup_RemoveAllIfExistsRemovesDanglingLinkWithoutTouchingItsTarget(){
-    native{
-        using TestPath = ::Path<NWB::Core::Alloc::GlobalArena>;
-        NWB::Tests::TestArena<> arena;
-        const TestPath root(arena.arena, "global_test_artifacts/cleanup_dangling_link");
-        ASSERT_TRUE(EnsureEmptyDirectory(root));
-        const TestPath link = root / "dangling";
-#if defined(NWB_PLATFORM_WINDOWS)
-        if(!CreateSymbolicLinkW(link.c_str(), L"missing", SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE)){
-            const DWORD error = GetLastError();
-            ASSERT_TRUE(RemoveAllForCleanup(root));
-            if(error == ERROR_PRIVILEGE_NOT_HELD)
-                GTEST_SKIP() << "Symlink creation requires host permission";
-            FAIL() << "CreateSymbolicLinkW failed: " << error;
-        }
-#else
-        ASSERT_EQ(::symlink("missing", link.c_str()), 0);
-#endif
-        ASSERT_TRUE(RemoveAllIfExists(link));
-        const auto exists = FileExistsNoFollow(link);
-        ASSERT_TRUE(exists);
-        EXPECT_FALSE(*exists);
-        EXPECT_TRUE(RemoveAllForCleanup(root));
-    }
-}
-
-void VerifyGlobalFilesystemCleanup_DosDeviceDrivePathRemovesItsOwnedTree(){
-    native{
-#if defined(NWB_PLATFORM_WINDOWS)
-        using TestPath = ::Path<NWB::Core::Alloc::GlobalArena>;
-        NWB::Tests::TestArena<> arena;
-        const TestPath root(arena.arena, "global_test_artifacts/cleanup_device_drive");
-        ASSERT_TRUE(EnsureEmptyDirectory(root));
-        ASSERT_TRUE(EnsureDirectories(root / "nested"));
-        ASSERT_TRUE(WriteTextFile(root / "nested" / "payload", "owned"));
-        const auto absolute = AbsolutePath(root);
-        ASSERT_TRUE(absolute);
-        const auto native = absolute->native();
-        ASSERT_GE(native.size(), 3u);
-        ASSERT_EQ(native[1u], L':');
-        TestPath::string_type deviceText(L"\\\\.\\", arena.arena);
-        deviceText.append(native);
-        const TestPath device(arena.arena, deviceText);
-        ASSERT_TRUE(RemoveAllForCleanup(device));
-        const auto exists = FileExists(root);
-        ASSERT_TRUE(exists);
-        EXPECT_FALSE(*exists);
-        EXPECT_TRUE(RemoveAllForCleanup(device));
-#endif
-    }
-}
-
-void VerifyGlobalFilesystemCleanup_SharingViolationIsReturnedAndCleanupCanBeRetriedAfterHandleRetirement(){
-    native{
-#if defined(NWB_PLATFORM_WINDOWS)
-        using TestPath = ::Path<NWB::Core::Alloc::GlobalArena>;
-        NWB::Tests::TestArena<> arena;
-        const TestPath root(arena.arena, "global_test_artifacts/cleanup_sharing_failure");
-        const TestPath file = root / "held";
-        ASSERT_TRUE(EnsureEmptyDirectory(root));
-        ASSERT_TRUE(WriteTextFile(file, "retained"));
-        const HANDLE handle = CreateFileW(file.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-        ASSERT_NE(handle, INVALID_HANDLE_VALUE);
-        ScopeExit retire([handle]()noexcept{
-            if(!CloseHandle(handle))
-                TerminateInvariant();
-        });
-        const auto removed = RemoveAllForCleanup(root);
-        ASSERT_FALSE(removed);
-        EXPECT_EQ(removed.error().value(), static_cast<i32>(ERROR_SHARING_VIOLATION));
-        ASSERT_TRUE(CloseHandle(handle));
-        retire.release();
-        EXPECT_TRUE(RemoveAllForCleanup(root));
-#endif
-    }
-}
-
-void VerifyGlobalFilesystemCleanup_ParentLinkLoopReturnsItsNativeErrorWithoutRemovingOtherFiles(){
-    native{
-#if !defined(NWB_PLATFORM_WINDOWS)
-        using TestPath = ::Path<NWB::Core::Alloc::GlobalArena>;
-        using TestString = NWB::Tests::TestAString;
-        NWB::Tests::TestArena<> arena;
-        const TestPath root(arena.arena, "global_test_artifacts/cleanup_parent_loop");
-        ASSERT_TRUE(EnsureEmptyDirectory(root));
-        ASSERT_TRUE(WriteTextFile(root / "retained", "retained"));
-        ASSERT_EQ(::symlink("loop", (root / "loop").c_str()), 0);
-        const auto removed = RemoveAllForCleanup(root / "loop" / "child");
-        ASSERT_FALSE(removed);
-        EXPECT_EQ(removed.error().value(), ELOOP);
-        TestString retained(arena.arena);
-        ASSERT_TRUE(ReadTextFile(root / "retained", retained));
-        EXPECT_EQ(retained, "retained");
-        EXPECT_TRUE(RemoveAllForCleanup(root));
-#endif
-    }
-}
-
-void VerifyGlobalFilesystemCleanup_RootAndChildrenBeyondPathMaxUseRelativeDescriptors(){
-    native{
-#if !defined(NWB_PLATFORM_WINDOWS)
-        using TestPath = ::Path<NWB::Core::Alloc::GlobalArena>;
-        NWB::Tests::TestArena<> arena;
-        const TestPath root(arena.arena, "global_test_artifacts/cleanup_deep_path");
-        ASSERT_TRUE(EnsureEmptyDirectory(root));
-        int descriptor = open(root.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-        ASSERT_GE(descriptor, 0);
-        ScopeExit retire([&descriptor]()noexcept{
-            if(descriptor >= 0 && close(descriptor) != 0)
-                TerminateInvariant();
-        });
-        TestPath deep = root;
-        constexpr AStringView s_Component = "depth_abcdefghijklmnopqrstuvwxyz_abcdefghijklmnopqrstuvwxyz_012345";
-        constexpr usize s_Depth = 80u;
-        for(usize level = 0u; level < s_Depth; ++level){
-            ASSERT_EQ(mkdirat(descriptor, s_Component.data(), 0700), 0);
-            const int next = openat(descriptor, s_Component.data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-            ASSERT_GE(next, 0);
-            const int previous = descriptor;
-            descriptor = next;
-            ASSERT_EQ(close(previous), 0);
-            deep /= s_Component;
-        }
-        const int file = openat(descriptor, "payload", O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
-        ASSERT_GE(file, 0);
-        ASSERT_EQ(close(file), 0);
-        EXPECT_GT(deep.size(), static_cast<usize>(PATH_MAX));
-        ASSERT_TRUE(RemoveAllForCleanup(deep));
-        ASSERT_EQ(close(descriptor), 0);
-        descriptor = -1;
-        EXPECT_TRUE(RemoveAllForCleanup(root));
-#endif
-    }
-}
-
-void VerifyGlobal_FilesystemStreamAndStageHelpersRejectInvalidAndTruncatedInputs(){
-    native{
-        NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
-        const ::Path<NWB::Core::Alloc::ScratchArena> emptyPath(scratchArena);
-        EXPECT_EQ(PathDepth(emptyPath), 0u);
-        const ::Path<NWB::Core::Alloc::ScratchArena> stageDir(scratchArena, "global_test_artifacts/stage_edge_test");
-        ASSERT_TRUE(EnsureEmptyDirectory(stageDir));
-        const auto stagedFile = stageDir / "payload.bin";
-        const Array<u8, 4u> payload = { 0x10u, 0x20u, 0x30u, 0x40u };
-        b8 created = false;
-        ASSERT_TRUE(StagedFileWriter(stagedFile).create(payload.data(), payload.size(), created));
-        EXPECT_TRUE(created);
-        EXPECT_TRUE(VerifyBinaryFileBytes(stagedFile, payload.data(), payload.size()));
-        const Array<u8, 4u> mismatched = { 0x10u, 0x20u, 0x30u, 0x41u };
-        EXPECT_FALSE(VerifyBinaryFileBytes(stagedFile, mismatched.data(), mismatched.size()));
-        EXPECT_FALSE(VerifyBinaryFileBytes(stagedFile, payload.data(), payload.size() - 1u));
-        EXPECT_FALSE(StagedFileWriter(stagedFile).create(mismatched.data(), mismatched.size(), created));
-        EXPECT_FALSE(created);
-        EXPECT_TRUE(VerifyBinaryFileBytes(stagedFile, payload.data(), payload.size()));
-        ASSERT_TRUE(ResizeFile(stagedFile, 2u));
-        EXPECT_TRUE(VerifyBinaryFileBytes(stagedFile, payload.data(), 2u));
-        ASSERT_TRUE(RemoveAllIfExists(stageDir));
-    }
-}
-
-void VerifyGlobal_UniquePublicationPreservesWinnersAcrossRaces(){
-    native{
-        NWB::Core::Alloc::ScratchArena arena(NWB::Tests::s_TestArena);
-        const ::Path<NWB::Core::Alloc::ScratchArena> directory(arena, "global_test_artifacts");
-        ASSERT_TRUE(EnsureDirectories(directory));
-        const auto suggestedPath = directory / "publication.bin";
-        auto reserved = StagedFileWriter(suggestedPath).stageUnique(nullptr, 0u);
-        ASSERT_TRUE(reserved);
-        const ::Path<NWB::Core::Alloc::ScratchArena> path = Move(*reserved);
-        const auto released = RemoveFile(path);
-        ASSERT_TRUE(released && *released);
-        const Array<u8, 4u> bytes{ 1u, 2u, 3u, 4u };
-        const Array<u8, 4u> different{ 1u, 2u, 3u, 5u };
-        const auto first = PublishUniqueFileIfAbsentOrIdentical(path, bytes);
-        ASSERT_TRUE(first);
-        EXPECT_TRUE(*first);
-        const auto repeated = PublishUniqueFileIfAbsentOrIdentical(path, bytes);
-        ASSERT_TRUE(repeated);
-        EXPECT_FALSE(*repeated);
-        const auto mismatch = PublishUniqueFileIfAbsentOrIdentical(path, different);
-        ASSERT_FALSE(mismatch);
-        EXPECT_EQ(mismatch.error(), MakeErrorCode(ErrorCondition::file_exists));
-        EXPECT_TRUE(VerifyBinaryFileBytes(path, bytes.data(), bytes.size()));
-        ::Vector<u8, NWB::Core::Alloc::ScratchArena> borrowedBytes(arena);
-        borrowedBytes.assign(different.begin(), different.end());
-        EXPECT_FALSE(PublishUniqueFileIfAbsentOrIdentical(path, Span<const u8>(borrowedBytes.data(), borrowedBytes.size())));
-        EXPECT_TRUE(BytesMatch(Span<const u8>(borrowedBytes.data(), borrowedBytes.size()), different));
-        const auto removed = RemoveFile(path);
-        ASSERT_TRUE(removed && *removed);
-
-        Atomic<b8> start{ false };
-        Array<u8, 2u> results{};
-        Array<Thread, 2u> threads;
-        for(usize index = 0u; index < threads.size(); ++index){
-            threads[index] = Thread([&, index](){
-                NWB::Core::Alloc::ScratchArena threadArena(NWB::Tests::s_TestArena);
-                const ::Path<NWB::Core::Alloc::ScratchArena> threadPath(threadArena, path);
-                while(!start.load(MemoryOrder::acquire))
-                    YieldThread();
-                const auto result = PublishUniqueFileIfAbsentOrIdentical(threadPath, bytes);
-                results[index] = result ? (*result ? 1u : 2u) : 0u;
-            });
-        }
-        start.store(true, MemoryOrder::release);
-        for(Thread& thread : threads)
-            thread.join();
-        EXPECT_TRUE((results[0u] == 1u && results[1u] == 2u) || (results[0u] == 2u && results[1u] == 1u));
-        EXPECT_TRUE(VerifyBinaryFileBytes(path, bytes.data(), bytes.size()));
-        const auto cleanup = RemoveFile(path);
-        ASSERT_TRUE(cleanup && *cleanup);
-
-        start.store(false, MemoryOrder::relaxed);
-        results = {};
-        Array<i32, 2u> publicationErrors{};
-        for(usize index = 0u; index < threads.size(); ++index){
-            threads[index] = Thread([&, index](){
-                NWB::Core::Alloc::ScratchArena threadArena(NWB::Tests::s_TestArena);
-                const ::Path<NWB::Core::Alloc::ScratchArena> threadPath(threadArena, path);
-                while(!start.load(MemoryOrder::acquire))
-                    YieldThread();
-                const Span<const u8> candidate = index == 0u ? Span<const u8>(bytes) : Span<const u8>(different);
-                const auto result = PublishUniqueFileIfAbsentOrIdentical(threadPath, candidate);
-                if(result && *result)
-                    results[index] = 1u;
-                else if(!result){
-                    publicationErrors[index] = result.error().value();
-                    if(result.error() == MakeErrorCode(ErrorCondition::file_exists))
-                        results[index] = 2u;
-                }
-                else
-                    results[index] = 3u;
-            });
-        }
-        start.store(true, MemoryOrder::release);
-        for(Thread& thread : threads)
-            thread.join();
-        EXPECT_TRUE((results[0u] == 1u && results[1u] == 2u) || (results[0u] == 2u && results[1u] == 1u)) << "results " << static_cast<u32>(results[0u]) << ", " << static_cast<u32>(results[1u]) << "; errors " << publicationErrors[0u] << ", " << publicationErrors[1u];
-        const Span<const u8> winner = results[0u] == 1u ? Span<const u8>(bytes) : Span<const u8>(different);
-        EXPECT_TRUE(VerifyBinaryFileBytes(path, winner.data(), winner.size()));
-        const auto finalCleanup = RemoveFile(path);
-        ASSERT_TRUE(finalCleanup && *finalCleanup);
-    }
-}
-
-void VerifyGlobal_StagedPairFailureIdentifiesEachWorkPath(){
-    native{
-        NWB::Core::Alloc::ScratchArena arena(NWB::Tests::s_TestArena);
-        const ::Path<NWB::Core::Alloc::ScratchArena> primary(arena, "output.bin");
-        const ::Path<NWB::Core::Alloc::ScratchArena> secondary(arena, "output.meta");
-        const StagedFilePairPaths paths(arena, primary, secondary);
-        const Array<const ::Path<NWB::Core::Alloc::ScratchArena>*, 4u> expected{ &paths.primaryTemporary, &paths.secondaryTemporary, &paths.primaryBackup, &paths.secondaryBackup };
-        for(const auto stage : { StagedFilePairFailureStage::InspectOutput, StagedFilePairFailureStage::NonRegularOutput }){
-            StagedFilePairResult result;
-            result.failureStage = stage;
-            result.failedWorkPath = true;
-            for(u32 index = 0u; index < expected.size(); ++index){
-                result.failedIndex = index;
-                EXPECT_EQ(FailedStagedFilePairPath(paths, result), *expected[index]);
-            }
-            result.failedWorkPath = false;
-            result.failedIndex = 0u;
-            EXPECT_EQ(FailedStagedFilePairPath(paths, result), paths.primary);
-            result.failedIndex = 1u;
-            EXPECT_EQ(FailedStagedFilePairPath(paths, result), paths.secondary);
-        }
-        StagedFilePairResult state;
-        state.backedUp[1u] = true;
-        state.temporaryErrors[0u] = MakeErrorCode(ErrorCondition::io_error);
-        StagedFilePairResult check;
-        EXPECT_TRUE(GlobalFilesystemStagingDetail::AcceptPreCommitValidation(check, state));
-        check.failureStage = StagedFilePairFailureStage::WorkPathAlreadyExists;
-        EXPECT_TRUE(GlobalFilesystemStagingDetail::AcceptPreCommitValidation(check, state));
-        EXPECT_TRUE(state.succeeded());
-        check.failureStage = StagedFilePairFailureStage::NonRegularOutput;
-        check.failedIndex = 2u;
-        check.failedWorkPath = true;
-        check.error = MakeErrorCode(ErrorCondition::invalid_argument);
-        EXPECT_FALSE(GlobalFilesystemStagingDetail::AcceptPreCommitValidation(check, state));
-        EXPECT_EQ(state.failureStage, check.failureStage);
-        EXPECT_EQ(state.error, check.error);
-        EXPECT_EQ(FailedStagedFilePairPath(paths, state), paths.primaryBackup);
-        EXPECT_TRUE(state.backedUp[1u]);
-        EXPECT_EQ(state.temporaryErrors[0u], MakeErrorCode(ErrorCondition::io_error));
-    }
-}
-
-NWB_ADHD_GTEST(Global, DerivedNamesReportInvalidInputsAndPreserveCanonicalBinaryIdentity, VerifyGlobal_DerivedNamesReportInvalidInputsAndPreserveCanonicalBinaryIdentity)
-NWB_ADHD_GTEST(Global, ConstexprNameViewsPreserveBoundedIdentityAndSymbolCallbacks, VerifyGlobal_ConstexprNameViewsPreserveBoundedIdentityAndSymbolCallbacks)
-NWB_ADHD_GTEST(Global, BinaryIdentityLanesDoNotRecordNameSymbols, VerifyGlobal_BinaryIdentityLanesDoNotRecordNameSymbols)
-NWB_ADHD_GTEST(Global, NameBinaryIdentityNeverInvokesInstalledSymbolCallbacks, VerifyGlobal_NameBinaryIdentityNeverInvokesInstalledSymbolCallbacks)
-NWB_ADHD_GTEST(Global, NameResolvedTextPreservesSymbolLookupAndHashFallback, VerifyGlobal_NameResolvedTextPreservesSymbolLookupAndHashFallback)
-NWB_ADHD_GTEST(Global, DiagnosticNameTextNeverInvokesForeignSymbolCallbacks, VerifyGlobal_DiagnosticNameTextNeverInvokesForeignSymbolCallbacks)
-NWB_ADHD_GTEST(Global, NameResolvedTextIsBoundedByStoredAndResolverBuffers, VerifyGlobal_NameResolvedTextIsBoundedByStoredAndResolverBuffers)
-NWB_ADHD_GTEST(Global, NameHashTextDistinguishesNullEmptyAndEmbeddedNull, VerifyGlobal_NameHashTextDistinguishesNullEmptyAndEmbeddedNull)
-NWB_ADHD_GTEST(Global, RuntimeNameTextAdmissionPreservesIdentityAndCallbackBoundaries, VerifyGlobal_RuntimeNameTextAdmissionPreservesIdentityAndCallbackBoundaries)
-NWB_ADHD_GTEST(Global, OptionalNameTextPreservesAbsenceAndOwnedContainerErrors, VerifyGlobal_OptionalNameTextPreservesAbsenceAndOwnedContainerErrors)
-NWB_ADHD_GTEST(Global, RuntimeNameFactoryPreservesRecursiveRecorderGuard, VerifyGlobal_RuntimeNameFactoryPreservesRecursiveRecorderGuard)
-NWB_ADHD_GTEST(Global, NameHashDebugTextRejectsInvalidHex, VerifyGlobal_NameHashDebugTextRejectsInvalidHex)
 NWB_ADHD_GTEST(Global, EnvironmentVariableNamesSupportSlicesAndRejectEmbeddedNull, VerifyGlobal_EnvironmentVariableNamesSupportSlicesAndRejectEmbeddedNull)
 NWB_ADHD_GTEST(Global, DirectoryRetentionPreservesPredicateErrorAndRetainsUnadmittedEntries, VerifyGlobal_DirectoryRetentionPreservesPredicateErrorAndRetainsUnadmittedEntries)
 NWB_ADHD_GTEST(Global, FileWriteSizeRejectionPreservesExistingOutput, VerifyGlobal_FileWriteSizeRejectionPreservesExistingOutput)
@@ -1558,18 +1121,12 @@ NWB_ADHD_GTEST(Global, ProcessArgumentValidationPreservesExistingOutput, VerifyG
 NWB_ADHD_GTEST(Global, SharedLibraryInvalidNamePreservesNativeFailureStatusWithoutOpening, VerifyGlobal_SharedLibraryInvalidNamePreservesNativeFailureStatusWithoutOpening)
 NWB_ADHD_GTEST(Global, MemoryMapLookupUsesHalfOpenRangesAndRejectsMissingAddresses, VerifyGlobal_MemoryMapLookupUsesHalfOpenRangesAndRejectsMissingAddresses)
 NWB_ADHD_GTEST(Global, MemoryMapRejectsMalformedOffsetsWithoutDiscardingValidNeighbors, VerifyGlobal_MemoryMapRejectsMalformedOffsetsWithoutDiscardingValidNeighbors)
-NWB_ADHD_GTEST(GlobalFilesystemCleanup, UnwindRetiresPopulatedTreeAndRepeatedMissingCleanupSucceeds, VerifyGlobalFilesystemCleanup_UnwindRetiresPopulatedTreeAndRepeatedMissingCleanupSucceeds)
-NWB_ADHD_GTEST(GlobalFilesystemCleanup, DotAndDotDotLeavesAreRejectedWithoutRemovingTheirContents, VerifyGlobalFilesystemCleanup_DotAndDotDotLeavesAreRejectedWithoutRemovingTheirContents)
-NWB_ADHD_GTEST(GlobalFilesystemCleanup, DirectoryAndRootLinksWithTrailingSeparatorsDoNotRemoveTheirTarget, VerifyGlobalFilesystemCleanup_DirectoryAndRootLinksWithTrailingSeparatorsDoNotRemoveTheirTarget)
-NWB_ADHD_GTEST(GlobalFilesystemCleanup, RemoveAllIfExistsRemovesDanglingLinkWithoutTouchingItsTarget, VerifyGlobalFilesystemCleanup_RemoveAllIfExistsRemovesDanglingLinkWithoutTouchingItsTarget)
-NWB_ADHD_GTEST(Global, FilesystemStreamAndStageHelpersRejectInvalidAndTruncatedInputs, VerifyGlobal_FilesystemStreamAndStageHelpersRejectInvalidAndTruncatedInputs)
-NWB_ADHD_GTEST(Global, UniquePublicationPreservesWinnersAcrossRaces, VerifyGlobal_UniquePublicationPreservesWinnersAcrossRaces)
-NWB_ADHD_GTEST(Global, StagedPairFailureIdentifiesEachWorkPath, VerifyGlobal_StagedPairFailureIdentifiesEachWorkPath)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
 
 
@@ -1615,22 +1172,6 @@ TEST(Global, WindowsProcessInputsSupportBoundedViews){
 
 TEST(Global, SharedLibraryAcceptsBoundedNamesAndRejectsInvalidSymbols){
     VerifyGlobal_SharedLibraryAcceptsBoundedNamesAndRejectsInvalidSymbols();
-}
-
-TEST(GlobalFilesystemCleanup, DosDeviceDrivePathRemovesItsOwnedTree){
-    VerifyGlobalFilesystemCleanup_DosDeviceDrivePathRemovesItsOwnedTree();
-}
-
-TEST(GlobalFilesystemCleanup, SharingViolationIsReturnedAndCleanupCanBeRetriedAfterHandleRetirement){
-    VerifyGlobalFilesystemCleanup_SharingViolationIsReturnedAndCleanupCanBeRetriedAfterHandleRetirement();
-}
-#else
-TEST(GlobalFilesystemCleanup, ParentLinkLoopReturnsItsNativeErrorWithoutRemovingOtherFiles){
-    VerifyGlobalFilesystemCleanup_ParentLinkLoopReturnsItsNativeErrorWithoutRemovingOtherFiles();
-}
-
-TEST(GlobalFilesystemCleanup, RootAndChildrenBeyondPathMaxUseRelativeDescriptors){
-    VerifyGlobalFilesystemCleanup_RootAndChildrenBeyondPathMaxUseRelativeDescriptors();
 }
 #endif
 

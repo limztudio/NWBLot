@@ -1,0 +1,478 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/edit_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 HasPendingUiEditBorrowOwnerTransfer(
+    in UiTextEditOwner targetOwner,
+    in UiTextEditOwner sessionOwner,
+    in b8 clipboardPending,
+    in UiTextEditOwner clipboardOwner,
+    in b8 primaryPending,
+    in UiTextEditOwner primaryOwner
+){
+    return sessionOwner == targetOwner
+        || (clipboardPending && clipboardOwner == targetOwner)
+        || (primaryPending && primaryOwner == targetOwner);
+}
+
+b8 HasUiEditModelGenerationsChanged(
+    in u64 beforeRevision,
+    in u64 beforeExternalRevision,
+    in u64 beforeSelectionGeneration,
+    in u64 beforeCompositionGeneration,
+    in u64 afterRevision,
+    in u64 afterExternalRevision,
+    in u64 afterSelectionGeneration,
+    in u64 afterCompositionGeneration
+){
+    return afterRevision != beforeRevision
+        || afterExternalRevision != beforeExternalRevision
+        || afterSelectionGeneration != beforeSelectionGeneration
+        || afterCompositionGeneration != beforeCompositionGeneration;
+}
+
+b8 IsUiEditEntryRebound(
+    in UiTextEditOwner currentOwner,
+    in UiTextEditOwner nextOwner,
+    in PopupToken currentPopup,
+    in PopupToken nextPopup,
+    in b8 currentActionCapable,
+    in b8 nextActionCapable,
+    in u64 currentNavigationInstance,
+    in u64 nextNavigationInstance
+){
+    return currentOwner != nextOwner
+        || currentPopup != nextPopup
+        || currentActionCapable != nextActionCapable
+        || currentNavigationInstance != nextNavigationInstance;
+}
+
+b8 IsMutatingUiEditClipboardAction(in EditClipboardAction action){
+    return action == EditClipboardAction::Cut || action == EditClipboardAction::Paste;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/edit_box_host.adhd.h>
+#include <impl/ecs_ui/edit_geometry.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
+
+#include <global/scope_exit.h>
+#include <global/simplemath.h>
+#include <global/termination.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::EditModel& model, Ui::IEditActionSink* actions, NavigationBorrow* navigation){
+    if(rejectBorrowedMutation())
+        return {};
+    if(navigation && model.textMode() != Ui::EditTextMode::Multiline)
+        return {};
+    if(actions)
+        synchronizeFocus();
+    m_borrowed = true;
+    m_borrowRejected = false;
+    ScopeExit release([this]()noexcept{ m_borrowed = false; });
+
+    Ui::EditBoxResult result;
+    result.valid = true;
+    result.focused = options.enabled && m_context.input().focus() == widget.id;
+    const UiTextEditOwner owner{ widget.id, widget.declarationGeneration, model.instanceGeneration() };
+    Entry* entry = find(widget.id);
+    b8 abandon = false;
+    if(!entry){
+        if(m_entries.size() == s_UiEditBoxMaxEntries){
+            result.valid = false;
+            return result;
+        }
+        m_entries.emplace_back(m_arena);
+        entry = &m_entries.back();
+        entry->owner = owner;
+        entry->expected.capture(model);
+        entry->navigationResetPending = navigation != nullptr;
+        abandon = actions != nullptr;
+    }
+    else{
+        const u64 navigationInstance = navigation ? navigation->state.instanceGeneration() : 0u;
+        const b8 rebound = IsUiEditEntryRebound(entry->owner, owner, entry->popup, popup, entry->actionCapable, actions != nullptr, entry->navigationInstanceGeneration, navigationInstance);
+        const b8 policyChanged = entry->enabled != options.enabled || entry->readOnly != options.readOnly;
+        abandon = actions && (rebound || policyChanged);
+        if(rebound || policyChanged || !entry->expected.matches(model)){
+            m_context.input().cancelSubmitCommands(widget.id);
+            entry->navigationResetPending = navigation != nullptr;
+            if(HasPendingUiEditBorrowOwnerTransfer(entry->owner, m_session.owner(), m_clipboard.pending(), m_clipboardOwner, m_primary.pending(), m_primaryOwner))
+                cancelTransfers();
+            discard(entry->owner);
+            entry->owner = owner;
+            entry->dragging = false;
+            entry->wordDragging = false;
+            m_clickTracker.cancel();
+            model.cancelComposition();
+            entry->expected.capture(model);
+            if(rebound || policyChanged){
+                entry->focused = false;
+                entry->focusGeneration = 0u;
+                entry->retiredFocusGeneration = 0u;
+            }
+        }
+    }
+    entry->widget = widget;
+    entry->popup = popup;
+    entry->seen = m_generation;
+    entry->actionCapable = actions != nullptr;
+    entry->navigationInstanceGeneration = navigation ? navigation->state.instanceGeneration() : 0u;
+    entry->enabled = options.enabled;
+    entry->readOnly = options.readOnly;
+    if(actions && result.focused && !entry->focused){
+        entry->focused = true;
+        entry->focusGeneration = nextFocusGeneration();
+    }
+    const u64 beforeRevision = model.revision();
+    const usize beforeAnchor = model.anchor();
+    const usize beforeCaret = model.caret();
+    if(m_borrowRejected){
+        result.valid = false;
+        return result;
+    }
+    if(navigation && entry->navigationResetPending){
+        navigation->state.reset();
+        entry->navigationResetPending = false;
+    }
+    if(abandon && !applyAction(options, Ui::EditAction::Abandon, *entry, model, result, *actions, navigation)){
+        result.valid = false;
+        discard(owner);
+        return result;
+    }
+    if((!result.focused && !actions) || options.readOnly || !options.enabled){
+        if(m_session.owner() == owner)
+            cancelTransfers();
+        model.cancelComposition();
+    }
+    b8 inputMethod = false;
+    for(usize index = 0u; index < m_events.size();){
+        if(m_events[index].owner != owner){
+            ++index;
+            continue;
+        }
+        Event event = Move(m_events[index]);
+        m_queuedTextBytes -= event.native.text.size();
+        m_events.erase(m_events.begin() + static_cast<isize>(index));
+        if(actions && event.focusGeneration <= entry->retiredFocusGeneration)
+            continue;
+        if(options.enabled){
+            if(!apply(options, event, *entry, model, result, actions, navigation)){
+                result.valid = false;
+                discard(owner);
+                if(HasPendingUiEditBorrowOwnerTransfer(owner, m_session.owner(), m_clipboard.pending(), m_clipboardOwner, m_primary.pending(), m_primaryOwner))
+                    cancelTransfers();
+                return result;
+            }
+            inputMethod = event.kind == UiEditBoxEventKind::Native;
+        }
+    }
+    // Earlier edit intentions cancel transfers before a completion can mutate their original selection.
+    if(m_clipboard.pending() && m_clipboardOwner == owner){
+        if(!result.focused){
+            if(!m_clipboard.cancel())
+                TerminateInvariant();
+        }
+        else{
+            const auto action = m_clipboard.action();
+            const b8 mutates = IsMutatingUiEditClipboardAction(action);
+            if(mutates){
+                if(m_session.owner() == owner && !m_session.cancel())
+                    TerminateInvariant();
+            }
+            const auto completion = m_clipboard.drain(owner, model, options.readOnly);
+            result.textChanged |= completion.textChanged;
+            result.selectionChanged |= completion.selectionChanged;
+            if(navigation && !m_borrowRejected && mutates && completion.status == UiEditClipboardStatus::Applied)
+                navigation->state.reset();
+        }
+    }
+    if(m_primary.pending() && m_primaryOwner == owner){
+        const auto completion = m_primary.drain(owner, model, options.readOnly);
+        result.textChanged |= completion.textChanged;
+        result.selectionChanged |= completion.selectionChanged;
+    }
+    result.textChanged |= beforeRevision != model.revision();
+    result.selectionChanged |= beforeAnchor != model.anchor() || beforeCaret != model.caret();
+    result.focused = options.enabled && m_context.input().focus() == widget.id;
+    result.preeditCaretVisible = entry->preeditCaretVisible;
+    synchronizeSession(options, inputMethod, *entry, model);
+    result.valid = !m_borrowRejected;
+    entry->expected.capture(model);
+    return result;
+}
+
+b8 UiEditBoxHost::apply(const Ui::EditBoxOptions& options, Event& event, Entry& entry, Ui::EditModel& model, Ui::EditBoxResult& result, Ui::IEditActionSink* actions, NavigationBorrow* navigation){
+    const u64 revision = model.revision();
+    const u64 externalRevision = model.externalRevision();
+    const u64 selectionGeneration = model.selectionGeneration();
+    const u64 compositionGeneration = model.compositionGeneration();
+    const b8 clipboard = m_clipboard.cancel();
+    const b8 primary = m_primary.cancel();
+    if(!clipboard || !primary)
+        TerminateInvariant();
+    if(m_borrowRejected)
+        return false;
+    const b8 composing = model.composition().active;
+    if(event.kind == UiEditBoxEventKind::Command){
+        if(event.navigation)
+            return navigation ? applyNavigation(event, event.navigationDirection, model, *navigation) : true;
+        const auto command = Ui::ApplyEditCommand(model, event.command, options.readOnly);
+        result.submitted |= command.submitted;
+        result.cancelled |= command.cancelled;
+        if(actions && (command.submitted || command.cancelled)){
+            if(!applyAction(options, command.submitted ? Ui::EditAction::Submit : Ui::EditAction::Cancel, entry, model, result, *actions, navigation))
+                return false;
+        }
+        if(command.cancelled){
+            const b8 cancelFocus = !actions || (entry.focused && entry.focusGeneration == event.focusGeneration && m_context.input().focus() == entry.widget.id);
+            if(actions){
+                entry.retiredFocusGeneration = Max(entry.retiredFocusGeneration, event.focusGeneration);
+                if(entry.focusGeneration == event.focusGeneration)
+                    entry.focused = false;
+            }
+            if(cancelFocus){
+                if(!m_context.input().dismissPopup(Ui::PopupDismissReason::Cancel))
+                    m_context.input().clearFocus();
+            }
+        }
+        if(command.clipboard != Ui::EditClipboardAction::None){
+            if(command.clipboard == Ui::EditClipboardAction::Copy){
+                if(!model.hasSelection())
+                    return true;
+                drainPublications();
+                const auto status = m_publications.request(model.selectedText());
+                m_clipboardFailure |= status != UiClipboardPublicationStatus::Pending;
+            }
+            else{
+                const auto request = m_clipboard.request(entry.owner, model, command.clipboard, Core::ClipboardChannel::Clipboard, options.readOnly);
+                if(request.status == UiEditClipboardStatus::Pending)
+                    m_clipboardOwner = entry.owner;
+            }
+        }
+    }
+    else if(event.kind == UiEditBoxEventKind::Character){
+        if(!options.readOnly && !model.replaceSelection(event.native.text))
+            return true;
+    }
+    else if(event.kind == UiEditBoxEventKind::Native){
+        if(options.readOnly || event.native.token == entry.rejectedNative)
+            return true;
+        if(event.native.kind == Core::TextInputEventKind::Commit && event.native.text.size() == 1u && !IsTextInputCodePoint(static_cast<u8>(event.native.text.front())))
+            return true;
+        const b8 matching = MatchesUiEditNativeSurroundingState(
+            model.revision(),
+            event.surroundingModelRevision,
+            model.externalRevision(),
+            event.geometryExternalRevision,
+            model.selectionGeneration(),
+            event.surroundingSelectionGeneration,
+            model.anchor(),
+            event.surroundingAnchor,
+            model.caret(),
+            event.surroundingCaret,
+            !actions || (m_session.owner() == entry.owner && m_session.token() == event.native.token)
+        );
+        const auto status = ApplyUiTextEditEvent(model, event.native, event.surroundingRevision, matching);
+        if(status != UiTextEditStatus::Applied){
+            model.cancelComposition();
+            entry.rejectedNative = event.native.token;
+            if(m_session.owner() == entry.owner && !m_session.cancel())
+                TerminateInvariant();
+        }
+        entry.preeditCaretVisible = event.native.kind != Core::TextInputEventKind::Preedit || event.native.caretVisible;
+    }
+    else if(event.kind == UiEditBoxEventKind::Selection){
+        if(model.revision() != event.geometryRevision || model.externalRevision() != event.geometryExternalRevision){
+            if(event.completed){
+                entry.dragging = false;
+                entry.wordDragging = false;
+            }
+            return true;
+        }
+        if(event.wordSelect){
+            const auto range = model.wordRangeAt(event.wordPosition);
+            if(!range || !model.setSelection(range->begin, range->end))
+                return true;
+            entry.wordDragStart = range->begin;
+            entry.wordDragEnd = range->end;
+            entry.wordDragging = true;
+        }
+        else if(event.dragging && entry.dragging && entry.wordDragging){
+            const auto range = model.wordRangeAt(event.wordPosition);
+            if(!range)
+                return true;
+            const Ui::EditWordRange selection = ResolveUiEditWordDragSelection(event.wordPosition, entry.wordDragStart, entry.wordDragEnd, *range);
+            if(!model.setSelection(selection.begin, selection.end))
+                return true;
+        }
+        else{
+            const usize anchor = ResolveUiEditSelectionAnchor(event.dragging, entry.dragging, entry.dragAnchor, event.extend, model.anchor(), event.position);
+            if(!model.setSelection(anchor, event.position))
+                return true;
+            entry.dragAnchor = anchor;
+            entry.wordDragging = false;
+        }
+        entry.dragging = !event.completed;
+        if(event.completed)
+            entry.wordDragging = false;
+        if(model.hasSelection() && m_clipboardService.capabilities(Core::ClipboardChannel::PrimarySelection).writeText){
+            const auto request = m_primary.request(entry.owner, model, Ui::EditClipboardAction::PublishSelection, Core::ClipboardChannel::PrimarySelection, options.readOnly);
+            if(request.status == UiEditClipboardStatus::Pending)
+                m_primaryOwner = entry.owner;
+        }
+    }
+    else if(event.kind == UiEditBoxEventKind::PastePrimary){
+        const auto request = m_clipboard.request(entry.owner, model, Ui::EditClipboardAction::Paste, Core::ClipboardChannel::PrimarySelection, options.readOnly);
+        if(request.status == UiEditClipboardStatus::Pending)
+            m_clipboardOwner = entry.owner;
+    }
+    else if(event.kind == UiEditBoxEventKind::Blur && actions){
+        entry.retiredFocusGeneration = event.focusGeneration;
+        return applyAction(options, Ui::EditAction::Blur, entry, model, result, *actions, navigation);
+    }
+    else if(event.kind == UiEditBoxEventKind::Focus && navigation){
+        navigation->state.reset();
+    }
+    if(composing && !model.composition().active && event.kind != UiEditBoxEventKind::Native){
+        entry.rejectedNative = m_session.token();
+        if(m_session.owner() == entry.owner && !m_session.cancel())
+            TerminateInvariant();
+    }
+    if(m_borrowRejected)
+        return false;
+    if(navigation && HasUiEditModelGenerationsChanged(revision, externalRevision, selectionGeneration, compositionGeneration, model.revision(), model.externalRevision(), model.selectionGeneration(), model.compositionGeneration()))
+        navigation->state.reset();
+    return true;
+}
+
+b8 UiEditBoxHost::applyNavigation(const Event& event, const Ui::EditNavigationDirection::Enum direction, Ui::EditModel& model, NavigationBorrow& navigation){
+    if(m_borrowRejected || m_context.failed())
+        return false;
+    if(model.textMode() != Ui::EditTextMode::Multiline || model.composition().active)
+        return true;
+    if(!IsValidUiEditNavigationViewportHeight(direction, event.navigationViewportHeight))
+        return false;
+    const Ui::TextAreaModelStamp expected = model.stamp();
+    const Ui::EditNavigationSnapshot preferred = navigation.state.snapshot();
+    const auto target = navigation.resolver.resolve(model, direction, preferred, event.navigationViewportHeight);
+    if(m_borrowRejected || m_context.failed() || !model.matchesStamp(expected) || model.composition().active || !navigation.state.matches(preferred) || !target || !IsFinite(target->preferredX))
+        return false;
+    if(!IsCommittedByteOnGraphemeBoundary(model.graphemeBoundaries(), target->committedByte))
+        return false;
+    if(!model.setSelection(event.command.extend ? expected.anchor : target->committedByte, target->committedByte))
+        return false;
+    if(!navigation.state.setPreferredX(target->preferredX))
+        TerminateInvariant();
+    return true;
+}
+
+b8 UiEditBoxHost::applyAction(const Ui::EditBoxOptions& options, const Ui::EditAction::Enum action, Entry& entry, Ui::EditModel& model, Ui::EditBoxResult& result, Ui::IEditActionSink& actions, NavigationBorrow* navigation){
+    const u64 revision = model.revision();
+    const u64 selectionGeneration = model.selectionGeneration();
+    const u64 compositionGeneration = model.compositionGeneration();
+    if(m_clipboard.pending() && m_clipboardOwner == entry.owner && !m_clipboard.cancel())
+        TerminateInvariant();
+    if(m_primary.pending() && m_primaryOwner == entry.owner && !m_primary.cancel())
+        TerminateInvariant();
+    if(action == Ui::EditAction::Blur || action == Ui::EditAction::Abandon)
+        model.cancelComposition();
+    const u64 externalRevision = model.externalRevision();
+    if(m_borrowRejected || !actions.apply(model, action, options.readOnly) || m_borrowRejected)
+        return false;
+    if(
+        navigation
+        && ShouldResetUiEditNavigationAfterAction(
+            action,
+            revision,
+            externalRevision,
+            selectionGeneration,
+            compositionGeneration,
+            model.revision(),
+            model.externalRevision(),
+            model.selectionGeneration(),
+            model.compositionGeneration()
+        )
+    )
+        navigation->state.reset();
+    MergeUiEditActionToResult(action, result);
+    if(action != Ui::EditAction::Submit || model.externalRevision() != externalRevision){
+        // Copied commits still apply at their ordered position; surrounding deletion cannot address this retired session.
+        if(m_session.owner() == entry.owner && !m_session.cancel())
+            TerminateInvariant();
+    }
+    return !m_borrowRejected;
+}
+
+void UiEditBoxHost::synchronizeSession(const Ui::EditBoxOptions& options, const b8 inputMethod, Entry& entry, Ui::EditModel& model){
+    if(!options.enabled || options.readOnly || m_context.input().focus() != entry.widget.id){
+        if(m_session.owner() == entry.owner && !m_session.cancel())
+            TerminateInvariant();
+        model.cancelComposition();
+        return;
+    }
+    if(!UiEditGeometry().sessionReady(entry.displayed, entry.owner, entry.popup))
+        return;
+    if(m_session.token().valid() && m_session.owner() != entry.owner && !m_session.cancel())
+        TerminateInvariant();
+    if(!m_session.token().valid()){
+        model.cancelComposition();
+        const auto admission = m_session.begin(entry.owner, nativeCaret(entry.displayed), model);
+        if(admission != Core::TextInputAdmission::Accepted)
+            return;
+        m_lastNativeSequence = 0u;
+        entry.rejectedNative = {};
+    }
+    else{
+        const auto admission = m_session.adoptLocal(entry.owner, model, nativeCaret(entry.displayed), inputMethod ? Core::TextInputChangeCause::InputMethod : Core::TextInputChangeCause::Other);
+        if(admission != Core::TextInputAdmission::Accepted){
+            model.cancelComposition();
+            if(!m_session.cancel())
+                TerminateInvariant();
+            return;
+        }
+    }
+    m_nativePublished = model.stamp();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

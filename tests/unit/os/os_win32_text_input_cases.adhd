@@ -1,0 +1,849 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/gtest_macros.adhd>
+#include <tests/common/capturing_logger.adhd>
+#include <tests/common/test_context.adhd>
+#include <tests/unit/os/suite.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <core/common/log.h>
+#include <core/os/text_input_service.h>
+#include <core/os/text_input_text.h>
+
+#include <global/thread.h>
+
+#include <gtest/gtest.h>
+
+#if defined(NWB_PLATFORM_WINDOWS)
+#include <core/os/win32/text_input.h>
+#include <core/os/win32/text_input_context.h>
+#include <windows.h>
+#include <imm.h>
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_os_win32_text_input_support{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB::Core;
+
+#if defined(NWB_PLATFORM_WINDOWS)
+inline constexpr WStringView s_Win32ClassName = L"NWBTextInputUnitTest";
+inline constexpr u32 s_Win32UnicodeNoChar = static_cast<u32>(UNICODE_NOCHAR);
+inline constexpr isize s_Win32TrueResult = static_cast<isize>(TRUE);
+inline constexpr isize s_Win32GcsResultStr = static_cast<isize>(GCS_RESULTSTR);
+inline constexpr isize s_Win32CsInsertChar = static_cast<isize>(CS_INSERTCHAR);
+inline constexpr isize s_Win32CsNoMoveCaret = static_cast<isize>(CS_NOMOVECARET);
+inline constexpr isize s_Win32ShowUiCompositionWindowFlag = static_cast<isize>(ISC_SHOWUICOMPOSITIONWINDOW);
+inline constexpr isize s_Win32ShowUiFullFlags = static_cast<isize>(ISC_SHOWUICOMPOSITIONWINDOW | ISC_SHOWUICANDIDATEWINDOW | (ISC_SHOWUICANDIDATEWINDOW << 2u) | (1u << 20u));
+inline constexpr isize s_Win32ShowUiReplayFlags = static_cast<isize>(ISC_SHOWUICOMPOSITIONWINDOW | ISC_SHOWUICANDIDATEWINDOW | (1u << 20u));
+
+class Win32TextInputFixture : public testing::Test{
+public:
+    static LRESULT CALLBACK WindowProc(const HWND window, const UINT message, const WPARAM wParam, const LPARAM lParam);
+
+    Win32TextInputFixture()
+        : m_loggerGuard(m_logger, Common::LoggerBreakPolicy::ReportOnly)
+    {}
+
+    virtual void SetUp()override;
+    virtual void TearDown()override;
+
+
+public:
+    [[nodiscard]] TextInputSessionToken activeSession()const noexcept{ return m_service->activeSession(); }
+    [[nodiscard]] b8 setFocused(const b8 focused){ return m_service->setFocused(focused); }
+    [[nodiscard]] Expected<TextInputSessionToken, TextInputAdmission::Enum> beginEmpty(){ return m_service->begin({}); }
+    [[nodiscard]] b8 endSession(const TextInputSessionToken token){ return m_service->end(token); }
+    [[nodiscard]] TextInputPollResult::Enum poll(const TextInputSessionToken token, TextInputEvent& outEvent){ return m_service->poll(token, outEvent); }
+
+    [[nodiscard]] isize sendChar(const u32 ch, const isize lParam){ return static_cast<isize>(SendMessageW(m_window, WM_CHAR, static_cast<WPARAM>(ch), static_cast<LPARAM>(lParam))); }
+    [[nodiscard]] isize sendSysChar(const u32 ch, const isize lParam){ return static_cast<isize>(SendMessageW(m_window, WM_SYSCHAR, static_cast<WPARAM>(ch), static_cast<LPARAM>(lParam))); }
+    [[nodiscard]] isize sendUniChar(const u32 ch, const isize lParam){ return static_cast<isize>(SendMessageW(m_window, WM_UNICHAR, static_cast<WPARAM>(ch), static_cast<LPARAM>(lParam))); }
+    [[nodiscard]] isize sendImeStartComposition(){ return static_cast<isize>(SendMessageW(m_window, WM_IME_STARTCOMPOSITION, 0u, 0)); }
+    [[nodiscard]] isize sendImeEndComposition(){ return static_cast<isize>(SendMessageW(m_window, WM_IME_ENDCOMPOSITION, 0u, 0)); }
+    [[nodiscard]] isize sendImeChar(const u32 ch){ return static_cast<isize>(SendMessageW(m_window, WM_IME_CHAR, static_cast<WPARAM>(ch), 0)); }
+    [[nodiscard]] isize sendImeComposition(const u32 ch, const isize flags){ return static_cast<isize>(SendMessageW(m_window, WM_IME_COMPOSITION, static_cast<WPARAM>(ch), static_cast<LPARAM>(flags))); }
+    [[nodiscard]] isize sendImeSetContext(const b8 active, const isize flags){ return static_cast<isize>(SendMessageW(m_window, WM_IME_SETCONTEXT, active ? TRUE : FALSE, static_cast<LPARAM>(flags))); }
+    [[nodiscard]] isize sendKillFocus(){ return static_cast<isize>(SendMessageW(m_window, WM_KILLFOCUS, 0u, 0)); }
+    [[nodiscard]] isize sendSetFocus(){ return static_cast<isize>(SendMessageW(m_window, WM_SETFOCUS, 0u, 0)); }
+
+    [[nodiscard]] b8 dispatchDirectChar(const u32 ch){ return DispatchWin32TextInputMessage(*m_service, WM_CHAR, static_cast<WPARAM>(ch), 0); }
+    [[nodiscard]] Expected<u32> decodeFallbackChar(const u32 unit){ return DecodeWin32FallbackCharInput(*m_service, unit); }
+    [[nodiscard]] b8 resetFallbackChar(){ return ResetWin32FallbackCharInput(*m_service); }
+
+
+public:
+    NWB::Tests::CapturingLogger m_logger;
+    Common::LoggerRegistrationGuard m_loggerGuard;
+    NWB::Tests::TestArena<> m_arena;
+    GlobalUniquePtr<ITextInputService> m_service;
+    HWND m_window = nullptr;
+    TextInputSessionToken m_token;
+    usize m_sceneCharacterCount = 0u;
+    usize m_contextForwardCount = 0u;
+    isize m_lastContextForwardedFlags = 0;
+    LRESULT m_lastContextDefaultResult = 0;
+    TextInputSessionToken m_cancelledDuringContextToken;
+    u32 m_sceneCodePoint = 0u;
+    b8 m_cancelOnNextContextForward = false;
+    b8 m_contextFocusLossSucceeded = false;
+    b8 m_contextFocusRestoreSucceeded = false;
+};
+#else
+inline constexpr u32 s_Win32UnicodeNoChar = 0xFFFFu;
+inline constexpr isize s_Win32TrueResult = 1;
+inline constexpr isize s_Win32GcsResultStr = 0;
+inline constexpr isize s_Win32CsInsertChar = 0;
+inline constexpr isize s_Win32CsNoMoveCaret = 0;
+inline constexpr isize s_Win32ShowUiCompositionWindowFlag = 0;
+inline constexpr isize s_Win32ShowUiFullFlags = 0;
+inline constexpr isize s_Win32ShowUiReplayFlags = 0;
+
+class Win32TextInputFixture{
+public:
+    [[nodiscard]] TextInputSessionToken activeSession()const noexcept{ return {}; }
+    [[nodiscard]] b8 setFocused(const b8)noexcept{ return false; }
+    [[nodiscard]] Expected<TextInputSessionToken, TextInputAdmission::Enum> beginEmpty()noexcept{ return MakeUnexpected(TextInputAdmission::Unsupported); }
+    [[nodiscard]] b8 endSession(const TextInputSessionToken)noexcept{ return false; }
+    [[nodiscard]] TextInputPollResult::Enum poll(const TextInputSessionToken, TextInputEvent&)noexcept{ return TextInputPollResult::InvalidSession; }
+
+    [[nodiscard]] isize sendChar(const u32, const isize)noexcept{ return 0; }
+    [[nodiscard]] isize sendSysChar(const u32, const isize)noexcept{ return 0; }
+    [[nodiscard]] isize sendUniChar(const u32, const isize)noexcept{ return 0; }
+    [[nodiscard]] isize sendImeStartComposition()noexcept{ return 0; }
+    [[nodiscard]] isize sendImeEndComposition()noexcept{ return 0; }
+    [[nodiscard]] isize sendImeChar(const u32)noexcept{ return 0; }
+    [[nodiscard]] isize sendImeComposition(const u32, const isize)noexcept{ return 0; }
+    [[nodiscard]] isize sendImeSetContext(const b8, const isize)noexcept{ return 0; }
+    [[nodiscard]] isize sendKillFocus()noexcept{ return 0; }
+    [[nodiscard]] isize sendSetFocus()noexcept{ return 0; }
+
+    [[nodiscard]] b8 dispatchDirectChar(const u32)noexcept{ return false; }
+    [[nodiscard]] Expected<u32> decodeFallbackChar(const u32)noexcept{ return MakeUnexpected(Failure{}); }
+    [[nodiscard]] b8 resetFallbackChar()noexcept{ return false; }
+
+
+public:
+    TextInputSessionToken m_token;
+    usize m_sceneCharacterCount = 0u;
+    usize m_contextForwardCount = 0u;
+    isize m_lastContextForwardedFlags = 0;
+    isize m_lastContextDefaultResult = 0;
+    TextInputSessionToken m_cancelledDuringContextToken;
+    u32 m_sceneCodePoint = 0u;
+    b8 m_cancelOnNextContextForward = false;
+    b8 m_contextFocusLossSucceeded = false;
+    b8 m_contextFocusRestoreSucceeded = false;
+};
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+namespace NWB::Tests::OS{
+using __hidden_os_win32_text_input_support::Win32TextInputFixture;
+using __hidden_os_win32_text_input_support::s_Win32UnicodeNoChar;
+using __hidden_os_win32_text_input_support::s_Win32TrueResult;
+using __hidden_os_win32_text_input_support::s_Win32GcsResultStr;
+using __hidden_os_win32_text_input_support::s_Win32CsInsertChar;
+using __hidden_os_win32_text_input_support::s_Win32CsNoMoveCaret;
+using __hidden_os_win32_text_input_support::s_Win32ShowUiCompositionWindowFlag;
+using __hidden_os_win32_text_input_support::s_Win32ShowUiFullFlags;
+using __hidden_os_win32_text_input_support::s_Win32ShowUiReplayFlags;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyWin32TextInputFixture_RepeatedExplicitContextReleasePreservesActiveNativeSession(mut Win32TextInputFixture self){
+    b8 hasNativeContext = false;
+    b8 firstRelease = false;
+    b8 secondRelease = false;
+    native(mut self, mut hasNativeContext, mut firstRelease, mut secondRelease){
+#if defined(NWB_PLATFORM_WINDOWS)
+        const HIMC nativeContext = ImmGetContext(self.m_window);
+        hasNativeContext = nativeContext != nullptr;
+        if(hasNativeContext){
+            NWB::Core::Win32TextInputContextGuard context(self.m_window, nativeContext);
+            firstRelease = context.release();
+            secondRelease = context.release();
+        }
+#endif
+    }
+    ASSERT_TRUE(hasNativeContext);
+    ASSERT_TRUE(firstRelease);
+    ASSERT_TRUE(secondRelease);
+    EXPECT_EQ(self.activeSession(), self.m_token);
+    EXPECT_EQ(self.sendChar(cast<u32>('R'), 0), 0);
+
+    StandaloneTextInputEvent out = StandaloneTextInputEvent();
+    ASSERT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Event);
+    EXPECT_EQ(out.event.text, "R");
+}
+
+void VerifyWin32TextInputFixture_ContextScopeUnwindPreservesOriginalThrownMarkerAndNativeSession(mut Win32TextInputFixture self){
+    b8 hasNativeContext = false;
+    b8 caughtOriginal = false;
+    native(mut self, mut hasNativeContext, mut caughtOriginal){
+#if defined(NWB_PLATFORM_WINDOWS)
+        struct UnwindMarker final{};
+        try{
+            const HIMC nativeContext = ImmGetContext(self.m_window);
+            hasNativeContext = nativeContext != nullptr;
+            if(hasNativeContext){
+                NWB::Core::Win32TextInputContextGuard context(self.m_window, nativeContext);
+                throw UnwindMarker{};
+            }
+        }
+        catch(const UnwindMarker&){
+            caughtOriginal = true;
+        }
+#endif
+    }
+    ASSERT_TRUE(hasNativeContext);
+    EXPECT_TRUE(caughtOriginal);
+    EXPECT_EQ(self.activeSession(), self.m_token);
+    EXPECT_EQ(self.sendChar(cast<u32>('U'), 0), 0);
+
+    StandaloneTextInputEvent out = StandaloneTextInputEvent();
+    ASSERT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Event);
+    EXPECT_EQ(out.event.text, "U");
+}
+
+void VerifyWin32TextInputFixture_SurrogatePairRemainsPerServiceUntilComplete(mut Win32TextInputFixture self){
+    StandaloneTextInputEvent out = StandaloneTextInputEvent();
+    EXPECT_EQ(self.sendChar(0xd83du, 0), 0);
+    EXPECT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Pending);
+    EXPECT_EQ(self.sendChar(0xde00u, 0), 0);
+    ASSERT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Event);
+    EXPECT_EQ(out.event.text, "\xF0\x9F\x98\x80");
+    EXPECT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Pending);
+}
+
+void VerifyWin32TextInputFixture_AggregateCharacterCountsIgnoreHighFlagsAndKeepScalarBoundaries(mut Win32TextInputFixture self){
+    EXPECT_EQ(self.sendChar(cast<u32>('A'), 0x40000003), 0);
+    EXPECT_EQ(self.sendSysChar(0xd55cu, 0x20000002), 0);
+    EXPECT_EQ(self.sendUniChar(0x1f600u, 2), 0);
+    EXPECT_EQ(self.sendChar(0xd83du, 2), 0);
+    EXPECT_EQ(self.sendChar(0xde00u, 2), 0);
+
+    StandaloneTextInputEvent out = StandaloneTextInputEvent();
+    ASSERT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Event);
+    EXPECT_EQ(out.event.text, "AAA");
+    ASSERT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Event);
+    EXPECT_EQ(out.event.text, "\xED\x95\x9C\xED\x95\x9C");
+    for(usize index = 0u; index < 2u; ++index){
+        ASSERT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Event);
+        EXPECT_EQ(out.event.text, "\xF0\x9F\x98\x80\xF0\x9F\x98\x80");
+    }
+    EXPECT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Pending);
+}
+
+void VerifyWin32TextInputFixture_MaximumAggregateSupplementaryCommitBatchesWithoutEventOverflow(mut Win32TextInputFixture self){
+    EXPECT_EQ(self.sendUniChar(0x1f600u, 0xffff), 0);
+    ASSERT_EQ(self.activeSession(), self.m_token);
+
+    StandaloneTextInputEvent out = StandaloneTextInputEvent();
+    usize totalBytes = 0u;
+    u64 sequence = 0u;
+    while(totalBytes < 0xffffu * 4u){
+        ASSERT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Event);
+        ASSERT_EQ(out.event.kind, TextInputEventKind::Commit);
+        const StringView textView = ViewGlobalString(out.event.text);
+        ASSERT_FALSE(textView.empty());
+        EXPECT_LE(textView.size(), s_TextInputMaxEventTextBytes);
+        ASSERT_EQ(textView.size() % 4u, 0u);
+        EXPECT_GT(out.event.sequence, sequence);
+        sequence = out.event.sequence;
+        for(usize offset = 0u; offset < textView.size(); offset += 4u)
+            ASSERT_EQ(textView.substr(offset, 4u), "\xF0\x9F\x98\x80");
+        totalBytes += textView.size();
+    }
+    EXPECT_EQ(totalBytes, 0xffffu * 4u);
+    EXPECT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Pending);
+}
+
+void VerifyWin32TextInputFixture_AggregateCommitOverflowDiscardsAlreadyQueuedPrefix(mut Win32TextInputFixture self){
+    EXPECT_EQ(self.sendChar(cast<u32>('x'), 5), 0);
+    EXPECT_EQ(self.sendUniChar(0x1f600u, 0xffff), 0);
+    EXPECT_FALSE(self.activeSession().valid());
+
+    StandaloneTextInputEvent out = StandaloneTextInputEvent();
+    ASSERT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Event);
+    EXPECT_EQ(out.event.kind, TextInputEventKind::Cancelled);
+    EXPECT_EQ(out.event.cancelReason, TextInputCancelReason::Overflow);
+    EXPECT_TRUE(out.event.text.empty());
+    EXPECT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::InvalidSession);
+}
+
+void VerifyWin32TextInputFixture_IsolatedLowSurrogateCancelsWithExplicitFailure(mut Win32TextInputFixture self){
+    EXPECT_EQ(self.sendChar(0xde00u, 0), 0);
+    EXPECT_FALSE(self.activeSession().valid());
+
+    StandaloneTextInputEvent out = StandaloneTextInputEvent();
+    ASSERT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Event);
+    EXPECT_EQ(out.event.kind, TextInputEventKind::Cancelled);
+    EXPECT_EQ(out.event.cancelReason, TextInputCancelReason::NativeFailure);
+    EXPECT_TRUE(out.event.text.empty());
+
+    b8 warningOk = true;
+    native(in self, mut warningOk){
+#if defined(NWB_PLATFORM_WINDOWS) && NWB_OCCUR_WARNING
+        warningOk = self.m_logger.sawMessageContaining(NWB_TEXT("Text input: native delivery rejected"))
+            && self.m_logger.lastType() == NWB::Core::Common::LogType::Warning;
+#endif
+    }
+    EXPECT_TRUE(warningOk);
+}
+
+void VerifyWin32TextInputFixture_FocusLossClearsPendingSurrogateBeforeReplacement(mut Win32TextInputFixture self){
+    StandaloneTextInputEvent out = StandaloneTextInputEvent();
+    EXPECT_EQ(self.sendChar(0xd83du, 0), 0);
+    ASSERT_TRUE(self.setFocused(false));
+    ASSERT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Event);
+    EXPECT_EQ(out.event.cancelReason, TextInputCancelReason::FocusLost);
+    EXPECT_FALSE(self.dispatchDirectChar(cast<u32>('x')));
+    ASSERT_TRUE(self.setFocused(true));
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = self.beginEmpty();
+    ASSERT_TRUE(tokenAdmission.has_value());
+    self.m_token = tokenAdmission.value();
+    ASSERT_TRUE(self.m_token.valid());
+    EXPECT_EQ(self.sendChar(cast<u32>('B'), 0), 0);
+    ASSERT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Event);
+    EXPECT_EQ(out.event.text, "B");
+}
+
+void VerifyWin32TextInputFixture_EndDiscardAndReplacementCannotReusePartialUtf16(mut Win32TextInputFixture self){
+    EXPECT_EQ(self.sendChar(0xd83du, 0), 0);
+    ASSERT_TRUE(self.endSession(self.m_token));
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = self.beginEmpty();
+    ASSERT_TRUE(tokenAdmission.has_value());
+    self.m_token = tokenAdmission.value();
+    ASSERT_TRUE(self.m_token.valid());
+    EXPECT_EQ(self.sendChar(0xde00u, 0), 0);
+
+    StandaloneTextInputEvent out = StandaloneTextInputEvent();
+    ASSERT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Event);
+    EXPECT_EQ(out.event.kind, TextInputEventKind::Cancelled);
+}
+
+void VerifyWin32TextInputFixture_ControlCharactersStayOutOfCommittedDocumentText(mut Win32TextInputFixture self){
+    Array<u32, 5> controlChars = Array<u32, 5>();
+    controlChars[0u] = 0x08u;
+    controlChars[1u] = 0x09u;
+    controlChars[2u] = 0x0du;
+    controlChars[3u] = 0x1bu;
+    controlChars[4u] = 0x7fu;
+    for(in u32 ch : controlChars)
+        EXPECT_EQ(self.sendChar(ch, 0), 0);
+
+    StandaloneTextInputEvent out = StandaloneTextInputEvent();
+    EXPECT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Pending);
+    EXPECT_EQ(self.sendUniChar(s_Win32UnicodeNoChar, 0), s_Win32TrueResult);
+    EXPECT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Pending);
+}
+
+void VerifyWin32TextInputFixture_ImeCharIsConsumedWithoutDuplicateCommitAndFollowingTypingSurvives(mut Win32TextInputFixture self){
+    EXPECT_EQ(self.sendImeStartComposition(), 0);
+    EXPECT_EQ(self.sendImeChar(0xd55cu), 0);
+    EXPECT_EQ(self.sendImeEndComposition(), 0);
+
+    StandaloneTextInputEvent out = StandaloneTextInputEvent();
+    ASSERT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Event);
+    EXPECT_EQ(out.event.kind, TextInputEventKind::Preedit);
+    EXPECT_TRUE(out.event.text.empty());
+    EXPECT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Pending);
+    EXPECT_EQ(self.sendChar(0xd55cu, 0), 0);
+    ASSERT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Event);
+    EXPECT_EQ(out.event.kind, TextInputEventKind::Commit);
+    EXPECT_EQ(out.event.text, "\xED\x95\x9C");
+}
+
+void VerifyWin32TextInputFixture_CompositionWithoutCurrentStartCannotDeliverAcrossSessionBoundary(mut Win32TextInputFixture self){
+    EXPECT_EQ(self.sendImeStartComposition(), 0);
+    ASSERT_TRUE(self.endSession(self.m_token));
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = self.beginEmpty();
+    ASSERT_TRUE(tokenAdmission.has_value());
+    self.m_token = tokenAdmission.value();
+    ASSERT_TRUE(self.m_token.valid());
+    EXPECT_EQ(self.sendImeComposition(0u, s_Win32GcsResultStr), 0);
+
+    StandaloneTextInputEvent out = StandaloneTextInputEvent();
+    EXPECT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Pending);
+}
+
+void VerifyWin32TextInputFixture_BridgeRejectsUnsupportedForeignServiceBeforeDowncast(mut Win32TextInputFixture self){
+    b8 createdUnsupported = false;
+    b8 foreignDispatch = true;
+    b8 mouseDispatch = true;
+    b8 foreignContext = true;
+    b8 mouseContext = true;
+    native(mut self, mut createdUnsupported, mut foreignDispatch, mut mouseDispatch, mut foreignContext, mut mouseContext){
+#if defined(NWB_PLATFORM_WINDOWS)
+        auto unsupportedResult = NWB::Core::CreateTextInputService(self.m_arena.arena, nullptr);
+        createdUnsupported = unsupportedResult.has_value();
+        if(unsupportedResult){
+            const GlobalUniquePtr<NWB::Core::ITextInputService> unsupported = Move(*unsupportedResult);
+            foreignDispatch = NWB::Core::DispatchWin32TextInputMessage(*unsupported, WM_CHAR, 'x', 0);
+            mouseDispatch = NWB::Core::DispatchWin32TextInputMessage(*self.m_service, WM_MOUSEMOVE, 0u, 0);
+            foreignContext = NWB::Core::ResolveWin32TextInputContextMessage(*unsupported, WM_IME_SETCONTEXT, TRUE, 456).has_value();
+            mouseContext = NWB::Core::ResolveWin32TextInputContextMessage(*self.m_service, WM_MOUSEMOVE, 0u, 456).has_value();
+        }
+#endif
+    }
+    ASSERT_TRUE(createdUnsupported);
+    EXPECT_FALSE(foreignDispatch);
+    EXPECT_FALSE(mouseDispatch);
+    EXPECT_FALSE(foreignContext);
+    EXPECT_FALSE(mouseContext);
+
+    StandaloneTextInputEvent out = StandaloneTextInputEvent();
+    EXPECT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Pending);
+}
+
+void VerifyWin32TextInputFixture_ImeContextVisibilityTracksSessionAfterActivationAndPreservesOtherFlags(mut Win32TextInputFixture self){
+    ASSERT_TRUE(self.endSession(self.m_token));
+    const isize flags = s_Win32ShowUiFullFlags;
+    const isize activeExpectedFlags = flags & ~s_Win32ShowUiCompositionWindowFlag;
+    const usize before = self.m_contextForwardCount;
+    const isize inactiveResult = self.sendImeSetContext(true, flags);
+    EXPECT_EQ(self.m_contextForwardCount, before + 1u);
+    EXPECT_EQ(self.m_lastContextForwardedFlags, flags);
+    EXPECT_EQ(inactiveResult, cast<isize>(self.m_lastContextDefaultResult));
+
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> begun = self.beginEmpty();
+    ASSERT_TRUE(begun.has_value());
+    self.m_token = begun.value();
+    EXPECT_EQ(self.m_contextForwardCount, before + 2u);
+    EXPECT_EQ(self.m_lastContextForwardedFlags, activeExpectedFlags);
+    const isize activeResult = self.sendImeSetContext(true, flags);
+    EXPECT_EQ(self.m_contextForwardCount, before + 3u);
+    EXPECT_EQ(self.m_lastContextForwardedFlags, activeExpectedFlags);
+    EXPECT_EQ(activeResult, cast<isize>(self.m_lastContextDefaultResult));
+    ASSERT_TRUE(self.endSession(self.m_token));
+    EXPECT_EQ(self.m_contextForwardCount, before + 4u);
+    EXPECT_EQ(self.m_lastContextForwardedFlags, flags);
+}
+
+void VerifyWin32TextInputFixture_ImeContextReplayNeverReactivatesAfterFocusLossOrNativeDeactivation(mut Win32TextInputFixture self){
+    ASSERT_TRUE(self.endSession(self.m_token));
+    const isize flags = s_Win32ShowUiReplayFlags;
+    const isize initialSetResult = self.sendImeSetContext(true, flags);
+    EXPECT_EQ(initialSetResult, cast<isize>(self.m_lastContextDefaultResult));
+
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> begun = self.beginEmpty();
+    ASSERT_TRUE(begun.has_value());
+    self.m_token = begun.value();
+    const usize beforeFocusLoss = self.m_contextForwardCount;
+    ASSERT_TRUE(self.setFocused(false));
+    EXPECT_EQ(self.m_contextForwardCount, beforeFocusLoss);
+    const isize deactivationResult = self.sendImeSetContext(false, flags);
+    EXPECT_EQ(self.m_contextForwardCount, beforeFocusLoss + 1u);
+    EXPECT_EQ(self.m_lastContextForwardedFlags, flags);
+    EXPECT_EQ(deactivationResult, cast<isize>(self.m_lastContextDefaultResult));
+
+    ASSERT_TRUE(self.setFocused(true));
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> second = self.beginEmpty();
+    ASSERT_TRUE(second.has_value());
+    self.m_token = second.value();
+    EXPECT_EQ(self.m_contextForwardCount, beforeFocusLoss + 1u);
+    ASSERT_TRUE(self.endSession(self.m_token));
+    EXPECT_EQ(self.m_contextForwardCount, beforeFocusLoss + 1u);
+}
+
+void VerifyWin32TextInputFixture_ReentrantFocusCancellationRestoresNativeImeVisibilityAndKeepsCancelEvent(mut Win32TextInputFixture self){
+    ASSERT_TRUE(self.endSession(self.m_token));
+    const isize flags = s_Win32ShowUiReplayFlags;
+    const isize initialSetResult = self.sendImeSetContext(true, flags);
+    EXPECT_EQ(initialSetResult, cast<isize>(self.m_lastContextDefaultResult));
+
+    const usize before = self.m_contextForwardCount;
+    self.m_cancelOnNextContextForward = true;
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> begun = self.beginEmpty();
+    ASSERT_FALSE(begun.has_value());
+    EXPECT_EQ(begun.error(), TextInputAdmission::Unavailable);
+    EXPECT_FALSE(self.m_cancelOnNextContextForward);
+    EXPECT_TRUE(self.m_contextFocusLossSucceeded);
+    EXPECT_TRUE(self.m_contextFocusRestoreSucceeded);
+    EXPECT_TRUE(self.m_cancelledDuringContextToken.valid());
+    EXPECT_EQ(self.m_contextForwardCount, before + 2u);
+    EXPECT_EQ(self.m_lastContextForwardedFlags, flags);
+
+    StandaloneTextInputEvent out = StandaloneTextInputEvent();
+    ASSERT_EQ(self.poll(self.m_cancelledDuringContextToken, out.event), TextInputPollResult::Event);
+    EXPECT_EQ(out.event.kind, TextInputEventKind::Cancelled);
+    EXPECT_EQ(out.event.cancelReason, TextInputCancelReason::FocusLost);
+    EXPECT_EQ(self.poll(self.m_cancelledDuringContextToken, out.event), TextInputPollResult::InvalidSession);
+    EXPECT_EQ(self.m_sceneCharacterCount, 0u);
+}
+
+void VerifyWin32TextInputFixture_SceneFallbackCannotJoinSurrogatesAcrossSessionOwnership(mut Win32TextInputFixture self){
+    ASSERT_TRUE(self.endSession(self.m_token));
+    EXPECT_FALSE(self.decodeFallbackChar(0xd83du).has_value());
+
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = self.beginEmpty();
+    ASSERT_TRUE(tokenAdmission.has_value());
+    self.m_token = tokenAdmission.value();
+    ASSERT_TRUE(self.m_token.valid());
+    ASSERT_TRUE(self.endSession(self.m_token));
+    EXPECT_FALSE(self.decodeFallbackChar(0xde00u).has_value());
+
+    const Expected<u32> codePoint = self.decodeFallbackChar(cast<u32>('A'));
+    ASSERT_TRUE(codePoint.has_value());
+    EXPECT_EQ(codePoint.value(), cast<u32>('A'));
+}
+
+void VerifyWin32TextInputFixture_SceneFallbackFocusResetDiscardsPartialPair(mut Win32TextInputFixture self){
+    ASSERT_TRUE(self.endSession(self.m_token));
+    EXPECT_FALSE(self.decodeFallbackChar(0xd83du).has_value());
+    ASSERT_TRUE(self.setFocused(false));
+    ASSERT_TRUE(self.resetFallbackChar());
+    ASSERT_TRUE(self.setFocused(true));
+    ASSERT_TRUE(self.resetFallbackChar());
+    EXPECT_FALSE(self.decodeFallbackChar(0xde00u).has_value());
+}
+
+void VerifyWin32TextInputFixture_SceneFallbackDecoderNeverConsumesActivePair(mut Win32TextInputFixture self){
+    EXPECT_EQ(self.sendChar(0xd83du, 0), 0);
+    EXPECT_FALSE(self.decodeFallbackChar(0xde00u).has_value());
+
+    EXPECT_EQ(self.sendChar(0xde00u, 0), 0);
+    StandaloneTextInputEvent out = StandaloneTextInputEvent();
+    ASSERT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Event);
+    EXPECT_EQ(out.event.text, "\xF0\x9F\x98\x80");
+}
+
+void VerifyWin32TextInputFixture_SceneFallbackSurrogateStateIsPerServiceAndValidatesUnits(mut Win32TextInputFixture self){
+    ASSERT_TRUE(self.endSession(self.m_token));
+    EXPECT_FALSE(self.decodeFallbackChar(0xd83du).has_value());
+
+    b8 secondCreated = false;
+    b8 secondFocused = false;
+    b8 secondDecoded = true;
+    native(mut self, mut secondCreated, mut secondFocused, mut secondDecoded){
+#if defined(NWB_PLATFORM_WINDOWS)
+        auto secondResult = NWB::Core::CreateTextInputService(self.m_arena.arena, self.m_window);
+        if(secondResult && secondResult->get() != nullptr){
+            secondCreated = true;
+            const GlobalUniquePtr<NWB::Core::ITextInputService> second = Move(*secondResult);
+            secondFocused = second->setFocused(true);
+            secondDecoded = NWB::Core::DecodeWin32FallbackCharInput(*second, 0xde00u).has_value();
+        }
+#endif
+    }
+    ASSERT_TRUE(secondCreated);
+    ASSERT_TRUE(secondFocused);
+    EXPECT_FALSE(secondDecoded);
+
+    const Expected<u32> supplementary = self.decodeFallbackChar(0xde00u);
+    ASSERT_TRUE(supplementary.has_value());
+    EXPECT_EQ(supplementary.value(), 0x1f600u);
+    EXPECT_FALSE(self.decodeFallbackChar(0x110000u).has_value());
+    EXPECT_FALSE(self.decodeFallbackChar(0u).has_value());
+    EXPECT_FALSE(self.decodeFallbackChar(0xd83du).has_value());
+
+    const Expected<u32> asciiB = self.decodeFallbackChar(cast<u32>('B'));
+    ASSERT_TRUE(asciiB.has_value());
+    EXPECT_EQ(asciiB.value(), cast<u32>('B'));
+    EXPECT_FALSE(self.decodeFallbackChar(0xde00u).has_value());
+}
+
+void VerifyWin32TextInputFixture_SceneFallbackBridgeRejectsForeignServiceAndWrongThread(mut Win32TextInputFixture self){
+    ASSERT_TRUE(self.endSession(self.m_token));
+    b8 unsupportedCreated = false;
+    b8 unsupportedDecode = true;
+    b8 unsupportedReset = true;
+    b8 wrongThreadDecode = true;
+    b8 wrongThreadReset = true;
+    native(mut self, mut unsupportedCreated, mut unsupportedDecode, mut unsupportedReset, mut wrongThreadDecode, mut wrongThreadReset){
+#if defined(NWB_PLATFORM_WINDOWS)
+        auto unsupportedResult = NWB::Core::CreateTextInputService(self.m_arena.arena, nullptr);
+        unsupportedCreated = unsupportedResult.has_value();
+        if(unsupportedResult){
+            const GlobalUniquePtr<NWB::Core::ITextInputService> unsupported = Move(*unsupportedResult);
+            unsupportedDecode = NWB::Core::DecodeWin32FallbackCharInput(*unsupported, 'A').has_value();
+            unsupportedReset = NWB::Core::ResetWin32FallbackCharInput(*unsupported);
+        }
+        Thread worker([&](){
+            wrongThreadDecode = NWB::Core::DecodeWin32FallbackCharInput(*self.m_service, 'A').has_value();
+            wrongThreadReset = NWB::Core::ResetWin32FallbackCharInput(*self.m_service);
+        });
+        worker.join();
+#endif
+    }
+    ASSERT_TRUE(unsupportedCreated);
+    EXPECT_FALSE(unsupportedDecode);
+    EXPECT_FALSE(unsupportedReset);
+    EXPECT_FALSE(wrongThreadDecode);
+    EXPECT_FALSE(wrongThreadReset);
+
+    const Expected<u32> codePoint = self.decodeFallbackChar(cast<u32>('C'));
+    ASSERT_TRUE(codePoint.has_value());
+    EXPECT_EQ(codePoint.value(), cast<u32>('C'));
+}
+
+void VerifyWin32TextInputFixture_InsertCharCreatesProvisionalPreeditWithoutCommitAndHonorsNoMoveCaret(mut Win32TextInputFixture self){
+    StandaloneTextInputEvent out = StandaloneTextInputEvent();
+    EXPECT_EQ(self.sendImeStartComposition(), 0);
+    EXPECT_EQ(self.sendImeComposition(0xd55cu, s_Win32CsInsertChar | s_Win32CsNoMoveCaret), 0);
+    ASSERT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Event);
+    EXPECT_EQ(out.event.kind, TextInputEventKind::Preedit);
+    EXPECT_EQ(out.event.text, "\xED\x95\x9C");
+    EXPECT_EQ(out.event.anchorByte, 0u);
+    EXPECT_EQ(out.event.caretByte, 0u);
+    EXPECT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Pending);
+
+    EXPECT_EQ(self.sendImeComposition(cast<u32>('A'), s_Win32CsInsertChar), 0);
+    ASSERT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Event);
+    EXPECT_EQ(out.event.kind, TextInputEventKind::Preedit);
+    EXPECT_EQ(out.event.text, "A\xED\x95\x9C");
+    EXPECT_EQ(out.event.caretByte, 1u);
+
+    EXPECT_EQ(self.sendImeEndComposition(), 0);
+    ASSERT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Event);
+    EXPECT_EQ(out.event.kind, TextInputEventKind::Preedit);
+    EXPECT_TRUE(out.event.text.empty());
+    EXPECT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Pending);
+}
+
+void VerifyWin32TextInputFixture_InsertCharSupplementaryPairProducesOneUtf8PreeditAndCancellationClearsIt(mut Win32TextInputFixture self){
+    StandaloneTextInputEvent out = StandaloneTextInputEvent();
+    EXPECT_EQ(self.sendImeStartComposition(), 0);
+    ASSERT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Event);
+    EXPECT_EQ(self.sendImeComposition(0xd83du, s_Win32CsInsertChar), 0);
+    EXPECT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Pending);
+    EXPECT_EQ(self.sendImeComposition(0xde00u, s_Win32CsInsertChar), 0);
+    ASSERT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Event);
+    EXPECT_EQ(out.event.kind, TextInputEventKind::Preedit);
+    EXPECT_EQ(out.event.text, "\xF0\x9F\x98\x80");
+    EXPECT_EQ(out.event.caretByte, 4u);
+    EXPECT_EQ(self.sendImeComposition(0u, 0), 0);
+    ASSERT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Event);
+    EXPECT_EQ(out.event.kind, TextInputEventKind::Preedit);
+    EXPECT_TRUE(out.event.text.empty());
+    EXPECT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Pending);
+}
+
+void VerifyWin32TextInputFixture_KeyboardFocusMessagesCancelQueuedWorkWithoutActivationChange(mut Win32TextInputFixture self){
+    StandaloneTextInputEvent out = StandaloneTextInputEvent();
+    EXPECT_EQ(self.sendChar(cast<u32>('A'), 0), 0);
+    EXPECT_EQ(self.sendImeStartComposition(), 0);
+    EXPECT_EQ(self.sendImeComposition(0xd55cu, s_Win32CsInsertChar), 0);
+    EXPECT_EQ(self.sendKillFocus(), 0);
+    EXPECT_FALSE(self.activeSession().valid());
+    ASSERT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Event);
+    EXPECT_EQ(out.event.kind, TextInputEventKind::Cancelled);
+    EXPECT_EQ(out.event.cancelReason, TextInputCancelReason::FocusLost);
+    EXPECT_TRUE(out.event.text.empty());
+    EXPECT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::InvalidSession);
+
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> unavailableBegin = self.beginEmpty();
+    ASSERT_FALSE(unavailableBegin.has_value());
+    EXPECT_EQ(unavailableBegin.error(), TextInputAdmission::Unavailable);
+
+    EXPECT_EQ(self.sendSetFocus(), 0);
+    const Expected<TextInputSessionToken, TextInputAdmissionEnum> tokenAdmission = self.beginEmpty();
+    ASSERT_TRUE(tokenAdmission.has_value());
+    self.m_token = tokenAdmission.value();
+    ASSERT_TRUE(self.m_token.valid());
+    EXPECT_EQ(self.sendChar(cast<u32>('B'), 0), 0);
+    ASSERT_EQ(self.poll(self.m_token, out.event), TextInputPollResult::Event);
+    EXPECT_EQ(out.event.kind, TextInputEventKind::Commit);
+    EXPECT_EQ(out.event.text, "B");
+}
+
+void VerifyWin32TextInputFixture_InactiveKeyboardFocusMessagesResetSceneSurrogateState(mut Win32TextInputFixture self){
+    ASSERT_TRUE(self.endSession(self.m_token));
+    EXPECT_FALSE(self.decodeFallbackChar(0xd83du).has_value());
+    EXPECT_EQ(self.sendKillFocus(), 0);
+    EXPECT_EQ(self.sendSetFocus(), 0);
+    EXPECT_FALSE(self.decodeFallbackChar(0xde00u).has_value());
+}
+
+void VerifyWin32TextInputFixture_UnfocusedSceneFallbackRefusesLateWindowCharacterAndClearsPartialPair(mut Win32TextInputFixture self){
+    ASSERT_TRUE(self.endSession(self.m_token));
+    EXPECT_EQ(self.sendChar(0xd83du, 0), 0);
+    EXPECT_EQ(self.m_sceneCharacterCount, 0u);
+    // Direct focus state update leaves fallback reset to the refusal guard, as a defensive late-message case.
+    ASSERT_TRUE(self.setFocused(false));
+    EXPECT_EQ(self.sendChar(cast<u32>('A'), 0), 0);
+    EXPECT_EQ(self.m_sceneCharacterCount, 0u);
+    ASSERT_TRUE(self.setFocused(true));
+    EXPECT_EQ(self.sendChar(0xde00u, 0), 0);
+    EXPECT_EQ(self.m_sceneCharacterCount, 0u);
+    EXPECT_EQ(self.sendChar(cast<u32>('B'), 0), 0);
+    EXPECT_EQ(self.m_sceneCharacterCount, 1u);
+    EXPECT_EQ(self.m_sceneCodePoint, cast<u32>('B'));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_PLATFORM_WINDOWS)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_os_win32_text_input_support{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+LRESULT CALLBACK Win32TextInputFixture::WindowProc(const HWND window, const UINT message, const WPARAM wParam, const LPARAM lParam){
+    if(message == WM_NCCREATE){
+        const auto& creation = *MakeNotNull(reinterpret_cast<const CREATESTRUCTW*>(lParam));
+        SetLastError(ERROR_SUCCESS);
+        const LONG_PTR previous = SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(creation.lpCreateParams));
+        if(previous == 0 && GetLastError() != ERROR_SUCCESS)
+            return FALSE;
+    }
+    auto* const fixture = reinterpret_cast<Win32TextInputFixture*>(GetWindowLongPtrW(window, GWLP_USERDATA));
+    if(fixture && fixture->m_service){
+        const auto forwardedLParam = ResolveWin32TextInputContextMessage(*fixture->m_service, message, wParam, lParam);
+        if(forwardedLParam){
+            ++fixture->m_contextForwardCount;
+            fixture->m_lastContextForwardedFlags = *forwardedLParam;
+            if(fixture->m_cancelOnNextContextForward){
+                fixture->m_cancelOnNextContextForward = false;
+                fixture->m_cancelledDuringContextToken = fixture->m_service->activeSession();
+                fixture->m_contextFocusLossSucceeded = fixture->m_service->setFocused(false);
+                fixture->m_contextFocusRestoreSucceeded = fixture->m_service->setFocused(true);
+            }
+            fixture->m_lastContextDefaultResult = DefWindowProcW(window, message, wParam, static_cast<LPARAM>(*forwardedLParam));
+            return fixture->m_lastContextDefaultResult;
+        }
+        if(message == WM_UNICHAR && wParam == UNICODE_NOCHAR)
+            return TRUE;
+        if(DispatchWin32TextInputMessage(*fixture->m_service, message, wParam, lParam))
+            return 0;
+        if(message == WM_CHAR){
+            const auto codePoint = DecodeWin32FallbackCharInput(*fixture->m_service, static_cast<u32>(wParam));
+            if(codePoint){
+                ++fixture->m_sceneCharacterCount;
+                fixture->m_sceneCodePoint = *codePoint;
+            }
+            return 0;
+        }
+    }
+    return DefWindowProcW(window, message, wParam, lParam);
+}
+
+void Win32TextInputFixture::SetUp(){
+    const HINSTANCE instance = GetModuleHandleW(nullptr);
+    WNDCLASSW nativeClass = {};
+    nativeClass.lpfnWndProc = WindowProc;
+    nativeClass.hInstance = instance;
+    nativeClass.lpszClassName = s_Win32ClassName.data();
+    const ATOM registered = RegisterClassW(&nativeClass);
+    ASSERT_TRUE(registered != 0u || GetLastError() == ERROR_CLASS_ALREADY_EXISTS);
+    m_window = CreateWindowExW(0u, s_Win32ClassName.data(), L"", WS_POPUP, 0, 0, 100, 100, nullptr, nullptr, instance, this);
+    ASSERT_NE(m_window, nullptr);
+    auto serviceResult = CreateTextInputService(m_arena.arena, m_window);
+    ASSERT_TRUE(serviceResult);
+    m_service = Move(*serviceResult);
+    ASSERT_NE(m_service.get(), nullptr);
+    ASSERT_TRUE(m_service->setFocused(true));
+    const TextInputSessionDesc desc{ { 10, 15, 2, 18 }, {}, 0u, 0u };
+    const auto begun = m_service->begin(desc);
+    ASSERT_TRUE(begun);
+    m_token = *begun;
+    ASSERT_TRUE(m_token.valid());
+}
+
+void Win32TextInputFixture::TearDown(){
+    m_service.reset();
+    if(m_window){
+        EXPECT_NE(DestroyWindow(m_window), FALSE);
+        m_window = nullptr;
+    }
+    EXPECT_EQ(m_logger.errorCount(), 0u);
+    EXPECT_NE(m_logger.lastType(), Common::LogType::Fatal);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+TEST_F(Win32TextInputFixture, RepeatedExplicitContextReleasePreservesActiveNativeSession){ VerifyWin32TextInputFixture_RepeatedExplicitContextReleasePreservesActiveNativeSession(*this); }
+TEST_F(Win32TextInputFixture, ContextScopeUnwindPreservesOriginalThrownMarkerAndNativeSession){ VerifyWin32TextInputFixture_ContextScopeUnwindPreservesOriginalThrownMarkerAndNativeSession(*this); }
+TEST_F(Win32TextInputFixture, SurrogatePairRemainsPerServiceUntilComplete){ VerifyWin32TextInputFixture_SurrogatePairRemainsPerServiceUntilComplete(*this); }
+TEST_F(Win32TextInputFixture, AggregateCharacterCountsIgnoreHighFlagsAndKeepScalarBoundaries){ VerifyWin32TextInputFixture_AggregateCharacterCountsIgnoreHighFlagsAndKeepScalarBoundaries(*this); }
+TEST_F(Win32TextInputFixture, MaximumAggregateSupplementaryCommitBatchesWithoutEventOverflow){ VerifyWin32TextInputFixture_MaximumAggregateSupplementaryCommitBatchesWithoutEventOverflow(*this); }
+TEST_F(Win32TextInputFixture, AggregateCommitOverflowDiscardsAlreadyQueuedPrefix){ VerifyWin32TextInputFixture_AggregateCommitOverflowDiscardsAlreadyQueuedPrefix(*this); }
+TEST_F(Win32TextInputFixture, IsolatedLowSurrogateCancelsWithExplicitFailure){ VerifyWin32TextInputFixture_IsolatedLowSurrogateCancelsWithExplicitFailure(*this); }
+TEST_F(Win32TextInputFixture, FocusLossClearsPendingSurrogateBeforeReplacement){ VerifyWin32TextInputFixture_FocusLossClearsPendingSurrogateBeforeReplacement(*this); }
+TEST_F(Win32TextInputFixture, EndDiscardAndReplacementCannotReusePartialUtf16){ VerifyWin32TextInputFixture_EndDiscardAndReplacementCannotReusePartialUtf16(*this); }
+TEST_F(Win32TextInputFixture, ControlCharactersStayOutOfCommittedDocumentText){ VerifyWin32TextInputFixture_ControlCharactersStayOutOfCommittedDocumentText(*this); }
+TEST_F(Win32TextInputFixture, ImeCharIsConsumedWithoutDuplicateCommitAndFollowingTypingSurvives){ VerifyWin32TextInputFixture_ImeCharIsConsumedWithoutDuplicateCommitAndFollowingTypingSurvives(*this); }
+TEST_F(Win32TextInputFixture, CompositionWithoutCurrentStartCannotDeliverAcrossSessionBoundary){ VerifyWin32TextInputFixture_CompositionWithoutCurrentStartCannotDeliverAcrossSessionBoundary(*this); }
+TEST_F(Win32TextInputFixture, BridgeRejectsUnsupportedForeignServiceBeforeDowncast){ VerifyWin32TextInputFixture_BridgeRejectsUnsupportedForeignServiceBeforeDowncast(*this); }
+TEST_F(Win32TextInputFixture, ImeContextVisibilityTracksSessionAfterActivationAndPreservesOtherFlags){ VerifyWin32TextInputFixture_ImeContextVisibilityTracksSessionAfterActivationAndPreservesOtherFlags(*this); }
+TEST_F(Win32TextInputFixture, ImeContextReplayNeverReactivatesAfterFocusLossOrNativeDeactivation){ VerifyWin32TextInputFixture_ImeContextReplayNeverReactivatesAfterFocusLossOrNativeDeactivation(*this); }
+TEST_F(Win32TextInputFixture, ReentrantFocusCancellationRestoresNativeImeVisibilityAndKeepsCancelEvent){ VerifyWin32TextInputFixture_ReentrantFocusCancellationRestoresNativeImeVisibilityAndKeepsCancelEvent(*this); }
+TEST_F(Win32TextInputFixture, SceneFallbackCannotJoinSurrogatesAcrossSessionOwnership){ VerifyWin32TextInputFixture_SceneFallbackCannotJoinSurrogatesAcrossSessionOwnership(*this); }
+TEST_F(Win32TextInputFixture, SceneFallbackFocusResetDiscardsPartialPair){ VerifyWin32TextInputFixture_SceneFallbackFocusResetDiscardsPartialPair(*this); }
+TEST_F(Win32TextInputFixture, SceneFallbackDecoderNeverConsumesActivePair){ VerifyWin32TextInputFixture_SceneFallbackDecoderNeverConsumesActivePair(*this); }
+TEST_F(Win32TextInputFixture, SceneFallbackSurrogateStateIsPerServiceAndValidatesUnits){ VerifyWin32TextInputFixture_SceneFallbackSurrogateStateIsPerServiceAndValidatesUnits(*this); }
+TEST_F(Win32TextInputFixture, SceneFallbackBridgeRejectsForeignServiceAndWrongThread){ VerifyWin32TextInputFixture_SceneFallbackBridgeRejectsForeignServiceAndWrongThread(*this); }
+TEST_F(Win32TextInputFixture, InsertCharCreatesProvisionalPreeditWithoutCommitAndHonorsNoMoveCaret){ VerifyWin32TextInputFixture_InsertCharCreatesProvisionalPreeditWithoutCommitAndHonorsNoMoveCaret(*this); }
+TEST_F(Win32TextInputFixture, InsertCharSupplementaryPairProducesOneUtf8PreeditAndCancellationClearsIt){ VerifyWin32TextInputFixture_InsertCharSupplementaryPairProducesOneUtf8PreeditAndCancellationClearsIt(*this); }
+TEST_F(Win32TextInputFixture, KeyboardFocusMessagesCancelQueuedWorkWithoutActivationChange){ VerifyWin32TextInputFixture_KeyboardFocusMessagesCancelQueuedWorkWithoutActivationChange(*this); }
+TEST_F(Win32TextInputFixture, InactiveKeyboardFocusMessagesResetSceneSurrogateState){ VerifyWin32TextInputFixture_InactiveKeyboardFocusMessagesResetSceneSurrogateState(*this); }
+TEST_F(Win32TextInputFixture, UnfocusedSceneFallbackRefusesLateWindowCharacterAndClearsPartialPair){ VerifyWin32TextInputFixture_UnfocusedSceneFallbackRefusesLateWindowCharacterAndClearsPartialPair(*this); }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -2,7 +2,88 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/floating_point_environment_guard.adhd>
 #include <tests/common/gtest_macros.adhd>
+#include <tests/common/test_context.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <global/array.h>
+#include <global/bit.h>
+#include <global/floating_point_environment.h>
+#include <global/limit.h>
+#include <global/simd/convert.h>
+#include <global/simd/type.h>
+#include <global/simd/vector.h>
+#include <global/simdmath.h>
+#include <global/simplemath.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::MathCases{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ScopedHeldFloatingPointEnvironment final : NoCopy{
+public:
+    ScopedHeldFloatingPointEnvironment() = default;
+    ScopedHeldFloatingPointEnvironment(ScopedHeldFloatingPointEnvironment&&) = delete;
+    ~ScopedHeldFloatingPointEnvironment()noexcept{
+        if(m_active && m_original && !SetFloatingPointEnvironment(*m_original))
+            NWB_ASSERT(false);
+    }
+
+
+public:
+    [[nodiscard]] b8 valid()const noexcept{ return m_original.has_value(); }
+
+    [[nodiscard]] b8 restoreNow()noexcept{
+        if(!m_original || !SetFloatingPointEnvironment(*m_original))
+            return false;
+        m_active = false;
+        return true;
+    }
+
+
+private:
+    Expected<FloatingPointEnvironment> m_original = HoldFloatingPointExceptions();
+    b8 m_active = true;
+};
+
+using ScopedTestTrace = NWB::Tests::ScopedTestTrace;
+
+inline constexpr Array<i32, 4u> s_FloatingPointRoundingModes = { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
+inline constexpr Array<i32, 3u> s_DirectedRoundingModes = { FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
+inline constexpr i32 s_FeAllExcept = FE_ALL_EXCEPT;
+inline constexpr i32 s_FeInvalid = FE_INVALID;
+inline constexpr i32 s_FeOverflow = FE_OVERFLOW;
+inline constexpr i32 s_FeDivByZero = FE_DIVBYZERO;
+inline constexpr i32 s_FeInexact = FE_INEXACT;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -13,6 +94,17 @@ const f32 s_MathMatrixDeterminantEpsilon = 0.000000000001f;
 const f32 s_MathMatrixRigidEpsilon = 0.001f;
 const f32 s_SingleDirectionEpsilon = 0.00001f;
 const f64 s_DoubleDirectionEpsilon = 0.00000000000002;
+
+const u32 s_F32InfinityBits = 0x7f800000u;
+const u32 s_F32NegInfinityBits = 0xff800000u;
+const u32 s_F32QuietNanBits = 0x7fc00000u;
+const u32 s_F32NegZeroBits = 0x80000000u;
+
+const u64 s_F64InfinityBits = 0x7ff0000000000000u;
+const u64 s_F64NegInfinityBits = 0xfff0000000000000u;
+const u64 s_F64QuietNanBits = 0x7ff8000000000000u;
+const u64 s_F64NegZeroBits = 0x8000000000000000u;
+const u64 s_F64MaxBits = 0x7fefffffffffffffu;
 
 class EqualityObservation{
     public b8 equal = false;
@@ -30,6 +122,128 @@ void ExpectDoubleDirectionNear(in VectorDouble actual, in VectorDouble expected)
     EXPECT_NEAR(actual.x, expected.x, s_DoubleDirectionEpsilon);
     EXPECT_NEAR(actual.y, expected.y, s_DoubleDirectionEpsilon);
     EXPECT_NEAR(actual.z, expected.z, s_DoubleDirectionEpsilon);
+}
+
+VectorSingle MakeVolatileSingleBits(in u32 x, in u32 y, in u32 z, in u32 w){
+    VectorSingle result = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+    native(in x, in y, in z, in w, mut result){
+        Array<volatile u32, 4u> runtimeBits = { x, y, z, w };
+        result = VectorSetInt(runtimeBits[0], runtimeBits[1], runtimeBits[2], runtimeBits[3]);
+    }
+    return result;
+}
+
+VectorDouble MakeVolatileDoubleBits(in u64 x, in u64 y, in u64 z, in u64 w){
+    VectorDouble result = VectorDouble(0.0, 0.0, 0.0, 0.0);
+    native(in x, in y, in z, in w, mut result){
+        Array<volatile u64, 4u> runtimeBits = { x, y, z, w };
+        result = VectorDoubleSetInt(runtimeBits[0], runtimeBits[1], runtimeBits[2], runtimeBits[3]);
+    }
+    return result;
+}
+
+VectorSingle MakeVolatileSingleFloats(in f32 x, in f32 y, in f32 z, in f32 w){
+    VectorSingle result = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+    native(in x, in y, in z, in w, mut result){
+        Array<volatile f32, 4u> runtimeFloats = { x, y, z, w };
+        result = VectorSet(runtimeFloats[0], runtimeFloats[1], runtimeFloats[2], runtimeFloats[3]);
+    }
+    return result;
+}
+
+VectorDouble MakeVolatileDoubleFloats(in f64 x, in f64 y, in f64 z, in f64 w){
+    VectorDouble result = VectorDouble(0.0, 0.0, 0.0, 0.0);
+    native(in x, in y, in z, in w, mut result){
+        Array<volatile f64, 4u> runtimeFloats = { x, y, z, w };
+        result = VectorDoubleSet(runtimeFloats[0], runtimeFloats[1], runtimeFloats[2], runtimeFloats[3]);
+    }
+    return result;
+}
+
+u32 GetSingleLaneBits(in VectorSingle vec, in usize lane){
+    u32 result = 0u;
+    native(in vec, in lane, mut result){
+        result = VectorGetIntByIndex(vec, lane);
+    }
+    return result;
+}
+
+u64 GetDoubleLaneBits(in VectorDouble vec, in usize lane){
+    u64 result = 0u;
+    native(in vec, in lane, mut result){
+        result = VectorDoubleGetIntByIndex(vec, lane);
+    }
+    return result;
+}
+
+f32 GetSingleLaneFloat(in VectorSingle vec, in usize lane){
+    f32 result = 0.0f;
+    native(in vec, in lane, mut result){
+        result = VectorGetByIndex(vec, lane);
+    }
+    return result;
+}
+
+f64 GetDoubleLaneFloat(in VectorDouble vec, in usize lane){
+    f64 result = 0.0;
+    native(in vec, in lane, mut result){
+        result = vec[lane];
+    }
+    return result;
+}
+
+Array<u32, 4> MakeU32Array4(in u32 x, in u32 y, in u32 z, in u32 w){
+    Array<u32, 4> values = Array<u32, 4>();
+    values[0u] = x;
+    values[1u] = y;
+    values[2u] = z;
+    values[3u] = w;
+    return values;
+}
+
+Array<u64, 4> MakeU64Array4(in u64 x, in u64 y, in u64 z, in u64 w){
+    Array<u64, 4> values = Array<u64, 4>();
+    values[0u] = x;
+    values[1u] = y;
+    values[2u] = z;
+    values[3u] = w;
+    return values;
+}
+
+Array<f32, 4> MakeF32Array4(in f32 x, in f32 y, in f32 z, in f32 w){
+    Array<f32, 4> values = Array<f32, 4>();
+    values[0u] = x;
+    values[1u] = y;
+    values[2u] = z;
+    values[3u] = w;
+    return values;
+}
+
+Array<f64, 4> MakeF64Array4(in f64 x, in f64 y, in f64 z, in f64 w){
+    Array<f64, 4> values = Array<f64, 4>();
+    values[0u] = x;
+    values[1u] = y;
+    values[2u] = z;
+    values[3u] = w;
+    return values;
+}
+
+Array<f32x4, 4> MakeF32x4Array4(in VectorSingle a, in VectorSingle b, in VectorSingle c, in VectorSingle d){
+    Array<f32x4, 4> values = Array<f32x4, 4>();
+    values[0u] = f32x4(a);
+    values[1u] = f32x4(b);
+    values[2u] = f32x4(c);
+    values[3u] = f32x4(d);
+    return values;
+}
+
+Array<f64x4, 4> MakeF64x4Array4(in VectorDouble a, in VectorDouble b, in VectorDouble c, in VectorDouble d){
+    Array<f64x4, 4> values = Array<f64x4, 4>();
+    values[0u] = f64x4(a);
+    values[1u] = f64x4(b);
+    values[2u] = f64x4(c);
+    values[3u] = f64x4(d);
+    return values;
 }
 
 

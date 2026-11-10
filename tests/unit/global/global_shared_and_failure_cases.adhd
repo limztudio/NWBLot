@@ -3,12 +3,15 @@
 
 
 #include <tests/common/gtest_macros.adhd>
-#include <tests/unit/global/global_tests.adhd>
+#include <tests/common/test_context.adhd>
+#include <tests/unit/global/algorithm_case_types.adhd>
+#include <tests/unit/global/name_case_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
 
 
@@ -340,7 +343,7 @@ using ReferenceComparisonOwner = RefCountPtr<ComparisonReferenceTarget, Comparis
 [[nodiscard]] inline ThrowingComparisonResult operator!(const ReferenceComparisonOwner&)noexcept{ return {}; }
 
 template<typename OwnerT>
-void VerifyComparisonResultConversions(){
+void VerifyComparisonResultConversions(u32& outWrapperChecks, b8& outFirstNull, b8& outSecondNull){
     OwnerT first;
     OwnerT second;
     static_assert(noexcept(first < second));
@@ -366,8 +369,9 @@ void VerifyComparisonResultConversions(){
     EXPECT_THROW(::operator<=(nullptr, first), u32);
     EXPECT_THROW(::operator>=(first, nullptr), u32);
     EXPECT_THROW(::operator>=(nullptr, first), u32);
-    EXPECT_FALSE(first);
-    EXPECT_FALSE(second);
+    outWrapperChecks = 10u;
+    outFirstNull = !static_cast<b8>(first);
+    outSecondNull = !static_cast<b8>(second);
 }
 
 struct ObservationPointer{
@@ -1047,7 +1051,8 @@ void VerifyNoexceptFailureTests_CaptureMoveTransportDoesNotReinvokeClassPlacemen
 }
 
 void VerifyNoexceptFailureTests_FancyPointerDereferenceAndRawConversionFailuresPreserveBorrowedTarget(){
-    native{
+    b8 preservedTarget = false;
+    native(mut preservedTarget){
         using namespace __hidden_pointer_failure_tests;
         using Storage = RefCountPtr<RefCountTarget, FancyPointerDeleter>;
         RefCountTarget target;
@@ -1057,12 +1062,16 @@ void VerifyNoexceptFailureTests_FancyPointerDereferenceAndRawConversionFailuresP
 
         EXPECT_THROW(EXPECT_EQ(&*stored, &target), u32);
         EXPECT_THROW(stored = &target, u32);
-        EXPECT_EQ(stored.get().target, &target);
+        preservedTarget = stored.get().target == &target;
     }
+    EXPECT_TRUE(preservedTarget);
 }
 
 void VerifyNoexceptFailureTests_UniqueOwnerComparisonResultConversionUnwindsThroughEveryBooleanWrapper(){
-    native{
+    u32 wrapperChecks = 0u;
+    b8 firstNull = false;
+    b8 secondNull = false;
+    native(mut wrapperChecks, mut firstNull, mut secondNull){
         using namespace __hidden_pointer_failure_tests;
         UniquePtr<int> first;
         UniquePtr<int> second;
@@ -1070,12 +1079,18 @@ void VerifyNoexceptFailureTests_UniqueOwnerComparisonResultConversionUnwindsThro
         static_assert(noexcept(::operator>(first, second)));
         static_assert(noexcept(::operator<=(first, second)));
         static_assert(noexcept(::operator>=(first, second)));
-        VerifyComparisonResultConversions<UniqueComparisonOwner>();
+        VerifyComparisonResultConversions<UniqueComparisonOwner>(wrapperChecks, firstNull, secondNull);
     }
+    EXPECT_EQ(wrapperChecks, 10u);
+    EXPECT_TRUE(firstNull);
+    EXPECT_TRUE(secondNull);
 }
 
 void VerifyNoexceptFailureTests_ReferenceOwnerComparisonResultConversionUnwindsThroughEveryBooleanWrapper(){
-    native{
+    u32 wrapperChecks = 0u;
+    b8 firstNull = false;
+    b8 secondNull = false;
+    native(mut wrapperChecks, mut firstNull, mut secondNull){
         using namespace __hidden_pointer_failure_tests;
         RefCountPtr<ComparisonReferenceTarget> first;
         RefCountPtr<ComparisonReferenceTarget> second;
@@ -1083,12 +1098,18 @@ void VerifyNoexceptFailureTests_ReferenceOwnerComparisonResultConversionUnwindsT
         static_assert(noexcept(::operator>(first, second)));
         static_assert(noexcept(::operator<=(first, second)));
         static_assert(noexcept(::operator>=(first, second)));
-        VerifyComparisonResultConversions<ReferenceComparisonOwner>();
+        VerifyComparisonResultConversions<ReferenceComparisonOwner>(wrapperChecks, firstNull, secondNull);
     }
+    EXPECT_EQ(wrapperChecks, 10u);
+    EXPECT_TRUE(firstNull);
+    EXPECT_TRUE(secondNull);
 }
 
 void VerifyNoexceptFailureTests_OwnerObservationUsesImplicitCopyAndPreservesBorrowedTargetsOnFailure(){
-    native{
+    b8 failCopyReset = true;
+    b8 uniqueTargetPreserved = false;
+    b8 sharedTargetPreserved = false;
+    native(mut failCopyReset, mut uniqueTargetPreserved, mut sharedTargetPreserved){
         using namespace __hidden_pointer_failure_tests;
         static_assert(noexcept(ObservationPointer(DeclVal<const ObservationPointer&>())));
         static_assert(!noexcept(DeclVal<void(*)(ObservationPointer)noexcept>()(DeclVal<const ObservationPointer&>())));
@@ -1106,16 +1127,25 @@ void VerifyNoexceptFailureTests_OwnerObservationUsesImplicitCopyAndPreservesBorr
         EXPECT_THROW(EXPECT_EQ(shared.get().target, &target), u32);
         EXPECT_THROW(EXPECT_EQ(shared.operator->().target, &target), u32);
         ObservationPointer::s_FailCopy = false;
-        EXPECT_EQ(unique.get().target, &target);
-        EXPECT_EQ(shared.get().target, &target);
+        failCopyReset = ObservationPointer::s_FailCopy;
+        uniqueTargetPreserved = unique.get().target == &target;
+        sharedTargetPreserved = shared.get().target == &target;
     }
+    EXPECT_FALSE(failCopyReset);
+    EXPECT_TRUE(uniqueTargetPreserved);
+    EXPECT_TRUE(sharedTargetPreserved);
 }
 
 void VerifyNoexceptFailureTests_HexAppendCapacityAndOutputFailuresPreservePublishedCharacters(){
     CompactString fixed = CompactString();
     AppendHexU32(0u, fixed);
+    EXPECT_EQ(fixed.view(), "00000000");
     fixed.clear();
-    native{
+
+    b8 capacityEmpty = false;
+    CompactString hex64Prefix = CompactString();
+    CompactString hex32LiteralPrefix = CompactString();
+    native(mut capacityEmpty, mut hex64Prefix, mut hex32LiteralPrefix){
         using namespace __hidden_hex_failure_tests;
         ACompactString compactFixed;
         static_assert(noexcept(AppendHexU32(u32{}, compactFixed)));
@@ -1125,17 +1155,20 @@ void VerifyNoexceptFailureTests_HexAppendCapacityAndOutputFailuresPreservePublis
         ThrowingHexCapacityString capacity;
         static_assert(!noexcept(AppendHexU64(u64{}, capacity)));
         EXPECT_THROW(AppendHexU64(1u, capacity), u32);
-        EXPECT_TRUE(capacity.text.empty());
+        capacityEmpty = capacity.text.empty();
 
         ThrowingHexAppendString output;
         static_assert(!noexcept(AppendHexU64(u64{}, output)));
         EXPECT_THROW(AppendHexU64(0xabcdef0123456789u, output), u32);
-        EXPECT_EQ(output.text.view(), AStringView("ab"));
+        hex64Prefix = output.text;
         output.text.clear();
         static_assert(!noexcept(AppendHexU32UnsignedLiteral(u32{}, output)));
         EXPECT_THROW(AppendHexU32UnsignedLiteral(0x89abcdefu, output), u32);
-        EXPECT_EQ(output.text.view(), AStringView("0x"));
+        hex32LiteralPrefix = output.text;
     }
+    EXPECT_TRUE(capacityEmpty);
+    EXPECT_EQ(hex64Prefix.view(), "ab");
+    EXPECT_EQ(hex32LiteralPrefix.view(), "0x");
 }
 
 void VerifyNoexceptFailureTests_FixedVectorRemovalSupportsCopyOnlyAndEmptyZeroCapacity(){
@@ -1195,37 +1228,57 @@ void VerifyNoexceptFailureTests_FixedVectorRemovalReleasesResourcesAndRetainsSiz
 }
 
 void VerifyNoexceptFailureTests_FixedVectorElementAssignmentFailurePropagatesWithoutPublishingFullSize(){
-    native{
+    const u32 initialValue = 17u;
+    const u32 replacementValue = 29u;
+    usize retainedSize = 0u;
+    u32 retainedFirstValue = 0u;
+    native(in initialValue, in replacementValue, mut retainedSize, mut retainedFirstValue){
         using namespace __hidden_fixed_vector_failure_tests;
         FixedVector<ThrowingFixedVectorAssignment, 4u> stored;
         stored.resize(1u);
-        stored[0u].value = 17u;
+        stored[0u].value = initialValue;
         ThrowingFixedVectorAssignment replacement;
-        replacement.value = 29u;
+        replacement.value = replacementValue;
         static_assert(!noexcept(stored.fill(replacement)));
         EXPECT_THROW(stored.fill(replacement), u32);
-        EXPECT_EQ(stored.size(), 1u);
-        EXPECT_EQ(stored[0u].value, 17u);
+        retainedSize = stored.size();
+        retainedFirstValue = stored[0u].value;
     }
+    EXPECT_EQ(retainedSize, 1u);
+    EXPECT_EQ(retainedFirstValue, initialValue);
 }
 
 void VerifyNoexceptFailureTests_FixedVectorElementSwapFailurePropagatesWithoutSwappingSizes(){
-    native{
+    const u32 expectedFirst = 17u;
+    const u32 expectedSecond = 29u;
+    usize firstSize = 0u;
+    usize secondSize = 0u;
+    u32 firstValue = 0u;
+    u32 secondValue = 0u;
+    native(in expectedFirst, in expectedSecond, mut firstSize, mut secondSize, mut firstValue, mut secondValue){
         using namespace __hidden_fixed_vector_failure_tests;
         FixedVector<ThrowingFixedVectorSwap, 4u> first;
         FixedVector<ThrowingFixedVectorSwap, 4u> second;
         first.resize(1u);
         second.resize(2u);
-        first[0u].value = 17u;
-        second[0u].value = 29u;
+        first[0u].value = expectedFirst;
+        second[0u].value = expectedSecond;
         static_assert(!noexcept(first.swap(second)));
         EXPECT_THROW(first.swap(second), u32);
-        EXPECT_EQ(first.size(), 1u);
-        EXPECT_EQ(second.size(), 2u);
-        EXPECT_EQ(first[0u].value, 17u);
-        EXPECT_EQ(second[0u].value, 29u);
+        firstSize = first.size();
+        secondSize = second.size();
+        firstValue = first[0u].value;
+        secondValue = second[0u].value;
     }
+    EXPECT_EQ(firstSize, 1u);
+    EXPECT_EQ(secondSize, 2u);
+    EXPECT_EQ(firstValue, expectedFirst);
+    EXPECT_EQ(secondValue, expectedSecond);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_ADHD_GTEST(Global, BinarySharedHelpersPreserveEdgeCases, VerifyGlobal_BinarySharedHelpersPreserveEdgeCases)
 NWB_ADHD_GTEST(Global, NumericSharedHelpersPreserveEdgeCases, VerifyGlobal_NumericSharedHelpersPreserveEdgeCases)

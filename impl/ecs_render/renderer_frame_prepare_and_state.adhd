@@ -1,0 +1,687 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/reflection/statistics_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 DoesFrameTargetScaleFactorRequireRecreation(in u32 currentSurfelFactor, in u32 requestedSurfelFactor, in u32 currentShadowFactor, in u32 requestedShadowFactor){
+    if(currentSurfelFactor != 0u && currentSurfelFactor != requestedSurfelFactor)
+        return true;
+    return currentShadowFactor != 0u && currentShadowFactor != requestedShadowFactor;
+}
+
+b8 HasFrameTargetScaleFactorMismatch(in u32 currentSurfelFactor, in u32 requestedSurfelFactor, in u32 currentShadowFactor, in u32 requestedShadowFactor){
+    return currentSurfelFactor != requestedSurfelFactor || currentShadowFactor != requestedShadowFactor;
+}
+
+b8 AreDeferredFrameTargetDimensionsCurrent(in b8 targetsPresent, in u32 targetWidth, in u32 targetHeight, in u32 targetSurfelFactor, in u32 targetShadowFactor, in u32 width, in u32 height, in u32 surfelFactor, in u32 shadowFactor){
+    return targetsPresent && targetWidth == width && targetHeight == height && targetSurfelFactor == surfelFactor && targetShadowFactor == shadowFactor;
+}
+
+b8 IsReflectionHardwareTraceRequested(in ReflectionTraceMode traceMode){
+    return traceMode == ReflectionTraceMode::Hardware || traceMode == ReflectionTraceMode::Hybrid;
+}
+
+b8 HasTransparentCsgFrameWork(in b8 hasTransparentStaticWork, in b8 hasTransparentSkinnedWork){
+    return hasTransparentStaticWork || hasTransparentSkinnedWork;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/module.adhd.h>
+#include <impl/ecs_render/renderer_frame_pipeline.adhd.h>
+#include <impl/assets_graphics/renderer_subsystem.adhd.h>
+#include <impl/ecs_render/deferred/deferred_frame_target_builder.adhd.h>
+#include <impl/ecs_render/execute/frame_diagnostics.adhd.h>
+#include <impl/ecs_render/gi/quality_settings.adhd.h>
+#include <impl/ecs_render/kernel/renderer_gpu_timing_scope_reservations.adhd.h>
+#include <impl/ecs_render/kernel/timing_names.adhd.h>
+#include <impl/ecs_render/shared/frame_types.adhd.h>
+#include <impl/ecs_scene/components.adhd.h>
+
+#include <core/graphics/backend_selection.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_renderer_frame_prepare_and_state{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr Array<Name, 2> s_DeferredTaskTimingFeedbackScopes = { RendererGpuTimingScope::s_AvboitDepthWarp.identity, RendererGpuTimingScope::s_AvboitIntegration.identity, };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+RendererSystem::RendererSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, RendererShaderPathResolveCallback shaderPathResolver)
+    : Core::ECS::ISystem(arena)
+    , Core::IRenderPass(graphics)
+    , m_pipeline(MakeNotNullUnique(Core::MakeGlobalUnique<RendererFramePipeline>(arena, arena, world, graphics, assetManager, Move(shaderPathResolver))))
+{
+    readAccess<NWB::Impl::Scene::ActiveCameraComponent>();
+    readAccess<NWB::Impl::Scene::TransformComponent>();
+    readAccess<NWB::Impl::Scene::CameraComponent>();
+    readAccess<RendererComponent>();
+    readAccess<MaterialInstanceComponent>();
+    readAccess<CsgReceiverComponent>();
+    readAccess<StaticCsgMeshComponent>();
+    readAccess<SkinnedCsgMeshComponent>();
+    readAccess<CsgCutterComponent>();
+}
+
+RendererSystem::~RendererSystem()noexcept = default;
+
+b8 RendererSystem::validateResources(const u32 width, const u32 height, const u32 sampleCount){
+    return m_pipeline->validateResources(width, height, sampleCount);
+}
+
+void RendererSystem::invalidateResources(){
+    m_pipeline->invalidateResources();
+}
+
+Expected<void, Core::CpuTaskAdmissionError::Enum> RendererSystem::update(Core::ECS::World& world, const f32 delta)noexcept{
+    m_pipeline->update(world, delta);
+    return {};
+}
+
+b8 RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
+    return m_pipeline->prepareResources(framebuffer);
+}
+
+void RendererSystem::render(Core::Framebuffer* framebuffer){
+    m_pipeline->render(framebuffer);
+}
+
+b8 RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder){
+    return m_pipeline->appendFrameGraph(builder);
+}
+
+void RendererSystem::setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept{
+    m_pipeline->setActiveSceneSubsystems(subsystems);
+}
+
+void RendererSystem::setRefractionEnabled(const b8 enabled)noexcept{
+    m_pipeline->setRefractionEnabled(enabled);
+}
+
+void RendererSystem::setRefractionHardwareTracingEnabled(const b8 enabled)noexcept{
+    m_pipeline->setRefractionHardwareTracingEnabled(enabled);
+}
+
+void RendererSystem::setRefractionDiagnosticsEnabled(const b8 enabled)noexcept{
+    m_pipeline->setRefractionDiagnosticsEnabled(enabled);
+}
+
+Expected<RefractionStatistics> RendererSystem::tryGetLatestRefractionStatistics()const noexcept{
+    return m_pipeline->tryGetLatestRefractionStatistics();
+}
+
+b8 RendererSystem::setCausticQualitySettings(const CausticQualitySettings& settings)noexcept{
+    return m_pipeline->setCausticQualitySettings(settings);
+}
+
+b8 RendererSystem::setSurfelGiQualitySettings(const SurfelGiQualitySettings& settings)noexcept{
+    return m_pipeline->setSurfelGiQualitySettings(settings);
+}
+
+b8 RendererSystem::setSoftwareShadowSettings(const SoftwareShadowSettings& settings)noexcept{
+    return m_pipeline->setSoftwareShadowSettings(settings);
+}
+
+b8 RendererSystem::setShadowQualitySettings(const ShadowQualitySettings& settings)noexcept{
+    return m_pipeline->setShadowQualitySettings(settings);
+}
+
+b8 RendererSystem::setReflectionSettings(const ReflectionSettings& settings)noexcept{
+    return m_pipeline->setReflectionSettings(settings);
+}
+
+Expected<ReflectionStatistics> RendererSystem::tryGetLatestReflectionStatistics()const noexcept{
+    return m_pipeline->tryGetLatestReflectionStatistics();
+}
+
+b8 RendererSystem::setPresentationSettings(const PresentationSettings& settings)noexcept{
+    return m_pipeline->setPresentationSettings(settings);
+}
+
+void RendererSystem::setFrameLaggedAsyncLightingEnabled(const b8 enabled)noexcept{
+    m_pipeline->setFrameLaggedAsyncLightingEnabled(enabled);
+}
+
+Core::GpuTaskGraphRuntimeStatistics RendererSystem::deferredTaskGraphRuntimeStatistics()const noexcept{
+    return m_pipeline->deferredTaskGraphRuntimeStatistics();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+RendererFramePipeline::RendererFramePipeline(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, RendererShaderPathResolveCallback shaderPathResolver)
+    : m_arena(arena)
+    , m_world(world)
+    , m_graphics(graphics)
+    , m_assetManager(assetManager)
+    , m_shaderPathResolver(Move(shaderPathResolver))
+    , m_csgShapeRegistry(arena)
+    , m_frameGraphRendererLabel(arena)
+    , m_defaultSceneSubsystems(arena)
+    , m_meshState(arena)
+    , m_materialState(arena)
+    , m_opticalVolumes(arena)
+    , m_rayTracingState(arena)
+    , m_shadowComputePersistentState(arena)
+    , m_shadowVisibilityReturnState(arena)
+    , m_shadowPreparePersistentState(arena)
+    , m_causticsComputePersistentState(arena)
+    , m_hardwareCausticAccumulatorPersistentState(arena)
+    , m_causticIrradianceReturnState(arena)
+    , m_surfelGiComputePersistentState(arena)
+    , m_surfelGiCounterPersistentState(arena)
+    , m_surfelIrradianceReturnState(arena)
+    , m_shaderSystem(graphics, assetManager, m_shaderPathResolver)
+    , m_meshSystem(arena, world, graphics, assetManager, m_meshState)
+    , m_csgSystem(arena, world, graphics, m_csgShapeRegistry, m_csgState, m_shaderSystem, m_meshSystem)
+    , m_materialSystem(arena, world, graphics, assetManager, m_csgShapeRegistry, m_materialState, m_shaderSystem, m_meshSystem, m_csgSystem, m_opticalVolumes)
+    , m_deferredSystem(arena, world, graphics, m_deferredState, m_shaderSystem)
+    , m_reflectionSystem(arena, graphics, m_shaderSystem)
+    , m_avboitSystem(arena, graphics, m_avboitState, m_shaderSystem, m_materialSystem, m_csgSystem)
+    , m_raytracingSystem(arena, world, graphics, m_shaderSystem, m_meshSystem, m_materialSystem, m_rayTracingState, m_opticalVolumes, m_csgShapeRegistry)
+    , m_deferredTaskTimingFeedback(arena, graphics, __hidden_renderer_frame_prepare_and_state::s_DeferredTaskTimingFeedbackScopes)
+    , m_deferredLightingTaskGraph(arena)
+    , m_deferredLightingTaskGraphAnalysis(arena)
+    , m_deferredLightingTaskGraphQueueAssignments(arena)
+    , m_deferredLightingTaskGraphQueueAssignmentTelemetry(arena)
+    , m_deferredLightingCompiledGraph(arena)
+    , m_deferredLightingRecordedGraph(arena)
+    , m_deferredLightingSubmissionTransaction(arena)
+{
+    if(!RegisterBuiltInCsgShapeTypes(m_csgShapeRegistry))
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register built-in CSG shape types"));
+
+    m_deferredTaskTimingFeedback.activate();
+}
+
+RendererFramePipeline::~RendererFramePipeline(){
+    // Resolve payloads eagerly while owners are alive.
+    m_deferredLightingTaskGraph.reset();
+    m_deferredTaskTimingFeedback.deactivate();
+}
+
+b8 RendererFramePipeline::validateResources(const u32 width, const u32 height, const u32){
+    m_raytracingSystem.logCapabilityOnce();
+    if(width == 0 || height == 0)
+        return true;
+
+    if(!m_activeSceneSubsystems){
+        if(!m_defaultSceneSubsystems.loadProjectStartScene(m_assetManager))
+            return false;
+        m_activeSceneSubsystems = &m_defaultSceneSubsystems;
+        m_shaderSystem.setActiveSceneSubsystems(m_activeSceneSubsystems);
+    }
+    if(!m_activeSceneSubsystems->hasSubsystem<RendererSubsystem>()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: active scene does not include required subsystem '{}'"), ConvertString(RendererSubsystem::s_AssetTypeText));
+        return false;
+    }
+
+    const u32 surfelResolveFactor = static_cast<u32>(m_surfelGiQualitySettings.resolveResolution);
+    const u32 shadowReceiverFactor = m_raytracingSystem.requestedShadowReceiverFactor();
+    if(DoesFrameTargetScaleFactorRequireRecreation(m_frameTargets.surfelResolveFactor, surfelResolveFactor, m_frameTargets.shadowReceiverFactor, shadowReceiverFactor)){
+        // Shared producers must drain and recreate before their retained queue handoffs are cleared.
+        if(!m_graphics.waitForIdle())
+            return false;
+        invalidateResources();
+    }
+
+    if(!RendererGpuTimingScopeReservations::Prepare(m_graphics))
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU timing scope preparation failed; timing samples may be skipped"));
+
+    DeferredFrameTargets* deferredTargets = m_frameTargets.valid() ? &m_frameTargets : nullptr;
+    b8 targetsReady = AreDeferredFrameTargetDimensionsCurrent(deferredTargets != nullptr, deferredTargets ? deferredTargets->width : 0u, deferredTargets ? deferredTargets->height : 0u, deferredTargets ? deferredTargets->surfelResolveFactor : 0u, deferredTargets ? deferredTargets->shadowReceiverFactor : 0u, width, height, surfelResolveFactor, shadowReceiverFactor);
+    if(!targetsReady){
+        // New targets invalidate stale compute scratch and visibility returns.
+        resetTargetGenerationStateHandoffs();
+        resetLaggedLightingHistoryTracking();
+        resetFrameTargets();
+        m_materialSystem.invalidateRendererPipelines();
+
+        DeferredFrameTargetBuilder targetBuilder(m_graphics, m_rayTracingState, m_deferredSystem, m_avboitSystem, m_csgSystem, m_raytracingSystem);
+        auto createdTargetsResult = targetBuilder.build(width, height, shadowReceiverFactor, surfelResolveFactor);
+        if(!createdTargetsResult)
+            return false;
+        commitFrameTargets(Move(*createdTargetsResult));
+        deferredTargets = &m_frameTargets;
+        targetsReady = m_deferredSystem.createDeferredLightingPipeline() && m_deferredSystem.createDeferredCompositePipeline();
+        if(!targetsReady)
+            resetFrameTargets();
+    }
+    if(!targetsReady || !deferredTargets)
+        return false;
+
+    // Pipeline compatibility setup uses the stable framebuffer-zero prototype, not a currently acquired image.
+    if(Core::Framebuffer* presentationFramebuffer = m_graphics.getFramebuffer(0u)){
+        if(!m_deferredSystem.createDeferredPresentPipeline(*presentationFramebuffer))
+            return false;
+    }
+
+    if(!m_reflectionSystem.prepareResources(width, height, m_graphics.queryFeatureSupport(Core::Feature::RayQuery), false, m_reflectionSettings))
+        return false;
+
+    if(!m_materialSystem.prepareMaterialPassBindingLayout())
+        return false;
+
+    if(isTransparentFeatureEnabled() && !m_avboitSystem.createAvboitPipelines())
+        return false;
+
+    if(!m_meshSystem.createMeshViewBuffer())
+        return false;
+
+    if(isCsgFeatureEnabled()){
+        if(!m_csgSystem.createCsgIntervalPeelResources(*deferredTargets, true))
+            return false;
+    }
+    else{
+        if(!m_csgSystem.createCsgClipResources())
+            return false;
+    }
+
+    return true;
+}
+
+void RendererFramePipeline::invalidateResources(){
+    m_opticalVolumes.reset();
+    m_deferredTaskTimingFeedback.reset();
+    m_deferredLightingTaskGraphQueueAssignmentTelemetry.reset();
+    m_preparedCsgFrameState = CsgFrameState{};
+    m_preparedCsgFrameStateValid = false;
+    m_preparedHasTransparentRenderers = false;
+    m_preparedRefractionActive = false;
+    m_preparedRefractionResources = RayTracingRefractionGraphResources{};
+    m_shadowPrepareGraph.m_shadowPreparationOutcome.resourcesValid = false;
+    m_shadowPrepareGraph.m_shadowPreparationOutcome.ready = false;
+    m_shadowPrepareGraph.resetShadowPrepareTaskState();
+    m_preparedTaskGraphPresentationContributor = nullptr;
+    m_preparedTaskGraphOutputLayerContributor = nullptr;
+    resetFrameTaskState();
+    NWB_FATAL_ASSERT_MSG(m_deferredLightingRecordedGraph.releaseCommandListCache(), "renderer resource invalidation requires idle command-list caches");
+    resetInvalidatedResourceStateHandoffs();
+    resetLaggedLightingHistoryTracking();
+    m_frameRenderRecoveryFailed = false;
+    m_reflectionSystem.invalidateResources();
+    m_raytracingSystem.invalidateResources();
+    resetFrameTargets();
+    // AVBOIT pipelines also consume Material's shared push layout, so release those pipelines before Material clears the layout owner.
+    m_avboitSystem.invalidateResources();
+    m_shaderSystem.invalidateResources();
+    m_meshSystem.invalidateResources();
+    m_materialSystem.invalidateResources();
+    m_csgSystem.invalidateResources();
+    m_deferredSystem.invalidateResources();
+}
+
+void RendererFramePipeline::update([[maybe_unused]] Core::ECS::World& world, [[maybe_unused]] f32 delta)noexcept{}
+
+b8 RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
+    m_shadowPrepareGraph.m_shadowPreparationOutcome.resourcesValid = false;
+    m_shadowPrepareGraph.m_shadowPreparationOutcome.ready = false;
+    m_preparedHasTransparentRenderers = false;
+    m_preparedRefractionActive = false;
+    m_preparedRefractionResources = RayTracingRefractionGraphResources{};
+    m_preparedTaskGraphPresentationContributor = nullptr;
+    m_preparedTaskGraphOutputLayerContributor = nullptr;
+
+    if(!framebuffer)
+        return false;
+
+    const Core::AcquiredPresentationFrame& presentationFrame = m_graphics.acquiredPresentationFrame();
+    const Core::FramebufferDesc& presentationFramebufferDesc = framebuffer->getDescription();
+    if(!presentationFrame.valid() || presentationFrame.framebuffer.get() != framebuffer || presentationFramebufferDesc.colorAttachments.size() != 1u || presentationFramebufferDesc.colorAttachments[0].texture != presentationFrame.backBuffer.texture.get()){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: presentation preparation did not match the acquired frame; requesting recreation"));
+        m_graphics.requestDeviceRecreation();
+        return false;
+    }
+
+    if(HasFrameTargetScaleFactorMismatch(m_frameTargets.surfelResolveFactor, static_cast<u32>(m_surfelGiQualitySettings.resolveResolution), m_frameTargets.shadowReceiverFactor, m_raytracingSystem.requestedShadowReceiverFactor())){
+        const Core::TextureDesc& presentationDesc = presentationFrame.backBuffer.texture->getDescription();
+        if(!validateResources(presentationDesc.width, presentationDesc.height, presentationDesc.sampleCount))
+            return false;
+    }
+
+    Core::Alloc::ScratchArena scratchArena(s_PrepareArena);
+    m_meshSystem.pruneRuntimeMeshResources(scratchArena);
+    const b8 hasVisibleTransparentRenderers = m_materialSystem.prepareVisibleMaterialSurfaceInfos();
+    m_preparedHasTransparentRenderers = isTransparentFeatureEnabled() && hasVisibleTransparentRenderers;
+    m_materialSystem.prepareVisibleMaterialInstanceMutableCache();
+    m_preparedCsgFrameState = CsgFrameState{};
+    m_preparedCsgFrameStateValid = false;
+
+    if(!m_frameTargets.valid())
+        return true;
+    DeferredFrameTargets& deferredTargets = m_frameTargets;
+
+    m_reflectionSystem.pollStatistics();
+    m_raytracingSystem.refraction().pollRefractionStatistics();
+    if(m_preparedHasTransparentRenderers)
+        m_opticalVolumes.prepare(m_world, m_materialSystem, scratchArena);
+    else
+        m_opticalVolumes.reset();
+    m_preparedCsgFrameState = (isCsgFeatureEnabled() && HasCsgFrameCandidates(m_world)) ? m_csgSystem.buildFrameState(scratchArena, m_materialSystem) : CsgFrameState{};
+    m_preparedCsgFrameStateValid = true;
+    const b8 hasCsgFrameWork = !m_preparedCsgFrameState.empty();
+    const b8 rayQuerySupported = m_graphics.queryFeatureSupport(Core::Feature::RayQuery);
+    if(!m_reflectionSystem.prepareResources(deferredTargets.width, deferredTargets.height, rayQuerySupported, hasCsgFrameWork && rayQuerySupported, m_reflectionSettings))
+        return false;
+
+    if(hasCsgFrameWork && !deferredTargets.csgIntervalTargetsValid())
+        return false;
+
+    // CSG receiver ranges are indexed by material-pass instance; an active pass reserves one range per renderer.
+    const usize csgReceiverRangeCount = hasCsgFrameWork ? m_world.view<RendererComponent>().candidateCount() : 0u;
+
+    if(!m_materialSystem.prepareMaterialPassResources(scratchArena, deferredTargets.framebuffer.get(), MaterialPipelinePass::Opaque, false, m_preparedCsgFrameState, nullptr))
+        return false;
+
+    if(m_preparedHasTransparentRenderers && !m_avboitSystem.prepareAvboitPassResources(scratchArena, m_preparedCsgFrameState, deferredTargets))
+        return false;
+
+    // Material owns growth. Once every domain pass prepares, publish one Mesh generation; retain the prior one on refresh.
+    const ECSRenderDetail::MaterialPassBufferSnapshot materialBuffers = m_materialSystem.materialPassBufferSnapshot();
+    if(materialBuffers.valid() && !m_meshSystem.prepareMeshFrameBindings(materialBuffers))
+        return false;
+    if(hasCsgFrameWork && !materialBuffers.valid())
+        return false;
+
+    // Create CSG resources once here; draw paths only consume prepared layouts and handles.
+    if(hasCsgFrameWork && !m_csgSystem.prepareCsgFrameResources(csgReceiverRangeCount, static_cast<usize>(m_preparedCsgFrameState.cutterCount)))
+        return false;
+
+    // Resource selection and capacity growth happen before shared-graph compilation.
+    // The first deferred packet records the corresponding GPU work later, after every selected handle has been imported declaratively.
+    m_raytracingSystem.discardSurfelResourceInitialization();
+    if(!m_raytracingSystem.preflightShadowVisibilityResources(deferredTargets, scratchArena)){
+        m_shadowPrepareGraph.m_shadowPreparationOutcome.resourcesValid = false;
+        m_shadowPrepareGraph.m_shadowPreparationOutcome.ready = false;
+        m_raytracingSystem.discardPreflightShadowVisibilityResources();
+        return false;
+    }
+    m_shadowPrepareGraph.m_shadowPreparationOutcome.resourcesValid = true;
+    // The ray scene prepares geometry on its own. Reflection borrows neutral context only after that preflight picks a generation.
+    m_preparedReflectionSceneAvailable = IsReflectionHardwareTraceRequested(m_reflectionSettings.traceMode) && m_raytracingSystem.prepareSceneQueryResources();
+    ++m_reflectionFrameIndex;
+
+    // Refraction loads shaders and creates pipelines in preparation; the graph build only consumes the snapshot.
+    const b8 opticalCaptureRequested = m_preparedHasTransparentRenderers && (m_refractionEnabled || m_reflectionSettings.traceMode != ReflectionTraceMode::Disabled);
+    m_preparedRefractionActive = opticalCaptureRequested && m_raytracingSystem.refraction().prepareRefractionResources();
+    const b8 hasTransparentCsgFrameWork = HasTransparentCsgFrameWork(m_preparedCsgFrameState.hasTransparentStaticWork, m_preparedCsgFrameState.hasTransparentSkinnedWork);
+    if(m_preparedRefractionActive && hasTransparentCsgFrameWork && !m_csgSystem.prepareRefractionIntervalCapResources(deferredTargets))
+        return false;
+    m_preparedRefractionResources = m_raytracingSystem.refraction().snapshotRefractionGraphResources(deferredTargets.width, deferredTargets.height, m_reflectionFrameIndex);
+    m_preparedRefractionResources.refractionEnabled = m_refractionEnabled;
+    if(!m_refractionEnabled){
+        m_preparedRefractionResources.pipeline = m_preparedRefractionResources.screenFallbackPipeline;
+        m_preparedRefractionResources.densePipeline = m_preparedRefractionResources.denseScreenFallbackPipeline;
+        m_preparedRefractionResources.usesHardwareTrace = false;
+        m_preparedRefractionResources.tlasHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    }
+
+    if(Core::IGpuTaskGraphOutputLayerContributor* const contributor = m_graphics.taskGraphOutputLayerContributor()){
+        if(contributor->prepareTaskGraphOutputLayer(presentationFrame))
+            m_preparedTaskGraphOutputLayerContributor = contributor;
+        else if(m_graphics.isDeviceRecreationRequested()){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: output layer requested recreation during preparation"));
+            return false;
+        }
+        else
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: output layer preparation failed; rendering scene output without its layer"));
+    }
+
+    if(Core::IGpuTaskGraphPresentationContributor* const contributor = m_graphics.taskGraphPresentationContributor()){
+        if(contributor->prepareTaskGraphPresentation(presentationFrame))
+            m_preparedTaskGraphPresentationContributor = contributor;
+        else if(m_graphics.isDeviceRecreationRequested()){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: presentation contributor requested recreation during preparation"));
+            return false;
+        }
+        else
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: presentation contributor preparation failed; rendering scene output without its overlay"));
+    }
+
+    return true;
+}
+
+void RendererFramePipeline::setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept{
+    m_activeSceneSubsystems = subsystems;
+    m_shaderSystem.setActiveSceneSubsystems(subsystems);
+}
+
+b8 RendererFramePipeline::setSurfelGiQualitySettings(const SurfelGiQualitySettings& settings)noexcept{
+    if(!ValidateSurfelGiQualitySettings(settings))
+        return false;
+    m_surfelGiQualitySettings = settings;
+    return true;
+}
+
+b8 RendererFramePipeline::setReflectionSettings(const ReflectionSettings& settings)noexcept{
+    if(!ValidateReflectionSettings(settings))
+        return false;
+    m_reflectionSettings = settings;
+    return true;
+}
+
+void RendererFramePipeline::setFrameLaggedAsyncLightingEnabled(const b8 enabled)noexcept{
+    if(m_frameLaggedAsyncLightingEnabled == enabled)
+        return;
+    // Proof that disabling the mode returned to the current-frame path: set when turning off, cleared by the next accepted normal frame.
+    m_laggedLightingCurrentFrameAcceptancePending = m_frameLaggedAsyncLightingEnabled && !enabled;
+    if(m_frameLaggedAsyncLightingEnabled && !enabled && m_laggedLightingHistorySubmissionToken.valid()){
+        m_laggedLightingHistoryWriterDrainToken = m_laggedLightingHistorySubmissionToken;
+        m_laggedLightingHistoryWriterDrainGeneration = m_laggedLightingHistoryGeneration;
+    }
+    m_frameLaggedAsyncLightingEnabled = enabled;
+    m_laggedLightingReport = LaggedLightingReport::Unreported;
+    m_laggedLightingReportGeneration = 0u;
+    resetLaggedLightingHistoryReadTracking();
+}
+
+void RendererFramePipeline::commitFrameTargets(DeferredFrameTargets&& targets){
+    m_frameTargets = Move(targets);
+
+    DeferredFrameDiagnostics{}.logCommittedDeferredFrameTargets(
+        m_frameTargets.width,
+        m_frameTargets.height,
+        Core::GetFormatInfo(m_frameTargets.albedoFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.normalFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.worldPositionFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.opaqueColorFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.compositeColorFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.depthFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.shadowVisibilityFormat).getName(),
+        m_frameTargets.csgPeelLayerCount,
+        Core::GetFormatInfo(m_frameTargets.csgCapNormalFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.csgIntervalDepthFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.csgIntervalIdFormat).getName(),
+        m_frameTargets.csgReceiverEventLayerCount,
+        Core::GetFormatInfo(m_frameTargets.csgReceiverEventDataFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.csgReceiverEventCountFormat).getName(),
+        m_frameTargets.csgReceiverSpanLayerCount,
+        Core::GetFormatInfo(m_frameTargets.csgReceiverSpanDataFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.csgReceiverSpanCountFormat).getName(),
+        m_frameTargets.csgRemovedIntervalLayerCount,
+        Core::GetFormatInfo(m_frameTargets.csgRemovedIntervalDepthFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.csgRemovedIntervalCapNormalFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.csgRemovedIntervalDataFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.csgRemovedIntervalCountFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.avboit.accumColorFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.avboit.accumExtinctionFormat).getName(),
+        Core::GetFormatInfo(m_frameTargets.avboit.transmittanceFormat).getName()
+    );
+}
+
+void RendererFramePipeline::resetFrameTargets(){
+    // AVBOIT owns descriptor registrations embedded in the aggregate, so retire them before Deferred clears it.
+    m_avboitSystem.resetAvboitFrameTargets(m_frameTargets.avboit);
+    m_deferredSystem.resetDeferredFrameTargets(m_frameTargets);
+}
+
+void RendererFramePipeline::resetDeferredTaskGraphRuntime(){
+    {
+        Core::GpuCompiledGraph::ReadView planAccess(m_deferredLightingCompiledGraph);
+        if(planAccess.valid()){
+            const u64 recordingAttemptGeneration = m_deferredLightingRecordedGraph.recordingAttemptGeneration();
+            if(recordingAttemptGeneration != 0u && !m_deferredLightingSubmissionTransaction.discardUnaccepted(m_deferredLightingTaskGraph, m_deferredLightingCompiledGraph, recordingAttemptGeneration))
+                NWB_FATAL_ASSERT_MSG(false, "renderer task-graph reset must resolve every unaccepted packet");
+            m_deferredLightingSubmissionTransaction.reset(m_deferredLightingCompiledGraph);
+            m_deferredLightingRecordedGraph.reset(m_deferredLightingCompiledGraph);
+        }
+    }
+
+    m_deferredLightingTaskGraph.reset();
+    m_deferredFrameTimingBeginTask = {};
+    m_deferredLightingTaskGraphAnalysis.reset();
+    m_deferredLightingTaskGraphQueueAssignments.reset();
+    m_deferredLightingCompiledGraph.reset();
+    m_deferredLightingTaskGraphDeclarationSeconds = 0.0;
+    m_deferredLightingTaskGraphDeclared = false;
+    m_deferredLightingTaskGraphScheduled = false;
+}
+
+void RendererFramePipeline::resetFrameTaskState(){
+    resetDeferredFrameTaskIdsAndFlags();
+    resetDeferredTaskGraphRuntime();
+}
+
+void RendererFramePipeline::resetDeferredFrameTaskIdsAndFlags()noexcept{
+    m_shadowPrepareGraph.resetShadowPrepareUploadTaskState();
+    m_deferredLaggedLightingHistorySlotsUploadTask = {};
+    m_graphicsPrefixGraph.m_graphicsPrefixMeshViewSetupTask = {};
+    m_graphicsPrefixGraph.m_graphicsPrefixSceneShadingSetupTask = {};
+    m_graphicsPrefixGraph.m_graphicsPrefixDeferredClearTask = {};
+    m_graphicsPrefixGraph.resetGraphicsPrefixTaskState();
+    m_graphicsPrefixGraph.m_graphicsPrefixMeshViewSetupReady = false;
+    m_graphicsPrefixGraph.m_graphicsPrefixSceneShadingSetupReady = false;
+    resetSharedDeferredFrameTaskState();
+    m_deferredFrameRecoveryArmed = false;
+    m_deferredFrameRecoveryRetiresTiming = false;
+    m_deferredPresentationOverlayRequired = false;
+}
+
+void RendererFramePipeline::resetSharedDeferredFrameTaskState()noexcept{
+    m_shadowVisibilityGraph.m_deferredShadowVisibilityOpaqueTask = {};
+    m_shadowVisibilityGraph.m_deferredShadowVisibilityOpaqueFirstWaveletTask = {};
+    m_shadowVisibilityGraph.m_deferredShadowVisibilityOpaqueResolveTask = {};
+    m_shadowVisibilityGraph.m_deferredShadowVisibilityTransparentTraceTask = {};
+    m_shadowVisibilityGraph.m_deferredShadowVisibilityTransparentTemporalMergeTask = {};
+    m_shadowVisibilityGraph.m_deferredShadowVisibilityTransparentFirstWaveletTask = {};
+    m_shadowVisibilityGraph.m_deferredShadowVisibilityDiagnosticsTask = {};
+    m_shadowVisibilityGraph.m_deferredShadowVisibilityAdaptiveCounterClearTask = {};
+    m_shadowVisibilityGraph.m_deferredShadowVisibilityAllLitClearTask = {};
+    m_shadowVisibilityGraph.m_deferredShadowVisibilityTask = {};
+    m_causticsGraph.resetDeferredCausticsTaskState();
+    m_surfelGiGraph.m_deferredSurfelGiPreparationTask = {};
+    m_surfelGiGraph.m_deferredSurfelGiInitializationLifecycleTask = {};
+    m_surfelGiGraph.m_deferredSurfelGiSnapshotCopyTask = {};
+    m_surfelGiGraph.m_deferredSurfelGiIrradianceClearTask = {};
+    m_surfelGiGraph.m_deferredSurfelGiAgeFreeTask = {};
+    m_surfelGiGraph.m_deferredSurfelGiCellHeadClearTask = {};
+    m_surfelGiGraph.m_deferredSurfelGiHashBuildTask = {};
+    m_surfelGiGraph.m_deferredSurfelGiSpawnTask = {};
+    m_surfelGiGraph.m_deferredSurfelGiTraceBuildArgsTask = {};
+    m_surfelGiGraph.m_deferredSurfelGiTraceTask = {};
+    m_surfelGiGraph.m_deferredSurfelGiResolveTask = {};
+    m_surfelGiGraph.m_deferredSurfelGiTask = {};
+    m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask = {};
+    m_causticsGraph.m_deferredHardwareCausticsTask = {};
+    m_avboitSystem.resetTaskGraphStage();
+    m_deferredLightingTask = {};
+    m_deferredCompositeTask = {};
+    m_deferredPresentationOverlayTask = {};
+    m_deferredPresentTask = {};
+    m_deferredFrameTimingEndTask = {};
+    m_deferredLaggedLightingHistoryTask = {};
+    m_deferredFrameRecoveryTask = {};
+    m_deferredSurfelGiCounterReadbackCompletion = {};
+    m_deferredLightingHistoryReadReadyCompletion = {};
+    m_deferredLightingHistoryWriterDrainCompletion = {};
+}
+
+void RendererFramePipeline::resetTargetGenerationStateHandoffs()noexcept{
+    // Replaced targets invalidate retained compute-local state.
+    m_raytracingSystem.invalidateLightSpaceShadowCapture();
+    m_shadowComputePersistentState.reset();
+    m_shadowVisibilityReturnState.reset();
+    m_causticsComputePersistentState.reset();
+    m_hardwareCausticAccumulatorPersistentState.reset();
+    m_causticIrradianceReturnState.reset();
+    m_surfelGiComputePersistentState.reset();
+    m_surfelGiCounterPersistentState.reset();
+    m_surfelIrradianceReturnState.reset();
+}
+
+void RendererFramePipeline::resetInvalidatedResourceStateHandoffs()noexcept{
+    // Only retained cross-frame state resets here.
+    resetTargetGenerationStateHandoffs();
+    m_shadowPreparePersistentState.reset();
+}
+
+void RendererFramePipeline::invalidateLaggedLightingHistoryWriterDrain()noexcept{
+    m_laggedLightingHistoryWriterDrainToken = Core::QueueSubmissionToken{};
+    m_laggedLightingHistoryWriterDrainGeneration = 0u;
+}
+
+void RendererFramePipeline::resetLaggedLightingHistoryReadTracking()noexcept{
+    invalidateLaggedLightingHistorySubmission();
+    m_laggedLightingHistoryGeneration = 0u;
+}
+
+void RendererFramePipeline::resetLaggedLightingHistoryTracking()noexcept{
+    resetLaggedLightingHistoryReadTracking();
+    invalidateLaggedLightingHistoryWriterDrain();
+}
+
+void RendererFramePipeline::reportLaggedLightingTransition(const LaggedLightingReport::Enum report, const u64 targetGeneration){
+    DeferredFrameDiagnostics{}.reportLaggedLightingTransitionIfNeeded(report, targetGeneration, m_laggedLightingReport, m_laggedLightingReportGeneration);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

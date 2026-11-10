@@ -9,6 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
 
 
@@ -237,14 +238,20 @@ using UiMultilineClipboardTests = __hidden_ui_multiline_clipboard_tests::UiMulti
 using UiMultilineNativeTests = __hidden_ui_multiline_native_tests::UiMultilineNativeTests;
 
 using KeyEnum = NWB::Core::Key::Enum;
+using UiEditClipboardController = NWB::Impl::UiEditClipboardController;
 using UiEditModelSnapshot = NWB::Impl::Ui::EditModelSnapshot;
 using UiEditNavigationResult = NWB::Impl::Ui::EditNavigationResult;
 using UiEditNavigationSnapshot = NWB::Impl::Ui::EditNavigationSnapshot;
 using UiEditNavigationState = NWB::Impl::Ui::EditNavigationState;
 using UiEditLimits = NWB::Impl::Ui::EditLimits;
 using UiFrameDelta = NWB::Impl::UiFrameDelta;
+using UiTextEditOwner = NWB::Impl::UiTextEditOwner;
+using UiTextEditResult = NWB::Impl::UiTextEditResult;
+using UiTextEditSession = NWB::Impl::UiTextEditSession;
+namespace UiEditClipboardStatus = NWB::Impl::UiEditClipboardStatus;
 namespace UiEditTextMode = NWB::Impl::Ui::EditTextMode;
 namespace UiPointerPhase = NWB::Impl::Ui::PointerPhase;
+namespace UiTextEditStatus = NWB::Impl::UiTextEditStatus;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1423,99 +1430,105 @@ void VerifyUiFrameDeltaTests_LongStallSaturatesAtPaintDeltaLimit(){
     EXPECT_FLOAT_EQ(delta.consume(), 0.0f);
 }
 
+UiTextEditOwner MakeMultilineOwner(in u64 widgetValue, in u64 modelGeneration){
+    UiTextEditOwner owner = UiTextEditOwner();
+    owner.widget.value = widgetValue;
+    owner.declarationGeneration = 1u;
+    owner.modelGeneration = modelGeneration;
+    return owner;
+}
+
+TextInputRect MakeMultilineCaret(){
+    TextInputRect caret = TextInputRect();
+    caret.x = 30;
+    caret.y = 40;
+    caret.width = 1;
+    caret.height = 18;
+    return caret;
+}
+
 void VerifyUiMultilineClipboardTests_NormalizedCapacityFailurePreservesSelectionAndHistory(mut UiMultilineClipboardTests self){
-    native(mut self){
-        using namespace NWB;
-        using namespace NWB::Impl;
-        Ui::EditModel model(self.m_arena, { 6u }, Ui::EditTextMode::Multiline);
-        UiEditClipboardController controller(self.m_arena, self.m_clipboard);
-        const UiTextEditOwner owner{ { 51u }, 1u, model.instanceGeneration() };
-        ASSERT_TRUE(model.setText("a\nb"));
-        ASSERT_TRUE(model.setSelection(1u, 2u));
-        const u64 revision = model.revision();
-        const u64 selection = model.selectionGeneration();
-        self.m_clipboard.delayed = true;
-        ASSERT_EQ(controller.request(owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
-        ASSERT_TRUE(self.m_clipboard.pump());
-        ASSERT_TRUE(self.m_clipboard.deliver(controller.token(), ClipboardStatus::Success, "x\r\ny\r\nz"));
-        EXPECT_EQ(controller.drain(owner, model).status, UiEditClipboardStatus::TooLarge);
-        EXPECT_EQ(model.text(), "a\nb");
-        EXPECT_EQ(model.anchor(), 1u);
-        EXPECT_EQ(model.caret(), 2u);
-        EXPECT_EQ(model.revision(), revision);
-        EXPECT_EQ(model.selectionGeneration(), selection);
-        EXPECT_FALSE(model.canUndo());
-    }
+    UiEditLimits limits = UiEditLimits();
+    limits.maxBytes = 6u;
+    UiEditModel model = UiEditModel(self.m_arena, limits, UiEditTextMode::Multiline);
+    UiEditClipboardController controller = UiEditClipboardController(self.m_arena, self.m_clipboard);
+    const UiTextEditOwner owner = MakeMultilineOwner(51u, model.instanceGeneration());
+    ASSERT_TRUE(model.setText("a\nb"));
+    ASSERT_TRUE(model.setSelection(1u, 2u));
+    const u64 revision = model.revision();
+    const u64 selection = model.selectionGeneration();
+    self.m_clipboard.delayed = true;
+    ASSERT_EQ(controller.request(owner, model, UiEditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    ASSERT_TRUE(self.m_clipboard.pump());
+    ASSERT_TRUE(self.m_clipboard.deliver(controller.token(), ClipboardStatus::Success, "x\r\ny\r\nz"));
+    EXPECT_EQ(controller.drain(owner, model).status, UiEditClipboardStatus::TooLarge);
+    EXPECT_EQ(model.text(), "a\nb");
+    EXPECT_EQ(model.anchor(), 1u);
+    EXPECT_EQ(model.caret(), 2u);
+    EXPECT_EQ(model.revision(), revision);
+    EXPECT_EQ(model.selectionGeneration(), selection);
+    EXPECT_FALSE(model.canUndo());
 }
 
 void VerifyUiMultilineClipboardTests_UnsupportedControlsRejectBeforeReplacement(mut UiMultilineClipboardTests self){
-    native(mut self){
-        using namespace NWB;
-        using namespace NWB::Impl;
-        Ui::EditModel model(self.m_arena, {}, Ui::EditTextMode::Multiline);
-        UiEditClipboardController controller(self.m_arena, self.m_clipboard);
-        const UiTextEditOwner owner{ { 51u }, 1u, model.instanceGeneration() };
-        ASSERT_TRUE(model.setText("a\nb"));
-        ASSERT_TRUE(model.selectAll());
-        const u64 selection = model.selectionGeneration();
-        self.m_clipboard.delayed = true;
-        ASSERT_EQ(controller.request(owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
-        ASSERT_TRUE(self.m_clipboard.pump());
-        ASSERT_TRUE(self.m_clipboard.deliver(controller.token(), ClipboardStatus::Success, "x\x01y"));
-        EXPECT_EQ(controller.drain(owner, model).status, UiEditClipboardStatus::InvalidText);
-        EXPECT_EQ(model.text(), "a\nb");
-        EXPECT_EQ(model.anchor(), 0u);
-        EXPECT_EQ(model.caret(), 3u);
-        EXPECT_EQ(model.selectionGeneration(), selection);
-        EXPECT_FALSE(model.canUndo());
-    }
+    UiEditModel model = UiEditModel(self.m_arena, UiEditLimits(), UiEditTextMode::Multiline);
+    UiEditClipboardController controller = UiEditClipboardController(self.m_arena, self.m_clipboard);
+    const UiTextEditOwner owner = MakeMultilineOwner(51u, model.instanceGeneration());
+    ASSERT_TRUE(model.setText("a\nb"));
+    ASSERT_TRUE(model.selectAll());
+    const u64 selection = model.selectionGeneration();
+    self.m_clipboard.delayed = true;
+    ASSERT_EQ(controller.request(owner, model, UiEditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    ASSERT_TRUE(self.m_clipboard.pump());
+    ASSERT_TRUE(self.m_clipboard.deliver(controller.token(), ClipboardStatus::Success, "x\x01y"));
+    EXPECT_EQ(controller.drain(owner, model).status, UiEditClipboardStatus::InvalidText);
+    EXPECT_EQ(model.text(), "a\nb");
+    EXPECT_EQ(model.anchor(), 0u);
+    EXPECT_EQ(model.caret(), 3u);
+    EXPECT_EQ(model.selectionGeneration(), selection);
+    EXPECT_FALSE(model.canUndo());
 }
 
 void VerifyUiMultilineNativeTests_NoncanonicalPreeditRejectsRatherThanChangingNativeOffsets(mut UiMultilineNativeTests self){
-    native(mut self){
-        using namespace NWB;
-        using namespace NWB::Impl;
-        Ui::EditModel model(self.m_arena, {}, Ui::EditTextMode::Multiline);
-        UiTextEditSession session(self.m_arena, self.m_textInput);
-        const UiTextEditOwner owner{ { 81u }, 1u, model.instanceGeneration() };
-        ASSERT_TRUE(model.setText("a\nb"));
-        const u64 selection = model.selectionGeneration();
-        ASSERT_EQ(session.begin(owner, { 30, 40, 1, 18 }, model), TextInputAdmission::Accepted);
-        ASSERT_EQ(self.m_textInput.preedit("x\r\ny", 1u, 4u), TextInputAdmission::Accepted);
-        EXPECT_EQ(session.drain(owner, model).status, UiTextEditStatus::ModelRejected);
-        EXPECT_EQ(model.text(), "a\nb");
-        EXPECT_EQ(model.selectionGeneration(), selection);
-        EXPECT_FALSE(model.composition().active);
-        EXPECT_FALSE(session.token().valid());
-    }
+    UiEditModel model = UiEditModel(self.m_arena, UiEditLimits(), UiEditTextMode::Multiline);
+    UiTextEditSession session = UiTextEditSession(self.m_arena, self.m_textInput);
+    const UiTextEditOwner owner = MakeMultilineOwner(81u, model.instanceGeneration());
+    ASSERT_TRUE(model.setText("a\nb"));
+    const u64 selection = model.selectionGeneration();
+    ASSERT_EQ(session.begin(owner, MakeMultilineCaret(), model), TextInputAdmission::Accepted);
+    ASSERT_EQ(self.m_textInput.preedit("x\r\ny", 1u, 4u), TextInputAdmission::Accepted);
+    EXPECT_EQ(session.drain(owner, model).status, UiTextEditStatus::ModelRejected);
+    EXPECT_EQ(model.text(), "a\nb");
+    EXPECT_EQ(model.selectionGeneration(), selection);
+    EXPECT_FALSE(model.composition().active);
+    EXPECT_FALSE(session.token().valid());
 }
 
 void VerifyUiMultilineNativeTests_LaterOversizedCommitPreservesEarlierAcceptedNativeEdit(mut UiMultilineNativeTests self){
-    native(mut self){
-        using namespace NWB;
-        using namespace NWB::Impl;
-        Ui::EditModel model(self.m_arena, { 6u }, Ui::EditTextMode::Multiline);
-        UiTextEditSession session(self.m_arena, self.m_textInput);
-        const UiTextEditOwner owner{ { 81u }, 1u, model.instanceGeneration() };
-        ASSERT_TRUE(model.setText("a\nb"));
-        ASSERT_EQ(session.begin(owner, { 30, 40, 1, 18 }, model), TextInputAdmission::Accepted);
-        ASSERT_EQ(self.m_textInput.commit("x"), TextInputAdmission::Accepted);
-        ASSERT_EQ(self.m_textInput.commit("y\r\nzz"), TextInputAdmission::Accepted);
-        const auto result = session.drain(owner, model);
-        EXPECT_EQ(result.status, UiTextEditStatus::ModelRejected);
-        EXPECT_EQ(result.eventsApplied, 1u);
-        EXPECT_EQ(model.text(), "a\nbx");
-        EXPECT_FALSE(session.token().valid());
-        ASSERT_TRUE(model.undo());
-        EXPECT_EQ(model.text(), "a\nb");
-        EXPECT_FALSE(model.canUndo());
-    }
+    UiEditLimits limits = UiEditLimits();
+    limits.maxBytes = 6u;
+    UiEditModel model = UiEditModel(self.m_arena, limits, UiEditTextMode::Multiline);
+    UiTextEditSession session = UiTextEditSession(self.m_arena, self.m_textInput);
+    const UiTextEditOwner owner = MakeMultilineOwner(81u, model.instanceGeneration());
+    ASSERT_TRUE(model.setText("a\nb"));
+    ASSERT_EQ(session.begin(owner, MakeMultilineCaret(), model), TextInputAdmission::Accepted);
+    ASSERT_EQ(self.m_textInput.commit("x"), TextInputAdmission::Accepted);
+    ASSERT_EQ(self.m_textInput.commit("y\r\nzz"), TextInputAdmission::Accepted);
+    const UiTextEditResult result = session.drain(owner, model);
+    EXPECT_EQ(result.status, UiTextEditStatus::ModelRejected);
+    EXPECT_EQ(result.eventsApplied, 1u);
+    EXPECT_EQ(model.text(), "a\nbx");
+    EXPECT_FALSE(session.token().valid());
+    ASSERT_TRUE(model.undo());
+    EXPECT_EQ(model.text(), "a\nb");
+    EXPECT_FALSE(model.canUndo());
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
 
 

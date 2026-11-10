@@ -9,6 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
 
 
@@ -123,6 +124,40 @@ public:
     [[nodiscard]] auto pending(const u32 slot){ return inner.control->pending(slot); }
 };
 
+struct ReflectionFeedbackControlContext{
+    ReflectionStatisticsTestHelpers::StatisticsContext<ReflectionFeedbackControl> inner;
+    Core::GpuTaskGraph graph{ inner.arena };
+
+
+public:
+    [[nodiscard]] b8 valid()const noexcept{ return static_cast<b8>(inner.control); }
+    [[nodiscard]] ReflectionFeedbackPlan plan(const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, const b8 enabled, const u64 graphicsFrame){
+        return inner.control->plan(stamp, settings, enabled, graphicsFrame);
+    }
+    [[nodiscard]] b8 reserve(const ReflectionFeedbackPlan& plan){ return inner.control->reserve(plan); }
+    void discard(const ReflectionFeedbackPlan& plan){ inner.control->discard(plan); }
+    [[nodiscard]] ReflectionFeedbackReservation makeReservation(const ReflectionFeedbackPlan& plan){
+        return ReflectionFeedbackReservation(inner.control, plan);
+    }
+};
+
+struct ReflectionHistoryControlContext{
+    ReflectionStatisticsTestHelpers::StatisticsContext<ReflectionHistoryControl> inner;
+    Core::GpuTaskGraph graph{ inner.arena };
+
+
+public:
+    [[nodiscard]] b8 valid()const noexcept{ return static_cast<b8>(inner.control); }
+    [[nodiscard]] ReflectionHistoryPlan plan(const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, const u64 graphicsFrame){
+        return inner.control->plan(stamp, settings, graphicsFrame);
+    }
+    [[nodiscard]] b8 reserve(const ReflectionHistoryPlan& plan){ return inner.control->reserve(plan); }
+    void discard(const ReflectionHistoryPlan& plan){ inner.control->discard(plan); }
+    [[nodiscard]] ReflectionHistoryReservation makeReservation(const ReflectionHistoryPlan& plan){
+        return ReflectionHistoryReservation(inner.control, plan);
+    }
+};
+
 struct PruneContext : Tests::EcsTestWorld{
     MeshSystem& meshSystem = world.addSystem<MeshSystem>(world);
 };
@@ -164,11 +199,13 @@ namespace ReflectionFeedbackResetReason = Impl::ReflectionFeedbackResetReason;
 using Impl::TryComputeReflectionFeedbackExtent;
 using Impl::ResolveReflectionFeedbackOutcome;
 
+using ReflectionFeedbackControlContext = EcsGraphicsReflectionRefractionDetail::ReflectionFeedbackControlContext;
 using ReflectionHistoryState = Impl::ReflectionHistoryState;
 using ReflectionHistoryPlan = Impl::ReflectionHistoryPlan;
 using ReflectionHistoryOutcome = Impl::ReflectionHistoryOutcome;
 using ReflectionHistoryControl = Impl::ReflectionHistoryControl;
 using ReflectionHistoryReservation = Impl::ReflectionHistoryReservation;
+using ReflectionHistoryControlContext = EcsGraphicsReflectionRefractionDetail::ReflectionHistoryControlContext;
 namespace ReflectionHistoryResetReason = Impl::ReflectionHistoryResetReason;
 using Impl::ResolveReflectionHistoryOutcome;
 
@@ -508,58 +545,72 @@ void VerifyReflectionFeedback_ResourceGenerationBlocksOldCallbacksWithoutDiscard
 }
 
 void VerifyReflectionFeedback_RejectedGraphAndResetReleaseTheMoveOnlyReservation(){
-    native{
+    ReflectionFeedbackControlContext context = ReflectionFeedbackControlContext();
+    ASSERT_TRUE(context.valid());
+    const ReflectionFeedbackPlan rejected = context.plan(Stamp(), ReflectionSettings(), true, 1u);
+    b8 rejectedAdmitted = true;
+    native(mut context, in rejected, mut rejectedAdmitted){
         using LeaseTask = ReflectionStatisticsTestHelpers::ReservationLeaseTask<ReflectionFeedbackReservation>;
-        Core::Alloc::GlobalArena arena{ Name(s_EcsCaseTestsReflectionFeedbackGraph) };
-        auto controlResult = Impl::CreateStatisticsControl<ReflectionFeedbackControl>(arena, 1u);
-        ASSERT_TRUE(controlResult);
-        auto control = Move(*controlResult);
-        Core::GpuTaskGraph graph(arena);
-        const auto rejected = control->plan(Stamp(), ReflectionSettings{}, true, 1u);
-        EXPECT_FALSE(graph.addTask<LeaseTask>(Core::GpuTaskDesc{}, LeaseTask::Payload{ ReflectionFeedbackReservation(control, rejected) }).has_value());
-        Core::GpuTaskDesc desc;
-        desc.setIdentity(Name(s_EcsCaseTestsFeedbackLease)).setMarkerLabel("Feedback Lease");
-        const auto pending = control->plan(Stamp(), ReflectionSettings{}, true, 2u);
-        {
-            const auto gpuTaskAdmission = graph.addTask<LeaseTask>(desc, LeaseTask::Payload{ ReflectionFeedbackReservation(control, pending) });
-            ASSERT_TRUE(gpuTaskAdmission);
-            ASSERT_TRUE(gpuTaskAdmission->valid());
-        }
-        graph.reset();
-        const auto retry = control->plan(Stamp(), ReflectionSettings{}, true, 3u);
-        ASSERT_TRUE(control->reserve(retry));
-        EXPECT_EQ(retry.probeIndex, 0u);
-        control->discard(retry);
+        rejectedAdmitted = context.graph.addTask<LeaseTask>(Core::GpuTaskDesc{}, LeaseTask::Payload{ ReflectionFeedbackReservation(context.inner.control, rejected) }).has_value();
     }
+    EXPECT_FALSE(rejectedAdmitted);
+    GpuTaskDesc desc = GpuTaskDesc();
+    desc.setIdentity(s_EcsCaseTestsFeedbackLease).setMarkerLabel("Feedback Lease");
+    const ReflectionFeedbackPlan pending = context.plan(Stamp(), ReflectionSettings(), true, 2u);
+    b8 pendingAdmitted = false;
+    b8 pendingTaskValid = false;
+    native(mut context, in desc, in pending, mut pendingAdmitted, mut pendingTaskValid){
+        using LeaseTask = ReflectionStatisticsTestHelpers::ReservationLeaseTask<ReflectionFeedbackReservation>;
+        const auto gpuTaskAdmission = context.graph.addTask<LeaseTask>(desc, LeaseTask::Payload{ ReflectionFeedbackReservation(context.inner.control, pending) });
+        pendingAdmitted = gpuTaskAdmission.has_value();
+        if(gpuTaskAdmission)
+            pendingTaskValid = gpuTaskAdmission->valid();
+    }
+    ASSERT_TRUE(pendingAdmitted);
+    ASSERT_TRUE(pendingTaskValid);
+    context.graph.reset();
+    const ReflectionFeedbackPlan retry = context.plan(Stamp(), ReflectionSettings(), true, 3u);
+    ASSERT_TRUE(context.reserve(retry));
+    EXPECT_EQ(retry.probeIndex, 0u);
+    context.discard(retry);
 }
 
 void VerifyReflectionFeedback_MovedLeasePublishesOnceAndInvalidAcceptanceRetainsQuarantineAfterDestruction(){
-    native{
-        Core::Alloc::GlobalArena arena{ Name(s_EcsCaseTestsReflectionFeedbackMove) };
-        auto controlResult = Impl::CreateStatisticsControl<ReflectionFeedbackControl>(arena, 1u);
-        ASSERT_TRUE(controlResult);
-        auto control = Move(*controlResult);
-        const auto first = control->plan(Stamp(), ReflectionSettings{}, true, 1u);
-        ReflectionFeedbackReservation original(control, first);
-        ASSERT_TRUE(original.valid());
-        ReflectionFeedbackReservation moved(Move(original));
-        EXPECT_FALSE(original.valid());
-        EXPECT_TRUE(moved.valid());
-        moved.accept(Token(first.sequence), true);
-        EXPECT_FALSE(moved.valid());
-        moved.accept(Token(99u), true);
-        const auto retry = control->plan(Stamp(), ReflectionSettings{}, true, 2u);
-        EXPECT_EQ(retry.probeIndex, 1u);
-        {
-            ReflectionFeedbackReservation accepted(control, retry);
-            ASSERT_TRUE(accepted.valid());
-            accepted.accept({}, true);
+    ReflectionFeedbackControlContext context = ReflectionFeedbackControlContext();
+    ASSERT_TRUE(context.valid());
+    const ReflectionFeedbackPlan first = context.plan(Stamp(), ReflectionSettings(), true, 1u);
+    b8 originalInitiallyValid = false;
+    b8 originalValidAfterMove = true;
+    b8 movedValidBeforeAccept = false;
+    b8 movedValidAfterAccept = true;
+    native(mut context, in first, mut originalInitiallyValid, mut originalValidAfterMove, mut movedValidBeforeAccept, mut movedValidAfterAccept){
+        ReflectionFeedbackReservation original(context.inner.control, first);
+        originalInitiallyValid = original.valid();
+        if(originalInitiallyValid){
+            ReflectionFeedbackReservation moved(Move(original));
+            originalValidAfterMove = original.valid();
+            movedValidBeforeAccept = moved.valid();
+            moved.accept(Token(first.sequence), true);
+            movedValidAfterAccept = moved.valid();
+            moved.accept(Token(99u), true);
         }
-        const auto quarantined = control->plan(Stamp(), ReflectionSettings{}, true, 3u);
-        EXPECT_TRUE(quarantined.quarantined);
-        ReflectionFeedbackReservation blocked(control, quarantined);
-        EXPECT_FALSE(blocked.valid());
     }
+    ASSERT_TRUE(originalInitiallyValid);
+    EXPECT_FALSE(originalValidAfterMove);
+    EXPECT_TRUE(movedValidBeforeAccept);
+    EXPECT_FALSE(movedValidAfterAccept);
+
+    const ReflectionFeedbackPlan retry = context.plan(Stamp(), ReflectionSettings(), true, 2u);
+    EXPECT_EQ(retry.probeIndex, 1u);
+    {
+        ReflectionFeedbackReservation accepted = context.makeReservation(retry);
+        ASSERT_TRUE(accepted.valid());
+        accepted.accept(QueueSubmissionToken(), true);
+    }
+    const ReflectionFeedbackPlan quarantined = context.plan(Stamp(), ReflectionSettings(), true, 3u);
+    EXPECT_TRUE(quarantined.quarantined);
+    const ReflectionFeedbackReservation blocked = context.makeReservation(quarantined);
+    EXPECT_FALSE(blocked.valid());
 }
 
 void VerifyReflectionHistory_AcceptedSampleCountCapsWhileSamplingIndexContinues(){
@@ -577,84 +628,76 @@ void VerifyReflectionHistory_AcceptedSampleCountCapsWhileSamplingIndexContinues(
 }
 
 void VerifyReflectionHistory_SingleSampleLimitStillPublishesBanksAndAdvancesAcceptedSampling(){
-    native{
-        Core::Alloc::GlobalArena arena{ Name(s_EcsCaseTestsReflectionSingleSampleHistory) };
-        auto controlResult = Impl::CreateStatisticsControl<ReflectionHistoryControl>(arena, 1u);
-        ASSERT_TRUE(controlResult);
-        auto control = Move(*controlResult);
-        ReflectionSettings settings;
-        settings.temporalMaxSamples = 1u;
-        u64 epoch = 0u;
-        for(u32 index = 0u; index < 4u; ++index){
-            const auto plan = control->plan(Stamp(), settings, 100u + index);
-            const auto outcome = ResolveReflectionHistoryOutcome(plan, true);
-            EXPECT_TRUE(outcome.eligible);
-            EXPECT_EQ(outcome.reused, index != 0u);
-            EXPECT_EQ(outcome.sampleCount, 1u);
-            EXPECT_EQ(outcome.sampleIndex, index);
-            EXPECT_EQ(plan.currentBank, index & 1u);
-            EXPECT_EQ(outcome.historyStartGraphicsFrame, 100u);
-            if(index == 0u)
-                epoch = outcome.epoch;
-            EXPECT_EQ(outcome.epoch, epoch);
-            ReflectionHistoryReservation reservation(control, plan);
-            ASSERT_TRUE(reservation.valid());
-            reservation.accept(Token(plan.sequence), true);
-            const auto next = control->plan(Stamp(), settings, 101u + index);
-            EXPECT_EQ(next.acceptedSequence, plan.sequence);
-            EXPECT_EQ(next.previousBank, plan.currentBank);
-            EXPECT_EQ(next.previousSampleCount, 1u);
-            EXPECT_EQ(next.sampleIndex, index + 1u);
-        }
+    ReflectionHistoryControlContext context = ReflectionHistoryControlContext();
+    ASSERT_TRUE(context.valid());
+    ReflectionSettings settings = ReflectionSettings();
+    settings.temporalMaxSamples = 1u;
+    u64 epoch = 0u;
+    for(u32 index = 0u; index < 4u; ++index){
+        const ReflectionHistoryPlan plan = context.plan(Stamp(), settings, 100u + index);
+        const ReflectionHistoryOutcome outcome = ResolveReflectionHistoryOutcome(plan, true);
+        EXPECT_TRUE(outcome.eligible);
+        EXPECT_EQ(outcome.reused, index != 0u);
+        EXPECT_EQ(outcome.sampleCount, 1u);
+        EXPECT_EQ(outcome.sampleIndex, index);
+        EXPECT_EQ(plan.currentBank, index & 1u);
+        EXPECT_EQ(outcome.historyStartGraphicsFrame, 100u);
+        if(index == 0u)
+            epoch = outcome.epoch;
+        EXPECT_EQ(outcome.epoch, epoch);
+        ReflectionHistoryReservation reservation = context.makeReservation(plan);
+        ASSERT_TRUE(reservation.valid());
+        reservation.accept(Token(plan.sequence), true);
+        const ReflectionHistoryPlan next = context.plan(Stamp(), settings, 101u + index);
+        EXPECT_EQ(next.acceptedSequence, plan.sequence);
+        EXPECT_EQ(next.previousBank, plan.currentBank);
+        EXPECT_EQ(next.previousSampleCount, 1u);
+        EXPECT_EQ(next.sampleIndex, index + 1u);
     }
 }
 
 void VerifyReflectionHistory_DiscardedLateHardwareResetKeepsHistoryUntilAnAcceptedRetry(){
-    native{
-        Core::Alloc::GlobalArena arena{ Name(s_EcsCaseTestsReflectionLateResetHistory) };
-        auto controlResult = Impl::CreateStatisticsControl<ReflectionHistoryControl>(arena, 1u);
-        ASSERT_TRUE(controlResult);
-        auto control = Move(*controlResult);
-        const ReflectionSettings settings;
-        const auto first = control->plan(Stamp(), settings, 10u);
-        ReflectionHistoryReservation initial(control, first);
-        ASSERT_TRUE(initial.valid());
-        initial.accept(Token(first.sequence), true);
+    ReflectionHistoryControlContext context = ReflectionHistoryControlContext();
+    ASSERT_TRUE(context.valid());
+    const ReflectionSettings settings = ReflectionSettings();
+    const ReflectionHistoryPlan first = context.plan(Stamp(), settings, 10u);
+    ReflectionHistoryReservation initial = context.makeReservation(first);
+    ASSERT_TRUE(initial.valid());
+    initial.accept(Token(first.sequence), true);
 
-        const auto rejected = control->plan(Stamp(), settings, 11u);
-        ASSERT_TRUE(rejected.reused);
-        const auto lateReset = ResolveReflectionHistoryOutcome(rejected, false);
-        EXPECT_EQ(lateReset.resetReason, ReflectionHistoryResetReason::HardwareChanged);
-        EXPECT_FALSE(lateReset.reused);
-        EXPECT_EQ(lateReset.sampleIndex, 0u);
-        EXPECT_EQ(lateReset.sampleCount, 1u);
-        ReflectionHistoryReservation abandoned(control, rejected);
-        ASSERT_TRUE(abandoned.valid());
-        abandoned.discard();
-        const auto retry = control->plan(Stamp(), settings, 12u);
-        EXPECT_EQ(retry.acceptedSequence, first.sequence);
-        EXPECT_EQ(retry.epoch, rejected.epoch);
-        EXPECT_EQ(retry.currentBank, rejected.currentBank);
-        EXPECT_EQ(retry.previousBank, first.currentBank);
-        const auto restoredReady = ResolveReflectionHistoryOutcome(retry, true);
-        EXPECT_TRUE(restoredReady.reused);
-        EXPECT_FALSE(restoredReady.reset);
-        EXPECT_EQ(restoredReady.sampleIndex, 1u);
+    const ReflectionHistoryPlan rejected = context.plan(Stamp(), settings, 11u);
+    ASSERT_TRUE(rejected.reused);
+    const ReflectionHistoryOutcome lateReset = ResolveReflectionHistoryOutcome(rejected, false);
+    EXPECT_EQ(lateReset.resetReason, ReflectionHistoryResetReason::HardwareChanged);
+    EXPECT_FALSE(lateReset.reused);
+    EXPECT_EQ(lateReset.sampleIndex, 0u);
+    EXPECT_EQ(lateReset.sampleCount, 1u);
+    ReflectionHistoryReservation abandoned = context.makeReservation(rejected);
+    ASSERT_TRUE(abandoned.valid());
+    abandoned.discard();
+    const ReflectionHistoryPlan retry = context.plan(Stamp(), settings, 12u);
+    EXPECT_EQ(retry.acceptedSequence, first.sequence);
+    EXPECT_EQ(retry.epoch, rejected.epoch);
+    EXPECT_EQ(retry.currentBank, rejected.currentBank);
+    EXPECT_EQ(retry.previousBank, first.currentBank);
+    const ReflectionHistoryOutcome restoredReady = ResolveReflectionHistoryOutcome(retry, true);
+    EXPECT_TRUE(restoredReady.reused);
+    EXPECT_FALSE(restoredReady.reset);
+    EXPECT_EQ(restoredReady.sampleIndex, 1u);
 
-        ReflectionHistoryReservation accepted(control, retry);
-        ASSERT_TRUE(accepted.valid());
-        accepted.accept(Token(retry.sequence), false);
-        const auto next = control->plan(Stamp(), settings, 13u);
-        const auto stable = ResolveReflectionHistoryOutcome(next, false);
-        EXPECT_EQ(next.acceptedSequence, retry.sequence);
-        EXPECT_EQ(next.previousBank, retry.currentBank);
-        EXPECT_EQ(stable.epoch, lateReset.epoch);
-        EXPECT_EQ(stable.sampleIndex, 1u);
-        EXPECT_EQ(stable.sampleCount, 2u);
-        EXPECT_EQ(stable.historyStartGraphicsFrame, 12u);
-        EXPECT_TRUE(stable.reused);
-        EXPECT_FALSE(stable.reset);
-    }
+    ReflectionHistoryReservation accepted = context.makeReservation(retry);
+    ASSERT_TRUE(accepted.valid());
+    accepted.accept(Token(retry.sequence), false);
+    const ReflectionHistoryPlan next = context.plan(Stamp(), settings, 13u);
+    const ReflectionHistoryOutcome stable = ResolveReflectionHistoryOutcome(next, false);
+    EXPECT_EQ(next.acceptedSequence, retry.sequence);
+    EXPECT_EQ(next.previousBank, retry.currentBank);
+    EXPECT_EQ(stable.epoch, lateReset.epoch);
+    EXPECT_EQ(stable.sampleIndex, 1u);
+    EXPECT_EQ(stable.sampleCount, 2u);
+    EXPECT_EQ(stable.historyStartGraphicsFrame, 12u);
+    EXPECT_TRUE(stable.reused);
+    EXPECT_FALSE(stable.reset);
 }
 
 void VerifyReflectionHistory_EverySceneDomainAndViewChangeResetsOnce(){
@@ -798,28 +841,33 @@ void VerifyReflectionHistory_ResourceGenerationRejectsOldAcceptanceAndResetsEpoc
 }
 
 void VerifyReflectionHistory_GraphRejectionAndResetReleaseUnacceptedLease(){
-    native{
+    ReflectionHistoryControlContext context = ReflectionHistoryControlContext();
+    ASSERT_TRUE(context.valid());
+    const ReflectionHistoryPlan rejected = context.plan(Stamp(), ReflectionSettings(), 1u);
+    b8 rejectedAdmitted = true;
+    native(mut context, in rejected, mut rejectedAdmitted){
         using LeaseTask = ReflectionStatisticsTestHelpers::ReservationLeaseTask<ReflectionHistoryReservation>;
-        Core::Alloc::GlobalArena arena{ Name(s_EcsCaseTestsReflectionHistoryLease) };
-        auto controlResult = Impl::CreateStatisticsControl<ReflectionHistoryControl>(arena, 1u);
-        ASSERT_TRUE(controlResult);
-        auto control = Move(*controlResult);
-        Core::GpuTaskGraph graph(arena);
-        const auto rejected = control->plan(Stamp(), ReflectionSettings{}, 1u);
-        EXPECT_FALSE(graph.addTask<LeaseTask>(Core::GpuTaskDesc{}, LeaseTask::Payload{ ReflectionHistoryReservation(control, rejected) }).has_value());
-        Core::GpuTaskDesc desc;
-        desc.setIdentity(Name(s_EcsCaseTestsHistoryLease)).setMarkerLabel("History Lease");
-        const auto pending = control->plan(Stamp(), ReflectionSettings{}, 2u);
-        {
-            const auto gpuTaskAdmission = graph.addTask<LeaseTask>(desc, LeaseTask::Payload{ ReflectionHistoryReservation(control, pending) });
-            ASSERT_TRUE(gpuTaskAdmission);
-            ASSERT_TRUE(gpuTaskAdmission->valid());
-        }
-        graph.reset();
-        const auto retry = control->plan(Stamp(), ReflectionSettings{}, 3u);
-        EXPECT_TRUE(control->reserve(retry));
-        EXPECT_EQ(retry.sampleIndex, 0u);
+        rejectedAdmitted = context.graph.addTask<LeaseTask>(Core::GpuTaskDesc{}, LeaseTask::Payload{ ReflectionHistoryReservation(context.inner.control, rejected) }).has_value();
     }
+    EXPECT_FALSE(rejectedAdmitted);
+    GpuTaskDesc desc = GpuTaskDesc();
+    desc.setIdentity(s_EcsCaseTestsHistoryLease).setMarkerLabel("History Lease");
+    const ReflectionHistoryPlan pending = context.plan(Stamp(), ReflectionSettings(), 2u);
+    b8 pendingAdmitted = false;
+    b8 pendingTaskValid = false;
+    native(mut context, in desc, in pending, mut pendingAdmitted, mut pendingTaskValid){
+        using LeaseTask = ReflectionStatisticsTestHelpers::ReservationLeaseTask<ReflectionHistoryReservation>;
+        const auto gpuTaskAdmission = context.graph.addTask<LeaseTask>(desc, LeaseTask::Payload{ ReflectionHistoryReservation(context.inner.control, pending) });
+        pendingAdmitted = gpuTaskAdmission.has_value();
+        if(gpuTaskAdmission)
+            pendingTaskValid = gpuTaskAdmission->valid();
+    }
+    ASSERT_TRUE(pendingAdmitted);
+    ASSERT_TRUE(pendingTaskValid);
+    context.graph.reset();
+    const ReflectionHistoryPlan retry = context.plan(Stamp(), ReflectionSettings(), 3u);
+    EXPECT_TRUE(context.reserve(retry));
+    EXPECT_EQ(retry.sampleIndex, 0u);
 }
 
 void VerifyReflectionSettings_AcceptsZeroHardwareBudgetWithScreenFeedback(){
@@ -1442,6 +1490,10 @@ void VerifyShadowMaterialContextPolicy_RejectedAndCrossRouteUploadsDoNotAdmitSta
     EXPECT_FALSE(policy.softwareSnapshotAccepted(false, true, true, 22u, 22u, 2u, 3u));
     EXPECT_TRUE(policy.softwareSnapshotAccepted(false, true, true, 22u, 22u, 2u, 2u));
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_ADHD_GTEST(ReflectionFeedback, ExtentAccountsForTwoSurfaceClassesAndPartialTiles, VerifyReflectionFeedback_ExtentAccountsForTwoSurfaceClassesAndPartialTiles)
 NWB_ADHD_GTEST(ReflectionFeedback, SpeculativePlansAndRejectedWriterDoNotAdvanceCadence, VerifyReflectionFeedback_SpeculativePlansAndRejectedWriterDoNotAdvanceCadence)

@@ -1,0 +1,626 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/gtest_macros.adhd>
+#include "ui_core_and_list_fixtures.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/unit/ui/multiline_fixture.adhd.h>
+#include <tests/unit/ui/name_cases.adhd.h>
+
+#include <impl/ecs_ui/toolkit/edit/commands.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/float_model.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/integer_model.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd.h>
+#include <impl/ecs_ui/toolkit/input/bindings.adhd.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiNumericEditTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace UiComboTests;
+
+inline constexpr AStringView s_NumericPanelKey = "panel";
+inline constexpr AStringView s_IntegerEditKey = "integer";
+inline constexpr AStringView s_DecimalEditKey = "decimal";
+
+namespace NumericEventKind = ::__hidden_ui_glyph_sdf_tests::UiFixtureNumericEventKind;
+
+struct NumericEvent{
+    AString<Core::Alloc::GlobalArena> text;
+    InputCommandIntent intent;
+    EditAction::Enum action = EditAction::Submit;
+    NumericEventKind::Enum kind = NumericEventKind::Text;
+
+
+public:
+    explicit NumericEvent(Core::Alloc::GlobalArena& arena)noexcept : text(arena){}
+};
+
+class NumericHost final : public IEditBoxHost{
+public:
+    explicit NumericHost(Core::Alloc::GlobalArena& arena);
+    virtual ~NumericHost()noexcept override = default;
+
+
+public:
+    void text(AStringView value);
+    void key(i32 key, b8 control = false);
+    void replace(AStringView value);
+    void preedit(AStringView value);
+    void action(EditAction::Enum action);
+
+    [[nodiscard]] virtual EditBoxResult edit(const WidgetState& widget, const EditBoxOptions& options, EditModel& draft)noexcept override;
+    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&)noexcept override{ return {}; }
+    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState& widget, const EditBoxOptions& options, const PopupToken& popup, EditModel& draft, IEditActionSink& sink)override;
+    [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)noexcept override{ return {}; }
+    [[nodiscard]] virtual b8 publish(const WidgetState& widget, const EditBoxView& view, const EditBoxPlacement& placement, const EditBoxOptions& options)override;
+
+
+public:
+    AString<Core::Alloc::GlobalArena> displayed;
+    IntegerEditModel* onLoanInteger = nullptr;
+    IntegerEditModel* onPublishInteger = nullptr;
+    FloatEditModel* onPublishFloat = nullptr;
+    Builder* resetBuilder = nullptr;
+    PopupToken lastPopup;
+    i64 mutationValue = 99;
+    usize loans = 0u;
+    usize ordinaryLoans = 0u;
+    usize publishes = 0u;
+    b8 focused = true;
+    b8 mutationApplied = false;
+
+
+private:
+    Core::Alloc::GlobalArena& m_arena;
+    PaintVector<NumericEvent> m_events;
+    InputBindings m_bindings;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class NumericFixture : public WidgetFixture{
+public:
+    NumericFixture();
+
+
+public:
+    [[nodiscard]] b8 beginNumeric(const u64 generation){
+        return begin(generation) && m_builder.beginPanel(s_NumericPanelKey, { 20.0f, 20.0f, 740.0f, 520.0f });
+    }
+    [[nodiscard]] b8 beginParent(const u64 generation){
+        return begin(generation) && m_builder.beginPopup("parent", m_parent, UiWidgetTests::LargeLoanParentOptions());
+    }
+    [[nodiscard]] b8 acceptNumeric(){
+        return finishPanel() && m_context.commitFrame(m_context.readyGeneration());
+    }
+    void useHost()noexcept{ m_builder.setEditHost(&m_host); }
+
+
+public:
+    IntegerEditModel m_integer;
+    FloatEditModel m_float;
+    EditBoxState m_integerState;
+    EditBoxState m_floatState;
+    PopupState m_parent;
+    PopupState m_child;
+    NumericHost m_host;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiNumericTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Impl::Ui;
+using DraftSnapshot = UiMultilineTests::MultilineSnapshot;
+
+template<typename Model>
+class NumericModelFixture : public testing::Test{
+public:
+    NumericModelFixture()
+        : m_arena(Name(NWB::Tests::UiCases::s_UiNumericModelsFixture))
+        , m_model(m_arena)
+    {}
+
+
+public:
+    Core::Alloc::GlobalArena m_arena;
+    Model m_model;
+};
+
+void ExpectRejected(const NumericEditResult& result, b8 restored = false);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiPopupToolsTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Impl::Ui;
+using namespace UiWidgetTests;
+
+inline constexpr AStringView s_PopupToolsPanelKey = "panel";
+inline constexpr AStringView s_AnchorKey = "anchor";
+inline constexpr AStringView s_TooltipKey = "tip";
+inline constexpr AStringView s_MenuKey = "menu";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class PopupToolsSource final : public IListDataSource{
+public:
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return generation; }
+    [[nodiscard]] virtual u64 revision()const noexcept override;
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{ return count; }
+    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{ return index < count ? index + 1u : 0u; }
+    [[nodiscard]] virtual Expected<u64> indexOf(u64 value)const noexcept override;
+    [[nodiscard]] virtual Expected<u64> findEnabled(u64 start, b8 reverse)const noexcept override;
+    [[nodiscard]] virtual StringView text(u64 index)const noexcept override;
+    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{ return index < count && index + 1u != 3u; }
+
+
+public:
+    u64 generation = 1401u;
+    u64 count = 5u;
+    u64 selectListKey = 4u;
+    mutable u64 contentRevision = 1u;
+    mutable ContextMenuState* closeOnText = nullptr;
+    mutable TooltipState* resetTooltipOnText = nullptr;
+    mutable ListState* selectListOnText = nullptr;
+    mutable ComboState* closeComboOnRevision = nullptr;
+    mutable b8 changeRevisionOnText = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class PopupToolsFixture : public WidgetFixture{
+public:
+    virtual void SetUp()override;
+    [[nodiscard]] b8 declareTools(u64 generation, b8 tooltip = true, b8 menu = true, const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f });
+    [[nodiscard]] b8 prepareTools(const u64 generation, const b8 tooltip = true, const b8 menu = true, const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f }){
+        return declareTools(generation, tooltip, menu, bounds) && finishPanel();
+    }
+    [[nodiscard]] b8 acceptTools(const u64 generation, const b8 tooltip = true, const b8 menu = true, const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f }){
+        return prepareTools(generation, tooltip, menu, bounds) && m_context.commitFrame(generation);
+    }
+    [[nodiscard]] b8 acceptPopupTooltip(u64 generation);
+    [[nodiscard]] const HitTarget* menuHost()const noexcept;
+    [[nodiscard]] const HitTarget* menuRow(u64 key)const noexcept;
+    [[nodiscard]] b8 moveToAnchor(AStringView parent = s_PopupToolsPanelKey);
+    void secondaryClick(const Point& point);
+    [[nodiscard]] b8 openBySecondary(u64 generation);
+
+
+public:
+    PopupToolsSource m_source;
+    TooltipState m_tooltip;
+    ContextMenuState m_menu;
+    PopupState m_plainPopup;
+    WidgetOptions m_anchorOptions;
+    TooltipOptions m_tooltipOptions;
+    ContextMenuOptions m_menuOptions;
+    ContextMenuResult m_menuResult;
+    f32 m_deltaSeconds = 0.0f;
+    b8 m_anchorActivated = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void ExpectNumericEditRejected(in NumericEditResult result, in b8 restored){
+    EXPECT_TRUE(result.valid);
+    EXPECT_TRUE(result.rejected);
+    EXPECT_FALSE(result.committed);
+    EXPECT_FALSE(result.valueChanged);
+    EXPECT_FALSE(result.cancelled);
+    EXPECT_FALSE(result.clamped);
+    EXPECT_EQ(result.restored, restored);
+}
+
+PopupOptions MakePopupTooltipFixtureOptions(){
+    PopupOptions options = PopupOptions();
+    options.anchor.x = 40.0f;
+    options.anchor.y = 40.0f;
+    options.anchor.width = 40.0f;
+    options.anchor.height = 24.0f;
+    options.size.x = 320.0f;
+    options.size.y = 220.0f;
+    return options;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiNumericEditTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NumericHost::NumericHost(Core::Alloc::GlobalArena& arena)
+    : displayed(arena)
+    , m_arena(arena)
+    , m_events(arena)
+    , m_bindings(arena)
+{}
+
+void NumericHost::text(const AStringView value){
+    NumericEvent event(m_arena);
+    event.text.assign(value.data(), value.size());
+    m_events.push_back(Move(event));
+}
+
+void NumericHost::key(const i32 key, const b8 control){
+    NumericEvent event(m_arena);
+    event.kind = NumericEventKind::Key;
+    event.intent = m_bindings.resolve(key, control ? Core::InputModifier::Control : 0);
+    m_events.push_back(Move(event));
+}
+
+void NumericHost::replace(const AStringView value){
+    key(Core::Key::A, true);
+    text(value);
+}
+
+void NumericHost::preedit(const AStringView value){
+    NumericEvent event(m_arena);
+    event.kind = NumericEventKind::Preedit;
+    event.text.assign(value.data(), value.size());
+    m_events.push_back(Move(event));
+}
+
+void NumericHost::action(const EditAction::Enum action){
+    NumericEvent event(m_arena);
+    event.kind = NumericEventKind::Action;
+    event.action = action;
+    m_events.push_back(Move(event));
+}
+
+EditBoxResult NumericHost::edit([[maybe_unused]] const WidgetState& widget, [[maybe_unused]] const EditBoxOptions& options, [[maybe_unused]] EditModel& draft)noexcept{
+    ++ordinaryLoans;
+    EditBoxResult result;
+    result.valid = true;
+    return result;
+}
+
+EditBoxResult NumericHost::editActions([[maybe_unused]] const WidgetState& widget, const EditBoxOptions& options, const PopupToken& popup, EditModel& draft, IEditActionSink& sink){
+    ++loans;
+    lastPopup = popup;
+    EditBoxResult result;
+    result.valid = true;
+    result.focused = options.enabled && focused;
+    const u64 revision = draft.revision();
+    const usize anchor = draft.anchor();
+    const usize caret = draft.caret();
+    for(const auto& event : m_events){
+        if(event.kind == NumericEventKind::Action){
+            if(!sink.apply(draft, event.action, options.readOnly)){
+                result.valid = false;
+                break;
+            }
+            result.blurred |= event.action == EditAction::Blur;
+            result.abandoned |= event.action == EditAction::Abandon;
+            if(event.action == EditAction::Blur)
+                result.focused = false;
+        }
+        else if(options.enabled && event.kind == NumericEventKind::Text && !options.readOnly){
+            if(!draft.replaceSelection(event.text)){
+                result.valid = false;
+                break;
+            }
+        }
+        else if(options.enabled && event.kind == NumericEventKind::Preedit && !options.readOnly){
+            if(!draft.beginComposition() || !draft.updateComposition(event.text, event.text.size(), event.text.size())){
+                result.valid = false;
+                break;
+            }
+        }
+        else if(options.enabled && event.kind == NumericEventKind::Key){
+            const auto command = ApplyEditCommand(draft, TranslateEditCommand(event.intent, false, EditTextMode::SingleLine), options.readOnly);
+            result.submitted |= command.submitted;
+            result.cancelled |= command.cancelled;
+            if(command.submitted || command.cancelled){
+                if(!sink.apply(draft, command.submitted ? EditAction::Submit : EditAction::Cancel, options.readOnly)){
+                    result.valid = false;
+                    break;
+                }
+                if(command.cancelled){
+                    result.focused = false;
+                    break;
+                }
+            }
+        }
+    }
+    m_events.clear();
+    if(onLoanInteger)
+        mutationApplied = onLoanInteger->setValue(mutationValue);
+    if(resetBuilder)
+        resetBuilder->reset();
+    result.textChanged = revision != draft.revision();
+    result.selectionChanged = anchor != draft.anchor() || caret != draft.caret();
+    return result;
+}
+
+b8 NumericHost::publish([[maybe_unused]] const WidgetState& widget, const EditBoxView& view, [[maybe_unused]] const EditBoxPlacement& placement, [[maybe_unused]] const EditBoxOptions& options){
+    ++publishes;
+    displayed.assign(view.displayText().data(), view.displayText().size());
+    if(onPublishInteger)
+        mutationApplied = onPublishInteger->setValue(mutationValue);
+    if(onPublishFloat)
+        mutationApplied = onPublishFloat->setValue(static_cast<f64>(mutationValue));
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NumericFixture::NumericFixture()
+    : m_integer(m_arena)
+    , m_float(m_arena)
+    , m_host(m_arena)
+{}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiNumericTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void ExpectRejected(const NumericEditResult& result, const b8 restored){
+    ::__hidden_ui_glyph_sdf_tests::ExpectNumericEditRejected(result, restored);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiPopupToolsTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u64 PopupToolsSource::revision()const noexcept{
+    if(closeComboOnRevision){
+        ComboState& state = *MakeNotNull(Exchange(closeComboOnRevision, nullptr));
+        state.close();
+    }
+    return contentRevision;
+}
+
+Expected<u64> PopupToolsSource::indexOf(const u64 value)const noexcept{
+    return UiWidgetTests::FindArithmeticFixtureRowIndex(count, 0u, false, value);
+}
+
+Expected<u64> PopupToolsSource::findEnabled(const u64 start, const b8 reverse)const noexcept{
+    return UiWidgetTests::FindSingleDisabledFixtureRow(count, 0u, false, start, reverse, 3u);
+}
+
+StringView PopupToolsSource::text(const u64 index)const noexcept{
+    if(changeRevisionOnText){
+        changeRevisionOnText = false;
+        ++contentRevision;
+    }
+    if(closeOnText){
+        ContextMenuState& state = *MakeNotNull(Exchange(closeOnText, nullptr));
+        state.close();
+    }
+    if(resetTooltipOnText){
+        TooltipState& state = *MakeNotNull(Exchange(resetTooltipOnText, nullptr));
+        state.reset();
+    }
+    if(selectListOnText){
+        ListState& state = *MakeNotNull(Exchange(selectListOnText, nullptr));
+        state.select(selectListKey);
+    }
+    constexpr Array<StringView, 5u> s_Labels = { "One", "Two", "Three", "Four", "Five" };
+    return index < count && index < s_Labels.size() ? s_Labels[index] : StringView{};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void PopupToolsFixture::SetUp(){
+    WidgetFixture::SetUp();
+    m_anchorOptions.width = { LayoutSizePolicy::Fixed, 220.0f };
+    m_anchorOptions.height = { LayoutSizePolicy::Fixed, 32.0f };
+    m_tooltipOptions.delaySeconds = 0.0f;
+    m_menuOptions.size = { 240.0f, 220.0f };
+}
+
+b8 PopupToolsFixture::declareTools(const u64 generation, const b8 tooltip, const b8 menu, const Rect& bounds){
+    if(!begin(generation) || !m_builder.beginPanel(s_PopupToolsPanelKey, bounds))
+        return false;
+    m_builder.setDeltaSeconds(m_deltaSeconds);
+    m_anchorActivated = m_builder.button(s_AnchorKey, "Anchor", m_anchorOptions);
+    m_menuResult = {};
+    if(tooltip && !m_builder.tooltip(s_TooltipKey, s_AnchorKey, "Helpful text", m_tooltip, m_tooltipOptions))
+        return false;
+    if(menu){
+        m_menuResult = m_builder.contextMenu(s_MenuKey, s_AnchorKey, m_source, m_menu, m_menuOptions);
+        if(!m_menuResult.valid)
+            return false;
+    }
+    return true;
+}
+
+b8 PopupToolsFixture::acceptPopupTooltip(const u64 generation){
+    if(!begin(generation))
+        return false;
+    const PopupOptions options = ::__hidden_ui_glyph_sdf_tests::MakePopupTooltipFixtureOptions();
+    m_builder.setDeltaSeconds(m_deltaSeconds);
+    if(!m_builder.beginPopup("plain", m_plainPopup, options))
+        return false;
+    m_anchorActivated = m_builder.button(s_AnchorKey, "Popup anchor", m_anchorOptions);
+    return m_builder.tooltip(s_TooltipKey, s_AnchorKey, "Overlay help", m_tooltip, m_tooltipOptions) && m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame() && m_context.commitFrame(generation);
+}
+
+const HitTarget* PopupToolsFixture::menuHost()const noexcept{
+    for(const HitTarget& entry : m_context.input().targets()){
+        if(entry.navigable && entry.popup.instanceGeneration == m_menu.instanceGeneration())
+            return &entry;
+    }
+    return nullptr;
+}
+
+const HitTarget* PopupToolsFixture::menuRow(const u64 key)const noexcept{
+    for(const HitTarget& entry : m_context.input().targets()){
+        if(entry.value == key && entry.popup.instanceGeneration == m_menu.instanceGeneration())
+            return &entry;
+    }
+    return nullptr;
+}
+
+b8 PopupToolsFixture::moveToAnchor(const AStringView parent){
+    const HitTarget* accepted = target(id(s_AnchorKey, parent));
+    if(!accepted)
+        return false;
+    const Point point = Center(accepted->rectangle);
+    return send({ .position = point, .type = InputEventType::PointerMove }).hover == id(s_AnchorKey, parent);
+}
+
+void PopupToolsFixture::secondaryClick(const Point& point){
+    EXPECT_TRUE(send({ .position = point, .type = InputEventType::SecondaryDown }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = point, .type = InputEventType::SecondaryUp }).pointerConsumed);
+}
+
+b8 PopupToolsFixture::openBySecondary(const u64 generation){
+    const HitTarget* accepted = target(id(s_AnchorKey, s_PopupToolsPanelKey));
+    if(!accepted)
+        return false;
+    const Point point = Center(accepted->rectangle);
+    secondaryClick(point);
+    return acceptTools(generation, false) && m_menu.isOpen();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

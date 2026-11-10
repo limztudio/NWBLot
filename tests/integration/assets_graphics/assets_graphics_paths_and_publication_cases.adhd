@@ -9,6 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
 
 
@@ -194,6 +195,47 @@ inline void PrepareAssetPathWorkload(const usize directoryCount, const AStringVi
     return output && AStringView(*output) == AStringView(fixture.expectedDerived);
 }
 
+struct ScratchArenaSentinel final : NoCopy{
+    Core::Alloc::ScratchArena& arena;
+    u8* bytes = nullptr;
+
+
+public:
+    explicit ScratchArenaSentinel(Core::Alloc::ScratchArena& owner)noexcept
+        : arena(owner)
+        , bytes(static_cast<u8*>(owner.allocate(1u, 64u)))
+    {
+        if(bytes != nullptr){
+            for(usize index = 0u; index < 64u; ++index)
+                bytes[index] = static_cast<u8>(index + 91u);
+        }
+    }
+    ~ScratchArenaSentinel()noexcept{
+        release();
+    }
+
+
+public:
+    [[nodiscard]] b8 valid()const noexcept{ return bytes != nullptr; }
+
+    [[nodiscard]] b8 intact()const noexcept{
+        if(bytes == nullptr)
+            return false;
+        for(usize index = 0u; index < 64u; ++index){
+            if(bytes[index] != static_cast<u8>(index + 91u))
+                return false;
+        }
+        return true;
+    }
+
+    void release()noexcept{
+        if(bytes != nullptr){
+            arena.deallocate(bytes, 1u, 64u);
+            bytes = nullptr;
+        }
+    }
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -244,14 +286,17 @@ void VerifyAssetConstructorContracts_ImplicitNameBindingCanThrowDespiteNothrowEx
 }
 
 void VerifyAssetConstructorContracts_CastIncludesTheCompleteContextualComparisonConversion(){
-    native{
+    ContextualComparisonAsset asset = ContextualComparisonAsset();
+    EXPECT_EQ(asset.virtualPath(), Name());
+    b8 nullCastReturnsNull = false;
+    native(in asset, mut nullCastReturnsNull){
         using namespace NWB::Core::Assets;
         static_assert(noexcept(DeclVal<const IAsset&>().assetType() != ContextualComparisonAsset::AssetTypeName()));
         static_assert(!noexcept(CastAsset<ContextualComparisonAsset>(DeclVal<const IAsset*>())));
-        ContextualComparisonAsset asset;
         EXPECT_THROW({ EXPECT_EQ(CastAsset<ContextualComparisonAsset>(&asset), &asset); }, u32);
-        EXPECT_EQ(CastAsset<ContextualComparisonAsset>(nullptr), nullptr);
+        nullCastReturnsNull = CastAsset<ContextualComparisonAsset>(nullptr) == nullptr;
     }
+    EXPECT_TRUE(nullCastReturnsNull);
 }
 
 void VerifyAssetPaths_MetadataAssetDeclarationUsesTheCookerNameRegardlessOfDeclarationOrder(){
@@ -383,58 +428,63 @@ void VerifyAssetPaths_DerivedPathRejectsOutsideAndEmptyLogicalPaths(){
 }
 
 void VerifyAssetPaths_LongAsciiAndUnicodePathsRemainCorrectAcrossRepeatedCallerArenaUse(){
-    native{
-        using namespace NWB::Core;
-        using namespace NWB::Core::Assets;
-        for(const b8 unicode : { false, true }){
-            PathFixture fixture;
-            PrepareAssetPathWorkload(8u, unicode ? AStringView("ÉTAGE_한글_東京_😀_") : AStringView("Long_COMPONENT_"), unicode ? 8u : 12u, fixture);
-            Alloc::ScratchArena scratchArena(Name(s_AssetCaseTestsAssetPathRepeatedScratch), 65536u);
-            auto* const sentinel = static_cast<u8*>(scratchArena.allocate(1u, 64u));
-            ASSERT_NE(sentinel, nullptr);
-            for(usize index = 0u; index < 64u; ++index)
-                sentinel[index] = static_cast<u8>(index + 91u);
-            const ArenaMemoryStats retained = scratchArena.memoryStats();
-            ArenaMemoryStats warm;
-            for(usize call = 0u; call < 16u; ++call){
-                {
-                    AString<Alloc::ScratchArena> relative(scratchArena);
-                    ASSERT_TRUE(AssetPathsDetail::BuildRelativeAssetPathText(fixture.relativePath, relative));
-                    EXPECT_EQ(AStringView(relative), AStringView(fixture.expectedRelative));
-                    EXPECT_EQ(relative.c_str()[relative.size()], '\0');
-                }
-                EXPECT_TRUE(BuildAndVerifyDerivedAssetPath(fixture, scratchArena));
-                for(usize index = 0u; index < 64u; ++index)
-                    EXPECT_EQ(sentinel[index], static_cast<u8>(index + 91u));
-                const ArenaMemoryStats after = scratchArena.memoryStats();
-                if(call == 0u)
-                    warm = after;
-                EXPECT_EQ(after.usedBytes, retained.usedBytes);
-                EXPECT_EQ(after.reservedBytes, warm.reservedBytes);
-            }
-            const NWB::Path parentInput = fixture.sourcePath / ".." / "Second.LOD1.NWB";
-            for(usize call = 0u; call < 16u; ++call){
-                {
-                    const ::Path<Alloc::ScratchArena> source(scratchArena, parentInput);
-                    const auto normal = source.lexicallyNormal();
-                    const auto stem = normal.stem();
-                    const auto extension = normal.extension();
-                    EXPECT_EQ(stem.native(), TStringView(NWB_TEXT("Second.LOD1")));
-                    EXPECT_EQ(extension.native(), TStringView(NWB_TEXT(".NWB")));
-                }
-                EXPECT_EQ(scratchArena.memoryStats().usedBytes, retained.usedBytes);
-            }
-            for(usize call = 0u; call < 16u; ++call){
-                {
-                    const ::Path<Alloc::ScratchArena> source(scratchArena, fixture.relativePath);
-                    const ::Path<Alloc::ScratchArena> emptyBase(scratchArena);
-                    const auto relative = source.lexicallyRelative(emptyBase);
-                    EXPECT_FALSE(relative.empty());
-                }
-                EXPECT_EQ(scratchArena.memoryStats().usedBytes, retained.usedBytes);
-            }
-            scratchArena.deallocate(sentinel, 1u, 64u);
+    for(u32 mode = 0u; mode < 2u; ++mode){
+        const b8 unicode = mode == 1u;
+        PathFixture fixture = PathFixture();
+        StringView directoryToken = "Long_COMPONENT_";
+        usize tokenRepeats = 12u;
+        if(unicode){
+            directoryToken = "ÉTAGE_한글_東京_😀_";
+            tokenRepeats = 8u;
         }
+        PrepareAssetPathWorkload(8u, directoryToken, tokenRepeats, fixture);
+        ScratchArena scratchArena(s_AssetCaseTestsAssetPathRepeatedScratch, 65536u);
+        ScratchArenaSentinel sentinel(scratchArena);
+        ASSERT_TRUE(sentinel.valid());
+        const ArenaMemoryStats retained = scratchArena.memoryStats();
+        ArenaMemoryStats warm = ArenaMemoryStats();
+        for(usize call = 0u; call < 16u; ++call){
+            native(in fixture, mut scratchArena){
+                AString<Core::Alloc::ScratchArena> relative(scratchArena);
+                ASSERT_TRUE(Core::Assets::AssetPathsDetail::BuildRelativeAssetPathText(fixture.relativePath, relative));
+                EXPECT_EQ(AStringView(relative), AStringView(fixture.expectedRelative));
+                EXPECT_EQ(relative.c_str()[relative.size()], '\0');
+            }
+            EXPECT_TRUE(BuildAndVerifyDerivedAssetPath(fixture, scratchArena));
+            EXPECT_TRUE(sentinel.intact());
+            const ArenaMemoryStats after = scratchArena.memoryStats();
+            if(call == 0u)
+                warm = after;
+            EXPECT_EQ(after.usedBytes, retained.usedBytes);
+            EXPECT_EQ(after.reservedBytes, warm.reservedBytes);
+        }
+        GraphicsTestPath parentInput(fixture.arena);
+        native(in fixture, mut parentInput){
+            parentInput = fixture.sourcePath / ".." / "Second.LOD1.NWB";
+        }
+        for(usize call = 0u; call < 16u; ++call){
+            native(in parentInput, mut scratchArena){
+                const ::Path<Core::Alloc::ScratchArena> source(scratchArena, parentInput);
+                const auto normal = source.lexicallyNormal();
+                const auto stem = normal.stem();
+                const auto extension = normal.extension();
+                EXPECT_EQ(stem.native(), TStringView(NWB_TEXT("Second.LOD1")));
+                EXPECT_EQ(extension.native(), TStringView(NWB_TEXT(".NWB")));
+            }
+            EXPECT_EQ(scratchArena.memoryStats().usedBytes, retained.usedBytes);
+        }
+        for(usize call = 0u; call < 16u; ++call){
+            b8 relativeEmpty = true;
+            native(in fixture, mut scratchArena, mut relativeEmpty){
+                const ::Path<Core::Alloc::ScratchArena> source(scratchArena, fixture.relativePath);
+                const ::Path<Core::Alloc::ScratchArena> emptyBase(scratchArena);
+                const auto relative = source.lexicallyRelative(emptyBase);
+                relativeEmpty = relative.empty();
+            }
+            EXPECT_FALSE(relativeEmpty);
+            EXPECT_EQ(scratchArena.memoryStats().usedBytes, retained.usedBytes);
+        }
+        sentinel.release();
     }
 }
 
@@ -485,11 +535,13 @@ void VerifyAssetPaths_StemAndExtensionPreserveTrailingSeparatorsDotsAndRoots(){
 }
 
 void VerifyAssetPaths_ConvertedPathByteCountingRejectsOverflowWithoutWrapping(){
-    native{
-        CountingByteOutput counter{ Limit<usize>::s_Max };
-        EXPECT_ANY_THROW(WriteConvertedText<char>(counter, AStringView("x")));
-        EXPECT_EQ(counter.byteCount, Limit<usize>::s_Max);
+    CountingByteOutput counter = CountingByteOutput();
+    counter.byteCount = usize.max;
+    const StringView input = "x";
+    native(in input, mut counter){
+        EXPECT_ANY_THROW(WriteConvertedText<char>(counter, input));
     }
+    EXPECT_EQ(counter.byteCount, usize.max);
 }
 
 void VerifyAssetsGraphics_ConcurrentImmutablePublicationPreservesTheWinner(){

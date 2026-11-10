@@ -9,6 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
 
 
@@ -26,11 +27,9 @@ native{
 
 #include <tests/common/floating_point_environment_guard.adhd.h>
 #include <tests/common/test_context.adhd.h>
-#include <tests/unit/metascript/generated/compact_string.adhd.h>
-#if defined(NWB_METASCRIPT_GENERATED_TESTS)
 #include <tests/unit/metascript/generated/builtin_shadow_global.adhd.h>
+#include <tests/unit/metascript/generated/compact_string.adhd.h>
 #include <tests/unit/metascript/generated/reflection_container.adhd.h>
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -212,11 +211,30 @@ using Tests::AnyLaneGreater3Double;
 using Tests::AnyLaneGreater2Single;
 using Tests::FiniteLane3Single;
 using Tests::FiniteLane3Double;
-
-#if defined(NWB_METASCRIPT_GENERATED_TESTS)
 using Tests::ReadShadowedGlobalConstant;
 using Tests::ReflectionContainerFixture;
-#endif
+
+struct ScopedHeldFloatingPointEnvironment final : NoCopy{
+public:
+    ScopedHeldFloatingPointEnvironment() = default;
+    ScopedHeldFloatingPointEnvironment(ScopedHeldFloatingPointEnvironment&&) = delete;
+    ~ScopedHeldFloatingPointEnvironment()noexcept{
+        if(m_original && !SetFloatingPointEnvironment(*m_original))
+            NWB_ASSERT(false);
+    }
+
+
+public:
+    [[nodiscard]] b8 valid()const noexcept{ return m_original.has_value(); }
+
+
+private:
+    Expected<FloatingPointEnvironment> m_original = HoldFloatingPointExceptions();
+};
+
+inline constexpr Array<i32, 4u> s_FloatingPointRoundingModes = { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
+inline constexpr i32 s_FeAllExcept = FE_ALL_EXCEPT;
+inline constexpr i32 s_FeInvalid = FE_INVALID;
 
 [[nodiscard]] inline i32 RunGeneratedLerpMoveOnly(LerpMoveOnlyOperand& operand){
     return Tests::LerpMoveOnly(operand).value;
@@ -631,66 +649,82 @@ void VerifyMetascript_OversizedReaderResultIsRejectedBeforeUsingItsBuffer(){
 }
 
 void VerifyAdhdReflection_RejectsInvalidContainerEntriesWithoutPublishingEmptyNames(){
-    native{
-#if defined(NWB_METASCRIPT_GENERATED_TESTS)
-        AdhdTestArena arena;
-        constexpr Array<char, 3u> invalidBytes = { 'b', '\0', 'd' };
-        const MStringView invalid(invalidBytes.data(), invalidBytes.size());
-        Value input(arena.arena);
-        auto& names = input.field("names");
-        names.append(Value(MStringView("first"), arena.arena));
-        names.append(Value(invalid, arena.arena));
-        names.append(Value(i64(7), arena.arena));
-        names.append(Value(MStringView("last"), arena.arena));
-        auto& fixed = input.field("fixedNames");
-        fixed.append(Value(MStringView("fixed/first"), arena.arena));
-        fixed.append(Value(invalid, arena.arena));
-        fixed.append(Value(MStringView("fixed/last"), arena.arena));
-        auto& bounded = input.field("boundedNames");
-        bounded.append(Value(invalid, arena.arena));
-        bounded.append(Value(MStringView("bounded/first"), arena.arena));
-        bounded.append(Value(MStringView("bounded/last"), arena.arena));
-        auto& counts = input.field("counts");
-        counts.field("valid").setInteger(9);
-        counts.field(invalid).setInteger(3);
-        counts.field("wrong_type").setString("not a number");
-        auto& assets = input.field("assets");
-        assets.field("valid").setString("project/asset");
-        assets.field(invalid).setString("project/ignored");
-        assets.field("invalid_value").setString(invalid);
-        assets.field("wrong_type").setInteger(3);
-        auto& enumAssets = input.field("enumAssets");
-        enumAssets.field("Valid").setString("project/enum_asset");
-        enumAssets.field("unknown").setString("project/ignored_enum");
-
-        ReflectionContainerFixture value;
-        value.fixedNames[1u] = Name("fixed/retained");
-        ASSERT_TRUE(value.deserializeNwb(input));
-        ASSERT_EQ(value.names.size(), 2u);
-        EXPECT_EQ(value.names[0u], Name("first"));
-        EXPECT_EQ(value.names[1u], Name("last"));
-        EXPECT_EQ(value.fixedNames[0u], Name("fixed/first"));
-        EXPECT_EQ(value.fixedNames[1u], Name("fixed/retained"));
-        EXPECT_EQ(value.fixedNames[2u], Name("fixed/last"));
-        ASSERT_EQ(value.boundedNames.size(), 2u);
-        EXPECT_EQ(value.boundedNames[0u], Name("bounded/first"));
-        EXPECT_EQ(value.boundedNames[1u], Name("bounded/last"));
-        ASSERT_EQ(value.counts.size(), 1u);
-        const auto count = value.counts.find(Name("valid"));
-        ASSERT_NE(count, value.counts.end());
-        EXPECT_EQ(count.value(), 9u);
-        ASSERT_EQ(value.assets.size(), 1u);
-        const auto asset = value.assets.find(Name("valid"));
-        ASSERT_NE(asset, value.assets.end());
-        EXPECT_EQ(asset.value().name(), Name("project/asset"));
-        ASSERT_EQ(value.enumAssets.size(), 1u);
-        Vector<Name, MetaArena> dependencies(arena.arena);
-        ASSERT_TRUE(ReflectionContainerFixture::extractNwbAssetDependencies(input, [&](const Name& name){ dependencies.push_back(name); }));
-        ASSERT_EQ(dependencies.size(), 2u);
-        EXPECT_NE(FindIf(dependencies.begin(), dependencies.end(), [](const Name& name)noexcept{ return name == Name("project/asset"); }), dependencies.end());
-        EXPECT_NE(FindIf(dependencies.begin(), dependencies.end(), [](const Name& name)noexcept{ return name == Name("project/enum_asset"); }), dependencies.end());
-#endif
+    AdhdTestArena arena = AdhdTestArena();
+    Array<u8, 3u> invalidBytes = Array<u8, 3u>();
+    invalidBytes[0u] = cast<u8>('b');
+    invalidBytes[1u] = 0u;
+    invalidBytes[2u] = cast<u8>('d');
+    StringView invalid = "";
+    native(in invalidBytes, mut invalid){
+        invalid = AStringView(reinterpret_cast<const char*>(invalidBytes.data()), invalidBytes.size());
     }
+
+    Value input = Value(arena.arena);
+    mut Value names = input.field("names");
+    names.append(Value("first", arena.arena));
+    names.append(Value(invalid, arena.arena));
+    names.append(Value(cast<i64>(7), arena.arena));
+    names.append(Value("last", arena.arena));
+    mut Value fixed = input.field("fixedNames");
+    fixed.append(Value("fixed/first", arena.arena));
+    fixed.append(Value(invalid, arena.arena));
+    fixed.append(Value("fixed/last", arena.arena));
+    mut Value bounded = input.field("boundedNames");
+    bounded.append(Value(invalid, arena.arena));
+    bounded.append(Value("bounded/first", arena.arena));
+    bounded.append(Value("bounded/last", arena.arena));
+    mut Value counts = input.field("counts");
+    counts.field("valid").setInteger(9);
+    counts.field(invalid).setInteger(3);
+    counts.field("wrong_type").setString("not a number");
+    mut Value assets = input.field("assets");
+    assets.field("valid").setString("project/asset");
+    assets.field(invalid).setString("project/ignored");
+    assets.field("invalid_value").setString(invalid);
+    assets.field("wrong_type").setInteger(3);
+    mut Value enumAssets = input.field("enumAssets");
+    enumAssets.field("Valid").setString("project/enum_asset");
+    enumAssets.field("unknown").setString("project/ignored_enum");
+
+    ReflectionContainerFixture value = ReflectionContainerFixture();
+    value.fixedNames[1u] = Name("fixed/retained");
+    ASSERT_TRUE(value.deserializeNwb(input));
+    ASSERT_EQ(value.names.size(), 2u);
+    EXPECT_EQ(value.names[0u], Name("first"));
+    EXPECT_EQ(value.names[1u], Name("last"));
+    EXPECT_EQ(value.fixedNames[0u], Name("fixed/first"));
+    EXPECT_EQ(value.fixedNames[1u], Name("fixed/retained"));
+    EXPECT_EQ(value.fixedNames[2u], Name("fixed/last"));
+    ASSERT_EQ(value.boundedNames.size(), 2u);
+    EXPECT_EQ(value.boundedNames[0u], Name("bounded/first"));
+    EXPECT_EQ(value.boundedNames[1u], Name("bounded/last"));
+    ASSERT_EQ(value.counts.size(), 1u);
+    ASSERT_TRUE(value.counts.contains(Name("valid")));
+    EXPECT_EQ(value.counts.at(Name("valid")), 9u);
+    ASSERT_EQ(value.assets.size(), 1u);
+    ASSERT_TRUE(value.assets.contains(Name("valid")));
+    EXPECT_EQ(value.assets.at(Name("valid")).name(), Name("project/asset"));
+    ASSERT_EQ(value.enumAssets.size(), 1u);
+
+    Vector<Name> dependencies = Vector<Name>();
+    b8 extracted = false;
+    native(in input, mut dependencies, mut extracted){
+        extracted = ReflectionContainerFixture::extractNwbAssetDependencies(input, [&](const Name& name){
+            dependencies.push_back(name);
+        });
+    }
+    ASSERT_TRUE(extracted);
+    ASSERT_EQ(dependencies.size(), 2u);
+    b8 hasProjectAsset = false;
+    b8 hasEnumAsset = false;
+    for(in Name dep : dependencies){
+        if(dep == Name("project/asset"))
+            hasProjectAsset = true;
+        if(dep == Name("project/enum_asset"))
+            hasEnumAsset = true;
+    }
+    EXPECT_TRUE(hasProjectAsset);
+    EXPECT_TRUE(hasEnumAsset);
 }
 
 void VerifyAdhdCompactString_SearchAndBoundariesUseCanonicalStoredText(){
@@ -750,11 +784,7 @@ void VerifyAdhdCompiler_UnshadowedBuiltinConstantStillResolves(){
 }
 
 void VerifyAdhdCompiler_GlobalConstantShadowsBuiltinInTypeInference(){
-    native{
-#if defined(NWB_METASCRIPT_GENERATED_TESTS)
-        EXPECT_EQ(ReadShadowedGlobalConstant(), 44);
-#endif
-    }
+    EXPECT_EQ(ReadShadowedGlobalConstant(), 44);
 }
 
 void VerifyAdhdCompiler_ScalarLerpKeepsFirstTemporaryCategory(){
@@ -802,61 +832,67 @@ void VerifyAdhdCompiler_HighByteFrontBackAndIndexMaintainUnsignedSemanticsAndMut
 }
 
 void VerifyAdhdCompiler_SimdLaneComparisonAndFiniteChecksIgnoreInactiveAndShortCircuitedSignalingNaNs(){
-    native{
-#if defined(NWB_METASCRIPT_GENERATED_TESTS)
-#pragma STDC FENV_ACCESS ON
-        const auto originalEnvironment = HoldFloatingPointExceptions();
-        ASSERT_TRUE(originalEnvironment);
-        const NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
+    ScopedHeldFloatingPointEnvironment environmentGuard = ScopedHeldFloatingPointEnvironment();
+    ASSERT_TRUE(environmentGuard.valid());
 
+    VectorSingle zero32 = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+    VectorDouble zero64 = VectorDouble(0.0, 0.0, 0.0, 0.0);
+    ASSERT_TRUE(zero32.x == 0.0f && zero64.x == 0.0);
+
+    VectorSingle inactive32 = zero32;
+    VectorSingle shortCircuit32 = zero32;
+    VectorSingle active32 = zero32;
+    VectorDouble inactive64 = zero64;
+    VectorDouble shortCircuit64 = zero64;
+    VectorDouble active64 = zero64;
+    native(mut inactive32, mut shortCircuit32, mut active32, mut inactive64, mut shortCircuit64, mut active64){
         volatile u32 snan32 = 0x7f800123u;
         volatile u64 snan64 = 0x7ff0000000000123ull;
-        const SIMDVectorSingle inactive32 = VectorSetInt(0u, 0u, 0u, snan32);
-        const SIMDVectorSingle shortCircuit32 = VectorSetInt(0x3f800000u, snan32, 0u, snan32);
-        const SIMDVectorSingle active32 = VectorSetInt(0u, snan32, 0u, 0u);
-        const SIMDVectorDouble inactive64 = VectorDoubleSetInt(0ull, 0ull, 0ull, snan64);
-        const SIMDVectorDouble shortCircuit64 = VectorDoubleSetInt(0x3ff0000000000000ull, snan64, 0ull, snan64);
-        const SIMDVectorDouble active64 = VectorDoubleSetInt(0ull, snan64, 0ull, 0ull);
+        inactive32 = VectorSetInt(0u, 0u, 0u, snan32);
+        shortCircuit32 = VectorSetInt(0x3f800000u, snan32, 0u, snan32);
+        active32 = VectorSetInt(0u, snan32, 0u, 0u);
+        inactive64 = VectorDoubleSetInt(0ull, 0ull, 0ull, snan64);
+        shortCircuit64 = VectorDoubleSetInt(0x3ff0000000000000ull, snan64, 0ull, snan64);
+        active64 = VectorDoubleSetInt(0ull, snan64, 0ull, 0ull);
+    }
 
-        for(const i32 roundingMode : { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO }){
-            ASSERT_TRUE(SetFloatingPointRoundingMode(roundingMode));
+    for(in i32 roundingMode : s_FloatingPointRoundingModes){
+        ASSERT_TRUE(SetFloatingPointRoundingMode(roundingMode).has_value());
 
-            ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-            EXPECT_FALSE(AnyLaneGreater3Single(inactive32, VectorZero()));
-            EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0);
+        ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
+        EXPECT_FALSE(AnyLaneGreater3Single(inactive32, zero32));
+        EXPECT_EQ(TestFloatingPointExceptions(s_FeAllExcept), 0);
 
-            ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-            EXPECT_TRUE(AnyLaneGreater3Single(shortCircuit32, VectorZero()));
-            EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0);
+        ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
+        EXPECT_TRUE(AnyLaneGreater3Single(shortCircuit32, zero32));
+        EXPECT_EQ(TestFloatingPointExceptions(s_FeAllExcept), 0);
 
-            ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-            EXPECT_FALSE(AnyLaneGreater3Single(active32, VectorZero()));
-            EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT) & FE_INVALID, FE_INVALID);
+        ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
+        EXPECT_FALSE(AnyLaneGreater3Single(active32, zero32));
+        EXPECT_EQ(TestFloatingPointExceptions(s_FeAllExcept) & s_FeInvalid, s_FeInvalid);
 
-            ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-            EXPECT_FALSE(AnyLaneGreater3Double(inactive64, VectorDoubleZero()));
-            EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0);
+        ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
+        EXPECT_FALSE(AnyLaneGreater3Double(inactive64, zero64));
+        EXPECT_EQ(TestFloatingPointExceptions(s_FeAllExcept), 0);
 
-            ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-            EXPECT_TRUE(AnyLaneGreater3Double(shortCircuit64, VectorDoubleZero()));
-            EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0);
+        ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
+        EXPECT_TRUE(AnyLaneGreater3Double(shortCircuit64, zero64));
+        EXPECT_EQ(TestFloatingPointExceptions(s_FeAllExcept), 0);
 
-            ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-            EXPECT_FALSE(AnyLaneGreater3Double(active64, VectorDoubleZero()));
-            EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT) & FE_INVALID, FE_INVALID);
+        ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
+        EXPECT_FALSE(AnyLaneGreater3Double(active64, zero64));
+        EXPECT_EQ(TestFloatingPointExceptions(s_FeAllExcept) & s_FeInvalid, s_FeInvalid);
 
-            ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-            EXPECT_TRUE(AnyLaneGreater2Single(shortCircuit32, VectorZero()));
-            EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0);
+        ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
+        EXPECT_TRUE(AnyLaneGreater2Single(shortCircuit32, zero32));
+        EXPECT_EQ(TestFloatingPointExceptions(s_FeAllExcept), 0);
 
-            ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-            EXPECT_TRUE(FiniteLane3Single(inactive32));
-            EXPECT_FALSE(FiniteLane3Single(active32));
-            EXPECT_TRUE(FiniteLane3Double(inactive64));
-            EXPECT_FALSE(FiniteLane3Double(active64));
-            EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0);
-        }
-#endif
+        ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
+        EXPECT_TRUE(FiniteLane3Single(inactive32));
+        EXPECT_FALSE(FiniteLane3Single(active32));
+        EXPECT_TRUE(FiniteLane3Double(inactive64));
+        EXPECT_FALSE(FiniteLane3Double(active64));
+        EXPECT_EQ(TestFloatingPointExceptions(s_FeAllExcept), 0);
     }
 }
 
@@ -886,6 +922,7 @@ NWB_ADHD_GTEST(Metascript, OversizedReaderResultIsRejectedBeforeUsingItsBuffer, 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
 
 
@@ -928,6 +965,7 @@ NWB_ADHD_GTEST(AdhdCompiler, SimdLaneComparisonAndFiniteChecksIgnoreInactiveAndS
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
 
 

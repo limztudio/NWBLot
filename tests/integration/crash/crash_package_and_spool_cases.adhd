@@ -9,6 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
 
 
@@ -46,17 +47,32 @@ void ForeignSignalOwner(int)noexcept;
 
 
 void VerifyCrash_SpoolAdmissionPreservesFilesystemCategoryAndCodeAfterUnlock(){
-    native{
+    if(!IsDesktopCrashPlatform())
+        return;
+
+    CrashTestArena testArena = CrashTestArena();
+    const StringView group = "crash_failed_spool_admission";
+    RemoveTestArtifacts(testArena.arena, group);
+    const CrashTestPath caseDirectory = TestCaseDirectory(testArena.arena, group);
+    ASSERT_TRUE(EnsureDirectories(caseDirectory));
+    const CrashTestPath blocked = caseDirectory / "blocked";
+    ASSERT_TRUE(WriteTextFile(blocked, "This file cannot be a parent directory.\n"));
+    const CrashTestPath spoolDirectory = blocked / s_SpoolDirectory;
+    const CrashTestPath pendingDirectory = spoolDirectory / s_PendingBucket;
+    UninstallCrashHandler();
+
+    b8 installAccepted = true;
+    b8 installed = true;
+    b8 handlerStarted = true;
+    b8 restorePending = true;
+    u32 nativeDiagnostics = 0u;
+    u32 unlockedDiagnostics = 0u;
+    b8 matchedOperation = false;
+    b8 matchedCategory = false;
+    b8 matchedCode = false;
+    native(in spoolDirectory, in pendingDirectory, mut installAccepted, mut installed, mut handlerStarted, mut restorePending, mut nativeDiagnostics, mut unlockedDiagnostics, mut matchedOperation, mut matchedCategory, mut matchedCode){
 #if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
-        CrashTestArena testArena;
-        auto& arena = testArena.arena;
-        constexpr AStringView s_Group("crash_failed_spool_admission");
-        RemoveTestArtifacts(arena, s_Group);
-        ASSERT_TRUE(EnsureDirectories(TestCaseDirectory(arena, s_Group)));
-        const CrashTestPath blocked = TestCaseDirectory(arena, s_Group) / "blocked";
-        ASSERT_TRUE(WriteTextFile(blocked, AStringView("This file cannot be a parent directory.\n")));
-        const CrashTestPath spoolDirectory = blocked / s_SpoolDirectory;
-        const auto expectedFailure = EnsureDirectories(spoolDirectory / CrashNames::s_PendingDirectoryName);
+        const auto expectedFailure = EnsureDirectories(pendingDirectory);
         ASSERT_FALSE(expectedFailure);
         Array<char, 64u> expectedCategory = {};
         CopyFixedBuffer(expectedCategory, "category=");
@@ -67,7 +83,6 @@ void VerifyCrash_SpoolAdmissionPreservesFilesystemCategoryAndCodeAfterUnlock(){
         if(nativeCode < 0)
             AppendFixedBuffer(expectedCode, "-");
         AppendUnsignedToFixedBuffer(expectedCode, static_cast<u64>(nativeCode < 0 ? -nativeCode : nativeCode));
-        UninstallCrashHandler();
         const auto previousCallback = DiagnosticDetail::g_EventCallback.exchange(ObserveNativeLifecycle, MemoryOrder::acq_rel);
         ScopeExit restoreCallback([previousCallback]()noexcept{ SetDiagnosticEventCallback(previousCallback); });
         s_NativeLifecycleDiagnostics = 0u;
@@ -76,35 +91,55 @@ void VerifyCrash_SpoolAdmissionPreservesFilesystemCategoryAndCodeAfterUnlock(){
         Core::Crash::CrashConfig config(installArena);
         config.applicationName = "bad-spool-admission";
         config.spoolDirectory = spoolDirectory;
-        EXPECT_FALSE(Core::Crash::InstallCrashHandler(config));
-        EXPECT_FALSE(Core::Crash::CrashDetail::g_State.installed);
-        EXPECT_FALSE(Core::Crash::CrashDetail::g_State.handlerStarted);
-        EXPECT_FALSE(Core::Crash::CrashDetail::g_State.platformRestorePending);
-        EXPECT_EQ(s_NativeLifecycleDiagnostics, 1u);
-        EXPECT_EQ(s_UnlockedLifecycleDiagnostics, 1u);
-        EXPECT_EQ(FixedBufferView(s_LastLifecycleOperation), AStringView("prepare_spool"));
-        EXPECT_NE(FixedBufferView(s_LastLifecycleDiagnostic).find(FixedBufferView(expectedCategory)), AStringView::npos);
-        EXPECT_NE(FixedBufferView(s_LastLifecycleDiagnostic).find(FixedBufferView(expectedCode)), AStringView::npos);
-        UninstallCrashHandler();
-        RemoveTestArtifacts(arena, s_Group);
+        installAccepted = Core::Crash::InstallCrashHandler(config);
+        installed = Core::Crash::CrashDetail::g_State.installed;
+        handlerStarted = Core::Crash::CrashDetail::g_State.handlerStarted;
+        restorePending = Core::Crash::CrashDetail::g_State.platformRestorePending;
+        nativeDiagnostics = s_NativeLifecycleDiagnostics;
+        unlockedDiagnostics = s_UnlockedLifecycleDiagnostics;
+        matchedOperation = FixedBufferView(s_LastLifecycleOperation) == AStringView("prepare_spool");
+        matchedCategory = FixedBufferView(s_LastLifecycleDiagnostic).find(FixedBufferView(expectedCategory)) != AStringView::npos;
+        matchedCode = FixedBufferView(s_LastLifecycleDiagnostic).find(FixedBufferView(expectedCode)) != AStringView::npos;
 #endif
     }
+    EXPECT_FALSE(installAccepted);
+    EXPECT_FALSE(installed);
+    EXPECT_FALSE(handlerStarted);
+    EXPECT_FALSE(restorePending);
+    EXPECT_EQ(nativeDiagnostics, 1u);
+    EXPECT_EQ(unlockedDiagnostics, 1u);
+    EXPECT_TRUE(matchedOperation);
+    EXPECT_TRUE(matchedCategory);
+    EXPECT_TRUE(matchedCode);
+    UninstallCrashHandler();
+    RemoveTestArtifacts(testArena.arena, group);
 }
 
 void VerifyCrash_FailedExecutableAdmissionReleasesResourcesAndObservesFailureAfterUnlock(){
-    native{
+    if(!IsDesktopCrashPlatform())
+        return;
+
+    CrashTestArena testArena = CrashTestArena();
+    const StringView group = "crash_bad_executable_admission";
+    RemoveTestArtifacts(testArena.arena, group);
+    const CrashTestPath caseDirectory = TestCaseDirectory(testArena.arena, group);
+    ASSERT_TRUE(EnsureDirectories(caseDirectory));
+    const CrashTestPath invalidExecutable = caseDirectory / "invalid_handler";
+    ASSERT_TRUE(WriteTextFile(invalidExecutable, "This is not an executable image.\n"));
+    const CrashTestPath spoolDirectory = SpoolDirectory(testArena.arena, group);
+    UninstallCrashHandler();
+
+    usize beforeCount = 0u;
+    usize afterCount = 0u;
+    u32 nativeDiagnostics = 0u;
+    u32 unlockedDiagnostics = 0u;
+    b8 diagnosticHasCode = false;
+    native(in invalidExecutable, in spoolDirectory, mut testArena, mut beforeCount, mut afterCount, mut nativeDiagnostics, mut unlockedDiagnostics, mut diagnosticHasCode){
 #if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
-        CrashTestArena testArena;
         auto& arena = testArena.arena;
-        constexpr AStringView s_Group("crash_bad_executable_admission");
-        RemoveTestArtifacts(arena, s_Group);
-        ASSERT_TRUE(EnsureDirectories(TestCaseDirectory(arena, s_Group)));
-        const CrashTestPath invalidExecutable = TestCaseDirectory(arena, s_Group) / "invalid_handler";
-        ASSERT_TRUE(WriteTextFile(invalidExecutable, AStringView("This is not an executable image.\n")));
 #if defined(NWB_PLATFORM_LINUX)
         ASSERT_EQ(chmod(invalidExecutable.c_str(), 0700), 0);
 #endif
-        UninstallCrashHandler();
         const auto previousCallback = DiagnosticDetail::g_EventCallback.exchange(ObserveNativeLifecycle, MemoryOrder::acq_rel);
         ScopeExit restoreCallback([previousCallback]()noexcept{ SetDiagnosticEventCallback(previousCallback); });
         s_NativeLifecycleDiagnostics = 0u;
@@ -113,17 +148,18 @@ void VerifyCrash_FailedExecutableAdmissionReleasesResourcesAndObservesFailureAft
         const auto executableText = PathToString<char>(arena, invalidExecutable);
         Core::Crash::CrashConfig config(installArena);
         config.applicationName = "bad-executable-admission";
-        config.spoolDirectory = SpoolDirectory(arena, s_Group);
+        config.spoolDirectory = spoolDirectory;
         config.handlerExecutablePath = AStringView(executableText);
         EXPECT_FALSE(Core::Crash::InstallCrashHandler(config));
 #if defined(NWB_PLATFORM_WINDOWS)
         DWORD before = 0u;
         ASSERT_TRUE(GetProcessHandleCount(GetCurrentProcess(), &before));
+        beforeCount = static_cast<usize>(before);
 #else
         constexpr AStringView s_FileDescriptorsDirectory = "/proc/self/fd";
         const auto before = DirectoryIterator<GlobalArena>::Create(CrashTestPath(arena, s_FileDescriptorsDirectory));
         ASSERT_TRUE(before);
-        const auto beforeCount = static_cast<usize>(before->end() - before->begin());
+        beforeCount = static_cast<usize>(before->end() - before->begin());
 #endif
         for(u32 attempt = 0u; attempt < 4u; ++attempt){
             EXPECT_FALSE(Core::Crash::InstallCrashHandler(config));
@@ -134,29 +170,41 @@ void VerifyCrash_FailedExecutableAdmissionReleasesResourcesAndObservesFailureAft
 #if defined(NWB_PLATFORM_WINDOWS)
         DWORD after = 0u;
         ASSERT_TRUE(GetProcessHandleCount(GetCurrentProcess(), &after));
-        EXPECT_EQ(after, before);
+        afterCount = static_cast<usize>(after);
 #else
         const auto after = DirectoryIterator<GlobalArena>::Create(CrashTestPath(arena, s_FileDescriptorsDirectory));
         ASSERT_TRUE(after);
-        EXPECT_EQ(static_cast<usize>(after->end() - after->begin()), beforeCount);
+        afterCount = static_cast<usize>(after->end() - after->begin());
 #endif
-        EXPECT_EQ(s_NativeLifecycleDiagnostics, 5u);
-        EXPECT_EQ(s_UnlockedLifecycleDiagnostics, s_NativeLifecycleDiagnostics);
-        EXPECT_NE(FixedBufferView(s_LastLifecycleDiagnostic).find("code="), AStringView::npos);
-        UninstallCrashHandler();
-        RemoveTestArtifacts(arena, s_Group);
+        nativeDiagnostics = s_NativeLifecycleDiagnostics;
+        unlockedDiagnostics = s_UnlockedLifecycleDiagnostics;
+        diagnosticHasCode = FixedBufferView(s_LastLifecycleDiagnostic).find("code=") != AStringView::npos;
 #endif
     }
+    EXPECT_EQ(afterCount, beforeCount);
+    EXPECT_EQ(nativeDiagnostics, 5u);
+    EXPECT_EQ(unlockedDiagnostics, nativeDiagnostics);
+    EXPECT_TRUE(diagnosticHasCode);
+    UninstallCrashHandler();
+    RemoveTestArtifacts(testArena.arena, group);
 }
 
 void VerifyCrash_UninstallRestoresDisabledAlternateStackAndPriorSignalAndTerminateOwners(){
-    native{
+    if(!IsDesktopLinuxCrashPlatform())
+        return;
+
+    CrashTestArena testArena = CrashTestArena();
+    const StringView group = "crash_restore_native_hooks";
+    RemoveTestArtifacts(testArena.arena, group);
+    UninstallCrashHandler();
+    const CrashTestPath spoolDirectory = SpoolDirectory(testArena.arena, group);
+
+    b8 stackDisabledRestored = false;
+    b8 signalOwnerRestored = false;
+    b8 terminateOwnerRestored = false;
+    b8 restorePending = true;
+    native(in spoolDirectory, mut stackDisabledRestored, mut signalOwnerRestored, mut terminateOwnerRestored, mut restorePending){
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-        CrashTestArena testArena;
-        auto& arena = testArena.arena;
-        constexpr AStringView s_Group("crash_restore_native_hooks");
-        RemoveTestArtifacts(arena, s_Group);
-        UninstallCrashHandler();
         stack_t originalStack = {};
         struct sigaction originalAction = {};
         ASSERT_EQ(sigaltstack(nullptr, &originalStack), 0);
@@ -179,30 +227,42 @@ void VerifyCrash_UninstallRestoresDisabledAlternateStackAndPriorSignalAndTermina
         PersistentArena installArena(s_InstallArena, PersistentArena::StructureAlignedSize(64u * 1024u));
         Core::Crash::CrashConfig config(installArena);
         config.applicationName = "restore-native-hooks";
-        config.spoolDirectory = SpoolDirectory(arena, s_Group);
+        config.spoolDirectory = spoolDirectory;
         ASSERT_TRUE(Core::Crash::InstallCrashHandler(config));
         UninstallCrashHandler();
         stack_t restoredStack = {};
         struct sigaction restoredAction = {};
         ASSERT_EQ(sigaltstack(nullptr, &restoredStack), 0);
         ASSERT_EQ(sigaction(SIGILL, nullptr, &restoredAction), 0);
-        EXPECT_NE(restoredStack.ss_flags & SS_DISABLE, 0);
-        EXPECT_EQ(restoredAction.sa_handler, OriginalSignalOwner);
-        EXPECT_EQ(QueryTerminateHandler(), OriginalTerminateOwner);
-        EXPECT_FALSE(Core::Crash::CrashDetail::g_State.platformRestorePending);
-        RemoveTestArtifacts(arena, s_Group);
+        stackDisabledRestored = (restoredStack.ss_flags & SS_DISABLE) != 0;
+        signalOwnerRestored = restoredAction.sa_handler == OriginalSignalOwner;
+        terminateOwnerRestored = QueryTerminateHandler() == OriginalTerminateOwner;
+        restorePending = Core::Crash::CrashDetail::g_State.platformRestorePending;
 #endif
     }
+    EXPECT_TRUE(stackDisabledRestored);
+    EXPECT_TRUE(signalOwnerRestored);
+    EXPECT_TRUE(terminateOwnerRestored);
+    EXPECT_FALSE(restorePending);
+    RemoveTestArtifacts(testArena.arena, group);
 }
 
 void VerifyCrash_UninstallPreservesNewerForeignNativeHookOwners(){
-    native{
+    if(!IsDesktopLinuxCrashPlatform())
+        return;
+
+    CrashTestArena testArena = CrashTestArena();
+    const StringView group = "crash_preserve_foreign_hooks";
+    RemoveTestArtifacts(testArena.arena, group);
+    UninstallCrashHandler();
+    const CrashTestPath spoolDirectory = SpoolDirectory(testArena.arena, group);
+
+    b8 foreignStackRetained = false;
+    b8 foreignSignalRetained = false;
+    b8 foreignTerminateRetained = false;
+    b8 restorePending = true;
+    native(in spoolDirectory, mut foreignStackRetained, mut foreignSignalRetained, mut foreignTerminateRetained, mut restorePending){
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-        CrashTestArena testArena;
-        auto& arena = testArena.arena;
-        constexpr AStringView s_Group("crash_preserve_foreign_hooks");
-        RemoveTestArtifacts(arena, s_Group);
-        UninstallCrashHandler();
         stack_t originalStack = {};
         struct sigaction originalAction = {};
         ASSERT_EQ(sigaltstack(nullptr, &originalStack), 0);
@@ -217,7 +277,7 @@ void VerifyCrash_UninstallPreservesNewerForeignNativeHookOwners(){
         PersistentArena installArena(s_InstallArena, PersistentArena::StructureAlignedSize(64u * 1024u));
         Core::Crash::CrashConfig config(installArena);
         config.applicationName = "preserve-foreign-hooks";
-        config.spoolDirectory = SpoolDirectory(arena, s_Group);
+        config.spoolDirectory = spoolDirectory;
         ASSERT_TRUE(Core::Crash::InstallCrashHandler(config));
         struct sigaction foreignAction = {};
         foreignAction.sa_handler = ForeignSignalOwner;
@@ -233,13 +293,17 @@ void VerifyCrash_UninstallPreservesNewerForeignNativeHookOwners(){
         struct sigaction retainedAction = {};
         ASSERT_EQ(sigaltstack(nullptr, &retainedStack), 0);
         ASSERT_EQ(sigaction(SIGILL, nullptr, &retainedAction), 0);
-        EXPECT_EQ(retainedStack.ss_sp, g_ForeignSignalStack.data());
-        EXPECT_EQ(retainedAction.sa_handler, ForeignSignalOwner);
-        EXPECT_EQ(QueryTerminateHandler(), ForeignTerminateOwner);
-        EXPECT_FALSE(Core::Crash::CrashDetail::g_State.platformRestorePending);
-        RemoveTestArtifacts(arena, s_Group);
+        foreignStackRetained = retainedStack.ss_sp == g_ForeignSignalStack.data();
+        foreignSignalRetained = retainedAction.sa_handler == ForeignSignalOwner;
+        foreignTerminateRetained = QueryTerminateHandler() == ForeignTerminateOwner;
+        restorePending = Core::Crash::CrashDetail::g_State.platformRestorePending;
 #endif
     }
+    EXPECT_TRUE(foreignStackRetained);
+    EXPECT_TRUE(foreignSignalRetained);
+    EXPECT_TRUE(foreignTerminateRetained);
+    EXPECT_FALSE(restorePending);
+    RemoveTestArtifacts(testArena.arena, group);
 }
 
 void VerifyCrash_MetadataRejectsTruncationAndEmbeddedNullWithoutChangingPublishedValue(){
@@ -487,6 +551,7 @@ void VerifyCrash_FlushReportsFailsWhenUploadingRecoveryIsBlocked(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
 
 
@@ -536,6 +601,7 @@ NWB_ADHD_GTEST(Crash, FlushReportsFailsWhenUploadingRecoveryIsBlocked, VerifyCra
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
 
 

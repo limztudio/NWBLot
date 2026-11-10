@@ -28,7 +28,7 @@ When using `--depfile`, paths must be safe for both Ninja and Make depfiles. The
     - Wrong: `public u32 count() const{`, `public b8 evaluate() const override{`
 - **Canonical Top-to-Bottom Section Order**:
   1. `.adhd` `#include` directives (`#include <...>` or `#include "..."` for other `.adhd` files)
-  2. Top-level `native{ ... }` block (C++ `#include`s and forward declarations needed by the generated `.adhd.h`)
+  2. Top-level `[header] native{ ... }` block (C++ `#include`s and forward declarations needed by the generated `.adhd.h`; `[source] native{ ... }` at the bottom when `.adhd.cpp`-only C++ definitions are needed)
   3. File-scope `const` compile-time constants (`const u32 s_MaxItems = 64u;`) and `type` aliases (`type ItemId = u64;`)
   4. `enum<SizeType>` and `flag<SizeType>` declarations
   5. `interface` declarations
@@ -96,9 +96,9 @@ f32 ComputePaddedWidth(in ElementBox box){
 
 ## 2. Compiler-Owned Decisions & Prohibited Constructs
 
-1. **No `[inline]` / `[noinline]` or `[header]` / `[source]` Attributes, and No `inline` / `noinline` Keywords**:
-   - Both callable inlining (`ShouldAutoInlineCallable`) and top-level `native{}` header-vs-source placement (`NativeLinkageAnalyzer`) are decided **exclusively and automatically by the `adhd` compiler itself**, never by the user.
-   - Writing `[inline]`, `[noinline]`, `inline`, `noinline`, `[header]`, or `[source]` in `.adhd` is a compile-time error.
+1. **No `[inline]` / `[noinline]` Attributes and No `inline` / `noinline` Keywords**:
+   - Inlining is decided **exclusively and automatically by the `adhd` compiler itself** (`ShouldAutoInlineCallable`), never by the user.
+   - Writing `[inline]`, `[noinline]`, `inline`, or `noinline` anywhere in `.adhd` is a compile-time error.
 2. **No `namespace` Keyword**:
    - `.adhd` files never declare `namespace`. The C++ namespace is configured on the CMake target via `nwb_target_adhd_sources(<target> NAMESPACE "NWB::...")`.
 3. **No `struct` or `union` Keywords**:
@@ -205,9 +205,9 @@ f32 ComputePaddedWidth(in ElementBox box){
   - `method` (`class` / `interface`): `[reflect]` (never `[inline]` or `[noinline]`)
   - `parallel` / `parallel_for`: `[core(Any|Heavy|Light|MainThread)]`, `[priority(Normal|Critical|Background)]`
   - `assert` / `info` / `warning` / `error`: `[essential]`
-  - top-level `native`: no attributes permitted
+  - top-level `native` (file scope): `[header]` or `[source]` (**mandatory**; omitting `[header]` / `[source]` on a top-level `native` block is a compile error)
 - **C++ Interop (`native` Blocks)**:
-  - **Top-level `native{ ... }`**: Automatically routed by `adhd_compiler` into `.adhd.h` or `.adhd.cpp` based on declaration order and C++ ODR definitions (never write `[header]` or `[source]`). Frame both the outside and inside of every top-level `native{ ... }` block with two blank lines, a 128-slash separator, and two blank lines (and when the entire `native{}` body is wrapped in an outer `#if ...` / `#endif`, place two blank lines + 128-slash + two blank lines inside `#if ...` and before `#endif` as well).
+  - **Top-level `[header] native{ ... }` / `[source] native{ ... }`**: Mandatory explicit target attribute on every file-scope `native` block — `[header]` emits into `.adhd.h` and `[source]` emits into `.adhd.cpp` (automatic header/source guessing is retired). Frame both the outside and inside of every top-level `native{ ... }` block with two blank lines, a 128-slash separator, and two blank lines (and when the entire `native{}` body is wrapped in an outer `#if ...` / `#endif`, place two blank lines + 128-slash + two blank lines inside `#if ...` and before `#endif` as well).
   - **Statement-level `native(in x, mut y = this.member){ ... }`**: Binds `.adhd` variables/fields into a scoped C++ block (`in` as `const` reference/value, `mut` as mutable reference) while preserving `.adhd` mutability and concurrency analysis.
 
 ---

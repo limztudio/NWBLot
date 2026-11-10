@@ -9,6 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
 
 
@@ -215,17 +216,42 @@ using ObjectGeometryCacheSnapshotType = Impl::ECSRenderDetail::ObjectGeometryCac
 using RendererMeshSystem = Impl::RendererMeshSystem;
 inline constexpr u64 s_MeshObjectVertexByteSize = NWB_MESH_OBJECT_VERTEX_BYTE_SIZE;
 
+using DeferredGraphResourceImportResult = Impl::DeferredGraphResourceImportResult;
+using GpuGraphResourceId = Core::GpuGraphResourceId;
+using TextureSubresourceSet = Core::TextureSubresourceSet;
+using GpuTaskResourceUse = Core::GpuTaskResourceUse;
+namespace GpuTaskResourceAccess = Core::GpuTaskResourceAccess;
+using BufferHandle = Core::BufferHandle;
+using GpuDescriptorHandle = Core::GpuDescriptorHandle;
+namespace GpuDescriptorClass = Core::GpuDescriptorClass;
+
 using RayTracingOpticalSceneGraphBuffer = Impl::RayTracingOpticalSceneGraphBuffer;
 using RayTracingOpticalSceneGather = Impl::RayTracingOpticalSceneGather;
 using RayTracingOpticalSceneUpload = Impl::RayTracingOpticalSceneUpload;
+using RayTracingOpticalUploadControlResult = Expected<Impl::RayTracingOpticalUploadControlHandle>;
 using RendererComponent = Impl::RendererComponent;
 using OpticalBoundaryModeEnum = Impl::OpticalBoundaryMode::Enum;
 using OpticalSceneContext = EcsGraphicsMeshOpticsDetail::OpticalSceneContext;
 using OpticalWorldBoundsResult = decltype(Impl::ComputeOpticalWorldBounds(DeclVal<const SIMDMatrix&>(), DeclVal<const SIMDVectorSingle&>(), DeclVal<const SIMDVectorSingle&>()));
+using FloatingPointEnvironment = ::FloatingPointEnvironment;
+using FloatingPointEnvironmentGuard = Tests::FloatingPointEnvironmentGuard;
+using ::HoldFloatingPointExceptions;
+using Impl::CreateRayTracingOpticalUploadControl;
 using Impl::OpticalUploadByteSizeFits;
 using Impl::OpticalRuntimeInputCountFits;
 using Impl::OpticalSceneInstanceCountFits;
 using Impl::ComputeOpticalWorldBounds;
+#if defined(NWB_HAS_FMA3) || defined(NWB_HAS_NEON64)
+inline constexpr f64 s_ExpectedOpticalCancellationX = 0x1.fffffcp-1;
+#else
+inline constexpr f64 s_ExpectedOpticalCancellationX = 0.0;
+#endif
+inline constexpr f32 s_OpticalCancellationMagnitudeBound = 0x1p-16f;
+inline constexpr i32 s_FeTonearest = FE_TONEAREST;
+inline constexpr i32 s_FeDownward = FE_DOWNWARD;
+inline constexpr i32 s_FeUpward = FE_UPWARD;
+inline constexpr i32 s_FeTowardzero = FE_TOWARDZERO;
+inline constexpr i32 s_FeInvalid = FE_INVALID;
 inline constexpr usize s_OpticalRuntimeInputGpuBytes = sizeof(Impl::RayTracingOpticalRuntimeInputGpu);
 inline constexpr u32 s_RtOpticalSceneHeaderBytes = NWB_RT_OPTICAL_SCENE_HEADER_BYTES;
 inline constexpr u32 s_RtOpticalInstanceBytes = NWB_RT_OPTICAL_INSTANCE_BYTES;
@@ -492,18 +518,26 @@ void VerifyOpaqueCsgIntervalClearBuilder_NoOpaqueWorkDoesNotPublishDependencyAsC
     }
 }
 
+GpuGraphResourceId MakeGraphResourceId(in u32 generation, in u32 index){
+    GpuGraphResourceId id = GpuGraphResourceId();
+    id.generation = generation;
+    id.index = index;
+    return id;
+}
+
 void VerifyOpaqueGbufferResourceUses_CsgSparseValidityKeepsReadWriteRangesWithoutOpaqueDraws(){
-    native{
+    DeferredGraphResourceImportResult resources = DeferredGraphResourceImportResult();
+    resources.csgCapBackNormal = MakeGraphResourceId(1u, 1u);
+    resources.csgIntervalDepth = MakeGraphResourceId(1u, 2u);
+    resources.csgIntervalId = MakeGraphResourceId(1u, 3u);
+    resources.csgReceiverEventData = MakeGraphResourceId(1u, 4u);
+    resources.csgReceiverEventCount = MakeGraphResourceId(1u, 5u);
+    const TextureSubresourceSet peel = TextureSubresourceSet(0u, 1u, 0u, 4u);
+    const TextureSubresourceSet events = TextureSubresourceSet(0u, 1u, 0u, 8u);
+    const TextureSubresourceSet counts = TextureSubresourceSet(0u, 1u, 0u, 1u);
+    Vector<GpuTaskResourceUse> uses = Vector<GpuTaskResourceUse>();
+    native(in resources, in peel, in events, in counts, mut uses){
         Core::Alloc::ScratchArena scratch(s_EcsCaseTestsOpaqueGbufferCsgSparse);
-        Impl::DeferredGraphResourceImportResult resources;
-        resources.csgCapBackNormal = { .generation = 1u, .index = 1u };
-        resources.csgIntervalDepth = { .generation = 1u, .index = 2u };
-        resources.csgIntervalId = { .generation = 1u, .index = 3u };
-        resources.csgReceiverEventData = { .generation = 1u, .index = 4u };
-        resources.csgReceiverEventCount = { .generation = 1u, .index = 5u };
-        const Core::TextureSubresourceSet peel(0u, 1u, 0u, 4u);
-        const Core::TextureSubresourceSet events(0u, 1u, 0u, 8u);
-        const Core::TextureSubresourceSet counts(0u, 1u, 0u, 1u);
         const Impl::OpaqueGbufferResourceUseInputs inputs{
             .resources = resources,
             .materialInstanceRange = {},
@@ -517,23 +551,24 @@ void VerifyOpaqueGbufferResourceUses_CsgSparseValidityKeepsReadWriteRangesWithou
             .hasCsgFrameGpuWork = false,
             .hasOpaqueCsgFrameWork = true,
         };
-        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses{ scratch };
-        Impl::OpaqueGbufferResourceUseBuilder::Append(inputs, uses);
-        ASSERT_EQ(uses.size(), 11u);
-        EXPECT_EQ(uses[1].resource, resources.csgCapBackNormal);
-        EXPECT_EQ(uses[1].access, Core::GpuTaskResourceAccess::Write);
-        EXPECT_EQ(uses[2].resource, resources.csgIntervalDepth);
-        EXPECT_EQ(uses[2].access, Core::GpuTaskResourceAccess::Write);
-        EXPECT_EQ(uses[3].resource, resources.csgIntervalId);
-        EXPECT_EQ(uses[3].access, Core::GpuTaskResourceAccess::ReadWrite);
-        EXPECT_EQ(uses[3].range.textureSubresources, peel);
-        EXPECT_EQ(uses[4].resource, resources.csgReceiverEventData);
-        EXPECT_EQ(uses[4].access, Core::GpuTaskResourceAccess::Write);
-        EXPECT_EQ(uses[4].range.textureSubresources, events);
-        EXPECT_EQ(uses[5].resource, resources.csgReceiverEventCount);
-        EXPECT_EQ(uses[5].access, Core::GpuTaskResourceAccess::ReadWrite);
-        EXPECT_EQ(uses[5].range.textureSubresources, counts);
+        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> scratchUses{ scratch };
+        Impl::OpaqueGbufferResourceUseBuilder::Append(inputs, scratchUses);
+        uses.assign(scratchUses.begin(), scratchUses.end());
     }
+    ASSERT_EQ(uses.size(), 11u);
+    EXPECT_EQ(uses[1u].resource, resources.csgCapBackNormal);
+    EXPECT_EQ(uses[1u].access, GpuTaskResourceAccess::Write);
+    EXPECT_EQ(uses[2u].resource, resources.csgIntervalDepth);
+    EXPECT_EQ(uses[2u].access, GpuTaskResourceAccess::Write);
+    EXPECT_EQ(uses[3u].resource, resources.csgIntervalId);
+    EXPECT_EQ(uses[3u].access, GpuTaskResourceAccess::ReadWrite);
+    EXPECT_EQ(uses[3u].range.textureSubresources, peel);
+    EXPECT_EQ(uses[4u].resource, resources.csgReceiverEventData);
+    EXPECT_EQ(uses[4u].access, GpuTaskResourceAccess::Write);
+    EXPECT_EQ(uses[4u].range.textureSubresources, events);
+    EXPECT_EQ(uses[5u].resource, resources.csgReceiverEventCount);
+    EXPECT_EQ(uses[5u].access, GpuTaskResourceAccess::ReadWrite);
+    EXPECT_EQ(uses[5u].range.textureSubresources, counts);
 }
 
 void VerifyOpticalRuntimeBounds_UploadByteSizeRejectsEmptyMisalignedAndOutOfCapacity(){
@@ -571,34 +606,28 @@ void VerifyOpticalRuntimeBounds_GraphBufferRequiresResourceAndAcceptedUploadOrRe
 }
 
 void VerifyOpticalRuntimeBounds_MissingRuntimeBoundsPoisonsUnionWithoutDroppingInstance(){
-    native{
-        Core::Alloc::ScratchArena scratch{ Name(s_EcsCaseTestsOpticalRuntimeBoundsGather) };
-        RayTracingOpticalSceneGather gather{ scratch, 8u };
-        RendererComponent renderer;
-        const auto descriptor = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, 5u);
-        gather.appendRuntime(Core::ECS::EntityID(1u, 0u), renderer, Core::BufferHandle{}, descriptor, {});
-        EXPECT_EQ(gather.instances.size(), 1u);
-        EXPECT_EQ(gather.header.transparentCount, 1u);
-        EXPECT_TRUE(gather.runtimeBounds.empty());
-        EXPECT_FALSE(gather.boundsCompleteExceptRuntime);
-        EXPECT_EQ(gather.header.flags & s_RtOpticalSceneFlagBoundsValid, 0u);
-    }
+    OpticalSceneContext context = OpticalSceneContext();
+    RayTracingOpticalSceneGather gather = RayTracingOpticalSceneGather(context.scratch, 8u);
+    const RendererComponent renderer = RendererComponent();
+    const GpuDescriptorHandle descriptor = GpuDescriptorHandle::Make(GpuDescriptorClass::StorageBuffer, 5u);
+    gather.appendRuntime(EntityID(1u, 0u), renderer, BufferHandle(), descriptor, f32x3x4());
+    EXPECT_EQ(gather.instances.size(), 1u);
+    EXPECT_EQ(gather.header.transparentCount, 1u);
+    EXPECT_TRUE(gather.runtimeBounds.empty());
+    EXPECT_FALSE(gather.boundsCompleteExceptRuntime);
+    EXPECT_EQ(gather.header.flags & s_RtOpticalSceneFlagBoundsValid, 0u);
 }
 
 void VerifyOpticalRuntimeBounds_RejectedUploadControlDoesNotAllocateOrPublish(){
-    native{
-        Core::Alloc::GlobalArena arena{ Name(s_EcsCaseTestsOpticalRuntimeBoundsRejectedUploadControl) };
-        const auto before = arena.memoryStats();
-        const auto rejected = Impl::CreateRayTracingOpticalUploadControl(arena, Core::BufferHandle{}, Core::GpuPhysicalQueueId{ .index = 0u, .deviceGeneration = 1u });
-        ASSERT_FALSE(rejected.has_value());
-        const auto after = arena.memoryStats();
-        EXPECT_EQ(after.reservedBytes, before.reservedBytes);
-        EXPECT_EQ(after.usedBytes, before.usedBytes);
-        EXPECT_EQ(after.peakUsedBytes, before.peakUsedBytes);
-        EXPECT_EQ(after.allocationCount, before.allocationCount);
-        EXPECT_EQ(after.reallocationCount, before.reallocationCount);
-        EXPECT_EQ(after.deallocationCount, before.deallocationCount);
-    }
+    OpticalSceneContext context = OpticalSceneContext();
+    GpuPhysicalQueueId queue = GpuPhysicalQueueId();
+    queue.index = 0u;
+    queue.deviceGeneration = 1u;
+    const ArenaMemoryStats before = context.arena.memoryStats();
+    const RayTracingOpticalUploadControlResult rejected = CreateRayTracingOpticalUploadControl(context.arena, BufferHandle(), queue);
+    ASSERT_FALSE(rejected.has_value());
+    const ArenaMemoryStats after = context.arena.memoryStats();
+    ExpectArenaMemoryUnchanged(before, after);
 }
 
 void VerifyOpticalScene_OnlyEmittedTransparentPoliciesRequireClosedMedia(){
@@ -773,9 +802,10 @@ void VerifyOpticalScene_AffineBoundsEncloseMirroringNonuniformScaleAndLargeTrans
 }
 
 void VerifyOpticalScene_CancellationRetainsOrderedAffineEnclosure(){
-    native{
+    Float34U transform = MakeZeroFloat34U();
+    Float3U point = Float3U();
+    native(mut transform, mut point){
         Array<volatile f32, 5> inputs = { -0x1p+24f, 0x1.000002p+24f, 0x1p+24f, 1.0f, 0x1.fffffep-1f, };
-        Float34U transform{};
         transform._11 = inputs[0u];
         transform._12 = inputs[1u];
         transform._21 = inputs[0u];
@@ -785,71 +815,109 @@ void VerifyOpticalScene_CancellationRetainsOrderedAffineEnclosure(){
         transform._32 = inputs[0u];
         transform._33 = inputs[2u];
         transform._34 = inputs[0u];
-        const Float3U point(inputs[3u], inputs[4u], inputs[3u]);
-        const auto bounds = ComputeOpticalWorldBounds(LoadFloat(transform), LoadFloat(point), LoadFloat(point));
-        ASSERT_TRUE(bounds);
-        Float3U minimum{};
-        Float3U maximum{};
-        StoreFloat(bounds->minimum, minimum);
-        StoreFloat(bounds->maximum, maximum);
-
-        // Probe point where reassociation or fused multiply-add changes containment.
-#if defined(NWB_HAS_FMA3) || defined(NWB_HAS_NEON64)
-        constexpr f64 s_ExpectedX = 0x1.fffffcp-1;
-#else
-        constexpr f64 s_ExpectedX = 0.0;
-#endif
-        EXPECT_LT(static_cast<f64>(minimum.x), s_ExpectedX);
-        EXPECT_GT(static_cast<f64>(maximum.x), s_ExpectedX);
-        for(usize lane = 1u; lane < 3u; ++lane){
-            EXPECT_LT(minimum.raw[lane], 0.0f);
-            EXPECT_GT(maximum.raw[lane], 0.0f);
-            const SIMDVectorSingle magnitude = VectorAbs(VectorSet(minimum.raw[lane], maximum.raw[lane], 0.0f, 0.0f));
-            EXPECT_LT(VectorGetX(magnitude), 0x1p-16f);
-            EXPECT_LT(VectorGetY(magnitude), 0x1p-16f);
-        }
-        EXPECT_LT(maximum.x - minimum.x, 0x1p-16f);
+        point = Float3U(inputs[3u], inputs[4u], inputs[3u]);
     }
+    const OpticalWorldBoundsResult bounds = ComputeOpticalWorldBounds(LoadFloat(transform), LoadFloat(point), LoadFloat(point));
+    ASSERT_TRUE(bounds.has_value());
+    Float3U minimum = Float3U();
+    Float3U maximum = Float3U();
+    StoreFloat(bounds.value().minimum, minimum);
+    StoreFloat(bounds.value().maximum, maximum);
+
+    // Probe point where reassociation or fused multiply-add changes containment.
+    EXPECT_LT(cast<f64>(minimum.x), s_ExpectedOpticalCancellationX);
+    EXPECT_GT(cast<f64>(maximum.x), s_ExpectedOpticalCancellationX);
+    for(usize lane = 1u; lane < 3u; ++lane){
+        EXPECT_LT(minimum.raw[lane], 0.0f);
+        EXPECT_GT(maximum.raw[lane], 0.0f);
+        const VectorSingle magnitude = Abs(VectorSingle(minimum.raw[lane], maximum.raw[lane], 0.0f, 0.0f));
+        EXPECT_LT(magnitude.x, s_OpticalCancellationMagnitudeBound);
+        EXPECT_LT(magnitude.y, s_OpticalCancellationMagnitudeBound);
+    }
+    EXPECT_LT(maximum.x - minimum.x, s_OpticalCancellationMagnitudeBound);
 }
 
 void VerifyOpticalScene_InactiveSignalingNaNLanesPreserveAffineEnclosureAndExceptionFlags(){
-    native{
-#pragma STDC FENV_ACCESS ON
-        const auto originalEnvironment = HoldFloatingPointExceptions();
-        ASSERT_TRUE(originalEnvironment);
-        const Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
+    const Expected<FloatingPointEnvironment> originalEnvironment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(originalEnvironment.has_value());
+    const FloatingPointEnvironmentGuard restoreEnvironment = FloatingPointEnvironmentGuard(originalEnvironment.value());
 
-        Float34U transform{};
-        transform._11 = -2.0f;
-        transform._12 = 0.25f;
-        transform._14 = 100000.0f;
-        transform._22 = 3.0f;
-        transform._24 = -40000.0f;
-        transform._33 = 0.5f;
-        SIMDMatrix objectToWorld = LoadFloat(transform);
-        const SIMDVectorSingle localMin = VectorSet(-3.0f, -2.0f, -1.0f, 0.0f);
-        const SIMDVectorSingle localMax = VectorSet(1.0f, 4.0f, 5.0f, 0.0f);
-        Array<volatile u32, 2> inactiveBits = { 0x7f800123u, 0xff800456u };
-        const SIMDVectorSingle poisonedMin = VectorSelect(localMin, VectorReplicateInt(inactiveBits[0]), s_SIMDMaskW);
-        const SIMDVectorSingle poisonedMax = VectorSelect(localMax, VectorReplicateInt(inactiveBits[1]), s_SIMDMaskW);
-        objectToWorld.v[3] = VectorReplicateInt(inactiveBits[0]);
-        for(const i32 roundingMode : { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO }){
-            ASSERT_TRUE(SetFloatingPointRoundingMode(roundingMode));
-            ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-            const auto reference = ComputeOpticalWorldBounds(objectToWorld, localMin, localMax);
-            const i32 referenceFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-            ASSERT_TRUE(reference);
-            ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-            const auto bounds = ComputeOpticalWorldBounds(objectToWorld, poisonedMin, poisonedMax);
-            const i32 actualFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-            ASSERT_TRUE(bounds);
-            EXPECT_EQ(actualFlags, referenceFlags);
-            EXPECT_EQ(actualFlags & FE_INVALID, 0);
-            EXPECT_EQ(VectorGetIntW(bounds->minimum), 0u);
-            EXPECT_EQ(VectorGetIntW(bounds->maximum), 0u);
-            EXPECT_TRUE(Vector4EqualInt(bounds->minimum, reference->minimum));
-            EXPECT_TRUE(Vector4EqualInt(bounds->maximum, reference->maximum));
+    Float34U transform = MakeZeroFloat34U();
+    transform._11 = -2.0f;
+    transform._12 = 0.25f;
+    transform._14 = 100000.0f;
+    transform._22 = 3.0f;
+    transform._24 = -40000.0f;
+    transform._33 = 0.5f;
+    const VectorSingle localMin = VectorSingle(-3.0f, -2.0f, -1.0f, 0.0f);
+    const VectorSingle localMax = VectorSingle(1.0f, 4.0f, 5.0f, 0.0f);
+
+    Array<i32, 4> roundingModes = Array<i32, 4>();
+    roundingModes[0u] = s_FeTonearest;
+    roundingModes[1u] = s_FeDownward;
+    roundingModes[2u] = s_FeUpward;
+    roundingModes[3u] = s_FeTowardzero;
+    for(in i32 roundingMode : roundingModes){
+        b8 roundingApplied = false;
+        b8 clearedReference = false;
+        OpticalWorldBoundsResult reference = OpticalWorldBoundsResult();
+        i32 referenceFlags = 0;
+        native(in roundingMode, in transform, in localMin, in localMax, mut roundingApplied, mut clearedReference, mut reference, mut referenceFlags){
+            {
+#pragma STDC FENV_ACCESS ON
+                Array<volatile u32, 1> inactiveRowBits = { 0x7f800123u };
+                SIMDMatrix objectToWorld = LoadFloat(transform);
+                objectToWorld.v[3] = VectorReplicateInt(inactiveRowBits[0]);
+                roundingApplied = SetFloatingPointRoundingMode(roundingMode).has_value();
+                if(roundingApplied){
+                    clearedReference = ClearFloatingPointExceptions(FE_ALL_EXCEPT).has_value();
+                    if(clearedReference){
+                        reference = ComputeOpticalWorldBounds(objectToWorld, localMin, localMax);
+                        referenceFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+                    }
+                }
+            }
         }
+        ASSERT_TRUE(roundingApplied);
+        ASSERT_TRUE(clearedReference);
+        ASSERT_TRUE(reference.has_value());
+
+        b8 clearedActual = false;
+        OpticalWorldBoundsResult bounds = OpticalWorldBoundsResult();
+        i32 actualFlags = 0;
+        u32 minimumW = 1u;
+        u32 maximumW = 1u;
+        b8 equalMinimum = false;
+        b8 equalMaximum = false;
+        native(in transform, in localMin, in localMax, in reference, mut clearedActual, mut bounds, mut actualFlags, mut minimumW, mut maximumW, mut equalMinimum, mut equalMaximum){
+            {
+#pragma STDC FENV_ACCESS ON
+                Array<volatile u32, 2> inactiveBits = { 0x7f800123u, 0xff800456u };
+                SIMDMatrix objectToWorld = LoadFloat(transform);
+                objectToWorld.v[3] = VectorReplicateInt(inactiveBits[0]);
+                const SIMDVectorSingle poisonedMin = VectorSelect(localMin, VectorReplicateInt(inactiveBits[0]), s_SIMDMaskW);
+                const SIMDVectorSingle poisonedMax = VectorSelect(localMax, VectorReplicateInt(inactiveBits[1]), s_SIMDMaskW);
+                clearedActual = ClearFloatingPointExceptions(FE_ALL_EXCEPT).has_value();
+                if(clearedActual){
+                    bounds = ComputeOpticalWorldBounds(objectToWorld, poisonedMin, poisonedMax);
+                    actualFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+                    if(bounds){
+                        minimumW = VectorGetIntW(bounds->minimum);
+                        maximumW = VectorGetIntW(bounds->maximum);
+                        equalMinimum = Vector4EqualInt(bounds->minimum, reference->minimum);
+                        equalMaximum = Vector4EqualInt(bounds->maximum, reference->maximum);
+                    }
+                }
+            }
+        }
+        ASSERT_TRUE(clearedActual);
+        ASSERT_TRUE(bounds.has_value());
+        EXPECT_EQ(actualFlags, referenceFlags);
+        EXPECT_EQ(actualFlags & s_FeInvalid, 0);
+        EXPECT_EQ(minimumW, 0u);
+        EXPECT_EQ(maximumW, 0u);
+        EXPECT_TRUE(equalMinimum);
+        EXPECT_TRUE(equalMaximum);
     }
 }
 
@@ -1048,6 +1116,7 @@ void VerifyRefractiveBoundsIsolation_TouchingTheCertifiedMarginIsNotIsolated(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
 
 

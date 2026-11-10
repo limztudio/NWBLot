@@ -9,6 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
 
 
@@ -335,12 +336,21 @@ void GpuTelemetryCheckEdges(in usize taskCount, in GpuTelemetryScenario scenario
     EXPECT_EQ(dependencyIndex, analysis.edges().size());
 }
 
-void VerifyGpuTelemetry_PreservesExplicitInferredAndOverlappingEdgeFlags(){
-    native{
-        ASSERT_NO_FATAL_FAILURE(GpuTelemetryCheckEdges(3u, GpuTelemetryScenario::Explicit));
-        ASSERT_NO_FATAL_FAILURE(GpuTelemetryCheckEdges(3u, GpuTelemetryScenario::Inferred));
-        ASSERT_NO_FATAL_FAILURE(GpuTelemetryCheckEdges(3u, GpuTelemetryScenario::Mixed));
+b8 GpuTelemetryHasFatalFailure(){
+    b8 failed = false;
+    native(mut failed){
+        failed = ::testing::Test::HasFatalFailure();
     }
+    return failed;
+}
+
+void VerifyGpuTelemetry_PreservesExplicitInferredAndOverlappingEdgeFlags(){
+    GpuTelemetryCheckEdges(3u, GpuTelemetryScenario::Explicit);
+    ASSERT_FALSE(GpuTelemetryHasFatalFailure());
+    GpuTelemetryCheckEdges(3u, GpuTelemetryScenario::Inferred);
+    ASSERT_FALSE(GpuTelemetryHasFatalFailure());
+    GpuTelemetryCheckEdges(3u, GpuTelemetryScenario::Mixed);
+    ASSERT_FALSE(GpuTelemetryHasFatalFailure());
 }
 
 GpuTaskResourceUse GpuTelemetryTerminalResourceUse(in GpuGraphResourceId resource){

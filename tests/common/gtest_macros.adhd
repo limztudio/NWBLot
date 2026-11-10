@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
 
 
@@ -111,8 +112,8 @@ NWB_END
 #define SUCCEED(...) native{ SUCCEED(__VA_ARGS__) }
 #define GTEST_SKIP(...) native{ GTEST_SKIP(__VA_ARGS__) }
 
-#define NWB_ADHD_GTEST(Suite, Case, ...) native{ TEST(Suite, Case){ __VA_ARGS__(); } }
-#define NWB_ADHD_GTEST_F(Fixture, Case, ...) native{ TEST_F(Fixture, Case){ __VA_ARGS__(*this); } }
+#define NWB_ADHD_GTEST(Suite, Case, ...) [source] native{ TEST(Suite, Case){ __VA_ARGS__(); } }
+#define NWB_ADHD_GTEST_F(Fixture, Case, ...) [source] native{ TEST_F(Fixture, Case){ __VA_ARGS__(*this); } }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

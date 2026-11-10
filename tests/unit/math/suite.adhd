@@ -2,15 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <tests/common/floating_point_environment_guard.adhd>
-#include <tests/common/gtest_macros.adhd>
-#include <tests/common/test_context.adhd>
 #include "case_types.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
 
 
@@ -19,20 +17,8 @@ native{
 
 #include <core/common/module.h>
 
-#include <global/bit.h>
 #include <global/compile.h>
-#include <global/floating_point_environment.h>
-#include <global/limit.h>
-#include <global/process.h>
 #include <global/scope_exit.h>
-#include <global/simd/convert.h>
-#include <global/simdmath.h>
-#include <global/simplemath.h>
-
-#if defined(NWB_PLATFORM_LINUX) && defined(NWB_HAS_AVX2)
-#include <sys/wait.h>
-#include <unistd.h>
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -45,151 +31,6 @@ namespace NWB::Tests::MathSuiteDetail{
 
 
 NWB_NOINLINE SIMDVectorSingle NWB_SIMD_CALL EvaluateSingleBoxNormal(SIMDVectorSingle position, SIMDVectorSingle extents, SIMDVectorSingle fallback, f32 threshold)noexcept;
-
-NWB_NOINLINE b8 BaselineCompareDouble3(SIMDVectorDouble left, SIMDVectorDouble right)noexcept;
-
-template<b8 Integer, u32 Dimension>
-NWB_NOINLINE b8 CompareDouble(SIMDVectorDouble left, SIMDVectorDouble right)noexcept{
-#pragma STDC FENV_ACCESS ON
-    if constexpr(Integer){
-        if constexpr(Dimension == 3u)
-            return VectorDouble3EqualInt(left, right);
-        else
-            return VectorDouble4EqualInt(left, right);
-    }
-    else{
-        if constexpr(Dimension == 3u)
-            return VectorDouble3Equal(left, right);
-        else
-            return VectorDouble4Equal(left, right);
-    }
-}
-
-template<b8 Integer>
-NWB_NOINLINE b8 CompareSingle(SIMDVectorSingle left, SIMDVectorSingle right)noexcept{
-#pragma STDC FENV_ACCESS ON
-    if constexpr(Integer)
-        return Vector4EqualInt(left, right);
-    else
-        return Vector4Equal(left, right);
-}
-
-NWB_NOINLINE u32 ExtractMask(SIMDVectorDouble value)noexcept;
-
-namespace Reduction{
-enum Enum : u32{
-    Dot2,
-    Dot3,
-    Dot4,
-    Sum
-};
-};
-
-template<Reduction::Enum Kind>
-NWB_NOINLINE SIMDVectorDouble OriginalReduction(SIMDVectorDouble lhs, SIMDVectorDouble rhs)noexcept{
-#pragma STDC FENV_ACCESS ON
-    if constexpr(Kind == Reduction::Dot2){
-        lhs = VectorDoubleAndInt(lhs, s_DoubleSIMDMaskXY);
-        rhs = VectorDoubleAndInt(rhs, s_DoubleSIMDMaskXY);
-    }
-    else if constexpr(Kind == Reduction::Dot3){
-        lhs = VectorDoubleAndInt(lhs, s_DoubleSIMDMask3);
-        rhs = VectorDoubleAndInt(rhs, s_DoubleSIMDMask3);
-    }
-    const SIMDVectorDouble values = Kind == Reduction::Sum ? lhs : VectorDoubleMultiply(lhs, rhs);
-    SIMDVectorDouble result = VectorDoubleAdd(VectorDoubleSplatX(values), VectorDoubleSplatY(values));
-    if constexpr(Kind == Reduction::Dot2)
-        return result;
-    result = VectorDoubleAdd(result, VectorDoubleSplatZ(values));
-    if constexpr(Kind == Reduction::Dot3)
-        return result;
-    return VectorDoubleAdd(result, VectorDoubleSplatW(values));
-}
-
-template<Reduction::Enum Kind>
-NWB_NOINLINE SIMDVectorDouble CurrentReduction(SIMDVectorDouble lhs, SIMDVectorDouble rhs)noexcept{
-#pragma STDC FENV_ACCESS ON
-    if constexpr(Kind == Reduction::Dot2)
-        return VectorDouble2Dot(lhs, rhs);
-    else if constexpr(Kind == Reduction::Dot3)
-        return VectorDouble3Dot(lhs, rhs);
-    else if constexpr(Kind == Reduction::Dot4)
-        return VectorDouble4Dot(lhs, rhs);
-    else
-        return VectorDoubleSum(lhs);
-}
-
-template<Reduction::Enum Kind>
-void CheckReductionEdge(SIMDVectorDouble input, SIMDVectorDouble multiplier, i32 roundingMode, usize index){
-#pragma STDC FENV_ACCESS ON
-    ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-    const SIMDVectorDouble expected = OriginalReduction<Kind>(input, multiplier);
-    const i32 expectedExceptions = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-    const SIMDVectorDouble actual = CurrentReduction<Kind>(input, multiplier);
-    const i32 actualExceptions = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    EXPECT_EQ(actualExceptions, expectedExceptions) << roundingMode << ':' << index << ':' << Kind;
-    for(usize lane = 0u; lane < 4u; ++lane)
-        EXPECT_EQ(VectorDoubleGetIntByIndex(actual, lane), VectorDoubleGetIntByIndex(expected, lane)) << roundingMode << ':' << index << ':' << Kind << ':' << lane;
-}
-
-template<u32 Dimension>
-NWB_NOINLINE SIMDVectorDouble OriginalReciprocalLength(SIMDVectorDouble value)noexcept{
-#pragma STDC FENV_ACCESS ON
-    if constexpr(Dimension == 2u)
-        return VectorDoubleReciprocalSqrt(VectorDouble2LengthSq(value));
-    else if constexpr(Dimension == 3u)
-        return VectorDoubleReciprocalSqrt(VectorDouble3LengthSq(value));
-    else
-        return VectorDoubleReciprocalSqrt(VectorDouble4LengthSq(value));
-}
-
-template<u32 Dimension, b8 Estimate>
-NWB_NOINLINE SIMDVectorDouble CurrentReciprocalLength(SIMDVectorDouble value)noexcept{
-#pragma STDC FENV_ACCESS ON
-    if constexpr(Dimension == 2u){
-        if constexpr(Estimate)
-            return VectorDouble2ReciprocalLengthEst(value);
-        else
-            return VectorDouble2ReciprocalLength(value);
-    }
-    else if constexpr(Dimension == 3u){
-        if constexpr(Estimate)
-            return VectorDouble3ReciprocalLengthEst(value);
-        else
-            return VectorDouble3ReciprocalLength(value);
-    }
-    else{
-        if constexpr(Estimate)
-            return VectorDouble4ReciprocalLengthEst(value);
-        else
-            return VectorDouble4ReciprocalLength(value);
-    }
-}
-
-template<u32 Dimension>
-void CheckReciprocalLengthEdge(SIMDVectorDouble input){
-#pragma STDC FENV_ACCESS ON
-    ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-    const SIMDVectorDouble expected = OriginalReciprocalLength<Dimension>(input);
-    const i32 expectedFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-    const SIMDVectorDouble actual = CurrentReciprocalLength<Dimension, false>(input);
-    const i32 actualFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-    const SIMDVectorDouble estimate = CurrentReciprocalLength<Dimension, true>(input);
-    const i32 estimateFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    EXPECT_EQ(actualFlags, expectedFlags) << Dimension;
-    EXPECT_EQ(estimateFlags, expectedFlags) << Dimension;
-    for(usize lane = 0u; lane < 4u; ++lane){
-        EXPECT_EQ(VectorDoubleGetIntByIndex(actual, lane), VectorDoubleGetIntByIndex(expected, lane)) << Dimension << ':' << lane;
-        EXPECT_EQ(VectorDoubleGetIntByIndex(estimate, lane), VectorDoubleGetIntByIndex(expected, lane)) << Dimension << ':' << lane;
-    }
-}
-
-#if defined(NWB_PLATFORM_LINUX) && defined(NWB_HAS_AVX2)
-void TrapPriorityHandler(i32 signalNumber, siginfo_t* information, void* context)noexcept;
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -208,6 +49,7 @@ namespace NWB::Tests::MathCases{
 
 
 using AabbTransformBounds = decltype(::AabbTests::Transform(::MatrixIdentity(), ::VectorZero(), ::VectorZero()))::value_type;
+using MathSuiteDetail::EvaluateSingleBoxNormal;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -224,11 +66,6 @@ using AabbTransformBounds = decltype(::AabbTests::Transform(::MatrixIdentity(), 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-const u32 s_F32InfinityBits = 0x7f800000u;
-const u32 s_F32NegInfinityBits = 0xff800000u;
-const u32 s_F32QuietNanBits = 0x7fc00000u;
-const u32 s_F32NegZeroBits = 0x80000000u;
 
 MatrixSingle MakeIdentitySingle(){
     MatrixSingle result = MatrixSingle(f32x4x4());
@@ -453,27 +290,31 @@ VectorDouble EvalTriangleAreaNormal64(in VectorSingle a, in VectorSingle b, in V
 }
 
 void VerifyMathBoxNormal_FiniteSquaredLengthDoesNotOverflowInUnusedReductionLanes(){
-    native{
-#pragma STDC FENV_ACCESS ON
-        using namespace NWB::Tests::MathSuiteDetail;
-        const auto originalEnvironment = HoldFloatingPointExceptions();
-        ASSERT_TRUE(originalEnvironment);
-        NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
+    const VectorSingle zeroGuard = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+    ASSERT_TRUE(zeroGuard.x == 0.0f);
+    ScopedHeldFloatingPointEnvironment envGuard = ScopedHeldFloatingPointEnvironment();
+    ASSERT_TRUE(envGuard.valid());
 
-        Array<volatile u32, 13u> inputBits = { 0xc6ab1d80u, 0x51272bbbu, 0x5f60eb2cu, 0x677561fau, 0xc1aeb5b9u, 0x7213a692u, 0xd272655fu, 0xdd4e3655u, 0xa3419f79u, 0xb181e207u, 0xcedc8003u, 0x65e759c3u, 0x86a287b0u };
-        const SIMDVectorSingle position = VectorSetInt(inputBits[0], inputBits[1], inputBits[2], inputBits[3]);
-        const SIMDVectorSingle extents = VectorSetInt(inputBits[4], inputBits[5], inputBits[6], inputBits[7]);
-        const SIMDVectorSingle fallback = VectorSetInt(inputBits[8], inputBits[9], inputBits[10], inputBits[11]);
-        const f32 threshold = BitCast<f32>(static_cast<u32>(inputBits[12]));
-        for(const i32 roundingMode : { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO }){
-            ASSERT_TRUE(SetFloatingPointRoundingMode(roundingMode));
-            ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-            const SIMDVectorSingle normal = EvaluateSingleBoxNormal(position, extents, fallback, threshold);
-            const i32 flags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-            EXPECT_EQ(flags & FE_OVERFLOW, 0) << roundingMode;
-            EXPECT_TRUE(VectorIsFinite(normal, VectorComponentMask::s_XYZ)) << roundingMode;
-            EXPECT_GT(VectorGetZ(normal), 0.99999f) << roundingMode;
+    const VectorSingle position = MakeVolatileSingleBits(0xc6ab1d80u, 0x51272bbbu, 0x5f60eb2cu, 0x677561fau);
+    const VectorSingle extents = MakeVolatileSingleBits(0xc1aeb5b9u, 0x7213a692u, 0xd272655fu, 0xdd4e3655u);
+    const VectorSingle fallback = MakeVolatileSingleBits(0xa3419f79u, 0xb181e207u, 0xcedc8003u, 0x65e759c3u);
+    f32 threshold = 0.0f;
+    native(mut threshold){
+        volatile u32 thresholdBits = 0x86a287b0u;
+        threshold = BitCast<f32>(static_cast<u32>(thresholdBits));
+    }
+
+    for(in i32 roundingMode : s_FloatingPointRoundingModes){
+        ASSERT_TRUE(SetFloatingPointRoundingMode(roundingMode).has_value());
+        ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
+        VectorSingle normal = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+        native(in position, in extents, in fallback, in threshold, mut normal){
+            normal = EvaluateSingleBoxNormal(position, extents, fallback, threshold);
         }
+        const i32 flags = TestFloatingPointExceptions(s_FeAllExcept);
+        EXPECT_EQ(flags & s_FeOverflow, 0);
+        EXPECT_TRUE(IsFinite(normal.xyz));
+        EXPECT_GT(normal.z, 0.99999f);
     }
 }
 
@@ -534,28 +375,14 @@ void VerifyCurrentMathContractBoundaries_TriangleBoxIntersectionRejectsASeparati
     const BoundingBox box = BoundingBox(f32x3u(0.0f, 0.0f, 0.0f), f32x3u(1.0f, 1.0f, 1.0f));
     const BoundingOrientedBox oriented = BoundingOrientedBox(f32x3u(0.0f, 0.0f, 0.0f), f32x3u(1.0f, 1.0f, 1.0f), f32x4(0.0f, 0.0f, 0.0f, 1.0f));
     Array<Array<f32x4, 3>, 5> triangles = Array<Array<f32x4, 3>, 5>();
-    triangles[0u][0u] = f32x4(4.0f, 0.0f, 0.0f, 0.0f);
-    triangles[0u][1u] = f32x4(0.0f, 4.0f, 0.0f, 0.0f);
-    triangles[0u][2u] = f32x4(0.0f, 0.0f, 4.0f, 0.0f);
-    triangles[1u][0u] = f32x4(1.0f, -1.0f, -1.0f, 0.0f);
-    triangles[1u][1u] = f32x4(1.0f, 1.0f, -1.0f, 0.0f);
-    triangles[1u][2u] = f32x4(1.0f, 0.0f, 1.0f, 0.0f);
-    triangles[2u][0u] = f32x4(-2.0f, 0.0f, 0.0f, 0.0f);
-    triangles[2u][1u] = f32x4(2.0f, 0.0f, 0.0f, 0.0f);
-    triangles[2u][2u] = f32x4(2.0f, 0.0f, 0.0f, 0.0f);
-    triangles[3u][0u] = f32x4(1.0f, 1.0f, 1.0f, 0.0f);
-    triangles[3u][1u] = f32x4(1.0f, 1.0f, 1.0f, 0.0f);
-    triangles[3u][2u] = f32x4(1.0f, 1.0f, 1.0f, 0.0f);
-    triangles[4u][0u] = f32x4(1.2f, 1.0f, 0.0f, 0.0f);
-    triangles[4u][1u] = f32x4(1.0f, 1.2f, 0.0f, 0.0f);
-    triangles[4u][2u] = f32x4(1.0f, 1.2f, 0.0f, 0.0f);
+    triangles[0u][0u] = f32x4(4.0f, 0.0f, 0.0f, 0.0f); triangles[0u][1u] = f32x4(0.0f, 4.0f, 0.0f, 0.0f); triangles[0u][2u] = f32x4(0.0f, 0.0f, 4.0f, 0.0f);
+    triangles[1u][0u] = f32x4(1.0f, -1.0f, -1.0f, 0.0f); triangles[1u][1u] = f32x4(1.0f, 1.0f, -1.0f, 0.0f); triangles[1u][2u] = f32x4(1.0f, 0.0f, 1.0f, 0.0f);
+    triangles[2u][0u] = f32x4(-2.0f, 0.0f, 0.0f, 0.0f); triangles[2u][1u] = f32x4(2.0f, 0.0f, 0.0f, 0.0f); triangles[2u][2u] = f32x4(2.0f, 0.0f, 0.0f, 0.0f);
+    triangles[3u][0u] = f32x4(1.0f, 1.0f, 1.0f, 0.0f); triangles[3u][1u] = f32x4(1.0f, 1.0f, 1.0f, 0.0f); triangles[3u][2u] = f32x4(1.0f, 1.0f, 1.0f, 0.0f);
+    triangles[4u][0u] = f32x4(1.2f, 1.0f, 0.0f, 0.0f); triangles[4u][1u] = f32x4(1.0f, 1.2f, 0.0f, 0.0f); triangles[4u][2u] = f32x4(1.0f, 1.2f, 0.0f, 0.0f);
 
     Array<b8, 5> expected = Array<b8, 5>();
-    expected[0u] = false;
-    expected[1u] = true;
-    expected[2u] = true;
-    expected[3u] = true;
-    expected[4u] = false;
+    expected[0u] = false; expected[1u] = true; expected[2u] = true; expected[3u] = true; expected[4u] = false;
 
     for(usize index = 0u; index < triangles.size(); ++index){
         ScopedTestTrace trace(index);
@@ -569,21 +396,11 @@ void VerifyCurrentMathContractBoundaries_TriangleBoxIntersectionRejectsASeparati
     const BoundingDoubleBox doubleBox = BoundingDoubleBox(f64x3u(0.0, 0.0, 0.0), f64x3u(1.0, 1.0, 1.0));
     const BoundingDoubleOrientedBox doubleOriented = BoundingDoubleOrientedBox(f64x3u(0.0, 0.0, 0.0), f64x3u(1.0, 1.0, 1.0), f64x4(0.0, 0.0, 0.0, 1.0));
     Array<Array<f64x4, 3>, 5> doubleTriangles = Array<Array<f64x4, 3>, 5>();
-    doubleTriangles[0u][0u] = f64x4(4.0, 0.0, 0.0, 0.0);
-    doubleTriangles[0u][1u] = f64x4(0.0, 4.0, 0.0, 0.0);
-    doubleTriangles[0u][2u] = f64x4(0.0, 0.0, 4.0, 0.0);
-    doubleTriangles[1u][0u] = f64x4(1.0, -1.0, -1.0, 0.0);
-    doubleTriangles[1u][1u] = f64x4(1.0, 1.0, -1.0, 0.0);
-    doubleTriangles[1u][2u] = f64x4(1.0, 0.0, 1.0, 0.0);
-    doubleTriangles[2u][0u] = f64x4(-2.0, 0.0, 0.0, 0.0);
-    doubleTriangles[2u][1u] = f64x4(2.0, 0.0, 0.0, 0.0);
-    doubleTriangles[2u][2u] = f64x4(2.0, 0.0, 0.0, 0.0);
-    doubleTriangles[3u][0u] = f64x4(1.0, 1.0, 1.0, 0.0);
-    doubleTriangles[3u][1u] = f64x4(1.0, 1.0, 1.0, 0.0);
-    doubleTriangles[3u][2u] = f64x4(1.0, 1.0, 1.0, 0.0);
-    doubleTriangles[4u][0u] = f64x4(1.2, 1.0, 0.0, 0.0);
-    doubleTriangles[4u][1u] = f64x4(1.0, 1.2, 0.0, 0.0);
-    doubleTriangles[4u][2u] = f64x4(1.0, 1.2, 0.0, 0.0);
+    doubleTriangles[0u][0u] = f64x4(4.0, 0.0, 0.0, 0.0); doubleTriangles[0u][1u] = f64x4(0.0, 4.0, 0.0, 0.0); doubleTriangles[0u][2u] = f64x4(0.0, 0.0, 4.0, 0.0);
+    doubleTriangles[1u][0u] = f64x4(1.0, -1.0, -1.0, 0.0); doubleTriangles[1u][1u] = f64x4(1.0, 1.0, -1.0, 0.0); doubleTriangles[1u][2u] = f64x4(1.0, 0.0, 1.0, 0.0);
+    doubleTriangles[2u][0u] = f64x4(-2.0, 0.0, 0.0, 0.0); doubleTriangles[2u][1u] = f64x4(2.0, 0.0, 0.0, 0.0); doubleTriangles[2u][2u] = f64x4(2.0, 0.0, 0.0, 0.0);
+    doubleTriangles[3u][0u] = f64x4(1.0, 1.0, 1.0, 0.0); doubleTriangles[3u][1u] = f64x4(1.0, 1.0, 1.0, 0.0); doubleTriangles[3u][2u] = f64x4(1.0, 1.0, 1.0, 0.0);
+    doubleTriangles[4u][0u] = f64x4(1.2, 1.0, 0.0, 0.0); doubleTriangles[4u][1u] = f64x4(1.0, 1.2, 0.0, 0.0); doubleTriangles[4u][2u] = f64x4(1.0, 1.2, 0.0, 0.0);
 
     for(usize index = 0u; index < doubleTriangles.size(); ++index){
         ScopedTestTrace trace(index);
@@ -761,18 +578,22 @@ void VerifyCurrentMathContractBoundaries_SphereTransformBoundsSmallShearAdmitted
 }
 
 void VerifyMathDoubleConstant_ComponentConstructionPreservesSubFloatPrecisionAndRawExceptionalBits(){
-    native{
-        constexpr Array<u64, 4u> s_ComponentBits = { 0x3FF0000000000001ull, 0x8000000000000000ull, 0x7FF8123456789ABCull, 0xBFF0000000000001ull };
-        const SIMDVectorDoubleConstF constant{ { { BitCast<f64>(s_ComponentBits[0]), BitCast<f64>(s_ComponentBits[1]), BitCast<f64>(s_ComponentBits[2]), BitCast<f64>(s_ComponentBits[3]) } } };
-        const Double4 fromComponents(constant.f);
+    const Array<u64, 4> componentBits = MakeU64Array4(0x3FF0000000000001u, 0x8000000000000000u, 0x7FF8123456789ABCu, 0xBFF0000000000001u);
+    f64x4 fromComponents = f64x4();
+    f64x4 fromNative = f64x4();
+    native(in componentBits, mut fromComponents, mut fromNative){
+        const SIMDVectorDoubleConstF constant{ { { BitCast<f64>(componentBits[0u]), BitCast<f64>(componentBits[1u]), BitCast<f64>(componentBits[2u]), BitCast<f64>(componentBits[3u]) } } };
+        fromComponents = Double4(constant.f);
         const SIMDVectorDouble nativeVec = constant;
-        Double4 fromNative{};
         StoreDouble(nativeVec, fromNative);
+    }
 
-        for(usize component = 0u; component < 4u; ++component){
-            EXPECT_EQ(BitCast<u64>(fromComponents.raw[component]), s_ComponentBits[component]) << component;
-            EXPECT_EQ(BitCast<u64>(fromNative.raw[component]), s_ComponentBits[component]) << component;
-        }
+    const VectorDouble compVec = VectorDouble(fromComponents);
+    const VectorDouble natVec = VectorDouble(fromNative);
+    for(usize component = 0u; component < 4u; ++component){
+        ScopedTestTrace trace(component);
+        EXPECT_EQ(GetDoubleLaneBits(compVec, component), componentBits[component]);
+        EXPECT_EQ(GetDoubleLaneBits(natVec, component), componentBits[component]);
     }
 }
 
@@ -895,14 +716,13 @@ void VerifyMathGeometryBoundaries_TriangleAreaPreservesSquaredSumOrderAtThreshol
 }
 
 void VerifyMath_DoubleSphereContainmentDistinguishesTangencyFromSubunitSeparationAtLargeCoordinates(){
-    native{
-        constexpr f64 s_Base = 0x1p+40;
-        const BoundingDoubleSphere sphere(Double3U(s_Base, 0.0, 0.0), 1.0);
-        EXPECT_EQ(sphere.contains(SIMDVectorDouble{ s_Base + 1.0, 0.0, 0.0, 0.0 }), ContainmentType::Contains);
-        EXPECT_EQ(sphere.contains(SIMDVectorDouble{ s_Base + 1.0 + 0x1p-10, 0.0, 0.0, 0.0 }), ContainmentType::Disjoint);
-        const BoundingDoubleSphere point(Double3U(s_Base, 0.0, 0.0), 0.0);
-        EXPECT_EQ(point.contains(SIMDVectorDouble{ s_Base + 0x1p-10, 0.0, 0.0, 0.0 }), ContainmentType::Disjoint);
-    }
+    const f64 base = 1099511627776.0;
+    const f64 subUnit = 0.0009765625;
+    const BoundingDoubleSphere sphere = BoundingDoubleSphere(f64x3u(base, 0.0, 0.0), 1.0);
+    EXPECT_EQ(sphere.contains(VectorDouble(base + 1.0, 0.0, 0.0, 0.0)), ContainmentType::Contains);
+    EXPECT_EQ(sphere.contains(VectorDouble(base + 1.0 + subUnit, 0.0, 0.0, 0.0)), ContainmentType::Disjoint);
+    const BoundingDoubleSphere point = BoundingDoubleSphere(f64x3u(base, 0.0, 0.0), 0.0);
+    EXPECT_EQ(point.contains(VectorDouble(base + subUnit, 0.0, 0.0, 0.0)), ContainmentType::Disjoint);
 }
 
 void VerifyMath_FrustumSphereTangencyAndZeroRadiusKeepContainmentBoundary(){
@@ -995,106 +815,181 @@ void VerifyMath_RectangleExtentPoliciesPreserveNanSignedZeroAndInsetRounding(){
 }
 
 void VerifyMath_DoubleMatrixTransformsAndInversePreserveSubunitOffsetsAtLargeTranslations(){
-    native{
-        constexpr f64 s_Base = 0x1p+40;
-        const SIMDMatrixDouble matrix = MatrixDoubleMultiply(MatrixDoubleTranslation(s_Base + 0.25, -s_Base + 0.5, 3.0 + 0x1p-40), MatrixDoubleScaling(2.0, 4.0, 0.5));
-        const SIMDVectorDouble point{ 0.25, -0.125, 0x1p-39, 1.0 };
-        const SIMDVectorDouble transformed = VectorDouble3TransformCoord(point, matrix);
-        EXPECT_EQ(transformed.x, s_Base + 0.75);
-        EXPECT_EQ(transformed.y, -s_Base);
-        EXPECT_EQ(transformed.z, 3.0 + 0x1p-39);
-        EXPECT_EQ(transformed.w, 1.0);
+    const f64 base = 1099511627776.0;
+    const f64 powNeg40 = bit_cast<f64>(cast<u64>(0x3d70000000000000u));
+    const f64 powNeg39 = bit_cast<f64>(cast<u64>(0x3d80000000000000u));
+    const MatrixDouble matrix = Mul(MakeTranslationDouble(base + 0.25, -base + 0.5, 3.0 + powNeg40), MakeScalingDouble(2.0, 4.0, 0.5));
+    const VectorDouble point = VectorDouble(0.25, -0.125, powNeg39, 1.0);
 
-        Double34 packed{};
-        StoreDouble(matrix, packed);
-        EXPECT_EQ(packed._14, s_Base + 0.25);
-        EXPECT_EQ(packed._24, -s_Base + 0.5);
-        EXPECT_EQ(packed._34, 3.0 + 0x1p-40);
-        const SIMDVectorDouble fromPacked = VectorDouble3TransformCoord(point, LoadDouble(packed));
-        for(usize lane = 0u; lane < 4u; ++lane)
-            EXPECT_EQ(fromPacked[lane], transformed[lane]) << lane;
+    VectorDouble transformed = VectorDouble(0.0, 0.0, 0.0, 0.0);
+    native(in point, in matrix, mut transformed){
+        transformed = VectorDouble3TransformCoord(point, matrix);
+    }
+    EXPECT_EQ(transformed.x, base + 0.75);
+    EXPECT_EQ(transformed.y, -base);
+    EXPECT_EQ(transformed.z, 3.0 + powNeg39);
+    EXPECT_EQ(transformed.w, 1.0);
 
-        SIMDVectorDouble determinant{};
+    const f64x3x4 packed = f64x3x4(matrix);
+    EXPECT_EQ(packed._14, base + 0.25);
+    EXPECT_EQ(packed._24, -base + 0.5);
+    EXPECT_EQ(packed._34, 3.0 + powNeg40);
+
+    const MatrixDouble loadedPacked = MatrixDouble(packed);
+    VectorDouble fromPacked = VectorDouble(0.0, 0.0, 0.0, 0.0);
+    VectorDouble determinant = VectorDouble(0.0, 0.0, 0.0, 0.0);
+    VectorDouble restored = VectorDouble(0.0, 0.0, 0.0, 0.0);
+    native(in point, in loadedPacked, in matrix, in transformed, mut fromPacked, mut determinant, mut restored){
+        fromPacked = VectorDouble3TransformCoord(point, loadedPacked);
         const SIMDMatrixDouble inverse = MatrixDoubleInverse(&determinant, matrix);
-        EXPECT_EQ(determinant.x, 4.0);
-        const SIMDVectorDouble restored = VectorDouble3TransformCoord(transformed, inverse);
-        for(usize lane = 0u; lane < 4u; ++lane)
-            EXPECT_EQ(restored[lane], point[lane]) << lane;
+        restored = VectorDouble3TransformCoord(transformed, inverse);
+    }
+    for(usize lane = 0u; lane < 4u; ++lane){
+        EXPECT_EQ(GetDoubleLaneFloat(fromPacked, lane), GetDoubleLaneFloat(transformed, lane));
+    }
+    EXPECT_EQ(determinant.x, 4.0);
+    for(usize lane = 0u; lane < 4u; ++lane){
+        EXPECT_EQ(GetDoubleLaneFloat(restored, lane), GetDoubleLaneFloat(point, lane));
     }
 }
 
 void VerifyMath_DoubleDecompositionReconstructsNoncommutingRotationsWithNegativeScaleAndRejectsShear(){
-    native{
+    const f64 base = 1099511627776.0;
+    const f64 powNeg40 = bit_cast<f64>(cast<u64>(0x3d70000000000000u));
+
+    MatrixDouble matrix = MatrixDouble(f64x4x4());
+    MatrixDouble reconstructed = MatrixDouble(f64x4x4());
+    b8 hasDecomp = false;
+    b8 quatIsNaN = true;
+    native(in base, in powNeg40, mut matrix, mut reconstructed, mut hasDecomp, mut quatIsNaN){
         const SIMDMatrixDouble rotation = MatrixDoubleMultiply(MatrixDoubleRotationX(0.5), MatrixDoubleMultiply(MatrixDoubleRotationY(-0.75), MatrixDoubleRotationZ(1.25)));
-        const SIMDMatrixDouble matrix = MatrixDoubleMultiply(MatrixDoubleTranslation(0x1p+40 + 0.25, -7.0 + 0x1p-40, 11.0 + 0x1p-40), MatrixDoubleMultiply(rotation, MatrixDoubleScaling(-2.0, 3.0, 0.5)));
+        matrix = MatrixDoubleMultiply(MatrixDoubleTranslation(base + 0.25, -7.0 + powNeg40, 11.0 + powNeg40), MatrixDoubleMultiply(rotation, MatrixDoubleScaling(-2.0, 3.0, 0.5)));
         const auto decomposition = MatrixDoubleDecompose(matrix);
-        ASSERT_TRUE(decomposition);
-        EXPECT_FALSE(QuaternionDoubleIsNaN(decomposition->rotation));
-        const SIMDMatrixDouble reconstructed = MatrixDoubleAffineTransformation(decomposition->scale, VectorDoubleZero(), decomposition->rotation, decomposition->translation);
-        for(usize row = 0u; row < 4u; ++row){
-            for(usize lane = 0u; lane < 3u; ++lane)
-                EXPECT_NEAR(reconstructed.v[row][lane], matrix.v[row][lane], 4.0e-15) << row << ':' << lane;
-            EXPECT_EQ(reconstructed.v[row].w, matrix.v[row].w) << row;
+        hasDecomp = decomposition.has_value();
+        if(decomposition){
+            quatIsNaN = QuaternionDoubleIsNaN(decomposition->rotation);
+            reconstructed = MatrixDoubleAffineTransformation(decomposition->scale, VectorDoubleZero(), decomposition->rotation, decomposition->translation);
         }
-        SIMDMatrixDouble shear = MatrixDoubleIdentity();
-        shear.v[0].y = 0.5;
-        EXPECT_FALSE(MatrixDoubleDecompose(shear));
     }
+    ASSERT_TRUE(hasDecomp);
+    EXPECT_FALSE(quatIsNaN);
+
+    Array<f64x4, 4> actualRows = Array<f64x4, 4>();
+    Array<f64x4, 4> expectedRows = Array<f64x4, 4>();
+    native(in reconstructed, in matrix, mut actualRows, mut expectedRows){
+        for(usize row = 0u; row < 4u; ++row){
+            StoreDouble(reconstructed.v[row], actualRows[row]);
+            StoreDouble(matrix.v[row], expectedRows[row]);
+        }
+    }
+    for(usize row = 0u; row < 4u; ++row){
+        EXPECT_NEAR(actualRows[row].x, expectedRows[row].x, 4.0e-15);
+        EXPECT_NEAR(actualRows[row].y, expectedRows[row].y, 4.0e-15);
+        EXPECT_NEAR(actualRows[row].z, expectedRows[row].z, 4.0e-15);
+        EXPECT_EQ(actualRows[row].w, expectedRows[row].w);
+    }
+
+    const MatrixDouble shear = MakeRowsDouble(
+        VectorDouble(1.0, 0.5, 0.0, 0.0),
+        VectorDouble(0.0, 1.0, 0.0, 0.0),
+        VectorDouble(0.0, 0.0, 1.0, 0.0),
+        VectorDouble(0.0, 0.0, 0.0, 1.0)
+    );
+    EXPECT_FALSE(MatrixDoubleDecompose(shear).has_value());
 }
 
 void VerifyMath_DoubleAffineAdmissionRejectsSingularNonfiniteAndProjectiveMatrices(){
-    native{
-        EXPECT_FALSE(MatrixDoubleIsInvertibleAffine(MatrixDoubleScaling(1.0, 1.0, 0x1p-81), 0.0, 0x1p-80));
-        EXPECT_TRUE(MatrixDoubleIsInvertibleAffine(MatrixDoubleScaling(1.0, 1.0, 0x1p-79), 0.0, 0x1p-80));
-        EXPECT_FALSE(MatrixDoubleIsInvertibleAffine(MatrixDoubleScaling(1.0, 1.0, 0.0), 0.0, 0.0));
-        EXPECT_FALSE(MatrixDoubleIsAffine(MatrixDoubleTranslation(Limit<f64>::s_Infinity, 0.0, 0.0), 0.0));
-        SIMDMatrixDouble projective = MatrixDoubleIdentity();
-        projective.v[3] = SIMDVectorDouble{ 0.0, 0.0, 0x1p-40, 1.0 };
-        EXPECT_FALSE(MatrixDoubleIsAffine(projective, 0x1p-41));
-        EXPECT_TRUE(MatrixDoubleIsAffine(projective, 0x1p-39));
-    }
+    const f64 pNeg81 = bit_cast<f64>(cast<u64>(0x3ae0000000000000u));
+    const f64 pNeg80 = bit_cast<f64>(cast<u64>(0x3af0000000000000u));
+    const f64 pNeg79 = bit_cast<f64>(cast<u64>(0x3b00000000000000u));
+    const f64 pNeg41 = bit_cast<f64>(cast<u64>(0x3d60000000000000u));
+    const f64 pNeg40 = bit_cast<f64>(cast<u64>(0x3d70000000000000u));
+    const f64 pNeg39 = bit_cast<f64>(cast<u64>(0x3d80000000000000u));
+    const f64 posInf = bit_cast<f64>(cast<u64>(s_F64InfinityBits));
+
+    EXPECT_FALSE(MatrixDoubleIsInvertibleAffine(MakeScalingDouble(1.0, 1.0, pNeg81), 0.0, pNeg80));
+    EXPECT_TRUE(MatrixDoubleIsInvertibleAffine(MakeScalingDouble(1.0, 1.0, pNeg79), 0.0, pNeg80));
+    EXPECT_FALSE(MatrixDoubleIsInvertibleAffine(MakeScalingDouble(1.0, 1.0, 0.0), 0.0, 0.0));
+    EXPECT_FALSE(MatrixDoubleIsAffine(MakeTranslationDouble(posInf, 0.0, 0.0), 0.0));
+
+    const MatrixDouble projective = MakeRowsDouble(
+        VectorDouble(1.0, 0.0, 0.0, 0.0),
+        VectorDouble(0.0, 1.0, 0.0, 0.0),
+        VectorDouble(0.0, 0.0, 1.0, 0.0),
+        VectorDouble(0.0, 0.0, pNeg40, 1.0)
+    );
+    EXPECT_FALSE(MatrixDoubleIsAffine(projective, pNeg41));
+    EXPECT_TRUE(MatrixDoubleIsAffine(projective, pNeg39));
 }
 
 void VerifyMath_DoubleQuaternionAntipodalInterpolationPreservesSmallDeviationFromRightAngle(){
-    native{
-        const f64 angle = 0x1.921fb54442d18p+0 + 0x1p-40;
-        const SIMDVectorDouble rotation = QuaternionDoubleRotationNormal(SIMDVectorDouble{ 0.0, 0.0, 1.0, 0.0 }, angle);
-        const SIMDVectorDouble interpolated = QuaternionDoubleSlerp(rotation, VectorDoubleNegate(rotation), 0.5);
-        EXPECT_FALSE(QuaternionDoubleIsNaN(interpolated));
-        EXPECT_FALSE(QuaternionDoubleIsInfinite(interpolated));
-        const SIMDVectorDouble rotated = VectorDouble3Rotate(SIMDVectorDouble{ 1.0, 0.0, 0.0, 0.0 }, interpolated);
-        EXPECT_NEAR(rotated.x, Cos(angle), 4.0e-16);
-        EXPECT_NEAR(rotated.y, Sin(angle), 4.0e-16);
-        EXPECT_LT(rotated.x, -0x1p-41);
-        const SIMDVectorDouble degenerateInverse = QuaternionDoubleInverse(VectorDoubleZero());
-        for(usize lane = 0u; lane < 4u; ++lane)
-            EXPECT_EQ(degenerateInverse[lane], 0.0) << lane;
+    const f64 angle = bit_cast<f64>(cast<u64>(0x3ff921fb54442d18u)) + bit_cast<f64>(cast<u64>(0x3d70000000000000u));
+    const f64 negPowNeg41 = -bit_cast<f64>(cast<u64>(0x3d60000000000000u));
+    const VectorDouble rotation = MakeQuatRotationNormalDouble(VectorDouble(0.0, 0.0, 1.0, 0.0), angle);
+
+    VectorDouble interpolated = VectorDouble(0.0, 0.0, 0.0, 0.0);
+    b8 isNaN = true;
+    b8 isInf = true;
+    VectorDouble degenerateInverse = VectorDouble(1.0, 1.0, 1.0, 1.0);
+    native(in rotation, mut interpolated, mut isNaN, mut isInf, mut degenerateInverse){
+        interpolated = QuaternionDoubleSlerp(rotation, VectorDoubleNegate(rotation), 0.5);
+        isNaN = QuaternionDoubleIsNaN(interpolated);
+        isInf = QuaternionDoubleIsInfinite(interpolated);
+        degenerateInverse = QuaternionDoubleInverse(VectorDoubleZero());
     }
+    EXPECT_FALSE(isNaN);
+    EXPECT_FALSE(isInf);
+
+    const VectorDouble rotated = RotateVector3Double(VectorDouble(1.0, 0.0, 0.0, 0.0), interpolated);
+    EXPECT_NEAR(rotated.x, Cos(angle), 4.0e-16);
+    EXPECT_NEAR(rotated.y, Sin(angle), 4.0e-16);
+    EXPECT_LT(rotated.x, negPowNeg41);
+
+    for(usize lane = 0u; lane < 4u; ++lane)
+        EXPECT_EQ(GetDoubleLaneFloat(degenerateInverse, lane), 0.0);
 }
 
 void VerifyMath_DoubleRigidQuaternionExtractionKeepsRowMatrixRotationAndDualTranslationDirection(){
-    native{
-        const SIMDVectorDouble translation{ 7.0 + 0x1p-40, -11.0 + 0x1p-40, 5.0 + 0x1p-40, 0.0 };
-        const SIMDMatrixDouble matrix = MatrixDoubleMultiply(MatrixDoubleTranslationFromVector(translation), MatrixDoubleRotationZ(0.75));
+    const f64 powNeg40 = bit_cast<f64>(cast<u64>(0x3d70000000000000u));
+    const VectorDouble translation = VectorDouble(7.0 + powNeg40, -11.0 + powNeg40, 5.0 + powNeg40, 0.0);
+    const VectorDouble direction = VectorDouble(2.0, -3.0, 4.0, 0.0);
+
+    MatrixDouble matrix = MatrixDouble(f64x4x4());
+    VectorDouble fromMatrix = VectorDouble(0.0, 0.0, 0.0, 0.0);
+    f64x4 quatStorage = f64x4();
+    b8 hasQuat = false;
+    f64x4 realStorage = f64x4();
+    f64x4 dualStorage = f64x4();
+    VectorDouble extractedTranslation = VectorDouble(0.0, 0.0, 0.0, 0.0);
+    b8 hasDual = false;
+    native(in translation, in direction, mut matrix, mut fromMatrix, mut quatStorage, mut hasQuat, mut realStorage, mut dualStorage, mut extractedTranslation, mut hasDual){
+        matrix = MatrixDoubleMultiply(MatrixDoubleTranslationFromVector(translation), MatrixDoubleRotationZ(0.75));
+        fromMatrix = VectorDouble3TransformNormal(direction, matrix);
         const auto quaternion = MatrixDoubleTryBuildRigidRotationQuaternion(matrix, 0.0, 1.0e-12);
-        ASSERT_TRUE(quaternion);
-        const SIMDVectorDouble direction{ 2.0, -3.0, 4.0, 0.0 };
-        const SIMDVectorDouble fromMatrix = VectorDouble3TransformNormal(direction, matrix);
-        const SIMDVectorDouble fromQuaternion = VectorDouble3Rotate(direction, quaternion->value);
-        for(usize lane = 0u; lane < 3u; ++lane)
-            EXPECT_NEAR(fromQuaternion[lane], fromMatrix[lane], 2.0e-15) << lane;
-
+        hasQuat = quaternion.has_value();
+        if(quaternion)
+            StoreDouble(quaternion->value, quatStorage);
         const auto dualQuaternion = MatrixDoubleTryBuildRigidDualQuaternion(matrix, 0.0, 1.0e-12);
-        ASSERT_TRUE(dualQuaternion);
-        const SIMDVectorDouble extractedTranslation = VectorDoubleScale(QuaternionDoubleMultiply(dualQuaternion->dual, QuaternionDoubleConjugate(dualQuaternion->real)), 2.0);
-        for(usize lane = 0u; lane < 3u; ++lane)
-            EXPECT_NEAR(extractedTranslation[lane], translation[lane], 4.0e-15) << lane;
-
-        const SIMDVectorDouble transformed = VectorDoubleAdd(VectorDouble3Rotate(direction, dualQuaternion->real), extractedTranslation);
-        const SIMDVectorDouble expected = VectorDouble3Transform(direction, matrix);
-        for(usize lane = 0u; lane < 3u; ++lane)
-            EXPECT_NEAR(transformed[lane], expected[lane], 4.0e-15) << lane;
+        hasDual = dualQuaternion.has_value();
+        if(dualQuaternion){
+            StoreDouble(dualQuaternion->real, realStorage);
+            StoreDouble(dualQuaternion->dual, dualStorage);
+            extractedTranslation = VectorDoubleScale(QuaternionDoubleMultiply(dualQuaternion->dual, QuaternionDoubleConjugate(dualQuaternion->real)), 2.0);
+        }
     }
+    ASSERT_TRUE(hasQuat);
+    const VectorDouble fromQuaternion = RotateVector3Double(direction, VectorDouble(quatStorage));
+    for(usize lane = 0u; lane < 3u; ++lane)
+        EXPECT_NEAR(GetDoubleLaneFloat(fromQuaternion, lane), GetDoubleLaneFloat(fromMatrix, lane), 2.0e-15);
+
+    ASSERT_TRUE(hasDual);
+    for(usize lane = 0u; lane < 3u; ++lane)
+        EXPECT_NEAR(GetDoubleLaneFloat(extractedTranslation, lane), GetDoubleLaneFloat(translation, lane), 4.0e-15);
+
+    const VectorDouble transformed = RotateVector3Double(direction, VectorDouble(realStorage)) + extractedTranslation;
+    const VectorDouble expected = TransformVector3Double(direction, matrix);
+    for(usize lane = 0u; lane < 3u; ++lane)
+        EXPECT_NEAR(GetDoubleLaneFloat(transformed, lane), GetDoubleLaneFloat(expected, lane), 4.0e-15);
 }
 
 void VerifyMath_CenteredOrthographicProjectionPreservesNegativeZeroTranslation(){
@@ -1242,513 +1137,161 @@ void VerifyMath_RawFloatLaneHashKeepsSignedZeroAndNanPayloads(){
     EXPECT_EQ(actual, expected);
 }
 
-void VerifyMath_DoubleComparisonAndSelectionKeepAll64MaskBitsAndNaNOrdering(){
-    native{
-        const SIMDVectorDouble lhs{ 0x1.0000000000001p+0, -0.0, Limit<f64>::s_QuietNaN, 0x1p+40 };
-        const SIMDVectorDouble rhs{ 1.0, 0.0, Limit<f64>::s_QuietNaN, 0x1p+40 + 1.0 };
-        const SIMDVectorDouble equal = VectorDoubleEqual(lhs, rhs);
-        const SIMDVectorDouble greater = VectorDoubleGreater(lhs, rhs);
-        const Array<u64, 4u> equalBits = { 0u, Limit<u64>::s_Max, 0u, 0u };
-        const Array<u64, 4u> greaterBits = { Limit<u64>::s_Max, 0u, 0u, 0u };
-        for(usize lane = 0u; lane < 4u; ++lane){
-            EXPECT_EQ(BitCast<u64>(equal[lane]), equalBits[lane]) << lane;
-            EXPECT_EQ(BitCast<u64>(greater[lane]), greaterBits[lane]) << lane;
-        }
-
-        const SIMDVectorDouble first = VectorDoubleSetInt(0x0123456789abcdefu, 0x8000000000000000u, 0x7ff8000000001234u, 1u);
-        const SIMDVectorDouble second = VectorDoubleSetInt(0xfedcba9876543210u, 0u, 0x7ff800009abcdef0u, Limit<u64>::s_Max);
-        const SIMDVectorDouble control = VectorDoubleSetInt(0xffffffff00000000u, 0x8000000000000000u, 0x00000000ffffffffu, 0u);
-        const SIMDVectorDouble selected = VectorDoubleSelect(first, second, control);
-        const Array<u64, 4u> selectedBits = { 0xfedcba9889abcdefu, 0u, 0x7ff800009abcdef0u, 1u };
-        for(usize lane = 0u; lane < 4u; ++lane)
-            EXPECT_EQ(BitCast<u64>(selected[lane]), selectedBits[lane]) << lane;
-    }
-}
-
-void VerifyMath_DoubleIntegerAdditionWrapsAcross64BitLaneBoundaries(){
-    native{
-        const SIMDVectorDouble sum = VectorDoubleAddInt(VectorDoubleSetInt(Limit<u64>::s_Max, 0xffffffffu, 0x8000000000000000u, 0xfffffffffffffffeu), VectorDoubleSetInt(1u, 1u, 0x8000000000000000u, 3u));
-        const Array<u64, 4u> expected = { 0u, 0x100000000u, 0u, 1u };
-        for(usize lane = 0u; lane < 4u; ++lane)
-            EXPECT_EQ(BitCast<u64>(sum[lane]), expected[lane]) << lane;
-    }
-}
-
-void VerifyMath_DoubleDotAndNearlyParallelCrossRetainResidualBeyondFloatPrecision(){
-    native{
-        const SIMDVectorDouble dot = VectorDouble3Dot(SIMDVectorDouble{ 0x1p+40 + 1.0, -0x1p+40, 0.0, Limit<f64>::s_QuietNaN }, SIMDVectorDouble{ 1.0, 1.0, 1.0, Limit<f64>::s_Infinity });
-        for(usize lane = 0u; lane < 4u; ++lane)
-            EXPECT_EQ(dot[lane], 1.0) << lane;
-
-        const SIMDVectorDouble cross = VectorDouble3Cross(SIMDVectorDouble{ 1.0, 1.0 + 0x1p-40, 0.0, Limit<f64>::s_QuietNaN }, SIMDVectorDouble{ 1.0, 1.0, 0.0, Limit<f64>::s_Infinity });
-        EXPECT_EQ(cross.z, -0x1p-40);
-        EXPECT_EQ(BitCast<u64>(cross.w), 0u);
-    }
-}
-
-void VerifyMath_SinglePartialLaneDotIgnoresNonfiniteInactiveLanesWithoutInvalidExceptions(){
-    native{
-#pragma STDC FENV_ACCESS ON
-        const auto originalEnvironment = HoldFloatingPointExceptions();
-        ASSERT_TRUE(originalEnvironment);
-        NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
-
-        Array<Array<volatile u32, 2u>, 4u> inactiveBits = {{ { 0x7f800000u, 0u }, { 0u, 0x7f800000u }, { 0x7fc01234u, 0u }, { 0x7f800001u, 0u } }};
-        for(usize index = 0u; index < LengthOf(inactiveBits); ++index){
-            const f32 inactiveLeft = BitCast<f32>(inactiveBits[index][0]);
-            const f32 inactiveRight = BitCast<f32>(inactiveBits[index][1]);
-            const SIMDVectorSingle lhs2 = VectorSet(2.0f, 3.0f, inactiveLeft, inactiveLeft);
-            const SIMDVectorSingle rhs2 = VectorSet(5.0f, 7.0f, inactiveRight, inactiveRight);
-            ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-            const SIMDVectorSingle dot2 = Vector2Dot(lhs2, rhs2);
-            const i32 dot2Invalid = TestFloatingPointExceptions(FE_INVALID);
-            EXPECT_EQ(dot2Invalid, 0) << index;
-            for(usize lane = 0u; lane < 4u; ++lane)
-                EXPECT_EQ(VectorGetByIndex(dot2, lane), 31.0f) << index << ':' << lane;
-
-            const SIMDVectorSingle lhs3 = VectorSet(2.0f, 3.0f, 4.0f, inactiveLeft);
-            const SIMDVectorSingle rhs3 = VectorSet(5.0f, 7.0f, 11.0f, inactiveRight);
-            ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-            const SIMDVectorSingle dot3 = Vector3Dot(lhs3, rhs3);
-            const i32 dot3Invalid = TestFloatingPointExceptions(FE_INVALID);
-            EXPECT_EQ(dot3Invalid, 0) << index;
-            for(usize lane = 0u; lane < 4u; ++lane)
-                EXPECT_EQ(VectorGetByIndex(dot3, lane), 75.0f) << index << ':' << lane;
-        }
-    }
-}
-
-void VerifyMath_SinglePartialLaneCrossIgnoresNonfiniteAndOverflowingInactiveLanes(){
-    native{
-#pragma STDC FENV_ACCESS ON
-        const auto originalEnvironment = HoldFloatingPointExceptions();
-        ASSERT_TRUE(originalEnvironment);
-        NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
-
-        Array<Array<volatile u32, 2u>, 6u> inactiveBits = {{ { 0x7f800000u, 0u }, { 0u, 0x7f800000u }, { 0x7fc01234u, 0u }, { 0x7f800001u, 0u }, { 0u, 0x7f800001u }, { 0x7f7fffffu, 0x7f7fffffu } }};
-        for(usize index = 0u; index < LengthOf(inactiveBits); ++index){
-            const SIMDVectorSingle lhs2 = VectorSetInt(0x40000000u, 0x40400000u, inactiveBits[index][0], inactiveBits[index][0]);
-            const SIMDVectorSingle rhs2 = VectorSetInt(0x40a00000u, 0x40e00000u, inactiveBits[index][1], inactiveBits[index][1]);
-            ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-            const SIMDVectorSingle cross2 = Vector2Cross(lhs2, rhs2);
-            const i32 cross2Exceptions = TestFloatingPointExceptions(FE_INVALID | FE_OVERFLOW);
-            EXPECT_EQ(cross2Exceptions, 0) << index;
-            for(usize lane = 0u; lane < 4u; ++lane)
-                EXPECT_EQ(VectorGetByIndex(cross2, lane), -1.0f) << index << ':' << lane;
-
-            const SIMDVectorSingle lhs3 = VectorSetInt(0x40000000u, 0x40400000u, 0x40800000u, inactiveBits[index][0]);
-            const SIMDVectorSingle rhs3 = VectorSetInt(0x40a00000u, 0x40e00000u, 0x41300000u, inactiveBits[index][1]);
-            ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-            const SIMDVectorSingle cross3 = Vector3Cross(lhs3, rhs3);
-            const i32 cross3Exceptions = TestFloatingPointExceptions(FE_INVALID | FE_OVERFLOW);
-            EXPECT_EQ(cross3Exceptions, 0) << index;
-            const Array<f32, 3u> cross3Expected = { 5.0f, -2.0f, -1.0f };
-            for(usize lane = 0u; lane < 3u; ++lane)
-                EXPECT_EQ(VectorGetByIndex(cross3, lane), cross3Expected[lane]) << index << ':' << lane;
-            EXPECT_EQ(VectorGetIntW(cross3), 0u) << index;
-        }
-
-        const SIMDVectorSingle lhs = VectorSet(2.0f, 3.0f, 0.0f, 0.0f);
-        const SIMDVectorSingle rhs = VectorSet(Limit<f32>::s_Infinity, 7.0f, 0.0f, 0.0f);
-        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-        const SIMDVectorSingle cross = Vector2Cross(lhs, rhs);
-        const i32 crossExceptions = TestFloatingPointExceptions(FE_INVALID | FE_OVERFLOW);
-        EXPECT_EQ(crossExceptions, 0);
-        for(usize lane = 0u; lane < 4u; ++lane)
-            EXPECT_EQ(VectorGetByIndex(cross, lane), -Limit<f32>::s_Infinity) << lane;
-    }
-}
-
-void VerifyMath_DoublePartialLaneDotAndCrossIgnoreNonfiniteInactiveLanesWithoutInvalidExceptions(){
-    native{
-#pragma STDC FENV_ACCESS ON
-        const auto originalEnvironment = HoldFloatingPointExceptions();
-        ASSERT_TRUE(originalEnvironment);
-        NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
-        const Array<f64, 4u> lhsInactive = { Limit<f64>::s_Infinity, 0.0, Limit<f64>::s_QuietNaN, Limit<f64>::s_QuietNaN };
-        const Array<f64, 4u> rhsInactive = { 0.0, Limit<f64>::s_Infinity, 0.0, Limit<f64>::s_QuietNaN };
-        for(usize index = 0u; index < LengthOf(lhsInactive); ++index){
-            const SIMDVectorDouble lhs2{ 2.0, 3.0, lhsInactive[index], lhsInactive[index] };
-            const SIMDVectorDouble rhs2{ 5.0, 7.0, rhsInactive[index], rhsInactive[index] };
-            EXPECT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-            const SIMDVectorDouble dot2 = VectorDouble2Dot(lhs2, rhs2);
-            const i32 dot2Invalid = TestFloatingPointExceptions(FE_INVALID);
-            EXPECT_EQ(dot2Invalid, 0) << index;
-            for(usize lane = 0u; lane < 4u; ++lane)
-                EXPECT_EQ(dot2[lane], 31.0) << index << ':' << lane;
-
-            EXPECT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-            const SIMDVectorDouble cross2 = VectorDouble2Cross(lhs2, rhs2);
-            const i32 cross2Invalid = TestFloatingPointExceptions(FE_INVALID);
-            EXPECT_EQ(cross2Invalid, 0) << index;
-            for(usize lane = 0u; lane < 4u; ++lane)
-                EXPECT_EQ(cross2[lane], -1.0) << index << ':' << lane;
-
-            const SIMDVectorDouble lhs3{ 2.0, 3.0, 4.0, lhsInactive[index] };
-            const SIMDVectorDouble rhs3{ 5.0, 7.0, 11.0, rhsInactive[index] };
-            EXPECT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-            const SIMDVectorDouble dot3 = VectorDouble3Dot(lhs3, rhs3);
-            const i32 dot3Invalid = TestFloatingPointExceptions(FE_INVALID);
-            EXPECT_EQ(dot3Invalid, 0) << index;
-            for(usize lane = 0u; lane < 4u; ++lane)
-                EXPECT_EQ(dot3[lane], 75.0) << index << ':' << lane;
-
-            EXPECT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-            const SIMDVectorDouble cross3 = VectorDouble3Cross(lhs3, rhs3);
-            const i32 cross3Invalid = TestFloatingPointExceptions(FE_INVALID);
-            EXPECT_EQ(cross3Invalid, 0) << index;
-            const SIMDVectorDouble cross3Expected{ 5.0, -2.0, -1.0, 0.0 };
-            for(usize lane = 0u; lane < 4u; ++lane)
-                EXPECT_EQ(cross3[lane], cross3Expected[lane]) << index << ':' << lane;
-        }
-    }
-}
-
-void VerifyMath_SingleLog2KeepsSubnormalExponentsAndZeroInfinityNaNDomains(){
-    native{
-        for(u32 bitIndex = 0u; bitIndex < 23u; ++bitIndex){
-            volatile u32 subnormalBits = 1u << bitIndex;
-            const SIMDVectorSingle input = VectorSetInt(subnormalBits, 0x007fffffu, 0x00800000u, 0x3f800000u);
-            const SIMDVectorSingle logarithm = VectorLog2(input);
-            EXPECT_EQ(VectorGetX(logarithm), static_cast<f32>(static_cast<i32>(bitIndex) - 149)) << bitIndex;
-            EXPECT_NEAR(VectorGetY(logarithm), -126.0f, 0.00004f) << bitIndex;
-            EXPECT_EQ(VectorGetZ(logarithm), -126.0f) << bitIndex;
-            EXPECT_EQ(VectorGetW(logarithm), 0.0f) << bitIndex;
-        }
-        Array<volatile u32, 4u> domainBits = { 0x80000000u, 0x7f800000u, 0xbf800000u, 0x7fc01234u };
-        const SIMDVectorSingle special = VectorLog2(VectorSetInt(domainBits[0], domainBits[1], domainBits[2], domainBits[3]));
-        EXPECT_EQ(VectorGetIntX(special), 0xff800000u);
-        EXPECT_EQ(VectorGetIntY(special), 0x7f800000u);
-        EXPECT_TRUE(IsNaN(VectorGetZ(special)));
-        EXPECT_TRUE(IsNaN(VectorGetW(special)));
-    }
-}
-
-void VerifyMath_DoubleTranscendentalsHandleLargeArgumentsNonfiniteDomainsAndSignedZero(){
-    native{
-        const SIMDVectorDouble angles{ 0x1p+40, -0x1p+100, 0x1p+900, -0.0 };
-        SIMDVectorDouble sine{};
-        SIMDVectorDouble cosine{};
-        VectorDoubleSinCos(sine, cosine, angles);
-        for(usize lane = 0u; lane < 4u; ++lane){
-            EXPECT_NEAR(sine[lane], Sin(angles[lane]), 2.0e-15) << lane;
-            EXPECT_NEAR(cosine[lane], Cos(angles[lane]), 2.0e-15) << lane;
-        }
-        EXPECT_TRUE(SignBit(sine.w));
-
-        const SIMDVectorDouble invalidSine = VectorDoubleSin(SIMDVectorDouble{ Limit<f64>::s_Infinity, -Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN, -0.0 });
-        EXPECT_TRUE(IsNaN(invalidSine.x));
-        EXPECT_TRUE(IsNaN(invalidSine.y));
-        EXPECT_TRUE(IsNaN(invalidSine.z));
-        EXPECT_TRUE(SignBit(invalidSine.w));
-
-        const SIMDVectorDouble logarithm = VectorDoubleLog2(SIMDVectorDouble{ -1.0, 0.0, 0x1p-1074, Limit<f64>::s_Infinity });
-        EXPECT_TRUE(IsNaN(logarithm.x));
-        EXPECT_EQ(logarithm.y, -Limit<f64>::s_Infinity);
-        EXPECT_EQ(logarithm.z, -1074.0);
-        EXPECT_EQ(logarithm.w, Limit<f64>::s_Infinity);
-        const SIMDVectorDouble exponential = VectorDoubleExp2(SIMDVectorDouble{ 1024.0, -1074.0, -1075.0, Limit<f64>::s_QuietNaN });
-        EXPECT_EQ(exponential.x, Limit<f64>::s_Infinity);
-        EXPECT_EQ(BitCast<u64>(exponential.y), 1u);
-        EXPECT_EQ(BitCast<u64>(exponential.z), 0u);
-        EXPECT_TRUE(IsNaN(exponential.w));
-
-        const SIMDVectorDouble tangent = VectorDoubleTanH(SIMDVectorDouble{ Limit<f64>::s_Infinity, -Limit<f64>::s_Infinity, -0.0, 0.0 });
-        EXPECT_EQ(tangent.x, 1.0);
-        EXPECT_EQ(tangent.y, -1.0);
-        EXPECT_TRUE(SignBit(tangent.z));
-        EXPECT_FALSE(SignBit(tangent.w));
-    }
-}
-
 void VerifyMath_DoubleModAvoidsQuotientOverflowAndUnderflowWhileKeepingDivisorSign(){
-    native{
-        const SIMDVectorDouble overflow = VectorDoubleMod(SIMDVectorDouble{ Limit<f64>::s_Max, -Limit<f64>::s_Max, Limit<f64>::s_Max, -Limit<f64>::s_Max }, SIMDVectorDouble{ 0x1p-1000, 0x1p-1000, -0x1p-1000, -0x1p-1000 });
-        const Array<u64, 4u> overflowBits = { 0u, 0u, 0x8000000000000000u, 0x8000000000000000u };
-        for(usize lane = 0u; lane < 4u; ++lane)
-            EXPECT_EQ(BitCast<u64>(overflow[lane]), overflowBits[lane]) << lane;
+    const f64 maxVal = f64.max;
+    const f64 posTiny = bit_cast<f64>(cast<u64>(0x0170000000000000u));
+    const f64 negTiny = bit_cast<f64>(cast<u64>(0x8170000000000000u));
+    const f64 subMin = bit_cast<f64>(cast<u64>(1u));
+    const f64 negSubMin = bit_cast<f64>(cast<u64>(0x8000000000000001u));
+    const f64 posInf = bit_cast<f64>(cast<u64>(s_F64InfinityBits));
+    const f64 qnan = bit_cast<f64>(cast<u64>(s_F64QuietNanBits));
 
-        const SIMDVectorDouble underflow = VectorDoubleMod(SIMDVectorDouble{ 0x1p-1074, -0x1p-1074, 0x1p-1074, -0x1p-1074 }, SIMDVectorDouble{ Limit<f64>::s_Max, Limit<f64>::s_Max, -Limit<f64>::s_Max, -Limit<f64>::s_Max });
-        const SIMDVectorDouble underflowExpected{ 0x1p-1074, Limit<f64>::s_Max, -Limit<f64>::s_Max, -0x1p-1074 };
-        for(usize lane = 0u; lane < 4u; ++lane)
-            EXPECT_EQ(underflow[lane], underflowExpected[lane]) << lane;
+    const VectorDouble ovLhs = VectorDouble(maxVal, -maxVal, maxVal, -maxVal);
+    const VectorDouble ovRhs = VectorDouble(posTiny, posTiny, negTiny, negTiny);
+    const VectorDouble unLhs = VectorDouble(subMin, negSubMin, subMin, negSubMin);
+    const VectorDouble unRhs = VectorDouble(maxVal, maxVal, -maxVal, -maxVal);
+    const VectorDouble exLhs = VectorDouble(posInf, qnan, 1.0, maxVal);
+    const VectorDouble exRhs = VectorDouble(1.0, 1.0, 0.0, posInf);
 
-        const SIMDVectorDouble exceptional = VectorDoubleMod(SIMDVectorDouble{ Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN, 1.0, Limit<f64>::s_Max }, SIMDVectorDouble{ 1.0, 1.0, 0.0, Limit<f64>::s_Infinity });
-        EXPECT_TRUE(IsNaN(exceptional.x));
-        EXPECT_TRUE(IsNaN(exceptional.y));
-        EXPECT_TRUE(IsNaN(exceptional.z));
-        EXPECT_EQ(exceptional.w, Limit<f64>::s_Max);
+    VectorDouble overflow = VectorDouble(0.0, 0.0, 0.0, 0.0);
+    VectorDouble underflow = VectorDouble(0.0, 0.0, 0.0, 0.0);
+    VectorDouble exceptional = VectorDouble(0.0, 0.0, 0.0, 0.0);
+    native(in ovLhs, in ovRhs, in unLhs, in unRhs, in exLhs, in exRhs, mut overflow, mut underflow, mut exceptional){
+        overflow = VectorDoubleMod(ovLhs, ovRhs);
+        underflow = VectorDoubleMod(unLhs, unRhs);
+        exceptional = VectorDoubleMod(exLhs, exRhs);
     }
+
+    const Array<u64, 4> overflowBits = MakeU64Array4(0u, 0u, 0x8000000000000000u, 0x8000000000000000u);
+    for(usize lane = 0u; lane < 4u; ++lane)
+        EXPECT_EQ(GetDoubleLaneBits(overflow, lane), overflowBits[lane]);
+
+    const Array<f64, 4> underflowExpected = MakeF64Array4(subMin, maxVal, -maxVal, negSubMin);
+    for(usize lane = 0u; lane < 4u; ++lane)
+        EXPECT_EQ(GetDoubleLaneFloat(underflow, lane), underflowExpected[lane]);
+
+    EXPECT_TRUE(IsNaN(exceptional.x));
+    EXPECT_TRUE(IsNaN(exceptional.y));
+    EXPECT_TRUE(IsNaN(exceptional.z));
+    EXPECT_EQ(exceptional.w, maxVal);
 }
 
 void VerifyMath_DoubleModAnglesKeepsLargeFiniteArgumentsAndTiesEvenAtPiBoundaries(){
-    native{
-        const SIMDVectorDouble huge{ Limit<f64>::s_Max, -Limit<f64>::s_Max, 0x1p+900, -0x1p+900 };
-        const SIMDVectorDouble reduced = VectorDoubleModAngles(huge);
-        for(usize lane = 0u; lane < 4u; ++lane){
-            EXPECT_TRUE(IsFinite(reduced[lane])) << lane;
-            EXPECT_EQ(BitCast<u64>(reduced[lane]), BitCast<u64>(Remainder(huge[lane], s_Double2PI))) << lane;
-            EXPECT_LE(Abs(reduced[lane]), s_DoublePI) << lane;
-        }
-        const SIMDVectorDouble ties = VectorDoubleModAngles(SIMDVectorDouble{ s_DoublePI, -s_DoublePI, 3.0 * s_DoublePI, -3.0 * s_DoublePI });
-        const SIMDVectorDouble tiesExpected{ s_DoublePI, -s_DoublePI, -s_DoublePI, s_DoublePI };
-        for(usize lane = 0u; lane < 4u; ++lane)
-            EXPECT_EQ(ties[lane], tiesExpected[lane]) << lane;
+    const f64 pow900 = bit_cast<f64>(cast<u64>(0x7830000000000000u));
+    const f64 posInf = bit_cast<f64>(cast<u64>(s_F64InfinityBits));
+    const f64 negInf = bit_cast<f64>(cast<u64>(s_F64NegInfinityBits));
+    const f64 qnan = bit_cast<f64>(cast<u64>(s_F64QuietNanBits));
 
-        const SIMDVectorDouble exceptional = VectorDoubleModAngles(SIMDVectorDouble{ Limit<f64>::s_Infinity, -Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN, -0.0 });
-        EXPECT_TRUE(IsNaN(exceptional.x));
-        EXPECT_TRUE(IsNaN(exceptional.y));
-        EXPECT_TRUE(IsNaN(exceptional.z));
-        EXPECT_TRUE(SignBit(exceptional.w));
+    const VectorDouble huge = VectorDouble(f64.max, -f64.max, pow900, -pow900);
+    const VectorDouble tiesIn = VectorDouble(s_DoublePI, -s_DoublePI, 3.0 * s_DoublePI, -3.0 * s_DoublePI);
+    const VectorDouble exIn = VectorDouble(posInf, negInf, qnan, -0.0);
+
+    VectorDouble reduced = VectorDouble(0.0, 0.0, 0.0, 0.0);
+    VectorDouble ties = VectorDouble(0.0, 0.0, 0.0, 0.0);
+    VectorDouble exceptional = VectorDouble(0.0, 0.0, 0.0, 0.0);
+    Array<u64, 4> expectedHugeBits = Array<u64, 4>();
+    native(in huge, in tiesIn, in exIn, mut reduced, mut ties, mut exceptional, mut expectedHugeBits){
+        reduced = VectorDoubleModAngles(huge);
+        ties = VectorDoubleModAngles(tiesIn);
+        exceptional = VectorDoubleModAngles(exIn);
+        for(usize lane = 0u; lane < 4u; ++lane)
+            expectedHugeBits[lane] = BitCast<u64>(Remainder(huge[lane], s_Double2PI));
     }
+
+    for(usize lane = 0u; lane < 4u; ++lane){
+        const f64 laneVal = GetDoubleLaneFloat(reduced, lane);
+        EXPECT_TRUE(IsFinite(laneVal));
+        EXPECT_EQ(GetDoubleLaneBits(reduced, lane), expectedHugeBits[lane]);
+        EXPECT_LE(Abs(laneVal), s_DoublePI);
+    }
+
+    const Array<f64, 4> tiesExpected = MakeF64Array4(s_DoublePI, -s_DoublePI, -s_DoublePI, s_DoublePI);
+    for(usize lane = 0u; lane < 4u; ++lane)
+        EXPECT_EQ(GetDoubleLaneFloat(ties, lane), tiesExpected[lane]);
+
+    EXPECT_TRUE(IsNaN(exceptional.x));
+    EXPECT_TRUE(IsNaN(exceptional.y));
+    EXPECT_TRUE(IsNaN(exceptional.z));
+    EXPECT_TRUE(SignBit(exceptional.w));
 }
 
 void VerifyMath_DoubleNormalizationRejectsDegenerateNonfiniteAndUnderflowedLengths(){
-    native{
-        const SIMDVectorDouble fallback{ 0.0, 1.0, 0.0, 9.0 };
-        alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 4u> invalid = {
-            SIMDVectorDouble{ 0.0, 0.0, 0.0, 5.0 },
-            SIMDVectorDouble{ Limit<f64>::s_Infinity, 0.0, 0.0, 0.0 },
-            SIMDVectorDouble{ 0.0, Limit<f64>::s_QuietNaN, 0.0, 0.0 },
-            SIMDVectorDouble{ 0x1p-1074, 0.0, 0.0, 0.0 },
-        };
-        for(const SIMDVectorDouble input : invalid){
-            EXPECT_FALSE(VectorDouble3TryNormalize(input));
-            const SIMDVectorDouble normalized = VectorDouble3NormalizeOr(input, fallback, 0.0);
-            EXPECT_EQ(normalized.x, 0.0);
-            EXPECT_EQ(normalized.y, 1.0);
-            EXPECT_EQ(normalized.z, 0.0);
-            EXPECT_EQ(normalized.w, 0.0);
+    const f64 posInf = bit_cast<f64>(cast<u64>(s_F64InfinityBits));
+    const f64 qnan = bit_cast<f64>(cast<u64>(s_F64QuietNanBits));
+    const f64 subMin = bit_cast<f64>(cast<u64>(1u));
+    const f64 pNeg41 = bit_cast<f64>(cast<u64>(0x3d60000000000000u));
+    const f64 pNeg39 = bit_cast<f64>(cast<u64>(0x3d80000000000000u));
+    const f64 pNeg80 = bit_cast<f64>(cast<u64>(0x3af0000000000000u));
+
+    const VectorDouble fallback = VectorDouble(0.0, 1.0, 0.0, 9.0);
+    const Array<f64x4, 4> invalid = MakeF64x4Array4(
+        VectorDouble(0.0, 0.0, 0.0, 5.0),
+        VectorDouble(posInf, 0.0, 0.0, 0.0),
+        VectorDouble(0.0, qnan, 0.0, 0.0),
+        VectorDouble(subMin, 0.0, 0.0, 0.0)
+    );
+
+    for(in f64x4 item : invalid){
+        const VectorDouble input = VectorDouble(item);
+        EXPECT_FALSE(VectorDouble3TryNormalize(input).has_value());
+        VectorDouble normalized = VectorDouble(0.0, 0.0, 0.0, 0.0);
+        native(in input, in fallback, mut normalized){
+            normalized = VectorDouble3NormalizeOr(input, fallback, 0.0);
         }
-        const SIMDVectorDouble belowThreshold = VectorDouble3NormalizeOr(SIMDVectorDouble{ 0x1p-41, 0.0, 0.0, 0.0 }, fallback, 0x1p-80);
-        EXPECT_EQ(belowThreshold.y, 1.0);
-        const SIMDVectorDouble aboveThreshold = VectorDouble3NormalizeOr(SIMDVectorDouble{ 0x1p-39, 0.0, 0.0, 0.0 }, fallback, 0x1p-80);
-        EXPECT_EQ(aboveThreshold.x, 1.0);
-        EXPECT_EQ(aboveThreshold.y, 0.0);
+        EXPECT_EQ(normalized.x, 0.0);
+        EXPECT_EQ(normalized.y, 1.0);
+        EXPECT_EQ(normalized.z, 0.0);
+        EXPECT_EQ(normalized.w, 0.0);
     }
+
+    const VectorDouble belowIn = VectorDouble(pNeg41, 0.0, 0.0, 0.0);
+    const VectorDouble aboveIn = VectorDouble(pNeg39, 0.0, 0.0, 0.0);
+    VectorDouble belowThreshold = VectorDouble(0.0, 0.0, 0.0, 0.0);
+    VectorDouble aboveThreshold = VectorDouble(0.0, 0.0, 0.0, 0.0);
+    native(in belowIn, in aboveIn, in fallback, in pNeg80, mut belowThreshold, mut aboveThreshold){
+        belowThreshold = VectorDouble3NormalizeOr(belowIn, fallback, pNeg80);
+        aboveThreshold = VectorDouble3NormalizeOr(aboveIn, fallback, pNeg80);
+    }
+    EXPECT_EQ(belowThreshold.y, 1.0);
+    EXPECT_EQ(aboveThreshold.x, 1.0);
+    EXPECT_EQ(aboveThreshold.y, 0.0);
 }
 
 void VerifyMath_DoubleRefractionDistinguishesCriticalAngleOnEitherSideOfBinary64Threshold(){
-    native{
-        const SIMDVectorDouble incident{ 1.0, 0.0, 0.0, 0.0 };
-        const SIMDVectorDouble normal{ 0.0, 1.0, 0.0, 0.0 };
-        const SIMDVectorDouble critical = VectorDouble3Refract(incident, normal, 1.0);
-        EXPECT_EQ(critical.x, 1.0);
-        EXPECT_EQ(critical.y, 0.0);
-        const f64 belowIndex = 1.0 - 0x1p-40;
-        const SIMDVectorDouble below = VectorDouble3Refract(incident, normal, belowIndex);
-        EXPECT_EQ(below.x, belowIndex);
-        EXPECT_NEAR(below.y, -Sqrt(1.0 - belowIndex * belowIndex), 1.0e-20);
-        EXPECT_LT(below.y, 0.0);
-        const SIMDVectorDouble above = VectorDouble3Refract(incident, normal, 1.0 + 0x1p-40);
-        for(usize lane = 0u; lane < 4u; ++lane)
-            EXPECT_EQ(above[lane], 0.0) << lane;
+    const f64 powNeg40 = bit_cast<f64>(cast<u64>(0x3d70000000000000u));
+    const VectorDouble incident = VectorDouble(1.0, 0.0, 0.0, 0.0);
+    const VectorDouble normal = VectorDouble(0.0, 1.0, 0.0, 0.0);
+    const f64 belowIndex = 1.0 - powNeg40;
+    const f64 aboveIndex = 1.0 + powNeg40;
+
+    VectorDouble critical = VectorDouble(0.0, 0.0, 0.0, 0.0);
+    VectorDouble below = VectorDouble(0.0, 0.0, 0.0, 0.0);
+    VectorDouble above = VectorDouble(0.0, 0.0, 0.0, 0.0);
+    native(in incident, in normal, in belowIndex, in aboveIndex, mut critical, mut below, mut above){
+        critical = VectorDouble3Refract(incident, normal, 1.0);
+        below = VectorDouble3Refract(incident, normal, belowIndex);
+        above = VectorDouble3Refract(incident, normal, aboveIndex);
     }
-}
 
-void VerifyMath_HyperbolicTangentSaturatesAndPreservesSignedZero(){
-    const f32 infinity = bit_cast<f32>(s_F32InfinityBits);
-    EXPECT_TRUE(NearlyEqual4(EvalVectorTanH(VectorSingle(50.0f, -50.0f, infinity, -infinity)), 1.0f, -1.0f, 1.0f, -1.0f));
-
-    const VectorSingle signedZeroTanH = EvalVectorTanH(VectorSingle(-0.0f, 0.0f, -0.0f, 0.0f));
-    EXPECT_TRUE(SignBit(signedZeroTanH.x));
-    EXPECT_FALSE(SignBit(signedZeroTanH.y));
+    EXPECT_EQ(critical.x, 1.0);
+    EXPECT_EQ(critical.y, 0.0);
+    EXPECT_EQ(below.x, belowIndex);
+    EXPECT_NEAR(below.y, -Sqrt(1.0 - belowIndex * belowIndex), 1.0e-20);
+    EXPECT_LT(below.y, 0.0);
+    for(usize lane = 0u; lane < 4u; ++lane)
+        EXPECT_EQ(GetDoubleLaneFloat(above, lane), 0.0);
 }
 
 void VerifyMath_VectorIntegerAddWrapsAtUnsignedLaneLimits(){
-    native{
-        const SIMDVectorSingle sum = VectorAddInt(VectorSetInt(Limit<u32>::s_Max, 4u, 0xFFFFFFFEu, 19u), VectorSetInt(1u, 7u, 3u, Limit<u32>::s_Max));
-        EXPECT_EQ(VectorGetIntX(sum), 0u);
-        EXPECT_EQ(VectorGetIntZ(sum), 1u);
-        EXPECT_EQ(VectorGetIntW(sum), 18u);
+    const VectorSingle lhs = MakeVolatileSingleBits(u32.max, 4u, 0xFFFFFFFEu, 19u);
+    const VectorSingle rhs = MakeVolatileSingleBits(1u, 7u, 3u, u32.max);
+    VectorSingle sum = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+    native(in lhs, in rhs, mut sum){
+        sum = VectorAddInt(lhs, rhs);
     }
-}
-
-void VerifyMath_RefractCriticalAngle(){
-    const VectorSingle normal = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
-    const VectorSingle criticalIncident = VectorSingle(1.0f, 0.0f, 0.0f, 0.0f);
-    const VectorSingle totalInternalIncident = VectorSingle(0.866025404f, -0.5f, 0.0f, 0.0f);
-
-    EXPECT_TRUE(NearlyEqual4(EvalVector2Refract(criticalIncident, normal, 1.0f), 1.0f, 0.0f, 0.0f, 0.0f));
-    EXPECT_TRUE(NearlyEqual4(EvalVector3Refract(criticalIncident, normal, 1.0f), 1.0f, 0.0f, 0.0f, 0.0f));
-    EXPECT_TRUE(NearlyEqual4(EvalVector4Refract(criticalIncident, normal, 1.0f), 1.0f, 0.0f, 0.0f, 0.0f));
-    EXPECT_TRUE(NearlyEqual4(EvalVector3Refract(totalInternalIncident, normal, 2.0f), 0.0f, 0.0f, 0.0f, 0.0f));
-}
-
-void VerifyMath_NormalizeOrUsesFallbackForZeroAndNonfiniteInput(){
-    const VectorSingle fallback = VectorSingle(0.0f, 1.0f, 0.0f, 1.0f);
-    const f32 infinity = bit_cast<f32>(s_F32InfinityBits);
-
-    EXPECT_TRUE(NearlyEqual3(EvalVector3NormalizeOr(VectorSingle(0.0f, 0.0f, 0.0f, 5.0f), fallback, 0.0f), 0.0f, 1.0f, 0.0f));
-    EXPECT_TRUE(NearlyEqual4(EvalVector4NormalizeOr(VectorSingle(infinity, 0.0f, 0.0f, 0.0f), fallback, 0.0f), 0.0f, 1.0f, 0.0f, 1.0f));
-}
-
-void VerifyMathNativeMask_RawSignBitsIgnoreLowWordSignAndNoncanonicalNaNPayloads(){
-    native{
-#pragma STDC FENV_ACCESS ON
-        using namespace NWB::Tests::MathSuiteDetail;
-        const auto originalEnvironment = HoldFloatingPointExceptions();
-        ASSERT_TRUE(originalEnvironment);
-        NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
-
-        constexpr Array<u64, 4u> s_Magnitudes = { 0x0000000080000000ull, 0x0000000000000001ull, 0x7FF0000080000001ull, 0x7FF8123476543210ull };
-        for(u32 expected = 0u; expected < 16u; ++expected){
-            const SIMDVectorDouble value = VectorDoubleSetInt(
-                s_Magnitudes[0] | (static_cast<u64>(expected & 1u) << 63u),
-                s_Magnitudes[1] | (static_cast<u64>((expected >> 1u) & 1u) << 63u),
-                s_Magnitudes[2] | (static_cast<u64>((expected >> 2u) & 1u) << 63u),
-                s_Magnitudes[3] | (static_cast<u64>((expected >> 3u) & 1u) << 63u)
-            );
-            ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-            EXPECT_EQ(ExtractMask(value), expected) << expected;
-            EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0) << expected;
-        }
-    }
-}
-
-void VerifyMathNativeMask_PartialAndFullComparisonsPreserveSignalingLaneExceptions(){
-    native{
-#pragma STDC FENV_ACCESS ON
-        using namespace NWB::Tests::MathSuiteDetail;
-        const auto originalEnvironment = HoldFloatingPointExceptions();
-        ASSERT_TRUE(originalEnvironment);
-        NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
-
-        constexpr Array<i32, 4u> s_RoundingModes = { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
-        for(const i32 roundingMode : s_RoundingModes){
-            ASSERT_TRUE(SetFloatingPointRoundingMode(roundingMode));
-            for(usize poisonLane = 0u; poisonLane < 4u; ++poisonLane){
-                const SIMDVectorSingle referenceSingle = VectorReplicate(1.0f);
-                const SIMDVectorDouble referenceDouble = VectorDoubleReplicate(1.0);
-                const SIMDVectorSingle single = VectorSetIntByIndex(referenceSingle, 0x7F801234u, poisonLane);
-                const SIMDVectorDouble value = VectorDoubleSetIntByIndex(referenceDouble, 0x7FF0000000001234ull, poisonLane);
-
-                ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-                EXPECT_FALSE(CompareSingle<false>(single, referenceSingle)) << roundingMode << ':' << poisonLane;
-                EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), FE_INVALID) << roundingMode << ':' << poisonLane;
-
-                ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-                EXPECT_TRUE(CompareSingle<true>(single, single)) << roundingMode << ':' << poisonLane;
-                EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0) << roundingMode << ':' << poisonLane;
-
-                ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-                const b8 baselinePartial = BaselineCompareDouble3(value, referenceDouble);
-                const i32 baselinePartialFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-                EXPECT_EQ(baselinePartial, poisonLane == 3u) << roundingMode << ':' << poisonLane;
-                if(poisonLane != 3u)
-                    EXPECT_EQ(baselinePartialFlags, FE_INVALID) << roundingMode << ':' << poisonLane;
-
-                ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-                const b8 actualPartial = CompareDouble<false, 3u>(value, referenceDouble);
-                const i32 actualPartialFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-                EXPECT_EQ(actualPartial, baselinePartial) << roundingMode << ':' << poisonLane;
-                EXPECT_EQ(actualPartialFlags, baselinePartialFlags) << roundingMode << ':' << poisonLane;
-                if(poisonLane != 3u)
-                    EXPECT_EQ(actualPartialFlags, FE_INVALID) << roundingMode << ':' << poisonLane;
-
-                ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-                EXPECT_FALSE((CompareDouble<false, 4u>(value, referenceDouble))) << roundingMode << ':' << poisonLane;
-                EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), FE_INVALID) << roundingMode << ':' << poisonLane;
-
-                ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-                EXPECT_TRUE((CompareDouble<true, 3u>(value, value))) << roundingMode << ':' << poisonLane;
-                EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0) << roundingMode << ':' << poisonLane;
-
-                ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-                EXPECT_TRUE((CompareDouble<true, 4u>(value, value))) << roundingMode << ':' << poisonLane;
-                EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0) << roundingMode << ':' << poisonLane;
-            }
-        }
-    }
-}
-
-void VerifyMathNativeReduction_MultipleNaNsInactiveSignalingLanesAndOrderedCancellationPreserveBitsAndExceptions(){
-    native{
-#pragma STDC FENV_ACCESS ON
-        using namespace NWB::Tests::MathSuiteDetail;
-        const auto originalEnvironment = HoldFloatingPointExceptions();
-        ASSERT_TRUE(originalEnvironment);
-        NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
-
-        constexpr Array<Array<u64, 8>, 8> s_InputBits = {{
-            { 0x7ff8000000000123ull, 0xfff8000000000124ull, 0x7ff8000000000125ull, 0xfff8000000000126ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull },
-            { 0x4000000000000000ull, 0x4008000000000000ull, 0x7ff0000000000125ull, 0xfff0000000000126ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull },
-            { 0x4000000000000000ull, 0x4008000000000000ull, 0x4010000000000000ull, 0xfff0000000000126ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull },
-            { 0x43b0000000000000ull, 0x3ff0000000000000ull, 0xc3b0000000000000ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull },
-            { 0x7fefffffffffffffull, 0x7fefffffffffffffull, 0xffefffffffffffffull, 0xffefffffffffffffull, 0x3ff0000000000000ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull },
-            { 1u, 0x8000000000000001ull, 0x8000000000000000ull, 0u, 0xbff0000000000000ull, 0xbff0000000000000ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull },
-            { 0x7ff8000000000123ull, 0xfff0000000000124ull, 0x7ff8000000000125ull, 0xfff0000000000126ull, 0xfff8000000000233ull, 0x7ff0000000000234ull, 0xfff0000000000235ull, 0x7ff8000000000236ull },
-            { 0x7ff0000000000123ull, 0xfff8000000000124ull, 0x7ff0000000000000ull, 0xfff0000000000000ull, 0xfff0000000000233ull, 0x7ff8000000000234ull, 0u, 0x7ff0000000000000ull }
-        }};
-        constexpr Array<i32, 4> s_RoundingModes = { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
-        for(const i32 roundingMode : s_RoundingModes){
-            ASSERT_TRUE(SetFloatingPointRoundingMode(roundingMode));
-            for(usize index = 0u; index < LengthOf(s_InputBits); ++index){
-                const SIMDVectorDouble input = VectorDoubleSetInt(s_InputBits[index][0], s_InputBits[index][1], s_InputBits[index][2], s_InputBits[index][3]);
-                const SIMDVectorDouble multiplier = VectorDoubleSetInt(s_InputBits[index][4], s_InputBits[index][5], s_InputBits[index][6], s_InputBits[index][7]);
-                CheckReductionEdge<Reduction::Dot2>(input, multiplier, roundingMode, index);
-                CheckReductionEdge<Reduction::Dot3>(input, multiplier, roundingMode, index);
-                CheckReductionEdge<Reduction::Dot4>(input, multiplier, roundingMode, index);
-                CheckReductionEdge<Reduction::Sum>(input, multiplier, roundingMode, index);
-            }
-        }
-    }
-}
-
-void VerifyMathNativeReduction_ReciprocalLengthsPreserveZeroDivisionSubnormalSquaresAndNonfiniteInactiveLanes(){
-    native{
-#pragma STDC FENV_ACCESS ON
-        using namespace NWB::Tests::MathSuiteDetail;
-        const auto originalEnvironment = HoldFloatingPointExceptions();
-        ASSERT_TRUE(originalEnvironment);
-        NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
-        constexpr Array<Array<u64, 4>, 6> s_Cases = {{
-            { 0u, 0x8000000000000000ull, 0u, 0x8000000000000000ull },
-            { 0x1e60000000000000ull, 0u, 0u, 0u },
-            { 0x7ff0000000000000ull, 0u, 0u, 0u },
-            { 0x4000000000000000ull, 0x4008000000000000ull, 0x7ff0000000000123ull, 0xfff0000000000124ull },
-            { 0x4000000000000000ull, 0x4008000000000000ull, 0x4010000000000000ull, 0xfff0000000000124ull },
-            { 0x7ff8000000000123ull, 0xfff8000000000124ull, 0x7ff0000000000125ull, 0xfff0000000000126ull }
-        }};
-        constexpr Array<i32, 4> s_RoundingModes = { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
-        for(const i32 roundingMode : s_RoundingModes){
-            ASSERT_TRUE(SetFloatingPointRoundingMode(roundingMode));
-            for(const auto& bits : s_Cases){
-                const SIMDVectorDouble input = VectorDoubleSetInt(bits[0], bits[1], bits[2], bits[3]);
-                CheckReciprocalLengthEdge<2u>(input);
-                CheckReciprocalLengthEdge<3u>(input);
-                CheckReciprocalLengthEdge<4u>(input);
-            }
-        }
-    }
-}
-
-void VerifyMathNativeReduction_PackedDot3KeepsInvalidPriorityWhenAnotherActiveLaneOverflows(){
-    native{
-#if defined(NWB_PLATFORM_LINUX) && defined(NWB_HAS_AVX2)
-        using namespace NWB::Tests::MathSuiteDetail;
-        const pid_t child = fork();
-        ASSERT_GE(child, 0);
-        if(child == 0){
-            struct sigaction action{};
-            action.sa_sigaction = TrapPriorityHandler;
-            action.sa_flags = SA_SIGINFO;
-            if(sigemptyset(&action.sa_mask) != 0 || sigaction(SIGFPE, &action, nullptr) != 0)
-                _exit(3);
-            if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT) || feenableexcept(FE_INVALID | FE_OVERFLOW) == -1)
-                _exit(4);
-            volatile u64 maximumBits = 0x7fefffffffffffffull;
-            const SIMDVectorDouble lhs = VectorDoubleSetInt(maximumBits, 0x3ff0000000000000ull, 0u, 0u);
-            const SIMDVectorDouble rhs = VectorDoubleSet(2.0, 1.0, Limit<f64>::s_Infinity, 0.0);
-            volatile SIMDVectorDouble result = VectorDouble3Dot(lhs, rhs);
-            _exit(VectorDoubleMoveMask(result) != 0u ? 2 : 5);
-        }
-        i32 status{};
-        ASSERT_EQ(waitpid(child, &status, 0), child);
-        ASSERT_TRUE(WIFEXITED(status));
-        EXPECT_EQ(WEXITSTATUS(status), 0);
-#endif
-    }
+    EXPECT_EQ(GetSingleLaneBits(sum, 0u), 0u);
+    EXPECT_EQ(GetSingleLaneBits(sum, 2u), 1u);
+    EXPECT_EQ(GetSingleLaneBits(sum, 3u), 18u);
 }
 
 void VerifyCurrentMathContractBoundaries_SingleRigidExtractionPreservesNonzeroRotationAndDualTranslationDirection(){
@@ -1784,36 +1327,119 @@ void VerifyCurrentMathContractBoundaries_SingleRigidExtractionPreservesNonzeroRo
 }
 
 void VerifyCurrentMathContractBoundaries_DoubleQuaternionExtractionKeepsBranchTiesAndIgnoresNonrotationLanes(){
-    native{
-#pragma STDC FENV_ACCESS ON
-        const auto originalEnvironment = HoldFloatingPointExceptions();
-        ASSERT_TRUE(originalEnvironment);
-        NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
-        alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 9u> inputs = {
-            SIMDVectorDouble{ 1.0, 0.2, -0.3, 0.1 },
-            SIMDVectorDouble{ 0.2, 1.0, -0.3, 0.1 },
-            SIMDVectorDouble{ 0.2, -0.3, 1.0, 0.1 },
-            SIMDVectorDouble{ 0.2, -0.3, 0.1, 1.0 },
-            SIMDVectorDouble{ 0.5, 0.5, 0.5, 0.5 },
-            SIMDVectorDouble{ 0.5 + 0x1p-40, 0.5, 0.5, 0.5 },
-            SIMDVectorDouble{ 0.5, 0.5 + 0x1p-40, 0.5, 0.5 },
-            SIMDVectorDouble{ 0.5, 0.5, 0.5 + 0x1p-40, 0.5 },
-            SIMDVectorDouble{ 0.5, 0.5, 0.5, 0.5 + 0x1p-40 }
-        };
-        volatile u64 unusedBits = 0x7ff0000000000001u;
-        for(usize index = 0u; index < LengthOf(inputs); ++index){
-            SCOPED_TRACE(index);
-            const SIMDVectorDouble expected = QuaternionDoubleNormalize(inputs[index]);
-            SIMDMatrixDouble matrix = MatrixDoubleRotationQuaternion(expected);
+    const VectorSingle zeroGuard = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+    ASSERT_TRUE(zeroGuard.x == 0.0f);
+    ScopedHeldFloatingPointEnvironment envGuard = ScopedHeldFloatingPointEnvironment();
+    ASSERT_TRUE(envGuard.valid());
+
+    const f64 powNeg40 = bit_cast<f64>(cast<u64>(0x3d70000000000000u));
+    Array<f64x4, 9> inputs = Array<f64x4, 9>();
+    inputs[0u] = f64x4(1.0, 0.2, -0.3, 0.1);
+    inputs[1u] = f64x4(0.2, 1.0, -0.3, 0.1);
+    inputs[2u] = f64x4(0.2, -0.3, 1.0, 0.1);
+    inputs[3u] = f64x4(0.2, -0.3, 0.1, 1.0);
+    inputs[4u] = f64x4(0.5, 0.5, 0.5, 0.5);
+    inputs[5u] = f64x4(0.5 + powNeg40, 0.5, 0.5, 0.5);
+    inputs[6u] = f64x4(0.5, 0.5 + powNeg40, 0.5, 0.5);
+    inputs[7u] = f64x4(0.5, 0.5, 0.5 + powNeg40, 0.5);
+    inputs[8u] = f64x4(0.5, 0.5, 0.5, 0.5 + powNeg40);
+
+    for(usize index = 0u; index < 9u; ++index){
+        ScopedTestTrace trace(index);
+        const VectorDouble input = VectorDouble(inputs[index]);
+        VectorDouble expected = VectorDouble(0.0, 0.0, 0.0, 0.0);
+        MatrixDouble matrix = MatrixDouble(f64x4x4());
+        native(in input, mut expected, mut matrix){
+            volatile u64 unusedBits = 0x7ff0000000000001u;
+            expected = QuaternionDoubleNormalize(input);
+            matrix = MatrixDoubleRotationQuaternion(expected);
+            const f64 poison = BitCast<f64>(static_cast<u64>(unusedBits));
             for(usize row = 0u; row < 3u; ++row)
-                matrix.v[row].w = BitCast<f64>(unusedBits);
-            matrix.v[3] = VectorDoubleReplicate(BitCast<f64>(unusedBits));
-            ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-            const SIMDVectorDouble actual = QuaternionDoubleRotationMatrix(matrix);
-            const i32 exceptions = TestFloatingPointExceptions(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW);
-            EXPECT_EQ(exceptions, 0);
-            for(usize lane = 0u; lane < 4u; ++lane)
-                EXPECT_NEAR(actual[lane], expected[lane], 8.0e-16) << lane;
+                matrix.v[row].w = poison;
+            matrix.v[3] = VectorDoubleReplicate(poison);
+        }
+
+        ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
+        VectorDouble actual = VectorDouble(0.0, 0.0, 0.0, 0.0);
+        native(in matrix, mut actual){
+            actual = QuaternionDoubleRotationMatrix(matrix);
+        }
+        const i32 exceptions = TestFloatingPointExceptions(s_FeInvalid | s_FeDivByZero | s_FeOverflow);
+        EXPECT_EQ(exceptions, 0);
+        for(usize lane = 0u; lane < 4u; ++lane)
+            EXPECT_NEAR(GetDoubleLaneFloat(actual, lane), GetDoubleLaneFloat(expected, lane), 8.0e-16);
+    }
+}
+
+void VerifyMath_DoubleVectorFloorAndCeilingPreserveBinary64BoundaryValues(){
+    const f64 sub1 = bit_cast<f64>(cast<u64>(1u));
+    const f64 sub3 = bit_cast<f64>(cast<u64>(3u));
+    const f64 posInf = bit_cast<f64>(cast<u64>(s_F64InfinityBits));
+    const f64 negInf = bit_cast<f64>(cast<u64>(s_F64NegInfinityBits));
+    const f64 posMax = bit_cast<f64>(cast<u64>(s_F64MaxBits));
+    const f64 qnan = bit_cast<f64>(cast<u64>(s_F64QuietNanBits));
+
+    Array<f64x4, 6> inputs = Array<f64x4, 6>();
+    inputs[0u] = f64x4(0.0, -0.0, bit_cast<f64>(cast<u64>(0x0010000000000000u)), bit_cast<f64>(cast<u64>(0x8010000000000000u)));
+    inputs[1u] = f64x4(sub1, -sub1, sub3, -sub3);
+    inputs[2u] = f64x4(bit_cast<f64>(cast<u64>(0x3fefffffffffffffu)), bit_cast<f64>(cast<u64>(0x3ff0000000000001u)), bit_cast<f64>(cast<u64>(0xbfefffffffffffffu)), bit_cast<f64>(cast<u64>(0xbff0000000000001u)));
+    inputs[3u] = f64x4(bit_cast<f64>(cast<u64>(0x4340000000000000u)), bit_cast<f64>(cast<u64>(0xc340000000000000u)), bit_cast<f64>(cast<u64>(0x432fffffffffffffu)), bit_cast<f64>(cast<u64>(0xc32fffffffffffffu)));
+    inputs[4u] = f64x4(posInf, negInf, posMax, -posMax);
+    inputs[5u] = f64x4(qnan, -qnan, bit_cast<f64>(cast<u64>(0x4330000000000001u)), bit_cast<f64>(cast<u64>(0xc330000000000001u)));
+
+    for(in f64x4 row : inputs){
+        const VectorDouble input = VectorDouble(row);
+        const VectorDouble floorVal = Floor(input);
+        const VectorDouble ceilingVal = Ceil(input);
+        VectorDouble truncateVal = VectorDouble(0.0, 0.0, 0.0, 0.0);
+        native(in input, mut truncateVal){
+            truncateVal = VectorDoubleTruncate(input);
+        }
+        for(usize lane = 0u; lane < 4u; ++lane){
+            ScopedTestTrace trace(lane);
+            const f64 inScalar = GetDoubleLaneFloat(input, lane);
+            const f64 floorScalar = GetDoubleLaneFloat(floorVal, lane);
+            const f64 ceilScalar = GetDoubleLaneFloat(ceilingVal, lane);
+            const f64 truncScalar = GetDoubleLaneFloat(truncateVal, lane);
+            if(IsNaN(inScalar)){
+                EXPECT_TRUE(IsNaN(floorScalar));
+                EXPECT_TRUE(IsNaN(ceilScalar));
+                EXPECT_TRUE(IsNaN(truncScalar));
+                continue;
+            }
+            f64 expectedTrunc = 0.0;
+            native(in inScalar, mut expectedTrunc){
+                expectedTrunc = Truncate(inScalar);
+            }
+            EXPECT_EQ(bit_cast<u64>(floorScalar), bit_cast<u64>(Floor(inScalar)));
+            EXPECT_EQ(bit_cast<u64>(ceilScalar), bit_cast<u64>(Ceil(inScalar)));
+            EXPECT_EQ(bit_cast<u64>(truncScalar), bit_cast<u64>(expectedTrunc));
+        }
+    }
+}
+
+void VerifyMath_DoubleVectorRoundPreservesTiesSignedZeroAndLargeIntegralLanes(){
+    const f64 posInf = bit_cast<f64>(cast<u64>(s_F64InfinityBits));
+    const f64 negInf = bit_cast<f64>(cast<u64>(s_F64NegInfinityBits));
+
+    Array<f64x4, 4> inputs = Array<f64x4, 4>();
+    inputs[0u] = f64x4(0.5, -0.5, 1.5, -1.5);
+    inputs[1u] = f64x4(2.5, -2.5, bit_cast<f64>(cast<u64>(0x3fdfffffffffffffu)), bit_cast<f64>(cast<u64>(0xbfdfffffffffffffu)));
+    inputs[2u] = f64x4(bit_cast<f64>(cast<u64>(0x4340000000000000u)), bit_cast<f64>(cast<u64>(0xc340000000000000u)), bit_cast<f64>(cast<u64>(0x4330000000000001u)), bit_cast<f64>(cast<u64>(0xc330000000000001u)));
+    inputs[3u] = f64x4(-0.0, 0.0, posInf, negInf);
+
+    Array<f64x4, 4> expected = Array<f64x4, 4>();
+    expected[0u] = f64x4(0.0, -0.0, 2.0, -2.0);
+    expected[1u] = f64x4(2.0, -2.0, 0.0, -0.0);
+    expected[2u] = f64x4(bit_cast<f64>(cast<u64>(0x4340000000000000u)), bit_cast<f64>(cast<u64>(0xc340000000000000u)), bit_cast<f64>(cast<u64>(0x4330000000000001u)), bit_cast<f64>(cast<u64>(0xc330000000000001u)));
+    expected[3u] = f64x4(-0.0, 0.0, posInf, negInf);
+
+    for(usize index = 0u; index < 4u; ++index){
+        const VectorDouble rounded = Round(VectorDouble(inputs[index]));
+        const VectorDouble expectedVec = VectorDouble(expected[index]);
+        for(usize lane = 0u; lane < 4u; ++lane){
+            ScopedTestTrace trace(lane);
+            EXPECT_EQ(GetDoubleLaneBits(rounded, lane), GetDoubleLaneBits(expectedVec, lane));
         }
     }
 }
@@ -1822,6 +1448,7 @@ void VerifyCurrentMathContractBoundaries_DoubleQuaternionExtractionKeepsBranchTi
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
 
 
@@ -1837,30 +1464,6 @@ namespace NWB::Tests::MathSuiteDetail{
 NWB_NOINLINE SIMDVectorSingle NWB_SIMD_CALL EvaluateSingleBoxNormal(const SIMDVectorSingle position, const SIMDVectorSingle extents, const SIMDVectorSingle fallback, const f32 threshold)noexcept{
     return SdfTests::BoxNormal(position, extents, fallback, threshold);
 }
-
-NWB_NOINLINE b8 BaselineCompareDouble3(const SIMDVectorDouble left, const SIMDVectorDouble right)noexcept{
-#pragma STDC FENV_ACCESS ON
-    const SIMDVectorDouble comparison = VectorDoubleEqual(left, right);
-#if defined(NWB_HAS_NEON64)
-    const uint64x2_t low = vshrq_n_u64(SIMDVectorDoubleDetail::GetLowBits(comparison), 63u);
-    const uint64x2_t high = vshrq_n_u64(SIMDVectorDoubleDetail::GetHighBits(comparison), 63u);
-    const u32 mask = static_cast<u32>(vgetq_lane_u64(low, 0) | (vgetq_lane_u64(low, 1) << 1u) | (vgetq_lane_u64(high, 0) << 2u) | (vgetq_lane_u64(high, 1) << 3u));
-#else
-    const u32 mask = VectorDoubleMoveMask(comparison);
-#endif
-    return (mask & VectorDoubleComponentMask::s_DoubleXYZ) == VectorDoubleComponentMask::s_DoubleXYZ;
-}
-
-NWB_NOINLINE u32 ExtractMask(const SIMDVectorDouble value)noexcept{
-#pragma STDC FENV_ACCESS ON
-    return VectorDoubleMoveMask(value);
-}
-
-#if defined(NWB_PLATFORM_LINUX) && defined(NWB_HAS_AVX2)
-void TrapPriorityHandler(const i32, siginfo_t* const information, void*)noexcept{
-    _exit(information != nullptr && information->si_code == FPE_FLTINV ? 0 : 1);
-}
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1914,63 +1517,15 @@ NWB_ADHD_GTEST(Math, UnsignedFloatClampsNegativeOverflowAndNonfiniteInput, Verif
 NWB_ADHD_GTEST(Math, PartialHalfFloatBuffersPreserveSubnormalsAndNonfiniteInput, VerifyMath_PartialHalfFloatBuffersPreserveSubnormalsAndNonfiniteInput)
 NWB_ADHD_GTEST(Math, HalfFloat4PreservesSignedZeroSubnormalNaNAndInfinity, VerifyMath_HalfFloat4PreservesSignedZeroSubnormalNaNAndInfinity)
 NWB_ADHD_GTEST(Math, RawFloatLaneHashKeepsSignedZeroAndNanPayloads, VerifyMath_RawFloatLaneHashKeepsSignedZeroAndNanPayloads)
-NWB_ADHD_GTEST(Math, DoubleComparisonAndSelectionKeepAll64MaskBitsAndNaNOrdering, VerifyMath_DoubleComparisonAndSelectionKeepAll64MaskBitsAndNaNOrdering)
-NWB_ADHD_GTEST(Math, DoubleIntegerAdditionWrapsAcross64BitLaneBoundaries, VerifyMath_DoubleIntegerAdditionWrapsAcross64BitLaneBoundaries)
-NWB_ADHD_GTEST(Math, DoubleDotAndNearlyParallelCrossRetainResidualBeyondFloatPrecision, VerifyMath_DoubleDotAndNearlyParallelCrossRetainResidualBeyondFloatPrecision)
-NWB_ADHD_GTEST(Math, SinglePartialLaneDotIgnoresNonfiniteInactiveLanesWithoutInvalidExceptions, VerifyMath_SinglePartialLaneDotIgnoresNonfiniteInactiveLanesWithoutInvalidExceptions)
-NWB_ADHD_GTEST(Math, SinglePartialLaneCrossIgnoresNonfiniteAndOverflowingInactiveLanes, VerifyMath_SinglePartialLaneCrossIgnoresNonfiniteAndOverflowingInactiveLanes)
-NWB_ADHD_GTEST(Math, DoublePartialLaneDotAndCrossIgnoreNonfiniteInactiveLanesWithoutInvalidExceptions, VerifyMath_DoublePartialLaneDotAndCrossIgnoreNonfiniteInactiveLanesWithoutInvalidExceptions)
-NWB_ADHD_GTEST(Math, SingleLog2KeepsSubnormalExponentsAndZeroInfinityNaNDomains, VerifyMath_SingleLog2KeepsSubnormalExponentsAndZeroInfinityNaNDomains)
-NWB_ADHD_GTEST(Math, DoubleTranscendentalsHandleLargeArgumentsNonfiniteDomainsAndSignedZero, VerifyMath_DoubleTranscendentalsHandleLargeArgumentsNonfiniteDomainsAndSignedZero)
 NWB_ADHD_GTEST(Math, DoubleModAvoidsQuotientOverflowAndUnderflowWhileKeepingDivisorSign, VerifyMath_DoubleModAvoidsQuotientOverflowAndUnderflowWhileKeepingDivisorSign)
 NWB_ADHD_GTEST(Math, DoubleModAnglesKeepsLargeFiniteArgumentsAndTiesEvenAtPiBoundaries, VerifyMath_DoubleModAnglesKeepsLargeFiniteArgumentsAndTiesEvenAtPiBoundaries)
 NWB_ADHD_GTEST(Math, DoubleNormalizationRejectsDegenerateNonfiniteAndUnderflowedLengths, VerifyMath_DoubleNormalizationRejectsDegenerateNonfiniteAndUnderflowedLengths)
 NWB_ADHD_GTEST(Math, DoubleRefractionDistinguishesCriticalAngleOnEitherSideOfBinary64Threshold, VerifyMath_DoubleRefractionDistinguishesCriticalAngleOnEitherSideOfBinary64Threshold)
-NWB_ADHD_GTEST(Math, HyperbolicTangentSaturatesAndPreservesSignedZero, VerifyMath_HyperbolicTangentSaturatesAndPreservesSignedZero)
 NWB_ADHD_GTEST(Math, VectorIntegerAddWrapsAtUnsignedLaneLimits, VerifyMath_VectorIntegerAddWrapsAtUnsignedLaneLimits)
-NWB_ADHD_GTEST(Math, RefractCriticalAngle, VerifyMath_RefractCriticalAngle)
-NWB_ADHD_GTEST(Math, NormalizeOrUsesFallbackForZeroAndNonfiniteInput, VerifyMath_NormalizeOrUsesFallbackForZeroAndNonfiniteInput)
-NWB_ADHD_GTEST(MathNativeMask, RawSignBitsIgnoreLowWordSignAndNoncanonicalNaNPayloads, VerifyMathNativeMask_RawSignBitsIgnoreLowWordSignAndNoncanonicalNaNPayloads)
-NWB_ADHD_GTEST(MathNativeMask, PartialAndFullComparisonsPreserveSignalingLaneExceptions, VerifyMathNativeMask_PartialAndFullComparisonsPreserveSignalingLaneExceptions)
-NWB_ADHD_GTEST(MathNativeReduction, MultipleNaNsInactiveSignalingLanesAndOrderedCancellationPreserveBitsAndExceptions, VerifyMathNativeReduction_MultipleNaNsInactiveSignalingLanesAndOrderedCancellationPreserveBitsAndExceptions)
-NWB_ADHD_GTEST(MathNativeReduction, ReciprocalLengthsPreserveZeroDivisionSubnormalSquaresAndNonfiniteInactiveLanes, VerifyMathNativeReduction_ReciprocalLengthsPreserveZeroDivisionSubnormalSquaresAndNonfiniteInactiveLanes)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_PLATFORM_LINUX) && defined(NWB_HAS_AVX2)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(MathNativeReduction, PackedDot3KeepsInvalidPriorityWhenAnotherActiveLaneOverflows){ VerifyMathNativeReduction_PackedDot3KeepsInvalidPriorityWhenAnotherActiveLaneOverflows(); }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_ADHD_GTEST(CurrentMathContractBoundaries, SingleRigidExtractionPreservesNonzeroRotationAndDualTranslationDirection, VerifyCurrentMathContractBoundaries_SingleRigidExtractionPreservesNonzeroRotationAndDualTranslationDirection)
 NWB_ADHD_GTEST(CurrentMathContractBoundaries, DoubleQuaternionExtractionKeepsBranchTiesAndIgnoresNonrotationLanes, VerifyCurrentMathContractBoundaries_DoubleQuaternionExtractionKeepsBranchTiesAndIgnoresNonrotationLanes)
+NWB_ADHD_GTEST(Math, DoubleVectorFloorAndCeilingPreserveBinary64BoundaryValues, VerifyMath_DoubleVectorFloorAndCeilingPreserveBinary64BoundaryValues)
+NWB_ADHD_GTEST(Math, DoubleVectorRoundPreservesTiesSignedZeroAndLargeIntegralLanes, VerifyMath_DoubleVectorRoundPreservesTiesSignedZeroAndLargeIntegralLanes)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

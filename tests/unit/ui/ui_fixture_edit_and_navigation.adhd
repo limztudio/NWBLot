@@ -1,0 +1,628 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/gtest_macros.adhd>
+#include "ui_fixture_widget_base.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/font_fixture.adhd.h>
+#include <tests/unit/ui/fixture_text_shaping.adhd.h>
+#include <tests/unit/ui/name_cases.adhd.h>
+#include <tests/unit/ui/native_input.adhd.h>
+
+#include <impl/ecs_ui/toolkit/edit/grapheme.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/model.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
+#include <impl/ecs_ui/toolkit/input/router.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/edit_box.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/edit_caret_geometry.adhd.h>
+
+#include <global/filesystem.h>
+#include <global/simdmath.h>
+#include <global/simplemath.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiEditCaretTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Impl::Ui;
+
+inline constexpr f32 s_CaretGlyphAdvance = 10.0f;
+
+namespace ShaperFault = ::__hidden_ui_glyph_sdf_tests::UiFixtureShaperFault;
+
+class CaretShaper final : public ITextShaper{
+public:
+    explicit CaretShaper(Core::Alloc::GlobalArena& arena)noexcept : m_arena(arena){}
+    virtual ~CaretShaper()noexcept override = default;
+
+
+public:
+    [[nodiscard]] virtual Expected<ShapedRun, TextLayoutStatus::Enum> shape(const ShapeRequest& request)override;
+
+
+public:
+    f32 scalarAdvance = s_CaretGlyphAdvance;
+    ShaperFault::Enum fault = ShaperFault::None;
+    b8 variedHeight = false;
+    b8 zeroAdvance = false;
+
+
+private:
+    Core::Alloc::GlobalArena& m_arena;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class EditCaretFixture : public testing::Test{
+public:
+    EditCaretFixture();
+
+
+public:
+    [[nodiscard]] Expected<TextLayout, TextLayoutStatus::Enum> layout(const StringView text, const TextDirection::Enum direction = TextDirection::LeftToRight){
+        return m_builder.layout({ .text = text, .fontSize = 16.0f, .direction = direction });
+    }
+    [[nodiscard]] b8 identityMapping(StringView text);
+    [[nodiscard]] b8 adopt(StringView text, usize committedBytes, EditTextMode::Enum mode = EditTextMode::Multiline);
+    [[nodiscard]] b8 adoptText(const StringView text, const EditTextMode::Enum mode = EditTextMode::Multiline){
+        return identityMapping(text) && adopt(text, text.size(), mode);
+    }
+    void expectCaret(usize byte, f32 x, f32 y, f32 height = 12.0f)const;
+    void expectRange(EditBoxRange range, u32 line, Rect expected, f32 cap = 1.0f)const;
+
+
+public:
+    Core::Alloc::GlobalArena m_arena;
+    CaretShaper m_shaper;
+    TextLayoutBuilder m_builder;
+    EditCaretGeometry m_geometry;
+    PaintVector<EditCaretMapping> m_mapping;
+    EditBoundaryVector m_boundaries;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiEditTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class EditFixture : public testing::Test{
+public:
+    EditFixture()
+        : m_arena(Name(NWB::Tests::UiCases::s_UiEditFixture))
+        , m_model(m_arena)
+    {}
+
+
+public:
+    Core::Alloc::GlobalArena m_arena;
+    Impl::Ui::EditModel m_model;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiHorizontalNavigationTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Impl::Ui;
+
+HitTarget Part(const HitTarget& host)noexcept;
+PopupScope Popup(const HitTarget& owner, u64 openGeneration = 7u)noexcept;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class HorizontalNavigationFixture : public UiTestSupport::RouterTestFixture{
+public:
+    HorizontalNavigationFixture();
+
+
+public:
+    [[nodiscard]] InputRoutingResult keyDown(Core::Key::Enum key, b8 repeat = false);
+    [[nodiscard]] InputRoutingResult keyUp(Core::Key::Enum key);
+    void press(Core::Key::Enum key);
+    void focusTarget(usize index = 0u);
+    [[nodiscard]] b8 publish(usize count = 2u, Span<const PopupScope> popups = {});
+    [[nodiscard]] Expected<ControlAction> take(usize index = 0u)noexcept;
+    void bindEditor(usize hostIndex = 0u)noexcept;
+
+
+public:
+    Array<HitTarget, 3u> m_targets;
+    u64 m_generation = 0u;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiMultilineViewTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace Impl;
+using namespace Impl::Ui;
+using namespace UiWidgetTests;
+
+inline constexpr AStringView s_MultilineViewFontPath = "tests/ui/widgets/multiline_view/font";
+inline constexpr AStringView s_MultilineViewSkinPath = "tests/ui/widgets/multiline_view/skin";
+inline constexpr Rect s_MultilineViewViewport{ 0.0f, 0.0f, 500.0f, 500.0f };
+
+using NWB::Tests::UiFixtureText::FixtureShaper;
+
+void ExpectPlacement(const EditBoxPlacement& actual, const EditBoxPlacement& expected);
+void CollectSolidRects(const DrawSnapshot& snapshot, const Color& color, PaintVector<Rect>& output);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class MultilineViewFixture : public testing::Test{
+public:
+    MultilineViewFixture();
+
+
+public:
+    [[nodiscard]] b8 shapeView();
+    [[nodiscard]] b8 place(f32 width = 100.0f, f32 height = 100.0f, Point previousScroll = {})noexcept;
+    [[nodiscard]] b8 loadFont();
+    [[nodiscard]] Expected<DrawSnapshot> paintView(const EditBoxStyle& style, const EditBoxPaintFlags& flags);
+
+
+public:
+    Core::Alloc::GlobalArena m_arena;
+    EditModel m_model;
+    FixtureShaper m_shaper;
+    TextLayoutBuilder m_layoutBuilder;
+    EditBoxView m_view;
+    EditBoxPlacement m_placement;
+    Font m_font;
+    TextService m_text;
+    UiSkin m_skin;
+    PaintBuilder m_paint;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+HitTarget MakeHorizontalNavigationPart(in HitTarget host){
+    HitTarget part = HitTarget();
+    part.id.value = 4u;
+    part.declarationGeneration = host.declarationGeneration;
+    part.rectangle.x = 20.0f;
+    part.rectangle.y = 20.0f;
+    part.rectangle.width = 60.0f;
+    part.rectangle.height = 20.0f;
+    part.clip = host.clip;
+    part.paintOrder = 1u;
+    part.activatable = true;
+    part.control = host.control;
+    part.owner = host.id;
+    part.ownerDeclarationGeneration = host.declarationGeneration;
+    part.value = 91u;
+    part.popup = host.popup;
+    part.layer = host.layer;
+    return part;
+}
+
+PopupScope MakeHorizontalNavigationPopup(in HitTarget owner, in u64 openGeneration){
+    PopupScope popup = PopupScope();
+    popup.token.widget = owner.id;
+    popup.token.declarationGeneration = owner.declarationGeneration;
+    popup.token.instanceGeneration = 6u;
+    popup.token.openGeneration = openGeneration;
+    popup.bounds.x = 0.0f;
+    popup.bounds.y = 0.0f;
+    popup.bounds.width = 300.0f;
+    popup.bounds.height = 200.0f;
+    popup.viewport = popup.bounds;
+    popup.layer = 1u;
+    return popup;
+}
+
+void ExpectUiEditBoxPlacement(in EditBoxPlacement actual, in EditBoxPlacement expected){
+    ExpectUiRect(actual.bounds, expected.bounds);
+    ExpectUiRect(actual.frameClip, expected.frameClip);
+    ExpectUiRect(actual.content, expected.content);
+    ExpectUiRect(actual.clip, expected.clip);
+    ExpectUiRect(actual.caret, expected.caret);
+    EXPECT_FLOAT_EQ(actual.textOrigin.x, expected.textOrigin.x);
+    EXPECT_FLOAT_EQ(actual.textOrigin.y, expected.textOrigin.y);
+    EXPECT_FLOAT_EQ(actual.scroll, expected.scroll);
+    EXPECT_FLOAT_EQ(actual.scrollY, expected.scrollY);
+}
+
+void ExpectUiEditCaretRect(in Rect rectangle, in f32 x, in f32 y, in f32 height){
+    EXPECT_FLOAT_EQ(rectangle.x, x);
+    EXPECT_FLOAT_EQ(rectangle.y, y);
+    EXPECT_FLOAT_EQ(rectangle.width, 0.0f);
+    EXPECT_FLOAT_EQ(rectangle.height, height);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiEditCaretTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<ShapedRun, TextLayoutStatus::Enum> CaretShaper::shape(const ShapeRequest& request){
+    ShapedRun run(m_arena);
+    run.metrics = variedHeight && request.text == "TALL" ? FontMetrics{ 10.0f, 4.0f, 6.0f } : FontMetrics{ 8.0f, 2.0f, 2.0f };
+    if(fault == ShaperFault::Overlap){
+        run.glyphs.push_back({ {}, 1u, 0u, 2u, {}, { s_CaretGlyphAdvance, 0.0f }, {} });
+        run.glyphs.push_back({ {}, 2u, 1u, 3u, {}, { s_CaretGlyphAdvance, 0.0f }, {} });
+    }
+    else if(fault == ShaperFault::InconsistentGlyphEnd){
+        run.glyphs.push_back({ {}, 1u, 0u, 1u, {}, { s_CaretGlyphAdvance, 0.0f }, {} });
+        run.glyphs.push_back({ {}, 2u, 0u, 3u, {}, {}, {} });
+    }
+    else if(fault == ShaperFault::NonfinitePlacement){
+        run.glyphs.push_back({ {}, 1u, 0u, 1u, {}, { Limit<f32>::s_Max, 0.0f }, {} });
+        run.glyphs.push_back({ {}, 2u, 1u, 2u, { Limit<f32>::s_Max, 0.0f }, {}, {} });
+    }
+    else if(request.text == "ffi")
+        run.glyphs.push_back({ {}, 1u, 0u, 3u, {}, { 30.0f, 0.0f }, {} });
+    else if(request.text == "A\xcc\x81" "B"){
+        run.glyphs.push_back({ {}, 1u, 0u, 3u, {}, { s_CaretGlyphAdvance, 0.0f }, {} });
+        run.glyphs.push_back({ {}, 2u, 3u, 4u, {}, { s_CaretGlyphAdvance, 0.0f }, {} });
+    }
+    else if(request.text == "e\xcc\x81")
+        run.glyphs.push_back({ {}, 1u, 0u, 3u, {}, { s_CaretGlyphAdvance, 0.0f }, {} });
+    else if(request.text == "\xe1\x84\x92\xe1\x85\xa1\xe1\x86\xab")
+        run.glyphs.push_back({ {}, 1u, 0u, 9u, {}, { 12.0f, 0.0f }, {} });
+    else{
+        usize begin = fault == ShaperFault::LeadingGap ? 1u : 0u;
+        const usize limit = request.text.size() - (fault == ShaperFault::TrailingGap && !request.text.empty() ? 1u : 0u);
+        while(begin < limit){
+            usize end = begin + 1u;
+            while(end < limit && IsUtf8Continuation(static_cast<u8>(request.text[end])))
+                ++end;
+            run.glyphs.push_back({ {}, 1u, static_cast<u32>(begin), static_cast<u32>(end), {}, { scalarAdvance, 0.0f }, {} });
+            begin = end;
+        }
+    }
+    if(zeroAdvance){
+        for(ShapedGlyph& glyph : run.glyphs)
+            glyph.advance.x = 0.0f;
+    }
+    if(request.direction == TextDirection::RightToLeft)
+        Tests::UiFixtureText::ReverseGlyphs(run);
+    return run;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+EditCaretFixture::EditCaretFixture()
+    : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiWidgetsEditCaret))
+    , m_shaper(m_arena)
+    , m_builder(m_arena, m_shaper)
+    , m_geometry(m_arena)
+    , m_mapping(m_arena)
+    , m_boundaries(m_arena)
+{}
+
+b8 EditCaretFixture::identityMapping(const StringView text){
+    auto boundaries = GraphemeSegmentation::Build(m_arena, text);
+    if(!boundaries)
+        return false;
+    m_boundaries = Move(*boundaries);
+    m_mapping.clear();
+    m_mapping.reserve(m_boundaries.size());
+    for(const usize boundary : m_boundaries)
+        m_mapping.push_back({ boundary, boundary });
+    return true;
+}
+
+b8 EditCaretFixture::adopt(const StringView text, const usize committedBytes, const EditTextMode::Enum mode){
+    auto candidate = layout(text);
+    return candidate && m_geometry.adoptLayout(Move(*candidate), text, m_mapping, committedBytes, mode);
+}
+
+void EditCaretFixture::expectCaret(const usize byte, const f32 x, const f32 y, const f32 height)const{
+    const auto rectangle = m_geometry.caretRect(byte);
+    ASSERT_TRUE(rectangle);
+    ::__hidden_ui_glyph_sdf_tests::ExpectUiEditCaretRect(*rectangle, x, y, height);
+}
+
+void EditCaretFixture::expectRange(const EditBoxRange range, const u32 line, const Rect expected, const f32 cap)const{
+    const auto rectangle = m_geometry.rangeOnLine(range, line, cap);
+    ASSERT_TRUE(rectangle);
+    ::__hidden_ui_glyph_sdf_tests::ExpectUiRect(*rectangle, expected);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiHorizontalNavigationTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+HitTarget Part(const HitTarget& host)noexcept{
+    return ::__hidden_ui_glyph_sdf_tests::MakeHorizontalNavigationPart(host);
+}
+
+PopupScope Popup(const HitTarget& owner, const u64 openGeneration)noexcept{
+    return ::__hidden_ui_glyph_sdf_tests::MakeHorizontalNavigationPopup(owner, openGeneration);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+HorizontalNavigationFixture::HorizontalNavigationFixture()
+    : RouterTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiHorizontalNavigation))
+{
+    for(usize index = 0u; index < 2u; ++index){
+        HitTarget& host = m_targets[index];
+        host.id = { index + 1u };
+        host.declarationGeneration = 7u;
+        host.rectangle = { static_cast<f32>(index) * 140.0f, 0.0f, 100.0f, 100.0f };
+        host.clip = { 0.0f, 0.0f, 300.0f, 200.0f };
+        host.focusable = true;
+        host.control = { 11u + index, 21u, 31u };
+        host.navigable = true;
+        host.horizontalNavigation = true;
+        host.pageRows = 4u;
+    }
+    HitTarget& editor = m_targets[2u];
+    editor.id = { 3u };
+    editor.declarationGeneration = 9u;
+    editor.rectangle = { 0.0f, 120.0f, 120.0f, 24.0f };
+    editor.clip = m_targets[0u].clip;
+    editor.focusable = true;
+    editor.textEditable = true;
+    editor.control = { 101u, 102u, 103u };
+}
+
+InputRoutingResult HorizontalNavigationFixture::keyDown(const Core::Key::Enum key, const b8 repeat){
+    return send({ .key = key, .type = InputEventType::KeyDown, .repeat = repeat });
+}
+
+InputRoutingResult HorizontalNavigationFixture::keyUp(const Core::Key::Enum key){
+    return send({ .key = key, .type = InputEventType::KeyUp });
+}
+
+void HorizontalNavigationFixture::press(const Core::Key::Enum key){
+    EXPECT_TRUE(keyDown(key).commandConsumed);
+    EXPECT_TRUE(keyUp(key).commandConsumed);
+}
+
+void HorizontalNavigationFixture::focusTarget(const usize index){
+    const Rect& rectangle = m_targets[index].rectangle;
+    const Point point{ rectangle.x + 10.0f, rectangle.y + 10.0f };
+    EXPECT_TRUE(send({ .position = point, .type = InputEventType::PrimaryDown }).pointerConsumed);
+    EXPECT_TRUE(send({ .position = point, .type = InputEventType::PrimaryUp }).pointerConsumed);
+    EXPECT_EQ(m_router.focus(), m_targets[index].id);
+}
+
+b8 HorizontalNavigationFixture::publish(const usize count, const Span<const PopupScope> popups){
+    const u64 generation = m_generation + 1u;
+    if(!m_router.commitTargets(Span<const HitTarget>(m_targets.data(), count), generation, popups))
+        return false;
+    m_generation = generation;
+    return true;
+}
+
+Expected<ControlAction> HorizontalNavigationFixture::take(const usize index)noexcept{
+    const HitTarget& host = m_targets[index];
+    return m_router.consumeControlAction(host.id, host.declarationGeneration, host.control);
+}
+
+void HorizontalNavigationFixture::bindEditor(const usize hostIndex)noexcept{
+    const HitTarget& host = m_targets[hostIndex];
+    HitTarget& editor = m_targets[2u];
+    editor.commandOwner = host.id;
+    editor.commandOwnerDeclarationGeneration = host.declarationGeneration;
+    editor.commandControl = host.control;
+    editor.popup = host.popup;
+    editor.layer = host.layer;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiMultilineViewTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void ExpectPlacement(const EditBoxPlacement& actual, const EditBoxPlacement& expected){
+    ::__hidden_ui_glyph_sdf_tests::ExpectUiEditBoxPlacement(actual, expected);
+}
+
+void CollectSolidRects(const DrawSnapshot& snapshot, const Color& color, PaintVector<Rect>& output){
+    output.clear();
+    for(const DrawCommand& command : snapshot.commands()){
+        if(command.material != PaintMaterial::Solid)
+            continue;
+        for(u32 index = command.firstIndex; index + 5u < command.firstIndex + command.indexCount; index += 6u){
+            const Vertex& first = snapshot.vertices()[snapshot.indices()[index]];
+            if(first.color.r != color.r || first.color.g != color.g || first.color.b != color.b || first.color.a != color.a)
+                continue;
+            const Vertex& opposite = snapshot.vertices()[snapshot.indices()[index + 2u]];
+            output.push_back({ first.position.x, first.position.y, opposite.position.x - first.position.x, opposite.position.y - first.position.y });
+        }
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+MultilineViewFixture::MultilineViewFixture()
+    : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiWidgetsMultilineView))
+    , m_model(m_arena, {}, EditTextMode::Multiline)
+    , m_shaper(m_arena)
+    , m_layoutBuilder(m_arena, m_shaper)
+    , m_view(m_arena)
+    , m_font(m_arena, Name(s_MultilineViewFontPath))
+    , m_text(m_arena)
+    , m_skin(m_arena, Name(s_MultilineViewSkinPath))
+    , m_paint(m_arena)
+{
+    UiSkin::RegionVector regions(m_arena);
+    m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/widgets/multiline_view/texture"), 4u, 4u, 1.0f, Move(regions));
+}
+
+b8 MultilineViewFixture::shapeView(){
+    if(!m_view.snapshot(m_model))
+        return false;
+    auto layout = m_layoutBuilder.layout({ m_view.displayText() });
+    return layout && m_view.adoptLayout(Move(*layout));
+}
+
+b8 MultilineViewFixture::place(const f32 width, const f32 height, const Point previousScroll)noexcept{
+    const auto placement = m_view.arrange({ 10.0f, 20.0f, width, height }, {}, s_MultilineViewViewport, previousScroll);
+    if(!placement)
+        return false;
+    m_placement = *placement;
+    return true;
+}
+
+b8 MultilineViewFixture::loadFont(){
+    Core::Alloc::ScratchArena fontScratchArena(s_FontScratchArenaName);
+    return InstallLatinFixtureFont(fontScratchArena, m_arena, m_font, m_text);
+}
+
+Expected<DrawSnapshot> MultilineViewFixture::paintView(const EditBoxStyle& style, const EditBoxPaintFlags& flags){
+    m_paint.begin({ s_MultilineViewViewport.width, s_MultilineViewViewport.height, 1.0f, 1.0f }, 1u, 1u, Core::Assets::AssetRef<UiSkin>(s_MultilineViewSkinPath), m_skin);
+    if(!m_view.paint(m_text, m_paint, m_skin, m_placement, style, flags))
+        return MakeUnexpected(Failure{});
+    EXPECT_FALSE(m_paint.popClip());
+    return m_paint.freeze();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

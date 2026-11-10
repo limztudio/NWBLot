@@ -1,0 +1,464 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/gtest_macros.adhd>
+#include "ui_fixture_control_declarations.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+UiFixtureSearchFilterMode ResolveSearchFilterMode(in AStringView query, in AStringView secondHalfQuery, in AStringView emptyResultQuery){
+    if(query == secondHalfQuery)
+        return UiFixtureSearchFilterMode::Second;
+    if(query == emptyResultQuery)
+        return UiFixtureSearchFilterMode::Empty;
+    return UiFixtureSearchFilterMode::All;
+}
+
+Expected<u64> FindRadioFixtureIndexOf(in u64 count, in u64 removed, in b8 reverseFlag, in b8 duplicate, in u64 value){
+    const u64 activeCount = ComputeRadioFixtureRawCount(count, removed);
+    for(u64 cursor = 0u; cursor < activeCount; ++cursor){
+        if(value != 0u && ComputeRadioFixtureRawKey(count, removed, reverseFlag, duplicate, cursor) == value)
+            return cursor;
+    }
+    return MakeUnexpected(Failure());
+}
+
+Expected<u64> FindRadioFixtureEnabledIndex(in u64 count, in u64 removed, in b8 reverseFlag, in b8 duplicate, in b8 allDisabled, in u64 disabledKey, in u64 start, in b8 backwards){
+    const u64 activeCount = ComputeRadioFixtureRawCount(count, removed);
+    if(start >= activeCount || allDisabled)
+        return MakeUnexpected(Failure());
+    u64 cursor = start;
+    while(cursor < activeCount){
+        if(ComputeRadioFixtureRawKey(count, removed, reverseFlag, duplicate, cursor) != disabledKey)
+            return cursor;
+        if(backwards){
+            if(cursor == 0u)
+                break;
+            --cursor;
+        }
+        else
+            ++cursor;
+    }
+    return MakeUnexpected(Failure());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <global/simdmath.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiRadioGroupTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u64 RadioSource::instanceGeneration()const{
+    callback(RadioCallbackSite::Instance);
+    return m_generation;
+}
+
+u64 RadioSource::revision()const{
+    callback(RadioCallbackSite::Revision);
+    return m_contentRevision;
+}
+
+u64 RadioSource::rowCount()const{
+    callback(RadioCallbackSite::Count);
+    return rawCount();
+}
+
+u64 RadioSource::key(const u64 index)const{
+    callback(RadioCallbackSite::Key);
+    return rawKey(index);
+}
+
+Expected<u64> RadioSource::indexOf(const u64 value)const noexcept{
+    callback(RadioCallbackSite::None);
+    return ::__hidden_ui_glyph_sdf_tests::FindRadioFixtureIndexOf(m_count, m_removed, m_reverse, m_duplicate, value);
+}
+
+Expected<u64> RadioSource::findEnabled(const u64 start, const b8 reverse)const noexcept{
+    callback(RadioCallbackSite::None);
+    return ::__hidden_ui_glyph_sdf_tests::FindRadioFixtureEnabledIndex(m_count, m_removed, m_reverse, m_duplicate, m_allDisabled, m_disabled, start, reverse);
+}
+
+StringView RadioSource::text(const u64 index)const{
+    callback(RadioCallbackSite::Text);
+    ++m_textCalls;
+    m_label = { static_cast<char>('A' + index % 26u), 'b', 'c', 'd' };
+    return { m_label.data(), m_label.size() };
+}
+
+b8 RadioSource::enabled(const u64 index)const{
+    callback(RadioCallbackSite::Enabled);
+    return index < rawCount() && !m_allDisabled && rawKey(index) != m_disabled;
+}
+
+void RadioSource::resetCounters()const noexcept{
+    m_calls = 0u;
+    m_textCalls = 0u;
+    m_mutations = 0u;
+    m_callbacksAfterMutation = 0u;
+    m_beginAccepted = false;
+    m_endAccepted = false;
+}
+
+void RadioSource::armSelection(RadioGroupState& state, const RadioCallbackSite::Enum site, const u64 keyValue, const b8 awayAndBack)noexcept{
+    m_state = &state;
+    m_selected = keyValue;
+    m_site = site;
+    m_mutation = awayAndBack ? RadioMutation::SelectAwayBack : RadioMutation::Select;
+}
+
+void RadioSource::armSource(const RadioCallbackSite::Enum site, const b8 replacement)noexcept{
+    m_site = site;
+    m_mutation = replacement ? RadioMutation::Replacement : RadioMutation::Revision;
+}
+
+void RadioSource::armReentry(Builder& builder, const RadioCallbackSite::Enum site, const b8 panel)noexcept{
+    m_builder = &builder;
+    m_site = site;
+    m_mutation = panel ? RadioMutation::PanelBuilder : RadioMutation::ResetBuilder;
+}
+
+void RadioSource::armClose(PopupState& popup, const RadioCallbackSite::Enum site)noexcept{
+    m_popup = &popup;
+    m_site = site;
+    m_mutation = RadioMutation::ClosePopup;
+}
+
+u64 RadioSource::rawCount()const noexcept{
+    return ::__hidden_ui_glyph_sdf_tests::ComputeRadioFixtureRawCount(m_count, m_removed);
+}
+
+u64 RadioSource::rawKey(const u64 index)const noexcept{
+    return ::__hidden_ui_glyph_sdf_tests::ComputeRadioFixtureRawKey(m_count, m_removed, m_reverse, m_duplicate, index);
+}
+
+void RadioSource::callback(const RadioCallbackSite::Enum site)const{
+    ++m_calls;
+    m_label.fill('?');
+    if(m_mutations != 0u)
+        ++m_callbacksAfterMutation;
+    if(m_site == RadioCallbackSite::None || m_site != site)
+        return;
+    m_site = RadioCallbackSite::None;
+    ++m_mutations;
+    switch(m_mutation){
+    case RadioMutation::Select:
+        m_state->select(m_selected);
+        break;
+    case RadioMutation::SelectAwayBack:
+        m_state->select(m_selected + 10u);
+        m_state->select(m_selected);
+        break;
+    case RadioMutation::Revision:
+        ++m_contentRevision;
+        break;
+    case RadioMutation::Replacement:
+        ++m_generation;
+        break;
+    case RadioMutation::ResetBuilder:
+        m_builder->reset();
+        break;
+    case RadioMutation::PanelBuilder:
+        m_beginAccepted = m_builder->beginPanel("reentered", { 0.0f, 0.0f, 100.0f, 80.0f });
+        m_endAccepted = m_builder->endPanel();
+        break;
+    case RadioMutation::ClosePopup:
+        m_popup->close();
+        break;
+    default:
+        break;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void RadioGroupFixture::SetUp(){
+    WidgetFixture::SetUp();
+    configureRadioSkin();
+    ASSERT_TRUE(m_skin.validatePayload());
+    m_builder.setSkin(m_skin);
+    m_state.select(10u);
+}
+
+void RadioGroupFixture::configureRadioSkin(const b8 fallbackOnly){
+    configureSkin();
+    UiSkin::RegionVector regions(m_arena);
+    regions.assign(m_skin.regions().begin(), m_skin.regions().end());
+    constexpr Array<StringView, 6> s_Names{ "radio.normal", "radio.checked", "radio.mark", "checkbox.normal", "checkbox.checked", "checkbox.mark" };
+    for(u32 index = 0u; index < 6u; ++index){
+        if(fallbackOnly && index < 3u)
+            continue;
+        UiSkinRegion region;
+        const auto regionName = Name::FromText(s_Names[index]);
+        ASSERT_TRUE(regionName);
+        region.name = *regionName;
+        region.rectangle = { 88u + index * 8u, 0u, 8u, 8u };
+        if(index % 3u != 2u){
+            region.minimumWidth = 24.0f;
+            region.minimumHeight = 24.0f;
+        }
+        regions.push_back(Move(region));
+    }
+    m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 144u, 16u, 1.0f, Move(regions));
+}
+
+b8 RadioGroupFixture::declare(const u64 generation, const RadioGroupOptions& options, const Rect& bounds){
+    return declareSource(generation, m_source, m_state, options, bounds);
+}
+
+b8 RadioGroupFixture::declareSource(const u64 generation, const IListDataSource& source, RadioGroupState& state, const RadioGroupOptions& options, const Rect& bounds){
+    if(!begin(generation) || !m_builder.beginPanel(s_RadioPanelKey, bounds))
+        return false;
+    m_result = m_builder.radioGroup(s_RadioGroupKey, source, state, options);
+    return m_result.valid;
+}
+
+b8 RadioGroupFixture::prepare(const u64 generation, const RadioGroupOptions& options, const Rect& bounds){
+    return declare(generation, options, bounds) && finishPanel();
+}
+
+b8 RadioGroupFixture::accept(const u64 generation, const RadioGroupOptions& options, const Rect& bounds){
+    return prepare(generation, options, bounds) && m_context.commitFrame(generation);
+}
+
+WidgetId RadioGroupFixture::host()const{
+    return id(s_RadioGroupKey, s_RadioPanelKey);
+}
+
+const RadioGroupChoicePlacement* RadioGroupFixture::choice(const u64 keyValue, const RadioGroupState& state)const noexcept{
+    const RadioGroupPlacement& placement = state.placement();
+    for(u32 index = 0u; index < placement.count; ++index){
+        if(placement.rows[index].key == keyValue)
+            return &placement.rows[index];
+    }
+    return nullptr;
+}
+
+Point RadioGroupFixture::choicePoint(const u64 keyValue)const noexcept{
+    const RadioGroupChoicePlacement* item = choice(keyValue, m_state);
+    return item ? UiWidgetTests::Center(item->rectangle) : Point{};
+}
+
+usize RadioGroupFixture::regionQuads(const DrawSnapshot& snapshot, const Name& name)const noexcept{
+    const UiSkinRegion* region = m_skin.findRegion(name);
+    if(!region)
+        return 0u;
+    return ::__hidden_ui_glyph_sdf_tests::CountUiSkinRegionQuads(*region, m_skin.atlasWidth(), snapshot);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace UiSearchComboTests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u64 FilterView::rowCount()const noexcept{
+    return ::__hidden_ui_glyph_sdf_tests::ComputeSearchFilterRowCount(mode, full->count);
+}
+
+u64 FilterView::key(const u64 index)const noexcept{
+    return ::__hidden_ui_glyph_sdf_tests::ComputeSearchFilterRowKey(mode, index);
+}
+
+Expected<u64> FilterView::indexOf(const u64 value)const noexcept{
+    return ::__hidden_ui_glyph_sdf_tests::FindSearchFilterRowIndex(mode, full->count, value);
+}
+
+Expected<u64> FilterView::findEnabled(const u64 start, const b8 reverse)const{
+    return UiWidgetTests::FindSingleDisabledFixtureRowByKey(rowCount(), start, reverse, key(start), full->disabled);
+}
+
+StringView FilterView::text(const u64 index)const{
+    if(textMutation){
+        EditModel& query = *MakeNotNull(Exchange(textMutation, nullptr));
+        if(!query.setText(s_CallbackQuery))
+            ADD_FAILURE() << "callback query change failed";
+    }
+    return full->text(key(index) - 1u);
+}
+
+b8 FilterView::enabled(const u64 index)const{
+    if(enabledMutation){
+        EditModel& query = *MakeNotNull(Exchange(enabledMutation, nullptr));
+        if(!query.setText(s_EmptyResultQuery))
+            ADD_FAILURE() << "enabled callback query change failed";
+    }
+    return index < rowCount() && full->enabled(key(index) - 1u);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+SearchSource::SearchSource(Core::Alloc::GlobalArena& arena)noexcept
+    : m_query(arena)
+{
+    view.full = &full;
+    alternate.full = &full;
+}
+
+b8 SearchSource::enabled(const u64 index)const{
+    if(fullMutation){
+        EditModel& query = *MakeNotNull(Exchange(fullMutation, nullptr));
+        if(!query.setText(s_EmptyResultQuery))
+            ADD_FAILURE() << "full source callback query change failed";
+    }
+    return full.enabled(index);
+}
+
+b8 SearchSource::filter(const AStringView query){
+    ++filterCalls;
+    if(filterMutation){
+        EditModel& model = *MakeNotNull(Exchange(filterMutation, nullptr));
+        if(!model.setText(s_CallbackQuery))
+            return false;
+    }
+    const AStringView previous{ m_query.data(), m_query.size() };
+    if(previous != query){
+        m_query.assign(query.data(), query.size());
+        ++view.contentRevision;
+    }
+    view.mode = ::__hidden_ui_glyph_sdf_tests::ResolveSearchFilterMode(query, s_SecondHalfQuery, s_EmptyResultQuery);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+EditBoxResult SearchEditHost::edit([[maybe_unused]] const WidgetState& widget, [[maybe_unused]] const EditBoxOptions& options, [[maybe_unused]] EditModel& model)noexcept{
+    ++contextScopedLoans;
+    return {};
+}
+
+EditBoxResult SearchEditHost::editInPopup(const WidgetState& widget, const EditBoxOptions& options, const PopupToken& popup, EditModel& model){
+    ++loans;
+    lastPopup = popup;
+    loanContextPopup = m_context.popupToken();
+    EditBoxResult result;
+    result.valid = true;
+    result.focused = options.enabled && m_context.input().focus() == widget.id;
+    result.submitted = submitted;
+    result.cancelled = cancelled;
+    submitted = false;
+    cancelled = false;
+    if(m_changeText){
+        result.valid = model.setText(m_nextText);
+        result.textChanged = result.valid;
+        m_changeText = false;
+    }
+    if(preedit){
+        result.valid = result.valid && model.beginComposition() && model.updateComposition(s_PreeditText, 0u, 7u);
+        preedit = false;
+    }
+    return result;
+}
+
+b8 SearchEditHost::publish([[maybe_unused]] const WidgetState& widget, const EditBoxView& view, [[maybe_unused]] const EditBoxPlacement& placement, [[maybe_unused]] const EditBoxOptions& options){
+    ++publications;
+    publishContextPopup = m_context.popupToken();
+    publishedComposing = view.composing();
+    if(publishMutation){
+        EditModel& query = *MakeNotNull(Exchange(publishMutation, nullptr));
+        return query.setText("published");
+    }
+    return true;
+}
+
+void SearchEditHost::text(const AStringView value)noexcept{
+    m_nextText = value;
+    m_changeText = true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+SearchComboOptions SearchFixture::Options()noexcept{
+    return ::__hidden_ui_glyph_sdf_tests::MakeSearchComboFixtureOptions();
+}
+
+SearchFixture::SearchFixture()
+    : m_searchSource(m_arena)
+    , m_search(m_arena)
+    , m_host(m_context)
+{}
+
+void SearchFixture::SetUp(){
+    WidgetFixture::SetUp();
+    m_builder.setEditHost(&m_host);
+}
+
+b8 SearchFixture::declareSearch(const u64 generation){
+    if(!begin(generation) || !m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 280.0f }))
+        return false;
+    m_searchResult = m_builder.searchComboBox(s_ComboKey, m_searchSource, m_search, Options());
+    return m_searchResult.combo.valid;
+}
+
+b8 SearchFixture::openSearch(const u64 generation){
+    const HitTarget* field = target(id(s_ComboKey, s_ComboPanelKey));
+    if(!field)
+        return false;
+    click(Center(field->rectangle));
+    return acceptSearch(generation) && m_search.combo().isOpen();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -9,6 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
 
 
@@ -42,6 +43,15 @@ using GpuHazardResourceAccessEnum = Core::GpuTaskResourceAccess::Enum;
 using GpuHazardResourceSharingMask = Core::ResourceQueueSharing::Mask;
 using GpuHazardQueueClassEnum = Core::CommandQueue::Enum;
 using GpuHazardGlobalArena = Core::Alloc::GlobalArena;
+
+using GpuHazardImportPublication = Core::GpuGraphResourceImportIndex::Publication;
+using GpuHazardResourcePointerKey = Core::GpuTaskGraphDetail::ResourcePointerKey;
+
+struct GpuHazardImportIndexRig{
+    Core::Alloc::GlobalArena arena{ s_TaskGraphImportPartialPublication };
+    Vector<Core::GpuTaskGraphDetail::GpuGraphResourceNode, Core::Alloc::GlobalArena> resources{ arena };
+    Core::GpuGraphResourceImportIndex index{ arena };
+};
 
 struct GpuHazardOwnerImportContext{
     Core::Alloc::GlobalArena inputArena{ s_GpuCaseGraphImportIndexInputs };
@@ -528,33 +538,38 @@ void VerifyGpuHazardOwner_EveryNameHashLaneParticipatesAndResourceSetIdentityHas
 }
 
 void VerifyGpuHazardOwner_DuplicatePointerRollsBackOnlyNewIdentity(){
-    native{
-        Core::Alloc::GlobalArena arena{ s_TaskGraphImportPartialPublication };
-        Vector<Core::GpuTaskGraphDetail::GpuGraphResourceNode, Core::Alloc::GlobalArena> resources(arena);
-        resources.resize(32u);
-        for(usize index = 0u; index < resources.size(); ++index){
-            const auto name = IndexedName(s_TaskGraphImportPrefix, index);
-            ASSERT_TRUE(name.has_value());
-            resources[index].identity = *name;
-        }
-        Core::GpuGraphResourceImportIndex index(arena);
-        const Core::GpuTaskGraphDetail::ResourcePointerKey pointer{ reinterpret_cast<const void*>(1u), Core::GpuGraphResourceType::Buffer };
-        index.prepareResourceIndexes(resources, pointer);
-        const Name first(s_TaskGraphImportFirstPointer);
-        const Name second(s_TaskGraphImportRejectedPointer);
-        Core::GpuGraphResourceImportIndex::Publication accepted;
-        ASSERT_TRUE(index.publishResource(first.identityHash(), pointer, 32u, accepted));
-        Core::GpuGraphResourceImportIndex::Publication rejected;
-        EXPECT_FALSE(index.publishResource(second.identityHash(), pointer, 33u, rejected));
-        EXPECT_TRUE(rejected.identity);
-        EXPECT_FALSE(rejected.pointer);
-        index.rollbackResource(second.identityHash(), pointer, rejected);
-        EXPECT_EQ(index.findResourceIdentity(resources, second), Limit<u32>::s_Max);
-        EXPECT_EQ(index.findResourceIdentity(resources, first), 32u);
-        const auto match = index.findResourceImportMatch(resources, nullptr, pointer);
-        EXPECT_TRUE(match.samePointer);
-        EXPECT_EQ(match.index, 32u);
+    GpuHazardImportIndexRig rig = GpuHazardImportIndexRig();
+    rig.resources.resize(32u);
+    for(usize idx = 0u; idx < rig.resources.size(); ++idx){
+        const Expected<Name> name = IndexedName(s_TaskGraphImportPrefix, idx);
+        ASSERT_TRUE(name.has_value());
+        rig.resources[idx].identity = name.value();
     }
+    GpuHazardResourcePointerKey pointer = GpuHazardResourcePointerKey();
+    native(mut pointer){
+        pointer = Core::GpuTaskGraphDetail::ResourcePointerKey{ reinterpret_cast<const void*>(1u), Core::GpuGraphResourceType::Buffer };
+    }
+    rig.index.prepareResourceIndexes(rig.resources, pointer);
+    const Name first = Name(s_TaskGraphImportFirstPointer);
+    const Name second = Name(s_TaskGraphImportRejectedPointer);
+    GpuHazardImportPublication accepted = GpuHazardImportPublication();
+    ASSERT_TRUE(rig.index.publishResource(first.identityHash(), pointer, 32u, accepted));
+    GpuHazardImportPublication rejected = GpuHazardImportPublication();
+    EXPECT_FALSE(rig.index.publishResource(second.identityHash(), pointer, 33u, rejected));
+    EXPECT_TRUE(rejected.identity);
+    EXPECT_FALSE(rejected.pointer);
+    rig.index.rollbackResource(second.identityHash(), pointer, rejected);
+    EXPECT_EQ(rig.index.findResourceIdentity(rig.resources, second), u32.max);
+    EXPECT_EQ(rig.index.findResourceIdentity(rig.resources, first), 32u);
+    b8 samePointer = false;
+    u32 matchIndex = 0u;
+    native(in rig, in pointer, mut samePointer, mut matchIndex){
+        const auto match = rig.index.findResourceImportMatch(rig.resources, nullptr, pointer);
+        samePointer = match.samePointer;
+        matchIndex = match.index;
+    }
+    EXPECT_TRUE(samePointer);
+    EXPECT_EQ(matchIndex, 32u);
 }
 
 void VerifyGpuHazardOwner_ManySetsReuseOnlyTheirOriginalOrderedMembersAndRetainFirstLabels(){

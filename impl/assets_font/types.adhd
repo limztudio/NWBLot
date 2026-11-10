@@ -120,5 +120,6 @@ void ReportNativeFontFailure(in NativeFontFailure failure){
         error("ValidateFontSource failed: FreeType rejected the scalable Unicode face ({})", failure.operation);
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -78,7 +78,6 @@ private:
     StmtParser m_stmtParser;
     MStringView m_activeSource;
     const Preprocessor* m_preprocessor = nullptr;
-    b8 m_seenLocalAdhdDecl = false;
 };
 
 

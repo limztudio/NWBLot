@@ -9,6 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
 
 
@@ -96,11 +97,6 @@ static_assert(!noexcept(Impl::EncodeMeshletRefDeltas(
     DeclVal<NoThrowMeshletBytes&>()
 )));
 
-struct OctEncodingBoundary{
-    Float3U axis;
-    u32 packed;
-};
-
 static constexpr u32 s_Oct16ChannelMask = 255u;
 static constexpr u32 s_Oct16YShift = 8u;
 static constexpr f32 s_Oct16UnormScale = 1.0f / 255.0f;
@@ -119,6 +115,19 @@ static constexpr f32 s_Oct16SignedScale = 2.0f;
     }
     return Vector3NormalizeOr(VectorSet(x, y, z, 0.0f), VectorSet(0.0f, 0.0f, 1.0f, 0.0f), NWB::Impl::s_MeshletConeAxisLengthSquaredEpsilon);
 }
+
+using MeshletDesc = Impl::MeshletDesc;
+using MeshletPositionStreamRef = Impl::MeshletPositionStreamRef;
+using MeshletAttributeStreamRef = Impl::MeshletAttributeStreamRef;
+namespace MeshletDeltaWidth = Impl::MeshletRefDeltaWidth;
+using Impl::MeshletRefDeltaByteWidth;
+using Impl::PackMeshletConeOct16;
+using Impl::PackMeshletCounts;
+using Impl::PackMeshletRefEncoding;
+using Impl::TryDecodeMeshletAttributeRef;
+using Impl::TryDecodeMeshletPositionRef;
+using Impl::s_MeshletConeAxisFallback;
+using Core::Assets::IsLikelyNonStandaloneFirstToken;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -389,6 +398,26 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class OctEncodingBoundary{
+    public f32x3u m_axis;
+    public u32 m_packed;
+
+    public OctEncodingBoundary(in f32 x, in f32 y, in f32 z, in u32 packed){
+        this.m_axis = f32x3u(x, y, z);
+        this.m_packed = packed;
+    }
+}
+
+b8 IsMetadataDiscoveryWindowsHost(){
+    b8 isWindows = false;
+    native(mut isWindows){
+#if defined(NWB_PLATFORM_WINDOWS)
+        isWindows = true;
+#endif
+    }
+    return isWindows;
+}
+
 void VerifyAssetsGraphics_MeshletRefEncodingCrossesIndexWidthBoundaries(){
     TestArena testArena = TestArena();
     native(mut testArena){
@@ -437,91 +466,126 @@ void VerifyAssetsGraphics_MeshletRefEncodingCrossesIndexWidthBoundaries(){
 }
 
 void VerifyAssetsGraphics_MeshletOct16DecodePreservesQuantizationAndFoldBits(){
-    native{
-        // Scalar octahedral decode fixes UNORM endpoint and fold rounding.
-        for(u32 packed = 0u; packed < 65536u; ++packed){
+    // Scalar octahedral decode fixes UNORM endpoint and fold rounding.
+    for(u32 packed = 0u; packed < 65536u; ++packed){
+        const ScopedTestTrace trace(packed);
+        b8 matches = false;
+        native(in packed, mut matches){
             const SIMDVectorSingle reference = ScalarOct16Reference(packed);
             const SIMDVectorSingle decoded = NWB::Impl::UnpackMeshletConeOct16Axis(packed);
-            ASSERT_EQ(VectorGetIntX(decoded), VectorGetIntX(reference)) << packed;
-            ASSERT_EQ(VectorGetIntY(decoded), VectorGetIntY(reference)) << packed;
-            ASSERT_EQ(VectorGetIntZ(decoded), VectorGetIntZ(reference)) << packed;
-            ASSERT_EQ(VectorGetIntW(decoded), VectorGetIntW(reference)) << packed;
+            matches = Vector4EqualInt(decoded, reference);
         }
+        ASSERT_TRUE(matches);
     }
 }
 
 void VerifyAssetsGraphics_MeshletOct16EncodingRetainsHalfStepAndFoldBoundaries(){
-    native{
-        const Array<OctEncodingBoundary, 11u> boundaries = {{
-            { { -0x1p-23f, 0.0f, 0x1.fffffcp-1f }, 0x807fu },
-            { { 0.0f, 0.0f, 1.0f }, 0x8080u },
-            { { 0x1p-23f, 0.0f, 0x1.fffffcp-1f }, 0x8080u },
-            { { 0.0f, -0x1p-23f, 0x1.fffffcp-1f }, 0x7f80u },
-            { { 0.0f, 0x1p-23f, 0x1.fffffcp-1f }, 0x8080u },
-            { { -0.0f, -0.0f, -1.0f }, 0xffffu },
-            { { 1.0f, 0.0f, -1.0f }, 0xbfffu },
-            { { 0.0f, -1.0f, -1.0f }, 0x00bfu },
-            { { 1.0f, 1.0f, 0.0f }, 0xbfbfu },
-            { { 1.0f, 1.0f, -0x1p-23f }, 0xbfbfu },
-            { { 1.0f, 1.0f, 0x1p-23f }, 0xbfbfu },
-        }};
-        for(const OctEncodingBoundary& boundary : boundaries){
-            volatile f32 x = boundary.axis.x, y = boundary.axis.y, z = boundary.axis.z;
-            EXPECT_EQ(NWB::Impl::PackMeshletConeOct16(VectorSet(x, y, z, 0.0f)), boundary.packed) << boundary.packed;
+    const f32 negUlp23 = bit_cast<f32>(0xb4000000u);
+    const f32 posUlp23 = bit_cast<f32>(0x34000000u);
+    const f32 nearOne = bit_cast<f32>(0x3f7ffffeu);
+    const f32 negZero = bit_cast<f32>(0x80000000u);
+
+    Vector<OctEncodingBoundary> boundaries = Vector<OctEncodingBoundary>();
+    boundaries.reserve(11u);
+    boundaries.push_back(OctEncodingBoundary(negUlp23, 0.0f, nearOne, 0x807fu));
+    boundaries.push_back(OctEncodingBoundary(0.0f, 0.0f, 1.0f, 0x8080u));
+    boundaries.push_back(OctEncodingBoundary(posUlp23, 0.0f, nearOne, 0x8080u));
+    boundaries.push_back(OctEncodingBoundary(0.0f, negUlp23, nearOne, 0x7f80u));
+    boundaries.push_back(OctEncodingBoundary(0.0f, posUlp23, nearOne, 0x8080u));
+    boundaries.push_back(OctEncodingBoundary(negZero, negZero, -1.0f, 0xffffu));
+    boundaries.push_back(OctEncodingBoundary(1.0f, 0.0f, -1.0f, 0xbfffu));
+    boundaries.push_back(OctEncodingBoundary(0.0f, -1.0f, -1.0f, 0x00bfu));
+    boundaries.push_back(OctEncodingBoundary(1.0f, 1.0f, 0.0f, 0xbfbfu));
+    boundaries.push_back(OctEncodingBoundary(1.0f, 1.0f, negUlp23, 0xbfbfu));
+    boundaries.push_back(OctEncodingBoundary(1.0f, 1.0f, posUlp23, 0xbfbfu));
+
+    for(in OctEncodingBoundary boundary : boundaries){
+        const ScopedTestTrace trace(boundary.m_packed);
+        const f32 axisX = boundary.m_axis.x;
+        const f32 axisY = boundary.m_axis.y;
+        const f32 axisZ = boundary.m_axis.z;
+        u32 packed = 0u;
+        native(in axisX, in axisY, in axisZ, mut packed){
+            volatile f32 x = axisX;
+            volatile f32 y = axisY;
+            volatile f32 z = axisZ;
+            packed = NWB::Impl::PackMeshletConeOct16(VectorSet(x, y, z, 0.0f));
         }
-        EXPECT_EQ(NWB::Impl::PackMeshletConeOct16(VectorZero()), NWB::Impl::s_MeshletConeAxisFallback);
+        EXPECT_EQ(packed, boundary.m_packed);
     }
+    EXPECT_EQ(PackMeshletConeOct16(VectorSingle(0.0f, 0.0f, 0.0f, 0.0f)), s_MeshletConeAxisFallback);
 }
 
 void VerifyAssetsGraphics_MeshletPositionAndSkinDeltasRejectU32WraparoundAtEveryWidth(){
-    native{
-        using namespace NWB::Impl;
-        for(const MeshletRefDeltaWidth::Enum width : { MeshletRefDeltaWidth::U8, MeshletRefDeltaWidth::U16, MeshletRefDeltaWidth::U32 }){
-            MeshletDesc meshlet;
-            meshlet.counts = PackMeshletCounts(1u, 1u, 1u, 1u);
-            meshlet.encoding = PackMeshletRefEncoding(width, width, width, width, width, width);
-            meshlet.positionBase = Limit<u32>::s_Max - 1u;
-            const u32 byteWidth = MeshletRefDeltaByteWidth(width);
-            Array<u8, 8u> bytes = { 1u };
-            const Expected<MeshletPositionStreamRef> boundary = TryDecodeMeshletPositionRef(Span<const u8>(bytes.data(), byteWidth), meshlet, 0u, false);
-            ASSERT_TRUE(boundary);
-            EXPECT_EQ(boundary->position, Limit<u32>::s_Max);
-            meshlet.positionBase = Limit<u32>::s_Max;
-            EXPECT_FALSE(TryDecodeMeshletPositionRef(Span<const u8>(bytes.data(), byteWidth), meshlet, 0u, false));
+    for(u32 widthIndex = 0u; widthIndex < 3u; ++widthIndex){
+        auto width = MeshletDeltaWidth::U8;
+        if(widthIndex == 1u)
+            width = MeshletDeltaWidth::U16;
+        else if(widthIndex == 2u)
+            width = MeshletDeltaWidth::U32;
 
-            bytes[0u] = 0u;
-            bytes[byteWidth] = 1u;
-            meshlet.positionBase = 0u;
-            meshlet.skinBase = Limit<u32>::s_Max - 1u;
-            const Expected<MeshletPositionStreamRef> skinBoundary = TryDecodeMeshletPositionRef(Span<const u8>(bytes.data(), byteWidth * 2u), meshlet, 0u, true);
-            ASSERT_TRUE(skinBoundary);
-            EXPECT_EQ(skinBoundary->skin, Limit<u32>::s_Max);
-            meshlet.skinBase = Limit<u32>::s_Max;
-            EXPECT_FALSE(TryDecodeMeshletPositionRef(Span<const u8>(bytes.data(), byteWidth * 2u), meshlet, 0u, true));
-        }
+        MeshletDesc meshlet = MeshletDesc();
+        meshlet.counts = PackMeshletCounts(1u, 1u, 1u, 1u);
+        meshlet.encoding = PackMeshletRefEncoding(width, width, width, width, width, width);
+        meshlet.positionBase = u32.max - 1u;
+        const u32 byteWidth = MeshletRefDeltaByteWidth(width);
+        Array<u8, 8u> bytes = Array<u8, 8u>();
+        bytes[0u] = 1u;
+        const Span<u8> singleSpan = bytes;
+        const Expected<MeshletPositionStreamRef> boundary = TryDecodeMeshletPositionRef(singleSpan.subspan(0u, byteWidth), meshlet, 0u, false);
+        ASSERT_TRUE(boundary.has_value());
+        EXPECT_EQ(boundary.value().position, u32.max);
+        meshlet.positionBase = u32.max;
+        EXPECT_FALSE(TryDecodeMeshletPositionRef(singleSpan.subspan(0u, byteWidth), meshlet, 0u, false).has_value());
+
+        bytes[0u] = 0u;
+        bytes[byteWidth] = 1u;
+        meshlet.positionBase = 0u;
+        meshlet.skinBase = u32.max - 1u;
+        const Span<u8> skinSpan = bytes;
+        const Expected<MeshletPositionStreamRef> skinBoundary = TryDecodeMeshletPositionRef(skinSpan.subspan(0u, byteWidth * 2u), meshlet, 0u, true);
+        ASSERT_TRUE(skinBoundary.has_value());
+        EXPECT_EQ(skinBoundary.value().skin, u32.max);
+        meshlet.skinBase = u32.max;
+        EXPECT_FALSE(TryDecodeMeshletPositionRef(skinSpan.subspan(0u, byteWidth * 2u), meshlet, 0u, true).has_value());
     }
 }
 
 void VerifyAssetsGraphics_MeshletAttributeDeltasRejectU32WraparoundInEveryChannelAndWidth(){
-    native{
-        using namespace NWB::Impl;
-        const Array<u32 MeshletDesc::*, 4u> baseMembers = { &MeshletDesc::normalBase, &MeshletDesc::tangentBase, &MeshletDesc::uv0Base, &MeshletDesc::colorBase };
-        const Array<u32 MeshletAttributeStreamRef::*, 4u> indexMembers = { &MeshletAttributeStreamRef::normal, &MeshletAttributeStreamRef::tangent, &MeshletAttributeStreamRef::uv0, &MeshletAttributeStreamRef::color };
-        for(const MeshletRefDeltaWidth::Enum width : { MeshletRefDeltaWidth::U8, MeshletRefDeltaWidth::U16, MeshletRefDeltaWidth::U32 }){
-            const u32 byteWidth = MeshletRefDeltaByteWidth(width);
-            for(usize channel = 0u; channel < baseMembers.size(); ++channel){
-                MeshletDesc meshlet;
-                meshlet.counts = PackMeshletCounts(1u, 1u, 1u, 1u);
-                meshlet.encoding = PackMeshletRefEncoding(width, width, width, width, width, width);
-                meshlet.*baseMembers[channel] = Limit<u32>::s_Max - 1u;
-                Array<u8, 16u> bytes = {};
-                bytes[channel * byteWidth] = 1u;
-                const Expected<MeshletAttributeStreamRef> boundary = TryDecodeMeshletAttributeRef(Span<const u8>(bytes.data(), byteWidth * 4u), meshlet, 0u);
-                ASSERT_TRUE(boundary);
-                EXPECT_EQ((*boundary).*indexMembers[channel], Limit<u32>::s_Max);
-                meshlet.*baseMembers[channel] = Limit<u32>::s_Max;
-                EXPECT_FALSE(TryDecodeMeshletAttributeRef(Span<const u8>(bytes.data(), byteWidth * 4u), meshlet, 0u));
+    for(u32 widthIndex = 0u; widthIndex < 3u; ++widthIndex){
+        auto width = MeshletDeltaWidth::U8;
+        if(widthIndex == 1u)
+            width = MeshletDeltaWidth::U16;
+        else if(widthIndex == 2u)
+            width = MeshletDeltaWidth::U32;
+
+        const u32 byteWidth = MeshletRefDeltaByteWidth(width);
+        for(usize channel = 0u; channel < 4u; ++channel){
+            MeshletDesc meshlet = MeshletDesc();
+            meshlet.counts = PackMeshletCounts(1u, 1u, 1u, 1u);
+            meshlet.encoding = PackMeshletRefEncoding(width, width, width, width, width, width);
+            switch(channel){
+            case 0u: meshlet.normalBase = u32.max - 1u; break;
+            case 1u: meshlet.tangentBase = u32.max - 1u; break;
+            case 2u: meshlet.uv0Base = u32.max - 1u; break;
+            case 3u: meshlet.colorBase = u32.max - 1u; break;
+            default: break;
             }
+            Array<u8, 16u> bytes = Array<u8, 16u>();
+            bytes[channel * byteWidth] = 1u;
+            const Span<u8> attrSpan = bytes;
+            const Expected<MeshletAttributeStreamRef> boundary = TryDecodeMeshletAttributeRef(attrSpan.subspan(0u, byteWidth * 4u), meshlet, 0u);
+            ASSERT_TRUE(boundary.has_value());
+            u32 decodedChannel = 0u;
+            switch(channel){
+            case 0u: decodedChannel = boundary.value().normal; meshlet.normalBase = u32.max; break;
+            case 1u: decodedChannel = boundary.value().tangent; meshlet.tangentBase = u32.max; break;
+            case 2u: decodedChannel = boundary.value().uv0; meshlet.uv0Base = u32.max; break;
+            case 3u: decodedChannel = boundary.value().color; meshlet.colorBase = u32.max; break;
+            default: break;
+            }
+            EXPECT_EQ(decodedChannel, u32.max);
+            EXPECT_FALSE(TryDecodeMeshletAttributeRef(attrSpan.subspan(0u, byteWidth * 4u), meshlet, 0u).has_value());
         }
     }
 }
@@ -550,13 +614,21 @@ void VerifyMetadataDiscoveryAdmission_DuplicateRootsKeepFirstOwnerAndPaths(){
 }
 
 void VerifyMetadataDiscoveryAdmission_CaseDistinctNativeFilesBothReachMetadataAdmission(){
-    native{
-#if defined(NWB_PLATFORM_WINDOWS)
-        GTEST_SKIP() << "The current Windows host identity folds physical path case";
-#else
+    if(IsMetadataDiscoveryWindowsHost()){
+        native{
+            GTEST_SKIP() << "The current Windows host identity folds physical path case";
+        }
+        return;
+    }
+
+    AssetArena arena(s_AssetCaseTestsMetadataDiscoveryCaseIdentity);
+    ScratchArena scratchArena(s_AssetCaseTestsMetadataDiscoveryCaseIdentityScratch);
+    b8 casePreserved = false;
+    b8 differentPaths = false;
+    b8 sameNormalized = false;
+    usize discoveredCount = 0u;
+    native(mut arena, mut scratchArena, mut casePreserved, mut differentPaths, mut sameNormalized, mut discoveredCount){
         using namespace NWB::Core::Assets;
-        AssetArena arena{Name(s_AssetCaseTestsMetadataDiscoveryCaseIdentity)};
-        ScratchArena scratchArena{Name(s_AssetCaseTestsMetadataDiscoveryCaseIdentityScratch)};
         const NWB::Path root = Tests::RepoRootOf(arena, __FILE__) / s_BuildDirectory / "metadata_discovery_case_identity";
         ASSERT_TRUE(EnsureEmptyDirectory(root));
         const NWB::Path upperPath = root / "Case.nwb";
@@ -565,19 +637,29 @@ void VerifyMetadataDiscoveryAdmission_CaseDistinctNativeFilesBothReachMetadataAd
         ASSERT_TRUE(::WriteTextFile(lowerPath, "lower native input"));
         ScratchString upperContents(scratchArena);
         ASSERT_TRUE(::ReadTextFile(upperPath, upperContents));
-        if(upperContents != "upper native input")
-            GTEST_SKIP() << "The test filesystem does not preserve distinct native path case";
-
-        CookVector<ResolvedAssetRoot> roots(arena);
-        roots.emplace_back(NWB::Path(arena, root), s_ProjectVirtualRoot);
-        roots.emplace_back(NWB::Path(arena, root), s_ProjectVirtualRoot);
-        const auto files = AssetFileDiscovery::Discover(roots, s_NwbExtension, arena, scratchArena);
-        ASSERT_TRUE(files);
-        ASSERT_EQ(files->size(), 2u);
-        EXPECT_NE((*files)[0].filePath, (*files)[1].filePath);
-        EXPECT_EQ((*files)[0].normalizedPathText, (*files)[1].normalizedPathText);
-#endif
+        casePreserved = upperContents == "upper native input";
+        if(casePreserved){
+            CookVector<ResolvedAssetRoot> roots(arena);
+            roots.emplace_back(NWB::Path(arena, root), s_ProjectVirtualRoot);
+            roots.emplace_back(NWB::Path(arena, root), s_ProjectVirtualRoot);
+            const auto files = AssetFileDiscovery::Discover(roots, s_NwbExtension, arena, scratchArena);
+            ASSERT_TRUE(files);
+            discoveredCount = files->size();
+            if(discoveredCount == 2u){
+                differentPaths = (*files)[0].filePath != (*files)[1].filePath;
+                sameNormalized = (*files)[0].normalizedPathText == (*files)[1].normalizedPathText;
+            }
+        }
     }
+    if(!casePreserved){
+        native{
+            GTEST_SKIP() << "The test filesystem does not preserve distinct native path case";
+        }
+        return;
+    }
+    ASSERT_EQ(discoveredCount, 2u);
+    EXPECT_TRUE(differentPaths);
+    EXPECT_TRUE(sameNormalized);
 }
 
 void VerifyMetadataDiscoveryAdmission_VirtualPathDoesNotSkipAnUninspectableEarlierRoot(){
@@ -743,87 +825,82 @@ void VerifyMetadataExtensionOwnership_MapMoveAndReplacementUseEachOriginalObject
 }
 
 void VerifyMetadataExtensionOwnership_RequireRefillsAnExplicitlyMovedOutOwner(){
-    native{
+    const Name name(s_MovedSlotMetadataName);
+    AssetArena arena(name);
+    ExtensionState state = ExtensionState();
+    native(in name, mut arena, mut state){
         using namespace NWB::Core::Assets;
-        AssetArena arena{ Name(s_MovedSlotMetadataName) };
-        ExtensionState state;
-        {
-            ParsedAssetMetadata metadata(arena);
-            const Name name(s_MovedSlotMetadataName);
-            const NotNull<AlignedExtension*> first = MakeNotNull(&RequireParsedMetadataExtension<AlignedExtension>(name, metadata, arena, state));
-            ParsedMetadataExtension detached = Move(metadata.extensions.at(name));
-            EXPECT_EQ(detached.get(), first.get());
-            EXPECT_EQ(FindParsedMetadataExtension<AlignedExtension>(name, metadata), nullptr);
-            AlignedExtension& replacement = RequireParsedMetadataExtension<AlignedExtension>(name, metadata, arena, state);
-            EXPECT_NE(&replacement, first.get());
-            EXPECT_EQ(replacement.identity, 2u);
-            EXPECT_EQ(metadata.extensions.size(), 1u);
-            detached.reset();
-            EXPECT_EQ(state.destructions, 1u);
-        }
-        EXPECT_EQ(state.destructions, 2u);
-        EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+        ParsedAssetMetadata metadata(arena);
+        const NotNull<AlignedExtension*> first = MakeNotNull(&RequireParsedMetadataExtension<AlignedExtension>(name, metadata, arena, state));
+        ParsedMetadataExtension detached = Move(metadata.extensions.at(name));
+        EXPECT_EQ(detached.get(), first.get());
+        EXPECT_EQ(FindParsedMetadataExtension<AlignedExtension>(name, metadata), nullptr);
+        AlignedExtension& replacement = RequireParsedMetadataExtension<AlignedExtension>(name, metadata, arena, state);
+        EXPECT_NE(&replacement, first.get());
+        EXPECT_EQ(replacement.identity, 2u);
+        EXPECT_EQ(metadata.extensions.size(), 1u);
+        detached.reset();
+        EXPECT_EQ(state.destructions, 1u);
     }
+    EXPECT_EQ(state.destructions, 2u);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
 }
 
 void VerifyMetadataExtensionOwnership_ConstructorUnwindReleasesStorageAndConstructedMembers(){
-    native{
+    const Name name(s_ConstructorUnwindMetadataName);
+    AssetArena arena(name);
+    ExtensionState state = ExtensionState();
+    native(in name, mut arena, mut state){
         using namespace NWB::Core::Assets;
-        AssetArena arena{ Name(s_ConstructorUnwindMetadataName) };
-        ExtensionState state;
-        {
-            ParsedAssetMetadata metadata(arena);
-            const Name name(s_ConstructorUnwindMetadataName);
-            const u64 baseline = arena.memoryStats().usedBytes;
-            EXPECT_THROW({
-                EXPECT_EQ(RequireParsedMetadataExtension<AlignedExtension>(name, metadata, arena, state, true).identity, 1u);
-            }, ExtensionConstructionFailure);
-            EXPECT_TRUE(metadata.extensions.empty());
-            EXPECT_EQ(state.constructions, 1u);
-            EXPECT_EQ(state.destructions, 0u);
-            EXPECT_EQ(state.memberDestructions, 1u);
-            EXPECT_EQ(arena.memoryStats().usedBytes, baseline);
-        }
-        EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+        ParsedAssetMetadata metadata(arena);
+        const u64 baseline = arena.memoryStats().usedBytes;
+        EXPECT_THROW({
+            EXPECT_EQ(RequireParsedMetadataExtension<AlignedExtension>(name, metadata, arena, state, true).identity, 1u);
+        }, ExtensionConstructionFailure);
+        EXPECT_TRUE(metadata.extensions.empty());
+        EXPECT_EQ(arena.memoryStats().usedBytes, baseline);
     }
+    EXPECT_EQ(state.constructions, 1u);
+    EXPECT_EQ(state.destructions, 0u);
+    EXPECT_EQ(state.memberDestructions, 1u);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
 }
 
 void VerifyMetadataExtensionOwnership_CallerUnwindDestroysPublishedExtensions(){
-    native{
+    const Name name(s_CallerUnwindMetadataName);
+    AssetArena arena(name);
+    ExtensionState state = ExtensionState();
+    native(in name, mut arena, mut state){
         using namespace NWB::Core::Assets;
-        AssetArena arena{ Name(s_CallerUnwindMetadataName) };
-        ExtensionState state;
         EXPECT_THROW({
             ParsedAssetMetadata metadata(arena);
-            const AlignedExtension& created = RequireParsedMetadataExtension<AlignedExtension>(Name(s_CallerUnwindMetadataName), metadata, arena, state);
+            const AlignedExtension& created = RequireParsedMetadataExtension<AlignedExtension>(name, metadata, arena, state);
             EXPECT_EQ(created.identity, 1u);
             throw ExtensionCallerFailure{};
         }, ExtensionCallerFailure);
-        EXPECT_EQ(state.destructions, 1u);
-        EXPECT_EQ(state.memberDestructions, 1u);
-        EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
     }
+    EXPECT_EQ(state.destructions, 1u);
+    EXPECT_EQ(state.memberDestructions, 1u);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
 }
 
 void VerifyMetadataExtensionOwnership_ReentrantInsertionReturnsTheActualStoredValue(){
-    native{
+    const Name name(s_ReentrantMetadataName);
+    AssetArena arena(name);
+    ExtensionState state = ExtensionState();
+    native(in name, mut arena, mut state){
         using namespace NWB::Core::Assets;
-        AssetArena arena{ Name(s_ReentrantMetadataName) };
-        ExtensionState state;
-        {
-            ParsedAssetMetadata metadata(arena);
-            const Name name(s_ReentrantMetadataName);
-            ReentrantExtension& result = RequireParsedMetadataExtension<ReentrantExtension>(name, metadata, metadata, name, state, true);
-            EXPECT_EQ(result.identity, 2u);
-            EXPECT_EQ(result.nested, nullptr);
-            EXPECT_EQ(&result, FindParsedMetadataExtension<ReentrantExtension>(name, metadata));
-            EXPECT_EQ(metadata.extensions.size(), 1u);
-            EXPECT_EQ(state.constructions, 2u);
-            EXPECT_EQ(state.destructions, 1u);
-        }
-        EXPECT_EQ(state.destructions, 2u);
-        EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
+        ParsedAssetMetadata metadata(arena);
+        ReentrantExtension& result = RequireParsedMetadataExtension<ReentrantExtension>(name, metadata, metadata, name, state, true);
+        EXPECT_EQ(result.identity, 2u);
+        EXPECT_EQ(result.nested, nullptr);
+        EXPECT_EQ(&result, FindParsedMetadataExtension<ReentrantExtension>(name, metadata));
+        EXPECT_EQ(metadata.extensions.size(), 1u);
+        EXPECT_EQ(state.constructions, 2u);
+        EXPECT_EQ(state.destructions, 1u);
     }
+    EXPECT_EQ(state.destructions, 2u);
+    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
 }
 
 void VerifyMetadataExtensionOwnership_InsertionUnwindDestroysThePendingErasedOwner(){
@@ -1055,13 +1132,17 @@ void VerifyMetadataRegistryPublication_MetadataRegistrationKeepsCallerTextAlive(
 }
 
 void VerifyMetadataRegistryPublication_ConcurrentMetadataRegistrationsKeepDistinctTokens(){
-    native{
+    Vector<StringView> tokens = Vector<StringView>();
+    tokens.reserve(4u);
+    tokens.push_back("nwb_owned_thread_a_71a7");
+    tokens.push_back("nwb_owned_thread_b_71a7");
+    tokens.push_back("nwb_owned_thread_c_71a7");
+    tokens.push_back("nwb_owned_thread_d_71a7");
+
+    native(in tokens){
         using namespace NWB::Core::Assets;
-        constexpr Array<AStringView, 4u> tokens = {
-            "nwb_owned_thread_a_71a7", "nwb_owned_thread_b_71a7", "nwb_owned_thread_c_71a7", "nwb_owned_thread_d_71a7"
-        };
-        Array<Thread, tokens.size()> threads;
-        for(usize i = 0u; i < tokens.size(); ++i){
+        Array<Thread, 4u> threads;
+        for(usize i = 0u; i < threads.size(); ++i){
             threads[i] = Thread([&, i](){
                 ScratchArena scratchArena{Name(s_AssetCaseTestsMetadataRegistryConcurrentTokens)};
                 ScratchString text(tokens[i], scratchArena);
@@ -1071,9 +1152,10 @@ void VerifyMetadataRegistryPublication_ConcurrentMetadataRegistrationsKeepDistin
         }
         for(Thread& thread : threads)
             thread.join();
-        for(const AStringView token : tokens)
-            EXPECT_TRUE(IsLikelyNonStandaloneFirstToken(token));
     }
+
+    for(in StringView token : tokens)
+        EXPECT_TRUE(IsLikelyNonStandaloneFirstToken(token));
 }
 
 void VerifyModelCookMetadata_UniqueAssetPathReferencesFailAndLocalObjectReferencesRecover(){

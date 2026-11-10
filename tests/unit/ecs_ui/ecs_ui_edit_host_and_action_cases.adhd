@@ -9,6 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
 
 
@@ -59,31 +60,6 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_edit_click_tracker_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using namespace NWB::Impl::Ui;
-
-inline constexpr UiTextEditOwner s_Owner{ { 11u }, 2u, 3u };
-inline constexpr UiTextEditOwner s_OtherOwner{ { 12u }, 2u, 3u };
-inline constexpr Ui::PopupToken s_Popup{ { 21u }, 1u, 1u, 1u };
-inline constexpr Ui::PopupToken s_ReopenedPopup{ { 21u }, 1u, 1u, 2u };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace __hidden_ui_edit_clipboard_tests{
 
 
@@ -113,7 +89,15 @@ public:
     virtual void startNativeRequest(ClipboardRequestToken, ClipboardOperation::Enum, ClipboardChannel::Enum, AStringView)noexcept override{}
 };
 
-inline constexpr UiTextEditOwner s_Owner{ { 51u }, 2u, 3u };
+struct FakeClipboardRig{
+    Tests::TestArena<> arena;
+    UiEditHostFixtureSupport::FakeClipboard service{ arena.arena, true };
+};
+
+struct DelayedClipboardRig{
+    Tests::TestArena<> arena;
+    DelayedClipboard service{ arena.arena };
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -131,9 +115,25 @@ namespace NWB::Tests::EcsUi{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using DelayedClipboard = __hidden_ui_edit_clipboard_tests::DelayedClipboard;
+using DelayedClipboardRig = __hidden_ui_edit_clipboard_tests::DelayedClipboardRig;
+using FakeClipboardRig = __hidden_ui_edit_clipboard_tests::FakeClipboardRig;
+using TestArena = NWB::Tests::TestArena<>;
+using ClipboardChannelEnum = NWB::Core::ClipboardChannel::Enum;
 using UiConfigurableEditInputTests = __hidden_ui_configurable_edit_input_tests::UiConfigurableEditInputTests;
+using UiClipboardPublicationResult = NWB::Impl::UiClipboardPublicationResult;
+using UiClipboardPublications = NWB::Impl::UiClipboardPublications;
+using UiClipboardPublicationStatusEnum = NWB::Impl::UiClipboardPublicationStatus::Enum;
 using UiEditClickTracker = NWB::Impl::UiEditClickTracker;
+using UiEditClipboardController = NWB::Impl::UiEditClipboardController;
+using UiEditClipboardResult = NWB::Impl::UiEditClipboardResult;
+using UiEditClipboardStatusEnum = NWB::Impl::UiEditClipboardStatus::Enum;
+using UiEditLimits = NWB::Impl::Ui::EditLimits;
+using UiTextEditOwner = NWB::Impl::UiTextEditOwner;
+namespace UiClipboardPublicationStatus = NWB::Impl::UiClipboardPublicationStatus;
 namespace UiEditClickKind = NWB::Impl::UiEditClickKind;
+namespace UiEditClipboardStatus = NWB::Impl::UiEditClipboardStatus;
+inline constexpr usize s_ClipboardMaxPublications = NWB::Impl::s_UiClipboardMaxPublications;
 inline constexpr usize s_EditInputMaxEvents = NWB::Impl::Ui::s_InputMaxEvents;
 
 
@@ -152,153 +152,140 @@ inline constexpr usize s_EditInputMaxEvents = NWB::Impl::Ui::s_InputMaxEvents;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+UiTextEditOwner MakeHostEditOwner(in u64 widgetValue, in u64 declarationGeneration, in u64 modelGeneration){
+    UiTextEditOwner owner = UiTextEditOwner();
+    owner.widget.value = widgetValue;
+    owner.declarationGeneration = declarationGeneration;
+    owner.modelGeneration = modelGeneration;
+    return owner;
+}
+
+UiPopupToken MakeHostPopupToken(in u64 widgetValue, in u64 declarationGeneration, in u64 instanceGeneration, in u64 openGeneration){
+    UiPopupToken token = UiPopupToken();
+    token.widget.value = widgetValue;
+    token.declarationGeneration = declarationGeneration;
+    token.instanceGeneration = instanceGeneration;
+    token.openGeneration = openGeneration;
+    return token;
+}
+
+UiPoint MakeHostPoint(in f32 x, in f32 y){
+    UiPoint point = UiPoint();
+    point.x = x;
+    point.y = y;
+    return point;
+}
+
 void VerifyUiClipboardPublications_CopiedWritePreservesNativeFifoBeforeLaterPasteRead(){
-    native{
-        using namespace NWB;
-        using namespace NWB::Core;
-        using namespace NWB::Impl;
-        using UiEditHostFixtureSupport::FakeClipboard;
-        Tests::TestArena arena;
-        FakeClipboard service(arena.arena, true);
-        UiClipboardPublications publications(arena.arena, service);
-        AString<Alloc::GlobalArena> source("copied", arena.arena);
-        ASSERT_EQ(publications.request(source), UiClipboardPublicationStatus::Pending);
-        source.assign("changed");
-        const auto read = service.requestReadText(ClipboardChannel::Clipboard);
-        ASSERT_TRUE(read);
-        ASSERT_TRUE(service.pump());
-        EXPECT_EQ(service.startedOperation, ClipboardOperation::WriteText);
-        EXPECT_EQ(service.startedText, "copied");
-        EXPECT_EQ(publications.drain().status, UiClipboardPublicationStatus::Pending);
-        ASSERT_TRUE(service.deliver(service.startedToken, ClipboardStatus::Success));
-        ASSERT_TRUE(service.pump());
-        EXPECT_EQ(service.startedOperation, ClipboardOperation::ReadText);
-        EXPECT_EQ(service.startedToken, *read);
-        ASSERT_TRUE(service.deliver(*read, ClipboardStatus::Success, "copied"));
-        const auto result = publications.drain();
-        EXPECT_EQ(result.status, UiClipboardPublicationStatus::Published);
-        EXPECT_EQ(result.published, 1u);
-        EXPECT_EQ(publications.pending(), 0u);
-        ClipboardCompletion completion(arena.arena);
-        ASSERT_EQ(service.poll(*read, completion), ClipboardPollResult::Completed);
-        EXPECT_EQ(completion.text, "copied");
-    }
+    FakeClipboardRig rig = FakeClipboardRig();
+    UiClipboardPublications publications = UiClipboardPublications(rig.arena.arena, rig.service);
+    String source = String("copied");
+    ASSERT_EQ(publications.request(StringView(source)), UiClipboardPublicationStatus::Pending);
+    source.assign("changed");
+    const auto read = rig.service.requestReadText(ClipboardChannel::Clipboard);
+    ASSERT_TRUE(read.has_value());
+    const ClipboardRequestToken readToken = read.value();
+    ASSERT_TRUE(rig.service.pump());
+    EXPECT_EQ(rig.service.startedOperation, ClipboardOperation::WriteText);
+    EXPECT_EQ(rig.service.startedText, "copied");
+    EXPECT_EQ(publications.drain().status, UiClipboardPublicationStatus::Pending);
+    ASSERT_TRUE(rig.service.deliver(rig.service.startedToken, ClipboardStatus::Success));
+    ASSERT_TRUE(rig.service.pump());
+    EXPECT_EQ(rig.service.startedOperation, ClipboardOperation::ReadText);
+    EXPECT_EQ(rig.service.startedToken, readToken);
+    ASSERT_TRUE(rig.service.deliver(readToken, ClipboardStatus::Success, "copied"));
+    const UiClipboardPublicationResult result = publications.drain();
+    EXPECT_EQ(result.status, UiClipboardPublicationStatus::Published);
+    EXPECT_EQ(result.published, 1u);
+    EXPECT_EQ(publications.pending(), 0u);
+    ClipboardCompletion completion = ClipboardCompletion(rig.arena.arena);
+    ASSERT_EQ(rig.service.poll(readToken, completion), ClipboardPollResult::Completed);
+    EXPECT_EQ(completion.text, "copied");
 }
 
 void VerifyUiClipboardPublications_BoundedQueueAndExplicitResetReleaseAllPendingNativeTokens(){
-    native{
-        using namespace NWB;
-        using namespace NWB::Core;
-        using namespace NWB::Impl;
-        using UiEditHostFixtureSupport::FakeClipboard;
-        Tests::TestArena arena;
-        FakeClipboard service(arena.arena, true);
-        UiClipboardPublications publications(arena.arena, service);
-        for(usize index = 0u; index < s_UiClipboardMaxPublications; ++index)
-            ASSERT_EQ(publications.request("copy"), UiClipboardPublicationStatus::Pending);
-        EXPECT_EQ(publications.pending(), s_UiClipboardMaxPublications);
-        EXPECT_EQ(publications.request("overflow"), UiClipboardPublicationStatus::QueueFull);
-        ASSERT_TRUE(service.pump());
-        const auto old = service.startedToken;
-        ASSERT_TRUE(publications.cancel());
-        EXPECT_EQ(publications.pending(), 0u);
-        EXPECT_FALSE(service.deliver(old, ClipboardStatus::Success));
-        EXPECT_EQ(publications.drain().status, UiClipboardPublicationStatus::Idle);
-        EXPECT_EQ(publications.request("new"), UiClipboardPublicationStatus::Pending);
-    }
+    FakeClipboardRig rig = FakeClipboardRig();
+    UiClipboardPublications publications = UiClipboardPublications(rig.arena.arena, rig.service);
+    for(usize index = 0u; index < s_ClipboardMaxPublications; ++index)
+        ASSERT_EQ(publications.request("copy"), UiClipboardPublicationStatus::Pending);
+    EXPECT_EQ(publications.pending(), s_ClipboardMaxPublications);
+    EXPECT_EQ(publications.request("overflow"), UiClipboardPublicationStatus::QueueFull);
+    ASSERT_TRUE(rig.service.pump());
+    const ClipboardRequestToken old = rig.service.startedToken;
+    ASSERT_TRUE(publications.cancel());
+    EXPECT_EQ(publications.pending(), 0u);
+    EXPECT_FALSE(rig.service.deliver(old, ClipboardStatus::Success));
+    EXPECT_EQ(publications.drain().status, UiClipboardPublicationStatus::Idle);
+    EXPECT_EQ(publications.request("new"), UiClipboardPublicationStatus::Pending);
 }
 
 void VerifyUiClipboardPublications_CompletionFailuresAreReportedAndConsumedWithoutLosingSuccessfulPublications(){
-    native{
-        using namespace NWB;
-        using namespace NWB::Core;
-        using namespace NWB::Impl;
-        using UiEditHostFixtureSupport::FakeClipboard;
-        Tests::TestArena arena;
-        FakeClipboard service(arena.arena, true);
-        UiClipboardPublications publications(arena.arena, service);
-        ASSERT_EQ(publications.request("success"), UiClipboardPublicationStatus::Pending);
-        ASSERT_EQ(publications.request("failure"), UiClipboardPublicationStatus::Pending);
-        ASSERT_EQ(publications.request("unsupported"), UiClipboardPublicationStatus::Pending);
-        ASSERT_TRUE(service.pump());
-        ASSERT_TRUE(service.deliver(service.startedToken, ClipboardStatus::Success));
-        ASSERT_TRUE(service.pump());
-        ASSERT_TRUE(service.deliver(service.startedToken, ClipboardStatus::NativeFailure));
-        ASSERT_TRUE(service.pump());
-        ASSERT_TRUE(service.deliver(service.startedToken, ClipboardStatus::Unsupported));
-        const auto result = publications.drain();
-        EXPECT_EQ(result.published, 1u);
-        EXPECT_EQ(result.failed, 2u);
-        EXPECT_EQ(result.status, UiClipboardPublicationStatus::Unsupported);
-        EXPECT_EQ(publications.pending(), 0u);
-        EXPECT_EQ(publications.drain().failed, 0u);
-    }
+    FakeClipboardRig rig = FakeClipboardRig();
+    UiClipboardPublications publications = UiClipboardPublications(rig.arena.arena, rig.service);
+    ASSERT_EQ(publications.request("success"), UiClipboardPublicationStatus::Pending);
+    ASSERT_EQ(publications.request("failure"), UiClipboardPublicationStatus::Pending);
+    ASSERT_EQ(publications.request("unsupported"), UiClipboardPublicationStatus::Pending);
+    ASSERT_TRUE(rig.service.pump());
+    ASSERT_TRUE(rig.service.deliver(rig.service.startedToken, ClipboardStatus::Success));
+    ASSERT_TRUE(rig.service.pump());
+    ASSERT_TRUE(rig.service.deliver(rig.service.startedToken, ClipboardStatus::NativeFailure));
+    ASSERT_TRUE(rig.service.pump());
+    ASSERT_TRUE(rig.service.deliver(rig.service.startedToken, ClipboardStatus::Unsupported));
+    const UiClipboardPublicationResult result = publications.drain();
+    EXPECT_EQ(result.published, 1u);
+    EXPECT_EQ(result.failed, 2u);
+    EXPECT_EQ(result.status, UiClipboardPublicationStatus::Unsupported);
+    EXPECT_EQ(publications.pending(), 0u);
+    EXPECT_EQ(publications.drain().failed, 0u);
 }
 
 void VerifyUiClipboardPublications_InvalidInputAndUnsupportedChannelNeverAdmitNativeWork(){
-    native{
-        using namespace NWB;
-        using namespace NWB::Core;
-        using namespace NWB::Impl;
-        using UiEditHostFixtureSupport::FakeClipboard;
-        Tests::TestArena arena;
-        FakeClipboard service(arena.arena, true);
-        UiClipboardPublications publications(arena.arena, service);
-        EXPECT_EQ(publications.request("\xC0\xAF"), UiClipboardPublicationStatus::InvalidText);
-        EXPECT_EQ(publications.request(AStringView("a\0b", 3u)), UiClipboardPublicationStatus::InvalidText);
-        EXPECT_EQ(publications.request("primary", ClipboardChannel::PrimarySelection), UiClipboardPublicationStatus::Unsupported);
-        EXPECT_EQ(publications.pending(), 0u);
-        ASSERT_TRUE(service.pump());
-        EXPECT_FALSE(service.startedToken.valid());
-    }
+    FakeClipboardRig rig = FakeClipboardRig();
+    UiClipboardPublications publications = UiClipboardPublications(rig.arena.arena, rig.service);
+    String nulText = String("axb");
+    nulText[1u] = '\0';
+    EXPECT_EQ(publications.request("\xC0\xAF"), UiClipboardPublicationStatus::InvalidText);
+    EXPECT_EQ(publications.request(StringView(nulText)), UiClipboardPublicationStatus::InvalidText);
+    EXPECT_EQ(publications.request("primary", ClipboardChannel::PrimarySelection), UiClipboardPublicationStatus::Unsupported);
+    EXPECT_EQ(publications.pending(), 0u);
+    ASSERT_TRUE(rig.service.pump());
+    EXPECT_FALSE(rig.service.startedToken.valid());
 }
 
 void VerifyUiClipboardPublications_AnotherThreadCannotRequestDrainOrCancelOwnedPublication(){
-    native{
-        using namespace NWB;
-        using namespace NWB::Core;
-        using namespace NWB::Impl;
-        using UiEditHostFixtureSupport::FakeClipboard;
-        Tests::TestArena arena;
-        FakeClipboard service(arena.arena, true);
-        UiClipboardPublications publications(arena.arena, service);
-        ASSERT_EQ(publications.request("copy"), UiClipboardPublicationStatus::Pending);
-        UiClipboardPublicationStatus::Enum requested = UiClipboardPublicationStatus::Idle;
-        UiClipboardPublicationStatus::Enum drained = UiClipboardPublicationStatus::Idle;
-        b8 cancelled = true;
+    FakeClipboardRig rig = FakeClipboardRig();
+    UiClipboardPublications publications = UiClipboardPublications(rig.arena.arena, rig.service);
+    ASSERT_EQ(publications.request("copy"), UiClipboardPublicationStatus::Pending);
+    UiClipboardPublicationStatusEnum requested = UiClipboardPublicationStatus::Idle;
+    UiClipboardPublicationStatusEnum drained = UiClipboardPublicationStatus::Idle;
+    b8 cancelled = true;
+    native(mut publications, mut requested, mut drained, mut cancelled){
         Thread other([&]()noexcept{
             requested = publications.request("other");
             drained = publications.drain().status;
             cancelled = publications.cancel();
         });
         other.join();
-        EXPECT_EQ(requested, UiClipboardPublicationStatus::WrongThread);
-        EXPECT_EQ(drained, UiClipboardPublicationStatus::WrongThread);
-        EXPECT_FALSE(cancelled);
-        EXPECT_EQ(publications.pending(), 1u);
-        EXPECT_TRUE(publications.cancel());
     }
+    EXPECT_EQ(requested, UiClipboardPublicationStatus::WrongThread);
+    EXPECT_EQ(drained, UiClipboardPublicationStatus::WrongThread);
+    EXPECT_FALSE(cancelled);
+    EXPECT_EQ(publications.pending(), 1u);
+    EXPECT_TRUE(publications.cancel());
 }
 
 void VerifyUiClipboardPublications_DestructionCancelsUndeliveredWorkBeforeServiceRetirement(){
-    native{
-        using namespace NWB;
-        using namespace NWB::Core;
-        using namespace NWB::Impl;
-        using UiEditHostFixtureSupport::FakeClipboard;
-        Tests::TestArena arena;
-        FakeClipboard service(arena.arena, true);
-        ClipboardRequestToken old;
-        {
-            UiClipboardPublications publications(arena.arena, service);
-            ASSERT_EQ(publications.request("copy"), UiClipboardPublicationStatus::Pending);
-            ASSERT_TRUE(service.pump());
-            old = service.startedToken;
-        }
-        EXPECT_FALSE(service.deliver(old, ClipboardStatus::Success));
-        ClipboardCompletion completion(arena.arena);
-        EXPECT_EQ(service.poll(old, completion), ClipboardPollResult::InvalidRequest);
+    FakeClipboardRig rig = FakeClipboardRig();
+    ClipboardRequestToken old = ClipboardRequestToken();
+    {
+        UiClipboardPublications publications = UiClipboardPublications(rig.arena.arena, rig.service);
+        ASSERT_EQ(publications.request("copy"), UiClipboardPublicationStatus::Pending);
+        ASSERT_TRUE(rig.service.pump());
+        old = rig.service.startedToken;
     }
+    EXPECT_FALSE(rig.service.deliver(old, ClipboardStatus::Success));
+    ClipboardCompletion completion = ClipboardCompletion(rig.arena.arena);
+    EXPECT_EQ(rig.service.poll(old, completion), ClipboardPollResult::InvalidRequest);
 }
 
 void VerifyUiConfigurableEditInputTests_EmptyKeyboardProfileLeavesNativeTextAndExplicitCommandsAvailable(mut UiConfigurableEditInputTests self){
@@ -1159,276 +1146,254 @@ void VerifyUiEditBoxHostTests_QueuedCopyThenPastePreservesAsynchronousNativePubl
 }
 
 void VerifyUiEditClickTracker_ExactTimeAndDistanceBoundsRequireAReleasedFirstPress(){
-    native{
-        using namespace __hidden_ui_edit_click_tracker_tests;
-        UiEditClickTracker tracker;
-        EXPECT_EQ(tracker.press(s_Owner, s_Popup, 4u, 5u, { 10.0f, 20.0f }, 1000u, false), UiEditClickKind::Caret);
-        EXPECT_EQ(tracker.press(s_Owner, s_Popup, 4u, 5u, { 14.0f, 20.0f }, 1500u, false), UiEditClickKind::Caret);
-        tracker.release(s_Owner);
-        EXPECT_EQ(tracker.press(s_Owner, s_Popup, 4u, 5u, { 18.0f, 20.0f }, 2000u, false), UiEditClickKind::Word);
-        tracker.release(s_Owner);
-        EXPECT_EQ(tracker.press(s_Owner, s_Popup, 4u, 5u, { 18.0f, 20.0f }, 2001u, false), UiEditClickKind::Caret);
-    }
+    const UiTextEditOwner owner = MakeHostEditOwner(11u, 2u, 3u);
+    const UiPopupToken popup = MakeHostPopupToken(21u, 1u, 1u, 1u);
+    UiEditClickTracker tracker = UiEditClickTracker();
+    EXPECT_EQ(tracker.press(owner, popup, 4u, 5u, MakeHostPoint(10.0f, 20.0f), 1000u, false), UiEditClickKind::Caret);
+    EXPECT_EQ(tracker.press(owner, popup, 4u, 5u, MakeHostPoint(14.0f, 20.0f), 1500u, false), UiEditClickKind::Caret);
+    tracker.release(owner);
+    EXPECT_EQ(tracker.press(owner, popup, 4u, 5u, MakeHostPoint(18.0f, 20.0f), 2000u, false), UiEditClickKind::Word);
+    tracker.release(owner);
+    EXPECT_EQ(tracker.press(owner, popup, 4u, 5u, MakeHostPoint(18.0f, 20.0f), 2001u, false), UiEditClickKind::Caret);
 }
 
 void VerifyUiEditClickTracker_ClockReversalAndMovementCannotManufactureASecondClick(){
-    native{
-        using namespace __hidden_ui_edit_click_tracker_tests;
-        UiEditClickTracker tracker;
-        EXPECT_EQ(tracker.press(s_Owner, {}, 1u, 1u, { 0.0f, 0.0f }, Limit<u64>::s_Max - 1u, false), UiEditClickKind::Caret);
-        tracker.release(s_Owner);
-        EXPECT_EQ(tracker.press(s_Owner, {}, 1u, 1u, { 0.0f, 0.0f }, 2u, false), UiEditClickKind::Caret);
-        tracker.move({ 4.1f, 0.0f });
-        tracker.release(s_Owner);
-        EXPECT_EQ(tracker.press(s_Owner, {}, 1u, 1u, { 0.0f, 0.0f }, 3u, false), UiEditClickKind::Caret);
-        tracker.release(s_Owner);
-        EXPECT_EQ(tracker.press(s_Owner, {}, 1u, 1u, { 0.0f, 0.0f }, 504u, false), UiEditClickKind::Caret);
-    }
+    const UiTextEditOwner owner = MakeHostEditOwner(11u, 2u, 3u);
+    const UiPopupToken noPopup = UiPopupToken();
+    const UiPoint origin = MakeHostPoint(0.0f, 0.0f);
+    UiEditClickTracker tracker = UiEditClickTracker();
+    EXPECT_EQ(tracker.press(owner, noPopup, 1u, 1u, origin, u64.max - 1u, false), UiEditClickKind::Caret);
+    tracker.release(owner);
+    EXPECT_EQ(tracker.press(owner, noPopup, 1u, 1u, origin, 2u, false), UiEditClickKind::Caret);
+    tracker.move(MakeHostPoint(4.1f, 0.0f));
+    tracker.release(owner);
+    EXPECT_EQ(tracker.press(owner, noPopup, 1u, 1u, origin, 3u, false), UiEditClickKind::Caret);
+    tracker.release(owner);
+    EXPECT_EQ(tracker.press(owner, noPopup, 1u, 1u, origin, 504u, false), UiEditClickKind::Caret);
 }
 
 void VerifyUiEditClickTracker_PopupReopenModelReplacementFocusLossAndShiftFenceTheSequence(){
-    native{
-        using namespace __hidden_ui_edit_click_tracker_tests;
-        UiEditClickTracker tracker;
-        EXPECT_EQ(tracker.press(s_Owner, s_Popup, 1u, 1u, {}, 100u, false), UiEditClickKind::Caret);
-        tracker.release(s_Owner);
-        EXPECT_EQ(tracker.press(s_Owner, s_ReopenedPopup, 1u, 1u, {}, 120u, false), UiEditClickKind::Caret);
-        tracker.release(s_Owner);
-        EXPECT_EQ(tracker.press(s_Owner, s_ReopenedPopup, 1u, 2u, {}, 140u, false), UiEditClickKind::Caret);
-        tracker.release(s_Owner);
-        tracker.retainFocus(s_OtherOwner);
-        EXPECT_EQ(tracker.press(s_Owner, s_ReopenedPopup, 1u, 2u, {}, 160u, false), UiEditClickKind::Caret);
-        tracker.release(s_Owner);
-        EXPECT_EQ(tracker.press(s_Owner, s_ReopenedPopup, 1u, 2u, {}, 180u, true), UiEditClickKind::Caret);
-        tracker.release(s_Owner);
-        EXPECT_EQ(tracker.press(s_Owner, s_ReopenedPopup, 1u, 2u, {}, 200u, false), UiEditClickKind::Caret);
-    }
+    const UiTextEditOwner owner = MakeHostEditOwner(11u, 2u, 3u);
+    const UiTextEditOwner otherOwner = MakeHostEditOwner(12u, 2u, 3u);
+    const UiPopupToken popup = MakeHostPopupToken(21u, 1u, 1u, 1u);
+    const UiPopupToken reopenedPopup = MakeHostPopupToken(21u, 1u, 1u, 2u);
+    const UiPoint origin = UiPoint();
+    UiEditClickTracker tracker = UiEditClickTracker();
+    EXPECT_EQ(tracker.press(owner, popup, 1u, 1u, origin, 100u, false), UiEditClickKind::Caret);
+    tracker.release(owner);
+    EXPECT_EQ(tracker.press(owner, reopenedPopup, 1u, 1u, origin, 120u, false), UiEditClickKind::Caret);
+    tracker.release(owner);
+    EXPECT_EQ(tracker.press(owner, reopenedPopup, 1u, 2u, origin, 140u, false), UiEditClickKind::Caret);
+    tracker.release(owner);
+    tracker.retainFocus(otherOwner);
+    EXPECT_EQ(tracker.press(owner, reopenedPopup, 1u, 2u, origin, 160u, false), UiEditClickKind::Caret);
+    tracker.release(owner);
+    EXPECT_EQ(tracker.press(owner, reopenedPopup, 1u, 2u, origin, 180u, true), UiEditClickKind::Caret);
+    tracker.release(owner);
+    EXPECT_EQ(tracker.press(owner, reopenedPopup, 1u, 2u, origin, 200u, false), UiEditClickKind::Caret);
 }
 
 void VerifyUiEditClipboard_InvalidActionAndChannelTakePrecedenceOverModelState(){
-    native{
-        using namespace __hidden_ui_edit_clipboard_tests;
-        Tests::TestArena arena;
-        DelayedClipboard service(arena.arena);
-        UiEditClipboardController controller(arena.arena, service);
-        Ui::EditModel model(arena.arena);
-        const auto invalidChannel = static_cast<ClipboardChannel::Enum>(255u);
-        EXPECT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::None, invalidChannel, true).status, UiEditClipboardStatus::InvalidAction);
-        EXPECT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste, invalidChannel, true).status, UiEditClipboardStatus::Unsupported);
-        EXPECT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Copy, invalidChannel).status, UiEditClipboardStatus::Unsupported);
-    }
+    const UiTextEditOwner owner = MakeHostEditOwner(51u, 2u, 3u);
+    DelayedClipboardRig rig = DelayedClipboardRig();
+    UiEditClipboardController controller = UiEditClipboardController(rig.arena.arena, rig.service);
+    UiEditModel model = UiEditModel(rig.arena.arena);
+    const ClipboardChannelEnum invalidChannel = cast<ClipboardChannelEnum>(255u);
+    EXPECT_EQ(controller.request(owner, model, UiEditClipboardAction::None, invalidChannel, true).status, UiEditClipboardStatus::InvalidAction);
+    EXPECT_EQ(controller.request(owner, model, UiEditClipboardAction::Paste, invalidChannel, true).status, UiEditClipboardStatus::Unsupported);
+    EXPECT_EQ(controller.request(owner, model, UiEditClipboardAction::Copy, invalidChannel).status, UiEditClipboardStatus::Unsupported);
 }
 
 void VerifyUiEditClipboard_CutWaitsForSuccessfulNativePublicationBeforeDeleting(){
-    native{
-        using namespace __hidden_ui_edit_clipboard_tests;
-        Tests::TestArena arena;
-        DelayedClipboard service(arena.arena);
-        UiEditClipboardController controller(arena.arena, service);
-        Ui::EditModel model(arena.arena);
-        ASSERT_TRUE(model.setText("abcd"));
-        ASSERT_TRUE(model.setSelection(1u, 3u));
-        ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Cut).status, UiEditClipboardStatus::Pending);
-        EXPECT_EQ(model.text(), "abcd");
-        ASSERT_TRUE(service.pump());
-        ASSERT_TRUE(service.completeNativeRequest(controller.token(), ClipboardStatus::NativeFailure));
-        EXPECT_EQ(controller.drain(s_Owner, model).status, UiEditClipboardStatus::NativeFailure);
-        EXPECT_EQ(model.selectedText(), "bc");
-        EXPECT_FALSE(model.canUndo());
-        ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Cut).status, UiEditClipboardStatus::Pending);
-        ASSERT_TRUE(service.pump());
-        ASSERT_TRUE(service.completeNativeRequest(controller.token(), ClipboardStatus::Success));
-        EXPECT_TRUE(controller.drain(s_Owner, model).textChanged);
-        EXPECT_EQ(model.text(), "ad");
-        ASSERT_TRUE(model.undo());
-        EXPECT_EQ(model.text(), "abcd");
-        EXPECT_EQ(model.selectedText(), "bc");
-    }
+    const UiTextEditOwner owner = MakeHostEditOwner(51u, 2u, 3u);
+    DelayedClipboardRig rig = DelayedClipboardRig();
+    UiEditClipboardController controller = UiEditClipboardController(rig.arena.arena, rig.service);
+    UiEditModel model = UiEditModel(rig.arena.arena);
+    ASSERT_TRUE(model.setText("abcd"));
+    ASSERT_TRUE(model.setSelection(1u, 3u));
+    ASSERT_EQ(controller.request(owner, model, UiEditClipboardAction::Cut).status, UiEditClipboardStatus::Pending);
+    EXPECT_EQ(model.text(), "abcd");
+    ASSERT_TRUE(rig.service.pump());
+    ASSERT_TRUE(rig.service.completeNativeRequest(controller.token(), ClipboardStatus::NativeFailure));
+    EXPECT_EQ(controller.drain(owner, model).status, UiEditClipboardStatus::NativeFailure);
+    EXPECT_EQ(model.selectedText(), "bc");
+    EXPECT_FALSE(model.canUndo());
+    ASSERT_EQ(controller.request(owner, model, UiEditClipboardAction::Cut).status, UiEditClipboardStatus::Pending);
+    ASSERT_TRUE(rig.service.pump());
+    ASSERT_TRUE(rig.service.completeNativeRequest(controller.token(), ClipboardStatus::Success));
+    EXPECT_TRUE(controller.drain(owner, model).textChanged);
+    EXPECT_EQ(model.text(), "ad");
+    ASSERT_TRUE(model.undo());
+    EXPECT_EQ(model.text(), "abcd");
+    EXPECT_EQ(model.selectedText(), "bc");
 }
 
 void VerifyUiEditClipboard_CopiedOwnerGenerationsRejectReplacedWidgetDeclarationAndModel(){
-    native{
-        using namespace __hidden_ui_edit_clipboard_tests;
-        Tests::TestArena arena;
-        DelayedClipboard service(arena.arena);
-        UiEditClipboardController controller(arena.arena, service);
-        Ui::EditModel model(arena.arena);
-        ASSERT_TRUE(model.setText("base"));
-        const Array<UiTextEditOwner, 3u> replacements = { UiTextEditOwner{ { 52u }, 2u, 3u }, UiTextEditOwner{ { 51u }, 4u, 3u }, UiTextEditOwner{ { 51u }, 2u, 5u } };
-        for(const auto& owner : replacements){
-            ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
-            ASSERT_TRUE(service.pump());
-            const auto old = controller.token();
-            ASSERT_TRUE(service.completeNativeRequest(old, ClipboardStatus::Success, "old"));
-            EXPECT_EQ(controller.drain(owner, model).status, UiEditClipboardStatus::StaleOwner);
-            EXPECT_EQ(model.text(), "base");
-            EXPECT_FALSE(controller.pending());
-            EXPECT_FALSE(service.completeNativeRequest(old, ClipboardStatus::Success, "late"));
-        }
+    const UiTextEditOwner baseOwner = MakeHostEditOwner(51u, 2u, 3u);
+    DelayedClipboardRig rig = DelayedClipboardRig();
+    UiEditClipboardController controller = UiEditClipboardController(rig.arena.arena, rig.service);
+    UiEditModel model = UiEditModel(rig.arena.arena);
+    ASSERT_TRUE(model.setText("base"));
+    Array<UiTextEditOwner, 3> replacements = Array<UiTextEditOwner, 3>();
+    replacements[0u] = MakeHostEditOwner(52u, 2u, 3u);
+    replacements[1u] = MakeHostEditOwner(51u, 4u, 3u);
+    replacements[2u] = MakeHostEditOwner(51u, 2u, 5u);
+    for(in UiTextEditOwner owner : replacements){
+        ASSERT_EQ(controller.request(baseOwner, model, UiEditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+        ASSERT_TRUE(rig.service.pump());
+        const ClipboardRequestToken old = controller.token();
+        ASSERT_TRUE(rig.service.completeNativeRequest(old, ClipboardStatus::Success, "old"));
+        EXPECT_EQ(controller.drain(owner, model).status, UiEditClipboardStatus::StaleOwner);
+        EXPECT_EQ(model.text(), "base");
+        EXPECT_FALSE(controller.pending());
+        EXPECT_FALSE(rig.service.completeNativeRequest(old, ClipboardStatus::Success, "late"));
     }
 }
 
 void VerifyUiEditClipboard_TextRevisionSelectionAndPreeditChangesFencePendingTransfer(){
-    native{
-        using namespace __hidden_ui_edit_clipboard_tests;
-        Tests::TestArena arena;
-        DelayedClipboard service(arena.arena);
-        UiEditClipboardController controller(arena.arena, service);
-        Ui::EditModel model(arena.arena);
-        ASSERT_TRUE(model.setText("base"));
-        ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
-        ASSERT_TRUE(service.pump());
-        ASSERT_TRUE(model.setSelection(0u, 0u));
-        EXPECT_EQ(controller.drain(s_Owner, model).status, UiEditClipboardStatus::StaleModel);
-        EXPECT_EQ(model.text(), "base");
-        ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
-        ASSERT_TRUE(service.pump());
-        ASSERT_TRUE(model.replaceSelection("changed"));
-        EXPECT_EQ(controller.drain(s_Owner, model).status, UiEditClipboardStatus::StaleModel);
-        ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
-        ASSERT_TRUE(service.pump());
-        ASSERT_TRUE(model.beginComposition());
-        EXPECT_EQ(controller.drain(s_Owner, model).status, UiEditClipboardStatus::StaleModel);
-        EXPECT_TRUE(model.composition().active);
-        EXPECT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::CompositionActive);
-    }
+    const UiTextEditOwner owner = MakeHostEditOwner(51u, 2u, 3u);
+    DelayedClipboardRig rig = DelayedClipboardRig();
+    UiEditClipboardController controller = UiEditClipboardController(rig.arena.arena, rig.service);
+    UiEditModel model = UiEditModel(rig.arena.arena);
+    ASSERT_TRUE(model.setText("base"));
+    ASSERT_EQ(controller.request(owner, model, UiEditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    ASSERT_TRUE(rig.service.pump());
+    ASSERT_TRUE(model.setSelection(0u, 0u));
+    EXPECT_EQ(controller.drain(owner, model).status, UiEditClipboardStatus::StaleModel);
+    EXPECT_EQ(model.text(), "base");
+    ASSERT_EQ(controller.request(owner, model, UiEditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    ASSERT_TRUE(rig.service.pump());
+    ASSERT_TRUE(model.replaceSelection("changed"));
+    EXPECT_EQ(controller.drain(owner, model).status, UiEditClipboardStatus::StaleModel);
+    ASSERT_EQ(controller.request(owner, model, UiEditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    ASSERT_TRUE(rig.service.pump());
+    ASSERT_TRUE(model.beginComposition());
+    EXPECT_EQ(controller.drain(owner, model).status, UiEditClipboardStatus::StaleModel);
+    EXPECT_TRUE(model.composition().active);
+    EXPECT_EQ(controller.request(owner, model, UiEditClipboardAction::Paste).status, UiEditClipboardStatus::CompositionActive);
 }
 
 void VerifyUiEditClipboard_ExplicitCancellationInvalidatesDeliveryAndNewRequestSupersedesOld(){
-    native{
-        using namespace __hidden_ui_edit_clipboard_tests;
-        Tests::TestArena arena;
-        DelayedClipboard service(arena.arena);
-        UiEditClipboardController controller(arena.arena, service);
-        Ui::EditModel model(arena.arena);
-        ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
-        ASSERT_TRUE(service.pump());
-        const auto first = controller.token();
-        ASSERT_TRUE(controller.cancel());
-        EXPECT_FALSE(service.completeNativeRequest(first, ClipboardStatus::Success, "old"));
-        ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
-        ASSERT_TRUE(service.pump());
-        const auto second = controller.token();
-        ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
-        EXPECT_NE(controller.token(), second);
-        EXPECT_FALSE(service.completeNativeRequest(second, ClipboardStatus::Success, "old"));
-        ASSERT_TRUE(service.pump());
-        ASSERT_TRUE(service.completeNativeRequest(controller.token(), ClipboardStatus::Success, "new"));
-        EXPECT_TRUE(controller.drain(s_Owner, model).textChanged);
-        EXPECT_EQ(model.text(), "new");
-    }
+    const UiTextEditOwner owner = MakeHostEditOwner(51u, 2u, 3u);
+    DelayedClipboardRig rig = DelayedClipboardRig();
+    UiEditClipboardController controller = UiEditClipboardController(rig.arena.arena, rig.service);
+    UiEditModel model = UiEditModel(rig.arena.arena);
+    ASSERT_EQ(controller.request(owner, model, UiEditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    ASSERT_TRUE(rig.service.pump());
+    const ClipboardRequestToken first = controller.token();
+    ASSERT_TRUE(controller.cancel());
+    EXPECT_FALSE(rig.service.completeNativeRequest(first, ClipboardStatus::Success, "old"));
+    ASSERT_EQ(controller.request(owner, model, UiEditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    ASSERT_TRUE(rig.service.pump());
+    const ClipboardRequestToken second = controller.token();
+    ASSERT_EQ(controller.request(owner, model, UiEditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    EXPECT_NE(controller.token(), second);
+    EXPECT_FALSE(rig.service.completeNativeRequest(second, ClipboardStatus::Success, "old"));
+    ASSERT_TRUE(rig.service.pump());
+    ASSERT_TRUE(rig.service.completeNativeRequest(controller.token(), ClipboardStatus::Success, "new"));
+    EXPECT_TRUE(controller.drain(owner, model).textChanged);
+    EXPECT_EQ(model.text(), "new");
 }
 
 void VerifyUiEditClipboard_IdenticalExternalResetInvalidatesCopiedPasteDespiteUnchangedTextRevision(){
-    native{
-        using namespace __hidden_ui_edit_clipboard_tests;
-        Tests::TestArena arena;
-        DelayedClipboard service(arena.arena);
-        UiEditClipboardController controller(arena.arena, service);
-        Ui::EditModel model(arena.arena);
-        ASSERT_TRUE(model.setText("base"));
-        ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
-        ASSERT_TRUE(service.pump());
-        const auto old = controller.token();
-        const u64 revision = model.revision();
-        const u64 externalRevision = model.externalRevision();
-        ASSERT_TRUE(model.setText("base"));
-        EXPECT_EQ(model.revision(), revision);
-        EXPECT_GT(model.externalRevision(), externalRevision);
-        ASSERT_TRUE(service.completeNativeRequest(old, ClipboardStatus::Success, "old"));
-        EXPECT_EQ(controller.drain(s_Owner, model).status, UiEditClipboardStatus::StaleModel);
-        EXPECT_EQ(model.text(), "base");
-        EXPECT_FALSE(controller.pending());
-    }
+    const UiTextEditOwner owner = MakeHostEditOwner(51u, 2u, 3u);
+    DelayedClipboardRig rig = DelayedClipboardRig();
+    UiEditClipboardController controller = UiEditClipboardController(rig.arena.arena, rig.service);
+    UiEditModel model = UiEditModel(rig.arena.arena);
+    ASSERT_TRUE(model.setText("base"));
+    ASSERT_EQ(controller.request(owner, model, UiEditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    ASSERT_TRUE(rig.service.pump());
+    const ClipboardRequestToken old = controller.token();
+    const u64 revision = model.revision();
+    const u64 externalRevision = model.externalRevision();
+    ASSERT_TRUE(model.setText("base"));
+    EXPECT_EQ(model.revision(), revision);
+    EXPECT_GT(model.externalRevision(), externalRevision);
+    ASSERT_TRUE(rig.service.completeNativeRequest(old, ClipboardStatus::Success, "old"));
+    EXPECT_EQ(controller.drain(owner, model).status, UiEditClipboardStatus::StaleModel);
+    EXPECT_EQ(model.text(), "base");
+    EXPECT_FALSE(controller.pending());
 }
 
 void VerifyUiEditClipboard_TextLimitAndMalformedClipboardPreserveSelectionHistoryAndCommittedText(){
-    native{
-        using namespace __hidden_ui_edit_clipboard_tests;
-        Tests::TestArena arena;
-        DelayedClipboard service(arena.arena);
-        UiEditClipboardController controller(arena.arena, service);
-        Ui::EditModel model(arena.arena, { 4u });
-        ASSERT_TRUE(model.setText("abcd"));
-        ASSERT_TRUE(model.setSelection(1u, 3u));
-        ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
-        ASSERT_TRUE(service.pump());
-        ASSERT_TRUE(service.completeNativeRequest(controller.token(), ClipboardStatus::Success, "xyz"));
-        EXPECT_EQ(controller.drain(s_Owner, model).status, UiEditClipboardStatus::TooLarge);
-        EXPECT_EQ(model.selectedText(), "bc");
-        EXPECT_FALSE(model.canUndo());
-        ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
-        ASSERT_TRUE(service.pump());
-        ASSERT_TRUE(service.completeNativeRequest(controller.token(), ClipboardStatus::Success, "\xC0\xAF"));
-        EXPECT_EQ(controller.drain(s_Owner, model).status, UiEditClipboardStatus::InvalidText);
-        EXPECT_EQ(model.text(), "abcd");
-        EXPECT_EQ(model.selectedText(), "bc");
-        ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
-        ASSERT_TRUE(service.pump());
-        ASSERT_TRUE(service.completeNativeRequest(controller.token(), ClipboardStatus::Success, ""));
-        EXPECT_FALSE(controller.drain(s_Owner, model).textChanged);
-        EXPECT_EQ(model.selectedText(), "bc");
-    }
+    const UiTextEditOwner owner = MakeHostEditOwner(51u, 2u, 3u);
+    DelayedClipboardRig rig = DelayedClipboardRig();
+    UiEditClipboardController controller = UiEditClipboardController(rig.arena.arena, rig.service);
+    UiEditLimits limits = UiEditLimits();
+    limits.maxBytes = 4u;
+    UiEditModel model = UiEditModel(rig.arena.arena, limits);
+    ASSERT_TRUE(model.setText("abcd"));
+    ASSERT_TRUE(model.setSelection(1u, 3u));
+    ASSERT_EQ(controller.request(owner, model, UiEditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    ASSERT_TRUE(rig.service.pump());
+    ASSERT_TRUE(rig.service.completeNativeRequest(controller.token(), ClipboardStatus::Success, "xyz"));
+    EXPECT_EQ(controller.drain(owner, model).status, UiEditClipboardStatus::TooLarge);
+    EXPECT_EQ(model.selectedText(), "bc");
+    EXPECT_FALSE(model.canUndo());
+    ASSERT_EQ(controller.request(owner, model, UiEditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    ASSERT_TRUE(rig.service.pump());
+    ASSERT_TRUE(rig.service.completeNativeRequest(controller.token(), ClipboardStatus::Success, "\xC0\xAF"));
+    EXPECT_EQ(controller.drain(owner, model).status, UiEditClipboardStatus::InvalidText);
+    EXPECT_EQ(model.text(), "abcd");
+    EXPECT_EQ(model.selectedText(), "bc");
+    ASSERT_EQ(controller.request(owner, model, UiEditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    ASSERT_TRUE(rig.service.pump());
+    ASSERT_TRUE(rig.service.completeNativeRequest(controller.token(), ClipboardStatus::Success, ""));
+    EXPECT_FALSE(controller.drain(owner, model).textChanged);
+    EXPECT_EQ(model.selectedText(), "bc");
 }
 
 void VerifyUiEditClipboard_ReadOnlyPreventsCutPasteAndCancelsMutationIfPolicyChangesDuringTransfer(){
-    native{
-        using namespace __hidden_ui_edit_clipboard_tests;
-        Tests::TestArena arena;
-        DelayedClipboard service(arena.arena);
-        UiEditClipboardController controller(arena.arena, service);
-        Ui::EditModel model(arena.arena);
-        ASSERT_TRUE(model.setText("abcd"));
-        ASSERT_TRUE(model.selectAll());
-        EXPECT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Cut, ClipboardChannel::Clipboard, true).status, UiEditClipboardStatus::ReadOnly);
-        EXPECT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste, ClipboardChannel::Clipboard, true).status, UiEditClipboardStatus::ReadOnly);
-        ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Copy, ClipboardChannel::Clipboard, true).status, UiEditClipboardStatus::Pending);
-        ASSERT_TRUE(service.pump());
-        ASSERT_TRUE(service.completeNativeRequest(controller.token(), ClipboardStatus::Success));
-        EXPECT_EQ(controller.drain(s_Owner, model, true).status, UiEditClipboardStatus::Published);
-        ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
-        ASSERT_TRUE(service.pump());
-        ASSERT_TRUE(service.completeNativeRequest(controller.token(), ClipboardStatus::Success, "new"));
-        EXPECT_EQ(controller.drain(s_Owner, model, true).status, UiEditClipboardStatus::ReadOnly);
-        EXPECT_EQ(model.text(), "abcd");
-        EXPECT_EQ(model.selectedText(), "abcd");
-    }
+    const UiTextEditOwner owner = MakeHostEditOwner(51u, 2u, 3u);
+    DelayedClipboardRig rig = DelayedClipboardRig();
+    UiEditClipboardController controller = UiEditClipboardController(rig.arena.arena, rig.service);
+    UiEditModel model = UiEditModel(rig.arena.arena);
+    ASSERT_TRUE(model.setText("abcd"));
+    ASSERT_TRUE(model.selectAll());
+    EXPECT_EQ(controller.request(owner, model, UiEditClipboardAction::Cut, ClipboardChannel::Clipboard, true).status, UiEditClipboardStatus::ReadOnly);
+    EXPECT_EQ(controller.request(owner, model, UiEditClipboardAction::Paste, ClipboardChannel::Clipboard, true).status, UiEditClipboardStatus::ReadOnly);
+    ASSERT_EQ(controller.request(owner, model, UiEditClipboardAction::Copy, ClipboardChannel::Clipboard, true).status, UiEditClipboardStatus::Pending);
+    ASSERT_TRUE(rig.service.pump());
+    ASSERT_TRUE(rig.service.completeNativeRequest(controller.token(), ClipboardStatus::Success));
+    EXPECT_EQ(controller.drain(owner, model, true).status, UiEditClipboardStatus::Published);
+    ASSERT_EQ(controller.request(owner, model, UiEditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    ASSERT_TRUE(rig.service.pump());
+    ASSERT_TRUE(rig.service.completeNativeRequest(controller.token(), ClipboardStatus::Success, "new"));
+    EXPECT_EQ(controller.drain(owner, model, true).status, UiEditClipboardStatus::ReadOnly);
+    EXPECT_EQ(model.text(), "abcd");
+    EXPECT_EQ(model.selectedText(), "abcd");
 }
 
 void VerifyUiEditClipboard_UnsupportedPrimarySelectionRejectsBeforeTransferAdmission(){
-    native{
-        using namespace __hidden_ui_edit_clipboard_tests;
-        Tests::TestArena arena;
-        DelayedClipboard service(arena.arena);
-        UiEditClipboardController controller(arena.arena, service);
-        Ui::EditModel model(arena.arena);
-        EXPECT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste, ClipboardChannel::PrimarySelection).status, UiEditClipboardStatus::Unsupported);
-    }
+    const UiTextEditOwner owner = MakeHostEditOwner(51u, 2u, 3u);
+    DelayedClipboardRig rig = DelayedClipboardRig();
+    UiEditClipboardController controller = UiEditClipboardController(rig.arena.arena, rig.service);
+    UiEditModel model = UiEditModel(rig.arena.arena);
+    EXPECT_EQ(controller.request(owner, model, UiEditClipboardAction::Paste, ClipboardChannel::PrimarySelection).status, UiEditClipboardStatus::Unsupported);
 }
 
 void VerifyUiEditClipboard_OwnerThreadViolationCannotPollApplyOrCancelAHostRequest(){
-    native{
-        using namespace __hidden_ui_edit_clipboard_tests;
-        Tests::TestArena arena;
-        DelayedClipboard service(arena.arena);
-        UiEditClipboardController controller(arena.arena, service);
-        Ui::EditModel model(arena.arena);
-        ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
-        UiEditClipboardStatus::Enum requestStatus = UiEditClipboardStatus::Idle;
-        UiEditClipboardStatus::Enum drainStatus = UiEditClipboardStatus::Idle;
-        b8 cancelled = true;
+    const UiTextEditOwner owner = MakeHostEditOwner(51u, 2u, 3u);
+    DelayedClipboardRig rig = DelayedClipboardRig();
+    UiEditClipboardController controller = UiEditClipboardController(rig.arena.arena, rig.service);
+    UiEditModel model = UiEditModel(rig.arena.arena);
+    ASSERT_EQ(controller.request(owner, model, UiEditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    UiEditClipboardStatusEnum requestStatus = UiEditClipboardStatus::Idle;
+    UiEditClipboardStatusEnum drainStatus = UiEditClipboardStatus::Idle;
+    b8 cancelled = true;
+    native(mut controller, in owner, mut model, mut requestStatus, mut drainStatus, mut cancelled){
         Thread other([&]()noexcept{
-            requestStatus = controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status;
-            drainStatus = controller.drain(s_Owner, model).status;
+            requestStatus = controller.request(owner, model, UiEditClipboardAction::Paste).status;
+            drainStatus = controller.drain(owner, model).status;
             cancelled = controller.cancel();
         });
         other.join();
-        EXPECT_EQ(requestStatus, UiEditClipboardStatus::WrongThread);
-        EXPECT_EQ(drainStatus, UiEditClipboardStatus::WrongThread);
-        EXPECT_FALSE(cancelled);
-        EXPECT_TRUE(controller.pending());
-        EXPECT_TRUE(controller.cancel());
     }
+    EXPECT_EQ(requestStatus, UiEditClipboardStatus::WrongThread);
+    EXPECT_EQ(drainStatus, UiEditClipboardStatus::WrongThread);
+    EXPECT_FALSE(cancelled);
+    EXPECT_TRUE(controller.pending());
+    EXPECT_TRUE(controller.cancel());
 }
 
 NWB_ADHD_GTEST(UiClipboardPublications, CopiedWritePreservesNativeFifoBeforeLaterPasteRead, VerifyUiClipboardPublications_CopiedWritePreservesNativeFifoBeforeLaterPasteRead)

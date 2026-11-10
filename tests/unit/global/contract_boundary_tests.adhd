@@ -10,6 +10,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
 
 
@@ -43,17 +44,6 @@ namespace __hidden_contract_boundary_tests{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-template<typename T>
-void VerifySignedLowerSaturation(){
-    constexpr T s_Minimum = Limit<T>::s_Min;
-    constexpr T s_Maximum = Limit<T>::s_Max;
-    EXPECT_EQ(AddSaturating<T>(s_Minimum, T(-1)), s_Minimum);
-    EXPECT_EQ(AddSaturating<T>(T(-1), s_Minimum), s_Minimum);
-    EXPECT_EQ(AddSaturating<T>(s_Minimum, s_Minimum), s_Minimum);
-    EXPECT_EQ(AddSaturating<T>(T(s_Minimum + T(1)), T(-1)), s_Minimum);
-    EXPECT_EQ(AddSaturating<T>(s_Maximum, T(1)), s_Maximum);
-}
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 [[noreturn]] void VerifyRedirectedFileWithClosedDescriptors(u32 mask, AStringView outputPath);
@@ -179,13 +169,22 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void VerifySignedLowerSaturation<T>(in T minimum, in T nearMinimum, in T maximum){
+    const T minusOne = cast<T>(-1);
+    const T plusOne = cast<T>(1);
+    EXPECT_EQ(AddSaturating<T>(minimum, minusOne), minimum);
+    EXPECT_EQ(AddSaturating<T>(minusOne, minimum), minimum);
+    EXPECT_EQ(AddSaturating<T>(minimum, minimum), minimum);
+    EXPECT_EQ(AddSaturating<T>(nearMinimum, minusOne), minimum);
+    EXPECT_EQ(AddSaturating<T>(maximum, plusOne), maximum);
+}
+
 void VerifyGlobalContractBoundaries_SignedAdditionClampsNegativeOverflowToTheLowerBound(){
-    native{
-        __hidden_contract_boundary_tests::VerifySignedLowerSaturation<i8>();
-        __hidden_contract_boundary_tests::VerifySignedLowerSaturation<i16>();
-        __hidden_contract_boundary_tests::VerifySignedLowerSaturation<i32>();
-        __hidden_contract_boundary_tests::VerifySignedLowerSaturation<i64>();
-    }
+    VerifySignedLowerSaturation<i8>(i8.min, cast<i8>(i8.min + cast<i8>(1)), i8.max);
+    VerifySignedLowerSaturation<i16>(i16.min, cast<i16>(i16.min + cast<i16>(1)), i16.max);
+    VerifySignedLowerSaturation<i32>(i32.min, i32.min + 1, i32.max);
+    VerifySignedLowerSaturation<i64>(i64.min, i64.min + cast<i64>(1), i64.max);
+    EXPECT_EQ(AddSaturating<i32>(i32.min, -1), i32.min);
 }
 
 void VerifyGlobalContractBoundaries_AlignmentOverflowKeepsTheLastRepresentableAlignedSize(){
@@ -267,64 +266,134 @@ void VerifyGlobalContractBoundaries_Utf8OffsetRejectsMalformedPrefixesWithoutRea
 
 void VerifyGlobalContractBoundaries_FixedIndexMapCollisionWrapAndCapacityFailurePreserveExistingEntries(){
     const Name ownerName = s_GlobalContractNameTestsGlobalFixedIndexCollision;
-    native(in ownerName){
+    b8 mapValid = false;
+    b8 insertedInitial = true;
+    b8 overflowKeyInserted = true;
+    b8 overflowKeyMissing = false;
+    b8 updatedExisting = false;
+    FixedVector<usize, 5u> storedValues;
+    b8 allFound = true;
+    b8 overflowMapValid = true;
+    b8 overflowMapInsert = true;
+    b8 overflowMapMissing = false;
+    native(in ownerName, mut mapValid, mut insertedInitial, mut overflowKeyInserted, mut overflowKeyMissing, mut updatedExisting, mut storedValues, mut allFound, mut overflowMapValid, mut overflowMapInsert, mut overflowMapMissing){
         NWB::Core::Alloc::ScratchArena arena{ ownerName };
         const auto collide = [](const u32)noexcept{ return usize{ 1u }; };
         FixedIndexMap<u32, NWB::Core::Alloc::ScratchArena, decltype(collide)> map(arena, 2u, collide);
-        ASSERT_TRUE(map.valid());
-        for(u32 key = 0u; key < 5u; ++key)
-            ASSERT_TRUE(map.insertOrAssign(key, key + 10u));
-        EXPECT_FALSE(map.insertOrAssign(5u, 99u));
-        EXPECT_EQ(map.find(5u), nullptr);
-        ASSERT_TRUE(map.insertOrAssign(4u, 77u));
-        for(u32 key = 0u; key < 5u; ++key){
-            const usize* const value = map.find(key);
-            ASSERT_NE(value, nullptr);
-            EXPECT_EQ(*value, key == 4u ? 77u : key + 10u);
+        mapValid = map.valid();
+        if(mapValid){
+            for(u32 key = 0u; key < 5u; ++key)
+                insertedInitial = insertedInitial && map.insertOrAssign(key, key + 10u);
+            overflowKeyInserted = map.insertOrAssign(5u, 99u);
+            overflowKeyMissing = map.find(5u) == nullptr;
+            updatedExisting = map.insertOrAssign(4u, 77u);
+            for(u32 key = 0u; key < 5u; ++key){
+                const usize* const value = map.find(key);
+                if(value == nullptr){
+                    allFound = false;
+                    break;
+                }
+                storedValues.push_back(*value);
+            }
         }
         FixedIndexMap<u32, NWB::Core::Alloc::ScratchArena> overflow(arena, Limit<usize>::s_Max);
-        EXPECT_FALSE(overflow.valid());
-        EXPECT_FALSE(overflow.insertOrAssign(0u, 0u));
-        EXPECT_EQ(overflow.find(0u), nullptr);
+        overflowMapValid = overflow.valid();
+        overflowMapInsert = overflow.insertOrAssign(0u, 0u);
+        overflowMapMissing = overflow.find(0u) == nullptr;
     }
+    ASSERT_TRUE(mapValid);
+    ASSERT_TRUE(insertedInitial);
+    EXPECT_FALSE(overflowKeyInserted);
+    EXPECT_TRUE(overflowKeyMissing);
+    ASSERT_TRUE(updatedExisting);
+    ASSERT_TRUE(allFound);
+    ASSERT_EQ(storedValues.size(), 5u);
+    for(usize key = 0u; key < 5u; ++key){
+        if(key == 4u)
+            EXPECT_EQ(storedValues[key], 77u);
+        else
+            EXPECT_EQ(storedValues[key], key + 10u);
+    }
+    EXPECT_FALSE(overflowMapValid);
+    EXPECT_FALSE(overflowMapInsert);
+    EXPECT_TRUE(overflowMapMissing);
 }
 
 void VerifyGlobalContractBoundaries_RedirectedProcessPreservesCombinedOutputAndExitStatusWithClosedStandardDescriptors(){
-    native{
+    b8 supported = false;
+    b8 prepared = false;
+    String outputText = "";
+    native(mut supported, mut prepared, mut outputText){
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-        using namespace __hidden_contract_boundary_tests;
+        supported = true;
         NWB::Tests::TestArena<> testArena;
         const ::Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/contract_redirected_closed_stdio");
-        ASSERT_TRUE(EnsureEmptyDirectory(root));
-        const auto outputPath = root / "combined.txt";
-        const auto outputText = PathToString<char>(testArena.arena, outputPath);
-        for(u32 mask = 1u; mask < 8u; ++mask){
-            SCOPED_TRACE(mask);
-            ASSERT_EXIT(VerifyRedirectedFileWithClosedDescriptors(mask, AStringView(outputText)), testing::ExitedWithCode(0), "");
+        prepared = EnsureEmptyDirectory(root).has_value();
+        if(prepared){
+            const auto outputPath = root / "combined.txt";
+            const auto renderedPath = PathToString<char>(testArena.arena, outputPath);
+            outputText.assign(AStringView(renderedPath));
         }
-        ASSERT_TRUE(RemoveAllIfExists(root));
 #endif
     }
+    if(!supported)
+        return;
+
+    ASSERT_TRUE(prepared);
+    const StringView outputPathView = outputText;
+    EXPECT_FALSE(outputPathView.empty());
+    for(u32 mask = 1u; mask < 8u; ++mask){
+        ScopedTestTrace trace(mask);
+        native(in mask, in outputPathView){
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+            ASSERT_EXIT(__hidden_contract_boundary_tests::VerifyRedirectedFileWithClosedDescriptors(mask, outputPathView), testing::ExitedWithCode(0), "");
+#else
+            static_cast<void>(mask);
+            static_cast<void>(outputPathView);
+#endif
+        }
+    }
+
+    b8 removed = false;
+    native(mut removed){
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+        NWB::Tests::TestArena<> testArena;
+        const ::Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/contract_redirected_closed_stdio");
+        removed = RemoveAllIfExists(root).has_value();
+#endif
+    }
+    ASSERT_TRUE(removed);
 }
 
 void VerifyGlobalContractBoundaries_CapturedProcessPreservesStdoutAndFailureStatusWithClosedStandardDescriptors(){
+    b8 supported = false;
+    u32 checkedMasks = 0u;
     for(u32 mask = 1u; mask < 8u; ++mask){
         ScopedTestTrace trace(mask);
-        native(in mask){
+        native(in mask, mut supported, mut checkedMasks){
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+            supported = true;
             ASSERT_EXIT(__hidden_contract_boundary_tests::VerifyCapturedOutputWithClosedDescriptors(mask), testing::ExitedWithCode(0), "");
+            ++checkedMasks;
 #else
-            (void)mask;
+            static_cast<void>(mask);
+            static_cast<void>(supported);
+            static_cast<void>(checkedMasks);
 #endif
         }
     }
+    if(!supported)
+        return;
+    EXPECT_EQ(checkedMasks, 7u);
 }
 
 void VerifyGlobalContractBoundaries_ThrowingNotNullConversionPropagatesAndPreservesThePriorPointer(){
-    native{
+    i32 original = 17;
+    i32 replacement = 29;
+    b8 preservedAddress = false;
+    i32 storedValue = 0;
+    native(mut original, mut replacement, mut preservedAddress, mut storedValue){
         using namespace __hidden_global_pointer_contract_tests;
-        int original = 17;
-        int replacement = 29;
         ThrowingPointerConversion conversion{ &replacement };
         static_assert(!noexcept(NotNull<int*>(conversion)));
         static_assert(!IsConstructible_V<NotNull<int*>, NotNull<const int*>>);
@@ -333,7 +402,8 @@ void VerifyGlobalContractBoundaries_ThrowingNotNullConversionPropagatesAndPreser
         static_assert(!noexcept(stored = conversion));
         EXPECT_THROW((NotNull<int*>(conversion)), u32);
         EXPECT_THROW(stored = conversion, u32);
-        EXPECT_EQ(stored.get(), &original);
+        preservedAddress = stored.get() == &original;
+        storedValue = *stored;
 
         using ThrowingDestructorAssignment = NotNull<int*>&(NotNull<int*>::*)(PotentiallyThrowingPointerDestruction);
         using NonthrowingAssignment = NotNull<int*>&(NotNull<int*>::*)(NonthrowingPointerConversion)noexcept;
@@ -341,6 +411,10 @@ void VerifyGlobalContractBoundaries_ThrowingNotNullConversionPropagatesAndPreser
         static_assert(IsSame_V<decltype(&NotNull<int*>::template operator=<NonthrowingPointerConversion>), NonthrowingAssignment>);
         static_assert(!noexcept(NotNull<int*>(DeclVal<PotentiallyThrowingPointerDestruction>())));
     }
+    EXPECT_TRUE(preservedAddress);
+    EXPECT_EQ(storedValue, 17);
+    EXPECT_EQ(original, 17);
+    EXPECT_EQ(replacement, 29);
 }
 
 void VerifyGlobalContractBoundaries_ConvertingCopyFromAConstReferenceOwnerRetainsItsValueDeleterAndLifetime(){
@@ -370,6 +444,7 @@ void VerifyGlobalContractBoundaries_ConvertingCopyFromAConstReferenceOwnerRetain
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
 
 
@@ -451,6 +526,7 @@ NWB_ADHD_GTEST(GlobalContractBoundaries, ConvertingCopyFromAConstReferenceOwnerR
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
 
 

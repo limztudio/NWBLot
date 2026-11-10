@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
 
 
@@ -66,7 +67,7 @@ static_assert(alignof(SceneLightGpuData) >= alignof(Float4), "SceneLightGpuData 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline MeshFrameHeapSlots ResolveMeshFrameHeapSlots(const MeshFrameBindingSnapshot& frameBindings, const u32 generatedVertex = 0u)noexcept{
+[[nodiscard]] NWB_INLINE MeshFrameHeapSlots ResolveMeshFrameHeapSlots(const MeshFrameBindingSnapshot& frameBindings, const u32 generatedVertex = 0u)noexcept{
     NWB_ASSERT(frameBindings.bindingValid());
     return MakeMeshFrameHeapSlots(
         frameBindings.instanceHeapHandle.slot(),
@@ -76,7 +77,7 @@ static_assert(alignof(SceneLightGpuData) >= alignof(Float4), "SceneLightGpuData 
     );
 }
 
-[[nodiscard]] inline ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
+[[nodiscard]] NWB_INLINE ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
     const u32 meshletCount,
     const u32 instanceIndex,
     const u32 materialConstantByteOffset,
@@ -99,7 +100,7 @@ static_assert(alignof(SceneLightGpuData) >= alignof(Float4), "SceneLightGpuData 
     );
 }
 
-inline void SetShaderDrivenPushConstants(
+NWB_INLINE void SetShaderDrivenPushConstants(
     Core::CommandList& commandList,
     const u32 meshletCount,
     const u32 instanceIndex,
@@ -119,7 +120,7 @@ inline void SetShaderDrivenPushConstants(
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 }
 
-inline void SetTransparentDrawPushConstants(
+NWB_INLINE void SetTransparentDrawPushConstants(
     Core::CommandList& commandList,
     const u32 meshletCount,
     const u32 instanceIndex,
@@ -148,7 +149,7 @@ inline void SetTransparentDrawPushConstants(
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 }
 
-inline void SetEmulatedVertexAttribute(const Core::Format::Enum format, const u32 offsetByteCount, const NameText<char> name, Core::VertexAttributeDesc& attribute){
+NWB_INLINE void SetEmulatedVertexAttribute(const Core::Format::Enum format, const u32 offsetByteCount, const NameText<char> name, Core::VertexAttributeDesc& attribute){
     attribute.setFormat(format).setBufferIndex(NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX).setOffset(offsetByteCount).setElementStride(s_EmulatedVertexStride).setName(Name(name));
 }
 

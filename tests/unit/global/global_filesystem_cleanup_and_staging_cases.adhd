@@ -1,0 +1,734 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/gtest_macros.adhd>
+#include <tests/common/test_context.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <core/alloc/scratch.h>
+
+#include <global/atomic.h>
+#include <global/binary.h>
+#include <global/containers.h>
+#include <global/filesystem/cleanup.h>
+#include <global/filesystem/exclusive_publication.h>
+#include <global/filesystem/file_staging.h>
+#include <global/filesystem/operations.h>
+#include <global/filesystem/path.h>
+#include <global/filesystem/staged_file_writer.h>
+#include <global/filesystem/utility.h>
+#include <global/scope_exit.h>
+#include <global/termination.h>
+#include <global/thread.h>
+
+#if defined(NWB_PLATFORM_LINUX)
+#include <unistd.h>
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyGlobalFilesystemCleanup_UnwindRetiresPopulatedTreeAndRepeatedMissingCleanupSucceeds(){
+    b8 caught = false;
+    b8 hadCleanupError = true;
+    Expected<b8, ErrorCode> existsAfterUnwind = true;
+    b8 repeatedMissingCleanupOk = false;
+
+    native(mut caught, mut hadCleanupError, mut existsAfterUnwind, mut repeatedMissingCleanupOk){
+        using TestPath = ::Path<NWB::Core::Alloc::GlobalArena>;
+        NWB::Tests::TestArena<> arena;
+        const TestPath root(arena.arena, "global_test_artifacts/cleanup_unwind");
+        ASSERT_TRUE(EnsureEmptyDirectory(root));
+        ASSERT_TRUE(EnsureDirectories(root / "a" / "b"));
+        ASSERT_TRUE(WriteTextFile(root / "a" / "b" / "payload", "nested"));
+        ASSERT_TRUE(WriteTextFile(root / ".hidden", "hidden"));
+        ASSERT_TRUE(WriteTextFile(root / "sibling", "sibling"));
+        static_assert(noexcept(RemoveAllForCleanup(root)));
+        struct Marker final{};
+        ErrorCode cleanupError;
+        try{
+            ScopeExit cleanup([&]()noexcept{
+                const auto removed = RemoveAllForCleanup(root);
+                if(!removed)
+                    cleanupError = removed.error();
+            });
+            throw Marker{};
+        }
+        catch(const Marker&){
+            caught = true;
+        }
+        hadCleanupError = static_cast<b8>(cleanupError);
+        existsAfterUnwind = FileExists(root);
+        repeatedMissingCleanupOk = RemoveAllForCleanup(root).has_value();
+    }
+
+    EXPECT_TRUE(caught);
+    EXPECT_FALSE(hadCleanupError);
+    ASSERT_TRUE(existsAfterUnwind.has_value());
+    EXPECT_FALSE(existsAfterUnwind.value());
+    EXPECT_TRUE(repeatedMissingCleanupOk);
+}
+
+void VerifyGlobalFilesystemCleanup_DotAndDotDotLeavesAreRejectedWithoutRemovingTheirContents(){
+    b8 dotSucceeded = true;
+    b8 dotDotSucceeded = true;
+    i32 dotErrorValue = 0;
+    i32 dotDotErrorValue = 0;
+    b8 readRetainedOk = false;
+    String retainedText = "";
+    b8 removedRoot = false;
+
+    native(mut dotSucceeded, mut dotDotSucceeded, mut dotErrorValue, mut dotDotErrorValue, mut readRetainedOk, mut retainedText, mut removedRoot){
+        using TestPath = ::Path<NWB::Core::Alloc::GlobalArena>;
+        using TestString = NWB::Tests::TestAString;
+        NWB::Tests::TestArena<> arena;
+        const TestPath root(arena.arena, "global_test_artifacts/cleanup_dot_rejection");
+        const TestPath child = root / "child";
+        const TestPath retained = root / "retained";
+        ASSERT_TRUE(EnsureEmptyDirectory(root));
+        ASSERT_TRUE(EnsureDirectories(child));
+        ASSERT_TRUE(WriteTextFile(retained, "retained"));
+        const auto dot = RemoveAllForCleanup(child / ".");
+        const auto dotDot = RemoveAllForCleanup(child / "..");
+        dotSucceeded = dot.has_value();
+        dotDotSucceeded = dotDot.has_value();
+        if(!dot)
+            dotErrorValue = dot.error().value();
+        if(!dotDot)
+            dotDotErrorValue = dotDot.error().value();
+        TestString text(arena.arena);
+        readRetainedOk = ReadTextFile(retained, text).has_value();
+        retainedText.assign(AStringView(text));
+        removedRoot = RemoveAllForCleanup(root).has_value();
+    }
+
+    ASSERT_FALSE(dotSucceeded);
+    ASSERT_FALSE(dotDotSucceeded);
+    EXPECT_NE(dotErrorValue, 0);
+    EXPECT_NE(dotDotErrorValue, 0);
+    ASSERT_TRUE(readRetainedOk);
+    EXPECT_EQ(StringView(retainedText), StringView("retained"));
+    EXPECT_TRUE(removedRoot);
+}
+
+void VerifyGlobalFilesystemCleanup_DirectoryAndRootLinksWithTrailingSeparatorsDoNotRemoveTheirTarget(){
+    b8 skippedNoPermission = false;
+    b8 symlinkFailed = false;
+    b8 removedTree = false;
+    b8 removedTrailingLink = false;
+    b8 readPayloadOk = false;
+    String retainedText = "";
+    b8 removedRoot = false;
+
+    native(mut skippedNoPermission, mut symlinkFailed, mut removedTree, mut removedTrailingLink, mut readPayloadOk, mut retainedText, mut removedRoot){
+        using TestPath = ::Path<NWB::Core::Alloc::GlobalArena>;
+        using TestString = NWB::Tests::TestAString;
+        NWB::Tests::TestArena<> arena;
+        const TestPath root(arena.arena, "global_test_artifacts/cleanup_links");
+        const TestPath tree = root / "tree";
+        const TestPath outside = root / "retained";
+        const TestPath link = tree / "link";
+        const TestPath rootLink = root / "root_link";
+        ASSERT_TRUE(EnsureEmptyDirectory(root));
+        ASSERT_TRUE(EnsureDirectories(tree));
+        ASSERT_TRUE(EnsureDirectories(outside));
+        ASSERT_TRUE(WriteTextFile(outside / "payload", "retained"));
+#if defined(NWB_PLATFORM_WINDOWS)
+        const auto absoluteOutside = AbsolutePath(outside);
+        ASSERT_TRUE(absoluteOutside);
+        if(!CreateSymbolicLinkW(link.c_str(), absoluteOutside->c_str(), SYMBOLIC_LINK_FLAG_DIRECTORY | SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE)){
+            const DWORD error = GetLastError();
+            ASSERT_TRUE(RemoveAllForCleanup(root));
+            if(error == ERROR_PRIVILEGE_NOT_HELD){
+                skippedNoPermission = true;
+                return;
+            }
+            symlinkFailed = true;
+            return;
+        }
+        ASSERT_TRUE(CreateSymbolicLinkW(rootLink.c_str(), absoluteOutside->c_str(), SYMBOLIC_LINK_FLAG_DIRECTORY | SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE));
+#else
+        ASSERT_EQ(::symlink("../retained", link.c_str()), 0);
+        ASSERT_EQ(::symlink("retained", rootLink.c_str()), 0);
+#endif
+        removedTree = RemoveAllForCleanup(tree).has_value();
+        auto trailing = PathToString(arena.arena, rootLink);
+        trailing += '/';
+        removedTrailingLink = RemoveAllForCleanup(TestPath(arena.arena, trailing)).has_value();
+        TestString retained(arena.arena);
+        readPayloadOk = ReadTextFile(outside / "payload", retained).has_value();
+        retainedText.assign(AStringView(retained));
+        removedRoot = RemoveAllForCleanup(root).has_value();
+    }
+
+    if(skippedNoPermission){
+        GTEST_SKIP();
+        return;
+    }
+    ASSERT_FALSE(symlinkFailed);
+    ASSERT_TRUE(removedTree);
+    ASSERT_TRUE(removedTrailingLink);
+    ASSERT_TRUE(readPayloadOk);
+    EXPECT_EQ(StringView(retainedText), StringView("retained"));
+    EXPECT_TRUE(removedRoot);
+}
+
+void VerifyGlobalFilesystemCleanup_RemoveAllIfExistsRemovesDanglingLinkWithoutTouchingItsTarget(){
+    b8 skippedNoPermission = false;
+    b8 symlinkFailed = false;
+    b8 removedDangling = false;
+    Expected<b8, ErrorCode> existsAfter = true;
+    b8 removedRoot = false;
+
+    native(mut skippedNoPermission, mut symlinkFailed, mut removedDangling, mut existsAfter, mut removedRoot){
+        using TestPath = ::Path<NWB::Core::Alloc::GlobalArena>;
+        NWB::Tests::TestArena<> arena;
+        const TestPath root(arena.arena, "global_test_artifacts/cleanup_dangling_link");
+        ASSERT_TRUE(EnsureEmptyDirectory(root));
+        const TestPath link = root / "dangling";
+#if defined(NWB_PLATFORM_WINDOWS)
+        if(!CreateSymbolicLinkW(link.c_str(), L"missing", SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE)){
+            const DWORD error = GetLastError();
+            ASSERT_TRUE(RemoveAllForCleanup(root));
+            if(error == ERROR_PRIVILEGE_NOT_HELD){
+                skippedNoPermission = true;
+                return;
+            }
+            symlinkFailed = true;
+            return;
+        }
+#else
+        ASSERT_EQ(::symlink("missing", link.c_str()), 0);
+#endif
+        removedDangling = RemoveAllIfExists(link).has_value();
+        existsAfter = FileExistsNoFollow(link);
+        removedRoot = RemoveAllForCleanup(root).has_value();
+    }
+
+    if(skippedNoPermission){
+        GTEST_SKIP();
+        return;
+    }
+    ASSERT_FALSE(symlinkFailed);
+    ASSERT_TRUE(removedDangling);
+    ASSERT_TRUE(existsAfter.has_value());
+    EXPECT_FALSE(existsAfter.value());
+    EXPECT_TRUE(removedRoot);
+}
+
+void VerifyGlobalFilesystemCleanup_DosDeviceDrivePathRemovesItsOwnedTree(){
+    b8 windowsSupported = false;
+    b8 removedDevice = false;
+    Expected<b8, ErrorCode> existsAfter = true;
+    b8 repeatedDeviceRemove = false;
+
+    native(mut windowsSupported, mut removedDevice, mut existsAfter, mut repeatedDeviceRemove){
+#if defined(NWB_PLATFORM_WINDOWS)
+        windowsSupported = true;
+        using TestPath = ::Path<NWB::Core::Alloc::GlobalArena>;
+        NWB::Tests::TestArena<> arena;
+        const TestPath root(arena.arena, "global_test_artifacts/cleanup_device_drive");
+        ASSERT_TRUE(EnsureEmptyDirectory(root));
+        ASSERT_TRUE(EnsureDirectories(root / "nested"));
+        ASSERT_TRUE(WriteTextFile(root / "nested" / "payload", "owned"));
+        const auto absolute = AbsolutePath(root);
+        ASSERT_TRUE(absolute);
+        const auto native = absolute->native();
+        ASSERT_GE(native.size(), 3u);
+        ASSERT_EQ(native[1u], L':');
+        TestPath::string_type deviceText(L"\\\\.\\", arena.arena);
+        deviceText.append(native);
+        const TestPath device(arena.arena, deviceText);
+        removedDevice = RemoveAllForCleanup(device).has_value();
+        existsAfter = FileExists(root);
+        repeatedDeviceRemove = RemoveAllForCleanup(device).has_value();
+#endif
+    }
+
+    if(!windowsSupported)
+        return;
+
+    ASSERT_TRUE(removedDevice);
+    ASSERT_TRUE(existsAfter.has_value());
+    EXPECT_FALSE(existsAfter.value());
+    EXPECT_TRUE(repeatedDeviceRemove);
+}
+
+void VerifyGlobalFilesystemCleanup_SharingViolationIsReturnedAndCleanupCanBeRetriedAfterHandleRetirement(){
+    b8 windowsSupported = false;
+    b8 blockedCleanupFailed = false;
+    b8 matchedSharingViolation = false;
+    b8 retryAfterCloseSucceeded = false;
+
+    native(mut windowsSupported, mut blockedCleanupFailed, mut matchedSharingViolation, mut retryAfterCloseSucceeded){
+#if defined(NWB_PLATFORM_WINDOWS)
+        windowsSupported = true;
+        using TestPath = ::Path<NWB::Core::Alloc::GlobalArena>;
+        NWB::Tests::TestArena<> arena;
+        const TestPath root(arena.arena, "global_test_artifacts/cleanup_sharing_failure");
+        const TestPath file = root / "held";
+        ASSERT_TRUE(EnsureEmptyDirectory(root));
+        ASSERT_TRUE(WriteTextFile(file, "retained"));
+        const HANDLE handle = CreateFileW(file.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        ASSERT_NE(handle, INVALID_HANDLE_VALUE);
+        ScopeExit retire([handle]()noexcept{
+            if(!CloseHandle(handle))
+                TerminateInvariant();
+        });
+        const auto removed = RemoveAllForCleanup(root);
+        blockedCleanupFailed = !removed.has_value();
+        if(!removed)
+            matchedSharingViolation = removed.error().value() == static_cast<i32>(ERROR_SHARING_VIOLATION);
+        ASSERT_TRUE(CloseHandle(handle));
+        retire.release();
+        retryAfterCloseSucceeded = RemoveAllForCleanup(root).has_value();
+#endif
+    }
+
+    if(!windowsSupported)
+        return;
+
+    ASSERT_TRUE(blockedCleanupFailed);
+    EXPECT_TRUE(matchedSharingViolation);
+    EXPECT_TRUE(retryAfterCloseSucceeded);
+}
+
+void VerifyGlobalFilesystemCleanup_ParentLinkLoopReturnsItsNativeErrorWithoutRemovingOtherFiles(){
+    b8 posixSupported = false;
+    b8 loopCleanupFailed = false;
+    b8 matchedLoopError = false;
+    b8 readRetainedOk = false;
+    String retainedText = "";
+    b8 removedRoot = false;
+
+    native(mut posixSupported, mut loopCleanupFailed, mut matchedLoopError, mut readRetainedOk, mut retainedText, mut removedRoot){
+#if !defined(NWB_PLATFORM_WINDOWS)
+        posixSupported = true;
+        using TestPath = ::Path<NWB::Core::Alloc::GlobalArena>;
+        using TestString = NWB::Tests::TestAString;
+        NWB::Tests::TestArena<> arena;
+        const TestPath root(arena.arena, "global_test_artifacts/cleanup_parent_loop");
+        ASSERT_TRUE(EnsureEmptyDirectory(root));
+        ASSERT_TRUE(WriteTextFile(root / "retained", "retained"));
+        ASSERT_EQ(::symlink("loop", (root / "loop").c_str()), 0);
+        const auto removed = RemoveAllForCleanup(root / "loop" / "child");
+        loopCleanupFailed = !removed.has_value();
+        if(!removed)
+            matchedLoopError = removed.error().value() == ELOOP;
+        TestString retained(arena.arena);
+        readRetainedOk = ReadTextFile(root / "retained", retained).has_value();
+        retainedText.assign(AStringView(retained));
+        removedRoot = RemoveAllForCleanup(root).has_value();
+#endif
+    }
+
+    if(!posixSupported)
+        return;
+
+    ASSERT_TRUE(loopCleanupFailed);
+    EXPECT_TRUE(matchedLoopError);
+    ASSERT_TRUE(readRetainedOk);
+    EXPECT_EQ(StringView(retainedText), StringView("retained"));
+    EXPECT_TRUE(removedRoot);
+}
+
+void VerifyGlobalFilesystemCleanup_RootAndChildrenBeyondPathMaxUseRelativeDescriptors(){
+    b8 posixSupported = false;
+    usize deepPathSize = 0u;
+    usize hostPathMax = 0u;
+    b8 removedDeep = false;
+    b8 removedRoot = false;
+
+    native(mut posixSupported, mut deepPathSize, mut hostPathMax, mut removedDeep, mut removedRoot){
+#if !defined(NWB_PLATFORM_WINDOWS)
+        posixSupported = true;
+        hostPathMax = static_cast<usize>(PATH_MAX);
+        using TestPath = ::Path<NWB::Core::Alloc::GlobalArena>;
+        NWB::Tests::TestArena<> arena;
+        const TestPath root(arena.arena, "global_test_artifacts/cleanup_deep_path");
+        ASSERT_TRUE(EnsureEmptyDirectory(root));
+        int descriptor = open(root.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+        ASSERT_GE(descriptor, 0);
+        ScopeExit retire([&descriptor]()noexcept{
+            if(descriptor >= 0 && close(descriptor) != 0)
+                TerminateInvariant();
+        });
+        TestPath deep = root;
+        constexpr AStringView s_Component = "depth_abcdefghijklmnopqrstuvwxyz_abcdefghijklmnopqrstuvwxyz_012345";
+        constexpr usize s_Depth = 80u;
+        for(usize level = 0u; level < s_Depth; ++level){
+            ASSERT_EQ(mkdirat(descriptor, s_Component.data(), 0700), 0);
+            const int next = openat(descriptor, s_Component.data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+            ASSERT_GE(next, 0);
+            const int previous = descriptor;
+            descriptor = next;
+            ASSERT_EQ(close(previous), 0);
+            deep /= s_Component;
+        }
+        const int file = openat(descriptor, "payload", O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+        ASSERT_GE(file, 0);
+        ASSERT_EQ(close(file), 0);
+        deepPathSize = deep.size();
+        removedDeep = RemoveAllForCleanup(deep).has_value();
+        ASSERT_EQ(close(descriptor), 0);
+        descriptor = -1;
+        removedRoot = RemoveAllForCleanup(root).has_value();
+#endif
+    }
+
+    if(!posixSupported)
+        return;
+
+    EXPECT_GT(deepPathSize, hostPathMax);
+    ASSERT_TRUE(removedDeep);
+    EXPECT_TRUE(removedRoot);
+}
+
+void VerifyGlobal_FilesystemStreamAndStageHelpersRejectInvalidAndTruncatedInputs(){
+    Array<u8, 4> payload = Array<u8, 4>();
+    payload[0u] = 0x10u;
+    payload[1u] = 0x20u;
+    payload[2u] = 0x30u;
+    payload[3u] = 0x40u;
+
+    Array<u8, 4> mismatched = Array<u8, 4>();
+    mismatched[0u] = 0x10u;
+    mismatched[1u] = 0x20u;
+    mismatched[2u] = 0x30u;
+    mismatched[3u] = 0x41u;
+
+    usize emptyDepth = 1u;
+    b8 firstCreateOk = false;
+    b8 firstCreatedFlag = false;
+    b8 initialBytesVerified = false;
+    b8 mismatchedVerified = true;
+    b8 shortVerified = true;
+    b8 secondCreateOk = true;
+    b8 secondCreatedFlag = true;
+    b8 retainedOriginalBytes = false;
+    b8 resizedToTwo = false;
+    b8 resizedBytesVerified = false;
+    b8 cleanedUp = false;
+
+    native(
+        in payload,
+        in mismatched,
+        mut emptyDepth,
+        mut firstCreateOk,
+        mut firstCreatedFlag,
+        mut initialBytesVerified,
+        mut mismatchedVerified,
+        mut shortVerified,
+        mut secondCreateOk,
+        mut secondCreatedFlag,
+        mut retainedOriginalBytes,
+        mut resizedToTwo,
+        mut resizedBytesVerified,
+        mut cleanedUp
+    ){
+        NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
+        const ::Path<NWB::Core::Alloc::ScratchArena> emptyPath(scratchArena);
+        emptyDepth = PathDepth(emptyPath);
+        const ::Path<NWB::Core::Alloc::ScratchArena> stageDir(scratchArena, "global_test_artifacts/stage_edge_test");
+        ASSERT_TRUE(EnsureEmptyDirectory(stageDir));
+        const auto stagedFile = stageDir / "payload.bin";
+        firstCreateOk = StagedFileWriter(stagedFile).create(payload.data(), payload.size(), firstCreatedFlag).has_value();
+        initialBytesVerified = VerifyBinaryFileBytes(stagedFile, payload.data(), payload.size());
+        mismatchedVerified = VerifyBinaryFileBytes(stagedFile, mismatched.data(), mismatched.size());
+        shortVerified = VerifyBinaryFileBytes(stagedFile, payload.data(), payload.size() - 1u);
+        secondCreateOk = StagedFileWriter(stagedFile).create(mismatched.data(), mismatched.size(), secondCreatedFlag).has_value();
+        retainedOriginalBytes = VerifyBinaryFileBytes(stagedFile, payload.data(), payload.size());
+        resizedToTwo = ResizeFile(stagedFile, 2u).has_value();
+        resizedBytesVerified = VerifyBinaryFileBytes(stagedFile, payload.data(), 2u);
+        cleanedUp = RemoveAllIfExists(stageDir).has_value();
+    }
+
+    EXPECT_EQ(emptyDepth, 0u);
+    ASSERT_TRUE(firstCreateOk);
+    EXPECT_TRUE(firstCreatedFlag);
+    EXPECT_TRUE(initialBytesVerified);
+    EXPECT_FALSE(mismatchedVerified);
+    EXPECT_FALSE(shortVerified);
+    EXPECT_FALSE(secondCreateOk);
+    EXPECT_FALSE(secondCreatedFlag);
+    EXPECT_TRUE(retainedOriginalBytes);
+    ASSERT_TRUE(resizedToTwo);
+    EXPECT_TRUE(resizedBytesVerified);
+    ASSERT_TRUE(cleanedUp);
+}
+
+void VerifyGlobal_UniquePublicationPreservesWinnersAcrossRaces(){
+    Array<u8, 4> bytes = Array<u8, 4>();
+    bytes[0u] = 1u;
+    bytes[1u] = 2u;
+    bytes[2u] = 3u;
+    bytes[3u] = 4u;
+
+    Array<u8, 4> different = Array<u8, 4>();
+    different[0u] = 1u;
+    different[1u] = 2u;
+    different[2u] = 3u;
+    different[3u] = 5u;
+
+    b8 firstCreated = false;
+    b8 repeatedAcceptedWithoutCreate = false;
+    b8 mismatchRejectedWithFileExists = false;
+    b8 verifiedInitialBytes = false;
+    b8 borrowedMismatchRejected = false;
+    b8 borrowedBytesUntouched = false;
+    Array<u8, 2> identicalRaceResults = Array<u8, 2>();
+    b8 verifiedIdenticalRaceBytes = false;
+    Array<u8, 2> conflictRaceResults = Array<u8, 2>();
+    b8 verifiedWinningBytes = false;
+    b8 cleanedUp = false;
+
+    native(
+        in bytes,
+        in different,
+        mut firstCreated,
+        mut repeatedAcceptedWithoutCreate,
+        mut mismatchRejectedWithFileExists,
+        mut verifiedInitialBytes,
+        mut borrowedMismatchRejected,
+        mut borrowedBytesUntouched,
+        mut identicalRaceResults,
+        mut verifiedIdenticalRaceBytes,
+        mut conflictRaceResults,
+        mut verifiedWinningBytes,
+        mut cleanedUp
+    ){
+        NWB::Core::Alloc::ScratchArena arena(NWB::Tests::s_TestArena);
+        const ::Path<NWB::Core::Alloc::ScratchArena> directory(arena, "global_test_artifacts");
+        ASSERT_TRUE(EnsureDirectories(directory));
+        const auto suggestedPath = directory / "publication.bin";
+        auto reserved = StagedFileWriter(suggestedPath).stageUnique(nullptr, 0u);
+        ASSERT_TRUE(reserved);
+        const ::Path<NWB::Core::Alloc::ScratchArena> path = Move(*reserved);
+        const auto released = RemoveFile(path);
+        ASSERT_TRUE(released && *released);
+
+        const auto first = PublishUniqueFileIfAbsentOrIdentical(path, bytes);
+        firstCreated = first.has_value() && *first;
+        const auto repeated = PublishUniqueFileIfAbsentOrIdentical(path, bytes);
+        repeatedAcceptedWithoutCreate = repeated.has_value() && !*repeated;
+        const auto mismatch = PublishUniqueFileIfAbsentOrIdentical(path, different);
+        mismatchRejectedWithFileExists = !mismatch && mismatch.error() == MakeErrorCode(ErrorCondition::file_exists);
+        verifiedInitialBytes = VerifyBinaryFileBytes(path, bytes.data(), bytes.size());
+
+        ::Vector<u8, NWB::Core::Alloc::ScratchArena> borrowedBytes(arena);
+        borrowedBytes.assign(different.begin(), different.end());
+        borrowedMismatchRejected = !PublishUniqueFileIfAbsentOrIdentical(path, Span<const u8>(borrowedBytes.data(), borrowedBytes.size())).has_value();
+        borrowedBytesUntouched = BytesMatch(Span<const u8>(borrowedBytes.data(), borrowedBytes.size()), different);
+        const auto removed = RemoveFile(path);
+        ASSERT_TRUE(removed && *removed);
+
+        Atomic<b8> start{ false };
+        Array<Thread, 2u> threads;
+        for(usize index = 0u; index < threads.size(); ++index){
+            threads[index] = Thread([&, index](){
+                NWB::Core::Alloc::ScratchArena threadArena(NWB::Tests::s_TestArena);
+                const ::Path<NWB::Core::Alloc::ScratchArena> threadPath(threadArena, path);
+                while(!start.load(MemoryOrder::acquire))
+                    YieldThread();
+                const auto result = PublishUniqueFileIfAbsentOrIdentical(threadPath, bytes);
+                identicalRaceResults[index] = result ? (*result ? 1u : 2u) : 0u;
+            });
+        }
+        start.store(true, MemoryOrder::release);
+        for(Thread& thread : threads)
+            thread.join();
+        verifiedIdenticalRaceBytes = VerifyBinaryFileBytes(path, bytes.data(), bytes.size());
+        const auto cleanup = RemoveFile(path);
+        ASSERT_TRUE(cleanup && *cleanup);
+
+        start.store(false, MemoryOrder::relaxed);
+        for(usize index = 0u; index < threads.size(); ++index){
+            threads[index] = Thread([&, index](){
+                NWB::Core::Alloc::ScratchArena threadArena(NWB::Tests::s_TestArena);
+                const ::Path<NWB::Core::Alloc::ScratchArena> threadPath(threadArena, path);
+                while(!start.load(MemoryOrder::acquire))
+                    YieldThread();
+                const Span<const u8> candidate = index == 0u ? Span<const u8>(bytes) : Span<const u8>(different);
+                const auto result = PublishUniqueFileIfAbsentOrIdentical(threadPath, candidate);
+                if(result && *result)
+                    conflictRaceResults[index] = 1u;
+                else if(!result && result.error() == MakeErrorCode(ErrorCondition::file_exists))
+                    conflictRaceResults[index] = 2u;
+                else
+                    conflictRaceResults[index] = 3u;
+            });
+        }
+        start.store(true, MemoryOrder::release);
+        for(Thread& thread : threads)
+            thread.join();
+        const Span<const u8> winner = conflictRaceResults[0u] == 1u ? Span<const u8>(bytes) : Span<const u8>(different);
+        verifiedWinningBytes = VerifyBinaryFileBytes(path, winner.data(), winner.size());
+        const auto finalCleanup = RemoveFile(path);
+        cleanedUp = finalCleanup.has_value() && *finalCleanup;
+    }
+
+    EXPECT_TRUE(firstCreated);
+    EXPECT_TRUE(repeatedAcceptedWithoutCreate);
+    EXPECT_TRUE(mismatchRejectedWithFileExists);
+    EXPECT_TRUE(verifiedInitialBytes);
+    EXPECT_TRUE(borrowedMismatchRejected);
+    EXPECT_TRUE(borrowedBytesUntouched);
+    const b8 identicalRaceOrdered = (identicalRaceResults[0u] == 1u && identicalRaceResults[1u] == 2u) || (identicalRaceResults[0u] == 2u && identicalRaceResults[1u] == 1u);
+    EXPECT_TRUE(identicalRaceOrdered);
+    EXPECT_TRUE(verifiedIdenticalRaceBytes);
+    const b8 conflictRaceOrdered = (conflictRaceResults[0u] == 1u && conflictRaceResults[1u] == 2u) || (conflictRaceResults[0u] == 2u && conflictRaceResults[1u] == 1u);
+    EXPECT_TRUE(conflictRaceOrdered);
+    EXPECT_TRUE(verifiedWinningBytes);
+    ASSERT_TRUE(cleanedUp);
+}
+
+void VerifyGlobal_StagedPairFailureIdentifiesEachWorkPath(){
+    u32 matchedWorkPathChecks = 0u;
+    u32 matchedOutputPathChecks = 0u;
+    b8 acceptedClean = false;
+    b8 acceptedWorkPathExists = false;
+    b8 stateSucceededAfterBenign = false;
+    b8 rejectedNonRegular = false;
+    b8 statePropagatedFailure = false;
+    b8 failedPathIsPrimaryBackup = false;
+    b8 preservedBackupFlag = false;
+    b8 preservedTemporaryError = false;
+
+    native(
+        mut matchedWorkPathChecks,
+        mut matchedOutputPathChecks,
+        mut acceptedClean,
+        mut acceptedWorkPathExists,
+        mut stateSucceededAfterBenign,
+        mut rejectedNonRegular,
+        mut statePropagatedFailure,
+        mut failedPathIsPrimaryBackup,
+        mut preservedBackupFlag,
+        mut preservedTemporaryError
+    ){
+        NWB::Core::Alloc::ScratchArena arena(NWB::Tests::s_TestArena);
+        const ::Path<NWB::Core::Alloc::ScratchArena> primary(arena, "output.bin");
+        const ::Path<NWB::Core::Alloc::ScratchArena> secondary(arena, "output.meta");
+        const StagedFilePairPaths paths(arena, primary, secondary);
+        const Array<const ::Path<NWB::Core::Alloc::ScratchArena>*, 4u> expected{
+            &paths.primaryTemporary,
+            &paths.secondaryTemporary,
+            &paths.primaryBackup,
+            &paths.secondaryBackup
+        };
+        for(const auto stage : { StagedFilePairFailureStage::InspectOutput, StagedFilePairFailureStage::NonRegularOutput }){
+            StagedFilePairResult result;
+            result.failureStage = stage;
+            result.failedWorkPath = true;
+            for(u32 index = 0u; index < expected.size(); ++index){
+                result.failedIndex = index;
+                if(FailedStagedFilePairPath(paths, result) == *expected[index])
+                    ++matchedWorkPathChecks;
+            }
+            result.failedWorkPath = false;
+            result.failedIndex = 0u;
+            if(FailedStagedFilePairPath(paths, result) == paths.primary)
+                ++matchedOutputPathChecks;
+            result.failedIndex = 1u;
+            if(FailedStagedFilePairPath(paths, result) == paths.secondary)
+                ++matchedOutputPathChecks;
+        }
+        StagedFilePairResult state;
+        state.backedUp[1u] = true;
+        state.temporaryErrors[0u] = MakeErrorCode(ErrorCondition::io_error);
+        StagedFilePairResult check;
+        acceptedClean = GlobalFilesystemStagingDetail::AcceptPreCommitValidation(check, state);
+        check.failureStage = StagedFilePairFailureStage::WorkPathAlreadyExists;
+        acceptedWorkPathExists = GlobalFilesystemStagingDetail::AcceptPreCommitValidation(check, state);
+        stateSucceededAfterBenign = state.succeeded();
+        check.failureStage = StagedFilePairFailureStage::NonRegularOutput;
+        check.failedIndex = 2u;
+        check.failedWorkPath = true;
+        check.error = MakeErrorCode(ErrorCondition::invalid_argument);
+        rejectedNonRegular = !GlobalFilesystemStagingDetail::AcceptPreCommitValidation(check, state);
+        statePropagatedFailure = state.failureStage == check.failureStage && state.error == check.error;
+        failedPathIsPrimaryBackup = FailedStagedFilePairPath(paths, state) == paths.primaryBackup;
+        preservedBackupFlag = state.backedUp[1u];
+        preservedTemporaryError = state.temporaryErrors[0u] == MakeErrorCode(ErrorCondition::io_error);
+    }
+
+    EXPECT_EQ(matchedWorkPathChecks, 8u);
+    EXPECT_EQ(matchedOutputPathChecks, 4u);
+    EXPECT_TRUE(acceptedClean);
+    EXPECT_TRUE(acceptedWorkPathExists);
+    EXPECT_TRUE(stateSucceededAfterBenign);
+    EXPECT_TRUE(rejectedNonRegular);
+    EXPECT_TRUE(statePropagatedFailure);
+    EXPECT_TRUE(failedPathIsPrimaryBackup);
+    EXPECT_TRUE(preservedBackupFlag);
+    EXPECT_TRUE(preservedTemporaryError);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_GTEST(GlobalFilesystemCleanup, UnwindRetiresPopulatedTreeAndRepeatedMissingCleanupSucceeds, VerifyGlobalFilesystemCleanup_UnwindRetiresPopulatedTreeAndRepeatedMissingCleanupSucceeds)
+NWB_ADHD_GTEST(GlobalFilesystemCleanup, DotAndDotDotLeavesAreRejectedWithoutRemovingTheirContents, VerifyGlobalFilesystemCleanup_DotAndDotDotLeavesAreRejectedWithoutRemovingTheirContents)
+NWB_ADHD_GTEST(GlobalFilesystemCleanup, DirectoryAndRootLinksWithTrailingSeparatorsDoNotRemoveTheirTarget, VerifyGlobalFilesystemCleanup_DirectoryAndRootLinksWithTrailingSeparatorsDoNotRemoveTheirTarget)
+NWB_ADHD_GTEST(GlobalFilesystemCleanup, RemoveAllIfExistsRemovesDanglingLinkWithoutTouchingItsTarget, VerifyGlobalFilesystemCleanup_RemoveAllIfExistsRemovesDanglingLinkWithoutTouchingItsTarget)
+NWB_ADHD_GTEST(Global, FilesystemStreamAndStageHelpersRejectInvalidAndTruncatedInputs, VerifyGlobal_FilesystemStreamAndStageHelpersRejectInvalidAndTruncatedInputs)
+NWB_ADHD_GTEST(Global, UniquePublicationPreservesWinnersAcrossRaces, VerifyGlobal_UniquePublicationPreservesWinnersAcrossRaces)
+NWB_ADHD_GTEST(Global, StagedPairFailureIdentifiesEachWorkPath, VerifyGlobal_StagedPairFailureIdentifiesEachWorkPath)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_PLATFORM_WINDOWS)
+TEST(GlobalFilesystemCleanup, DosDeviceDrivePathRemovesItsOwnedTree){
+    VerifyGlobalFilesystemCleanup_DosDeviceDrivePathRemovesItsOwnedTree();
+}
+
+TEST(GlobalFilesystemCleanup, SharingViolationIsReturnedAndCleanupCanBeRetriedAfterHandleRetirement){
+    VerifyGlobalFilesystemCleanup_SharingViolationIsReturnedAndCleanupCanBeRetriedAfterHandleRetirement();
+}
+#else
+TEST(GlobalFilesystemCleanup, ParentLinkLoopReturnsItsNativeErrorWithoutRemovingOtherFiles){
+    VerifyGlobalFilesystemCleanup_ParentLinkLoopReturnsItsNativeErrorWithoutRemovingOtherFiles();
+}
+
+TEST(GlobalFilesystemCleanup, RootAndChildrenBeyondPathMaxUseRelativeDescriptors){
+    VerifyGlobalFilesystemCleanup_RootAndChildrenBeyondPathMaxUseRelativeDescriptors();
+}
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

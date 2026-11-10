@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[header]
 native{
 
 
@@ -173,6 +174,7 @@ inline constexpr MStringView s_SuiteDedupAdhdSource =
     "}\r\n";
 
 inline constexpr MStringView s_SuiteNativeRawStringSource =
+    "[header]\r\n"
     "native{\r\n"
     "static constexpr const char* s_Shader = R\"SLANG(struct Out{\r\n"
     "#include \"inner.slangi\"\r\n"
@@ -400,6 +402,7 @@ inline constexpr MStringView s_SuiteSingleArgExpectedAndNumericBuiltinsSource =
     "}\r\n";
 
 inline constexpr MStringView s_SuiteNativeBlockParamNoShadowForwardDeclSource =
+    "[header]\r\n"
     "native{\r\n"
     "#include <impl/assets_ui_skin/asset.adhd.h>\r\n"
     "}\r\n"
@@ -897,34 +900,22 @@ void VerifyAdhdCompiler_RejectsMalformedHexMacroParamsCastsDanglingRefsAndEarlyR
     ExpectCompileFails(arena, "void BadParSet(in Set<i32> items) {\r\n    parallel_for(in i32 x : items) {\r\n    }\r\n}\r\n", "impl/bad_par_set.adhd");
 }
 
-void VerifyAdhdCompiler_AutomaticallyClassifiesHeaderAndSourceNativeBlocksAndRejectsTargetAttributes(){
+void VerifyAdhdCompiler_RequiresExplicitHeaderOrSourceOnTopLevelNativeBlocks(){
     AdhdTestArena arena = AdhdTestArena();
 
-    CompileResult singleHeaderRes = CompileResult(arena.arena);
-    ASSERT_TRUE(Compile("native{\r\nnamespace AliasNs = ::NWB;\r\nstruct alignas(16) HeaderOnlyPod { int v = 0; };\r\ninline constexpr const char* s_Raw = R\"TAG(void NotAFunc(){})TAG\";\r\n}\r\n", "impl/auto_header_only.adhd", arena.arena, singleHeaderRes));
-    EXPECT_NE(GeneratedHeaderView(singleHeaderRes).find("HeaderOnlyPod"), usize.max);
-    EXPECT_EQ(GeneratedSourceView(singleHeaderRes).find("HeaderOnlyPod"), usize.max);
+    CompileResult explicitRes = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile("[source]\r\nnative{\r\nstatic constexpr int kOnlyInCpp = 42;\r\n}\r\nconst u32 s_AfterSourceBlock = 7u;\r\n[header]\r\nnative{\r\nstruct ExplicitHeaderTag {};\r\n}\r\n", "impl/explicit_native_targets.adhd", arena.arena, explicitRes));
+    EXPECT_EQ(GeneratedHeaderView(explicitRes).find("kOnlyInCpp"), usize.max);
+    EXPECT_NE(GeneratedSourceView(explicitRes).find("kOnlyInCpp"), usize.max);
+    EXPECT_NE(GeneratedHeaderView(explicitRes).find("ExplicitHeaderTag"), usize.max);
+    EXPECT_EQ(GeneratedSourceView(explicitRes).find("ExplicitHeaderTag"), usize.max);
+    EXPECT_NE(GeneratedHeaderView(explicitRes).find("s_AfterSourceBlock"), usize.max);
 
-    CompileResult singleSourceRes = CompileResult(arena.arena);
-    ASSERT_TRUE(Compile("native{\r\nint ExternalOnlyInCpp(const int x){ return x + 1; }\r\n}\r\n", "impl/auto_source_only.adhd", arena.arena, singleSourceRes));
-    EXPECT_EQ(GeneratedHeaderView(singleSourceRes).find("ExternalOnlyInCpp"), usize.max);
-    EXPECT_NE(GeneratedSourceView(singleSourceRes).find("ExternalOnlyInCpp"), usize.max);
-
-    CompileResult twoBlockZeroDeclRes = CompileResult(arena.arena);
-    ASSERT_TRUE(Compile("native{\r\nstruct SplitHeaderType { int eval()const; };\r\n}\r\nnative{\r\nint SplitHeaderType::eval()const{ return 42; }\r\n}\r\n", "impl/auto_split_native.adhd", arena.arena, twoBlockZeroDeclRes));
-    EXPECT_NE(GeneratedHeaderView(twoBlockZeroDeclRes).find("struct SplitHeaderType"), usize.max);
-    EXPECT_EQ(GeneratedSourceView(twoBlockZeroDeclRes).find("struct SplitHeaderType"), usize.max);
-    EXPECT_EQ(GeneratedHeaderView(twoBlockZeroDeclRes).find("return 42;"), usize.max);
-    EXPECT_NE(GeneratedSourceView(twoBlockZeroDeclRes).find("return 42;"), usize.max);
-
-    CompileResult beforeDeclFlushedRes = CompileResult(arena.arena);
-    ASSERT_TRUE(Compile("native{\r\nint NeededBeforeAdhdDecl(){ return 7; }\r\n}\r\nconst u32 s_UsesHeader = 7u;\r\n", "impl/auto_flush_before_decl.adhd", arena.arena, beforeDeclFlushedRes));
-    EXPECT_NE(GeneratedHeaderView(beforeDeclFlushedRes).find("NeededBeforeAdhdDecl"), usize.max);
-    EXPECT_EQ(GeneratedSourceView(beforeDeclFlushedRes).find("NeededBeforeAdhdDecl"), usize.max);
-
-    ExpectCompileFailsWithMessage(arena, "[header]\r\nnative{\r\n}\r\n", "impl/prohibited_header_attr.adhd", "'header' and 'source' attributes are prohibited in adhd; header vs. source placement of top-level 'native' blocks is decided automatically by the adhd compiler");
-    ExpectCompileFailsWithMessage(arena, "[source]\r\nnative{\r\n}\r\n", "impl/prohibited_source_attr.adhd", "'header' and 'source' attributes are prohibited in adhd; header vs. source placement of top-level 'native' blocks is decided automatically by the adhd compiler");
-    ExpectCompileFailsWithMessage(arena, "[reflect]\r\nnative{\r\n}\r\n", "impl/bad_native_attr.adhd", "attributes are not permitted on top-level 'native' blocks");
+    ExpectCompileFailsWithMessage(arena, "native{\r\nstruct MissingTarget {};\r\n}\r\n", "impl/missing_native_target.adhd", "top-level 'native' block must specify '[header]' or '[source]'");
+    ExpectCompileFailsWithMessage(arena, "[header, source]\r\nnative{\r\n}\r\n", "impl/conflict_native.adhd", "duplicate or conflicting target attribute on top-level 'native' block");
+    ExpectCompileFailsWithMessage(arena, "[source(1)]\r\nnative{\r\n}\r\n", "impl/arg_native.adhd", "top-level 'native' target attribute does not accept arguments");
+    ExpectCompileFailsWithMessage(arena, "[reflect]\r\nnative{\r\n}\r\n", "impl/bad_native_attr.adhd", "unsupported attribute on top-level 'native' block; only '[header]' or '[source]' is permitted");
+    ExpectCompileFailsWithMessage(arena, "void ScopedFn() {\r\n    [header]\r\n    native{}\r\n}\r\n", "impl/scoped_native_attr.adhd", "attributes are not permitted on 'native' blocks");
 }
 
 void VerifyAdhdCompiler_RejectsSurrogateEscapesMalformedAttributesDependentBoundsAndParallelLambdaMutation(){
@@ -1219,6 +1210,7 @@ void VerifyAdhdCompiler_ValidatesHexFloatsSnakeCaseEnumParsingNestedDeductionAnd
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[source]
 native{
 
 
@@ -1304,7 +1296,7 @@ NWB_ADHD_GTEST(AdhdCompiler, SuppressesLastUseMoveForMutCapturedLocalsAndRejects
 NWB_ADHD_GTEST(AdhdCompiler, RejectsDeducedBoundViolationsWrongArityConstRefMutationInCtorAndProhibitedBool, VerifyAdhdCompiler_RejectsDeducedBoundViolationsWrongArityConstRefMutationInCtorAndProhibitedBool)
 NWB_ADHD_GTEST(AdhdCompiler, ValidatesDigitSeparatorsEnumForwardRefsFlagOpsSwitchConstEvalAndInRefRvalueBind, VerifyAdhdCompiler_ValidatesDigitSeparatorsEnumForwardRefsFlagOpsSwitchConstEvalAndInRefRvalueBind)
 NWB_ADHD_GTEST(AdhdCompiler, ValidatesHexFloatsSnakeCaseEnumParsingNestedDeductionAndStrictTypeRules, VerifyAdhdCompiler_ValidatesHexFloatsSnakeCaseEnumParsingNestedDeductionAndStrictTypeRules)
-NWB_ADHD_GTEST(AdhdCompiler, AutomaticallyClassifiesHeaderAndSourceNativeBlocksAndRejectsTargetAttributes, VerifyAdhdCompiler_AutomaticallyClassifiesHeaderAndSourceNativeBlocksAndRejectsTargetAttributes)
+NWB_ADHD_GTEST(AdhdCompiler, RequiresExplicitHeaderOrSourceOnTopLevelNativeBlocks, VerifyAdhdCompiler_RequiresExplicitHeaderOrSourceOnTopLevelNativeBlocks)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

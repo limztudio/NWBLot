@@ -1,0 +1,410 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/gtest_macros.adhd>
+#include <tests/unit/task/gpu/gpu_task_fixture_compile.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <core/task/gpu/capture/command_ir.h>
+#include <core/task/gpu/capture/command_ir_internal.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace TaskGraphTestUtils{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr Core::GpuTaskId s_CommandIrTask{ .generation = 17u, .index = 4u };
+inline constexpr Core::GpuSubmissionPacketId s_CommandIrPacket{ .generation = 19u, .index = 2u };
+inline constexpr Core::GpuPhysicalQueueId s_CommandIrQueue{ .index = 1u, .deviceGeneration = 3u };
+inline constexpr Core::GpuGraphResourceId s_CommandIrSource{ .generation = 17u, .index = 5u };
+inline constexpr Core::GpuGraphResourceId s_CommandIrDestination{ .generation = 17u, .index = 6u };
+
+inline constexpr usize s_CommandIrCopyBufferOffset = sizeof(Core::GpuCommandIrStreamHeader);
+inline constexpr usize s_CommandIrCopyTextureOffset = s_CommandIrCopyBufferOffset + sizeof(Core::GpuCommandIrCopyBufferRecord);
+inline constexpr usize s_CommandIrClearBufferOffset = s_CommandIrCopyTextureOffset + sizeof(Core::GpuCommandIrCopyTextureRecord);
+inline constexpr usize s_CommandIrClearTextureOffset = s_CommandIrClearBufferOffset + sizeof(Core::GpuCommandIrClearBufferRecord);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void CopyCommandIrBytes(const BinaryByteView source, Core::GraphicsBytes& outBytes);
+
+template<typename PodT>
+inline void WriteCommandIrPod(const usize byteOffset, const PodT& value, const Span<u8> bytes)noexcept(noexcept(NWB_MEMCPY(bytes.data() + byteOffset, bytes.size() - byteOffset, &value, sizeof(value)))){
+    NWB_ASSERT(byteOffset <= bytes.size());
+    NWB_ASSERT(bytes.size() - byteOffset >= sizeof(PodT));
+    NWB_MEMCPY(bytes.data() + byteOffset, bytes.size() - byteOffset, &value, sizeof(value));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct PayloadDestroyTask{
+    struct Payload{
+        u32* destructionCount = nullptr;
+
+
+    public:
+        explicit Payload(u32* const value)noexcept
+            : destructionCount(value)
+        {}
+        Payload(Payload&& other)noexcept;
+        Payload(const Payload&) = delete;
+        ~Payload()noexcept;
+    };
+};
+
+struct PacketLifecycleTask{
+    struct Payload{
+        u32* acceptedCount = nullptr;
+        u32* discardedCount = nullptr;
+        Core::GpuQueueCapability::Mask requiredCapabilities = Core::GpuQueueCapability::None;
+    };
+
+
+public:
+    static Core::GpuTaskCommandRequirements CommandRequirements(const Payload& payload)noexcept{ return Core::GpuTaskCommandRequirements{ payload.requiredCapabilities }; }
+
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken&)noexcept;
+
+    static void Discarded(Payload& payload)noexcept;
+};
+
+struct ReentrantCompileDuringDeclarationTask{
+    struct Payload{
+        const Core::GpuTaskGraph* graph = nullptr;
+        Core::GpuTaskGraphAnalysis* analysis = nullptr;
+        Core::Alloc::ScratchArena* scratchArena = nullptr;
+        b8* compileAttempted = nullptr;
+        b8* compileSucceeded = nullptr;
+
+
+    public:
+        Payload()noexcept = default;
+        Payload(const Payload&) = delete;
+        Payload(Payload&& other);
+    };
+};
+
+struct ReentrantTelemetryDuringDeclarationState{
+    const Core::GpuTaskGraph* graph = nullptr;
+    const Core::GpuTaskGraphAnalysis* analysis = nullptr;
+    const Core::GpuTaskGraphQueueAssignments* assignments = nullptr;
+    const Core::GpuCompiledGraph* compiledGraph = nullptr;
+    const Core::GpuGraphSubmissionTransaction* transaction = nullptr;
+    Core::GpuTaskGraphQueueAssignmentTelemetryTracker* tracker = nullptr;
+    Telemetry::FrameGraphBuilder* builder = nullptr;
+    Core::Alloc::ScratchArena* scratchArena = nullptr;
+    b8 trackerValidationAttempted = false;
+    b8 trackerValidationSucceeded = true;
+    b8 trackerUpdateAttempted = false;
+    b8 trackerUpdateSucceeded = true;
+    b8 appendAttempted = false;
+    b8 appendSucceeded = true;
+};
+
+struct ReentrantTelemetryDuringDeclarationTask{
+    struct Payload{
+        ReentrantTelemetryDuringDeclarationState* state = nullptr;
+
+
+    public:
+        explicit Payload(ReentrantTelemetryDuringDeclarationState& value)noexcept
+            : state(&value)
+        {}
+        Payload(const Payload&) = delete;
+        Payload(Payload&& other);
+    };
+};
+
+struct NativeRecordProbeTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements{ Core::GpuQueueCapability::Graphics };
+
+
+public:
+    struct Payload{
+        u32* recordCount = nullptr;
+    };
+
+
+public:
+    static b8 Record(const Payload& payload, Core::CommandList&, const Core::GpuTaskRecordContext&)noexcept;
+};
+
+struct MalformedLifecycleTask{
+    struct Payload{
+        u32* recordCount = nullptr;
+        u32* acceptedCount = nullptr;
+        u32* discardedCount = nullptr;
+    };
+
+
+public:
+    static b8 Record(const Payload& payload, Core::CommandList&, const Core::GpuTaskRecordContext&, const u32 lookalike = 0u)noexcept;
+
+    static b8 Accepted(Payload& payload, const Core::QueueSubmissionToken&)noexcept;
+
+    static void Discarded(const Payload& payload)noexcept;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 CaptureAllBuiltinCommandIrRecords(mut GpuCommandIrCapture capture){
+    TextureSlice sourceSlice = TextureSlice();
+    sourceSlice.setOrigin(1u, 2u, 3u);
+    sourceSlice.setSize(4u, 5u, 6u);
+    sourceSlice.setMipLevel(7u);
+    sourceSlice.setArraySlice(8u);
+    TextureSlice destinationSlice = TextureSlice();
+    destinationSlice.setOrigin(9u, 10u, 11u);
+    destinationSlice.setSize(12u, 13u, 14u);
+    destinationSlice.setMipLevel(15u);
+    destinationSlice.setArraySlice(16u);
+    GpuClearTextureTaskDesc clearTexture = GpuClearTextureTaskDesc();
+    clearTexture.destination = s_CommandIrDestination;
+    clearTexture.subresources = TextureSubresourceSet(2u, 3u, 4u, 5u);
+    clearTexture.valueType = GpuClearTextureTaskValueType::DepthStencil;
+    clearTexture.floatValue = Color(0.25f, 0.5f, 0.75f, 1.0f);
+    clearTexture.uintValue = UIntColor(2u, 3u, 5u, 7u);
+    clearTexture.intValue = IntColor(-2, -3, -5, -7);
+    clearTexture.depthValue = 0.125f;
+    clearTexture.stencilValue = 19u;
+    clearTexture.clearDepth = true;
+    clearTexture.clearStencil = true;
+
+    return capture.captureCopyBuffer(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrSource, 16u, s_CommandIrDestination, 32u, 64u)
+        && capture.captureCopyTexture(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrSource, sourceSlice, s_CommandIrDestination, destinationSlice)
+        && capture.captureClearBuffer(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrDestination, 0xdecafbadu)
+        && capture.captureClearTexture(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrDestination, clearTexture);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace TaskGraphTestUtils{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void CopyCommandIrBytes(const BinaryByteView source, Core::GraphicsBytes& outBytes){
+    outBytes.resize(source.size());
+    if(!source.empty())
+        NWB_MEMCPY(outBytes.data(), outBytes.size(), source.data(), source.size());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+PayloadDestroyTask::Payload::Payload(Payload&& other)noexcept
+    : destructionCount(other.destructionCount)
+{
+    other.destructionCount = nullptr;
+}
+
+PayloadDestroyTask::Payload::~Payload()noexcept{
+    if(destructionCount)
+        ++*destructionCount;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void PacketLifecycleTask::Accepted(Payload& payload, const Core::QueueSubmissionToken&)noexcept{
+    if(payload.acceptedCount)
+        ++*payload.acceptedCount;
+}
+
+void PacketLifecycleTask::Discarded(Payload& payload)noexcept{
+    if(payload.discardedCount)
+        ++*payload.discardedCount;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+ReentrantCompileDuringDeclarationTask::Payload::Payload(Payload&& other)
+    : graph(other.graph)
+    , analysis(other.analysis)
+    , scratchArena(other.scratchArena)
+    , compileAttempted(other.compileAttempted)
+    , compileSucceeded(other.compileSucceeded)
+{
+    other.graph = nullptr;
+    other.analysis = nullptr;
+    other.scratchArena = nullptr;
+    other.compileAttempted = nullptr;
+    other.compileSucceeded = nullptr;
+    if(!graph || !analysis || !scratchArena)
+        return;
+
+    if(compileAttempted)
+        *compileAttempted = true;
+    const Core::GpuTaskGraphCompiler compiler;
+    const Core::GpuTaskGraph::DeclarationReadView declarations = Core::GpuTaskGraph::DeclarationReadView::TryAcquire(*graph);
+    b8 succeeded = false;
+    if(declarations.valid())
+        succeeded = compiler.analyze(declarations, *scratchArena, *analysis);
+    if(compileSucceeded)
+        *compileSucceeded = succeeded;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+ReentrantTelemetryDuringDeclarationTask::Payload::Payload(Payload&& other)
+    : state(other.state)
+{
+    other.state = nullptr;
+    if(!state || !state->graph || !state->analysis || !state->assignments || !state->compiledGraph || !state->transaction || !state->tracker || !state->builder || !state->scratchArena)
+        return;
+
+    const Core::GpuTaskGraph::DeclarationReadView declarations = Core::GpuTaskGraph::DeclarationReadView::TryAcquire(*state->graph);
+    const Core::GpuCompiledGraph::ReadView compiledPlan(*state->compiledGraph);
+    state->trackerValidationAttempted = true;
+    state->trackerValidationSucceeded = state->tracker->validFor(declarations, *state->assignments, compiledPlan);
+    state->trackerUpdateAttempted = true;
+    state->trackerUpdateSucceeded = state->tracker->update(declarations, *state->assignments, compiledPlan, *state->transaction, *state->scratchArena);
+    const Core::GpuTaskGraphTelemetryOptions options{ .queueAssignments = state->assignments, .compiledPlan = &compiledPlan, .queueAssignmentTelemetry = state->tracker, };
+    state->appendAttempted = true;
+    state->appendSucceeded = declarations.appendFrameGraphTelemetry(*state->analysis, *state->scratchArena, *state->builder, options);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 NativeRecordProbeTask::Record(const Payload& payload, Core::CommandList&, const Core::GpuTaskRecordContext&)noexcept{
+    if(payload.recordCount)
+        ++*payload.recordCount;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 MalformedLifecycleTask::Record(const Payload& payload, Core::CommandList&, const Core::GpuTaskRecordContext&, [[maybe_unused]] const u32 lookalike)noexcept{
+    if(payload.recordCount)
+        ++*payload.recordCount;
+    return true;
+}
+
+b8 MalformedLifecycleTask::Accepted(Payload& payload, const Core::QueueSubmissionToken&)noexcept{
+    if(payload.acceptedCount)
+        ++*payload.acceptedCount;
+    return true;
+}
+
+void MalformedLifecycleTask::Discarded(const Payload& payload)noexcept{
+    if(payload.discardedCount)
+        ++*payload.discardedCount;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -241,17 +241,21 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
         }
         const EnumDecl* lhsEnum = m_checker.m_symbols.findEnum(lhsType);
         const EnumDecl* rhsEnum = m_checker.m_symbols.findEnum(rhsType);
+        const BuiltinEnumInfo* lhsBuiltinEnum = lhsEnum ? nullptr : FindBuiltinEnum(lhsType);
+        const BuiltinEnumInfo* rhsBuiltinEnum = rhsEnum ? nullptr : FindBuiltinEnum(rhsType);
         if(OperatorSemantics::IsBitwiseFlagOperatorToken(expr.op)){
-            if((lhsEnum && !lhsEnum->isFlag) || (!m_checker.m_symbols.findClass(lhsType) && rhsEnum && !rhsEnum->isFlag)){
+            const b8 lhsNonFlag = (lhsEnum && !lhsEnum->isFlag) || (lhsBuiltinEnum && !lhsBuiltinEnum->isFlag);
+            const b8 rhsNonFlag = !m_checker.m_symbols.findClass(lhsType) && ((rhsEnum && !rhsEnum->isFlag) || (rhsBuiltinEnum && !rhsBuiltinEnum->isFlag));
+            if(lhsNonFlag || rhsNonFlag){
                 m_checker.reportError(errors, expr.span, "bitwise operators are only supported on 'flag' types, not 'enum' types");
                 ok = false;
             }
-            else if(lhsEnum && rhsEnum && lhsEnum != rhsEnum){
+            else if((lhsEnum && rhsEnum && lhsEnum != rhsEnum) || (lhsBuiltinEnum && rhsBuiltinEnum && lhsBuiltinEnum != rhsBuiltinEnum) || (lhsEnum && rhsBuiltinEnum) || (lhsBuiltinEnum && rhsEnum)){
                 m_checker.reportError(errors, expr.span, "cannot combine values of two different 'flag' types in a bitwise operation");
                 ok = false;
             }
         }
-        else if(lhsEnum && OperatorSemantics::IsArithmeticOrShiftAssignOperatorToken(expr.op)){
+        else if((lhsEnum || lhsBuiltinEnum) && OperatorSemantics::IsArithmeticOrShiftAssignOperatorToken(expr.op)){
             m_checker.reportError(errors, expr.span, "arithmetic and shift compound assignment operators are not supported on 'enum' or 'flag' types");
             ok = false;
         }

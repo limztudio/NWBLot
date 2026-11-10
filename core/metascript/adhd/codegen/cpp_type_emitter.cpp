@@ -29,6 +29,8 @@ MStringView CppTypeEmitter::MapBuiltinCppType(const MStringView typeName)noexcep
         return vecInfo->cppExportName;
     if(const BuiltinSimdMatrixInfo* matInfo = FindBuiltinSimdMatrixType(typeName))
         return matInfo->cppExportName;
+    if(const BuiltinEnumInfo* enumInfo = FindBuiltinEnum(typeName))
+        return enumInfo->cppTypeName;
     return {};
 }
 

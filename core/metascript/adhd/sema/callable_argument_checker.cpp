@@ -107,6 +107,15 @@ b8 CallableArgumentChecker::check(
             m_checker.markStringToPathAdaptation(ownerClass, &method, scope, *arg);
         if(!m_checker.checkExpr(ownerClass, scope, paramIsMut, method, *arg, errors))
             ok = false;
+        if(builtinFnInfo && builtinFnInfo->wrapsFormatArgs && i >= builtinFnInfo->minArity){
+            const MStringView fmtArgType = m_checker.inferExprBaseType(ownerClass, &method, *arg, scope);
+            if(fmtArgType == "String" || fmtArgType == "CompactString")
+                arg->formatArgWrapKind = 1u;
+            else if(fmtArgType == "Path")
+                arg->formatArgWrapKind = 2u;
+            else if(fmtArgType == "Name")
+                arg->formatArgWrapKind = 3u;
+        }
         if(expectedParamTypeRef){
             const TypeRef* unwrappedParam = m_checker.m_symbols.unwrapTypeAlias(expectedParamTypeRef);
             if(unwrappedParam && !unwrappedParam->templateArgs.empty() && unwrappedParam->templateArgs[0].type){
@@ -127,9 +136,11 @@ b8 CallableArgumentChecker::check(
         if(builtinArgRule && !builtinArgRule->errorMessage.empty()){
             const TypeRef* actualRef = nullptr;
             const MStringView actualArgType = m_checker.inferExprBaseType(ownerClass, &method, *arg, scope, &actualRef);
-            b8 typeMismatch = (!builtinArgRule->requiredExactType.empty() && actualArgType != builtinArgRule->requiredExactType)
-                || (builtinArgRule->requiresStringLike && !actualArgType.empty() && !IsStringLikeType(actualArgType))
-                || (builtinArgRule->requiresIntegerScalar && !actualArgType.empty() && !BuiltinTypeSemantics::IsIntegerScalarType(actualArgType));
+            const b8 isKnownAdhdType = !actualArgType.empty()
+                && (BuiltinTypeSemantics::IsBuiltinTypeName(actualArgType) || m_checker.m_symbols.hasTypeSymbol(actualArgType));
+            b8 typeMismatch = (!builtinArgRule->requiredExactType.empty() && isKnownAdhdType && actualArgType != builtinArgRule->requiredExactType)
+                || (builtinArgRule->requiresStringLike && isKnownAdhdType && !IsStringLikeType(actualArgType))
+                || (builtinArgRule->requiresIntegerScalar && isKnownAdhdType && !BuiltinTypeSemantics::IsIntegerScalarType(actualArgType));
             if(!typeMismatch && (builtinArgRule->rule == BuiltinFunctionArgRule::UsizeSpan || builtinArgRule->rule == BuiltinFunctionArgRule::ByteSpan || builtinArgRule->rule == BuiltinFunctionArgRule::MutByteFixedVector)){
                 const TypeRef* containerType = actualRef ? m_checker.m_symbols.unwrapTypeAlias(actualRef) : nullptr;
                 const usize expectedArguments = builtinArgRule->rule == BuiltinFunctionArgRule::MutByteFixedVector ? 2u : 1u;

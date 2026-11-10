@@ -34,6 +34,11 @@ void HeaderPreambleEmitter::Emit(MString& out, const TranslationUnit& unit, cons
         out.append("#include <global/inplace_function.h>\r\n");
         out.append("#include <global/not_null.h>\r\n");
         out.append("#include <global/termination.h>\r\n");
+        for(const MStringView hdr : unit.requiredGlobalHeaders){
+            out.append("#include ");
+            out.append(hdr.data(), hdr.size());
+            out.append("\r\n");
+        }
         out.append("#include <core/alloc/global.h>\r\n");
         out.append("#include <core/alloc/general.h>\r\n");
         out.append("#include <core/alloc/scratch.h>\r\n");

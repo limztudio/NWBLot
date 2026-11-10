@@ -514,8 +514,8 @@ void VerifyAssetsUiSkinToolkitContract_RejectsMissingBasePartsButAcceptsDeclared
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
     ToolkitSkinArena testArena = ToolkitSkinArena();
-    Path assetRoot(testArena.arena);
-    Path atlasPath(testArena.arena);
+    Path assetRoot = Path();
+    Path atlasPath = Path();
     native(mut testArena, mut assetRoot, mut atlasPath){
         assetRoot = Path(testArena.arena, NWB_REPO_ROOT) / s_EngineDirectory / s_AssetsDirectory;
         atlasPath = assetRoot / s_UiDirectory / s_SkinsDirectory / s_DefaultSkinDirectory / s_AtlasMetadataFilename;
@@ -577,8 +577,8 @@ void VerifyAssetsUiSkinToolkitContract_CookOptInRejectsIncompleteMetadataWhileGe
     LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
     ToolkitSkinArena testArena = ToolkitSkinArena();
     TestAString genericMetadata = TestAString();
-    Path assetRoot(testArena.arena, "C:/ui_skin_contract_tests/assets");
-    Path atlasPath(testArena.arena);
+    Path assetRoot("C:/ui_skin_contract_tests/assets");
+    Path atlasPath = Path();
     b8 readDefault = false;
     native(in assetRoot, mut testArena, mut atlasPath, mut genericMetadata, mut readDefault){
         atlasPath = assetRoot / s_UiDirectory / s_AtlasMetadataFilename;

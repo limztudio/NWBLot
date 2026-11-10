@@ -365,7 +365,7 @@ b8 SymbolTable::isSelfDefaultedType(const MStringView typeName, const ClassDecl*
         }
         return !hasAnyCtor;
     }
-    if(IsUnalignedVectorType(baseName) || findEnum(baseName) != nullptr)
+    if(IsUnalignedVectorType(baseName) || findEnum(baseName) != nullptr || FindBuiltinEnum(baseName) != nullptr)
         return true;
     if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(baseName))
         return objInfo->isSelfDefaulted;
@@ -376,7 +376,7 @@ b8 SymbolTable::isSelfDefaultedType(const MStringView typeName, const ClassDecl*
 
 b8 SymbolTable::isSmallValueType(MStringView typeName)const noexcept{
     typeName = resolveBaseTypeName(typeName);
-    if(BuiltinTypeSemantics::IsScalarType(typeName) || IsSimdRegisterVectorType(typeName) || findEnum(typeName) != nullptr)
+    if(BuiltinTypeSemantics::IsScalarType(typeName) || IsSimdRegisterVectorType(typeName) || findEnum(typeName) != nullptr || FindBuiltinEnum(typeName) != nullptr)
         return true;
     if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(typeName))
         return objInfo->isSmallValue;

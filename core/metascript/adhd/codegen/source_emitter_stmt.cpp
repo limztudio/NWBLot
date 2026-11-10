@@ -99,9 +99,16 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
         }
         else if(stmt.expr){
             if(stmt.usesScratchArena && stmt.expr->kind == ExprKind::StringLiteral){
-                out.push_back('(');
-                emitExpr(out, *stmt.expr);
-                out.append(", __adhd_scratch);\r\n");
+                if(stmt.arenaFirstInit){
+                    out.append("(__adhd_scratch, ");
+                    emitExpr(out, *stmt.expr);
+                    out.append(");\r\n");
+                }
+                else{
+                    out.push_back('(');
+                    emitExpr(out, *stmt.expr);
+                    out.append(", __adhd_scratch);\r\n");
+                }
             }
             else{
                 out.append(" = ");

@@ -97,6 +97,7 @@ private:
         const FieldDecl** outAccessedField = nullptr
     )const noexcept;
     void reportError(MVector<ParseError>& errors, const SourceSpan span, const MStringView message)const{ ReportAdhdDiagnostic(m_arena, errors, span, message); }
+    void recordRequiredHeader(MStringView header)noexcept;
 
     [[nodiscard]] b8 checkTemplateParamBounds(Span<const TemplateParamDecl> params, const ClassDecl* enclosingClass, const MethodDecl* enclosingMethod, MVector<ParseError>& errors);
     [[nodiscard]] b8 interfaceInheritsFrom(const TypeRef& ifaceRef, const TypeRef& requiredIface, u32 depth = 0u)const noexcept;
@@ -143,6 +144,7 @@ private:
     SymbolTable& m_symbols;
     LayoutOptimizer m_layoutOptimizer;
     ParallelGraphValidator m_parallelValidator;
+    TranslationUnit* m_activeUnit = nullptr;
     const TypeRef* m_activeLambdaReturnType = nullptr;
     u32 m_parallelDepth = 0u;
     u32 m_loopDepth = 0u;
@@ -152,6 +154,7 @@ private:
     b8 m_inClassArenaContext = false;
     b8 m_activeParallelBlockUsesScratch = false;
     b8 m_hasTopLevelNativeBlocks = false;
+    b8 m_recordGlobalHeaders = false;
 };
 
 

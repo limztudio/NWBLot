@@ -79,6 +79,7 @@ struct FieldDecl{
     usize originalIndex = 0u;
     b8 hasCtorInit = false;
     b8 usesClassArena = false;
+    b8 arenaFirstDefaultInit = false;
     b8 isTransient = false;
     b8 isReflect = false;
 
@@ -210,6 +211,7 @@ public:
 struct TranslationUnit{
     MVector<MStringView> topLevelNativeBlocks;
     MVector<MStringView> sourceNativeBlocks;
+    MVector<MStringView> requiredGlobalHeaders;
     MVector<MString> includedAdhdFiles;
     MVector<MString> resolvedIncludedFiles;
     MVector<Stmt*> globalConstants;
@@ -227,6 +229,7 @@ public:
     explicit TranslationUnit(MetaArena& arena)noexcept
         : topLevelNativeBlocks(arena)
         , sourceNativeBlocks(arena)
+        , requiredGlobalHeaders(arena)
         , includedAdhdFiles(arena)
         , resolvedIncludedFiles(arena)
         , globalConstants(arena)

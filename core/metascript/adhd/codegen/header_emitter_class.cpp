@@ -228,9 +228,16 @@ void HeaderEmitter::emitClassFieldsCpp(MString& out, const Span<const FieldDecl*
                 out.append("))");
             }
             else if(field->usesClassArena && field->defaultExpr->kind == ExprKind::StringLiteral){
-                out.push_back('{');
-                m_sourceEmitter.emitExpr(out, *field->defaultExpr);
-                out.append(", s_ClassArena}");
+                if(field->arenaFirstDefaultInit){
+                    out.append("{s_ClassArena, ");
+                    m_sourceEmitter.emitExpr(out, *field->defaultExpr);
+                    out.push_back('}');
+                }
+                else{
+                    out.push_back('{');
+                    m_sourceEmitter.emitExpr(out, *field->defaultExpr);
+                    out.append(", s_ClassArena}");
+                }
             }
             else{
                 out.append(" = ");
@@ -257,6 +264,7 @@ void HeaderEmitter::emitClassFieldsCpp(MString& out, const Span<const FieldDecl*
                 || SymbolTable::IsSimdType(baseFieldType)
                 || SymbolTable::IsUnalignedVectorType(baseFieldType)
                 || m_symbols.findEnum(baseFieldType) != nullptr
+                || FindBuiltinEnum(baseFieldType) != nullptr
                 || (m_symbols.findClass(baseFieldType) != nullptr && m_symbols.isSelfDefaultedType(baseFieldType))
             )
                 out.append("{}");

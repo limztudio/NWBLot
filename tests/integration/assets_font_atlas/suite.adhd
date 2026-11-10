@@ -299,7 +299,7 @@ f32 AtlasGlyphAdvance(in FontAtlas atlas, in u32 glyphId){
 }
 
 Path ScratchRoot(mut MetadataTestArena testArena, in StringView subDir){
-    Path directory(testArena.arena);
+    Path directory = Path();
     native(in subDir, mut testArena, mut directory){
         directory = Path(testArena.arena, NWB_REPO_ROOT) / "__artifacts" / "font_metadata_tests" / subDir;
     }

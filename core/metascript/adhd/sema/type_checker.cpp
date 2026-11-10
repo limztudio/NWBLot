@@ -145,6 +145,8 @@ const ScopedVarInfo* TypeChecker::FindScopedVar(const Span<const ScopedVarInfo> 
 
 b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>& errors){
     b8 ok = true;
+    m_activeUnit = &unit;
+    m_recordGlobalHeaders = false;
 
     if(!m_symbols.build(unit, errors))
         ok = false;
@@ -219,6 +221,7 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
     }
 
     for(TypeAliasDecl* aliasDecl : unit.typeAliases){
+        m_recordGlobalHeaders = !aliasDecl->isImported;
         if(!checkTemplateParamBounds(aliasDecl->templateParams, nullptr, nullptr, errors))
             ok = false;
         if(aliasDecl->aliasedType){
@@ -256,6 +259,7 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
             }
             continue;
         }
+        m_recordGlobalHeaders = true;
         if(gc->varType){
             if(!checkTypeRef(*gc->varType, nullptr, nullptr, errors))
                 ok = false;
@@ -320,11 +324,13 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
     }
 
     for(InterfaceDecl* iface : unit.interfaces){
+        m_recordGlobalHeaders = !iface->isImported;
         if(!checkInterfaceDecl(*iface, errors))
             ok = false;
     }
 
     for(ClassDecl* classDecl : unit.classes){
+        m_recordGlobalHeaders = !classDecl->isImported;
         if(!checkClassDecl(*classDecl, errors))
             ok = false;
         for(MethodDecl* m : classDecl->methods){
@@ -334,6 +340,7 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
     }
 
     for(MethodDecl* fn : unit.freeFunctions){
+        m_recordGlobalHeaders = !fn->isImported;
         if(!fn->isOperator && !fn->name.empty() && !IsAsciiUpper(fn->name[0])){
             reportError(errors, fn->span, "global function name must start with an uppercase letter");
             ok = false;
@@ -358,10 +365,22 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
         fn->isInline = __hidden_adhd_type_checker::ShouldAutoInlineCallable(*fn);
     }
 
+    m_recordGlobalHeaders = false;
     if(!m_layoutOptimizer.optimizeTranslationUnit(unit, errors))
         ok = false;
 
+    m_activeUnit = nullptr;
     return ok;
+}
+
+void TypeChecker::recordRequiredHeader(const MStringView header)noexcept{
+    if(!m_recordGlobalHeaders || !m_activeUnit || header.empty())
+        return;
+    for(const MStringView existing : m_activeUnit->requiredGlobalHeaders){
+        if(existing == header)
+            return;
+    }
+    m_activeUnit->requiredGlobalHeaders.push_back(header);
 }
 
 void TypeChecker::buildCallArgHints(const ClassDecl* ownerClass, const MethodDecl* method, const Span<const Expr* const> args, const Span<const ScopedVarInfo> scope, MVector<MStringView>& outArgTypes, MVector<u8>& outArgIsMut)const{
@@ -476,7 +495,7 @@ MStringView TypeChecker::resolveScopeAccessEnumTypeName(const ClassDecl* ownerCl
         if(ownerClass){
             if(const FieldDecl* field = SymbolTable::FindClassField(*ownerClass, rootName); field && field->type){
                 const MStringView fieldTypeName = m_symbols.resolveBaseTypeName(field->type->name);
-                if(m_symbols.findEnum(fieldTypeName))
+                if(m_symbols.findEnum(fieldTypeName) || FindBuiltinEnum(fieldTypeName))
                     return fieldTypeName;
             }
         }
@@ -485,6 +504,11 @@ MStringView TypeChecker::resolveScopeAccessEnumTypeName(const ClassDecl* ownerCl
     if(expr.lhs){
         const TypeRef* lhsTypeRef = nullptr;
         const MStringView lhsBase = inferExprBaseType(ownerClass, method, *expr.lhs, scope, &lhsTypeRef);
+        if(const BuiltinFieldInfo* bf = FindBuiltinField(lhsBase, rootName)){
+            const MStringView bfTypeName = m_symbols.resolveBaseTypeName(bf->fieldTypeName);
+            if(!bfTypeName.empty() && (m_symbols.findEnum(bfTypeName) || FindBuiltinEnum(bfTypeName)))
+                return bfTypeName;
+        }
         if(const ClassDecl* targetCls = m_symbols.findClass(lhsBase)){
             if(const FieldDecl* field = SymbolTable::FindClassField(*targetCls, rootName); field && field->type){
                 if(outAccessedClass)
@@ -493,7 +517,7 @@ MStringView TypeChecker::resolveScopeAccessEnumTypeName(const ClassDecl* ownerCl
                     *outAccessedField = field;
                 const TypeRef* ft = m_symbols.substituteTypeParams(field->type, targetCls->templateParams, lhsTypeRef);
                 const MStringView fieldTypeName = ft ? m_symbols.resolveBaseTypeName(ft->name) : MStringView{};
-                if(!fieldTypeName.empty() && m_symbols.findEnum(fieldTypeName))
+                if(!fieldTypeName.empty() && (m_symbols.findEnum(fieldTypeName) || FindBuiltinEnum(fieldTypeName)))
                     return fieldTypeName;
             }
         }
@@ -501,18 +525,18 @@ MStringView TypeChecker::resolveScopeAccessEnumTypeName(const ClassDecl* ownerCl
     }
     if(const ScopedVarInfo* local = FindScopedVar(scope, rootName)){
         const MStringView localTypeName = resolveScopedVarBaseType(*local);
-        if(!localTypeName.empty() && m_symbols.findEnum(localTypeName))
+        if(!localTypeName.empty() && (m_symbols.findEnum(localTypeName) || FindBuiltinEnum(localTypeName)))
             return localTypeName;
         return {};
     }
     if(const Stmt* gc = m_symbols.findGlobalConstant(rootName); gc && gc->varType){
         const MStringView gcTypeName = m_symbols.resolveBaseTypeName(gc->varType->name);
-        if(!gcTypeName.empty() && m_symbols.findEnum(gcTypeName))
+        if(!gcTypeName.empty() && (m_symbols.findEnum(gcTypeName) || FindBuiltinEnum(gcTypeName)))
             return gcTypeName;
         return {};
     }
     const MStringView resolvedRoot = m_symbols.resolveBaseTypeName(rootName);
-    if(!resolvedRoot.empty() && m_symbols.findEnum(resolvedRoot))
+    if(!resolvedRoot.empty() && (m_symbols.findEnum(resolvedRoot) || FindBuiltinEnum(resolvedRoot)))
         return resolvedRoot;
     return {};
 }

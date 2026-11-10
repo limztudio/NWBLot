@@ -110,32 +110,32 @@ using UiSearchComboSource = UiFilteredListSource<UiSearchComboLabelResolver, s_S
 
 
 b8 DeclareSelectedKeyLabel(mut Builder ui, mut ScratchArena scratchArena, in u64 selectedKey){
-    const ScratchString text = StringFormat(scratchArena, s_SelectedTextFormat, selectedKey);
+    const String text = StringFormat(s_SelectedTextFormat, selectedKey);
     return ui.label(s_SelectedKey, StringView(text));
 }
 
 b8 DeclareCommittedNumericLabel(mut Builder ui, mut ScratchArena scratchArena, in i64 integerValue, in f64 floatValue){
-    const ScratchString text = StringFormat(scratchArena, "Committed: {} / {}", integerValue, floatValue);
+    const String text = StringFormat("Committed: {} / {}", integerValue, floatValue);
     return ui.label("committed", StringView(text));
 }
 
 b8 DeclarePopupToolsStatusLabel(mut Builder ui, mut ScratchArena scratchArena, in u64 commandKey, in u32 anchorClicks){
-    const ScratchString text = StringFormat(scratchArena, "Command: {} / Clicks: {}", commandKey, anchorClicks);
+    const String text = StringFormat("Command: {} / Clicks: {}", commandKey, anchorClicks);
     return ui.label(s_SelectedKey, StringView(text));
 }
 
 b8 DeclareProgressPercentLabel(mut Builder ui, mut ScratchArena scratchArena, in f64 percent){
-    const ScratchString text = StringFormat(scratchArena, "Completed: {:.0f}%", percent);
+    const String text = StringFormat("Completed: {:.0f}%", percent);
     return ui.label("value", StringView(text));
 }
 
 b8 DeclareGallerySectionLabel(mut Builder ui, mut ScratchArena scratchArena, in u32 sectionNumber, in u32 sectionCount, in StringView sectionName){
-    const ScratchString text = StringFormat(scratchArena, "UI samples {}/{}: {}", sectionNumber, sectionCount, sectionName);
+    const String text = StringFormat("UI samples {}/{}: {}", sectionNumber, sectionCount, sectionName);
     return ui.label("section", StringView(text));
 }
 
 b8 DeclareCounterLabel(mut Builder ui, mut ScratchArena scratchArena, in u32 count){
-    const ScratchString text = StringFormat(scratchArena, "Count: {}", count);
+    const String text = StringFormat("Count: {}", count);
     return ui.label("count", StringView(text));
 }
 

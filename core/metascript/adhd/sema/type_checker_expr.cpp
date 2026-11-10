@@ -174,6 +174,17 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                     }
                 }
             }
+            else if(const BuiltinEnumInfo* builtinEnum = FindBuiltinEnum(expr.scopeChain[0])){
+                recordRequiredHeader(builtinEnum->requiredHeader);
+                if(expr.scopeChain.size() != 2u){
+                    reportError(errors, expr.span, "invalid enum/flag scope access; expected 'TypeName::Entry'");
+                    ok = false;
+                }
+                else if(!HasBuiltinEnumEntry(builtinEnum->adhdName, expr.scopeChain[1])){
+                    reportError(errors, expr.span, "unknown enumerator in enum/flag scope access");
+                    ok = false;
+                }
+            }
             else if(
                 !m_hasTopLevelNativeBlocks
                 || hadVarOrMemberLhs
@@ -400,6 +411,16 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                     ok = false;
                 }
             }
+            else if(const BuiltinEnumInfo* lhsBuiltinEnum = FindBuiltinEnum(lhsType)){
+                if(expr.op == TokenType::Tilde && !lhsBuiltinEnum->isFlag){
+                    reportError(errors, expr.span, "bitwise '~' is only supported on 'flag' types, not 'enum' types");
+                    ok = false;
+                }
+                else if(OperatorSemantics::IsIncrementOrDecrementOperatorToken(expr.op)){
+                    reportError(errors, expr.span, "increment and decrement operators are not supported on 'enum' or 'flag' types");
+                    ok = false;
+                }
+            }
             if(!opMethod){
                 if(opDeclCls || m_symbols.findInterface(lhsType) || FindTemplateParam(ownerClass, &method, lhsType)){
                     reportError(errors, expr.span, "unary operator is not defined on operand type");
@@ -417,7 +438,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                     reportError(errors, expr.span, "increment and decrement operators require a numeric scalar operand");
                     ok = false;
                 }
-                else if(expr.op == TokenType::Tilde && !lhsType.empty() && !m_symbols.findEnum(lhsType) && !BuiltinTypeSemantics::IsIntegerScalarType(lhsType) && !SymbolTable::IsSimdRegisterVectorType(lhsType) && ConcreteTypeAnalyzer(m_symbols).isKnownConcreteTypeName(lhsType)){
+                else if(expr.op == TokenType::Tilde && !lhsType.empty() && !m_symbols.findEnum(lhsType) && !FindBuiltinEnum(lhsType) && !BuiltinTypeSemantics::IsIntegerScalarType(lhsType) && !SymbolTable::IsSimdRegisterVectorType(lhsType) && ConcreteTypeAnalyzer(m_symbols).isKnownConcreteTypeName(lhsType)){
                     reportError(errors, expr.span, "bitwise '~' requires an integer, SIMD, or 'flag' operand");
                     ok = false;
                 }
@@ -481,7 +502,8 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                     return BuiltinTypeSemantics::IsScalarType(baseName)
                         || SymbolTable::IsSimdType(baseName)
                         || SymbolTable::IsUnalignedVectorType(baseName)
-                        || m_symbols.findEnum(baseName) != nullptr;
+                        || m_symbols.findEnum(baseName) != nullptr
+                        || FindBuiltinEnum(baseName) != nullptr;
                 };
                 if(m_symbols.resolveRefMode(expr.targetType) == ParamPassingMode::None && hasKnownFixedLayout(dstType) && hasKnownFixedLayout(srcType)){
                     TypeRef srcTypeRef(m_arena);

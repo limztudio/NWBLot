@@ -106,12 +106,15 @@ public:
         if(name == adhdName) return true;
     #define NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE(adhdName, cppExportName, lanes, altCtorArity, byteSize, byteAlign, laneScalarType, isHalfFloat) \
         if(name == adhdName) return true;
-    #define NWB_ADHD_EXPORT_OBJECT_TYPE(adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isStringLike, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey, requiresTCharAdaptation) \
+    #define NWB_ADHD_EXPORT_OBJECT_TYPE(adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isStringLike, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey, requiresTCharAdaptation, arenaFirstInCtor, requiredHeader) \
+        if(name == adhdName) return true;
+    #define NWB_ADHD_EXPORT_BUILTIN_ENUM(adhdName, cppTypeName, cppScopeName, byteSize, byteAlign, isFlag, requiredHeader) \
         if(name == adhdName) return true;
     #define NWB_ADHD_EXPORT_GENERIC_TYPE(adhdName, cppExportName, paramKind, inlineLayoutKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, reflectedLinearKind, isReflectedMap, isAssetHandle) \
         if(name == adhdName) return true;
     #include "../export_types.h"
     #undef NWB_ADHD_EXPORT_GENERIC_TYPE
+    #undef NWB_ADHD_EXPORT_BUILTIN_ENUM
     #undef NWB_ADHD_EXPORT_OBJECT_TYPE
     #undef NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE
     #undef NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE

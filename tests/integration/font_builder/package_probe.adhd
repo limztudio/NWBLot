@@ -128,12 +128,8 @@ b8 ExportPayload(in Path directory, in FontAtlasPayload payload, mut ScratchAren
 
 b8 DecodePackage(in StringView source, in StringView destination){
     AssetArena arena(s_PackageArena);
-    Path sourcePath(arena);
-    Path destinationPath(arena);
-    native(in source, in destination, mut sourcePath, mut destinationPath){
-        sourcePath = source;
-        destinationPath = destination;
-    }
+    Path sourcePath(source);
+    Path destinationPath(destination);
     ScratchArena scratch(Name(s_FontPackageNameTestsIntegrationFontBuilderScratch));
     Font font(arena);
     FontAtlas atlas(arena);

@@ -32,6 +32,30 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
     if(expr.kind != ExprKind::Binary || expr.op != prevUnfusedLogicOp)
         m_unfusedLogicOp = TokenType::EndOfFile;
 
+    if(expr.formatArgWrapKind != 0u){
+        Expr unwrapped = expr;
+        unwrapped.formatArgWrapKind = 0u;
+        if(expr.formatArgWrapKind == 1u){
+            out.append("::AStringView(");
+            emitExpr(out, unwrapped);
+            out.push_back(')');
+        }
+        else if(expr.formatArgWrapKind == 2u){
+            out.append("::PathToString<char>(");
+            emitExpr(out, unwrapped);
+            out.push_back(')');
+        }
+        else if(expr.formatArgWrapKind == 3u){
+            out.push_back('(');
+            emitExpr(out, unwrapped);
+            out.append(").resolvedText()");
+        }
+        else{
+            emitExpr(out, unwrapped);
+        }
+        return;
+    }
+
     if(expr.wrapInSimdResult){
         out.append(IsDoubleSimdType(expr.resolvedSimdType) ? "::SIMDVectorDoubleResult{ " : "::SIMDVectorSingleResult{ ");
         Expr unwrapped = expr;
@@ -139,6 +163,14 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
         break;
     }
     case ExprKind::ScopeAccess:{
+        if(expr.scopeChain.size() == 2u){
+            if(const BuiltinEnumInfo* builtinEnum = FindBuiltinEnum(expr.scopeChain[0])){
+                out.append(builtinEnum->cppScopeName.data(), builtinEnum->cppScopeName.size());
+                out.append("::");
+                out.append(expr.scopeChain[1].data(), expr.scopeChain[1].size());
+                break;
+            }
+        }
         for(usize i = 0u; i < expr.scopeChain.size(); ++i){
             if(i > 0u)
                 out.append("::");

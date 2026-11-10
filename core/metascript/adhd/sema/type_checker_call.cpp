@@ -44,6 +44,10 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
     if(expr.lhs){
         if(expr.lhs->kind == ExprKind::Identifier){
             const MStringView baseCallee = m_symbols.resolveBaseTypeName(expr.lhs->text);
+            if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(baseCallee))
+                recordRequiredHeader(objInfo->requiredHeader);
+            else if(const BuiltinEnumInfo* enumInfo = FindBuiltinEnum(baseCallee))
+                recordRequiredHeader(enumInfo->requiredHeader);
             if(m_symbols.findInterface(baseCallee)){
                 reportError(errors, expr.span, "cannot instantiate an 'interface' type directly");
                 ok = false;
@@ -89,8 +93,27 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                 if(const BuiltinFunctionInfo* fnInfo = FindBuiltinFunction(expr.lhs->text)){
                     expr.isBuiltinCall = true;
                     calledMemberName = expr.lhs->text;
-                    if(callArgCount != fnInfo->arity){
+                    recordRequiredHeader(fnInfo->requiredHeader);
+                    if(fnInfo->prependsScratchArena){
+                        expr.injectScratchArena = true;
+                        method.usesScratchArena = true;
+                        m_activeParallelBlockUsesScratch = true;
+                    }
+                    const b8 badArity = fnInfo->isVariadic
+                        ? (callArgCount < fnInfo->minArity)
+                        : (callArgCount < fnInfo->minArity || callArgCount > fnInfo->arity);
+                    if(badArity){
                         reportError(errors, expr.span, "wrong number of arguments to built-in math/SIMD function");
+                        ok = false;
+                    }
+                    const b8 requiresExplicitTypeArg = fnInfo->returnRule == BuiltinFunctionReturnRule::CallTemplateArg0
+                        || fnInfo->adhdName == "NegateOverflows"
+                        || fnInfo->adhdName == "AddOverflows"
+                        || fnInfo->adhdName == "SubtractOverflows"
+                        || fnInfo->adhdName == "MultiplyOverflows"
+                        || fnInfo->adhdName == "DivideOverflows";
+                    if(requiresExplicitTypeArg && (expr.callTemplateArgs.size() != 1u || !expr.callTemplateArgs[0].type)){
+                        reportError(errors, expr.span, "built-in function requires exactly 1 explicit type argument '<T>'");
                         ok = false;
                     }
                 }

@@ -59,7 +59,7 @@ b8 TypeChecker::checkTemplateParamBounds(const Span<const TemplateParamDecl> par
             else{
                 const TypeRef* unwrappedConstType = m_symbols.unwrapTypeAlias(param.constValueType);
                 const MStringView baseConstName = unwrappedConstType ? m_symbols.resolveBaseTypeName(unwrappedConstType->name) : MStringView{};
-                if(!unwrappedConstType || m_symbols.resolveRefMode(param.constValueType) != ParamPassingMode::None || !(BuiltinTypeSemantics::IsIntegralOrBoolScalarType(baseConstName) || m_symbols.findEnum(baseConstName) != nullptr)){
+                if(!unwrappedConstType || m_symbols.resolveRefMode(param.constValueType) != ParamPassingMode::None || !(BuiltinTypeSemantics::IsIntegralOrBoolScalarType(baseConstName) || m_symbols.findEnum(baseConstName) != nullptr || FindBuiltinEnum(baseConstName) != nullptr)){
                     reportError(errors, param.span, "non-type template parameter must have an integer, b8, enum, or flag value type");
                     ok = false;
                 }
@@ -247,6 +247,11 @@ b8 TypeChecker::checkTemplateArgTypes(const Span<const TypeArg> templateArgs, co
 b8 TypeChecker::checkTypeRef(const TypeRef& typeRef, const ClassDecl* enclosingClass, const MethodDecl* enclosingMethod, const b8 allowVoid, MVector<ParseError>& errors){
     b8 ok = true;
     const TypeRef* unwrapped = m_symbols.unwrapTypeAlias(&typeRef);
+    const MStringView resolvedHeaderTypeName = unwrapped ? unwrapped->name : typeRef.name;
+    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(resolvedHeaderTypeName))
+        recordRequiredHeader(objInfo->requiredHeader);
+    else if(const BuiltinEnumInfo* enumInfo = FindBuiltinEnum(resolvedHeaderTypeName))
+        recordRequiredHeader(enumInfo->requiredHeader);
     const b8 isVoid = IsVoidTypeRef(&typeRef) || IsVoidTypeRef(unwrapped);
     if(isVoid){
         if(typeRef.refMode != ParamPassingMode::None || (unwrapped && unwrapped->refMode != ParamPassingMode::None)){
@@ -351,6 +356,7 @@ b8 TypeChecker::checkTypeRef(const TypeRef& typeRef, const ClassDecl* enclosingC
     else if(!typeRef.templateArgs.empty()){
         const b8 isKnownNonTemplated = BuiltinTypeSemantics::IsBuiltinTypeName(typeRef.name)
             || m_symbols.findEnum(typeRef.name) != nullptr
+            || FindBuiltinEnum(typeRef.name) != nullptr
             || FindTemplateParam(enclosingClass, enclosingMethod, typeRef.name) != nullptr;
         if(isKnownNonTemplated || !m_hasTopLevelNativeBlocks){
             reportError(errors, typeRef.span, "type does not accept template arguments");

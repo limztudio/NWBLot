@@ -937,7 +937,7 @@ void VerifyFilesystem_VolumeNamesRejectEmptySeparatorsAndWhitespace(){
 
 void VerifyFilesystemVolumeTest_EarlyPublicationFailureCleansOwnedWorkDirectories(mut FilesystemVolumeTest self){
     ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
-    StagedDirectoryPaths paths(self.m_arena);
+    StagedDirectoryPaths paths = StagedDirectoryPaths();
     b8 published = true;
 
     native(mut self, mut scratchArena, mut paths, mut published){
@@ -963,7 +963,7 @@ void VerifyFilesystemVolumeTest_EarlyPublicationFailureCleansOwnedWorkDirectorie
 
 void VerifyFilesystemVolumeTest_IncompletePublicationRollbackPreservesRecoveryFiles(mut FilesystemVolumeTest self){
     ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
-    StagedDirectoryPaths paths(self.m_arena);
+    StagedDirectoryPaths paths = StagedDirectoryPaths();
     b8 rollbackFailed = false;
 
     native(mut self, mut scratchArena, mut paths, mut rollbackFailed){
@@ -1001,7 +1001,7 @@ void VerifyFilesystemVolumeTest_IncompletePublicationRollbackPreservesRecoveryFi
 
 void VerifyFilesystemVolumeTest_ThrowingDiagnosticStillRetainsIncompleteRollback(mut FilesystemVolumeTest self){
     ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
-    StagedDirectoryPaths paths(self.m_arena);
+    StagedDirectoryPaths paths = StagedDirectoryPaths();
     b8 rollbackFailed = false;
 
     native(mut self, mut scratchArena, mut paths, mut rollbackFailed){
@@ -1039,7 +1039,7 @@ void VerifyFilesystemVolumeTest_ThrowingDiagnosticStillRetainsIncompleteRollback
 
 void VerifyFilesystemVolumeTest_FailedLaterSegmentPromotionRestoresPublishedBytes(mut FilesystemVolumeTest self){
     ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
-    StagedDirectoryPaths stagedPaths(self.m_arena);
+    StagedDirectoryPaths stagedPaths = StagedDirectoryPaths();
     native(mut self, mut stagedPaths){
         stagedPaths.stageDirectory = self.m_directory / s_FilesystemStageDirectory;
         stagedPaths.backupDirectory = self.m_directory / s_FilesystemBackupDirectory;
@@ -1092,7 +1092,7 @@ void VerifyFilesystemVolumeTest_FailedLaterSegmentPromotionRestoresPublishedByte
 
 void VerifyFilesystemVolumeTest_ThrowingPromotionDiagnosticRestoresPublishedBytesDuringUnwind(mut FilesystemVolumeTest self){
     ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
-    StagedDirectoryPaths stagedPaths(self.m_arena);
+    StagedDirectoryPaths stagedPaths = StagedDirectoryPaths();
     native(mut self, mut stagedPaths){
         stagedPaths.stageDirectory = self.m_directory / s_FilesystemStageDirectory;
         stagedPaths.backupDirectory = self.m_directory / s_FilesystemBackupDirectory;

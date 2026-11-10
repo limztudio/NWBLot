@@ -617,7 +617,7 @@ void VerifyPreparedFontSource_ImageCorruptionRejectsFullReadWhileFontOnlySkipsCo
     AssetBytes binary(testArena.arena);
     ASSERT_TRUE(SerializeFixtureSource(fixture, testArena.arena, binary));
     ASSERT_EQ(binary.size(), s_PixelOffset + 150u);
-    Path path(testArena.arena);
+    Path path = Path();
     ASSERT_TRUE(WriteCase("image_integrity_control.font", binary, testArena, path));
     PreparedFontSource original(testArena.arena);
     ASSERT_TRUE(ReadPreparedInto(path, true, testArena.arena, original));
@@ -658,7 +658,7 @@ void VerifyPreparedFontSource_SfntByteAndDigestCorruptionRejectBothReadModes(){
     SourceFixture fixture(testArena.arena);
     AssetBytes binary(testArena.arena);
     ASSERT_TRUE(SerializeFixtureSource(fixture, testArena.arena, binary));
-    Path path(testArena.arena);
+    Path path = Path();
     ASSERT_TRUE(WriteCase("font_integrity_control.font", binary, testArena, path));
     ASSERT_TRUE(CanReadPrepared(path, true, testArena.arena));
     for(usize index = 0u; index < s_CorruptSfntFilenames.size(); ++index){
@@ -679,7 +679,7 @@ void CheckMalformedPreparedField(in MalformedField field, in AssetBytes binary, 
     const ScopedTestTrace trace(field.m_filename);
     AssetBytes malformed = CopyAssetBytes(binary, testArena.arena);
     WriteLittleU32At(malformed, field.m_offset, field.m_value);
-    Path path(testArena.arena);
+    Path path = Path();
     ASSERT_TRUE(WriteCase(field.m_filename, malformed, testArena, path));
     for(u32 mode = 0u; mode < 2u; ++mode){
         const b8 includePixels = mode == 1u;
@@ -701,7 +701,7 @@ void VerifyPreparedFontSource_MalformedDirectoryCountsAndOverflowRejectBeforePay
     SourceFixture fixture(testArena.arena);
     AssetBytes binary(testArena.arena);
     ASSERT_TRUE(SerializeFixtureSource(fixture, testArena.arena, binary));
-    Path path(testArena.arena);
+    Path path = Path();
     ASSERT_TRUE(WriteCase("directory_control.font", binary, testArena, path));
     ASSERT_TRUE(CanReadPrepared(path, true, outputArena));
 
@@ -761,7 +761,7 @@ void VerifyPreparedFontSource_TruncatedSectionsAndTrailingBytesRejectBothReadMod
     SourceFixture fixture(testArena.arena);
     AssetBytes binary(testArena.arena);
     ASSERT_TRUE(SerializeFixtureSource(fixture, testArena.arena, binary));
-    Path path(testArena.arena);
+    Path path = Path();
     ASSERT_TRUE(WriteCase("length_control.font", binary, testArena, path));
     ASSERT_TRUE(CanReadPrepared(path, true, testArena.arena));
 

@@ -320,6 +320,7 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
             if(
                 !m_hasTopLevelNativeBlocks
                 || m_symbols.findEnum(ifaceName)
+                || FindBuiltinEnum(ifaceName)
                 || BuiltinTypeSemantics::IsScalarType(ifaceName)
                 || FindBuiltinObjectType(ifaceName)
                 || FindBuiltinGenericType(ifaceName)

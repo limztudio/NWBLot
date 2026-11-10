@@ -122,6 +122,59 @@ b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
             out.append("))");
             return true;
         }
+        if(callee == "ComputeSha256" && expr.arguments.size() == 1u && expr.arguments[0]){
+            out.append("([](const auto& __adhd_bytes)noexcept{ return ::ComputeSha256(::BinaryByteView{ reinterpret_cast<const ::u8*>(__adhd_bytes.data()), __adhd_bytes.size() }); }(");
+            m_emitter.emitExpr(out, *expr.arguments[0]);
+            out.append("))");
+            return true;
+        }
+        if(callee == "WriteTextFileAtomic" && expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
+            out.append("(::StagedFileWriter(");
+            m_emitter.emitExpr(out, *expr.arguments[0]);
+            out.append(").writeTextAtomic(");
+            m_emitter.emitExpr(out, *expr.arguments[1]);
+            out.append("))");
+            return true;
+        }
+        if(callee == "WriteBinaryFileAtomic" && expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
+            out.append("(::StagedFileWriter(");
+            m_emitter.emitExpr(out, *expr.arguments[0]);
+            out.append(").writeBinaryAtomic(");
+            m_emitter.emitExpr(out, *expr.arguments[1]);
+            out.append("))");
+            return true;
+        }
+        if(callee == "WriteAtomicChecked" && expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
+            out.append("([](const auto& __adhd_p, const auto& __adhd_b){ return ::StagedFileWriter(__adhd_p).writeAtomicChecked(reinterpret_cast<const ::u8*>(__adhd_b.data()), __adhd_b.size()); }(");
+            m_emitter.emitExpr(out, *expr.arguments[0]);
+            out.append(", ");
+            m_emitter.emitExpr(out, *expr.arguments[1]);
+            out.append("))");
+            return true;
+        }
+        if(callee == "VerifyBinaryFileBytes" && expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
+            out.append("([](const auto& __adhd_p, const auto& __adhd_b){ return ::VerifyBinaryFileBytes(__adhd_p, reinterpret_cast<const ::u8*>(__adhd_b.data()), __adhd_b.size()); }(");
+            m_emitter.emitExpr(out, *expr.arguments[0]);
+            out.append(", ");
+            m_emitter.emitExpr(out, *expr.arguments[1]);
+            out.append("))");
+            return true;
+        }
+        if(const BuiltinFunctionInfo* fnInfo = FindBuiltinFunction(callee); fnInfo && fnInfo->prependsScratchArena){
+            out.append(fnInfo->cppExportName.data(), fnInfo->cppExportName.size());
+            if(!expr.callTemplateArgs.empty())
+                m_emitter.m_typeEmitter.emitTypeArgListCpp(out, expr.callTemplateArgs);
+            out.push_back('(');
+            const MStringView arenaExpr = expr.injectClassArena ? MStringView("s_ClassArena") : MStringView("__adhd_scratch");
+            out.append(arenaExpr.data(), arenaExpr.size());
+            for(usize i = 0u; i < expr.arguments.size(); ++i){
+                out.append(", ");
+                if(expr.arguments[i])
+                    m_emitter.emitExpr(out, *expr.arguments[i]);
+            }
+            out.push_back(')');
+            return true;
+        }
     }
     return false;
 }

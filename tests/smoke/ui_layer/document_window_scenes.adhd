@@ -341,8 +341,6 @@ b8 InitUiTextSmokeSamples(
         for(u32 channels = 1u; channels <= 4u; ++channels){
             const Impl::Ui::SdfAtlasPageBinding sdfBinding{
                 .font = Core::Assets::AssetRef<Impl::Font>(s_LatinFontPath),
-                .fontSha256 = {},
-                .pixelsSha256 = {},
                 .fontGeneration = 1u,
                 .atlasIdentity = s_CoverageAtlasIdentity,
                 .generation = 1u,

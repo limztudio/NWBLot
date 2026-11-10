@@ -85,6 +85,13 @@ MStringView TypeChecker::inferExprTypeName(const ClassDecl* ownerClass, const Me
             if(const BuiltinFunctionInfo* fnInfo = FindBuiltinFunction(expr.lhs->text)){
                 if(fnInfo->returnRule == BuiltinFunctionReturnRule::FixedType)
                     return fnInfo->returnTypeName;
+                if(fnInfo->returnRule == BuiltinFunctionReturnRule::CallTemplateArg0){
+                    if(!fnInfo->returnTypeName.empty())
+                        return fnInfo->returnTypeName;
+                    if(!expr.callTemplateArgs.empty() && expr.callTemplateArgs[0].type)
+                        return m_symbols.resolveBaseTypeName(expr.callTemplateArgs[0].type->name);
+                    return {};
+                }
                 if(!expr.arguments.empty() && expr.arguments[0]){
                     if(fnInfo->returnRule == BuiltinFunctionReturnRule::LaneScalar){
                         const MStringView argType = inferExprTypeName(ownerClass, method, *expr.arguments[0], scope);
@@ -293,10 +300,32 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
                     if(!fnInfo->returnTypeArgName.empty()){
                         TypeRef* valType = AllocateAstNode<TypeRef>(m_arena);
                         valType->name = fnInfo->returnTypeArgName;
+                        if(!fnInfo->returnNestedTypeArgName.empty()){
+                            TypeRef* nestedType = AllocateAstNode<TypeRef>(m_arena);
+                            nestedType->name = fnInfo->returnNestedTypeArgName;
+                            TypeArg nestedArg;
+                            nestedArg.type = nestedType;
+                            valType->templateArgs.push_back(nestedArg);
+                        }
                         TypeArg valArg;
                         valArg.type = valType;
                         synth->templateArgs.push_back(valArg);
                     }
+                    if(!fnInfo->returnErrorTypeName.empty()){
+                        TypeRef* errType = AllocateAstNode<TypeRef>(m_arena);
+                        errType->name = fnInfo->returnErrorTypeName;
+                        TypeArg errArg;
+                        errArg.type = errType;
+                        synth->templateArgs.push_back(errArg);
+                    }
+                    return synth;
+                }
+                if(fnInfo->returnRule == BuiltinFunctionReturnRule::CallTemplateArg0 && !expr.callTemplateArgs.empty() && expr.callTemplateArgs[0].type){
+                    if(fnInfo->returnTypeName.empty())
+                        return m_symbols.unwrapTypeAlias(expr.callTemplateArgs[0].type);
+                    TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
+                    synth->name = fnInfo->returnTypeName;
+                    synth->templateArgs.push_back(expr.callTemplateArgs[0]);
                     return synth;
                 }
             }
@@ -339,6 +368,20 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
             if(const BuiltinReceiverMethodInfo* recvMethod = FindBuiltinReceiverMethod(lhsType, mName); recvMethod && recvMethod->synthesizeTypeRef){
                 TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
                 synth->name = recvMethod->returnTypeName;
+                if(!recvMethod->returnTypeArgName.empty()){
+                    TypeRef* valType = AllocateAstNode<TypeRef>(m_arena);
+                    valType->name = recvMethod->returnTypeArgName;
+                    TypeArg valArg;
+                    valArg.type = valType;
+                    synth->templateArgs.push_back(valArg);
+                }
+                if(!recvMethod->returnErrorTypeName.empty()){
+                    TypeRef* errType = AllocateAstNode<TypeRef>(m_arena);
+                    errType->name = recvMethod->returnErrorTypeName;
+                    TypeArg errArg;
+                    errArg.type = errType;
+                    synth->templateArgs.push_back(errArg);
+                }
                 return synth;
             }
             if(recvTypeRef && FindBuiltinGenericType(lhsType) && !recvTypeRef->templateArgs.empty() && recvTypeRef->templateArgs[0].type){
@@ -463,9 +506,9 @@ MStringView TypeChecker::inferExprBaseType(const ClassDecl* ownerClass, const Me
             const_cast<Expr&>(expr).resolvedSimdType = rhsT;
             return rhsT;
         }
-        if(m_symbols.findEnum(lhsT))
+        if(m_symbols.findEnum(lhsT) || FindBuiltinEnum(lhsT))
             return lhsT;
-        if(m_symbols.findEnum(rhsT))
+        if(m_symbols.findEnum(rhsT) || FindBuiltinEnum(rhsT))
             return rhsT;
         return !lhsT.empty() ? lhsT : rhsT;
     }

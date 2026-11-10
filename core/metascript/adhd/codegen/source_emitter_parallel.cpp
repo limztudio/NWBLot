@@ -293,10 +293,26 @@ void ParallelStatementEmitter::emitParallelStmt(MString& out, const Stmt& stmt, 
                 m_emitter.emitScratchArenaPrologue(out, indent + 2u, "parallel");
                 m_emitter.emitIndent(out, indent + 2u);
             }
+            const MStringView parallelCallee = (stmt.expr->lhs && stmt.expr->lhs->kind == ExprKind::Identifier)
+                ? stmt.expr->lhs->text
+                : MStringView{};
+            const BuiltinFunctionInfo* parallelBuiltin = stmt.expr->isBuiltinCall
+                ? FindBuiltinFunction(parallelCallee)
+                : nullptr;
+            const b8 parallelArenaFirst = (parallelBuiltin && parallelBuiltin->prependsScratchArena)
+                || (!stmt.expr->isBuiltinCall && !parallelCallee.empty() && IsArenaFirstCtorType(m_emitter.m_symbols.resolveBaseTypeName(parallelCallee)));
+            const MStringView parallelArena = stmt.expr->injectClassArena
+                ? MStringView("s_ClassArena")
+                : (stmt.expr->injectScratchArena ? MStringView("__adhd_scratch") : MStringView{});
             m_emitter.emitCallTargetExpr(out, stmt.expr->lhs, stmt.expr->isBuiltinCall);
             if(!stmt.expr->callTemplateArgs.empty())
                 m_emitter.m_typeEmitter.emitTypeArgListCpp(out, stmt.expr->callTemplateArgs);
             out.push_back('(');
+            if(!parallelArena.empty() && parallelArenaFirst){
+                out.append(parallelArena.data(), parallelArena.size());
+                if(!stmt.expr->arguments.empty())
+                    out.append(", ");
+            }
             for(usize i = 0u; i < stmt.expr->arguments.size(); ++i){
                 if(i > 0u)
                     out.append(", ");
@@ -308,10 +324,11 @@ void ParallelStatementEmitter::emitParallelStmt(MString& out, const Stmt& stmt, 
                     AppendUnsignedDecimal(out, i);
                 }
             }
-            if(stmt.expr->injectClassArena)
-                out.append(", s_ClassArena");
-            else if(stmt.expr->injectScratchArena)
-                out.append(", __adhd_scratch");
+            if(!parallelArena.empty() && !parallelArenaFirst){
+                if(!stmt.expr->arguments.empty())
+                    out.append(", ");
+                out.append(parallelArena.data(), parallelArena.size());
+            }
             out.append("); }, ");
             AppendTaskOptions(out, stmt);
             out.append(");\r\n");

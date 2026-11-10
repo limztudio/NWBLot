@@ -28,8 +28,18 @@
 #endif
 
 #ifndef NWB_ADHD_EXPORT_OBJECT_TYPE
-#define NWB_ADHD_EXPORT_OBJECT_TYPE(adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isStringLike, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey, requiresTCharAdaptation)
+#define NWB_ADHD_EXPORT_OBJECT_TYPE(adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isStringLike, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey, requiresTCharAdaptation, arenaFirstInCtor, requiredHeader)
 #define NWB_ADHD_EXPORT_OBJECT_TYPE_AUTO_UNDEF
+#endif
+
+#ifndef NWB_ADHD_EXPORT_BUILTIN_ENUM
+#define NWB_ADHD_EXPORT_BUILTIN_ENUM(adhdName, cppTypeName, cppScopeName, byteSize, byteAlign, isFlag, requiredHeader)
+#define NWB_ADHD_EXPORT_BUILTIN_ENUM_AUTO_UNDEF
+#endif
+
+#ifndef NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY
+#define NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY(adhdEnumName, entryName)
+#define NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY_AUTO_UNDEF
 #endif
 
 #ifndef NWB_ADHD_EXPORT_GENERIC_TYPE
@@ -127,15 +137,162 @@ NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE("u64x2u", "UInt64x2U", 2u, 0u, 16u, 8u, "u
 NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE("u64x3u", "UInt64x3U", 3u, 0u, 24u, 8u, "u64", false)
 NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE("u64x4u", "UInt64x4U", 4u, 0u, 32u, 8u, "u64", false)
 
-NWB_ADHD_EXPORT_OBJECT_TYPE("String",        "AString<>",                  32u,  8u, true,  true,  false, false, false, false, false, true,  true,  true,  true,  false)
-NWB_ADHD_EXPORT_OBJECT_TYPE("StringView",    "AStringView",                16u,  8u, false, false, true,  true,  false, true,  true,  true,  true,  false, false, false)
-NWB_ADHD_EXPORT_OBJECT_TYPE("CompactString", "ACompactString",             256u, 1u, false, true,  false, false, true,  false, false, true,  true,  false, true,  false)
-NWB_ADHD_EXPORT_OBJECT_TYPE("Name",          "",                           8u,   8u, false, true,  true,  false, true,  true,  false, false, true,  false, true,  false)
-NWB_ADHD_EXPORT_OBJECT_TYPE("Path",          "",                           32u,  8u, false, true,  false, false, false, true,  false, false, false, false, true,  true)
-NWB_ADHD_EXPORT_OBJECT_TYPE("NameHash",      "::NameHash",                 64u,  8u, false, true,  false, false, true,  false, true,  false, false, false, false, false)
-NWB_ADHD_EXPORT_OBJECT_TYPE("EntityID",      "::NWB::Core::ECS::EntityID", 4u,   4u, false, true,  true,  false, true,  false, false, false, false, false, false, false)
-NWB_ADHD_EXPORT_OBJECT_TYPE("Failure",       "::Failure",                  1u,   1u, false, true,  true,  false, true,  false, false, false, false, false, false, false)
-NWB_ADHD_EXPORT_OBJECT_TYPE("ErrorCode",     "::ErrorCode",                16u,  8u, false, true,  true,  false, true,  false, false, false, false, false, false, false)
+NWB_ADHD_EXPORT_OBJECT_TYPE("String",                   "AString<>",                                                     32u,  8u, true,  true,  false, false, false, false, false, true,  true,  true,  true,  false, false, "")
+NWB_ADHD_EXPORT_OBJECT_TYPE("StringView",               "AStringView",                                                   16u,  8u, false, false, true,  true,  false, true,  true,  true,  true,  false, false, false, false, "")
+NWB_ADHD_EXPORT_OBJECT_TYPE("CompactString",            "ACompactString",                                                256u, 1u, false, true,  false, false, true,  false, false, true,  true,  false, true,  false, false, "")
+NWB_ADHD_EXPORT_OBJECT_TYPE("Name",                     "",                                                              8u,   8u, false, true,  true,  false, true,  true,  false, false, true,  false, true,  false, false, "")
+NWB_ADHD_EXPORT_OBJECT_TYPE("Path",                     "::Path<::NWB::Core::Alloc::GlobalArena>",                       32u,  8u, true,  true,  false, false, false, true,  false, false, false, true,  true,  false, true,  "")
+NWB_ADHD_EXPORT_OBJECT_TYPE("ExecutablePaths",          "::ExecutablePaths<::NWB::Core::Alloc::GlobalArena>",            8u,   8u, true,  true,  false, false, false, false, false, false, false, false, false, false, true,  "")
+NWB_ADHD_EXPORT_OBJECT_TYPE("StagedDirectoryPaths",     "::StagedDirectoryPaths<::NWB::Core::Alloc::GlobalArena>",       64u,  8u, true,  true,  false, false, false, false, false, false, false, false, false, false, true,  "")
+NWB_ADHD_EXPORT_OBJECT_TYPE("NameHash",                 "::NameHash",                                                    64u,  8u, false, true,  false, false, true,  false, true,  false, false, false, false, false, false, "")
+NWB_ADHD_EXPORT_OBJECT_TYPE("Sha256Digest",             "::Sha256Digest",                                                32u,  1u, false, true,  false, false, true,  false, true,  false, false, false, false, false, false, "<global/sha256.h>")
+NWB_ADHD_EXPORT_OBJECT_TYPE("EntityID",                 "::NWB::Core::ECS::EntityID",                                    4u,   4u, false, true,  true,  false, true,  false, false, false, false, false, false, false, false, "")
+NWB_ADHD_EXPORT_OBJECT_TYPE("Failure",                  "::Failure",                                                     1u,   1u, false, true,  true,  false, true,  false, false, false, false, false, false, false, false, "")
+NWB_ADHD_EXPORT_OBJECT_TYPE("ErrorCode",                "::ErrorCode",                                                   16u,  8u, false, true,  true,  false, true,  false, false, false, false, false, false, false, false, "")
+NWB_ADHD_EXPORT_OBJECT_TYPE("FileRemovalFailure",       "::FileRemovalFailure",                                          24u,  8u, false, true,  false, false, false, false, true,  false, false, false, false, false, false, "")
+NWB_ADHD_EXPORT_OBJECT_TYPE("SizedFileCreateFailure",   "::SizedFileCreateFailure",                                      24u,  8u, false, true,  false, false, false, false, true,  false, false, false, false, false, false, "")
+NWB_ADHD_EXPORT_OBJECT_TYPE("Timer",                    "::Timer",                                                       8u,   8u, false, true,  true,  false, false, false, true,  false, false, false, false, false, false, "")
+NWB_ADHD_EXPORT_OBJECT_TYPE("TimerDelta",               "::TimerDelta",                                                  8u,   8u, false, true,  true,  false, false, true,  false, false, false, false, false, false, false, "")
+NWB_ADHD_EXPORT_OBJECT_TYPE("AtomicFlag",               "::AtomicFlag",                                                  4u,   4u, false, true,  false, false, false, false, true,  false, false, false, false, false, false, "")
+NWB_ADHD_EXPORT_OBJECT_TYPE("DiagnosticEventRecord",    "::DiagnosticEventRecord",                                       96u,  8u, false, true,  false, false, false, false, true,  false, false, false, false, false, false, "")
+NWB_ADHD_EXPORT_OBJECT_TYPE("DiagnosticEventText",      "::DiagnosticEventText",                                         512u, 1u, false, true,  false, false, false, false, true,  false, false, false, false, false, false, "")
+NWB_ADHD_EXPORT_OBJECT_TYPE("FloatingPointEnvironment", "::FloatingPointEnvironment",                                    32u,  8u, false, true,  false, false, false, false, true,  false, false, false, false, false, false, "<global/floating_point_environment.h>")
+NWB_ADHD_EXPORT_OBJECT_TYPE("CpuWorkerPlacement",       "::CpuWorkerPlacement",                                          16u,  4u, false, true,  true,  false, true,  false, true,  false, false, false, false, false, false, "<global/cpu_topology.h>")
+NWB_ADHD_EXPORT_OBJECT_TYPE("GraphemeBoundaryState",    "::GraphemeBoundaryState",                                       16u,  8u, false, true,  true,  false, false, false, true,  false, false, false, false, false, false, "<global/unicode/grapheme.h>")
+
+NWB_ADHD_EXPORT_BUILTIN_ENUM("MemoryOrder",                "::MemoryOrder",                        "::MemoryOrder",                4u, 4u, false, "")
+NWB_ADHD_EXPORT_BUILTIN_ENUM("ErrorCondition",             "::ErrorCondition",                     "::ErrorCondition",             4u, 4u, false, "")
+NWB_ADHD_EXPORT_BUILTIN_ENUM("ProcessSignal",              "::ProcessSignal::Enum",                "::ProcessSignal",              4u, 4u, false, "")
+NWB_ADHD_EXPORT_BUILTIN_ENUM("BinaryVectorPayloadFailure", "::BinaryVectorPayloadFailure::Enum",   "::BinaryVectorPayloadFailure", 1u, 1u, false, "")
+NWB_ADHD_EXPORT_BUILTIN_ENUM("ContainmentType",            "::ContainmentType::Enum",              "::ContainmentType",            1u, 1u, false, "")
+NWB_ADHD_EXPORT_BUILTIN_ENUM("PlaneIntersectionType",      "::PlaneIntersectionType::Enum",        "::PlaneIntersectionType",      1u, 1u, false, "")
+NWB_ADHD_EXPORT_BUILTIN_ENUM("CpuAffinity",                "::CpuAffinity::Enum",                  "::CpuAffinity",                1u, 1u, false, "<global/cpu_topology.h>")
+NWB_ADHD_EXPORT_BUILTIN_ENUM("GraphemeBreak",              "::GraphemeBreak::Enum",                "::GraphemeBreak",              1u, 1u, false, "<global/unicode/properties.h>")
+NWB_ADHD_EXPORT_BUILTIN_ENUM("IndicConjunct",              "::IndicConjunct::Enum",                "::IndicConjunct",              1u, 1u, false, "<global/unicode/properties.h>")
+
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("MemoryOrder", "relaxed")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("MemoryOrder", "consume")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("MemoryOrder", "acquire")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("MemoryOrder", "release")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("MemoryOrder", "acq_rel")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("MemoryOrder", "seq_cst")
+
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "address_family_not_supported")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "address_in_use")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "address_not_available")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "already_connected")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "argument_list_too_long")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "argument_out_of_domain")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "bad_address")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "bad_file_descriptor")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "bad_message")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "broken_pipe")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "connection_aborted")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "connection_already_in_progress")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "connection_refused")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "connection_reset")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "cross_device_link")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "destination_address_required")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "device_or_resource_busy")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "directory_not_empty")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "executable_format_error")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "file_exists")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "file_too_large")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "filename_too_long")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "function_not_supported")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "host_unreachable")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "identifier_removed")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "illegal_byte_sequence")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "inappropriate_io_control_operation")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "interrupted")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "invalid_argument")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "invalid_seek")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "io_error")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "is_a_directory")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "message_size")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "network_down")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "network_reset")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "network_unreachable")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "no_buffer_space")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "no_child_process")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "no_link")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "no_lock_available")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "no_message_available")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "no_message")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "no_protocol_option")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "no_space_on_device")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "no_stream_resources")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "no_such_device_or_address")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "no_such_device")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "no_such_file_or_directory")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "no_such_process")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "not_a_directory")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "not_a_socket")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "not_a_stream")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "not_connected")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "not_enough_memory")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "not_supported")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "operation_canceled")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "operation_in_progress")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "operation_not_permitted")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "operation_not_supported")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "operation_would_block")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "owner_dead")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "permission_denied")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "protocol_error")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "protocol_not_supported")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "read_only_file_system")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "resource_deadlock_would_occur")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "result_out_of_range")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "state_not_recoverable")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "stream_timeout")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "text_file_busy")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "timed_out")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "too_many_files_open_in_system")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "too_many_files_open")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "too_many_links")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "too_many_symbolic_link_levels")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "value_too_large")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ErrorCondition", "wrong_protocol_type")
+
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ProcessSignal", "Interrupt")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ProcessSignal", "Terminate")
+
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("BinaryVectorPayloadFailure", "CountOverflow")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("BinaryVectorPayloadFailure", "SourceTruncated")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("BinaryVectorPayloadFailure", "OutputOverflow")
+
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ContainmentType", "Disjoint")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ContainmentType", "Intersects")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("ContainmentType", "Contains")
+
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("PlaneIntersectionType", "Front")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("PlaneIntersectionType", "Intersecting")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("PlaneIntersectionType", "Back")
+
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("CpuAffinity", "Any")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("CpuAffinity", "Performance")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("CpuAffinity", "Efficiency")
+
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("GraphemeBreak", "Other")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("GraphemeBreak", "CR")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("GraphemeBreak", "LF")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("GraphemeBreak", "Control")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("GraphemeBreak", "Extend")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("GraphemeBreak", "ZWJ")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("GraphemeBreak", "Regional_Indicator")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("GraphemeBreak", "Prepend")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("GraphemeBreak", "SpacingMark")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("GraphemeBreak", "L")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("GraphemeBreak", "V")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("GraphemeBreak", "T")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("GraphemeBreak", "LV")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("GraphemeBreak", "LVT")
+
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("IndicConjunct", "None")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("IndicConjunct", "Consonant")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("IndicConjunct", "Extend")
+NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY("IndicConjunct", "Linker")
 
 NWB_ADHD_EXPORT_GENERIC_TYPE("Vector",             "",                              SingleType,   None,        32u, 8u, true,  true,  false, false, false, false, false, true,  false, true,  DynamicBack, false, false)
 NWB_ADHD_EXPORT_GENERIC_TYPE("ParallelVector",     "",                              SingleType,   None,        32u, 8u, true,  true,  false, false, false, false, false, false, false, true,  DynamicBack, false, false)
@@ -166,13 +323,12 @@ NWB_ADHD_EXPORT_NWB_VALUE_TYPE("b8",            ".isInteger()", ".asInteger()", 
 NWB_ADHD_EXPORT_NWB_VALUE_TYPE("EntityID",      ".isInteger()", ".asInteger()", "::NWB::Core::ECS::EntityID(static_cast<u32>(", "))",                       "__f->isInteger()) this->",                                                             " = ::NWB::Core::ECS::EntityID(static_cast<u32>(__f->asInteger()));\r\n", "__f->isInteger()) this->",                                                             " = ::NWB::Core::ECS::EntityID(static_cast<u32>(__f->asInteger()));\r\n", false)
 NWB_ADHD_EXPORT_NWB_VALUE_TYPE("String",        ".isString()",  ".asString()",  "AString<>(",                                   ", s_ClassArena)",          "__f->isString()) this->",                                                              ".assign(__f->asString());\r\n",                                          "__f->isString()) this->",                                                              " = AString<>(__f->asString(), s_ClassArena);\r\n",  false)
 NWB_ADHD_EXPORT_NWB_VALUE_TYPE("CompactString", ".isString()",  ".asString()",  "ACompactString(",                              ")",                        "__f->isString()) this->",                                                              ".assign(__f->asString());\r\n",                                          "__f->isString()) this->",                                                              " = ACompactString(__f->asString());\r\n",          false)
-NWB_ADHD_EXPORT_NWB_VALUE_TYPE("Path",          ".isString()",  ".asString()",  "Path(::ConvertString(",                        "))",                       "__f->isString()) this->",                                                              " = ::ConvertString(__f->asString());\r\n",                               "__f->isString()) this->",                                                              " = Path(::ConvertString(__f->asString()));\r\n",    false)
+NWB_ADHD_EXPORT_NWB_VALUE_TYPE("Path",          ".isString()",  ".asString()",  "::Path<::NWB::Core::Alloc::GlobalArena>(s_ClassArena, ", ")", "__f->isString()) this->", " = __f->asString();\r\n", "__f->isString()) this->", " = ::Path<::NWB::Core::Alloc::GlobalArena>(s_ClassArena, __f->asString());\r\n", false)
 NWB_ADHD_EXPORT_NWB_VALUE_TYPE("Name",          ".isString()",  ".asString()",  "::Name::FromText(",                            ").value_or(::Name{})",     "__f->isString()){ if(const auto __name = ::Name::FromText(__f->asString())) this->",   " = *__name; }\r\n",                                                      "__f->isString()){ if(const auto __name = ::Name::FromText(__f->asString())) this->",   " = *__name; }\r\n",                                 true)
 NWB_ADHD_EXPORT_NWB_VALUE_TYPE("AssetRef",      ".isString()",  ".asString()",  "{::Name::FromText(",                           ").value_or(::Name{})}",    "__f->isString()){ if(const auto __name = ::Name::FromText(__f->asString())) this->",   ".virtualPath = *__name; }\r\n",                                          "__f->isString()){ if(const auto __name = ::Name::FromText(__f->asString())) this->",   " = {*__name}; }\r\n",                               true)
 
 NWB_ADHD_EXPORT_IMPLICIT_CONVERSION("String",         "StringView", false)
 NWB_ADHD_EXPORT_IMPLICIT_CONVERSION("CompactString",  "StringView", false)
-NWB_ADHD_EXPORT_IMPLICIT_CONVERSION("StringView",     "Path",       false)
 NWB_ADHD_EXPORT_IMPLICIT_CONVERSION("Vector",         "Span",       true)
 NWB_ADHD_EXPORT_IMPLICIT_CONVERSION("ParallelVector", "Span",       true)
 NWB_ADHD_EXPORT_IMPLICIT_CONVERSION("Array",          "Span",       true)
@@ -220,6 +376,16 @@ NWB_ADHD_EXPORT_LITERAL_TOKEN(TokenType::StringLiteral,  ExprKind::StringLiteral
 #ifdef NWB_ADHD_EXPORT_GENERIC_TYPE_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_GENERIC_TYPE_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_GENERIC_TYPE
+#endif
+
+#ifdef NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY
+#endif
+
+#ifdef NWB_ADHD_EXPORT_BUILTIN_ENUM_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_BUILTIN_ENUM_AUTO_UNDEF
+#undef NWB_ADHD_EXPORT_BUILTIN_ENUM
 #endif
 
 #ifdef NWB_ADHD_EXPORT_OBJECT_TYPE_AUTO_UNDEF

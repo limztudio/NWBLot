@@ -55,6 +55,7 @@ b8 LocalVariableChecker::check(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
         }
         if(varRefMode == ParamPassingMode::None && SymbolTable::IsArenaBackedContainer(baseVarTypeName)){
             stmt.usesScratchArena = true;
+            stmt.arenaFirstInit = IsArenaFirstCtorType(baseVarTypeName);
             method.usesScratchArena = true;
             m_checker.m_activeParallelBlockUsesScratch = true;
         }

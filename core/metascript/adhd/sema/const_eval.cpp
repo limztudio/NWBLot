@@ -54,7 +54,7 @@ constexpr i64 s_I64ShiftOperandMax = 64;
     if(!globalConst || !globalConst->varType)
         return false;
     const MStringView baseName = symbols.resolveBaseTypeName(globalConst->varType->name);
-    return BuiltinTypeSemantics::IsIntegralOrBoolScalarType(baseName) || symbols.findEnum(baseName) != nullptr;
+    return BuiltinTypeSemantics::IsIntegralOrBoolScalarType(baseName) || symbols.findEnum(baseName) != nullptr || FindBuiltinEnum(baseName) != nullptr;
 }
 
 

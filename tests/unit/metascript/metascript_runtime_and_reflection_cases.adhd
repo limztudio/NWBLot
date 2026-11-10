@@ -896,6 +896,10 @@ void VerifyAdhdCompiler_SimdLaneComparisonAndFiniteChecksIgnoreInactiveAndShortC
     }
 }
 
+void VerifyAdhdCompiler_GlobalExportArenaFirstFormattingOverflowAndHeaderTracking(){
+    EXPECT_TRUE(ExerciseGlobalExportEdgeCases());
+}
+
 NWB_ADHD_GTEST(Metascript, EmptyAndStructOnlyDocumentsHaveNoImplicitVariables, VerifyMetascript_EmptyAndStructOnlyDocumentsHaveNoImplicitVariables)
 NWB_ADHD_GTEST(Metascript, StructNamesAndVariablesUseSeparateNamespaces, VerifyMetascript_StructNamesAndVariablesUseSeparateNamespaces)
 NWB_ADHD_GTEST(Metascript, StructMetadataOwnsSourceAndSurvivesVariableStorageGrowth, VerifyMetascript_StructMetadataOwnsSourceAndSurvivesVariableStorageGrowth)
@@ -960,6 +964,7 @@ NWB_ADHD_GTEST(AdhdCompiler, TrimViewBorrowsLocalCompactString, VerifyAdhdCompil
 NWB_ADHD_GTEST(AdhdCompiler, StringAndCompactSubstrPreserveOwnershipAndSingleEvaluation, VerifyAdhdCompiler_StringAndCompactSubstrPreserveOwnershipAndSingleEvaluation)
 NWB_ADHD_GTEST(AdhdCompiler, HighByteFrontBackAndIndexMaintainUnsignedSemanticsAndMutation, VerifyAdhdCompiler_HighByteFrontBackAndIndexMaintainUnsignedSemanticsAndMutation)
 NWB_ADHD_GTEST(AdhdCompiler, SimdLaneComparisonAndFiniteChecksIgnoreInactiveAndShortCircuitedSignalingNaNs, VerifyAdhdCompiler_SimdLaneComparisonAndFiniteChecksIgnoreInactiveAndShortCircuitedSignalingNaNs)
+NWB_ADHD_GTEST(AdhdCompiler, GlobalExportArenaFirstFormattingOverflowAndHeaderTracking, VerifyAdhdCompiler_GlobalExportArenaFirstFormattingOverflowAndHeaderTracking)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -67,6 +67,7 @@ namespace BuiltinFunctionReturnRule{
         LaneScalar,
         MatrixMultiply,
         Unexpected,
+        CallTemplateArg0,
     };
 };
 
@@ -86,6 +87,7 @@ namespace BuiltinFunctionArgRule{
 struct BuiltinObjectTypeInfo{
     MStringView adhdName;
     MStringView cppExportName;
+    MStringView requiredHeader;
     u32 byteSize;
     u32 byteAlign;
     b8 isArenaBacked;
@@ -100,6 +102,22 @@ struct BuiltinObjectTypeInfo{
     b8 isNonThreadSafeContainer;
     b8 isNwbMapKey;
     b8 requiresTCharAdaptation;
+    b8 arenaFirstInCtor;
+};
+
+struct BuiltinEnumInfo{
+    MStringView adhdName;
+    MStringView cppTypeName;
+    MStringView cppScopeName;
+    MStringView requiredHeader;
+    u32 byteSize;
+    u32 byteAlign;
+    b8 isFlag;
+};
+
+struct BuiltinEnumEntryInfo{
+    MStringView adhdEnumName;
+    MStringView entryName;
 };
 
 struct BuiltinGenericTypeInfo{
@@ -206,6 +224,8 @@ struct BuiltinReceiverMethodInfo{
     MStringView receiverTypeName;
     MStringView methodName;
     MStringView returnTypeName;
+    MStringView returnTypeArgName;
+    MStringView returnErrorTypeName;
     b8 synthesizeTypeRef;
 };
 
@@ -232,8 +252,15 @@ struct BuiltinFunctionInfo{
     MStringView cppExportName;
     MStringView returnTypeName;
     MStringView returnTypeArgName;
+    MStringView returnNestedTypeArgName;
+    MStringView returnErrorTypeName;
+    MStringView requiredHeader;
+    usize minArity;
     usize arity;
     BuiltinFunctionReturnRule::Enum returnRule;
+    b8 prependsScratchArena;
+    b8 isVariadic;
+    b8 wrapsFormatArgs;
     Array<BuiltinFunctionArgRule::Enum, 5> argRules;
 };
 
@@ -260,6 +287,9 @@ struct BuiltinGlobalConstantInfo{
 }
 
 [[nodiscard]] const BuiltinObjectTypeInfo* FindBuiltinObjectType(MStringView name)noexcept;
+[[nodiscard]] const BuiltinEnumInfo* FindBuiltinEnum(MStringView name)noexcept;
+[[nodiscard]] b8 HasBuiltinEnumEntry(MStringView enumName, MStringView entryName)noexcept;
+[[nodiscard]] b8 IsArenaFirstCtorType(MStringView name)noexcept;
 [[nodiscard]] const BuiltinGenericTypeInfo* FindBuiltinGenericType(MStringView name)noexcept;
 [[nodiscard]] b8 FindBuiltinBinaryHashMemberSuffix(MStringView name, MStringView& outMemberSuffix)noexcept;
 [[nodiscard]] const BuiltinNwbValueTypeInfo* FindBuiltinNwbValueType(MStringView name)noexcept;

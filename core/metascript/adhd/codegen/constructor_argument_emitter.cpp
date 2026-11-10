@@ -89,13 +89,19 @@ void ConstructorArgumentEmitter::emit(MString& out, const MStringView baseTypeNa
         out.push_back(')');
     }
     else{
+        const b8 arenaFirst = !injectedArenaName.empty() && IsArenaFirstCtorType(baseTypeName);
+        if(arenaFirst){
+            out.append(injectedArenaName.data(), injectedArenaName.size());
+            if(!arguments.empty())
+                out.append(", ");
+        }
         for(usize i = 0u; i < arguments.size(); ++i){
             if(i > 0u)
                 out.append(", ");
             if(arguments[i])
                 m_emitter.emitExpr(out, *arguments[i]);
         }
-        if(!injectedArenaName.empty()){
+        if(!injectedArenaName.empty() && !arenaFirst){
             if(!arguments.empty())
                 out.append(", ");
             out.append(injectedArenaName.data(), injectedArenaName.size());

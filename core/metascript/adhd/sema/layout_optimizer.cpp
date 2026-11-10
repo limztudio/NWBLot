@@ -322,6 +322,11 @@ void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, const u32 dep
         outAlign = enumDecl->underlyingAlign;
         return;
     }
+    if(const BuiltinEnumInfo* builtinEnum = FindBuiltinEnum(name)){
+        outSize = builtinEnum->byteSize;
+        outAlign = builtinEnum->byteAlign;
+        return;
+    }
 
     if(const ClassDecl* classDecl = m_symbols.findClass(name)){
         if(!type.templateArgs.empty() && m_unit){
@@ -346,7 +351,9 @@ void LayoutOptimizer::markFieldArenaUsage(const TypeRef& fieldType, FieldDecl& f
     if(!classDecl.subsystemTypeName.empty() || !classDecl.componentAssetTypeName.empty())
         return;
     if(m_symbols.resolveRefMode(&fieldType) == ParamPassingMode::None && SymbolTable::IsArenaBackedContainer(m_symbols.resolveBaseTypeName(fieldType.name))){
+        const MStringView baseFieldName = m_symbols.resolveBaseTypeName(fieldType.name);
         field.usesClassArena = true;
+        field.arenaFirstDefaultInit = IsArenaFirstCtorType(baseFieldName);
         classDecl.needsClassArena = true;
     }
     else if(TypeLayoutAnalyzer(m_symbols).containsArenaBackedContainer(fieldType)){

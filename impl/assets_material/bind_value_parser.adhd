@@ -74,14 +74,8 @@ Expected<MaterialTypedValueData> ParseMaterialTypedValue(in StringView key, in S
         if(type.value().valueType == MaterialParameterValueType::f16){
             const StringView numericToken = NormalizeMaterialParameterNumericToken(tokens.value().values[cast<usize>(i)], type.value().valueType);
             const Expected<f32> converted = ParseMaterialParameterF32Token(numericToken);
-            if(converted.has_value()){
-                const f32 f32Val = converted.value();
-                u32 halfBits = 0u;
-                native(in f32Val, mut halfBits){
-                    halfBits = static_cast<u32>(::ConvertFloatToHalf(f32Val));
-                }
-                parsedValue = halfBits;
-            }
+            if(converted.has_value())
+                parsedValue = cast<u32>(ConvertFloatToHalf(converted.value()));
         }
         else{
             parsedValue = ParseMaterialParameterNonHalfToken(tokens.value().values[cast<usize>(i)], type.value().valueType);

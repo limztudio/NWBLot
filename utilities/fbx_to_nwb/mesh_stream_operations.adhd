@@ -37,24 +37,22 @@ using ScratchU32Vector = Vector<u32, Core::Alloc::ScratchArena>;
 
 
 b8 DropSourceMeshTangentsStreams(
+    in Span<SourceVertexRef> sourceVertexRefs,
     mut UtilityVec4Vector inOutTangents,
     mut UtilitySourceVertexRefVector inOutVertexRefs,
-    mut UtilityU32Vector inOutIndices
+    mut Span<u32> inOutIndices
 ){
     inOutTangents.clear();
 
     HashMap<SourceVertexRef, u32> compactLookup;
-    compactLookup.reserve(inOutVertexRefs.size());
+    compactLookup.reserve(sourceVertexRefs.size());
     Vector<SourceVertexRef> compactVertexRefs;
-    compactVertexRefs.reserve(inOutVertexRefs.size());
+    compactVertexRefs.reserve(sourceVertexRefs.size());
     Vector<u32> vertexRefRemap;
-    vertexRefRemap.reserve(inOutVertexRefs.size());
+    vertexRefRemap.reserve(sourceVertexRefs.size());
 
-    for(usize i = 0u; i < inOutVertexRefs.size(); ++i){
-        SourceVertexRef ref;
-        native(in i, in inOutVertexRefs, mut ref){
-            ref = inOutVertexRefs[i];
-        }
+    for(usize i = 0u; i < sourceVertexRefs.size(); ++i){
+        SourceVertexRef ref = sourceVertexRefs[i];
         ref.tangent = s_MeshMissingStreamIndex;
 
         if(compactLookup.contains(ref)){
@@ -69,15 +67,9 @@ b8 DropSourceMeshTangentsStreams(
     }
 
     for(usize i = 0u; i < inOutIndices.size(); ++i){
-        u32 index = 0u;
-        native(in i, in inOutIndices, mut index){
-            index = inOutIndices[i];
-        }
+        const u32 index = inOutIndices[i];
         assert(cast<usize>(index) < vertexRefRemap.size());
-        const u32 remapped = vertexRefRemap[cast<usize>(index)];
-        native(in i, in remapped, mut inOutIndices){
-            inOutIndices[i] = remapped;
-        }
+        inOutIndices[i] = vertexRefRemap[cast<usize>(index)];
     }
     inOutVertexRefs.clear();
     inOutVertexRefs.reserve(compactVertexRefs.size());
@@ -153,18 +145,13 @@ b8 RemapSourceVertexRefs(
     in Span<u32> uv0,
     in Span<u32> colors,
     in Span<u32> skin,
-    mut UtilitySourceVertexRefVector inOutVertexRefs
+    mut Span<SourceVertexRef> inOutVertexRefs
 ){
     for(usize i = 0u; i < inOutVertexRefs.size(); ++i){
-        SourceVertexRef ref;
-        native(in i, in inOutVertexRefs, mut ref){
-            ref = inOutVertexRefs[i];
-        }
+        SourceVertexRef ref = inOutVertexRefs[i];
         if(!RemapSourceVertexRef(positions, normals, tangents, uv0, colors, skin, ref))
             return false;
-        native(in i, in ref, mut inOutVertexRefs){
-            inOutVertexRefs[i] = ref;
-        }
+        inOutVertexRefs[i] = ref;
     }
     return true;
 }

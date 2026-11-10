@@ -122,6 +122,10 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorExpE(SIMDVectorSingle value)noex
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorExp(SIMDVectorSingle value)noexcept{ return VectorExpE(value); }
 
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleExp(SIMDVectorDouble value)noexcept{
+    return VectorDoubleSet(Exp(VectorDoubleGetX(value)), Exp(VectorDoubleGetY(value)), Exp(VectorDoubleGetZ(value)), Exp(VectorDoubleGetW(value)));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -250,6 +254,16 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorLog2(SIMDVectorSingle value)noex
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleLog2(SIMDVectorDouble value)noexcept{
     return VectorDoubleSet(Log2(VectorDoubleGetX(value)), Log2(VectorDoubleGetY(value)), Log2(VectorDoubleGetZ(value)), Log2(VectorDoubleGetW(value)));
+}
+
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorLogE(SIMDVectorSingle value)noexcept{
+    return VectorMultiply(s_SIMDInvLgE, VectorLog2(value));
+}
+
+NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorLog(SIMDVectorSingle value)noexcept{ return VectorLogE(value); }
+
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleLog(SIMDVectorDouble value)noexcept{
+    return VectorDoubleSet(Log(VectorDoubleGetX(value)), Log(VectorDoubleGetY(value)), Log(VectorDoubleGetZ(value)), Log(VectorDoubleGetW(value)));
 }
 
 

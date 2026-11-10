@@ -161,8 +161,17 @@ namespace __hidden_adhd_source_emitter{
             if(ExprReferencesIdentifier(nb.sourceExpr, name))
                 return true;
         }
-        if(stmt->kind == StmtKind::NativeBlock && stmt->nativeCode.find(name) != MStringView::npos)
-            return true;
+        if(stmt->kind == StmtKind::NativeBlock && !name.empty()){
+            usize pos = 0u;
+            while((pos = stmt->nativeCode.find(name, pos)) != MStringView::npos){
+                const b8 leftOk = pos == 0u || !IsAsciiIdentifierChar(stmt->nativeCode[pos - 1u]);
+                const usize endPos = pos + name.size();
+                const b8 rightOk = endPos >= stmt->nativeCode.size() || !IsAsciiIdentifierChar(stmt->nativeCode[endPos]);
+                if(leftOk && rightOk)
+                    return true;
+                pos = endPos;
+            }
+        }
     }
     return false;
 }

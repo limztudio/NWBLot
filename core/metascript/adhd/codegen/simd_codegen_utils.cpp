@@ -1,4 +1,5 @@
 // limztudio@gmail.com
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -135,38 +136,6 @@ void AppendIntSimdLaneExtract(MString& out, const MStringView varName, const u32
     out.append("))");
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 [[nodiscard]] MStringView SimdRegisterCppType(const MStringView simdType)noexcept{
     if(const BuiltinSimdVectorInfo* vecInfo = FindBuiltinSimdVectorType(simdType); vecInfo && !vecInfo->regCppType.empty())
         return vecInfo->regCppType;
@@ -272,26 +241,6 @@ void AppendSimdLaneCountIntrinsicPrefix(MString& out, const b8 isDouble, const u
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -299,4 +248,5 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

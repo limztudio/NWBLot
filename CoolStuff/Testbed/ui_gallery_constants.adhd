@@ -8,25 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <global/text_utils.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 interface IUiLabelResolver{
     StringView label(in u64 index)const;
 }
@@ -140,11 +121,7 @@ class UiFilteredListState<ResolverT : IUiLabelResolver, const usize LabelCount, 
         const ResolverT resolver = ResolverT();
         for(u64 index = 0u; index < cast<u64>(LabelCount); ++index){
             const StringView label = resolver.label(index);
-            b8 matched = false;
-            native(in label, in query, mut matched){
-                matched = ContainsAsciiIgnoreCase<char>(label, query);
-            }
-            if(!matched)
+            if(!ContainsAsciiIgnoreCase(label, query))
                 continue;
             this.m_indices[cast<usize>(this.m_count)] = index;
             ++this.m_count;

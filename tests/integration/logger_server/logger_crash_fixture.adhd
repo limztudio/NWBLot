@@ -191,7 +191,6 @@ public:
         : m_loggerRegistration(m_logger)
     {}
 
-    void touch()const noexcept{}
 
 
 private:

@@ -193,7 +193,7 @@ void FbxSourceMeshStreams::ReserveSourceMeshBuildContext(const usize estimatedTr
 }
 
 b8 FbxSourceMeshStreams::DropSourceMeshTangents(Core::Alloc::ScratchArena&, SourceMeshStreams& inOutMesh){
-    return DropSourceMeshTangentsStreams(inOutMesh.tangents, inOutMesh.vertexRefs, inOutMesh.indices);
+    return DropSourceMeshTangentsStreams(inOutMesh.vertexRefs, inOutMesh.tangents, inOutMesh.vertexRefs, Span<u32>(inOutMesh.indices));
 }
 
 b8 FbxSourceMeshStreams::EnsureTriangleIndexScratchCapacity(const ufbx_mesh& mesh, UtilityScratchVector<u32>& inOutTriangleIndices){

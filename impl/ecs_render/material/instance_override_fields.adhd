@@ -133,29 +133,17 @@ Expected<MaterialInstanceParameterNames> SplitMaterialInstanceParameterName(in S
         return MakeUnexpected(Failure());
 
     const usize dotPos = dotIndex.value();
-    Name resolvedParameterName = s_NameNone;
-    Name resolvedBlockName = s_NameNone;
-    Name resolvedFieldName = s_NameNone;
-    b8 validNames = false;
-    native(in parameterName, in dotPos, mut resolvedParameterName, mut resolvedBlockName, mut resolvedFieldName, mut validNames){
-        const auto name = Name::FromText(parameterName);
-        const auto blockName = Name::FromText(parameterName.substr(0u, dotPos));
-        const auto fieldName = Name::FromText(parameterName.substr(dotPos + 1u));
-        if(name && blockName && fieldName){
-            resolvedParameterName = *name;
-            resolvedBlockName = *blockName;
-            resolvedFieldName = *fieldName;
-            validNames = true;
-        }
-    }
-    if(!validNames){
+    const Expected<Name> name = ParseName(parameterName);
+    const Expected<Name> blockName = ParseName(parameterName.substr(0u, dotPos));
+    const Expected<Name> fieldName = ParseName(parameterName.substr(dotPos + 1u));
+    if(!name.has_value() || !blockName.has_value() || !fieldName.has_value()){
         error("MaterialInstanceComponent: parameter '{}' contains an embedded null", parameterName);
         return MakeUnexpected(Failure());
     }
     MaterialInstanceParameterNames result;
-    result.parameterName = resolvedParameterName;
-    result.blockName = resolvedBlockName;
-    result.fieldName = resolvedFieldName;
+    result.parameterName = name.value();
+    result.blockName = blockName.value();
+    result.fieldName = fieldName.value();
     return result;
 }
 

@@ -276,6 +276,7 @@ NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDLogEst5 = { { { -0.145700f, -0.145700f, 
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDLogEst6 = { { { +0.057148f, +0.057148f, +0.057148f, +0.057148f } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDLogEst7 = { { { -0.010578f, -0.010578f, -0.010578f, -0.010578f } } };
 NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDLgE = { { { +1.442695f, +1.442695f, +1.442695f, +1.442695f } } };
+NWB_GLOBAL_CONST SIMDVectorConstF s_SIMDInvLgE = { { { +6.93147182e-1f, +6.93147182e-1f, +6.93147182e-1f, +6.93147182e-1f } } };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

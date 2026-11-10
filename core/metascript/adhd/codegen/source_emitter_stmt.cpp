@@ -296,21 +296,27 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
                     hasDerefShadowBindings = true;
                     emitIndent(out, indent + 1u);
                     if(binding.mode == ParamPassingMode::In)
-                        out.append("const auto* __adhd_native_ptr_");
+                        out.append("[[maybe_unused]] const auto* __adhd_native_ptr_");
                     else
-                        out.append("auto* __adhd_native_ptr_");
+                        out.append("[[maybe_unused]] auto* __adhd_native_ptr_");
                     AppendUnsignedDecimal(out, static_cast<u32>(i));
                     out.append(" = &(");
                     emitExpr(out, *binding.sourceExpr);
                     out.append(");\r\n");
                 }
+                else if(stmt.nativeCode.find('#') != MStringView::npos){
+                    emitIndent(out, indent + 1u);
+                    out.append("(void)");
+                    out.append(binding.aliasName.data(), binding.aliasName.size());
+                    out.append(";\r\n");
+                }
                 continue;
             }
             emitIndent(out, indent + 1u);
             if(binding.mode == ParamPassingMode::In)
-                out.append("const auto& ");
+                out.append("[[maybe_unused]] const auto& ");
             else
-                out.append("auto& ");
+                out.append("[[maybe_unused]] auto& ");
             out.append(binding.aliasName.data(), binding.aliasName.size());
             out.append(" = (");
             if(binding.sourceExpr)
@@ -326,9 +332,9 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
                 if(binding.sourceExpr && binding.sourceExpr->kind == ExprKind::Identifier && binding.sourceExpr->text == binding.aliasName && binding.sourceExpr->derefNotNull){
                     emitIndent(out, bodyIndent);
                     if(binding.mode == ParamPassingMode::In)
-                        out.append("const auto& ");
+                        out.append("[[maybe_unused]] const auto& ");
                     else
-                        out.append("auto& ");
+                        out.append("[[maybe_unused]] auto& ");
                     out.append(binding.aliasName.data(), binding.aliasName.size());
                     out.append(" = *__adhd_native_ptr_");
                     AppendUnsignedDecimal(out, static_cast<u32>(i));

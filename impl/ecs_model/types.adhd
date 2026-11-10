@@ -118,10 +118,15 @@ void BuildSortedModelAttachmentParentOrder(
     mut Vector<usize> outOrder
 ){
     BuildModelAttachmentIdentityOrder(jointQueries.size(), outOrder);
-    native(in jointQueries, mut outOrder){
-        ::Sort(outOrder.begin(), outOrder.end(), [&](const usize lhs, const usize rhs)noexcept{
-            return jointQueries[lhs].parentEntity < jointQueries[rhs].parentEntity;
-        });
+    for(usize i = 1u; i < outOrder.size(); ++i){
+        const usize current = outOrder[i];
+        const EntityID currentParent = jointQueries[current].parentEntity;
+        usize j = i;
+        while(j > 0u && currentParent < jointQueries[outOrder[j - 1u]].parentEntity){
+            outOrder[j] = outOrder[j - 1u];
+            --j;
+        }
+        outOrder[j] = current;
     }
 }
 

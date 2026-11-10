@@ -175,12 +175,24 @@ void RebuildUiSkinRegionIndex(in Span<UiSkinRegion> regions, mut Vector<u32> out
         outIndex.reserve(regions.size());
         for(u32 position = 0u; position < cast<u32>(regions.size()); ++position)
             outIndex.push_back(position);
-        native(in regions, mut outIndex){
-            ::Sort(outIndex.begin(), outIndex.end(), [&regions](const u32 left, const u32 right)noexcept{
-                const Name& a = regions[left].name;
-                const Name& b = regions[right].name;
-                return a == b ? left < right : a < b;
-            });
+        for(usize i = 1u; i < outIndex.size(); ++i){
+            const u32 current = outIndex[i];
+            const Name currentName = regions[cast<usize>(current)].name;
+            usize j = i;
+            while(j > 0u){
+                const u32 previous = outIndex[j - 1u];
+                const Name previousName = regions[cast<usize>(previous)].name;
+                b8 currentBeforePrevious = false;
+                if(currentName == previousName)
+                    currentBeforePrevious = current < previous;
+                else
+                    currentBeforePrevious = currentName < previousName;
+                if(!currentBeforePrevious)
+                    break;
+                outIndex[j] = previous;
+                --j;
+            }
+            outIndex[j] = current;
         }
     }
 }

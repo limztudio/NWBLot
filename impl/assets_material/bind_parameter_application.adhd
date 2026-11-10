@@ -121,8 +121,14 @@ class MaterialBindParameterApplication{
                 return false;
         }
 
-        native(mut outResourceReferences){
-            ::Sort(outResourceReferences.begin(), outResourceReferences.end(), LessMaterialResourceReferenceOffset);
+        for(usize i = 1u; i < outResourceReferences.size(); ++i){
+            const MaterialResourceReference current = outResourceReferences[i];
+            usize j = i;
+            while(j > 0u && LessMaterialResourceReferenceOffset(current, outResourceReferences[j - 1u])){
+                outResourceReferences[j] = outResourceReferences[j - 1u];
+                --j;
+            }
+            outResourceReferences[j] = current;
         }
         return true;
     }

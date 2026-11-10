@@ -211,6 +211,15 @@ NWB_INLINE void NWB_SIMD_CALL AabbDoubleTests::ExpandTriangle(const SIMDVectorDo
     return bounds;
 }
 
+[[nodiscard]] NWB_INLINE b8 NWB_SIMD_CALL TryTransformAabb(const SIMDMatrix& localToWorld, const SIMDVectorSingle localMinBounds, const SIMDVectorSingle localMaxBounds, SIMDVectorSingle& outMinBounds, SIMDVectorSingle& outMaxBounds)noexcept{
+    if(const auto transformed = AabbTests::Transform(localToWorld, localMinBounds, localMaxBounds)){
+        outMinBounds = transformed->minBounds;
+        outMaxBounds = transformed->maxBounds;
+        return true;
+    }
+    return false;
+}
+
 [[nodiscard]] inline Expected<AabbDoubleTests::Bounds> NWB_SIMD_CALL AabbDoubleTests::Transform(const SIMDMatrixDouble& localToWorld, const SIMDVectorDouble localMinBounds, const SIMDVectorDouble localMaxBounds)noexcept{
     if(!AabbDoubleTests::Valid(localMinBounds, localMaxBounds))
         return MakeUnexpected(Failure{});

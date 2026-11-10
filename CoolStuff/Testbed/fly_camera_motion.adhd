@@ -206,23 +206,15 @@ class FlyCameraMotion{
 
     private VectorSingle resolveAnglesFromRotation(in VectorSingle rotation)const{
         const VectorSingle forwardVector = this.resolveForwardVector(rotation);
-        f32 yaw = 0.0f;
-        f32 pitch = 0.0f;
-        native(in forwardVector, mut yaw, mut pitch){
-            yaw = ::VectorGetX(::VectorATan2(::VectorSplatX(forwardVector), ::VectorSplatZ(forwardVector)));
-            pitch = ::VectorGetX(::VectorNegate(::VectorASin(::VectorSplatY(forwardVector))));
-        }
+        const f32 yaw = ATan2(forwardVector.x, forwardVector.z);
+        const f32 pitch = -ASin(forwardVector.y);
         return this.sanitizeAngles(yaw, pitch);
     }
 
     public VectorSingle resolveStepRotation(in VectorSingle currentRotation, in VectorSingle mouseDelta)const{
         const VectorSingle angles = this.resolveAnglesFromRotation(currentRotation);
         const VectorSingle rotationAngles = this.resolveRotationAngles(angles, mouseDelta);
-        VectorSingle resolvedRotation(0.0f, 0.0f, 0.0f, 1.0f);
-        native(in rotationAngles, mut resolvedRotation){
-            resolvedRotation = ::QuaternionRotationRollPitchYawFromVector(rotationAngles);
-        }
-        return resolvedRotation;
+        return QuaternionRotationRollPitchYawFromVector(rotationAngles);
     }
 }
 

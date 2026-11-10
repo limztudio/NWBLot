@@ -200,8 +200,8 @@ namespace __hidden_simd_lane_zero_analysis{
                     || callee == "Saturate"
                     || callee == "Sin"
                     || callee == "Tan"
-                    || callee == "asin"
-                    || callee == "atan"
+                    || callee == "ASin"
+                    || callee == "ATan"
                     || callee == "FoldOctahedralAxis"
                 )
                 && expr.arguments.size() == 1u

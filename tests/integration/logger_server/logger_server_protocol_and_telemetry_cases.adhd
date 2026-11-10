@@ -67,7 +67,6 @@ public:
         : m_loggerRegistration(m_logger)
     {}
 
-    void touch()const noexcept{}
 
 
 private:
@@ -82,7 +81,6 @@ public:
         : m_loggerRegistration(m_logger)
     {}
 
-    void touch()const noexcept{}
 
 
 private:
@@ -97,7 +95,6 @@ public:
         : m_registration(m_logger, Core::Common::LoggerBreakPolicy::ReportOnly)
     {}
 
-    void touch()const noexcept{}
 
 
 private:
@@ -124,7 +121,6 @@ public:
         , m_loggerGuard(m_logger, Core::Common::LoggerBreakPolicy::ReportOnly)
     {}
 
-    void touch()const noexcept{}
 
 
 protected:
@@ -160,7 +156,6 @@ public:
 #else
 class MinidumpBoundaryTests : public ::testing::Test{
 public:
-    void touch()const noexcept{}
 };
 #endif
 
@@ -206,7 +201,6 @@ CrashTestPath MakeTelemetryPublicationTestDirectory(mut LoggerTestArena testAren
 
 
 void VerifyLoggerProtocolTests_MessagePayloadReadsUnalignedBytesAndPreservesEmbeddedNulls(mut LoggerProtocolTests self){
-    self.touch();
     LoggerTestArena testArena = LoggerTestArena();
     native(mut testArena){
         constexpr Array<tchar, 3u> s_Message = { static_cast<tchar>('A'), 0, static_cast<tchar>('Z') };
@@ -232,7 +226,6 @@ void VerifyLoggerProtocolTests_MessagePayloadReadsUnalignedBytesAndPreservesEmbe
 }
 
 void VerifyLoggerProtocolTests_CrashUploadAuthorizationMatchesBearerToken(mut LoggerProtocolTests self){
-    self.touch();
     EXPECT_TRUE(CrashUploadAuthorizationMatches("", ""));
     EXPECT_TRUE(CrashUploadAuthorizationMatches("", "bad"));
     EXPECT_FALSE(CrashUploadAuthorizationMatches(s_LoggerProtocolSecretToken, ""));
@@ -251,7 +244,6 @@ void VerifyLoggerProtocolTests_CrashUploadAuthorizationMatchesBearerToken(mut Lo
 
 
 void VerifyLoggerTelemetryPublication_TelemetryPublicationDoesNotReplaceExistingFinalFile(mut LoggerTelemetryPublication self){
-    self.touch();
     LoggerTestArena testArena = LoggerTestArena();
     const CrashTestPath root = MakeTelemetryPublicationTestDirectory(testArena);
     ASSERT_FALSE(root.empty());
@@ -278,7 +270,6 @@ void VerifyLoggerTelemetryPublication_TelemetryPublicationDoesNotReplaceExisting
 }
 
 void VerifyLoggerTelemetryPublication_TelemetryPublicationDoesNotReplaceExistingStagingFile(mut LoggerTelemetryPublication self){
-    self.touch();
     LoggerTestArena testArena = LoggerTestArena();
     const CrashTestPath root = MakeTelemetryPublicationTestDirectory(testArena);
     ASSERT_FALSE(root.empty());
@@ -305,7 +296,6 @@ void VerifyLoggerTelemetryPublication_TelemetryPublicationDoesNotReplaceExisting
 }
 
 void VerifyLoggerTelemetryPublication_ConcurrentTelemetryPublishersCannotReplaceEachOther(mut LoggerTelemetryPublication self){
-    self.touch();
     LoggerTestArena rootArena = LoggerTestArena();
     LoggerTestArena firstArena = LoggerTestArena();
     LoggerTestArena secondArena = LoggerTestArena();
@@ -343,7 +333,6 @@ void VerifyLoggerTelemetryPublication_ConcurrentTelemetryPublishersCannotReplace
 }
 
 void VerifyLoggerTelemetryPublication_TelemetryPublicationMovesCompletedBytesToNewFinalFile(mut LoggerTelemetryPublication self){
-    self.touch();
     LoggerTestArena testArena = LoggerTestArena();
     const CrashTestPath root = MakeTelemetryPublicationTestDirectory(testArena);
     ASSERT_FALSE(root.empty());
@@ -371,7 +360,6 @@ void VerifyLoggerTelemetryPublication_TelemetryPublicationMovesCompletedBytesToN
 
 
 void VerifyLoggerProducerContracts_MessagePayloadRejectsInvalidTypeWithoutPublishingStaleBytes(mut LoggerProducerContracts self){
-    self.touch();
     LoggerTestArena testArena = LoggerTestArena();
     LogBytes payload = LogBytes(testArena.arena);
     payload.push_back(42u);
@@ -385,7 +373,6 @@ void VerifyLoggerProducerContracts_MessagePayloadRejectsInvalidTypeWithoutPublis
 }
 
 void VerifyLoggerProducerContracts_SimultaneousProcessedFilesKeepIndependentRecords(mut LoggerProducerContracts self){
-    self.touch();
     LoggerTestArena testArena = LoggerTestArena();
     ProcessedMessageFile first = ProcessedMessageFile(testArena.arena);
     ProcessedMessageFile second = ProcessedMessageFile(testArena.arena);
@@ -409,7 +396,6 @@ void VerifyLoggerProducerContracts_SimultaneousProcessedFilesKeepIndependentReco
 }
 
 void VerifyLoggerProducerContracts_MissingArchiveRetainsNativeReadFailureInOwningRejection(mut LoggerProducerContracts self){
-    self.touch();
     LoggerTestArena testArena = LoggerTestArena();
     const StringView group = "logger_server_missing_archive_native_error_test";
     const StringView stem = "missing_archive_001";
@@ -518,7 +504,6 @@ void VerifyLogRowPainter_LongTextWrapsWithinHiddenParentClientWidth(){
 }
 
 void VerifyMinidumpBoundaryTests_MissingDumpRetainsNativeReadFailureInReturnedReport(mut MinidumpBoundaryTests self){
-    self.touch();
     if(!IsWindowsLoggerCrashPlatform())
         return;
 
@@ -543,7 +528,6 @@ void VerifyMinidumpBoundaryTests_MissingDumpRetainsNativeReadFailureInReturnedRe
 }
 
 void VerifyMinidumpBoundaryTests_TruncatedHeadersAndOutOfFileStreamDirectoriesCannotDecode(mut MinidumpBoundaryTests self){
-    self.touch();
     if(!IsWindowsLoggerCrashPlatform())
         return;
 
@@ -585,7 +569,6 @@ void VerifyMinidumpBoundaryTests_TruncatedHeadersAndOutOfFileStreamDirectoriesCa
 }
 
 void VerifyMinidumpBoundaryTests_TruncatedThreadListCountCannotReadBeyondItsAdmittedStream(mut MinidumpBoundaryTests self){
-    self.touch();
     if(!IsWindowsLoggerCrashPlatform())
         return;
 
@@ -604,7 +587,6 @@ void VerifyMinidumpBoundaryTests_TruncatedThreadListCountCannotReadBeyondItsAdmi
 }
 
 void VerifyMinidumpBoundaryTests_ShortExceptionContextCannotBorrowSurroundingFileBytes(mut MinidumpBoundaryTests self){
-    self.touch();
     if(!IsWindowsLoggerCrashPlatform())
         return;
 
@@ -628,7 +610,6 @@ void VerifyMinidumpBoundaryTests_ShortExceptionContextCannotBorrowSurroundingFil
 }
 
 void VerifyMinidumpBoundaryTests_Memory64OffsetsAndLengthsCannotTruncateIntoASmallFile(mut MinidumpBoundaryTests self){
-    self.touch();
     if(!IsWindowsLoggerCrashPlatform())
         return;
 
@@ -662,7 +643,6 @@ void VerifyMinidumpBoundaryTests_Memory64OffsetsAndLengthsCannotTruncateIntoASma
 }
 
 void VerifyMinidumpBoundaryTests_TruncatedModuleListCannotReadBeyondItsAdmittedStream(mut MinidumpBoundaryTests self){
-    self.touch();
     if(!IsWindowsLoggerCrashPlatform())
         return;
 
@@ -681,7 +661,6 @@ void VerifyMinidumpBoundaryTests_TruncatedModuleListCannotReadBeyondItsAdmittedS
 }
 
 void VerifyMinidumpBoundaryTests_InvalidModuleNameLengthsAndTerminatorsCannotBorrowOtherDumpBytes(mut MinidumpBoundaryTests self){
-    self.touch();
     if(!IsWindowsLoggerCrashPlatform())
         return;
 
@@ -722,7 +701,6 @@ void VerifyMinidumpBoundaryTests_InvalidModuleNameLengthsAndTerminatorsCannotBor
 }
 
 void VerifyMinidumpBoundaryTests_UnalignedExceptionAndContextRecordsKeepTheirBoundedValues(mut MinidumpBoundaryTests self){
-    self.touch();
     if(!IsWindowsLoggerCrashPlatform())
         return;
 

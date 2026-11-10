@@ -22,7 +22,7 @@ b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
                 if(i > 0u)
                     out.append(", ");
                 if(expr.arguments[i]){
-                    if(IsRegisterPromotableSimdType(expr.arguments[i]->resolvedSimdType))
+                    if(!expr.arguments[i]->isMutArg && IsRegisterPromotableSimdType(expr.arguments[i]->resolvedSimdType))
                         m_emitter.emitSimdRegExpr(out, *expr.arguments[i], expr.arguments[i]->resolvedSimdType);
                     else
                         m_emitter.emitExpr(out, *expr.arguments[i]);

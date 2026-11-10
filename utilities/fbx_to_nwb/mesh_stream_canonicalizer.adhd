@@ -198,7 +198,7 @@ Expected<SourceMeshCanonicalizeReport> SourceMeshCanonicalizer::CanonicalizeSkin
     if(!colorRemap)
         return MakeUnexpected(Failure{});
 
-    if(!RemapSourceVertexRefs(positionRemap, *normalRemap, *tangentRemap, *uv0Remap, *colorRemap, skinRemap, inOutMesh.vertexRefs))
+    if(!RemapSourceVertexRefs(positionRemap, *normalRemap, *tangentRemap, *uv0Remap, *colorRemap, skinRemap, Span<SourceVertexRef>(inOutMesh.vertexRefs)))
         return MakeUnexpected(Failure{});
 
     report.after = CountSourceMeshStreams(inOutMesh);
@@ -228,7 +228,7 @@ Expected<SourceMeshCanonicalizeReport> SourceMeshCanonicalizer::Canonicalize(Cor
     const auto skinRemap = __hidden_mesh_canonicalizer::DeduplicateStream(s_SkinStreamLabel, cpuScheduler, scratchArena, inOutMesh.skin);
     if(!skinRemap)
         return MakeUnexpected(Failure{});
-    if(!RemapSourceVertexRefs(*positionRemap, *normalRemap, *tangentRemap, *uv0Remap, *colorRemap, *skinRemap, inOutMesh.vertexRefs))
+    if(!RemapSourceVertexRefs(*positionRemap, *normalRemap, *tangentRemap, *uv0Remap, *colorRemap, *skinRemap, Span<SourceVertexRef>(inOutMesh.vertexRefs)))
         return MakeUnexpected(Failure{});
 
     report.after = CountSourceMeshStreams(inOutMesh);

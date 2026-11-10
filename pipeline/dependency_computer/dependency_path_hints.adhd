@@ -70,11 +70,7 @@ class DependencyPathHints{
             return;
 
         const StringView trimmedText = trimmed.value();
-        Optional<Name> parsedName = Optional<Name>();
-        native(in trimmedText, mut parsedName){
-            if(const auto name = Name::FromText(trimmedText); name && *name)
-                parsedName = *name;
-        }
+        const Expected<Name> parsedName = ParseName(trimmedText);
         if(!parsedName.has_value())
             return;
 
@@ -117,13 +113,9 @@ class DependencyPathHints{
     }
 
     public StringView lookup(in Name virtualPath)const{
-        StringView resolved = virtualPath.resolvedText();
-        native(in texts = this.m_texts, in virtualPath, mut resolved){
-            const auto found = texts.find(virtualPath);
-            if(found != texts.end())
-                resolved = AStringView(found.value());
-        }
-        return resolved;
+        if(this.m_texts.contains(virtualPath))
+            return StringView(this.m_texts.at(virtualPath));
+        return virtualPath.resolvedText();
     }
 }
 

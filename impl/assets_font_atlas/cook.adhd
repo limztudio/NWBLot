@@ -66,8 +66,20 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsFontAtlasCookAdhdModule(in u64 value){
-    return value != 0u;
+const b8 s_FontAtlasCookIncludePreparedPixels = true;
+
+b8 HasPositiveFontAtlasGlyphBitmapDimensions(in u32 width, in u32 height){
+    return width > 0u && height > 0u;
+}
+
+b8 IsMatchingFontAtlasSourceGlyphListCount(in u32 sourceGlyphCount, in u32 maxGlyphCount, in usize metadataGlyphCount){
+    return sourceGlyphCount > 0u && sourceGlyphCount <= maxGlyphCount && metadataGlyphCount == cast<usize>(sourceGlyphCount);
+}
+
+Expected<u32> TryConvertFontAtlasMetadataInteger(in i64 rawValue, in u32 minimum, in u32 maximum){
+    if(rawValue < cast<i64>(minimum) || cast<u64>(rawValue) > cast<u64>(maximum))
+        return MakeUnexpected(Failure());
+    return cast<u32>(rawValue);
 }
 
 
@@ -79,6 +91,8 @@ native{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/assets_font/prepared_source.adhd.h>
 
 #include <core/assets/cook_metadata.h>
@@ -154,7 +168,7 @@ using Core::Metascript::Value;
     if(!planeTopResult)
         return MakeUnexpected(Failure{});
     glyph.planeTop = *planeTopResult;
-    if(glyph.width == 0u || glyph.height == 0u){
+    if(!HasPositiveFontAtlasGlyphBitmapDimensions(glyph.width, glyph.height)){
         NWB_LOGGER_ERROR(NWB_TEXT("Font atlas glyph meta '{}': bitmap dimensions must be positive; empty glyphs declare only advance_units"), PathToString<tchar>(path));
         return MakeUnexpected(Failure{});
     }
@@ -267,7 +281,7 @@ Expected<Core::Assets::AssetVector<FontAtlasGlyph>> ParseFontAtlasGlyphMetadata(
     const auto glyphs = Core::Assets::FindMetadataListField(nwbFilePath, asset, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphsField);
     if(!glyphs)
         return MakeUnexpected(glyphs.error());
-    if(payload.sourceGlyphCount == 0u || payload.sourceGlyphCount > s_FontAtlasMaxGlyphCount || (*glyphs)->asList().size() != payload.sourceGlyphCount){
+    if(!IsMatchingFontAtlasSourceGlyphListCount(payload.sourceGlyphCount, s_FontAtlasMaxGlyphCount, (*glyphs)->asList().size())){
         NWB_LOGGER_ERROR(NWB_TEXT("Font atlas glyph meta '{}': exactly one record per source glyph is required"), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
@@ -285,8 +299,11 @@ Expected<Core::Assets::AssetVector<FontAtlasGlyph>> ParseFontAtlasGlyphMetadata(
 
 Expected<u32> ReadFontAtlasMetadataU32(const Path& path, const Core::Metascript::Value& map, const AStringView diagnosticPrefix, const AStringView field, const u32 minimum, const u32 maximum){
     const Core::Metascript::Value* value = map.findField(field);
-    if(value && value->isInteger() && value->asInteger() >= minimum && static_cast<u64>(value->asInteger()) <= maximum)
-        return static_cast<u32>(value->asInteger());
+    if(value && value->isInteger()){
+        const Expected<u32> converted = TryConvertFontAtlasMetadataInteger(value->asInteger(), minimum, maximum);
+        if(converted)
+            return *converted;
+    }
     NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be an integer in {}..{}"), ConvertString(diagnosticPrefix), PathToString<tchar>(path), ConvertString(field), minimum, maximum);
     return MakeUnexpected(Failure{});
 }
@@ -311,7 +328,7 @@ Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(const Name virtualP
         return MakeUnexpected(Failure{});
     Path fontPath = nwbFilePath;
     fontPath.replaceExtension(s_PreparedFontExtension);
-    auto sourceResult = ReadPreparedFontSource(fontPath, true, arena);
+    auto sourceResult = ReadPreparedFontSource(fontPath, s_FontAtlasCookIncludePreparedPixels, arena);
     if(!sourceResult)
         return MakeUnexpected(Failure{});
     PreparedFontSource& source = *sourceResult;

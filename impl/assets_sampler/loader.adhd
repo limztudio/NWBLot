@@ -64,8 +64,16 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsSamplerLoaderAdhdModule(in u64 value){
-    return value != 0u;
+const u32 s_SamplerDescriptorBindingSlot = 0u;
+
+Name ResolveSamplerDebugName(in Name debugName, in Name assetVirtualPath){
+    if(debugName != s_NameNone)
+        return debugName;
+    return assetVirtualPath;
+}
+
+b8 HasInitializedSamplerResourceState(in b8 hasSampler, in b8 hasDescriptorHandle){
+    return hasSampler || hasDescriptorHandle;
 }
 
 
@@ -88,9 +96,9 @@ NWB_IMPL_BEGIN
 
 
 b8 SamplerAssetLoader::Create(const Sampler& samplerAsset, const Name& debugName, const TStringView ownerName, Core::GraphicsRuntime& graphics, SamplerGpuResource& outResource){
-    const Name samplerName = debugName ? debugName : samplerAsset.virtualPath();
+    const Name samplerName = ResolveSamplerDebugName(debugName, samplerAsset.virtualPath());
     NWB_ASSERT(!outResource.valid());
-    if(outResource.sampler || outResource.samplerHeapHandle.valid()){
+    if(HasInitializedSamplerResourceState(outResource.sampler != nullptr, outResource.samplerHeapHandle.valid())){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: sampler resource is partially initialized; release it before recreating"), ownerName);
         return false;
     }
@@ -118,7 +126,7 @@ b8 SamplerAssetLoader::Create(const Sampler& samplerAsset, const Name& debugName
     }
     const Core::GpuDescriptorHandle samplerHandle = *samplerHandleResult;
     Core::GpuDescriptorRetirementGuard releaseDescriptor(heap, samplerHandle);
-    if(!heap.write(samplerHandle, Core::DescriptorWriteItem::Sampler(0u, sampler.get()))){
+    if(!heap.write(samplerHandle, Core::DescriptorWriteItem::Sampler(s_SamplerDescriptorBindingSlot, sampler.get()))){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to write the bindless sampler slot for '{}'"), ownerName, ConvertString(samplerName.resolvedText()));
         return false;
     }

@@ -2,26 +2,76 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_ui/toolkit/edit/model.adhd>
+#include <impl/ecs_ui/toolkit/edit/edit_command_mapping.adhd>
+
 native{
-#include <impl/ecs_ui/toolkit/edit/model.adhd.h>
-
-#include <impl/ecs_ui/toolkit/edit/edit_command_mapping.adhd.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_IMPL_UI_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline b8 EraseEditWord(EditModel& model, const b8 forward){
+[[nodiscard]] b8 EraseEditWord(EditModel& model, b8 forward);
+
+// Active preedit owns editing keys and Enter.
+// Escape first cancels preedit without cancelling the widget.
+// Clipboard actions describe requests; the host borrows its OS service to perform the actual exchange.
+[[nodiscard]] EditCommandResult ApplyEditCommand(EditModel& model, const EditCommandRequest& request, b8 readOnly = false);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_END
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsAdmittedEditCommand(in EditCommand command){
+    return command != EditCommand::None && cast<u8>(command) <= cast<u8>(EditCommand::Newline);
+}
+
+EditMove ResolveEditWordEraseMove(in b8 forward){
+    if(forward)
+        return EditMove::WordRight;
+    return EditMove::WordLeft;
+}
+
+void FinalizeAppliedEditCommand(
+    in b8 applied,
+    in u64 previousRevision,
+    in u64 currentRevision,
+    in usize previousAnchor,
+    in usize currentAnchor,
+    in usize previousCaret,
+    in usize currentCaret,
+    mut EditCommandResult inOutResult
+){
+    if(applied){
+        inOutResult.textChanged = currentRevision != previousRevision;
+        inOutResult.selectionChanged = currentAnchor != previousAnchor || currentCaret != previousCaret;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 EraseEditWord(EditModel& model, const b8 forward){
     if(model.hasSelection())
         return model.replaceSelection({});
     const usize caret = model.caret();
-    if(!model.move(forward ? EditMove::WordRight : EditMove::WordLeft))
+    if(!model.move(ResolveEditWordEraseMove(forward)))
         return false;
     const usize boundary = model.caret();
     if(!model.setSelection(caret, caret))
@@ -32,12 +82,9 @@ NWB_IMPL_UI_BEGIN
     return model.eraseSurrounding(beforeBytes, afterBytes);
 }
 
-// Active preedit owns editing keys and Enter.
-// Escape first cancels preedit without cancelling the widget.
-// Clipboard actions describe requests; the host borrows its OS service to perform the actual exchange.
-[[nodiscard]] inline EditCommandResult ApplyEditCommand(EditModel& model, const EditCommandRequest& request, const b8 readOnly = false){
+EditCommandResult ApplyEditCommand(EditModel& model, const EditCommandRequest& request, const b8 readOnly){
     EditCommandResult result;
-    if(request.command == EditCommand::None || request.command > EditCommand::Newline)
+    if(!IsAdmittedEditCommand(request.command))
         return result;
     result.handled = true;
     if(request.repeat && ShouldSuppressEditCommandRepeat(request.command))
@@ -74,10 +121,7 @@ NWB_IMPL_UI_BEGIN
         default: break;
         }
     }
-    if(applied){
-        result.textChanged = model.revision() != revision;
-        result.selectionChanged = model.anchor() != anchor || model.caret() != caret;
-    }
+    FinalizeAppliedEditCommand(applied, revision, model.revision(), anchor, model.anchor(), caret, model.caret(), result);
     return result;
 }
 
@@ -86,17 +130,6 @@ NWB_IMPL_UI_BEGIN
 
 
 NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ImplEcsUiToolkitEditCommandsAdhdModule(in u64 value){
-    return value != 0u;
 }
 
 

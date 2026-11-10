@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_ui_skin/palette_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 #if defined(NWB_COOK)
 
@@ -72,8 +78,35 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsUiSkinCookAdhdModule(in u64 value){
-    return value != 0u;
+UiSkinRegion BuildParsedUiSkinRegion(
+    in Name name,
+    in UiSkinDrawMode drawMode,
+    in Array<u32, 4> rectangleValues,
+    in Array<u32, 4> sliceValues,
+    in Array<f32, 4> paddingValues,
+    in Array<f32, 2> minimumSizeValues
+){
+    UiSkinRegion region;
+    region.name = name;
+    region.drawMode = drawMode;
+    region.rectangle = UiSkinRect(rectangleValues[0u], rectangleValues[1u], rectangleValues[2u], rectangleValues[3u]);
+    region.sliceInsets = UiSkinSliceInsets(sliceValues[0u], sliceValues[1u], sliceValues[2u], sliceValues[3u]);
+    region.padding = UiSkinInsets(paddingValues[0u], paddingValues[1u], paddingValues[2u], paddingValues[3u]);
+    region.minimumWidth = minimumSizeValues[0u];
+    region.minimumHeight = minimumSizeValues[1u];
+    return region;
+}
+
+b8 IsValidNewUiSkinPaletteRole(in usize role, in b8 alreadySeen){
+    return role < cast<usize>(UiSkinColorRole::kCount) && !alreadySeen;
+}
+
+UiSkinColor BuildParsedUiSkinPaletteColor(in Array<f32, 4> components){
+    return UiSkinColor(components[0u], components[1u], components[2u], components[3u]);
+}
+
+b8 IsValidUiSkinToolkitContractOption(in b8 hasToolkitContract, in StringView toolkitContract){
+    return !hasToolkitContract || toolkitContract == s_UiSkinWidgetsContract;
 }
 
 
@@ -85,6 +118,8 @@ native{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/assets_ui_skin/validation.adhd.h>
 #include <impl/assets_ui_skin/ui_skin_binary_codec.adhd.h>
 
@@ -169,7 +204,7 @@ template<usize Count>
 }
 
 [[nodiscard]] static Expected<UiSkinRegion> ParseRegion(const Path& path, const Value& object){
-    UiSkinRegion region{};
+    UiSkinDrawMode::Enum drawMode = UiSkinDrawMode::Sprite;
 
     if(!Core::Assets::CheckMetadataAssetMap(path, object, s_UiSkinDiagnosticPrefix))
         return MakeUnexpected(Failure{});
@@ -177,22 +212,21 @@ template<usize Count>
         auto drawModeResult = Core::Assets::ParseNamedMetadataEnumField<UiSkinDrawMode::Enum>(path, object, s_UiSkinDiagnosticPrefix, s_UiSkinDrawModeField, s_DrawModeCases, s_UiSkinDrawModeHint);
         if(!drawModeResult)
             return MakeUnexpected(Failure{});
-        region.drawMode = *drawModeResult;
+        drawMode = *drawModeResult;
     }
 
-    if(!Core::Assets::ValidateMetadataAssetFields(path, object, s_UiSkinDiagnosticPrefix, [hasSlice = region.drawMode == UiSkinDrawMode::NineSlice](const AStringView field)noexcept{
+    if(!Core::Assets::ValidateMetadataAssetFields(path, object, s_UiSkinDiagnosticPrefix, [hasSlice = drawMode == UiSkinDrawMode::NineSlice](const AStringView field)noexcept{
         return IsAllowedUiSkinRegionField(field, hasSlice);
     }))
         return MakeUnexpected(Failure{});
     auto nameResult = Core::Assets::ReadMetadataNameField(path, object, s_UiSkinDiagnosticPrefix, s_UiSkinNameField, true);
     if(!nameResult)
         return MakeUnexpected(Failure{});
-    region.name = *nameResult;
 
     auto rectangleResult = ReadU32List<s_UiSkinRectComponentCount>(path, object, s_UiSkinRectField, true);
     if(!rectangleResult)
         return MakeUnexpected(Failure{});
-    auto sliceResult = ReadU32List<s_UiSkinSliceComponentCount>(path, object, s_UiSkinSliceField, region.drawMode == UiSkinDrawMode::NineSlice);
+    auto sliceResult = ReadU32List<s_UiSkinSliceComponentCount>(path, object, s_UiSkinSliceField, drawMode == UiSkinDrawMode::NineSlice);
     if(!sliceResult)
         return MakeUnexpected(Failure{});
     auto paddingResult = ReadLogicalList<s_UiSkinPaddingComponentCount>(path, object, s_UiSkinPaddingField);
@@ -202,12 +236,7 @@ template<usize Count>
     if(!minimumSizeResult)
         return MakeUnexpected(Failure{});
 
-    region.rectangle = UiSkinRect((*rectangleResult)[0u], (*rectangleResult)[1u], (*rectangleResult)[2u], (*rectangleResult)[3u]);
-    region.sliceInsets = UiSkinSliceInsets((*sliceResult)[0u], (*sliceResult)[1u], (*sliceResult)[2u], (*sliceResult)[3u]);
-    region.padding = UiSkinInsets((*paddingResult)[0u], (*paddingResult)[1u], (*paddingResult)[2u], (*paddingResult)[3u]);
-    region.minimumWidth = (*minimumSizeResult)[0u];
-    region.minimumHeight = (*minimumSizeResult)[1u];
-    return region;
+    return BuildParsedUiSkinRegion(*nameResult, drawMode, *rectangleResult, *sliceResult, *paddingResult, *minimumSizeResult);
 }
 
 [[nodiscard]] static Expected<UiSkinPalette> ParsePalette(const Path& path, const Value& asset){
@@ -230,7 +259,7 @@ template<usize Count>
             return MakeUnexpected(Failure{});
         const AStringView name = nameResultValue->text;
         const usize role = ResolveUiSkinColorRole(name);
-        if(role == UiSkinColorRole::kCount || seen[role]){
+        if(!IsValidNewUiSkinPaletteRole(role, role < UiSkinColorRole::kCount ? seen[role] : true)){
             NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': unknown or duplicate palette role '{}'"), ConvertString(s_UiSkinDiagnosticPrefix), PathToString<tchar>(path), ConvertString(name));
             return MakeUnexpected(Failure{});
         }
@@ -250,7 +279,7 @@ template<usize Count>
                 return MakeUnexpected(Failure{});
             }
         }
-        palette.colors[role] = UiSkinColor(components[0u], components[1u], components[2u], components[3u]);
+        palette.colors[role] = BuildParsedUiSkinPaletteColor(components);
         seen[role] = true;
     }
     return palette;
@@ -366,7 +395,7 @@ Expected<UiSkinCookEntry> ParseUiSkinCookMetadata(const Name virtualPath, const 
         return MakeUnexpected(Failure{});
     const AStringView toolkitContract = toolkitContractResult->text;
     const b8 hasToolkitContract = toolkitContractResult->present;
-    if(hasToolkitContract && toolkitContract != s_UiSkinWidgetsContract){
+    if(!IsValidUiSkinToolkitContractOption(hasToolkitContract, toolkitContract)){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': toolkit_contract must be 'widgets'"), ConvertString(s_UiSkinDiagnosticPrefix), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }

@@ -6,7 +6,6 @@ native{
 #include <impl/ecs_csg/components.adhd.h>
 #include <impl/ecs_csg/shape_registry_validation.adhd.h>
 #include <impl/assets_csg/shape_id.adhd.h>
-#include <core/common/log.h>
 
 #include <global/scope_exit.h>
 #include <global/span.h>
@@ -171,7 +170,7 @@ public:
         const auto found = m_shapeTypeIds.find(desc.name);
         if(found != m_shapeTypeIds.end()){
             if(!replaceExisting){
-                NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: shape type '{}' is already registered"), ConvertString(desc.name.resolvedText()));
+                LogCsgShapeAlreadyRegistered(desc.name);
                 return MakeUnexpected(Failure{});
             }
 
@@ -366,14 +365,6 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ImplEcsCsgShapeRegistryAdhdModule(in u64 value){
-    return value != 0u;
 }
 
 

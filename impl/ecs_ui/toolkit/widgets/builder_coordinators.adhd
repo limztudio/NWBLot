@@ -1,0 +1,239 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <impl/ecs_ui/toolkit/builder.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ComboCoordinator final{
+private:
+    using Item = BuilderScopeFrame::Item;
+    using ListFrame = BuilderScopeFrame::ListFrame;
+    using ComboFrame = BuilderScopeFrame::ComboFrame;
+
+
+public:
+    explicit ComboCoordinator(Builder& builder)noexcept
+        : m_builder(builder)
+    {}
+
+
+public:
+    [[nodiscard]] ComboResult declareCombo(AStringView stableKey, const IListDataSource& source, const ComboOptions& options, const SearchComboOptions* searchOptions, ComboState& state, SearchComboState* search, ISearchableListDataSource* searchSource);
+    [[nodiscard]] SearchComboResult searchComboBox(AStringView stableKey, ISearchableListDataSource& source, SearchComboState& state, const SearchComboOptions& options);
+    [[nodiscard]] b8 paintCombo(const Item& item, const LayoutBox& box);
+    [[nodiscard]] b8 paintCombos();
+
+
+private:
+    [[nodiscard]] b8 paintComboPopup(ComboFrame& frame);
+    [[nodiscard]] b8 applyComboInput(const WidgetState& field, ComboFrame& frame, ComboResult& result);
+    [[nodiscard]] b8 applyComboListInput(ComboFrame& frame, ComboResult& result);
+    [[nodiscard]] b8 prepareComboSearch(const WidgetState& field, ComboFrame& frame);
+    void snapshotComboQuery(ComboFrame& frame)noexcept;
+    [[nodiscard]] b8 paintComboQuery(ComboFrame& frame, LayoutBox& content);
+
+
+private:
+    Builder& m_builder;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ContextMenuCoordinator final{
+private:
+    using Item = BuilderScopeFrame::Item;
+    using ListFrame = BuilderScopeFrame::ListFrame;
+    using ContextMenuFrame = BuilderScopeFrame::ContextMenuFrame;
+
+
+public:
+    explicit ContextMenuCoordinator(Builder& builder)noexcept
+        : m_builder(builder)
+    {}
+
+
+public:
+    [[nodiscard]] ContextMenuResult declareMenu(AStringView stableKey, AStringView anchorKey, const IListDataSource& source, ContextMenuState& state, const ContextMenuOptions& options);
+    [[nodiscard]] b8 paintMenus();
+
+
+private:
+    [[nodiscard]] b8 prepareContextMenu(ContextMenuFrame& frame, ContextMenuResult& result);
+    [[nodiscard]] b8 applyContextMenuInput(ContextMenuFrame& frame, ContextMenuResult& result);
+    void snapshotContextMenu(ContextMenuFrame& frame)noexcept;
+    [[nodiscard]] b8 paintContextMenuPopup(ContextMenuFrame& frame);
+
+
+private:
+    Builder& m_builder;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class EditBoxCoordinator final{
+private:
+    using Item = BuilderScopeFrame::Item;
+    using IntegerEditFrame = BuilderScopeFrame::IntegerEditFrame;
+    using FloatEditFrame = BuilderScopeFrame::FloatEditFrame;
+
+
+public:
+    explicit EditBoxCoordinator(Builder& builder)noexcept
+        : m_builder(builder)
+    {}
+
+
+public:
+    [[nodiscard]] EditBoxResult declareEditBox(AStringView stableKey, const EditBoxOptions& options, EditModel& model, EditBoxState& state, IEditActionSink* actions, IntegerEditFrame* integerFrame, FloatEditFrame* floatFrame);
+    [[nodiscard]] b8 prepareEditBox(const EditBoxResult& result, EditModel& model, EditBoxState& state, Item& item);
+    [[nodiscard]] b8 paintEditBox(const Item& item, const LayoutBox& box, const HitTarget* navigation);
+
+
+private:
+    Builder& m_builder;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ListCoordinator final{
+private:
+    using Item = BuilderScopeFrame::Item;
+    using ListFrame = BuilderScopeFrame::ListFrame;
+    using ListRow = BuilderScopeFrame::ListRow;
+
+
+public:
+    explicit ListCoordinator(Builder& builder)noexcept
+        : m_builder(builder)
+    {}
+
+
+public:
+    [[nodiscard]] ListResult virtualList(AStringView stableKey, const IListDataSource& source, ListState& state, const ListOptions& options);
+    [[nodiscard]] const UiSkinRegion* prepareListFrame(const IListDataSource& source, ListState& state, const ListOptions& options, const ControlToken& token, u64 rowCount, b8 focusOnCommit, WidgetId commandFocus, ListFrame& outFrame);
+    [[nodiscard]] b8 paintList(const Item& item, const LayoutBox& box);
+
+
+private:
+    [[nodiscard]] b8 prepareListMetrics(ListFrame& frame);
+    [[nodiscard]] b8 paintListRows(const Item& item, const ListFrame& frame, const ScrollPlacement& placement);
+
+
+private:
+    Builder& m_builder;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class NumericEditCoordinator final{
+private:
+    using IntegerEditFrame = BuilderScopeFrame::IntegerEditFrame;
+    using FloatEditFrame = BuilderScopeFrame::FloatEditFrame;
+
+
+public:
+    explicit NumericEditCoordinator(Builder& builder)noexcept
+        : m_builder(builder)
+    {}
+
+
+public:
+    [[nodiscard]] NumericEditBoxResult integerEdit(AStringView stableKey, IntegerEditModel& model, EditBoxState& state, const IntegerEditOptions& options);
+    [[nodiscard]] NumericEditBoxResult floatEdit(AStringView stableKey, FloatEditModel& model, EditBoxState& state, const FloatEditOptions& options);
+
+
+private:
+    template<typename FrameT, typename ModelT, typename OptionsT, typename ValidateBoundsF, typename FrameListT>
+    [[nodiscard]] NumericEditBoxResult declareNumericEdit(AStringView stableKey, ModelT& model, EditBoxState& state, const OptionsT& options, ValidateBoundsF validateBounds, FrameListT& frames);
+
+
+private:
+    Builder& m_builder;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class TextAreaCoordinator final{
+private:
+    using Item = BuilderScopeFrame::Item;
+    using TextAreaFrame = BuilderScopeFrame::TextAreaFrame;
+
+
+public:
+    explicit TextAreaCoordinator(Builder& builder)noexcept
+        : m_builder(builder)
+    {}
+
+
+public:
+    [[nodiscard]] EditBoxResult declareTextArea(AStringView stableKey, EditModel& model, TextAreaState& state, const TextAreaOptions& options);
+    [[nodiscard]] b8 paintTextArea(const Item& item, const LayoutBox& box);
+
+
+private:
+    [[nodiscard]] b8 textAreaAvailable(const EditModel& model, const TextAreaState& state)const noexcept;
+    void snapshotTextArea(TextAreaFrame& frame)noexcept;
+    [[nodiscard]] b8 applyTextAreaScrollInput(const Item& item, const TextAreaFrame& frame, const ControlToken& token);
+    [[nodiscard]] b8 paintTextAreaScrollbars(const Item& item, const ScrollViewportPlacement& placement, const Rect& clip, const ControlToken& token);
+
+
+private:
+    Builder& m_builder;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class TooltipCoordinator final{
+private:
+    using Item = BuilderScopeFrame::Item;
+    using TooltipFrame = BuilderScopeFrame::TooltipFrame;
+
+
+public:
+    explicit TooltipCoordinator(Builder& builder)noexcept
+        : m_builder(builder)
+    {}
+
+
+public:
+    [[nodiscard]] b8 declareTooltip(AStringView stableKey, AStringView anchorKey, StringView text, TooltipState& state, const TooltipOptions& options);
+    [[nodiscard]] b8 paintTooltips();
+
+
+private:
+    Builder& m_builder;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_END
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

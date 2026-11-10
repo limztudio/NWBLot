@@ -2,8 +2,81 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsUiEditBoxHostImplAdhdModule(in u64 value){
-    return value != 0u;
+#include <impl/ecs_ui/edit_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 HasPendingUiEditOwnerTransfer(
+    in UiTextEditOwner targetOwner,
+    in UiTextEditOwner sessionOwner,
+    in b8 clipboardPending,
+    in UiTextEditOwner clipboardOwner,
+    in b8 primaryPending,
+    in UiTextEditOwner primaryOwner
+){
+    return sessionOwner == targetOwner
+        || (clipboardPending && clipboardOwner == targetOwner)
+        || (primaryPending && primaryOwner == targetOwner);
+}
+
+b8 ShouldCancelUnfocusedUiEditTransfers(
+    in b8 focused,
+    in UiTextEditOwner focusedOwner,
+    in b8 sessionValid,
+    in UiTextEditOwner sessionOwner,
+    in b8 clipboardPending,
+    in UiTextEditOwner clipboardOwner,
+    in b8 primaryPending,
+    in UiTextEditOwner primaryOwner
+){
+    return (sessionValid && (!focused || focusedOwner != sessionOwner))
+        || (clipboardPending && (!focused || focusedOwner != clipboardOwner))
+        || (primaryPending && (!focused || focusedOwner != primaryOwner));
+}
+
+b8 HasUiEditModelGenerationsChanged(
+    in u64 beforeRevision,
+    in u64 beforeExternalRevision,
+    in u64 beforeSelectionGeneration,
+    in u64 beforeCompositionGeneration,
+    in u64 afterRevision,
+    in u64 afterExternalRevision,
+    in u64 afterSelectionGeneration,
+    in u64 afterCompositionGeneration
+){
+    return afterRevision != beforeRevision
+        || afterExternalRevision != beforeExternalRevision
+        || afterSelectionGeneration != beforeSelectionGeneration
+        || afterCompositionGeneration != beforeCompositionGeneration;
+}
+
+u64 AdvanceUiEditSelectionSequence(mut u64 inOutSelectionSequence){
+    if(inOutSelectionSequence == u64.max)
+        TerminateInvariant();
+    ++inOutSelectionSequence;
+    return inOutSelectionSequence;
+}
+
+b8 IsUiEditEntryRebound(
+    in UiTextEditOwner currentOwner,
+    in UiTextEditOwner nextOwner,
+    in PopupToken currentPopup,
+    in PopupToken nextPopup,
+    in b8 currentActionCapable,
+    in b8 nextActionCapable,
+    in u64 currentNavigationInstance,
+    in u64 nextNavigationInstance
+){
+    return currentOwner != nextOwner
+        || currentPopup != nextPopup
+        || currentActionCapable != nextActionCapable
+        || currentNavigationInstance != nextNavigationInstance;
+}
+
+b8 IsMutatingUiEditClipboardAction(in EditClipboardAction action){
+    return action == EditClipboardAction::Cut || action == EditClipboardAction::Paste;
 }
 
 
@@ -99,7 +172,7 @@ void UiEditBoxHost::finishFrame(){
         const auto& entry = m_entries[index - 1u];
         if(entry.seen == m_generation)
             continue;
-        if(m_session.owner() == entry.owner || (m_clipboard.pending() && m_clipboardOwner == entry.owner) || (m_primary.pending() && m_primaryOwner == entry.owner))
+        if(HasPendingUiEditOwnerTransfer(entry.owner, m_session.owner(), m_clipboard.pending(), m_clipboardOwner, m_primary.pending(), m_primaryOwner))
             cancelTransfers();
         discard(entry.owner);
         m_entries.erase(m_entries.begin() + static_cast<isize>(index - 1u));
@@ -182,7 +255,7 @@ void UiEditBoxHost::synchronizeFocus(){
         candidate.dragging = false;
         candidate.wordDragging = false;
     }
-    if((m_session.token().valid() && (!focused || entry->owner != m_session.owner())) || (m_clipboard.pending() && (!focused || entry->owner != m_clipboardOwner)) || (m_primary.pending() && (!focused || entry->owner != m_primaryOwner)))
+    if(ShouldCancelUnfocusedUiEditTransfers(focused, focused ? entry->owner : UiTextEditOwner{}, m_session.token().valid(), m_session.owner(), m_clipboard.pending(), m_clipboardOwner, m_primary.pending(), m_primaryOwner))
         cancelTransfers();
 }
 
@@ -384,7 +457,7 @@ b8 UiEditBoxHost::apply(const Ui::EditBoxOptions& options, Event& event, Entry& 
     }
     if(m_borrowRejected)
         return false;
-    if(navigation && (model.revision() != revision || model.externalRevision() != externalRevision || model.selectionGeneration() != selectionGeneration || model.compositionGeneration() != compositionGeneration))
+    if(navigation && HasUiEditModelGenerationsChanged(revision, externalRevision, selectionGeneration, compositionGeneration, model.revision(), model.externalRevision(), model.selectionGeneration(), model.compositionGeneration()))
         navigation->state.reset();
     return true;
 }
@@ -569,9 +642,7 @@ void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previo
     }
     else if((input.type == Ui::InputEventType::PrimaryDown || input.type == Ui::InputEventType::PrimaryUp || input.type == Ui::InputEventType::PointerMove) && (input.type != Ui::InputEventType::PointerMove || previousCapture.valid())){
         if(input.type == Ui::InputEventType::PrimaryDown){
-            if(m_selectionSequence == Limit<u64>::s_Max)
-                TerminateInvariant();
-            m_activeSelectionSequence = ++m_selectionSequence;
+            m_activeSelectionSequence = AdvanceUiEditSelectionSequence(m_selectionSequence);
             m_selectionSource = input.source;
         }
         else if(m_activeSelectionSequence == 0u || input.source != m_selectionSource)
@@ -753,13 +824,13 @@ Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, con
     }
     else{
         const u64 navigationInstance = navigation ? navigation->state.instanceGeneration() : 0u;
-        const b8 rebound = entry->owner != owner || entry->popup != popup || entry->actionCapable != (actions != nullptr) || entry->navigationInstanceGeneration != navigationInstance;
+        const b8 rebound = IsUiEditEntryRebound(entry->owner, owner, entry->popup, popup, entry->actionCapable, actions != nullptr, entry->navigationInstanceGeneration, navigationInstance);
         const b8 policyChanged = entry->enabled != options.enabled || entry->readOnly != options.readOnly;
         abandon = actions && (rebound || policyChanged);
         if(rebound || policyChanged || !entry->expected.matches(model)){
             m_context.input().cancelSubmitCommands(widget.id);
             entry->navigationResetPending = navigation != nullptr;
-            if(m_session.owner() == entry->owner || (m_clipboard.pending() && m_clipboardOwner == entry->owner) || (m_primary.pending() && m_primaryOwner == entry->owner))
+            if(HasPendingUiEditOwnerTransfer(entry->owner, m_session.owner(), m_clipboard.pending(), m_clipboardOwner, m_primary.pending(), m_primaryOwner))
                 cancelTransfers();
             discard(entry->owner);
             entry->owner = owner;
@@ -822,7 +893,7 @@ Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, con
             if(!apply(options, event, *entry, model, result, actions, navigation)){
                 result.valid = false;
                 discard(owner);
-                if(m_session.owner() == owner || (m_clipboard.pending() && m_clipboardOwner == owner) || (m_primary.pending() && m_primaryOwner == owner))
+                if(HasPendingUiEditOwnerTransfer(owner, m_session.owner(), m_clipboard.pending(), m_clipboardOwner, m_primary.pending(), m_primaryOwner))
                     cancelTransfers();
                 return result;
             }
@@ -837,7 +908,7 @@ Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, con
         }
         else{
             const auto action = m_clipboard.action();
-            const b8 mutates = action == Ui::EditClipboardAction::Cut || action == Ui::EditClipboardAction::Paste;
+            const b8 mutates = IsMutatingUiEditClipboardAction(action);
             if(mutates){
                 if(m_session.owner() == owner && !m_session.cancel())
                     TerminateInvariant();

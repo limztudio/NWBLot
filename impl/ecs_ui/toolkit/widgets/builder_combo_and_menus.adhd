@@ -2,8 +2,51 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsUiToolkitWidgetsBuilderComboAndMenusAdhdModule(in u64 value){
-    return value != 0u;
+#include <impl/ecs_ui/toolkit/widgets/popup_style.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Rect ResolveWindowFirstUseViewport(in Rect bounds, in DisplayMetrics display){
+    return Rect(bounds.x, bounds.y, Max(display.logicalWidth, bounds.width), Max(display.logicalHeight, bounds.height));
+}
+
+Rect ResolveWindowHeaderBounds(in Rect windowBounds, in f32 titleHeight){
+    return Rect(windowBounds.x, windowBounds.y, windowBounds.width, titleHeight);
+}
+
+b8 IsComboResultFocused(in b8 enabled, in WidgetId focusId, in WidgetId fieldId, in WidgetId rowsId, in b8 hasEditor, in WidgetId editorId){
+    if(!enabled)
+        return false;
+    return focusId == fieldId || focusId == rowsId || (hasEditor && focusId == editorId);
+}
+
+PopupOptions BuildComboPopupOptions(in Rect anchor, in f32 popupHeight){
+    PopupOptions options;
+    options.anchor = anchor;
+    options.size = Point(anchor.width, popupHeight);
+    return options;
+}
+
+Rect BuildContextMenuTriggerAnchorRect(in Point position){
+    return Rect(position.x, position.y, 0.0f, 0.0f);
+}
+
+PopupOptions BuildContextMenuPopupOptions(in Rect anchor, in Point size){
+    PopupOptions options;
+    options.anchor = anchor;
+    options.size = size;
+    options.gap = 0.0f;
+    return options;
+}
+
+f32 ResolveSinglePixelCaretWidth(in DisplayMetrics display){
+    return 1.0f / display.pixelScaleX;
+}
+
+b8 IsValidVirtualListWheelRows(in f32 wheelRows){
+    return IsFinite(wheelRows) && wheelRows > 0.0f;
 }
 
 
@@ -12,6 +55,7 @@ b8 ImplEcsUiToolkitWidgetsBuilderComboAndMenusAdhdModule(in u64 value){
 
 native{
 #include <impl/ecs_ui/toolkit/builder.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/builder_coordinators.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/ui_scope_descriptor_factory.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/control_style_metrics.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/hit_target_factory.adhd.h>
@@ -35,245 +79,6 @@ NWB_IMPL_UI_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#ifndef NWB_IMPL_ECS_UI_TOOLKIT_BUILDER_COORDINATORS_INTERNAL_H
-#define NWB_IMPL_ECS_UI_TOOLKIT_BUILDER_COORDINATORS_INTERNAL_H
-class Builder;
-
-
-class ComboCoordinator final{
-private:
-    using Item = BuilderScopeFrame::Item;
-    using ListFrame = BuilderScopeFrame::ListFrame;
-    using ComboFrame = BuilderScopeFrame::ComboFrame;
-
-
-public:
-    explicit ComboCoordinator(Builder& builder)noexcept
-        : m_builder(builder)
-    {}
-
-
-public:
-    [[nodiscard]] ComboResult declareCombo(AStringView stableKey, const IListDataSource& source, const ComboOptions& options, const SearchComboOptions* searchOptions, ComboState& state, SearchComboState* search, ISearchableListDataSource* searchSource);
-    [[nodiscard]] SearchComboResult searchComboBox(AStringView stableKey, ISearchableListDataSource& source, SearchComboState& state, const SearchComboOptions& options);
-    [[nodiscard]] b8 paintCombo(const Item& item, const LayoutBox& box);
-    [[nodiscard]] b8 paintCombos();
-
-
-private:
-    [[nodiscard]] b8 paintComboPopup(ComboFrame& frame);
-    [[nodiscard]] b8 applyComboInput(const WidgetState& field, ComboFrame& frame, ComboResult& result);
-    [[nodiscard]] b8 applyComboListInput(ComboFrame& frame, ComboResult& result);
-    [[nodiscard]] b8 prepareComboSearch(const WidgetState& field, ComboFrame& frame);
-    void snapshotComboQuery(ComboFrame& frame)noexcept;
-    [[nodiscard]] b8 paintComboQuery(ComboFrame& frame, LayoutBox& content);
-
-
-private:
-    Builder& m_builder;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class Builder;
-
-
-class ContextMenuCoordinator final{
-private:
-    using Item = BuilderScopeFrame::Item;
-    using ListFrame = BuilderScopeFrame::ListFrame;
-    using ContextMenuFrame = BuilderScopeFrame::ContextMenuFrame;
-
-
-public:
-    explicit ContextMenuCoordinator(Builder& builder)noexcept
-        : m_builder(builder)
-    {}
-
-
-public:
-    [[nodiscard]] ContextMenuResult declareMenu(AStringView stableKey, AStringView anchorKey, const IListDataSource& source, ContextMenuState& state, const ContextMenuOptions& options);
-    [[nodiscard]] b8 paintMenus();
-
-
-private:
-    [[nodiscard]] b8 prepareContextMenu(ContextMenuFrame& frame, ContextMenuResult& result);
-    [[nodiscard]] b8 applyContextMenuInput(ContextMenuFrame& frame, ContextMenuResult& result);
-    void snapshotContextMenu(ContextMenuFrame& frame)noexcept;
-    [[nodiscard]] b8 paintContextMenuPopup(ContextMenuFrame& frame);
-
-
-private:
-    Builder& m_builder;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class Builder;
-
-
-class EditBoxCoordinator final{
-private:
-    using Item = BuilderScopeFrame::Item;
-    using IntegerEditFrame = BuilderScopeFrame::IntegerEditFrame;
-    using FloatEditFrame = BuilderScopeFrame::FloatEditFrame;
-
-
-public:
-    explicit EditBoxCoordinator(Builder& builder)noexcept
-        : m_builder(builder)
-    {}
-
-
-public:
-    [[nodiscard]] EditBoxResult declareEditBox(AStringView stableKey, const EditBoxOptions& options, EditModel& model, EditBoxState& state, IEditActionSink* actions, IntegerEditFrame* integerFrame, FloatEditFrame* floatFrame);
-    [[nodiscard]] b8 prepareEditBox(const EditBoxResult& result, EditModel& model, EditBoxState& state, Item& item);
-    [[nodiscard]] b8 paintEditBox(const Item& item, const LayoutBox& box, const HitTarget* navigation);
-
-
-private:
-    Builder& m_builder;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class Builder;
-
-
-class ListCoordinator final{
-private:
-    using Item = BuilderScopeFrame::Item;
-    using ListFrame = BuilderScopeFrame::ListFrame;
-    using ListRow = BuilderScopeFrame::ListRow;
-
-
-public:
-    explicit ListCoordinator(Builder& builder)noexcept
-        : m_builder(builder)
-    {}
-
-
-public:
-    [[nodiscard]] ListResult virtualList(AStringView stableKey, const IListDataSource& source, ListState& state, const ListOptions& options);
-    [[nodiscard]] const UiSkinRegion* prepareListFrame(const IListDataSource& source, ListState& state, const ListOptions& options, const ControlToken& token, u64 rowCount, b8 focusOnCommit, WidgetId commandFocus, ListFrame& outFrame);
-    [[nodiscard]] b8 paintList(const Item& item, const LayoutBox& box);
-
-
-private:
-    [[nodiscard]] b8 prepareListMetrics(ListFrame& frame);
-    [[nodiscard]] b8 paintListRows(const Item& item, const ListFrame& frame, const ScrollPlacement& placement);
-
-
-private:
-    Builder& m_builder;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class Builder;
-
-
-class NumericEditCoordinator final{
-private:
-    using IntegerEditFrame = BuilderScopeFrame::IntegerEditFrame;
-    using FloatEditFrame = BuilderScopeFrame::FloatEditFrame;
-
-
-public:
-    explicit NumericEditCoordinator(Builder& builder)noexcept
-        : m_builder(builder)
-    {}
-
-
-public:
-    [[nodiscard]] NumericEditBoxResult integerEdit(AStringView stableKey, IntegerEditModel& model, EditBoxState& state, const IntegerEditOptions& options);
-    [[nodiscard]] NumericEditBoxResult floatEdit(AStringView stableKey, FloatEditModel& model, EditBoxState& state, const FloatEditOptions& options);
-
-
-private:
-    template<typename FrameT, typename ModelT, typename OptionsT, typename ValidateBoundsF, typename FrameListT>
-    [[nodiscard]] NumericEditBoxResult declareNumericEdit(AStringView stableKey, ModelT& model, EditBoxState& state, const OptionsT& options, ValidateBoundsF validateBounds, FrameListT& frames);
-
-
-private:
-    Builder& m_builder;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class Builder;
-
-
-class TextAreaCoordinator final{
-private:
-    using Item = BuilderScopeFrame::Item;
-    using TextAreaFrame = BuilderScopeFrame::TextAreaFrame;
-
-
-public:
-    explicit TextAreaCoordinator(Builder& builder)noexcept
-        : m_builder(builder)
-    {}
-
-
-public:
-    [[nodiscard]] EditBoxResult declareTextArea(AStringView stableKey, EditModel& model, TextAreaState& state, const TextAreaOptions& options);
-    [[nodiscard]] b8 paintTextArea(const Item& item, const LayoutBox& box);
-
-
-private:
-    [[nodiscard]] b8 textAreaAvailable(const EditModel& model, const TextAreaState& state)const noexcept;
-    void snapshotTextArea(TextAreaFrame& frame)noexcept;
-    [[nodiscard]] b8 applyTextAreaScrollInput(const Item& item, const TextAreaFrame& frame, const ControlToken& token);
-    [[nodiscard]] b8 paintTextAreaScrollbars(const Item& item, const ScrollViewportPlacement& placement, const Rect& clip, const ControlToken& token);
-
-
-private:
-    Builder& m_builder;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class Builder;
-
-
-class TooltipCoordinator final{
-private:
-    using Item = BuilderScopeFrame::Item;
-    using TooltipFrame = BuilderScopeFrame::TooltipFrame;
-
-
-public:
-    explicit TooltipCoordinator(Builder& builder)noexcept
-        : m_builder(builder)
-    {}
-
-
-public:
-    [[nodiscard]] b8 declareTooltip(AStringView stableKey, AStringView anchorKey, StringView text, TooltipState& state, const TooltipOptions& options);
-    [[nodiscard]] b8 paintTooltips();
-
-
-private:
-    Builder& m_builder;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#endif
 
 
 b8 Builder::applySliderInput(SliderFrame& frame, const SliderPlacement& placement, const b8 interactive){
@@ -431,7 +236,7 @@ b8 Builder::endWindow(){
     b8 arranged = true;
     if(!state.collapsed){
         const DisplayMetrics& display = m_paint.displayMetrics();
-        const Rect viewport{ m_scope->m_bounds.x, m_scope->m_bounds.y, Max(display.logicalWidth, m_scope->m_bounds.width), Max(display.logicalHeight, m_scope->m_bounds.height) };
+        const Rect viewport = ResolveWindowFirstUseViewport(m_scope->m_bounds, display);
         arranged = m_scope->m_layout.arrange(viewport);
         const LayoutBox* root = m_scope->m_layout.box(0u);
         if(arranged && root){
@@ -488,7 +293,7 @@ b8 Builder::paintWindowTitle(){
     const WindowState& state = *m_scope->m_window.state;
     const WidgetStyle& style = m_scope->m_window.style;
     const WindowMetrics& metrics = m_scope->m_window.metrics;
-    const Rect header{ state.bounds.x, state.bounds.y, state.bounds.width, metrics.titleHeight };
+    const Rect header = ResolveWindowHeaderBounds(state.bounds, metrics.titleHeight);
     const Rect clip = visibleClip(header);
     const InputRouter& input = m_context.input();
     const b8 collapseHovered = input.hover() == m_scope->m_window.collapseState.id;
@@ -678,7 +483,8 @@ ComboResult ComboCoordinator::declareCombo(AStringView stableKey, const IListDat
     result.selectionChanged = previousSelection != state.selectedKey();
     result.opened = !previouslyOpen && state.isOpen();
     result.closed = previouslyOpen && !state.isOpen();
-    result.focused = options.enabled && (m_builder.m_context.input().focus() == field.id || m_builder.m_context.input().focus() == frame.rows.id || (frame.editor != s_LayoutNoParent && m_builder.m_context.input().focus() == m_builder.m_scope->m_comboEditors[frame.editor].state.id));
+    const WidgetId editorId = frame.editor != s_LayoutNoParent ? m_builder.m_scope->m_comboEditors[frame.editor].state.id : WidgetId{};
+    result.focused = IsComboResultFocused(options.enabled, m_builder.m_context.input().focus(), field.id, frame.rows.id, frame.editor != s_LayoutNoParent, editorId);
     return result;
 }
 
@@ -971,9 +777,7 @@ b8 ComboCoordinator::paintComboPopup(ComboFrame& frame){
         m_builder.m_scope->m_lists[frame.list].token = frame.listToken;
         return true;
     }
-    PopupOptions options;
-    options.anchor = anchor;
-    options.size = { anchor.width, frame.options.popupHeight };
+    const PopupOptions options = BuildComboPopupOptions(anchor, frame.options.popupHeight);
     const auto placement = PlacePopup(options, m_builder.m_paint.displayMetrics());
     if(!placement)
         return false;
@@ -1152,7 +956,7 @@ b8 ContextMenuCoordinator::prepareContextMenu(ContextMenuFrame& frame, ContextMe
     if(input.consumePopupDismissal(frame.popupToken))
         state.close();
     while(auto trigger = input.consumeContextMenu(frame.anchor.id, frame.anchor.declarationGeneration)){
-        if(frame.options.enabled && trigger->popup == m_builder.m_context.popupToken() && !state.open({ trigger->position.x, trigger->position.y, 0.0f, 0.0f }))
+        if(frame.options.enabled && trigger->popup == m_builder.m_context.popupToken() && !state.open(BuildContextMenuTriggerAnchorRect(trigger->position)))
             return false;
     }
     if(!frame.options.enabled)
@@ -1238,10 +1042,7 @@ b8 ContextMenuCoordinator::paintContextMenuPopup(ContextMenuFrame& frame){
         snapshotContextMenu(frame);
         return true;
     }
-    PopupOptions options;
-    options.anchor = frame.state->m_anchor;
-    options.size = frame.options.size;
-    options.gap = 0.0f;
+    const PopupOptions options = BuildContextMenuPopupOptions(frame.state->m_anchor, frame.options.size);
     const auto placement = PlacePopup(options, m_builder.m_paint.displayMetrics());
     if(!placement)
         return false;
@@ -1418,7 +1219,7 @@ b8 EditBoxCoordinator::prepareEditBox(const EditBoxResult& result, EditModel& mo
 b8 EditBoxCoordinator::paintEditBox(const Item& item, const LayoutBox& box, const HitTarget* navigation){
     if(!m_builder.numericEditMatches(item))
         return false;
-    const f32 caretWidth = 1.0f / m_builder.m_paint.displayMetrics().pixelScaleX;
+    const f32 caretWidth = ResolveSinglePixelCaretWidth(m_builder.m_paint.displayMetrics());
     const auto arranged = item.editView.arrange(box.rectangle, item.padding, m_builder.visibleClip(box.clip), { item.editState->scroll, 0.0f }, caretWidth);
     if(!arranged)
         return false;
@@ -1464,7 +1265,7 @@ b8 Builder::paintEditBox(const Item& item, const LayoutBox& box, const HitTarget
 
 ListResult ListCoordinator::virtualList(const AStringView stableKey, const IListDataSource& source, ListState& state, const ListOptions& options){
     ListResult result;
-    if(m_builder.itemDeclarationBlocked() || !IsFinite(options.wheelRows) || options.wheelRows <= 0.0f){
+    if(m_builder.itemDeclarationBlocked() || !IsValidVirtualListWheelRows(options.wheelRows)){
         m_builder.m_context.fail();
         return result;
     }
@@ -1553,9 +1354,6 @@ ListResult ListCoordinator::virtualList(const AStringView stableKey, const IList
 
 
 NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 }
 
 

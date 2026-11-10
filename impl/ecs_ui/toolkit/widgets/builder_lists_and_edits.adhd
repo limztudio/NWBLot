@@ -2,8 +2,79 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsUiToolkitWidgetsBuilderListsAndEditsAdhdModule(in u64 value){
-    return value != 0u;
+#include <impl/ecs_ui/toolkit/widgets/style.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<f64x2u> TryResolveListCursorScrollSpan(in u64 cursorIndex, in f32 rowHeight){
+    const f64 start = cast<f64>(cursorIndex) * cast<f64>(rowHeight);
+    const f64 end = start + cast<f64>(rowHeight);
+    if(!IsFinite(start) || !IsFinite(end) || end <= start)
+        return MakeUnexpected(Failure());
+    return f64x2u(start, end);
+}
+
+b8 IsListRowsFocused(in WidgetId focusId, in WidgetId listId, in WidgetId commandFocus){
+    return focusId == listId || (commandFocus.valid() && focusId == commandFocus);
+}
+
+b8 IsValidTextAreaWheelLines(in f32 wheelLines){
+    return IsFinite(wheelLines) && wheelLines > 0.0f;
+}
+
+u8 SelectNextTextAreaScrollStream(
+    in b8 haveHorizontal,
+    in u64 horizontalSequence,
+    in b8 haveVertical,
+    in u64 verticalSequence,
+    in b8 haveAction,
+    in u64 actionSequence
+){
+    if(haveHorizontal && (!haveVertical || horizontalSequence <= verticalSequence) && (!haveAction || horizontalSequence <= actionSequence))
+        return 0u;
+    if(haveVertical && (!haveAction || verticalSequence <= actionSequence))
+        return 1u;
+    return 2u;
+}
+
+b8 IsTooltipHoverEligible(
+    in b8 optionsEnabled,
+    in b8 anchorEnabled,
+    in b8 windowFocused,
+    in b8 pointerKnown,
+    in b8 pointerBusy,
+    in b8 primaryDown,
+    in b8 secondaryDown,
+    in b8 captureValid,
+    in b8 acceptedEnabled,
+    in PopupToken acceptedPopup,
+    in PopupToken currentPopup,
+    in b8 overAnchor
+){
+    return optionsEnabled && anchorEnabled && windowFocused && pointerKnown
+        && !pointerBusy && !primaryDown && !secondaryDown && !captureValid
+        && acceptedEnabled && acceptedPopup == currentPopup && overAnchor;
+}
+
+b8 ShouldDismissPaintedTooltip(
+    in b8 anchorEnabled,
+    in b8 pointerKnown,
+    in b8 windowFocused,
+    in b8 pointerBusy,
+    in b8 primaryDown,
+    in b8 secondaryDown,
+    in PopupToken topPopup,
+    in PopupToken statePopup,
+    in Rect anchorRect,
+    in Rect clip,
+    in Point pointer
+){
+    return !anchorEnabled || !pointerKnown || !windowFocused || pointerBusy
+        || primaryDown || secondaryDown
+        || (topPopup.valid() && topPopup != statePopup)
+        || !UiRectIntersectionContainsPoint(anchorRect, clip, pointer);
 }
 
 
@@ -12,6 +83,7 @@ b8 ImplEcsUiToolkitWidgetsBuilderListsAndEditsAdhdModule(in u64 value){
 
 native{
 #include <impl/ecs_ui/toolkit/builder.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/builder_coordinators.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/ui_scope_descriptor_factory.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/control_style_metrics.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/hit_target_factory.adhd.h>
@@ -35,245 +107,6 @@ NWB_IMPL_UI_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#ifndef NWB_IMPL_ECS_UI_TOOLKIT_BUILDER_COORDINATORS_INTERNAL_H
-#define NWB_IMPL_ECS_UI_TOOLKIT_BUILDER_COORDINATORS_INTERNAL_H
-class Builder;
-
-
-class ComboCoordinator final{
-private:
-    using Item = BuilderScopeFrame::Item;
-    using ListFrame = BuilderScopeFrame::ListFrame;
-    using ComboFrame = BuilderScopeFrame::ComboFrame;
-
-
-public:
-    explicit ComboCoordinator(Builder& builder)noexcept
-        : m_builder(builder)
-    {}
-
-
-public:
-    [[nodiscard]] ComboResult declareCombo(AStringView stableKey, const IListDataSource& source, const ComboOptions& options, const SearchComboOptions* searchOptions, ComboState& state, SearchComboState* search, ISearchableListDataSource* searchSource);
-    [[nodiscard]] SearchComboResult searchComboBox(AStringView stableKey, ISearchableListDataSource& source, SearchComboState& state, const SearchComboOptions& options);
-    [[nodiscard]] b8 paintCombo(const Item& item, const LayoutBox& box);
-    [[nodiscard]] b8 paintCombos();
-
-
-private:
-    [[nodiscard]] b8 paintComboPopup(ComboFrame& frame);
-    [[nodiscard]] b8 applyComboInput(const WidgetState& field, ComboFrame& frame, ComboResult& result);
-    [[nodiscard]] b8 applyComboListInput(ComboFrame& frame, ComboResult& result);
-    [[nodiscard]] b8 prepareComboSearch(const WidgetState& field, ComboFrame& frame);
-    void snapshotComboQuery(ComboFrame& frame)noexcept;
-    [[nodiscard]] b8 paintComboQuery(ComboFrame& frame, LayoutBox& content);
-
-
-private:
-    Builder& m_builder;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class Builder;
-
-
-class ContextMenuCoordinator final{
-private:
-    using Item = BuilderScopeFrame::Item;
-    using ListFrame = BuilderScopeFrame::ListFrame;
-    using ContextMenuFrame = BuilderScopeFrame::ContextMenuFrame;
-
-
-public:
-    explicit ContextMenuCoordinator(Builder& builder)noexcept
-        : m_builder(builder)
-    {}
-
-
-public:
-    [[nodiscard]] ContextMenuResult declareMenu(AStringView stableKey, AStringView anchorKey, const IListDataSource& source, ContextMenuState& state, const ContextMenuOptions& options);
-    [[nodiscard]] b8 paintMenus();
-
-
-private:
-    [[nodiscard]] b8 prepareContextMenu(ContextMenuFrame& frame, ContextMenuResult& result);
-    [[nodiscard]] b8 applyContextMenuInput(ContextMenuFrame& frame, ContextMenuResult& result);
-    void snapshotContextMenu(ContextMenuFrame& frame)noexcept;
-    [[nodiscard]] b8 paintContextMenuPopup(ContextMenuFrame& frame);
-
-
-private:
-    Builder& m_builder;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class Builder;
-
-
-class EditBoxCoordinator final{
-private:
-    using Item = BuilderScopeFrame::Item;
-    using IntegerEditFrame = BuilderScopeFrame::IntegerEditFrame;
-    using FloatEditFrame = BuilderScopeFrame::FloatEditFrame;
-
-
-public:
-    explicit EditBoxCoordinator(Builder& builder)noexcept
-        : m_builder(builder)
-    {}
-
-
-public:
-    [[nodiscard]] EditBoxResult declareEditBox(AStringView stableKey, const EditBoxOptions& options, EditModel& model, EditBoxState& state, IEditActionSink* actions, IntegerEditFrame* integerFrame, FloatEditFrame* floatFrame);
-    [[nodiscard]] b8 prepareEditBox(const EditBoxResult& result, EditModel& model, EditBoxState& state, Item& item);
-    [[nodiscard]] b8 paintEditBox(const Item& item, const LayoutBox& box, const HitTarget* navigation);
-
-
-private:
-    Builder& m_builder;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class Builder;
-
-
-class ListCoordinator final{
-private:
-    using Item = BuilderScopeFrame::Item;
-    using ListFrame = BuilderScopeFrame::ListFrame;
-    using ListRow = BuilderScopeFrame::ListRow;
-
-
-public:
-    explicit ListCoordinator(Builder& builder)noexcept
-        : m_builder(builder)
-    {}
-
-
-public:
-    [[nodiscard]] ListResult virtualList(AStringView stableKey, const IListDataSource& source, ListState& state, const ListOptions& options);
-    [[nodiscard]] const UiSkinRegion* prepareListFrame(const IListDataSource& source, ListState& state, const ListOptions& options, const ControlToken& token, u64 rowCount, b8 focusOnCommit, WidgetId commandFocus, ListFrame& outFrame);
-    [[nodiscard]] b8 paintList(const Item& item, const LayoutBox& box);
-
-
-private:
-    [[nodiscard]] b8 prepareListMetrics(ListFrame& frame);
-    [[nodiscard]] b8 paintListRows(const Item& item, const ListFrame& frame, const ScrollPlacement& placement);
-
-
-private:
-    Builder& m_builder;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class Builder;
-
-
-class NumericEditCoordinator final{
-private:
-    using IntegerEditFrame = BuilderScopeFrame::IntegerEditFrame;
-    using FloatEditFrame = BuilderScopeFrame::FloatEditFrame;
-
-
-public:
-    explicit NumericEditCoordinator(Builder& builder)noexcept
-        : m_builder(builder)
-    {}
-
-
-public:
-    [[nodiscard]] NumericEditBoxResult integerEdit(AStringView stableKey, IntegerEditModel& model, EditBoxState& state, const IntegerEditOptions& options);
-    [[nodiscard]] NumericEditBoxResult floatEdit(AStringView stableKey, FloatEditModel& model, EditBoxState& state, const FloatEditOptions& options);
-
-
-private:
-    template<typename FrameT, typename ModelT, typename OptionsT, typename ValidateBoundsF, typename FrameListT>
-    [[nodiscard]] NumericEditBoxResult declareNumericEdit(AStringView stableKey, ModelT& model, EditBoxState& state, const OptionsT& options, ValidateBoundsF validateBounds, FrameListT& frames);
-
-
-private:
-    Builder& m_builder;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class Builder;
-
-
-class TextAreaCoordinator final{
-private:
-    using Item = BuilderScopeFrame::Item;
-    using TextAreaFrame = BuilderScopeFrame::TextAreaFrame;
-
-
-public:
-    explicit TextAreaCoordinator(Builder& builder)noexcept
-        : m_builder(builder)
-    {}
-
-
-public:
-    [[nodiscard]] EditBoxResult declareTextArea(AStringView stableKey, EditModel& model, TextAreaState& state, const TextAreaOptions& options);
-    [[nodiscard]] b8 paintTextArea(const Item& item, const LayoutBox& box);
-
-
-private:
-    [[nodiscard]] b8 textAreaAvailable(const EditModel& model, const TextAreaState& state)const noexcept;
-    void snapshotTextArea(TextAreaFrame& frame)noexcept;
-    [[nodiscard]] b8 applyTextAreaScrollInput(const Item& item, const TextAreaFrame& frame, const ControlToken& token);
-    [[nodiscard]] b8 paintTextAreaScrollbars(const Item& item, const ScrollViewportPlacement& placement, const Rect& clip, const ControlToken& token);
-
-
-private:
-    Builder& m_builder;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class Builder;
-
-
-class TooltipCoordinator final{
-private:
-    using Item = BuilderScopeFrame::Item;
-    using TooltipFrame = BuilderScopeFrame::TooltipFrame;
-
-
-public:
-    explicit TooltipCoordinator(Builder& builder)noexcept
-        : m_builder(builder)
-    {}
-
-
-public:
-    [[nodiscard]] b8 declareTooltip(AStringView stableKey, AStringView anchorKey, StringView text, TooltipState& state, const TooltipOptions& options);
-    [[nodiscard]] b8 paintTooltips();
-
-
-private:
-    Builder& m_builder;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#endif
 
 
 const UiSkinRegion* ListCoordinator::prepareListFrame(
@@ -431,9 +264,8 @@ Expected<ScrollPlacement> ListLayoutPreparer::measureListPlacement(ListFrame& fr
         if(!candidate)
             return MakeUnexpected(Failure{});
         if(revealCursor){
-            const f64 start = static_cast<f64>(cursorIndex) * static_cast<f64>(frame.rowHeight);
-            const f64 end = start + static_cast<f64>(frame.rowHeight);
-            if(!IsFinite(start) || !IsFinite(end) || end <= start || !scroll.ensureVisible(start, end, candidate->viewport.height))
+            const auto span = TryResolveListCursorScrollSpan(cursorIndex, frame.rowHeight);
+            if(!span || !scroll.ensureVisible(span->x, span->y, candidate->viewport.height))
                 return MakeUnexpected(Failure{});
         }
         if(revealCursor)
@@ -549,7 +381,7 @@ b8 ListCoordinator::paintListRows(const Item& item, const ListFrame& frame, cons
     const auto rowsId = TryMakeWidgetId(item.state.id, s_WidgetPartRows);
     if(!rowsId)
         return false;
-    const b8 focused = m_builder.m_context.input().focus() == item.state.id || (frame.commandFocus.valid() && m_builder.m_context.input().focus() == frame.commandFocus);
+    const b8 focused = IsListRowsFocused(m_builder.m_context.input().focus(), item.state.id, frame.commandFocus);
     auto found = LowerBound(rows.begin(), rows.end(), placement.firstRow, [](const ListRow& row, const u64 value)noexcept{ return row.index < value; });
     for(u64 index = placement.firstRow; index < placement.endRow; ++index, ++found){
         if(found == rows.end() || found->index != index || !m_builder.listStateMatches(frame))
@@ -780,7 +612,7 @@ private:
 
 
 EditBoxResult TextAreaCoordinator::declareTextArea(const AStringView stableKey, EditModel& model, TextAreaState& state, const TextAreaOptions& options){
-    if(m_builder.itemDeclarationBlocked() || !IsFinite(options.wheelLines) || options.wheelLines <= 0.0f || model.textMode() != EditTextMode::Multiline){
+    if(m_builder.itemDeclarationBlocked() || !IsValidTextAreaWheelLines(options.wheelLines) || model.textMode() != EditTextMode::Multiline){
         m_builder.m_context.fail();
         return {};
     }
@@ -980,10 +812,15 @@ b8 TextAreaCoordinator::applyTextAreaScrollInput(const Item& item, const TextAre
     Point scroll = state.scroll();
     b8 manual = false;
     while(haveHorizontal || haveVertical || haveAction){
-        const u64 horizontalSequence = haveHorizontal ? horizontal->updateSequence : Limit<u64>::s_Max;
-        const u64 verticalSequence = haveVertical ? vertical->updateSequence : Limit<u64>::s_Max;
-        const u64 actionSequence = haveAction ? action->id.sequence : Limit<u64>::s_Max;
-        if(haveHorizontal && horizontalSequence <= verticalSequence && horizontalSequence <= actionSequence){
+        const u8 stream = SelectNextTextAreaScrollStream(
+            haveHorizontal,
+            haveHorizontal ? horizontal->updateSequence : 0u,
+            haveVertical,
+            haveVertical ? vertical->updateSequence : 0u,
+            haveAction,
+            haveAction ? action->id.sequence : 0u
+        );
+        if(stream == 0u){
             const auto dragged = TryDragScrollbarOffset(*horizontal, true);
             if(!dragged)
                 return false;
@@ -992,7 +829,7 @@ b8 TextAreaCoordinator::applyTextAreaScrollInput(const Item& item, const TextAre
             horizontal = m_builder.m_context.takePartPointerGesture(item.state, *horizontalId, enabled);
             haveHorizontal = horizontal && horizontal->control == token;
         }
-        else if(haveVertical && verticalSequence <= actionSequence){
+        else if(stream == 1u){
             const auto dragged = TryDragScrollbarOffset(*vertical, false);
             if(!dragged)
                 return false;
@@ -1117,9 +954,20 @@ b8 TooltipCoordinator::declareTooltip(const AStringView stableKey, const AString
     const HitTarget* accepted = input.findTarget(anchor->state.id, anchor->state.declarationGeneration);
     const HitTarget* hovered = input.findTarget(input.hover());
     const b8 overAnchor = hovered && (hovered->id == anchor->state.id || hovered->owner == anchor->state.id);
-    const b8 eligible = options.enabled && anchor->enabled && input.windowFocused() && input.pointerKnown()
-        && !m_builder.m_pointerBusy && !input.primaryDown() && !input.secondaryDown() && !input.capture().valid()
-        && accepted && accepted->enabled && accepted->popup == m_builder.m_context.popupToken() && overAnchor;
+    const b8 eligible = accepted && IsTooltipHoverEligible(
+        options.enabled,
+        anchor->enabled,
+        input.windowFocused(),
+        input.pointerKnown(),
+        m_builder.m_pointerBusy,
+        input.primaryDown(),
+        input.secondaryDown(),
+        input.capture().valid(),
+        accepted->enabled,
+        accepted->popup,
+        m_builder.m_context.popupToken(),
+        overAnchor
+    );
     if(!TooltipBehavior::Update(state, anchor->state.id, anchor->state.declarationGeneration, m_builder.m_context.popupToken(), input.focusLossGeneration(), input.hoverActivityGeneration(), eligible, m_builder.m_deltaSeconds, options)){
         m_builder.m_context.fail();
         return false;
@@ -1158,12 +1006,19 @@ b8 TooltipCoordinator::paintTooltips(){
         const Rect clip = m_builder.visibleClip(box->clip);
         const Point& pointer = m_builder.m_context.input().pointerPosition();
         const InputRouter& input = m_builder.m_context.input();
-        if(
-            !anchor.enabled || !input.pointerKnown() || !input.windowFocused() || m_builder.m_pointerBusy
-            || input.primaryDown() || input.secondaryDown()
-            || (m_builder.m_context.topPopupToken().valid() && m_builder.m_context.topPopupToken() != frame.state->m_popup)
-            || !UiRectIntersectionContainsPoint(box->rectangle, clip, pointer)
-        ){
+        if(ShouldDismissPaintedTooltip(
+            anchor.enabled,
+            input.pointerKnown(),
+            input.windowFocused(),
+            m_builder.m_pointerBusy,
+            input.primaryDown(),
+            input.secondaryDown(),
+            m_builder.m_context.topPopupToken(),
+            frame.state->m_popup,
+            box->rectangle,
+            clip,
+            pointer
+        )){
             if(!TooltipBehavior::Update(*frame.state, frame.anchor.id, frame.anchor.declarationGeneration, frame.state->m_popup, input.focusLossGeneration(), input.hoverActivityGeneration(), false, 0.0f, frame.options))
                 return false;
             frame.revision = frame.state->revision();
@@ -1201,9 +1056,6 @@ b8 Builder::paintTooltips(){
 
 
 NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 }
 
 

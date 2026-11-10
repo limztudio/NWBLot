@@ -2,8 +2,76 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsSceneRuntimeAdhdModule(in u64 value){
-    return value != 0u;
+#include <impl/assets_scene/component_asset_binary_codec.adhd>
+#include <impl/assets_scene/scene_asset_binary_codec.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_ActiveSceneSubsystemsDiagnosticOwner = "ActiveSceneSubsystems";
+
+void LogSceneSubsystemLoadFailed(in Name subsystemName){
+    error("{}: failed to load subsystem asset '{}'", s_ActiveSceneSubsystemsDiagnosticOwner, subsystemName.resolvedText());
+}
+
+void LogSceneAssetNotSubsystem(in Name subsystemName){
+    error("{}: asset '{}' is not a subsystem", s_ActiveSceneSubsystemsDiagnosticOwner, subsystemName.resolvedText());
+}
+
+void LogSceneDuplicateSubsystemType(in Name subsystemType, in Name sceneName){
+    error(
+        "{}: duplicate subsystem type '{}' in scene '{}'"
+        , s_ActiveSceneSubsystemsDiagnosticOwner
+        , subsystemType.resolvedText()
+        , sceneName.resolvedText()
+    );
+}
+
+void LogSceneComponentLoadFailed(in Name componentName, in Name entityName){
+    error(
+        "{}: failed to load component asset '{}' for entity '{}'"
+        , s_ActiveSceneSubsystemsDiagnosticOwner
+        , componentName.resolvedText()
+        , entityName.resolvedText()
+    );
+}
+
+void LogSceneAssetNotComponent(in Name componentName){
+    error("{}: asset '{}' is not a component", s_ActiveSceneSubsystemsDiagnosticOwner, componentName.resolvedText());
+}
+
+void LogSceneDuplicateComponentType(in Name componentType, in Name entityName){
+    error(
+        "{}: duplicate component type '{}' on entity '{}'"
+        , s_ActiveSceneSubsystemsDiagnosticOwner
+        , componentType.resolvedText()
+        , entityName.resolvedText()
+    );
+}
+
+b8 ValidateSceneEntityInstantiationReady(in b8 sceneValid){
+    if(sceneValid)
+        return true;
+
+    error("{}: cannot instantiate entities before loading a valid scene", s_ActiveSceneSubsystemsDiagnosticOwner);
+    return false;
+}
+
+b8 ValidateSceneLoadedEntityHasComponents(in b8 hasComponents, in Name entityName){
+    if(hasComponents)
+        return true;
+
+    error("{}: loaded entity '{}' has no components", s_ActiveSceneSubsystemsDiagnosticOwner, entityName.resolvedText());
+    return false;
+}
+
+b8 ValidateCreatedSceneEcsEntity(in EntityID entityId, in Name entityName){
+    if(entityId.valid())
+        return true;
+
+    error("{}: failed to create ECS entity for '{}'", s_ActiveSceneSubsystemsDiagnosticOwner, entityName.resolvedText());
+    return false;
 }
 
 
@@ -14,13 +82,10 @@ native{
 #include <impl/assets_scene/asset.adhd.h>
 #include <core/assets/polymorphic_asset_codec.h>
 
-#include <impl/assets_scene/component_asset_binary_codec.adhd.h>
-#include <impl/assets_scene/scene_asset_binary_codec.adhd.h>
 #include <impl/ecs_scene/camera.adhd.h>
 
 #include <core/assets/auto_registration.h>
 #include <core/assets/binary_payload_io.h>
-#include <core/common/log.h>
 
 #include <global/binary.h>
 #include <global/simd/vector.h>
@@ -313,17 +378,17 @@ b8 ActiveSceneSubsystems::loadScene(const SceneRef& scene, Core::Assets::AssetMa
         const SubsystemRef currentSubsystem = pendingSubsystems[queueIndex];
         auto loadedAsset = assetManager.loadSync(ISubsystem::AssetTypeName(), currentSubsystem.name());
         if(!loadedAsset){
-            NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to load subsystem asset '{}'"), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner, ConvertString(currentSubsystem.name().resolvedText()));
+            LogSceneSubsystemLoadFailed(currentSubsystem.name());
             return false;
         }
         const ISubsystem* const subsystemPtr = SubsystemTypeAutoRegistrar::Cast(loadedAsset->get());
         if(!subsystemPtr){
-            NWB_LOGGER_ERROR(NWB_TEXT("{}: asset '{}' is not a subsystem"), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner, ConvertString(currentSubsystem.name().resolvedText()));
+            LogSceneAssetNotSubsystem(currentSubsystem.name());
             return false;
         }
         for(const UniquePtr<ISubsystem>& existing : nextLoadedSubsystems){
             if(existing && existing->assetType() == subsystemPtr->assetType()){
-                NWB_LOGGER_ERROR(NWB_TEXT("{}: duplicate subsystem type '{}' in scene '{}'"), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner, ConvertString(subsystemPtr->assetType().resolvedText()), ConvertString(scene.name().resolvedText()));
+                LogSceneDuplicateSubsystemType(subsystemPtr->assetType(), scene.name());
                 return false;
             }
         }
@@ -345,27 +410,17 @@ b8 ActiveSceneSubsystems::loadScene(const SceneRef& scene, Core::Assets::AssetMa
         for(const ComponentRef& currentComponent : entityAsset.components()){
             auto loadedComponentAsset = assetManager.loadSync(IComponent::AssetTypeName(), currentComponent.name());
             if(!loadedComponentAsset){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("{}: failed to load component asset '{}' for entity '{}'")
-                    , __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner
-                    , ConvertString(currentComponent.name().resolvedText())
-                    , ConvertString(currentEntity.name().resolvedText())
-                );
+                LogSceneComponentLoadFailed(currentComponent.name(), currentEntity.name());
                 return false;
             }
             const IComponent* const componentPtr = ComponentTypeAutoRegistrar::Cast(loadedComponentAsset->get());
             if(!componentPtr){
-                NWB_LOGGER_ERROR(NWB_TEXT("{}: asset '{}' is not a component"), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner, ConvertString(currentComponent.name().resolvedText()));
+                LogSceneAssetNotComponent(currentComponent.name());
                 return false;
             }
             for(const UniquePtr<IComponent>& existing : loadedComponents){
                 if(existing && existing->assetType() == componentPtr->assetType()){
-                    NWB_LOGGER_ERROR(
-                        NWB_TEXT("{}: duplicate component type '{}' on entity '{}'")
-                        , __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner
-                        , ConvertString(componentPtr->assetType().resolvedText())
-                        , ConvertString(currentEntity.name().resolvedText())
-                    );
+                    LogSceneDuplicateComponentType(componentPtr->assetType(), currentEntity.name());
                     return false;
                 }
             }
@@ -383,21 +438,15 @@ b8 ActiveSceneSubsystems::loadScene(const SceneRef& scene, Core::Assets::AssetMa
 }
 
 b8 ActiveSceneSubsystems::instantiateEntities(Core::ECS::World& world)const{
-    if(!valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: cannot instantiate entities before loading a valid scene"), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner);
+    if(!ValidateSceneEntityInstantiationReady(valid()))
         return false;
-    }
 
     for(const LoadedEntity& loadedEntity : m_loadedEntities){
-        if(loadedEntity.components.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("{}: loaded entity '{}' has no components"), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner, ConvertString(loadedEntity.entity.name().resolvedText()));
+        if(!ValidateSceneLoadedEntityHasComponents(!loadedEntity.components.empty(), loadedEntity.entity.name()))
             return false;
-        }
         Core::ECS::Entity entity = world.createEntity();
-        if(!entity.id().valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create ECS entity for '{}'"), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner, ConvertString(loadedEntity.entity.name().resolvedText()));
+        if(!ValidateCreatedSceneEcsEntity(entity.id(), loadedEntity.entity.name()))
             return false;
-        }
         for(const UniquePtr<IComponent>& component : loadedEntity.components){
             if(!component)
                 return false;

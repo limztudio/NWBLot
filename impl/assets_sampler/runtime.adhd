@@ -2,8 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsSamplerRuntimeAdhdModule(in u64 value){
-    return value != 0u;
+b8 IsSamplerFilterFlagEnabled(in u32 filterFlag){
+    return filterFlag != 0u;
 }
 
 
@@ -74,9 +74,9 @@ b8 Sampler::loadBinary(const Span<const u8> binary){
     m_description.borderColor = Core::Color(header.borderColorR, header.borderColorG, header.borderColorB, header.borderColorA);
     m_description.maxAnisotropy = header.maxAnisotropy;
     m_description.mipBias = header.mipBias;
-    m_description.minFilter = header.minFilter != 0u;
-    m_description.magFilter = header.magFilter != 0u;
-    m_description.mipFilter = header.mipFilter != 0u;
+    m_description.minFilter = IsSamplerFilterFlagEnabled(header.minFilter);
+    m_description.magFilter = IsSamplerFilterFlagEnabled(header.magFilter);
+    m_description.mipFilter = IsSamplerFilterFlagEnabled(header.mipFilter);
     m_description.addressU = static_cast<Core::SamplerAddressMode::Enum>(header.addressU);
     m_description.addressV = static_cast<Core::SamplerAddressMode::Enum>(header.addressV);
     m_description.addressW = static_cast<Core::SamplerAddressMode::Enum>(header.addressW);

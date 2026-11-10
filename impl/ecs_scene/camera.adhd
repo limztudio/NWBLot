@@ -93,8 +93,7 @@ public:
 
 [[nodiscard]] inline Core::ECS::EntityID CreateSceneCameraEntity(Core::ECS::World& world, const Float4& position){
     auto cameraEntity = world.createEntity();
-    auto& transform = cameraEntity.addComponent<TransformComponent>();
-    transform.position = position;
+    cameraEntity.addComponent<TransformComponent>() = MakePositionTransformComponent(LoadFloat(position));
     cameraEntity.addComponent<CameraComponent>();
     return cameraEntity.id();
 }
@@ -107,14 +106,6 @@ NWB_IMPL_SCENE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ImplEcsSceneCameraAdhdModule(in u64 value){
-    return value != 0u;
 }
 
 

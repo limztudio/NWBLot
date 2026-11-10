@@ -2,13 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_ui/toolkit/edit/model.adhd>
+
 native{
-#include <impl/ecs_ui/toolkit/edit/model.adhd.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_IMPL_UI_BEGIN
 
 
@@ -28,15 +24,19 @@ public:
     [[nodiscard]] b8 matchesSurrounding(const EditModel& model)const noexcept{
         return MatchesEditModelSnapshotSurroundingValues(model.text(), model.stamp(), AStringView(m_expectedText), m_expectedStamp);
     }
+
     [[nodiscard]] b8 matches(const EditModel& model)const noexcept{
         return MatchesEditModelSnapshotValues(model.text(), model.stamp(), model.composition(), AStringView(m_expectedText), AStringView(m_expectedPreedit), m_expectedComposition, m_expectedStamp);
     }
+
     void captureSurrounding(const EditModel& model){
         CaptureEditModelSnapshotSurroundingValues(model.text(), model.stamp(), m_expectedText, m_expectedStamp, m_expectedRevision, m_expectedExternalRevision);
     }
+
     void capture(const EditModel& model){
         CaptureEditModelSnapshotValues(model.text(), model.stamp(), model.composition(), m_expectedText, m_expectedPreedit, m_expectedComposition, m_expectedStamp, m_expectedRevision, m_expectedExternalRevision);
     }
+
     void clear()noexcept{
         ClearEditModelSnapshotValues(m_expectedText, m_expectedPreedit, m_expectedComposition, m_expectedStamp, m_expectedRevision, m_expectedExternalRevision);
     }
@@ -56,17 +56,6 @@ public:
 
 
 NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ImplEcsUiToolkitEditModelSnapshotAdhdModule(in u64 value){
-    return value != 0u;
 }
 
 

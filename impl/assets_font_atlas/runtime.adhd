@@ -2,8 +2,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsFontAtlasRuntimeAdhdModule(in u64 value){
-    return value != 0u;
+usize ComputeFontAtlasInitialBinaryBytes(in u32 headerBytes, in u32 glyphBytes, in usize glyphCount){
+    return cast<usize>(headerBytes) + glyphCount * cast<usize>(glyphBytes);
+}
+
+usize AccumulateFontAtlasChunkBytes(in usize currentBytes, in u32 chunkHeaderBytes, in usize chunkPayloadBytes){
+    return currentBytes + cast<usize>(chunkHeaderBytes) + chunkPayloadBytes;
+}
+
+b8 HasConsumedExactFontAtlasBinaryPayload(in usize cursor, in usize totalBytes){
+    return cursor == totalBytes;
+}
+
+b8 IsFontAtlasGlyphIndexInBounds(in u32 glyphId, in usize glyphCount){
+    return cast<usize>(glyphId) < glyphCount;
 }
 
 
@@ -119,7 +131,7 @@ static_assert(s_NameHashLaneCount == s_FontAtlasIdentityLaneCount);
         tableBytes += byteCount;
         payload.positioningTables.push_back(Move(table));
     }
-    if(cursor != bytes.size() || !ValidateFontAtlasPayload(payload, scratchArena))
+    if(!HasConsumedExactFontAtlasBinaryPayload(cursor, bytes.size()) || !ValidateFontAtlasPayload(payload, scratchArena))
         return MakeUnexpected(Failure{});
     return payload;
 }
@@ -171,11 +183,11 @@ Expected<Core::Assets::AssetBytes> SerializeFontAtlasPayload(const FontAtlasPayl
     if(!ValidateFontAtlasPayload(payload, scratchArena))
         return MakeUnexpected(Failure{});
     Core::Assets::AssetBytes binary(arena);
-    usize size = s_FontAtlasBinaryHeaderBytes + payload.glyphs.size() * s_FontAtlasBinaryGlyphBytes;
+    usize size = ComputeFontAtlasInitialBinaryBytes(s_FontAtlasBinaryHeaderBytes, s_FontAtlasBinaryGlyphBytes, payload.glyphs.size());
     for(const FontAtlasGroup& group : payload.groups)
-        size += s_FontAtlasBinaryGroupHeaderBytes + group.pixels.size();
+        size = AccumulateFontAtlasChunkBytes(size, s_FontAtlasBinaryGroupHeaderBytes, group.pixels.size());
     for(const FontAtlasPositioningTable& table : payload.positioningTables)
-        size += s_FontAtlasBinaryTableHeaderBytes + table.bytes.size();
+        size = AccumulateFontAtlasChunkBytes(size, s_FontAtlasBinaryTableHeaderBytes, table.bytes.size());
     binary.reserve(size);
     Array<u64, s_FontAtlasIdentityLaneCount> identityQwords{};
     for(usize lane = 0u; lane < s_NameHashLaneCount; ++lane)
@@ -373,7 +385,7 @@ void FontAtlas::setPayload(FontAtlasPayload&& payload)noexcept{
 }
 
 const FontAtlasGlyph* FontAtlas::glyph(const u32 glyphId)const noexcept{
-    return glyphId < m_payload.glyphs.size() ? &m_payload.glyphs[glyphId] : nullptr;
+    return IsFontAtlasGlyphIndexInBounds(glyphId, m_payload.glyphs.size()) ? &m_payload.glyphs[glyphId] : nullptr;
 }
 
 

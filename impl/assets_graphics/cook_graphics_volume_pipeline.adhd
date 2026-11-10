@@ -2,8 +2,42 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsGraphicsCookGraphicsVolumePipelineAdhdModule(in u64 value){
-    return value != 0u;
+const StringView s_CsgShapeOwnerKindLabel = "CSG shape";
+const StringView s_CsgShapeEvalFieldLabel = "eval";
+const StringView s_MaterialOwnerKindLabel = "material";
+const StringView s_MeshSubsystemNonStandaloneKindLabel = "mesh_subsystem";
+const StringView s_IncludeNonStandaloneKindLabel = "include";
+const StringView s_ShaderNonStandaloneKindLabel = "shader";
+const StringView s_ShaderFirstTokenSuffixLabel = "_shader";
+
+b8 ValidateCanonicalPreparedShaderIdentity(
+    in Name shaderName,
+    in Name stageName,
+    in StringView entryName,
+    in StringView archiveStage,
+    in StringView entryPoint
+){
+    if(shaderName != s_NameNone && stageName != s_NameNone && !entryPoint.empty())
+        return true;
+
+    error("Shader cook failed to canonicalize shader identity for '{}' stage '{}' entry point '{}'", entryName, archiveStage, entryPoint);
+    return false;
+}
+
+b8 IsBeforeShaderMacroDefinitionName(in StringView lhsName, in StringView rhsName){
+    return lhsName < rhsName;
+}
+
+b8 ShouldSkipGraphicsVolumePreparation(in b8 hasSelectedGraphicsMetadata, in usize materialEntryCount){
+    return !hasSelectedGraphicsMetadata && materialEntryCount == 0u;
+}
+
+b8 ValidateMaterialCookRequiresShaderEntries(in usize shaderEntryCount, in usize materialEntryCount){
+    if(shaderEntryCount > 0u || materialEntryCount == 0u)
+        return true;
+
+    error("GraphicsCook: material assets require at least one shader entry");
+    return false;
 }
 
 
@@ -12,6 +46,11 @@ b8 ImplAssetsGraphicsCookGraphicsVolumePipelineAdhdModule(in u64 value){
 
 native{
 #if defined(NWB_COOK)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/assets_graphics/cook_components.adhd.h>
 #include <impl/assets_graphics/csg_shader_variants.adhd.h>
 #include <impl/assets_shader/cook.adhd.h>
@@ -59,6 +98,7 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
 class ShaderVariantBytecodeCache final{
 public:
     using ScratchPath = ::Path<Core::Alloc::ScratchArena>;
@@ -74,6 +114,8 @@ private:
 using Core::Assets::ScratchArena;
 using Core::Assets::ScratchString;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 namespace __hidden_shader_volume_writer{
@@ -138,7 +180,15 @@ static b8 AppendShaderIndexToManifest(
 
 };
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace AssetsGraphicsCookDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 b8 AppendPreparedShadersToManifest(
     const Path& cacheDirectory,
@@ -171,12 +221,10 @@ b8 AppendPreparedShadersToManifest(
         const ShaderCook::ShaderEntry& entry = preparedEntry.entry;
         const auto shaderNameResult = ToName(entry.name);
         const auto stageNameResult = ToName(entry.archiveStage);
-        if(!shaderNameResult || !stageNameResult || !*shaderNameResult || !*stageNameResult || entry.entryPoint.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shader cook failed to canonicalize shader identity for '{}' stage '{}' entry point '{}'"), ConvertString(entry.name), ConvertString(entry.archiveStage), ConvertString(entry.entryPoint));
+        const Name shaderName = (shaderNameResult && *shaderNameResult) ? **shaderNameResult : s_NameNone;
+        const Name stageName = (stageNameResult && *stageNameResult) ? **stageNameResult : s_NameNone;
+        if(!ValidateCanonicalPreparedShaderIdentity(shaderName, stageName, AStringView(entry.name), AStringView(entry.archiveStage), AStringView(entry.entryPoint)))
             return false;
-        }
-        const Name shaderName = **shaderNameResult;
-        const Name stageName = **stageNameResult;
 
         auto appendShaderVariant = [&](const ShaderCook::DefineCombo& defineCombo) -> b8{
             const Core::Assets::CookString generatedVariantName = ShaderCook::BuildCanonicalVariantName(defineCombo, cookArena, scratchArena);
@@ -338,7 +386,7 @@ b8 ShaderVariantBytecodeCache::GetBytecode(
     for(const auto& [defineName, value] : mergedDefines)
         compileDefines.push_back(ShaderBinaryPayload::ShaderMacroDefinition{ defineName, value });
     Sort(compileDefines.begin(), compileDefines.end(), [](const ShaderBinaryPayload::ShaderMacroDefinition& lhs, const ShaderBinaryPayload::ShaderMacroDefinition& rhs)noexcept{
-        return lhs.name < rhs.name;
+        return IsBeforeShaderMacroDefinitionName(lhs.name, rhs.name);
     });
 
     const ScratchPath cacheParentPath = bytecodeCachePath.parentPath();
@@ -528,8 +576,9 @@ static b8 ParseMaterialBindFiles(Core::Assets::AssetsVolumeCookDetail::AssetVolu
 static b8 PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::AssetVolumePrepareContext& context){
     const GraphicsVolumeMetadata* selectedGraphics = Core::Assets::FindParsedMetadataExtension<GraphicsVolumeMetadata>(s_GraphicsVolumeMetadataExtensionName, context.parsedMetadata);
     const Core::Assets::ICookEntryBucket* materialBucket = context.parsedMetadata.entryRegistry.find(Material::AssetTypeName());
+    const usize materialBucketSize = materialBucket ? materialBucket->size() : 0u;
     // Only selected graphics metadata or materials require generated modules and the shader index.
-    if(!selectedGraphics && (!materialBucket || materialBucket->size() == 0u))
+    if(ShouldSkipGraphicsVolumePreparation(selectedGraphics != nullptr, materialBucketSize))
         return true;
 
     GraphicsVolumeMetadata& graphicsMetadata = Core::Assets::RequireParsedMetadataExtension<GraphicsVolumeMetadata>(s_GraphicsVolumeMetadataExtensionName, context.parsedMetadata, context.parsedMetadata.arena);
@@ -539,10 +588,8 @@ static b8 PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::Asse
         return false;
 
     auto& materialEntries = context.parsedMetadata.entryRegistry.entries<MaterialCookEntry>(Material::AssetTypeName());
-    if(graphicsMetadata.shaderEntries.empty() && !materialEntries.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: material assets require at least one shader entry"));
+    if(!ValidateMaterialCookRequiresShaderEntries(graphicsMetadata.shaderEntries.size(), materialEntries.size()))
         return false;
-    }
 
     if(!ValidateMaterialCookInterfaces(graphicsMetadata.materialBindEntries, materialEntries, context.scratchArena))
         return false;
@@ -570,7 +617,7 @@ static b8 PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::Asse
 
     // Resolve each CSG eval path to its absolute source (verbatim include, checksum-covered). Runs before shape includes.
     for(auto& csgShapeEntry : graphicsMetadata.csgShapeEntries){
-        if(!resolveIncludeVirtualSource("CSG shape", csgShapeEntry.shapeName.resolvedText(), "eval", csgShapeEntry.evalInclude))
+        if(!resolveIncludeVirtualSource(s_CsgShapeOwnerKindLabel, csgShapeEntry.shapeName.resolvedText(), s_CsgShapeEvalFieldLabel, csgShapeEntry.evalInclude))
             return false;
     }
 
@@ -582,9 +629,9 @@ static b8 PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::Asse
     // Resolve each material bxdf/surface path to its absolute source (verbatim include, checksum-covered).
     for(auto& materialEntry : materialEntries){
         const AStringView materialName(materialEntry.virtualPath);
-        if(!resolveIncludeVirtualSource("material", materialName, s_MaterialBxdfSourceLabel, materialEntry.bxdfSource))
+        if(!resolveIncludeVirtualSource(s_MaterialOwnerKindLabel, materialName, s_MaterialBxdfSourceLabel, materialEntry.bxdfSource))
             return false;
-        if(!resolveIncludeVirtualSource("material", materialName, s_MaterialSurfaceSourceLabel, materialEntry.surfaceSource))
+        if(!resolveIncludeVirtualSource(s_MaterialOwnerKindLabel, materialName, s_MaterialSurfaceSourceLabel, materialEntry.surfaceSource))
             return false;
     }
 
@@ -713,10 +760,10 @@ static b8 PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::Asse
 
 static Core::Assets::AssetsVolumeCookDetail::AssetVolumePrepareAutoRegistrar S_PrepareGraphicsVolumeAssetsRegistrar(&PrepareGraphicsVolumeAssets);
 static Core::Assets::AssetMetadataParserAutoRegistrar S_GraphicsVolumeMetadataParserRegistrar(&ParseGraphicsDocumentMetadata, nullptr);
-static Core::Assets::NonStandaloneAssetTypeAutoRegistrar S_MeshSubsystemNonStandaloneAssetTypeRegistrar(MeshSubsystem::AssetTypeName(), "mesh_subsystem");
-static Core::Assets::NonStandaloneAssetTypeAutoRegistrar S_IncludeNonStandaloneAssetTypeRegistrar(s_IncludeAssetTypeName, "include");
-static Core::Assets::NonStandaloneAssetTypeAutoRegistrar S_ShaderNonStandaloneAssetTypeRegistrar(Name("shader"), "shader");
-static Core::Assets::NonStandaloneFirstTokenSuffixAutoRegistrar S_ShaderSuffixNonStandaloneRegistrar("_shader");
+static Core::Assets::NonStandaloneAssetTypeAutoRegistrar S_MeshSubsystemNonStandaloneAssetTypeRegistrar(MeshSubsystem::AssetTypeName(), s_MeshSubsystemNonStandaloneKindLabel);
+static Core::Assets::NonStandaloneAssetTypeAutoRegistrar S_IncludeNonStandaloneAssetTypeRegistrar(s_IncludeAssetTypeName, s_IncludeNonStandaloneKindLabel);
+static Core::Assets::NonStandaloneAssetTypeAutoRegistrar S_ShaderNonStandaloneAssetTypeRegistrar(s_ShaderNonStandaloneAssetTypeName, s_ShaderNonStandaloneKindLabel);
+static Core::Assets::NonStandaloneFirstTokenSuffixAutoRegistrar S_ShaderSuffixNonStandaloneRegistrar(s_ShaderFirstTokenSuffixLabel);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -730,7 +777,14 @@ static Core::Assets::NonStandaloneFirstTokenSuffixAutoRegistrar S_ShaderSuffixNo
 
 NWB_IMPL_END
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 }
 
 

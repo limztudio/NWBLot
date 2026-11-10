@@ -87,8 +87,20 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsCsgCookAdhdModule(in u64 value){
-    return value != 0u;
+b8 HasNonEmptyCsgMetadataText(in StringView text){
+    return !TrimView(text).empty();
+}
+
+b8 HasCsgBackslashPathSeparator(in StringView includePath){
+    for(usize i = 0u; i < includePath.size(); ++i){
+        if(includePath[i] == '\\')
+            return true;
+    }
+    return false;
+}
+
+b8 IsSharedCsgGeneratedIncludeConflict(in b8 inserted, in Name existingModule, in Name currentModule){
+    return !inserted && existingModule != currentModule;
 }
 
 
@@ -100,6 +112,8 @@ native{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/assets_csg/shape_module_writer.adhd.h>
 
 #include <impl/assets_csg/shape_module_source.adhd.h>
@@ -141,7 +155,7 @@ using Core::Assets::ScratchArena;
         return MakeUnexpected(Failure{});
     if(!textResult->present)
         return AStringView{};
-    if(TrimView(textResult->text).empty()){
+    if(!HasNonEmptyCsgMetadataText(textResult->text)){
         NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' must not be empty"), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
         return MakeUnexpected(Failure{});
     }
@@ -153,7 +167,7 @@ using Core::Assets::ScratchArena;
         NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' must not be empty"), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
         return false;
     }
-    if(includePath.find('\\') != AStringView::npos){
+    if(HasCsgBackslashPathSeparator(includePath)){
         NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' must use '/' path separators"), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
         return false;
     }
@@ -332,7 +346,7 @@ Expected<Path> CsgShapeModuleWriter::emit(const Path& cacheDirectory, const AStr
         ScratchString canonicalModuleInclude(moduleEntry.moduleInclude, scratchArena);
         CanonicalizeTextInPlace(canonicalModuleInclude);
         const auto generatedIncludeOwner = generatedIncludeOwners.try_emplace(Move(canonicalModuleInclude), moduleEntry.shaderModule);
-        if(!generatedIncludeOwner.second && generatedIncludeOwner.first.value() != moduleEntry.shaderModule){
+        if(IsSharedCsgGeneratedIncludeConflict(generatedIncludeOwner.second, generatedIncludeOwner.first.value(), moduleEntry.shaderModule)){
             NWB_LOGGER_ERROR(NWB_TEXT("CSG shape include generation: generated include '{}' is shared by modules '{}' and '{}'")
                 , ConvertString(moduleEntry.moduleInclude)
                 , ConvertString(generatedIncludeOwner.first.value().resolvedText())

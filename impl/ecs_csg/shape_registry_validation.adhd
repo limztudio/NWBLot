@@ -12,6 +12,10 @@ void LogCsgShapeInvalidParameterSize(in Name name){
     error("CsgShapeRegistry: rejected shape type '{}' with parameter size larger than the inline shader ABI", name.resolvedText());
 }
 
+void LogCsgShapeAlreadyRegistered(in Name name){
+    error("CsgShapeRegistry: shape type '{}' is already registered", name.resolvedText());
+}
+
 b8 ValidateCsgShaderModuleInclude(in Name name, in Name shaderModule, in StringView shaderModuleInclude){
     if(shaderModule == s_NameNone)
         return true;

@@ -2,17 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_ui/toolkit/edit/grapheme.adhd>
+#include <impl/ecs_ui/toolkit/edit/edit_history.adhd>
+#include <impl/ecs_ui/toolkit/edit/edit_history_actions.adhd>
+#include <impl/ecs_ui/toolkit/edit/edit_composition_rules.adhd>
+#include <impl/ecs_ui/toolkit/edit/edit_selection_actions.adhd>
+#include <impl/ecs_ui/toolkit/edit/model_validation.adhd>
+
 native{
-#include <impl/ecs_ui/toolkit/edit/grapheme.adhd.h>
-
-#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
 #include <impl/ecs_ui/toolkit/global.adhd.h>
-
-#include <impl/ecs_ui/toolkit/edit/edit_history.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/edit_history_actions.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/edit_composition_rules.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/edit_selection_actions.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/model_validation.adhd.h>
 
 #include <global/atomic_identity.h>
 #include <global/termination.h>
@@ -34,26 +32,11 @@ private:
 
 
 private:
-    [[nodiscard]] static u64 NextIdentity()noexcept{
-        static Atomic<u64> s_NextIdentity{ 1u };
-        return NextNonWrappingIdentity(s_NextIdentity);
-    }
+    [[nodiscard]] static u64 NextIdentity()noexcept;
 
 
 public:
-    explicit EditModel(Core::Alloc::GlobalArena& arena, const EditLimits& limits = {}, const EditTextMode::Enum mode = EditTextMode::SingleLine)
-        : m_instanceGeneration(NextIdentity())
-        , m_limits(ClampEditLimits(limits))
-        , m_text(arena)
-        , m_boundaries(arena)
-        , m_history(arena)
-        , m_preedit(arena)
-        , m_textMode(mode)
-    {
-        if(mode != EditTextMode::SingleLine && mode != EditTextMode::Multiline)
-            TerminateInvariant();
-        m_boundaries.push_back(0u);
-    }
+    explicit EditModel(Core::Alloc::GlobalArena& arena, const EditLimits& limits = {}, EditTextMode::Enum mode = EditTextMode::SingleLine);
 
 
 public:
@@ -95,288 +78,55 @@ public:
         return stamp() == expected;
     }
 
-    [[nodiscard]] b8 setText(const AStringView value){
-        return ApplyEditModelSetText(
-            value,
-            m_limits.maxBytes,
-            m_textMode,
-            m_text,
-            m_boundaries,
-            m_anchor,
-            m_caret,
-            m_selectionGeneration,
-            m_history,
-            m_historyCursor,
-            m_historyBytes,
-            m_preedit,
-            m_preeditAnchor,
-            m_preeditCaret,
-            m_compositionAnchor,
-            m_compositionCaret,
-            m_compositionActive,
-            m_compositionGeneration,
-            m_revision,
-            m_externalRevision
-        );
-    }
+    [[nodiscard]] b8 setText(AStringView value);
 
-    [[nodiscard]] b8 setSelection(const usize anchor, const usize caret)noexcept{
-        return EditSelectionActions{}.setSelection(
-            m_boundaries,
-            anchor,
-            caret,
-            m_anchor,
-            m_caret,
-            m_selectionGeneration,
-            m_preedit,
-            m_preeditAnchor,
-            m_preeditCaret,
-            m_compositionAnchor,
-            m_compositionCaret,
-            m_compositionActive,
-            m_compositionGeneration
-        );
-    }
+    [[nodiscard]] b8 setSelection(usize anchor, usize caret)noexcept;
 
     [[nodiscard]] b8 selectAll()noexcept{ return setSelection(0u, m_text.size()); }
 
     // Home/End address the current hard line in Multiline mode; document movement always addresses the complete text.
     // Word movement groups whitespace, ASCII punctuation, and all remaining graphemes without a linguistic word claim.
-    [[nodiscard]] b8 move(const EditMove::Enum movement, const b8 extend = false)noexcept{
-        return EditSelectionActions{}.move(
-            text(),
-            m_boundaries,
-            m_textMode,
-            movement,
-            extend,
-            m_anchor,
-            m_caret,
-            m_selectionGeneration,
-            m_preedit,
-            m_preeditAnchor,
-            m_preeditCaret,
-            m_compositionAnchor,
-            m_compositionCaret,
-            m_compositionActive,
-            m_compositionGeneration
-        );
-    }
+    [[nodiscard]] b8 move(EditMove::Enum movement, b8 extend = false)noexcept;
 
     // Returns the complete run containing a grapheme boundary; document end selects the preceding run.
-    [[nodiscard]] Expected<EditWordRange> wordRangeAt(const usize position)const noexcept{
-        return ResolveEditWordRangeAt(text(), m_boundaries, position);
-    }
+    [[nodiscard]] Expected<EditWordRange> wordRangeAt(usize position)const noexcept;
 
-    [[nodiscard]] b8 replaceSelection(const AStringView value){ return replaceRange(selectionStart(), selectionEnd(), value); }
+    [[nodiscard]] b8 replaceSelection(AStringView value){ return replaceRange(selectionStart(), selectionEnd(), value); }
 
-    [[nodiscard]] b8 backspace(){
-        const EditWordRange range = ResolveEditBackspaceRange(m_boundaries, m_anchor, m_caret);
-        return replaceRange(range.begin, range.end, {});
-    }
+    [[nodiscard]] b8 backspace();
 
-    [[nodiscard]] b8 eraseForward(){
-        const EditWordRange range = ResolveEditEraseForwardRange(m_boundaries, m_text.size(), m_anchor, m_caret);
-        return replaceRange(range.begin, range.end, {});
-    }
+    [[nodiscard]] b8 eraseForward();
 
     // Native surrounding deletion uses byte distances from the caret and preserves the original selection in undo.
-    [[nodiscard]] b8 eraseSurrounding(const usize beforeBytes, const usize afterBytes){
-        if(beforeBytes > m_caret || afterBytes > m_text.size() - m_caret)
-            return false;
-        if(beforeBytes == 0u && afterBytes == 0u)
-            return true;
-        return replaceRange(m_caret - beforeBytes, m_caret + afterBytes, {});
-    }
+    [[nodiscard]] b8 eraseSurrounding(usize beforeBytes, usize afterBytes);
 
     // Native selection surrounding deletion retains selected bytes and direction, rejecting merged endpoint seams.
-    [[nodiscard]] b8 eraseAroundSelection(const usize beforeBytes, const usize afterBytes){
-        return ApplyEditModelEraseAroundSelection(
-            beforeBytes,
-            afterBytes,
-            m_textMode,
-            m_limits.maxHistoryRecords,
-            m_limits.maxHistoryBytes,
-            m_text,
-            m_boundaries,
-            m_anchor,
-            m_caret,
-            m_selectionGeneration,
-            m_history,
-            m_historyCursor,
-            m_historyBytes,
-            m_preedit,
-            m_preeditAnchor,
-            m_preeditCaret,
-            m_compositionAnchor,
-            m_compositionCaret,
-            m_compositionActive,
-            m_compositionGeneration,
-            m_revision
-        );
-    }
+    [[nodiscard]] b8 eraseAroundSelection(usize beforeBytes, usize afterBytes);
 
-    [[nodiscard]] b8 undo(){
-        return EditHistoryActions{}.undo(
-            m_history,
-            m_textMode,
-            m_text,
-            m_boundaries,
-            m_anchor,
-            m_caret,
-            m_selectionGeneration,
-            m_historyCursor,
-            m_preedit,
-            m_preeditAnchor,
-            m_preeditCaret,
-            m_compositionAnchor,
-            m_compositionCaret,
-            m_compositionActive,
-            m_compositionGeneration,
-            m_revision
-        );
-    }
+    [[nodiscard]] b8 undo();
 
-    [[nodiscard]] b8 redo(){
-        return EditHistoryActions{}.redo(
-            m_history,
-            m_textMode,
-            m_text,
-            m_boundaries,
-            m_anchor,
-            m_caret,
-            m_selectionGeneration,
-            m_historyCursor,
-            m_preedit,
-            m_preeditAnchor,
-            m_preeditCaret,
-            m_compositionAnchor,
-            m_compositionCaret,
-            m_compositionActive,
-            m_compositionGeneration,
-            m_revision
-        );
-    }
+    [[nodiscard]] b8 redo();
 
     [[nodiscard]] b8 canUndo()const noexcept{ return m_historyCursor != 0u; }
 
     [[nodiscard]] b8 canRedo()const noexcept{ return m_historyCursor < m_history.size(); }
 
-    [[nodiscard]] b8 beginComposition()noexcept{
-        return EditCompositionRules{}.begin(
-            m_anchor,
-            m_caret,
-            m_preedit,
-            m_preeditAnchor,
-            m_preeditCaret,
-            m_compositionAnchor,
-            m_compositionCaret,
-            m_compositionActive,
-            m_compositionGeneration
-        );
-    }
+    [[nodiscard]] b8 beginComposition()noexcept;
 
     // Preedit positions are validated UTF8 scalar boundaries, because native IMEs may select part of a grapheme.
-    [[nodiscard]] b8 updateComposition(const AStringView value, const usize anchor, const usize caret){
-        return EditCompositionRules{}.update(
-            m_compositionActive,
-            value,
-            anchor,
-            caret,
-            m_text.size(),
-            m_compositionAnchor,
-            m_compositionCaret,
-            m_limits.maxBytes,
-            m_textMode,
-            m_preedit,
-            m_preeditAnchor,
-            m_preeditCaret,
-            m_compositionGeneration
-        );
-    }
+    [[nodiscard]] b8 updateComposition(AStringView value, usize anchor, usize caret);
 
-    [[nodiscard]] b8 commitComposition(const AStringView value){
-        if(!m_compositionActive)
-            return false;
-        return replaceRange(Min(m_compositionAnchor, m_compositionCaret), Max(m_compositionAnchor, m_compositionCaret), value);
-    }
+    [[nodiscard]] b8 commitComposition(AStringView value);
 
-    void cancelComposition()noexcept{
-        EditCompositionRules{}.cancel(
-            m_preedit,
-            m_preeditAnchor,
-            m_preeditCaret,
-            m_compositionAnchor,
-            m_compositionCaret,
-            m_compositionActive,
-            m_compositionGeneration
-        );
-    }
+    void cancelComposition()noexcept;
 
-    [[nodiscard]] EditCompositionView composition()const noexcept{
-        return EditCompositionRules{}.view(
-            { m_preedit.data(), m_preedit.size() },
-            m_preeditAnchor,
-            m_preeditCaret,
-            m_compositionAnchor,
-            m_compositionCaret,
-            m_compositionActive
-        );
-    }
+    [[nodiscard]] EditCompositionView composition()const noexcept;
 
 
 private:
-    [[nodiscard]] b8 replaceRange(const usize begin, const usize end, const AStringView replacement){
-        // Inserted combining marks and neighboring emoji may merge clusters; keep the caret at a valid following edge.
-        return ApplyEditModelReplaceRange(
-            begin,
-            end,
-            replacement,
-            m_limits.maxBytes,
-            m_textMode,
-            m_limits.maxHistoryRecords,
-            m_limits.maxHistoryBytes,
-            m_text,
-            m_boundaries,
-            m_anchor,
-            m_caret,
-            m_selectionGeneration,
-            m_history,
-            m_historyCursor,
-            m_historyBytes,
-            m_preedit,
-            m_preeditAnchor,
-            m_preeditCaret,
-            m_compositionAnchor,
-            m_compositionCaret,
-            m_compositionActive,
-            m_compositionGeneration,
-            m_revision
-        );
-    }
+    [[nodiscard]] b8 replaceRange(usize begin, usize end, AStringView replacement);
 
-    [[nodiscard]] b8 restoreHistoryState(const AStringView value, const usize anchor, const usize caret, const isize cursorDelta){
-        return EditHistoryActions{}.restore(
-            value,
-            anchor,
-            caret,
-            cursorDelta,
-            m_textMode,
-            m_text,
-            m_boundaries,
-            m_anchor,
-            m_caret,
-            m_selectionGeneration,
-            m_historyCursor,
-            m_preedit,
-            m_preeditAnchor,
-            m_preeditCaret,
-            m_compositionAnchor,
-            m_compositionCaret,
-            m_compositionActive,
-            m_compositionGeneration,
-            m_revision
-        );
-    }
+    [[nodiscard]] b8 restoreHistoryState(AStringView value, usize anchor, usize caret, isize cursorDelta);
 
 
 private:
@@ -416,8 +166,324 @@ NWB_IMPL_UI_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsUiToolkitEditModelAdhdModule(in u64 value){
-    return value != 0u;
+b8 IsValidEditTextMode(in EditTextMode mode){
+    return mode == EditTextMode::SingleLine || mode == EditTextMode::Multiline;
+}
+
+b8 CanEraseEditSurrounding(in usize beforeBytes, in usize afterBytes, in usize caret, in usize textSize){
+    return beforeBytes <= caret && afterBytes <= textSize - caret;
+}
+
+EditWordRange ResolveEditCompositionRange(in usize compositionAnchor, in usize compositionCaret){
+    EditWordRange range;
+    range.begin = Min(compositionAnchor, compositionCaret);
+    range.end = Max(compositionAnchor, compositionCaret);
+    return range;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u64 EditModel::NextIdentity()noexcept{
+    static Atomic<u64> s_NextIdentity{ 1u };
+    return NextNonWrappingIdentity(s_NextIdentity);
+}
+
+EditModel::EditModel(Core::Alloc::GlobalArena& arena, const EditLimits& limits, const EditTextMode::Enum mode)
+    : m_instanceGeneration(NextIdentity())
+    , m_limits(ClampEditLimits(limits))
+    , m_text(arena)
+    , m_boundaries(arena)
+    , m_history(arena)
+    , m_preedit(arena)
+    , m_textMode(mode)
+{
+    if(!IsValidEditTextMode(mode))
+        TerminateInvariant();
+    m_boundaries.push_back(0u);
+}
+
+b8 EditModel::setText(const AStringView value){
+    return ApplyEditModelSetText(
+        value,
+        m_limits.maxBytes,
+        m_textMode,
+        m_text,
+        m_boundaries,
+        m_anchor,
+        m_caret,
+        m_selectionGeneration,
+        m_history,
+        m_historyCursor,
+        m_historyBytes,
+        m_preedit,
+        m_preeditAnchor,
+        m_preeditCaret,
+        m_compositionAnchor,
+        m_compositionCaret,
+        m_compositionActive,
+        m_compositionGeneration,
+        m_revision,
+        m_externalRevision
+    );
+}
+
+b8 EditModel::setSelection(const usize anchor, const usize caret)noexcept{
+    return EditSelectionActions{}.setSelection(
+        m_boundaries,
+        anchor,
+        caret,
+        m_anchor,
+        m_caret,
+        m_selectionGeneration,
+        m_preedit,
+        m_preeditAnchor,
+        m_preeditCaret,
+        m_compositionAnchor,
+        m_compositionCaret,
+        m_compositionActive,
+        m_compositionGeneration
+    );
+}
+
+b8 EditModel::move(const EditMove::Enum movement, const b8 extend)noexcept{
+    return EditSelectionActions{}.move(
+        text(),
+        m_boundaries,
+        m_textMode,
+        movement,
+        extend,
+        m_anchor,
+        m_caret,
+        m_selectionGeneration,
+        m_preedit,
+        m_preeditAnchor,
+        m_preeditCaret,
+        m_compositionAnchor,
+        m_compositionCaret,
+        m_compositionActive,
+        m_compositionGeneration
+    );
+}
+
+Expected<EditWordRange> EditModel::wordRangeAt(const usize position)const noexcept{
+    return ResolveEditWordRangeAt(text(), m_boundaries, position);
+}
+
+b8 EditModel::backspace(){
+    const EditWordRange range = ResolveEditBackspaceRange(m_boundaries, m_anchor, m_caret);
+    return replaceRange(range.begin, range.end, {});
+}
+
+b8 EditModel::eraseForward(){
+    const EditWordRange range = ResolveEditEraseForwardRange(m_boundaries, m_text.size(), m_anchor, m_caret);
+    return replaceRange(range.begin, range.end, {});
+}
+
+b8 EditModel::eraseSurrounding(const usize beforeBytes, const usize afterBytes){
+    if(!CanEraseEditSurrounding(beforeBytes, afterBytes, m_caret, m_text.size()))
+        return false;
+    if(beforeBytes == 0u && afterBytes == 0u)
+        return true;
+    return replaceRange(m_caret - beforeBytes, m_caret + afterBytes, {});
+}
+
+b8 EditModel::eraseAroundSelection(const usize beforeBytes, const usize afterBytes){
+    return ApplyEditModelEraseAroundSelection(
+        beforeBytes,
+        afterBytes,
+        m_textMode,
+        m_limits.maxHistoryRecords,
+        m_limits.maxHistoryBytes,
+        m_text,
+        m_boundaries,
+        m_anchor,
+        m_caret,
+        m_selectionGeneration,
+        m_history,
+        m_historyCursor,
+        m_historyBytes,
+        m_preedit,
+        m_preeditAnchor,
+        m_preeditCaret,
+        m_compositionAnchor,
+        m_compositionCaret,
+        m_compositionActive,
+        m_compositionGeneration,
+        m_revision
+    );
+}
+
+b8 EditModel::undo(){
+    return EditHistoryActions{}.undo(
+        m_history,
+        m_textMode,
+        m_text,
+        m_boundaries,
+        m_anchor,
+        m_caret,
+        m_selectionGeneration,
+        m_historyCursor,
+        m_preedit,
+        m_preeditAnchor,
+        m_preeditCaret,
+        m_compositionAnchor,
+        m_compositionCaret,
+        m_compositionActive,
+        m_compositionGeneration,
+        m_revision
+    );
+}
+
+b8 EditModel::redo(){
+    return EditHistoryActions{}.redo(
+        m_history,
+        m_textMode,
+        m_text,
+        m_boundaries,
+        m_anchor,
+        m_caret,
+        m_selectionGeneration,
+        m_historyCursor,
+        m_preedit,
+        m_preeditAnchor,
+        m_preeditCaret,
+        m_compositionAnchor,
+        m_compositionCaret,
+        m_compositionActive,
+        m_compositionGeneration,
+        m_revision
+    );
+}
+
+b8 EditModel::beginComposition()noexcept{
+    return EditCompositionRules{}.begin(
+        m_anchor,
+        m_caret,
+        m_preedit,
+        m_preeditAnchor,
+        m_preeditCaret,
+        m_compositionAnchor,
+        m_compositionCaret,
+        m_compositionActive,
+        m_compositionGeneration
+    );
+}
+
+b8 EditModel::updateComposition(const AStringView value, const usize anchor, const usize caret){
+    return EditCompositionRules{}.update(
+        m_compositionActive,
+        value,
+        anchor,
+        caret,
+        m_text.size(),
+        m_compositionAnchor,
+        m_compositionCaret,
+        m_limits.maxBytes,
+        m_textMode,
+        m_preedit,
+        m_preeditAnchor,
+        m_preeditCaret,
+        m_compositionGeneration
+    );
+}
+
+b8 EditModel::commitComposition(const AStringView value){
+    if(!m_compositionActive)
+        return false;
+    const EditWordRange range = ResolveEditCompositionRange(m_compositionAnchor, m_compositionCaret);
+    return replaceRange(range.begin, range.end, value);
+}
+
+void EditModel::cancelComposition()noexcept{
+    EditCompositionRules{}.cancel(
+        m_preedit,
+        m_preeditAnchor,
+        m_preeditCaret,
+        m_compositionAnchor,
+        m_compositionCaret,
+        m_compositionActive,
+        m_compositionGeneration
+    );
+}
+
+EditCompositionView EditModel::composition()const noexcept{
+    return EditCompositionRules{}.view(
+        { m_preedit.data(), m_preedit.size() },
+        m_preeditAnchor,
+        m_preeditCaret,
+        m_compositionAnchor,
+        m_compositionCaret,
+        m_compositionActive
+    );
+}
+
+b8 EditModel::replaceRange(const usize begin, const usize end, const AStringView replacement){
+    // Inserted combining marks and neighboring emoji may merge clusters; keep the caret at a valid following edge.
+    return ApplyEditModelReplaceRange(
+        begin,
+        end,
+        replacement,
+        m_limits.maxBytes,
+        m_textMode,
+        m_limits.maxHistoryRecords,
+        m_limits.maxHistoryBytes,
+        m_text,
+        m_boundaries,
+        m_anchor,
+        m_caret,
+        m_selectionGeneration,
+        m_history,
+        m_historyCursor,
+        m_historyBytes,
+        m_preedit,
+        m_preeditAnchor,
+        m_preeditCaret,
+        m_compositionAnchor,
+        m_compositionCaret,
+        m_compositionActive,
+        m_compositionGeneration,
+        m_revision
+    );
+}
+
+b8 EditModel::restoreHistoryState(const AStringView value, const usize anchor, const usize caret, const isize cursorDelta){
+    return EditHistoryActions{}.restore(
+        value,
+        anchor,
+        caret,
+        cursorDelta,
+        m_textMode,
+        m_text,
+        m_boundaries,
+        m_anchor,
+        m_caret,
+        m_selectionGeneration,
+        m_historyCursor,
+        m_preedit,
+        m_preeditAnchor,
+        m_preeditCaret,
+        m_compositionAnchor,
+        m_compositionCaret,
+        m_compositionActive,
+        m_compositionGeneration,
+        m_revision
+    );
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_END
 }
 
 

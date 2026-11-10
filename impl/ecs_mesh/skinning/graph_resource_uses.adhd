@@ -33,6 +33,76 @@ public:
     {}
 };
 
+[[nodiscard]] Expected<MeshSkinningGraphResourceUses> BuildMeshSkinningGraphResourceUses(
+    Span<const MeshSkinningGraphDispatchPlan> plans,
+    Core::Alloc::ScratchArena& scratchArena
+);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> SkinningGraphResourceUseError{
+    MissingPlans,
+    DeformationUsesFailed,
+    PostDispatchUsesFailed,
+    LocalBoundsUsesFailed,
+    FinalizerUsesFailed,
+    MissingFinalState
+}
+
+usize ComputePromotedSkinningResourceUseCapacity(in usize inlineCapacity, in usize factor){
+    return inlineCapacity * factor;
+}
+
+b8 ShouldDeclareSkinningStreamFinalizerUses(in b8 hasActiveSkin, in b8 copiedRestStreams){
+    return hasActiveSkin || copiedRestStreams;
+}
+
+void ReportSkinningGraphResourceUseError(in SkinningGraphResourceUseError err){
+    switch(err){
+    case SkinningGraphResourceUseError::MissingPlans:
+        error("MeshSkinningSystem: graph resource uses require dispatch plans");
+        break;
+    case SkinningGraphResourceUseError::DeformationUsesFailed:
+        error("MeshSkinningSystem: failed to declare graph resource uses for skinning deformation");
+        break;
+    case SkinningGraphResourceUseError::PostDispatchUsesFailed:
+        error("MeshSkinningSystem: failed to declare graph resource uses for skinning bounds/repack");
+        break;
+    case SkinningGraphResourceUseError::LocalBoundsUsesFailed:
+        error("MeshSkinningSystem: failed to declare local bounds reduction resources");
+        break;
+    case SkinningGraphResourceUseError::FinalizerUsesFailed:
+        error("MeshSkinningSystem: failed to declare graph-owned skinning final states");
+        break;
+    case SkinningGraphResourceUseError::MissingFinalState:
+        error("MeshSkinningSystem: graph-owned skinning dispatch has no final state");
+        break;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // The result owns ordered uses built from immutable plans.
 namespace __hidden_skinning_graph_resource_uses{
 
@@ -98,7 +168,7 @@ public:
 
     [[nodiscard]] b8 promoteIndex(){
         NWB_ASSERT(!m_index && m_count == InlineCapacity);
-        Index index(InlineCapacity * s_SkinningPromotedIndexCapacityFactor, Core::GpuGraphResourceIdHasher{}, EqualTo<Core::GpuGraphResourceId>{}, m_scratchArena);
+        Index index(ComputePromotedSkinningResourceUseCapacity(InlineCapacity, s_SkinningPromotedIndexCapacityFactor), Core::GpuGraphResourceIdHasher{}, EqualTo<Core::GpuGraphResourceId>{}, m_scratchArena);
         for(const ResourceUseEntry& entry : m_inline){
             const auto [found, inserted] = index.emplace(entry.resource, entry.info);
             if(!inserted){
@@ -123,7 +193,7 @@ public:
     void writeTo(Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& outUses)const{
         outUses.resize(m_count);
         const auto writeUse = [&](const Core::GpuGraphResourceId resource, const ResourceUseInfo& info)noexcept{
-            outUses[info.outputIndex] = Core::GpuTaskResourceUse{ .resource = resource, .range = {}, .requiredState = info.requiredState, .access = info.access, };
+            outUses[info.outputIndex] = Core::GpuTaskResourceUse{ .resource = resource, .range = {}, .requiredState = info.requiredState, .access = info.access };
         };
         if(m_index){
             for(const auto& entry : *m_index)
@@ -153,14 +223,17 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Expected<MeshSkinningGraphResourceUses> BuildMeshSkinningGraphResourceUses(const Span<const MeshSkinningGraphDispatchPlan> plans, Core::Alloc::ScratchArena& scratchArena){
+Expected<MeshSkinningGraphResourceUses> BuildMeshSkinningGraphResourceUses(
+    const Span<const MeshSkinningGraphDispatchPlan> plans,
+    Core::Alloc::ScratchArena& scratchArena
+){
     using namespace __hidden_skinning_graph_resource_uses;
 
     MeshSkinningGraphResourceUses uses(scratchArena);
     if(plans.empty())
         return uses;
     if(!plans.data()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: graph resource uses require dispatch plans"));
+        ReportSkinningGraphResourceUseError(SkinningGraphResourceUseError::MissingPlans);
         return MakeUnexpected(Failure{});
     }
 
@@ -186,7 +259,7 @@ public:
             || !deformation.add(plan.skinResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
             || !deformation.add(plan.jointPaletteResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
         ){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare graph resource uses for skinning deformation"));
+            ReportSkinningGraphResourceUseError(SkinningGraphResourceUseError::DeformationUsesFailed);
             return MakeUnexpected(Failure{});
         }
     }
@@ -207,7 +280,7 @@ public:
                 || !postDispatch.add(plan.attributeResource, Core::ResourceStates::UnorderedAccess, Core::GpuTaskResourceAccess::Write)
             ))
         ){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare graph resource uses for skinning bounds/repack"));
+            ReportSkinningGraphResourceUseError(SkinningGraphResourceUseError::PostDispatchUsesFailed);
             return MakeUnexpected(Failure{});
         }
     }
@@ -220,14 +293,14 @@ public:
             || !localBounds.add(plan.meshletLocalBoundsResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
             || !localBounds.add(plan.localBoundsResource, Core::ResourceStates::UnorderedAccess, Core::GpuTaskResourceAccess::Write)
         ){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare local bounds reduction resources"));
+            ReportSkinningGraphResourceUseError(SkinningGraphResourceUseError::LocalBoundsUsesFailed);
             return MakeUnexpected(Failure{});
         }
     }
 
     for(const MeshSkinningGraphDispatchPlan& plan : plans){
         if(
-            ((plan.hasActiveSkin || plan.copiedRestStreams) && (
+            (ShouldDeclareSkinningStreamFinalizerUses(plan.hasActiveSkin, plan.copiedRestStreams) && (
                 !finalizer.add(plan.skinnedPositionResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
                 || !finalizer.add(plan.skinnedNormalResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
                 || !finalizer.add(plan.skinnedTangentResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
@@ -238,12 +311,12 @@ public:
             ))
             || (plan.repacksNormals && !finalizer.add(plan.attributeResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read))
         ){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare graph-owned skinning final states"));
+            ReportSkinningGraphResourceUseError(SkinningGraphResourceUseError::FinalizerUsesFailed);
             return MakeUnexpected(Failure{});
         }
     }
     if(finalizer.m_count == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: graph-owned skinning dispatch has no final state"));
+        ReportSkinningGraphResourceUseError(SkinningGraphResourceUseError::MissingFinalState);
         return MakeUnexpected(Failure{});
     }
 
@@ -262,14 +335,6 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ImplEcsMeshSkinningGraphResourceUsesAdhdModule(in u64 value){
-    return value != 0u;
 }
 
 

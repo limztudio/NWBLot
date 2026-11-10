@@ -2,17 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/gpu/renderer_state_and_tasks.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+#include <impl/ecs_ui/toolkit/gpu/types.adhd>
 
 native{
 #include <impl/assets_scene/asset.adhd.h>
 #include <impl/assets_ui_skin/types.adhd.h>
 #include <impl/ecs_ui/toolkit/paint.adhd.h>
-#include <impl/ecs_ui/toolkit/gpu/types.adhd.h>
 
 #include <core/assets/manager.h>
 #include <core/graphics/runtime/runtime.h>
@@ -79,8 +74,39 @@ NWB_IMPL_UI_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsUiToolkitGpuRendererAdhdModule(in u64 value){
-    return value != 0u;
+b8 IsValidGpuSubmissionReadinessToken(in b8 tokenValid, in b8 hasPhysicalQueueIdentity){
+    return tokenValid && hasPhysicalQueueIdentity;
+}
+
+b8 MatchesValidatedGpuRendererExtent(
+    in u32 currentWidth,
+    in u32 currentHeight,
+    in u32 requestedWidth,
+    in u32 requestedHeight,
+    in b8 hasSharedResources
+){
+    return currentWidth == requestedWidth && currentHeight == requestedHeight && hasSharedResources;
+}
+
+b8 CanAcceptGpuSkinInput(in b8 validIdentity, in u64 skinGeneration, in b8 hasSharedResources){
+    return validIdentity && skinGeneration != 0u && hasSharedResources;
+}
+
+b8 CanSubmitGpuSnapshotState(
+    in b8 hasPending,
+    in b8 hasSharedResources,
+    in b8 hasSkin,
+    in u64 snapshotGeneration
+){
+    return !hasPending && hasSharedResources && hasSkin && snapshotGeneration != 0u;
+}
+
+b8 IsGpuPendingFrameReadyToDeclare(in b8 hasPending, in b8 framePrepared, in b8 readyToDeclare){
+    return hasPending && framePrepared && readyToDeclare;
+}
+
+b8 MatchesPendingGpuFrameGeneration(in b8 hasPending, in u64 pendingGeneration, in u64 acceptedGeneration){
+    return hasPending && pendingGeneration == acceptedGeneration;
 }
 
 
@@ -213,7 +239,7 @@ public:
         if(!submission)
             return MakeUnexpected(submission.error());
         target->m_readinessToken = *submission;
-        if(!target->m_readinessToken.valid() || !target->m_readinessToken.hasPhysicalQueueIdentity())
+        if(!IsValidGpuSubmissionReadinessToken(target->m_readinessToken.valid(), target->m_readinessToken.hasPhysicalQueueIdentity()))
             return MakeUnexpected(Failure{});
         if(!GpuSampledTextures::PrepareDescriptor(graphics, target->m_color, Core::Format::RGBA16_FLOAT, target->m_sampledImage))
             return MakeUnexpected(Failure{});
@@ -497,6 +523,18 @@ GpuRendererState::GpuRendererState(Core::Alloc::GlobalArena& arena, Core::Graphi
     m_imageCache.reserve();
 }
 
+b8 GpuRendererState::createResources(){
+    return GpuSharedResourcesFactory{}.create(*this);
+}
+
+Expected<GpuVersion<GpuTargetVersion>> GpuRendererState::createTarget(const u32 width, const u32 height){
+    return GpuTargetFactory{}.create(m_arena, m_graphics, width, height);
+}
+
+b8 GpuRendererState::prepareOutputPipeline(const Core::FramebufferInfo& info){
+    return GpuSharedResourcesFactory{}.prepareOutputPipeline(*this, info);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -519,7 +557,7 @@ b8 GpuRenderer::validateResources(const u32 width, const u32 height){
     m_state->m_frameTimingScopePrepared = m_state->m_graphics.gpuTiming().prepareScopeQueries(GpuRendererTimingScope::s_Frame.identity, m_state->m_graphics.getDevice(), s_GpuFrameTimingQueryCount);
     if(!m_state->m_frameTimingScopePrepared)
         NWB_LOGGER_WARNING(NWB_TEXT("GpuRenderer: could not prepare standalone frame timing scope"));
-    if(m_state->m_width == width && m_state->m_height == height && m_state->m_resources)
+    if(MatchesValidatedGpuRendererExtent(m_state->m_width, m_state->m_height, width, height, static_cast<b8>(m_state->m_resources)))
         return true;
     if(m_state->m_pending)
         return false;
@@ -575,7 +613,7 @@ void GpuRenderer::invalidateResources()noexcept{
 }
 
 b8 GpuRenderer::setSkin(const Core::Assets::AssetRef<UiSkin>& identity, const UiSkin& skin, const u64 skinGeneration){
-    if(!identity.valid() || skinGeneration == 0u || !m_state->m_resources || !skin.validatePayload())
+    if(!CanAcceptGpuSkinInput(identity.valid(), skinGeneration, static_cast<b8>(m_state->m_resources)) || !skin.validatePayload())
         return false;
     const SkinBinding binding{ identity, skin.texture(), skinGeneration, skin.atlasWidth(), skin.atlasHeight(), skin.referenceDensity() };
     if(m_state->m_skin){
@@ -594,14 +632,14 @@ b8 GpuRenderer::setSkin(const Core::Assets::AssetRef<UiSkin>& identity, const Ui
     version->m_binding = binding;
     if(!TextureAssetLoader::Create(*texture, s_GpuAtlasTextureName, s_GpuRendererContext, m_state->m_graphics, version->m_texture))
         return false;
-    if(!version->m_texture.readinessToken.valid() || !version->m_texture.readinessToken.hasPhysicalQueueIdentity())
+    if(!IsValidGpuSubmissionReadinessToken(version->m_texture.readinessToken.valid(), version->m_texture.readinessToken.hasPhysicalQueueIdentity()))
         return false;
     m_state->m_skin = Move(version);
     return true;
 }
 
 b8 GpuRenderer::submit(DrawSnapshot&& snapshot)noexcept{
-    if(m_state->m_pending || !m_state->m_resources || !m_state->m_skin || snapshot.generation() == 0u)
+    if(!CanSubmitGpuSnapshotState(static_cast<b8>(m_state->m_pending), static_cast<b8>(m_state->m_resources), static_cast<b8>(m_state->m_skin), snapshot.generation()))
         return false;
     if(!SameSkinBinding(snapshot.skinBinding(), m_state->m_skin->m_binding))
         return false;
@@ -663,9 +701,9 @@ Expected<Core::GpuTaskGraphOutputLayer> GpuRenderer::declareTaskGraphOutputLayer
 }
 
 void GpuRenderer::acceptTaskGraphOutputLayer(const u64 frameGeneration, const Core::QueueSubmissionToken& submissionToken)noexcept{
-    if(!m_state->m_pending || m_state->m_pending->m_snapshot.generation() != frameGeneration)
+    if(!MatchesPendingGpuFrameGeneration(static_cast<b8>(m_state->m_pending), m_state->m_pending ? m_state->m_pending->m_snapshot.generation() : 0u, frameGeneration))
         return;
-    NWB_FATAL_ASSERT(submissionToken.valid() && submissionToken.hasPhysicalQueueIdentity());
+    NWB_FATAL_ASSERT(IsValidGpuSubmissionReadinessToken(submissionToken.valid(), submissionToken.hasPhysicalQueueIdentity()));
     m_state->m_pending->m_finalConsumer = submissionToken;
     m_state->m_lastAcceptedAcquired = m_state->m_pending->m_acquired;
     m_state->m_lastAcceptedGeneration = frameGeneration;
@@ -683,7 +721,7 @@ void GpuRenderer::acceptTaskGraphOutputLayer(const u64 frameGeneration, const Co
 
 Expected<Core::GpuTaskGraphOutputLayer> GpuRendererState::declare(Core::GpuTaskGraph& graph, b8 allowEmptySceneLayer){
     Core::GpuTaskGraphOutputLayer layer;
-    if(!m_pending || !m_pending->m_prepared || !m_readyToDeclare)
+    if(!IsGpuPendingFrameReadyToDeclare(static_cast<b8>(m_pending), m_pending ? m_pending->m_prepared : false, m_readyToDeclare))
         return layer;
     const Core::AcquiredPresentationFrame& current = m_graphics.acquiredPresentationFrame();
     const Core::AcquiredPresentationFrame& prepared = m_pending->m_acquired;
@@ -854,7 +892,7 @@ struct StandaloneDeclarationContext{
 
 
 Expected<Core::GpuTaskId> GpuRendererState::declareStandalone(Core::GpuTaskGraph& graph, Core::GpuTimingFrameTransaction& frameTimingTransaction){
-    if(!m_pending || !m_pending->m_prepared || !m_readyToDeclare)
+    if(!IsGpuPendingFrameReadyToDeclare(static_cast<b8>(m_pending), m_pending ? m_pending->m_prepared : false, m_readyToDeclare))
         return MakeUnexpected(Failure{});
     Core::GpuTaskSchedulingHint beginScheduling;
     beginScheduling.cost = Core::GpuTaskCostHint::Tiny;

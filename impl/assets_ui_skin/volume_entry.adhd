@@ -2,9 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsUiSkinVolumeEntryAdhdModule(in u64 value){
-    return value != 0u;
-}
+const b8 s_UiSkinCookEntryLogBuildFailure = false;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,7 +57,7 @@ static b8 RegisterUiSkinCookEntry(Core::Assets::CookEntryRegistry& registry){
             },
             nullptr,
             [](UiSkinCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildUiSkinAsset(entry, arena); },
-            false,
+            s_UiSkinCookEntryLogBuildFailure,
             registry
         )
         && AssetsSubsystemCook::RegisterSubsystemCookEntry<UiSubsystem>(registry)

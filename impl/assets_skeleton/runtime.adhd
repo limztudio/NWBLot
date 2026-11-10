@@ -2,8 +2,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsSkeletonRuntimeAdhdModule(in u64 value){
-    return value != 0u;
+#include <impl/assets_skeleton/joint_validation.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ValidateSkeletonRuntimePayload(
+    in b8 hasValidVirtualPath,
+    in Span<SkeletonJoint> joints,
+    in HashMap<Name, u32> jointIndices,
+    mut ScratchSkeletonByteVector scratchNamedJoints
+){
+    if(!hasValidVirtualPath)
+        return false;
+    return ValidateSkeletonPayloadData(joints, jointIndices, scratchNamedJoints);
 }
 
 
@@ -46,11 +59,8 @@ static_assert(sizeof(SkeletonJointBinary) == s_SkeletonJointBinaryBytes, "Skelet
 
 
 b8 Skeleton::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
-    if(!checkVirtualPath(NWB_TEXT("Skeleton::validatePayload")))
-        return false;
-
     Vector<u8, Core::Alloc::ScratchArena> namedJoints(scratchArena);
-    return ValidateSkeletonPayloadData(m_joints, m_jointIndices, namedJoints);
+    return ValidateSkeletonRuntimePayload(checkVirtualPath(NWB_TEXT("Skeleton::validatePayload")), m_joints, m_jointIndices, namedJoints);
 }
 
 b8 Skeleton::loadBinary(const Span<const u8> binary){

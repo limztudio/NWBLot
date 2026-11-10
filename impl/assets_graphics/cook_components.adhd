@@ -2,13 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_graphics/cook_shader_plan_and_validation.adhd>
-#include <impl/assets_graphics/cook_graphics_volume_pipeline.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 native{
 #if defined(NWB_COOK)
 
@@ -54,8 +47,11 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsGraphicsCookComponentsAdhdModule(in u64 value){
-    return value != 0u;
+const StringView s_RendererOpticalVolumeCoincidenceChoices = "'independent', 'identical_material', or 'shared_group'";
+const StringView s_RendererOpticalBoundaryModeChoices = "'unspecified', 'closed_nested', or 'closed_priority'";
+
+b8 IsValidRendererOpticalVolumeGroupName(in b8 parsedOk, in Name groupName){
+    return parsedOk && groupName != s_NameNone;
 }
 
 
@@ -64,6 +60,11 @@ b8 ImplAssetsGraphicsCookComponentsAdhdModule(in u64 value){
 
 native{
 #if defined(NWB_COOK)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/assets_graphics/csg_shader_variants.adhd.h>
 #include <impl/assets_shader/cook.adhd.h>
 #include <global/containers.h>
@@ -109,6 +110,7 @@ NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 using Core::Assets::ScratchArena;
 using Core::Assets::ScratchString;
@@ -221,7 +223,7 @@ static b8 ExtractSingleAssetRefComponentDependencies(const Core::Assets::CookDep
             s_RendererComponentDiagnosticPrefix,
             s_RendererComponentOpticalVolumeCoincidenceField,
             Span<const ::NamedEnumCase<OpticalVolumeCoincidence::Enum>>(s_CoincidenceCases.data(), s_CoincidenceCases.size()),
-            "'independent', 'identical_material', or 'shared_group'"
+            s_RendererOpticalVolumeCoincidenceChoices
         );
         if(!parsedCoincidence)
             return MakeUnexpected(Failure{});
@@ -237,7 +239,7 @@ static b8 ExtractSingleAssetRefComponentDependencies(const Core::Assets::CookDep
             return MakeUnexpected(Failure{});
         }
         const auto groupName = Name::FromText(groupField->text);
-        if(!groupName || !*groupName){
+        if(!IsValidRendererOpticalVolumeGroupName(groupName.has_value(), groupName ? *groupName : s_NameNone)){
             NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' contains an embedded null"), ConvertString(s_RendererComponentDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_RendererComponentOpticalVolumeGroupField));
             return MakeUnexpected(Failure{});
         }
@@ -256,7 +258,7 @@ static b8 ExtractSingleAssetRefComponentDependencies(const Core::Assets::CookDep
             s_RendererComponentDiagnosticPrefix,
             s_RendererComponentOpticalBoundaryModeField,
             Span<const ::NamedEnumCase<OpticalBoundaryMode::Enum>>(s_BoundaryModeCases.data(), s_BoundaryModeCases.size()),
-            "'unspecified', 'closed_nested', or 'closed_priority'"
+            s_RendererOpticalBoundaryModeChoices
         );
         if(!parsedBoundaryMode)
             return MakeUnexpected(Failure{});
@@ -345,7 +347,14 @@ b8 RegisterGraphicsComponentCookDependencies(Core::Assets::CookDependencyRegistr
 
 NWB_IMPL_END
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 }
 
 

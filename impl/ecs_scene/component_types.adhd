@@ -146,6 +146,30 @@ void AssignDecomposedTransformComponent(
     outTransform.scale = f32x4(scale, 0.0f);
 }
 
+TransformComponent MakePositionTransformComponent(in VectorSingle position){
+    TransformComponent transform;
+    transform.position = f32x4(position);
+    return transform;
+}
+
+TransformComponent MakeEulerTransformComponent(in f32 pitchRadians, in f32 yawRadians, in f32 rollRadians){
+    TransformComponent transform;
+    transform.rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(pitchRadians, yawRadians, rollRadians, 0.0f)));
+    return transform;
+}
+
+TransformComponent MakePositionEulerTransformComponent(
+    in VectorSingle position,
+    in f32 pitchRadians,
+    in f32 yawRadians,
+    in f32 rollRadians
+){
+    TransformComponent transform;
+    transform.position = f32x4(position);
+    transform.rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(pitchRadians, yawRadians, rollRadians, 0.0f)));
+    return transform;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

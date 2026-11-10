@@ -2,6 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_mesh/cook_meshlet_scoring.adhd>
+#include <impl/assets_mesh/cook_types.adhd>
+#include <impl/assets_mesh/mesh_binary_codec.adhd>
+#include <impl/assets_mesh/skin_binary_codec.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 #if defined(NWB_COOK)
 
@@ -96,8 +105,80 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsMeshCookAdhdModule(in u64 value){
-    return value != 0u;
+usize ComputeMeshletParallelCandidateReserve(in u32 workerThreadCount){
+    return (cast<usize>(workerThreadCount) + 1u) * s_MeshletDisconnectedCandidateParallelOversubscription;
+}
+
+b8 ValidateBuiltMeshletsNonEmpty(in usize meshletCount, in StringView metaKind, in StringView filePathText){
+    if(meshletCount != 0u)
+        return true;
+
+    error("{} meta '{}': meshlet build produced no meshlets", metaKind, filePathText);
+    return false;
+}
+
+b8 ValidateSkinCookInverseBindMatrix(in MatrixSingle matrix, in StringView filePathText, in usize matrixIndex){
+    if(IsValidSkinInverseBindMatrix(matrix))
+        return true;
+
+    error(
+        "Skin meta '{}': inverse_bind_matrices[{}] is not a finite invertible affine matrix"
+        , filePathText
+        , matrixIndex
+    );
+    return false;
+}
+
+b8 ValidateSkinCookInverseBindMatricesNonEmpty(in usize matrixCount, in StringView filePathText){
+    if(matrixCount != 0u)
+        return true;
+
+    error("Skin meta '{}': '{}' must not be empty", filePathText, s_SkinInverseBindMatricesField);
+    return false;
+}
+
+b8 SerializeMeshBinaryPayload(
+    in Span<f32x3u> positions,
+    in Span<f16x4u> normals,
+    in Span<f16x4u> tangents,
+    in Span<f32x2u> uv0,
+    in Span<f16x4u> colors,
+    in Span<MeshletDesc> meshlets,
+    in Span<MeshletBounds> meshletBounds,
+    in Span<u8> meshletPositionRefDeltas,
+    in Span<u8> meshletAttributeRefDeltas,
+    in Span<MeshletLocalVertexRef> meshletLocalVertexRefs,
+    in Span<u8> meshletPrimitiveIndices,
+    in Span<u32> solidTriangleWords,
+    mut Vector<u8> outBinary
+){
+    MeshBinaryCodec codec;
+    return codec.serialize(
+        positions,
+        normals,
+        tangents,
+        uv0,
+        colors,
+        meshlets,
+        meshletBounds,
+        meshletPositionRefDeltas,
+        meshletAttributeRefDeltas,
+        meshletLocalVertexRefs,
+        meshletPrimitiveIndices,
+        solidTriangleWords,
+        outBinary
+    );
+}
+
+b8 SerializeSkinBinaryPayload(
+    in NameHash meshNameHash,
+    in NameHash skeletonNameHash,
+    in Span<SkinInfluence4> influences,
+    in Span<SkeletonJointMatrix> inverseBindMatrices,
+    mut Vector<u8> outBinary
+){
+    SkinBinaryCodec codec;
+    return codec.serialize(meshNameHash, skeletonNameHash, influences, inverseBindMatrices, outBinary);
 }
 
 
@@ -105,6 +186,12 @@ b8 ImplAssetsMeshCookAdhdModule(in u64 value){
 
 
 native{
+#if defined(NWB_COOK)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/assets_mesh/skin_cook.adhd.h>
 #include <impl/assets_mesh/cook_metadata.adhd.h>
 #include <core/alloc/scratch.h>
@@ -116,11 +203,8 @@ native{
 #include <impl/assets_mesh/binary_payload_io.adhd.h>
 #include <impl/assets_mesh/meshlet_triangle_indices.adhd.h>
 #include <impl/assets_mesh/payload_validation.adhd.h>
-#include <impl/assets_mesh/mesh_binary_codec.adhd.h>
-#include <impl/assets_mesh/skin_binary_codec.adhd.h>
 #include <impl/assets_mesh/cook_stream_reorder.adhd.h>
 #include <impl/assets_mesh/cook_solid_topology.adhd.h>
-#include <impl/assets_mesh/cook_meshlet_scoring.adhd.h>
 #include <impl/assets_mesh/cook_meshlet_metrics.adhd.h>
 #include <impl/assets_skeleton/cook_matrix.adhd.h>
 #include <core/assets/binary_payload_io.h>
@@ -244,7 +328,7 @@ b8 MeshCookMeshlets::BuildMeshlets(const Path& nwbFilePath, const TStringView me
         frontier,
         frontierFlags
     );
-    parallelCandidates.reserve((static_cast<usize>(cpuScheduler.workerThreadCount()) + 1u) * s_MeshletDisconnectedCandidateParallelOversubscription);
+    parallelCandidates.reserve(ComputeMeshletParallelCandidateReserve(cpuScheduler.workerThreadCount()));
 
     MeshletScoreState scoreState;
 
@@ -306,10 +390,8 @@ b8 MeshCookMeshlets::BuildMeshlets(const Path& nwbFilePath, const TStringView me
             return false;
     }
 
-    if(entry.meshlets.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet build produced no meshlets"), metaKind, PathToString<tchar>(nwbFilePath));
+    if(!ValidateBuiltMeshletsNonEmpty(entry.meshlets.size(), s_MeshMetaKindText, AStringView(filePathText)))
         return false;
-    }
 
     LogMeshletCookMetrics(
         s_MeshMetaKindText,
@@ -386,7 +468,7 @@ using namespace Core::Metascript;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<Core::Assets::AssetVector<SkeletonJointMatrix>> ParseInverseBindMatrices(const Path& nwbFilePath, const Value& asset, Core::Assets::AssetArena& arena){
+[[nodiscard]] static Expected<Core::Assets::AssetVector<SkeletonJointMatrix>> ParseInverseBindMatrices(const Path& nwbFilePath, const AStringView nwbFilePathText, const Value& asset, Core::Assets::AssetArena& arena){
     Core::Assets::AssetVector<SkeletonJointMatrix> values(arena);
 
     const auto matrices = Core::Assets::FindMetadataListField(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix, s_SkinInverseBindMatricesField);
@@ -400,23 +482,18 @@ using namespace Core::Metascript;
         if(!matrix)
             return MakeUnexpected(Failure{});
 
-        if(!IsValidSkinInverseBindMatrix(LoadFloat(*matrix))){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': inverse_bind_matrices[{}] is not a finite invertible affine matrix"), PathToString<tchar>(nwbFilePath), matrixIndex);
+        if(!ValidateSkinCookInverseBindMatrix(LoadFloat(*matrix), nwbFilePathText, matrixIndex))
             return MakeUnexpected(Failure{});
-        }
         values.push_back(*matrix);
     }
 
-    if(values.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}' must not be empty"), PathToString<tchar>(nwbFilePath), ConvertString(s_SkinInverseBindMatricesField));
+    if(!ValidateSkinCookInverseBindMatricesNonEmpty(values.size(), nwbFilePathText))
         return MakeUnexpected(Failure{});
-    }
     return values;
 }
 
-[[nodiscard]] static b8 ValidateSkinInfluenceJointIndices(const Path& nwbFilePath, const SkinCookEntry& entry){
-    const Core::Assets::AssetString nwbFilePathText = PathToString(entry.influences.get_allocator().arena(), nwbFilePath);
-    return ValidateSkinCookInfluenceJointIndices(AStringView(nwbFilePathText), entry.inverseBindMatrices.size(), entry.influences);
+[[nodiscard]] static b8 ValidateSkinInfluenceJointIndices(const AStringView nwbFilePathText, const SkinCookEntry& entry){
+    return ValidateSkinCookInfluenceJointIndices(nwbFilePathText, entry.inverseBindMatrices.size(), entry.influences);
 }
 
 
@@ -525,7 +602,7 @@ b8 MeshAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::As
     if(!mesh.validatePayload(scratchArena))
         return false;
 
-    return MeshBinaryCodec().serialize(
+    return SerializeMeshBinaryPayload(
         mesh.positionStream(),
         mesh.normalStream(),
         mesh.tangentStream(),
@@ -554,7 +631,7 @@ b8 SkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::As
     if(!skin.validatePayload())
         return false;
 
-    return SkinBinaryCodec().serialize(
+    return SerializeSkinBinaryPayload(
         skin.mesh().name().hash(),
         skin.skeleton().name().hash(),
         skin.influences(),
@@ -599,11 +676,13 @@ Expected<SkinCookEntry> ParseSkinCookMetadata(const Name virtualPath, const Path
     entry.skeleton = *skeletonResult;
     if(!SkinInfluenceMetadataParser::Parse(nwbFilePath, asset, NWB_TEXT("Skin"), {}, true, entry.influences))
         return MakeUnexpected(Failure{});
-    auto inverseBindMatricesResult = ParseInverseBindMatrices(nwbFilePath, asset, arena);
+
+    const Core::Assets::AssetString nwbFilePathText = PathToString(arena, nwbFilePath);
+    auto inverseBindMatricesResult = ParseInverseBindMatrices(nwbFilePath, AStringView(nwbFilePathText), asset, arena);
     if(!inverseBindMatricesResult)
         return MakeUnexpected(Failure{});
     entry.inverseBindMatrices = Move(*inverseBindMatricesResult);
-    if(!ValidateSkinInfluenceJointIndices(nwbFilePath, entry))
+    if(!ValidateSkinInfluenceJointIndices(AStringView(nwbFilePathText), entry))
         return MakeUnexpected(Failure{});
 
     return entry;
@@ -624,6 +703,12 @@ Expected<Skin> BuildSkinAsset(SkinCookEntry& skinEntry, Core::Assets::AssetArena
 
 
 NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

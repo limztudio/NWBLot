@@ -2,9 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsGraphicsVolumeEntryAdhdModule(in u64 value){
-    return value != 0u;
-}
+const usize s_GraphicsCookSubsystemTypeCount = 10u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -47,6 +45,21 @@ namespace __hidden_assets_graphics_volume_entry{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+static constexpr Array<Name, s_GraphicsCookSubsystemTypeCount> s_GraphicsCookSubsystemAssetTypes = {
+    RendererSubsystem::AssetTypeName(),
+    MeshSubsystem::AssetTypeName(),
+    DeferredSubsystem::AssetTypeName(),
+    BvhSubsystem::AssetTypeName(),
+    GiSubsystem::AssetTypeName(),
+    ReflectionSubsystem::AssetTypeName(),
+    ShadowSubsystem::AssetTypeName(),
+    TransparentSubsystem::AssetTypeName(),
+    RefractiveSubsystem::AssetTypeName(),
+    CsgSubsystem::AssetTypeName(),
+};
+
+static_assert(s_GraphicsCookSubsystemAssetTypes.size() == s_GraphicsCookSubsystemTypeCount, "Graphics cook subsystem count drifted");
 
 static b8 RegisterGraphicsSubsystemCookEntries(Core::Assets::CookEntryRegistry& registry){
     return

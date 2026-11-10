@@ -2,13 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "edit_geometry.adhd"
+#include "text_edit_session.adhd"
+#include "edit_clipboard_controller.adhd"
+#include "clipboard_publications.adhd"
+
 native{
 #include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
-#include <impl/ecs_ui/edit_geometry.adhd.h>
-#include <impl/ecs_ui/text_edit_session.adhd.h>
-#include <impl/ecs_ui/edit_clipboard_controller.adhd.h>
-#include <impl/ecs_ui/clipboard_publications.adhd.h>
-
 #include <impl/ecs_ui/toolkit/context.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/edit_box_state.adhd.h>
 
@@ -189,14 +189,6 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ImplEcsUiEditBoxHostAdhdModule(in u64 value){
-    return value != 0u;
 }
 
 

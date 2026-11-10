@@ -2,10 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-#include <impl/ecs_ui/toolkit/edit/model.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/model.adhd>
+#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd>
 
-#include <impl/ecs_ui/toolkit/edit/numeric_types.adhd.h>
+native{
 #include <core/alloc/global.h>
 
 #include <global/termination.h>
@@ -95,15 +95,7 @@ template<typename Canonicalize>
     return result;
 }
 
-[[nodiscard]] inline Expected<b8, ErrorCode> CanonicalizeDraft(const Expected<AStringView, ErrorCode>& formatted, EditModel& inOutDraft, AString<Core::Alloc::GlobalArena>& outAcceptedDraft){
-    if(!formatted)
-        return MakeUnexpected(formatted.error());
-    const b8 changed = *formatted != inOutDraft.text();
-    if(!inOutDraft.setText(*formatted))
-        return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
-    outAcceptedDraft.assign(formatted->data(), formatted->size());
-    return changed;
-}
+[[nodiscard]] Expected<b8, ErrorCode> CanonicalizeDraft(const Expected<AStringView, ErrorCode>& formatted, EditModel& inOutDraft, AString<Core::Alloc::GlobalArena>& outAcceptedDraft);
 
 template<typename Value, typename Formatter>
 [[nodiscard]] inline Expected<b8, ErrorCode> FormatCanonicalDraft(const Value value, Formatter formatter, EditModel& inOutDraft, AString<Core::Alloc::GlobalArena>& outAcceptedDraft){
@@ -111,12 +103,7 @@ template<typename Value, typename Formatter>
     return CanonicalizeDraft(formatter(value, buffer), inOutDraft, outAcceptedDraft);
 }
 
-[[nodiscard]] inline b8 SetDraftText(const AStringView text, EditModel& inOutDraft, u64& inOutRevision){
-    if(!inOutDraft.setText(text))
-        return false;
-    AdvanceNonWrappingRevision(inOutRevision);
-    return true;
-}
+[[nodiscard]] b8 SetDraftText(AStringView text, EditModel& inOutDraft, u64& inOutRevision);
 
 template<typename Canonicalize>
 [[nodiscard]] inline NumericEditResult RestoreModelDraft(Canonicalize canonicalize, const b8 cancelled, u64& inOutRevision)noexcept(noexcept(RestoreDraft(Move(canonicalize), cancelled))){
@@ -240,8 +227,55 @@ NWB_IMPL_UI_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsUiToolkitEditNumericModelOperationsAdhdModule(in u64 value){
-    return value != 0u;
+b8 HasCanonicalDraftChanged(in StringView formatted, in StringView currentDraft){
+    return formatted != currentDraft;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NumericEditDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<b8, ErrorCode> CanonicalizeDraft(const Expected<AStringView, ErrorCode>& formatted, EditModel& inOutDraft, AString<Core::Alloc::GlobalArena>& outAcceptedDraft){
+    if(!formatted)
+        return MakeUnexpected(formatted.error());
+    const b8 changed = HasCanonicalDraftChanged(*formatted, inOutDraft.text());
+    if(!inOutDraft.setText(*formatted))
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
+    outAcceptedDraft.assign(formatted->data(), formatted->size());
+    return changed;
+}
+
+b8 SetDraftText(const AStringView text, EditModel& inOutDraft, u64& inOutRevision){
+    if(!inOutDraft.setText(text))
+        return false;
+    AdvanceNonWrappingRevision(inOutRevision);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_END
 }
 
 

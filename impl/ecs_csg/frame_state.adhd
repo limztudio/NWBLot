@@ -150,14 +150,13 @@ public:
         if(!drawState.active || drawState.cutterCount == 0u)
             return;
 
-        const usize firstCutter = static_cast<usize>(drawState.firstCutter);
-        const usize cutterCount = static_cast<usize>(drawState.cutterCount);
-        if(firstCutter > m_cutterRefs.size() || cutterCount > m_cutterRefs.size() - firstCutter){
+        if(!IsValidCsgReceiverDrawRange(drawState, m_cutterRefs.size())){
             NWB_ASSERT(false);
             return;
         }
 
-        const usize cutterEnd = firstCutter + cutterCount;
+        const usize firstCutter = static_cast<usize>(drawState.firstCutter);
+        const usize cutterEnd = firstCutter + static_cast<usize>(drawState.cutterCount);
         for(usize cutterIndex = firstCutter; cutterIndex < cutterEnd; ++cutterIndex){
             const CsgFrameCutterRef& cutterRef = m_cutterRefs[cutterIndex];
             if(!cutterRef.cutter){
@@ -263,14 +262,6 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ImplEcsCsgFrameStateAdhdModule(in u64 value){
-    return value != 0u;
 }
 
 

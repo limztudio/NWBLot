@@ -2,8 +2,52 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsTextureRuntimeAdhdModule(in u64 value){
-    return value != 0u;
+#include <impl/assets_texture/validation.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ValidateTextureRuntimePayload(
+    in b8 hasValidVirtualPath,
+    in Name virtualPath,
+    in u8 payloadFormat,
+    in u8 dimension,
+    in u32 width,
+    in u32 height,
+    in u32 depth,
+    in u8 alphaMode,
+    in u8 alphaConstantUnorm8,
+    in Span<TextureMipLevel> mipLevels,
+    in Span<u8> payloadBytes
+){
+    if(!hasValidVirtualPath)
+        return false;
+    return ValidateTextureAssetPayload(
+        virtualPath,
+        payloadFormat,
+        dimension,
+        width,
+        height,
+        depth,
+        alphaMode,
+        alphaConstantUnorm8,
+        mipLevels,
+        payloadBytes
+    );
+}
+
+Expected<usize> TryResolveSeparateAlphaUastcByteOffset(
+    in b8 hasSeparateAlpha,
+    in Span<TextureMipLevel> mipLevels,
+    in usize totalPayloadByteCount
+){
+    if(!hasSeparateAlpha)
+        return MakeUnexpected(Failure());
+    const u64 primaryBytes = ComputeTexturePrimaryPayloadByteCount(mipLevels);
+    if(primaryBytes > cast<u64>(totalPayloadByteCount))
+        return MakeUnexpected(Failure());
+    return cast<usize>(primaryBytes);
 }
 
 
@@ -49,9 +93,8 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_TextureAssetCodecAutoRegistrar, TextureAssetC
 
 
 b8 Texture::validatePayload()const{
-    if(!checkVirtualPath(__hidden_texture_runtime::s_ValidatePayloadContext))
-        return false;
-    return ValidateTextureAssetPayload(
+    return ValidateTextureRuntimePayload(
+        checkVirtualPath(__hidden_texture_runtime::s_ValidatePayloadContext),
         virtualPath(),
         static_cast<u8>(m_payloadFormat),
         static_cast<u8>(m_dimension),
@@ -137,9 +180,14 @@ u64 Texture::primaryPayloadByteCount()const noexcept{
 }
 
 const u8* Texture::alphaUastcBlocks()const noexcept{
-    if(m_alphaMode != TextureAlphaMode::SeparateUastcLdr4x4)
+    const auto offset = TryResolveSeparateAlphaUastcByteOffset(
+        m_alphaMode == TextureAlphaMode::SeparateUastcLdr4x4,
+        m_mipLevels,
+        m_payloadBytes.size()
+    );
+    if(!offset)
         return nullptr;
-    return m_payloadBytes.data() + static_cast<usize>(primaryPayloadByteCount());
+    return m_payloadBytes.data() + *offset;
 }
 
 

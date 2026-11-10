@@ -2,8 +2,69 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsMaterialCookShaderAndAssetEmitAdhdModule(in u64 value){
-    return value != 0u;
+const StringView s_AvboitAccumulateGeneratedDirLeaf = "material_avboit_accumulate_pixel_shaders";
+const StringView s_AvboitAccumulateAuthoringHeader = "avboit/accumulate_ps_authoring.slangi";
+const StringView s_AvboitOccupancyGeneratedDirLeaf = "material_avboit_occupancy_pixel_shaders";
+const StringView s_AvboitOccupancyAuthoringHeader = "avboit/occupancy_ps_authoring.slangi";
+const StringView s_AvboitExtinctionGeneratedDirLeaf = "material_avboit_extinction_pixel_shaders";
+const StringView s_AvboitExtinctionAuthoringHeader = "avboit/extinction_ps_authoring.slangi";
+const StringView s_AvboitGeneratedPixelShaderHeaderLine = "// Generated per-material AVBOIT pass pixel shader: engine AVBOIT pass authoring + this material's\n";
+const StringView s_MaterialGeneratedPixelShaderDirLeaf = "material_pixel_shaders";
+const StringView s_MaterialGeneratedPixelShaderHeaderLine = "// Generated per-material G-buffer pixel shader: engine pixel-shader authoring + this material's\n";
+const StringView s_MaterialGeneratedPixelShaderAuthoringHeader = "mesh/material_ps_authoring.slangi";
+const StringView s_MaterialGeneratedPixelShaderNamePrefix = "generated/material_ps/";
+const StringView s_DeferredBxdfDispatchGenerationLabel = "Deferred bxdf dispatch";
+const StringView s_ShadowSurfaceDispatchGenerationLabel = "Shadow surface dispatch";
+
+usize CountVariantAssignmentReserve(in StringView rawVariantView){
+    usize count = 1u;
+    for(usize i = 0u; i < rawVariantView.size(); ++i){
+        if(rawVariantView[i] == ';')
+            ++count;
+    }
+    return count;
+}
+
+Expected<b8> TryConvertMaterialBoolInteger(in i64 propertyInt){
+    if(propertyInt == 0)
+        return false;
+    if(propertyInt == 1)
+        return true;
+    return MakeUnexpected(Failure());
+}
+
+b8 ValidateUniqueDeferredBxdfSlot(in u32 shadingModelId, in StringView existingSlot, in StringView incomingSource){
+    if(existingSlot.empty() || existingSlot == incomingSource)
+        return true;
+
+    error("Deferred bxdf dispatch: shading model id {} maps to multiple bxdf sources", shadingModelId);
+    return false;
+}
+
+b8 ValidateUniqueShadowSurfaceDispatchSlot(
+    in u32 surfaceDispatchId,
+    in StringView existingSurface,
+    in StringView incomingSurface,
+    in StringView existingInterface,
+    in StringView incomingInterface
+){
+    if(!existingSurface.empty() && existingSurface != incomingSurface){
+        error("Shadow surface dispatch: model id {} maps to multiple surface sources", surfaceDispatchId);
+        return false;
+    }
+    if(!existingInterface.empty() && existingInterface != incomingInterface){
+        error("Shadow surface dispatch: model id {} maps to multiple material interfaces", surfaceDispatchId);
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateNonEmptyMaterialCookInterface(in StringView materialVirtualPath, in StringView materialInterface){
+    if(!materialInterface.empty())
+        return true;
+
+    error("Material '{}' is missing required material interface", materialVirtualPath);
+    return false;
 }
 
 
@@ -12,6 +73,11 @@ b8 ImplAssetsMaterialCookShaderAndAssetEmitAdhdModule(in u64 value){
 
 native{
 #if defined(NWB_COOK)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/assets_material/cook.adhd.h>
 #include <impl/assets_material/cook_private.adhd.h>
 #include <impl/assets_material/bind.adhd.h>
@@ -38,6 +104,7 @@ NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 namespace MaterialCookDetail{
 
@@ -177,12 +244,7 @@ static Expected<CookString> ParseVariantField(const Path& nwbFilePath, const Cor
 
     using ScratchDefineCombo = HashMap<AStringView, AStringView, ScratchArena, Hasher<AStringView>, EqualTo<AStringView>>;
     ScratchDefineCombo assignments(0, Hasher<AStringView>(), EqualTo<AStringView>(), scratchArena);
-    usize assignmentReserve = 1u;
-    for(const char ch : rawVariantView){
-        if(ch == ';')
-            ++assignmentReserve;
-    }
-    assignments.reserve(assignmentReserve);
+    assignments.reserve(CountVariantAssignmentReserve(rawVariantView));
 
     const auto logInvalidVariant = [&](){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' has invalid variant signature '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(fieldName), ConvertString(rawVariantView));
@@ -436,9 +498,9 @@ static Expected<b8> ParseMaterialBoolProperty(const Path& nwbFilePath, const Cor
         return MakeUnexpected(Failure{});
     }
     if(propertyValue->isInteger()){
-        const i64 propertyInt = propertyValue->asInteger();
-        if(propertyInt == 0 || propertyInt == 1)
-            return propertyInt != 0;
+        const Expected<b8> converted = TryConvertMaterialBoolInteger(propertyValue->asInteger());
+        if(converted)
+            return *converted;
     }
     NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': '{}' must be 0 or 1"), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
     return MakeUnexpected(Failure{});
@@ -475,8 +537,10 @@ static b8 AppendShadowSurfaceBindAliases(
 namespace MaterialAvboitShaderDetail{
 
 
-using namespace MaterialCookDetail;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+using namespace MaterialCookDetail;
 
 struct MaterialAvboitPassPixelShaderSpec{
     AStringView generatedDirectoryLeaf;
@@ -488,24 +552,24 @@ struct MaterialAvboitPassPixelShaderSpec{
 
 
 static constexpr MaterialAvboitPassPixelShaderSpec s_AvboitAccumulatePassSpec = {
-    AStringView("material_avboit_accumulate_pixel_shaders"),
-    AStringView("avboit/accumulate_ps_authoring.slangi"),
+    s_AvboitAccumulateGeneratedDirLeaf,
+    s_AvboitAccumulateAuthoringHeader,
     s_MaterialAvboitAccumulatePassLabel,
     s_AvboitAccumulatePixelShaderGeneratedPrefix,
     &MaterialCookEntry::avboitAccumulatePixelShaderName,
 };
 
 static constexpr MaterialAvboitPassPixelShaderSpec s_AvboitOccupancyPassSpec = {
-    AStringView("material_avboit_occupancy_pixel_shaders"),
-    AStringView("avboit/occupancy_ps_authoring.slangi"),
+    s_AvboitOccupancyGeneratedDirLeaf,
+    s_AvboitOccupancyAuthoringHeader,
     s_MaterialAvboitOccupancyPassLabel,
     s_AvboitOccupancyPixelShaderGeneratedPrefix,
     &MaterialCookEntry::avboitOccupancyPixelShaderName,
 };
 
 static constexpr MaterialAvboitPassPixelShaderSpec s_AvboitExtinctionPassSpec = {
-    AStringView("material_avboit_extinction_pixel_shaders"),
-    AStringView("avboit/extinction_ps_authoring.slangi"),
+    s_AvboitExtinctionGeneratedDirLeaf,
+    s_AvboitExtinctionAuthoringHeader,
     s_MaterialAvboitExtinctionPassLabel,
     s_AvboitExtinctionPixelShaderGeneratedPrefix,
     &MaterialCookEntry::avboitExtinctionPixelShaderName,
@@ -550,7 +614,7 @@ static Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitPass
         // Same .bind + .surface pair as the G-buffer PS.
         CookString generatedSource(arena);
         BuildGeneratedMaterialPixelShaderSource(
-            "// Generated per-material AVBOIT pass pixel shader: engine AVBOIT pass authoring + this material's\n",
+            s_AvboitGeneratedPixelShaderHeaderLine,
             spec.authoringHeaderInclude,
             AStringView(entry.materialInterface),
             AStringView(entry.surfaceSource),
@@ -597,7 +661,14 @@ static Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitPass
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 Expected<MaterialCookVector<GeneratedMaterialPixelShader>> MaterialAvboitShaderGenerator::EmitAccumulate(
     const Path& cacheDirectory,
@@ -815,7 +886,7 @@ b8 AssignMaterialShadingModelIds(const Span<MaterialCookEntry> materialEntries, 
 Expected<Path> EmitDeferredBxdfDispatchModule(const Path& cacheDirectory, const AStringView configurationSafeName, const Span<const MaterialCookEntry> materialEntries, Core::Alloc::ScratchArena& scratchArena){
     using namespace MaterialCookDetail;
     Path includeRoot = cacheDirectory / configurationSafeName / s_DeferredBxdfIncludeSubDir;
-    if(!Core::Assets::PrepareGeneratedIncludeRoot(includeRoot, "Deferred bxdf dispatch"))
+    if(!Core::Assets::PrepareGeneratedIncludeRoot(includeRoot, s_DeferredBxdfDispatchGenerationLabel))
         return MakeUnexpected(Failure{});
 
     // Each assigned BXDF id maps to one source; materials sharing that source share the slot.
@@ -838,10 +909,8 @@ Expected<Path> EmitDeferredBxdfDispatchModule(const Path& cacheDirectory, const 
 
         const AStringView source(entry.bxdfSource);
         AStringView& slot = sourceById[entry.shadingModelId];
-        if(!slot.empty() && slot != source){
-            NWB_LOGGER_ERROR(NWB_TEXT("Deferred bxdf dispatch: shading model id {} maps to multiple bxdf sources"), entry.shadingModelId);
+        if(!ValidateUniqueDeferredBxdfSlot(entry.shadingModelId, slot, source))
             return MakeUnexpected(Failure{});
-        }
         slot = source;
     }
 
@@ -884,7 +953,7 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShad
     if(!ValidateGeneratedMaterialMeshShader(generatedShaderCount, sharedMeshShaderName))
         return MakeUnexpected(Failure{});
 
-    const ScratchPath generatedRoot = ScratchPath(scratchArena, cacheDirectory) / configurationSafeName / s_GeneratedCacheDirectory / "material_pixel_shaders";
+    const ScratchPath generatedRoot = ScratchPath(scratchArena, cacheDirectory) / configurationSafeName / s_GeneratedCacheDirectory / s_MaterialGeneratedPixelShaderDirLeaf;
     auto removeAllIfExistsResult = RemoveAllIfExists(generatedRoot);
     if(!removeAllIfExistsResult){
         NWB_LOGGER_ERROR(NWB_TEXT("Material pixel shader generation: failed to clear generated directory '{}': {}"), PathToString<tchar>(generatedRoot), ConvertString(removeAllIfExistsResult.error().message()));
@@ -907,8 +976,8 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShad
         // Engine authoring + .bind + surface hook; mesh stage is shared.
         CookString generatedSource(arena);
         BuildGeneratedMaterialPixelShaderSource(
-            "// Generated per-material G-buffer pixel shader: engine pixel-shader authoring + this material's\n",
-            "mesh/material_ps_authoring.slangi",
+            s_MaterialGeneratedPixelShaderHeaderLine,
+            s_MaterialGeneratedPixelShaderAuthoringHeader,
             AStringView(entry.materialInterface),
             AStringView(entry.surfaceSource),
             generatedSource
@@ -929,7 +998,7 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShad
         }
 
         GeneratedMaterialPixelShader generated(arena);
-        generated.name += "generated/material_ps/";
+        generated.name += s_MaterialGeneratedPixelShaderNamePrefix;
         generated.name += entry.virtualPath;
         AssignGeneratedMaterialShaderSource(outputPath, scratchArena, generated.source);
 
@@ -978,10 +1047,8 @@ b8 ValidateMaterialCookInterfaces(const Span<const MaterialBindEntry> materialBi
         materialEntry.typedBlockBytes.clear();
         materialEntry.resourceReferences.clear();
 
-        if(materialEntry.materialInterface.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' is missing required material interface"), ConvertString(AStringView(materialEntry.virtualPath)));
+        if(!ValidateNonEmptyMaterialCookInterface(AStringView(materialEntry.virtualPath), AStringView(materialEntry.materialInterface)))
             return false;
-        }
 
         const auto materialInterfaceNameResult = Name::FromText(AStringView(materialEntry.materialInterface));
         if(!materialInterfaceNameResult){
@@ -1095,7 +1162,7 @@ Expected<Path> ShadowSurfaceDispatchGenerator::emit(
 ){
     using namespace MaterialCookDetail;
     Path includeRoot = cacheDirectory / configurationSafeName / s_ShadowSurfaceIncludeSubDir;
-    if(!Core::Assets::PrepareGeneratedIncludeRoot(includeRoot, "Shadow surface dispatch"))
+    if(!Core::Assets::PrepareGeneratedIncludeRoot(includeRoot, s_ShadowSurfaceDispatchGenerationLabel))
         return MakeUnexpected(Failure{});
 
     // Each surface id maps to one source and .bind interface; shared surfaces require the same interface because their hooks use fixed accessor names.
@@ -1120,19 +1187,12 @@ Expected<Path> ShadowSurfaceDispatchGenerator::emit(
             continue;
 
         const AStringView surface(entry.surfaceSource);
-        AStringView& surfaceSlot = surfaceById[entry.surfaceDispatchId];
-        if(!surfaceSlot.empty() && surfaceSlot != surface){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: model id {} maps to multiple surface sources"), entry.surfaceDispatchId);
-            return MakeUnexpected(Failure{});
-        }
-        surfaceSlot = surface;
-
         const AStringView interfaceName(entry.materialInterface);
+        AStringView& surfaceSlot = surfaceById[entry.surfaceDispatchId];
         AStringView& interfaceSlot = interfaceById[entry.surfaceDispatchId];
-        if(!interfaceSlot.empty() && interfaceSlot != interfaceName){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: model id {} maps to multiple material interfaces"), entry.surfaceDispatchId);
+        if(!ValidateUniqueShadowSurfaceDispatchSlot(entry.surfaceDispatchId, surfaceSlot, surface, interfaceSlot, interfaceName))
             return MakeUnexpected(Failure{});
-        }
+        surfaceSlot = surface;
         interfaceSlot = interfaceName;
     }
 
@@ -1332,7 +1392,14 @@ b8 MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
 
 NWB_IMPL_END
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 }
 
 

@@ -2,8 +2,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsSubsystemRuntimeAdhdModule(in u64 value){
-    return value != 0u;
+b8 ValidateSubsystemHasDeclaredFields(in usize fieldCount){
+    if(fieldCount > 0u)
+        return true;
+
+    error("ISubsystem::validatePayload failed: subsystem must declare at least one asset field");
+    return false;
+}
+
+b8 ValidateNonEmptySubsystemAssetRefName(in Name assetName){
+    if(assetName != s_NameNone)
+        return true;
+
+    error("ISubsystem::loadBinary failed: asset reference must not be empty");
+    return false;
 }
 
 
@@ -71,10 +83,8 @@ b8 ValidatePayload(const ISubsystem& subsystem){
     }
 
     const usize count = subsystem.fieldCount();
-    if(count == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::validatePayload failed: subsystem must declare at least one asset field"));
+    if(!ValidateSubsystemHasDeclaredFields(count))
         return false;
-    }
 
     for(usize i = 0u; i < count; ++i){
         const SubsystemFieldValueDescriptor descriptor = subsystem.fieldDescriptor(i);
@@ -124,10 +134,8 @@ b8 LoadBinary(const Span<const u8> binary, ISubsystem& outSubsystem){
         outSubsystem.clearFieldValues(i);
         for(u64 elementIndex = 0u; elementIndex < elementCount; ++elementIndex){
             const Name assetName(assetHashes[hashOffset++]);
-            if(!assetName){
-                NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::loadBinary failed: asset reference must not be empty"));
+            if(!ValidateNonEmptySubsystemAssetRefName(assetName))
                 return false;
-            }
             outSubsystem.appendFieldValue(i, assetName);
         }
     }

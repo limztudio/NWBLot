@@ -35,6 +35,7 @@ if(NWB_BUILD_PIPELINE)
         SOURCES
             "${CMAKE_CURRENT_LIST_DIR}/runtime.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/cook.adhd"
+            "${CMAKE_CURRENT_LIST_DIR}/cook_internal.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/cook_compiler_and_metadata.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/shader_define_planner.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/slang_compiler.adhd"

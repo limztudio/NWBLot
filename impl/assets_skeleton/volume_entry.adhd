@@ -2,9 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsSkeletonVolumeEntryAdhdModule(in u64 value){
-    return value != 0u;
-}
+const b8 s_SkeletonCookEntryLogBuildFailure = true;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,7 +47,7 @@ static b8 RegisterSkeletonCookEntry(Core::Assets::CookEntryRegistry& registry){
         [](SkeletonCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
             return BuildSkeletonAsset(entry, arena, scratchArena);
         },
-        true,
+        s_SkeletonCookEntryLogBuildFailure,
         registry
     );
 }

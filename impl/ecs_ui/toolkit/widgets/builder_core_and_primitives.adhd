@@ -2,8 +2,58 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsUiToolkitWidgetsBuilderCoreAndPrimitivesAdhdModule(in u64 value){
-    return value != 0u;
+#include <impl/ecs_ui/toolkit/widgets/popup_style.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Rect s_FullImageUvRect = Rect(0.0f, 0.0f, 1.0f, 1.0f);
+const Point s_CompoundPopupPlaceholderSize = Point(1.0f, 1.0f);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsValidPanelDirection(in LayoutDirection direction){
+    return direction == LayoutDirection::Row || direction == LayoutDirection::Column;
+}
+
+b8 IsValidSeparatorDeclaration(in SeparatorOptions options){
+    return options.direction <= SeparatorDirection::Vertical && IsFinite(options.thickness) && options.thickness >= 0.0f;
+}
+
+b8 IsBasicControlInteractive(in WidgetKind kind){
+    return kind == WidgetKind::Button || kind == WidgetKind::Checkbox;
+}
+
+b8 IsPopupLoanCurrent(in b8 isOpen, in u64 stateInstanceGeneration, in u64 stateOpenGeneration, in PopupToken token){
+    return isOpen && stateInstanceGeneration == token.instanceGeneration && stateOpenGeneration == token.openGeneration;
+}
+
+b8 ResolveSliderThumbPressedState(in b8 interactive, in b8 primaryDown, in WidgetId captureId, in WidgetId trackId, in WidgetId thumbId){
+    return interactive && primaryDown && (captureId == trackId || captureId == thumbId);
+}
+
+LayoutNodeDesc BuildSizedLeafNodeDesc(in LayoutSize width, in LayoutSize height, in Point intrinsicSize){
+    LayoutNodeDesc description;
+    description.width = width;
+    description.height = height;
+    description.intrinsicSize = intrinsicSize;
+    return description;
+}
+
+LayoutNodeDesc BuildWidthLeafNodeDesc(in LayoutSize width, in Point intrinsicSize){
+    LayoutNodeDesc description;
+    description.width = width;
+    description.intrinsicSize = intrinsicSize;
+    return description;
+}
+
+PopupOptions BuildCompoundPopupReservationOptions(){
+    PopupOptions options;
+    options.size = s_CompoundPopupPlaceholderSize;
+    return options;
 }
 
 
@@ -12,6 +62,7 @@ b8 ImplEcsUiToolkitWidgetsBuilderCoreAndPrimitivesAdhdModule(in u64 value){
 
 native{
 #include <impl/ecs_ui/toolkit/builder.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/builder_coordinators.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/ui_scope_descriptor_factory.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/control_style_metrics.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/hit_target_factory.adhd.h>
@@ -36,245 +87,6 @@ NWB_IMPL_UI_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#ifndef NWB_IMPL_ECS_UI_TOOLKIT_BUILDER_COORDINATORS_INTERNAL_H
-#define NWB_IMPL_ECS_UI_TOOLKIT_BUILDER_COORDINATORS_INTERNAL_H
-class Builder;
-
-
-class ComboCoordinator final{
-private:
-    using Item = BuilderScopeFrame::Item;
-    using ListFrame = BuilderScopeFrame::ListFrame;
-    using ComboFrame = BuilderScopeFrame::ComboFrame;
-
-
-public:
-    explicit ComboCoordinator(Builder& builder)noexcept
-        : m_builder(builder)
-    {}
-
-
-public:
-    [[nodiscard]] ComboResult declareCombo(AStringView stableKey, const IListDataSource& source, const ComboOptions& options, const SearchComboOptions* searchOptions, ComboState& state, SearchComboState* search, ISearchableListDataSource* searchSource);
-    [[nodiscard]] SearchComboResult searchComboBox(AStringView stableKey, ISearchableListDataSource& source, SearchComboState& state, const SearchComboOptions& options);
-    [[nodiscard]] b8 paintCombo(const Item& item, const LayoutBox& box);
-    [[nodiscard]] b8 paintCombos();
-
-
-private:
-    [[nodiscard]] b8 paintComboPopup(ComboFrame& frame);
-    [[nodiscard]] b8 applyComboInput(const WidgetState& field, ComboFrame& frame, ComboResult& result);
-    [[nodiscard]] b8 applyComboListInput(ComboFrame& frame, ComboResult& result);
-    [[nodiscard]] b8 prepareComboSearch(const WidgetState& field, ComboFrame& frame);
-    void snapshotComboQuery(ComboFrame& frame)noexcept;
-    [[nodiscard]] b8 paintComboQuery(ComboFrame& frame, LayoutBox& content);
-
-
-private:
-    Builder& m_builder;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class Builder;
-
-
-class ContextMenuCoordinator final{
-private:
-    using Item = BuilderScopeFrame::Item;
-    using ListFrame = BuilderScopeFrame::ListFrame;
-    using ContextMenuFrame = BuilderScopeFrame::ContextMenuFrame;
-
-
-public:
-    explicit ContextMenuCoordinator(Builder& builder)noexcept
-        : m_builder(builder)
-    {}
-
-
-public:
-    [[nodiscard]] ContextMenuResult declareMenu(AStringView stableKey, AStringView anchorKey, const IListDataSource& source, ContextMenuState& state, const ContextMenuOptions& options);
-    [[nodiscard]] b8 paintMenus();
-
-
-private:
-    [[nodiscard]] b8 prepareContextMenu(ContextMenuFrame& frame, ContextMenuResult& result);
-    [[nodiscard]] b8 applyContextMenuInput(ContextMenuFrame& frame, ContextMenuResult& result);
-    void snapshotContextMenu(ContextMenuFrame& frame)noexcept;
-    [[nodiscard]] b8 paintContextMenuPopup(ContextMenuFrame& frame);
-
-
-private:
-    Builder& m_builder;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class Builder;
-
-
-class EditBoxCoordinator final{
-private:
-    using Item = BuilderScopeFrame::Item;
-    using IntegerEditFrame = BuilderScopeFrame::IntegerEditFrame;
-    using FloatEditFrame = BuilderScopeFrame::FloatEditFrame;
-
-
-public:
-    explicit EditBoxCoordinator(Builder& builder)noexcept
-        : m_builder(builder)
-    {}
-
-
-public:
-    [[nodiscard]] EditBoxResult declareEditBox(AStringView stableKey, const EditBoxOptions& options, EditModel& model, EditBoxState& state, IEditActionSink* actions, IntegerEditFrame* integerFrame, FloatEditFrame* floatFrame);
-    [[nodiscard]] b8 prepareEditBox(const EditBoxResult& result, EditModel& model, EditBoxState& state, Item& item);
-    [[nodiscard]] b8 paintEditBox(const Item& item, const LayoutBox& box, const HitTarget* navigation);
-
-
-private:
-    Builder& m_builder;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class Builder;
-
-
-class ListCoordinator final{
-private:
-    using Item = BuilderScopeFrame::Item;
-    using ListFrame = BuilderScopeFrame::ListFrame;
-    using ListRow = BuilderScopeFrame::ListRow;
-
-
-public:
-    explicit ListCoordinator(Builder& builder)noexcept
-        : m_builder(builder)
-    {}
-
-
-public:
-    [[nodiscard]] ListResult virtualList(AStringView stableKey, const IListDataSource& source, ListState& state, const ListOptions& options);
-    [[nodiscard]] const UiSkinRegion* prepareListFrame(const IListDataSource& source, ListState& state, const ListOptions& options, const ControlToken& token, u64 rowCount, b8 focusOnCommit, WidgetId commandFocus, ListFrame& outFrame);
-    [[nodiscard]] b8 paintList(const Item& item, const LayoutBox& box);
-
-
-private:
-    [[nodiscard]] b8 prepareListMetrics(ListFrame& frame);
-    [[nodiscard]] b8 paintListRows(const Item& item, const ListFrame& frame, const ScrollPlacement& placement);
-
-
-private:
-    Builder& m_builder;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class Builder;
-
-
-class NumericEditCoordinator final{
-private:
-    using IntegerEditFrame = BuilderScopeFrame::IntegerEditFrame;
-    using FloatEditFrame = BuilderScopeFrame::FloatEditFrame;
-
-
-public:
-    explicit NumericEditCoordinator(Builder& builder)noexcept
-        : m_builder(builder)
-    {}
-
-
-public:
-    [[nodiscard]] NumericEditBoxResult integerEdit(AStringView stableKey, IntegerEditModel& model, EditBoxState& state, const IntegerEditOptions& options);
-    [[nodiscard]] NumericEditBoxResult floatEdit(AStringView stableKey, FloatEditModel& model, EditBoxState& state, const FloatEditOptions& options);
-
-
-private:
-    template<typename FrameT, typename ModelT, typename OptionsT, typename ValidateBoundsF, typename FrameListT>
-    [[nodiscard]] NumericEditBoxResult declareNumericEdit(AStringView stableKey, ModelT& model, EditBoxState& state, const OptionsT& options, ValidateBoundsF validateBounds, FrameListT& frames);
-
-
-private:
-    Builder& m_builder;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class Builder;
-
-
-class TextAreaCoordinator final{
-private:
-    using Item = BuilderScopeFrame::Item;
-    using TextAreaFrame = BuilderScopeFrame::TextAreaFrame;
-
-
-public:
-    explicit TextAreaCoordinator(Builder& builder)noexcept
-        : m_builder(builder)
-    {}
-
-
-public:
-    [[nodiscard]] EditBoxResult declareTextArea(AStringView stableKey, EditModel& model, TextAreaState& state, const TextAreaOptions& options);
-    [[nodiscard]] b8 paintTextArea(const Item& item, const LayoutBox& box);
-
-
-private:
-    [[nodiscard]] b8 textAreaAvailable(const EditModel& model, const TextAreaState& state)const noexcept;
-    void snapshotTextArea(TextAreaFrame& frame)noexcept;
-    [[nodiscard]] b8 applyTextAreaScrollInput(const Item& item, const TextAreaFrame& frame, const ControlToken& token);
-    [[nodiscard]] b8 paintTextAreaScrollbars(const Item& item, const ScrollViewportPlacement& placement, const Rect& clip, const ControlToken& token);
-
-
-private:
-    Builder& m_builder;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class Builder;
-
-
-class TooltipCoordinator final{
-private:
-    using Item = BuilderScopeFrame::Item;
-    using TooltipFrame = BuilderScopeFrame::TooltipFrame;
-
-
-public:
-    explicit TooltipCoordinator(Builder& builder)noexcept
-        : m_builder(builder)
-    {}
-
-
-public:
-    [[nodiscard]] b8 declareTooltip(AStringView stableKey, AStringView anchorKey, StringView text, TooltipState& state, const TooltipOptions& options);
-    [[nodiscard]] b8 paintTooltips();
-
-
-private:
-    Builder& m_builder;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#endif
-
 
 Builder::Builder(Core::Alloc::GlobalArena& arena, Context& context, PaintBuilder& paint, TextService& text)
     : m_arena(arena)
@@ -292,7 +104,7 @@ Builder::Builder(Core::Alloc::GlobalArena& arena, Context& context, PaintBuilder
 }
 
 b8 Builder::beginPanel(const AStringView stableKey, const Rect& bounds, const LayoutDirection::Enum direction){
-    if(declarationBlocked() || m_scope->m_panelActive || m_scope->m_windowActive || !m_skin || (direction != LayoutDirection::Row && direction != LayoutDirection::Column)){
+    if(declarationBlocked() || m_scope->m_panelActive || m_scope->m_windowActive || !m_skin || !IsValidPanelDirection(direction)){
         m_context.fail();
         return false;
     }
@@ -387,7 +199,7 @@ void Builder::reset()noexcept{
 }
 
 b8 Builder::separator(const AStringView stableKey, const SeparatorOptions& options){
-    if(itemDeclarationBlocked() || options.direction > SeparatorDirection::Vertical || !IsFinite(options.thickness) || options.thickness < 0.0f){
+    if(itemDeclarationBlocked() || !IsValidSeparatorDeclaration(options)){
         m_context.fail();
         return false;
     }
@@ -512,10 +324,7 @@ Expected<NotNull<Builder::Item*>> Builder::addItem(const AStringView stableKey, 
         intrinsicSize = ResolveCheckboxIntrinsicSize(textSize, *checkboxExtent, m_style.gap);
         item.checkboxExtent = *checkboxExtent;
     }
-    LayoutNodeDesc description;
-    description.width = options.width;
-    description.height = options.height;
-    description.intrinsicSize = intrinsicSize;
+    const LayoutNodeDesc description = BuildSizedLeafNodeDesc(options.width, options.height, intrinsicSize);
     if(!addItemNode(description, item))
         return MakeUnexpected(Failure{});
     m_scope->m_items.push_back(Move(item));
@@ -717,10 +526,7 @@ b8 Builder::publishImageFrame(const WidgetState& widget, ImageFrame&& frame){
     Item item(m_arena);
     item.state = widget;
     item.image = static_cast<u32>(m_scope->m_images.size());
-    LayoutNodeDesc description;
-    description.width = frame.options.width;
-    description.height = frame.options.height;
-    description.intrinsicSize = frame.metrics.contentSize;
+    const LayoutNodeDesc description = BuildSizedLeafNodeDesc(frame.options.width, frame.options.height, frame.metrics.contentSize);
     if(!addItemNode(description, item))
         return false;
     m_scope->m_images.push_back(Move(frame));
@@ -736,7 +542,7 @@ b8 Builder::paintImage(const Item& item, const LayoutBox& box){
     if(!placement)
         return false;
     m_paint.pushClip(placement->clip);
-    const b8 painted = frame.source ? m_paint.drawImage(frame.source, placement->bounds, { 0.0f, 0.0f, 1.0f, 1.0f }, frame.options.tint) : m_paint.drawRegion(frame.region, placement->bounds, frame.options.tint);
+    const b8 painted = frame.source ? m_paint.drawImage(frame.source, placement->bounds, s_FullImageUvRect, frame.options.tint) : m_paint.drawRegion(frame.region, placement->bounds, frame.options.tint);
     return finishClipPaint(item, placement->bounds, placement->clip, painted);
 }
 
@@ -767,9 +573,7 @@ b8 Builder::progress(const AStringView stableKey, const f64 fraction, const Prog
     Item item(m_arena);
     item.state = **widget;
     item.progress = static_cast<u32>(m_scope->m_progress.size());
-    LayoutNodeDesc description;
-    description.width = frame.options.width;
-    description.intrinsicSize = frame.metrics.contentSize;
+    const LayoutNodeDesc description = BuildWidthLeafNodeDesc(frame.options.width, frame.metrics.contentSize);
     if(!addItemNode(description, item))
         return false;
     m_scope->m_progress.push_back(Move(frame));
@@ -837,7 +641,7 @@ b8 Builder::paintItem(const Item& item, const LayoutBox& box){
     const b8 hover = input.hover() == item.state.id;
     const b8 pressed = input.pressed(item.state.id);
     const b8 focused = input.focus() == item.state.id;
-    const b8 interactive = item.state.kind == WidgetKind::Button || item.state.kind == WidgetKind::Checkbox;
+    const b8 interactive = IsBasicControlInteractive(item.state.kind);
     const Rect clip = visibleClip(box.clip);
     if(!ControlVisualPainter().paintBasicControlItemVisual(
         m_paint,
@@ -1098,8 +902,7 @@ void Builder::releasePopupFamily()noexcept{
 }
 
 b8 Builder::reserveCompoundPopup(const WidgetState& widget, const PopupToken& token){
-    PopupOptions options;
-    options.size = { 1.0f, 1.0f };
+    const PopupOptions options = BuildCompoundPopupReservationOptions();
     const auto placement = PlacePopup(options, m_paint.displayMetrics());
     if(!placement)
         return false;
@@ -1166,7 +969,7 @@ public:
             return false;
         for(usize index = 0u; index < m_count; ++index){
             const PopupLoan& loan = *m_popups[index];
-            if(!loan.state.isOpen() || loan.state.instanceGeneration() != loan.token.instanceGeneration || loan.state.openGeneration() != loan.token.openGeneration)
+            if(!IsPopupLoanCurrent(loan.state.isOpen(), loan.state.instanceGeneration(), loan.state.openGeneration(), loan.token))
                 return false;
         }
         return true;
@@ -1266,9 +1069,7 @@ RadioGroupResult Builder::radioGroup(const AStringView stableKey, const IListDat
     item.state = **widget;
     item.enabled = interactive;
     item.radioGroup = static_cast<u32>(m_scope->m_radioGroups.size());
-    LayoutNodeDesc description;
-    description.width = options.width;
-    description.intrinsicSize = frame.m_metrics.contentSize;
+    const LayoutNodeDesc description = BuildWidthLeafNodeDesc(options.width, frame.m_metrics.contentSize);
     if(!addItemNode(description, item)){
         result.valid = false;
         return result;
@@ -1423,9 +1224,7 @@ b8 Builder::slider(const AStringView stableKey, SliderState& state, const Slider
     item.state = **widget;
     item.enabled = options.enabled;
     item.slider = static_cast<u32>(m_scope->m_sliders.size());
-    LayoutNodeDesc description;
-    description.width = options.width;
-    description.intrinsicSize = frame.m_metrics.contentSize;
+    const LayoutNodeDesc description = BuildWidthLeafNodeDesc(options.width, frame.m_metrics.contentSize);
     if(!addItemNode(description, item))
         return false;
     m_scope->m_sliders.push_back(Move(frame));
@@ -1508,7 +1307,7 @@ b8 Builder::paintSlider(const Item& item, const LayoutBox& box){
     if(!thumbId)
         return false;
     const b8 hover = interactive && input.hover() == *thumbId;
-    const b8 pressed = interactive && input.primaryDown() && (input.capture() == *trackId || input.capture() == *thumbId);
+    const b8 pressed = ResolveSliderThumbPressedState(interactive, input.primaryDown(), input.capture(), *trackId, *thumbId);
     const b8 focused = input.focus() == item.state.id;
     if(!ControlVisualPainter().paintSliderVisual(m_paint, *m_skin, frame.m_style, *placement, interactive, pressed, hover, focused) || !sliderMatches(frame))
         return false;
@@ -1535,9 +1334,6 @@ b8 Builder::paintSlider(const Item& item, const LayoutBox& box){
 
 
 NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 }
 
 

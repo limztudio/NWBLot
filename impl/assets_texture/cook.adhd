@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_texture/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 #if defined(NWB_COOK)
 
@@ -71,8 +77,33 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsTextureCookAdhdModule(in u64 value){
-    return value != 0u;
+const StringView s_TextureUnsupportedAlphaModeHint = "has unsupported alpha_mode";
+const StringView s_TextureUnsupportedFormatHint = "has unsupported texture format";
+const StringView s_TextureUnsupportedDimensionHint = "has unsupported texture dimension";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsValidTextureUnsignedFieldValue(in i64 rawValue, in u32 minimum, in u32 maximum){
+    if(rawValue < 0)
+        return false;
+    const u64 unsignedValue = cast<u64>(rawValue);
+    return unsignedValue >= cast<u64>(minimum) && unsignedValue <= cast<u64>(maximum);
+}
+
+usize ExpectedTextureResolutionComponentCount(in b8 isVolumeDimension){
+    if(isVolumeDimension)
+        return s_VolumeResolutionComponentCount;
+    return s_PlanarResolutionComponentCount;
+}
+
+b8 IsPositiveTextureResolutionDimension(in i64 rawValue){
+    return rawValue > 0 && cast<u64>(rawValue) <= cast<u64>(u32.max);
+}
+
+b8 IsValidCubeTextureResolution(in b8 isCubeDimension, in u32 width, in u32 height){
+    return !isCubeDimension || width == height;
 }
 
 
@@ -84,6 +115,8 @@ native{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/assets_texture/texture_binary_codec.adhd.h>
 
 #include <core/assets/binary_payload_io.h>
@@ -125,7 +158,7 @@ static Core::Assets::AssetPairedSidecarRuleAutoRegistrar s_TexturePairedSidecarR
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required"), ConvertString(s_TextureDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
         return MakeUnexpected(Failure{});
     }
-    if(!field->isInteger() || field->asInteger() < 0 || static_cast<u64>(field->asInteger()) < minimum || static_cast<u64>(field->asInteger()) > maximum){
+    if(!field->isInteger() || !IsValidTextureUnsignedFieldValue(field->asInteger(), minimum, maximum)){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be an integer in [{}, {}]"), ConvertString(s_TextureDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName), minimum, maximum);
         return MakeUnexpected(Failure{});
     }
@@ -134,7 +167,7 @@ static Core::Assets::AssetPairedSidecarRuleAutoRegistrar s_TexturePairedSidecarR
 
 [[nodiscard]] static Expected<TextureResolution> ReadResolution(const Path& nwbFilePath, const Value& asset, const TextureDimension::Enum dimension){
     const Value* const field = asset.findField(s_TextureResolutionField);
-    const usize componentCount = dimension == TextureDimension::Texture3D ? s_VolumeResolutionComponentCount : s_PlanarResolutionComponentCount;
+    const usize componentCount = ExpectedTextureResolutionComponentCount(dimension == TextureDimension::Texture3D);
     if(!field || !field->isList() || field->asList().size() != componentCount){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': resolution must contain exactly {} positive integer dimensions"), ConvertString(s_TextureDiagnosticPrefix), PathToString<tchar>(nwbFilePath), componentCount);
         return MakeUnexpected(Failure{});
@@ -142,13 +175,13 @@ static Core::Assets::AssetPairedSidecarRuleAutoRegistrar s_TexturePairedSidecarR
     Array<u32, s_VolumeResolutionComponentCount> dimensions{ 0u, 0u, 1u };
     for(usize component = 0u; component < componentCount; ++component){
         const Value& value = field->asList()[component];
-        if(!value.isInteger() || value.asInteger() <= 0 || static_cast<u64>(value.asInteger()) > Limit<u32>::s_Max){
+        if(!value.isInteger() || !IsPositiveTextureResolutionDimension(value.asInteger())){
             NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': resolution component {} must be a positive u32 integer"), ConvertString(s_TextureDiagnosticPrefix), PathToString<tchar>(nwbFilePath), component);
             return MakeUnexpected(Failure{});
         }
         dimensions[component] = static_cast<u32>(value.asInteger());
     }
-    if(dimension == TextureDimension::TextureCube && dimensions[0u] != dimensions[1u]){
+    if(!IsValidCubeTextureResolution(dimension == TextureDimension::TextureCube, dimensions[0u], dimensions[1u])){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': cube resolution must be square"), ConvertString(s_TextureDiagnosticPrefix), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
@@ -231,7 +264,7 @@ Expected<TextureCookEntry> ParseTextureCookMetadata(const Name virtualPath, cons
         s_TextureDiagnosticPrefix,
         s_TextureAlphaModeField,
         TextureFormat::s_AlphaModeCases,
-        "has unsupported alpha_mode"
+        s_TextureUnsupportedAlphaModeHint
     );
     if(!alphaMode)
         return MakeUnexpected(Failure{});
@@ -246,7 +279,7 @@ Expected<TextureCookEntry> ParseTextureCookMetadata(const Name virtualPath, cons
         s_TextureDiagnosticPrefix,
         s_TextureFormatField,
         TextureFormat::s_PayloadFormatCases,
-        "has unsupported texture format"
+        s_TextureUnsupportedFormatHint
     );
     const auto dimension = Core::Assets::ParseNamedMetadataEnumField<TextureDimension::Enum>(
         nwbFilePath,
@@ -254,7 +287,7 @@ Expected<TextureCookEntry> ParseTextureCookMetadata(const Name virtualPath, cons
         s_TextureDiagnosticPrefix,
         s_TextureDimensionField,
         TextureFormat::s_DimensionCases,
-        "has unsupported texture dimension"
+        s_TextureUnsupportedDimensionHint
     );
     if(!format || !dimension)
         return MakeUnexpected(Failure{});

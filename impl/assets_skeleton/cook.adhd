@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_skeleton/joint_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 #if defined(NWB_COOK)
 
@@ -63,8 +69,24 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsSkeletonCookAdhdModule(in u64 value){
-    return value != 0u;
+b8 HasSkeletonJointMatrixRowCount(in usize rowCount){
+    return rowCount == cast<usize>(s_SkeletonJointMatrixRowCount);
+}
+
+b8 HasSkeletonJointMatrixColumnCount(in usize columnCount){
+    return columnCount == cast<usize>(s_SkeletonJointMatrixColumnCount);
+}
+
+SkeletonJointMatrix BuildSkeletonJointMatrixFromRows(
+    in Array<f32, 4> row0,
+    in Array<f32, 4> row1,
+    in Array<f32, 4> row2
+){
+    return SkeletonJointMatrix(
+        row0[0u], row0[1u], row0[2u], row0[3u],
+        row1[0u], row1[1u], row1[2u], row1[3u],
+        row2[0u], row2[1u], row2[2u], row2[3u]
+    );
 }
 
 
@@ -76,6 +98,8 @@ native{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/assets_skeleton/cook_matrix.adhd.h>
 
 #include <core/assets/binary_payload_io.h>
@@ -141,22 +165,20 @@ using namespace Core::Metascript;
 
 
 Expected<SkeletonJointMatrix> AssetsSkeletonCookDetail::ParseSkeletonJointMatrixValue(const Path& nwbFilePath, const Core::Metascript::Value& value, const AStringView metaKind, const AStringView label){
-    SkeletonJointMatrix matrix = ::MatrixIdentity<Float34>();
-
-    if(!value.isList() || value.asList().size() != s_SkeletonJointMatrixRowCount){
+    if(!value.isList() || !HasSkeletonJointMatrixRowCount(value.asList().size())){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must be a 3x4 affine matrix"), ConvertString(metaKind), PathToString<tchar>(nwbFilePath), ConvertString(label));
         return MakeUnexpected(Failure{});
     }
 
+    Array<Array<f32, s_SkeletonJointMatrixColumnCount>, s_SkeletonJointMatrixRowCount> matrixRows{};
     const auto& rows = value.asList();
     for(usize rowIndex = 0u; rowIndex < s_SkeletonJointMatrixRowCount; ++rowIndex){
         const Core::Metascript::Value& row = rows[rowIndex];
-        if(!row.isList() || row.asList().size() != s_SkeletonJointMatrixColumnCount){
+        if(!row.isList() || !HasSkeletonJointMatrixColumnCount(row.asList().size())){
             NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' row {} must have 4 numeric values"), ConvertString(metaKind), PathToString<tchar>(nwbFilePath), ConvertString(label), rowIndex);
             return MakeUnexpected(Failure{});
         }
 
-        Array<f32, s_SkeletonJointMatrixColumnCount> rowValues{};
         const auto& columns = row.asList();
         for(usize columnIndex = 0u; columnIndex < s_SkeletonJointMatrixColumnCount; ++columnIndex){
             const Core::Metascript::Value& column = columns[columnIndex];
@@ -170,13 +192,11 @@ Expected<SkeletonJointMatrix> AssetsSkeletonCookDetail::ParseSkeletonJointMatrix
                 NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' row {} column {} is non-finite or outside f32 range"), ConvertString(metaKind), PathToString<tchar>(nwbFilePath), ConvertString(label), rowIndex, columnIndex);
                 return MakeUnexpected(Failure{});
             }
-            rowValues[columnIndex] = *columnIndexResult;
+            matrixRows[rowIndex][columnIndex] = *columnIndexResult;
         }
-
-        matrix.rows[rowIndex] = Float4(rowValues[0u], rowValues[1u], rowValues[2u], rowValues[3u]);
     }
 
-    return matrix;
+    return BuildSkeletonJointMatrixFromRows(matrixRows[0u], matrixRows[1u], matrixRows[2u]);
 }
 
 

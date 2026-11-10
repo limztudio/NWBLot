@@ -2,8 +2,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsModelRuntimeAdhdModule(in u64 value){
-    return value != 0u;
+#include <impl/assets_model/model_binary_codec.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 DeserializeModelBinaryPayload(
+    in Span<u8> binary,
+    mut Vector<ModelSkeletonObject> outSkeletonObjects,
+    mut Vector<ModelStaticMeshObject> outStaticMeshObjects,
+    mut Vector<ModelSkinnedMeshObject> outSkinnedMeshObjects
+){
+    ModelBinaryCodec codec;
+    return codec.deserialize(binary, outSkeletonObjects, outStaticMeshObjects, outSkinnedMeshObjects);
 }
 
 
@@ -12,8 +24,6 @@ b8 ImplAssetsModelRuntimeAdhdModule(in u64 value){
 
 native{
 #include <impl/assets_model/asset.adhd.h>
-
-#include <impl/assets_model/model_binary_codec.adhd.h>
 
 #include <core/assets/auto_registration.h>
 #include <core/assets/binary_payload_io.h>
@@ -57,7 +67,7 @@ b8 Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
 b8 Model::loadBinary(const Span<const u8> binary){
     Core::Alloc::ScratchArena scratchArena(s_AssetsModelLoadBinaryArena);
     Model candidate(m_skeletonObjects.get_allocator().arena(), virtualPath());
-    if(!ModelBinaryCodec().deserialize(binary, candidate.m_skeletonObjects, candidate.m_staticMeshObjects, candidate.m_skinnedMeshObjects) || !candidate.validatePayload(scratchArena))
+    if(!DeserializeModelBinaryPayload(binary, candidate.m_skeletonObjects, candidate.m_staticMeshObjects, candidate.m_skinnedMeshObjects) || !candidate.validatePayload(scratchArena))
         return false;
     *this = Move(candidate);
     return true;

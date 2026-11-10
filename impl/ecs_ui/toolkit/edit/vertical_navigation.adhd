@@ -2,9 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-#include <impl/ecs_ui/toolkit/edit/commands.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/commands.adhd>
 
+native{
 #include <global/atomic_identity.h>
 
 
@@ -45,12 +45,15 @@ public:
     [[nodiscard]] f32 preferredX()const noexcept{ return m_preferredX; }
 
     [[nodiscard]] b8 hasPreferredX()const noexcept{ return m_valid; }
+
     [[nodiscard]] EditNavigationSnapshot snapshot()const noexcept{
         return EditNavigationSnapshot(m_instanceGeneration, m_generation, m_preferredX, m_valid);
     }
+
     [[nodiscard]] b8 matches(const EditNavigationSnapshot& snapshot)const noexcept{
         return snapshot == this->snapshot();
     }
+
     [[nodiscard]] b8 setPreferredX(const f32 preferredX)noexcept{
         const auto resolved = TryResolveEditNavigationPreferredX(preferredX);
         if(!resolved)
@@ -60,6 +63,7 @@ public:
         AdvanceNonWrappingRevision(m_generation);
         return true;
     }
+
     void reset()noexcept{
         AdvanceNonWrappingRevision(m_generation);
         ClearEditNavigationPreferredX(m_preferredX, m_valid);
@@ -95,14 +99,6 @@ NWB_IMPL_UI_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ImplEcsUiToolkitEditVerticalNavigationAdhdModule(in u64 value){
-    return value != 0u;
 }
 
 

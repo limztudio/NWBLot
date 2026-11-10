@@ -33,8 +33,42 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsGraphicsGatherAdhdModule(in u64 value){
-    return value != 0u;
+Expected<usize> TryComputeMergedGraphicsShaderRecordCapacity(in usize existingCount, in usize incomingCount){
+    if(incomingCount > usize.max - existingCount){
+        error("GraphicsGather: merged shader index size overflows");
+        return MakeUnexpected(Failure());
+    }
+    return existingCount + incomingCount;
+}
+
+b8 ValidateMatchingGatheredShaderRecord(
+    in Name previousShaderName,
+    in Name previousStage,
+    in StringView previousVariantName,
+    in u64 previousSourceChecksum,
+    in u64 previousBytecodeChecksum,
+    in Name incomingShaderName,
+    in Name incomingStage,
+    in StringView incomingVariantName,
+    in u64 incomingSourceChecksum,
+    in u64 incomingBytecodeChecksum
+){
+    if(
+        previousShaderName == incomingShaderName
+        && previousStage == incomingStage
+        && previousVariantName == incomingVariantName
+        && previousSourceChecksum == incomingSourceChecksum
+        && previousBytecodeChecksum == incomingBytecodeChecksum
+    )
+        return true;
+
+    error(
+        "GraphicsGather: conflicting shader index record '{}' variant '{}' stage '{}'"
+        , incomingShaderName.resolvedText()
+        , incomingVariantName
+        , incomingStage.resolvedText()
+    );
+    return false;
 }
 
 
@@ -99,14 +133,13 @@ b8 MergeGatheredGraphicsAsset(const Name& virtualPath, const Span<const u8> inco
         return false;
     auto& records = *parsedRecords;
     auto& incomingRecords = *parsedIncomingRecords;
-    if(AddOverflows<usize>(records.size(), incomingRecords.size())){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsGather: merged shader index size overflows"));
+    const Expected<usize> mergedCapacity = TryComputeMergedGraphicsShaderRecordCapacity(records.size(), incomingRecords.size());
+    if(!mergedCapacity)
         return false;
-    }
 
     HashMap<NameHash, usize, Core::Alloc::ScratchArena, Hasher<NameHash>, EqualTo<NameHash>> recordIndices(scratchArena);
-    recordIndices.reserve(records.size() + incomingRecords.size());
-    records.reserve(records.size() + incomingRecords.size());
+    recordIndices.reserve(*mergedCapacity);
+    records.reserve(*mergedCapacity);
     for(usize i = 0u; i < records.size(); ++i){
         if(!__hidden_graphics_gather::ValidateRecordIdentity(records[i]))
             return false;
@@ -128,10 +161,19 @@ b8 MergeGatheredGraphicsAsset(const Name& virtualPath, const Span<const u8> inco
         }
 
         const auto& previous = records[found.value()];
-        if(previous.shaderName != record.shaderName || previous.stage != record.stage || previous.variantName != record.variantName || previous.sourceChecksum != record.sourceChecksum || previous.bytecodeChecksum != record.bytecodeChecksum){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsGather: conflicting shader index record '{}' variant '{}' stage '{}'"), ConvertString(record.shaderName.resolvedText()), ConvertString(record.variantName), ConvertString(record.stage.resolvedText()));
+        if(!ValidateMatchingGatheredShaderRecord(
+            previous.shaderName,
+            previous.stage,
+            previous.variantName,
+            previous.sourceChecksum,
+            previous.bytecodeChecksum,
+            record.shaderName,
+            record.stage,
+            record.variantName,
+            record.sourceChecksum,
+            record.bytecodeChecksum
+        ))
             return false;
-        }
     }
 
     auto merged = Core::ShaderArchive::SerializeIndex(records, arena, scratchArena);

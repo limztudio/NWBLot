@@ -64,8 +64,10 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsFontCookAdhdModule(in u64 value){
-    return value != 0u;
+const b8 s_FontCookIncludePreparedPixels = false;
+
+b8 IsValidFontCookVirtualPath(in Name virtualPath){
+    return virtualPath != s_NameNone;
 }
 
 
@@ -77,6 +79,8 @@ native{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/assets_font/font_binary_codec.adhd.h>
 #include <impl/assets_font/prepared_source.adhd.h>
 
@@ -146,7 +150,7 @@ Expected<FontCookEntry> ParseFontCookMetadata(const Path& assetRoot, const AStri
 
 Expected<FontCookEntry> ParseFontCookMetadataValue(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena){
     FontCookEntry entry(arena);
-    if(!virtualPath)
+    if(!IsValidFontCookVirtualPath(virtualPath))
         return MakeUnexpected(Failure{});
     if(!asset.isNull()){
         if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_FontMetaDiagnosticPrefix) || !Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_FontMetaDiagnosticPrefix, InitializerList<AStringView>{}))
@@ -154,7 +158,7 @@ Expected<FontCookEntry> ParseFontCookMetadataValue(const Name virtualPath, const
     }
     Path fontPath = nwbFilePath;
     fontPath.replaceExtension(s_PreparedFontExtension);
-    auto source = ReadPreparedFontSource(fontPath, false, arena);
+    auto source = ReadPreparedFontSource(fontPath, s_FontCookIncludePreparedPixels, arena);
     if(!source || !ValidateFontSource(source->fontBytes, source->faceIndex))
         return MakeUnexpected(Failure{});
     entry.fontBytes = Move(source->fontBytes);

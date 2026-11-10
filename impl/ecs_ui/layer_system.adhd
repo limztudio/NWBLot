@@ -2,15 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/edit_box_host_impl.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+#include <impl/ecs_ui/layer_types.adhd>
 
 native{
 #include <impl/ecs_ui/components.adhd.h>
-#include <impl/ecs_ui/layer_types.adhd.h>
 #include <impl/ecs_ui/paint_context.adhd.h>
 #include <impl/ecs_ui/edit_box_host.adhd.h>
 #include <impl/ecs_ui/skin_selection.adhd.h>
@@ -159,8 +154,34 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsUiLayerSystemAdhdModule(in u64 value){
-    return value != 0u;
+b8 IsValidUiDisplayScale(in f32 scaleX, in f32 scaleY){
+    return IsFinite(scaleX) && scaleX > 0.0f && IsFinite(scaleY) && scaleY > 0.0f;
+}
+
+b8 ShouldSuppressControlCharInput(in b8 hasControlModifier, in b8 hasAltModifier){
+    return hasControlModifier && !hasAltModifier;
+}
+
+b8 ShouldBlockRoutedCommandText(in b8 isCommandDown, in b8 hasCommand, in b8 allowText){
+    return isCommandDown && hasCommand && !allowText;
+}
+
+u8 ResolveUiPointerPressOwner(
+    in b8 nativeActive,
+    in b8 wouldConsumePointer,
+    in b8 hasPopup,
+    in b8 hitTargetValid
+){
+    b8 consumed = hasPopup || hitTargetValid;
+    if(nativeActive)
+        consumed = wouldConsumePointer;
+    if(consumed)
+        return cast<u8>(UiInputOwner::Custom);
+    return cast<u8>(UiInputOwner::Scene);
+}
+
+b8 CanBeginUiLayerPaintFrame(in b8 resourcesReady, in b8 rendererHasPendingFrame, in b8 contextReady){
+    return resourcesReady && !rendererHasPendingFrame && !contextReady;
 }
 
 
@@ -323,7 +344,7 @@ void UiLayerSystem::render(Core::Framebuffer* framebuffer){
 }
 
 void UiLayerSystem::displayScaleChanged(const f32 scaleX, const f32 scaleY){
-    NWB_ASSERT(IsFinite(scaleX) && scaleX > 0.0f && IsFinite(scaleY) && scaleY > 0.0f);
+    NWB_ASSERT(IsValidUiDisplayScale(scaleX, scaleY));
     m_frameDelta.clear();
     abandonPendingFrame(true);
     m_display = { static_cast<f32>(m_width) / scaleX, static_cast<f32>(m_height) / scaleY, scaleX, scaleY };
@@ -442,7 +463,7 @@ b8 UiLayerSystem::keyboardCharInput(const u32 unicode, const i32 mods){
     synchronizeNativeInput();
     m_editHost.collectNative();
     if(m_editHost.hasTextFocus()){
-        if((mods & Core::InputModifier::Control) != 0 && (mods & Core::InputModifier::Alt) == 0)
+        if(ShouldSuppressControlCharInput((mods & Core::InputModifier::Control) != 0, (mods & Core::InputModifier::Alt) != 0))
             return true;
         return m_editHost.character(unicode);
     }
@@ -480,8 +501,12 @@ b8 UiLayerSystem::mouseButtonUpdate(const i32 button, const i32 action, const i3
     if(action == Core::InputAction::Press && m_pressedButtons == 0u){
         const b8 acceptsSource = m_context.input().acceptsPointerSource(Ui::s_NativePointerSource);
         const b8 nativeActive = m_context.input().activePointerSource() == Ui::s_NativePointerSource;
-        const b8 consumed = nativeActive ? m_context.input().wouldConsumePointer(m_pointer) : m_context.input().hasPopup() || m_context.input().hitTest(m_pointer).valid();
-        m_pointerOwner = consumed ? UiInputOwner::Custom : UiInputOwner::Scene;
+        m_pointerOwner = ResolveUiPointerPressOwner(
+            nativeActive,
+            nativeActive && m_context.input().wouldConsumePointer(m_pointer),
+            m_context.input().hasPopup(),
+            !nativeActive && m_context.input().hitTest(m_pointer).valid()
+        );
         if(acceptsSource && m_pointerOwner != UiInputOwner::Custom)
             m_context.input().clearFocus();
     }
@@ -592,7 +617,7 @@ void UiLayerSystem::routeInput(const Ui::InputEvent& event, b8* blockText){
     m_editHost.input(*normalized, previousCapture, submit);
     if(blockText){
         // Core captures this policy only if the native handler owns the physical sequence, including inert repeats.
-        *blockText = normalized->type == Ui::InputEventType::CommandDown && normalized->command != Ui::InputCommand::None && !normalized->allowText;
+        *blockText = ShouldBlockRoutedCommandText(normalized->type == Ui::InputEventType::CommandDown, normalized->command != Ui::InputCommand::None, normalized->allowText);
     }
     LogUiInputRoutingOverflows(result.activationOverflow, result.gestureOverflow);
 }
@@ -629,7 +654,7 @@ void UiLayerSystem::synchronizeNativeInput(){
 Expected<void, Core::CpuTaskAdmissionError::Enum> UiLayerSystem::update([[maybe_unused]] Core::ECS::World& world, const f32 delta){
     m_frameDelta.add(delta);
     synchronizeInput();
-    if(!m_resourcesReady || m_renderer.hasPendingFrame() || m_context.ready())
+    if(!CanBeginUiLayerPaintFrame(m_resourcesReady, m_renderer.hasPendingFrame(), m_context.ready()))
         return {};
     AdvanceUiLayerFrameGeneration(m_frameGeneration);
     const UiSkin& skin = *MakeNotNull(Core::Assets::CastAsset<UiSkin>(m_skinAsset.get()));

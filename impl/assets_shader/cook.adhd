@@ -2,12 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_shader/cook_compiler_and_metadata.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 native{
 #if defined(NWB_COOK)
 
@@ -267,8 +261,55 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsShaderCookAdhdModule(in u64 value){
-    return value != 0u;
+b8 IsBetterDependencyRootAliasMatch(in b8 hasCurrentBest, in usize candidateDepth, in usize currentBestDepth){
+    return !hasCurrentBest || candidateDepth > currentBestDepth;
+}
+
+Expected<usize> TryComputeCanonicalAliasedDependencyPathCapacity(
+    in usize prefixBytes,
+    in usize rootKeyBytes,
+    in usize relativePathBytes
+){
+    usize relativeSegmentBytes = 0u;
+    if(relativePathBytes > 0u){
+        if(relativePathBytes == usize.max)
+            return MakeUnexpected(Failure());
+        relativeSegmentBytes = 1u + relativePathBytes;
+    }
+    if(rootKeyBytes > usize.max - prefixBytes)
+        return MakeUnexpected(Failure());
+    const usize headerBytes = prefixBytes + rootKeyBytes;
+    if(relativeSegmentBytes > usize.max - headerBytes)
+        return MakeUnexpected(Failure());
+    return headerBytes + relativeSegmentBytes;
+}
+
+b8 ValidateNonEmptyDependencyRootAliasList(in usize aliasCount){
+    if(aliasCount > 0u)
+        return true;
+
+    error("Dependency checksum requires at least one dependency root alias");
+    return false;
+}
+
+b8 ValidateDependencyRootAliasInputs(in b8 rootEmpty, in StringView key){
+    if(!rootEmpty && !key.empty())
+        return true;
+
+    error("Dependency checksum requires non-empty dependency root aliases");
+    return false;
+}
+
+b8 ValidateCanonicalDependencyRootAliasKey(in StringView canonicalKey){
+    if(!canonicalKey.empty())
+        return true;
+
+    error("Dependency checksum requires non-empty dependency root alias keys");
+    return false;
+}
+
+b8 ShouldReserveMergedShaderDefines(in b8 canReserve, in usize reserveCount, in usize existingCount){
+    return canReserve && reserveCount > existingCount;
 }
 
 
@@ -277,18 +318,26 @@ b8 ImplAssetsShaderCookAdhdModule(in u64 value){
 
 native{
 #if defined(NWB_COOK)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/assets_shader/cook.adhd.h>
+#include <impl/assets_shader/cook_internal.adhd.h>
 #include <impl/assets_shader/shader_define_planner.adhd.h>
 #include <impl/assets_shader/slang_compiler.adhd.h>
 #include <impl/assets_shader/shader_source_fingerprint.adhd.h>
 #include <impl/assets_shader/source_dependencies.adhd.h>
 #include <impl/assets_shader/shader_types.adhd.h>
 #include <impl/assets_shader/slang_compiler_request_validator.adhd.h>
+
 #include <core/assets/cook_metadata.h>
 #include <core/assets/paths.h>
+#include <core/common/log.h>
 #include <core/graphics/shader_stage_names.h>
 #include <core/graphics/spirv_entry_point.h>
-#include <core/common/log.h>
+
 #include <global/filesystem/cleanup.h>
 #include <global/hash_utils.h>
 #include <global/process_execution.h>
@@ -299,90 +348,6 @@ native{
 
 
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#ifndef NWB_IMPL_ASSETS_SHADER_COOK_INTERNAL_DECLS_H
-#define NWB_IMPL_ASSETS_SHADER_COOK_INTERNAL_DECLS_H
-// One isolated temporary directory per compiler invocation, plus the BOM-stripped source overlay the compiler reads when inputs carry a UTF-8 BOM.
-namespace SlangCompilerWorkspace{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using ScratchPath = ::Path<Core::Alloc::ScratchArena>;
-using ScratchString = Core::Assets::ScratchString;
-template<typename T>
-using ScratchVector = Core::Assets::ScratchVector<T>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// The common path allocates the source path last, so it is declared last to be released first from scratch.
-struct CompilerInputs final{
-    ScratchVector<ScratchPath> includeDirectories;
-    ScratchPath sourcePath;
-};
-
-// Removes the work directory when the invocation ends; a cleanup failure is reported, not returned.
-class ScopedDirectoryCleanupGuard final : NoCopy{
-public:
-    explicit ScopedDirectoryCleanupGuard(const ScratchPath& path)noexcept
-        : m_path(path)
-    {}
-    ~ScopedDirectoryCleanupGuard()noexcept;
-
-
-private:
-    const ScratchPath& m_path;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] Expected<ScratchPath> CreateCompilerWorkDirectory(const ScratchPath& parentDirectory, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] Expected<usize> CompilerPathTextCapacity(const ScratchPath& path);
-[[nodiscard]] Expected<ScratchString> BuildCompilerPathText(const ScratchPath& path, Core::Alloc::ScratchArena& scratchArena);
-// Each absolute root gets its own encoded overlay directory so nested relative includes keep resolving within that root.
-[[nodiscard]] Expected<ScratchPath> BuildCompilerOverlayPath(const ScratchPath& overlayRoot, const ScratchPath& absolutePath, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] b8 IsCompilerDependency(Span<const Path> dependencies, const ScratchPath& absolutePath)noexcept;
-[[nodiscard]] Expected<CompilerInputs> PrepareBomStrippedCompilerInputs(const ShaderCook::ShaderCompilerRequest& request, const ScratchPath& overlayRoot, Core::Alloc::ScratchArena& scratchArena);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class SlangCompilerFingerprint{
-public:
-    [[nodiscard]] static Expected<u64> Compute(const Path& temporaryRoot, Core::Alloc::ScratchArena& scratchArena, Span<const AStringView> commonArguments, Span<const AStringView> baselineCapabilities, Span<const ShaderBinaryPayload::SlangStageMapping> stageMappings);
-};
-
-#endif
-
-
-
-
-namespace Assets = Core::Assets;
-namespace Alloc = Core::Alloc;
-namespace Metascript = Core::Metascript;
-
-using CookString = ShaderCook::CookString;
-using DefineEntry = ShaderCook::DefineEntry;
-using IncludeEntry = ShaderCook::IncludeEntry;
-using ShaderEntry = ShaderCook::ShaderEntry;
-using DefineCombo = ShaderCook::DefineCombo;
-template<typename T> using CookVector = ShaderCook::CookVector<T>;
-template<typename K, typename V> using CookMap = ShaderCook::CookMap<K, V>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -445,7 +410,7 @@ static Expected<ScratchString> BuildCanonicalDependencyPath(const Path& dependen
     for(const NormalizedDependencyRootAlias& rootAlias : normalizedRootAliases){
         if(normalizedDependency != rootAlias.root && !PathHasDirectoryAncestor(normalizedDependency, rootAlias.root))
             continue;
-        if(!bestRootAlias || rootAlias.depth > bestRootAlias->depth)
+        if(IsBetterDependencyRootAliasMatch(bestRootAlias != nullptr, rootAlias.depth, bestRootAlias ? bestRootAlias->depth : 0u))
             bestRootAlias = &rootAlias;
     }
     if(!bestRootAlias){
@@ -463,9 +428,11 @@ static Expected<ScratchString> BuildCanonicalDependencyPath(const Path& dependen
     const ScratchString relativePathText = PathToString(scratchArena, normalizedDependency.lexicallyRelative(bestRootAlias->root));
 
     const AStringView pathPrefix = allowUnaliasedPath ? ShaderBinaryPayload::s_ShaderChecksumAliasPrefix : AStringView();
+    const auto capacity = TryComputeCanonicalAliasedDependencyPathCapacity(pathPrefix.size(), bestRootAlias->key.size(), relativePathText.size());
+    if(!capacity)
+        return MakeUnexpected(Failure{});
     ScratchString canonicalPath(scratchArena);
-    const usize relativePathSize = relativePathText.empty() ? 0u : AddSize(1u, relativePathText.size());
-    canonicalPath.reserve(AddSize(AddSize(pathPrefix.size(), bestRootAlias->key.size()), relativePathSize));
+    canonicalPath.reserve(*capacity);
     canonicalPath += pathPrefix;
     canonicalPath += bestRootAlias->key;
     if(!relativePathText.empty()){
@@ -473,235 +440,6 @@ static Expected<ScratchString> BuildCanonicalDependencyPath(const Path& dependen
         canonicalPath += relativePathText;
     }
     return canonicalPath;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_slang_compiler_workspace{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace ShaderBinaryPayload;
-
-Atomic<u64> g_TemporarySequence{0u};
-
-struct CompilerIncludeReplacement{
-    SlangCompilerWorkspace::ScratchString pathText;
-    usize sourceOffset;
-    usize sourceBytes;
-};
-
-[[nodiscard]] static b8 WriteBomStrippedCompilerInput(
-    const Path& sourcePath,
-    const ShaderCook::ShaderCompilerRequest& request,
-    const SlangCompilerWorkspace::ScratchPath& overlayRoot,
-    const SlangCompilerWorkspace::ScratchPath& outputPath,
-    SlangCompilerWorkspace::ScratchString& source,
-    Alloc::ScratchArena& scratchArena
-);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_slang_compiler{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace ShaderBinaryPayload;
-using ScratchPath = SlangCompilerWorkspace::ScratchPath;
-using ScratchString = SlangCompilerWorkspace::ScratchString;
-template<typename T>
-using ScratchVector = SlangCompilerWorkspace::ScratchVector<T>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Slang's SPIR-V 1.5 profile does not include the standard capability set used by the generated Vulkan shaders.
-// Declare it explicitly so Slang produces the same output without silently rewriting the requested profile.
-static constexpr Array<AStringView, s_SpirvBaselineCapabilityCount> s_SpirvBaselineCapabilities = {
-    s_SpirvCapabilityNonSemanticInfo,
-    s_SpirvCapabilityUserType,
-    s_SpirvCapabilityDerivativeControl,
-    s_SpirvCapabilityImageQuery,
-    s_SpirvCapabilityImageGatherExtended,
-    s_SpirvCapabilitySparseResidency,
-    s_SpirvCapabilityMinLod,
-    s_SpirvCapabilityFragmentFullyCovered,
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr Array<AStringView, s_CommonCompilerArgumentCount> s_CommonCompilerArguments = {
-    s_SlangTargetArgument, s_SlangTargetSpirv,
-    s_SlangEmitSpirvDirectlyArgument,
-    s_SlangUseEntryPointNameArgument,
-    s_SlangWarningsAsErrorsArgument, s_SlangWarningsAsErrorsAll,
-    s_SlangProfileArgument, ShaderBinaryPayload::s_Spirv15TargetProfileText,
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static Expected<ScratchString> BuildCompilerDefineArgument(const ShaderBinaryPayload::ShaderMacroDefinition& define, const ShaderCook::ShaderCompilerRequest& request, const ScratchPath& overlayRoot, Alloc::ScratchArena& scratchArena){
-    const b8 plannedMacroInclude = request.compilerInputsHaveBom && FindIf(request.externallyPlannedMacroIncludes.begin(), request.externallyPlannedMacroIncludes.end(), [&define](const AStringView name)noexcept{
-            return name == define.name;
-        }) != request.externallyPlannedMacroIncludes.end();
-    const AStringView includeName = plannedMacroInclude ? UnquoteDoubleQuotedView(define.value) : AStringView();
-    const ScratchPath includePath(scratchArena, includeName);
-    Expected<ScratchPath> overlayIncludePath = MakeUnexpected(Failure{});
-    usize valueCapacity = define.value.size();
-    if(!includeName.empty() && includePath.isAbsolute()){
-        const auto absoluteIncludePath = AbsolutePath(includePath);
-        if(!absoluteIncludePath){
-            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to resolve planned macro include '{}': {}:{}"), PathToString<tchar>(includePath), ConvertString(absoluteIncludePath.error().category().name()), absoluteIncludePath.error().value());
-            return MakeUnexpected(Failure{});
-        }
-        const ScratchPath normalizedIncludePath = absoluteIncludePath->lexicallyNormal();
-        overlayIncludePath = SlangCompilerWorkspace::BuildCompilerOverlayPath(overlayRoot, normalizedIncludePath, scratchArena);
-        if(!SlangCompilerWorkspace::IsCompilerDependency(request.dependencies, normalizedIncludePath) || !overlayIncludePath){
-            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: planned macro include '{}' is not a mapped compiler dependency"), ConvertString(includeName));
-            return MakeUnexpected(Failure{});
-        }
-        const auto capacity = SlangCompilerWorkspace::CompilerPathTextCapacity(*overlayIncludePath);
-        if(!capacity)
-            return MakeUnexpected(Failure{});
-        const auto quotedCapacity = ShaderBinaryPayload::TryComputeQuotedCompilerPathCapacity(*capacity);
-        if(!quotedCapacity)
-            return MakeUnexpected(Failure{});
-        valueCapacity = *quotedCapacity;
-    }
-    const usize fixedBytes = s_SlangDefineArgument.size() + (!define.value.empty() ? 1u : 0u);
-    const auto argumentCapacity = ShaderBinaryPayload::TryComputeCompilerDefineArgumentCapacity(fixedBytes, define.name.size(), valueCapacity);
-    if(!argumentCapacity)
-        return MakeUnexpected(Failure{});
-    ScratchString argument{scratchArena};
-    argument.reserve(*argumentCapacity);
-    argument += s_SlangDefineArgument;
-    argument += define.name;
-    if(!define.value.empty()){
-        argument += '=';
-        if(overlayIncludePath){
-            argument += '"';
-            auto out = BackInserter(argument);
-            WriteConvertedText<char>(out, overlayIncludePath->native());
-            argument += '"';
-        }
-        else
-            argument += define.value;
-    }
-    return argument;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static const Array<SlangStageMapping, 14u> s_StageMappings = {{
-    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::VertexStage), s_SlangStageVertex },
-    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::HullStage), s_SlangStageHull },
-    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::DomainStage), s_SlangStageDomain },
-    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::GeometryStage), s_SlangStageGeometry },
-    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::PixelStage), s_SlangStageFragment },
-    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::ComputeStage), s_SlangStageCompute },
-    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::AmplificationStage), s_SlangStageAmplification },
-    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::MeshStage), s_SlangStageMesh },
-    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::RayGenerationStage), s_SlangStageRayGeneration },
-    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::AnyHitStage), s_SlangStageAnyHit },
-    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::ClosestHitStage), s_SlangStageClosestHit },
-    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::MissStage), s_SlangStageMiss },
-    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::IntersectionStage), s_SlangStageIntersection },
-    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::CallableStage), s_SlangStageCallable },
-}};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_shader_cook{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace ShaderBinaryPayload;
-using ScratchString = Assets::ScratchString;
-template<typename T>
-using ScratchVector = Assets::ScratchVector<T>;
-template<typename T>
-using ScratchHashSet = HashSet<T, Alloc::ScratchArena, Hasher<T>, EqualTo<T>>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static Expected<ShaderCook::CookMap<CookString, ShaderCook::DefineEntry>> ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset, ShaderCook::CookArena& arena){
-    ShaderCook::CookMap<CookString, ShaderCook::DefineEntry> defines{arena};
-
-    const auto* definesVal = asset.findField(s_ShaderDefinesField);
-    if(!definesVal)
-        return defines;
-
-    if(!definesVal->isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': defines must be a map"), PathToString<tchar>(nwbFilePath));
-        return MakeUnexpected(Failure{});
-    }
-
-    const CookString nwbFilePathText = PathToString(arena, nwbFilePath);
-    const auto& definesMap = definesVal->asMap();
-    defines.reserve(definesMap.size());
-    for(const auto& [key, val] : definesMap){
-        CookString defineName(key.data(), key.size(), arena);
-        const ShaderDefineNameStatus::Enum nameStatus = ClassifyShaderDefineName(AStringView(defineName));
-        if(nameStatus == ShaderDefineNameStatus::Reserved){
-            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' is an engine transport feature selected in shader source"), PathToString<tchar>(nwbFilePath), ConvertString(defineName));
-            return MakeUnexpected(Failure{});
-        }
-        if(nameStatus == ShaderDefineNameStatus::Invalid){
-            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' must be an ASCII shader identifier"), PathToString<tchar>(nwbFilePath), ConvertString(defineName));
-            return MakeUnexpected(Failure{});
-        }
-
-        ShaderCook::CookVector<CookString> defineValues(arena);
-        if(!val.copyStringList(defineValues)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' values must be a list of strings"), PathToString<tchar>(nwbFilePath), ConvertString(defineName));
-            return MakeUnexpected(Failure{});
-        }
-        if(!ValidateShaderDefineEntrySpec(AStringView(nwbFilePathText), AStringView(defineName), defineValues))
-            return MakeUnexpected(Failure{});
-
-        ShaderCook::DefineEntry defineEntry(Move(defineValues));
-        defines.insert_or_assign(Move(defineName), Move(defineEntry));
-    }
-    return defines;
 }
 
 
@@ -725,18 +463,14 @@ Expected<ShaderBinaryPayload::DependencyChecksum> ShaderCook::ComputeDependencyC
     ShaderBinaryPayload::DependencyChecksum result;
     result.checksum = s_Fnv64OffsetBasis;
 
-    if(dependencyRootAliases.size() == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Dependency checksum requires at least one dependency root alias"));
+    if(!ValidateNonEmptyDependencyRootAliasList(dependencyRootAliases.size()))
         return MakeUnexpected(Failure{});
-    }
 
     Vector<__hidden_shader_cook_checksum::NormalizedDependencyRootAlias, Core::Alloc::ScratchArena> normalizedRootAliases{scratchArena};
     normalizedRootAliases.reserve(dependencyRootAliases.size());
     for(const DependencyRootAlias& rootAlias : dependencyRootAliases){
-        if(rootAlias.root.empty() || rootAlias.key.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Dependency checksum requires non-empty dependency root aliases"));
+        if(!ValidateDependencyRootAliasInputs(rootAlias.root.empty(), rootAlias.key))
             return MakeUnexpected(Failure{});
-        }
 
         __hidden_shader_cook_checksum::NormalizedDependencyRootAlias normalizedAlias{scratchArena};
         const auto rootPath = AbsolutePath(__hidden_shader_cook_checksum::ScratchPath(scratchArena, rootAlias.root));
@@ -748,10 +482,8 @@ Expected<ShaderBinaryPayload::DependencyChecksum> ShaderCook::ComputeDependencyC
         normalizedAlias.root = __hidden_shader_cook_checksum::NormalizeDependencyRootAliasPath(*rootPath);
         normalizedAlias.key = rootAlias.key;
         CanonicalizeTextInPlace(normalizedAlias.key);
-        if(normalizedAlias.key.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Dependency checksum requires non-empty dependency root alias keys"));
+        if(!ValidateCanonicalDependencyRootAliasKey(AStringView(normalizedAlias.key)))
             return MakeUnexpected(Failure{});
-        }
         normalizedAlias.depth = PathDepth(normalizedAlias.root);
         normalizedRootAliases.push_back(Move(normalizedAlias));
     }
@@ -832,8 +564,13 @@ u64 ShaderCook::ComputeSourceChecksum(const ShaderEntry& entry, const AStringVie
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ShaderDefinePlanner::mergeInheritedDefines(const Span<const Path> dependencies, const CookMap<CookString, IncludeEntry>& includeMetadata, Alloc::ScratchArena& scratchArena, ShaderEntry& inOutEntry){
-    Core::Assets::ScratchVector<NotNull<const IncludeEntry*>> inheritedEntries{scratchArena};
+void ShaderDefinePlanner::mergeInheritedDefines(
+    const Span<const Path> dependencies,
+    const ShaderCook::CookMap<ShaderCook::CookString, ShaderCook::IncludeEntry>& includeMetadata,
+    Core::Alloc::ScratchArena& scratchArena,
+    ShaderCook::ShaderEntry& inOutEntry
+){
+    Core::Assets::ScratchVector<NotNull<const ShaderCook::IncludeEntry*>> inheritedEntries{scratchArena};
     inheritedEntries.reserve(dependencies.size());
 
     usize defineReserveCount = inOutEntry.defineValues.size();
@@ -847,17 +584,17 @@ void ShaderDefinePlanner::mergeInheritedDefines(const Span<const Path> dependenc
         if(found == includeMetadata.end())
             continue;
 
-        const IncludeEntry& includeEntry = found.value();
+        const ShaderCook::IncludeEntry& includeEntry = found.value();
         inheritedEntries.push_back(MakeNotNull(&includeEntry));
 
         if(!ShaderBinaryPayload::TryAccumulateInheritedShaderDefineReserve(includeEntry.defineValues.size(), defineReserveCount))
             canReserveDefineValues = false;
     }
 
-    if(canReserveDefineValues && defineReserveCount > inOutEntry.defineValues.size())
+    if(ShouldReserveMergedShaderDefines(canReserveDefineValues, defineReserveCount, inOutEntry.defineValues.size()))
         inOutEntry.defineValues.reserve(defineReserveCount);
 
-    for(const NotNull<const IncludeEntry*> includeEntry : inheritedEntries){
+    for(const NotNull<const ShaderCook::IncludeEntry*> includeEntry : inheritedEntries){
         for(const auto& [defineName, defineEntry] : includeEntry->defineValues){
             auto [defineIt, inserted] = inOutEntry.defineValues.try_emplace(defineName, m_memoryArena);
             if(inserted)
@@ -866,14 +603,18 @@ void ShaderDefinePlanner::mergeInheritedDefines(const Span<const Path> dependenc
     }
 }
 
-b8 ShaderDefinePlanner::expandDefineCombinations(const CookMap<CookString, DefineEntry>& defineValues, Alloc::ScratchArena& scratchArena, CookVector<DefineCombo>& outCombinations){
+b8 ShaderDefinePlanner::expandDefineCombinations(
+    const ShaderCook::CookMap<ShaderCook::CookString, ShaderCook::DefineEntry>& defineValues,
+    Core::Alloc::ScratchArena& scratchArena,
+    ShaderCook::CookVector<ShaderCook::DefineCombo>& outCombinations
+){
     outCombinations.clear();
-    DefineCombo initialCombo{m_memoryArena};
+    ShaderCook::DefineCombo initialCombo{m_memoryArena};
     initialCombo.reserve(defineValues.size());
     outCombinations.push_back(Move(initialCombo));
 
-    auto cloneComboWithEntry = [&](const DefineCombo& source, const AStringView defineName, const AStringView defineValue) -> Expected<DefineCombo>{
-        DefineCombo copy{m_memoryArena};
+    auto cloneComboWithEntry = [&](const ShaderCook::DefineCombo& source, const AStringView defineName, const AStringView defineValue) -> Expected<ShaderCook::DefineCombo>{
+        ShaderCook::DefineCombo copy{m_memoryArena};
         copy.reserve(defineValues.size());
         for(const auto& [sourceName, sourceValue] : source){
             if(!copy.try_emplace(sourceName, sourceValue).second){
@@ -890,7 +631,7 @@ b8 ShaderDefinePlanner::expandDefineCombinations(const CookMap<CookString, Defin
 
     for(const auto& entry : ShaderCook::SortedDefineEntries(defineValues, scratchArena)){
         const AStringView defineName(*entry.key);
-        const CookVector<CookString>& values = entry.value->values;
+        const ShaderCook::CookVector<ShaderCook::CookString>& values = entry.value->values;
         if(values.empty()){
             outCombinations.clear();
             return true;
@@ -898,7 +639,7 @@ b8 ShaderDefinePlanner::expandDefineCombinations(const CookMap<CookString, Defin
 
         if(values.size() == 1u){
             const AStringView value(values.front());
-            for(DefineCombo& combo : outCombinations){
+            for(ShaderCook::DefineCombo& combo : outCombinations){
                 combo.reserve(defineValues.size());
                 if(!combo.try_emplace(defineName, value).second){
                     NWB_ASSERT(false);
@@ -915,11 +656,11 @@ b8 ShaderDefinePlanner::expandDefineCombinations(const CookMap<CookString, Defin
             return false;
         }
 
-        CookVector<DefineCombo> expanded{m_memoryArena};
+        ShaderCook::CookVector<ShaderCook::DefineCombo> expanded{m_memoryArena};
         expanded.reserve(*expandedCount);
 
         const usize copiedValueCount = values.size() - 1u;
-        for(DefineCombo& combo : outCombinations){
+        for(ShaderCook::DefineCombo& combo : outCombinations){
             for(usize valueIndex = 0u; valueIndex < copiedValueCount; ++valueIndex){
                 auto copy = cloneComboWithEntry(combo, defineName, values[valueIndex]);
                 if(!copy){
@@ -950,7 +691,14 @@ b8 ShaderDefinePlanner::expandDefineCombinations(const CookMap<CookString, Defin
 
 NWB_IMPL_END
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 }
 
 

@@ -2,8 +2,44 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsUiToolkitGpuRendererStateAndTasksAdhdModule(in u64 value){
-    return value != 0u;
+#include <impl/ecs_ui/toolkit/gpu/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 MatchesPreparedGpuSampledCounts(
+    in usize declaredGlyphs,
+    in usize preparedGlyphs,
+    in usize declaredSdfs,
+    in usize preparedSdfs,
+    in usize declaredTextures,
+    in usize preparedTextures
+){
+    return declaredGlyphs == preparedGlyphs && declaredSdfs == preparedSdfs && declaredTextures == preparedTextures;
+}
+
+b8 ShouldExpandGpuRgbSdfUpload(in u32 channelCount, in b8 rgbSampledSupported){
+    return channelCount == s_GpuRgbChannelCount && !rgbSampledSupported;
+}
+
+b8 IsGpuQueueTimelineComplete(
+    in b8 timelineValid,
+    in b8 queueMatches,
+    in u64 completedValue,
+    in u64 requiredValue
+){
+    return timelineValid && queueMatches && completedValue >= requiredValue;
+}
+
+b8 CanPrepareGpuPresentationFrame(in b8 acquiredValid, in b8 hasSharedResources, in u32 width, in u32 height){
+    return acquiredValid && hasSharedResources && width != 0u && height != 0u;
+}
+
+u32 ResolveGpuPresentationMode(in b8 hdr10Active, in u32 hdr10Mode, in u32 sdrMode){
+    if(hdr10Active)
+        return hdr10Mode;
+    return sdrMode;
 }
 
 
@@ -250,20 +286,23 @@ b8 GpuRasterTask::Record(const Payload& payload, Core::CommandList& commands, co
         || context.declarations.textureForResource(payload.skin) != frame->m_skin->m_texture.texture.get()
     )
         return false;
-    if(payload.glyphPages.size() != frame->m_glyphPages.size())
+    if(!MatchesPreparedGpuSampledCounts(
+        payload.glyphPages.size(),
+        frame->m_glyphPages.size(),
+        payload.sdfPages.size(),
+        frame->m_sdfPages.size(),
+        payload.textureImages.size(),
+        frame->m_textureImages.size()
+    ))
         return false;
     for(usize index = 0u; index < payload.glyphPages.size(); ++index){
         if(context.declarations.textureForResource(payload.glyphPages[index]) != frame->m_glyphPages[index]->m_texture.get())
             return false;
     }
-    if(payload.sdfPages.size() != frame->m_sdfPages.size())
-        return false;
     for(usize index = 0u; index < payload.sdfPages.size(); ++index){
         if(context.declarations.textureForResource(payload.sdfPages[index]) != frame->m_sdfPages[index]->m_texture.get())
             return false;
     }
-    if(payload.textureImages.size() != frame->m_textureImages.size())
-        return false;
     for(usize index = 0u; index < payload.textureImages.size(); ++index){
         if(context.declarations.textureForResource(payload.textureImages[index]) != frame->m_textureImages[index]->m_texture.texture.get())
             return false;
@@ -573,7 +612,7 @@ Expected<GpuVersion<GpuSdfAtlasVersion>> GpuImageResources::prepareSdfPage(Core:
     constexpr Array<Core::Format::Enum, 4> s_Formats{ Core::Format::R8_UNORM, Core::Format::RG8_UNORM, Core::Format::RGB8_UNORM, Core::Format::RGBA8_UNORM };
     Core::Format::Enum format = s_Formats[binding.channelCount - 1u];
     u32 uploadChannels = binding.channelCount;
-    if(binding.channelCount == s_GpuRgbChannelCount && (device.queryFormatSupport(format) & s_RequiredSampledTextureSupport) != s_RequiredSampledTextureSupport){
+    if(ShouldExpandGpuRgbSdfUpload(binding.channelCount, (device.queryFormatSupport(format) & s_RequiredSampledTextureSupport) == s_RequiredSampledTextureSupport)){
         format = Core::Format::RGBA8_UNORM;
         uploadChannels = s_GpuRgbaChannelCount;
     }
@@ -773,7 +812,7 @@ b8 GpuTokenComplete(Core::Device& device, const Core::QueueSubmissionToken& toke
         return false;
     const Core::GpuPhysicalQueueId queue{ token.physicalQueueIndex, token.deviceGeneration };
     const auto timeline = device.getQueueTimelineSnapshot(queue);
-    return timeline && timeline->valid() && timeline->queue == queue && timeline->completedValue >= token.value;
+    return timeline && IsGpuQueueTimelineComplete(timeline->valid(), timeline->queue == queue, timeline->completedValue, token.value);
 }
 
 
@@ -789,13 +828,6 @@ b8 GpuRendererState::MatchesAcquired(const Core::AcquiredPresentationFrame& firs
     ;
 }
 
-b8 GpuRendererState::createResources(){
-    return GpuSharedResourcesFactory{}.create(*this);
-}
-
-Expected<GpuVersion<GpuTargetVersion>> GpuRendererState::createTarget(const u32 width, const u32 height){
-    return GpuTargetFactory{}.create(m_arena, m_graphics, width, height);
-}
 
 b8 GpuRendererState::prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& snapshot){
     const usize vertexCount = snapshot.vertices().size();
@@ -809,15 +841,12 @@ b8 GpuRendererState::prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& snap
         && __hidden_ui_gpu_resources::EnsureGeometryBuffer<u32>(device, indexCount, s_GpuInitialIndexCapacity, s_GpuIndexBufferName, false, slot.indices, slot.indexCapacity);
 }
 
-b8 GpuRendererState::prepareOutputPipeline(const Core::FramebufferInfo& info){
-    return GpuSharedResourcesFactory{}.prepareOutputPipeline(*this, info);
-}
 
 b8 GpuRendererState::prepare(const Core::AcquiredPresentationFrame& acquired){
     m_readyToDeclare = false;
     if(!m_pending)
         return true;
-    if(!acquired.valid() || !m_resources || m_width == 0u || m_height == 0u)
+    if(!CanPrepareGpuPresentationFrame(acquired.valid(), static_cast<b8>(m_resources), m_width, m_height))
         return false;
     const Core::FramebufferDesc& attachments = acquired.framebuffer->getDescription();
     const Core::TextureDesc& backBuffer = acquired.backBuffer.texture->getDescription();
@@ -868,7 +897,7 @@ b8 GpuRendererState::prepare(const Core::AcquiredPresentationFrame& acquired){
         m_pending->m_indices = slot.indices;
         m_pending->m_outputPipeline = m_resources->m_outputPipeline;
         m_pending->m_acquired = acquired;
-        m_pending->m_presentationMode = m_graphics.isHDR10OutputActive() ? NWB_UI_PRESENTATION_HDR10 : NWB_UI_PRESENTATION_SDR;
+        m_pending->m_presentationMode = ResolveGpuPresentationMode(m_graphics.isHDR10OutputActive(), NWB_UI_PRESENTATION_HDR10, NWB_UI_PRESENTATION_SDR);
         m_pending->m_prepared = true;
         m_readyToDeclare = true;
         slot.inFlight = m_pending;

@@ -2,8 +2,28 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsFontRuntimeAdhdModule(in u64 value){
-    return value != 0u;
+const i64 s_AdmittedFontFaceCount = 1;
+
+b8 IsAdmittedStaticScalableFontFace(
+    in i64 faceCount,
+    in i64 glyphCount,
+    in u32 unitsPerEm,
+    in b8 isSfnt,
+    in b8 isScalable,
+    in b8 hasMultipleMasters
+){
+    return
+        faceCount == s_AdmittedFontFaceCount
+        && glyphCount > 0
+        && unitsPerEm != 0u
+        && isSfnt
+        && isScalable
+        && !hasMultipleMasters
+    ;
+}
+
+b8 IsPreparedFontFileLengthInBounds(in b8 streamGood, in i64 fileEndBytes, in usize minHeaderBytes, in u64 maxFileBytes){
+    return streamGood && fileEndBytes >= cast<i64>(minHeaderBytes) && cast<u64>(fileEndBytes) <= maxFileBytes;
 }
 
 
@@ -100,7 +120,7 @@ public:
         const FT_Error faceError = FT_New_Memory_Face(m_library, bytes.data(), static_cast<FT_Long>(bytes.size()), 0, &m_face);
         if(faceError != 0)
             return MakeUnexpected(MakeNativeFontFailure(s_FontOpFtNewMemoryFace, faceError));
-        if(m_face->num_faces != 1 || m_face->num_glyphs <= 0 || m_face->units_per_EM == 0u || !FT_IS_SFNT(m_face) || !FT_IS_SCALABLE(m_face) || FT_HAS_MULTIPLE_MASTERS(m_face))
+        if(!IsAdmittedStaticScalableFontFace(static_cast<i64>(m_face->num_faces), static_cast<i64>(m_face->num_glyphs), static_cast<u32>(m_face->units_per_EM), FT_IS_SFNT(m_face) != 0, FT_IS_SCALABLE(m_face) != 0, FT_HAS_MULTIPLE_MASTERS(m_face) != 0))
             return MakeUnexpected(MakeNativeFontPolicyFailure(s_FontOpAdmitStaticScalableFace));
         const FT_Error charmapError = FT_Select_Charmap(m_face, FT_ENCODING_UNICODE);
         if(charmapError != 0)
@@ -191,7 +211,7 @@ Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& pat
         return ReadFailure(path, s_PreparedFontOpenFailedReason);
     stream.seekg(0, InputFileStream::end);
     const StreamOffset fileEnd = stream.tellg();
-    if(!stream || fileEnd < static_cast<StreamOffset>(s_PreparedFontHeaderBytes) || static_cast<u64>(fileEnd) > s_PreparedFontMaxFileBytes)
+    if(!IsPreparedFontFileLengthInBounds(static_cast<b8>(stream), static_cast<i64>(fileEnd), s_PreparedFontHeaderBytes, s_PreparedFontMaxFileBytes))
         return ReadFailure(path, s_PreparedFontLengthOutOfBoundsReason);
     stream.seekg(0, InputFileStream::beg);
     if(!stream)

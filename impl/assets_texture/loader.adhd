@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_texture/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 #include <impl/assets_texture/asset.adhd.h>
 
@@ -76,8 +82,54 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsTextureLoaderAdhdModule(in u64 value){
-    return value != 0u;
+usize ComputeUastcBlockByteOffset(in u32 blockX, in u32 blockY, in u32 blockCountX){
+    const u64 blockIndex = cast<u64>(blockY) * cast<u64>(blockCountX) + cast<u64>(blockX);
+    return cast<usize>(blockIndex * s_TextureUastcBytesPerBlock);
+}
+
+usize ComputeDecodedUastcDestinationTexelIndex(
+    in u64 destinationX,
+    in u64 destinationY,
+    in u32 mipWidth
+){
+    return cast<usize>(destinationY * cast<u64>(mipWidth) + destinationX);
+}
+
+f32 NormalizeTextureAlphaUnorm8(in u8 alphaUnorm8){
+    return cast<f32>(alphaUnorm8) / cast<f32>(u8.max);
+}
+
+u8 ResolveHdrUniformAlphaUnorm8(in b8 isConstantUnorm8, in u8 alphaConstantUnorm8){
+    if(isConstantUnorm8)
+        return alphaConstantUnorm8;
+    return u8.max;
+}
+
+Name ResolveTextureUploadDebugName(in Name debugName, in Name virtualPath){
+    if(debugName != s_NameNone)
+        return debugName;
+    return virtualPath;
+}
+
+b8 ShouldRetryTextureCreateWithFallback(
+    in b8 isLdrPayload,
+    in b8 isRgba8Format,
+    in b8 isHdrPayload,
+    in b8 isOpaqueAlpha
+){
+    return (isLdrPayload && !isRgba8Format) || (isHdrPayload && isOpaqueAlpha);
+}
+
+usize ComputeTextureUploadRegionReserveCount(
+    in Span<TextureMipLevel> mipLevels,
+    in b8 isVolumeTexture
+){
+    if(isVolumeTexture)
+        return mipLevels.size();
+    usize totalRegions = 0u;
+    for(in TextureMipLevel mip : mipLevels)
+        totalRegions += cast<usize>(mip.sliceCount);
+    return totalRegions;
 }
 
 
@@ -237,10 +289,9 @@ template<typename StoreTexelT>
 [[nodiscard]] static b8 VisitDecodedUastcTexels(const TextureMipLevel& mip, const BinaryByteView sourceBytes, StoreTexelT&& storeTexel){
     for(u32 blockY = 0u; blockY < mip.blockCountY; ++blockY){
         for(u32 blockX = 0u; blockX < mip.blockCountX; ++blockX){
-            const u64 blockIndex = static_cast<u64>(blockY) * static_cast<u64>(mip.blockCountX) + blockX;
-            const u64 blockOffset = blockIndex * s_UastcBytesPerBlock;
+            const usize blockOffset = ComputeUastcBlockByteOffset(blockX, blockY, mip.blockCountX);
             basist::uastc_block sourceBlock;
-            NWB_MEMCPY(&sourceBlock, sizeof(sourceBlock), sourceBytes.data() + static_cast<usize>(blockOffset), sizeof(sourceBlock));
+            NWB_MEMCPY(&sourceBlock, sizeof(sourceBlock), sourceBytes.data() + blockOffset, sizeof(sourceBlock));
 
             Array<basist::color32, s_UastcBlockWidth * s_UastcBlockHeight> decodedTexels{};
             if(!basist::unpack_uastc(sourceBlock, decodedTexels.data(), false))
@@ -257,7 +308,7 @@ template<typename StoreTexelT>
                         break;
 
                     const usize sourceTexelIndex = static_cast<usize>(localY * s_UastcBlockWidth + localX);
-                    const usize destinationTexelIndex = static_cast<usize>(destinationY * static_cast<u64>(mip.width) + destinationX);
+                    const usize destinationTexelIndex = ComputeDecodedUastcDestinationTexelIndex(destinationX, destinationY, mip.width);
                     storeTexel(decodedTexels[sourceTexelIndex], destinationTexelIndex);
                 }
             }
@@ -349,7 +400,7 @@ template<typename StoreTexelT>
 }
 
 static void StoreHdrAlpha(const usize texelIndex, const u8 alphaUnorm8, const Span<u8> outRgba16FloatBytes)noexcept{
-    const basist::half_float alphaHalf = basist::float_to_half(static_cast<f32>(alphaUnorm8) / static_cast<f32>(Limit<u8>::s_Max));
+    const basist::half_float alphaHalf = basist::float_to_half(NormalizeTextureAlphaUnorm8(alphaUnorm8));
     u8* const destination = outRgba16FloatBytes.data() + texelIndex * s_TextureRgba16FloatBytesPerTexel + s_TextureRgba16FloatAlphaByteOffset;
     NWB_MEMCPY(destination, sizeof(alphaHalf), &alphaHalf, sizeof(alphaHalf));
 }
@@ -360,7 +411,10 @@ static void StoreHdrAlpha(const usize texelIndex, const u8 alphaUnorm8, const Sp
         return false;
 
     if(textureAsset.alphaMode() != TextureAlphaMode::SeparateUastcLdr4x4){
-        const u8 alphaUnorm8 = textureAsset.alphaMode() == TextureAlphaMode::ConstantUnorm8 ? textureAsset.alphaConstantUnorm8() : static_cast<u8>(Limit<u8>::s_Max);
+        const u8 alphaUnorm8 = ResolveHdrUniformAlphaUnorm8(
+            textureAsset.alphaMode() == TextureAlphaMode::ConstantUnorm8,
+            textureAsset.alphaConstantUnorm8()
+        );
         for(usize texelIndex = 0u; texelIndex < texelCount; ++texelIndex)
             StoreHdrAlpha(texelIndex, alphaUnorm8, outRgba16FloatBytes);
         return true;
@@ -573,7 +627,7 @@ b8 TextureAssetLoader::Create(const Texture& textureAsset, const Name& debugName
         return false;
     }
 
-    const Name imageName = debugName ? debugName : textureAsset.virtualPath();
+    const Name imageName = ResolveTextureUploadDebugName(debugName, textureAsset.virtualPath());
     const Core::TextureDimension::Enum textureDimension = __hidden_texture_loader::ToCoreTextureDimension(textureAsset.dimension());
     const Core::GpuDescriptorClass::Enum descriptorClass = __hidden_texture_loader::ToSampledImageDescriptorClass(textureAsset.dimension());
     // Texture::loadBinary already validated the cooked dimension; keep a debug-only invariant here.
@@ -599,7 +653,12 @@ b8 TextureAssetLoader::Create(const Texture& textureAsset, const Name& debugName
     auto textureResult = graphics.createTexture(textureDesc);
     if(
         !textureResult
-        && ((textureAsset.payloadFormat() == TexturePayloadFormat::UastcLdr4x4 && format != Core::Format::RGBA8_UNORM) || (textureAsset.payloadFormat() == TexturePayloadFormat::UastcHdr4x4 && textureAsset.alphaMode() == TextureAlphaMode::Opaque))
+        && ShouldRetryTextureCreateWithFallback(
+            textureAsset.payloadFormat() == TexturePayloadFormat::UastcLdr4x4,
+            format == Core::Format::RGBA8_UNORM,
+            textureAsset.payloadFormat() == TexturePayloadFormat::UastcHdr4x4,
+            textureAsset.alphaMode() == TextureAlphaMode::Opaque
+        )
     ){
         auto fallbackResult = __hidden_texture_loader::CreateTextureWithFormatFallback(
             textureDesc,
@@ -635,17 +694,14 @@ b8 TextureAssetLoader::Create(const Texture& textureAsset, const Name& debugName
     }
 
     Vector<Core::GraphicsStandaloneService::TextureUploadRegion, Core::Alloc::ScratchArena> uploadRegions{scratchArena};
-    usize uploadRegionReserveCount = 0u;
     const b8 isVolumeTexture = textureAsset.dimension() == TextureDimension::Texture3D;
-    for(usize mipIndex = 0u; mipIndex < textureAsset.mipLevels().size(); ++mipIndex)
-        uploadRegionReserveCount += isVolumeTexture ? 1u : static_cast<usize>(textureAsset.mipLevels()[mipIndex].sliceCount);
-    uploadRegions.reserve(uploadRegionReserveCount);
+    uploadRegions.reserve(ComputeTextureUploadRegionReserveCount(textureAsset.mipLevels(), isVolumeTexture));
     for(usize mipIndex = 0u; mipIndex < textureAsset.mipLevels().size(); ++mipIndex){
         const TextureMipLevel& mip = textureAsset.mipLevels()[mipIndex];
         const TextureDecodedMipUpload& decoded = decodedMips[mipIndex];
         NWB_ASSERT(!decoded.bytes.empty() && decoded.rowPitch != 0u && decoded.sliceByteCount != 0u && mip.sliceCount != 0u);
 
-        if(textureAsset.dimension() == TextureDimension::Texture3D){
+        if(isVolumeTexture){
             uploadRegions.push_back(Core::GraphicsStandaloneService::TextureUploadRegion{
                 .data = decoded.bytes.data(),
                 .dataSize = decoded.bytes.size(),

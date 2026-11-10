@@ -2,8 +2,55 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsMeshRuntimeAdhdModule(in u64 value){
-    return value != 0u;
+#include <impl/assets_mesh/mesh_binary_codec.adhd>
+#include <impl/assets_mesh/skin_binary_codec.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 DeserializeMeshBinaryPayload(
+    in Span<u8> binary,
+    mut Vector<f32x3u> outPositions,
+    mut Vector<f16x4u> outNormals,
+    mut Vector<f16x4u> outTangents,
+    mut Vector<f32x2u> outUv0,
+    mut Vector<f16x4u> outColors,
+    mut Vector<MeshletDesc> outMeshlets,
+    mut Vector<MeshletBounds> outMeshletBounds,
+    mut Vector<u8> outMeshletPositionRefDeltas,
+    mut Vector<u8> outMeshletAttributeRefDeltas,
+    mut Vector<MeshletLocalVertexRef> outMeshletLocalVertexRefs,
+    mut Vector<u8> outMeshletPrimitiveIndices,
+    mut Vector<u32> outSolidTriangleWords
+){
+    MeshBinaryCodec codec;
+    return codec.deserialize(
+        binary,
+        outPositions,
+        outNormals,
+        outTangents,
+        outUv0,
+        outColors,
+        outMeshlets,
+        outMeshletBounds,
+        outMeshletPositionRefDeltas,
+        outMeshletAttributeRefDeltas,
+        outMeshletLocalVertexRefs,
+        outMeshletPrimitiveIndices,
+        outSolidTriangleWords
+    );
+}
+
+b8 DeserializeSkinBinaryPayload(
+    in Span<u8> binary,
+    mut Name outMesh,
+    mut Name outSkeleton,
+    mut Vector<SkinInfluence4> outInfluences,
+    mut Vector<SkeletonJointMatrix> outInverseBindMatrices
+){
+    SkinBinaryCodec codec;
+    return codec.deserialize(binary, outMesh, outSkeleton, outInfluences, outInverseBindMatrices);
 }
 
 
@@ -20,8 +67,6 @@ native{
 
 #include <impl/assets_mesh/meshlet_ref_decoding.adhd.h>
 #include <impl/assets_mesh/payload_validation.adhd.h>
-#include <impl/assets_mesh/mesh_binary_codec.adhd.h>
-#include <impl/assets_mesh/skin_binary_codec.adhd.h>
 
 #include <core/common/log.h>
 #include <core/assets/auto_registration.h>
@@ -67,7 +112,7 @@ b8 Mesh::loadBinary(const Span<const u8> binary){
         return false;
 
     Mesh candidate(m_positionStream.get_allocator().arena(), virtualPath());
-    if(!MeshBinaryCodec().deserialize(
+    if(!DeserializeMeshBinaryPayload(
         binary,
         candidate.m_positionStream,
         candidate.m_normalStream,
@@ -160,7 +205,7 @@ b8 Mesh::hasIncompleteGeometryPayload()const noexcept{
 
 b8 Skin::loadBinary(const Span<const u8> binary){
     Skin candidate(m_influences.get_allocator().arena(), virtualPath());
-    if(!SkinBinaryCodec().deserialize(binary, candidate.m_mesh.virtualPath, candidate.m_skeleton.virtualPath, candidate.m_influences, candidate.m_inverseBindMatrices) || !candidate.validatePayload())
+    if(!DeserializeSkinBinaryPayload(binary, candidate.m_mesh.virtualPath, candidate.m_skeleton.virtualPath, candidate.m_influences, candidate.m_inverseBindMatrices) || !candidate.validatePayload())
         return false;
     *this = Move(candidate);
     return true;

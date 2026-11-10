@@ -2,6 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_ui/toolkit/text/atlas_types.adhd>
+#include <impl/ecs_ui/toolkit/text/shaper_types.adhd>
+
 native{
 #include <impl/ecs_ui/toolkit/text/layout.adhd.h>
 
@@ -60,8 +63,66 @@ NWB_IMPL_UI_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplEcsUiToolkitTextServiceAdhdModule(in u64 value){
-    return value != 0u;
+b8 IsValidTextRasterPixelSize(in u32 pixelSize){
+    return pixelSize != 0u && pixelSize <= s_TextMaxRasterPpem;
+}
+
+b8 FitsCoverageAtlasGlyphBitmap(in u32 width, in u32 height){
+    const u32 maxExtent = s_GlyphAtlasPageExtent - s_GlyphAtlasGlyphGutter;
+    return width <= maxExtent && height <= maxExtent;
+}
+
+u32 ResolveRasterBitmapSourceRow(in i32 pitch, in u32 rows, in u32 row){
+    if(pitch >= 0)
+        return row;
+    return rows - row - 1u;
+}
+
+b8 MatchesBakedAtlasShapingMetrics(
+    in u32 payloadFaceIndex,
+    in u32 fontFaceIndex,
+    in u32 payloadUnitsPerEm,
+    in u32 hbUnitsPerEm,
+    in u32 payloadSourceGlyphCount,
+    in u32 hbGlyphCount
+){
+    return payloadFaceIndex == fontFaceIndex && payloadUnitsPerEm == hbUnitsPerEm && payloadSourceGlyphCount == hbGlyphCount;
+}
+
+b8 IsValidFontFaceShapeByteRange(in u32 byteBegin, in u32 byteEnd, in usize textSize, in f32 fontSize){
+    return byteBegin <= byteEnd && cast<usize>(byteEnd) <= textSize && textSize <= s_TextMaxBytes && IsValidTextFontSize(fontSize);
+}
+
+u32 ResolveShapedClusterByteEnd(
+    in TextDirection direction,
+    in u32 endIndex,
+    in u32 glyphCount,
+    in u32 nextClusterByteBegin,
+    in u32 byteEnd,
+    in u32 previousBegin
+){
+    if(direction == TextDirection::LeftToRight){
+        if(endIndex < glyphCount)
+            return nextClusterByteBegin;
+        return byteEnd;
+    }
+    return previousBegin;
+}
+
+Rect MakeCachedCoverageGlyphBounds(in i32 bearingX, in i32 bearingY, in Rect pixels){
+    return Rect(cast<f32>(bearingX), -cast<f32>(bearingY), pixels.width, pixels.height);
+}
+
+b8 IsValidTextPaintOriginAndColor(in Point topLeft, in Color color){
+    return IsFinite(topLeft.x) && IsFinite(topLeft.y) && IsValidPaintColor(color);
+}
+
+Point MakeDisplayPixelScalePoint(in DisplayMetrics metrics){
+    return Point(metrics.pixelScaleX, metrics.pixelScaleY);
+}
+
+b8 HasPositivePreparedGlyphExtent(in Rect rectangle){
+    return rectangle.width > 0.0f && rectangle.height > 0.0f;
 }
 
 
@@ -123,7 +184,7 @@ public:
     }
 
     [[nodiscard]] Expected<Rect> rasterBounds(const u32 glyphId, const u32 pixelSize){
-        if(pixelSize == 0u || pixelSize > s_TextMaxRasterPpem)
+        if(!IsValidTextRasterPixelSize(pixelSize))
             return MakeUnexpected(Failure{});
         if(FT_Set_Pixel_Sizes(m_face, 0u, pixelSize) != 0 || FT_Load_Glyph(m_face, glyphId, FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP) != 0){
             NWB_LOGGER_ERROR(NWB_TEXT("UI glyph raster measurement failed"));
@@ -140,7 +201,7 @@ public:
     }
 
     [[nodiscard]] b8 rasterize(const u32 glyphId, const u32 pixelSize, GlyphBitmap& output){
-        if(pixelSize == 0u || pixelSize > s_TextMaxRasterPpem)
+        if(!IsValidTextRasterPixelSize(pixelSize))
             return false;
         if(FT_Set_Pixel_Sizes(m_face, 0u, pixelSize) != 0 || FT_Load_Glyph(m_face, glyphId, FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP) != 0 || FT_Render_Glyph(m_face->glyph, FT_RENDER_MODE_NORMAL) != 0){
             NWB_LOGGER_ERROR(NWB_TEXT("UI glyph rasterization failed"));
@@ -156,12 +217,12 @@ public:
         output.height = bitmap.rows;
         output.bearingX = slot->bitmap_left;
         output.bearingY = slot->bitmap_top;
-        if(bitmap.width > s_GlyphAtlasPageExtent - s_GlyphAtlasGlyphGutter || bitmap.rows > s_GlyphAtlasPageExtent - s_GlyphAtlasGlyphGutter)
+        if(!FitsCoverageAtlasGlyphBitmap(bitmap.width, bitmap.rows))
             return false;
         output.pixels.resize(static_cast<usize>(bitmap.width) * bitmap.rows);
         const usize pitch = static_cast<usize>(Abs(bitmap.pitch));
         for(u32 row = 0u; row < bitmap.rows; ++row){
-            const u32 sourceRow = bitmap.pitch >= 0 ? row : bitmap.rows - row - 1u;
+            const u32 sourceRow = ResolveRasterBitmapSourceRow(bitmap.pitch, bitmap.rows, row);
             if(bitmap.width != 0u)
                 NWB_MEMCPY(output.pixels.data() + static_cast<usize>(row) * bitmap.width, bitmap.width, bitmap.buffer + static_cast<usize>(sourceRow) * pitch, bitmap.width);
         }
@@ -287,8 +348,7 @@ private:
             if(
                 source.atlas->validatePayload(scratchArena) && payload.font == m_identity
                 && ValidateFontAtlasSourceMatch(payload, source.font)
-                && payload.faceIndex == source.font.faceIndex() && payload.unitsPerEm == hb_face_get_upem(m_hbFace)
-                && payload.sourceGlyphCount == hb_face_get_glyph_count(m_hbFace)
+                && MatchesBakedAtlasShapingMetrics(payload.faceIndex, source.font.faceIndex(), payload.unitsPerEm, hb_face_get_upem(m_hbFace), payload.sourceGlyphCount, hb_face_get_glyph_count(m_hbFace))
             ){
                 auto atlasResult = CreateBakedFontAtlas(arena, *source.atlas, m_generation);
                 if(atlasResult)
@@ -331,8 +391,6 @@ private:
                 CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error, .category = s_TextFontLifecycleCategory, .message = "UI FreeType library destruction failed", .file = __FILE__, .line = __LINE__, });
         }
     }
-
-
 
 
 private:
@@ -387,7 +445,7 @@ Expected<FontMetrics> FontFace::metrics(f32 fontSize)const{
 }
 
 b8 FontFace::shape(const ShapeRequest& request, u32 byteBegin, u32 byteEnd, PaintVector<RawShapedGlyph>& output)const{
-    if(!valid() || byteBegin > byteEnd || byteEnd > request.text.size() || request.text.size() > s_TextMaxBytes || !IsValidTextFontSize(request.fontSize))
+    if(!valid() || !IsValidFontFaceShapeByteRange(byteBegin, byteEnd, request.text.size(), request.fontSize))
         return false;
     const i32 scale = ComputeTextFixedPointScale(request.fontSize);
     hb_font_set_scale(m_state->m_scaledFont, scale, scale);
@@ -427,7 +485,8 @@ b8 FontFace::shape(const ShapeRequest& request, u32 byteBegin, u32 byteEnd, Pain
         while(end < count && infos[end].cluster == infos[first].cluster)
             ++end;
         const u32 clusterBegin = infos[first].cluster;
-        const u32 clusterEnd = request.direction == TextDirection::LeftToRight ? (end < count ? infos[end].cluster : byteEnd) : previousBegin;
+        const u32 nextCluster = end < count ? infos[end].cluster : byteEnd;
+        const u32 clusterEnd = ResolveShapedClusterByteEnd(request.direction, end, count, nextCluster, byteEnd, previousBegin);
         for(u32 index = first; index < end; ++index){
             hb_glyph_extents_t extents{};
             Rect ink;
@@ -568,7 +627,7 @@ Expected<Rect> TextService::measure(const TextLayout& layout, const DisplayMetri
                 return MakeUnexpected(Failure{});
             const AtlasGlyph* cached = m_atlas->find(glyph.face, glyph.glyphId, pixelSize);
             const Expected<Rect> raster = cached
-                ? Expected<Rect>(Rect{ static_cast<f32>(cached->bearingX), -static_cast<f32>(cached->bearingY), cached->pixels.width, cached->pixels.height })
+                ? Expected<Rect>(MakeCachedCoverageGlyphBounds(cached->bearingX, cached->bearingY, cached->pixels))
                 : glyph.face->rasterBounds(glyph.glyphId, pixelSize);
             if(!raster)
                 return MakeUnexpected(Failure{});
@@ -582,7 +641,7 @@ b8 TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point topLe
     using namespace __hidden_ui_text_service;
     const DisplayMetrics& metrics = paint.displayMetrics();
     const auto rasterMetrics = TryResolveTextRasterMetrics(layout.fontSize(), metrics);
-    if(layout.lines().empty() || !rasterMetrics || !IsFinite(topLeft.x) || !IsFinite(topLeft.y) || !IsValidPaintColor(color))
+    if(layout.lines().empty() || !rasterMetrics || !IsValidTextPaintOriginAndColor(topLeft, color))
         return false;
     const Rect clip = paint.currentClip();
     const TextGlyphIntersection::Enum clipStatus = TryIntersectTextRects(clip, clip);
@@ -594,7 +653,7 @@ b8 TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point topLe
     const f32 rasterPpem = rasterMetrics->rasterPpem;
     const u32 pixelSize = rasterMetrics->pixelSize;
     const f32 rasterScale = rasterMetrics->rasterScale;
-    const Point deviceScale{ metrics.pixelScaleX, metrics.pixelScaleY };
+    const Point deviceScale = MakeDisplayPixelScalePoint(metrics);
     Core::Alloc::ScratchArena scratchArena(s_TextPaintCandidatesArena);
     Vector<usize, Core::Alloc::ScratchArena> candidates(scratchArena);
     candidates.reserve(layout.glyphs().size());
@@ -626,7 +685,7 @@ b8 TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point topLe
             if(!rectangle)
                 return false;
             item.rectangle = *rectangle;
-            if(item.rectangle.width > 0.0f && item.rectangle.height > 0.0f){
+            if(HasPositivePreparedGlyphExtent(item.rectangle)){
                 const FontAtlasGlyph& record = *atlas->glyph(glyph.glyphId);
                 item.sdfPage = &atlas->page(record.group);
                 item.channel = record.channel;

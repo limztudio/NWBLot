@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_sampler/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 #if defined(NWB_COOK)
 
@@ -57,8 +63,45 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsSamplerCookAdhdModule(in u64 value){
-    return value != 0u;
+const f32 s_SamplerCookBorderColorChannel = 0.0f;
+
+b8 ValidateSamplerCookMetadataDescription(
+    in StringView filePathText,
+    in f32 borderColorR,
+    in f32 borderColorG,
+    in f32 borderColorB,
+    in f32 borderColorA,
+    in f32 maxAnisotropy,
+    in f32 mipBias,
+    in u32 addressU,
+    in u32 addressV,
+    in u32 addressW,
+    in u32 reductionType
+){
+    if(IsValidSamplerDescriptionParameters(
+        borderColorR,
+        borderColorG,
+        borderColorB,
+        borderColorA,
+        maxAnisotropy,
+        mipBias,
+        addressU,
+        addressV,
+        addressW,
+        reductionType
+    ))
+        return true;
+
+    error("{} '{}': sampler description is invalid", s_SamplerMetaDiagnosticPrefix, filePathText);
+    return false;
+}
+
+b8 ValidateSamplerCookEntryVirtualPath(in Name virtualPath){
+    if(virtualPath != s_NameNone)
+        return true;
+
+    error("Sampler cook: sampler entry is invalid");
+    return false;
 }
 
 
@@ -70,9 +113,10 @@ native{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <core/assets/binary_payload_io.h>
 #include <core/assets/cook_metadata.h>
-#include <core/common/log.h>
 
 #include <global/binary.h>
 
@@ -154,7 +198,7 @@ b8 SamplerAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<SamplerCookEntry> ParseSamplerCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena&, Core::Alloc::ScratchArena&){
+Expected<SamplerCookEntry> ParseSamplerCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena&, Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_sampler_cook;
 
     SamplerCookEntry entry;
@@ -166,7 +210,7 @@ Expected<SamplerCookEntry> ParseSamplerCookMetadata(const Name virtualPath, cons
         return MakeUnexpected(Failure{});
 
     Core::SamplerDesc description;
-    description.borderColor = Core::Color(0.0f, 0.0f, 0.0f, 0.0f);
+    description.borderColor = Core::Color(s_SamplerCookBorderColorChannel, s_SamplerCookBorderColorChannel, s_SamplerCookBorderColorChannel, s_SamplerCookBorderColorChannel);
     auto minFilterResult = Core::Assets::ParseNamedMetadataEnumField<b8>(nwbFilePath, asset, s_SamplerMetaDiagnosticPrefix, s_SamplerMinFilterField, s_FilterCases, s_SamplerFilterHint);
     if(!minFilterResult)
         return MakeUnexpected(Failure{});
@@ -203,10 +247,21 @@ Expected<SamplerCookEntry> ParseSamplerCookMetadata(const Name virtualPath, cons
     if(!mipBiasResult)
         return MakeUnexpected(Failure{});
     description.mipBias = *mipBiasResult;
-    if(!IsValidSamplerDescription(description)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': sampler description is invalid"), ConvertString(s_SamplerMetaDiagnosticPrefix), PathToString<tchar>(nwbFilePath));
+    const AString<Core::Alloc::ScratchArena> filePathText = PathToString<char>(scratchArena, nwbFilePath);
+    if(!ValidateSamplerCookMetadataDescription(
+        filePathText,
+        description.borderColor.r,
+        description.borderColor.g,
+        description.borderColor.b,
+        description.borderColor.a,
+        description.maxAnisotropy,
+        description.mipBias,
+        static_cast<u32>(description.addressU),
+        static_cast<u32>(description.addressV),
+        static_cast<u32>(description.addressW),
+        static_cast<u32>(description.reductionType)
+    ))
         return MakeUnexpected(Failure{});
-    }
 
     entry.description = description;
     return entry;
@@ -217,10 +272,8 @@ Expected<SamplerCookEntry> ParseSamplerCookMetadata(const Path& assetRoot, const
 }
 
 Expected<Sampler> BuildSamplerAsset(const SamplerCookEntry& samplerEntry, Core::Assets::AssetArena& arena){
-    if(!samplerEntry.virtualPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("Sampler cook: sampler entry is invalid"));
+    if(!ValidateSamplerCookEntryVirtualPath(samplerEntry.virtualPath))
         return MakeUnexpected(Failure{});
-    }
 
     Sampler asset(arena, samplerEntry.virtualPath);
     asset.setDescription(samplerEntry.description);

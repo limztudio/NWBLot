@@ -2,8 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsMaterialVolumeEntryAdhdModule(in u64 value){
-    return value != 0u;
+const Name s_MaterialCookEntryAssetTypeName = "material";
+const StringView s_MaterialNonStandaloneKindLabel = "material";
+const b8 s_MaterialLogCookBuildFailure = false;
+
+b8 IsValidMaterialResourceDependencyName(in b8 parsedOk, in Name resourceName){
+    return parsedOk && resourceName != s_NameNone;
 }
 
 
@@ -45,6 +49,8 @@ namespace __hidden_assets_material_volume_entry{
 
 
 inline constexpr TStringView s_MaterialAssetKindLabel = NWB_TEXT("material");
+
+static_assert(Material::AssetTypeName() == s_MaterialCookEntryAssetTypeName, "Material cook entry asset type drifted");
 
 [[nodiscard]] static b8 IsMaterialResourceParameterValue(const AStringView valueText, Core::Alloc::ScratchArena& scratchArena){
     const AStringView trimmed = TrimView(valueText);
@@ -88,7 +94,7 @@ static b8 ExtractMaterialDependencies(const Core::Assets::CookDependencyItemCont
     Sort(resourceParameterValues.begin(), resourceParameterValues.end());
     for(const AStringView resourceValue : resourceParameterValues){
         const auto resourceName = Name::FromText(resourceValue);
-        if(!resourceName || !*resourceName)
+        if(!IsValidMaterialResourceDependencyName(resourceName.has_value(), resourceName ? *resourceName : s_NameNone))
             return false;
         if(!collector.addAssetDependency(*resourceName))
             return false;
@@ -104,13 +110,13 @@ static b8 RegisterMaterialCookEntry(Core::Assets::CookEntryRegistry& registry){
         },
         nullptr,
         [](MaterialCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildMaterialAsset(entry, arena); },
-        false,
+        s_MaterialLogCookBuildFailure,
         registry
     );
 }
 
 static b8 RegisterMaterialCookDependency(Core::Assets::CookDependencyRegistry& registry){
-    return registry.registerType(Material::AssetTypeName(), &ExtractMaterialDependencies);
+    return registry.registerType(s_MaterialCookEntryAssetTypeName, &ExtractMaterialDependencies);
 }
 
 
@@ -119,7 +125,7 @@ static b8 RegisterMaterialCookDependency(Core::Assets::CookDependencyRegistry& r
 
 NWB_DEFINE_COOK_ENTRY_REGISTRAR(s_MaterialCookEntryRegistrar, RegisterMaterialCookEntry);
 NWB_DEFINE_COOK_DEPENDENCY_REGISTRAR(s_MaterialCookDependencyRegistrar, RegisterMaterialCookDependency);
-static Core::Assets::NonStandaloneAssetTypeAutoRegistrar s_MaterialNonStandaloneAssetTypeRegistrar(Material::AssetTypeName(), "material");
+static Core::Assets::NonStandaloneAssetTypeAutoRegistrar s_MaterialNonStandaloneAssetTypeRegistrar(s_MaterialCookEntryAssetTypeName, s_MaterialNonStandaloneKindLabel);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

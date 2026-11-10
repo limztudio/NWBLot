@@ -111,6 +111,12 @@ void FinalizeCsgFrameState(mut CsgFrameState inOutState){
     inOutState.hasAnyWork = inOutState.hasOpaqueStaticWork || inOutState.hasOpaqueSkinnedWork || inOutState.hasTransparentStaticWork || inOutState.hasTransparentSkinnedWork;
 }
 
+b8 IsValidCsgReceiverDrawRange(in CsgReceiverDrawState drawState, in usize totalCutterCount){
+    const usize firstCutter = cast<usize>(drawState.firstCutter);
+    const usize cutterCount = cast<usize>(drawState.cutterCount);
+    return firstCutter <= totalCutterCount && cutterCount <= totalCutterCount - firstCutter;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -2,9 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsFontAtlasVolumeEntryAdhdModule(in u64 value){
-    return value != 0u;
-}
+const Name s_FontAtlasCookEntryAssetTypeName = "font_atlas";
+const b8 s_FontAtlasLogCookBuildFailure = false;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,6 +40,10 @@ namespace __hidden_font_atlas_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr TStringView s_FontAtlasAssetKindLabel = NWB_TEXT("font atlas");
+
+static_assert(FontAtlas::AssetTypeName() == s_FontAtlasCookEntryAssetTypeName, "Font atlas cook entry asset type drifted");
+
 static b8 ExtractFontAtlasDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
     const auto fontRef = Core::Assets::ReadMetadataAssetRefField<Font>(context.nwbFilePath, context.asset, s_FontAtlasMetaDiagnosticPrefix, s_FontAtlasMetaFontField, true);
     if(!fontRef)
@@ -50,7 +53,7 @@ static b8 ExtractFontAtlasDependencies(const Core::Assets::CookDependencyItemCon
 
 static b8 RegisterFontAtlasCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<FontAtlasCookEntry, FontAtlas, FontAtlasAssetCodec>(
-        NWB_TEXT("font atlas"),
+        s_FontAtlasAssetKindLabel,
         [](const Path& root, AStringView virtualRoot, const Path& path, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
             return ParseFontAtlasCookMetadata(root, virtualRoot, path, doc, context.cookArena, context.scratchArena);
         },
@@ -60,13 +63,13 @@ static b8 RegisterFontAtlasCookEntry(Core::Assets::CookEntryRegistry& registry){
         [](FontAtlasCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
             return BuildFontAtlasAsset(Move(entry), arena, scratchArena);
         },
-        false,
+        s_FontAtlasLogCookBuildFailure,
         registry
     );
 }
 
 static b8 RegisterFontAtlasCookDependency(Core::Assets::CookDependencyRegistry& registry){
-    return registry.registerType(FontAtlas::AssetTypeName(), &ExtractFontAtlasDependencies);
+    return registry.registerType(s_FontAtlasCookEntryAssetTypeName, &ExtractFontAtlasDependencies);
 }
 
 

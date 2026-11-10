@@ -2,9 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ImplAssetsCsgVolumeEntryAdhdModule(in u64 value){
-    return value != 0u;
-}
+const Name s_CsgShapeDependencyAssetTypeName = "csg_shape";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,6 +36,8 @@ namespace __hidden_assets_csg_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static_assert(CsgShape::AssetTypeName() == s_CsgShapeDependencyAssetTypeName, "CSG shape dependency type drifted");
+
 static b8 ExtractCsgShapeDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector&){
     if(!context.document)
         return false;
@@ -46,7 +46,7 @@ static b8 ExtractCsgShapeDependencies(const Core::Assets::CookDependencyItemCont
 }
 
 static b8 RegisterCsgShapeCookDependency(Core::Assets::CookDependencyRegistry& registry){
-    return registry.registerType(CsgShape::AssetTypeName(), &ExtractCsgShapeDependencies);
+    return registry.registerType(s_CsgShapeDependencyAssetTypeName, &ExtractCsgShapeDependencies);
 }
 
 

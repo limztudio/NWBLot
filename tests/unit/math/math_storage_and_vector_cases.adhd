@@ -1,56 +1,49 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
 
-b8 MathStorageAndVectorCasesReady(in u64 value){
-    return value != 0u;
-}
+#include <tests/common/floating_point_environment_guard.adhd>
+#include <tests/common/gtest_macros.adhd>
+#include <tests/common/test_context.adhd>
+#include <tests/unit/math/suite.adhd>
+#include "case_types.adhd"
 
 native{
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <gtest/gtest.h>
+#include <core/common/module.h>
 
 #include <global/array.h>
-#include <tests/common/floating_point_environment_guard.adhd.h>
+#include <global/compile.h>
+#include <global/containers.h>
 #include <global/floating_point_environment.h>
-#include <global/simdmath.h>
 #include <global/limit.h>
+#include <global/not_null.h>
 #include <global/scope_exit.h>
+#include <global/simd/collision_triangle.h>
+#include <global/simd/convert.h>
+#include <global/simd/result.h>
+#include <global/simd/type.h>
+#include <global/simd/vector.h>
+#include <global/simd/vector_clamp_ordered.h>
+#include <global/simdmath.h>
+#include <global/simplemath.h>
+
+#if defined(__linux__)
+#include <sys/mman.h>
+#include <unistd.h>
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_math_storage_boundary_tests{
+namespace NWB::Tests::MathStorageCasesDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-template<typename Value>
-static void CheckStorageHashMatchesEquality(const Value& lhs, const Value& same, const Value& different){
-    EXPECT_EQ(lhs, same);
-    EXPECT_NE(lhs, different);
-    EXPECT_EQ(Hasher<Value>{}(lhs), Hasher<Value>{}(same));
-}
-
-TEST(Math, SignedZeroStorageEqualityProducesEqualHashes){
-    EXPECT_EQ(FloatingHashBits(-0.0f), FloatingHashBits(0.0f));
-    CheckStorageHashMatchesEquality(Float4(-0.0f, 1.0f, 2.0f, 3.0f), Float4(0.0f, 1.0f, 2.0f, 3.0f), Float4(0.0f, 1.0f, 2.0f, 4.0f));
-    CheckStorageHashMatchesEquality(Float3Int(-0.0f, 1.0f, 2.0f, -3), Float3Int(0.0f, 1.0f, 2.0f, -3), Float3Int(0.0f, 1.0f, 2.0f, -4));
-    CheckStorageHashMatchesEquality(Float3UInt(-0.0f, 1.0f, 2.0f, 3u), Float3UInt(0.0f, 1.0f, 2.0f, 3u), Float3UInt(0.0f, 1.0f, 2.0f, 4u));
-    CheckStorageHashMatchesEquality(Float2U(-0.0f, 1.0f), Float2U(0.0f, 1.0f), Float2U(0.0f, 2.0f));
-    CheckStorageHashMatchesEquality(Float3U(-0.0f, 1.0f, 2.0f), Float3U(0.0f, 1.0f, 2.0f), Float3U(0.0f, 1.0f, 3.0f));
-    CheckStorageHashMatchesEquality(Float4U(-0.0f, 1.0f, 2.0f, 3.0f), Float4U(0.0f, 1.0f, 2.0f, 3.0f), Float4U(0.0f, 1.0f, 2.0f, 4.0f));
-}
 
 template<typename Storage, usize LogicalCount, typename Source>
-static void CheckDoubleStoresIgnoreInactiveLanesAndPreserveObjectPadding(const Source& source, const Array<f64, LogicalCount>& expected){
+void CheckDoubleStoresIgnoreInactiveLanesAndPreserveObjectPadding(const Source& source, const Array<f64, LogicalCount>& expected){
     struct StorageRecord{
         Storage value;
         Array<u64, 4> neighbor{};
@@ -96,7 +89,7 @@ static void CheckDoubleStoresIgnoreInactiveLanesAndPreserveObjectPadding(const S
 }
 
 template<typename Storage, usize LogicalCount>
-static void CheckDoubleStorageHashIgnoresPaddingAndCanonicalizesSignedZero(){
+void CheckDoubleStorageHashIgnoresPaddingAndCanonicalizesSignedZero(){
     Storage lhs{};
     Storage rhs{};
     for(usize lane = 0u; lane < LogicalCount; ++lane){
@@ -112,307 +105,6 @@ static void CheckDoubleStorageHashIgnoresPaddingAndCanonicalizesSignedZero(){
     EXPECT_NE(lhs, rhs);
 }
 
-TEST(Math, DoubleStorageHashesCanonicalizeSignedZeroAndRetainSubFloatResiduals){
-    EXPECT_EQ(FloatingHashBits(-0.0), FloatingHashBits(0.0));
-    EXPECT_NE(FloatingHashBits(1.0 + 0x1p-52), FloatingHashBits(1.0));
-    CheckStorageHashMatchesEquality(Double4(-0.0, 1.0 + 0x1p-52, -0.0, 0x1p+40 + 1.0), Double4(0.0, 1.0 + 0x1p-52, 0.0, 0x1p+40 + 1.0), Double4(0.0, 1.0, 0.0, 0x1p+40 + 1.0));
-    CheckStorageHashMatchesEquality(Double4U(-0.0, 1.0 + 0x1p-52, -0.0, 0x1p+40 + 1.0), Double4U(0.0, 1.0 + 0x1p-52, 0.0, 0x1p+40 + 1.0), Double4U(0.0, 1.0, 0.0, 0x1p+40 + 1.0));
-}
-
-TEST(Math, AlignedShortDoubleStoresAndStreamsPreservePoisonedPaddingAndNeighborStorage){
-    const Array<f64, 2> pairExpected = { -0.0, 1.0 + 0x1p-52 };
-    CheckDoubleStoresIgnoreInactiveLanesAndPreserveObjectPadding<Double2, 2u>(SIMDVectorDouble{ pairExpected[0], pairExpected[1], Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN }, pairExpected);
-    const Array<f64, 3> tripleExpected = { -0.0, 1.0 + 0x1p-52, 0x1p+40 + 1.0 };
-    CheckDoubleStoresIgnoreInactiveLanesAndPreserveObjectPadding<Double3, 3u>(SIMDVectorDouble{ tripleExpected[0], tripleExpected[1], tripleExpected[2], Limit<f64>::s_QuietNaN }, tripleExpected);
-    const Array<f64, 9> matrixExpected = { -0.0, 1.0 + 0x1p-52, 0x1p+40 + 1.0, 2.0, -0.0, -0x1p+40 - 1.0, 0x1p-40, -3.0, 1.0 + 0x1p-52 };
-    const SIMDMatrixDouble matrix = {
-        SIMDVectorDouble{ matrixExpected[0], matrixExpected[1], matrixExpected[2], Limit<f64>::s_Infinity },
-        SIMDVectorDouble{ matrixExpected[3], matrixExpected[4], matrixExpected[5], Limit<f64>::s_QuietNaN },
-        SIMDVectorDouble{ matrixExpected[6], matrixExpected[7], matrixExpected[8], -Limit<f64>::s_Infinity },
-        SIMDVectorDouble{ Limit<f64>::s_QuietNaN, Limit<f64>::s_Infinity, -Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN },
-    };
-    CheckDoubleStoresIgnoreInactiveLanesAndPreserveObjectPadding<Double33, 9u>(matrix, matrixExpected);
-}
-
-TEST(Math, AlignedShortDoubleAndCompactMatrixHashesIgnorePaddingWithSignedZeroAndBinary64Residuals){
-    CheckDoubleStorageHashIgnoresPaddingAndCanonicalizesSignedZero<Double2, 2u>();
-    CheckDoubleStorageHashIgnoresPaddingAndCanonicalizesSignedZero<Double3, 3u>();
-    CheckDoubleStorageHashIgnoresPaddingAndCanonicalizesSignedZero<Double33, 9u>();
-}
-
-TEST(Math, DoubleTransformStreamsPreservePaddedStridesDuringAlignedUnalignedAndInPlaceConversion){
-    struct AlignedRecord{
-        Double3 value;
-        Array<u64, 4> gap{};
-    };
-    struct alignas(32) UnalignedRecord{
-        u64 prefix;
-        Double3U value;
-        Array<u64, 4> gap{};
-    };
-    Array<AlignedRecord, 3> aligned{};
-    Array<UnalignedRecord, 3> unaligned{};
-    NWB_MEMSET(aligned.data(), 0xa5, sizeof(aligned));
-    NWB_MEMSET(unaligned.data(), 0x5a, sizeof(unaligned));
-    const u64 poison = 0x7ff8000000001234u;
-    for(usize index = 0u; index < LengthOf(aligned); ++index){
-        const f64 position = static_cast<f64>(index);
-        const f64 x = 0.25 * position + (0x1p+40 + 0.25);
-        const f64 y = (position - 1.0) * 0x1p-40;
-        StoreDouble(VectorDoubleSet(x, y, 1.0 + 0x1p-52, Limit<f64>::s_Infinity), aligned[index].value);
-        NWB_MEMCPY(reinterpret_cast<u8*>(&aligned[index].value) + 3u * sizeof(f64), sizeof(aligned[index].value) - 3u * sizeof(f64), &poison, sizeof(poison));
-    }
-    Array<u8, sizeof(aligned)> alignedOriginal{};
-    Array<u8, sizeof(unaligned)> unalignedOriginal{};
-    NWB_MEMCPY(alignedOriginal.data(), alignedOriginal.size(), aligned.data(), sizeof(aligned));
-    NWB_MEMCPY(unalignedOriginal.data(), unalignedOriginal.size(), unaligned.data(), sizeof(unaligned));
-    const SIMDMatrixDouble matrix = MatrixDoubleTranslation(0.25, 0.0, 0.0);
-    EXPECT_EQ(VectorDouble3TransformCoordStream(MakeNotNull(&unaligned[0].value), sizeof(UnalignedRecord), MakeNotNull<const Double3*>(&aligned[0].value), sizeof(AlignedRecord), LengthOf(aligned), matrix).get(), &unaligned[0].value);
-    EXPECT_EQ(NWB_MEMCMP(aligned.data(), alignedOriginal.data(), sizeof(aligned)), 0);
-    for(usize index = 0u; index < LengthOf(aligned); ++index)
-        EXPECT_EQ(unaligned[index].value.x, 0.25 * static_cast<f64>(index) + (0x1p+40 + 0.5)) << index;
-
-    EXPECT_EQ(VectorDouble3TransformCoordStream(MakeNotNull(&unaligned[0].value), sizeof(UnalignedRecord), MakeNotNull<const Double3U*>(&unaligned[0].value), sizeof(UnalignedRecord), LengthOf(unaligned), matrix).get(), &unaligned[0].value);
-    EXPECT_EQ(VectorDouble3TransformCoordStream(MakeNotNull(&aligned[0].value), sizeof(AlignedRecord), MakeNotNull<const Double3U*>(&unaligned[0].value), sizeof(UnalignedRecord), LengthOf(aligned), matrix).get(), &aligned[0].value);
-    EXPECT_EQ(VectorDouble3TransformCoordStream(MakeNotNull(&aligned[0].value), sizeof(AlignedRecord), MakeNotNull<const Double3*>(&aligned[0].value), sizeof(AlignedRecord), LengthOf(aligned), matrix).get(), &aligned[0].value);
-    for(usize index = 0u; index < LengthOf(aligned); ++index){
-        EXPECT_EQ(aligned[index].value.x, 0.25 * static_cast<f64>(index) + (0x1p+40 + 1.25)) << index;
-        EXPECT_EQ(unaligned[index].value.x, 0.25 * static_cast<f64>(index) + (0x1p+40 + 0.75)) << index;
-        EXPECT_EQ(aligned[index].value.y, (static_cast<f64>(index) - 1.0) * 0x1p-40) << index;
-        EXPECT_EQ(aligned[index].value.z, 1.0 + 0x1p-52) << index;
-        const auto alignedBytes = MakeNotNull(reinterpret_cast<const u8*>(&aligned[index]));
-        const auto unalignedBytes = MakeNotNull(reinterpret_cast<const u8*>(&unaligned[index]));
-        for(usize offset = 3u * sizeof(f64); offset < sizeof(AlignedRecord); ++offset)
-            EXPECT_EQ(alignedBytes.get()[offset], alignedOriginal[index * sizeof(AlignedRecord) + offset]) << index << ':' << offset;
-        for(usize offset = 0u; offset < sizeof(UnalignedRecord); ++offset){
-            if(offset >= offsetof(UnalignedRecord, value) && offset < offsetof(UnalignedRecord, value) + sizeof(Double3U))
-                continue;
-            EXPECT_EQ(unalignedBytes.get()[offset], unalignedOriginal[index * sizeof(UnalignedRecord) + offset]) << index << ':' << offset;
-        }
-    }
-
-    BoundingDoubleBox bounds;
-    BoundingDoubleBox::CreateFromPoints(bounds, LengthOf(aligned), aligned[0].value, sizeof(AlignedRecord));
-    EXPECT_EQ(bounds.center.x, 0x1p+40 + 1.5);
-    EXPECT_EQ(bounds.center.y, 0.0);
-    EXPECT_EQ(bounds.center.z, 1.0 + 0x1p-52);
-    EXPECT_EQ(bounds.extents.x, 0.25);
-    EXPECT_EQ(bounds.extents.y, 0x1p-40);
-    EXPECT_EQ(bounds.extents.z, 0.0);
-    EXPECT_EQ(bounds.contains(SIMDVectorDouble{ 0x1p+40 + 1.75 + 0x1p-10, 0.0, 1.0 + 0x1p-52, 0.0 }), ContainmentType::Disjoint);
-
-    struct PairRecord{
-        Double2 value;
-        Array<u64, 4> gap{};
-    };
-    Array<PairRecord, 2> pairs{};
-    NWB_MEMSET(pairs.data(), 0xa5, sizeof(pairs));
-    for(usize index = 0u; index < LengthOf(pairs); ++index){
-        StoreDouble(SIMDVectorDouble{ 0x1p+40 + 0.25, 1.0 + 0x1p-52, Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN }, pairs[index].value);
-        NWB_MEMCPY(reinterpret_cast<u8*>(&pairs[index].value) + 2u * sizeof(f64), sizeof(pairs[index].value) - 2u * sizeof(f64), &poison, sizeof(poison));
-    }
-    Array<u8, sizeof(pairs)> pairOriginal{};
-    NWB_MEMCPY(pairOriginal.data(), pairOriginal.size(), pairs.data(), sizeof(pairs));
-    EXPECT_EQ(VectorDouble2TransformCoordStream(MakeNotNull(&pairs[0].value), sizeof(PairRecord), MakeNotNull<const Double2*>(&pairs[0].value), sizeof(PairRecord), LengthOf(pairs), matrix).get(), &pairs[0].value);
-    for(usize index = 0u; index < LengthOf(pairs); ++index){
-        EXPECT_EQ(pairs[index].value.x, 0x1p+40 + 0.5) << index;
-        EXPECT_EQ(pairs[index].value.y, 1.0 + 0x1p-52) << index;
-        const auto bytes = MakeNotNull(reinterpret_cast<const u8*>(&pairs[index]));
-        for(usize offset = 2u * sizeof(f64); offset < sizeof(PairRecord); ++offset)
-            EXPECT_EQ(bytes.get()[offset], pairOriginal[index * sizeof(PairRecord) + offset]) << index << ':' << offset;
-    }
-}
-
-TEST(Math, DoubleRawIntegerEqualityRequiresBoth32BitHalvesOfEveryLane){
-    const Array<u64, 4> firstBits = { 0x0123456789abcdefu, 0x8000000000000000u, 0x7ff800009abcdef0u, 0xfedcba9876543210u };
-    const Array<u64, 2> differences = { 0x0000000000000001u, 0x0000000100000000u };
-    const SIMDVectorDouble first = VectorDoubleSetInt(firstBits[0], firstBits[1], firstBits[2], firstBits[3]);
-    for(usize changedLane = 0u; changedLane < 4u; ++changedLane){
-        for(const u64 difference : differences){
-            const SIMDVectorDouble second = VectorDoubleSetIntByIndex(first, firstBits[changedLane] ^ difference, changedLane);
-            alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 2> equality = { VectorDoubleEqualInt(first, second), VectorDoubleEqualInt(second, first) };
-            for(const SIMDVectorDouble mask : equality){
-                for(usize lane = 0u; lane < 4u; ++lane)
-                    EXPECT_EQ(VectorDoubleGetIntByIndex(mask, lane), lane == changedLane ? 0u : Limit<u64>::s_Max) << changedLane << ':' << difference << ':' << lane;
-            }
-        }
-    }
-}
-
-TEST(Math, DoubleSingleConversionsRetainSubnormalsAndSignsAndRoundHalfUlpTiesEven){
-    Array<Array<volatile f64, 4u>, 3u> runtimeInputs = {{
-        { Limit<f64>::s_Max, -Limit<f64>::s_Max, -0.0, 0.0 },
-        { 1.0 + 0x1p-24, 1.0 + 0x1.8p-23, -1.0 - 0x1p-24, -1.0 - 0x1.8p-23 },
-        { 0x1p-150, 0x1.8p-149, -0x1p-150, -0x1.8p-149 },
-    }};
-    const SIMDVectorSingle overflow = ConvertVectorDoubleToSingle(VectorDoubleSet(runtimeInputs[0][0], runtimeInputs[0][1], runtimeInputs[0][2], runtimeInputs[0][3]));
-    const Array<u32, 4> overflowExpected = { 0x7f800000u, 0xff800000u, 0x80000000u, 0u };
-    for(usize lane = 0u; lane < 4u; ++lane)
-        EXPECT_EQ(VectorGetIntByIndex(overflow, lane), overflowExpected[lane]) << lane;
-
-    const Array<u32, 4> subnormalBits = { 1u, 0x80000001u, 0x007fffffu, 0x807fffffu };
-    Array<volatile u32, 4u> runtimeSubnormalBits = { 1u, 0x80000001u, 0x007fffffu, 0x807fffffu };
-    const SIMDVectorSingle subnormals = VectorSetInt(runtimeSubnormalBits[0], runtimeSubnormalBits[1], runtimeSubnormalBits[2], runtimeSubnormalBits[3]);
-    const SIMDVectorDouble widened = ConvertVectorSingleToDouble(subnormals);
-    const Array<f64, 4> widenedExpected = { 0x1p-149, -0x1p-149, 0x1.fffffcp-127, -0x1.fffffcp-127 };
-    const SIMDVectorSingle narrowed = ConvertVectorDoubleToSingle(widened);
-    for(usize lane = 0u; lane < 4u; ++lane){
-        EXPECT_EQ(VectorDoubleGetIntByIndex(widened, lane), BitCast<u64>(widenedExpected[lane])) << lane;
-        EXPECT_EQ(VectorGetIntByIndex(narrowed, lane), subnormalBits[lane]) << lane;
-    }
-
-    Array<volatile u32, 4u> runtimeZeroBits = { 0x80000000u, 0u, 0x80000000u, 0u };
-    const SIMDVectorDouble signedZeros = ConvertVectorSingleToDouble(VectorSetInt(runtimeZeroBits[0], runtimeZeroBits[1], runtimeZeroBits[2], runtimeZeroBits[3]));
-    const Array<u64, 4> zeroExpected = { 0x8000000000000000u, 0u, 0x8000000000000000u, 0u };
-    for(usize lane = 0u; lane < 4u; ++lane)
-        EXPECT_EQ(VectorDoubleGetIntByIndex(signedZeros, lane), zeroExpected[lane]) << lane;
-
-    const SIMDVectorSingle rounded = ConvertVectorDoubleToSingle(VectorDoubleSet(runtimeInputs[1][0], runtimeInputs[1][1], runtimeInputs[1][2], runtimeInputs[1][3]));
-    const Array<u32, 4> roundedExpected = { 0x3f800000u, 0x3f800002u, 0xbf800000u, 0xbf800002u };
-    for(usize lane = 0u; lane < 4u; ++lane)
-        EXPECT_EQ(VectorGetIntByIndex(rounded, lane), roundedExpected[lane]) << lane;
-
-    const SIMDVectorSingle underflow = ConvertVectorDoubleToSingle(VectorDoubleSet(runtimeInputs[2][0], runtimeInputs[2][1], runtimeInputs[2][2], runtimeInputs[2][3]));
-    const Array<u32, 4> underflowExpected = { 0u, 2u, 0x80000000u, 0x80000002u };
-    for(usize lane = 0u; lane < 4u; ++lane)
-        EXPECT_EQ(VectorGetIntByIndex(underflow, lane), underflowExpected[lane]) << lane;
-}
-
-TEST(Math, SingleRuntimePermutationsPreserveNaNPayloadsSignedZeroAndSubnormalBits){
-    const Array<u32, 8> bits = { 0xffc01234u, 0x80000000u, 1u, 0x7f800001u, 0u, 0x7fc05678u, 0x807fffffu, Limit<u32>::s_Max };
-    const SIMDVectorSingle first = VectorSetInt(bits[0], bits[1], bits[2], bits[3]);
-    const SIMDVectorSingle second = VectorSetInt(bits[4], bits[5], bits[6], bits[7]);
-    for(u32 code = 0u; code < 256u; ++code){
-        Array<volatile u32, 4u> controls = { code & 3u, (code >> 2u) & 3u, (code >> 4u) & 3u, (code >> 6u) & 3u };
-        const SIMDVectorSingle result = VectorSwizzle(first, controls[0], controls[1], controls[2], controls[3]);
-        for(usize lane = 0u; lane < 4u; ++lane)
-            EXPECT_EQ(VectorGetIntByIndex(result, lane), bits[controls[lane]]) << code << ':' << lane;
-    }
-    for(u32 code = 0u; code < 4096u; ++code){
-        Array<volatile u32, 4u> controls = { code & 7u, (code >> 3u) & 7u, (code >> 6u) & 7u, (code >> 9u) & 7u };
-        const SIMDVectorSingle result = VectorPermute(first, second, controls[0], controls[1], controls[2], controls[3]);
-        for(usize lane = 0u; lane < 4u; ++lane)
-            EXPECT_EQ(VectorGetIntByIndex(result, lane), bits[controls[lane]]) << code << ':' << lane;
-    }
-}
-
-TEST(Math, UnalignedFloat33LoadRetainsNegativeZeroAndSignalingNaNPayloadWithoutInvalidExceptions){
-#pragma STDC FENV_ACCESS ON
-    const auto originalEnvironment = HoldFloatingPointExceptions();
-    ASSERT_TRUE(originalEnvironment);
-    NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
-
-    struct alignas(16){
-        u32 prefix{};
-        Float33U value{};
-    } record;
-    Array<volatile u32, 9u> runtimeBits = { 0x80000000u, 1u, 0x7fc01234u, 0x80000000u, 0x7f800001u, 0x807fffffu, 0xff800000u, 0u, 0xffc05678u };
-    for(usize lane = 0u; lane < 9u; ++lane)
-        record.value.raw[lane] = BitCast<f32>(runtimeBits[lane]);
-    ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-    const SIMDMatrix matrix = LoadFloat(record.value);
-    const i32 invalid = TestFloatingPointExceptions(FE_INVALID);
-    EXPECT_EQ(invalid, 0);
-    for(usize row = 0u; row < 3u; ++row){
-        for(usize lane = 0u; lane < 3u; ++lane)
-            EXPECT_EQ(VectorGetIntByIndex(matrix.v[row], lane), runtimeBits[row * 3u + lane]) << row << ':' << lane;
-        EXPECT_EQ(VectorGetIntW(matrix.v[row]), 0u) << row;
-    }
-    const Array<u32, 4> lastRow = { 0u, 0u, 0u, BitCast<u32>(1.0f) };
-    for(usize lane = 0u; lane < 4u; ++lane)
-        EXPECT_EQ(VectorGetIntByIndex(matrix.v[3], lane), lastRow[lane]) << lane;
-}
-
-TEST(Math, SelectionControlTreatsHighBitUnsignedValuesAsTrueAndPreservesSelectedRawBits){
-    const Array<u32, 4> choices = { 0u, 1u, 0x80000000u, Limit<u32>::s_Max };
-    const Array<u32, 4> left = { 0x80000000u, 1u, 0x7f800001u, 0xffc01234u };
-    const Array<u32, 4> right = { 0u, 0x807fffffu, 0x7fc05678u, Limit<u32>::s_Max };
-    const SIMDVectorSingle first = VectorSetInt(left[0], left[1], left[2], left[3]);
-    const SIMDVectorSingle second = VectorSetInt(right[0], right[1], right[2], right[3]);
-    for(u32 code = 0u; code < 256u; ++code){
-        Array<volatile u32, 4u> controls = { choices[code & 3u], choices[(code >> 2u) & 3u], choices[(code >> 4u) & 3u], choices[(code >> 6u) & 3u] };
-        const SIMDVectorSingle control = VectorSelectControl(controls[0], controls[1], controls[2], controls[3]);
-        const SIMDVectorSingle selected = VectorSelect(first, second, control);
-        const SIMDVectorDouble doubleControl = VectorDoubleSelectControl(controls[0], controls[1], controls[2], controls[3]);
-        for(usize lane = 0u; lane < 4u; ++lane){
-            const b8 enabled = controls[lane] != 0u;
-            EXPECT_EQ(VectorGetIntByIndex(control, lane), enabled ? Limit<u32>::s_Max : 0u) << code << ':' << lane;
-            EXPECT_EQ(VectorGetIntByIndex(selected, lane), enabled ? right[lane] : left[lane]) << code << ':' << lane;
-            EXPECT_EQ(VectorDoubleGetIntByIndex(doubleControl, lane), enabled ? Limit<u64>::s_Max : 0u) << code << ':' << lane;
-        }
-    }
-}
-
-TEST(Math, DoubleRuntimePermutationsRetainNonfiniteAndRawBitsAcrossPairs){
-    const SIMDVectorDouble first = VectorDoubleSetInt(0xfff8000012345678u, 0x8000000000000000u, 0x0123456789abcdefu, 0x7ff0000000000001u);
-    const SIMDVectorDouble second = VectorDoubleSetInt(0u, 0x7ff800009abcdef0u, 0xfedcba9876543210u, Limit<u64>::s_Max);
-    Array<Array<volatile u32, 4u>, 3u> swizzleControls = {{ { 3u, 1u, 0u, 2u }, { 2u, 0u, 3u, 1u }, { 1u, 3u, 1u, 3u } }};
-    const Array<Array<u64, 4>, 3> swizzleExpected = {{
-        { 0x7ff0000000000001u, 0x8000000000000000u, 0xfff8000012345678u, 0x0123456789abcdefu },
-        { 0x0123456789abcdefu, 0xfff8000012345678u, 0x7ff0000000000001u, 0x8000000000000000u },
-        { 0x8000000000000000u, 0x7ff0000000000001u, 0x8000000000000000u, 0x7ff0000000000001u }
-    }};
-    for(usize index = 0u; index < LengthOf(swizzleExpected); ++index){
-        const SIMDVectorDouble result = VectorDoubleSwizzle(first, swizzleControls[index][0], swizzleControls[index][1], swizzleControls[index][2], swizzleControls[index][3]);
-        for(usize lane = 0u; lane < 4u; ++lane)
-            EXPECT_EQ(VectorDoubleGetIntByIndex(result, lane), swizzleExpected[index][lane]) << index << ':' << lane;
-    }
-
-    Array<Array<volatile u32, 4u>, 3u> permuteControls = {{ { 7u, 0u, 6u, 1u }, { 3u, 4u, 2u, 5u }, { 5u, 3u, 4u, 0u } }};
-    const Array<Array<u64, 4>, 3> permuteExpected = {{
-        { Limit<u64>::s_Max, 0xfff8000012345678u, 0xfedcba9876543210u, 0x8000000000000000u },
-        { 0x7ff0000000000001u, 0u, 0x0123456789abcdefu, 0x7ff800009abcdef0u },
-        { 0x7ff800009abcdef0u, 0x7ff0000000000001u, 0u, 0xfff8000012345678u }
-    }};
-    for(usize index = 0u; index < LengthOf(permuteExpected); ++index){
-        const SIMDVectorDouble result = VectorDoublePermute(first, second, permuteControls[index][0], permuteControls[index][1], permuteControls[index][2], permuteControls[index][3]);
-        for(usize lane = 0u; lane < 4u; ++lane)
-            EXPECT_EQ(VectorDoubleGetIntByIndex(result, lane), permuteExpected[index][lane]) << index << ':' << lane;
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/math/case_types.adhd.h>
-
-#include <global/containers.h>
-#include <global/floating_point_environment.h>
-#include <global/simd/result.h>
-#include <global/simd/type.h>
-#include <global/simd/vector.h>
-#include <global/limit.h>
-#include <global/scope_exit.h>
-
-#include <gtest/gtest.h>
-
-#if defined(__linux__)
-#include <sys/mman.h>
-#include <unistd.h>
-#endif
-
-#pragma STDC FENV_ACCESS ON
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_storage_equality_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 template<typename Element, usize Count>
 struct RawEqualityStorage{
     Array<Element, Count> raw{};
@@ -427,6 +119,7 @@ public:
 
 template<typename Value, usize Count>
 NWB_NOINLINE b8 LegacyEqual(const Value& lhs, const Value& rhs)noexcept{
+#pragma STDC FENV_ACCESS ON
     for(usize lane = 0u; lane < Count; ++lane){
         if(lhs.raw[lane] != rhs.raw[lane])
             return false;
@@ -434,7 +127,6 @@ NWB_NOINLINE b8 LegacyEqual(const Value& lhs, const Value& rhs)noexcept{
     return true;
 }
 
-// Compare the scalar reference under its original default floating-point environment.
 #pragma STDC FENV_ACCESS OFF
 template<typename Value, usize Count>
 NWB_NOINLINE b8 DefaultContextLegacyEqual(const Value& lhs, const Value& rhs)noexcept{
@@ -444,10 +136,12 @@ NWB_NOINLINE b8 DefaultContextLegacyEqual(const Value& lhs, const Value& rhs)noe
     }
     return true;
 }
-#pragma STDC FENV_ACCESS ON
 
 template<typename Value>
-NWB_NOINLINE b8 StorageEqual(const Value& lhs, const Value& rhs)noexcept{ return lhs == rhs; }
+NWB_NOINLINE b8 StorageEqual(const Value& lhs, const Value& rhs)noexcept{
+#pragma STDC FENV_ACCESS ON
+    return lhs == rhs;
+}
 
 template<typename Result>
 struct ExpectedVectorStorage{
@@ -473,6 +167,7 @@ void CheckExpectedVectorAlignment(const Array<Lane, Count>& bits){
 
 template<typename Value, usize Count>
 void CheckNaNComparisonFlags(){
+#pragma STDC FENV_ACCESS ON
     const auto original = GetFloatingPointEnvironment();
     ASSERT_TRUE(original);
     ScopeExit restore([&]()noexcept{
@@ -516,19 +211,23 @@ public:
     }
 };
 
-using EqualityObservation = NWB::Tests::MathCases::EqualityObservation;
-
 template<typename Value, typename Compare>
-Expected<EqualityObservation> ObserveEquality(const Value& lhs, const Value& rhs, Compare compare)noexcept(noexcept(DeclVal<void(*)(b8)noexcept>()(compare(lhs, rhs))) && IsNothrowDestructible_V<Compare>){
+Expected<NWB::Tests::MathCases::EqualityObservation> ObserveEquality(const Value& lhs, const Value& rhs, Compare compare)noexcept(noexcept(DeclVal<void(*)(b8)noexcept>()(compare(lhs, rhs))) && IsNothrowDestructible_V<Compare>){
+#pragma STDC FENV_ACCESS ON
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return MakeUnexpected(Failure{});
     _mm_setcsr(_mm_getcsr() & ~0x3Fu);
     const b8 equal = compare(lhs, rhs);
-    return EqualityObservation{ .flags = TestFloatingPointExceptions(FE_ALL_EXCEPT), .rawFlags = _mm_getcsr() & 0x3Fu, .equal = equal };
+    NWB::Tests::MathCases::EqualityObservation obs{};
+    obs.flags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+    obs.rawFlags = _mm_getcsr() & 0x3Fu;
+    obs.equal = equal;
+    return obs;
 }
 
 template<typename Value, usize Count>
 void CheckRawEqualityComparisonFlags(){
+#pragma STDC FENV_ACCESS ON
     EqualityEnvironmentGuard restore;
     ASSERT_TRUE(restore.original);
     const auto held = HoldFloatingPointExceptions();
@@ -596,148 +295,6 @@ void CheckPageBoundary(){
 }
 #endif
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(Math, StorageEqualityPreservesRawHalfAndIntegralBoundaryBits){
-    const Half4U halfBits(0x7C01u, 0xFC01u, 0x8000u, 0xFFFFu);
-    EXPECT_TRUE(halfBits == halfBits);
-    const Int4 signedBits(Limit<i32>::s_Min, Limit<i32>::s_Max, -1, 0);
-    const UInt4 unsignedBits(Limit<u32>::s_Max, 0x80000000u, 0x7FFFFFFFu, 0u);
-    EXPECT_TRUE(signedBits == signedBits);
-    EXPECT_TRUE(unsignedBits == unsignedBits);
-}
-
-TEST(Math, StorageEqualityUsesNumericFloatsAndIntegerMixedPayloads){
-    const Float4U first(0.0f, -0.0f, Limit<f32>::s_Infinity, BitCast<f32>(u32{ 1u }));
-    const Float4U second(-0.0f, 0.0f, Limit<f32>::s_Infinity, BitCast<f32>(u32{ 1u }));
-    EXPECT_TRUE(first == second);
-    EXPECT_FALSE(first != second);
-    const Float4U nan(Limit<f32>::s_QuietNaN, 1.0f, 2.0f, 3.0f);
-    EXPECT_FALSE(nan == nan);
-    EXPECT_TRUE(nan != nan);
-
-    const Float3Int mixedSigned(0.0f, -0.0f, 2.0f, Limit<i32>::s_Min);
-    EXPECT_TRUE(mixedSigned == Float3Int(-0.0f, 0.0f, 2.0f, Limit<i32>::s_Min));
-    EXPECT_FALSE(mixedSigned == Float3Int(0.0f, -0.0f, 2.0f, Limit<i32>::s_Min + 1));
-    const Float3UInt mixedUnsigned(0.0f, -0.0f, 2.0f, 0x7F800001u);
-    EXPECT_TRUE(mixedUnsigned == Float3UInt(-0.0f, 0.0f, 2.0f, 0x7F800001u));
-    EXPECT_FALSE(mixedUnsigned == Float3UInt(0.0f, -0.0f, 2.0f, 0x7F800002u));
-    EXPECT_FALSE(Float3UInt(1.0f, 2.0f, Limit<f32>::s_QuietNaN, 0u) == Float3UInt(1.0f, 2.0f, Limit<f32>::s_QuietNaN, 0u));
-}
-
-TEST(Math, StorageEqualityPreservesNaNShortCircuitExceptionFlags){
-    using namespace __hidden_storage_equality_tests;
-    CheckNaNComparisonFlags<Float4U, 4u>();
-    CheckNaNComparisonFlags<Float33U, 9u>();
-}
-
-TEST(Math, StorageEqualityDoesNotReadBeyondUnalignedShortValues){
-    using namespace __hidden_storage_equality_tests;
-#if defined(__linux__)
-    CheckPageBoundary<RawEqualityStorage<b8, 1u>, 1u>();
-    CheckPageBoundary<RawEqualityStorage<b8, 16u>, 16u>();
-    CheckPageBoundary<RawEqualityStorage<b8, 17u>, 17u>();
-    CheckPageBoundary<RawEqualityStorage<b8, 33u>, 33u>();
-    CheckPageBoundary<Half2U, 2u>();
-    CheckPageBoundary<Half4U, 4u>();
-    CheckPageBoundary<Float2U, 2u>();
-    CheckPageBoundary<Float3U, 3u>();
-    CheckPageBoundary<Float33U, 9u>();
-    CheckPageBoundary<Int2U, 2u>();
-    CheckPageBoundary<Int3U, 3u>();
-    CheckPageBoundary<UInt2U, 2u>();
-    CheckPageBoundary<UInt3U, 3u>();
-#else
-    GTEST_SKIP() << "Protected-page boundaries are verified on Linux";
-#endif
-}
-
-TEST(Math, StorageEqualityFallsBackForBooleanArrays){
-    using namespace __hidden_storage_equality_tests;
-    const auto verify = []<usize Count>(){
-        RawEqualityStorage<b8, Count> lhs{}, rhs{};
-        for(usize lane = 0u; lane < Count; ++lane)
-            lhs.raw[lane] = rhs.raw[lane] = (lane & 1u) != 0u;
-        EXPECT_TRUE(StorageEqual(lhs, rhs));
-        for(usize lane = 0u; lane < Count; ++lane){
-            rhs.raw[lane] = !rhs.raw[lane];
-            EXPECT_FALSE(StorageEqual(lhs, rhs)) << Count << ", " << lane;
-            EXPECT_EQ(StorageEqual(lhs, rhs), (LegacyEqual<RawEqualityStorage<b8, Count>, Count>(lhs, rhs)));
-            rhs.raw[lane] = lhs.raw[lane];
-        }
-        EXPECT_TRUE(StorageEqual(lhs, rhs));
-    };
-    verify.operator()<1u>();
-    verify.operator()<2u>();
-    verify.operator()<7u>();
-    verify.operator()<16u>();
-    verify.operator()<17u>();
-    verify.operator()<33u>();
-}
-
-TEST(Math, StorageEqualityFallsBackForWideIntegralArrays){
-    using namespace __hidden_storage_equality_tests;
-#if defined(__SIZEOF_INT128__)
-    using WideInteger = __int128;
-    const WideInteger high = static_cast<WideInteger>(1) << 100u;
-    const RawEqualityStorage<WideInteger, 3u> lhs{ { high, -high, high + 7 } };
-    auto rhs = lhs;
-    EXPECT_TRUE(StorageEqual(lhs, rhs));
-    rhs.raw[1] += static_cast<WideInteger>(1) << 110u;
-    EXPECT_FALSE(StorageEqual(lhs, rhs));
-    EXPECT_EQ(StorageEqual(lhs, rhs), (LegacyEqual<RawEqualityStorage<WideInteger, 3u>, 3u>(lhs, rhs)));
-    rhs = lhs;
-    rhs.raw[2] += 1;
-    EXPECT_FALSE(StorageEqual(lhs, rhs));
-#else
-    GTEST_SKIP() << "This target does not expose a wider integral type";
-#endif
-}
-
-TEST(Math, StorageEqualityPreservesSubnormalNaNAndSkippedLaneMxcsrFlags){
-    using namespace __hidden_storage_equality_tests;
-#if defined(NWB_HAS_SSE2)
-    CheckRawEqualityComparisonFlags<Float4U, 4u>();
-    CheckRawEqualityComparisonFlags<Float33U, 9u>();
-#else
-    GTEST_SKIP() << "Raw MXCSR equality flags are specific to x86 SSE targets";
-#endif
-}
-
-TEST(Math, ExpectedSIMDValuesKeepAlignedLoadsAfterEightBytePrefixAndAcrossArrayStride){
-    using namespace __hidden_storage_equality_tests;
-    // Bare SIMD values in packed expected storage caused an aligned load to crash.
-    CheckExpectedVectorAlignment<SIMDVectorSingleResult>(Array<u32, 4u>{ 0x80000000u, 0x7F812345u, 0x00000001u, 0x7F7FFFFFu });
-    CheckExpectedVectorAlignment<SIMDVectorDoubleResult>(Array<u64, 4u>{ 0x8000000000000000ull, 0x7FF0000000012345ull, 0x0000000000000001ull, 0x7FEFFFFFFFFFFFFFull });
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/common/test_context.adhd.h>
-
-#include <global/not_null.h>
-#include <global/simdmath.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_stream_exception_contract_tests{
 template<typename VectorT>
 struct ThrowingStreamLoadResult{
     operator VectorT()const{ throw u32{ 0xE208u }; }
@@ -746,328 +303,8 @@ struct ThrowingStreamLoadResult{
 struct SingleStreamLoadInput{};
 struct DoubleStreamLoadInput{};
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] ThrowingStreamLoadResult<SIMDVectorSingle> LoadFloat(const SingleStreamLoadInput&)noexcept{ return {}; }
-
-[[nodiscard]] ThrowingStreamLoadResult<SIMDVectorDouble> LoadDouble(const DoubleStreamLoadInput&)noexcept{ return {}; }
-
-};
-
-
-TEST(CurrentMathContractBoundaries, TransformStreamCallbackFailureDoesNotTerminateOrPublishOutput){
-    const auto singleFailure = [](SIMDVectorSingle, const SIMDMatrix&)->SIMDVectorSingle{ throw u32{ 0xE206u }; };
-    const auto doubleFailure = [](SIMDVectorDouble, const SIMDMatrixDouble&)->SIMDVectorDouble{ throw u32{ 0xE207u }; };
-    const auto singleControl = [](SIMDVectorSingle value, const SIMDMatrix&)noexcept{ return value; };
-    const auto doubleControl = [](SIMDVectorDouble value, const SIMDMatrixDouble&)noexcept{ return value; };
-    const Float4U input(1.0f, 2.0f, 3.0f, 4.0f);
-    Float4U output(11.0f, 12.0f, 13.0f, 14.0f);
-    const Double4U doubleInput(1.0, 2.0, 3.0, 4.0);
-    Double4U doubleOutput(21.0, 22.0, 23.0, 24.0);
-    const SIMDMatrix matrix = MatrixIdentity();
-    const SIMDMatrixDouble doubleMatrix = MatrixDoubleIdentity();
-
-    static_assert(!noexcept(SIMDVectorDetail::VectorTransformStreamImpl(MakeNotNull(&output), sizeof(output), MakeNotNull(&input), sizeof(input), 1u, matrix, singleFailure)));
-    static_assert(noexcept(SIMDVectorDetail::VectorTransformStreamImpl(MakeNotNull(&output), sizeof(output), MakeNotNull(&input), sizeof(input), 1u, matrix, singleControl)));
-    static_assert(!noexcept(SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(MakeNotNull(&doubleOutput), sizeof(doubleOutput), MakeNotNull(&doubleInput), sizeof(doubleInput), 1u, doubleMatrix, doubleFailure)));
-    static_assert(noexcept(SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(MakeNotNull(&doubleOutput), sizeof(doubleOutput), MakeNotNull(&doubleInput), sizeof(doubleInput), 1u, doubleMatrix, doubleControl)));
-
-    EXPECT_THROW(SIMDVectorDetail::VectorTransformStreamImpl(MakeNotNull(&output), sizeof(output), MakeNotNull(&input), sizeof(input), 1u, matrix, singleFailure), u32);
-    EXPECT_EQ(output, Float4U(11.0f, 12.0f, 13.0f, 14.0f));
-    EXPECT_THROW(SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(MakeNotNull(&doubleOutput), sizeof(doubleOutput), MakeNotNull(&doubleInput), sizeof(doubleInput), 1u, doubleMatrix, doubleFailure), u32);
-    EXPECT_EQ(doubleOutput, Double4U(21.0, 22.0, 23.0, 24.0));
-}
-
-TEST(CurrentMathContractBoundaries, StreamLoadConversionFailureUnwindsBeforePublishingOutput){
-    using namespace __hidden_stream_exception_contract_tests;
-    const SingleStreamLoadInput input;
-    const DoubleStreamLoadInput doubleInput;
-    Float4U output(11.0f, 12.0f, 13.0f, 14.0f);
-    Double4U doubleOutput(21.0, 22.0, 23.0, 24.0);
-    const SIMDMatrix matrix = MatrixIdentity();
-    const SIMDMatrixDouble doubleMatrix = MatrixDoubleIdentity();
-    const auto singleControl = [](SIMDVectorSingle value, const SIMDMatrix&)noexcept{ return value; };
-    const auto doubleControl = [](SIMDVectorDouble value, const SIMDMatrixDouble&)noexcept{ return value; };
-
-    static_assert(noexcept(LoadFloat(input)));
-    static_assert(noexcept(LoadDouble(doubleInput)));
-    static_assert(!noexcept(SIMDVectorDetail::VectorTransformStreamImpl(MakeNotNull(&output), sizeof(output), MakeNotNull(&input), sizeof(input), 1u, matrix, singleControl)));
-    static_assert(!noexcept(SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(MakeNotNull(&doubleOutput), sizeof(doubleOutput), MakeNotNull(&doubleInput), sizeof(doubleInput), 1u, doubleMatrix, doubleControl)));
-
-    EXPECT_THROW(SIMDVectorDetail::VectorTransformStreamImpl(MakeNotNull(&output), sizeof(output), MakeNotNull(&input), sizeof(input), 1u, matrix, singleControl), u32);
-    EXPECT_EQ(output, Float4U(11.0f, 12.0f, 13.0f, 14.0f));
-    EXPECT_THROW(SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(MakeNotNull(&doubleOutput), sizeof(doubleOutput), MakeNotNull(&doubleInput), sizeof(doubleInput), 1u, doubleMatrix, doubleControl), u32);
-    EXPECT_EQ(doubleOutput, Double4U(21.0, 22.0, 23.0, 24.0));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/common/module.h>
-
-#include <tests/common/test_context.adhd.h>
-
-#include <gtest/gtest.h>
-
-#include <global/floating_point_environment.h>
-#include <global/simd/collision_triangle.h>
-#include <global/simd/convert.h>
-#include <global/scope_exit.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_math_triangle_intersection_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using VertexCoords = Array<f64, 3>;
-
-
-template<typename VectorT>
-static void CheckWindingAndOperandOrder(const Span<const VectorT> first, const Span<const VectorT> second, const b8 expected){
-    constexpr Array<Array<u32, 3>, 6> s_Permutations = {{ { 0u, 1u, 2u }, { 0u, 2u, 1u }, { 1u, 0u, 2u }, { 1u, 2u, 0u }, { 2u, 0u, 1u }, { 2u, 1u, 0u } }};
-    for(const auto& firstOrder : s_Permutations){
-        for(const auto& secondOrder : s_Permutations){
-            if constexpr(IsSame_V<VectorT, SIMDVectorSingle>){
-                EXPECT_EQ(TriangleTests::Intersects(first[firstOrder[0]], first[firstOrder[1]], first[firstOrder[2]], second[secondOrder[0]], second[secondOrder[1]], second[secondOrder[2]]), expected);
-                EXPECT_EQ(TriangleTests::Intersects(second[secondOrder[0]], second[secondOrder[1]], second[secondOrder[2]], first[firstOrder[0]], first[firstOrder[1]], first[firstOrder[2]]), expected);
-            }
-            else{
-                EXPECT_EQ(TriangleDoubleTests::Intersects(first[firstOrder[0]], first[firstOrder[1]], first[firstOrder[2]], second[secondOrder[0]], second[secondOrder[1]], second[secondOrder[2]]), expected);
-                EXPECT_EQ(TriangleDoubleTests::Intersects(second[secondOrder[0]], second[secondOrder[1]], second[secondOrder[2]], first[firstOrder[0]], first[firstOrder[1]], first[firstOrder[2]]), expected);
-            }
-        }
-    }
-}
-
-static void CheckBothPrecisions(const Span<const VertexCoords> first, const Span<const VertexCoords> second, const b8 expected){
-    alignas(SIMDVectorSingle) Array<SIMDVectorSingle, 3> firstSingle{}, secondSingle{};
-    alignas(SIMDVectorDouble) Array<SIMDVectorDouble, 3> firstDouble{}, secondDouble{};
-    for(u32 index = 0u; index < 3u; ++index){
-        firstDouble[index] = VectorDoubleSet(first[index][0], first[index][1], first[index][2], 0.0);
-        secondDouble[index] = VectorDoubleSet(second[index][0], second[index][1], second[index][2], 0.0);
-        firstSingle[index] = ConvertVectorDoubleToSingle(firstDouble[index]);
-        secondSingle[index] = ConvertVectorDoubleToSingle(secondDouble[index]);
-    }
-    CheckWindingAndOperandOrder<SIMDVectorSingle>(firstSingle, secondSingle, expected);
-    CheckWindingAndOperandOrder<SIMDVectorDouble>(firstDouble, secondDouble, expected);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(MathTriangleIntersection, RejectsSeparatedCoplanarTrianglesWithOverlappingBounds){
-    const Array<VertexCoords, 3> first = { VertexCoords{ 0.0, 0.0, 0.0 }, VertexCoords{ 2.0, 0.0, 0.0 }, VertexCoords{ 0.0, 2.0, 0.0 } };
-    const Array<VertexCoords, 3> second = { VertexCoords{ 1.5, 1.5, 0.0 }, VertexCoords{ 2.0, 1.5, 0.0 }, VertexCoords{ 1.5, 2.0, 0.0 } };
-    CheckBothPrecisions(first, second, false);
-}
-
-TEST(MathTriangleIntersection, RejectsSeparatedNoncoplanarTrianglesWithOverlappingBounds){
-    const Array<VertexCoords, 3> first = { VertexCoords{ 0.0, 0.0, 0.0 }, VertexCoords{ 2.0, 0.0, 0.0 }, VertexCoords{ 0.0, 2.0, 0.0 } };
-    const Array<VertexCoords, 3> second = { VertexCoords{ 1.5, 1.5, -1.0 }, VertexCoords{ 1.5, 2.0, 1.0 }, VertexCoords{ 2.0, 1.5, 1.0 } };
-    CheckBothPrecisions(first, second, false);
-}
-
-TEST(MathTriangleIntersection, CoplanarOverlapAndContainmentIgnoreWinding){
-    const Array<VertexCoords, 3> first = { VertexCoords{ 0.0, 0.0, 0.0 }, VertexCoords{ 2.0, 0.0, 0.0 }, VertexCoords{ 0.0, 2.0, 0.0 } };
-    const Array<VertexCoords, 3> overlapping = { VertexCoords{ 0.5, 0.5, 0.0 }, VertexCoords{ 2.5, 0.5, 0.0 }, VertexCoords{ 0.5, 2.5, 0.0 } };
-    const Array<VertexCoords, 3> contained = { VertexCoords{ 0.25, 0.25, 0.0 }, VertexCoords{ 0.75, 0.25, 0.0 }, VertexCoords{ 0.25, 0.75, 0.0 } };
-    CheckBothPrecisions(first, overlapping, true);
-    CheckBothPrecisions(first, contained, true);
-}
-
-TEST(MathTriangleIntersection, CoplanarSharedEdgeAndPointRemainIntersections){
-    const Array<VertexCoords, 3> first = { VertexCoords{ 0.0, 0.0, 0.0 }, VertexCoords{ 2.0, 0.0, 0.0 }, VertexCoords{ 0.0, 2.0, 0.0 } };
-    const Array<VertexCoords, 3> sharedEdge = { VertexCoords{ 2.0, 0.0, 0.0 }, VertexCoords{ 0.0, 2.0, 0.0 }, VertexCoords{ 2.0, 2.0, 0.0 } };
-    const Array<VertexCoords, 3> sharedPoint = { VertexCoords{ 2.0, 0.0, 0.0 }, VertexCoords{ 3.0, 0.0, 0.0 }, VertexCoords{ 2.0, 1.0, 0.0 } };
-    CheckBothPrecisions(first, sharedEdge, true);
-    CheckBothPrecisions(first, sharedPoint, true);
-}
-
-TEST(MathTriangleIntersection, NoncoplanarCrossingRetainsTheVertexOnTheOppositePlane){
-    const Array<VertexCoords, 3> first = { VertexCoords{ 0.0, 0.0, 0.0 }, VertexCoords{ 2.0, 0.0, 0.0 }, VertexCoords{ 0.0, 2.0, 0.0 } };
-    const Array<VertexCoords, 3> crossing = { VertexCoords{ 0.5, 0.5, -1.0 }, VertexCoords{ 0.5, 0.5, 1.0 }, VertexCoords{ 1.5, 0.5, 0.0 } };
-    CheckBothPrecisions(first, crossing, true);
-}
-
-TEST(MathTriangleIntersection, DegeneratePointOutsideTheTriangleIsRejectedInsideItsBounds){
-    const Array<VertexCoords, 3> first = { VertexCoords{ 0.0, 0.0, 0.0 }, VertexCoords{ 2.0, 0.0, 0.0 }, VertexCoords{ 0.0, 2.0, 0.0 } };
-    const Array<VertexCoords, 3> outside = { VertexCoords{ 1.5, 1.5, 0.0 }, VertexCoords{ 1.5, 1.5, 0.0 }, VertexCoords{ 1.5, 1.5, 0.0 } };
-    const Array<VertexCoords, 3> inside = { VertexCoords{ 0.5, 0.5, 0.0 }, VertexCoords{ 0.5, 0.5, 0.0 }, VertexCoords{ 0.5, 0.5, 0.0 } };
-    const Array<VertexCoords, 3> touching = { VertexCoords{ 2.0, 0.0, 0.0 }, VertexCoords{ 2.0, 0.0, 0.0 }, VertexCoords{ 2.0, 0.0, 0.0 } };
-    CheckBothPrecisions(first, outside, false);
-    CheckBothPrecisions(first, inside, true);
-    CheckBothPrecisions(first, touching, true);
-}
-
-TEST(MathTriangleIntersection, DegenerateSegmentOutsideTheTriangleIsRejectedInsideItsBounds){
-    const Array<VertexCoords, 3> first = { VertexCoords{ 0.0, 0.0, 0.0 }, VertexCoords{ 2.0, 0.0, 0.0 }, VertexCoords{ 0.0, 2.0, 0.0 } };
-    const Array<VertexCoords, 3> outside = { VertexCoords{ 1.5, 1.5, 0.0 }, VertexCoords{ 1.75, 1.5, 0.0 }, VertexCoords{ 2.0, 1.5, 0.0 } };
-    const Array<VertexCoords, 3> crossing = { VertexCoords{ -1.0, 1.0, 0.0 }, VertexCoords{ 0.5, 1.0, 0.0 }, VertexCoords{ 2.0, 1.0, 0.0 } };
-    CheckBothPrecisions(first, outside, false);
-    CheckBothPrecisions(first, crossing, true);
-}
-
-TEST(MathTriangleIntersection, DegenerateParallelSegmentsRequireTheSameLine){
-    const Array<VertexCoords, 3> first = { VertexCoords{ 0.0, 0.0, 0.0 }, VertexCoords{ 1.0, 1.0, 0.0 }, VertexCoords{ 2.0, 2.0, 0.0 } };
-    const Array<VertexCoords, 3> displaced = { VertexCoords{ 0.0, 1.0, 0.0 }, VertexCoords{ 0.5, 1.5, 0.0 }, VertexCoords{ 1.0, 2.0, 0.0 } };
-    const Array<VertexCoords, 3> overlapping = { VertexCoords{ 1.0, 1.0, 0.0 }, VertexCoords{ 2.0, 2.0, 0.0 }, VertexCoords{ 3.0, 3.0, 0.0 } };
-    const Array<VertexCoords, 3> touching = { VertexCoords{ 2.0, 2.0, 0.0 }, VertexCoords{ 3.0, 3.0, 0.0 }, VertexCoords{ 4.0, 4.0, 0.0 } };
-    CheckBothPrecisions(first, displaced, false);
-    CheckBothPrecisions(first, overlapping, true);
-    CheckBothPrecisions(first, touching, true);
-}
-
-TEST(MathTriangleIntersection, DegenerateSkewSegmentsAreRejectedDespiteOverlappingBounds){
-    const Array<VertexCoords, 3> first = { VertexCoords{ 0.0, 0.0, 0.0 }, VertexCoords{ 1.0, 1.0, 1.0 }, VertexCoords{ 2.0, 2.0, 2.0 } };
-    const Array<VertexCoords, 3> skew = { VertexCoords{ 0.0, 2.0, 0.0 }, VertexCoords{ 1.0, 1.0, 0.5 }, VertexCoords{ 2.0, 0.0, 1.0 } };
-    const Array<VertexCoords, 3> crossing = { VertexCoords{ 0.0, 2.0, 0.0 }, VertexCoords{ 1.0, 1.0, 1.0 }, VertexCoords{ 2.0, 0.0, 2.0 } };
-    CheckBothPrecisions(first, skew, false);
-    CheckBothPrecisions(first, crossing, true);
-}
-
-TEST(MathTriangleIntersection, TinyCoplanarTrianglesRetainSeparatingAxes){
-    constexpr f64 s_Scale = 0x1p-60;
-    const Array<VertexCoords, 3> first = { VertexCoords{ 0.0, 0.0, 0.0 }, VertexCoords{ 2.0 * s_Scale, 0.0, 0.0 }, VertexCoords{ 0.0, 2.0 * s_Scale, 0.0 } };
-    const Array<VertexCoords, 3> second = { VertexCoords{ 1.5 * s_Scale, 1.5 * s_Scale, 0.0 }, VertexCoords{ 2.0 * s_Scale, 1.5 * s_Scale, 0.0 }, VertexCoords{ 1.5 * s_Scale, 2.0 * s_Scale, 0.0 } };
-    CheckBothPrecisions(first, second, false);
-}
-
-TEST(MathTriangleIntersection, DoubleCoplanarSeparationAndTouchSurviveLargeTranslation){
-    constexpr f64 s_Base = 0x1p+40;
-    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 3> first = { VectorDoubleSet(s_Base, s_Base, 0.0, 0.0), VectorDoubleSet(s_Base + 2.0, s_Base, 0.0, 0.0), VectorDoubleSet(s_Base, s_Base + 2.0, 0.0, 0.0) };
-    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 3> separated = { VectorDoubleSet(s_Base + 1.5, s_Base + 1.5, 0.0, 0.0), VectorDoubleSet(s_Base + 2.0, s_Base + 1.5, 0.0, 0.0), VectorDoubleSet(s_Base + 1.5, s_Base + 2.0, 0.0, 0.0) };
-    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 3> touching = { VectorDoubleSet(s_Base + 2.0, s_Base, 0.0, 0.0), VectorDoubleSet(s_Base + 3.0, s_Base, 0.0, 0.0), VectorDoubleSet(s_Base + 2.0, s_Base + 1.0, 0.0, 0.0) };
-    CheckWindingAndOperandOrder<SIMDVectorDouble>(first, separated, false);
-    CheckWindingAndOperandOrder<SIMDVectorDouble>(first, touching, true);
-}
-
-TEST(MathTriangleIntersection, InactiveSignalingNaNsDoNotRaiseInvalidDuringIntersection){
-#pragma STDC FENV_ACCESS ON
-    const auto originalEnvironment = HoldFloatingPointExceptions();
-    ASSERT_TRUE(originalEnvironment);
-    NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
-    volatile u32 singleInactiveBits = 0x7f800001u;
-    volatile u64 doubleInactiveBits = 0x7ff0000000000001u;
-    alignas(SIMDVectorSingle) const Array<SIMDVectorSingle, 3> firstSingle = {
-        VectorSetIntW(VectorSet(0.0f, 0.0f, 0.0f, 0.0f), singleInactiveBits),
-        VectorSetIntW(VectorSet(2.0f, 0.0f, 0.0f, 0.0f), singleInactiveBits),
-        VectorSetIntW(VectorSet(0.0f, 2.0f, 0.0f, 0.0f), singleInactiveBits)
-    };
-    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 3> firstDouble = {
-        VectorDoubleSetIntW(VectorDoubleSet(0.0, 0.0, 0.0, 0.0), doubleInactiveBits),
-        VectorDoubleSetIntW(VectorDoubleSet(2.0, 0.0, 0.0, 0.0), doubleInactiveBits),
-        VectorDoubleSetIntW(VectorDoubleSet(0.0, 2.0, 0.0, 0.0), doubleInactiveBits)
-    };
-    ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-    const b8 singleIntersects = TriangleTests::Intersects(firstSingle[0], firstSingle[1], firstSingle[2], firstSingle[0], firstSingle[1], firstSingle[2]);
-    const i32 singleInvalid = TestFloatingPointExceptions(FE_INVALID);
-    EXPECT_TRUE(singleIntersects);
-    EXPECT_EQ(singleInvalid, 0);
-    ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-    const b8 doubleIntersects = TriangleDoubleTests::Intersects(firstDouble[0], firstDouble[1], firstDouble[2], firstDouble[0], firstDouble[1], firstDouble[2]);
-    const i32 doubleInvalid = TestFloatingPointExceptions(FE_INVALID);
-    EXPECT_TRUE(doubleIntersects);
-    EXPECT_EQ(doubleInvalid, 0);
-}
-
-TEST(MathTriangleIntersection, ExactlyContainedDyadicPointSurvivesSingleProjectionCancellation){
-    const Array<VertexCoords, 3> first = { VertexCoords{ 824370.0, 14961.0, -10577.0 }, VertexCoords{ -393548.0, -764217.0, 231491.0 }, VertexCoords{ -838274.0, -740881.0, -157088.0 } };
-    // Exact coplanar interior point at the weighted average of A0, A1, and A2.
-    const Array<VertexCoords, 3> contained = { VertexCoords{ 104229.5, -368794.0, 13312.25 }, VertexCoords{ 104229.5, -368794.0, 13312.25 }, VertexCoords{ 104229.5, -368794.0, 13312.25 } };
-    CheckBothPrecisions(first, contained, true);
-}
-
-TEST(MathTriangleIntersection, ExactlyContainedDyadicPointSurvivesDoubleProjectionCancellation){
-    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 3> first = {
-        VectorDoubleSet(495456340.0, -271487682.75, 212747462.0, 0.0),
-        VectorDoubleSet(48651637.25, -531182607.0, 473308109.25, 0.0),
-        VectorDoubleSet(-155700933.5, -479176747.0, 416710936.25, 0.0)
-    };
-    // Interior point remains coplanar even when near-zero dot products round differently.
-    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 3> contained = {
-        VectorDoubleSet(220965845.9375, -388333679.875, 328878492.375, 0.0),
-        VectorDoubleSet(220965845.9375, -388333679.875, 328878492.375, 0.0),
-        VectorDoubleSet(220965845.9375, -388333679.875, 328878492.375, 0.0)
-    };
-    CheckWindingAndOperandOrder<SIMDVectorDouble>(first, contained, true);
-}
-
-TEST(MathTriangleIntersection, ProjectionRoundoffAllowancePreservesSmallRealGaps){
-    constexpr f64 s_SingleGap = 0x1p-20;
-    const Array<VertexCoords, 3> first = { VertexCoords{ 0.0, 0.0, 0.0 }, VertexCoords{ 2.0, 0.0, 0.0 }, VertexCoords{ 0.0, 2.0, 0.0 } };
-    const Array<VertexCoords, 3> outside = { VertexCoords{ 1.0 + s_SingleGap, 1.0, 0.0 }, VertexCoords{ 1.0 + s_SingleGap, 1.0, 0.0 }, VertexCoords{ 1.0 + s_SingleGap, 1.0, 0.0 } };
-    const Array<VertexCoords, 3> sloped = { VertexCoords{ 0.0, 0.0, 0.0 }, VertexCoords{ 2.0, 0.0, 2.0 }, VertexCoords{ 0.0, 2.0, -2.0 } };
-    const Array<VertexCoords, 3> displaced = { VertexCoords{ 0.0, 0.0, s_SingleGap }, VertexCoords{ 2.0, 0.0, 2.0 + s_SingleGap }, VertexCoords{ 0.0, 2.0, -2.0 + s_SingleGap } };
-    CheckBothPrecisions(first, outside, false);
-    CheckBothPrecisions(sloped, displaced, false);
-
-    constexpr f64 s_DoubleGap = 0x1p-40;
-    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 3> firstDouble = { VectorDoubleSet(0.0, 0.0, 0.0, 0.0), VectorDoubleSet(2.0, 0.0, 0.0, 0.0), VectorDoubleSet(0.0, 2.0, 0.0, 0.0) };
-    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 3> outsideDouble = { VectorDoubleSet(1.0 + s_DoubleGap, 1.0, 0.0, 0.0), VectorDoubleSet(1.0 + s_DoubleGap, 1.0, 0.0, 0.0), VectorDoubleSet(1.0 + s_DoubleGap, 1.0, 0.0, 0.0) };
-    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 3> slopedDouble = { VectorDoubleSet(0.0, 0.0, 0.0, 0.0), VectorDoubleSet(2.0, 0.0, 2.0, 0.0), VectorDoubleSet(0.0, 2.0, -2.0, 0.0) };
-    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 3> displacedDouble = { VectorDoubleSet(0.0, 0.0, s_DoubleGap, 0.0), VectorDoubleSet(2.0, 0.0, 2.0 + s_DoubleGap, 0.0), VectorDoubleSet(0.0, 2.0, -2.0 + s_DoubleGap, 0.0) };
-    CheckWindingAndOperandOrder<SIMDVectorDouble>(firstDouble, outsideDouble, false);
-    CheckWindingAndOperandOrder<SIMDVectorDouble>(slopedDouble, displacedDouble, false);
-}
-
-TEST(MathTriangleIntersection, ProjectionRoundoffAllowancePreservesTranslatedOneUlpGaps){
-    constexpr f64 s_SingleBase = 0x1p+20, s_SingleGap = 0.125;
-    const Array<VertexCoords, 3> first = { VertexCoords{ s_SingleBase, s_SingleBase, 0.0 }, VertexCoords{ s_SingleBase + 2.0, s_SingleBase, 0.0 }, VertexCoords{ s_SingleBase, s_SingleBase + 2.0, 0.0 } };
-    const VertexCoords point = { s_SingleBase + 1.0 + s_SingleGap, s_SingleBase + 1.0, 0.0 };
-    const Array<VertexCoords, 3> outside = { point, point, point };
-    CheckBothPrecisions(first, outside, false);
-
-    constexpr f64 s_DoubleBase = 0x1p+40, s_DoubleGap = 0x1p-12;
-    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 3> firstDouble = { VectorDoubleSet(s_DoubleBase, s_DoubleBase, 0.0, 0.0), VectorDoubleSet(s_DoubleBase + 2.0, s_DoubleBase, 0.0, 0.0), VectorDoubleSet(s_DoubleBase, s_DoubleBase + 2.0, 0.0, 0.0) };
-    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 3> outsideDouble = {
-        VectorDoubleSet(s_DoubleBase + 1.0 + s_DoubleGap, s_DoubleBase + 1.0, 0.0, 0.0),
-        VectorDoubleSet(s_DoubleBase + 1.0 + s_DoubleGap, s_DoubleBase + 1.0, 0.0, 0.0),
-        VectorDoubleSet(s_DoubleBase + 1.0 + s_DoubleGap, s_DoubleBase + 1.0, 0.0, 0.0)
-    };
-    CheckWindingAndOperandOrder<SIMDVectorDouble>(firstDouble, outsideDouble, false);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <global/floating_point_environment.h>
-#include <global/not_null.h>
-#include <global/simdmath.h>
-#include <global/scope_exit.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_vector_pow_boundary_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+[[nodiscard]] ThrowingStreamLoadResult<SIMDVectorSingle> LoadFloat(const SingleStreamLoadInput&)noexcept;
+[[nodiscard]] ThrowingStreamLoadResult<SIMDVectorDouble> LoadDouble(const DoubleStreamLoadInput&)noexcept;
 
 using PowerWords = u32 __attribute__((ext_vector_type(4)));
 using PowerEvaluate = SIMDVectorSingle(*)(SIMDVectorSingle, SIMDVectorSingle)noexcept;
@@ -1081,6 +318,1269 @@ struct alignas(SIMDVectorSingle) PowerObservation{
 };
 static_assert(alignof(Expected<PowerObservation>) >= alignof(PowerObservation));
 
+NWB_NOINLINE SIMDVectorSingle FrozenPower(SIMDVectorSingle x, SIMDVectorSingle y)noexcept;
+NWB_NOINLINE SIMDVectorSingle CurrentPower(SIMDVectorSingle x, SIMDVectorSingle y)noexcept;
+[[nodiscard]] Expected<PowerObservation> ObservePower(NotNull<PowerEvaluate> evaluate, SIMDVectorSingle x, SIMDVectorSingle y, i32 initialFlags, u64 initialNativeFlags)noexcept;
+
+NWB_NOINLINE f32 LegacyMultiplyAddExpression(f32 first, f32 second, f32 addend)noexcept;
+NWB_NOINLINE f64 LegacyDoubleMultiplyAddExpression(f64 first, f64 second, f64 addend)noexcept;
+NWB_NOINLINE f32 LegacyNegativeMultiplySubtractExpression(f32 first, f32 second, f32 addend)noexcept;
+NWB_NOINLINE f64 LegacyDoubleMultiplyThenAdd(f64 first, f64 second, f64 addend)noexcept;
+NWB_NOINLINE SIMDVectorDouble DoubleMultiplyAddExpression(SIMDVectorDouble first, SIMDVectorDouble second, SIMDVectorDouble addend)noexcept;
+NWB_NOINLINE SIMDVectorDouble DoubleMultiplyThenAdd(SIMDVectorDouble first, SIMDVectorDouble second, SIMDVectorDouble addend)noexcept;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void CheckStorageHashMatchesEquality<T>(in T lhs, in T same, in T different){
+    EXPECT_EQ(lhs, same);
+    EXPECT_NE(lhs, different);
+    EXPECT_EQ(HashValue(lhs), HashValue(same));
+}
+
+Array<f64x3u, 3> MakeTriangleVertices(in f64 x0, in f64 y0, in f64 z0, in f64 x1, in f64 y1, in f64 z1, in f64 x2, in f64 y2, in f64 z2){
+    Array<f64x3u, 3> vertices = Array<f64x3u, 3>();
+    vertices[0u] = f64x3u(x0, y0, z0);
+    vertices[1u] = f64x3u(x1, y1, z1);
+    vertices[2u] = f64x3u(x2, y2, z2);
+    return vertices;
+}
+
+b8 EvalTriangleSingleIntersects(in VectorSingle a0, in VectorSingle a1, in VectorSingle a2, in VectorSingle b0, in VectorSingle b1, in VectorSingle b2){
+    b8 result = false;
+    native(in a0, in a1, in a2, in b0, in b1, in b2, mut result){
+        result = TriangleTests::Intersects(a0, a1, a2, b0, b1, b2);
+    }
+    return result;
+}
+
+b8 EvalTriangleDoubleIntersects(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2, in VectorDouble b0, in VectorDouble b1, in VectorDouble b2){
+    b8 result = false;
+    native(in a0, in a1, in a2, in b0, in b1, in b2, mut result){
+        result = TriangleDoubleTests::Intersects(a0, a1, a2, b0, b1, b2);
+    }
+    return result;
+}
+
+Array<Array<usize, 3>, 6> MakeTrianglePermutations(){
+    Array<Array<usize, 3>, 6> perms = Array<Array<usize, 3>, 6>();
+    perms[0u][0u] = 0u; perms[0u][1u] = 1u; perms[0u][2u] = 2u;
+    perms[1u][0u] = 0u; perms[1u][1u] = 2u; perms[1u][2u] = 1u;
+    perms[2u][0u] = 1u; perms[2u][1u] = 0u; perms[2u][2u] = 2u;
+    perms[3u][0u] = 1u; perms[3u][1u] = 2u; perms[3u][2u] = 0u;
+    perms[4u][0u] = 2u; perms[4u][1u] = 0u; perms[4u][2u] = 1u;
+    perms[5u][0u] = 2u; perms[5u][1u] = 1u; perms[5u][2u] = 0u;
+    return perms;
+}
+
+void CheckTriangleDoubleWindingAndOrder(in Array<f64x3u, 3> first, in Array<f64x3u, 3> second, in b8 expected){
+    const Array<Array<usize, 3>, 6> perms = MakeTrianglePermutations();
+    for(in Array<usize, 3> firstOrder : perms){
+        const VectorDouble f0 = VectorDouble(first[firstOrder[0u]], 0.0);
+        const VectorDouble f1 = VectorDouble(first[firstOrder[1u]], 0.0);
+        const VectorDouble f2 = VectorDouble(first[firstOrder[2u]], 0.0);
+        for(in Array<usize, 3> secondOrder : perms){
+            const VectorDouble s0 = VectorDouble(second[secondOrder[0u]], 0.0);
+            const VectorDouble s1 = VectorDouble(second[secondOrder[1u]], 0.0);
+            const VectorDouble s2 = VectorDouble(second[secondOrder[2u]], 0.0);
+            EXPECT_EQ(EvalTriangleDoubleIntersects(f0, f1, f2, s0, s1, s2), expected);
+            EXPECT_EQ(EvalTriangleDoubleIntersects(s0, s1, s2, f0, f1, f2), expected);
+        }
+    }
+}
+
+void CheckTriangleBothPrecisions(in Array<f64x3u, 3> first, in Array<f64x3u, 3> second, in b8 expected){
+    Array<f32x3u, 3> firstSingle = Array<f32x3u, 3>();
+    Array<f32x3u, 3> secondSingle = Array<f32x3u, 3>();
+    for(usize idx = 0u; idx < 3u; ++idx){
+        firstSingle[idx] = f32x3u(cast<f32>(first[idx].x), cast<f32>(first[idx].y), cast<f32>(first[idx].z));
+        secondSingle[idx] = f32x3u(cast<f32>(second[idx].x), cast<f32>(second[idx].y), cast<f32>(second[idx].z));
+    }
+    const Array<Array<usize, 3>, 6> perms = MakeTrianglePermutations();
+    for(in Array<usize, 3> firstOrder : perms){
+        const VectorSingle f0 = VectorSingle(firstSingle[firstOrder[0u]], 0.0f);
+        const VectorSingle f1 = VectorSingle(firstSingle[firstOrder[1u]], 0.0f);
+        const VectorSingle f2 = VectorSingle(firstSingle[firstOrder[2u]], 0.0f);
+        for(in Array<usize, 3> secondOrder : perms){
+            const VectorSingle s0 = VectorSingle(secondSingle[secondOrder[0u]], 0.0f);
+            const VectorSingle s1 = VectorSingle(secondSingle[secondOrder[1u]], 0.0f);
+            const VectorSingle s2 = VectorSingle(secondSingle[secondOrder[2u]], 0.0f);
+            EXPECT_EQ(EvalTriangleSingleIntersects(f0, f1, f2, s0, s1, s2), expected);
+            EXPECT_EQ(EvalTriangleSingleIntersects(s0, s1, s2, f0, f1, f2), expected);
+        }
+    }
+    CheckTriangleDoubleWindingAndOrder(first, second, expected);
+}
+
+void VerifyMath_SignedZeroStorageEqualityProducesEqualHashes(){
+    native{
+        EXPECT_EQ(FloatingHashBits(-0.0f), FloatingHashBits(0.0f));
+    }
+    CheckStorageHashMatchesEquality(f32x4(-0.0f, 1.0f, 2.0f, 3.0f), f32x4(0.0f, 1.0f, 2.0f, 3.0f), f32x4(0.0f, 1.0f, 2.0f, 4.0f));
+    CheckStorageHashMatchesEquality(f32x3_i32(-0.0f, 1.0f, 2.0f, -3), f32x3_i32(0.0f, 1.0f, 2.0f, -3), f32x3_i32(0.0f, 1.0f, 2.0f, -4));
+    CheckStorageHashMatchesEquality(f32x3_u32(-0.0f, 1.0f, 2.0f, 3u), f32x3_u32(0.0f, 1.0f, 2.0f, 3u), f32x3_u32(0.0f, 1.0f, 2.0f, 4u));
+    CheckStorageHashMatchesEquality(f32x2u(-0.0f, 1.0f), f32x2u(0.0f, 1.0f), f32x2u(0.0f, 2.0f));
+    CheckStorageHashMatchesEquality(f32x3u(-0.0f, 1.0f, 2.0f), f32x3u(0.0f, 1.0f, 2.0f), f32x3u(0.0f, 1.0f, 3.0f));
+    CheckStorageHashMatchesEquality(f32x4u(-0.0f, 1.0f, 2.0f, 3.0f), f32x4u(0.0f, 1.0f, 2.0f, 3.0f), f32x4u(0.0f, 1.0f, 2.0f, 4.0f));
+}
+
+void VerifyMath_DoubleStorageHashesCanonicalizeSignedZeroAndRetainSubFloatResiduals(){
+    const f64 onePlusEps = bit_cast<f64>(cast<u64>(0x3ff0000000000001u));
+    const f64 largeVal = 1099511627777.0;
+    native(in onePlusEps){
+        EXPECT_EQ(FloatingHashBits(-0.0), FloatingHashBits(0.0));
+        EXPECT_NE(FloatingHashBits(onePlusEps), FloatingHashBits(1.0));
+    }
+    CheckStorageHashMatchesEquality(f64x4(-0.0, onePlusEps, -0.0, largeVal), f64x4(0.0, onePlusEps, 0.0, largeVal), f64x4(0.0, 1.0, 0.0, largeVal));
+    CheckStorageHashMatchesEquality(f64x4u(-0.0, onePlusEps, -0.0, largeVal), f64x4u(0.0, onePlusEps, 0.0, largeVal), f64x4u(0.0, 1.0, 0.0, largeVal));
+}
+
+void VerifyMath_AlignedShortDoubleStoresAndStreamsPreservePoisonedPaddingAndNeighborStorage(){
+    native{
+        using namespace NWB::Tests::MathStorageCasesDetail;
+        const Array<f64, 2> pairExpected = { -0.0, 1.0 + 0x1p-52 };
+        CheckDoubleStoresIgnoreInactiveLanesAndPreserveObjectPadding<Double2, 2u>(SIMDVectorDouble{ pairExpected[0], pairExpected[1], Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN }, pairExpected);
+        const Array<f64, 3> tripleExpected = { -0.0, 1.0 + 0x1p-52, 0x1p+40 + 1.0 };
+        CheckDoubleStoresIgnoreInactiveLanesAndPreserveObjectPadding<Double3, 3u>(SIMDVectorDouble{ tripleExpected[0], tripleExpected[1], tripleExpected[2], Limit<f64>::s_QuietNaN }, tripleExpected);
+        const Array<f64, 9> matrixExpected = { -0.0, 1.0 + 0x1p-52, 0x1p+40 + 1.0, 2.0, -0.0, -0x1p+40 - 1.0, 0x1p-40, -3.0, 1.0 + 0x1p-52 };
+        const SIMDMatrixDouble matrix = {
+            SIMDVectorDouble{ matrixExpected[0], matrixExpected[1], matrixExpected[2], Limit<f64>::s_Infinity },
+            SIMDVectorDouble{ matrixExpected[3], matrixExpected[4], matrixExpected[5], Limit<f64>::s_QuietNaN },
+            SIMDVectorDouble{ matrixExpected[6], matrixExpected[7], matrixExpected[8], -Limit<f64>::s_Infinity },
+            SIMDVectorDouble{ Limit<f64>::s_QuietNaN, Limit<f64>::s_Infinity, -Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN },
+        };
+        CheckDoubleStoresIgnoreInactiveLanesAndPreserveObjectPadding<Double33, 9u>(matrix, matrixExpected);
+    }
+}
+
+void VerifyMath_AlignedShortDoubleAndCompactMatrixHashesIgnorePaddingWithSignedZeroAndBinary64Residuals(){
+    native{
+        using namespace NWB::Tests::MathStorageCasesDetail;
+        CheckDoubleStorageHashIgnoresPaddingAndCanonicalizesSignedZero<Double2, 2u>();
+        CheckDoubleStorageHashIgnoresPaddingAndCanonicalizesSignedZero<Double3, 3u>();
+        CheckDoubleStorageHashIgnoresPaddingAndCanonicalizesSignedZero<Double33, 9u>();
+    }
+}
+
+void VerifyMath_DoubleTransformStreamsPreservePaddedStridesDuringAlignedUnalignedAndInPlaceConversion(){
+    native{
+        struct AlignedRecord{
+            Double3 value;
+            Array<u64, 4> gap{};
+        };
+        struct alignas(32) UnalignedRecord{
+            u64 prefix;
+            Double3U value;
+            Array<u64, 4> gap{};
+        };
+        Array<AlignedRecord, 3> aligned{};
+        Array<UnalignedRecord, 3> unaligned{};
+        NWB_MEMSET(aligned.data(), 0xa5, sizeof(aligned));
+        NWB_MEMSET(unaligned.data(), 0x5a, sizeof(unaligned));
+        const u64 poison = 0x7ff8000000001234u;
+        for(usize index = 0u; index < LengthOf(aligned); ++index){
+            const f64 position = static_cast<f64>(index);
+            const f64 x = 0.25 * position + (0x1p+40 + 0.25);
+            const f64 y = (position - 1.0) * 0x1p-40;
+            StoreDouble(VectorDoubleSet(x, y, 1.0 + 0x1p-52, Limit<f64>::s_Infinity), aligned[index].value);
+            NWB_MEMCPY(reinterpret_cast<u8*>(&aligned[index].value) + 3u * sizeof(f64), sizeof(aligned[index].value) - 3u * sizeof(f64), &poison, sizeof(poison));
+        }
+        Array<u8, sizeof(aligned)> alignedOriginal{};
+        Array<u8, sizeof(unaligned)> unalignedOriginal{};
+        NWB_MEMCPY(alignedOriginal.data(), alignedOriginal.size(), aligned.data(), sizeof(aligned));
+        NWB_MEMCPY(unalignedOriginal.data(), unalignedOriginal.size(), unaligned.data(), sizeof(unaligned));
+        const SIMDMatrixDouble matrix = MatrixDoubleTranslation(0.25, 0.0, 0.0);
+        EXPECT_EQ(VectorDouble3TransformCoordStream(MakeNotNull(&unaligned[0].value), sizeof(UnalignedRecord), MakeNotNull<const Double3*>(&aligned[0].value), sizeof(AlignedRecord), LengthOf(aligned), matrix).get(), &unaligned[0].value);
+        EXPECT_EQ(NWB_MEMCMP(aligned.data(), alignedOriginal.data(), sizeof(aligned)), 0);
+        for(usize index = 0u; index < LengthOf(aligned); ++index)
+            EXPECT_EQ(unaligned[index].value.x, 0.25 * static_cast<f64>(index) + (0x1p+40 + 0.5)) << index;
+
+        EXPECT_EQ(VectorDouble3TransformCoordStream(MakeNotNull(&unaligned[0].value), sizeof(UnalignedRecord), MakeNotNull<const Double3U*>(&unaligned[0].value), sizeof(UnalignedRecord), LengthOf(unaligned), matrix).get(), &unaligned[0].value);
+        EXPECT_EQ(VectorDouble3TransformCoordStream(MakeNotNull(&aligned[0].value), sizeof(AlignedRecord), MakeNotNull<const Double3U*>(&unaligned[0].value), sizeof(UnalignedRecord), LengthOf(aligned), matrix).get(), &aligned[0].value);
+        EXPECT_EQ(VectorDouble3TransformCoordStream(MakeNotNull(&aligned[0].value), sizeof(AlignedRecord), MakeNotNull<const Double3*>(&aligned[0].value), sizeof(AlignedRecord), LengthOf(aligned), matrix).get(), &aligned[0].value);
+        for(usize index = 0u; index < LengthOf(aligned); ++index){
+            EXPECT_EQ(aligned[index].value.x, 0.25 * static_cast<f64>(index) + (0x1p+40 + 1.25)) << index;
+            EXPECT_EQ(unaligned[index].value.x, 0.25 * static_cast<f64>(index) + (0x1p+40 + 0.75)) << index;
+            EXPECT_EQ(aligned[index].value.y, (static_cast<f64>(index) - 1.0) * 0x1p-40) << index;
+            EXPECT_EQ(aligned[index].value.z, 1.0 + 0x1p-52) << index;
+            const auto alignedBytes = MakeNotNull(reinterpret_cast<const u8*>(&aligned[index]));
+            const auto unalignedBytes = MakeNotNull(reinterpret_cast<const u8*>(&unaligned[index]));
+            for(usize offset = 3u * sizeof(f64); offset < sizeof(AlignedRecord); ++offset)
+                EXPECT_EQ(alignedBytes.get()[offset], alignedOriginal[index * sizeof(AlignedRecord) + offset]) << index << ':' << offset;
+            for(usize offset = 0u; offset < sizeof(UnalignedRecord); ++offset){
+                if(offset >= offsetof(UnalignedRecord, value) && offset < offsetof(UnalignedRecord, value) + sizeof(Double3U))
+                    continue;
+                EXPECT_EQ(unalignedBytes.get()[offset], unalignedOriginal[index * sizeof(UnalignedRecord) + offset]) << index << ':' << offset;
+            }
+        }
+
+        BoundingDoubleBox bounds;
+        BoundingDoubleBox::CreateFromPoints(bounds, LengthOf(aligned), aligned[0].value, sizeof(AlignedRecord));
+        EXPECT_EQ(bounds.center.x, 0x1p+40 + 1.5);
+        EXPECT_EQ(bounds.center.y, 0.0);
+        EXPECT_EQ(bounds.center.z, 1.0 + 0x1p-52);
+        EXPECT_EQ(bounds.extents.x, 0.25);
+        EXPECT_EQ(bounds.extents.y, 0x1p-40);
+        EXPECT_EQ(bounds.extents.z, 0.0);
+        EXPECT_EQ(bounds.contains(SIMDVectorDouble{ 0x1p+40 + 1.75 + 0x1p-10, 0.0, 1.0 + 0x1p-52, 0.0 }), ContainmentType::Disjoint);
+
+        struct PairRecord{
+            Double2 value;
+            Array<u64, 4> gap{};
+        };
+        Array<PairRecord, 2> pairs{};
+        NWB_MEMSET(pairs.data(), 0xa5, sizeof(pairs));
+        for(usize index = 0u; index < LengthOf(pairs); ++index){
+            StoreDouble(SIMDVectorDouble{ 0x1p+40 + 0.25, 1.0 + 0x1p-52, Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN }, pairs[index].value);
+            NWB_MEMCPY(reinterpret_cast<u8*>(&pairs[index].value) + 2u * sizeof(f64), sizeof(pairs[index].value) - 2u * sizeof(f64), &poison, sizeof(poison));
+        }
+        Array<u8, sizeof(pairs)> pairOriginal{};
+        NWB_MEMCPY(pairOriginal.data(), pairOriginal.size(), pairs.data(), sizeof(pairs));
+        EXPECT_EQ(VectorDouble2TransformCoordStream(MakeNotNull(&pairs[0].value), sizeof(PairRecord), MakeNotNull<const Double2*>(&pairs[0].value), sizeof(PairRecord), LengthOf(pairs), matrix).get(), &pairs[0].value);
+        for(usize index = 0u; index < LengthOf(pairs); ++index){
+            EXPECT_EQ(pairs[index].value.x, 0x1p+40 + 0.5) << index;
+            EXPECT_EQ(pairs[index].value.y, 1.0 + 0x1p-52) << index;
+            const auto bytes = MakeNotNull(reinterpret_cast<const u8*>(&pairs[index]));
+            for(usize offset = 2u * sizeof(f64); offset < sizeof(PairRecord); ++offset)
+                EXPECT_EQ(bytes.get()[offset], pairOriginal[index * sizeof(PairRecord) + offset]) << index << ':' << offset;
+        }
+    }
+}
+
+void VerifyMath_DoubleRawIntegerEqualityRequiresBoth32BitHalvesOfEveryLane(){
+    native{
+        const Array<u64, 4> firstBits = { 0x0123456789abcdefu, 0x8000000000000000u, 0x7ff800009abcdef0u, 0xfedcba9876543210u };
+        const Array<u64, 2> differences = { 0x0000000000000001u, 0x0000000100000000u };
+        const SIMDVectorDouble first = VectorDoubleSetInt(firstBits[0], firstBits[1], firstBits[2], firstBits[3]);
+        for(usize changedLane = 0u; changedLane < 4u; ++changedLane){
+            for(const u64 difference : differences){
+                const SIMDVectorDouble second = VectorDoubleSetIntByIndex(first, firstBits[changedLane] ^ difference, changedLane);
+                alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 2> equality = { VectorDoubleEqualInt(first, second), VectorDoubleEqualInt(second, first) };
+                for(const SIMDVectorDouble mask : equality){
+                    for(usize lane = 0u; lane < 4u; ++lane)
+                        EXPECT_EQ(VectorDoubleGetIntByIndex(mask, lane), lane == changedLane ? 0u : Limit<u64>::s_Max) << changedLane << ':' << difference << ':' << lane;
+                }
+            }
+        }
+    }
+}
+
+void VerifyMath_DoubleSingleConversionsRetainSubnormalsAndSignsAndRoundHalfUlpTiesEven(){
+    native{
+        Array<Array<volatile f64, 4u>, 3u> runtimeInputs = {{
+            { Limit<f64>::s_Max, -Limit<f64>::s_Max, -0.0, 0.0 },
+            { 1.0 + 0x1p-24, 1.0 + 0x1.8p-23, -1.0 - 0x1p-24, -1.0 - 0x1.8p-23 },
+            { 0x1p-150, 0x1.8p-149, -0x1p-150, -0x1.8p-149 },
+        }};
+        const SIMDVectorSingle overflow = ConvertVectorDoubleToSingle(VectorDoubleSet(runtimeInputs[0][0], runtimeInputs[0][1], runtimeInputs[0][2], runtimeInputs[0][3]));
+        const Array<u32, 4> overflowExpected = { 0x7f800000u, 0xff800000u, 0x80000000u, 0u };
+        for(usize lane = 0u; lane < 4u; ++lane)
+            EXPECT_EQ(VectorGetIntByIndex(overflow, lane), overflowExpected[lane]) << lane;
+
+        const Array<u32, 4> subnormalBits = { 1u, 0x80000001u, 0x007fffffu, 0x807fffffu };
+        Array<volatile u32, 4u> runtimeSubnormalBits = { 1u, 0x80000001u, 0x007fffffu, 0x807fffffu };
+        const SIMDVectorSingle subnormals = VectorSetInt(runtimeSubnormalBits[0], runtimeSubnormalBits[1], runtimeSubnormalBits[2], runtimeSubnormalBits[3]);
+        const SIMDVectorDouble widened = ConvertVectorSingleToDouble(subnormals);
+        const Array<f64, 4> widenedExpected = { 0x1p-149, -0x1p-149, 0x1.fffffcp-127, -0x1.fffffcp-127 };
+        const SIMDVectorSingle narrowed = ConvertVectorDoubleToSingle(widened);
+        for(usize lane = 0u; lane < 4u; ++lane){
+            EXPECT_EQ(VectorDoubleGetIntByIndex(widened, lane), BitCast<u64>(widenedExpected[lane])) << lane;
+            EXPECT_EQ(VectorGetIntByIndex(narrowed, lane), subnormalBits[lane]) << lane;
+        }
+
+        Array<volatile u32, 4u> runtimeZeroBits = { 0x80000000u, 0u, 0x80000000u, 0u };
+        const SIMDVectorDouble signedZeros = ConvertVectorSingleToDouble(VectorSetInt(runtimeZeroBits[0], runtimeZeroBits[1], runtimeZeroBits[2], runtimeZeroBits[3]));
+        const Array<u64, 4> zeroExpected = { 0x8000000000000000u, 0u, 0x8000000000000000u, 0u };
+        for(usize lane = 0u; lane < 4u; ++lane)
+            EXPECT_EQ(VectorDoubleGetIntByIndex(signedZeros, lane), zeroExpected[lane]) << lane;
+
+        const SIMDVectorSingle rounded = ConvertVectorDoubleToSingle(VectorDoubleSet(runtimeInputs[1][0], runtimeInputs[1][1], runtimeInputs[1][2], runtimeInputs[1][3]));
+        const Array<u32, 4> roundedExpected = { 0x3f800000u, 0x3f800002u, 0xbf800000u, 0xbf800002u };
+        for(usize lane = 0u; lane < 4u; ++lane)
+            EXPECT_EQ(VectorGetIntByIndex(rounded, lane), roundedExpected[lane]) << lane;
+
+        const SIMDVectorSingle underflow = ConvertVectorDoubleToSingle(VectorDoubleSet(runtimeInputs[2][0], runtimeInputs[2][1], runtimeInputs[2][2], runtimeInputs[2][3]));
+        const Array<u32, 4> underflowExpected = { 0u, 2u, 0x80000000u, 0x80000002u };
+        for(usize lane = 0u; lane < 4u; ++lane)
+            EXPECT_EQ(VectorGetIntByIndex(underflow, lane), underflowExpected[lane]) << lane;
+    }
+}
+
+void VerifyMath_SingleRuntimePermutationsPreserveNaNPayloadsSignedZeroAndSubnormalBits(){
+    native{
+        const Array<u32, 8> bits = { 0xffc01234u, 0x80000000u, 1u, 0x7f800001u, 0u, 0x7fc05678u, 0x807fffffu, Limit<u32>::s_Max };
+        const SIMDVectorSingle first = VectorSetInt(bits[0], bits[1], bits[2], bits[3]);
+        const SIMDVectorSingle second = VectorSetInt(bits[4], bits[5], bits[6], bits[7]);
+        for(u32 code = 0u; code < 256u; ++code){
+            Array<volatile u32, 4u> controls = { code & 3u, (code >> 2u) & 3u, (code >> 4u) & 3u, (code >> 6u) & 3u };
+            const SIMDVectorSingle result = VectorSwizzle(first, controls[0], controls[1], controls[2], controls[3]);
+            for(usize lane = 0u; lane < 4u; ++lane)
+                EXPECT_EQ(VectorGetIntByIndex(result, lane), bits[controls[lane]]) << code << ':' << lane;
+        }
+        for(u32 code = 0u; code < 4096u; ++code){
+            Array<volatile u32, 4u> controls = { code & 7u, (code >> 3u) & 7u, (code >> 6u) & 7u, (code >> 9u) & 7u };
+            const SIMDVectorSingle result = VectorPermute(first, second, controls[0], controls[1], controls[2], controls[3]);
+            for(usize lane = 0u; lane < 4u; ++lane)
+                EXPECT_EQ(VectorGetIntByIndex(result, lane), bits[controls[lane]]) << code << ':' << lane;
+        }
+    }
+}
+
+void VerifyMath_UnalignedFloat33LoadRetainsNegativeZeroAndSignalingNaNPayloadWithoutInvalidExceptions(){
+    native{
+#pragma STDC FENV_ACCESS ON
+        const auto originalEnvironment = HoldFloatingPointExceptions();
+        ASSERT_TRUE(originalEnvironment);
+        NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
+
+        struct alignas(16){
+            u32 prefix{};
+            Float33U value{};
+        } record;
+        Array<volatile u32, 9u> runtimeBits = { 0x80000000u, 1u, 0x7fc01234u, 0x80000000u, 0x7f800001u, 0x807fffffu, 0xff800000u, 0u, 0xffc05678u };
+        for(usize lane = 0u; lane < 9u; ++lane)
+            record.value.raw[lane] = BitCast<f32>(runtimeBits[lane]);
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+        const SIMDMatrix matrix = LoadFloat(record.value);
+        const i32 invalid = TestFloatingPointExceptions(FE_INVALID);
+        EXPECT_EQ(invalid, 0);
+        for(usize row = 0u; row < 3u; ++row){
+            for(usize lane = 0u; lane < 3u; ++lane)
+                EXPECT_EQ(VectorGetIntByIndex(matrix.v[row], lane), runtimeBits[row * 3u + lane]) << row << ':' << lane;
+            EXPECT_EQ(VectorGetIntW(matrix.v[row]), 0u) << row;
+        }
+        const Array<u32, 4> lastRow = { 0u, 0u, 0u, BitCast<u32>(1.0f) };
+        for(usize lane = 0u; lane < 4u; ++lane)
+            EXPECT_EQ(VectorGetIntByIndex(matrix.v[3], lane), lastRow[lane]) << lane;
+    }
+}
+
+void VerifyMath_SelectionControlTreatsHighBitUnsignedValuesAsTrueAndPreservesSelectedRawBits(){
+    native{
+        const Array<u32, 4> choices = { 0u, 1u, 0x80000000u, Limit<u32>::s_Max };
+        const Array<u32, 4> left = { 0x80000000u, 1u, 0x7f800001u, 0xffc01234u };
+        const Array<u32, 4> right = { 0u, 0x807fffffu, 0x7fc05678u, Limit<u32>::s_Max };
+        const SIMDVectorSingle first = VectorSetInt(left[0], left[1], left[2], left[3]);
+        const SIMDVectorSingle second = VectorSetInt(right[0], right[1], right[2], right[3]);
+        for(u32 code = 0u; code < 256u; ++code){
+            Array<volatile u32, 4u> controls = { choices[code & 3u], choices[(code >> 2u) & 3u], choices[(code >> 4u) & 3u], choices[(code >> 6u) & 3u] };
+            const SIMDVectorSingle control = VectorSelectControl(controls[0], controls[1], controls[2], controls[3]);
+            const SIMDVectorSingle selected = VectorSelect(first, second, control);
+            const SIMDVectorDouble doubleControl = VectorDoubleSelectControl(controls[0], controls[1], controls[2], controls[3]);
+            for(usize lane = 0u; lane < 4u; ++lane){
+                const b8 enabled = controls[lane] != 0u;
+                EXPECT_EQ(VectorGetIntByIndex(control, lane), enabled ? Limit<u32>::s_Max : 0u) << code << ':' << lane;
+                EXPECT_EQ(VectorGetIntByIndex(selected, lane), enabled ? right[lane] : left[lane]) << code << ':' << lane;
+                EXPECT_EQ(VectorDoubleGetIntByIndex(doubleControl, lane), enabled ? Limit<u64>::s_Max : 0u) << code << ':' << lane;
+            }
+        }
+    }
+}
+
+void VerifyMath_DoubleRuntimePermutationsRetainNonfiniteAndRawBitsAcrossPairs(){
+    native{
+        const SIMDVectorDouble first = VectorDoubleSetInt(0xfff8000012345678u, 0x8000000000000000u, 0x0123456789abcdefu, 0x7ff0000000000001u);
+        const SIMDVectorDouble second = VectorDoubleSetInt(0u, 0x7ff800009abcdef0u, 0xfedcba9876543210u, Limit<u64>::s_Max);
+        Array<Array<volatile u32, 4u>, 3u> swizzleControls = {{ { 3u, 1u, 0u, 2u }, { 2u, 0u, 3u, 1u }, { 1u, 3u, 1u, 3u } }};
+        const Array<Array<u64, 4>, 3> swizzleExpected = {{
+            { 0x7ff0000000000001u, 0x8000000000000000u, 0xfff8000012345678u, 0x0123456789abcdefu },
+            { 0x0123456789abcdefu, 0xfff8000012345678u, 0x7ff0000000000001u, 0x8000000000000000u },
+            { 0x8000000000000000u, 0x7ff0000000000001u, 0x8000000000000000u, 0x7ff0000000000001u }
+        }};
+        for(usize index = 0u; index < LengthOf(swizzleExpected); ++index){
+            const SIMDVectorDouble result = VectorDoubleSwizzle(first, swizzleControls[index][0], swizzleControls[index][1], swizzleControls[index][2], swizzleControls[index][3]);
+            for(usize lane = 0u; lane < 4u; ++lane)
+                EXPECT_EQ(VectorDoubleGetIntByIndex(result, lane), swizzleExpected[index][lane]) << index << ':' << lane;
+        }
+
+        Array<Array<volatile u32, 4u>, 3u> permuteControls = {{ { 7u, 0u, 6u, 1u }, { 3u, 4u, 2u, 5u }, { 5u, 3u, 4u, 0u } }};
+        const Array<Array<u64, 4>, 3> permuteExpected = {{
+            { Limit<u64>::s_Max, 0xfff8000012345678u, 0xfedcba9876543210u, 0x8000000000000000u },
+            { 0x7ff0000000000001u, 0u, 0x0123456789abcdefu, 0x7ff800009abcdef0u },
+            { 0x7ff800009abcdef0u, 0x7ff0000000000001u, 0u, 0xfff8000012345678u }
+        }};
+        for(usize index = 0u; index < LengthOf(permuteExpected); ++index){
+            const SIMDVectorDouble result = VectorDoublePermute(first, second, permuteControls[index][0], permuteControls[index][1], permuteControls[index][2], permuteControls[index][3]);
+            for(usize lane = 0u; lane < 4u; ++lane)
+                EXPECT_EQ(VectorDoubleGetIntByIndex(result, lane), permuteExpected[index][lane]) << index << ':' << lane;
+        }
+    }
+}
+
+void VerifyMath_StorageEqualityPreservesRawHalfAndIntegralBoundaryBits(){
+    const f16x4u halfBits = f16x4u(cast<u16>(0x7C01u), cast<u16>(0xFC01u), cast<u16>(0x8000u), cast<u16>(0xFFFFu));
+    EXPECT_TRUE(halfBits == halfBits);
+    const i32x4 signedBits = i32x4(i32.min, i32.max, -1, 0);
+    const u32x4 unsignedBits = u32x4(u32.max, 0x80000000u, 0x7FFFFFFFu, 0u);
+    EXPECT_TRUE(signedBits == signedBits);
+    EXPECT_TRUE(unsignedBits == unsignedBits);
+}
+
+void VerifyMath_StorageEqualityUsesNumericFloatsAndIntegerMixedPayloads(){
+    const f32 inf = bit_cast<f32>(s_F32InfinityBits);
+    const f32 qnan = bit_cast<f32>(s_F32QuietNanBits);
+    const f32 subnormalOne = bit_cast<f32>(1u);
+    const f32x4u first = f32x4u(0.0f, -0.0f, inf, subnormalOne);
+    const f32x4u second = f32x4u(-0.0f, 0.0f, inf, subnormalOne);
+    EXPECT_TRUE(first == second);
+    EXPECT_FALSE(first != second);
+    const f32x4u nanVec = f32x4u(qnan, 1.0f, 2.0f, 3.0f);
+    EXPECT_FALSE(nanVec == nanVec);
+    EXPECT_TRUE(nanVec != nanVec);
+
+    const f32x3_i32 mixedSigned = f32x3_i32(0.0f, -0.0f, 2.0f, i32.min);
+    EXPECT_TRUE(mixedSigned == f32x3_i32(-0.0f, 0.0f, 2.0f, i32.min));
+    EXPECT_FALSE(mixedSigned == f32x3_i32(0.0f, -0.0f, 2.0f, i32.min + 1));
+    const f32x3_u32 mixedUnsigned = f32x3_u32(0.0f, -0.0f, 2.0f, 0x7F800001u);
+    EXPECT_TRUE(mixedUnsigned == f32x3_u32(-0.0f, 0.0f, 2.0f, 0x7F800001u));
+    EXPECT_FALSE(mixedUnsigned == f32x3_u32(0.0f, -0.0f, 2.0f, 0x7F800002u));
+    EXPECT_FALSE(f32x3_u32(1.0f, 2.0f, qnan, 0u) == f32x3_u32(1.0f, 2.0f, qnan, 0u));
+}
+
+void VerifyMath_StorageEqualityPreservesNaNShortCircuitExceptionFlags(){
+    native{
+        using namespace NWB::Tests::MathStorageCasesDetail;
+        CheckNaNComparisonFlags<Float4U, 4u>();
+        CheckNaNComparisonFlags<Float33U, 9u>();
+    }
+}
+
+void VerifyMath_StorageEqualityDoesNotReadBeyondUnalignedShortValues(){
+    native{
+        using namespace NWB::Tests::MathStorageCasesDetail;
+#if defined(__linux__)
+        CheckPageBoundary<RawEqualityStorage<b8, 1u>, 1u>();
+        CheckPageBoundary<RawEqualityStorage<b8, 16u>, 16u>();
+        CheckPageBoundary<RawEqualityStorage<b8, 17u>, 17u>();
+        CheckPageBoundary<RawEqualityStorage<b8, 33u>, 33u>();
+        CheckPageBoundary<Half2U, 2u>();
+        CheckPageBoundary<Half4U, 4u>();
+        CheckPageBoundary<Float2U, 2u>();
+        CheckPageBoundary<Float3U, 3u>();
+        CheckPageBoundary<Float33U, 9u>();
+        CheckPageBoundary<Int2U, 2u>();
+        CheckPageBoundary<Int3U, 3u>();
+        CheckPageBoundary<UInt2U, 2u>();
+        CheckPageBoundary<UInt3U, 3u>();
+#else
+        GTEST_SKIP() << "Protected-page boundaries are verified on Linux";
+#endif
+    }
+}
+
+void VerifyMath_StorageEqualityFallsBackForBooleanArrays(){
+    native{
+        using namespace NWB::Tests::MathStorageCasesDetail;
+        const auto verify = []<usize Count>(){
+            RawEqualityStorage<b8, Count> lhs{}, rhs{};
+            for(usize lane = 0u; lane < Count; ++lane)
+                lhs.raw[lane] = rhs.raw[lane] = (lane & 1u) != 0u;
+            EXPECT_TRUE(StorageEqual(lhs, rhs));
+            for(usize lane = 0u; lane < Count; ++lane){
+                rhs.raw[lane] = !rhs.raw[lane];
+                EXPECT_FALSE(StorageEqual(lhs, rhs)) << Count << ", " << lane;
+                EXPECT_EQ(StorageEqual(lhs, rhs), (LegacyEqual<RawEqualityStorage<b8, Count>, Count>(lhs, rhs)));
+                rhs.raw[lane] = lhs.raw[lane];
+            }
+            EXPECT_TRUE(StorageEqual(lhs, rhs));
+        };
+        verify.operator()<1u>();
+        verify.operator()<2u>();
+        verify.operator()<7u>();
+        verify.operator()<16u>();
+        verify.operator()<17u>();
+        verify.operator()<33u>();
+    }
+}
+
+void VerifyMath_StorageEqualityFallsBackForWideIntegralArrays(){
+    native{
+        using namespace NWB::Tests::MathStorageCasesDetail;
+#if defined(__SIZEOF_INT128__)
+        using WideInteger = __int128;
+        const WideInteger high = static_cast<WideInteger>(1) << 100u;
+        const RawEqualityStorage<WideInteger, 3u> lhs{ { high, -high, high + 7 } };
+        auto rhs = lhs;
+        EXPECT_TRUE(StorageEqual(lhs, rhs));
+        rhs.raw[1] += static_cast<WideInteger>(1) << 110u;
+        EXPECT_FALSE(StorageEqual(lhs, rhs));
+        EXPECT_EQ(StorageEqual(lhs, rhs), (LegacyEqual<RawEqualityStorage<WideInteger, 3u>, 3u>(lhs, rhs)));
+        rhs = lhs;
+        rhs.raw[2] += 1;
+        EXPECT_FALSE(StorageEqual(lhs, rhs));
+#else
+        GTEST_SKIP() << "This target does not expose a wider integral type";
+#endif
+    }
+}
+
+void VerifyMath_StorageEqualityPreservesSubnormalNaNAndSkippedLaneMxcsrFlags(){
+    native{
+        using namespace NWB::Tests::MathStorageCasesDetail;
+#if defined(NWB_HAS_SSE2)
+        CheckRawEqualityComparisonFlags<Float4U, 4u>();
+        CheckRawEqualityComparisonFlags<Float33U, 9u>();
+#else
+        GTEST_SKIP() << "Raw MXCSR equality flags are specific to x86 SSE targets";
+#endif
+    }
+}
+
+void VerifyMath_ExpectedSIMDValuesKeepAlignedLoadsAfterEightBytePrefixAndAcrossArrayStride(){
+    native{
+        using namespace NWB::Tests::MathStorageCasesDetail;
+        CheckExpectedVectorAlignment<SIMDVectorSingleResult>(Array<u32, 4u>{ 0x80000000u, 0x7F812345u, 0x00000001u, 0x7F7FFFFFu });
+        CheckExpectedVectorAlignment<SIMDVectorDoubleResult>(Array<u64, 4u>{ 0x8000000000000000ull, 0x7FF0000000012345ull, 0x0000000000000001ull, 0x7FEFFFFFFFFFFFFFull });
+    }
+}
+
+void VerifyCurrentMathContractBoundaries_TransformStreamCallbackFailureDoesNotTerminateOrPublishOutput(){
+    const f32x4u input = f32x4u(1.0f, 2.0f, 3.0f, 4.0f);
+    f32x4u output = f32x4u(11.0f, 12.0f, 13.0f, 14.0f);
+    const f64x4u doubleInput = f64x4u(1.0, 2.0, 3.0, 4.0);
+    f64x4u doubleOutput = f64x4u(21.0, 22.0, 23.0, 24.0);
+    native(in input, mut output, in doubleInput, mut doubleOutput){
+        const auto singleFailure = [](SIMDVectorSingle, const SIMDMatrix&) -> SIMDVectorSingle{ throw u32{ 0xE206u }; };
+        const auto doubleFailure = [](SIMDVectorDouble, const SIMDMatrixDouble&) -> SIMDVectorDouble{ throw u32{ 0xE207u }; };
+        const auto singleControl = [](SIMDVectorSingle value, const SIMDMatrix&)noexcept{ return value; };
+        const auto doubleControl = [](SIMDVectorDouble value, const SIMDMatrixDouble&)noexcept{ return value; };
+        const SIMDMatrix matrix = MatrixIdentity();
+        const SIMDMatrixDouble doubleMatrix = MatrixDoubleIdentity();
+
+        static_assert(!noexcept(SIMDVectorDetail::VectorTransformStreamImpl(MakeNotNull(&output), sizeof(output), MakeNotNull(&input), sizeof(input), 1u, matrix, singleFailure)));
+        static_assert(noexcept(SIMDVectorDetail::VectorTransformStreamImpl(MakeNotNull(&output), sizeof(output), MakeNotNull(&input), sizeof(input), 1u, matrix, singleControl)));
+        static_assert(!noexcept(SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(MakeNotNull(&doubleOutput), sizeof(doubleOutput), MakeNotNull(&doubleInput), sizeof(doubleInput), 1u, doubleMatrix, doubleFailure)));
+        static_assert(noexcept(SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(MakeNotNull(&doubleOutput), sizeof(doubleOutput), MakeNotNull(&doubleInput), sizeof(doubleInput), 1u, doubleMatrix, doubleControl)));
+
+        EXPECT_THROW(SIMDVectorDetail::VectorTransformStreamImpl(MakeNotNull(&output), sizeof(output), MakeNotNull(&input), sizeof(input), 1u, matrix, singleFailure), u32);
+        EXPECT_THROW(SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(MakeNotNull(&doubleOutput), sizeof(doubleOutput), MakeNotNull(&doubleInput), sizeof(doubleInput), 1u, doubleMatrix, doubleFailure), u32);
+    }
+    EXPECT_EQ(output, f32x4u(11.0f, 12.0f, 13.0f, 14.0f));
+    EXPECT_EQ(doubleOutput, f64x4u(21.0, 22.0, 23.0, 24.0));
+}
+
+void VerifyCurrentMathContractBoundaries_StreamLoadConversionFailureUnwindsBeforePublishingOutput(){
+    f32x4u output = f32x4u(11.0f, 12.0f, 13.0f, 14.0f);
+    f64x4u doubleOutput = f64x4u(21.0, 22.0, 23.0, 24.0);
+    native(mut output, mut doubleOutput){
+        using namespace NWB::Tests::MathStorageCasesDetail;
+        const SingleStreamLoadInput input;
+        const DoubleStreamLoadInput doubleInput;
+        const SIMDMatrix matrix = MatrixIdentity();
+        const SIMDMatrixDouble doubleMatrix = MatrixDoubleIdentity();
+        const auto singleControl = [](SIMDVectorSingle value, const SIMDMatrix&)noexcept{ return value; };
+        const auto doubleControl = [](SIMDVectorDouble value, const SIMDMatrixDouble&)noexcept{ return value; };
+
+        static_assert(noexcept(LoadFloat(input)));
+        static_assert(noexcept(LoadDouble(doubleInput)));
+        static_assert(!noexcept(SIMDVectorDetail::VectorTransformStreamImpl(MakeNotNull(&output), sizeof(output), MakeNotNull(&input), sizeof(input), 1u, matrix, singleControl)));
+        static_assert(!noexcept(SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(MakeNotNull(&doubleOutput), sizeof(doubleOutput), MakeNotNull(&doubleInput), sizeof(doubleInput), 1u, doubleMatrix, doubleControl)));
+
+        EXPECT_THROW(SIMDVectorDetail::VectorTransformStreamImpl(MakeNotNull(&output), sizeof(output), MakeNotNull(&input), sizeof(input), 1u, matrix, singleControl), u32);
+        EXPECT_THROW(SIMDVectorDoubleDetail::VectorDoubleTransformStreamImpl(MakeNotNull(&doubleOutput), sizeof(doubleOutput), MakeNotNull(&doubleInput), sizeof(doubleInput), 1u, doubleMatrix, doubleControl), u32);
+    }
+    EXPECT_EQ(output, f32x4u(11.0f, 12.0f, 13.0f, 14.0f));
+    EXPECT_EQ(doubleOutput, f64x4u(21.0, 22.0, 23.0, 24.0));
+}
+
+void VerifyMathTriangleIntersection_RejectsSeparatedCoplanarTrianglesWithOverlappingBounds(){
+    const Array<f64x3u, 3> first = MakeTriangleVertices(0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 2.0, 0.0);
+    const Array<f64x3u, 3> second = MakeTriangleVertices(1.5, 1.5, 0.0, 2.0, 1.5, 0.0, 1.5, 2.0, 0.0);
+    CheckTriangleBothPrecisions(first, second, false);
+}
+
+void VerifyMathTriangleIntersection_RejectsSeparatedNoncoplanarTrianglesWithOverlappingBounds(){
+    const Array<f64x3u, 3> first = MakeTriangleVertices(0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 2.0, 0.0);
+    const Array<f64x3u, 3> second = MakeTriangleVertices(1.5, 1.5, -1.0, 1.5, 2.0, 1.0, 2.0, 1.5, 1.0);
+    CheckTriangleBothPrecisions(first, second, false);
+}
+
+void VerifyMathTriangleIntersection_CoplanarOverlapAndContainmentIgnoreWinding(){
+    const Array<f64x3u, 3> first = MakeTriangleVertices(0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 2.0, 0.0);
+    const Array<f64x3u, 3> overlapping = MakeTriangleVertices(0.5, 0.5, 0.0, 2.5, 0.5, 0.0, 0.5, 2.5, 0.0);
+    const Array<f64x3u, 3> contained = MakeTriangleVertices(0.25, 0.25, 0.0, 0.75, 0.25, 0.0, 0.25, 0.75, 0.0);
+    CheckTriangleBothPrecisions(first, overlapping, true);
+    CheckTriangleBothPrecisions(first, contained, true);
+}
+
+void VerifyMathTriangleIntersection_CoplanarSharedEdgeAndPointRemainIntersections(){
+    const Array<f64x3u, 3> first = MakeTriangleVertices(0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 2.0, 0.0);
+    const Array<f64x3u, 3> sharedEdge = MakeTriangleVertices(2.0, 0.0, 0.0, 0.0, 2.0, 0.0, 2.0, 2.0, 0.0);
+    const Array<f64x3u, 3> sharedPoint = MakeTriangleVertices(2.0, 0.0, 0.0, 3.0, 0.0, 0.0, 2.0, 1.0, 0.0);
+    CheckTriangleBothPrecisions(first, sharedEdge, true);
+    CheckTriangleBothPrecisions(first, sharedPoint, true);
+}
+
+void VerifyMathTriangleIntersection_NoncoplanarCrossingRetainsTheVertexOnTheOppositePlane(){
+    const Array<f64x3u, 3> first = MakeTriangleVertices(0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 2.0, 0.0);
+    const Array<f64x3u, 3> crossing = MakeTriangleVertices(0.5, 0.5, -1.0, 0.5, 0.5, 1.0, 1.5, 0.5, 0.0);
+    CheckTriangleBothPrecisions(first, crossing, true);
+}
+
+void VerifyMathTriangleIntersection_DegeneratePointOutsideTheTriangleIsRejectedInsideItsBounds(){
+    const Array<f64x3u, 3> first = MakeTriangleVertices(0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 2.0, 0.0);
+    const Array<f64x3u, 3> outside = MakeTriangleVertices(1.5, 1.5, 0.0, 1.5, 1.5, 0.0, 1.5, 1.5, 0.0);
+    const Array<f64x3u, 3> inside = MakeTriangleVertices(0.5, 0.5, 0.0, 0.5, 0.5, 0.0, 0.5, 0.5, 0.0);
+    const Array<f64x3u, 3> touching = MakeTriangleVertices(2.0, 0.0, 0.0, 2.0, 0.0, 0.0, 2.0, 0.0, 0.0);
+    CheckTriangleBothPrecisions(first, outside, false);
+    CheckTriangleBothPrecisions(first, inside, true);
+    CheckTriangleBothPrecisions(first, touching, true);
+}
+
+void VerifyMathTriangleIntersection_DegenerateSegmentOutsideTheTriangleIsRejectedInsideItsBounds(){
+    const Array<f64x3u, 3> first = MakeTriangleVertices(0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 2.0, 0.0);
+    const Array<f64x3u, 3> outside = MakeTriangleVertices(1.5, 1.5, 0.0, 1.75, 1.5, 0.0, 2.0, 1.5, 0.0);
+    const Array<f64x3u, 3> crossing = MakeTriangleVertices(-1.0, 1.0, 0.0, 0.5, 1.0, 0.0, 2.0, 1.0, 0.0);
+    CheckTriangleBothPrecisions(first, outside, false);
+    CheckTriangleBothPrecisions(first, crossing, true);
+}
+
+void VerifyMathTriangleIntersection_DegenerateParallelSegmentsRequireTheSameLine(){
+    const Array<f64x3u, 3> first = MakeTriangleVertices(0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 2.0, 2.0, 0.0);
+    const Array<f64x3u, 3> displaced = MakeTriangleVertices(0.0, 1.0, 0.0, 0.5, 1.5, 0.0, 1.0, 2.0, 0.0);
+    const Array<f64x3u, 3> overlapping = MakeTriangleVertices(1.0, 1.0, 0.0, 2.0, 2.0, 0.0, 3.0, 3.0, 0.0);
+    const Array<f64x3u, 3> touching = MakeTriangleVertices(2.0, 2.0, 0.0, 3.0, 3.0, 0.0, 4.0, 4.0, 0.0);
+    CheckTriangleBothPrecisions(first, displaced, false);
+    CheckTriangleBothPrecisions(first, overlapping, true);
+    CheckTriangleBothPrecisions(first, touching, true);
+}
+
+void VerifyMathTriangleIntersection_DegenerateSkewSegmentsAreRejectedDespiteOverlappingBounds(){
+    const Array<f64x3u, 3> first = MakeTriangleVertices(0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0);
+    const Array<f64x3u, 3> skew = MakeTriangleVertices(0.0, 2.0, 0.0, 1.0, 1.0, 0.5, 2.0, 0.0, 1.0);
+    const Array<f64x3u, 3> crossing = MakeTriangleVertices(0.0, 2.0, 0.0, 1.0, 1.0, 1.0, 2.0, 0.0, 2.0);
+    CheckTriangleBothPrecisions(first, skew, false);
+    CheckTriangleBothPrecisions(first, crossing, true);
+}
+
+void VerifyMathTriangleIntersection_TinyCoplanarTrianglesRetainSeparatingAxes(){
+    const f64 tinyScale = bit_cast<f64>(cast<u64>(0x3c30000000000000u));
+    const Array<f64x3u, 3> first = MakeTriangleVertices(0.0, 0.0, 0.0, 2.0 * tinyScale, 0.0, 0.0, 0.0, 2.0 * tinyScale, 0.0);
+    const Array<f64x3u, 3> second = MakeTriangleVertices(1.5 * tinyScale, 1.5 * tinyScale, 0.0, 2.0 * tinyScale, 1.5 * tinyScale, 0.0, 1.5 * tinyScale, 2.0 * tinyScale, 0.0);
+    CheckTriangleBothPrecisions(first, second, false);
+}
+
+void VerifyMathTriangleIntersection_DoubleCoplanarSeparationAndTouchSurviveLargeTranslation(){
+    const f64 base = 1099511627776.0;
+    const Array<f64x3u, 3> first = MakeTriangleVertices(base, base, 0.0, base + 2.0, base, 0.0, base, base + 2.0, 0.0);
+    const Array<f64x3u, 3> separated = MakeTriangleVertices(base + 1.5, base + 1.5, 0.0, base + 2.0, base + 1.5, 0.0, base + 1.5, base + 2.0, 0.0);
+    const Array<f64x3u, 3> touching = MakeTriangleVertices(base + 2.0, base, 0.0, base + 3.0, base, 0.0, base + 2.0, base + 1.0, 0.0);
+    CheckTriangleDoubleWindingAndOrder(first, separated, false);
+    CheckTriangleDoubleWindingAndOrder(first, touching, true);
+}
+
+void VerifyMathTriangleIntersection_InactiveSignalingNaNsDoNotRaiseInvalidDuringIntersection(){
+    native{
+#pragma STDC FENV_ACCESS ON
+        const auto originalEnvironment = HoldFloatingPointExceptions();
+        ASSERT_TRUE(originalEnvironment);
+        NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
+        volatile u32 singleInactiveBits = 0x7f800001u;
+        volatile u64 doubleInactiveBits = 0x7ff0000000000001u;
+        alignas(SIMDVectorSingle) const Array<SIMDVectorSingle, 3> firstSingle = {
+            VectorSetIntW(VectorSet(0.0f, 0.0f, 0.0f, 0.0f), singleInactiveBits),
+            VectorSetIntW(VectorSet(2.0f, 0.0f, 0.0f, 0.0f), singleInactiveBits),
+            VectorSetIntW(VectorSet(0.0f, 2.0f, 0.0f, 0.0f), singleInactiveBits)
+        };
+        alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 3> firstDouble = {
+            VectorDoubleSetIntW(VectorDoubleSet(0.0, 0.0, 0.0, 0.0), doubleInactiveBits),
+            VectorDoubleSetIntW(VectorDoubleSet(2.0, 0.0, 0.0, 0.0), doubleInactiveBits),
+            VectorDoubleSetIntW(VectorDoubleSet(0.0, 2.0, 0.0, 0.0), doubleInactiveBits)
+        };
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+        const b8 singleIntersects = TriangleTests::Intersects(firstSingle[0], firstSingle[1], firstSingle[2], firstSingle[0], firstSingle[1], firstSingle[2]);
+        const i32 singleInvalid = TestFloatingPointExceptions(FE_INVALID);
+        EXPECT_TRUE(singleIntersects);
+        EXPECT_EQ(singleInvalid, 0);
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+        const b8 doubleIntersects = TriangleDoubleTests::Intersects(firstDouble[0], firstDouble[1], firstDouble[2], firstDouble[0], firstDouble[1], firstDouble[2]);
+        const i32 doubleInvalid = TestFloatingPointExceptions(FE_INVALID);
+        EXPECT_TRUE(doubleIntersects);
+        EXPECT_EQ(doubleInvalid, 0);
+    }
+}
+
+void VerifyMathTriangleIntersection_ExactlyContainedDyadicPointSurvivesSingleProjectionCancellation(){
+    const Array<f64x3u, 3> first = MakeTriangleVertices(824370.0, 14961.0, -10577.0, -393548.0, -764217.0, 231491.0, -838274.0, -740881.0, -157088.0);
+    const Array<f64x3u, 3> contained = MakeTriangleVertices(104229.5, -368794.0, 13312.25, 104229.5, -368794.0, 13312.25, 104229.5, -368794.0, 13312.25);
+    CheckTriangleBothPrecisions(first, contained, true);
+}
+
+void VerifyMathTriangleIntersection_ExactlyContainedDyadicPointSurvivesDoubleProjectionCancellation(){
+    const Array<f64x3u, 3> first = MakeTriangleVertices(495456340.0, -271487682.75, 212747462.0, 48651637.25, -531182607.0, 473308109.25, -155700933.5, -479176747.0, 416710936.25);
+    const Array<f64x3u, 3> contained = MakeTriangleVertices(220965845.9375, -388333679.875, 328878492.375, 220965845.9375, -388333679.875, 328878492.375, 220965845.9375, -388333679.875, 328878492.375);
+    CheckTriangleDoubleWindingAndOrder(first, contained, true);
+}
+
+void VerifyMathTriangleIntersection_ProjectionRoundoffAllowancePreservesSmallRealGaps(){
+    const f64 singleGap = bit_cast<f64>(cast<u64>(0x3eb0000000000000u));
+    const Array<f64x3u, 3> first = MakeTriangleVertices(0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 2.0, 0.0);
+    const Array<f64x3u, 3> outside = MakeTriangleVertices(1.0 + singleGap, 1.0, 0.0, 1.0 + singleGap, 1.0, 0.0, 1.0 + singleGap, 1.0, 0.0);
+    const Array<f64x3u, 3> sloped = MakeTriangleVertices(0.0, 0.0, 0.0, 2.0, 0.0, 2.0, 0.0, 2.0, -2.0);
+    const Array<f64x3u, 3> displaced = MakeTriangleVertices(0.0, 0.0, singleGap, 2.0, 0.0, 2.0 + singleGap, 0.0, 2.0, -2.0 + singleGap);
+    CheckTriangleBothPrecisions(first, outside, false);
+    CheckTriangleBothPrecisions(sloped, displaced, false);
+
+    const f64 doubleGap = bit_cast<f64>(cast<u64>(0x3d70000000000000u));
+    const Array<f64x3u, 3> outsideDouble = MakeTriangleVertices(1.0 + doubleGap, 1.0, 0.0, 1.0 + doubleGap, 1.0, 0.0, 1.0 + doubleGap, 1.0, 0.0);
+    const Array<f64x3u, 3> displacedDouble = MakeTriangleVertices(0.0, 0.0, doubleGap, 2.0, 0.0, 2.0 + doubleGap, 0.0, 2.0, -2.0 + doubleGap);
+    CheckTriangleDoubleWindingAndOrder(first, outsideDouble, false);
+    CheckTriangleDoubleWindingAndOrder(sloped, displacedDouble, false);
+}
+
+void VerifyMathTriangleIntersection_ProjectionRoundoffAllowancePreservesTranslatedOneUlpGaps(){
+    const f64 singleBase = 1048576.0;
+    const f64 singleGap = 0.125;
+    const Array<f64x3u, 3> first = MakeTriangleVertices(singleBase, singleBase, 0.0, singleBase + 2.0, singleBase, 0.0, singleBase, singleBase + 2.0, 0.0);
+    const Array<f64x3u, 3> outside = MakeTriangleVertices(singleBase + 1.0 + singleGap, singleBase + 1.0, 0.0, singleBase + 1.0 + singleGap, singleBase + 1.0, 0.0, singleBase + 1.0 + singleGap, singleBase + 1.0, 0.0);
+    CheckTriangleBothPrecisions(first, outside, false);
+
+    const f64 doubleBase = 1099511627776.0;
+    const f64 doubleGap = bit_cast<f64>(cast<u64>(0x3f30000000000000u));
+    const Array<f64x3u, 3> firstDouble = MakeTriangleVertices(doubleBase, doubleBase, 0.0, doubleBase + 2.0, doubleBase, 0.0, doubleBase, doubleBase + 2.0, 0.0);
+    const Array<f64x3u, 3> outsideDouble = MakeTriangleVertices(doubleBase + 1.0 + doubleGap, doubleBase + 1.0, 0.0, doubleBase + 1.0 + doubleGap, doubleBase + 1.0, 0.0, doubleBase + 1.0 + doubleGap, doubleBase + 1.0, 0.0);
+    CheckTriangleDoubleWindingAndOrder(firstDouble, outsideDouble, false);
+}
+
+void VerifyMath_VectorPowerPreservesMixedSpecialsAndAdjacentSrgbRoundingWithSeededState(){
+    native{
+#pragma STDC FENV_ACCESS ON
+        using namespace NWB::Tests::MathStorageCasesDetail;
+        const i32 originalError = errno;
+#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+        u64 originalNativeStatus{};
+        __asm__ __volatile__("mrs %0, fpsr" : "=r"(originalNativeStatus));
+#endif
+        const auto originalEnvironment = HoldFloatingPointExceptions();
+        ASSERT_TRUE(originalEnvironment);
+        ScopeExit restore([&]()noexcept{
+            if(!SetFloatingPointEnvironment(*originalEnvironment))
+                __builtin_trap();
+#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+            __asm__ __volatile__("msr fpsr, %0" : : "r"(originalNativeStatus));
+#endif
+            errno = originalError;
+        });
+
+        struct PowerCase{ PowerWords x, y; };
+        constexpr Array<PowerCase, 8> s_Cases = {{
+            { { 1u, 0x80000001u, 0x007fffffu, 0x3f800000u }, { 0x3f800000u, 0x3f800000u, 0x3f800000u, 0x4019999au } },
+            { { 0u, 0x3f800000u, 0x3e800000u, 0x3f000000u }, { 0x3ed55555u, 0xc0800000u, 0x80000000u, 0x3f800000u } },
+            { { 0x37800000u, 0x47800000u, 0u, 0x3f800000u }, { 0xc0800000u, 0x40800000u, 0x40400000u, 0u } },
+            { { 0x80000000u, 0u, 0xbf800000u, 0x7f7fffffu }, { 0xc0400000u, 0xbf800000u, 0x3f000000u, 0x40000000u } },
+            { { 0x7fc00123u, 0x7f800125u, 0xbf800000u, 0x3f800000u }, { 0u, 0x3f800000u, 0xff800126u, 0x7f800125u } },
+            { { 1u, 0x007fffffu, 0x00800000u, 0xff800000u }, { 0x40000000u, 0x3f000000u, 0x40200000u, 0xc0400000u } },
+            { { 0x3d32b0b2u, 0x3d32b0b3u, 0x3d32b0b4u, 0x3eb048afu }, { 0x3ed55555u, 0x3ed55555u, 0x3ed55555u, 0x3ed55555u } },
+            { { 0x3eb048aeu, 0x3eb048afu, 0x3eb048b0u, 0x3d2dc666u }, { 0x3ed55555u, 0x3ed55555u, 0x3ed55555u, 0xc13fc46au } }
+        }};
+        constexpr Array<i32, 4> s_Modes = { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
+        constexpr Array<i32, 2> s_InitialFlags = { 0, FE_INEXACT };
+#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+        constexpr Array<u32, 2> s_DenormalModes = { _DN_SAVE, _DN_FLUSH };
+        constexpr Array<u64, 4> s_NativeSeeds = { 0u, 0x80u, 0x08000000u, 0x08000080u };
+#else
+        constexpr Array<u32, 1> s_DenormalModes = { 0u };
+        constexpr Array<u64, 1> s_NativeSeeds = { 0u };
+#endif
+        for(const u32 denormalMode : s_DenormalModes){
+#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+            u32 control{};
+            ASSERT_EQ(_controlfp_s(&control, denormalMode, _MCW_DN), 0);
+            ASSERT_EQ(control & _MCW_DN, denormalMode);
+#endif
+            for(const i32 mode : s_Modes){
+                ASSERT_TRUE(SetFloatingPointRoundingMode(mode));
+                for(const u64 nativeSeed : s_NativeSeeds){
+                    for(const i32 seed : s_InitialFlags){
+                        for(usize index = 0u; index < LengthOf(s_Cases); ++index){
+                            const SIMDVectorSingle x = BitCast<SIMDVectorSingle>(s_Cases[index].x), y = BitCast<SIMDVectorSingle>(s_Cases[index].y);
+                            const auto expected = ObservePower(MakeNotNull<PowerEvaluate>(FrozenPower), x, y, seed, nativeSeed), actual = ObservePower(MakeNotNull<PowerEvaluate>(CurrentPower), x, y, seed, nativeSeed);
+                            ASSERT_TRUE(expected);
+                            ASSERT_TRUE(actual);
+                            EXPECT_EQ(actual->flags, expected->flags) << denormalMode << ':' << mode << ':' << seed << ':' << index;
+                            EXPECT_EQ(actual->error, expected->error) << denormalMode << ':' << mode << ':' << seed << ':' << index;
+                            EXPECT_EQ(actual->nativeStatus, expected->nativeStatus) << denormalMode << ':' << mode << ':' << seed << ':' << index;
+                            EXPECT_EQ(actual->rawNativeStatus, expected->rawNativeStatus) << denormalMode << ':' << mode << ':' << seed << ':' << index;
+                            for(usize lane = 0u; lane < 4u; ++lane)
+                                EXPECT_EQ(VectorGetIntByIndex(actual->value, lane), VectorGetIntByIndex(expected->value, lane)) << denormalMode << ':' << mode << ':' << seed << ':' << index << ':' << lane;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+void VerifyMath_VectorPowerKeepsDenormalInputStatusWithInvalidTrapEnabled(){
+    native{
+#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+#pragma STDC FENV_ACCESS ON
+        using namespace NWB::Tests::MathStorageCasesDetail;
+        const i32 originalError = errno;
+        u64 originalNativeStatus{};
+        __asm__ __volatile__("mrs %0, fpsr" : "=r"(originalNativeStatus));
+        const auto originalEnvironment = HoldFloatingPointExceptions();
+        ASSERT_TRUE(originalEnvironment);
+        ScopeExit restore([&]()noexcept{
+            if(!SetFloatingPointEnvironment(*originalEnvironment))
+                __builtin_trap();
+            __asm__ __volatile__("msr fpsr, %0" : : "r"(originalNativeStatus));
+            errno = originalError;
+        });
+
+        constexpr Array<u32, 2> s_DenormalModes = { _DN_SAVE, _DN_FLUSH };
+        constexpr Array<i32, 4> s_Modes = { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
+        constexpr Array<i32, 2> s_InitialFlags = { 0, FE_INEXACT };
+        const SIMDVectorSingle x = VectorSetInt(1u, 0x3f800000u, 0x3f800000u, 0x3f800000u);
+        const SIMDVectorSingle y = VectorSet(2.0f, 1.0f, 1.0f, 1.0f);
+        constexpr Array<u64, 4> s_NativeSeeds = { 0u, 0x80u, 0x08000000u, 0x08000080u };
+        for(const u32 denormalMode : s_DenormalModes){
+            u32 control{};
+            ASSERT_EQ(_controlfp_s(&control, denormalMode, _MCW_DN), 0);
+            ASSERT_EQ(control & _MCW_DN, denormalMode);
+            ASSERT_EQ(_controlfp_s(&control, control & ~_EM_INVALID, _MCW_EM), 0);
+            for(const i32 mode : s_Modes){
+                ASSERT_TRUE(SetFloatingPointRoundingMode(mode));
+                for(const u64 nativeSeed : s_NativeSeeds){
+                    for(const i32 seed : s_InitialFlags){
+                        const auto expected = ObservePower(MakeNotNull<PowerEvaluate>(FrozenPower), x, y, seed, nativeSeed), actual = ObservePower(MakeNotNull<PowerEvaluate>(CurrentPower), x, y, seed, nativeSeed);
+                        ASSERT_TRUE(expected);
+                        ASSERT_TRUE(actual);
+                        EXPECT_EQ(actual->flags, expected->flags) << denormalMode << ':' << mode << ':' << seed;
+                        EXPECT_EQ(actual->error, expected->error) << denormalMode << ':' << mode << ':' << seed;
+                        EXPECT_EQ(actual->nativeStatus, expected->nativeStatus) << denormalMode << ':' << mode << ':' << seed;
+                        EXPECT_EQ(actual->rawNativeStatus, expected->rawNativeStatus) << denormalMode << ':' << mode << ':' << seed;
+                        for(usize lane = 0u; lane < 4u; ++lane)
+                            EXPECT_EQ(VectorGetIntByIndex(actual->value, lane), VectorGetIntByIndex(expected->value, lane)) << denormalMode << ':' << mode << ':' << seed << ':' << lane;
+                    }
+                }
+            }
+        }
+#endif
+    }
+}
+
+void VerifyMath_MultiplyExpressionsPreserveCompilerRoundingPolicyAndSignedZero(){
+    native{
+        using namespace NWB::Tests::MathStorageCasesDetail;
+        Array<volatile f32, 4u> first = { 0x1.0008p+0f, -0x1.0008p+0f, 0.0f, -0.0f };
+        Array<volatile f32, 4u> second = { 0x1.fffp-1f, 0x1.fffp-1f, -0.0f, 1.0f };
+        Array<volatile f32, 4u> addend = { -1.0f, 1.0f, -0.0f, -0.0f };
+        Array<volatile f32, 4u> difference = { 1.0f, -1.0f, -0.0f, 0.0f };
+        const SIMDVectorSingle lhs = VectorSet(first[0], first[1], first[2], first[3]);
+        const SIMDVectorSingle rhs = VectorSet(second[0], second[1], second[2], second[3]);
+        const SIMDVectorSingle sum = VectorMultiplyAddExpression(lhs, rhs, VectorSet(addend[0], addend[1], addend[2], addend[3]));
+        const SIMDVectorSingle subtraction = VectorNegativeMultiplySubtractExpression(lhs, rhs, VectorSet(difference[0], difference[1], difference[2], difference[3]));
+        for(usize lane = 0u; lane < 4u; ++lane){
+            EXPECT_EQ(BitCast<u32>(VectorGetByIndex(sum, lane)), BitCast<u32>(LegacyMultiplyAddExpression(first[lane], second[lane], addend[lane]))) << lane;
+            EXPECT_EQ(BitCast<u32>(VectorGetByIndex(subtraction, lane)), BitCast<u32>(LegacyNegativeMultiplySubtractExpression(first[lane], second[lane], difference[lane]))) << lane;
+        }
+    }
+}
+
+void VerifyMath_OrderedDoubleClampPreservesZeroNanAndSubnormalPayloads(){
+    native{
+#pragma STDC FENV_ACCESS ON
+#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_AVX)
+        const u32 originalControl = _mm_getcsr();
+#endif
+        const auto originalEnvironment = HoldFloatingPointExceptions();
+        ASSERT_TRUE(originalEnvironment);
+        NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
+#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_AVX)
+        ScopeExit restoreControl([&]()noexcept{
+            _mm_setcsr(originalControl);
+        });
+        constexpr Array<u32, 4> s_Modes = { 0u, 0x40u, 0x8000u, 0x8040u };
+        const u32 heldControl = _mm_getcsr();
+#else
+        constexpr Array<u32, 1> s_Modes = { 0u };
+#endif
+        Array<Array<volatile u64, 4u>, 2u> bits = {{
+            { 0x8000000000000000ull, 0u, 0x7ff8123456789abcull, 0xfff8abcdef012345ull },
+            { 1u, 0x8000000000000001ull, 0x7ff0000000000000ull, 0xfff0000000000000ull },
+        }};
+        const Array<Array<u64, 4>, 2> expected = {{
+            { 0x8000000000000000ull, 0u, 0x7ff8123456789abcull, 0xfff8abcdef012345ull },
+            { 1u, 0x8000000000000001ull, 0x3ff0000000000000ull, 0xbff0000000000000ull },
+        }};
+        for(const u32 mode : s_Modes){
+#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_AVX)
+            _mm_setcsr((heldControl & ~(0x8040u | 0x3fu)) | mode);
+#endif
+            for(usize row = 0u; row < LengthOf(bits); ++row){
+                const SIMDVectorDouble input = VectorDoubleSetInt(bits[row][0], bits[row][1], bits[row][2], bits[row][3]);
+                const SIMDVectorDouble result = VectorDoubleClampOrdered(input, VectorDoubleReplicate(-1.0), VectorDoubleReplicate(1.0));
+                for(usize lane = 0u; lane < 4u; ++lane)
+                    EXPECT_EQ(VectorDoubleGetIntByIndex(result, lane), expected[row][lane]) << mode << ':' << row << ':' << lane;
+            }
+        }
+        const SIMDVectorDouble zeroTies = VectorDoubleClampOrdered(VectorDoubleSet(-0.0, 0.0, -Limit<f64>::s_Infinity, Limit<f64>::s_Infinity), VectorDoubleReplicate(0.0), VectorDoubleReplicate(-0.0));
+        EXPECT_EQ(VectorDoubleGetIntX(zeroTies), 0x8000000000000000ull);
+        EXPECT_EQ(VectorDoubleGetIntY(zeroTies), 0u);
+        EXPECT_EQ(VectorDoubleGetIntZ(zeroTies), 0u);
+        EXPECT_EQ(VectorDoubleGetIntW(zeroTies), 0x8000000000000000ull);
+    }
+}
+
+void VerifyMath_MinMaxReturnSecondOperandForSignedZeroAndUnorderedLanes(){
+    native{
+        Array<Array<volatile u32, 4u>, 4u> singleBits = {{
+            { 0u, 0x80000000u, 0x7FC12345u, 0x40E00000u },
+            { 0x80000000u, 0u, 0x40800000u, 0x7FC56789u },
+            { 0x7FC12345u, 0xFFC12345u, 0x7F800000u, 0xFF800000u },
+            { 0x7FC56789u, 0xFFC56789u, 0x7F800000u, 0xFF800000u }
+        }};
+        Array<Array<volatile u64, 4u>, 4u> doubleBits = {{
+            { 0u, 0x8000000000000000u, 0x7FF8123456789ABCu, 0x401C000000000000u },
+            { 0x8000000000000000u, 0u, 0x4010000000000000u, 0x7FF8ABCDEF012345u },
+            { 0x7FF8123456789ABCu, 0xFFF8123456789ABCu, 0x7FF0000000000000u, 0xFFF0000000000000u },
+            { 0x7FF8ABCDEF012345u, 0xFFF8ABCDEF012345u, 0x7FF0000000000000u, 0xFFF0000000000000u }
+        }};
+        for(usize pair = 0u; pair < LengthOf(singleBits); pair += 2u){
+            for(const b8 reverse : { false, true }){
+                const usize firstRow = pair + (reverse ? 1u : 0u);
+                const usize secondRow = pair + (reverse ? 0u : 1u);
+                const SIMDVectorSingle first = VectorSetInt(singleBits[firstRow][0], singleBits[firstRow][1], singleBits[firstRow][2], singleBits[firstRow][3]);
+                const SIMDVectorSingle second = VectorSetInt(singleBits[secondRow][0], singleBits[secondRow][1], singleBits[secondRow][2], singleBits[secondRow][3]);
+                const SIMDVectorSingle minimum = VectorMin(first, second);
+                const SIMDVectorSingle maximum = VectorMax(first, second);
+                const SIMDVectorDouble firstDouble = VectorDoubleSetInt(doubleBits[firstRow][0], doubleBits[firstRow][1], doubleBits[firstRow][2], doubleBits[firstRow][3]);
+                const SIMDVectorDouble secondDouble = VectorDoubleSetInt(doubleBits[secondRow][0], doubleBits[secondRow][1], doubleBits[secondRow][2], doubleBits[secondRow][3]);
+                const SIMDVectorDouble minimumDouble = VectorDoubleMin(firstDouble, secondDouble);
+                const SIMDVectorDouble maximumDouble = VectorDoubleMax(firstDouble, secondDouble);
+                for(usize lane = 0u; lane < 4u; ++lane){
+                    EXPECT_EQ(VectorGetIntByIndex(minimum, lane), singleBits[secondRow][lane]) << pair << ':' << reverse << ':' << lane;
+                    EXPECT_EQ(VectorGetIntByIndex(maximum, lane), singleBits[secondRow][lane]) << pair << ':' << reverse << ':' << lane;
+                    EXPECT_EQ(VectorDoubleGetIntByIndex(minimumDouble, lane), doubleBits[secondRow][lane]) << pair << ':' << reverse << ':' << lane;
+                    EXPECT_EQ(VectorDoubleGetIntByIndex(maximumDouble, lane), doubleBits[secondRow][lane]) << pair << ':' << reverse << ':' << lane;
+                }
+            }
+        }
+    }
+}
+
+void VerifyMath_SingleSquareRootsPreserveSignedZeroSubnormalsAndInfinityWithoutInvalidExceptions(){
+    native{
+#if defined(NWB_HAS_NEON) && !defined(NWB_HAS_NEON64)
+        GTEST_SKIP() << "This case requires native vector square root and division.";
+#else
+#pragma STDC FENV_ACCESS ON
+        const auto originalEnvironment = HoldFloatingPointExceptions();
+        ASSERT_TRUE(originalEnvironment);
+        NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
+
+        Array<volatile u32, 4u> runtimeBits = { 0u, 0x80000000u, 0x7f800000u, 2u };
+        const SIMDVectorSingle input = VectorSetInt(runtimeBits[0], runtimeBits[1], runtimeBits[2], runtimeBits[3]);
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+        const SIMDVectorSingle root = VectorSqrt(input);
+        const i32 rootInvalid = TestFloatingPointExceptions(FE_INVALID);
+        EXPECT_EQ(rootInvalid, 0);
+        const Array<u32, 4> expectedRoot = { 0u, 0x80000000u, 0x7f800000u, BitCast<u32>(0x1p-74f) };
+        for(usize lane = 0u; lane < 4u; ++lane)
+            EXPECT_EQ(VectorGetIntByIndex(root, lane), expectedRoot[lane]) << lane;
+
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+        const SIMDVectorSingle reciprocalRoot = VectorReciprocalSqrt(input);
+        const i32 reciprocalInvalid = TestFloatingPointExceptions(FE_INVALID);
+        EXPECT_EQ(reciprocalInvalid, 0);
+        const Array<u32, 4> expectedReciprocal = { 0x7f800000u, 0xff800000u, 0u, BitCast<u32>(0x1p+74f) };
+        for(usize lane = 0u; lane < 4u; ++lane)
+            EXPECT_EQ(VectorGetIntByIndex(reciprocalRoot, lane), expectedReciprocal[lane]) << lane;
+#endif
+    }
+}
+
+void VerifyMath_DoubleVectorRetainsPrecisionCancellationSubnormalsAndSignedZero(){
+    native{
+        using namespace NWB::Tests::MathStorageCasesDetail;
+        const SIMDVectorDouble precision = SIMDVectorDouble{ 0x1p+40, 0x1p-40, -0x1p+40, -0x1p-40 } + SIMDVectorDouble{ 1., 0x1p-80, -1., -0x1p-80 };
+        EXPECT_EQ(precision.x, 0x1.0000000001p+40);
+        EXPECT_EQ(precision.y, 0x1.0000000001p-40);
+        EXPECT_EQ(precision.z, -0x1.0000000001p+40);
+        EXPECT_EQ(precision.w, -0x1.0000000001p-40);
+
+        Array<Array<volatile f64, 4u>, 3u> runtimeInputs = {{
+            { 0x1.0000002p+0, -0x1.0000002p+0, 0.0, -0.0 },
+            { 0x1.ffffffcp-1, 0x1.ffffffcp-1, -0.0, 1.0 },
+            { -1.0, 1.0, -0.0, -0.0 },
+        }};
+        const SIMDVectorDouble first = VectorDoubleSet(runtimeInputs[0][0], runtimeInputs[0][1], runtimeInputs[0][2], runtimeInputs[0][3]);
+        const SIMDVectorDouble second = VectorDoubleSet(runtimeInputs[1][0], runtimeInputs[1][1], runtimeInputs[1][2], runtimeInputs[1][3]);
+        const SIMDVectorDouble addend = VectorDoubleSet(runtimeInputs[2][0], runtimeInputs[2][1], runtimeInputs[2][2], runtimeInputs[2][3]);
+        const SIMDVectorDouble expression = DoubleMultiplyAddExpression(first, second, addend);
+        const SIMDVectorDouble separate = DoubleMultiplyThenAdd(first, second, addend);
+        const SIMDVectorDouble namedExpression = VectorDoubleMultiplyAddExpression(first, second, addend);
+        for(usize lane = 0u; lane < 4u; ++lane){
+            const u64 expectedExpression = BitCast<u64>(LegacyDoubleMultiplyAddExpression(first[lane], second[lane], addend[lane]));
+            EXPECT_EQ(BitCast<u64>(expression[lane]), expectedExpression) << lane;
+            EXPECT_EQ(BitCast<u64>(namedExpression[lane]), expectedExpression) << lane;
+            EXPECT_EQ(BitCast<u64>(separate[lane]), BitCast<u64>(LegacyDoubleMultiplyThenAdd(first[lane], second[lane], addend[lane]))) << lane;
+        }
+
+        const SIMDVectorDouble subnormal = SIMDVectorDouble{ BitCast<f64>(u64{ 1u }), BitCast<f64>(u64{ 3u }), -BitCast<f64>(u64{ 1u }), -BitCast<f64>(u64{ 3u }) } * SIMDVectorDouble{ 2., 0.5, 2., 0.5 };
+        EXPECT_EQ(BitCast<u64>(subnormal.x), 2u);
+        EXPECT_EQ(BitCast<u64>(subnormal.y), 2u);
+        EXPECT_EQ(BitCast<u64>(subnormal.z), 0x8000000000000002u);
+        EXPECT_EQ(BitCast<u64>(subnormal.w), 0x8000000000000002u);
+        const SIMDVectorDouble signedZero = SIMDVectorDouble{ -0., 0., -0., 0. } * SIMDVectorDouble{ 1., -1., -1., 1. };
+        EXPECT_TRUE(SignBit(signedZero.x));
+        EXPECT_TRUE(SignBit(signedZero.y));
+        EXPECT_FALSE(SignBit(signedZero.z));
+        EXPECT_FALSE(SignBit(signedZero.w));
+    }
+}
+
+void VerifyMath_MultiplySubtractRetainsCancellationDirectionAndSignedZero(){
+    native{
+#pragma STDC FENV_ACCESS ON
+        const auto originalEnvironment = HoldFloatingPointExceptions();
+        ASSERT_TRUE(originalEnvironment);
+        NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
+        ASSERT_TRUE(SetFloatingPointRoundingMode(FE_TONEAREST));
+
+        Array<Array<volatile f64, 4u>, 3u> doubleInputs = {{
+            { 0x1.0000002p+0, -0x1.0000002p+0, 1.0, -0.0 },
+            { 0x1.ffffffcp-1, 0x1.ffffffcp-1, 1.0, 1.0 },
+            { 1.0, -1.0, 1.0, 0.0 }
+        }};
+        const SIMDVectorDouble first = VectorDoubleSet(doubleInputs[0][0], doubleInputs[0][1], doubleInputs[0][2], doubleInputs[0][3]);
+        const SIMDVectorDouble second = VectorDoubleSet(doubleInputs[1][0], doubleInputs[1][1], doubleInputs[1][2], doubleInputs[1][3]);
+        const SIMDVectorDouble difference = VectorDoubleSet(doubleInputs[2][0], doubleInputs[2][1], doubleInputs[2][2], doubleInputs[2][3]);
+        const SIMDVectorDouble productMinusDifference = VectorDoubleMultiplySubtract(first, second, difference);
+        const SIMDVectorDouble productPlusNegativeDifference = VectorDoubleMultiplyAdd(first, second, VectorDoubleNegate(difference));
+        const SIMDVectorDouble differenceMinusProduct = VectorDoubleNegativeMultiplySubtract(first, second, difference);
+#if defined(NWB_HAS_FMA3) || defined(NWB_HAS_NEON)
+        constexpr u64 s_NegativeDoubleResidual = BitCast<u64>(-0x1p-54);
+        constexpr u64 s_PositiveDoubleResidual = BitCast<u64>(0x1p-54);
+#else
+        constexpr u64 s_NegativeDoubleResidual = 0u;
+        constexpr u64 s_PositiveDoubleResidual = 0u;
+#endif
+        constexpr Array<u64, 4> s_DoubleExpected = { s_NegativeDoubleResidual, s_PositiveDoubleResidual, 0u, 0x8000000000000000u };
+        constexpr Array<u64, 4> s_DoubleNegativeExpected = { s_PositiveDoubleResidual, s_NegativeDoubleResidual, 0u, 0u };
+
+        Array<Array<volatile f32, 4u>, 3u> singleInputs = {{
+            { 0x1.0008p+0f, -0x1.0008p+0f, 1.0f, -0.0f },
+            { 0x1.fffp-1f, 0x1.fffp-1f, 1.0f, 1.0f },
+            { 1.0f, -1.0f, 1.0f, 0.0f }
+        }};
+        const SIMDVectorSingle singleFirst = VectorSet(singleInputs[0][0], singleInputs[0][1], singleInputs[0][2], singleInputs[0][3]);
+        const SIMDVectorSingle singleSecond = VectorSet(singleInputs[1][0], singleInputs[1][1], singleInputs[1][2], singleInputs[1][3]);
+        const SIMDVectorSingle singleDifference = VectorSet(singleInputs[2][0], singleInputs[2][1], singleInputs[2][2], singleInputs[2][3]);
+        const SIMDVectorSingle singleResult = VectorMultiplySubtract(singleFirst, singleSecond, singleDifference);
+#if defined(NWB_HAS_FMA3) || defined(NWB_HAS_NEON64)
+        constexpr u32 s_NegativeSingleResidual = BitCast<u32>(-0x1p-26f);
+        constexpr u32 s_PositiveSingleResidual = BitCast<u32>(0x1p-26f);
+#else
+        constexpr u32 s_NegativeSingleResidual = 0u;
+        constexpr u32 s_PositiveSingleResidual = 0u;
+#endif
+        constexpr Array<u32, 4> s_SingleExpected = { s_NegativeSingleResidual, s_PositiveSingleResidual, 0u, 0x80000000u };
+        for(usize lane = 0u; lane < 4u; ++lane){
+            EXPECT_EQ(VectorDoubleGetIntByIndex(productMinusDifference, lane), s_DoubleExpected[lane]) << lane;
+            EXPECT_EQ(VectorDoubleGetIntByIndex(productPlusNegativeDifference, lane), s_DoubleExpected[lane]) << lane;
+            EXPECT_EQ(VectorDoubleGetIntByIndex(differenceMinusProduct, lane), s_DoubleNegativeExpected[lane]) << lane;
+            EXPECT_EQ(VectorGetIntByIndex(singleResult, lane), s_SingleExpected[lane]) << lane;
+        }
+    }
+}
+
+void VerifyMath_DoubleVectorFloorAndCeilingPreserveBinary64BoundaryValues(){
+    native{
+        alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 6> inputs = {{
+            { 0.0, -0.0, 0x1p-1022, -0x1p-1022 },
+            { BitCast<f64>(u64{ 1u }), -BitCast<f64>(u64{ 1u }), BitCast<f64>(u64{ 3u }), -BitCast<f64>(u64{ 3u }) },
+            { 0x1.fffffffffffffp-1, 0x1.0000000000001p+0, -0x1.fffffffffffffp-1, -0x1.0000000000001p+0 },
+            { 0x1p+53, -0x1p+53, 0x1.fffffffffffffp+51, -0x1.fffffffffffffp+51 },
+            { Limit<f64>::s_Infinity, -Limit<f64>::s_Infinity, Limit<f64>::s_Max, -Limit<f64>::s_Max },
+            { Limit<f64>::s_QuietNaN, -Limit<f64>::s_QuietNaN, 0x1.0000000000001p+52, -0x1.0000000000001p+52 },
+        }};
+        for(const SIMDVectorDouble input : inputs){
+            const SIMDVectorDouble floorVal = VectorDoubleFloor(input);
+            const SIMDVectorDouble ceilingVal = VectorDoubleCeiling(input);
+            const SIMDVectorDouble truncateVal = VectorDoubleTruncate(input);
+            for(usize lane = 0u; lane < 4u; ++lane){
+                if(IsNaN(input[lane])){
+                    EXPECT_TRUE(IsNaN(floorVal[lane]));
+                    EXPECT_TRUE(IsNaN(ceilingVal[lane]));
+                    EXPECT_TRUE(IsNaN(truncateVal[lane]));
+                    continue;
+                }
+                EXPECT_EQ(BitCast<u64>(floorVal[lane]), BitCast<u64>(Floor(input[lane]))) << lane;
+                EXPECT_EQ(BitCast<u64>(ceilingVal[lane]), BitCast<u64>(Ceil(input[lane]))) << lane;
+                EXPECT_EQ(BitCast<u64>(truncateVal[lane]), BitCast<u64>(Truncate(input[lane]))) << lane;
+            }
+        }
+    }
+}
+
+void VerifyMath_DoubleVectorRoundPreservesTiesSignedZeroAndLargeIntegralLanes(){
+    native{
+        alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 4> inputs = {{
+            { 0.5, -0.5, 1.5, -1.5 },
+            { 2.5, -2.5, 0x1.fffffffffffffp-2, -0x1.fffffffffffffp-2 },
+            { 0x1p+53, -0x1p+53, 0x1.0000000000001p+52, -0x1.0000000000001p+52 },
+            { -0.0, 0.0, Limit<f64>::s_Infinity, -Limit<f64>::s_Infinity },
+        }};
+        alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 4> expected = {{
+            { 0.0, -0.0, 2.0, -2.0 },
+            { 2.0, -2.0, 0.0, -0.0 },
+            { 0x1p+53, -0x1p+53, 0x1.0000000000001p+52, -0x1.0000000000001p+52 },
+            { -0.0, 0.0, Limit<f64>::s_Infinity, -Limit<f64>::s_Infinity },
+        }};
+        for(usize index = 0u; index < LengthOf(inputs); ++index){
+            const SIMDVectorDouble rounded = VectorDoubleRound(inputs[index]);
+            for(usize lane = 0u; lane < 4u; ++lane)
+                EXPECT_EQ(BitCast<u64>(rounded[lane]), BitCast<u64>(expected[index][lane])) << index << ':' << lane;
+        }
+    }
+}
+
+void VerifyMath_SingleFixedRoundingPreservesTiesSignedZeroAndSpecialValuesAcrossAmbientModes(){
+    native{
+#pragma STDC FENV_ACCESS ON
+        const auto originalEnvironment = HoldFloatingPointExceptions();
+        ASSERT_TRUE(originalEnvironment);
+        NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
+
+        const Array<i32, 4> modes = { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
+        Array<Array<volatile f32, 4u>, 4u> runtimeInputs = {{
+            { 0.5f, -0.5f, 1.5f, -1.5f },
+            { 0.25f, -0.25f, 2.5f, -2.5f },
+            { -0.0f, 0.0f, 0x1p+23f, -0x1p+23f },
+            { 0x1p-149f, -0x1p-149f, 0x1.fffffep+22f, -0x1.fffffep+22f },
+        }};
+        const Array<Array<Array<f32, 4>, 4>, 4> expected = {{
+            {{
+                { 0.0f, -0.0f, 2.0f, -2.0f },
+                { 0.0f, -0.0f, 2.0f, -2.0f },
+                { -0.0f, 0.0f, 0x1p+23f, -0x1p+23f },
+                { 0.0f, -0.0f, 0x1p+23f, -0x1p+23f },
+            }},
+            {{
+                { 0.0f, -0.0f, 1.0f, -1.0f },
+                { 0.0f, -0.0f, 2.0f, -2.0f },
+                { -0.0f, 0.0f, 0x1p+23f, -0x1p+23f },
+                { 0.0f, -0.0f, 0x1.fffffcp+22f, -0x1.fffffcp+22f },
+            }},
+            {{
+                { 0.0f, -1.0f, 1.0f, -2.0f },
+                { 0.0f, -1.0f, 2.0f, -3.0f },
+                { -0.0f, 0.0f, 0x1p+23f, -0x1p+23f },
+                { 0.0f, -1.0f, 0x1.fffffcp+22f, -0x1p+23f },
+            }},
+            {{
+                { 1.0f, -0.0f, 2.0f, -1.0f },
+                { 1.0f, -0.0f, 3.0f, -2.0f },
+                { -0.0f, 0.0f, 0x1p+23f, -0x1p+23f },
+                { 1.0f, -0.0f, 0x1p+23f, -0x1.fffffcp+22f },
+            }},
+        }};
+        Array<volatile u32, 4u> specialBits = { 0x7f800000u, 0xff800000u, 0x7fc01234u, 0xffc05678u };
+        for(const i32 mode : modes){
+            ASSERT_TRUE(SetFloatingPointRoundingMode(mode));
+            for(usize row = 0u; row < LengthOf(runtimeInputs); ++row){
+                const SIMDVectorSingle input = VectorSet(runtimeInputs[row][0], runtimeInputs[row][1], runtimeInputs[row][2], runtimeInputs[row][3]);
+                alignas(SIMDVectorSingle) const Array<SIMDVectorSingle, 4> results = { VectorRound(input), VectorTruncate(input), VectorFloor(input), VectorCeiling(input) };
+                for(usize operation = 0u; operation < LengthOf(results); ++operation){
+                    for(usize lane = 0u; lane < 4u; ++lane)
+                        EXPECT_EQ(VectorGetIntByIndex(results[operation], lane), BitCast<u32>(expected[operation][row][lane])) << mode << ':' << operation << ':' << row << ':' << lane;
+                }
+            }
+            const SIMDVectorSingle special = VectorSetInt(specialBits[0], specialBits[1], specialBits[2], specialBits[3]);
+            ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+            alignas(SIMDVectorSingle) const Array<SIMDVectorSingle, 4> specialResults = { VectorRound(special), VectorTruncate(special), VectorFloor(special), VectorCeiling(special) };
+            const i32 invalid = TestFloatingPointExceptions(FE_INVALID);
+            EXPECT_EQ(invalid, 0) << mode;
+            for(usize operation = 0u; operation < LengthOf(specialResults); ++operation){
+                for(usize lane = 0u; lane < 4u; ++lane)
+                    EXPECT_EQ(VectorGetIntByIndex(specialResults[operation], lane), specialBits[lane]) << mode << ':' << operation << ':' << lane;
+            }
+        }
+    }
+}
+
+void VerifyMath_DoubleFixedRoundingIgnoresAmbientDirectedModesAndKeepsNearestTiesAndSignedZero(){
+    native{
+#pragma STDC FENV_ACCESS ON
+        const auto originalEnvironment = HoldFloatingPointExceptions();
+        ASSERT_TRUE(originalEnvironment);
+        NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
+
+        const Array<i32, 3> roundingModes = { FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
+        Array<Array<volatile f64, 4u>, 4u> runtimeInputs = {{
+            { 0.5, -0.5, 1.5, -1.5 },
+            { 0.25, -0.25, 2.5, -2.5 },
+            { -0.0, 0.0, 0x1p+53, -0x1p+53 },
+            { 0x1p-1074, -0x1p-1074, 0x1.fffffffffffffp+51, -0x1.fffffffffffffp+51 },
+        }};
+        alignas(SIMDVectorDouble) const Array<Array<SIMDVectorDouble, 4>, 4> expected = {{
+            {{
+                { 0.0, -0.0, 2.0, -2.0 },
+                { 0.0, -0.0, 2.0, -2.0 },
+                { -0.0, 0.0, 0x1p+53, -0x1p+53 },
+                { 0.0, -0.0, 0x1p+52, -0x1p+52 },
+            }},
+            {{
+                { 0.0, -0.0, 1.0, -1.0 },
+                { 0.0, -0.0, 2.0, -2.0 },
+                { -0.0, 0.0, 0x1p+53, -0x1p+53 },
+                { 0.0, -0.0, 0x1.ffffffffffffep+51, -0x1.ffffffffffffep+51 },
+            }},
+            {{
+                { 0.0, -1.0, 1.0, -2.0 },
+                { 0.0, -1.0, 2.0, -3.0 },
+                { -0.0, 0.0, 0x1p+53, -0x1p+53 },
+                { 0.0, -1.0, 0x1.ffffffffffffep+51, -0x1p+52 },
+            }},
+            {{
+                { 1.0, -0.0, 2.0, -1.0 },
+                { 1.0, -0.0, 3.0, -2.0 },
+                { -0.0, 0.0, 0x1p+53, -0x1p+53 },
+                { 1.0, -0.0, 0x1p+52, -0x1.ffffffffffffep+51 },
+            }},
+        }};
+        for(const i32 mode : roundingModes){
+            const auto setStatus = SetFloatingPointRoundingMode(mode);
+            EXPECT_TRUE(setStatus);
+            if(!setStatus)
+                continue;
+            for(usize row = 0u; row < LengthOf(runtimeInputs); ++row){
+                const SIMDVectorDouble input = VectorDoubleSet(runtimeInputs[row][0], runtimeInputs[row][1], runtimeInputs[row][2], runtimeInputs[row][3]);
+                alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 4> results = { VectorDoubleRound(input), VectorDoubleTruncate(input), VectorDoubleFloor(input), VectorDoubleCeiling(input) };
+                for(usize operation = 0u; operation < LengthOf(results); ++operation){
+                    for(usize lane = 0u; lane < 4u; ++lane)
+                        EXPECT_EQ(BitCast<u64>(results[operation][lane]), BitCast<u64>(expected[operation][row][lane])) << mode << ':' << operation << ':' << row << ':' << lane;
+                }
+            }
+        }
+        const auto restoreStatus = SetFloatingPointEnvironment(*originalEnvironment);
+        EXPECT_TRUE(restoreStatus);
+        if(restoreStatus)
+            restoreEnvironment.release();
+    }
+}
+
+native{
+namespace NWB::Tests::MathStorageCasesDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+ThrowingStreamLoadResult<SIMDVectorSingle> LoadFloat(const SingleStreamLoadInput&)noexcept{ return {}; }
+
+ThrowingStreamLoadResult<SIMDVectorDouble> LoadDouble(const DoubleStreamLoadInput&)noexcept{ return {}; }
+
 NWB_NOINLINE SIMDVectorSingle FrozenPower(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
     return VectorSet(Pow(VectorGetX(x), VectorGetX(y)), Pow(VectorGetY(x), VectorGetY(y)), Pow(VectorGetZ(x), VectorGetZ(y)), Pow(VectorGetW(x), VectorGetW(y)));
 }
@@ -1089,7 +1589,7 @@ NWB_NOINLINE SIMDVectorSingle CurrentPower(const SIMDVectorSingle x, const SIMDV
     return VectorPow(x, y);
 }
 
-[[nodiscard]] Expected<PowerObservation> ObservePower(const NotNull<PowerEvaluate> evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y, const i32 initialFlags, [[maybe_unused]] const u64 initialNativeFlags)noexcept{
+Expected<PowerObservation> ObservePower(const NotNull<PowerEvaluate> evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y, const i32 initialFlags, [[maybe_unused]] const u64 initialNativeFlags)noexcept{
 #pragma STDC FENV_ACCESS ON
 #if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
     const u64 clearNativeStatus = 0u;
@@ -1108,7 +1608,7 @@ NWB_NOINLINE SIMDVectorSingle CurrentPower(const SIMDVectorSingle x, const SIMDV
 #endif
     errno = E2BIG;
     const SIMDVectorSingle value = evaluate.get()(x, y);
-    const i32 error = errno;
+    const i32 errCode = errno;
     const i32 flags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
     u32 nativeStatus = 0u;
 #if defined(NWB_PLATFORM_WINDOWS)
@@ -1118,166 +1618,10 @@ NWB_NOINLINE SIMDVectorSingle CurrentPower(const SIMDVectorSingle x, const SIMDV
 #if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
     __asm__ __volatile__("mrs %0, fpsr" : "=r"(rawNativeStatus));
 #endif
-    return PowerObservation{ value, rawNativeStatus, flags, error, nativeStatus };
+    return PowerObservation{ value, rawNativeStatus, flags, errCode, nativeStatus };
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(Math, VectorPowerPreservesMixedSpecialsAndAdjacentSrgbRoundingWithSeededState){
-#pragma STDC FENV_ACCESS ON
-    const i32 originalError = errno;
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
-    u64 originalNativeStatus{};
-    __asm__ __volatile__("mrs %0, fpsr" : "=r"(originalNativeStatus));
-#endif
-    const auto originalEnvironment = HoldFloatingPointExceptions();
-    ASSERT_TRUE(originalEnvironment);
-    ScopeExit restore([&]()noexcept{
-        if(!SetFloatingPointEnvironment(*originalEnvironment))
-            __builtin_trap();
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
-        __asm__ __volatile__("msr fpsr, %0" : : "r"(originalNativeStatus));
-#endif
-        errno = originalError;
-    });
-
-    struct PowerCase{ PowerWords x, y; };
-    constexpr Array<PowerCase, 8> s_Cases = {{
-        { { 1u, 0x80000001u, 0x007fffffu, 0x3f800000u }, { 0x3f800000u, 0x3f800000u, 0x3f800000u, 0x4019999au } },
-        { { 0u, 0x3f800000u, 0x3e800000u, 0x3f000000u }, { 0x3ed55555u, 0xc0800000u, 0x80000000u, 0x3f800000u } },
-        { { 0x37800000u, 0x47800000u, 0u, 0x3f800000u }, { 0xc0800000u, 0x40800000u, 0x40400000u, 0u } },
-        { { 0x80000000u, 0u, 0xbf800000u, 0x7f7fffffu }, { 0xc0400000u, 0xbf800000u, 0x3f000000u, 0x40000000u } },
-        { { 0x7fc00123u, 0x7f800125u, 0xbf800000u, 0x3f800000u }, { 0u, 0x3f800000u, 0xff800126u, 0x7f800125u } },
-        { { 1u, 0x007fffffu, 0x00800000u, 0xff800000u }, { 0x40000000u, 0x3f000000u, 0x40200000u, 0xc0400000u } },
-        { { 0x3d32b0b2u, 0x3d32b0b3u, 0x3d32b0b4u, 0x3eb048afu }, { 0x3ed55555u, 0x3ed55555u, 0x3ed55555u, 0x3ed55555u } },
-        { { 0x3eb048aeu, 0x3eb048afu, 0x3eb048b0u, 0x3d2dc666u }, { 0x3ed55555u, 0x3ed55555u, 0x3ed55555u, 0xc13fc46au } }
-    }};
-    constexpr Array<i32, 4> s_Modes = { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
-    constexpr Array<i32, 2> s_InitialFlags = { 0, FE_INEXACT };
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
-    constexpr Array<u32, 2> s_DenormalModes = { _DN_SAVE, _DN_FLUSH };
-#else
-    constexpr Array<u32, 1> s_DenormalModes = { 0u };
-#endif
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
-    constexpr Array<u64, 4> s_NativeSeeds = { 0u, 0x80u, 0x08000000u, 0x08000080u };
-#else
-    constexpr Array<u64, 1> s_NativeSeeds = { 0u };
-#endif
-    for(const u32 denormalMode : s_DenormalModes){
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
-        u32 control{};
-        ASSERT_EQ(_controlfp_s(&control, denormalMode, _MCW_DN), 0);
-        ASSERT_EQ(control & _MCW_DN, denormalMode);
-#endif
-        for(const i32 mode : s_Modes){
-            ASSERT_TRUE(SetFloatingPointRoundingMode(mode));
-            for(const u64 nativeSeed : s_NativeSeeds){
-                for(const i32 seed : s_InitialFlags){
-                    for(usize index = 0u; index < LengthOf(s_Cases); ++index){
-                        const SIMDVectorSingle x = BitCast<SIMDVectorSingle>(s_Cases[index].x), y = BitCast<SIMDVectorSingle>(s_Cases[index].y);
-                        const auto expected = ObservePower(MakeNotNull<PowerEvaluate>(FrozenPower), x, y, seed, nativeSeed), actual = ObservePower(MakeNotNull<PowerEvaluate>(CurrentPower), x, y, seed, nativeSeed);
-                        ASSERT_TRUE(expected);
-                        ASSERT_TRUE(actual);
-                        EXPECT_EQ(actual->flags, expected->flags) << denormalMode << ':' << mode << ':' << seed << ':' << index;
-                        EXPECT_EQ(actual->error, expected->error) << denormalMode << ':' << mode << ':' << seed << ':' << index;
-                        EXPECT_EQ(actual->nativeStatus, expected->nativeStatus) << denormalMode << ':' << mode << ':' << seed << ':' << index;
-                        EXPECT_EQ(actual->rawNativeStatus, expected->rawNativeStatus) << denormalMode << ':' << mode << ':' << seed << ':' << index;
-                        for(usize lane = 0u; lane < 4u; ++lane)
-                            EXPECT_EQ(VectorGetIntByIndex(actual->value, lane), VectorGetIntByIndex(expected->value, lane)) << denormalMode << ':' << mode << ':' << seed << ':' << index << ':' << lane;
-                    }
-                }
-            }
-        }
-    }
-}
-
-
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
-TEST(Math, VectorPowerKeepsDenormalInputStatusWithInvalidTrapEnabled){
-#pragma STDC FENV_ACCESS ON
-    const i32 originalError = errno;
-    u64 originalNativeStatus{};
-    __asm__ __volatile__("mrs %0, fpsr" : "=r"(originalNativeStatus));
-    const auto originalEnvironment = HoldFloatingPointExceptions();
-    ASSERT_TRUE(originalEnvironment);
-    ScopeExit restore([&]()noexcept{
-        if(!SetFloatingPointEnvironment(*originalEnvironment))
-            __builtin_trap();
-        __asm__ __volatile__("msr fpsr, %0" : : "r"(originalNativeStatus));
-        errno = originalError;
-    });
-
-    constexpr Array<u32, 2> s_DenormalModes = { _DN_SAVE, _DN_FLUSH };
-    constexpr Array<i32, 4> s_Modes = { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
-    constexpr Array<i32, 2> s_InitialFlags = { 0, FE_INEXACT };
-    const SIMDVectorSingle x = VectorSetInt(1u, 0x3f800000u, 0x3f800000u, 0x3f800000u);
-    const SIMDVectorSingle y = VectorSet(2.0f, 1.0f, 1.0f, 1.0f);
-    constexpr Array<u64, 4> s_NativeSeeds = { 0u, 0x80u, 0x08000000u, 0x08000080u };
-    for(const u32 denormalMode : s_DenormalModes){
-        u32 control{};
-        ASSERT_EQ(_controlfp_s(&control, denormalMode, _MCW_DN), 0);
-        ASSERT_EQ(control & _MCW_DN, denormalMode);
-        ASSERT_EQ(_controlfp_s(&control, control & ~_EM_INVALID, _MCW_EM), 0);
-        for(const i32 mode : s_Modes){
-            ASSERT_TRUE(SetFloatingPointRoundingMode(mode));
-            for(const u64 nativeSeed : s_NativeSeeds){
-                for(const i32 seed : s_InitialFlags){
-                    const auto expected = ObservePower(MakeNotNull<PowerEvaluate>(FrozenPower), x, y, seed, nativeSeed), actual = ObservePower(MakeNotNull<PowerEvaluate>(CurrentPower), x, y, seed, nativeSeed);
-                    ASSERT_TRUE(expected);
-                    ASSERT_TRUE(actual);
-                    EXPECT_EQ(actual->flags, expected->flags) << denormalMode << ':' << mode << ':' << seed;
-                    EXPECT_EQ(actual->error, expected->error) << denormalMode << ':' << mode << ':' << seed;
-                    EXPECT_EQ(actual->nativeStatus, expected->nativeStatus) << denormalMode << ':' << mode << ':' << seed;
-                    EXPECT_EQ(actual->rawNativeStatus, expected->rawNativeStatus) << denormalMode << ':' << mode << ':' << seed;
-                    for(usize lane = 0u; lane < 4u; ++lane)
-                        EXPECT_EQ(VectorGetIntByIndex(actual->value, lane), VectorGetIntByIndex(expected->value, lane)) << denormalMode << ':' << mode << ':' << seed << ':' << lane;
-                }
-            }
-        }
-    }
-}
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/common/module.h>
-
-#include <tests/common/test_context.adhd.h>
-
-#include <gtest/gtest.h>
-
-#include <global/floating_point_environment.h>
-#include <global/simdmath.h>
-#include <global/simd/vector_clamp_ordered.h>
-#include <global/compile.h>
-#include <global/limit.h>
-#include <global/simplemath.h>
-#include <global/scope_exit.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_vector_rounding_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+#pragma STDC FENV_ACCESS OFF
 NWB_NOINLINE f32 LegacyMultiplyAddExpression(const f32 first, const f32 second, const f32 addend)noexcept{
     return first * second + addend;
 }
@@ -1308,401 +1652,63 @@ NWB_NOINLINE SIMDVectorDouble DoubleMultiplyThenAdd(const SIMDVectorDouble first
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(Math, MultiplyExpressionsPreserveCompilerRoundingPolicyAndSignedZero){
-    // Contraction retains the 2^-26 residual lost by separate rounding.
-    Array<volatile f32, 4u> first = { 0x1.0008p+0f, -0x1.0008p+0f, 0.0f, -0.0f };
-    Array<volatile f32, 4u> second = { 0x1.fffp-1f, 0x1.fffp-1f, -0.0f, 1.0f };
-    Array<volatile f32, 4u> addend = { -1.0f, 1.0f, -0.0f, -0.0f };
-    Array<volatile f32, 4u> difference = { 1.0f, -1.0f, -0.0f, 0.0f };
-    const SIMDVectorSingle lhs = VectorSet(first[0], first[1], first[2], first[3]);
-    const SIMDVectorSingle rhs = VectorSet(second[0], second[1], second[2], second[3]);
-    const SIMDVectorSingle sum = VectorMultiplyAddExpression(lhs, rhs, VectorSet(addend[0], addend[1], addend[2], addend[3]));
-    const SIMDVectorSingle subtraction = VectorNegativeMultiplySubtractExpression(lhs, rhs, VectorSet(difference[0], difference[1], difference[2], difference[3]));
-    for(usize lane = 0u; lane < 4u; ++lane){
-        EXPECT_EQ(BitCast<u32>(VectorGetByIndex(sum, lane)), BitCast<u32>(LegacyMultiplyAddExpression(first[lane], second[lane], addend[lane]))) << lane;
-        EXPECT_EQ(BitCast<u32>(VectorGetByIndex(subtraction, lane)), BitCast<u32>(LegacyNegativeMultiplySubtractExpression(first[lane], second[lane], difference[lane]))) << lane;
-    }
-}
-
-TEST(Math, OrderedDoubleClampPreservesZeroNanAndSubnormalPayloads){
-#pragma STDC FENV_ACCESS ON
-#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_AVX)
-    const u32 originalControl = _mm_getcsr();
-#endif
-    const auto originalEnvironment = HoldFloatingPointExceptions();
-    ASSERT_TRUE(originalEnvironment);
-    NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
-#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_AVX)
-    ScopeExit restoreControl([&]()noexcept{
-        _mm_setcsr(originalControl);
-    });
-#endif
-#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_AVX)
-    constexpr Array<u32, 4> s_Modes = { 0u, 0x40u, 0x8000u, 0x8040u };
-    const u32 heldControl = _mm_getcsr();
-#else
-    constexpr Array<u32, 1> s_Modes = { 0u };
-#endif
-    Array<Array<volatile u64, 4u>, 2u> bits = {{
-        { 0x8000000000000000ull, 0u, 0x7ff8123456789abcull, 0xfff8abcdef012345ull },
-        { 1u, 0x8000000000000001ull, 0x7ff0000000000000ull, 0xfff0000000000000ull },
-    }};
-    const Array<Array<u64, 4>, 2> expected = {{
-        { 0x8000000000000000ull, 0u, 0x7ff8123456789abcull, 0xfff8abcdef012345ull },
-        { 1u, 0x8000000000000001ull, 0x3ff0000000000000ull, 0xbff0000000000000ull },
-    }};
-    for(const u32 mode : s_Modes){
-#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_AVX)
-        _mm_setcsr((heldControl & ~(0x8040u | 0x3fu)) | mode);
-#endif
-        for(usize row = 0u; row < LengthOf(bits); ++row){
-            const SIMDVectorDouble input = VectorDoubleSetInt(bits[row][0], bits[row][1], bits[row][2], bits[row][3]);
-            const SIMDVectorDouble result = VectorDoubleClampOrdered(input, VectorDoubleReplicate(-1.0), VectorDoubleReplicate(1.0));
-            for(usize lane = 0u; lane < 4u; ++lane)
-                EXPECT_EQ(VectorDoubleGetIntByIndex(result, lane), expected[row][lane]) << mode << ':' << row << ':' << lane;
-        }
-    }
-    const SIMDVectorDouble zeroTies = VectorDoubleClampOrdered(VectorDoubleSet(-0.0, 0.0, -Limit<f64>::s_Infinity, Limit<f64>::s_Infinity), VectorDoubleReplicate(0.0), VectorDoubleReplicate(-0.0));
-    EXPECT_EQ(VectorDoubleGetIntX(zeroTies), 0x8000000000000000ull);
-    EXPECT_EQ(VectorDoubleGetIntY(zeroTies), 0u);
-    EXPECT_EQ(VectorDoubleGetIntZ(zeroTies), 0u);
-    EXPECT_EQ(VectorDoubleGetIntW(zeroTies), 0x8000000000000000ull);
-}
-
-TEST(Math, MinMaxReturnSecondOperandForSignedZeroAndUnorderedLanes){
-    Array<Array<volatile u32, 4u>, 4u> singleBits = {{
-        { 0u, 0x80000000u, 0x7FC12345u, 0x40E00000u },
-        { 0x80000000u, 0u, 0x40800000u, 0x7FC56789u },
-        { 0x7FC12345u, 0xFFC12345u, 0x7F800000u, 0xFF800000u },
-        { 0x7FC56789u, 0xFFC56789u, 0x7F800000u, 0xFF800000u }
-    }};
-    Array<Array<volatile u64, 4u>, 4u> doubleBits = {{
-        { 0u, 0x8000000000000000u, 0x7FF8123456789ABCu, 0x401C000000000000u },
-        { 0x8000000000000000u, 0u, 0x4010000000000000u, 0x7FF8ABCDEF012345u },
-        { 0x7FF8123456789ABCu, 0xFFF8123456789ABCu, 0x7FF0000000000000u, 0xFFF0000000000000u },
-        { 0x7FF8ABCDEF012345u, 0xFFF8ABCDEF012345u, 0x7FF0000000000000u, 0xFFF0000000000000u }
-    }};
-    for(usize pair = 0u; pair < LengthOf(singleBits); pair += 2u){
-        for(const b8 reverse : { false, true }){
-            const usize firstRow = pair + (reverse ? 1u : 0u);
-            const usize secondRow = pair + (reverse ? 0u : 1u);
-            const SIMDVectorSingle first = VectorSetInt(singleBits[firstRow][0], singleBits[firstRow][1], singleBits[firstRow][2], singleBits[firstRow][3]);
-            const SIMDVectorSingle second = VectorSetInt(singleBits[secondRow][0], singleBits[secondRow][1], singleBits[secondRow][2], singleBits[secondRow][3]);
-            const SIMDVectorSingle minimum = VectorMin(first, second);
-            const SIMDVectorSingle maximum = VectorMax(first, second);
-            const SIMDVectorDouble firstDouble = VectorDoubleSetInt(doubleBits[firstRow][0], doubleBits[firstRow][1], doubleBits[firstRow][2], doubleBits[firstRow][3]);
-            const SIMDVectorDouble secondDouble = VectorDoubleSetInt(doubleBits[secondRow][0], doubleBits[secondRow][1], doubleBits[secondRow][2], doubleBits[secondRow][3]);
-            const SIMDVectorDouble minimumDouble = VectorDoubleMin(firstDouble, secondDouble);
-            const SIMDVectorDouble maximumDouble = VectorDoubleMax(firstDouble, secondDouble);
-            for(usize lane = 0u; lane < 4u; ++lane){
-                EXPECT_EQ(VectorGetIntByIndex(minimum, lane), singleBits[secondRow][lane]) << pair << ':' << reverse << ':' << lane;
-                EXPECT_EQ(VectorGetIntByIndex(maximum, lane), singleBits[secondRow][lane]) << pair << ':' << reverse << ':' << lane;
-                EXPECT_EQ(VectorDoubleGetIntByIndex(minimumDouble, lane), doubleBits[secondRow][lane]) << pair << ':' << reverse << ':' << lane;
-                EXPECT_EQ(VectorDoubleGetIntByIndex(maximumDouble, lane), doubleBits[secondRow][lane]) << pair << ':' << reverse << ':' << lane;
-            }
-        }
-    }
-}
-
-TEST(Math, SingleSquareRootsPreserveSignedZeroSubnormalsAndInfinityWithoutInvalidExceptions){
-#if defined(NWB_HAS_NEON) && !defined(NWB_HAS_NEON64)
-    GTEST_SKIP() << "This case requires native vector square root and division.";
-#else
-#pragma STDC FENV_ACCESS ON
-    const auto originalEnvironment = HoldFloatingPointExceptions();
-    ASSERT_TRUE(originalEnvironment);
-    NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
-
-    Array<volatile u32, 4u> runtimeBits = { 0u, 0x80000000u, 0x7f800000u, 2u };
-    const SIMDVectorSingle input = VectorSetInt(runtimeBits[0], runtimeBits[1], runtimeBits[2], runtimeBits[3]);
-    ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-    const SIMDVectorSingle root = VectorSqrt(input);
-    const i32 rootInvalid = TestFloatingPointExceptions(FE_INVALID);
-    EXPECT_EQ(rootInvalid, 0);
-    const Array<u32, 4> expectedRoot = { 0u, 0x80000000u, 0x7f800000u, BitCast<u32>(0x1p-74f) };
-    for(usize lane = 0u; lane < 4u; ++lane)
-        EXPECT_EQ(VectorGetIntByIndex(root, lane), expectedRoot[lane]) << lane;
-
-    ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-    const SIMDVectorSingle reciprocalRoot = VectorReciprocalSqrt(input);
-    const i32 reciprocalInvalid = TestFloatingPointExceptions(FE_INVALID);
-    EXPECT_EQ(reciprocalInvalid, 0);
-    const Array<u32, 4> expectedReciprocal = { 0x7f800000u, 0xff800000u, 0u, BitCast<u32>(0x1p+74f) };
-    for(usize lane = 0u; lane < 4u; ++lane)
-        EXPECT_EQ(VectorGetIntByIndex(reciprocalRoot, lane), expectedReciprocal[lane]) << lane;
-#endif
-}
-
-TEST(Math, DoubleVectorRetainsPrecisionCancellationSubnormalsAndSignedZero){
-    const SIMDVectorDouble precision = SIMDVectorDouble{ 0x1p+40, 0x1p-40, -0x1p+40, -0x1p-40 } + SIMDVectorDouble{ 1., 0x1p-80, -1., -0x1p-80 };
-    EXPECT_EQ(precision.x, 0x1.0000000001p+40);
-    EXPECT_EQ(precision.y, 0x1.0000000001p-40);
-    EXPECT_EQ(precision.z, -0x1.0000000001p+40);
-    EXPECT_EQ(precision.w, -0x1.0000000001p-40);
-
-    // Expression contraction retains the 2^-54 residual under the scalar compiler policy.
-    Array<Array<volatile f64, 4u>, 3u> runtimeInputs = {{
-        { 0x1.0000002p+0, -0x1.0000002p+0, 0.0, -0.0 },
-        { 0x1.ffffffcp-1, 0x1.ffffffcp-1, -0.0, 1.0 },
-        { -1.0, 1.0, -0.0, -0.0 },
-    }};
-    const SIMDVectorDouble first = VectorDoubleSet(runtimeInputs[0][0], runtimeInputs[0][1], runtimeInputs[0][2], runtimeInputs[0][3]);
-    const SIMDVectorDouble second = VectorDoubleSet(runtimeInputs[1][0], runtimeInputs[1][1], runtimeInputs[1][2], runtimeInputs[1][3]);
-    const SIMDVectorDouble addend = VectorDoubleSet(runtimeInputs[2][0], runtimeInputs[2][1], runtimeInputs[2][2], runtimeInputs[2][3]);
-    const SIMDVectorDouble expression = DoubleMultiplyAddExpression(first, second, addend);
-    const SIMDVectorDouble separate = DoubleMultiplyThenAdd(first, second, addend);
-    const SIMDVectorDouble namedExpression = VectorDoubleMultiplyAddExpression(first, second, addend);
-    for(usize lane = 0u; lane < 4u; ++lane){
-        const u64 expectedExpression = BitCast<u64>(LegacyDoubleMultiplyAddExpression(first[lane], second[lane], addend[lane]));
-        EXPECT_EQ(BitCast<u64>(expression[lane]), expectedExpression) << lane;
-        EXPECT_EQ(BitCast<u64>(namedExpression[lane]), expectedExpression) << lane;
-        EXPECT_EQ(BitCast<u64>(separate[lane]), BitCast<u64>(LegacyDoubleMultiplyThenAdd(first[lane], second[lane], addend[lane]))) << lane;
-    }
-
-    const SIMDVectorDouble subnormal = SIMDVectorDouble{ BitCast<f64>(u64{ 1u }), BitCast<f64>(u64{ 3u }), -BitCast<f64>(u64{ 1u }), -BitCast<f64>(u64{ 3u }) } * SIMDVectorDouble{ 2., 0.5, 2., 0.5 };
-    EXPECT_EQ(BitCast<u64>(subnormal.x), 2u);
-    EXPECT_EQ(BitCast<u64>(subnormal.y), 2u);
-    EXPECT_EQ(BitCast<u64>(subnormal.z), 0x8000000000000002u);
-    EXPECT_EQ(BitCast<u64>(subnormal.w), 0x8000000000000002u);
-    const SIMDVectorDouble signedZero = SIMDVectorDouble{ -0., 0., -0., 0. } * SIMDVectorDouble{ 1., -1., -1., 1. };
-    EXPECT_TRUE(SignBit(signedZero.x));
-    EXPECT_TRUE(SignBit(signedZero.y));
-    EXPECT_FALSE(SignBit(signedZero.z));
-    EXPECT_FALSE(SignBit(signedZero.w));
-}
-
-TEST(Math, MultiplySubtractRetainsCancellationDirectionAndSignedZero){
-#pragma STDC FENV_ACCESS ON
-    const auto originalEnvironment = HoldFloatingPointExceptions();
-    ASSERT_TRUE(originalEnvironment);
-    NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
-    ASSERT_TRUE(SetFloatingPointRoundingMode(FE_TONEAREST));
-
-    // FMA retains the 2^-54 residual and preserves the sign of zero on cancellation.
-    Array<Array<volatile f64, 4u>, 3u> doubleInputs = {{
-        { 0x1.0000002p+0, -0x1.0000002p+0, 1.0, -0.0 },
-        { 0x1.ffffffcp-1, 0x1.ffffffcp-1, 1.0, 1.0 },
-        { 1.0, -1.0, 1.0, 0.0 }
-    }};
-    const SIMDVectorDouble first = VectorDoubleSet(doubleInputs[0][0], doubleInputs[0][1], doubleInputs[0][2], doubleInputs[0][3]);
-    const SIMDVectorDouble second = VectorDoubleSet(doubleInputs[1][0], doubleInputs[1][1], doubleInputs[1][2], doubleInputs[1][3]);
-    const SIMDVectorDouble difference = VectorDoubleSet(doubleInputs[2][0], doubleInputs[2][1], doubleInputs[2][2], doubleInputs[2][3]);
-    const SIMDVectorDouble productMinusDifference = VectorDoubleMultiplySubtract(first, second, difference);
-    const SIMDVectorDouble productPlusNegativeDifference = VectorDoubleMultiplyAdd(first, second, VectorDoubleNegate(difference));
-    const SIMDVectorDouble differenceMinusProduct = VectorDoubleNegativeMultiplySubtract(first, second, difference);
-#if defined(NWB_HAS_FMA3) || defined(NWB_HAS_NEON)
-    constexpr u64 s_NegativeDoubleResidual = BitCast<u64>(-0x1p-54);
-    constexpr u64 s_PositiveDoubleResidual = BitCast<u64>(0x1p-54);
-#else
-    constexpr u64 s_NegativeDoubleResidual = 0u;
-    constexpr u64 s_PositiveDoubleResidual = 0u;
-#endif
-    constexpr Array<u64, 4> s_DoubleExpected = { s_NegativeDoubleResidual, s_PositiveDoubleResidual, 0u, 0x8000000000000000u };
-    constexpr Array<u64, 4> s_DoubleNegativeExpected = { s_PositiveDoubleResidual, s_NegativeDoubleResidual, 0u, 0u };
-
-    Array<Array<volatile f32, 4u>, 3u> singleInputs = {{
-        { 0x1.0008p+0f, -0x1.0008p+0f, 1.0f, -0.0f },
-        { 0x1.fffp-1f, 0x1.fffp-1f, 1.0f, 1.0f },
-        { 1.0f, -1.0f, 1.0f, 0.0f }
-    }};
-    const SIMDVectorSingle singleFirst = VectorSet(singleInputs[0][0], singleInputs[0][1], singleInputs[0][2], singleInputs[0][3]);
-    const SIMDVectorSingle singleSecond = VectorSet(singleInputs[1][0], singleInputs[1][1], singleInputs[1][2], singleInputs[1][3]);
-    const SIMDVectorSingle singleDifference = VectorSet(singleInputs[2][0], singleInputs[2][1], singleInputs[2][2], singleInputs[2][3]);
-    const SIMDVectorSingle singleResult = VectorMultiplySubtract(singleFirst, singleSecond, singleDifference);
-#if defined(NWB_HAS_FMA3) || defined(NWB_HAS_NEON64)
-    constexpr u32 s_NegativeSingleResidual = BitCast<u32>(-0x1p-26f);
-    constexpr u32 s_PositiveSingleResidual = BitCast<u32>(0x1p-26f);
-#else
-    constexpr u32 s_NegativeSingleResidual = 0u;
-    constexpr u32 s_PositiveSingleResidual = 0u;
-#endif
-    constexpr Array<u32, 4> s_SingleExpected = { s_NegativeSingleResidual, s_PositiveSingleResidual, 0u, 0x80000000u };
-    for(usize lane = 0u; lane < 4u; ++lane){
-        EXPECT_EQ(VectorDoubleGetIntByIndex(productMinusDifference, lane), s_DoubleExpected[lane]) << lane;
-        EXPECT_EQ(VectorDoubleGetIntByIndex(productPlusNegativeDifference, lane), s_DoubleExpected[lane]) << lane;
-        EXPECT_EQ(VectorDoubleGetIntByIndex(differenceMinusProduct, lane), s_DoubleNegativeExpected[lane]) << lane;
-        EXPECT_EQ(VectorGetIntByIndex(singleResult, lane), s_SingleExpected[lane]) << lane;
-    }
-}
-
-TEST(Math, DoubleVectorFloorAndCeilingPreserveBinary64BoundaryValues){
-    // The Windows standard library may under-align arrays of vector types.
-    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 6> inputs = {{
-        { 0.0, -0.0, 0x1p-1022, -0x1p-1022 },
-        { BitCast<f64>(u64{ 1u }), -BitCast<f64>(u64{ 1u }), BitCast<f64>(u64{ 3u }), -BitCast<f64>(u64{ 3u }) },
-        { 0x1.fffffffffffffp-1, 0x1.0000000000001p+0, -0x1.fffffffffffffp-1, -0x1.0000000000001p+0 },
-        { 0x1p+53, -0x1p+53, 0x1.fffffffffffffp+51, -0x1.fffffffffffffp+51 },
-        { Limit<f64>::s_Infinity, -Limit<f64>::s_Infinity, Limit<f64>::s_Max, -Limit<f64>::s_Max },
-        { Limit<f64>::s_QuietNaN, -Limit<f64>::s_QuietNaN, 0x1.0000000000001p+52, -0x1.0000000000001p+52 },
-    }};
-    for(const SIMDVectorDouble input : inputs){
-        const SIMDVectorDouble floor = VectorDoubleFloor(input);
-        const SIMDVectorDouble ceiling = VectorDoubleCeiling(input);
-        const SIMDVectorDouble truncate = VectorDoubleTruncate(input);
-        for(usize lane = 0u; lane < 4u; ++lane){
-            if(IsNaN(input[lane])){
-                EXPECT_TRUE(IsNaN(floor[lane]));
-                EXPECT_TRUE(IsNaN(ceiling[lane]));
-                EXPECT_TRUE(IsNaN(truncate[lane]));
-                continue;
-            }
-            EXPECT_EQ(BitCast<u64>(floor[lane]), BitCast<u64>(Floor(input[lane]))) << lane;
-            EXPECT_EQ(BitCast<u64>(ceiling[lane]), BitCast<u64>(Ceil(input[lane]))) << lane;
-            EXPECT_EQ(BitCast<u64>(truncate[lane]), BitCast<u64>(Truncate(input[lane]))) << lane;
-        }
-    }
-}
-
-TEST(Math, DoubleVectorRoundPreservesTiesSignedZeroAndLargeIntegralLanes){
-    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 4> inputs = {{
-        { 0.5, -0.5, 1.5, -1.5 },
-        { 2.5, -2.5, 0x1.fffffffffffffp-2, -0x1.fffffffffffffp-2 },
-        { 0x1p+53, -0x1p+53, 0x1.0000000000001p+52, -0x1.0000000000001p+52 },
-        { -0.0, 0.0, Limit<f64>::s_Infinity, -Limit<f64>::s_Infinity },
-    }};
-    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 4> expected = {{
-        { 0.0, -0.0, 2.0, -2.0 },
-        { 2.0, -2.0, 0.0, -0.0 },
-        { 0x1p+53, -0x1p+53, 0x1.0000000000001p+52, -0x1.0000000000001p+52 },
-        { -0.0, 0.0, Limit<f64>::s_Infinity, -Limit<f64>::s_Infinity },
-    }};
-    for(usize index = 0u; index < LengthOf(inputs); ++index){
-        const SIMDVectorDouble rounded = VectorDoubleRound(inputs[index]);
-        for(usize lane = 0u; lane < 4u; ++lane)
-            EXPECT_EQ(BitCast<u64>(rounded[lane]), BitCast<u64>(expected[index][lane])) << index << ':' << lane;
-    }
-}
-
-TEST(Math, SingleFixedRoundingPreservesTiesSignedZeroAndSpecialValuesAcrossAmbientModes){
-#pragma STDC FENV_ACCESS ON
-    const auto originalEnvironment = HoldFloatingPointExceptions();
-    ASSERT_TRUE(originalEnvironment);
-    NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
-
-    const Array<i32, 4> modes = { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
-    Array<Array<volatile f32, 4u>, 4u> runtimeInputs = {{
-        { 0.5f, -0.5f, 1.5f, -1.5f },
-        { 0.25f, -0.25f, 2.5f, -2.5f },
-        { -0.0f, 0.0f, 0x1p+23f, -0x1p+23f },
-        { 0x1p-149f, -0x1p-149f, 0x1.fffffep+22f, -0x1.fffffep+22f },
-    }};
-    const Array<Array<Array<f32, 4>, 4>, 4> expected = {{
-        {{
-            { 0.0f, -0.0f, 2.0f, -2.0f },
-            { 0.0f, -0.0f, 2.0f, -2.0f },
-            { -0.0f, 0.0f, 0x1p+23f, -0x1p+23f },
-            { 0.0f, -0.0f, 0x1p+23f, -0x1p+23f },
-        }},
-        {{
-            { 0.0f, -0.0f, 1.0f, -1.0f },
-            { 0.0f, -0.0f, 2.0f, -2.0f },
-            { -0.0f, 0.0f, 0x1p+23f, -0x1p+23f },
-            { 0.0f, -0.0f, 0x1.fffffcp+22f, -0x1.fffffcp+22f },
-        }},
-        {{
-            { 0.0f, -1.0f, 1.0f, -2.0f },
-            { 0.0f, -1.0f, 2.0f, -3.0f },
-            { -0.0f, 0.0f, 0x1p+23f, -0x1p+23f },
-            { 0.0f, -1.0f, 0x1.fffffcp+22f, -0x1p+23f },
-        }},
-        {{
-            { 1.0f, -0.0f, 2.0f, -1.0f },
-            { 1.0f, -0.0f, 3.0f, -2.0f },
-            { -0.0f, 0.0f, 0x1p+23f, -0x1p+23f },
-            { 1.0f, -0.0f, 0x1p+23f, -0x1.fffffcp+22f },
-        }},
-    }};
-    Array<volatile u32, 4u> specialBits = { 0x7f800000u, 0xff800000u, 0x7fc01234u, 0xffc05678u };
-    for(const i32 mode : modes){
-        ASSERT_TRUE(SetFloatingPointRoundingMode(mode));
-        for(usize row = 0u; row < LengthOf(runtimeInputs); ++row){
-            const SIMDVectorSingle input = VectorSet(runtimeInputs[row][0], runtimeInputs[row][1], runtimeInputs[row][2], runtimeInputs[row][3]);
-            alignas(SIMDVectorSingle) const Array<SIMDVectorSingle, 4> results = { VectorRound(input), VectorTruncate(input), VectorFloor(input), VectorCeiling(input) };
-            for(usize operation = 0u; operation < LengthOf(results); ++operation){
-                for(usize lane = 0u; lane < 4u; ++lane)
-                    EXPECT_EQ(VectorGetIntByIndex(results[operation], lane), BitCast<u32>(expected[operation][row][lane])) << mode << ':' << operation << ':' << row << ':' << lane;
-            }
-        }
-        const SIMDVectorSingle special = VectorSetInt(specialBits[0], specialBits[1], specialBits[2], specialBits[3]);
-        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-        alignas(SIMDVectorSingle) const Array<SIMDVectorSingle, 4> specialResults = { VectorRound(special), VectorTruncate(special), VectorFloor(special), VectorCeiling(special) };
-        const i32 invalid = TestFloatingPointExceptions(FE_INVALID);
-        EXPECT_EQ(invalid, 0) << mode;
-        for(usize operation = 0u; operation < LengthOf(specialResults); ++operation){
-            for(usize lane = 0u; lane < 4u; ++lane)
-                EXPECT_EQ(VectorGetIntByIndex(specialResults[operation], lane), specialBits[lane]) << mode << ':' << operation << ':' << lane;
-        }
-    }
-}
-
-TEST(Math, DoubleFixedRoundingIgnoresAmbientDirectedModesAndKeepsNearestTiesAndSignedZero){
-#pragma STDC FENV_ACCESS ON
-    const auto originalEnvironment = HoldFloatingPointExceptions();
-    ASSERT_TRUE(originalEnvironment);
-    NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
-
-    const Array<i32, 3> roundingModes = { FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
-    Array<Array<volatile f64, 4u>, 4u> runtimeInputs = {{
-        { 0.5, -0.5, 1.5, -1.5 },
-        { 0.25, -0.25, 2.5, -2.5 },
-        { -0.0, 0.0, 0x1p+53, -0x1p+53 },
-        { 0x1p-1074, -0x1p-1074, 0x1.fffffffffffffp+51, -0x1.fffffffffffffp+51 },
-    }};
-    alignas(SIMDVectorDouble) const Array<Array<SIMDVectorDouble, 4>, 4> expected = {{
-        {{
-            { 0.0, -0.0, 2.0, -2.0 },
-            { 0.0, -0.0, 2.0, -2.0 },
-            { -0.0, 0.0, 0x1p+53, -0x1p+53 },
-            { 0.0, -0.0, 0x1p+52, -0x1p+52 },
-        }},
-        {{
-            { 0.0, -0.0, 1.0, -1.0 },
-            { 0.0, -0.0, 2.0, -2.0 },
-            { -0.0, 0.0, 0x1p+53, -0x1p+53 },
-            { 0.0, -0.0, 0x1.ffffffffffffep+51, -0x1.ffffffffffffep+51 },
-        }},
-        {{
-            { 0.0, -1.0, 1.0, -2.0 },
-            { 0.0, -1.0, 2.0, -3.0 },
-            { -0.0, 0.0, 0x1p+53, -0x1p+53 },
-            { 0.0, -1.0, 0x1.ffffffffffffep+51, -0x1p+52 },
-        }},
-        {{
-            { 1.0, -0.0, 2.0, -1.0 },
-            { 1.0, -0.0, 3.0, -2.0 },
-            { -0.0, 0.0, 0x1p+53, -0x1p+53 },
-            { 1.0, -0.0, 0x1p+52, -0x1.ffffffffffffep+51 },
-        }},
-    }};
-    for(const i32 mode : roundingModes){
-        const auto setStatus = SetFloatingPointRoundingMode(mode);
-        EXPECT_TRUE(setStatus);
-        if(!setStatus)
-            continue;
-        for(usize row = 0u; row < LengthOf(runtimeInputs); ++row){
-            const SIMDVectorDouble input = VectorDoubleSet(runtimeInputs[row][0], runtimeInputs[row][1], runtimeInputs[row][2], runtimeInputs[row][3]);
-            alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 4> results = { VectorDoubleRound(input), VectorDoubleTruncate(input), VectorDoubleFloor(input), VectorDoubleCeiling(input) };
-            for(usize operation = 0u; operation < LengthOf(results); ++operation){
-                for(usize lane = 0u; lane < 4u; ++lane)
-                    EXPECT_EQ(BitCast<u64>(results[operation][lane]), BitCast<u64>(expected[operation][row][lane])) << mode << ':' << operation << ':' << row << ':' << lane;
-            }
-        }
-    }
-    const auto restoreStatus = SetFloatingPointEnvironment(*originalEnvironment);
-    EXPECT_TRUE(restoreStatus);
-    if(restoreStatus)
-        restoreEnvironment.release();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 }
+
+NWB_ADHD_GTEST(Math, SignedZeroStorageEqualityProducesEqualHashes, VerifyMath_SignedZeroStorageEqualityProducesEqualHashes)
+NWB_ADHD_GTEST(Math, DoubleStorageHashesCanonicalizeSignedZeroAndRetainSubFloatResiduals, VerifyMath_DoubleStorageHashesCanonicalizeSignedZeroAndRetainSubFloatResiduals)
+NWB_ADHD_GTEST(Math, AlignedShortDoubleStoresAndStreamsPreservePoisonedPaddingAndNeighborStorage, VerifyMath_AlignedShortDoubleStoresAndStreamsPreservePoisonedPaddingAndNeighborStorage)
+NWB_ADHD_GTEST(Math, AlignedShortDoubleAndCompactMatrixHashesIgnorePaddingWithSignedZeroAndBinary64Residuals, VerifyMath_AlignedShortDoubleAndCompactMatrixHashesIgnorePaddingWithSignedZeroAndBinary64Residuals)
+NWB_ADHD_GTEST(Math, DoubleTransformStreamsPreservePaddedStridesDuringAlignedUnalignedAndInPlaceConversion, VerifyMath_DoubleTransformStreamsPreservePaddedStridesDuringAlignedUnalignedAndInPlaceConversion)
+NWB_ADHD_GTEST(Math, DoubleRawIntegerEqualityRequiresBoth32BitHalvesOfEveryLane, VerifyMath_DoubleRawIntegerEqualityRequiresBoth32BitHalvesOfEveryLane)
+NWB_ADHD_GTEST(Math, DoubleSingleConversionsRetainSubnormalsAndSignsAndRoundHalfUlpTiesEven, VerifyMath_DoubleSingleConversionsRetainSubnormalsAndSignsAndRoundHalfUlpTiesEven)
+NWB_ADHD_GTEST(Math, SingleRuntimePermutationsPreserveNaNPayloadsSignedZeroAndSubnormalBits, VerifyMath_SingleRuntimePermutationsPreserveNaNPayloadsSignedZeroAndSubnormalBits)
+NWB_ADHD_GTEST(Math, UnalignedFloat33LoadRetainsNegativeZeroAndSignalingNaNPayloadWithoutInvalidExceptions, VerifyMath_UnalignedFloat33LoadRetainsNegativeZeroAndSignalingNaNPayloadWithoutInvalidExceptions)
+NWB_ADHD_GTEST(Math, SelectionControlTreatsHighBitUnsignedValuesAsTrueAndPreservesSelectedRawBits, VerifyMath_SelectionControlTreatsHighBitUnsignedValuesAsTrueAndPreservesSelectedRawBits)
+NWB_ADHD_GTEST(Math, DoubleRuntimePermutationsRetainNonfiniteAndRawBitsAcrossPairs, VerifyMath_DoubleRuntimePermutationsRetainNonfiniteAndRawBitsAcrossPairs)
+NWB_ADHD_GTEST(Math, StorageEqualityPreservesRawHalfAndIntegralBoundaryBits, VerifyMath_StorageEqualityPreservesRawHalfAndIntegralBoundaryBits)
+NWB_ADHD_GTEST(Math, StorageEqualityUsesNumericFloatsAndIntegerMixedPayloads, VerifyMath_StorageEqualityUsesNumericFloatsAndIntegerMixedPayloads)
+NWB_ADHD_GTEST(Math, StorageEqualityPreservesNaNShortCircuitExceptionFlags, VerifyMath_StorageEqualityPreservesNaNShortCircuitExceptionFlags)
+NWB_ADHD_GTEST(Math, StorageEqualityDoesNotReadBeyondUnalignedShortValues, VerifyMath_StorageEqualityDoesNotReadBeyondUnalignedShortValues)
+NWB_ADHD_GTEST(Math, StorageEqualityFallsBackForBooleanArrays, VerifyMath_StorageEqualityFallsBackForBooleanArrays)
+NWB_ADHD_GTEST(Math, StorageEqualityFallsBackForWideIntegralArrays, VerifyMath_StorageEqualityFallsBackForWideIntegralArrays)
+NWB_ADHD_GTEST(Math, StorageEqualityPreservesSubnormalNaNAndSkippedLaneMxcsrFlags, VerifyMath_StorageEqualityPreservesSubnormalNaNAndSkippedLaneMxcsrFlags)
+NWB_ADHD_GTEST(Math, ExpectedSIMDValuesKeepAlignedLoadsAfterEightBytePrefixAndAcrossArrayStride, VerifyMath_ExpectedSIMDValuesKeepAlignedLoadsAfterEightBytePrefixAndAcrossArrayStride)
+NWB_ADHD_GTEST(CurrentMathContractBoundaries, TransformStreamCallbackFailureDoesNotTerminateOrPublishOutput, VerifyCurrentMathContractBoundaries_TransformStreamCallbackFailureDoesNotTerminateOrPublishOutput)
+NWB_ADHD_GTEST(CurrentMathContractBoundaries, StreamLoadConversionFailureUnwindsBeforePublishingOutput, VerifyCurrentMathContractBoundaries_StreamLoadConversionFailureUnwindsBeforePublishingOutput)
+NWB_ADHD_GTEST(MathTriangleIntersection, RejectsSeparatedCoplanarTrianglesWithOverlappingBounds, VerifyMathTriangleIntersection_RejectsSeparatedCoplanarTrianglesWithOverlappingBounds)
+NWB_ADHD_GTEST(MathTriangleIntersection, RejectsSeparatedNoncoplanarTrianglesWithOverlappingBounds, VerifyMathTriangleIntersection_RejectsSeparatedNoncoplanarTrianglesWithOverlappingBounds)
+NWB_ADHD_GTEST(MathTriangleIntersection, CoplanarOverlapAndContainmentIgnoreWinding, VerifyMathTriangleIntersection_CoplanarOverlapAndContainmentIgnoreWinding)
+NWB_ADHD_GTEST(MathTriangleIntersection, CoplanarSharedEdgeAndPointRemainIntersections, VerifyMathTriangleIntersection_CoplanarSharedEdgeAndPointRemainIntersections)
+NWB_ADHD_GTEST(MathTriangleIntersection, NoncoplanarCrossingRetainsTheVertexOnTheOppositePlane, VerifyMathTriangleIntersection_NoncoplanarCrossingRetainsTheVertexOnTheOppositePlane)
+NWB_ADHD_GTEST(MathTriangleIntersection, DegeneratePointOutsideTheTriangleIsRejectedInsideItsBounds, VerifyMathTriangleIntersection_DegeneratePointOutsideTheTriangleIsRejectedInsideItsBounds)
+NWB_ADHD_GTEST(MathTriangleIntersection, DegenerateSegmentOutsideTheTriangleIsRejectedInsideItsBounds, VerifyMathTriangleIntersection_DegenerateSegmentOutsideTheTriangleIsRejectedInsideItsBounds)
+NWB_ADHD_GTEST(MathTriangleIntersection, DegenerateParallelSegmentsRequireTheSameLine, VerifyMathTriangleIntersection_DegenerateParallelSegmentsRequireTheSameLine)
+NWB_ADHD_GTEST(MathTriangleIntersection, DegenerateSkewSegmentsAreRejectedDespiteOverlappingBounds, VerifyMathTriangleIntersection_DegenerateSkewSegmentsAreRejectedDespiteOverlappingBounds)
+NWB_ADHD_GTEST(MathTriangleIntersection, TinyCoplanarTrianglesRetainSeparatingAxes, VerifyMathTriangleIntersection_TinyCoplanarTrianglesRetainSeparatingAxes)
+NWB_ADHD_GTEST(MathTriangleIntersection, DoubleCoplanarSeparationAndTouchSurviveLargeTranslation, VerifyMathTriangleIntersection_DoubleCoplanarSeparationAndTouchSurviveLargeTranslation)
+NWB_ADHD_GTEST(MathTriangleIntersection, InactiveSignalingNaNsDoNotRaiseInvalidDuringIntersection, VerifyMathTriangleIntersection_InactiveSignalingNaNsDoNotRaiseInvalidDuringIntersection)
+NWB_ADHD_GTEST(MathTriangleIntersection, ExactlyContainedDyadicPointSurvivesSingleProjectionCancellation, VerifyMathTriangleIntersection_ExactlyContainedDyadicPointSurvivesSingleProjectionCancellation)
+NWB_ADHD_GTEST(MathTriangleIntersection, ExactlyContainedDyadicPointSurvivesDoubleProjectionCancellation, VerifyMathTriangleIntersection_ExactlyContainedDyadicPointSurvivesDoubleProjectionCancellation)
+NWB_ADHD_GTEST(MathTriangleIntersection, ProjectionRoundoffAllowancePreservesSmallRealGaps, VerifyMathTriangleIntersection_ProjectionRoundoffAllowancePreservesSmallRealGaps)
+NWB_ADHD_GTEST(MathTriangleIntersection, ProjectionRoundoffAllowancePreservesTranslatedOneUlpGaps, VerifyMathTriangleIntersection_ProjectionRoundoffAllowancePreservesTranslatedOneUlpGaps)
+NWB_ADHD_GTEST(Math, VectorPowerPreservesMixedSpecialsAndAdjacentSrgbRoundingWithSeededState, VerifyMath_VectorPowerPreservesMixedSpecialsAndAdjacentSrgbRoundingWithSeededState)
+native{
+#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+TEST(Math, VectorPowerKeepsDenormalInputStatusWithInvalidTrapEnabled){ VerifyMath_VectorPowerKeepsDenormalInputStatusWithInvalidTrapEnabled(); }
+#endif
+}
+NWB_ADHD_GTEST(Math, MultiplyExpressionsPreserveCompilerRoundingPolicyAndSignedZero, VerifyMath_MultiplyExpressionsPreserveCompilerRoundingPolicyAndSignedZero)
+NWB_ADHD_GTEST(Math, OrderedDoubleClampPreservesZeroNanAndSubnormalPayloads, VerifyMath_OrderedDoubleClampPreservesZeroNanAndSubnormalPayloads)
+NWB_ADHD_GTEST(Math, MinMaxReturnSecondOperandForSignedZeroAndUnorderedLanes, VerifyMath_MinMaxReturnSecondOperandForSignedZeroAndUnorderedLanes)
+NWB_ADHD_GTEST(Math, SingleSquareRootsPreserveSignedZeroSubnormalsAndInfinityWithoutInvalidExceptions, VerifyMath_SingleSquareRootsPreserveSignedZeroSubnormalsAndInfinityWithoutInvalidExceptions)
+NWB_ADHD_GTEST(Math, DoubleVectorRetainsPrecisionCancellationSubnormalsAndSignedZero, VerifyMath_DoubleVectorRetainsPrecisionCancellationSubnormalsAndSignedZero)
+NWB_ADHD_GTEST(Math, MultiplySubtractRetainsCancellationDirectionAndSignedZero, VerifyMath_MultiplySubtractRetainsCancellationDirectionAndSignedZero)
+NWB_ADHD_GTEST(Math, DoubleVectorFloorAndCeilingPreserveBinary64BoundaryValues, VerifyMath_DoubleVectorFloorAndCeilingPreserveBinary64BoundaryValues)
+NWB_ADHD_GTEST(Math, DoubleVectorRoundPreservesTiesSignedZeroAndLargeIntegralLanes, VerifyMath_DoubleVectorRoundPreservesTiesSignedZeroAndLargeIntegralLanes)
+NWB_ADHD_GTEST(Math, SingleFixedRoundingPreservesTiesSignedZeroAndSpecialValuesAcrossAmbientModes, VerifyMath_SingleFixedRoundingPreservesTiesSignedZeroAndSpecialValuesAcrossAmbientModes)
+NWB_ADHD_GTEST(Math, DoubleFixedRoundingIgnoresAmbientDirectedModesAndKeepsNearestTiesAndSignedZero, VerifyMath_DoubleFixedRoundingIgnoresAmbientDirectedModesAndKeepsNearestTiesAndSignedZero)
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

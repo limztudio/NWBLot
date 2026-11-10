@@ -1,17 +1,23 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
 
-b8 UiNestedPopupRouterAndTriggerCasesReady(in u64 value){
-    return value != 0u;
-}
+#include <tests/common/gtest_macros.adhd>
+#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd>
+#include <tests/unit/ui/name_cases.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 native{
-#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd.h>
+#include <tests/unit/ui/native_input.adhd.h>
 
+#include <impl/ecs_ui/toolkit/input/router.adhd.h>
+
+#include <global/simdmath.h>
+
+#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,8 +33,8 @@ using namespace NWB;
 using namespace NWB::Impl::Ui;
 using namespace NWB::UiSearchComboTests;
 
-constexpr AStringView s_ListKey = "list";
-constexpr AStringView s_AnchorKey = "anchor";
+inline constexpr AStringView s_ListKey = "list";
+inline constexpr AStringView s_AnchorKey = "anchor";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -92,6 +98,26 @@ public:
     }
 
     void resetAllCounters()const noexcept{ resetCounters(); metadataCalls = 0u; }
+
+    void armSelectListOnText(ListState& state)noexcept{ selectListOnText = &state; }
+    [[nodiscard]] b8 hasSelectListOnText()const noexcept{ return selectListOnText != nullptr; }
+    [[nodiscard]] b8 hasSelectListOnRevision()const noexcept{ return selectListOnRevision != nullptr; }
+
+    void armSourceSelectList(NestedMutationSource& source, ListState& list)noexcept{
+        armSourceOnText = &source;
+        armList = &list;
+    }
+    [[nodiscard]] b8 hasArmSourceOnText()const noexcept{ return armSourceOnText != nullptr; }
+
+    void armSelectComboOnText(ComboState& state)noexcept{ selectComboOnText = &state; }
+    void armQueryOnText(EditModel& query)noexcept{ queryOnText = &query; }
+    void armCloseMenuOnText(ContextMenuState& state)noexcept{ closeMenuOnText = &state; }
+
+    void armClosePopupOnText(PopupState& state)noexcept{ closePopupOnText = &state; }
+    [[nodiscard]] b8 hasClosePopupOnText()const noexcept{ return closePopupOnText != nullptr; }
+
+    void armReopenPopupOnText(PopupState& state)noexcept{ reopenPopupOnText = &state; }
+    [[nodiscard]] b8 hasReopenPopupOnText()const noexcept{ return reopenPopupOnText != nullptr; }
 
 
 public:
@@ -171,12 +197,16 @@ public:
     {}
 
 
-protected:
+public:
     virtual void SetUp()override{
         WidgetFixture::SetUp();
         m_builder.setEditHost(&m_host);
         m_parent.open();
         m_child.open();
+    }
+
+    [[nodiscard]] b8 hasTarget(const WidgetId widget)const noexcept{
+        return target(widget) != nullptr;
     }
 
     [[nodiscard]] b8 beginParent(const u64 generation){
@@ -257,7 +287,7 @@ protected:
     }
 
 
-protected:
+public:
     PopupState m_parent;
     PopupState m_child;
     NestedMutationSource m_parentSource{ 2101u };
@@ -277,254 +307,7 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiNestedPopupLoanTests, ChildEndDefersVisibleRowCallbacksUntilTheOuterPopupEnds){
-    ASSERT_TRUE(beginParent(1u));
-    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions()));
-    ASSERT_TRUE(m_builder.virtualList(s_ListKey, m_childSource, m_childList, UiWidgetTests::LargeLoanListOptions()).valid);
-    m_childSource.resetAllCounters();
-    ASSERT_TRUE(m_builder.endPopup());
-    EXPECT_EQ(m_childSource.metadataCalls, 0u);
-    EXPECT_EQ(m_childSource.textCalls, 0u);
-    ASSERT_TRUE(m_builder.endPopup());
-    EXPECT_GT(m_childSource.textCalls, 0u);
-    ASSERT_TRUE(finishRoot());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-}
-
-TEST_F(UiNestedPopupLoanTests, ExplicitChildListMutationAfterChildEndRejectsTheEnclosingLoan){
-    ASSERT_TRUE(acceptLists(1u));
-    ASSERT_TRUE(declareLists(2u));
-    const u64 inputGeneration = m_childList.inputGeneration();
-    m_childList.select(4u);
-    EXPECT_NE(m_childList.inputGeneration(), inputGeneration);
-    EXPECT_FALSE(m_builder.endPopup());
-    EXPECT_EQ(m_childList.selectedKey(), 4u);
-    EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
-}
-
-TEST_F(UiNestedPopupLoanTests, ChildVisibleRowCallbackCannotMutateThePaintedParentListLoan){
-    ASSERT_TRUE(acceptLists(1u));
-    ASSERT_TRUE(declareLists(2u));
-    const u64 inputGeneration = m_parentList.inputGeneration();
-    m_childSource.selectListOnText = &m_parentList;
-    EXPECT_FALSE(m_builder.endPopup());
-    EXPECT_EQ(m_parentList.selectedKey(), 4u);
-    EXPECT_NE(m_parentList.inputGeneration(), inputGeneration);
-    EXPECT_EQ(m_childSource.selectListOnText, nullptr);
-    EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
-}
-
-TEST_F(UiNestedPopupLoanTests, ParentVisibleRowCallbackCannotMutateTheEndedChildListLoan){
-    ASSERT_TRUE(acceptLists(1u));
-    ASSERT_TRUE(declareLists(2u));
-    const u64 inputGeneration = m_childList.inputGeneration();
-    m_parentSource.selectListOnText = &m_childList;
-    EXPECT_FALSE(m_builder.endPopup());
-    EXPECT_EQ(m_childList.selectedKey(), 4u);
-    EXPECT_NE(m_childList.inputGeneration(), inputGeneration);
-    EXPECT_EQ(m_parentSource.selectListOnText, nullptr);
-    EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
-}
-
-TEST_F(UiNestedPopupLoanTests, ParentMetadataCallbackArmedByChildPaintStillRejectsThePaintedChildMutation){
-    ASSERT_TRUE(acceptLists(1u));
-    ASSERT_TRUE(declareLists(2u));
-    const u64 inputGeneration = m_childList.inputGeneration();
-    m_childSource.armSourceOnText = &m_parentSource;
-    m_childSource.armList = &m_childList;
-    m_childSource.textCalls = 0u;
-    EXPECT_FALSE(m_builder.endPopup());
-    EXPECT_GT(m_childSource.textCalls, 0u);
-    EXPECT_EQ(m_childSource.armSourceOnText, nullptr);
-    EXPECT_EQ(m_parentSource.selectListOnRevision, nullptr);
-    EXPECT_EQ(m_childList.selectedKey(), 4u);
-    EXPECT_NE(m_childList.inputGeneration(), inputGeneration);
-    EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
-}
-
-TEST_F(UiNestedPopupLoanTests, ChildSourceCallbackCannotMutateTheParentComboAfterItsFieldPaint){
-    ASSERT_TRUE(acceptBase(1u));
-    ASSERT_TRUE(beginParent(2u));
-    ASSERT_TRUE(m_builder.comboBox(s_ComboKey, m_comboSource, m_combo, Options()).valid);
-    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions()));
-    ASSERT_TRUE(m_builder.virtualList(s_ListKey, m_childSource, m_childList, UiWidgetTests::LargeLoanListOptions()).valid);
-    ASSERT_TRUE(m_builder.endPopup());
-    const u64 inputGeneration = m_combo.inputGeneration();
-    m_childSource.selectComboOnText = &m_combo;
-    EXPECT_FALSE(m_builder.endPopup());
-    EXPECT_EQ(m_combo.selectedKey(), 4u);
-    EXPECT_NE(m_combo.inputGeneration(), inputGeneration);
-    EXPECT_GT(m_combo.bounds().width, 0.0f);
-    EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
-}
-
-TEST_F(UiNestedPopupLoanTests, ParentSourceCallbackCannotMutateTheEndedChildSearchQueryLoan){
-    ASSERT_TRUE(acceptBase(1u));
-    m_search.combo().open();
-    ASSERT_TRUE(beginParent(2u));
-    ASSERT_TRUE(m_builder.virtualList(s_ListKey, m_parentSource, m_parentList, UiWidgetTests::LargeLoanListOptions()).valid);
-    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions()));
-    SearchComboOptions searchOptions;
-    searchOptions.combo = Options();
-    ASSERT_TRUE(m_builder.searchComboBox("search", m_searchSource, m_search, searchOptions).combo.valid);
-    ASSERT_TRUE(m_builder.endPopup());
-    const u64 externalRevision = m_search.query().externalRevision();
-    m_parentSource.queryOnText = &m_search.query();
-    EXPECT_FALSE(m_builder.endPopup());
-    EXPECT_EQ(m_search.query().text(), s_CallbackQuery);
-    EXPECT_GT(m_search.query().externalRevision(), externalRevision);
-    EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
-}
-
-TEST_F(UiNestedPopupLoanTests, ChildSourceCallbackCannotCloseTheParentContextMenuAndPublishTheFrame){
-    ASSERT_TRUE(acceptBase(1u));
-    ASSERT_TRUE(m_menu.open({ 80.0f, 120.0f, 0.0f, 0.0f }));
-    ASSERT_TRUE(beginParent(2u));
-    EXPECT_FALSE(m_builder.button(s_AnchorKey, "Commands"));
-    ASSERT_TRUE(m_builder.contextMenu("menu", s_AnchorKey, m_menuSource, m_menu).valid);
-    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions()));
-    ASSERT_TRUE(m_builder.virtualList(s_ListKey, m_childSource, m_childList, UiWidgetTests::LargeLoanListOptions()).valid);
-    ASSERT_TRUE(m_builder.endPopup());
-    const u64 revision = m_menu.revision();
-    m_childSource.closeMenuOnText = &m_menu;
-    EXPECT_FALSE(m_builder.endPopup());
-    EXPECT_FALSE(m_menu.isOpen());
-    EXPECT_GT(m_menu.revision(), revision);
-    EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
-}
-
-TEST_F(UiNestedPopupLoanTests, ClosingTheParentBeforeOuterEndSuppressesEveryDescendantSourceAndQueryPublication){
-    m_combo.open();
-    m_search.combo().open();
-    ASSERT_TRUE(m_menu.open({ 510.0f, 280.0f, 0.0f, 0.0f }));
-    ASSERT_TRUE(declareChildCompounds(1u));
-    resetChildCounters();
-    m_parent.close();
-    ASSERT_TRUE(m_builder.endPopup());
-    expectNoChildCallbacks();
-    ASSERT_TRUE(finishRoot());
-    const DrawSnapshot snapshot = m_paint.freeze();
-    EXPECT_TRUE(snapshot.commands().empty());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    EXPECT_TRUE(m_context.input().targets().empty());
-    EXPECT_FALSE(m_context.input().hasPopup());
-}
-
-TEST_F(UiNestedPopupLoanTests, ReopeningTheParentBeforeOuterEndSuppressesItsOldDescendantLoans){
-    m_combo.open();
-    m_search.combo().open();
-    ASSERT_TRUE(m_menu.open({ 510.0f, 280.0f, 0.0f, 0.0f }));
-    ASSERT_TRUE(declareChildCompounds(1u));
-    resetChildCounters();
-    const u64 openGeneration = m_parent.openGeneration();
-    m_parent.close();
-    m_parent.open();
-    EXPECT_NE(m_parent.openGeneration(), openGeneration);
-    ASSERT_TRUE(m_builder.endPopup());
-    expectNoChildCallbacks();
-    EXPECT_TRUE(m_parent.isOpen());
-    ASSERT_TRUE(finishRoot());
-    const DrawSnapshot snapshot = m_paint.freeze();
-    EXPECT_TRUE(snapshot.commands().empty());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    EXPECT_TRUE(m_context.input().targets().empty());
-    EXPECT_FALSE(m_context.input().hasPopup());
-}
-
-TEST_F(UiNestedPopupLoanTests, ClosingTheEndedChildSkipsItsCallbacksAndKeepsParentControlsPainted){
-    ASSERT_TRUE(beginParent(1u));
-    EXPECT_FALSE(m_builder.button("before", "Parent before"));
-    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions()));
-    ASSERT_TRUE(m_builder.virtualList(s_ListKey, m_childSource, m_childList, UiWidgetTests::LargeLoanListOptions()).valid);
-    ASSERT_TRUE(m_builder.endPopup());
-    m_childSource.resetAllCounters();
-    m_child.close();
-    EXPECT_FALSE(m_builder.button("after", "Parent after"));
-    ASSERT_TRUE(m_builder.endPopup());
-    EXPECT_EQ(m_childSource.metadataCalls, 0u);
-    EXPECT_EQ(m_childSource.textCalls, 0u);
-    ASSERT_TRUE(finishRoot());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    const WidgetId parent = UiTestSupport::RequireWidgetId(UiTestSupport::RequireRootId(m_root), s_ParentPopupKey);
-    EXPECT_NE(target(UiTestSupport::RequireWidgetId(parent, "before")), nullptr);
-    EXPECT_NE(target(UiTestSupport::RequireWidgetId(parent, "after")), nullptr);
-    EXPECT_EQ(target(UiTestSupport::RequireWidgetId(parent, s_ChildPopupKey)), nullptr);
-}
-
-TEST_F(UiNestedPopupLoanTests, ReopeningTheEndedChildRetiresItsOldBodyBeforeSourceCallbacks){
-    ASSERT_TRUE(beginParent(1u));
-    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions()));
-    ASSERT_TRUE(m_builder.virtualList(s_ListKey, m_childSource, m_childList, UiWidgetTests::LargeLoanListOptions()).valid);
-    ASSERT_TRUE(m_builder.endPopup());
-    m_childSource.resetAllCounters();
-    const u64 openGeneration = m_child.openGeneration();
-    m_child.close();
-    m_child.open();
-    EXPECT_NE(m_child.openGeneration(), openGeneration);
-    EXPECT_FALSE(m_builder.button("after", "Parent after"));
-    ASSERT_TRUE(m_builder.endPopup());
-    EXPECT_EQ(m_childSource.metadataCalls, 0u);
-    EXPECT_EQ(m_childSource.textCalls, 0u);
-    EXPECT_TRUE(m_child.isOpen());
-    ASSERT_TRUE(finishRoot());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    const WidgetId parent = UiTestSupport::RequireWidgetId(UiTestSupport::RequireRootId(m_root), s_ParentPopupKey);
-    EXPECT_NE(target(UiTestSupport::RequireWidgetId(parent, "after")), nullptr);
-    EXPECT_EQ(target(UiTestSupport::RequireWidgetId(parent, s_ChildPopupKey)), nullptr);
-}
-
-TEST_F(UiNestedPopupLoanTests, ParentFirstRowClosingItsPopupRejectsBeforeAnyDescendantTextCallback){
-    ASSERT_TRUE(acceptLists(1u));
-    ASSERT_TRUE(declareLists(2u));
-    m_parentSource.resetAllCounters();
-    m_childSource.resetAllCounters();
-    m_parentSource.closePopupOnText = &m_parent;
-    EXPECT_FALSE(m_builder.endPopup());
-    EXPECT_FALSE(m_parent.isOpen());
-    EXPECT_EQ(m_parentSource.closePopupOnText, nullptr);
-    EXPECT_EQ(m_parentSource.textCalls, 1u);
-    EXPECT_EQ(m_childSource.textCalls, 0u);
-    EXPECT_EQ(m_childSource.metadataCalls, 0u);
-    EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
-}
-
-TEST_F(UiNestedPopupLoanTests, ChildFirstRowReopeningItsAncestorRejectsBeforeLaterRowsOrSiblingCallbacks){
-    ASSERT_TRUE(acceptLists(1u));
-    ASSERT_TRUE(declareLists(2u));
-    PopupState sibling;
-    sibling.open();
-    NestedMutationSource siblingSource(2301u);
-    ListState siblingList;
-    ASSERT_TRUE(m_builder.beginPopup("sibling", sibling, UiWidgetTests::NestedChildOptions()));
-    ASSERT_TRUE(m_builder.virtualList(s_ListKey, siblingSource, siblingList, UiWidgetTests::LargeLoanListOptions()).valid);
-    ASSERT_TRUE(m_builder.endPopup());
-    m_parentSource.resetAllCounters();
-    m_childSource.resetAllCounters();
-    siblingSource.resetAllCounters();
-    const u64 openGeneration = m_parent.openGeneration();
-    m_childSource.reopenPopupOnText = &m_parent;
-    EXPECT_FALSE(m_builder.endPopup());
-    EXPECT_TRUE(m_parent.isOpen());
-    EXPECT_NE(m_parent.openGeneration(), openGeneration);
-    EXPECT_EQ(m_childSource.reopenPopupOnText, nullptr);
-    EXPECT_GT(m_parentSource.textCalls, 0u);
-    EXPECT_EQ(m_childSource.textCalls, 1u);
-    EXPECT_EQ(siblingSource.textCalls, 0u);
-    EXPECT_EQ(siblingSource.metadataCalls, 0u);
-    EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -540,7 +323,7 @@ using namespace NWB;
 using namespace NWB::Impl::Ui;
 using namespace NWB::UiComboTests;
 
-constexpr AStringView s_ListKey = "list";
+inline constexpr AStringView s_ListKey = "list";
 
 namespace ReentryKind{
     enum Enum : u8{ Reset, Panel };
@@ -694,7 +477,7 @@ struct AcceptedFrame{
 
 
 class UiNestedPopupReentryTests : public WidgetFixture{
-protected:
+public:
     virtual void SetUp()override{
         WidgetFixture::SetUp();
         m_parent.open();
@@ -780,7 +563,7 @@ protected:
     }
 
 
-protected:
+public:
     PopupState m_parent;
     PopupState m_child;
     PopupState m_sibling;
@@ -798,151 +581,7 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiNestedPopupReentryTests, ChildFirstRowResetRejectsWithoutClearingBorrowedFrames){
-    ASSERT_TRUE(acceptBase());
-    const AcceptedFrame frame = accepted();
-    ASSERT_GT(frame.count, 0u);
-    ASSERT_TRUE(beginParent());
-    ASSERT_TRUE(declareChild());
-    ASSERT_TRUE(declareSibling());
-    const u64 generation = m_childList.inputGeneration();
-    const u64 parentOpening = m_parent.openGeneration();
-    const u64 childOpening = m_child.openGeneration();
-    m_childSource.resetObservations();
-    m_siblingSource.resetObservations();
-    m_siblingSource.observeAttemptsOf(m_childSource);
-    m_childSource.armText(ReentryKind::Reset, m_builder);
-    EXPECT_FALSE(m_builder.endPopup());
-    EXPECT_EQ(m_childSource.attempts(), 1u);
-    EXPECT_EQ(m_childSource.resetAttempts(), 1u);
-    EXPECT_TRUE(m_childSource.failedAtAttempt());
-    EXPECT_EQ(m_childSource.textCalls, 1u);
-    EXPECT_EQ(m_siblingSource.textCalls, 0u);
-    EXPECT_EQ(m_siblingSource.metadataCalls(), 0u);
-    expectSourcePreserved(m_childSource, 2402u);
-    expectSourcePreserved(m_siblingSource, 2403u);
-    expectListPreserved(m_childList, generation);
-    EXPECT_TRUE(m_parent.isOpen());
-    EXPECT_TRUE(m_child.isOpen());
-    EXPECT_EQ(m_parent.openGeneration(), parentOpening);
-    EXPECT_EQ(m_child.openGeneration(), childOpening);
-    EXPECT_FALSE(m_context.commitFrame(2u));
-    expectRejected(frame);
-}
-
-TEST_F(UiNestedPopupReentryTests, ChildFirstRowBalancedPanelReentryRejectsBeforeLaterSiblingCallbacks){
-    ASSERT_TRUE(acceptBase());
-    const AcceptedFrame frame = accepted();
-    ASSERT_TRUE(beginParent());
-    ASSERT_TRUE(declareChild());
-    ASSERT_TRUE(declareSibling());
-    const u64 generation = m_childList.inputGeneration();
-    m_childSource.resetObservations();
-    m_siblingSource.resetObservations();
-    m_siblingSource.observeAttemptsOf(m_childSource);
-    m_childSource.armText(ReentryKind::Panel, m_builder);
-    EXPECT_FALSE(m_builder.endPopup());
-    expectPanelRejected(m_childSource);
-    EXPECT_EQ(m_childSource.textCalls, 1u);
-    EXPECT_EQ(m_siblingSource.textCalls, 0u);
-    EXPECT_EQ(m_siblingSource.metadataCalls(), 0u);
-    expectSourcePreserved(m_childSource, 2402u);
-    expectSourcePreserved(m_siblingSource, 2403u);
-    expectListPreserved(m_childList, generation);
-    EXPECT_TRUE(m_parent.isOpen());
-    EXPECT_TRUE(m_child.isOpen());
-    EXPECT_FALSE(m_context.commitFrame(2u));
-    expectRejected(frame);
-}
-
-TEST_F(UiNestedPopupReentryTests, ParentComboAutomaticPopupRowResetRejectsBeforeChildSourceCallbacks){
-    ASSERT_TRUE(acceptBase());
-    const AcceptedFrame frame = accepted();
-    m_combo.open();
-    ASSERT_TRUE(beginParent());
-    ASSERT_TRUE(m_builder.comboBox("combo", m_comboSource, m_combo, Options()).valid);
-    ASSERT_TRUE(declareChild());
-    const u64 comboGeneration = m_combo.inputGeneration();
-    const u64 listGeneration = m_combo.listState().inputGeneration();
-    const u64 preview = m_combo.listState().cursorKey();
-    const u64 childGeneration = m_childList.inputGeneration();
-    m_comboSource.resetObservations();
-    m_childSource.resetObservations();
-    m_childSource.observeAttemptsOf(m_comboSource);
-    m_comboSource.armText(ReentryKind::Reset, m_builder);
-    EXPECT_FALSE(m_builder.endPopup());
-    EXPECT_EQ(m_comboSource.attempts(), 1u);
-    EXPECT_EQ(m_comboSource.resetAttempts(), 1u);
-    EXPECT_TRUE(m_comboSource.failedAtAttempt());
-    EXPECT_EQ(m_comboSource.textCalls, 1u);
-    EXPECT_EQ(m_childSource.textCalls, 0u);
-    EXPECT_EQ(m_childSource.metadataCalls(), 0u);
-    expectSourcePreserved(m_comboSource, 2404u);
-    expectSourcePreserved(m_childSource, 2402u);
-    EXPECT_TRUE(m_combo.isOpen());
-    EXPECT_EQ(m_combo.selectedKey(), 0u);
-    EXPECT_EQ(m_combo.inputGeneration(), comboGeneration);
-    EXPECT_EQ(m_combo.listState().inputGeneration(), listGeneration);
-    EXPECT_EQ(m_combo.listState().cursorKey(), preview);
-    expectListPreserved(m_childList, childGeneration);
-    EXPECT_FALSE(m_context.commitFrame(2u));
-    expectRejected(frame);
-}
-
-TEST_F(UiNestedPopupReentryTests, LateParentRevisionScopeReentryRejectsAfterAllRowsWerePainted){
-    ASSERT_TRUE(acceptBase());
-    const AcceptedFrame frame = accepted();
-    ASSERT_TRUE(beginParent());
-    ASSERT_TRUE(m_builder.virtualList(s_ListKey, m_parentSource, m_parentList, UiWidgetTests::LargeLoanListOptions()).valid);
-    ASSERT_TRUE(declareChild());
-    ASSERT_TRUE(declareSibling());
-    const u64 parentGeneration = m_parentList.inputGeneration();
-    const u64 childGeneration = m_childList.inputGeneration();
-    m_parentSource.resetObservations();
-    m_childSource.resetObservations();
-    m_siblingSource.resetObservations();
-    m_childSource.observeAttemptsOf(m_parentSource);
-    m_siblingSource.observeAttemptsOf(m_parentSource);
-    // The parent has finished painting before child text arms its next revision call in final validation.
-    m_childSource.armRevisionAfterText(m_parentSource, m_builder);
-    EXPECT_FALSE(m_builder.endPopup());
-    EXPECT_EQ(m_childSource.arms(), 1u);
-    expectPanelRejected(m_parentSource);
-    EXPECT_EQ(m_parentSource.textCalls, 5u);
-    EXPECT_EQ(m_childSource.textCalls, 5u);
-    EXPECT_EQ(m_siblingSource.textCalls, 5u);
-    expectSourcePreserved(m_parentSource, 2401u);
-    expectSourcePreserved(m_childSource, 2402u);
-    expectSourcePreserved(m_siblingSource, 2403u);
-    expectListPreserved(m_parentList, parentGeneration);
-    expectListPreserved(m_childList, childGeneration);
-    EXPECT_TRUE(m_parent.isOpen());
-    EXPECT_TRUE(m_child.isOpen());
-    EXPECT_FALSE(m_context.commitFrame(2u));
-    expectRejected(frame);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ui/native_input.adhd.h>
-#include <tests/unit/ui/name_cases.adhd.h>
-
-#include <impl/ecs_ui/toolkit/input/router.adhd.h>
-
-#include <global/simdmath.h>
-
-#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -958,7 +597,7 @@ using namespace NWB;
 using namespace NWB::Impl::Ui;
 
 
-HitTarget BaseHitTarget()noexcept{
+[[nodiscard]] inline HitTarget BaseHitTarget()noexcept{
     HitTarget target;
     target.id = { 1u };
     target.rectangle = { 4.0f, 4.0f, 20.0f, 18.0f };
@@ -968,7 +607,7 @@ HitTarget BaseHitTarget()noexcept{
     return target;
 }
 
-PopupScope Scope(const u64 widget, const u32 layer, const PopupToken& parent = {})noexcept{
+[[nodiscard]] inline PopupScope Scope(const u64 widget, const u32 layer, const PopupToken& parent = {})noexcept{
     PopupScope scope;
     scope.token = { { widget }, 10u, 20u, 1u };
     scope.bounds = widget == 100u ? Rect{ 30.0f, 30.0f, 110.0f, 70.0f } : widget == 200u ? Rect{ 170.0f, 120.0f, 100.0f, 80.0f } : widget == 300u ? Rect{ 280.0f, 200.0f, 100.0f, 70.0f } : Rect{ 250.0f, 30.0f, 120.0f, 70.0f };
@@ -978,7 +617,7 @@ PopupScope Scope(const u64 widget, const u32 layer, const PopupToken& parent = {
     return scope;
 }
 
-HitTarget Barrier(const PopupScope& scope, const u32 order)noexcept{
+[[nodiscard]] inline HitTarget Barrier(const PopupScope& scope, const u32 order)noexcept{
     HitTarget target;
     target.id = scope.token.widget;
     target.declarationGeneration = scope.token.declarationGeneration;
@@ -990,7 +629,7 @@ HitTarget Barrier(const PopupScope& scope, const u32 order)noexcept{
     return target;
 }
 
-HitTarget Child(const PopupScope& scope, const u64 offset, const u32 order, const b8 navigation)noexcept{
+[[nodiscard]] inline HitTarget Child(const PopupScope& scope, const u64 offset, const u32 order, const b8 navigation)noexcept{
     HitTarget target;
     target.id = { scope.token.widget.value + offset };
     target.declarationGeneration = 10u;
@@ -1022,7 +661,7 @@ public:
     {}
 
 
-protected:
+public:
     [[nodiscard]] b8 install(const Span<const PopupScope> scopes, const u64 generation, const b8 navigation = false){
         Array<HitTarget, 1u + 3u * s_InputMaxPopups> targets{};
         targets[0u] = BaseHitTarget();
@@ -1033,6 +672,32 @@ protected:
             targets[order + 2u] = Child(scopes[index], 2u, order + 2u, navigation);
         }
         return m_router.commitTargets(Span(targets.data(), 1u + scopes.size() * 3u), generation, scopes);
+    }
+
+    [[nodiscard]] b8 installEmpty(const u64 generation, const b8 navigation = false){
+        return install({}, generation, navigation);
+    }
+
+    [[nodiscard]] b8 installOne(const PopupScope& scope, const u64 generation, const b8 navigation = false){
+        return install(Span(&scope, 1u), generation, navigation);
+    }
+
+    [[nodiscard]] b8 commitSingleScopeTargets(const Span<const HitTarget> targets, const u64 generation, const PopupScope& scope){
+        return m_router.commitTargets(targets, generation, Span(&scope, 1u));
+    }
+
+    [[nodiscard]] Optional<PopupScope> findPopupScope(const PopupToken& token)const noexcept{
+        if(const PopupScope* found = m_router.popupScope(token))
+            return *found;
+        return {};
+    }
+
+    [[nodiscard]] b8 hasPopupScope(const PopupToken& token)const noexcept{
+        return m_router.popupScope(token) != nullptr;
+    }
+
+    [[nodiscard]] b8 hasRouterTarget(const WidgetId id)const noexcept{
+        return m_router.findTarget(id) != nullptr;
     }
 
     void focusBase(){
@@ -1046,380 +711,7 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiNestedPopupRouterTests, ChildMayExtendOutsideParentWhileFocusAndPointerStayInAcceptedTopScope){
-    const PopupScope parent = Scope(100u, 1u);
-    const PopupScope child = Scope(200u, 2u, parent.token);
-    const Array<PopupScope, 2> scopes = { parent, child };
-    ASSERT_TRUE(install(scopes, 1u));
-    ASSERT_EQ(m_router.popupCount(), 2u);
-    ASSERT_NE(m_router.popupScope(child.token), nullptr);
-    EXPECT_EQ(m_router.popupScope(child.token)->parent, parent.token);
-    EXPECT_EQ(m_router.topPopupToken(), child.token);
-    EXPECT_EQ(m_router.focus().value, 201u);
-    EXPECT_EQ(m_router.hitTest({ 175.0f, 125.0f }).value, 201u);
-    EXPECT_FALSE(m_router.hitTest({ 35.0f, 35.0f }).valid());
-    key(Core::Key::Tab);
-    EXPECT_EQ(m_router.focus().value, 202u);
-    key(Core::Key::Tab);
-    EXPECT_EQ(m_router.focus().value, 201u);
-    key(Core::Key::Tab, true);
-    EXPECT_EQ(m_router.focus().value, 202u);
-    key(Core::Key::Enter);
-    EXPECT_TRUE(m_router.consumeActivation({ 202u }));
-    EXPECT_FALSE(m_router.consumeActivation({ 101u }));
-}
-
-TEST_F(UiNestedPopupRouterTests, EscapeDismissesOnlyChildThenRestoresChosenParentFocusAfterAcceptance){
-    focusBase();
-    const PopupScope parent = Scope(100u, 1u);
-    ASSERT_TRUE(install(Span(&parent, 1u), 2u));
-    key(Core::Key::Tab);
-    ASSERT_EQ(m_router.focus().value, 102u);
-    const PopupScope child = Scope(200u, 2u, parent.token);
-    const Array<PopupScope, 2> scopes = { parent, child };
-    ASSERT_TRUE(install(scopes, 3u));
-    ASSERT_EQ(m_router.focus().value, 201u);
-    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Escape , .type = InputEventType::KeyDown}).commandConsumed);
-    PopupDismissReason::Enum reason = PopupDismissReason::None;
-    const auto reasonResult1 = m_router.consumePopupDismissal(child.token);
-    ASSERT_TRUE(reasonResult1);
-    reason = *reasonResult1;
-    EXPECT_EQ(reason, PopupDismissReason::Cancel);
-    EXPECT_FALSE(m_router.consumePopupDismissal(parent.token));
-    EXPECT_FALSE(m_router.focus().valid());
-    ASSERT_TRUE(install(Span(&parent, 1u), 4u));
-    EXPECT_EQ(m_router.focus().value, 102u);
-    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Escape, .type = InputEventType::KeyDown, .repeat = true }).commandConsumed);
-    EXPECT_FALSE(m_router.consumePopupDismissal(parent.token));
-    EXPECT_EQ(m_router.focus().value, 102u);
-    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Escape , .type = InputEventType::KeyUp}).commandConsumed);
-    key(Core::Key::Escape);
-    const auto reasonResult2 = m_router.consumePopupDismissal(parent.token);
-    ASSERT_TRUE(reasonResult2);
-    reason = *reasonResult2;
-    EXPECT_EQ(reason, PopupDismissReason::Cancel);
-}
-
-TEST_F(UiNestedPopupRouterTests, OptedInChildTabLeavesItsParentOpenAndAdvancesParentFocus){
-    focusBase();
-    const PopupScope parent = Scope(100u, 1u);
-    ASSERT_TRUE(install(Span(&parent, 1u), 2u));
-    key(Core::Key::Tab);
-    ASSERT_EQ(m_router.focus().value, 102u);
-    PopupScope child = Scope(200u, 2u, parent.token);
-    child.dismissFocusTraversal = true;
-    child.focusAnchor = { 102u };
-    child.focusAnchorDeclarationGeneration = 10u;
-    const Array<PopupScope, 2> scopes = { parent, child };
-    ASSERT_TRUE(install(scopes, 3u));
-    ASSERT_EQ(m_router.focus().value, 201u);
-    key(Core::Key::Tab);
-    EXPECT_EQ(m_router.focus().value, 202u);
-    key(Core::Key::Tab);
-    PopupDismissReason::Enum reason = PopupDismissReason::None;
-    const auto reasonResult = m_router.consumePopupDismissal(child.token);
-    ASSERT_TRUE(reasonResult);
-    reason = *reasonResult;
-    EXPECT_EQ(reason, PopupDismissReason::FocusTraversal);
-    EXPECT_FALSE(m_router.consumePopupDismissal(parent.token));
-    ASSERT_TRUE(install(Span(&parent, 1u), 4u));
-    EXPECT_EQ(m_router.popupCount(), 1u);
-    EXPECT_EQ(m_router.topPopupToken(), parent.token);
-    EXPECT_EQ(m_router.focus().value, 101u);
-}
-
-TEST_F(UiNestedPopupRouterTests, OutsideChildPressOverParentConsumesReleaseWithoutParentActivation){
-    const PopupScope parent = Scope(100u, 1u);
-    const PopupScope child = Scope(200u, 2u, parent.token);
-    const Array<PopupScope, 2> scopes = { parent, child };
-    ASSERT_TRUE(install(scopes, 1u));
-    EXPECT_TRUE(send({ .position = { 35.0f, 35.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    EXPECT_FALSE(m_router.capture().valid());
-    PopupDismissReason::Enum reason = PopupDismissReason::None;
-    const auto reasonResult = m_router.consumePopupDismissal(child.token);
-    ASSERT_TRUE(reasonResult);
-    reason = *reasonResult;
-    EXPECT_EQ(reason, PopupDismissReason::OutsideClick);
-    EXPECT_FALSE(m_router.consumePopupDismissal(parent.token));
-    ASSERT_TRUE(install(Span(&parent, 1u), 2u));
-    EXPECT_TRUE(send({ .position = { 35.0f, 35.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
-    EXPECT_FALSE(m_router.consumeActivation({ 101u }));
-    click({ 35.0f, 35.0f });
-    EXPECT_TRUE(m_router.consumeActivation({ 101u }));
-}
-
-TEST_F(UiNestedPopupRouterTests, OutsideSecondarySequenceCannotOpenTheNewlyExposedParentMenu){
-    const PopupScope parent = Scope(100u, 1u);
-    const PopupScope child = Scope(200u, 2u, parent.token);
-    const Array<PopupScope, 2> scopes = { parent, child };
-    ASSERT_TRUE(install(scopes, 1u, true));
-    EXPECT_TRUE(send({ .position = { 35.0f, 35.0f } , .type = InputEventType::SecondaryDown}).pointerConsumed);
-    const auto reasonResult = m_router.consumePopupDismissal(child.token);
-    ASSERT_TRUE(reasonResult);
-    ASSERT_TRUE(install(Span(&parent, 1u), 2u, true));
-    EXPECT_TRUE(send({ .position = { 35.0f, 35.0f } , .type = InputEventType::SecondaryUp}).pointerConsumed);
-    ContextMenuAction action;
-    EXPECT_FALSE(m_router.consumeContextMenu({ 101u }, 10u));
-    EXPECT_TRUE(send({ .position = { 35.0f, 35.0f } , .type = InputEventType::SecondaryDown}).pointerConsumed);
-    EXPECT_FALSE(m_router.consumeContextMenu({ 101u }, 10u));
-    EXPECT_TRUE(send({ .position = { 35.0f, 35.0f } , .type = InputEventType::SecondaryUp}).pointerConsumed);
-    const auto actionResult = m_router.consumeContextMenu({ 101u }, 10u);
-    ASSERT_TRUE(actionResult);
-    action = *actionResult;
-    EXPECT_EQ(action.popup, parent.token);
-    EXPECT_EQ(action.origin, InputActionSource::Pointer);
-}
-
-TEST_F(UiNestedPopupRouterTests, ClosingAncestorPreservesUnrelatedTopChainAndItsAcceptedAction){
-    focusBase();
-    const PopupScope parent = Scope(100u, 1u);
-    const PopupScope child = Scope(200u, 2u, parent.token);
-    const PopupScope grandchild = Scope(300u, 3u, child.token);
-    const PopupScope unrelated = Scope(400u, 4u);
-    const Array<PopupScope, 4> scopes = { parent, child, grandchild, unrelated };
-    ASSERT_TRUE(install(scopes, 2u));
-    key(Core::Key::Enter);
-    ASSERT_EQ(m_router.actions().size(), 1u);
-    m_router.closePopup(parent.token);
-    EXPECT_EQ(m_router.focus().value, 401u);
-    EXPECT_EQ(m_router.hitTest({ 255.0f, 35.0f }).value, 401u);
-    EXPECT_TRUE(m_router.consumeActivation({ 401u }));
-    ASSERT_TRUE(install(Span(&unrelated, 1u), 3u));
-    EXPECT_EQ(m_router.popupCount(), 1u);
-    EXPECT_EQ(m_router.focus().value, 401u);
-    EXPECT_EQ(m_router.popupScope(parent.token), nullptr);
-    EXPECT_EQ(m_router.popupScope(child.token), nullptr);
-    EXPECT_EQ(m_router.popupScope(grandchild.token), nullptr);
-    ASSERT_TRUE(install({}, 4u));
-    EXPECT_EQ(m_router.focus().value, 1u);
-}
-
-TEST_F(UiNestedPopupRouterTests, RetiringAncestorCancelsDescendantIntentionsAcrossRemovalAndIdenticalReturn){
-    focusBase();
-    const PopupScope parent = Scope(100u, 1u);
-    const PopupScope child = Scope(200u, 2u, parent.token);
-    const Array<PopupScope, 2> scopes = { parent, child };
-    ASSERT_TRUE(install(scopes, 2u, true));
-    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Down , .type = InputEventType::KeyDown}).commandConsumed);
-    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Menu , .type = InputEventType::KeyDown}).commandConsumed);
-    EXPECT_TRUE(send({ .position = { 175.0f, 125.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    EXPECT_TRUE(send({ .position = { 175.0f, 125.0f } , .type = InputEventType::SecondaryDown}).pointerConsumed);
-    ASSERT_EQ(m_router.capture().value, 201u);
-    ASSERT_EQ(m_router.controlActions().size(), 1u);
-    m_router.invalidateTarget(parent.token.widget);
-    EXPECT_FALSE(m_router.hasPopup());
-    EXPECT_EQ(m_router.popupCount(), 0u);
-    ASSERT_EQ(m_router.targets().size(), 1u);
-    EXPECT_EQ(m_router.focus().value, 1u);
-    EXPECT_FALSE(m_router.capture().valid());
-    EXPECT_TRUE(m_router.actions().empty());
-    EXPECT_TRUE(m_router.controlActions().empty());
-    EXPECT_FALSE(m_router.consumeContextMenu({ 201u }, 10u));
-    ASSERT_TRUE(install(scopes, 3u, true));
-    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Down, .type = InputEventType::KeyDown, .repeat = true }).commandConsumed);
-    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Menu , .type = InputEventType::KeyDown}).commandConsumed);
-    EXPECT_TRUE(m_router.controlActions().empty());
-    EXPECT_FALSE(m_router.consumeContextMenu({ 201u }, 10u));
-    EXPECT_TRUE(send({ .position = { 175.0f, 125.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
-    EXPECT_TRUE(send({ .position = { 175.0f, 125.0f } , .type = InputEventType::SecondaryUp}).pointerConsumed);
-    EXPECT_TRUE(m_router.actions().empty());
-    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Down , .type = InputEventType::KeyUp}).commandConsumed);
-    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Menu , .type = InputEventType::KeyUp}).commandConsumed);
-    key(Core::Key::Down);
-    ControlAction action;
-    const auto actionResult = m_router.consumeControlAction({ 201u }, 10u, { 600u, 700u, 800u });
-    ASSERT_TRUE(actionResult);
-    action = *actionResult;
-    EXPECT_EQ(action.popup, child.token);
-    EXPECT_EQ(action.kind, ControlActionKind::Down);
-}
-
-TEST_F(UiNestedPopupRouterTests, RetiringLowerFamilyPreservesUnrelatedTopCaptureAndFocus){
-    const PopupScope parent = Scope(100u, 1u);
-    const PopupScope child = Scope(200u, 2u, parent.token);
-    const PopupScope unrelated = Scope(400u, 3u);
-    const Array<PopupScope, 3> scopes = { parent, child, unrelated };
-    ASSERT_TRUE(install(scopes, 1u));
-    EXPECT_TRUE(send({ .position = { 255.0f, 35.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    ASSERT_EQ(m_router.capture().value, 401u);
-    m_router.invalidateTarget(parent.token.widget);
-    EXPECT_EQ(m_router.popupCount(), 1u);
-    EXPECT_EQ(m_router.topPopupToken(), unrelated.token);
-    EXPECT_EQ(m_router.focus().value, 401u);
-    EXPECT_EQ(m_router.capture().value, 401u);
-    EXPECT_TRUE(send({ .position = { 255.0f, 35.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
-    EXPECT_TRUE(m_router.consumeActivation({ 401u }));
-    EXPECT_FALSE(m_router.consumeActivation({ 201u }));
-}
-
-TEST_F(UiNestedPopupRouterTests, ChangingAncestorRequiresRenewedChildTokenAndFencesOldCapture){
-    const PopupScope parent = Scope(100u, 1u);
-    const PopupScope child = Scope(200u, 2u, parent.token);
-    const Array<PopupScope, 2> original = { parent, child };
-    ASSERT_TRUE(install(original, 1u));
-    click({ 175.0f, 125.0f });
-    ASSERT_EQ(m_router.actions().size(), 1u);
-    EXPECT_TRUE(send({ .position = { 175.0f, 125.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    PopupScope nextParent = parent;
-    ++nextParent.token.openGeneration;
-    PopupScope nextChild = child;
-    const Array<PopupScope, 2> staleParent = { nextParent, nextChild };
-    EXPECT_FALSE(install(staleParent, 2u));
-    nextChild.parent = nextParent.token;
-    const Array<PopupScope, 2> staleChild = { nextParent, nextChild };
-    EXPECT_FALSE(install(staleChild, 2u));
-    EXPECT_EQ(m_router.layoutGeneration(), 1u);
-    EXPECT_EQ(m_router.focus().value, 201u);
-    EXPECT_EQ(m_router.capture().value, 201u);
-    ASSERT_EQ(m_router.actions().size(), 1u);
-    ++nextChild.token.openGeneration;
-    const Array<PopupScope, 2> renewed = { nextParent, nextChild };
-    ASSERT_TRUE(install(renewed, 2u));
-    EXPECT_EQ(m_router.focus().value, 201u);
-    EXPECT_FALSE(m_router.capture().valid());
-    EXPECT_TRUE(m_router.actions().empty());
-    EXPECT_TRUE(send({ .position = { 175.0f, 125.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
-    EXPECT_FALSE(m_router.consumeActivation({ 201u }));
-    click({ 175.0f, 125.0f });
-    EXPECT_TRUE(m_router.consumeActivation({ 201u }));
-}
-
-TEST_F(UiNestedPopupRouterTests, InvalidOrMissingAncestryRejectsAtomicallyAgainstAcceptedNestedGeometry){
-    const PopupScope parent = Scope(100u, 1u);
-    const PopupScope child = Scope(200u, 2u, parent.token);
-    const Array<PopupScope, 2> scopes = { parent, child };
-    ASSERT_TRUE(install(scopes, 1u));
-    click({ 175.0f, 125.0f });
-    EXPECT_TRUE(send({ .position = { 175.0f, 125.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    Array<PopupScope, 5u> invalid{};
-    invalid.fill(child);
-    ++invalid[0u].parent.openGeneration;
-    invalid[1u].parent.widget = {};
-    invalid[2u].parent = { { 999u }, 10u, 20u, 1u };
-    invalid[3u].parent = child.token;
-    invalid[4u].parent = {};
-    for(const auto& candidate : invalid){
-        const Array<PopupScope, 2> rejected = { parent, candidate };
-        EXPECT_FALSE(install(rejected, 2u));
-        EXPECT_EQ(m_router.layoutGeneration(), 1u);
-        EXPECT_EQ(m_router.focus().value, 201u);
-        EXPECT_EQ(m_router.capture().value, 201u);
-        EXPECT_EQ(m_router.hitTest({ 175.0f, 125.0f }).value, 201u);
-        EXPECT_EQ(m_router.actions().size(), 1u);
-    }
-    EXPECT_FALSE(install(Span(&child, 1u), 2u));
-    PopupScope forwardParent = parent;
-    forwardParent.parent = child.token;
-    const Array<PopupScope, 2> cyclic = { forwardParent, child };
-    EXPECT_FALSE(install(cyclic, 2u));
-    EXPECT_EQ(m_router.popupCount(), 2u);
-    EXPECT_TRUE(send({ .position = { 175.0f, 125.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
-    EXPECT_TRUE(m_router.consumeActivation({ 201u }));
-}
-
-TEST_F(UiNestedPopupRouterTests, NewDescendantsCannotRestoreInputBeneathAClosingAncestorLifetime){
-    PopupScope parent = Scope(100u, 1u);
-    PopupScope child = Scope(200u, 2u, parent.token);
-    PopupScope grandchild = Scope(300u, 3u, child.token);
-    const Array<PopupScope, 3> original = { parent, child, grandchild };
-    ASSERT_TRUE(install(original, 1u));
-    m_router.closePopup(parent.token);
-    ++child.token.openGeneration;
-    ++grandchild.token.openGeneration;
-    grandchild.parent = child.token;
-    const Array<PopupScope, 3> underClosingParent = { parent, child, grandchild };
-    ASSERT_TRUE(install(underClosingParent, 2u));
-    EXPECT_FALSE(m_router.focus().valid());
-    EXPECT_FALSE(m_router.hitTest({ 285.0f, 205.0f }).valid());
-    EXPECT_TRUE(m_router.actions().empty());
-    ++parent.token.openGeneration;
-    m_router.fencePopup(parent.token);
-    ++child.token.openGeneration;
-    child.parent = parent.token;
-    ++grandchild.token.openGeneration;
-    grandchild.parent = child.token;
-    const Array<PopupScope, 3> renewed = { parent, child, grandchild };
-    ASSERT_TRUE(install(renewed, 3u));
-    EXPECT_EQ(m_router.focus().value, 301u);
-    EXPECT_EQ(m_router.hitTest({ 285.0f, 205.0f }).value, 301u);
-}
-
-TEST_F(UiNestedPopupRouterTests, FencingAncestorImmediatelySuppressesAllDescendantActionsAndCapture){
-    const PopupScope parent = Scope(100u, 1u);
-    const PopupScope child = Scope(200u, 2u, parent.token);
-    const PopupScope grandchild = Scope(300u, 3u, child.token);
-    const Array<PopupScope, 3> scopes = { parent, child, grandchild };
-    ASSERT_TRUE(install(scopes, 1u));
-    click({ 285.0f, 205.0f });
-    ASSERT_EQ(m_router.actions().size(), 1u);
-    EXPECT_TRUE(send({ .position = { 285.0f, 205.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    PopupToken replaced = parent.token;
-    ++replaced.instanceGeneration;
-    m_router.fencePopup(replaced);
-    EXPECT_FALSE(m_router.focus().valid());
-    EXPECT_FALSE(m_router.capture().valid());
-    EXPECT_TRUE(m_router.actions().empty());
-    EXPECT_FALSE(m_router.hitTest({ 285.0f, 205.0f }).valid());
-    EXPECT_TRUE(send({ .position = { 285.0f, 205.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
-    EXPECT_FALSE(m_router.consumeActivation({ 301u }));
-}
-
-TEST_F(UiNestedPopupRouterTests, RetiringAnAlreadyRemovedPopupOwnerPartStillRestoresUnderlyingFocus){
-    focusBase();
-    const PopupScope scope = Scope(100u, 1u);
-    const HitTarget host = Child(scope, 1u, 1u, true);
-    HitTarget owner = Barrier(scope, 2u);
-    owner.owner = host.id;
-    owner.ownerDeclarationGeneration = host.declarationGeneration;
-    owner.control = host.control;
-    const Array<HitTarget, 3> targets = { BaseHitTarget(), host, owner };
-    ASSERT_TRUE(m_router.commitTargets(targets, 2u, Span(&scope, 1u)));
-    m_router.invalidateTarget(host.id);
-    EXPECT_EQ(m_router.targets().size(), 1u);
-    EXPECT_EQ(m_router.findTarget(owner.id), nullptr);
-    EXPECT_EQ(m_router.popupCount(), 1u);
-    EXPECT_FALSE(m_router.focus().valid());
-    m_router.invalidateTarget(owner.id);
-    EXPECT_EQ(m_router.popupCount(), 0u);
-    EXPECT_EQ(m_router.focus(), BaseHitTarget().id);
-    EXPECT_EQ(m_router.targets().size(), 1u);
-}
-
-TEST_F(UiNestedPopupRouterTests, NativeFocusLossDismissesWholeFamilyWithoutRestoringUnderlyingFocus){
-    focusBase();
-    const PopupScope parent = Scope(100u, 1u);
-    const PopupScope child = Scope(200u, 2u, parent.token);
-    const PopupScope grandchild = Scope(300u, 3u, child.token);
-    const Array<PopupScope, 3> scopes = { parent, child, grandchild };
-    ASSERT_TRUE(install(scopes, 2u));
-    EXPECT_TRUE(send({ .position = {} , .type = InputEventType::FocusLost}).commandConsumed);
-    EXPECT_FALSE(m_router.focus().valid());
-    EXPECT_FALSE(m_router.hitTest({ 285.0f, 205.0f }).valid());
-    PopupDismissReason::Enum reason = PopupDismissReason::None;
-    for(const auto& scope : scopes){
-        const auto reasonResult = m_router.consumePopupDismissal(scope.token);
-        ASSERT_TRUE(reasonResult);
-        reason = *reasonResult;
-        EXPECT_EQ(reason, PopupDismissReason::FocusLost);
-        EXPECT_FALSE(m_router.consumePopupDismissal(scope.token));
-    }
-    EXPECT_FALSE(send({ .position = {} , .type = InputEventType::FocusGained}).focus.valid());
-    ASSERT_TRUE(install({}, 3u));
-    EXPECT_FALSE(m_router.focus().valid());
-    EXPECT_FALSE(m_router.hasPopup());
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1436,15 +728,15 @@ using namespace NWB::Impl::Ui;
 using namespace NWB::UiPopupToolsTests;
 using namespace NWB::UiComboTests;
 
-constexpr AStringView s_MenuRowsKey = "rows";
-constexpr AStringView s_AfterKey = "after";
+inline constexpr AStringView s_MenuRowsKey = "rows";
+inline constexpr AStringView s_AfterKey = "after";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 class UiNestedPopupTriggerTests : public ComboFixture{
-protected:
+public:
     [[nodiscard]] static WidgetOptions Control()noexcept{
         WidgetOptions options;
         options.width = { LayoutSizePolicy::Fixed, 220.0f };
@@ -1453,13 +745,23 @@ protected:
     }
 
 
-protected:
+public:
     virtual void SetUp()override{
         ComboFixture::SetUp();
         m_source.count = 5u;
         m_source.disabled = 3u;
         m_parent.open();
         m_child.open();
+    }
+
+    [[nodiscard]] Optional<HitTarget> findTarget(const WidgetId widget)const noexcept{
+        if(const HitTarget* found = target(widget))
+            return *found;
+        return {};
+    }
+
+    [[nodiscard]] b8 hasTarget(const WidgetId widget)const noexcept{
+        return target(widget) != nullptr;
     }
 
     [[nodiscard]] WidgetId fieldId()const{ return UiTestSupport::RequireWidgetId(childId(), s_ComboKey); }
@@ -1517,7 +819,7 @@ protected:
     }
 
 
-protected:
+public:
     PopupState m_parent;
     PopupState m_child;
     ContextMenuState m_menu;
@@ -1530,73 +832,1038 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiNestedPopupTriggerTests, NestedComboRejectsDisabledRowWithoutActivatingUserAncestors){
-    ASSERT_TRUE(acceptChildCombo(1u));
-    ASSERT_NE(target(fieldId()), nullptr);
-    EXPECT_EQ(target(rowsId()), nullptr);
-    click(Center(target(fieldId())->rectangle));
-    ASSERT_TRUE(acceptChildCombo(2u));
-    EXPECT_FALSE(m_result.committed);
-    EXPECT_TRUE(m_state.isOpen());
-    ASSERT_NE(target(rowsId()), nullptr);
-    ASSERT_NE(target(comboRow(3u)), nullptr);
-    EXPECT_FALSE(target(comboRow(3u))->enabled);
-    click(Center(target(comboRow(3u))->rectangle));
-    ASSERT_TRUE(acceptChildCombo(3u));
-    EXPECT_FALSE(m_result.committed);
-    EXPECT_TRUE(m_state.isOpen());
-    EXPECT_EQ(m_state.selectedKey(), 0u);
-
-    ASSERT_NE(target(comboRow(4u)), nullptr);
-    click(Center(target(comboRow(4u))->rectangle));
-    ASSERT_TRUE(acceptChildCombo(4u));
-    EXPECT_TRUE(m_result.committed);
-    EXPECT_TRUE(m_result.selectionChanged);
-    EXPECT_TRUE(m_result.closed);
-    EXPECT_EQ(m_state.selectedKey(), 4u);
-    EXPECT_FALSE(m_state.isOpen());
-    EXPECT_EQ(target(rowsId()), nullptr);
-    expectUserParentsOpen();
-}
-
-TEST_F(UiNestedPopupTriggerTests, NestedMenuSkipsDisabledCommandsWithoutActivatingUserAncestors){
-    ASSERT_TRUE(acceptChildMenu(1u));
-    ASSERT_NE(target(anchorId()), nullptr);
-    const Point point = Center(target(anchorId())->rectangle);
-    EXPECT_TRUE(send({ .position = point , .type = InputEventType::SecondaryDown }).pointerConsumed);
-    EXPECT_TRUE(send({ .position = point , .type = InputEventType::SecondaryUp }).pointerConsumed);
-    ASSERT_TRUE(acceptChildMenu(2u));
-    EXPECT_TRUE(m_menuResult.opened);
-    EXPECT_FALSE(m_anchorActivated);
-    EXPECT_TRUE(m_menu.isOpen());
-    ASSERT_NE(target(menuRows()), nullptr);
-    press(Core::Key::Down);
-    press(Core::Key::Down);
-    ASSERT_TRUE(acceptChildMenu(3u));
-    EXPECT_EQ(m_menu.cursorKey(), 4u);
-    EXPECT_FALSE(m_menuResult.activated);
-    press(Core::Key::Enter);
-    ASSERT_TRUE(acceptChildMenu(4u));
-    EXPECT_TRUE(m_menuResult.activated);
-    EXPECT_EQ(m_menuResult.key, 4u);
-    EXPECT_TRUE(m_menuResult.closed);
-    EXPECT_FALSE(m_menu.isOpen());
-    EXPECT_FALSE(m_anchorActivated);
-    EXPECT_EQ(target(menuRows()), nullptr);
-    expectUserParentsOpen();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_ui_glyph_sdf_tests{
+using UiNestedPopupLoanMutationSource = __hidden_ui_nested_popup_loan_tests::NestedMutationSource;
+using UiNestedPopupLoanTests = __hidden_ui_nested_popup_loan_tests::UiNestedPopupLoanTests;
+namespace UiNestedPopupReentryKind = __hidden_ui_nested_popup_reentry_tests::ReentryKind;
+using UiNestedPopupReentryAcceptedFrame = __hidden_ui_nested_popup_reentry_tests::AcceptedFrame;
+using UiNestedPopupReentryTests = __hidden_ui_nested_popup_reentry_tests::UiNestedPopupReentryTests;
+using UiNestedPopupRouterTests = __hidden_ui_nested_popup_router_tests::UiNestedPopupRouterTests;
+using UiNestedPopupTriggerTests = __hidden_ui_nested_popup_trigger_tests::UiNestedPopupTriggerTests;
+
+using ComboOptions = ::NWB::Impl::Ui::ComboOptions;
+using ContextMenuAction = ::NWB::Impl::Ui::ContextMenuAction;
+using ControlAction = ::NWB::Impl::Ui::ControlAction;
+using ControlToken = ::NWB::Impl::Ui::ControlToken;
+using InputEvent = ::NWB::Impl::Ui::InputEvent;
+using ListState = ::NWB::Impl::Ui::ListState;
+using PopupScope = ::NWB::Impl::Ui::PopupScope;
+using PopupState = ::NWB::Impl::Ui::PopupState;
+using PopupToken = ::NWB::Impl::Ui::PopupToken;
+using SearchComboOptions = ::NWB::Impl::Ui::SearchComboOptions;
+
+namespace ControlActionKind = ::NWB::Impl::Ui::ControlActionKind;
+namespace CoreKey = ::NWB::Core::Key;
+using CoreKeyEnum = ::NWB::Core::Key::Enum;
+namespace InputActionSource = ::NWB::Impl::Ui::InputActionSource;
+namespace InputEventType = ::NWB::Impl::Ui::InputEventType;
+using InputEventTypeEnum = ::NWB::Impl::Ui::InputEventType::Enum;
+namespace PopupDismissReason = ::NWB::Impl::Ui::PopupDismissReason;
+using PopupDismissReasonEnum = ::NWB::Impl::Ui::PopupDismissReason::Enum;
+
+[[nodiscard]] inline ComboOptions MakeUiNestedPopupRouterComboOptions()noexcept{
+    return ::NWB::UiComboTests::Options();
 }
+[[nodiscard]] inline HitTarget MakeUiNestedPopupRouterBaseHitTarget()noexcept{
+    return __hidden_ui_nested_popup_router_tests::BaseHitTarget();
+}
+[[nodiscard]] inline PopupScope MakeUiNestedPopupRouterScope(const u64 widget, const u32 layer, const PopupToken& parent = {})noexcept{
+    return __hidden_ui_nested_popup_router_tests::Scope(widget, layer, parent);
+}
+[[nodiscard]] inline HitTarget MakeUiNestedPopupRouterBarrier(const PopupScope& scope, const u32 order)noexcept{
+    return __hidden_ui_nested_popup_router_tests::Barrier(scope, order);
+}
+[[nodiscard]] inline HitTarget MakeUiNestedPopupRouterChild(const PopupScope& scope, const u64 offset, const u32 order, const b8 navigation)noexcept{
+    return __hidden_ui_nested_popup_router_tests::Child(scope, offset, order, navigation);
+}
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_UiNestedPopupRouterParentKey = "parent";
+const StringView s_UiNestedPopupRouterChildKey = "child";
+const StringView s_UiNestedPopupRouterListKey = "list";
+const StringView s_UiNestedPopupRouterComboKey = "combo";
+const StringView s_UiNestedPopupRouterAnchorKey = "anchor";
+const StringView s_UiNestedPopupRouterCallbackQuery = "callback";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Rect MakeUiNestedPopupRouterRect(in f32 x, in f32 y, in f32 width, in f32 height){
+    Rect rect = Rect();
+    rect.x = x;
+    rect.y = y;
+    rect.width = width;
+    rect.height = height;
+    return rect;
+}
+
+Point MakeUiNestedPopupRouterPoint(in f32 x, in f32 y){
+    Point point = Point();
+    point.x = x;
+    point.y = y;
+    return point;
+}
+
+WidgetId MakeUiNestedPopupRouterWidgetId(in u64 value){
+    WidgetId id = WidgetId();
+    id.value = value;
+    return id;
+}
+
+PopupToken MakeUiNestedPopupRouterToken(in u64 widgetValue, in u64 declarationGeneration, in u64 instanceGeneration, in u64 openGeneration){
+    PopupToken token = PopupToken();
+    token.widget = MakeUiNestedPopupRouterWidgetId(widgetValue);
+    token.declarationGeneration = declarationGeneration;
+    token.instanceGeneration = instanceGeneration;
+    token.openGeneration = openGeneration;
+    return token;
+}
+
+ControlToken MakeUiNestedPopupRouterControlToken(in u64 instanceGeneration, in u64 contentGeneration, in u64 contentRevision){
+    ControlToken token = ControlToken();
+    token.instanceGeneration = instanceGeneration;
+    token.contentGeneration = contentGeneration;
+    token.contentRevision = contentRevision;
+    return token;
+}
+
+InputEvent MakeUiNestedPopupRouterPointerEvent(in InputEventTypeEnum eventType, in f32 x, in f32 y){
+    InputEvent event = InputEvent();
+    event.type = eventType;
+    event.position.x = x;
+    event.position.y = y;
+    return event;
+}
+
+InputEvent MakeUiNestedPopupRouterPointerPointEvent(in InputEventTypeEnum eventType, in Point position){
+    InputEvent event = InputEvent();
+    event.type = eventType;
+    event.position = position;
+    return event;
+}
+
+InputEvent MakeUiNestedPopupRouterKeyEvent(in InputEventTypeEnum eventType, in CoreKeyEnum key, in b8 repeat){
+    InputEvent event = InputEvent();
+    event.type = eventType;
+    event.key = key;
+    event.repeat = repeat;
+    return event;
+}
+
+InputEvent MakeUiNestedPopupRouterFocusEvent(in InputEventTypeEnum eventType){
+    InputEvent event = InputEvent();
+    event.type = eventType;
+    return event;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiNestedPopupLoanTests_ChildEndDefersVisibleRowCallbacksUntilTheOuterPopupEnds(mut UiNestedPopupLoanTests self){
+    ASSERT_TRUE(self.beginParent(1u));
+    ASSERT_TRUE(self.m_builder.beginPopup(s_UiNestedPopupRouterChildKey, self.m_child, MakeNestedChildPopupOptions()));
+    ASSERT_TRUE(self.m_builder.virtualList(s_UiNestedPopupRouterListKey, self.m_childSource, self.m_childList, MakeLargeLoanListOptions()).valid);
+    self.m_childSource.resetAllCounters();
+    ASSERT_TRUE(self.m_builder.endPopup());
+    EXPECT_EQ(self.m_childSource.metadataCalls, 0u);
+    EXPECT_EQ(self.m_childSource.textCalls, 0u);
+    ASSERT_TRUE(self.m_builder.endPopup());
+    EXPECT_GT(self.m_childSource.textCalls, 0u);
+    ASSERT_TRUE(self.finishRoot());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+}
+
+void VerifyUiNestedPopupLoanTests_ExplicitChildListMutationAfterChildEndRejectsTheEnclosingLoan(mut UiNestedPopupLoanTests self){
+    ASSERT_TRUE(self.acceptLists(1u));
+    ASSERT_TRUE(self.declareLists(2u));
+    const u64 inputGeneration = self.m_childList.inputGeneration();
+    self.m_childList.select(4u);
+    EXPECT_NE(self.m_childList.inputGeneration(), inputGeneration);
+    EXPECT_FALSE(self.m_builder.endPopup());
+    EXPECT_EQ(self.m_childList.selectedKey(), 4u);
+    EXPECT_EQ(self.m_context.input().layoutGeneration(), 1u);
+}
+
+void VerifyUiNestedPopupLoanTests_ChildVisibleRowCallbackCannotMutateThePaintedParentListLoan(mut UiNestedPopupLoanTests self){
+    ASSERT_TRUE(self.acceptLists(1u));
+    ASSERT_TRUE(self.declareLists(2u));
+    const u64 inputGeneration = self.m_parentList.inputGeneration();
+    self.m_childSource.armSelectListOnText(self.m_parentList);
+    EXPECT_FALSE(self.m_builder.endPopup());
+    EXPECT_EQ(self.m_parentList.selectedKey(), 4u);
+    EXPECT_NE(self.m_parentList.inputGeneration(), inputGeneration);
+    EXPECT_FALSE(self.m_childSource.hasSelectListOnText());
+    EXPECT_EQ(self.m_context.input().layoutGeneration(), 1u);
+}
+
+void VerifyUiNestedPopupLoanTests_ParentVisibleRowCallbackCannotMutateTheEndedChildListLoan(mut UiNestedPopupLoanTests self){
+    ASSERT_TRUE(self.acceptLists(1u));
+    ASSERT_TRUE(self.declareLists(2u));
+    const u64 inputGeneration = self.m_childList.inputGeneration();
+    self.m_parentSource.armSelectListOnText(self.m_childList);
+    EXPECT_FALSE(self.m_builder.endPopup());
+    EXPECT_EQ(self.m_childList.selectedKey(), 4u);
+    EXPECT_NE(self.m_childList.inputGeneration(), inputGeneration);
+    EXPECT_FALSE(self.m_parentSource.hasSelectListOnText());
+    EXPECT_EQ(self.m_context.input().layoutGeneration(), 1u);
+}
+
+void VerifyUiNestedPopupLoanTests_ParentMetadataCallbackArmedByChildPaintStillRejectsThePaintedChildMutation(mut UiNestedPopupLoanTests self){
+    ASSERT_TRUE(self.acceptLists(1u));
+    ASSERT_TRUE(self.declareLists(2u));
+    const u64 inputGeneration = self.m_childList.inputGeneration();
+    self.m_childSource.armSourceSelectList(self.m_parentSource, self.m_childList);
+    self.m_childSource.textCalls = 0u;
+    EXPECT_FALSE(self.m_builder.endPopup());
+    EXPECT_GT(self.m_childSource.textCalls, 0u);
+    EXPECT_FALSE(self.m_childSource.hasArmSourceOnText());
+    EXPECT_FALSE(self.m_parentSource.hasSelectListOnRevision());
+    EXPECT_EQ(self.m_childList.selectedKey(), 4u);
+    EXPECT_NE(self.m_childList.inputGeneration(), inputGeneration);
+    EXPECT_EQ(self.m_context.input().layoutGeneration(), 1u);
+}
+
+void VerifyUiNestedPopupLoanTests_ChildSourceCallbackCannotMutateTheParentComboAfterItsFieldPaint(mut UiNestedPopupLoanTests self){
+    ASSERT_TRUE(self.acceptBase(1u));
+    ASSERT_TRUE(self.beginParent(2u));
+    ASSERT_TRUE(self.m_builder.comboBox(s_UiNestedPopupRouterComboKey, self.m_comboSource, self.m_combo, MakeUiNestedPopupRouterComboOptions()).valid);
+    ASSERT_TRUE(self.m_builder.beginPopup(s_UiNestedPopupRouterChildKey, self.m_child, MakeNestedChildPopupOptions()));
+    ASSERT_TRUE(self.m_builder.virtualList(s_UiNestedPopupRouterListKey, self.m_childSource, self.m_childList, MakeLargeLoanListOptions()).valid);
+    ASSERT_TRUE(self.m_builder.endPopup());
+    const u64 inputGeneration = self.m_combo.inputGeneration();
+    self.m_childSource.armSelectComboOnText(self.m_combo);
+    EXPECT_FALSE(self.m_builder.endPopup());
+    EXPECT_EQ(self.m_combo.selectedKey(), 4u);
+    EXPECT_NE(self.m_combo.inputGeneration(), inputGeneration);
+    EXPECT_GT(self.m_combo.bounds().width, 0.0f);
+    EXPECT_EQ(self.m_context.input().layoutGeneration(), 1u);
+}
+
+void VerifyUiNestedPopupLoanTests_ParentSourceCallbackCannotMutateTheEndedChildSearchQueryLoan(mut UiNestedPopupLoanTests self){
+    ASSERT_TRUE(self.acceptBase(1u));
+    self.m_search.combo().open();
+    ASSERT_TRUE(self.beginParent(2u));
+    ASSERT_TRUE(self.m_builder.virtualList(s_UiNestedPopupRouterListKey, self.m_parentSource, self.m_parentList, MakeLargeLoanListOptions()).valid);
+    ASSERT_TRUE(self.m_builder.beginPopup(s_UiNestedPopupRouterChildKey, self.m_child, MakeNestedChildPopupOptions()));
+    SearchComboOptions searchOptions = SearchComboOptions();
+    searchOptions.combo = MakeUiNestedPopupRouterComboOptions();
+    ASSERT_TRUE(self.m_builder.searchComboBox("search", self.m_searchSource, self.m_search, searchOptions).combo.valid);
+    ASSERT_TRUE(self.m_builder.endPopup());
+    const u64 externalRevision = self.m_search.query().externalRevision();
+    self.m_parentSource.armQueryOnText(self.m_search.query());
+    EXPECT_FALSE(self.m_builder.endPopup());
+    EXPECT_EQ(self.m_search.query().text(), s_UiNestedPopupRouterCallbackQuery);
+    EXPECT_GT(self.m_search.query().externalRevision(), externalRevision);
+    EXPECT_EQ(self.m_context.input().layoutGeneration(), 1u);
+}
+
+void VerifyUiNestedPopupLoanTests_ChildSourceCallbackCannotCloseTheParentContextMenuAndPublishTheFrame(mut UiNestedPopupLoanTests self){
+    ASSERT_TRUE(self.acceptBase(1u));
+    ASSERT_TRUE(self.m_menu.open(MakeUiNestedPopupRouterRect(80.0f, 120.0f, 0.0f, 0.0f)));
+    ASSERT_TRUE(self.beginParent(2u));
+    EXPECT_FALSE(self.m_builder.button(s_UiNestedPopupRouterAnchorKey, "Commands"));
+    ASSERT_TRUE(self.m_builder.contextMenu("menu", s_UiNestedPopupRouterAnchorKey, self.m_menuSource, self.m_menu).valid);
+    ASSERT_TRUE(self.m_builder.beginPopup(s_UiNestedPopupRouterChildKey, self.m_child, MakeNestedChildPopupOptions()));
+    ASSERT_TRUE(self.m_builder.virtualList(s_UiNestedPopupRouterListKey, self.m_childSource, self.m_childList, MakeLargeLoanListOptions()).valid);
+    ASSERT_TRUE(self.m_builder.endPopup());
+    const u64 revision = self.m_menu.revision();
+    self.m_childSource.armCloseMenuOnText(self.m_menu);
+    EXPECT_FALSE(self.m_builder.endPopup());
+    EXPECT_FALSE(self.m_menu.isOpen());
+    EXPECT_GT(self.m_menu.revision(), revision);
+    EXPECT_EQ(self.m_context.input().layoutGeneration(), 1u);
+}
+
+void VerifyUiNestedPopupLoanTests_ClosingTheParentBeforeOuterEndSuppressesEveryDescendantSourceAndQueryPublication(mut UiNestedPopupLoanTests self){
+    self.m_combo.open();
+    self.m_search.combo().open();
+    ASSERT_TRUE(self.m_menu.open(MakeUiNestedPopupRouterRect(510.0f, 280.0f, 0.0f, 0.0f)));
+    ASSERT_TRUE(self.declareChildCompounds(1u));
+    self.resetChildCounters();
+    self.m_parent.close();
+    ASSERT_TRUE(self.m_builder.endPopup());
+    self.expectNoChildCallbacks();
+    ASSERT_TRUE(self.finishRoot());
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    EXPECT_TRUE(snapshot.commands().empty());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    EXPECT_TRUE(self.m_context.input().targets().empty());
+    EXPECT_FALSE(self.m_context.input().hasPopup());
+}
+
+void VerifyUiNestedPopupLoanTests_ReopeningTheParentBeforeOuterEndSuppressesItsOldDescendantLoans(mut UiNestedPopupLoanTests self){
+    self.m_combo.open();
+    self.m_search.combo().open();
+    ASSERT_TRUE(self.m_menu.open(MakeUiNestedPopupRouterRect(510.0f, 280.0f, 0.0f, 0.0f)));
+    ASSERT_TRUE(self.declareChildCompounds(1u));
+    self.resetChildCounters();
+    const u64 openGeneration = self.m_parent.openGeneration();
+    self.m_parent.close();
+    self.m_parent.open();
+    EXPECT_NE(self.m_parent.openGeneration(), openGeneration);
+    ASSERT_TRUE(self.m_builder.endPopup());
+    self.expectNoChildCallbacks();
+    EXPECT_TRUE(self.m_parent.isOpen());
+    ASSERT_TRUE(self.finishRoot());
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    EXPECT_TRUE(snapshot.commands().empty());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    EXPECT_TRUE(self.m_context.input().targets().empty());
+    EXPECT_FALSE(self.m_context.input().hasPopup());
+}
+
+void VerifyUiNestedPopupLoanTests_ClosingTheEndedChildSkipsItsCallbacksAndKeepsParentControlsPainted(mut UiNestedPopupLoanTests self){
+    ASSERT_TRUE(self.beginParent(1u));
+    EXPECT_FALSE(self.m_builder.button("before", "Parent before"));
+    ASSERT_TRUE(self.m_builder.beginPopup(s_UiNestedPopupRouterChildKey, self.m_child, MakeNestedChildPopupOptions()));
+    ASSERT_TRUE(self.m_builder.virtualList(s_UiNestedPopupRouterListKey, self.m_childSource, self.m_childList, MakeLargeLoanListOptions()).valid);
+    ASSERT_TRUE(self.m_builder.endPopup());
+    self.m_childSource.resetAllCounters();
+    self.m_child.close();
+    EXPECT_FALSE(self.m_builder.button("after", "Parent after"));
+    ASSERT_TRUE(self.m_builder.endPopup());
+    EXPECT_EQ(self.m_childSource.metadataCalls, 0u);
+    EXPECT_EQ(self.m_childSource.textCalls, 0u);
+    ASSERT_TRUE(self.finishRoot());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    const WidgetId parent = RequireUiWidgetId(RequireUiRootId(self.m_root), s_UiNestedPopupRouterParentKey);
+    EXPECT_TRUE(self.hasTarget(RequireUiWidgetId(parent, "before")));
+    EXPECT_TRUE(self.hasTarget(RequireUiWidgetId(parent, "after")));
+    EXPECT_FALSE(self.hasTarget(RequireUiWidgetId(parent, s_UiNestedPopupRouterChildKey)));
+}
+
+void VerifyUiNestedPopupLoanTests_ReopeningTheEndedChildRetiresItsOldBodyBeforeSourceCallbacks(mut UiNestedPopupLoanTests self){
+    ASSERT_TRUE(self.beginParent(1u));
+    ASSERT_TRUE(self.m_builder.beginPopup(s_UiNestedPopupRouterChildKey, self.m_child, MakeNestedChildPopupOptions()));
+    ASSERT_TRUE(self.m_builder.virtualList(s_UiNestedPopupRouterListKey, self.m_childSource, self.m_childList, MakeLargeLoanListOptions()).valid);
+    ASSERT_TRUE(self.m_builder.endPopup());
+    self.m_childSource.resetAllCounters();
+    const u64 openGeneration = self.m_child.openGeneration();
+    self.m_child.close();
+    self.m_child.open();
+    EXPECT_NE(self.m_child.openGeneration(), openGeneration);
+    EXPECT_FALSE(self.m_builder.button("after", "Parent after"));
+    ASSERT_TRUE(self.m_builder.endPopup());
+    EXPECT_EQ(self.m_childSource.metadataCalls, 0u);
+    EXPECT_EQ(self.m_childSource.textCalls, 0u);
+    EXPECT_TRUE(self.m_child.isOpen());
+    ASSERT_TRUE(self.finishRoot());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    const WidgetId parent = RequireUiWidgetId(RequireUiRootId(self.m_root), s_UiNestedPopupRouterParentKey);
+    EXPECT_TRUE(self.hasTarget(RequireUiWidgetId(parent, "after")));
+    EXPECT_FALSE(self.hasTarget(RequireUiWidgetId(parent, s_UiNestedPopupRouterChildKey)));
+}
+
+void VerifyUiNestedPopupLoanTests_ParentFirstRowClosingItsPopupRejectsBeforeAnyDescendantTextCallback(mut UiNestedPopupLoanTests self){
+    ASSERT_TRUE(self.acceptLists(1u));
+    ASSERT_TRUE(self.declareLists(2u));
+    self.m_parentSource.resetAllCounters();
+    self.m_childSource.resetAllCounters();
+    self.m_parentSource.armClosePopupOnText(self.m_parent);
+    EXPECT_FALSE(self.m_builder.endPopup());
+    EXPECT_FALSE(self.m_parent.isOpen());
+    EXPECT_FALSE(self.m_parentSource.hasClosePopupOnText());
+    EXPECT_EQ(self.m_parentSource.textCalls, 1u);
+    EXPECT_EQ(self.m_childSource.textCalls, 0u);
+    EXPECT_EQ(self.m_childSource.metadataCalls, 0u);
+    EXPECT_EQ(self.m_context.input().layoutGeneration(), 1u);
+}
+
+void VerifyUiNestedPopupLoanTests_ChildFirstRowReopeningItsAncestorRejectsBeforeLaterRowsOrSiblingCallbacks(mut UiNestedPopupLoanTests self){
+    ASSERT_TRUE(self.acceptLists(1u));
+    ASSERT_TRUE(self.declareLists(2u));
+    PopupState sibling = PopupState();
+    sibling.open();
+    UiNestedPopupLoanMutationSource siblingSource = UiNestedPopupLoanMutationSource(2301u);
+    ListState siblingList = ListState();
+    ASSERT_TRUE(self.m_builder.beginPopup("sibling", sibling, MakeNestedChildPopupOptions()));
+    ASSERT_TRUE(self.m_builder.virtualList(s_UiNestedPopupRouterListKey, siblingSource, siblingList, MakeLargeLoanListOptions()).valid);
+    ASSERT_TRUE(self.m_builder.endPopup());
+    self.m_parentSource.resetAllCounters();
+    self.m_childSource.resetAllCounters();
+    siblingSource.resetAllCounters();
+    const u64 openGeneration = self.m_parent.openGeneration();
+    self.m_childSource.armReopenPopupOnText(self.m_parent);
+    EXPECT_FALSE(self.m_builder.endPopup());
+    EXPECT_TRUE(self.m_parent.isOpen());
+    EXPECT_NE(self.m_parent.openGeneration(), openGeneration);
+    EXPECT_FALSE(self.m_childSource.hasReopenPopupOnText());
+    EXPECT_GT(self.m_parentSource.textCalls, 0u);
+    EXPECT_EQ(self.m_childSource.textCalls, 1u);
+    EXPECT_EQ(siblingSource.textCalls, 0u);
+    EXPECT_EQ(siblingSource.metadataCalls, 0u);
+    EXPECT_EQ(self.m_context.input().layoutGeneration(), 1u);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiNestedPopupReentryTests_ChildFirstRowResetRejectsWithoutClearingBorrowedFrames(mut UiNestedPopupReentryTests self){
+    ASSERT_TRUE(self.acceptBase());
+    const UiNestedPopupReentryAcceptedFrame frame = self.accepted();
+    ASSERT_GT(frame.count, 0u);
+    ASSERT_TRUE(self.beginParent());
+    ASSERT_TRUE(self.declareChild());
+    ASSERT_TRUE(self.declareSibling());
+    const u64 generation = self.m_childList.inputGeneration();
+    const u64 parentOpening = self.m_parent.openGeneration();
+    const u64 childOpening = self.m_child.openGeneration();
+    self.m_childSource.resetObservations();
+    self.m_siblingSource.resetObservations();
+    self.m_siblingSource.observeAttemptsOf(self.m_childSource);
+    self.m_childSource.armText(UiNestedPopupReentryKind::Reset, self.m_builder);
+    EXPECT_FALSE(self.m_builder.endPopup());
+    EXPECT_EQ(self.m_childSource.attempts(), 1u);
+    EXPECT_EQ(self.m_childSource.resetAttempts(), 1u);
+    EXPECT_TRUE(self.m_childSource.failedAtAttempt());
+    EXPECT_EQ(self.m_childSource.textCalls, 1u);
+    EXPECT_EQ(self.m_siblingSource.textCalls, 0u);
+    EXPECT_EQ(self.m_siblingSource.metadataCalls(), 0u);
+    self.expectSourcePreserved(self.m_childSource, 2402u);
+    self.expectSourcePreserved(self.m_siblingSource, 2403u);
+    self.expectListPreserved(self.m_childList, generation);
+    EXPECT_TRUE(self.m_parent.isOpen());
+    EXPECT_TRUE(self.m_child.isOpen());
+    EXPECT_EQ(self.m_parent.openGeneration(), parentOpening);
+    EXPECT_EQ(self.m_child.openGeneration(), childOpening);
+    EXPECT_FALSE(self.m_context.commitFrame(2u));
+    self.expectRejected(frame);
+}
+
+void VerifyUiNestedPopupReentryTests_ChildFirstRowBalancedPanelReentryRejectsBeforeLaterSiblingCallbacks(mut UiNestedPopupReentryTests self){
+    ASSERT_TRUE(self.acceptBase());
+    const UiNestedPopupReentryAcceptedFrame frame = self.accepted();
+    ASSERT_TRUE(self.beginParent());
+    ASSERT_TRUE(self.declareChild());
+    ASSERT_TRUE(self.declareSibling());
+    const u64 generation = self.m_childList.inputGeneration();
+    self.m_childSource.resetObservations();
+    self.m_siblingSource.resetObservations();
+    self.m_siblingSource.observeAttemptsOf(self.m_childSource);
+    self.m_childSource.armText(UiNestedPopupReentryKind::Panel, self.m_builder);
+    EXPECT_FALSE(self.m_builder.endPopup());
+    self.expectPanelRejected(self.m_childSource);
+    EXPECT_EQ(self.m_childSource.textCalls, 1u);
+    EXPECT_EQ(self.m_siblingSource.textCalls, 0u);
+    EXPECT_EQ(self.m_siblingSource.metadataCalls(), 0u);
+    self.expectSourcePreserved(self.m_childSource, 2402u);
+    self.expectSourcePreserved(self.m_siblingSource, 2403u);
+    self.expectListPreserved(self.m_childList, generation);
+    EXPECT_TRUE(self.m_parent.isOpen());
+    EXPECT_TRUE(self.m_child.isOpen());
+    EXPECT_FALSE(self.m_context.commitFrame(2u));
+    self.expectRejected(frame);
+}
+
+void VerifyUiNestedPopupReentryTests_ParentComboAutomaticPopupRowResetRejectsBeforeChildSourceCallbacks(mut UiNestedPopupReentryTests self){
+    ASSERT_TRUE(self.acceptBase());
+    const UiNestedPopupReentryAcceptedFrame frame = self.accepted();
+    self.m_combo.open();
+    ASSERT_TRUE(self.beginParent());
+    ASSERT_TRUE(self.m_builder.comboBox("combo", self.m_comboSource, self.m_combo, MakeUiNestedPopupRouterComboOptions()).valid);
+    ASSERT_TRUE(self.declareChild());
+    const u64 comboGeneration = self.m_combo.inputGeneration();
+    const u64 listGeneration = self.m_combo.listState().inputGeneration();
+    const u64 preview = self.m_combo.listState().cursorKey();
+    const u64 childGeneration = self.m_childList.inputGeneration();
+    self.m_comboSource.resetObservations();
+    self.m_childSource.resetObservations();
+    self.m_childSource.observeAttemptsOf(self.m_comboSource);
+    self.m_comboSource.armText(UiNestedPopupReentryKind::Reset, self.m_builder);
+    EXPECT_FALSE(self.m_builder.endPopup());
+    EXPECT_EQ(self.m_comboSource.attempts(), 1u);
+    EXPECT_EQ(self.m_comboSource.resetAttempts(), 1u);
+    EXPECT_TRUE(self.m_comboSource.failedAtAttempt());
+    EXPECT_EQ(self.m_comboSource.textCalls, 1u);
+    EXPECT_EQ(self.m_childSource.textCalls, 0u);
+    EXPECT_EQ(self.m_childSource.metadataCalls(), 0u);
+    self.expectSourcePreserved(self.m_comboSource, 2404u);
+    self.expectSourcePreserved(self.m_childSource, 2402u);
+    EXPECT_TRUE(self.m_combo.isOpen());
+    EXPECT_EQ(self.m_combo.selectedKey(), 0u);
+    EXPECT_EQ(self.m_combo.inputGeneration(), comboGeneration);
+    EXPECT_EQ(self.m_combo.listState().inputGeneration(), listGeneration);
+    EXPECT_EQ(self.m_combo.listState().cursorKey(), preview);
+    self.expectListPreserved(self.m_childList, childGeneration);
+    EXPECT_FALSE(self.m_context.commitFrame(2u));
+    self.expectRejected(frame);
+}
+
+void VerifyUiNestedPopupReentryTests_LateParentRevisionScopeReentryRejectsAfterAllRowsWerePainted(mut UiNestedPopupReentryTests self){
+    ASSERT_TRUE(self.acceptBase());
+    const UiNestedPopupReentryAcceptedFrame frame = self.accepted();
+    ASSERT_TRUE(self.beginParent());
+    ASSERT_TRUE(self.m_builder.virtualList(s_UiNestedPopupRouterListKey, self.m_parentSource, self.m_parentList, MakeLargeLoanListOptions()).valid);
+    ASSERT_TRUE(self.declareChild());
+    ASSERT_TRUE(self.declareSibling());
+    const u64 parentGeneration = self.m_parentList.inputGeneration();
+    const u64 childGeneration = self.m_childList.inputGeneration();
+    self.m_parentSource.resetObservations();
+    self.m_childSource.resetObservations();
+    self.m_siblingSource.resetObservations();
+    self.m_childSource.observeAttemptsOf(self.m_parentSource);
+    self.m_siblingSource.observeAttemptsOf(self.m_parentSource);
+    // The parent has finished painting before child text arms its next revision call in final validation.
+    self.m_childSource.armRevisionAfterText(self.m_parentSource, self.m_builder);
+    EXPECT_FALSE(self.m_builder.endPopup());
+    EXPECT_EQ(self.m_childSource.arms(), 1u);
+    self.expectPanelRejected(self.m_parentSource);
+    EXPECT_EQ(self.m_parentSource.textCalls, 5u);
+    EXPECT_EQ(self.m_childSource.textCalls, 5u);
+    EXPECT_EQ(self.m_siblingSource.textCalls, 5u);
+    self.expectSourcePreserved(self.m_parentSource, 2401u);
+    self.expectSourcePreserved(self.m_childSource, 2402u);
+    self.expectSourcePreserved(self.m_siblingSource, 2403u);
+    self.expectListPreserved(self.m_parentList, parentGeneration);
+    self.expectListPreserved(self.m_childList, childGeneration);
+    EXPECT_TRUE(self.m_parent.isOpen());
+    EXPECT_TRUE(self.m_child.isOpen());
+    EXPECT_FALSE(self.m_context.commitFrame(2u));
+    self.expectRejected(frame);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiNestedPopupRouterTests_ChildMayExtendOutsideParentWhileFocusAndPointerStayInAcceptedTopScope(mut UiNestedPopupRouterTests self){
+    const PopupScope parent = MakeUiNestedPopupRouterScope(100u, 1u);
+    const PopupScope child = MakeUiNestedPopupRouterScope(200u, 2u, parent.token);
+    Array<PopupScope, 2u> scopes = Array<PopupScope, 2u>();
+    scopes[0u] = parent;
+    scopes[1u] = child;
+    ASSERT_TRUE(self.install(scopes, 1u));
+    ASSERT_EQ(self.m_router.popupCount(), 2u);
+    const Optional<PopupScope> childScope = self.findPopupScope(child.token);
+    ASSERT_TRUE(childScope.has_value());
+    EXPECT_EQ(childScope.value().parent, parent.token);
+    EXPECT_EQ(self.m_router.topPopupToken(), child.token);
+    EXPECT_EQ(self.m_router.focus().value, 201u);
+    EXPECT_EQ(self.m_router.hitTest(MakeUiNestedPopupRouterPoint(175.0f, 125.0f)).value, 201u);
+    EXPECT_FALSE(self.m_router.hitTest(MakeUiNestedPopupRouterPoint(35.0f, 35.0f)).valid());
+    self.key(CoreKey::Tab);
+    EXPECT_EQ(self.m_router.focus().value, 202u);
+    self.key(CoreKey::Tab);
+    EXPECT_EQ(self.m_router.focus().value, 201u);
+    self.key(CoreKey::Tab, true);
+    EXPECT_EQ(self.m_router.focus().value, 202u);
+    self.key(CoreKey::Enter);
+    EXPECT_TRUE(self.m_router.consumeActivation(MakeUiNestedPopupRouterWidgetId(202u)));
+    EXPECT_FALSE(self.m_router.consumeActivation(MakeUiNestedPopupRouterWidgetId(101u)));
+}
+
+void VerifyUiNestedPopupRouterTests_EscapeDismissesOnlyChildThenRestoresChosenParentFocusAfterAcceptance(mut UiNestedPopupRouterTests self){
+    self.focusBase();
+    const PopupScope parent = MakeUiNestedPopupRouterScope(100u, 1u);
+    ASSERT_TRUE(self.installOne(parent, 2u));
+    self.key(CoreKey::Tab);
+    ASSERT_EQ(self.m_router.focus().value, 102u);
+    const PopupScope child = MakeUiNestedPopupRouterScope(200u, 2u, parent.token);
+    Array<PopupScope, 2u> scopes = Array<PopupScope, 2u>();
+    scopes[0u] = parent;
+    scopes[1u] = child;
+    ASSERT_TRUE(self.install(scopes, 3u));
+    ASSERT_EQ(self.m_router.focus().value, 201u);
+    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterKeyEvent(InputEventType::KeyDown, CoreKey::Escape, false)).commandConsumed);
+    PopupDismissReasonEnum reason = PopupDismissReason::None;
+    const auto reasonResult1 = self.m_router.consumePopupDismissal(child.token);
+    ASSERT_TRUE(reasonResult1.has_value());
+    reason = reasonResult1.value();
+    EXPECT_EQ(reason, PopupDismissReason::Cancel);
+    EXPECT_FALSE(self.m_router.consumePopupDismissal(parent.token).has_value());
+    EXPECT_FALSE(self.m_router.focus().valid());
+    ASSERT_TRUE(self.installOne(parent, 4u));
+    EXPECT_EQ(self.m_router.focus().value, 102u);
+    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterKeyEvent(InputEventType::KeyDown, CoreKey::Escape, true)).commandConsumed);
+    EXPECT_FALSE(self.m_router.consumePopupDismissal(parent.token).has_value());
+    EXPECT_EQ(self.m_router.focus().value, 102u);
+    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterKeyEvent(InputEventType::KeyUp, CoreKey::Escape, false)).commandConsumed);
+    self.key(CoreKey::Escape);
+    const auto reasonResult2 = self.m_router.consumePopupDismissal(parent.token);
+    ASSERT_TRUE(reasonResult2.has_value());
+    reason = reasonResult2.value();
+    EXPECT_EQ(reason, PopupDismissReason::Cancel);
+}
+
+void VerifyUiNestedPopupRouterTests_OptedInChildTabLeavesItsParentOpenAndAdvancesParentFocus(mut UiNestedPopupRouterTests self){
+    self.focusBase();
+    const PopupScope parent = MakeUiNestedPopupRouterScope(100u, 1u);
+    ASSERT_TRUE(self.installOne(parent, 2u));
+    self.key(CoreKey::Tab);
+    ASSERT_EQ(self.m_router.focus().value, 102u);
+    PopupScope child = MakeUiNestedPopupRouterScope(200u, 2u, parent.token);
+    child.dismissFocusTraversal = true;
+    child.focusAnchor = MakeUiNestedPopupRouterWidgetId(102u);
+    child.focusAnchorDeclarationGeneration = 10u;
+    Array<PopupScope, 2u> scopes = Array<PopupScope, 2u>();
+    scopes[0u] = parent;
+    scopes[1u] = child;
+    ASSERT_TRUE(self.install(scopes, 3u));
+    ASSERT_EQ(self.m_router.focus().value, 201u);
+    self.key(CoreKey::Tab);
+    EXPECT_EQ(self.m_router.focus().value, 202u);
+    self.key(CoreKey::Tab);
+    PopupDismissReasonEnum reason = PopupDismissReason::None;
+    const auto reasonResult = self.m_router.consumePopupDismissal(child.token);
+    ASSERT_TRUE(reasonResult.has_value());
+    reason = reasonResult.value();
+    EXPECT_EQ(reason, PopupDismissReason::FocusTraversal);
+    EXPECT_FALSE(self.m_router.consumePopupDismissal(parent.token).has_value());
+    ASSERT_TRUE(self.installOne(parent, 4u));
+    EXPECT_EQ(self.m_router.popupCount(), 1u);
+    EXPECT_EQ(self.m_router.topPopupToken(), parent.token);
+    EXPECT_EQ(self.m_router.focus().value, 101u);
+}
+
+void VerifyUiNestedPopupRouterTests_OutsideChildPressOverParentConsumesReleaseWithoutParentActivation(mut UiNestedPopupRouterTests self){
+    const PopupScope parent = MakeUiNestedPopupRouterScope(100u, 1u);
+    const PopupScope child = MakeUiNestedPopupRouterScope(200u, 2u, parent.token);
+    Array<PopupScope, 2u> scopes = Array<PopupScope, 2u>();
+    scopes[0u] = parent;
+    scopes[1u] = child;
+    ASSERT_TRUE(self.install(scopes, 1u));
+    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::PrimaryDown, 35.0f, 35.0f)).pointerConsumed);
+    EXPECT_FALSE(self.m_router.capture().valid());
+    PopupDismissReasonEnum reason = PopupDismissReason::None;
+    const auto reasonResult = self.m_router.consumePopupDismissal(child.token);
+    ASSERT_TRUE(reasonResult.has_value());
+    reason = reasonResult.value();
+    EXPECT_EQ(reason, PopupDismissReason::OutsideClick);
+    EXPECT_FALSE(self.m_router.consumePopupDismissal(parent.token).has_value());
+    ASSERT_TRUE(self.installOne(parent, 2u));
+    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::PrimaryUp, 35.0f, 35.0f)).pointerConsumed);
+    EXPECT_FALSE(self.m_router.consumeActivation(MakeUiNestedPopupRouterWidgetId(101u)));
+    self.click(MakeUiNestedPopupRouterPoint(35.0f, 35.0f));
+    EXPECT_TRUE(self.m_router.consumeActivation(MakeUiNestedPopupRouterWidgetId(101u)));
+}
+
+void VerifyUiNestedPopupRouterTests_OutsideSecondarySequenceCannotOpenTheNewlyExposedParentMenu(mut UiNestedPopupRouterTests self){
+    const PopupScope parent = MakeUiNestedPopupRouterScope(100u, 1u);
+    const PopupScope child = MakeUiNestedPopupRouterScope(200u, 2u, parent.token);
+    Array<PopupScope, 2u> scopes = Array<PopupScope, 2u>();
+    scopes[0u] = parent;
+    scopes[1u] = child;
+    ASSERT_TRUE(self.install(scopes, 1u, true));
+    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::SecondaryDown, 35.0f, 35.0f)).pointerConsumed);
+    const auto reasonResult = self.m_router.consumePopupDismissal(child.token);
+    ASSERT_TRUE(reasonResult.has_value());
+    ASSERT_TRUE(self.installOne(parent, 2u, true));
+    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::SecondaryUp, 35.0f, 35.0f)).pointerConsumed);
+    const WidgetId target101 = MakeUiNestedPopupRouterWidgetId(101u);
+    ContextMenuAction action = ContextMenuAction();
+    EXPECT_FALSE(self.m_router.consumeContextMenu(target101, 10u).has_value());
+    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::SecondaryDown, 35.0f, 35.0f)).pointerConsumed);
+    EXPECT_FALSE(self.m_router.consumeContextMenu(target101, 10u).has_value());
+    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::SecondaryUp, 35.0f, 35.0f)).pointerConsumed);
+    const auto actionResult = self.m_router.consumeContextMenu(target101, 10u);
+    ASSERT_TRUE(actionResult.has_value());
+    action = actionResult.value();
+    EXPECT_EQ(action.popup, parent.token);
+    EXPECT_EQ(action.origin, InputActionSource::Pointer);
+}
+
+void VerifyUiNestedPopupRouterTests_ClosingAncestorPreservesUnrelatedTopChainAndItsAcceptedAction(mut UiNestedPopupRouterTests self){
+    self.focusBase();
+    const PopupScope parent = MakeUiNestedPopupRouterScope(100u, 1u);
+    const PopupScope child = MakeUiNestedPopupRouterScope(200u, 2u, parent.token);
+    const PopupScope grandchild = MakeUiNestedPopupRouterScope(300u, 3u, child.token);
+    const PopupScope unrelated = MakeUiNestedPopupRouterScope(400u, 4u);
+    Array<PopupScope, 4u> scopes = Array<PopupScope, 4u>();
+    scopes[0u] = parent;
+    scopes[1u] = child;
+    scopes[2u] = grandchild;
+    scopes[3u] = unrelated;
+    ASSERT_TRUE(self.install(scopes, 2u));
+    self.key(CoreKey::Enter);
+    ASSERT_EQ(self.m_router.actions().size(), 1u);
+    self.m_router.closePopup(parent.token);
+    EXPECT_EQ(self.m_router.focus().value, 401u);
+    EXPECT_EQ(self.m_router.hitTest(MakeUiNestedPopupRouterPoint(255.0f, 35.0f)).value, 401u);
+    EXPECT_TRUE(self.m_router.consumeActivation(MakeUiNestedPopupRouterWidgetId(401u)));
+    ASSERT_TRUE(self.installOne(unrelated, 3u));
+    EXPECT_EQ(self.m_router.popupCount(), 1u);
+    EXPECT_EQ(self.m_router.focus().value, 401u);
+    EXPECT_FALSE(self.hasPopupScope(parent.token));
+    EXPECT_FALSE(self.hasPopupScope(child.token));
+    EXPECT_FALSE(self.hasPopupScope(grandchild.token));
+    ASSERT_TRUE(self.installEmpty(4u));
+    EXPECT_EQ(self.m_router.focus().value, 1u);
+}
+
+void VerifyUiNestedPopupRouterTests_RetiringAncestorCancelsDescendantIntentionsAcrossRemovalAndIdenticalReturn(mut UiNestedPopupRouterTests self){
+    self.focusBase();
+    const PopupScope parent = MakeUiNestedPopupRouterScope(100u, 1u);
+    const PopupScope child = MakeUiNestedPopupRouterScope(200u, 2u, parent.token);
+    Array<PopupScope, 2u> scopes = Array<PopupScope, 2u>();
+    scopes[0u] = parent;
+    scopes[1u] = child;
+    ASSERT_TRUE(self.install(scopes, 2u, true));
+    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterKeyEvent(InputEventType::KeyDown, CoreKey::Down, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterKeyEvent(InputEventType::KeyDown, CoreKey::Menu, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::PrimaryDown, 175.0f, 125.0f)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::SecondaryDown, 175.0f, 125.0f)).pointerConsumed);
+    ASSERT_EQ(self.m_router.capture().value, 201u);
+    ASSERT_EQ(self.m_router.controlActions().size(), 1u);
+    self.m_router.invalidateTarget(parent.token.widget);
+    EXPECT_FALSE(self.m_router.hasPopup());
+    EXPECT_EQ(self.m_router.popupCount(), 0u);
+    ASSERT_EQ(self.m_router.targets().size(), 1u);
+    EXPECT_EQ(self.m_router.focus().value, 1u);
+    EXPECT_FALSE(self.m_router.capture().valid());
+    EXPECT_TRUE(self.m_router.actions().empty());
+    EXPECT_TRUE(self.m_router.controlActions().empty());
+    const WidgetId target201 = MakeUiNestedPopupRouterWidgetId(201u);
+    EXPECT_FALSE(self.m_router.consumeContextMenu(target201, 10u).has_value());
+    ASSERT_TRUE(self.install(scopes, 3u, true));
+    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterKeyEvent(InputEventType::KeyDown, CoreKey::Down, true)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterKeyEvent(InputEventType::KeyDown, CoreKey::Menu, false)).commandConsumed);
+    EXPECT_TRUE(self.m_router.controlActions().empty());
+    EXPECT_FALSE(self.m_router.consumeContextMenu(target201, 10u).has_value());
+    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::PrimaryUp, 175.0f, 125.0f)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::SecondaryUp, 175.0f, 125.0f)).pointerConsumed);
+    EXPECT_TRUE(self.m_router.actions().empty());
+    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterKeyEvent(InputEventType::KeyUp, CoreKey::Down, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterKeyEvent(InputEventType::KeyUp, CoreKey::Menu, false)).commandConsumed);
+    self.key(CoreKey::Down);
+    ControlAction action = ControlAction();
+    const auto actionResult = self.m_router.consumeControlAction(target201, 10u, MakeUiNestedPopupRouterControlToken(600u, 700u, 800u));
+    ASSERT_TRUE(actionResult.has_value());
+    action = actionResult.value();
+    EXPECT_EQ(action.popup, child.token);
+    EXPECT_EQ(action.kind, ControlActionKind::Down);
+}
+
+void VerifyUiNestedPopupRouterTests_RetiringLowerFamilyPreservesUnrelatedTopCaptureAndFocus(mut UiNestedPopupRouterTests self){
+    const PopupScope parent = MakeUiNestedPopupRouterScope(100u, 1u);
+    const PopupScope child = MakeUiNestedPopupRouterScope(200u, 2u, parent.token);
+    const PopupScope unrelated = MakeUiNestedPopupRouterScope(400u, 3u);
+    Array<PopupScope, 3u> scopes = Array<PopupScope, 3u>();
+    scopes[0u] = parent;
+    scopes[1u] = child;
+    scopes[2u] = unrelated;
+    ASSERT_TRUE(self.install(scopes, 1u));
+    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::PrimaryDown, 255.0f, 35.0f)).pointerConsumed);
+    ASSERT_EQ(self.m_router.capture().value, 401u);
+    self.m_router.invalidateTarget(parent.token.widget);
+    EXPECT_EQ(self.m_router.popupCount(), 1u);
+    EXPECT_EQ(self.m_router.topPopupToken(), unrelated.token);
+    EXPECT_EQ(self.m_router.focus().value, 401u);
+    EXPECT_EQ(self.m_router.capture().value, 401u);
+    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::PrimaryUp, 255.0f, 35.0f)).pointerConsumed);
+    EXPECT_TRUE(self.m_router.consumeActivation(MakeUiNestedPopupRouterWidgetId(401u)));
+    EXPECT_FALSE(self.m_router.consumeActivation(MakeUiNestedPopupRouterWidgetId(201u)));
+}
+
+void VerifyUiNestedPopupRouterTests_ChangingAncestorRequiresRenewedChildTokenAndFencesOldCapture(mut UiNestedPopupRouterTests self){
+    const PopupScope parent = MakeUiNestedPopupRouterScope(100u, 1u);
+    const PopupScope child = MakeUiNestedPopupRouterScope(200u, 2u, parent.token);
+    Array<PopupScope, 2u> original = Array<PopupScope, 2u>();
+    original[0u] = parent;
+    original[1u] = child;
+    ASSERT_TRUE(self.install(original, 1u));
+    self.click(MakeUiNestedPopupRouterPoint(175.0f, 125.0f));
+    ASSERT_EQ(self.m_router.actions().size(), 1u);
+    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::PrimaryDown, 175.0f, 125.0f)).pointerConsumed);
+    PopupScope nextParent = parent;
+    ++nextParent.token.openGeneration;
+    PopupScope nextChild = child;
+    Array<PopupScope, 2u> staleParent = Array<PopupScope, 2u>();
+    staleParent[0u] = nextParent;
+    staleParent[1u] = nextChild;
+    EXPECT_FALSE(self.install(staleParent, 2u));
+    nextChild.parent = nextParent.token;
+    Array<PopupScope, 2u> staleChild = Array<PopupScope, 2u>();
+    staleChild[0u] = nextParent;
+    staleChild[1u] = nextChild;
+    EXPECT_FALSE(self.install(staleChild, 2u));
+    EXPECT_EQ(self.m_router.layoutGeneration(), 1u);
+    EXPECT_EQ(self.m_router.focus().value, 201u);
+    EXPECT_EQ(self.m_router.capture().value, 201u);
+    ASSERT_EQ(self.m_router.actions().size(), 1u);
+    ++nextChild.token.openGeneration;
+    Array<PopupScope, 2u> renewed = Array<PopupScope, 2u>();
+    renewed[0u] = nextParent;
+    renewed[1u] = nextChild;
+    ASSERT_TRUE(self.install(renewed, 2u));
+    EXPECT_EQ(self.m_router.focus().value, 201u);
+    EXPECT_FALSE(self.m_router.capture().valid());
+    EXPECT_TRUE(self.m_router.actions().empty());
+    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::PrimaryUp, 175.0f, 125.0f)).pointerConsumed);
+    const WidgetId target201 = MakeUiNestedPopupRouterWidgetId(201u);
+    EXPECT_FALSE(self.m_router.consumeActivation(target201));
+    self.click(MakeUiNestedPopupRouterPoint(175.0f, 125.0f));
+    EXPECT_TRUE(self.m_router.consumeActivation(target201));
+}
+
+void VerifyUiNestedPopupRouterTests_InvalidOrMissingAncestryRejectsAtomicallyAgainstAcceptedNestedGeometry(mut UiNestedPopupRouterTests self){
+    const PopupScope parent = MakeUiNestedPopupRouterScope(100u, 1u);
+    const PopupScope child = MakeUiNestedPopupRouterScope(200u, 2u, parent.token);
+    Array<PopupScope, 2u> scopes = Array<PopupScope, 2u>();
+    scopes[0u] = parent;
+    scopes[1u] = child;
+    ASSERT_TRUE(self.install(scopes, 1u));
+    self.click(MakeUiNestedPopupRouterPoint(175.0f, 125.0f));
+    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::PrimaryDown, 175.0f, 125.0f)).pointerConsumed);
+    Array<PopupScope, 5u> invalid = Array<PopupScope, 5u>();
+    invalid.fill(child);
+    ++invalid[0u].parent.openGeneration;
+    invalid[1u].parent.widget = WidgetId();
+    invalid[2u].parent = MakeUiNestedPopupRouterToken(999u, 10u, 20u, 1u);
+    invalid[3u].parent = child.token;
+    invalid[4u].parent = PopupToken();
+    for(in PopupScope candidate : invalid){
+        Array<PopupScope, 2u> rejected = Array<PopupScope, 2u>();
+        rejected[0u] = parent;
+        rejected[1u] = candidate;
+        EXPECT_FALSE(self.install(rejected, 2u));
+        EXPECT_EQ(self.m_router.layoutGeneration(), 1u);
+        EXPECT_EQ(self.m_router.focus().value, 201u);
+        EXPECT_EQ(self.m_router.capture().value, 201u);
+        EXPECT_EQ(self.m_router.hitTest(MakeUiNestedPopupRouterPoint(175.0f, 125.0f)).value, 201u);
+        EXPECT_EQ(self.m_router.actions().size(), 1u);
+    }
+    EXPECT_FALSE(self.installOne(child, 2u));
+    PopupScope forwardParent = parent;
+    forwardParent.parent = child.token;
+    Array<PopupScope, 2u> cyclic = Array<PopupScope, 2u>();
+    cyclic[0u] = forwardParent;
+    cyclic[1u] = child;
+    EXPECT_FALSE(self.install(cyclic, 2u));
+    EXPECT_EQ(self.m_router.popupCount(), 2u);
+    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::PrimaryUp, 175.0f, 125.0f)).pointerConsumed);
+    EXPECT_TRUE(self.m_router.consumeActivation(MakeUiNestedPopupRouterWidgetId(201u)));
+}
+
+void VerifyUiNestedPopupRouterTests_NewDescendantsCannotRestoreInputBeneathAClosingAncestorLifetime(mut UiNestedPopupRouterTests self){
+    PopupScope parent = MakeUiNestedPopupRouterScope(100u, 1u);
+    PopupScope child = MakeUiNestedPopupRouterScope(200u, 2u, parent.token);
+    PopupScope grandchild = MakeUiNestedPopupRouterScope(300u, 3u, child.token);
+    Array<PopupScope, 3u> original = Array<PopupScope, 3u>();
+    original[0u] = parent;
+    original[1u] = child;
+    original[2u] = grandchild;
+    ASSERT_TRUE(self.install(original, 1u));
+    self.m_router.closePopup(parent.token);
+    ++child.token.openGeneration;
+    ++grandchild.token.openGeneration;
+    grandchild.parent = child.token;
+    Array<PopupScope, 3u> underClosingParent = Array<PopupScope, 3u>();
+    underClosingParent[0u] = parent;
+    underClosingParent[1u] = child;
+    underClosingParent[2u] = grandchild;
+    ASSERT_TRUE(self.install(underClosingParent, 2u));
+    EXPECT_FALSE(self.m_router.focus().valid());
+    EXPECT_FALSE(self.m_router.hitTest(MakeUiNestedPopupRouterPoint(285.0f, 205.0f)).valid());
+    EXPECT_TRUE(self.m_router.actions().empty());
+    ++parent.token.openGeneration;
+    self.m_router.fencePopup(parent.token);
+    ++child.token.openGeneration;
+    child.parent = parent.token;
+    ++grandchild.token.openGeneration;
+    grandchild.parent = child.token;
+    Array<PopupScope, 3u> renewed = Array<PopupScope, 3u>();
+    renewed[0u] = parent;
+    renewed[1u] = child;
+    renewed[2u] = grandchild;
+    ASSERT_TRUE(self.install(renewed, 3u));
+    EXPECT_EQ(self.m_router.focus().value, 301u);
+    EXPECT_EQ(self.m_router.hitTest(MakeUiNestedPopupRouterPoint(285.0f, 205.0f)).value, 301u);
+}
+
+void VerifyUiNestedPopupRouterTests_FencingAncestorImmediatelySuppressesAllDescendantActionsAndCapture(mut UiNestedPopupRouterTests self){
+    const PopupScope parent = MakeUiNestedPopupRouterScope(100u, 1u);
+    const PopupScope child = MakeUiNestedPopupRouterScope(200u, 2u, parent.token);
+    const PopupScope grandchild = MakeUiNestedPopupRouterScope(300u, 3u, child.token);
+    Array<PopupScope, 3u> scopes = Array<PopupScope, 3u>();
+    scopes[0u] = parent;
+    scopes[1u] = child;
+    scopes[2u] = grandchild;
+    ASSERT_TRUE(self.install(scopes, 1u));
+    self.click(MakeUiNestedPopupRouterPoint(285.0f, 205.0f));
+    ASSERT_EQ(self.m_router.actions().size(), 1u);
+    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::PrimaryDown, 285.0f, 205.0f)).pointerConsumed);
+    PopupToken replaced = parent.token;
+    ++replaced.instanceGeneration;
+    self.m_router.fencePopup(replaced);
+    EXPECT_FALSE(self.m_router.focus().valid());
+    EXPECT_FALSE(self.m_router.capture().valid());
+    EXPECT_TRUE(self.m_router.actions().empty());
+    EXPECT_FALSE(self.m_router.hitTest(MakeUiNestedPopupRouterPoint(285.0f, 205.0f)).valid());
+    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerEvent(InputEventType::PrimaryUp, 285.0f, 205.0f)).pointerConsumed);
+    EXPECT_FALSE(self.m_router.consumeActivation(MakeUiNestedPopupRouterWidgetId(301u)));
+}
+
+void VerifyUiNestedPopupRouterTests_RetiringAnAlreadyRemovedPopupOwnerPartStillRestoresUnderlyingFocus(mut UiNestedPopupRouterTests self){
+    self.focusBase();
+    const PopupScope scope = MakeUiNestedPopupRouterScope(100u, 1u);
+    const HitTarget host = MakeUiNestedPopupRouterChild(scope, 1u, 1u, true);
+    HitTarget owner = MakeUiNestedPopupRouterBarrier(scope, 2u);
+    owner.owner = host.id;
+    owner.ownerDeclarationGeneration = host.declarationGeneration;
+    owner.control = host.control;
+    Array<HitTarget, 3u> targets = Array<HitTarget, 3u>();
+    targets[0u] = MakeUiNestedPopupRouterBaseHitTarget();
+    targets[1u] = host;
+    targets[2u] = owner;
+    ASSERT_TRUE(self.commitSingleScopeTargets(targets, 2u, scope));
+    self.m_router.invalidateTarget(host.id);
+    EXPECT_EQ(self.m_router.targets().size(), 1u);
+    EXPECT_FALSE(self.hasRouterTarget(owner.id));
+    EXPECT_EQ(self.m_router.popupCount(), 1u);
+    EXPECT_FALSE(self.m_router.focus().valid());
+    self.m_router.invalidateTarget(owner.id);
+    EXPECT_EQ(self.m_router.popupCount(), 0u);
+    EXPECT_EQ(self.m_router.focus(), MakeUiNestedPopupRouterBaseHitTarget().id);
+    EXPECT_EQ(self.m_router.targets().size(), 1u);
+}
+
+void VerifyUiNestedPopupRouterTests_NativeFocusLossDismissesWholeFamilyWithoutRestoringUnderlyingFocus(mut UiNestedPopupRouterTests self){
+    self.focusBase();
+    const PopupScope parent = MakeUiNestedPopupRouterScope(100u, 1u);
+    const PopupScope child = MakeUiNestedPopupRouterScope(200u, 2u, parent.token);
+    const PopupScope grandchild = MakeUiNestedPopupRouterScope(300u, 3u, child.token);
+    Array<PopupScope, 3u> scopes = Array<PopupScope, 3u>();
+    scopes[0u] = parent;
+    scopes[1u] = child;
+    scopes[2u] = grandchild;
+    ASSERT_TRUE(self.install(scopes, 2u));
+    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterFocusEvent(InputEventType::FocusLost)).commandConsumed);
+    EXPECT_FALSE(self.m_router.focus().valid());
+    EXPECT_FALSE(self.m_router.hitTest(MakeUiNestedPopupRouterPoint(285.0f, 205.0f)).valid());
+    PopupDismissReasonEnum reason = PopupDismissReason::None;
+    for(in PopupScope scope : scopes){
+        const auto reasonResult = self.m_router.consumePopupDismissal(scope.token);
+        ASSERT_TRUE(reasonResult.has_value());
+        reason = reasonResult.value();
+        EXPECT_EQ(reason, PopupDismissReason::FocusLost);
+        EXPECT_FALSE(self.m_router.consumePopupDismissal(scope.token).has_value());
+    }
+    EXPECT_FALSE(self.send(MakeUiNestedPopupRouterFocusEvent(InputEventType::FocusGained)).focus.valid());
+    ASSERT_TRUE(self.installEmpty(3u));
+    EXPECT_FALSE(self.m_router.focus().valid());
+    EXPECT_FALSE(self.m_router.hasPopup());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiNestedPopupTriggerTests_NestedComboRejectsDisabledRowWithoutActivatingUserAncestors(mut UiNestedPopupTriggerTests self){
+    ASSERT_TRUE(self.acceptChildCombo(1u));
+    const Optional<HitTarget> fieldTarget = self.findTarget(self.fieldId());
+    ASSERT_TRUE(fieldTarget.has_value());
+    EXPECT_FALSE(self.hasTarget(self.rowsId()));
+    self.click(CenterUiRect(fieldTarget.value().rectangle));
+    ASSERT_TRUE(self.acceptChildCombo(2u));
+    EXPECT_FALSE(self.m_result.committed);
+    EXPECT_TRUE(self.m_state.isOpen());
+    ASSERT_TRUE(self.hasTarget(self.rowsId()));
+    const Optional<HitTarget> row3Target = self.findTarget(self.comboRow(3u));
+    ASSERT_TRUE(row3Target.has_value());
+    EXPECT_FALSE(row3Target.value().enabled);
+    self.click(CenterUiRect(row3Target.value().rectangle));
+    ASSERT_TRUE(self.acceptChildCombo(3u));
+    EXPECT_FALSE(self.m_result.committed);
+    EXPECT_TRUE(self.m_state.isOpen());
+    EXPECT_EQ(self.m_state.selectedKey(), 0u);
+
+    const Optional<HitTarget> row4Target = self.findTarget(self.comboRow(4u));
+    ASSERT_TRUE(row4Target.has_value());
+    self.click(CenterUiRect(row4Target.value().rectangle));
+    ASSERT_TRUE(self.acceptChildCombo(4u));
+    EXPECT_TRUE(self.m_result.committed);
+    EXPECT_TRUE(self.m_result.selectionChanged);
+    EXPECT_TRUE(self.m_result.closed);
+    EXPECT_EQ(self.m_state.selectedKey(), 4u);
+    EXPECT_FALSE(self.m_state.isOpen());
+    EXPECT_FALSE(self.hasTarget(self.rowsId()));
+    self.expectUserParentsOpen();
+}
+
+void VerifyUiNestedPopupTriggerTests_NestedMenuSkipsDisabledCommandsWithoutActivatingUserAncestors(mut UiNestedPopupTriggerTests self){
+    ASSERT_TRUE(self.acceptChildMenu(1u));
+    const Optional<HitTarget> anchorTarget = self.findTarget(self.anchorId());
+    ASSERT_TRUE(anchorTarget.has_value());
+    const Point point = CenterUiRect(anchorTarget.value().rectangle);
+    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerPointEvent(InputEventType::SecondaryDown, point)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiNestedPopupRouterPointerPointEvent(InputEventType::SecondaryUp, point)).pointerConsumed);
+    ASSERT_TRUE(self.acceptChildMenu(2u));
+    EXPECT_TRUE(self.m_menuResult.opened);
+    EXPECT_FALSE(self.m_anchorActivated);
+    EXPECT_TRUE(self.m_menu.isOpen());
+    ASSERT_TRUE(self.hasTarget(self.menuRows()));
+    self.press(CoreKey::Down);
+    self.press(CoreKey::Down);
+    ASSERT_TRUE(self.acceptChildMenu(3u));
+    EXPECT_EQ(self.m_menu.cursorKey(), 4u);
+    EXPECT_FALSE(self.m_menuResult.activated);
+    self.press(CoreKey::Enter);
+    ASSERT_TRUE(self.acceptChildMenu(4u));
+    EXPECT_TRUE(self.m_menuResult.activated);
+    EXPECT_EQ(self.m_menuResult.key, 4u);
+    EXPECT_TRUE(self.m_menuResult.closed);
+    EXPECT_FALSE(self.m_menu.isOpen());
+    EXPECT_FALSE(self.m_anchorActivated);
+    EXPECT_FALSE(self.hasTarget(self.menuRows()));
+    self.expectUserParentsOpen();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_GTEST_F(UiNestedPopupLoanTests, ChildEndDefersVisibleRowCallbacksUntilTheOuterPopupEnds, VerifyUiNestedPopupLoanTests_ChildEndDefersVisibleRowCallbacksUntilTheOuterPopupEnds)
+NWB_ADHD_GTEST_F(UiNestedPopupLoanTests, ExplicitChildListMutationAfterChildEndRejectsTheEnclosingLoan, VerifyUiNestedPopupLoanTests_ExplicitChildListMutationAfterChildEndRejectsTheEnclosingLoan)
+NWB_ADHD_GTEST_F(UiNestedPopupLoanTests, ChildVisibleRowCallbackCannotMutateThePaintedParentListLoan, VerifyUiNestedPopupLoanTests_ChildVisibleRowCallbackCannotMutateThePaintedParentListLoan)
+NWB_ADHD_GTEST_F(UiNestedPopupLoanTests, ParentVisibleRowCallbackCannotMutateTheEndedChildListLoan, VerifyUiNestedPopupLoanTests_ParentVisibleRowCallbackCannotMutateTheEndedChildListLoan)
+NWB_ADHD_GTEST_F(UiNestedPopupLoanTests, ParentMetadataCallbackArmedByChildPaintStillRejectsThePaintedChildMutation, VerifyUiNestedPopupLoanTests_ParentMetadataCallbackArmedByChildPaintStillRejectsThePaintedChildMutation)
+NWB_ADHD_GTEST_F(UiNestedPopupLoanTests, ChildSourceCallbackCannotMutateTheParentComboAfterItsFieldPaint, VerifyUiNestedPopupLoanTests_ChildSourceCallbackCannotMutateTheParentComboAfterItsFieldPaint)
+NWB_ADHD_GTEST_F(UiNestedPopupLoanTests, ParentSourceCallbackCannotMutateTheEndedChildSearchQueryLoan, VerifyUiNestedPopupLoanTests_ParentSourceCallbackCannotMutateTheEndedChildSearchQueryLoan)
+NWB_ADHD_GTEST_F(UiNestedPopupLoanTests, ChildSourceCallbackCannotCloseTheParentContextMenuAndPublishTheFrame, VerifyUiNestedPopupLoanTests_ChildSourceCallbackCannotCloseTheParentContextMenuAndPublishTheFrame)
+NWB_ADHD_GTEST_F(UiNestedPopupLoanTests, ClosingTheParentBeforeOuterEndSuppressesEveryDescendantSourceAndQueryPublication, VerifyUiNestedPopupLoanTests_ClosingTheParentBeforeOuterEndSuppressesEveryDescendantSourceAndQueryPublication)
+NWB_ADHD_GTEST_F(UiNestedPopupLoanTests, ReopeningTheParentBeforeOuterEndSuppressesItsOldDescendantLoans, VerifyUiNestedPopupLoanTests_ReopeningTheParentBeforeOuterEndSuppressesItsOldDescendantLoans)
+NWB_ADHD_GTEST_F(UiNestedPopupLoanTests, ClosingTheEndedChildSkipsItsCallbacksAndKeepsParentControlsPainted, VerifyUiNestedPopupLoanTests_ClosingTheEndedChildSkipsItsCallbacksAndKeepsParentControlsPainted)
+NWB_ADHD_GTEST_F(UiNestedPopupLoanTests, ReopeningTheEndedChildRetiresItsOldBodyBeforeSourceCallbacks, VerifyUiNestedPopupLoanTests_ReopeningTheEndedChildRetiresItsOldBodyBeforeSourceCallbacks)
+NWB_ADHD_GTEST_F(UiNestedPopupLoanTests, ParentFirstRowClosingItsPopupRejectsBeforeAnyDescendantTextCallback, VerifyUiNestedPopupLoanTests_ParentFirstRowClosingItsPopupRejectsBeforeAnyDescendantTextCallback)
+NWB_ADHD_GTEST_F(UiNestedPopupLoanTests, ChildFirstRowReopeningItsAncestorRejectsBeforeLaterRowsOrSiblingCallbacks, VerifyUiNestedPopupLoanTests_ChildFirstRowReopeningItsAncestorRejectsBeforeLaterRowsOrSiblingCallbacks)
+
+NWB_ADHD_GTEST_F(UiNestedPopupReentryTests, ChildFirstRowResetRejectsWithoutClearingBorrowedFrames, VerifyUiNestedPopupReentryTests_ChildFirstRowResetRejectsWithoutClearingBorrowedFrames)
+NWB_ADHD_GTEST_F(UiNestedPopupReentryTests, ChildFirstRowBalancedPanelReentryRejectsBeforeLaterSiblingCallbacks, VerifyUiNestedPopupReentryTests_ChildFirstRowBalancedPanelReentryRejectsBeforeLaterSiblingCallbacks)
+NWB_ADHD_GTEST_F(UiNestedPopupReentryTests, ParentComboAutomaticPopupRowResetRejectsBeforeChildSourceCallbacks, VerifyUiNestedPopupReentryTests_ParentComboAutomaticPopupRowResetRejectsBeforeChildSourceCallbacks)
+NWB_ADHD_GTEST_F(UiNestedPopupReentryTests, LateParentRevisionScopeReentryRejectsAfterAllRowsWerePainted, VerifyUiNestedPopupReentryTests_LateParentRevisionScopeReentryRejectsAfterAllRowsWerePainted)
+
+NWB_ADHD_GTEST_F(UiNestedPopupRouterTests, ChildMayExtendOutsideParentWhileFocusAndPointerStayInAcceptedTopScope, VerifyUiNestedPopupRouterTests_ChildMayExtendOutsideParentWhileFocusAndPointerStayInAcceptedTopScope)
+NWB_ADHD_GTEST_F(UiNestedPopupRouterTests, EscapeDismissesOnlyChildThenRestoresChosenParentFocusAfterAcceptance, VerifyUiNestedPopupRouterTests_EscapeDismissesOnlyChildThenRestoresChosenParentFocusAfterAcceptance)
+NWB_ADHD_GTEST_F(UiNestedPopupRouterTests, OptedInChildTabLeavesItsParentOpenAndAdvancesParentFocus, VerifyUiNestedPopupRouterTests_OptedInChildTabLeavesItsParentOpenAndAdvancesParentFocus)
+NWB_ADHD_GTEST_F(UiNestedPopupRouterTests, OutsideChildPressOverParentConsumesReleaseWithoutParentActivation, VerifyUiNestedPopupRouterTests_OutsideChildPressOverParentConsumesReleaseWithoutParentActivation)
+NWB_ADHD_GTEST_F(UiNestedPopupRouterTests, OutsideSecondarySequenceCannotOpenTheNewlyExposedParentMenu, VerifyUiNestedPopupRouterTests_OutsideSecondarySequenceCannotOpenTheNewlyExposedParentMenu)
+NWB_ADHD_GTEST_F(UiNestedPopupRouterTests, ClosingAncestorPreservesUnrelatedTopChainAndItsAcceptedAction, VerifyUiNestedPopupRouterTests_ClosingAncestorPreservesUnrelatedTopChainAndItsAcceptedAction)
+NWB_ADHD_GTEST_F(UiNestedPopupRouterTests, RetiringAncestorCancelsDescendantIntentionsAcrossRemovalAndIdenticalReturn, VerifyUiNestedPopupRouterTests_RetiringAncestorCancelsDescendantIntentionsAcrossRemovalAndIdenticalReturn)
+NWB_ADHD_GTEST_F(UiNestedPopupRouterTests, RetiringLowerFamilyPreservesUnrelatedTopCaptureAndFocus, VerifyUiNestedPopupRouterTests_RetiringLowerFamilyPreservesUnrelatedTopCaptureAndFocus)
+NWB_ADHD_GTEST_F(UiNestedPopupRouterTests, ChangingAncestorRequiresRenewedChildTokenAndFencesOldCapture, VerifyUiNestedPopupRouterTests_ChangingAncestorRequiresRenewedChildTokenAndFencesOldCapture)
+NWB_ADHD_GTEST_F(UiNestedPopupRouterTests, InvalidOrMissingAncestryRejectsAtomicallyAgainstAcceptedNestedGeometry, VerifyUiNestedPopupRouterTests_InvalidOrMissingAncestryRejectsAtomicallyAgainstAcceptedNestedGeometry)
+NWB_ADHD_GTEST_F(UiNestedPopupRouterTests, NewDescendantsCannotRestoreInputBeneathAClosingAncestorLifetime, VerifyUiNestedPopupRouterTests_NewDescendantsCannotRestoreInputBeneathAClosingAncestorLifetime)
+NWB_ADHD_GTEST_F(UiNestedPopupRouterTests, FencingAncestorImmediatelySuppressesAllDescendantActionsAndCapture, VerifyUiNestedPopupRouterTests_FencingAncestorImmediatelySuppressesAllDescendantActionsAndCapture)
+NWB_ADHD_GTEST_F(UiNestedPopupRouterTests, RetiringAnAlreadyRemovedPopupOwnerPartStillRestoresUnderlyingFocus, VerifyUiNestedPopupRouterTests_RetiringAnAlreadyRemovedPopupOwnerPartStillRestoresUnderlyingFocus)
+NWB_ADHD_GTEST_F(UiNestedPopupRouterTests, NativeFocusLossDismissesWholeFamilyWithoutRestoringUnderlyingFocus, VerifyUiNestedPopupRouterTests_NativeFocusLossDismissesWholeFamilyWithoutRestoringUnderlyingFocus)
+
+NWB_ADHD_GTEST_F(UiNestedPopupTriggerTests, NestedComboRejectsDisabledRowWithoutActivatingUserAncestors, VerifyUiNestedPopupTriggerTests_NestedComboRejectsDisabledRowWithoutActivatingUserAncestors)
+NWB_ADHD_GTEST_F(UiNestedPopupTriggerTests, NestedMenuSkipsDisabledCommandsWithoutActivatingUserAncestors, VerifyUiNestedPopupTriggerTests_NestedMenuSkipsDisabledCommandsWithoutActivatingUserAncestors)
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

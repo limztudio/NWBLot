@@ -1,6 +1,13 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+#include <tests/common/gtest_macros.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -270,7 +277,7 @@ struct SkinPaintSample{
 
 
 class WidgetFixture : public testing::Test{
-protected:
+public:
     [[nodiscard]] static ImageOptions Fixed(f32 width = 96.0f, f32 height = 40.0f)noexcept;
 
 
@@ -278,7 +285,7 @@ public:
     WidgetFixture();
 
 
-protected:
+public:
     virtual void SetUp()override;
     void configureSkin(AStringView omitted = {});
     [[nodiscard]] b8 begin(u64 generation, const DisplayMetrics& display = { 800.0f, 600.0f, 1.0f, 1.0f });
@@ -299,7 +306,7 @@ protected:
     [[nodiscard]] Expected<Rect> skinQuad(const DrawSnapshot& snapshot, u32 slot)const noexcept;
 
 
-protected:
+public:
     Core::Alloc::GlobalArena m_arena;
     Font m_font;
     TextService m_text;
@@ -403,11 +410,11 @@ public:
 
 
 class ComboFixture : public WidgetFixture{
-protected:
+public:
     using WidgetFixture::press;
 
 
-protected:
+public:
     [[nodiscard]] b8 declareCombo(const u64 generation, const ComboOptions& options = Options(), const Rect& bounds = s_ComboPanelBounds){
         return declareSource(generation, m_source, m_state, options, bounds);
     }
@@ -426,7 +433,7 @@ protected:
     [[nodiscard]] b8 openByPointer(u64 generation);
 
 
-protected:
+public:
     ComboSource m_source;
     ComboState m_state;
     ComboResult m_result;
@@ -512,7 +519,7 @@ public:
     EditCaretFixture();
 
 
-protected:
+public:
     [[nodiscard]] Expected<TextLayout, TextLayoutStatus::Enum> layout(const StringView text, const TextDirection::Enum direction = TextDirection::LeftToRight){
         return m_builder.layout({ .text = text, .fontSize = 16.0f, .direction = direction });
     }
@@ -525,7 +532,7 @@ protected:
     void expectRange(EditBoxRange range, u32 line, Rect expected, f32 cap = 1.0f)const;
 
 
-protected:
+public:
     Core::Alloc::GlobalArena m_arena;
     CaretShaper m_shaper;
     TextLayoutBuilder m_builder;
@@ -584,7 +591,7 @@ public:
     {}
 
 
-protected:
+public:
     Core::Alloc::GlobalArena m_arena;
     Impl::Ui::EditModel m_model;
 };
@@ -645,7 +652,7 @@ public:
     HorizontalNavigationFixture();
 
 
-protected:
+public:
     [[nodiscard]] InputRoutingResult keyDown(Core::Key::Enum key, b8 repeat = false);
     [[nodiscard]] InputRoutingResult keyUp(Core::Key::Enum key);
     void press(Core::Key::Enum key);
@@ -655,7 +662,7 @@ protected:
     void bindEditor(usize hostIndex = 0u)noexcept;
 
 
-protected:
+public:
     Array<HitTarget, 3u> m_targets;
     u64 m_generation = 0u;
 };
@@ -932,7 +939,7 @@ public:
 
 
 class UiListBuilderTests : public WidgetFixture{
-protected:
+public:
     [[nodiscard]] b8 prepare(const u64 generation, const ListOptions& options = Options()){
         return prepareSource(generation, m_source, m_state, options);
     }
@@ -947,7 +954,7 @@ protected:
     [[nodiscard]] b8 wheel(f64 delta = -1.0);
 
 
-protected:
+public:
     ArithmeticSource m_source;
     ListState m_state;
     ListResult m_result;
@@ -1022,14 +1029,14 @@ public:
     MultilineViewFixture();
 
 
-protected:
+public:
     [[nodiscard]] b8 shapeView();
     [[nodiscard]] b8 place(f32 width = 100.0f, f32 height = 100.0f, Point previousScroll = {})noexcept;
     [[nodiscard]] b8 loadFont();
     [[nodiscard]] Expected<DrawSnapshot> paintView(const EditBoxStyle& style, const EditBoxPaintFlags& flags);
 
 
-protected:
+public:
     Core::Alloc::GlobalArena m_arena;
     EditModel m_model;
     FixtureShaper m_shaper;
@@ -1056,15 +1063,145 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+namespace __hidden_ui_glyph_sdf_tests{
+using ScopedTestTrace = ::NWB::Tests::ScopedTestTrace;
+using Rect = ::NWB::Impl::Ui::Rect;
+using Point = ::NWB::Impl::Ui::Point;
+using HitTarget = ::NWB::Impl::Ui::HitTarget;
+using WidgetId = ::NWB::Impl::Ui::WidgetId;
+using WidgetRoot = ::NWB::Impl::Ui::WidgetRoot;
+using DrawCommand = ::NWB::Impl::Ui::DrawCommand;
+using PopupOptions = ::NWB::Impl::Ui::PopupOptions;
+using ListOptions = ::NWB::Impl::Ui::ListOptions;
+namespace LayoutSizePolicy = ::NWB::Impl::Ui::LayoutSizePolicy;
+using ::NWB::Impl::Ui::TryMakeRootId;
+using ::NWB::Impl::Ui::TryMakeWidgetId;
+using ::NWB::Impl::Ui::TryMakeWidgetPartId;
+};
 }
 
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
 
-b8 UiCoreAndListFixturesReady(in u64 value){
-    return value != 0u;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Point CenterUiRect(in Rect bounds){
+    Point center = Point();
+    center.x = bounds.x + bounds.width * 0.5f;
+    center.y = bounds.y + bounds.height * 0.5f;
+    return center;
 }
+
+void ExpectUiRect(in Rect actual, in Rect expected){
+    EXPECT_FLOAT_EQ(actual.x, expected.x);
+    EXPECT_FLOAT_EQ(actual.y, expected.y);
+    EXPECT_FLOAT_EQ(actual.width, expected.width);
+    EXPECT_FLOAT_EQ(actual.height, expected.height);
+}
+
+void ExpectUiRectExact(in Rect actual, in Rect expected){
+    EXPECT_EQ(bit_cast<u32>(actual.x), bit_cast<u32>(expected.x));
+    EXPECT_EQ(bit_cast<u32>(actual.y), bit_cast<u32>(expected.y));
+    EXPECT_EQ(bit_cast<u32>(actual.width), bit_cast<u32>(expected.width));
+    EXPECT_EQ(bit_cast<u32>(actual.height), bit_cast<u32>(expected.height));
+}
+
+void ExpectUiHitTargetIdentity(in HitTarget actual, in HitTarget expected){
+    EXPECT_EQ(actual.id, expected.id);
+    EXPECT_EQ(actual.declarationGeneration, expected.declarationGeneration);
+    EXPECT_EQ(actual.control, expected.control);
+    EXPECT_EQ(actual.owner, expected.owner);
+    EXPECT_EQ(actual.enabled, expected.enabled);
+}
+
+void ExpectUiDrawCommandFields(in DrawCommand actual, in DrawCommand expected){
+    EXPECT_EQ(actual.firstIndex, expected.firstIndex);
+    EXPECT_EQ(actual.indexCount, expected.indexCount);
+    EXPECT_EQ(actual.material, expected.material);
+    EXPECT_EQ(actual.glyphPageIndex, expected.glyphPageIndex);
+    EXPECT_EQ(actual.sdfPageIndex, expected.sdfPageIndex);
+    EXPECT_EQ(actual.textureImageIndex, expected.textureImageIndex);
+    EXPECT_EQ(actual.sdfChannel, expected.sdfChannel);
+    EXPECT_EQ(actual.layer, expected.layer);
+}
+
+WidgetId RequireUiRootId(in WidgetRoot root){
+    const auto id = TryMakeRootId(root);
+    EXPECT_TRUE(id.has_value());
+    if(id.has_value())
+        return id.value();
+    return WidgetId();
+}
+
+WidgetId RequireUiWidgetId(in WidgetId parent, in AStringView stableKey){
+    const auto id = TryMakeWidgetId(parent, stableKey);
+    EXPECT_TRUE(id.has_value());
+    if(id.has_value())
+        return id.value();
+    return WidgetId();
+}
+
+WidgetId RequireUiWidgetPartId(in WidgetId parent, in u64 partKey){
+    const auto id = TryMakeWidgetPartId(parent, partKey);
+    EXPECT_TRUE(id.has_value());
+    if(id.has_value())
+        return id.value();
+    return WidgetId();
+}
+
+PopupOptions MakeNestedParentPopupOptions(){
+    PopupOptions options = PopupOptions();
+    options.anchor.x = 20.0f;
+    options.anchor.y = 20.0f;
+    options.anchor.width = 80.0f;
+    options.anchor.height = 20.0f;
+    options.size.x = 300.0f;
+    options.size.y = 380.0f;
+    return options;
+}
+
+PopupOptions MakeNestedChildPopupOptions(){
+    PopupOptions options = PopupOptions();
+    options.anchor.x = 420.0f;
+    options.anchor.y = 60.0f;
+    options.anchor.width = 80.0f;
+    options.anchor.height = 24.0f;
+    options.size.x = 340.0f;
+    options.size.y = 380.0f;
+    return options;
+}
+
+PopupOptions MakeLargeLoanParentPopupOptions(){
+    PopupOptions options = PopupOptions();
+    options.anchor.x = 20.0f;
+    options.anchor.y = 20.0f;
+    options.anchor.width = 80.0f;
+    options.anchor.height = 20.0f;
+    options.size.x = 340.0f;
+    options.size.y = 420.0f;
+    return options;
+}
+
+PopupOptions MakeLargeLoanChildPopupOptions(){
+    PopupOptions options = PopupOptions();
+    options.anchor.x = 420.0f;
+    options.anchor.y = 20.0f;
+    options.anchor.width = 80.0f;
+    options.anchor.height = 20.0f;
+    options.size.x = 340.0f;
+    options.size.y = 420.0f;
+    return options;
+}
+
+ListOptions MakeLargeLoanListOptions(){
+    ListOptions options = ListOptions();
+    options.height.policy = LayoutSizePolicy::Fixed;
+    options.height.value = 140.0f;
+    return options;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 native{
 

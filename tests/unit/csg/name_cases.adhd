@@ -3,6 +3,11 @@
 
 
 const Name s_CsgInputNameEngineCsgSphere = "engine/csg/sphere";
+const Name s_CsgInputNameEngineCsgBox = "engine/csg/box";
+const Name s_CsgInputNameEngineCsgPlane = "engine/csg/plane";
+const Name s_CsgInputNameEngineCsgCapsule = "engine/csg/capsule";
+const Name s_CsgInputNameProjectCsgGroupA = "project/csg/group_a";
+const Name s_CsgInputNameProjectCsgGroupB = "project/csg/group_b";
 const Name s_CsgInputNameProjectCsgSlab = "project/csg/slab";
 const Name s_CsgInputNameProjectCsgOversized = "project/csg/oversized";
 const Name s_CsgLookupNameProjectCsgOversized = "project/csg/oversized";

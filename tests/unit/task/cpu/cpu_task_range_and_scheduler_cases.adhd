@@ -1,847 +1,32 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
+#include <tests/common/gtest_macros.adhd>
+#include <tests/unit/task/cpu/suite.adhd>
 
-b8 CpuRangeAndSchedulerCasesReady(in u64 value){
-    return value != 0u;
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 native{
-#include <tests/unit/task/cpu/suite.adhd.h>
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/task/cpu/scheduler_test_config.adhd.h>
-
-#include <core/task/cpu/scheduler.h>
-
-#include <global/terminal_entry.h>
-#include <global/termination.h>
-#include <global/timer.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace __hidden_cpu_task_range_tests{
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr u32 s_CompletionTimeoutMS = CpuTaskSchedulerTestSupport::s_CompletionTimeoutMS;
 using namespace NWB::Core;
 using CpuTaskSchedulerTestSupport::HomogeneousWorkers;
+using CpuTaskSchedulerTestSupport::s_CompletionTimeoutMS;
 using CpuTaskSchedulerTestSupport::s_PollIntervalMS;
 
-void PumpUntil(CpuTaskScheduler& scheduler, const Atomic<b8>& done){
+inline void PumpUntil(CpuTaskScheduler& scheduler, const Atomic<b8>& done){
     const Timer start = TimerNow();
     while(!done.load(MemoryOrder::acquire)){
-        if(DurationInMS<u64>(TimerNow(), start) > __hidden_cpu_task_range_tests::s_CompletionTimeoutMS)
+        if(DurationInMS<u64>(TimerNow(), start) > s_CompletionTimeoutMS)
             TerminateInvariant();
         scheduler.pumpMainThread();
         SleepMS(s_PollIntervalMS);
     }
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(CpuTaskRangeTests, SingleChunkJoinsAllSubmittedDescendants){
-    using namespace __hidden_cpu_task_range_tests;
-    CpuTaskScheduler scheduler(0u);
-    u32 callbacks = 0u;
-    EXPECT_TRUE((scheduler.parallelFor(0u, 1u, 1u, [&](usize){
-        ++callbacks;
-        const auto cpuTaskAdmission = scheduler.submit([&](){
-            ++callbacks;
-            const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept{ ++callbacks; });
-            ASSERT_TRUE(secondCpuTaskAdmission);
-            if(secondCpuTaskAdmission)
-                ASSERT_TRUE(secondCpuTaskAdmission->valid());
-        });
-        ASSERT_TRUE(cpuTaskAdmission);
-        if(cpuTaskAdmission)
-            ASSERT_TRUE(cpuTaskAdmission->valid());
-    })));
-    EXPECT_EQ(callbacks, 3u);
-    EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
-}
-
-TEST(CpuTaskRangeTests, SingleChunkKeepsItsCallingWorkersIdentity){
-    using namespace __hidden_cpu_task_range_tests;
-    CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
-    const auto cpuTaskAdmission = scheduler.submit([&](){
-        const usize worker = scheduler.currentWorkerIndex();
-        const auto affinity = scheduler.currentWorkerAffinity();
-        EXPECT_NE(worker, 0u);
-        EXPECT_TRUE((scheduler.parallelFor(0u, 1u, 1u, [&](usize){
-            EXPECT_EQ(scheduler.currentWorkerIndex(), worker);
-            EXPECT_EQ(scheduler.currentWorkerAffinity(), affinity);
-        })));
-    });
-    ASSERT_TRUE(cpuTaskAdmission);
-    const auto task = *cpuTaskAdmission;
-    ASSERT_TRUE(task.valid());
-    scheduler.wait(task);
-}
-
-TEST(CpuTaskRangeTests, ExternalSingleChunkUsesAWorkerInsteadOfTheProducer){
-    using namespace __hidden_cpu_task_range_tests;
-    CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
-    Atomic<b8> done{ false };
-    usize worker = 0u;
-    Thread producer([&](){
-        EXPECT_TRUE((scheduler.parallelFor(0u, 1u, 1u, [&](usize)noexcept{ worker = scheduler.currentWorkerIndex(); })));
-        done.store(true, MemoryOrder::release);
-    });
-    PumpUntil(scheduler, done);
-    producer.join();
-    EXPECT_EQ(worker, 1u);
-}
-
-TEST(CpuTaskRangeTests, ExternalMainThreadRangeWaitsForTheOwner){
-    using namespace __hidden_cpu_task_range_tests;
-    CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
-    Atomic<b8> done{ false };
-    const ThreadId owner = QueryCurrentThreadId();
-    u32 callbacks = 0u;
-    Thread producer([&](){
-        EXPECT_TRUE((scheduler.parallelFor(0u, 1u, 1u, [&](usize){
-            ++callbacks;
-            EXPECT_EQ(QueryCurrentThreadId(), owner);
-            EXPECT_EQ(scheduler.currentWorkerIndex(), 0u);
-        }, { .target = CpuTaskTarget::MainThread })));
-        done.store(true, MemoryOrder::release);
-    });
-    PumpUntil(scheduler, done);
-    producer.join();
-    EXPECT_EQ(callbacks, 1u);
-}
-
-TEST(CpuTaskRangeTests, InvalidBatchOptionsPublishNoTasks){
-    using namespace __hidden_cpu_task_range_tests;
-    CpuTaskScheduler scheduler(0u);
-    u32 callbacks = 0u;
-    CpuTaskOptions options;
-    options.cost = static_cast<CpuTaskCost::Enum>(255u);
-    const auto rejected = scheduler.parallelFor(0u, 128u, 1u, [&](usize)noexcept{ ++callbacks; }, options);
-    ASSERT_FALSE(rejected);
-    EXPECT_EQ(rejected.error(), CpuTaskAdmissionError::InvalidOptions);
-    EXPECT_EQ(callbacks, 0u);
-    EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
-}
-
-
-TEST(CpuTaskRangeTests, InlineFailureRetiresSubmittedDescendantsBeforeTerminalHandling){
-    using namespace __hidden_cpu_task_range_tests;
-    using Failure = CpuTaskSchedulerTestSupport::InlineRangeFailure;
-    struct Retirement{
-        u32* count;
-
-
-    public:
-        explicit Retirement(u32& counter)noexcept : count(&counter){}
-        Retirement(const Retirement&) = delete;
-        Retirement(Retirement&& other)noexcept : count(other.count){ other.count = nullptr; }
-        ~Retirement()noexcept{
-            if(count)
-                ++*count;
-        }
-    };
-    u32 retirements = 0u;
-    u32 callbacks = 0u;
-    CpuTaskScheduler scheduler(0u);
-    const int result = ::InvokeTerminalEntry<Failure>([&]()->int{
-        EXPECT_TRUE((scheduler.parallelFor(0u, 1u, 1u, [&](usize){
-            const auto cpuTaskAdmission = scheduler.submit([&, capture = Retirement(retirements)](){
-                EXPECT_TRUE(capture.count != nullptr);
-                ++callbacks;
-            });
-            EXPECT_TRUE(cpuTaskAdmission);
-            if(cpuTaskAdmission)
-                EXPECT_TRUE(cpuTaskAdmission->valid());
-            throw Failure{ .code = 73 };
-        })));
-        return 0;
-    }, [&](const Failure& failure){
-        EXPECT_EQ(retirements, 1u);
-        EXPECT_EQ(callbacks, 0u);
-        EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
-        return failure.code;
-    }, []()noexcept{ return -1; });
-    EXPECT_EQ(result, 73);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_cpu_task_scheduler_cancellation_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace CpuTaskSchedulerTestSupport;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(CpuTaskSchedulerTests, QueuedPrioritiesRunCriticalThenNormalThenBackgroundAfterOccupiedWorkerReleases){
-    using namespace __hidden_cpu_task_scheduler_cancellation_tests;
-    DeadlineGuard deadline;
-    TaskGate occupied;
-    CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
-    ScopeExit releaseWorker([&]()noexcept{ occupied.open(); });
-    const auto cpuTaskAdmission = scheduler.submit([&]()noexcept{ occupied.block(); });
-    EXPECT_TRUE(cpuTaskAdmission);
-    if(cpuTaskAdmission)
-        EXPECT_TRUE(cpuTaskAdmission->valid());
-    EXPECT_TRUE(WaitUntil(occupied.entered, s_GateTimeoutMS));
-    Atomic<u32> cursor{ 0u };
-    Array<u32, 3u> order{};
-    const Array<CpuTaskPriority::Enum, 3u> priorities = { CpuTaskPriority::Background, CpuTaskPriority::Normal, CpuTaskPriority::Critical };
-    for(u32 index = 0u; index < 3u; ++index){
-        CpuTaskOptions options;
-        options.priority = priorities[index];
-        const auto secondCpuTaskAdmission = scheduler.submit([&, index]()noexcept{ order[cursor.fetch_add(1u)] = index; }, options);
-        EXPECT_TRUE(secondCpuTaskAdmission);
-        if(secondCpuTaskAdmission)
-            EXPECT_TRUE(secondCpuTaskAdmission->valid());
-    }
-    occupied.open();
-    scheduler.wait();
-    EXPECT_FALSE(occupied.expired.load());
-    EXPECT_EQ(cursor.load(), 3u);
-    EXPECT_EQ(order[0u], 2u);
-    EXPECT_EQ(order[1u], 1u);
-    EXPECT_EQ(order[2u], 0u);
-}
-
-
-TEST(CpuTaskSchedulerTests, CanceledScopeSkipsQueuedBodiesAndTheirDependentsAndRetiresCaptures){
-    using namespace __hidden_cpu_task_scheduler_cancellation_tests;
-    DeadlineGuard deadline;
-    Atomic<u32> retired{ 0u };
-    CpuTaskScheduler scheduler(0u);
-    CpuTaskScope scope(scheduler);
-    u32 invoked = 0u;
-    const auto predecessorTaskAdmission = scope.submit([&invoked, capture = LifetimeProbe(retired, 1u)]()noexcept{ invoked += capture.value; });
-    ASSERT_TRUE(predecessorTaskAdmission);
-    const auto predecessor = *predecessorTaskAdmission;
-    const auto dependentTaskAdmission = scheduler.submit([&invoked, capture = LifetimeProbe(retired, 2u)]()noexcept{ invoked += capture.value; }, predecessor);
-    ASSERT_TRUE(dependentTaskAdmission);
-    const auto dependent = *dependentTaskAdmission;
-    scope.cancel();
-    const auto cpuTaskAdmission = scope.submit([&]()noexcept{ ++invoked; });
-    EXPECT_FALSE(cpuTaskAdmission);
-    scheduler.wait(dependent);
-    scope.wait();
-    EXPECT_EQ(invoked, 0u);
-    EXPECT_EQ(retired.load(), 2u);
-    EXPECT_EQ(scheduler.statistics().canceledTasks, 2u);
-    EXPECT_EQ(scheduler.statistics().completedTasks, 0u);
-}
-
-
-TEST(CpuTaskSchedulerTests, CancelingAnActiveParentPreventsFutureDescendantsAndContinuations){
-    using namespace __hidden_cpu_task_scheduler_cancellation_tests;
-    DeadlineGuard deadline;
-    TaskGate parentGate;
-    CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
-    CpuTaskScope scope(scheduler);
-    ScopeExit releaseParent([&]()noexcept{ parentGate.open(); });
-    Atomic<u32> childInvocations{ 0u };
-    Atomic<u32> continuationInvocations{ 0u };
-    Atomic<b8> childRejected{ false };
-    const auto cpuTaskAdmission = scope.submit([&](){
-        parentGate.block();
-        const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept{ childInvocations.fetch_add(1u); });
-        if(!secondCpuTaskAdmission || !secondCpuTaskAdmission->valid())
-            childRejected.store(true, MemoryOrder::release);
-    });
-    ASSERT_TRUE(cpuTaskAdmission);
-    const auto parent = *cpuTaskAdmission;
-    EXPECT_TRUE(WaitUntil(parentGate.entered, s_GateTimeoutMS));
-    const auto continuationTaskAdmission = scheduler.submit([&]()noexcept{ continuationInvocations.fetch_add(1u); }, parent);
-    ASSERT_TRUE(continuationTaskAdmission);
-    const auto continuation = *continuationTaskAdmission;
-    scope.cancel();
-    parentGate.open();
-    scheduler.wait(continuation);
-    scope.wait();
-    EXPECT_FALSE(parentGate.expired.load());
-    EXPECT_EQ(childInvocations.load(), 0u);
-    EXPECT_EQ(continuationInvocations.load(), 0u);
-    EXPECT_GE(scheduler.statistics().canceledTasks, 2u);
-    EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
-}
-
-
-TEST(CpuTaskSchedulerTests, HeavyWorkUsesTheOtherClassWhileItsPreferredWorkerIsOccupied){
-    using namespace __hidden_cpu_task_scheduler_cancellation_tests;
-    DeadlineGuard deadline;
-    TaskGate preferredGate;
-    TaskGate spillGate;
-    CpuTaskScheduler scheduler(2u);
-    ScopeExit releaseWorkers([&]()noexcept{ preferredGate.open(); spillGate.open(); });
-    const auto workers = scheduler.statistics();
-    if(workers.performanceWorkers == 0u || workers.efficiencyWorkers == 0u)
-        GTEST_SKIP() << "The permitted CPUs do not provide both capacity classes.";
-    CpuAffinity::Enum preferredAffinity = CpuAffinity::Any;
-    CpuAffinity::Enum spillAffinity = CpuAffinity::Any;
-    const auto cpuTaskAdmission = scheduler.submit([&]()noexcept{
-        preferredAffinity = scheduler.currentWorkerAffinity();
-        preferredGate.block();
-    });
-    EXPECT_TRUE(cpuTaskAdmission);
-    if(cpuTaskAdmission)
-        EXPECT_TRUE(cpuTaskAdmission->valid());
-    EXPECT_TRUE(WaitUntil(preferredGate.entered, s_GateTimeoutMS));
-    const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept{
-        spillAffinity = scheduler.currentWorkerAffinity();
-        spillGate.block();
-    });
-    EXPECT_TRUE(secondCpuTaskAdmission);
-    if(secondCpuTaskAdmission)
-        EXPECT_TRUE(secondCpuTaskAdmission->valid());
-    EXPECT_TRUE(WaitUntil(spillGate.entered, s_GateTimeoutMS));
-    preferredGate.open();
-    spillGate.open();
-    scheduler.wait();
-    EXPECT_FALSE(preferredGate.expired.load());
-    EXPECT_FALSE(spillGate.expired.load());
-    EXPECT_EQ(preferredAffinity, CpuAffinity::Performance);
-    EXPECT_EQ(spillAffinity, CpuAffinity::Efficiency);
-    EXPECT_GT(scheduler.statistics().performanceTasks, 0u);
-    EXPECT_GT(scheduler.statistics().efficiencyTasks, 0u);
-}
-
-TEST(CpuTaskSchedulerTests, CanceledScopeSkipsBothDirectParallelRangeOverloads){
-    using namespace __hidden_cpu_task_scheduler_cancellation_tests;
-    DeadlineGuard deadline;
-    CpuTaskScheduler scheduler(0u);
-    CpuTaskScope scope(scheduler);
-    u32 invocations = 0u;
-    scope.cancel();
-    EXPECT_TRUE((scope.parallelFor(0u, 17u, [&](usize)noexcept{ ++invocations; })));
-    EXPECT_TRUE((scope.parallelFor(4u, 25u, 3u, [&](usize)noexcept{ ++invocations; })));
-    scope.wait();
-    EXPECT_EQ(invocations, 0u);
-    EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_cpu_task_scheduler_rejection_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace CpuTaskSchedulerTestSupport;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(CpuTaskSchedulerTests, WorkerSelfWaitIsRejectedInsteadOfDeadlocking){
-    EXPECT_DEATH({
-        using namespace __hidden_cpu_task_scheduler_rejection_tests;
-        DeadlineGuard deadline(true);
-        TaskGate start;
-        CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
-        CpuTaskHandle self;
-        const auto selfTaskAdmission = scheduler.submit([&](){ start.block(); scheduler.wait(self); });
-        if(!selfTaskAdmission)
-            ExitTestProcess(0u);
-        self = *selfTaskAdmission;
-        start.open();
-        scheduler.wait();
-    }, ""
-    );
-}
-
-
-TEST(CpuTaskSchedulerTests, DescendantWaitForAnAncestorIsRejectedInsteadOfDeadlocking){
-    EXPECT_DEATH({
-        using namespace __hidden_cpu_task_scheduler_rejection_tests;
-        DeadlineGuard deadline(true);
-        TaskGate start;
-        CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
-        CpuTaskHandle parent;
-        const auto cpuTaskAdmission = scheduler.submit([&](){
-            start.block();
-            const auto childTaskAdmission = scheduler.submit([&](){ scheduler.wait(parent); });
-            if(!childTaskAdmission)
-                ExitTestProcess(0u);
-            const auto child = *childTaskAdmission;
-            EXPECT_TRUE(child.valid());
-        });
-        if(!cpuTaskAdmission)
-            ExitTestProcess(0u);
-        parent = *cpuTaskAdmission;
-        start.open();
-        scheduler.wait();
-    }, ""
-    );
-}
-
-
-TEST(CpuTaskSchedulerTests, JoiningTheScopeThatContainsTheCurrentTaskIsRejected){
-    EXPECT_DEATH({
-        using namespace __hidden_cpu_task_scheduler_rejection_tests;
-        DeadlineGuard deadline(true);
-        CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
-        CpuTaskScope scope(scheduler);
-        const auto cpuTaskAdmission = scope.submit([&](){ scope.wait(); });
-        EXPECT_TRUE(cpuTaskAdmission);
-        if(cpuTaskAdmission)
-            EXPECT_TRUE(cpuTaskAdmission->valid());
-        scheduler.wait();
-    }, ""
-    );
-}
-
-TEST(CpuTaskSchedulerTests, ChildCannotDependDirectlyOnItsStructuredParent){
-    EXPECT_EXIT({
-        using namespace __hidden_cpu_task_scheduler_rejection_tests;
-        DeadlineGuard deadline;
-        CpuTaskScheduler scheduler(0u);
-        CpuTaskHandle parent;
-        b8 rejected = false;
-        const auto cpuTaskAdmission = scheduler.submit([&](){
-            const auto child = scheduler.submit([]()noexcept{}, parent);
-            rejected = !child;
-        });
-        if(!cpuTaskAdmission)
-            ExitTestProcess(2u);
-        parent = *cpuTaskAdmission;
-        scheduler.pumpMainThread();
-        if(!rejected)
-            ExitTestProcess(1u);
-        scheduler.wait(parent);
-        ExitTestProcess(scheduler.statistics().outstandingTasks == 0u ? 0u : 2u);
-    }, testing::ExitedWithCode(0), ""
-    );
-}
-
-
-TEST(CpuTaskSchedulerTests, ChildCannotDependOnATransitiveDependentOfItsStructuredParent){
-    EXPECT_EXIT({
-        using namespace __hidden_cpu_task_scheduler_rejection_tests;
-        DeadlineGuard deadline;
-        CpuTaskScheduler scheduler(0u);
-        CpuTaskHandle dependent;
-        b8 rejected = false;
-        u32 continuations = 0u;
-        const auto cpuTaskAdmission = scheduler.submit([&](){
-            const auto child = scheduler.submit([]()noexcept{}, dependent);
-            rejected = !child;
-        });
-        if(!cpuTaskAdmission)
-            ExitTestProcess(2u);
-        const auto parent = *cpuTaskAdmission;
-        dependent = parent;
-        for(u32 depth = 0u; depth < 3u; ++depth){
-            const auto dependentTaskAdmission = scheduler.submit([&]()noexcept{ ++continuations; }, dependent);
-            if(!dependentTaskAdmission)
-                ExitTestProcess(2u);
-            dependent = *dependentTaskAdmission;
-        }
-        scheduler.pumpMainThread();
-        if(!rejected)
-            ExitTestProcess(1u);
-        scheduler.wait(dependent);
-        ExitTestProcess(continuations == 3u && scheduler.statistics().outstandingTasks == 0u ? 0u : 2u);
-    }, testing::ExitedWithCode(0), ""
-    );
-}
-
-
-TEST(CpuTaskSchedulerTests, DescendantOnAnotherWorkerCannotJoinItsAncestorsScope){
-    EXPECT_DEATH({
-        using namespace __hidden_cpu_task_scheduler_rejection_tests;
-        DeadlineGuard deadline(true);
-        TaskGate parentGate;
-        CpuTaskScheduler scheduler(HomogeneousWorkers(2u));
-        CpuTaskScope scope(scheduler);
-        Atomic<usize> parentWorker{ 0u };
-        const auto cpuTaskAdmission = scope.submit([&](){
-            parentWorker.store(scheduler.currentWorkerIndex(), MemoryOrder::release);
-            const auto secondCpuTaskAdmission = scheduler.submit([&](){
-                if(!WaitUntil(parentGate.entered, s_GateTimeoutMS) || scheduler.currentWorkerIndex() == parentWorker.load(MemoryOrder::acquire))
-                    ExitTestProcess(0u);
-                scope.wait();
-            });
-            EXPECT_TRUE(secondCpuTaskAdmission);
-            if(secondCpuTaskAdmission)
-                EXPECT_TRUE(secondCpuTaskAdmission->valid());
-            parentGate.block();
-        });
-        EXPECT_TRUE(cpuTaskAdmission);
-        if(cpuTaskAdmission)
-            EXPECT_TRUE(cpuTaskAdmission->valid());
-        scheduler.wait();
-    }, ""
-    );
-}
-
-
-TEST(CpuTaskSchedulerTests, WorkerCannotWaitForAnIndependentlySubmittedDependent){
-    EXPECT_DEATH({
-        using namespace __hidden_cpu_task_scheduler_rejection_tests;
-        DeadlineGuard deadline(true);
-        TaskGate start;
-        CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
-        CpuTaskHandle dependent;
-        const auto runningTaskAdmission = scheduler.submit([&](){ start.block(); scheduler.wait(dependent); });
-        if(!runningTaskAdmission)
-            ExitTestProcess(0u);
-        const auto running = *runningTaskAdmission;
-        const auto dependentTaskAdmission = scheduler.submit([]()noexcept{}, running);
-        if(!dependentTaskAdmission)
-            ExitTestProcess(0u);
-        dependent = *dependentTaskAdmission;
-        start.open();
-        scheduler.wait();
-    }, ""
-    );
-}
-
-
-TEST(CpuTaskSchedulerTests, DescendantCannotWaitForTransitiveDependentsOfItsAncestor){
-    EXPECT_DEATH({
-        using namespace __hidden_cpu_task_scheduler_rejection_tests;
-        DeadlineGuard deadline(true);
-        TaskGate start;
-        CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
-        CpuTaskHandle dependent;
-        const auto cpuTaskAdmission = scheduler.submit([&](){
-            start.block();
-            const auto secondCpuTaskAdmission = scheduler.submit([&](){ scheduler.wait(dependent); });
-            EXPECT_TRUE(secondCpuTaskAdmission);
-            if(secondCpuTaskAdmission)
-                EXPECT_TRUE(secondCpuTaskAdmission->valid());
-        });
-        if(!cpuTaskAdmission)
-            ExitTestProcess(0u);
-        const auto parent = *cpuTaskAdmission;
-        dependent = parent;
-        for(u32 depth = 0u; depth < 3u; ++depth){
-            const auto dependentTaskAdmission = scheduler.submit([]()noexcept{}, dependent);
-            if(!dependentTaskAdmission)
-                ExitTestProcess(0u);
-            dependent = *dependentTaskAdmission;
-        }
-        start.open();
-        scheduler.wait();
-    }, ""
-    );
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_cpu_task_scheduler_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace CpuTaskSchedulerTestSupport;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(CpuTaskSchedulerTests, ForeignDependenciesAndForeignWaitsAreRejectedWithoutPublishingWork){
-    using namespace __hidden_cpu_task_scheduler_tests;
-    DeadlineGuard deadline;
-    CpuTaskScheduler first(0u);
-    CpuTaskScheduler second(0u);
-    const auto foreignTaskAdmission = first.submit([]()noexcept{});
-    ASSERT_TRUE(foreignTaskAdmission);
-    const auto foreign = *foreignTaskAdmission;
-    u32 invoked = 0u;
-    const auto rejected = second.submit([&]()noexcept{ ++invoked; }, foreign);
-    EXPECT_FALSE(rejected);
-    EXPECT_EQ(second.statistics().outstandingTasks, 0u);
-    EXPECT_THROW(second.wait(foreign), RuntimeException);
-    EXPECT_THROW({ const b8 complete = second.isComplete(foreign); EXPECT_FALSE(complete); }, RuntimeException);
-    first.wait(foreign);
-    EXPECT_THROW({ const b8 complete = second.isComplete(foreign); EXPECT_FALSE(complete); }, RuntimeException);
-    const auto cpuTaskAdmission = second.submit([&]()noexcept{ ++invoked; }, foreign);
-    EXPECT_FALSE(cpuTaskAdmission);
-    EXPECT_EQ(invoked, 0u);
-}
-
-
-TEST(CpuTaskSchedulerTests, RetiredHandlesStayCompleteWhenNodeStorageIsReused){
-    using namespace __hidden_cpu_task_scheduler_tests;
-    DeadlineGuard deadline;
-    CpuTaskScheduler scheduler(0u);
-    const auto retiredTaskAdmission = scheduler.submit([]()noexcept{});
-    ASSERT_TRUE(retiredTaskAdmission);
-    const auto retired = *retiredTaskAdmission;
-    scheduler.wait(retired);
-    u32 invoked = 0u;
-    const auto pendingTaskAdmission = scheduler.submit([&]()noexcept{ ++invoked; });
-    ASSERT_TRUE(pendingTaskAdmission);
-    const auto pending = *pendingTaskAdmission;
-    EXPECT_TRUE(scheduler.isComplete(retired));
-    EXPECT_FALSE(scheduler.isComplete(pending));
-    scheduler.wait(retired);
-    EXPECT_EQ(invoked, 0u);
-    scheduler.wait(pending);
-    EXPECT_EQ(invoked, 1u);
-}
-
-
-TEST(CpuTaskSchedulerTests, ParentCompletionRetainsAncestorCapturesUntilGrandchildrenAndRetirementFinish){
-    using namespace __hidden_cpu_task_scheduler_tests;
-    DeadlineGuard deadline;
-    TaskGate grandchildGate;
-    Atomic<u32> retirements{ 0u };
-    Atomic<u32> total{ 0u };
-    Atomic<u32> retirementsSeenByDependent{ 0u };
-    Atomic<b8> rejected{ false };
-    CpuTaskScheduler scheduler(HomogeneousWorkers(2u));
-    ScopeExit releaseGrandchild([&]()noexcept{ grandchildGate.open(); });
-    const auto cpuTaskAdmission = scheduler.submit([&scheduler, &grandchildGate, &retirements, &total, &rejected, parentCapture = LifetimeProbe(retirements, 11u)]() mutable{
-        const auto secondCpuTaskAdmission = scheduler.submit([&scheduler, &grandchildGate, &retirements, &total, &rejected, &parentCapture, childCapture = LifetimeProbe(retirements, 13u)]() mutable{
-            const auto thirdCpuTaskAdmission = scheduler.submit([&grandchildGate, &total, &parentCapture, &childCapture, grandchildCapture = LifetimeProbe(retirements, 17u)]()noexcept{
-                grandchildGate.block();
-                total.store(parentCapture.value + childCapture.value + grandchildCapture.value, MemoryOrder::release);
-            });
-            ASSERT_TRUE(thirdCpuTaskAdmission);
-            const auto grandchild = *thirdCpuTaskAdmission;
-            if(!grandchild.valid())
-                rejected.store(true, MemoryOrder::release);
-        });
-        ASSERT_TRUE(secondCpuTaskAdmission);
-        const auto child = *secondCpuTaskAdmission;
-        if(!child.valid())
-            rejected.store(true, MemoryOrder::release);
-    });
-    ASSERT_TRUE(cpuTaskAdmission);
-    const auto parent = *cpuTaskAdmission;
-    const auto fourthCpuTaskAdmission = scheduler.submit([&]()noexcept{
-        retirementsSeenByDependent.store(retirements.load(MemoryOrder::acquire), MemoryOrder::release);
-    }, parent
-    );
-    ASSERT_TRUE(fourthCpuTaskAdmission);
-    const auto dependent = *fourthCpuTaskAdmission;
-    EXPECT_TRUE(WaitUntil(grandchildGate.entered, s_GateTimeoutMS));
-    EXPECT_FALSE(scheduler.isComplete(parent));
-    EXPECT_FALSE(scheduler.isComplete(dependent));
-    EXPECT_EQ(retirements.load(), 0u);
-    grandchildGate.open();
-    scheduler.wait(dependent);
-    EXPECT_FALSE(rejected.load());
-    EXPECT_FALSE(grandchildGate.expired.load());
-    EXPECT_EQ(total.load(), 41u);
-    EXPECT_EQ(retirements.load(), 3u);
-    EXPECT_EQ(retirementsSeenByDependent.load(), 3u);
-}
-
-
-TEST(CpuTaskSchedulerTests, ScopeJoinDoesNotWaitForAnUnrelatedRunningScope){
-    using namespace __hidden_cpu_task_scheduler_tests;
-    DeadlineGuard deadline;
-    TaskGate unrelatedGate;
-    CpuTaskScheduler scheduler(HomogeneousWorkers(2u));
-    CpuTaskScope unrelated(scheduler);
-    CpuTaskScope owned(scheduler);
-    ScopeExit releaseUnrelated([&]()noexcept{ unrelatedGate.open(); });
-    const auto unrelatedTaskAdmission = unrelated.submit([&]()noexcept{ unrelatedGate.block(); });
-    ASSERT_TRUE(unrelatedTaskAdmission);
-    const auto unrelatedTask = *unrelatedTaskAdmission;
-    EXPECT_TRUE(WaitUntil(unrelatedGate.entered, s_GateTimeoutMS));
-    Atomic<b8> ownedFinished{ false };
-    const auto cpuTaskAdmission = owned.submit([&]()noexcept{ ownedFinished.store(true, MemoryOrder::release); });
-    EXPECT_TRUE(cpuTaskAdmission);
-    if(cpuTaskAdmission)
-        EXPECT_TRUE(cpuTaskAdmission->valid());
-    owned.wait();
-    EXPECT_TRUE(ownedFinished.load());
-    EXPECT_FALSE(scheduler.isComplete(unrelatedTask));
-    EXPECT_FALSE(unrelatedGate.expired.load());
-    unrelatedGate.open();
-    unrelated.wait();
-}
-
-
-TEST(CpuTaskSchedulerTests, ScopeDestructionIncludesChildrenSubmittedDirectlyToTheScheduler){
-    using namespace __hidden_cpu_task_scheduler_tests;
-    DeadlineGuard deadline;
-    Atomic<u32> retired{ 0u };
-    Atomic<u32> invoked{ 0u };
-    Atomic<b8> rejected{ false };
-    CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
-    {
-        CpuTaskScope scope(scheduler);
-        const auto cpuTaskAdmission = scope.submit([&](){
-            const auto secondCpuTaskAdmission = scheduler.submit([&invoked, capture = LifetimeProbe(retired, 23u)]()noexcept{
-                invoked.store(capture.value, MemoryOrder::release);
-            });
-            if(!secondCpuTaskAdmission || !secondCpuTaskAdmission->valid())
-                rejected.store(true, MemoryOrder::release);
-        });
-        EXPECT_TRUE(cpuTaskAdmission);
-        if(cpuTaskAdmission)
-            EXPECT_TRUE(cpuTaskAdmission->valid());
-    }
-    EXPECT_FALSE(rejected.load());
-    EXPECT_EQ(invoked.load(), 23u);
-    EXPECT_EQ(retired.load(), 1u);
-    EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
-}
-
-
-TEST(CpuTaskSchedulerTests, OneWorkerCompletesNestedParallelRangesThroughCooperativeExecution){
-    using namespace __hidden_cpu_task_scheduler_tests;
-    DeadlineGuard deadline;
-    CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
-    Array<Atomic<u32>, 35u> visited{};
-    const auto cpuTaskAdmission = scheduler.submit([&](){
-        EXPECT_TRUE((scheduler.parallelFor(0u, 5u, 1u, [&](const usize outer){
-            EXPECT_TRUE((scheduler.parallelFor(0u, 7u, 1u, [&](const usize inner)noexcept{
-                visited[outer * 7u + inner].fetch_add(1u, MemoryOrder::relaxed);
-            })));
-        })));
-    });
-    ASSERT_TRUE(cpuTaskAdmission);
-    const auto root = *cpuTaskAdmission;
-    scheduler.wait(root);
-    for(const auto& count : visited)
-        EXPECT_EQ(count.load(), 1u);
-    EXPECT_GT(scheduler.statistics().cooperativeTasks, 0u);
-    EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
-}
-
-
-TEST(CpuTaskSchedulerTests, MainThreadTasksSubmittedByWorkersExecuteOnlyOnTheSchedulerOwner){
-    using namespace __hidden_cpu_task_scheduler_tests;
-    DeadlineGuard deadline;
-    CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
-    const ThreadId owner = QueryCurrentThreadId();
-    Atomic<b8> published{ false };
-    Atomic<b8> rejected{ false };
-    Atomic<u32> invocations{ 0u };
-    ThreadId actual;
-    usize workerIndex = Limit<usize>::s_Max;
-    const auto cpuTaskAdmission = scheduler.submit([&](){
-        CpuTaskOptions mainOptions;
-        mainOptions.target = CpuTaskTarget::MainThread;
-        const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept{
-            actual = QueryCurrentThreadId();
-            workerIndex = scheduler.currentWorkerIndex();
-            invocations.fetch_add(1u, MemoryOrder::release);
-        }, mainOptions
-        );
-        if(!secondCpuTaskAdmission || !secondCpuTaskAdmission->valid())
-            rejected.store(true, MemoryOrder::release);
-        published.store(true, MemoryOrder::release);
-    });
-    ASSERT_TRUE(cpuTaskAdmission);
-    const auto parent = *cpuTaskAdmission;
-    EXPECT_TRUE(WaitUntil(published, s_GateTimeoutMS));
-    EXPECT_EQ(invocations.load(), 0u);
-    scheduler.wait(parent);
-    EXPECT_FALSE(rejected.load());
-    EXPECT_EQ(actual, owner);
-    EXPECT_EQ(workerIndex, 0u);
-    EXPECT_EQ(invocations.load(), 1u);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/task/cpu/scheduler.h>
-
-#include <global/terminal_entry.h>
-#include <global/platform.h>
-#include <global/timer.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 namespace __hidden_cpu_task_submission_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 using namespace NWB::Core;
 using CpuTaskSchedulerTestSupport::DeadlineGuard;
@@ -849,7 +34,6 @@ using CpuTaskSchedulerTestSupport::ExitTestProcess;
 
 inline constexpr u32 s_ConstructionException = 0xE101u;
 inline constexpr u32 s_WorkerException = 0xE102u;
-
 
 struct ThrowingMoveTask{
     ThrowingMoveTask()noexcept = default;
@@ -870,789 +54,1685 @@ public:
     void operator()()const noexcept{}
 };
 
-
 struct NonCallableTask{};
-
 
 static_assert(!IsConstructible_V<InplaceFunction<128u>, ThrowingMoveTask>);
 static_assert(!IsConstructible_V<InplaceFunction<128u>, NonCallableTask>);
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(CpuTaskSubmissionTests, CallableConstructionFailurePublishesNoSchedulerOrScopeWork){
-    using namespace __hidden_cpu_task_submission_tests;
-    CpuTaskScheduler scheduler(0u);
-    CpuTaskScope scope(scheduler);
-    ThrowingCopyTask callable;
-    u32 handled = 0u;
-    const auto handleError = [&handled](const u32 error)noexcept{
-        ++handled;
-        return static_cast<int>(error);
-    };
-    const int schedulerResult = InvokeTerminalEntry<u32>([&]()->int{
-        const auto task = scheduler.submit(callable);
-        EXPECT_FALSE(task);
-        return -1;
-    }, handleError, []()noexcept{ return -2; });
-    EXPECT_EQ(schedulerResult, static_cast<int>(s_ConstructionException));
-    EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
-
-    const int scopeResult = InvokeTerminalEntry<u32>([&]()->int{
-        const auto task = scope.submit(callable);
-        EXPECT_FALSE(task);
-        return -1;
-    }, handleError, []()noexcept{ return -2; });
-    EXPECT_EQ(scopeResult, static_cast<int>(s_ConstructionException));
-    EXPECT_EQ(handled, 2u);
-    EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
-    EXPECT_EQ(scheduler.statistics().completedTasks, 0u);
-    EXPECT_EQ(scheduler.statistics().canceledTasks, 0u);
-    scope.wait();
-    scheduler.wait();
-}
-
-
-TEST(CpuTaskSubmissionTests, ExpectedAdmissionErrorsPreservePublicationAndCancellationBoundaries){
-    using namespace __hidden_cpu_task_submission_tests;
-    CpuTaskScheduler scheduler(0u);
-    CpuTaskScope canceled(scheduler);
-    u32 callbacks = 0u;
-    const auto invalidDependencies = scheduler.submit([&]()noexcept{ ++callbacks; }, {}, nullptr, 1u);
-    ASSERT_FALSE(invalidDependencies);
-    EXPECT_EQ(invalidDependencies.error(), CpuTaskAdmissionError::InvalidDependencies);
-    CpuTaskOptions options;
-    options.target = static_cast<CpuTaskTarget::Enum>(CpuTaskTarget::MainThread + 1u);
-    const auto invalidOptions = scheduler.submit([&]()noexcept{ ++callbacks; }, options);
-    ASSERT_FALSE(invalidOptions);
-    EXPECT_EQ(invalidOptions.error(), CpuTaskAdmissionError::InvalidOptions);
-    canceled.cancel();
-    const auto scopeRejected = canceled.submit([&]()noexcept{ ++callbacks; });
-    ASSERT_FALSE(scopeRejected);
-    EXPECT_EQ(scopeRejected.error(), CpuTaskAdmissionError::ScopeCanceled);
-    EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
-    EXPECT_EQ(callbacks, 0u);
-    const auto accepted = scheduler.submit([&]()noexcept{ ++callbacks; });
-    ASSERT_TRUE(accepted);
-    EXPECT_TRUE(accepted->valid());
-    scheduler.wait(*accepted);
-    EXPECT_EQ(callbacks, 1u);
-    scheduler.drain();
-    const auto shutdownRejected = scheduler.submit([&]()noexcept{ ++callbacks; });
-    ASSERT_FALSE(shutdownRejected);
-    EXPECT_EQ(shutdownRejected.error(), CpuTaskAdmissionError::Aborting);
-    EXPECT_EQ(callbacks, 1u);
-    EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
-}
-
-
-TEST(CpuTaskSubmissionTests, WorkerCallbackFailureTerminatesWithoutDeferredCallerDelivery){
-    EXPECT_DEATH({
-        using namespace __hidden_cpu_task_submission_tests;
-        DeadlineGuard deadline(true);
-        const int result = InvokeTerminalEntry<u32>([]()->int{
-            CpuTaskScheduler scheduler(1u);
-            const auto cpuTaskAdmission = scheduler.submit([&](){
-                if(scheduler.currentWorkerIndex() == 0u)
-                    ExitTestProcess(0u);
-                throw s_WorkerException;
-            });
-            if(!cpuTaskAdmission)
-                ExitTestProcess(0u);
-            const auto task = *cpuTaskAdmission;
-            if(!task.valid())
-                return 0;
-            scheduler.wait(task);
-            return 0;
-        }, [](const u32)noexcept{ return 0; }, []()noexcept{ return 0; });
-        ExitTestProcess(static_cast<u32>(result));
-    }, ""
-    );
-}
-
-
-TEST(CpuTaskSubmissionTests, ParallelRangeWorkerFailureTerminatesWithoutDeferredCallerDelivery){
-    EXPECT_DEATH({
-        using namespace __hidden_cpu_task_submission_tests;
-        DeadlineGuard deadline(true);
-        const int result = InvokeTerminalEntry<u32>([]()->int{
-            CpuTaskScheduler scheduler(1u);
-            AtomicFlag workerEntered;
-            EXPECT_TRUE((scheduler.parallelFor(0u, 64u, [&](const usize){
-                if(scheduler.currentWorkerIndex() == 0u){
-                    while(!workerEntered.test(MemoryOrder::acquire))
-                        workerEntered.wait(false, MemoryOrder::acquire);
-                    return;
-                }
-                workerEntered.testAndSet(MemoryOrder::release);
-                workerEntered.notifyAll();
-                throw s_WorkerException;
-            })));
-            return 0;
-        }, [](const u32)noexcept{ return 0; }, []()noexcept{ return 0; });
-        ExitTestProcess(static_cast<u32>(result));
-    }, ""
-    );
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/task/cpu/scheduler.h>
-
-#include <global/timer.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace __hidden_cpu_task_wait_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr u32 s_WatchdogTimeoutMS = 10000u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 using namespace NWB::Core;
 using CpuTaskSchedulerTestSupport::DeadlineGuard;
 using CpuTaskSchedulerTestSupport::s_PollIntervalMS;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+inline constexpr u32 s_WatchdogTimeoutMS = 10000u;
 
 };
 
+namespace NWB::Tests::CpuTaskSuite{
+using CpuTaskAdmissionErrorEnum = NWB::Core::CpuTaskAdmissionError::Enum;
+using CpuAffinityEnum = ::CpuAffinity::Enum;
+}
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-TEST(CpuTaskWaitTests, ScopeRejectsAnIndependentTaskDependingOnTheCaller){
-    using namespace __hidden_cpu_task_wait_tests;
-    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
-    CpuTaskScheduler scheduler(0u);
-    CpuTaskScope scope(scheduler);
+void VerifyCpuTaskRangeTests_SingleChunkJoinsAllSubmittedDescendants(){
     u32 callbacks = 0u;
-    const auto callerTaskAdmission = scheduler.submit([&](){ scope.wait(); });
-    ASSERT_TRUE(callerTaskAdmission);
-    const auto caller = *callerTaskAdmission;
-    ASSERT_TRUE(caller.valid());
-    const auto cpuTaskAdmission = scope.submit([&]()noexcept{ ++callbacks; }, caller);
-    ASSERT_TRUE(cpuTaskAdmission);
-    if(cpuTaskAdmission)
-        ASSERT_TRUE(cpuTaskAdmission->valid());
-    EXPECT_THROW(scheduler.wait(caller), RuntimeException);
-    scope.wait();
-    EXPECT_EQ(callbacks, 0u);
-    EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
-}
-
-TEST(CpuTaskWaitTests, ScopeRejectsTransitiveDependentsOfTheCallersAncestor){
-    using namespace __hidden_cpu_task_wait_tests;
-    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
-    CpuTaskScheduler scheduler(0u);
-    CpuTaskScope scope(scheduler);
-    const auto cpuTaskAdmission = scheduler.submit([&](){
-        const auto secondCpuTaskAdmission = scheduler.submit([&](){ scope.wait(); });
-        ASSERT_TRUE(secondCpuTaskAdmission);
-        if(secondCpuTaskAdmission)
-            ASSERT_TRUE(secondCpuTaskAdmission->valid());
-    });
-    ASSERT_TRUE(cpuTaskAdmission);
-    const auto ancestor = *cpuTaskAdmission;
-    ASSERT_TRUE(ancestor.valid());
-    const auto middleTaskAdmission = scheduler.submit([]()noexcept{}, ancestor);
-    ASSERT_TRUE(middleTaskAdmission);
-    const auto middle = *middleTaskAdmission;
-    ASSERT_TRUE(middle.valid());
-    const auto thirdCpuTaskAdmission = scope.submit([]()noexcept{}, middle);
-    ASSERT_TRUE(thirdCpuTaskAdmission);
-    if(thirdCpuTaskAdmission)
-        ASSERT_TRUE(thirdCpuTaskAdmission->valid());
-    EXPECT_THROW(scheduler.wait(ancestor), RuntimeException);
-    scope.wait();
-    EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
-}
-
-TEST(CpuTaskWaitTests, ScopeRechecksDependenciesPublishedByCooperativeWork){
-    using namespace __hidden_cpu_task_wait_tests;
-    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
-    CpuTaskScheduler scheduler(0u);
-    CpuTaskScope scope(scheduler);
-    u32 callbacks = 0u;
-    const auto callerTaskAdmission = scheduler.submit([&](){ scope.wait(); });
-    ASSERT_TRUE(callerTaskAdmission);
-    const auto caller = *callerTaskAdmission;
-    ASSERT_TRUE(caller.valid());
-    const auto cpuTaskAdmission = scope.submit([&](){
-        ++callbacks;
-        const auto secondCpuTaskAdmission = scope.submit([&]()noexcept{ ++callbacks; }, caller);
-        ASSERT_TRUE(secondCpuTaskAdmission);
-        if(secondCpuTaskAdmission)
-            ASSERT_TRUE(secondCpuTaskAdmission->valid());
-    });
-    ASSERT_TRUE(cpuTaskAdmission);
-    if(cpuTaskAdmission)
-        ASSERT_TRUE(cpuTaskAdmission->valid());
-    EXPECT_THROW(scheduler.wait(caller), RuntimeException);
-    scope.wait();
-    EXPECT_EQ(callbacks, 1u);
-    EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
-}
-
-
-TEST(CpuTaskWaitTests, NewDependencyInvalidatesAnEarlierUnrelatedSearch){
-    using namespace __hidden_cpu_task_wait_tests;
-    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
-    u32 sequence = 0u;
-    u32 unrelated = 0u;
-    CpuTaskScheduler scheduler(0u);
-    CpuTaskScope scope(scheduler);
-    const auto prerequisiteTaskAdmission = scheduler.submit([&](){ EXPECT_EQ(++sequence, 2u); });
-    ASSERT_TRUE(prerequisiteTaskAdmission);
-    const auto prerequisite = *prerequisiteTaskAdmission;
-    ASSERT_TRUE(prerequisite.valid());
-    const auto cpuTaskAdmission = scheduler.submit([&]()noexcept{ ++unrelated; });
-    ASSERT_TRUE(cpuTaskAdmission);
-    if(cpuTaskAdmission)
-        ASSERT_TRUE(cpuTaskAdmission->valid());
-    const auto secondCpuTaskAdmission = scope.submit([&](){
-        EXPECT_EQ(++sequence, 1u);
-        const auto thirdCpuTaskAdmission = scope.submit([&](){ EXPECT_EQ(++sequence, 3u); }, prerequisite);
-        ASSERT_TRUE(thirdCpuTaskAdmission);
-        if(thirdCpuTaskAdmission)
-            ASSERT_TRUE(thirdCpuTaskAdmission->valid());
-    });
-    ASSERT_TRUE(secondCpuTaskAdmission);
-    if(secondCpuTaskAdmission)
-        ASSERT_TRUE(secondCpuTaskAdmission->valid());
-    scope.wait();
-    EXPECT_EQ(sequence, 3u);
-    EXPECT_EQ(unrelated, 0u);
-    scheduler.wait();
-    EXPECT_EQ(unrelated, 1u);
-}
-
-TEST(CpuTaskWaitTests, ReusedUnrelatedSlotCanBecomeAScopedDescendant){
-    using namespace __hidden_cpu_task_wait_tests;
-    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
-    u32 callbacks = 0u;
-    CpuTaskScheduler scheduler(0u);
-    CpuTaskScope scope(scheduler);
-    const auto unrelatedTaskAdmission = scheduler.submit([&]()noexcept{ ++callbacks; });
-    ASSERT_TRUE(unrelatedTaskAdmission);
-    const auto unrelated = *unrelatedTaskAdmission;
-    ASSERT_TRUE(unrelated.valid());
-    const auto cpuTaskAdmission = scope.submit([&](){
-        EXPECT_EQ(callbacks, 0u);
-        scheduler.wait(unrelated);
-        const auto childTaskAdmission = scheduler.submit([&]()noexcept{ ++callbacks; });
-        ASSERT_TRUE(childTaskAdmission);
-        const auto child = *childTaskAdmission;
-        ASSERT_TRUE(child.valid());
-        EXPECT_EQ(child.index, unrelated.index);
-        EXPECT_NE(child.generation, unrelated.generation);
-    });
-    ASSERT_TRUE(cpuTaskAdmission);
-    if(cpuTaskAdmission)
-        ASSERT_TRUE(cpuTaskAdmission->valid());
-    scope.wait();
-    EXPECT_EQ(callbacks, 2u);
-    EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
-}
-
-TEST(CpuTaskWaitTests, NestedScopesUseIndependentSearchIdentities){
-    using namespace __hidden_cpu_task_wait_tests;
-    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
-    u32 innerCallbacks = 0u;
-    u32 unrelatedCallbacks = 0u;
-    CpuTaskScheduler scheduler(0u);
-    CpuTaskScope inner(scheduler);
-    CpuTaskScope outer(scheduler);
-    const auto prerequisiteTaskAdmission = scheduler.submit([&]()noexcept{ ++innerCallbacks; });
-    ASSERT_TRUE(prerequisiteTaskAdmission);
-    const auto prerequisite = *prerequisiteTaskAdmission;
-    ASSERT_TRUE(prerequisite.valid());
-    const auto cpuTaskAdmission = inner.submit([&]()noexcept{ ++innerCallbacks; }, prerequisite);
-    ASSERT_TRUE(cpuTaskAdmission);
-    if(cpuTaskAdmission)
-        ASSERT_TRUE(cpuTaskAdmission->valid());
-    const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept{ ++unrelatedCallbacks; });
-    ASSERT_TRUE(secondCpuTaskAdmission);
-    if(secondCpuTaskAdmission)
-        ASSERT_TRUE(secondCpuTaskAdmission->valid());
-    const auto thirdCpuTaskAdmission = outer.submit([&](){
-        EXPECT_EQ(innerCallbacks, 0u);
-        inner.wait();
-        EXPECT_EQ(innerCallbacks, 2u);
-    });
-    ASSERT_TRUE(thirdCpuTaskAdmission);
-    if(thirdCpuTaskAdmission)
-        ASSERT_TRUE(thirdCpuTaskAdmission->valid());
-    outer.wait();
-    EXPECT_EQ(unrelatedCallbacks, 0u);
-    scheduler.wait();
-    EXPECT_EQ(unrelatedCallbacks, 1u);
-}
-
-TEST(CpuTaskWaitTests, ConcurrentScopeWaitersCanSwitchTheSharedSearchCache){
-    using namespace __hidden_cpu_task_wait_tests;
-    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
-    Atomic<u32> entered{ 0u };
-    Atomic<b8> start{ false };
-    Atomic<u32> visitsA{ 0u };
-    Atomic<u32> visitsB{ 0u };
-    CpuTaskSchedulerConfig config;
-    config.workerCount = 2u;
-    config.heterogeneous = false;
-    CpuTaskScheduler scheduler(config);
-    CpuTaskScope scopeA(scheduler);
-    CpuTaskScope scopeB(scheduler);
-    const auto cpuTaskAdmission = scheduler.submit([&](){
-        entered.fetch_add(1u, MemoryOrder::release);
-        while(!start.load(MemoryOrder::acquire))
-            SleepMS(s_PollIntervalMS);
-        scopeA.wait();
-    });
-    ASSERT_TRUE(cpuTaskAdmission);
-    const auto waiterA = *cpuTaskAdmission;
-    const auto secondCpuTaskAdmission = scheduler.submit([&](){
-        entered.fetch_add(1u, MemoryOrder::release);
-        while(!start.load(MemoryOrder::acquire))
-            SleepMS(s_PollIntervalMS);
-        scopeB.wait();
-    });
-    ASSERT_TRUE(secondCpuTaskAdmission);
-    const auto waiterB = *secondCpuTaskAdmission;
-    ASSERT_TRUE(waiterA.valid());
-    ASSERT_TRUE(waiterB.valid());
-    while(entered.load(MemoryOrder::acquire) != 2u)
-        SleepMS(s_PollIntervalMS);
-    for(u32 index = 0u; index < 32u; ++index){
-        const auto prerequisiteBTaskAdmission = scheduler.submit([]()noexcept{});
-        ASSERT_TRUE(prerequisiteBTaskAdmission);
-        const auto prerequisiteB = *prerequisiteBTaskAdmission;
-        const auto prerequisiteATaskAdmission = scheduler.submit([]()noexcept{});
-        ASSERT_TRUE(prerequisiteATaskAdmission);
-        const auto prerequisiteA = *prerequisiteATaskAdmission;
-        EXPECT_TRUE(prerequisiteB.valid());
-        EXPECT_TRUE(prerequisiteA.valid());
-        const auto thirdCpuTaskAdmission = scopeB.submit([&]()noexcept{ visitsB.fetch_add(1u, MemoryOrder::relaxed); }, prerequisiteB);
-        EXPECT_TRUE(thirdCpuTaskAdmission);
-        if(thirdCpuTaskAdmission)
-            EXPECT_TRUE(thirdCpuTaskAdmission->valid());
-        const auto fourthCpuTaskAdmission = scopeA.submit([&]()noexcept{ visitsA.fetch_add(1u, MemoryOrder::relaxed); }, prerequisiteA);
-        EXPECT_TRUE(fourthCpuTaskAdmission);
-        if(fourthCpuTaskAdmission)
-            EXPECT_TRUE(fourthCpuTaskAdmission->valid());
+    usize outstandingTasks = 0u;
+    native(mut callbacks, mut outstandingTasks){
+        using namespace __hidden_cpu_task_range_tests;
+        CpuTaskScheduler scheduler(0u);
+        EXPECT_TRUE((scheduler.parallelFor(0u, 1u, 1u, [&](usize) {
+            ++callbacks;
+            const auto cpuTaskAdmission = scheduler.submit([&]() {
+                ++callbacks;
+                const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept { ++callbacks; });
+                ASSERT_TRUE(secondCpuTaskAdmission);
+                if(secondCpuTaskAdmission)
+                    ASSERT_TRUE(secondCpuTaskAdmission->valid());
+            });
+            ASSERT_TRUE(cpuTaskAdmission);
+            if(cpuTaskAdmission)
+                ASSERT_TRUE(cpuTaskAdmission->valid());
+        })));
+        outstandingTasks = scheduler.statistics().outstandingTasks;
     }
-    start.store(true, MemoryOrder::release);
-    scheduler.wait(waiterA);
-    scheduler.wait(waiterB);
-    EXPECT_EQ(visitsA.load(MemoryOrder::acquire), 32u);
-    EXPECT_EQ(visitsB.load(MemoryOrder::acquire), 32u);
-    EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
+    EXPECT_EQ(callbacks, 3u);
+    EXPECT_EQ(outstandingTasks, 0u);
 }
 
-TEST(CpuTaskWaitTests, ScopeJoinSkipsUnrelatedPrefixesAcrossPriorityQueues){
-    using namespace __hidden_cpu_task_wait_tests;
-    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
-    constexpr u32 s_UnrelatedTasks = 1024u;
-    constexpr u32 s_ScopedTasks = 128u;
-    constexpr u32 s_Priorities = 3u;
-    CpuTaskScheduler scheduler(0u);
-    CpuTaskScope scope(scheduler);
-    u32 unrelated = 0u;
-    u32 joined = 0u;
-    for(u32 index = 0u; index < s_UnrelatedTasks; ++index){
-        CpuTaskOptions options;
-        options.priority = static_cast<CpuTaskPriority::Enum>(index % s_Priorities);
-        const auto cpuTaskAdmission = scheduler.submit([&]()noexcept{ ++unrelated; }, options);
-        ASSERT_TRUE(cpuTaskAdmission);
-        if(cpuTaskAdmission)
-            ASSERT_TRUE(cpuTaskAdmission->valid());
-    }
-    for(u32 index = 0u; index < s_ScopedTasks; ++index){
-        CpuTaskOptions options;
-        options.priority = static_cast<CpuTaskPriority::Enum>(index % s_Priorities);
-        const auto secondCpuTaskAdmission = scope.submit([&]()noexcept{ ++joined; }, options);
-        ASSERT_TRUE(secondCpuTaskAdmission);
-        if(secondCpuTaskAdmission)
-            ASSERT_TRUE(secondCpuTaskAdmission->valid());
-    }
-    scope.wait();
-    EXPECT_EQ(joined, s_ScopedTasks);
-    EXPECT_EQ(unrelated, 0u);
-    scheduler.wait();
-    EXPECT_EQ(unrelated, s_UnrelatedTasks);
-}
-
-TEST(CpuTaskWaitTests, NestedJoinCanRetireAnUnrelatedAnchorWithoutNewPublication){
-    using namespace __hidden_cpu_task_wait_tests;
-    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
-    CpuTaskScheduler scheduler(0u);
-    CpuTaskScope scope(scheduler);
-    u32 unrelated = 0u;
-    u32 joined = 0u;
-    const auto anchorTaskAdmission = scheduler.submit([&]()noexcept{ ++unrelated; });
-    ASSERT_TRUE(anchorTaskAdmission);
-    const auto anchor = *anchorTaskAdmission;
-    ASSERT_TRUE(anchor.valid());
-    const auto cpuTaskAdmission = scope.submit([&](){
-        EXPECT_EQ(unrelated, 0u);
-        scheduler.wait(anchor);
-        EXPECT_EQ(unrelated, 1u);
-        ++joined;
-    });
-    ASSERT_TRUE(cpuTaskAdmission);
-    if(cpuTaskAdmission)
-        ASSERT_TRUE(cpuTaskAdmission->valid());
-    const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept{ ++unrelated; });
-    ASSERT_TRUE(secondCpuTaskAdmission);
-    if(secondCpuTaskAdmission)
-        ASSERT_TRUE(secondCpuTaskAdmission->valid());
-    const auto thirdCpuTaskAdmission = scope.submit([&]()noexcept{ ++joined; });
-    ASSERT_TRUE(thirdCpuTaskAdmission);
-    if(thirdCpuTaskAdmission)
-        ASSERT_TRUE(thirdCpuTaskAdmission->valid());
-    scope.wait();
-    EXPECT_EQ(joined, 2u);
-    EXPECT_EQ(unrelated, 1u);
-    scheduler.wait();
-    EXPECT_EQ(unrelated, 2u);
-    EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
-}
-
-TEST(CpuTaskWaitTests, AnotherWorkerCanClaimAnUnrelatedAnchorDuringScopeExecution){
-    using namespace __hidden_cpu_task_wait_tests;
-    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
-    Atomic<b8> waiterEntered{ false };
-    Atomic<b8> blockerEntered{ false };
-    Atomic<b8> startWaiter{ false };
-    Atomic<b8> releaseBlocker{ false };
-    Atomic<b8> anchorEntered{ false };
-    Atomic<b8> releaseAnchor{ false };
-    Atomic<u32> joined{ 0u };
-    Atomic<u32> unrelated{ 0u };
-    CpuTaskSchedulerConfig config;
-    config.workerCount = 2u;
-    config.heterogeneous = false;
-    CpuTaskScheduler scheduler(config);
-    CpuTaskScope scope(scheduler);
-    ScopeExit release([&]()noexcept{
-        startWaiter.store(true, MemoryOrder::release);
-        releaseBlocker.store(true, MemoryOrder::release);
-        releaseAnchor.store(true, MemoryOrder::release);
-    });
-    const auto cpuTaskAdmission = scheduler.submit([&](){
-        waiterEntered.store(true, MemoryOrder::release);
-        while(!startWaiter.load(MemoryOrder::acquire))
-            SleepMS(s_PollIntervalMS);
-        scope.wait();
-    });
-    ASSERT_TRUE(cpuTaskAdmission);
-    const auto waiter = *cpuTaskAdmission;
-    ASSERT_TRUE(waiter.valid());
-    while(!waiterEntered.load(MemoryOrder::acquire))
-        SleepMS(s_PollIntervalMS);
-    const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept{
-        blockerEntered.store(true, MemoryOrder::release);
-        while(!releaseBlocker.load(MemoryOrder::acquire))
-            SleepMS(s_PollIntervalMS);
-    });
-    ASSERT_TRUE(secondCpuTaskAdmission);
-    if(secondCpuTaskAdmission)
-        ASSERT_TRUE(secondCpuTaskAdmission->valid());
-    while(!blockerEntered.load(MemoryOrder::acquire))
-        SleepMS(s_PollIntervalMS);
-    const auto thirdCpuTaskAdmission = scheduler.submit([&]()noexcept{
-        anchorEntered.store(true, MemoryOrder::release);
-        while(!releaseAnchor.load(MemoryOrder::acquire))
-            SleepMS(s_PollIntervalMS);
-    });
-    ASSERT_TRUE(thirdCpuTaskAdmission);
-    if(thirdCpuTaskAdmission)
-        ASSERT_TRUE(thirdCpuTaskAdmission->valid());
-    const auto fourthCpuTaskAdmission = scope.submit([&]()noexcept{
-        releaseBlocker.store(true, MemoryOrder::release);
-        while(!anchorEntered.load(MemoryOrder::acquire))
-            SleepMS(s_PollIntervalMS);
-        joined.fetch_add(1u, MemoryOrder::relaxed);
-    });
-    ASSERT_TRUE(fourthCpuTaskAdmission);
-    if(fourthCpuTaskAdmission)
-        ASSERT_TRUE(fourthCpuTaskAdmission->valid());
-    const auto fifthCpuTaskAdmission = scheduler.submit([&]()noexcept{ unrelated.fetch_add(1u, MemoryOrder::relaxed); });
-    ASSERT_TRUE(fifthCpuTaskAdmission);
-    if(fifthCpuTaskAdmission)
-        ASSERT_TRUE(fifthCpuTaskAdmission->valid());
-    const auto sixthCpuTaskAdmission = scope.submit([&](){
-        EXPECT_EQ(unrelated.load(MemoryOrder::acquire), 0u);
-        joined.fetch_add(1u, MemoryOrder::relaxed);
-        releaseAnchor.store(true, MemoryOrder::release);
-    });
-    ASSERT_TRUE(sixthCpuTaskAdmission);
-    if(sixthCpuTaskAdmission)
-        ASSERT_TRUE(sixthCpuTaskAdmission->valid());
-    startWaiter.store(true, MemoryOrder::release);
-    scheduler.wait(waiter);
-    scheduler.wait();
-    EXPECT_EQ(joined.load(MemoryOrder::acquire), 2u);
-    EXPECT_EQ(unrelated.load(MemoryOrder::acquire), 1u);
-    EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
-}
-
-TEST(CpuTaskWaitTests, DependencyCompletionAppendsScopedWorkAfterAnUnrelatedAnchor){
-    using namespace __hidden_cpu_task_wait_tests;
-    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
-    Atomic<b8> entered{ false };
-    Atomic<b8> release{ false };
-    CpuTaskScheduler scheduler(1u);
-    CpuTaskScope scope(scheduler);
-    ScopeExit releaseOnFailure([&]()noexcept{ release.store(true, MemoryOrder::release); });
-    const auto cpuTaskAdmission = scheduler.submit([&]()noexcept{
-        entered.store(true, MemoryOrder::release);
-        while(!release.load(MemoryOrder::acquire))
-            SleepMS(s_PollIntervalMS);
-    });
-    ASSERT_TRUE(cpuTaskAdmission);
-    const auto prerequisite = *cpuTaskAdmission;
-    ASSERT_TRUE(prerequisite.valid());
-    while(!entered.load(MemoryOrder::acquire))
-        SleepMS(s_PollIntervalMS);
-    CpuTaskOptions mainThread;
-    mainThread.target = CpuTaskTarget::MainThread;
-    u32 unrelated = 0u;
-    u32 joined = 0u;
-    const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept{ ++unrelated; }, mainThread);
-    ASSERT_TRUE(secondCpuTaskAdmission);
-    if(secondCpuTaskAdmission)
-        ASSERT_TRUE(secondCpuTaskAdmission->valid());
-    const auto thirdCpuTaskAdmission = scope.submit([&]()noexcept{
-        ++joined;
-        release.store(true, MemoryOrder::release);
-    }, mainThread
-    );
-    ASSERT_TRUE(thirdCpuTaskAdmission);
-    if(thirdCpuTaskAdmission)
-        ASSERT_TRUE(thirdCpuTaskAdmission->valid());
-    const auto fourthCpuTaskAdmission = scope.submit([&]()noexcept{ ++joined; }, mainThread, &prerequisite, 1u);
-    ASSERT_TRUE(fourthCpuTaskAdmission);
-    if(fourthCpuTaskAdmission)
-        ASSERT_TRUE(fourthCpuTaskAdmission->valid());
-    scope.wait();
-    EXPECT_EQ(joined, 2u);
-    EXPECT_EQ(unrelated, 0u);
-    scheduler.wait();
-    EXPECT_EQ(unrelated, 1u);
-}
-
-
-TEST(CpuTaskWaitTests, APositiveSearchCannotAdmitVisitedUnrelatedSiblingBranches){
-    using namespace __hidden_cpu_task_wait_tests;
-    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
-    CpuTaskScheduler scheduler(0u);
-    CpuTaskScope scope(scheduler);
-    u32 prerequisites = 0u;
-    u32 unrelated = 0u;
-    u32 joined = 0u;
-    const auto rootTaskAdmission = scheduler.submit([&]()noexcept{ ++prerequisites; });
-    ASSERT_TRUE(rootTaskAdmission);
-    const auto root = *rootTaskAdmission;
-    ASSERT_TRUE(root.valid());
-    const auto siblingTaskAdmission = scheduler.submit([&]()noexcept{ ++unrelated; }, root);
-    ASSERT_TRUE(siblingTaskAdmission);
-    const auto sibling = *siblingTaskAdmission;
-    ASSERT_TRUE(sibling.valid());
-    const auto cpuTaskAdmission = scheduler.submit([&]()noexcept{ ++unrelated; }, sibling);
-    ASSERT_TRUE(cpuTaskAdmission);
-    if(cpuTaskAdmission)
-        ASSERT_TRUE(cpuTaskAdmission->valid());
-    const auto positiveTaskAdmission = scheduler.submit([&]()noexcept{ ++prerequisites; }, root);
-    ASSERT_TRUE(positiveTaskAdmission);
-    const auto positive = *positiveTaskAdmission;
-    ASSERT_TRUE(positive.valid());
-    const auto secondCpuTaskAdmission = scope.submit([&]()noexcept{ ++joined; }, positive);
-    ASSERT_TRUE(secondCpuTaskAdmission);
-    if(secondCpuTaskAdmission)
-        ASSERT_TRUE(secondCpuTaskAdmission->valid());
-    scope.wait();
-    EXPECT_EQ(prerequisites, 2u);
-    EXPECT_EQ(joined, 1u);
-    EXPECT_EQ(unrelated, 0u);
-    scheduler.wait();
-    EXPECT_EQ(unrelated, 2u);
-}
-
-TEST(CpuTaskWaitTests, PublicationCanMakeAnEarlierNegativeSiblingContribute){
-    using namespace __hidden_cpu_task_wait_tests;
-    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
-    CpuTaskScheduler scheduler(0u);
-    CpuTaskScope scope(scheduler);
-    u32 unrelatedTail = 0u;
-    u32 prerequisite = 0u;
-    u32 joined = 0u;
-    const auto rootTaskAdmission = scheduler.submit([]()noexcept{});
-    ASSERT_TRUE(rootTaskAdmission);
-    const auto root = *rootTaskAdmission;
-    ASSERT_TRUE(root.valid());
-    const auto siblingTaskAdmission = scheduler.submit([&]()noexcept{ ++prerequisite; }, root);
-    ASSERT_TRUE(siblingTaskAdmission);
-    const auto sibling = *siblingTaskAdmission;
-    ASSERT_TRUE(sibling.valid());
-    const auto cpuTaskAdmission = scheduler.submit([&]()noexcept{ ++unrelatedTail; }, sibling);
-    ASSERT_TRUE(cpuTaskAdmission);
-    if(cpuTaskAdmission)
-        ASSERT_TRUE(cpuTaskAdmission->valid());
-    const auto positiveTaskAdmission = scheduler.submit([]()noexcept{}, root);
-    ASSERT_TRUE(positiveTaskAdmission);
-    const auto positive = *positiveTaskAdmission;
-    ASSERT_TRUE(positive.valid());
-    const auto secondCpuTaskAdmission = scope.submit([&](){
-        EXPECT_EQ(prerequisite, 0u);
-        ++joined;
-        const auto thirdCpuTaskAdmission = scope.submit([&]()noexcept{ ++joined; }, sibling);
-        EXPECT_TRUE(thirdCpuTaskAdmission);
-        if(thirdCpuTaskAdmission)
-            EXPECT_TRUE(thirdCpuTaskAdmission->valid());
-    }, positive
-    );
-    ASSERT_TRUE(secondCpuTaskAdmission);
-    if(secondCpuTaskAdmission)
-        ASSERT_TRUE(secondCpuTaskAdmission->valid());
-    scope.wait();
-    EXPECT_EQ(prerequisite, 1u);
-    EXPECT_EQ(joined, 2u);
-    EXPECT_EQ(unrelatedTail, 0u);
-    scheduler.wait();
-    EXPECT_EQ(unrelatedTail, 1u);
-}
-
-
-TEST(CpuTaskWaitTests, AShortestScopeProofDoesNotAdmitUnprocessedSiblingFrontiers){
-    using namespace __hidden_cpu_task_wait_tests;
-    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
-    CpuTaskScheduler scheduler(0u);
-    CpuTaskScope scope(scheduler);
-    u32 unrelated = 0u;
-    u32 joined = 0u;
-    const auto rootTaskAdmission = scheduler.submit([]()noexcept{});
-    ASSERT_TRUE(rootTaskAdmission);
-    const auto root = *rootTaskAdmission;
-    ASSERT_TRUE(root.valid());
-    const auto siblingTaskAdmission = scheduler.submit([&]()noexcept{ ++unrelated; }, root);
-    ASSERT_TRUE(siblingTaskAdmission);
-    const auto sibling = *siblingTaskAdmission;
-    ASSERT_TRUE(sibling.valid());
-    const auto cpuTaskAdmission = scheduler.submit([&]()noexcept{ ++unrelated; }, sibling);
-    ASSERT_TRUE(cpuTaskAdmission);
-    if(cpuTaskAdmission)
-        ASSERT_TRUE(cpuTaskAdmission->valid());
-    const auto secondCpuTaskAdmission = scope.submit([&]()noexcept{ ++joined; }, root);
-    ASSERT_TRUE(secondCpuTaskAdmission);
-    if(secondCpuTaskAdmission)
-        ASSERT_TRUE(secondCpuTaskAdmission->valid());
-    scope.wait();
-    EXPECT_EQ(joined, 1u);
-    EXPECT_EQ(unrelated, 0u);
-    scheduler.wait();
-    EXPECT_EQ(unrelated, 2u);
-}
-
-TEST(CpuTaskWaitTests, RecycledPositivePrerequisiteSlotsDoNotAdmitUnrelatedWork){
-    using namespace __hidden_cpu_task_wait_tests;
-    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
-    CpuTaskScheduler scheduler(0u);
-    CpuTaskScope scope(scheduler);
-    u32 unrelated = 0u;
-    u32 joined = 0u;
-    const auto rootTaskAdmission = scheduler.submit([]()noexcept{});
-    ASSERT_TRUE(rootTaskAdmission);
-    const auto root = *rootTaskAdmission;
-    ASSERT_TRUE(root.valid());
-    const auto positiveTaskAdmission = scheduler.submit([]()noexcept{}, root);
-    ASSERT_TRUE(positiveTaskAdmission);
-    const auto positive = *positiveTaskAdmission;
-    ASSERT_TRUE(positive.valid());
-    const auto cpuTaskAdmission = scope.submit([&](){
-        CpuTaskHandle recycled;
-        JoiningThread producer([&](){
-            const auto recycledTaskAdmission = scheduler.submit([&]()noexcept{ ++unrelated; });
-            ASSERT_TRUE(recycledTaskAdmission);
-            recycled =*recycledTaskAdmission;
+void VerifyCpuTaskRangeTests_SingleChunkKeepsItsCallingWorkersIdentity(){
+    native{
+        using namespace __hidden_cpu_task_range_tests;
+        CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
+        const auto cpuTaskAdmission = scheduler.submit([&]() {
+            const usize worker = scheduler.currentWorkerIndex();
+            const auto affinity = scheduler.currentWorkerAffinity();
+            EXPECT_NE(worker, 0u);
+            EXPECT_TRUE((scheduler.parallelFor(0u, 1u, 1u, [&](usize) {
+                EXPECT_EQ(scheduler.currentWorkerIndex(), worker);
+                EXPECT_EQ(scheduler.currentWorkerAffinity(), affinity);
+            })));
         });
+        ASSERT_TRUE(cpuTaskAdmission);
+        const auto task = *cpuTaskAdmission;
+        ASSERT_TRUE(task.valid());
+        scheduler.wait(task);
+    }
+}
+
+void VerifyCpuTaskRangeTests_ExternalSingleChunkUsesAWorkerInsteadOfTheProducer(){
+    usize worker = 0u;
+    native(mut worker){
+        using namespace __hidden_cpu_task_range_tests;
+        CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
+        Atomic<b8> done{ false };
+        Thread producer([&]() {
+            EXPECT_TRUE((scheduler.parallelFor(0u, 1u, 1u, [&](usize)noexcept { worker = scheduler.currentWorkerIndex(); })));
+            done.store(true, MemoryOrder::release);
+        });
+        PumpUntil(scheduler, done);
         producer.join();
-        EXPECT_TRUE(recycled.valid());
-        EXPECT_EQ(recycled.index, positive.index);
-        EXPECT_NE(recycled.generation, positive.generation);
-        ++joined;
-        const auto secondCpuTaskAdmission = scope.submit([&]()noexcept{ ++joined; });
+    }
+    EXPECT_EQ(worker, 1u);
+}
+
+void VerifyCpuTaskRangeTests_ExternalMainThreadRangeWaitsForTheOwner(){
+    u32 callbacks = 0u;
+    native(mut callbacks){
+        using namespace __hidden_cpu_task_range_tests;
+        CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
+        Atomic<b8> done{ false };
+        const ThreadId owner = QueryCurrentThreadId();
+        Thread producer([&]() {
+            EXPECT_TRUE((scheduler.parallelFor(0u, 1u, 1u, [&](usize) {
+                ++callbacks;
+                EXPECT_EQ(QueryCurrentThreadId(), owner);
+                EXPECT_EQ(scheduler.currentWorkerIndex(), 0u);
+            }, { .target = CpuTaskTarget::MainThread })));
+            done.store(true, MemoryOrder::release);
+        });
+        PumpUntil(scheduler, done);
+        producer.join();
+    }
+    EXPECT_EQ(callbacks, 1u);
+}
+
+void VerifyCpuTaskRangeTests_InvalidBatchOptionsPublishNoTasks(){
+    u32 callbacks = 0u;
+    usize outstandingTasks = 0u;
+    b8 accepted = true;
+    CpuTaskAdmissionErrorEnum err = CpuTaskAdmissionError::Aborting;
+    native(mut callbacks, mut outstandingTasks, mut accepted, mut err){
+        using namespace __hidden_cpu_task_range_tests;
+        CpuTaskScheduler scheduler(0u);
+        CpuTaskOptions options;
+        options.cost = static_cast<CpuTaskCost::Enum>(255u);
+        const auto rejected = scheduler.parallelFor(0u, 128u, 1u, [&](usize)noexcept { ++callbacks; }, options);
+        accepted = rejected.has_value();
+        if(!rejected)
+            err = rejected.error();
+        outstandingTasks = scheduler.statistics().outstandingTasks;
+    }
+    ASSERT_FALSE(accepted);
+    EXPECT_EQ(err, CpuTaskAdmissionError::InvalidOptions);
+    EXPECT_EQ(callbacks, 0u);
+    EXPECT_EQ(outstandingTasks, 0u);
+}
+
+void VerifyCpuTaskRangeTests_InlineFailureRetiresSubmittedDescendantsBeforeTerminalHandling(){
+    i32 result = 0;
+    native(mut result){
+        using namespace __hidden_cpu_task_range_tests;
+        using RangeFailure = CpuTaskSchedulerTestSupport::InlineRangeFailure;
+        struct Retirement{
+            u32* count;
+            explicit Retirement(u32& counter)noexcept : count(&counter){}
+            Retirement(const Retirement&) = delete;
+            Retirement(Retirement&& other)noexcept : count(other.count){ other.count = nullptr; }
+            ~Retirement()noexcept{
+                if(count)
+                    ++*count;
+            }
+        };
+        u32 retirements = 0u;
+        u32 callbacks = 0u;
+        CpuTaskScheduler scheduler(0u);
+        result = ::InvokeTerminalEntry<RangeFailure>([&]()->int {
+            EXPECT_TRUE((scheduler.parallelFor(0u, 1u, 1u, [&](usize) {
+                const auto cpuTaskAdmission = scheduler.submit([&, capture = Retirement(retirements)]() {
+                    EXPECT_TRUE(capture.count != nullptr);
+                    ++callbacks;
+                });
+                EXPECT_TRUE(cpuTaskAdmission);
+                if(cpuTaskAdmission)
+                    EXPECT_TRUE(cpuTaskAdmission->valid());
+                throw RangeFailure{ .code = 73 };
+            })));
+            return 0;
+        }, [&](const RangeFailure& failure) {
+            EXPECT_EQ(retirements, 1u);
+            EXPECT_EQ(callbacks, 0u);
+            EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
+            return failure.code;
+        }, []()noexcept { return -1; });
+    }
+    EXPECT_EQ(result, 73);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void VerifyCpuTaskSchedulerTests_QueuedPrioritiesRunCriticalThenNormalThenBackgroundAfterOccupiedWorkerReleases(){
+    b8 expired = true;
+    u32 cursorValue = 0u;
+    FixedVector<u32, 3> order = FixedVector<u32, 3>();
+    native(mut expired, mut cursorValue, mut order){
+        using namespace CpuTaskSchedulerTestSupport;
+        DeadlineGuard deadline;
+        TaskGate occupied;
+        CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
+        ScopeExit releaseWorker([&]()noexcept { occupied.open(); });
+        const auto cpuTaskAdmission = scheduler.submit([&]()noexcept { occupied.block(); });
+        EXPECT_TRUE(cpuTaskAdmission);
+        if(cpuTaskAdmission)
+            EXPECT_TRUE(cpuTaskAdmission->valid());
+        EXPECT_TRUE(WaitUntil(occupied.entered, s_GateTimeoutMS));
+        Atomic<u32> cursor{ 0u };
+        Array<u32, 3u> rawOrder{};
+        const Array<CpuTaskPriority::Enum, 3u> priorities = { CpuTaskPriority::Background, CpuTaskPriority::Normal, CpuTaskPriority::Critical };
+        for(u32 index = 0u; index < 3u; ++index){
+            CpuTaskOptions options;
+            options.priority = priorities[index];
+            const auto secondCpuTaskAdmission = scheduler.submit([&, index]()noexcept { rawOrder[cursor.fetch_add(1u)] = index; }, options);
+            EXPECT_TRUE(secondCpuTaskAdmission);
+            if(secondCpuTaskAdmission)
+                EXPECT_TRUE(secondCpuTaskAdmission->valid());
+        }
+        occupied.open();
+        scheduler.wait();
+        expired = occupied.expired.load();
+        cursorValue = cursor.load();
+        for(usize i = 0u; i < 3u; ++i)
+            order.push_back(rawOrder[i]);
+    }
+    EXPECT_FALSE(expired);
+    EXPECT_EQ(cursorValue, 3u);
+    ASSERT_EQ(order.size(), 3u);
+    EXPECT_EQ(order[0u], 2u);
+    EXPECT_EQ(order[1u], 1u);
+    EXPECT_EQ(order[2u], 0u);
+}
+
+void VerifyCpuTaskSchedulerTests_CanceledScopeSkipsQueuedBodiesAndTheirDependentsAndRetiresCaptures(){
+    u32 invoked = 0u;
+    u32 retiredCount = 0u;
+    u64 canceledTasks = 0u;
+    u64 completedTasks = 0u;
+    native(mut invoked, mut retiredCount, mut canceledTasks, mut completedTasks){
+        using namespace CpuTaskSchedulerTestSupport;
+        DeadlineGuard deadline;
+        Atomic<u32> retired{ 0u };
+        CpuTaskScheduler scheduler(0u);
+        CpuTaskScope scope(scheduler);
+        const auto predecessorTaskAdmission = scope.submit([&invoked, capture = LifetimeProbe(retired, 1u)]()noexcept { invoked += capture.value; });
+        ASSERT_TRUE(predecessorTaskAdmission);
+        const auto predecessor = *predecessorTaskAdmission;
+        const auto dependentTaskAdmission = scheduler.submit([&invoked, capture = LifetimeProbe(retired, 2u)]()noexcept { invoked += capture.value; }, predecessor);
+        ASSERT_TRUE(dependentTaskAdmission);
+        const auto dependent = *dependentTaskAdmission;
+        scope.cancel();
+        const auto cpuTaskAdmission = scope.submit([&]()noexcept { ++invoked; });
+        EXPECT_FALSE(cpuTaskAdmission);
+        scheduler.wait(dependent);
+        scope.wait();
+        retiredCount = retired.load();
+        canceledTasks = scheduler.statistics().canceledTasks;
+        completedTasks = scheduler.statistics().completedTasks;
+    }
+    EXPECT_EQ(invoked, 0u);
+    EXPECT_EQ(retiredCount, 2u);
+    EXPECT_EQ(canceledTasks, 2u);
+    EXPECT_EQ(completedTasks, 0u);
+}
+
+void VerifyCpuTaskSchedulerTests_CancelingAnActiveParentPreventsFutureDescendantsAndContinuations(){
+    b8 expired = true;
+    u32 childCount = 1u;
+    u32 continuationCount = 1u;
+    u64 canceledTasks = 0u;
+    usize outstandingTasks = 1u;
+    native(mut expired, mut childCount, mut continuationCount, mut canceledTasks, mut outstandingTasks){
+        using namespace CpuTaskSchedulerTestSupport;
+        DeadlineGuard deadline;
+        TaskGate parentGate;
+        CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
+        CpuTaskScope scope(scheduler);
+        ScopeExit releaseParent([&]()noexcept { parentGate.open(); });
+        Atomic<u32> childInvocations{ 0u };
+        Atomic<u32> continuationInvocations{ 0u };
+        Atomic<b8> childRejected{ false };
+        const auto cpuTaskAdmission = scope.submit([&]() {
+            parentGate.block();
+            const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept { childInvocations.fetch_add(1u); });
+            if(!secondCpuTaskAdmission || !secondCpuTaskAdmission->valid())
+                childRejected.store(true, MemoryOrder::release);
+        });
+        ASSERT_TRUE(cpuTaskAdmission);
+        const auto parent = *cpuTaskAdmission;
+        EXPECT_TRUE(WaitUntil(parentGate.entered, s_GateTimeoutMS));
+        const auto continuationTaskAdmission = scheduler.submit([&]()noexcept { continuationInvocations.fetch_add(1u); }, parent);
+        ASSERT_TRUE(continuationTaskAdmission);
+        const auto continuation = *continuationTaskAdmission;
+        scope.cancel();
+        parentGate.open();
+        scheduler.wait(continuation);
+        scope.wait();
+        expired = parentGate.expired.load();
+        childCount = childInvocations.load();
+        continuationCount = continuationInvocations.load();
+        canceledTasks = scheduler.statistics().canceledTasks;
+        outstandingTasks = scheduler.statistics().outstandingTasks;
+    }
+    EXPECT_FALSE(expired);
+    EXPECT_EQ(childCount, 0u);
+    EXPECT_EQ(continuationCount, 0u);
+    EXPECT_GE(canceledTasks, 2u);
+    EXPECT_EQ(outstandingTasks, 0u);
+}
+
+void VerifyCpuTaskSchedulerTests_HeavyWorkUsesTheOtherClassWhileItsPreferredWorkerIsOccupied(){
+    native{
+        using namespace CpuTaskSchedulerTestSupport;
+        DeadlineGuard deadline;
+        TaskGate preferredGate;
+        TaskGate spillGate;
+        CpuTaskScheduler scheduler(2u);
+        ScopeExit releaseWorkers([&]()noexcept { preferredGate.open(); spillGate.open(); });
+        const auto workers = scheduler.statistics();
+        if(workers.performanceWorkers == 0u || workers.efficiencyWorkers == 0u)
+            GTEST_SKIP() << "The permitted CPUs do not provide both capacity classes.";
+        CpuAffinity::Enum preferredAffinity = CpuAffinity::Any;
+        CpuAffinity::Enum spillAffinity = CpuAffinity::Any;
+        const auto cpuTaskAdmission = scheduler.submit([&]()noexcept {
+            preferredAffinity = scheduler.currentWorkerAffinity();
+            preferredGate.block();
+        });
+        EXPECT_TRUE(cpuTaskAdmission);
+        if(cpuTaskAdmission)
+            EXPECT_TRUE(cpuTaskAdmission->valid());
+        EXPECT_TRUE(WaitUntil(preferredGate.entered, s_GateTimeoutMS));
+        const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept {
+            spillAffinity = scheduler.currentWorkerAffinity();
+            spillGate.block();
+        });
         EXPECT_TRUE(secondCpuTaskAdmission);
         if(secondCpuTaskAdmission)
             EXPECT_TRUE(secondCpuTaskAdmission->valid());
-    }, positive
-    );
-    ASSERT_TRUE(cpuTaskAdmission);
-    if(cpuTaskAdmission)
-        ASSERT_TRUE(cpuTaskAdmission->valid());
-    scope.wait();
-    EXPECT_EQ(joined, 2u);
-    EXPECT_EQ(unrelated, 0u);
-    scheduler.wait();
-    EXPECT_EQ(unrelated, 1u);
+        EXPECT_TRUE(WaitUntil(spillGate.entered, s_GateTimeoutMS));
+        preferredGate.open();
+        spillGate.open();
+        scheduler.wait();
+        EXPECT_FALSE(preferredGate.expired.load());
+        EXPECT_FALSE(spillGate.expired.load());
+        EXPECT_EQ(preferredAffinity, CpuAffinity::Performance);
+        EXPECT_EQ(spillAffinity, CpuAffinity::Efficiency);
+        EXPECT_GT(scheduler.statistics().performanceTasks, 0u);
+        EXPECT_GT(scheduler.statistics().efficiencyTasks, 0u);
+    }
 }
 
-TEST(CpuTaskWaitTests, StructuredParentCompletionStaysScopedUntilEveryChildRetires){
-    using namespace __hidden_cpu_task_wait_tests;
-    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
-    constexpr u32 s_Children = 64u;
-    CpuTaskScheduler scheduler(0u);
-    CpuTaskScope scope(scheduler);
-    u32 unrelated = 0u;
-    u32 children = 0u;
-    const auto cpuTaskAdmission = scheduler.submit([&]()noexcept{ ++unrelated; });
-    ASSERT_TRUE(cpuTaskAdmission);
-    if(cpuTaskAdmission)
-        ASSERT_TRUE(cpuTaskAdmission->valid());
-    const auto secondCpuTaskAdmission = scope.submit([&](){
-        for(u32 child = 0u; child < s_Children; ++child){
-            const auto thirdCpuTaskAdmission = scheduler.submit([&]()noexcept{ ++children; });
+void VerifyCpuTaskSchedulerTests_CanceledScopeSkipsBothDirectParallelRangeOverloads(){
+    u32 invocations = 0u;
+    usize outstandingTasks = 0u;
+    native(mut invocations, mut outstandingTasks){
+        using namespace CpuTaskSchedulerTestSupport;
+        DeadlineGuard deadline;
+        CpuTaskScheduler scheduler(0u);
+        CpuTaskScope scope(scheduler);
+        scope.cancel();
+        EXPECT_TRUE((scope.parallelFor(0u, 17u, [&](usize)noexcept { ++invocations; })));
+        EXPECT_TRUE((scope.parallelFor(4u, 25u, 3u, [&](usize)noexcept { ++invocations; })));
+        scope.wait();
+        outstandingTasks = scheduler.statistics().outstandingTasks;
+    }
+    EXPECT_EQ(invocations, 0u);
+    EXPECT_EQ(outstandingTasks, 0u);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void VerifyCpuTaskSchedulerTests_WorkerSelfWaitIsRejectedInsteadOfDeadlocking(){
+    native{
+        EXPECT_DEATH({
+            using namespace CpuTaskSchedulerTestSupport;
+            DeadlineGuard deadline(true);
+            TaskGate start;
+            CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
+            CpuTaskHandle self;
+            const auto selfTaskAdmission = scheduler.submit([&]() { start.block(); scheduler.wait(self); });
+            if(!selfTaskAdmission)
+                ExitTestProcess(0u);
+            self = *selfTaskAdmission;
+            start.open();
+            scheduler.wait();
+        }, "");
+    }
+}
+
+void VerifyCpuTaskSchedulerTests_DescendantWaitForAnAncestorIsRejectedInsteadOfDeadlocking(){
+    native{
+        EXPECT_DEATH({
+            using namespace CpuTaskSchedulerTestSupport;
+            DeadlineGuard deadline(true);
+            TaskGate start;
+            CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
+            CpuTaskHandle parent;
+            const auto cpuTaskAdmission = scheduler.submit([&]() {
+                start.block();
+                const auto childTaskAdmission = scheduler.submit([&]() { scheduler.wait(parent); });
+                if(!childTaskAdmission)
+                    ExitTestProcess(0u);
+                const auto child = *childTaskAdmission;
+                EXPECT_TRUE(child.valid());
+            });
+            if(!cpuTaskAdmission)
+                ExitTestProcess(0u);
+            parent = *cpuTaskAdmission;
+            start.open();
+            scheduler.wait();
+        }, "");
+    }
+}
+
+void VerifyCpuTaskSchedulerTests_JoiningTheScopeThatContainsTheCurrentTaskIsRejected(){
+    native{
+        EXPECT_DEATH({
+            using namespace CpuTaskSchedulerTestSupport;
+            DeadlineGuard deadline(true);
+            CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
+            CpuTaskScope scope(scheduler);
+            const auto cpuTaskAdmission = scope.submit([&]() { scope.wait(); });
+            EXPECT_TRUE(cpuTaskAdmission);
+            if(cpuTaskAdmission)
+                EXPECT_TRUE(cpuTaskAdmission->valid());
+            scheduler.wait();
+        }, "");
+    }
+}
+
+void VerifyCpuTaskSchedulerTests_ChildCannotDependDirectlyOnItsStructuredParent(){
+    native{
+        EXPECT_EXIT({
+            using namespace CpuTaskSchedulerTestSupport;
+            DeadlineGuard deadline;
+            CpuTaskScheduler scheduler(0u);
+            CpuTaskHandle parent;
+            b8 rejected = false;
+            const auto cpuTaskAdmission = scheduler.submit([&]() {
+                const auto child = scheduler.submit([]()noexcept {}, parent);
+                rejected = !child;
+            });
+            if(!cpuTaskAdmission)
+                ExitTestProcess(2u);
+            parent = *cpuTaskAdmission;
+            scheduler.pumpMainThread();
+            if(!rejected)
+                ExitTestProcess(1u);
+            scheduler.wait(parent);
+            ExitTestProcess(scheduler.statistics().outstandingTasks == 0u ? 0u : 2u);
+        }, testing::ExitedWithCode(0), "");
+    }
+}
+
+void VerifyCpuTaskSchedulerTests_ChildCannotDependOnATransitiveDependentOfItsStructuredParent(){
+    native{
+        EXPECT_EXIT({
+            using namespace CpuTaskSchedulerTestSupport;
+            DeadlineGuard deadline;
+            CpuTaskScheduler scheduler(0u);
+            CpuTaskHandle dependent;
+            b8 rejected = false;
+            u32 continuations = 0u;
+            const auto cpuTaskAdmission = scheduler.submit([&]() {
+                const auto child = scheduler.submit([]()noexcept {}, dependent);
+                rejected = !child;
+            });
+            if(!cpuTaskAdmission)
+                ExitTestProcess(2u);
+            const auto parent = *cpuTaskAdmission;
+            dependent = parent;
+            for(u32 depth = 0u; depth < 3u; ++depth){
+                const auto dependentTaskAdmission = scheduler.submit([&]()noexcept { ++continuations; }, dependent);
+                if(!dependentTaskAdmission)
+                    ExitTestProcess(2u);
+                dependent = *dependentTaskAdmission;
+            }
+            scheduler.pumpMainThread();
+            if(!rejected)
+                ExitTestProcess(1u);
+            scheduler.wait(dependent);
+            ExitTestProcess(continuations == 3u && scheduler.statistics().outstandingTasks == 0u ? 0u : 2u);
+        }, testing::ExitedWithCode(0), "");
+    }
+}
+
+void VerifyCpuTaskSchedulerTests_DescendantOnAnotherWorkerCannotJoinItsAncestorsScope(){
+    native{
+        EXPECT_DEATH({
+            using namespace CpuTaskSchedulerTestSupport;
+            DeadlineGuard deadline(true);
+            TaskGate parentGate;
+            CpuTaskScheduler scheduler(HomogeneousWorkers(2u));
+            CpuTaskScope scope(scheduler);
+            Atomic<usize> parentWorker{ 0u };
+            const auto cpuTaskAdmission = scope.submit([&]() {
+                parentWorker.store(scheduler.currentWorkerIndex(), MemoryOrder::release);
+                const auto secondCpuTaskAdmission = scheduler.submit([&]() {
+                    if(!WaitUntil(parentGate.entered, s_GateTimeoutMS) || scheduler.currentWorkerIndex() == parentWorker.load(MemoryOrder::acquire))
+                        ExitTestProcess(0u);
+                    scope.wait();
+                });
+                EXPECT_TRUE(secondCpuTaskAdmission);
+                if(secondCpuTaskAdmission)
+                    EXPECT_TRUE(secondCpuTaskAdmission->valid());
+                parentGate.block();
+            });
+            EXPECT_TRUE(cpuTaskAdmission);
+            if(cpuTaskAdmission)
+                EXPECT_TRUE(cpuTaskAdmission->valid());
+            scheduler.wait();
+        }, "");
+    }
+}
+
+void VerifyCpuTaskSchedulerTests_WorkerCannotWaitForAnIndependentlySubmittedDependent(){
+    native{
+        EXPECT_DEATH({
+            using namespace CpuTaskSchedulerTestSupport;
+            DeadlineGuard deadline(true);
+            TaskGate start;
+            CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
+            CpuTaskHandle dependent;
+            const auto runningTaskAdmission = scheduler.submit([&]() { start.block(); scheduler.wait(dependent); });
+            if(!runningTaskAdmission)
+                ExitTestProcess(0u);
+            const auto running = *runningTaskAdmission;
+            const auto dependentTaskAdmission = scheduler.submit([]()noexcept {}, running);
+            if(!dependentTaskAdmission)
+                ExitTestProcess(0u);
+            dependent = *dependentTaskAdmission;
+            start.open();
+            scheduler.wait();
+        }, "");
+    }
+}
+
+void VerifyCpuTaskSchedulerTests_DescendantCannotWaitForTransitiveDependentsOfItsAncestor(){
+    native{
+        EXPECT_DEATH({
+            using namespace CpuTaskSchedulerTestSupport;
+            DeadlineGuard deadline(true);
+            TaskGate start;
+            CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
+            CpuTaskHandle dependent;
+            const auto cpuTaskAdmission = scheduler.submit([&]() {
+                start.block();
+                const auto secondCpuTaskAdmission = scheduler.submit([&]() { scheduler.wait(dependent); });
+                EXPECT_TRUE(secondCpuTaskAdmission);
+                if(secondCpuTaskAdmission)
+                    EXPECT_TRUE(secondCpuTaskAdmission->valid());
+            });
+            if(!cpuTaskAdmission)
+                ExitTestProcess(0u);
+            const auto parent = *cpuTaskAdmission;
+            dependent = parent;
+            for(u32 depth = 0u; depth < 3u; ++depth){
+                const auto dependentTaskAdmission = scheduler.submit([]()noexcept {}, dependent);
+                if(!dependentTaskAdmission)
+                    ExitTestProcess(0u);
+                dependent = *dependentTaskAdmission;
+            }
+            start.open();
+            scheduler.wait();
+        }, "");
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void VerifyCpuTaskSchedulerTests_ForeignDependenciesAndForeignWaitsAreRejectedWithoutPublishingWork(){
+    u32 invoked = 0u;
+    native(mut invoked){
+        using namespace CpuTaskSchedulerTestSupport;
+        DeadlineGuard deadline;
+        CpuTaskScheduler first(0u);
+        CpuTaskScheduler second(0u);
+        const auto foreignTaskAdmission = first.submit([]()noexcept {});
+        ASSERT_TRUE(foreignTaskAdmission);
+        const auto foreign = *foreignTaskAdmission;
+        const auto rejected = second.submit([&]()noexcept { ++invoked; }, foreign);
+        EXPECT_FALSE(rejected);
+        EXPECT_EQ(second.statistics().outstandingTasks, 0u);
+        EXPECT_THROW(second.wait(foreign), RuntimeException);
+        EXPECT_THROW({ const b8 complete = second.isComplete(foreign); EXPECT_FALSE(complete); }, RuntimeException);
+        first.wait(foreign);
+        EXPECT_THROW({ const b8 complete = second.isComplete(foreign); EXPECT_FALSE(complete); }, RuntimeException);
+        const auto cpuTaskAdmission = second.submit([&]()noexcept { ++invoked; }, foreign);
+        EXPECT_FALSE(cpuTaskAdmission);
+    }
+    EXPECT_EQ(invoked, 0u);
+}
+
+void VerifyCpuTaskSchedulerTests_RetiredHandlesStayCompleteWhenNodeStorageIsReused(){
+    u32 invokedAfterRetiredWait = 1u;
+    u32 invokedAfterPendingWait = 0u;
+    b8 retiredComplete = false;
+    b8 pendingComplete = true;
+    native(mut invokedAfterRetiredWait, mut invokedAfterPendingWait, mut retiredComplete, mut pendingComplete){
+        using namespace CpuTaskSchedulerTestSupport;
+        DeadlineGuard deadline;
+        CpuTaskScheduler scheduler(0u);
+        const auto retiredTaskAdmission = scheduler.submit([]()noexcept {});
+        ASSERT_TRUE(retiredTaskAdmission);
+        const auto retired = *retiredTaskAdmission;
+        scheduler.wait(retired);
+        u32 invoked = 0u;
+        const auto pendingTaskAdmission = scheduler.submit([&]()noexcept { ++invoked; });
+        ASSERT_TRUE(pendingTaskAdmission);
+        const auto pending = *pendingTaskAdmission;
+        retiredComplete = scheduler.isComplete(retired);
+        pendingComplete = scheduler.isComplete(pending);
+        scheduler.wait(retired);
+        invokedAfterRetiredWait = invoked;
+        scheduler.wait(pending);
+        invokedAfterPendingWait = invoked;
+    }
+    EXPECT_TRUE(retiredComplete);
+    EXPECT_FALSE(pendingComplete);
+    EXPECT_EQ(invokedAfterRetiredWait, 0u);
+    EXPECT_EQ(invokedAfterPendingWait, 1u);
+}
+
+void VerifyCpuTaskSchedulerTests_ParentCompletionRetainsAncestorCapturesUntilGrandchildrenAndRetirementFinish(){
+    b8 rejectedVal = true;
+    b8 expiredVal = true;
+    u32 totalVal = 0u;
+    u32 retirementsVal = 0u;
+    u32 seenVal = 0u;
+    native(mut rejectedVal, mut expiredVal, mut totalVal, mut retirementsVal, mut seenVal){
+        using namespace CpuTaskSchedulerTestSupport;
+        DeadlineGuard deadline;
+        TaskGate grandchildGate;
+        Atomic<u32> retirements{ 0u };
+        Atomic<u32> total{ 0u };
+        Atomic<u32> retirementsSeenByDependent{ 0u };
+        Atomic<b8> rejected{ false };
+        CpuTaskScheduler scheduler(HomogeneousWorkers(2u));
+        ScopeExit releaseGrandchild([&]()noexcept { grandchildGate.open(); });
+        const auto cpuTaskAdmission = scheduler.submit([&scheduler, &grandchildGate, &retirements, &total, &rejected, parentCapture = LifetimeProbe(retirements, 11u)]() mutable {
+            const auto secondCpuTaskAdmission = scheduler.submit([&scheduler, &grandchildGate, &retirements, &total, &rejected, &parentCapture, childCapture = LifetimeProbe(retirements, 13u)]() mutable {
+                const auto thirdCpuTaskAdmission = scheduler.submit([&grandchildGate, &total, &parentCapture, &childCapture, grandchildCapture = LifetimeProbe(retirements, 17u)]()noexcept {
+                    grandchildGate.block();
+                    total.store(parentCapture.value + childCapture.value + grandchildCapture.value, MemoryOrder::release);
+                });
+                ASSERT_TRUE(thirdCpuTaskAdmission);
+                const auto grandchild = *thirdCpuTaskAdmission;
+                if(!grandchild.valid())
+                    rejected.store(true, MemoryOrder::release);
+            });
+            ASSERT_TRUE(secondCpuTaskAdmission);
+            const auto child = *secondCpuTaskAdmission;
+            if(!child.valid())
+                rejected.store(true, MemoryOrder::release);
+        });
+        ASSERT_TRUE(cpuTaskAdmission);
+        const auto parent = *cpuTaskAdmission;
+        const auto fourthCpuTaskAdmission = scheduler.submit([&]()noexcept {
+            retirementsSeenByDependent.store(retirements.load(MemoryOrder::acquire), MemoryOrder::release);
+        }, parent);
+        ASSERT_TRUE(fourthCpuTaskAdmission);
+        const auto dependent = *fourthCpuTaskAdmission;
+        EXPECT_TRUE(WaitUntil(grandchildGate.entered, s_GateTimeoutMS));
+        EXPECT_FALSE(scheduler.isComplete(parent));
+        EXPECT_FALSE(scheduler.isComplete(dependent));
+        EXPECT_EQ(retirements.load(), 0u);
+        grandchildGate.open();
+        scheduler.wait(dependent);
+        rejectedVal = rejected.load();
+        expiredVal = grandchildGate.expired.load();
+        totalVal = total.load();
+        retirementsVal = retirements.load();
+        seenVal = retirementsSeenByDependent.load();
+    }
+    EXPECT_FALSE(rejectedVal);
+    EXPECT_FALSE(expiredVal);
+    EXPECT_EQ(totalVal, 41u);
+    EXPECT_EQ(retirementsVal, 3u);
+    EXPECT_EQ(seenVal, 3u);
+}
+
+void VerifyCpuTaskSchedulerTests_ScopeJoinDoesNotWaitForAnUnrelatedRunningScope(){
+    b8 ownedDone = false;
+    b8 unrelatedDoneDuringOwned = true;
+    b8 unrelatedExpired = true;
+    native(mut ownedDone, mut unrelatedDoneDuringOwned, mut unrelatedExpired){
+        using namespace CpuTaskSchedulerTestSupport;
+        DeadlineGuard deadline;
+        TaskGate unrelatedGate;
+        CpuTaskScheduler scheduler(HomogeneousWorkers(2u));
+        CpuTaskScope unrelated(scheduler);
+        CpuTaskScope owned(scheduler);
+        ScopeExit releaseUnrelated([&]()noexcept { unrelatedGate.open(); });
+        const auto unrelatedTaskAdmission = unrelated.submit([&]()noexcept { unrelatedGate.block(); });
+        ASSERT_TRUE(unrelatedTaskAdmission);
+        const auto unrelatedTask = *unrelatedTaskAdmission;
+        EXPECT_TRUE(WaitUntil(unrelatedGate.entered, s_GateTimeoutMS));
+        Atomic<b8> ownedFinished{ false };
+        const auto cpuTaskAdmission = owned.submit([&]()noexcept { ownedFinished.store(true, MemoryOrder::release); });
+        EXPECT_TRUE(cpuTaskAdmission);
+        if(cpuTaskAdmission)
+            EXPECT_TRUE(cpuTaskAdmission->valid());
+        owned.wait();
+        ownedDone = ownedFinished.load();
+        unrelatedDoneDuringOwned = scheduler.isComplete(unrelatedTask);
+        unrelatedExpired = unrelatedGate.expired.load();
+        unrelatedGate.open();
+        unrelated.wait();
+    }
+    EXPECT_TRUE(ownedDone);
+    EXPECT_FALSE(unrelatedDoneDuringOwned);
+    EXPECT_FALSE(unrelatedExpired);
+}
+
+void VerifyCpuTaskSchedulerTests_ScopeDestructionIncludesChildrenSubmittedDirectlyToTheScheduler(){
+    b8 rejectedVal = true;
+    u32 invokedVal = 0u;
+    u32 retiredVal = 0u;
+    usize outstandingTasks = 1u;
+    native(mut rejectedVal, mut invokedVal, mut retiredVal, mut outstandingTasks){
+        using namespace CpuTaskSchedulerTestSupport;
+        DeadlineGuard deadline;
+        Atomic<u32> retired{ 0u };
+        Atomic<u32> invoked{ 0u };
+        Atomic<b8> rejected{ false };
+        CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
+        {
+            CpuTaskScope scope(scheduler);
+            const auto cpuTaskAdmission = scope.submit([&]() {
+                const auto secondCpuTaskAdmission = scheduler.submit([&invoked, capture = LifetimeProbe(retired, 23u)]()noexcept {
+                    invoked.store(capture.value, MemoryOrder::release);
+                });
+                if(!secondCpuTaskAdmission || !secondCpuTaskAdmission->valid())
+                    rejected.store(true, MemoryOrder::release);
+            });
+            EXPECT_TRUE(cpuTaskAdmission);
+            if(cpuTaskAdmission)
+                EXPECT_TRUE(cpuTaskAdmission->valid());
+        }
+        rejectedVal = rejected.load();
+        invokedVal = invoked.load();
+        retiredVal = retired.load();
+        outstandingTasks = scheduler.statistics().outstandingTasks;
+    }
+    EXPECT_FALSE(rejectedVal);
+    EXPECT_EQ(invokedVal, 23u);
+    EXPECT_EQ(retiredVal, 1u);
+    EXPECT_EQ(outstandingTasks, 0u);
+}
+
+void VerifyCpuTaskSchedulerTests_OneWorkerCompletesNestedParallelRangesThroughCooperativeExecution(){
+    Vector<u32> visitedCounts = Vector<u32>();
+    u64 cooperativeTasks = 0u;
+    usize outstandingTasks = 1u;
+    native(mut visitedCounts, mut cooperativeTasks, mut outstandingTasks){
+        using namespace CpuTaskSchedulerTestSupport;
+        DeadlineGuard deadline;
+        CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
+        Array<Atomic<u32>, 35u> visited{};
+        const auto cpuTaskAdmission = scheduler.submit([&]() {
+            EXPECT_TRUE((scheduler.parallelFor(0u, 5u, 1u, [&](const usize outer) {
+                EXPECT_TRUE((scheduler.parallelFor(0u, 7u, 1u, [&](const usize inner)noexcept {
+                    visited[outer * 7u + inner].fetch_add(1u, MemoryOrder::relaxed);
+                })));
+            })));
+        });
+        ASSERT_TRUE(cpuTaskAdmission);
+        const auto root = *cpuTaskAdmission;
+        scheduler.wait(root);
+        for(const auto& count : visited)
+            visitedCounts.push_back(count.load());
+        cooperativeTasks = scheduler.statistics().cooperativeTasks;
+        outstandingTasks = scheduler.statistics().outstandingTasks;
+    }
+    ASSERT_EQ(visitedCounts.size(), 35u);
+    for(in u32 count : visitedCounts){
+        EXPECT_EQ(count, 1u);
+    }
+    EXPECT_GT(cooperativeTasks, 0u);
+    EXPECT_EQ(outstandingTasks, 0u);
+}
+
+void VerifyCpuTaskSchedulerTests_MainThreadTasksSubmittedByWorkersExecuteOnlyOnTheSchedulerOwner(){
+    b8 rejectedVal = true;
+    b8 sameThread = false;
+    usize workerIndex = usize.max;
+    u32 invocationsVal = 0u;
+    native(mut rejectedVal, mut sameThread, mut workerIndex, mut invocationsVal){
+        using namespace CpuTaskSchedulerTestSupport;
+        DeadlineGuard deadline;
+        CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
+        const ThreadId owner = QueryCurrentThreadId();
+        Atomic<b8> published{ false };
+        Atomic<b8> rejected{ false };
+        Atomic<u32> invocations{ 0u };
+        ThreadId actual;
+        const auto cpuTaskAdmission = scheduler.submit([&]() {
+            CpuTaskOptions mainOptions;
+            mainOptions.target = CpuTaskTarget::MainThread;
+            const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept {
+                actual = QueryCurrentThreadId();
+                workerIndex = scheduler.currentWorkerIndex();
+                invocations.fetch_add(1u, MemoryOrder::release);
+            }, mainOptions);
+            if(!secondCpuTaskAdmission || !secondCpuTaskAdmission->valid())
+                rejected.store(true, MemoryOrder::release);
+            published.store(true, MemoryOrder::release);
+        });
+        ASSERT_TRUE(cpuTaskAdmission);
+        const auto parent = *cpuTaskAdmission;
+        EXPECT_TRUE(WaitUntil(published, s_GateTimeoutMS));
+        EXPECT_EQ(invocations.load(), 0u);
+        scheduler.wait(parent);
+        rejectedVal = rejected.load();
+        sameThread = (actual == owner);
+        invocationsVal = invocations.load();
+    }
+    EXPECT_FALSE(rejectedVal);
+    EXPECT_TRUE(sameThread);
+    EXPECT_EQ(workerIndex, 0u);
+    EXPECT_EQ(invocationsVal, 1u);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void VerifyCpuTaskSubmissionTests_CallableConstructionFailurePublishesNoSchedulerOrScopeWork(){
+    i32 schedulerResult = 0;
+    i32 scopeResult = 0;
+    u32 handled = 0u;
+    usize outstandingTasks = 1u;
+    u64 completedTasks = 1u;
+    u64 canceledTasks = 1u;
+    native(mut schedulerResult, mut scopeResult, mut handled, mut outstandingTasks, mut completedTasks, mut canceledTasks){
+        using namespace __hidden_cpu_task_submission_tests;
+        CpuTaskScheduler scheduler(0u);
+        CpuTaskScope scope(scheduler);
+        ThrowingCopyTask callable;
+        const auto handleError = [&handled](const u32 err)noexcept {
+            ++handled;
+            return static_cast<int>(err);
+        };
+        schedulerResult = InvokeTerminalEntry<u32>([&]()->int {
+            const auto task = scheduler.submit(callable);
+            EXPECT_FALSE(task);
+            return -1;
+        }, handleError, []()noexcept { return -2; });
+        EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
+
+        scopeResult = InvokeTerminalEntry<u32>([&]()->int {
+            const auto task = scope.submit(callable);
+            EXPECT_FALSE(task);
+            return -1;
+        }, handleError, []()noexcept { return -2; });
+        const auto stats = scheduler.statistics();
+        outstandingTasks = stats.outstandingTasks;
+        completedTasks = stats.completedTasks;
+        canceledTasks = stats.canceledTasks;
+        scope.wait();
+        scheduler.wait();
+    }
+    EXPECT_EQ(schedulerResult, cast<i32>(0xE101u));
+    EXPECT_EQ(scopeResult, cast<i32>(0xE101u));
+    EXPECT_EQ(handled, 2u);
+    EXPECT_EQ(outstandingTasks, 0u);
+    EXPECT_EQ(completedTasks, 0u);
+    EXPECT_EQ(canceledTasks, 0u);
+}
+
+void VerifyCpuTaskSubmissionTests_ExpectedAdmissionErrorsPreservePublicationAndCancellationBoundaries(){
+    u32 callbacks = 0u;
+    usize outstandingTasks = 1u;
+    native(mut callbacks, mut outstandingTasks){
+        using namespace __hidden_cpu_task_submission_tests;
+        CpuTaskScheduler scheduler(0u);
+        CpuTaskScope canceled(scheduler);
+        const auto invalidDependencies = scheduler.submit([&]()noexcept { ++callbacks; }, {}, nullptr, 1u);
+        ASSERT_FALSE(invalidDependencies);
+        EXPECT_EQ(invalidDependencies.error(), CpuTaskAdmissionError::InvalidDependencies);
+        CpuTaskOptions options;
+        options.target = static_cast<CpuTaskTarget::Enum>(CpuTaskTarget::MainThread + 1u);
+        const auto invalidOptions = scheduler.submit([&]()noexcept { ++callbacks; }, options);
+        ASSERT_FALSE(invalidOptions);
+        EXPECT_EQ(invalidOptions.error(), CpuTaskAdmissionError::InvalidOptions);
+        canceled.cancel();
+        const auto scopeRejected = canceled.submit([&]()noexcept { ++callbacks; });
+        ASSERT_FALSE(scopeRejected);
+        EXPECT_EQ(scopeRejected.error(), CpuTaskAdmissionError::ScopeCanceled);
+        EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
+        EXPECT_EQ(callbacks, 0u);
+        const auto accepted = scheduler.submit([&]()noexcept { ++callbacks; });
+        ASSERT_TRUE(accepted);
+        EXPECT_TRUE(accepted->valid());
+        scheduler.wait(*accepted);
+        EXPECT_EQ(callbacks, 1u);
+        scheduler.drain();
+        const auto shutdownRejected = scheduler.submit([&]()noexcept { ++callbacks; });
+        ASSERT_FALSE(shutdownRejected);
+        EXPECT_EQ(shutdownRejected.error(), CpuTaskAdmissionError::Aborting);
+        outstandingTasks = scheduler.statistics().outstandingTasks;
+    }
+    EXPECT_EQ(callbacks, 1u);
+    EXPECT_EQ(outstandingTasks, 0u);
+}
+
+void VerifyCpuTaskSubmissionTests_WorkerCallbackFailureTerminatesWithoutDeferredCallerDelivery(){
+    native{
+        EXPECT_DEATH({
+            using namespace __hidden_cpu_task_submission_tests;
+            DeadlineGuard deadline(true);
+            const int result = InvokeTerminalEntry<u32>([]()->int {
+                CpuTaskScheduler scheduler(1u);
+                const auto cpuTaskAdmission = scheduler.submit([&]() {
+                    if(scheduler.currentWorkerIndex() == 0u)
+                        ExitTestProcess(0u);
+                    throw s_WorkerException;
+                });
+                if(!cpuTaskAdmission)
+                    ExitTestProcess(0u);
+                const auto task = *cpuTaskAdmission;
+                if(!task.valid())
+                    return 0;
+                scheduler.wait(task);
+                return 0;
+            }, [](const u32)noexcept { return 0; }, []()noexcept { return 0; });
+            ExitTestProcess(static_cast<u32>(result));
+        }, "");
+    }
+}
+
+void VerifyCpuTaskSubmissionTests_ParallelRangeWorkerFailureTerminatesWithoutDeferredCallerDelivery(){
+    native{
+        EXPECT_DEATH({
+            using namespace __hidden_cpu_task_submission_tests;
+            DeadlineGuard deadline(true);
+            const int result = InvokeTerminalEntry<u32>([]()->int {
+                CpuTaskScheduler scheduler(1u);
+                AtomicFlag workerEntered;
+                EXPECT_TRUE((scheduler.parallelFor(0u, 64u, [&](const usize) {
+                    if(scheduler.currentWorkerIndex() == 0u){
+                        while(!workerEntered.test(MemoryOrder::acquire))
+                            workerEntered.wait(false, MemoryOrder::acquire);
+                        return;
+                    }
+                    workerEntered.testAndSet(MemoryOrder::release);
+                    workerEntered.notifyAll();
+                    throw s_WorkerException;
+                })));
+                return 0;
+            }, [](const u32)noexcept { return 0; }, []()noexcept { return 0; });
+            ExitTestProcess(static_cast<u32>(result));
+        }, "");
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void VerifyCpuTaskWaitTests_ScopeRejectsAnIndependentTaskDependingOnTheCaller(){
+    u32 callbacks = 0u;
+    usize outstandingTasks = 1u;
+    native(mut callbacks, mut outstandingTasks){
+        using namespace __hidden_cpu_task_wait_tests;
+        DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
+        CpuTaskScheduler scheduler(0u);
+        CpuTaskScope scope(scheduler);
+        const auto callerTaskAdmission = scheduler.submit([&]() { scope.wait(); });
+        ASSERT_TRUE(callerTaskAdmission);
+        const auto caller = *callerTaskAdmission;
+        ASSERT_TRUE(caller.valid());
+        const auto cpuTaskAdmission = scope.submit([&]()noexcept { ++callbacks; }, caller);
+        ASSERT_TRUE(cpuTaskAdmission);
+        if(cpuTaskAdmission)
+            ASSERT_TRUE(cpuTaskAdmission->valid());
+        EXPECT_THROW(scheduler.wait(caller), RuntimeException);
+        scope.wait();
+        outstandingTasks = scheduler.statistics().outstandingTasks;
+    }
+    EXPECT_EQ(callbacks, 0u);
+    EXPECT_EQ(outstandingTasks, 0u);
+}
+
+void VerifyCpuTaskWaitTests_ScopeRejectsTransitiveDependentsOfTheCallersAncestor(){
+    usize outstandingTasks = 1u;
+    native(mut outstandingTasks){
+        using namespace __hidden_cpu_task_wait_tests;
+        DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
+        CpuTaskScheduler scheduler(0u);
+        CpuTaskScope scope(scheduler);
+        const auto cpuTaskAdmission = scheduler.submit([&]() {
+            const auto secondCpuTaskAdmission = scheduler.submit([&]() { scope.wait(); });
+            ASSERT_TRUE(secondCpuTaskAdmission);
+            if(secondCpuTaskAdmission)
+                ASSERT_TRUE(secondCpuTaskAdmission->valid());
+        });
+        ASSERT_TRUE(cpuTaskAdmission);
+        const auto ancestor = *cpuTaskAdmission;
+        ASSERT_TRUE(ancestor.valid());
+        const auto middleTaskAdmission = scheduler.submit([]()noexcept {}, ancestor);
+        ASSERT_TRUE(middleTaskAdmission);
+        const auto middle = *middleTaskAdmission;
+        ASSERT_TRUE(middle.valid());
+        const auto thirdCpuTaskAdmission = scope.submit([]()noexcept {}, middle);
+        ASSERT_TRUE(thirdCpuTaskAdmission);
+        if(thirdCpuTaskAdmission)
+            ASSERT_TRUE(thirdCpuTaskAdmission->valid());
+        EXPECT_THROW(scheduler.wait(ancestor), RuntimeException);
+        scope.wait();
+        outstandingTasks = scheduler.statistics().outstandingTasks;
+    }
+    EXPECT_EQ(outstandingTasks, 0u);
+}
+
+void VerifyCpuTaskWaitTests_ScopeRechecksDependenciesPublishedByCooperativeWork(){
+    u32 callbacks = 0u;
+    usize outstandingTasks = 1u;
+    native(mut callbacks, mut outstandingTasks){
+        using namespace __hidden_cpu_task_wait_tests;
+        DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
+        CpuTaskScheduler scheduler(0u);
+        CpuTaskScope scope(scheduler);
+        const auto callerTaskAdmission = scheduler.submit([&]() { scope.wait(); });
+        ASSERT_TRUE(callerTaskAdmission);
+        const auto caller = *callerTaskAdmission;
+        ASSERT_TRUE(caller.valid());
+        const auto cpuTaskAdmission = scope.submit([&]() {
+            ++callbacks;
+            const auto secondCpuTaskAdmission = scope.submit([&]()noexcept { ++callbacks; }, caller);
+            ASSERT_TRUE(secondCpuTaskAdmission);
+            if(secondCpuTaskAdmission)
+                ASSERT_TRUE(secondCpuTaskAdmission->valid());
+        });
+        ASSERT_TRUE(cpuTaskAdmission);
+        if(cpuTaskAdmission)
+            ASSERT_TRUE(cpuTaskAdmission->valid());
+        EXPECT_THROW(scheduler.wait(caller), RuntimeException);
+        scope.wait();
+        outstandingTasks = scheduler.statistics().outstandingTasks;
+    }
+    EXPECT_EQ(callbacks, 1u);
+    EXPECT_EQ(outstandingTasks, 0u);
+}
+
+void VerifyCpuTaskWaitTests_NewDependencyInvalidatesAnEarlierUnrelatedSearch(){
+    u32 sequence = 0u;
+    u32 unrelatedAfterScope = 1u;
+    u32 unrelatedAfterAll = 0u;
+    native(mut sequence, mut unrelatedAfterScope, mut unrelatedAfterAll){
+        using namespace __hidden_cpu_task_wait_tests;
+        DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
+        u32 unrelated = 0u;
+        CpuTaskScheduler scheduler(0u);
+        CpuTaskScope scope(scheduler);
+        const auto prerequisiteTaskAdmission = scheduler.submit([&]() { EXPECT_EQ(++sequence, 2u); });
+        ASSERT_TRUE(prerequisiteTaskAdmission);
+        const auto prerequisite = *prerequisiteTaskAdmission;
+        ASSERT_TRUE(prerequisite.valid());
+        const auto cpuTaskAdmission = scheduler.submit([&]()noexcept { ++unrelated; });
+        ASSERT_TRUE(cpuTaskAdmission);
+        if(cpuTaskAdmission)
+            ASSERT_TRUE(cpuTaskAdmission->valid());
+        const auto secondCpuTaskAdmission = scope.submit([&]() {
+            EXPECT_EQ(++sequence, 1u);
+            const auto thirdCpuTaskAdmission = scope.submit([&]() { EXPECT_EQ(++sequence, 3u); }, prerequisite);
+            ASSERT_TRUE(thirdCpuTaskAdmission);
+            if(thirdCpuTaskAdmission)
+                ASSERT_TRUE(thirdCpuTaskAdmission->valid());
+        });
+        ASSERT_TRUE(secondCpuTaskAdmission);
+        if(secondCpuTaskAdmission)
+            ASSERT_TRUE(secondCpuTaskAdmission->valid());
+        scope.wait();
+        unrelatedAfterScope = unrelated;
+        scheduler.wait();
+        unrelatedAfterAll = unrelated;
+    }
+    EXPECT_EQ(sequence, 3u);
+    EXPECT_EQ(unrelatedAfterScope, 0u);
+    EXPECT_EQ(unrelatedAfterAll, 1u);
+}
+
+void VerifyCpuTaskWaitTests_ReusedUnrelatedSlotCanBecomeAScopedDescendant(){
+    u32 callbacks = 0u;
+    usize outstandingTasks = 1u;
+    native(mut callbacks, mut outstandingTasks){
+        using namespace __hidden_cpu_task_wait_tests;
+        DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
+        CpuTaskScheduler scheduler(0u);
+        CpuTaskScope scope(scheduler);
+        const auto unrelatedTaskAdmission = scheduler.submit([&]()noexcept { ++callbacks; });
+        ASSERT_TRUE(unrelatedTaskAdmission);
+        const auto unrelated = *unrelatedTaskAdmission;
+        ASSERT_TRUE(unrelated.valid());
+        const auto cpuTaskAdmission = scope.submit([&]() {
+            EXPECT_EQ(callbacks, 0u);
+            scheduler.wait(unrelated);
+            const auto childTaskAdmission = scheduler.submit([&]()noexcept { ++callbacks; });
+            ASSERT_TRUE(childTaskAdmission);
+            const auto child = *childTaskAdmission;
+            ASSERT_TRUE(child.valid());
+            EXPECT_EQ(child.index, unrelated.index);
+            EXPECT_NE(child.generation, unrelated.generation);
+        });
+        ASSERT_TRUE(cpuTaskAdmission);
+        if(cpuTaskAdmission)
+            ASSERT_TRUE(cpuTaskAdmission->valid());
+        scope.wait();
+        outstandingTasks = scheduler.statistics().outstandingTasks;
+    }
+    EXPECT_EQ(callbacks, 2u);
+    EXPECT_EQ(outstandingTasks, 0u);
+}
+
+void VerifyCpuTaskWaitTests_NestedScopesUseIndependentSearchIdentities(){
+    u32 unrelatedAfterOuter = 1u;
+    u32 unrelatedAfterAll = 0u;
+    native(mut unrelatedAfterOuter, mut unrelatedAfterAll){
+        using namespace __hidden_cpu_task_wait_tests;
+        DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
+        u32 innerCallbacks = 0u;
+        u32 unrelatedCallbacks = 0u;
+        CpuTaskScheduler scheduler(0u);
+        CpuTaskScope inner(scheduler);
+        CpuTaskScope outer(scheduler);
+        const auto prerequisiteTaskAdmission = scheduler.submit([&]()noexcept { ++innerCallbacks; });
+        ASSERT_TRUE(prerequisiteTaskAdmission);
+        const auto prerequisite = *prerequisiteTaskAdmission;
+        ASSERT_TRUE(prerequisite.valid());
+        const auto cpuTaskAdmission = inner.submit([&]()noexcept { ++innerCallbacks; }, prerequisite);
+        ASSERT_TRUE(cpuTaskAdmission);
+        if(cpuTaskAdmission)
+            ASSERT_TRUE(cpuTaskAdmission->valid());
+        const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept { ++unrelatedCallbacks; });
+        ASSERT_TRUE(secondCpuTaskAdmission);
+        if(secondCpuTaskAdmission)
+            ASSERT_TRUE(secondCpuTaskAdmission->valid());
+        const auto thirdCpuTaskAdmission = outer.submit([&]() {
+            EXPECT_EQ(innerCallbacks, 0u);
+            inner.wait();
+            EXPECT_EQ(innerCallbacks, 2u);
+        });
+        ASSERT_TRUE(thirdCpuTaskAdmission);
+        if(thirdCpuTaskAdmission)
+            ASSERT_TRUE(thirdCpuTaskAdmission->valid());
+        outer.wait();
+        unrelatedAfterOuter = unrelatedCallbacks;
+        scheduler.wait();
+        unrelatedAfterAll = unrelatedCallbacks;
+    }
+    EXPECT_EQ(unrelatedAfterOuter, 0u);
+    EXPECT_EQ(unrelatedAfterAll, 1u);
+}
+
+void VerifyCpuTaskWaitTests_ConcurrentScopeWaitersCanSwitchTheSharedSearchCache(){
+    CpuTaskSchedulerConfig config = CpuTaskSchedulerConfig();
+    config.workerCount = 2u;
+    config.heterogeneous = false;
+    u32 countA = 0u;
+    u32 countB = 0u;
+    usize outstandingTasks = 1u;
+    native(in config, mut countA, mut countB, mut outstandingTasks){
+        using namespace __hidden_cpu_task_wait_tests;
+        DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
+        Atomic<u32> entered{ 0u };
+        Atomic<b8> start{ false };
+        Atomic<u32> visitsA{ 0u };
+        Atomic<u32> visitsB{ 0u };
+        CpuTaskScheduler scheduler(config);
+        CpuTaskScope scopeA(scheduler);
+        CpuTaskScope scopeB(scheduler);
+        const auto cpuTaskAdmission = scheduler.submit([&]() {
+            entered.fetch_add(1u, MemoryOrder::release);
+            while(!start.load(MemoryOrder::acquire))
+                SleepMS(s_PollIntervalMS);
+            scopeA.wait();
+        });
+        ASSERT_TRUE(cpuTaskAdmission);
+        const auto waiterA = *cpuTaskAdmission;
+        const auto secondCpuTaskAdmission = scheduler.submit([&]() {
+            entered.fetch_add(1u, MemoryOrder::release);
+            while(!start.load(MemoryOrder::acquire))
+                SleepMS(s_PollIntervalMS);
+            scopeB.wait();
+        });
+        ASSERT_TRUE(secondCpuTaskAdmission);
+        const auto waiterB = *secondCpuTaskAdmission;
+        ASSERT_TRUE(waiterA.valid());
+        ASSERT_TRUE(waiterB.valid());
+        while(entered.load(MemoryOrder::acquire) != 2u)
+            SleepMS(s_PollIntervalMS);
+        for(u32 index = 0u; index < 32u; ++index){
+            const auto prerequisiteBTaskAdmission = scheduler.submit([]()noexcept {});
+            ASSERT_TRUE(prerequisiteBTaskAdmission);
+            const auto prerequisiteB = *prerequisiteBTaskAdmission;
+            const auto prerequisiteATaskAdmission = scheduler.submit([]()noexcept {});
+            ASSERT_TRUE(prerequisiteATaskAdmission);
+            const auto prerequisiteA = *prerequisiteATaskAdmission;
+            EXPECT_TRUE(prerequisiteB.valid());
+            EXPECT_TRUE(prerequisiteA.valid());
+            const auto thirdCpuTaskAdmission = scopeB.submit([&]()noexcept { visitsB.fetch_add(1u, MemoryOrder::relaxed); }, prerequisiteB);
             EXPECT_TRUE(thirdCpuTaskAdmission);
             if(thirdCpuTaskAdmission)
                 EXPECT_TRUE(thirdCpuTaskAdmission->valid());
+            const auto fourthCpuTaskAdmission = scopeA.submit([&]()noexcept { visitsA.fetch_add(1u, MemoryOrder::relaxed); }, prerequisiteA);
+            EXPECT_TRUE(fourthCpuTaskAdmission);
+            if(fourthCpuTaskAdmission)
+                EXPECT_TRUE(fourthCpuTaskAdmission->valid());
         }
-    });
-    ASSERT_TRUE(secondCpuTaskAdmission);
-    if(secondCpuTaskAdmission)
-        ASSERT_TRUE(secondCpuTaskAdmission->valid());
-    scope.wait();
-    EXPECT_EQ(children, s_Children);
-    EXPECT_EQ(unrelated, 0u);
-    scheduler.wait();
-    EXPECT_EQ(unrelated, 1u);
+        start.store(true, MemoryOrder::release);
+        scheduler.wait(waiterA);
+        scheduler.wait(waiterB);
+        countA = visitsA.load(MemoryOrder::acquire);
+        countB = visitsB.load(MemoryOrder::acquire);
+        outstandingTasks = scheduler.statistics().outstandingTasks;
+    }
+    EXPECT_EQ(countA, 32u);
+    EXPECT_EQ(countB, 32u);
+    EXPECT_EQ(outstandingTasks, 0u);
 }
 
+void VerifyCpuTaskWaitTests_ScopeJoinSkipsUnrelatedPrefixesAcrossPriorityQueues(){
+    const u32 unrelatedTasks = 1024u;
+    const u32 scopedTasks = 128u;
+    const u32 priorities = 3u;
+    u32 joined = 0u;
+    u32 unrelatedAfterScope = 1u;
+    u32 unrelatedAfterAll = 0u;
+    native(in unrelatedTasks, in scopedTasks, in priorities, mut joined, mut unrelatedAfterScope, mut unrelatedAfterAll){
+        using namespace __hidden_cpu_task_wait_tests;
+        DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
+        CpuTaskScheduler scheduler(0u);
+        CpuTaskScope scope(scheduler);
+        u32 unrelated = 0u;
+        for(u32 index = 0u; index < unrelatedTasks; ++index){
+            CpuTaskOptions options;
+            options.priority = static_cast<CpuTaskPriority::Enum>(index % priorities);
+            const auto cpuTaskAdmission = scheduler.submit([&]()noexcept { ++unrelated; }, options);
+            ASSERT_TRUE(cpuTaskAdmission);
+            if(cpuTaskAdmission)
+                ASSERT_TRUE(cpuTaskAdmission->valid());
+        }
+        for(u32 index = 0u; index < scopedTasks; ++index){
+            CpuTaskOptions options;
+            options.priority = static_cast<CpuTaskPriority::Enum>(index % priorities);
+            const auto secondCpuTaskAdmission = scope.submit([&]()noexcept { ++joined; }, options);
+            ASSERT_TRUE(secondCpuTaskAdmission);
+            if(secondCpuTaskAdmission)
+                ASSERT_TRUE(secondCpuTaskAdmission->valid());
+        }
+        scope.wait();
+        unrelatedAfterScope = unrelated;
+        scheduler.wait();
+        unrelatedAfterAll = unrelated;
+    }
+    EXPECT_EQ(joined, scopedTasks);
+    EXPECT_EQ(unrelatedAfterScope, 0u);
+    EXPECT_EQ(unrelatedAfterAll, unrelatedTasks);
+}
+
+void VerifyCpuTaskWaitTests_NestedJoinCanRetireAnUnrelatedAnchorWithoutNewPublication(){
+    u32 joined = 0u;
+    u32 unrelatedAfterScope = 0u;
+    u32 unrelatedAfterAll = 0u;
+    usize outstandingTasks = 1u;
+    native(mut joined, mut unrelatedAfterScope, mut unrelatedAfterAll, mut outstandingTasks){
+        using namespace __hidden_cpu_task_wait_tests;
+        DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
+        CpuTaskScheduler scheduler(0u);
+        CpuTaskScope scope(scheduler);
+        u32 unrelated = 0u;
+        const auto anchorTaskAdmission = scheduler.submit([&]()noexcept { ++unrelated; });
+        ASSERT_TRUE(anchorTaskAdmission);
+        const auto anchor = *anchorTaskAdmission;
+        ASSERT_TRUE(anchor.valid());
+        const auto cpuTaskAdmission = scope.submit([&]() {
+            EXPECT_EQ(unrelated, 0u);
+            scheduler.wait(anchor);
+            EXPECT_EQ(unrelated, 1u);
+            ++joined;
+        });
+        ASSERT_TRUE(cpuTaskAdmission);
+        if(cpuTaskAdmission)
+            ASSERT_TRUE(cpuTaskAdmission->valid());
+        const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept { ++unrelated; });
+        ASSERT_TRUE(secondCpuTaskAdmission);
+        if(secondCpuTaskAdmission)
+            ASSERT_TRUE(secondCpuTaskAdmission->valid());
+        const auto thirdCpuTaskAdmission = scope.submit([&]()noexcept { ++joined; });
+        ASSERT_TRUE(thirdCpuTaskAdmission);
+        if(thirdCpuTaskAdmission)
+            ASSERT_TRUE(thirdCpuTaskAdmission->valid());
+        scope.wait();
+        unrelatedAfterScope = unrelated;
+        scheduler.wait();
+        unrelatedAfterAll = unrelated;
+        outstandingTasks = scheduler.statistics().outstandingTasks;
+    }
+    EXPECT_EQ(joined, 2u);
+    EXPECT_EQ(unrelatedAfterScope, 1u);
+    EXPECT_EQ(unrelatedAfterAll, 2u);
+    EXPECT_EQ(outstandingTasks, 0u);
+}
+
+void VerifyCpuTaskWaitTests_AnotherWorkerCanClaimAnUnrelatedAnchorDuringScopeExecution(){
+    CpuTaskSchedulerConfig config = CpuTaskSchedulerConfig();
+    config.workerCount = 2u;
+    config.heterogeneous = false;
+    u32 joinedVal = 0u;
+    u32 unrelatedVal = 0u;
+    usize outstandingTasks = 1u;
+    native(in config, mut joinedVal, mut unrelatedVal, mut outstandingTasks){
+        using namespace __hidden_cpu_task_wait_tests;
+        DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
+        Atomic<b8> waiterEntered{ false };
+        Atomic<b8> blockerEntered{ false };
+        Atomic<b8> startWaiter{ false };
+        Atomic<b8> releaseBlocker{ false };
+        Atomic<b8> anchorEntered{ false };
+        Atomic<b8> releaseAnchor{ false };
+        Atomic<u32> joined{ 0u };
+        Atomic<u32> unrelated{ 0u };
+        CpuTaskScheduler scheduler(config);
+        CpuTaskScope scope(scheduler);
+        ScopeExit release([&]()noexcept {
+            startWaiter.store(true, MemoryOrder::release);
+            releaseBlocker.store(true, MemoryOrder::release);
+            releaseAnchor.store(true, MemoryOrder::release);
+        });
+        const auto cpuTaskAdmission = scheduler.submit([&]() {
+            waiterEntered.store(true, MemoryOrder::release);
+            while(!startWaiter.load(MemoryOrder::acquire))
+                SleepMS(s_PollIntervalMS);
+            scope.wait();
+        });
+        ASSERT_TRUE(cpuTaskAdmission);
+        const auto waiter = *cpuTaskAdmission;
+        ASSERT_TRUE(waiter.valid());
+        while(!waiterEntered.load(MemoryOrder::acquire))
+            SleepMS(s_PollIntervalMS);
+        const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept {
+            blockerEntered.store(true, MemoryOrder::release);
+            while(!releaseBlocker.load(MemoryOrder::acquire))
+                SleepMS(s_PollIntervalMS);
+        });
+        ASSERT_TRUE(secondCpuTaskAdmission);
+        if(secondCpuTaskAdmission)
+            ASSERT_TRUE(secondCpuTaskAdmission->valid());
+        while(!blockerEntered.load(MemoryOrder::acquire))
+            SleepMS(s_PollIntervalMS);
+        const auto thirdCpuTaskAdmission = scheduler.submit([&]()noexcept {
+            anchorEntered.store(true, MemoryOrder::release);
+            while(!releaseAnchor.load(MemoryOrder::acquire))
+                SleepMS(s_PollIntervalMS);
+        });
+        ASSERT_TRUE(thirdCpuTaskAdmission);
+        if(thirdCpuTaskAdmission)
+            ASSERT_TRUE(thirdCpuTaskAdmission->valid());
+        const auto fourthCpuTaskAdmission = scope.submit([&]()noexcept {
+            releaseBlocker.store(true, MemoryOrder::release);
+            while(!anchorEntered.load(MemoryOrder::acquire))
+                SleepMS(s_PollIntervalMS);
+            joined.fetch_add(1u, MemoryOrder::relaxed);
+        });
+        ASSERT_TRUE(fourthCpuTaskAdmission);
+        if(fourthCpuTaskAdmission)
+            ASSERT_TRUE(fourthCpuTaskAdmission->valid());
+        const auto fifthCpuTaskAdmission = scheduler.submit([&]()noexcept { unrelated.fetch_add(1u, MemoryOrder::relaxed); });
+        ASSERT_TRUE(fifthCpuTaskAdmission);
+        if(fifthCpuTaskAdmission)
+            ASSERT_TRUE(fifthCpuTaskAdmission->valid());
+        const auto sixthCpuTaskAdmission = scope.submit([&]() {
+            EXPECT_EQ(unrelated.load(MemoryOrder::acquire), 0u);
+            joined.fetch_add(1u, MemoryOrder::relaxed);
+            releaseAnchor.store(true, MemoryOrder::release);
+        });
+        ASSERT_TRUE(sixthCpuTaskAdmission);
+        if(sixthCpuTaskAdmission)
+            ASSERT_TRUE(sixthCpuTaskAdmission->valid());
+        startWaiter.store(true, MemoryOrder::release);
+        scheduler.wait(waiter);
+        scheduler.wait();
+        joinedVal = joined.load(MemoryOrder::acquire);
+        unrelatedVal = unrelated.load(MemoryOrder::acquire);
+        outstandingTasks = scheduler.statistics().outstandingTasks;
+    }
+    EXPECT_EQ(joinedVal, 2u);
+    EXPECT_EQ(unrelatedVal, 1u);
+    EXPECT_EQ(outstandingTasks, 0u);
+}
+
+void VerifyCpuTaskWaitTests_DependencyCompletionAppendsScopedWorkAfterAnUnrelatedAnchor(){
+    u32 joined = 0u;
+    u32 unrelatedAfterScope = 1u;
+    u32 unrelatedAfterAll = 0u;
+    native(mut joined, mut unrelatedAfterScope, mut unrelatedAfterAll){
+        using namespace __hidden_cpu_task_wait_tests;
+        DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
+        Atomic<b8> entered{ false };
+        Atomic<b8> release{ false };
+        CpuTaskScheduler scheduler(1u);
+        CpuTaskScope scope(scheduler);
+        ScopeExit releaseOnFailure([&]()noexcept { release.store(true, MemoryOrder::release); });
+        const auto cpuTaskAdmission = scheduler.submit([&]()noexcept {
+            entered.store(true, MemoryOrder::release);
+            while(!release.load(MemoryOrder::acquire))
+                SleepMS(s_PollIntervalMS);
+        });
+        ASSERT_TRUE(cpuTaskAdmission);
+        const auto prerequisite = *cpuTaskAdmission;
+        ASSERT_TRUE(prerequisite.valid());
+        while(!entered.load(MemoryOrder::acquire))
+            SleepMS(s_PollIntervalMS);
+        CpuTaskOptions mainThread;
+        mainThread.target = CpuTaskTarget::MainThread;
+        u32 unrelated = 0u;
+        const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept { ++unrelated; }, mainThread);
+        ASSERT_TRUE(secondCpuTaskAdmission);
+        if(secondCpuTaskAdmission)
+            ASSERT_TRUE(secondCpuTaskAdmission->valid());
+        const auto thirdCpuTaskAdmission = scope.submit([&]()noexcept {
+            ++joined;
+            release.store(true, MemoryOrder::release);
+        }, mainThread);
+        ASSERT_TRUE(thirdCpuTaskAdmission);
+        if(thirdCpuTaskAdmission)
+            ASSERT_TRUE(thirdCpuTaskAdmission->valid());
+        const auto fourthCpuTaskAdmission = scope.submit([&]()noexcept { ++joined; }, mainThread, &prerequisite, 1u);
+        ASSERT_TRUE(fourthCpuTaskAdmission);
+        if(fourthCpuTaskAdmission)
+            ASSERT_TRUE(fourthCpuTaskAdmission->valid());
+        scope.wait();
+        unrelatedAfterScope = unrelated;
+        scheduler.wait();
+        unrelatedAfterAll = unrelated;
+    }
+    EXPECT_EQ(joined, 2u);
+    EXPECT_EQ(unrelatedAfterScope, 0u);
+    EXPECT_EQ(unrelatedAfterAll, 1u);
+}
+
+void VerifyCpuTaskWaitTests_APositiveSearchCannotAdmitVisitedUnrelatedSiblingBranches(){
+    u32 prerequisites = 0u;
+    u32 joined = 0u;
+    u32 unrelatedAfterScope = 1u;
+    u32 unrelatedAfterAll = 0u;
+    native(mut prerequisites, mut joined, mut unrelatedAfterScope, mut unrelatedAfterAll){
+        using namespace __hidden_cpu_task_wait_tests;
+        DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
+        CpuTaskScheduler scheduler(0u);
+        CpuTaskScope scope(scheduler);
+        u32 unrelated = 0u;
+        const auto rootTaskAdmission = scheduler.submit([&]()noexcept { ++prerequisites; });
+        ASSERT_TRUE(rootTaskAdmission);
+        const auto root = *rootTaskAdmission;
+        ASSERT_TRUE(root.valid());
+        const auto siblingTaskAdmission = scheduler.submit([&]()noexcept { ++unrelated; }, root);
+        ASSERT_TRUE(siblingTaskAdmission);
+        const auto sibling = *siblingTaskAdmission;
+        ASSERT_TRUE(sibling.valid());
+        const auto cpuTaskAdmission = scheduler.submit([&]()noexcept { ++unrelated; }, sibling);
+        ASSERT_TRUE(cpuTaskAdmission);
+        if(cpuTaskAdmission)
+            ASSERT_TRUE(cpuTaskAdmission->valid());
+        const auto positiveTaskAdmission = scheduler.submit([&]()noexcept { ++prerequisites; }, root);
+        ASSERT_TRUE(positiveTaskAdmission);
+        const auto positive = *positiveTaskAdmission;
+        ASSERT_TRUE(positive.valid());
+        const auto secondCpuTaskAdmission = scope.submit([&]()noexcept { ++joined; }, positive);
+        ASSERT_TRUE(secondCpuTaskAdmission);
+        if(secondCpuTaskAdmission)
+            ASSERT_TRUE(secondCpuTaskAdmission->valid());
+        scope.wait();
+        unrelatedAfterScope = unrelated;
+        scheduler.wait();
+        unrelatedAfterAll = unrelated;
+    }
+    EXPECT_EQ(prerequisites, 2u);
+    EXPECT_EQ(joined, 1u);
+    EXPECT_EQ(unrelatedAfterScope, 0u);
+    EXPECT_EQ(unrelatedAfterAll, 2u);
+}
+
+void VerifyCpuTaskWaitTests_PublicationCanMakeAnEarlierNegativeSiblingContribute(){
+    u32 prerequisite = 0u;
+    u32 joined = 0u;
+    u32 unrelatedAfterScope = 1u;
+    u32 unrelatedAfterAll = 0u;
+    native(mut prerequisite, mut joined, mut unrelatedAfterScope, mut unrelatedAfterAll){
+        using namespace __hidden_cpu_task_wait_tests;
+        DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
+        CpuTaskScheduler scheduler(0u);
+        CpuTaskScope scope(scheduler);
+        u32 unrelatedTail = 0u;
+        const auto rootTaskAdmission = scheduler.submit([]()noexcept {});
+        ASSERT_TRUE(rootTaskAdmission);
+        const auto root = *rootTaskAdmission;
+        ASSERT_TRUE(root.valid());
+        const auto siblingTaskAdmission = scheduler.submit([&]()noexcept { ++prerequisite; }, root);
+        ASSERT_TRUE(siblingTaskAdmission);
+        const auto sibling = *siblingTaskAdmission;
+        ASSERT_TRUE(sibling.valid());
+        const auto cpuTaskAdmission = scheduler.submit([&]()noexcept { ++unrelatedTail; }, sibling);
+        ASSERT_TRUE(cpuTaskAdmission);
+        if(cpuTaskAdmission)
+            ASSERT_TRUE(cpuTaskAdmission->valid());
+        const auto positiveTaskAdmission = scheduler.submit([]()noexcept {}, root);
+        ASSERT_TRUE(positiveTaskAdmission);
+        const auto positive = *positiveTaskAdmission;
+        ASSERT_TRUE(positive.valid());
+        const auto secondCpuTaskAdmission = scope.submit([&]() {
+            EXPECT_EQ(prerequisite, 0u);
+            ++joined;
+            const auto thirdCpuTaskAdmission = scope.submit([&]()noexcept { ++joined; }, sibling);
+            EXPECT_TRUE(thirdCpuTaskAdmission);
+            if(thirdCpuTaskAdmission)
+                EXPECT_TRUE(thirdCpuTaskAdmission->valid());
+        }, positive);
+        ASSERT_TRUE(secondCpuTaskAdmission);
+        if(secondCpuTaskAdmission)
+            ASSERT_TRUE(secondCpuTaskAdmission->valid());
+        scope.wait();
+        unrelatedAfterScope = unrelatedTail;
+        scheduler.wait();
+        unrelatedAfterAll = unrelatedTail;
+    }
+    EXPECT_EQ(prerequisite, 1u);
+    EXPECT_EQ(joined, 2u);
+    EXPECT_EQ(unrelatedAfterScope, 0u);
+    EXPECT_EQ(unrelatedAfterAll, 1u);
+}
+
+void VerifyCpuTaskWaitTests_AShortestScopeProofDoesNotAdmitUnprocessedSiblingFrontiers(){
+    u32 joined = 0u;
+    u32 unrelatedAfterScope = 1u;
+    u32 unrelatedAfterAll = 0u;
+    native(mut joined, mut unrelatedAfterScope, mut unrelatedAfterAll){
+        using namespace __hidden_cpu_task_wait_tests;
+        DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
+        CpuTaskScheduler scheduler(0u);
+        CpuTaskScope scope(scheduler);
+        u32 unrelated = 0u;
+        const auto rootTaskAdmission = scheduler.submit([]()noexcept {});
+        ASSERT_TRUE(rootTaskAdmission);
+        const auto root = *rootTaskAdmission;
+        ASSERT_TRUE(root.valid());
+        const auto siblingTaskAdmission = scheduler.submit([&]()noexcept { ++unrelated; }, root);
+        ASSERT_TRUE(siblingTaskAdmission);
+        const auto sibling = *siblingTaskAdmission;
+        ASSERT_TRUE(sibling.valid());
+        const auto cpuTaskAdmission = scheduler.submit([&]()noexcept { ++unrelated; }, sibling);
+        ASSERT_TRUE(cpuTaskAdmission);
+        if(cpuTaskAdmission)
+            ASSERT_TRUE(cpuTaskAdmission->valid());
+        const auto secondCpuTaskAdmission = scope.submit([&]()noexcept { ++joined; }, root);
+        ASSERT_TRUE(secondCpuTaskAdmission);
+        if(secondCpuTaskAdmission)
+            ASSERT_TRUE(secondCpuTaskAdmission->valid());
+        scope.wait();
+        unrelatedAfterScope = unrelated;
+        scheduler.wait();
+        unrelatedAfterAll = unrelated;
+    }
+    EXPECT_EQ(joined, 1u);
+    EXPECT_EQ(unrelatedAfterScope, 0u);
+    EXPECT_EQ(unrelatedAfterAll, 2u);
+}
+
+void VerifyCpuTaskWaitTests_RecycledPositivePrerequisiteSlotsDoNotAdmitUnrelatedWork(){
+    u32 joined = 0u;
+    u32 unrelatedAfterScope = 1u;
+    u32 unrelatedAfterAll = 0u;
+    native(mut joined, mut unrelatedAfterScope, mut unrelatedAfterAll){
+        using namespace __hidden_cpu_task_wait_tests;
+        DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
+        CpuTaskScheduler scheduler(0u);
+        CpuTaskScope scope(scheduler);
+        u32 unrelated = 0u;
+        const auto rootTaskAdmission = scheduler.submit([]()noexcept {});
+        ASSERT_TRUE(rootTaskAdmission);
+        const auto root = *rootTaskAdmission;
+        ASSERT_TRUE(root.valid());
+        const auto positiveTaskAdmission = scheduler.submit([]()noexcept {}, root);
+        ASSERT_TRUE(positiveTaskAdmission);
+        const auto positive = *positiveTaskAdmission;
+        ASSERT_TRUE(positive.valid());
+        const auto cpuTaskAdmission = scope.submit([&]() {
+            CpuTaskHandle recycled;
+            JoiningThread producer([&]() {
+                const auto recycledTaskAdmission = scheduler.submit([&]()noexcept { ++unrelated; });
+                ASSERT_TRUE(recycledTaskAdmission);
+                recycled = *recycledTaskAdmission;
+            });
+            producer.join();
+            EXPECT_TRUE(recycled.valid());
+            EXPECT_EQ(recycled.index, positive.index);
+            EXPECT_NE(recycled.generation, positive.generation);
+            ++joined;
+            const auto secondCpuTaskAdmission = scope.submit([&]()noexcept { ++joined; });
+            EXPECT_TRUE(secondCpuTaskAdmission);
+            if(secondCpuTaskAdmission)
+                EXPECT_TRUE(secondCpuTaskAdmission->valid());
+        }, positive);
+        ASSERT_TRUE(cpuTaskAdmission);
+        if(cpuTaskAdmission)
+            ASSERT_TRUE(cpuTaskAdmission->valid());
+        scope.wait();
+        unrelatedAfterScope = unrelated;
+        scheduler.wait();
+        unrelatedAfterAll = unrelated;
+    }
+    EXPECT_EQ(joined, 2u);
+    EXPECT_EQ(unrelatedAfterScope, 0u);
+    EXPECT_EQ(unrelatedAfterAll, 1u);
+}
+
+void VerifyCpuTaskWaitTests_StructuredParentCompletionStaysScopedUntilEveryChildRetires(){
+    const u32 childTarget = 64u;
+    u32 children = 0u;
+    u32 unrelatedAfterScope = 1u;
+    u32 unrelatedAfterAll = 0u;
+    native(in childTarget, mut children, mut unrelatedAfterScope, mut unrelatedAfterAll){
+        using namespace __hidden_cpu_task_wait_tests;
+        DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
+        CpuTaskScheduler scheduler(0u);
+        CpuTaskScope scope(scheduler);
+        u32 unrelated = 0u;
+        const auto cpuTaskAdmission = scheduler.submit([&]()noexcept { ++unrelated; });
+        ASSERT_TRUE(cpuTaskAdmission);
+        if(cpuTaskAdmission)
+            ASSERT_TRUE(cpuTaskAdmission->valid());
+        const auto secondCpuTaskAdmission = scope.submit([&]() {
+            for(u32 child = 0u; child < childTarget; ++child){
+                const auto thirdCpuTaskAdmission = scheduler.submit([&]()noexcept { ++children; });
+                EXPECT_TRUE(thirdCpuTaskAdmission);
+                if(thirdCpuTaskAdmission)
+                    EXPECT_TRUE(thirdCpuTaskAdmission->valid());
+            }
+        });
+        ASSERT_TRUE(secondCpuTaskAdmission);
+        if(secondCpuTaskAdmission)
+            ASSERT_TRUE(secondCpuTaskAdmission->valid());
+        scope.wait();
+        unrelatedAfterScope = unrelated;
+        scheduler.wait();
+        unrelatedAfterAll = unrelated;
+    }
+    EXPECT_EQ(children, childTarget);
+    EXPECT_EQ(unrelatedAfterScope, 0u);
+    EXPECT_EQ(unrelatedAfterAll, 1u);
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-}
+
+NWB_ADHD_GTEST(CpuTaskRangeTests, SingleChunkJoinsAllSubmittedDescendants, VerifyCpuTaskRangeTests_SingleChunkJoinsAllSubmittedDescendants)
+NWB_ADHD_GTEST(CpuTaskRangeTests, SingleChunkKeepsItsCallingWorkersIdentity, VerifyCpuTaskRangeTests_SingleChunkKeepsItsCallingWorkersIdentity)
+NWB_ADHD_GTEST(CpuTaskRangeTests, ExternalSingleChunkUsesAWorkerInsteadOfTheProducer, VerifyCpuTaskRangeTests_ExternalSingleChunkUsesAWorkerInsteadOfTheProducer)
+NWB_ADHD_GTEST(CpuTaskRangeTests, ExternalMainThreadRangeWaitsForTheOwner, VerifyCpuTaskRangeTests_ExternalMainThreadRangeWaitsForTheOwner)
+NWB_ADHD_GTEST(CpuTaskRangeTests, InvalidBatchOptionsPublishNoTasks, VerifyCpuTaskRangeTests_InvalidBatchOptionsPublishNoTasks)
+NWB_ADHD_GTEST(CpuTaskRangeTests, InlineFailureRetiresSubmittedDescendantsBeforeTerminalHandling, VerifyCpuTaskRangeTests_InlineFailureRetiresSubmittedDescendantsBeforeTerminalHandling)
+
+NWB_ADHD_GTEST(CpuTaskSchedulerTests, QueuedPrioritiesRunCriticalThenNormalThenBackgroundAfterOccupiedWorkerReleases, VerifyCpuTaskSchedulerTests_QueuedPrioritiesRunCriticalThenNormalThenBackgroundAfterOccupiedWorkerReleases)
+NWB_ADHD_GTEST(CpuTaskSchedulerTests, CanceledScopeSkipsQueuedBodiesAndTheirDependentsAndRetiresCaptures, VerifyCpuTaskSchedulerTests_CanceledScopeSkipsQueuedBodiesAndTheirDependentsAndRetiresCaptures)
+NWB_ADHD_GTEST(CpuTaskSchedulerTests, CancelingAnActiveParentPreventsFutureDescendantsAndContinuations, VerifyCpuTaskSchedulerTests_CancelingAnActiveParentPreventsFutureDescendantsAndContinuations)
+NWB_ADHD_GTEST(CpuTaskSchedulerTests, HeavyWorkUsesTheOtherClassWhileItsPreferredWorkerIsOccupied, VerifyCpuTaskSchedulerTests_HeavyWorkUsesTheOtherClassWhileItsPreferredWorkerIsOccupied)
+NWB_ADHD_GTEST(CpuTaskSchedulerTests, CanceledScopeSkipsBothDirectParallelRangeOverloads, VerifyCpuTaskSchedulerTests_CanceledScopeSkipsBothDirectParallelRangeOverloads)
+NWB_ADHD_GTEST(CpuTaskSchedulerTests, WorkerSelfWaitIsRejectedInsteadOfDeadlocking, VerifyCpuTaskSchedulerTests_WorkerSelfWaitIsRejectedInsteadOfDeadlocking)
+NWB_ADHD_GTEST(CpuTaskSchedulerTests, DescendantWaitForAnAncestorIsRejectedInsteadOfDeadlocking, VerifyCpuTaskSchedulerTests_DescendantWaitForAnAncestorIsRejectedInsteadOfDeadlocking)
+NWB_ADHD_GTEST(CpuTaskSchedulerTests, JoiningTheScopeThatContainsTheCurrentTaskIsRejected, VerifyCpuTaskSchedulerTests_JoiningTheScopeThatContainsTheCurrentTaskIsRejected)
+NWB_ADHD_GTEST(CpuTaskSchedulerTests, ChildCannotDependDirectlyOnItsStructuredParent, VerifyCpuTaskSchedulerTests_ChildCannotDependDirectlyOnItsStructuredParent)
+NWB_ADHD_GTEST(CpuTaskSchedulerTests, ChildCannotDependOnATransitiveDependentOfItsStructuredParent, VerifyCpuTaskSchedulerTests_ChildCannotDependOnATransitiveDependentOfItsStructuredParent)
+NWB_ADHD_GTEST(CpuTaskSchedulerTests, DescendantOnAnotherWorkerCannotJoinItsAncestorsScope, VerifyCpuTaskSchedulerTests_DescendantOnAnotherWorkerCannotJoinItsAncestorsScope)
+NWB_ADHD_GTEST(CpuTaskSchedulerTests, WorkerCannotWaitForAnIndependentlySubmittedDependent, VerifyCpuTaskSchedulerTests_WorkerCannotWaitForAnIndependentlySubmittedDependent)
+NWB_ADHD_GTEST(CpuTaskSchedulerTests, DescendantCannotWaitForTransitiveDependentsOfItsAncestor, VerifyCpuTaskSchedulerTests_DescendantCannotWaitForTransitiveDependentsOfItsAncestor)
+NWB_ADHD_GTEST(CpuTaskSchedulerTests, ForeignDependenciesAndForeignWaitsAreRejectedWithoutPublishingWork, VerifyCpuTaskSchedulerTests_ForeignDependenciesAndForeignWaitsAreRejectedWithoutPublishingWork)
+NWB_ADHD_GTEST(CpuTaskSchedulerTests, RetiredHandlesStayCompleteWhenNodeStorageIsReused, VerifyCpuTaskSchedulerTests_RetiredHandlesStayCompleteWhenNodeStorageIsReused)
+NWB_ADHD_GTEST(CpuTaskSchedulerTests, ParentCompletionRetainsAncestorCapturesUntilGrandchildrenAndRetirementFinish, VerifyCpuTaskSchedulerTests_ParentCompletionRetainsAncestorCapturesUntilGrandchildrenAndRetirementFinish)
+NWB_ADHD_GTEST(CpuTaskSchedulerTests, ScopeJoinDoesNotWaitForAnUnrelatedRunningScope, VerifyCpuTaskSchedulerTests_ScopeJoinDoesNotWaitForAnUnrelatedRunningScope)
+NWB_ADHD_GTEST(CpuTaskSchedulerTests, ScopeDestructionIncludesChildrenSubmittedDirectlyToTheScheduler, VerifyCpuTaskSchedulerTests_ScopeDestructionIncludesChildrenSubmittedDirectlyToTheScheduler)
+NWB_ADHD_GTEST(CpuTaskSchedulerTests, OneWorkerCompletesNestedParallelRangesThroughCooperativeExecution, VerifyCpuTaskSchedulerTests_OneWorkerCompletesNestedParallelRangesThroughCooperativeExecution)
+NWB_ADHD_GTEST(CpuTaskSchedulerTests, MainThreadTasksSubmittedByWorkersExecuteOnlyOnTheSchedulerOwner, VerifyCpuTaskSchedulerTests_MainThreadTasksSubmittedByWorkersExecuteOnlyOnTheSchedulerOwner)
+
+NWB_ADHD_GTEST(CpuTaskSubmissionTests, CallableConstructionFailurePublishesNoSchedulerOrScopeWork, VerifyCpuTaskSubmissionTests_CallableConstructionFailurePublishesNoSchedulerOrScopeWork)
+NWB_ADHD_GTEST(CpuTaskSubmissionTests, ExpectedAdmissionErrorsPreservePublicationAndCancellationBoundaries, VerifyCpuTaskSubmissionTests_ExpectedAdmissionErrorsPreservePublicationAndCancellationBoundaries)
+NWB_ADHD_GTEST(CpuTaskSubmissionTests, WorkerCallbackFailureTerminatesWithoutDeferredCallerDelivery, VerifyCpuTaskSubmissionTests_WorkerCallbackFailureTerminatesWithoutDeferredCallerDelivery)
+NWB_ADHD_GTEST(CpuTaskSubmissionTests, ParallelRangeWorkerFailureTerminatesWithoutDeferredCallerDelivery, VerifyCpuTaskSubmissionTests_ParallelRangeWorkerFailureTerminatesWithoutDeferredCallerDelivery)
+
+NWB_ADHD_GTEST(CpuTaskWaitTests, ScopeRejectsAnIndependentTaskDependingOnTheCaller, VerifyCpuTaskWaitTests_ScopeRejectsAnIndependentTaskDependingOnTheCaller)
+NWB_ADHD_GTEST(CpuTaskWaitTests, ScopeRejectsTransitiveDependentsOfTheCallersAncestor, VerifyCpuTaskWaitTests_ScopeRejectsTransitiveDependentsOfTheCallersAncestor)
+NWB_ADHD_GTEST(CpuTaskWaitTests, ScopeRechecksDependenciesPublishedByCooperativeWork, VerifyCpuTaskWaitTests_ScopeRechecksDependenciesPublishedByCooperativeWork)
+NWB_ADHD_GTEST(CpuTaskWaitTests, NewDependencyInvalidatesAnEarlierUnrelatedSearch, VerifyCpuTaskWaitTests_NewDependencyInvalidatesAnEarlierUnrelatedSearch)
+NWB_ADHD_GTEST(CpuTaskWaitTests, ReusedUnrelatedSlotCanBecomeAScopedDescendant, VerifyCpuTaskWaitTests_ReusedUnrelatedSlotCanBecomeAScopedDescendant)
+NWB_ADHD_GTEST(CpuTaskWaitTests, NestedScopesUseIndependentSearchIdentities, VerifyCpuTaskWaitTests_NestedScopesUseIndependentSearchIdentities)
+NWB_ADHD_GTEST(CpuTaskWaitTests, ConcurrentScopeWaitersCanSwitchTheSharedSearchCache, VerifyCpuTaskWaitTests_ConcurrentScopeWaitersCanSwitchTheSharedSearchCache)
+NWB_ADHD_GTEST(CpuTaskWaitTests, ScopeJoinSkipsUnrelatedPrefixesAcrossPriorityQueues, VerifyCpuTaskWaitTests_ScopeJoinSkipsUnrelatedPrefixesAcrossPriorityQueues)
+NWB_ADHD_GTEST(CpuTaskWaitTests, NestedJoinCanRetireAnUnrelatedAnchorWithoutNewPublication, VerifyCpuTaskWaitTests_NestedJoinCanRetireAnUnrelatedAnchorWithoutNewPublication)
+NWB_ADHD_GTEST(CpuTaskWaitTests, AnotherWorkerCanClaimAnUnrelatedAnchorDuringScopeExecution, VerifyCpuTaskWaitTests_AnotherWorkerCanClaimAnUnrelatedAnchorDuringScopeExecution)
+NWB_ADHD_GTEST(CpuTaskWaitTests, DependencyCompletionAppendsScopedWorkAfterAnUnrelatedAnchor, VerifyCpuTaskWaitTests_DependencyCompletionAppendsScopedWorkAfterAnUnrelatedAnchor)
+NWB_ADHD_GTEST(CpuTaskWaitTests, APositiveSearchCannotAdmitVisitedUnrelatedSiblingBranches, VerifyCpuTaskWaitTests_APositiveSearchCannotAdmitVisitedUnrelatedSiblingBranches)
+NWB_ADHD_GTEST(CpuTaskWaitTests, PublicationCanMakeAnEarlierNegativeSiblingContribute, VerifyCpuTaskWaitTests_PublicationCanMakeAnEarlierNegativeSiblingContribute)
+NWB_ADHD_GTEST(CpuTaskWaitTests, AShortestScopeProofDoesNotAdmitUnprocessedSiblingFrontiers, VerifyCpuTaskWaitTests_AShortestScopeProofDoesNotAdmitUnprocessedSiblingFrontiers)
+NWB_ADHD_GTEST(CpuTaskWaitTests, RecycledPositivePrerequisiteSlotsDoNotAdmitUnrelatedWork, VerifyCpuTaskWaitTests_RecycledPositivePrerequisiteSlotsDoNotAdmitUnrelatedWork)
+NWB_ADHD_GTEST(CpuTaskWaitTests, StructuredParentCompletionStaysScopedUntilEveryChildRetires, VerifyCpuTaskWaitTests_StructuredParentCompletionStaysScopedUntilEveryChildRetires)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

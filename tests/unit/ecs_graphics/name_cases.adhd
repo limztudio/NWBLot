@@ -2,13 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/gtest_macros.adhd>
+
 native{
 #include <impl/ecs_render/kernel/task_timing_feedback.adhd.h>
 #include <impl/ecs_render/mesh/mesh_system.adhd.h>
 #include <impl/ecs_render/reflection/statistics_readback.adhd.h>
 #include <impl/ecs_render/refraction/statistics_readback.adhd.h>
 #include <core/task/gpu/task_graph.h>
-#include <gtest/gtest.h>
 
 namespace NWB::Tests::EcsGraphicsCases{
 using MeshRayTracingResourceSnapshot = NWB::Impl::ECSRenderDetail::MeshRayTracingResourceSnapshot;
@@ -24,9 +25,6 @@ using GpuTimingSampleAttribution = NWB::Core::GpuTimingSampleAttribution;
 using GpuTaskTimingFeedbackPolicy = NWB::Core::GpuTaskTimingFeedbackPolicy;
 }
 }
-
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

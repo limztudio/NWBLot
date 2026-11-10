@@ -1,24 +1,62 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
 
-b8 GlobalArenaAndPropagationCasesReady(in u64 value){
-    return value != 0u;
-}
+#include <tests/common/gtest_macros.adhd>
+#include <tests/unit/global/global_tests.adhd>
 
 native{
-
-#include <tests/unit/global/name_case_types.adhd.h>
-
 #include <core/alloc/module.h>
+#include <core/alloc/scratch.h>
 
+#include <global/append_rollback.h>
 #include <global/arena_object.h>
+#include <global/atomic_identity.h>
+#include <global/auto_registration.h>
+#include <global/basic_string.h>
+#include <global/binary.h>
+#include <global/binary_big_endian.h>
+#include <global/binary_little_endian.h>
+#include <global/bit.h>
+#include <global/bit_matrix.h>
+#include <global/call_text.h>
+#include <global/checked_sum.h>
+#include <global/compile.h>
+#include <global/container/adaptor.h>
+#include <global/containers.h>
+#include <global/csv_text.h>
+#include <global/diagnostics.h>
+#include <global/disjoint_set.h>
+#include <global/filesystem/operations.h>
+#include <global/filesystem/path.h>
+#include <global/filesystem/utility.h>
+#include <global/fixed_buffer.h>
+#include <global/hierarchical_index_set.h>
+#include <global/integer_rect.h>
+#include <global/interval.h>
+#include <global/latin1_text.h>
+#include <global/limit.h>
+#include <global/name_hash.h>
+#include <global/not_null.h>
 #include <global/optional.h>
-
-#include <gtest/gtest.h>
+#include <global/overflow.h>
+#include <global/process_memory_map.h>
+#include <global/projected_index.h>
+#include <global/quantization.h>
+#include <global/range_algorithms.h>
+#include <global/range_partition.h>
+#include <global/sha1.h>
+#include <global/simd/color.h>
+#include <global/simplemath.h>
+#include <global/source_text.h>
+#include <global/statistics.h>
+#include <global/string_hash.h>
+#include <global/sync.h>
+#include <global/termination.h>
+#include <global/text_replacements.h>
+#include <global/text_utils.h>
+#include <global/unicode/grapheme.h>
+#include <global/utf8_text.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -36,6 +74,7 @@ using namespace NWB::Core::Alloc;
 struct ConstructionFailure{};
 
 struct ConstructionState{
+public:
     Array<usize, 8u> destructionOrder = {};
     usize failAt = Limit<usize>::s_Max;
     usize constructors = 0u;
@@ -48,8 +87,9 @@ struct ConstructionState{
 
 template<typename Arena>
 struct OwnedMember{
+public:
     ConstructionState& state;
-    Vector<u8, Arena> bytes;
+    ::Vector<u8, Arena> bytes;
 
 
 public:
@@ -68,6 +108,7 @@ public:
 
 template<typename Arena>
 struct alignas(128u) ConstructionProbe{
+public:
     inline static thread_local Arena* s_Arena = nullptr;
     inline static thread_local ConstructionState* s_State = nullptr;
 
@@ -119,6 +160,7 @@ private:
 };
 
 struct NestedConstruction{
+public:
     GlobalUniquePtr<ConstructionProbe<GlobalArena>> member;
     b8& destroyed;
 
@@ -134,6 +176,7 @@ public:
 };
 
 struct RejectingArena{
+public:
     usize attempts = 0u;
 
 
@@ -151,6 +194,7 @@ public:
 };
 
 struct ArenaPlacementProbe{
+public:
     inline static usize s_PlacementCalls = 0u;
     inline static usize s_Constructors = 0u;
     inline static usize s_Destructors = 0u;
@@ -175,6 +219,7 @@ public:
 
 template<typename Arena>
 struct ThrowingConstructionArgument{
+public:
     Arena& arena;
     ConstructionState& state;
 
@@ -185,6 +230,7 @@ public:
 
 template<typename Arena>
 struct ConstructionArgumentSource{
+public:
     Arena& arena;
     ConstructionState& state;
 
@@ -195,6 +241,7 @@ public:
 
 template<typename Arena>
 struct ArgumentCleanupProbe{
+public:
     OwnedMember<Arena> member;
 
 
@@ -204,10 +251,6 @@ public:
     {}
     ~ArgumentCleanupProbe()noexcept = default;
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 template<typename Arena>
 struct PrivateDestructorProbe{
@@ -298,17 +341,15 @@ public:
     b8& destroyed;
 };
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 struct OwnerReentryCallback{
+public:
     NotNull<void (*)(NotNull<void*>)noexcept> function;
     NotNull<void*> context;
 };
 
 template<typename Owner>
 struct ReentryOwners{
+public:
     Owner& slot;
     Owner& replacement;
     Owner& sink;
@@ -321,11 +362,8 @@ void RebindOwner(NotNull<void*> value)noexcept(noexcept(DeclVal<Owner&>() = Move
     owners.sink = Move(owners.slot);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 struct PolymorphicAllocationState{
+public:
     usize paddingDestructors = 0u;
     usize baseDestructors = 0u;
     usize concreteDestructors = 0u;
@@ -333,6 +371,7 @@ struct PolymorphicAllocationState{
 };
 
 struct PolymorphicAllocationPadding{
+public:
     PolymorphicAllocationState& state;
     Array<usize, 3u> padding = {};
 
@@ -345,6 +384,7 @@ public:
 };
 
 struct PolymorphicAllocationBase{
+public:
     PolymorphicAllocationState& state;
 
 
@@ -356,6 +396,7 @@ public:
 };
 
 struct PolymorphicAllocationIntermediate : virtual PolymorphicAllocationBase{
+public:
     explicit PolymorphicAllocationIntermediate(PolymorphicAllocationState& value)noexcept
         : PolymorphicAllocationBase(value)
     {}
@@ -363,6 +404,7 @@ struct PolymorphicAllocationIntermediate : virtual PolymorphicAllocationBase{
 };
 
 struct alignas(128u) PolymorphicAllocationProbe final : PolymorphicAllocationPadding, PolymorphicAllocationIntermediate{
+public:
     explicit PolymorphicAllocationProbe(PolymorphicAllocationState& value)noexcept
         : PolymorphicAllocationBase(value)
         , PolymorphicAllocationPadding(value)
@@ -376,8 +418,8 @@ struct alignas(128u) PolymorphicAllocationProbe final : PolymorphicAllocationPad
     }
 };
 
-
 struct ArrayReentryProbe{
+public:
     usize& destroyed;
     const OwnerReentryCallback* reentry;
 
@@ -393,7 +435,6 @@ public:
             reentry->function.get()(reentry->context);
     }
 };
-
 
 template<typename Arena>
 void VerifyScalarOwnerReentry(Arena& oldArena, Arena& newArena){
@@ -470,10 +511,6 @@ void VerifyArrayOwnerReentry(Arena& oldArena, Arena& newArena){
     EXPECT_EQ(newArena.memoryStats().usedBytes, newBefore.usedBytes);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 template<typename Arena>
 void VerifyPolymorphicAllocationIdentity(Arena& arena){
     const ArenaMemoryStats before = arena.memoryStats();
@@ -495,10 +532,6 @@ void VerifyPolymorphicAllocationIdentity(Arena& arena){
     EXPECT_EQ(after.usedBytes, before.usedBytes);
     EXPECT_EQ(after.allocationCount - before.allocationCount, after.deallocationCount - before.deallocationCount);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 template<typename Arena, typename Factory>
 void VerifyConstructionFailure(Arena& arena, const usize failAt, Factory factory){
@@ -525,281 +558,7 @@ void VerifyConstructionFailure(Arena& arena, const usize failAt, Factory factory
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(ArenaObjectConstruction, RawObjectFailureReleasesAlignedStorageAndConstructedMembers){
-    GlobalArena arena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectRawConstructorFailure)};
-    using Probe = ConstructionProbe<GlobalArena>;
-    VerifyConstructionFailure(arena, 1u, [&](ConstructionState& state){
-        return ArenaUniquePtr<Probe, GlobalArena>(NewArenaObject<Probe>(arena, arena, state), ArenaDeleter<Probe, GlobalArena>(arena));
-    });
-}
-
-TEST(ArenaObjectConstruction, GenericUniqueObjectFailureReleasesAlignedStorageAndConstructedMembers){
-    GlobalArena arena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectGenericConstructorFailure)};
-    VerifyConstructionFailure(arena, 1u, [&](ConstructionState& state){
-        return MakeArenaUnique<ConstructionProbe<GlobalArena>>(arena, arena, state);
-    });
-}
-
-TEST(ArenaObjectConstruction, GlobalUniqueObjectFailureReleasesAlignedStorageAndConstructedMembers){
-    GlobalArena arena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectGlobalConstructorFailure)};
-    VerifyConstructionFailure(arena, 1u, [&](ConstructionState& state){
-        return MakeGlobalUnique<ConstructionProbe<GlobalArena>>(arena, arena, state);
-    });
-}
-
-TEST(ArenaObjectConstruction, PersistentUniqueObjectFailureReleasesAlignedStorageAndConstructedMembers){
-    PersistentArena arena(Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectPersistentConstructorFailure), PersistentArena::StructureAlignedSize(16384u));
-    VerifyConstructionFailure(arena, 1u, [&](ConstructionState& state){
-        return MakePersistentUnique<ConstructionProbe<PersistentArena>>(arena, arena, state);
-    });
-}
-
-TEST(ArenaObjectConstruction, GenericArrayFailureDestroysOnlyCompletedElementsAndReleasesStorage){
-    GlobalArena arena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectGenericArrayFailure)};
-    VerifyConstructionFailure(arena, 3u, [&](ConstructionState&){
-        return MakeArenaUnique<ConstructionProbe<GlobalArena>[]>(arena, 4u);
-    });
-}
-
-TEST(ArenaObjectConstruction, GlobalArrayFailureDestroysOnlyCompletedElementsAndReleasesStorage){
-    GlobalArena arena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectGlobalArrayFailure)};
-    VerifyConstructionFailure(arena, 3u, [&](ConstructionState&){
-        return MakeGlobalUnique<ConstructionProbe<GlobalArena>[]>(arena, 4u);
-    });
-}
-
-TEST(ArenaObjectConstruction, PersistentArrayFailureDestroysOnlyCompletedElementsAndReleasesStorage){
-    PersistentArena arena(Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectPersistentArrayFailure), PersistentArena::StructureAlignedSize(16384u));
-    VerifyConstructionFailure(arena, 3u, [&](ConstructionState&){
-        return MakePersistentUnique<ConstructionProbe<PersistentArena>[]>(arena, 4u);
-    });
-}
-
-TEST(ArenaObjectConstruction, NestedFactorySuccessIsDestroyedWhenOuterConstructionThrows){
-    GlobalArena arena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectNestedConstructorFailure)};
-    ConstructionState state;
-    b8 outerDestroyed = false;
-    const ArenaMemoryStats before = arena.memoryStats();
-    EXPECT_THROW(EXPECT_TRUE(MakeGlobalUnique<NestedConstruction>(arena, arena, state, outerDestroyed)), ConstructionFailure);
-    const ArenaMemoryStats after = arena.memoryStats();
-    EXPECT_FALSE(outerDestroyed);
-    EXPECT_EQ(state.constructors, 1u);
-    EXPECT_EQ(state.completed, 1u);
-    EXPECT_EQ(state.destructors, 1u);
-    EXPECT_EQ(state.memberDestructors, 1u);
-    EXPECT_EQ(state.liveMembers, 0u);
-    EXPECT_EQ(after.usedBytes, before.usedBytes);
-    EXPECT_EQ(after.allocationCount - before.allocationCount, after.deallocationCount - before.deallocationCount);
-}
-
-TEST(ArenaObjectConstruction, FailedRawAllocationsNeverRunConstructorsOrDestructors){
-    GlobalArena memberArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectRejectedConstruction)};
-    RejectingArena arena;
-    ConstructionState state;
-    ActiveConstruction<GlobalArena> active(memberArena, state);
-    using Probe = ConstructionProbe<GlobalArena>;
-    EXPECT_EQ(NewArenaObject<Probe>(arena, memberArena, state), nullptr);
-    EXPECT_FALSE(MakeArenaUnique<Probe>(arena, memberArena, state));
-    EXPECT_FALSE(MakeArenaUnique<Probe[]>(arena, 4u));
-    EXPECT_EQ(arena.attempts, 3u);
-    EXPECT_EQ(state.constructors, 0u);
-    EXPECT_EQ(state.destructors, 0u);
-    EXPECT_EQ(state.memberDestructors, 0u);
-}
-
-TEST(ArenaObjectConstruction, ArenaFactoriesRetainStorageIdentityAndBypassClassAllocationHooks){
-    GlobalArena global{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectCanonicalGlobalPlacement)};
-    PersistentArena persistent(Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectCanonicalPersistentPlacement), PersistentArena::StructureAlignedSize(4096u));
-    ArenaPlacementProbe::s_PlacementCalls = 0u;
-    ArenaPlacementProbe::s_Constructors = 0u;
-    ArenaPlacementProbe::s_Destructors = 0u;
-    const ArenaMemoryStats globalBefore = global.memoryStats();
-    const ArenaMemoryStats persistentBefore = persistent.memoryStats();
-    {
-        auto globalObject = MakeGlobalUnique<ArenaPlacementProbe>(global);
-        auto persistentObject = MakePersistentUnique<ArenaPlacementProbe>(persistent);
-        auto globalArray = MakeGlobalUnique<ArenaPlacementProbe[]>(global, 3u);
-        auto persistentArray = MakePersistentUnique<ArenaPlacementProbe[]>(persistent, 3u);
-        EXPECT_TRUE(globalObject);
-        EXPECT_TRUE(persistentObject);
-        EXPECT_TRUE(globalArray);
-        EXPECT_TRUE(persistentArray);
-        ArenaPlacementProbe* const globalRaw = NewArenaObject<ArenaPlacementProbe>(global);
-        ArenaPlacementProbe* const persistentRaw = NewArenaObject<ArenaPlacementProbe>(persistent);
-        EXPECT_NE(globalRaw, nullptr);
-        EXPECT_NE(persistentRaw, nullptr);
-        DestroyArenaObject(global, globalRaw);
-        DestroyArenaObject(persistent, persistentRaw);
-    }
-    EXPECT_EQ(ArenaPlacementProbe::s_PlacementCalls, 0u);
-    EXPECT_EQ(ArenaPlacementProbe::s_Constructors, 10u);
-    EXPECT_EQ(ArenaPlacementProbe::s_Destructors, 10u);
-    const ArenaMemoryStats globalAfter = global.memoryStats();
-    const ArenaMemoryStats persistentAfter = persistent.memoryStats();
-    EXPECT_EQ(globalAfter.usedBytes, globalBefore.usedBytes);
-    EXPECT_EQ(globalAfter.reservedBytes, globalBefore.reservedBytes);
-    EXPECT_EQ(persistentAfter.usedBytes, persistentBefore.usedBytes);
-    EXPECT_EQ(persistentAfter.reservedBytes, persistentBefore.reservedBytes);
-    EXPECT_EQ(globalAfter.allocationCount - globalBefore.allocationCount, globalAfter.deallocationCount - globalBefore.deallocationCount);
-    EXPECT_EQ(persistentAfter.allocationCount - persistentBefore.allocationCount, persistentAfter.deallocationCount - persistentBefore.deallocationCount);
-}
-
-TEST(ArenaObjectConstruction, ArgumentTemporaryFailureDestroysCompletedMembersBeforeReleasingArenaStorage){
-    GlobalArena global{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectGlobalArgumentCleanupFailure)};
-    PersistentArena persistent(Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectPersistentArgumentCleanupFailure), PersistentArena::StructureAlignedSize(4096u));
-    ConstructionState globalState;
-    ConstructionState persistentState;
-    const ConstructionArgumentSource<GlobalArena> globalArgument{ global, globalState };
-    const ConstructionArgumentSource<PersistentArena> persistentArgument{ persistent, persistentState };
-    const ArenaMemoryStats globalBefore = global.memoryStats();
-    const ArenaMemoryStats persistentBefore = persistent.memoryStats();
-    EXPECT_THROW(EXPECT_TRUE(MakeGlobalUnique<ArgumentCleanupProbe<GlobalArena>>(global, globalArgument)), ConstructionFailure);
-    EXPECT_THROW(EXPECT_TRUE(MakePersistentUnique<ArgumentCleanupProbe<PersistentArena>>(persistent, persistentArgument)), ConstructionFailure);
-    EXPECT_EQ(globalState.liveMembers, 0u);
-    EXPECT_EQ(globalState.memberDestructors, 1u);
-    EXPECT_EQ(persistentState.liveMembers, 0u);
-    EXPECT_EQ(persistentState.memberDestructors, 1u);
-    const ArenaMemoryStats globalAfter = global.memoryStats();
-    const ArenaMemoryStats persistentAfter = persistent.memoryStats();
-    EXPECT_EQ(globalAfter.usedBytes, globalBefore.usedBytes);
-    EXPECT_EQ(globalAfter.reservedBytes, globalBefore.reservedBytes);
-    EXPECT_EQ(persistentAfter.usedBytes, persistentBefore.usedBytes);
-    EXPECT_EQ(persistentAfter.reservedBytes, persistentBefore.reservedBytes);
-    EXPECT_EQ(globalAfter.allocationCount - globalBefore.allocationCount, globalAfter.deallocationCount - globalBefore.deallocationCount);
-    EXPECT_EQ(persistentAfter.allocationCount - persistentBefore.allocationCount, persistentAfter.deallocationCount - persistentBefore.deallocationCount);
-}
-
-TEST(ArenaObjectConstruction, CanonicalPrivateDestructorsRetainOwningRollbackAndRawConstructionAccess){
-    GlobalArena global{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectPrivateGlobalDestructor)};
-    PersistentArena persistent(Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectPrivatePersistentDestructor), PersistentArena::StructureAlignedSize(4096u));
-    ConstructionState globalState;
-    ConstructionState persistentState;
-    const ConstructionArgumentSource<GlobalArena> globalArgument{ global, globalState };
-    const ConstructionArgumentSource<PersistentArena> persistentArgument{ persistent, persistentState };
-    const ArenaMemoryStats globalBefore = global.memoryStats();
-    const ArenaMemoryStats persistentBefore = persistent.memoryStats();
-    EXPECT_THROW(EXPECT_TRUE(MakeGlobalUnique<PrivateDestructorProbe<GlobalArena>>(global, globalArgument)), ConstructionFailure);
-    EXPECT_THROW(EXPECT_TRUE(MakePersistentUnique<PrivateDestructorProbe<PersistentArena>>(persistent, persistentArgument)), ConstructionFailure);
-    EXPECT_EQ(globalState.liveMembers, 0u);
-    EXPECT_EQ(globalState.memberDestructors, 1u);
-    EXPECT_EQ(persistentState.liveMembers, 0u);
-    EXPECT_EQ(persistentState.memberDestructors, 1u);
-    b8 globalDestroyed = false;
-    b8 persistentDestroyed = false;
-    {
-        auto globalOwner = MakeGlobalUnique<PrivateDestructorProbe<GlobalArena>>(global, global, globalState, globalDestroyed);
-        auto persistentOwner = MakePersistentUnique<PrivateDestructorProbe<PersistentArena>>(persistent, persistent, persistentState, persistentDestroyed);
-        EXPECT_TRUE(globalOwner);
-        EXPECT_TRUE(persistentOwner);
-    }
-    EXPECT_TRUE(globalDestroyed);
-    EXPECT_TRUE(persistentDestroyed);
-    b8 rawDestroyed = false;
-    auto* const raw = NewArenaObject<RawPrivateDestructorProbe<GlobalArena>>(global, rawDestroyed);
-    ASSERT_NE(raw, nullptr);
-    DestroyArenaObject(global, raw);
-    EXPECT_TRUE(rawDestroyed);
-    const ArenaMemoryStats globalAfter = global.memoryStats();
-    const ArenaMemoryStats persistentAfter = persistent.memoryStats();
-    EXPECT_EQ(globalAfter.usedBytes, globalBefore.usedBytes);
-    EXPECT_EQ(globalAfter.reservedBytes, globalBefore.reservedBytes);
-    EXPECT_EQ(persistentAfter.usedBytes, persistentBefore.usedBytes);
-    EXPECT_EQ(persistentAfter.reservedBytes, persistentBefore.reservedBytes);
-    EXPECT_EQ(globalAfter.allocationCount - globalBefore.allocationCount, globalAfter.deallocationCount - globalBefore.deallocationCount);
-    EXPECT_EQ(persistentAfter.allocationCount - persistentBefore.allocationCount, persistentAfter.deallocationCount - persistentBefore.deallocationCount);
-}
-
-TEST(ArenaObjectConstruction, IndividualDeleterFriendRetainsCompletedRollbackAndNormalOwningDestruction){
-    GlobalArena global{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectOperatorFriendGlobalDestructor)};
-    PersistentArena persistent(Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectOperatorFriendPersistentDestructor), PersistentArena::StructureAlignedSize(4096u));
-    ConstructionState globalState;
-    ConstructionState persistentState;
-    const ConstructionArgumentSource<GlobalArena> globalArgument{ global, globalState };
-    const ConstructionArgumentSource<PersistentArena> persistentArgument{ persistent, persistentState };
-    const ArenaMemoryStats globalBefore = global.memoryStats();
-    const ArenaMemoryStats persistentBefore = persistent.memoryStats();
-    EXPECT_THROW(EXPECT_TRUE(MakeGlobalUnique<OperatorPrivateDestructorProbe<GlobalArena>>(global, globalArgument)), ConstructionFailure);
-    EXPECT_THROW(EXPECT_TRUE(MakePersistentUnique<OperatorPrivateDestructorProbe<PersistentArena>>(persistent, persistentArgument)), ConstructionFailure);
-    EXPECT_EQ(globalState.liveMembers, 0u);
-    EXPECT_EQ(globalState.memberDestructors, 1u);
-    EXPECT_EQ(persistentState.liveMembers, 0u);
-    EXPECT_EQ(persistentState.memberDestructors, 1u);
-    {
-        auto globalOwner = MakeGlobalUnique<OperatorPrivateDestructorProbe<GlobalArena>>(global, global, globalState);
-        auto persistentOwner = MakePersistentUnique<OperatorPrivateDestructorProbe<PersistentArena>>(persistent, persistent, persistentState);
-        EXPECT_TRUE(globalOwner);
-        EXPECT_TRUE(persistentOwner);
-    }
-    EXPECT_EQ(globalState.liveMembers, 0u);
-    EXPECT_EQ(globalState.memberDestructors, 2u);
-    EXPECT_EQ(persistentState.liveMembers, 0u);
-    EXPECT_EQ(persistentState.memberDestructors, 2u);
-    b8 globalPrivateAlive = false;
-    b8 persistentPrivateAlive = false;
-    {
-        auto globalPrivate = MakeGlobalUnique<PrivateConstructorProbe<GlobalArena>>(global, globalPrivateAlive);
-        auto persistentPrivate = MakePersistentUnique<PrivateConstructorProbe<PersistentArena>>(persistent, persistentPrivateAlive);
-        EXPECT_TRUE(globalPrivate);
-        EXPECT_TRUE(persistentPrivate);
-        EXPECT_TRUE(globalPrivateAlive);
-        EXPECT_TRUE(persistentPrivateAlive);
-    }
-    EXPECT_FALSE(globalPrivateAlive);
-    EXPECT_FALSE(persistentPrivateAlive);
-    const ArenaMemoryStats globalAfter = global.memoryStats();
-    const ArenaMemoryStats persistentAfter = persistent.memoryStats();
-    EXPECT_EQ(globalAfter.usedBytes, globalBefore.usedBytes);
-    EXPECT_EQ(globalAfter.reservedBytes, globalBefore.reservedBytes);
-    EXPECT_EQ(persistentAfter.usedBytes, persistentBefore.usedBytes);
-    EXPECT_EQ(persistentAfter.reservedBytes, persistentBefore.reservedBytes);
-    EXPECT_EQ(globalAfter.allocationCount - globalBefore.allocationCount, globalAfter.deallocationCount - globalBefore.deallocationCount);
-    EXPECT_EQ(persistentAfter.allocationCount - persistentBefore.allocationCount, persistentAfter.deallocationCount - persistentBefore.deallocationCount);
-}
-
-TEST(ArenaObjectConstruction, PolymorphicTransfersRetainCompleteAllocationAcrossVirtualBases){
-    GlobalArena global{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectPolymorphicGlobal)};
-    PersistentArena persistent(Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectPolymorphicPersistent), PersistentArena::StructureAlignedSize(4096u));
-    ScratchArena scratch{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectPolymorphicScratch)};
-    VerifyPolymorphicAllocationIdentity(global);
-    VerifyPolymorphicAllocationIdentity(persistent);
-    VerifyPolymorphicAllocationIdentity(scratch);
-}
-
-TEST(ArenaObjectConstruction, StatefulCleanupSurvivesPreallocatedOwnerReentry){
-    GlobalArena oldGlobal{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectReentryOldGlobal)}, newGlobal{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectReentryNewGlobal)};
-    PersistentArena oldPersistent(Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectReentryOldPersistent), PersistentArena::StructureAlignedSize(4096u));
-    PersistentArena newPersistent(Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectReentryNewPersistent), PersistentArena::StructureAlignedSize(4096u));
-    ScratchArena oldScratch{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectReentryOldScratch)}, newScratch{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseArenaObjectReentryNewScratch)};
-    VerifyScalarOwnerReentry(oldGlobal, newGlobal);
-    VerifyScalarOwnerReentry(oldPersistent, newPersistent);
-    VerifyScalarOwnerReentry(oldScratch, newScratch);
-    VerifyArrayOwnerReentry<GlobalArena, false>(oldGlobal, newGlobal);
-    VerifyArrayOwnerReentry<PersistentArena, false>(oldPersistent, newPersistent);
-    VerifyArrayOwnerReentry<ScratchArena, false>(oldScratch, newScratch);
-    VerifyArrayOwnerReentry<GlobalArena, true>(oldGlobal, newGlobal);
-    VerifyArrayOwnerReentry<PersistentArena, true>(oldPersistent, newPersistent);
-    VerifyArrayOwnerReentry<ScratchArena, true>(oldScratch, newScratch);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/global/name_case_types.adhd.h>
-
-#include <core/alloc/module.h>
-
-#include <global/basic_string.h>
-#include <global/container/adaptor.h>
-#include <global/containers.h>
-
-#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -813,10 +572,7 @@ namespace __hidden_allocator_propagation_tests{
 
 using NWB::Core::Alloc::GlobalArena;
 
-[[nodiscard]] GlobalArena& DefaultOwner(){
-    static GlobalArena s_Arena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationDefault)};
-    return s_Arena;
-}
+[[nodiscard]] GlobalArena& DefaultOwner();
 
 template<typename T>
 using DefaultAllocator = ContainerDetail::DefaultArenaAllocator<T, GlobalArena, DefaultOwner>;
@@ -893,7 +649,6 @@ void VerifyStringMove(const b8 foreignArena, const b8 shortSource){
     EXPECT_EQ(sourceArena.memoryStats().allocationCount, sourceArena.memoryStats().deallocationCount);
     EXPECT_EQ(targetArena.memoryStats().allocationCount, targetArena.memoryStats().deallocationCount);
 }
-
 
 template<typename VectorT>
 void VerifyVectorSwap(const b8 foreignArena){
@@ -972,385 +727,725 @@ void VerifyStringSwap(const b8 foreignArena, const b8 shortFirst){
 }
 
 
-TEST(AllocatorPropagation, SelfAssignmentPreservesArenaBinding){
-    VerifyAllocatorSelfAssignment<ContainerDetail::ArenaAllocator<u32, GlobalArena>>();
-    VerifyAllocatorSelfAssignment<ContainerDetail::ArenaCacheAlignedAllocator<u32, GlobalArena>>();
-    VerifyAllocatorSelfAssignment<DefaultAllocator<u32>>();
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 }
 
-TEST(AllocatorPropagation, VectorMoveTransfersStorageAndItsDeallocationOwner){
-    for(const b8 foreignArena : { false, true }){
-        VerifyVectorMove<Vector<u32, GlobalArena>>(foreignArena);
-        VerifyVectorMove<DefaultVector<u32, GlobalArena, DefaultOwner>>(foreignArena);
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyArenaObjectConstruction_RawObjectFailureReleasesAlignedStorageAndConstructedMembers(){
+    const Name owner = s_GlobalArenaCaseArenaObjectRawConstructorFailure;
+    native(in owner){
+        using namespace __hidden_arena_object_construction_tests;
+        GlobalArena arena{ owner };
+        using Probe = ConstructionProbe<GlobalArena>;
+        VerifyConstructionFailure(arena, 1u, [&](ConstructionState& state){
+            return ArenaUniquePtr<Probe, GlobalArena>(NewArenaObject<Probe>(arena, arena, state), ArenaDeleter<Probe, GlobalArena>(arena));
+        });
     }
 }
 
-TEST(AllocatorPropagation, CacheAlignedVectorMoveTransfersStorageAndItsDeallocationOwner){
-    for(const b8 foreignArena : { false, true }){
-        for(const usize targetSize : { 0u, 1u, 65u })
-            VerifyVectorMove<ParallelVector<u32, GlobalArena>>(foreignArena, targetSize);
+void VerifyArenaObjectConstruction_GenericUniqueObjectFailureReleasesAlignedStorageAndConstructedMembers(){
+    const Name owner = s_GlobalArenaCaseArenaObjectGenericConstructorFailure;
+    native(in owner){
+        using namespace __hidden_arena_object_construction_tests;
+        GlobalArena arena{ owner };
+        VerifyConstructionFailure(arena, 1u, [&](ConstructionState& state){
+            return MakeArenaUnique<ConstructionProbe<GlobalArena>>(arena, arena, state);
+        });
     }
 }
 
-TEST(AllocatorPropagation, CacheAlignedVectorMoveConstructionPreservesExplicitArenaOwnership){
-    for(const b8 explicitAllocator : { false, true }){
-        for(const b8 foreignArena : { false, true }){
-            GlobalArena sourceArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationParallelConstructSource)};
-            GlobalArena targetArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationParallelConstructTarget)};
-            using Values = ParallelVector<u32, GlobalArena>;
+void VerifyArenaObjectConstruction_GlobalUniqueObjectFailureReleasesAlignedStorageAndConstructedMembers(){
+    const Name owner = s_GlobalArenaCaseArenaObjectGlobalConstructorFailure;
+    native(in owner){
+        using namespace __hidden_arena_object_construction_tests;
+        GlobalArena arena{ owner };
+        VerifyConstructionFailure(arena, 1u, [&](ConstructionState& state){
+            return MakeGlobalUnique<ConstructionProbe<GlobalArena>>(arena, arena, state);
+        });
+    }
+}
+
+void VerifyArenaObjectConstruction_PersistentUniqueObjectFailureReleasesAlignedStorageAndConstructedMembers(){
+    const Name owner = s_GlobalArenaCaseArenaObjectPersistentConstructorFailure;
+    native(in owner){
+        using namespace __hidden_arena_object_construction_tests;
+        PersistentArena arena(owner, PersistentArena::StructureAlignedSize(16384u));
+        VerifyConstructionFailure(arena, 1u, [&](ConstructionState& state){
+            return MakePersistentUnique<ConstructionProbe<PersistentArena>>(arena, arena, state);
+        });
+    }
+}
+
+void VerifyArenaObjectConstruction_GenericArrayFailureDestroysOnlyCompletedElementsAndReleasesStorage(){
+    const Name owner = s_GlobalArenaCaseArenaObjectGenericArrayFailure;
+    native(in owner){
+        using namespace __hidden_arena_object_construction_tests;
+        GlobalArena arena{ owner };
+        VerifyConstructionFailure(arena, 3u, [&](ConstructionState&){
+            return MakeArenaUnique<ConstructionProbe<GlobalArena>[]>(arena, 4u);
+        });
+    }
+}
+
+void VerifyArenaObjectConstruction_GlobalArrayFailureDestroysOnlyCompletedElementsAndReleasesStorage(){
+    const Name owner = s_GlobalArenaCaseArenaObjectGlobalArrayFailure;
+    native(in owner){
+        using namespace __hidden_arena_object_construction_tests;
+        GlobalArena arena{ owner };
+        VerifyConstructionFailure(arena, 3u, [&](ConstructionState&){
+            return MakeGlobalUnique<ConstructionProbe<GlobalArena>[]>(arena, 4u);
+        });
+    }
+}
+
+void VerifyArenaObjectConstruction_PersistentArrayFailureDestroysOnlyCompletedElementsAndReleasesStorage(){
+    const Name owner = s_GlobalArenaCaseArenaObjectPersistentArrayFailure;
+    native(in owner){
+        using namespace __hidden_arena_object_construction_tests;
+        PersistentArena arena(owner, PersistentArena::StructureAlignedSize(16384u));
+        VerifyConstructionFailure(arena, 3u, [&](ConstructionState&){
+            return MakePersistentUnique<ConstructionProbe<PersistentArena>[]>(arena, 4u);
+        });
+    }
+}
+
+void VerifyArenaObjectConstruction_NestedFactorySuccessIsDestroyedWhenOuterConstructionThrows(){
+    const Name owner = s_GlobalArenaCaseArenaObjectNestedConstructorFailure;
+    b8 outerDestroyed = false;
+    native(in owner, mut outerDestroyed){
+        using namespace __hidden_arena_object_construction_tests;
+        GlobalArena arena{ owner };
+        ConstructionState state;
+        const ArenaMemoryStats before = arena.memoryStats();
+        EXPECT_THROW(EXPECT_TRUE(MakeGlobalUnique<NestedConstruction>(arena, arena, state, outerDestroyed)), ConstructionFailure);
+        const ArenaMemoryStats after = arena.memoryStats();
+        EXPECT_EQ(state.constructors, 1u);
+        EXPECT_EQ(state.completed, 1u);
+        EXPECT_EQ(state.destructors, 1u);
+        EXPECT_EQ(state.memberDestructors, 1u);
+        EXPECT_EQ(state.liveMembers, 0u);
+        EXPECT_EQ(after.usedBytes, before.usedBytes);
+        EXPECT_EQ(after.allocationCount - before.allocationCount, after.deallocationCount - before.deallocationCount);
+    }
+    EXPECT_FALSE(outerDestroyed);
+}
+
+void VerifyArenaObjectConstruction_FailedRawAllocationsNeverRunConstructorsOrDestructors(){
+    const Name owner = s_GlobalArenaCaseArenaObjectRejectedConstruction;
+    native(in owner){
+        using namespace __hidden_arena_object_construction_tests;
+        GlobalArena memberArena{ owner };
+        RejectingArena arena;
+        ConstructionState state;
+        ActiveConstruction<GlobalArena> active(memberArena, state);
+        using Probe = ConstructionProbe<GlobalArena>;
+        EXPECT_EQ(NewArenaObject<Probe>(arena, memberArena, state), nullptr);
+        EXPECT_FALSE(MakeArenaUnique<Probe>(arena, memberArena, state));
+        EXPECT_FALSE(MakeArenaUnique<Probe[]>(arena, 4u));
+        EXPECT_EQ(arena.attempts, 3u);
+        EXPECT_EQ(state.constructors, 0u);
+        EXPECT_EQ(state.destructors, 0u);
+        EXPECT_EQ(state.memberDestructors, 0u);
+    }
+}
+
+void VerifyArenaObjectConstruction_ArenaFactoriesRetainStorageIdentityAndBypassClassAllocationHooks(){
+    const Name globalOwner = s_GlobalArenaCaseArenaObjectCanonicalGlobalPlacement;
+    const Name persistentOwner = s_GlobalArenaCaseArenaObjectCanonicalPersistentPlacement;
+    native(in globalOwner, in persistentOwner){
+        using namespace __hidden_arena_object_construction_tests;
+        GlobalArena global{ globalOwner };
+        PersistentArena persistent(persistentOwner, PersistentArena::StructureAlignedSize(4096u));
+        ArenaPlacementProbe::s_PlacementCalls = 0u;
+        ArenaPlacementProbe::s_Constructors = 0u;
+        ArenaPlacementProbe::s_Destructors = 0u;
+        const ArenaMemoryStats globalBefore = global.memoryStats();
+        const ArenaMemoryStats persistentBefore = persistent.memoryStats();
+        {
+            auto globalObject = MakeGlobalUnique<ArenaPlacementProbe>(global);
+            auto persistentObject = MakePersistentUnique<ArenaPlacementProbe>(persistent);
+            auto globalArray = MakeGlobalUnique<ArenaPlacementProbe[]>(global, 3u);
+            auto persistentArray = MakePersistentUnique<ArenaPlacementProbe[]>(persistent, 3u);
+            EXPECT_TRUE(globalObject);
+            EXPECT_TRUE(persistentObject);
+            EXPECT_TRUE(globalArray);
+            EXPECT_TRUE(persistentArray);
+            ArenaPlacementProbe* const globalRaw = NewArenaObject<ArenaPlacementProbe>(global);
+            ArenaPlacementProbe* const persistentRaw = NewArenaObject<ArenaPlacementProbe>(persistent);
+            EXPECT_NE(globalRaw, nullptr);
+            EXPECT_NE(persistentRaw, nullptr);
+            DestroyArenaObject(global, globalRaw);
+            DestroyArenaObject(persistent, persistentRaw);
+        }
+        EXPECT_EQ(ArenaPlacementProbe::s_PlacementCalls, 0u);
+        EXPECT_EQ(ArenaPlacementProbe::s_Constructors, 10u);
+        EXPECT_EQ(ArenaPlacementProbe::s_Destructors, 10u);
+        const ArenaMemoryStats globalAfter = global.memoryStats();
+        const ArenaMemoryStats persistentAfter = persistent.memoryStats();
+        EXPECT_EQ(globalAfter.usedBytes, globalBefore.usedBytes);
+        EXPECT_EQ(globalAfter.reservedBytes, globalBefore.reservedBytes);
+        EXPECT_EQ(persistentAfter.usedBytes, persistentBefore.usedBytes);
+        EXPECT_EQ(persistentAfter.reservedBytes, persistentBefore.reservedBytes);
+        EXPECT_EQ(globalAfter.allocationCount - globalBefore.allocationCount, globalAfter.deallocationCount - globalBefore.deallocationCount);
+        EXPECT_EQ(persistentAfter.allocationCount - persistentBefore.allocationCount, persistentAfter.deallocationCount - persistentBefore.deallocationCount);
+    }
+}
+
+void VerifyArenaObjectConstruction_ArgumentTemporaryFailureDestroysCompletedMembersBeforeReleasingArenaStorage(){
+    const Name globalOwner = s_GlobalArenaCaseArenaObjectGlobalArgumentCleanupFailure;
+    const Name persistentOwner = s_GlobalArenaCaseArenaObjectPersistentArgumentCleanupFailure;
+    native(in globalOwner, in persistentOwner){
+        using namespace __hidden_arena_object_construction_tests;
+        GlobalArena global{ globalOwner };
+        PersistentArena persistent(persistentOwner, PersistentArena::StructureAlignedSize(4096u));
+        ConstructionState globalState;
+        ConstructionState persistentState;
+        const ConstructionArgumentSource<GlobalArena> globalArgument{ global, globalState };
+        const ConstructionArgumentSource<PersistentArena> persistentArgument{ persistent, persistentState };
+        const ArenaMemoryStats globalBefore = global.memoryStats();
+        const ArenaMemoryStats persistentBefore = persistent.memoryStats();
+        EXPECT_THROW(EXPECT_TRUE(MakeGlobalUnique<ArgumentCleanupProbe<GlobalArena>>(global, globalArgument)), ConstructionFailure);
+        EXPECT_THROW(EXPECT_TRUE(MakePersistentUnique<ArgumentCleanupProbe<PersistentArena>>(persistent, persistentArgument)), ConstructionFailure);
+        EXPECT_EQ(globalState.liveMembers, 0u);
+        EXPECT_EQ(globalState.memberDestructors, 1u);
+        EXPECT_EQ(persistentState.liveMembers, 0u);
+        EXPECT_EQ(persistentState.memberDestructors, 1u);
+        const ArenaMemoryStats globalAfter = global.memoryStats();
+        const ArenaMemoryStats persistentAfter = persistent.memoryStats();
+        EXPECT_EQ(globalAfter.usedBytes, globalBefore.usedBytes);
+        EXPECT_EQ(globalAfter.reservedBytes, globalBefore.reservedBytes);
+        EXPECT_EQ(persistentAfter.usedBytes, persistentBefore.usedBytes);
+        EXPECT_EQ(persistentAfter.reservedBytes, persistentBefore.reservedBytes);
+        EXPECT_EQ(globalAfter.allocationCount - globalBefore.allocationCount, globalAfter.deallocationCount - globalBefore.deallocationCount);
+        EXPECT_EQ(persistentAfter.allocationCount - persistentBefore.allocationCount, persistentAfter.deallocationCount - persistentBefore.deallocationCount);
+    }
+}
+
+void VerifyArenaObjectConstruction_CanonicalPrivateDestructorsRetainOwningRollbackAndRawConstructionAccess(){
+    const Name globalOwner = s_GlobalArenaCaseArenaObjectPrivateGlobalDestructor;
+    const Name persistentOwner = s_GlobalArenaCaseArenaObjectPrivatePersistentDestructor;
+    b8 globalDestroyed = false;
+    b8 persistentDestroyed = false;
+    b8 rawDestroyed = false;
+    native(in globalOwner, in persistentOwner, mut globalDestroyed, mut persistentDestroyed, mut rawDestroyed){
+        using namespace __hidden_arena_object_construction_tests;
+        GlobalArena global{ globalOwner };
+        PersistentArena persistent(persistentOwner, PersistentArena::StructureAlignedSize(4096u));
+        ConstructionState globalState;
+        ConstructionState persistentState;
+        const ConstructionArgumentSource<GlobalArena> globalArgument{ global, globalState };
+        const ConstructionArgumentSource<PersistentArena> persistentArgument{ persistent, persistentState };
+        const ArenaMemoryStats globalBefore = global.memoryStats();
+        const ArenaMemoryStats persistentBefore = persistent.memoryStats();
+        EXPECT_THROW(EXPECT_TRUE(MakeGlobalUnique<PrivateDestructorProbe<GlobalArena>>(global, globalArgument)), ConstructionFailure);
+        EXPECT_THROW(EXPECT_TRUE(MakePersistentUnique<PrivateDestructorProbe<PersistentArena>>(persistent, persistentArgument)), ConstructionFailure);
+        EXPECT_EQ(globalState.liveMembers, 0u);
+        EXPECT_EQ(globalState.memberDestructors, 1u);
+        EXPECT_EQ(persistentState.liveMembers, 0u);
+        EXPECT_EQ(persistentState.memberDestructors, 1u);
+        {
+            auto globalOwnerPtr = MakeGlobalUnique<PrivateDestructorProbe<GlobalArena>>(global, global, globalState, globalDestroyed);
+            auto persistentOwnerPtr = MakePersistentUnique<PrivateDestructorProbe<PersistentArena>>(persistent, persistent, persistentState, persistentDestroyed);
+            EXPECT_TRUE(globalOwnerPtr);
+            EXPECT_TRUE(persistentOwnerPtr);
+        }
+        auto* const raw = NewArenaObject<RawPrivateDestructorProbe<GlobalArena>>(global, rawDestroyed);
+        ASSERT_NE(raw, nullptr);
+        DestroyArenaObject(global, raw);
+        const ArenaMemoryStats globalAfter = global.memoryStats();
+        const ArenaMemoryStats persistentAfter = persistent.memoryStats();
+        EXPECT_EQ(globalAfter.usedBytes, globalBefore.usedBytes);
+        EXPECT_EQ(globalAfter.reservedBytes, globalBefore.reservedBytes);
+        EXPECT_EQ(persistentAfter.usedBytes, persistentBefore.usedBytes);
+        EXPECT_EQ(persistentAfter.reservedBytes, persistentBefore.reservedBytes);
+        EXPECT_EQ(globalAfter.allocationCount - globalBefore.allocationCount, globalAfter.deallocationCount - globalBefore.deallocationCount);
+        EXPECT_EQ(persistentAfter.allocationCount - persistentBefore.allocationCount, persistentAfter.deallocationCount - persistentBefore.deallocationCount);
+    }
+    EXPECT_TRUE(globalDestroyed);
+    EXPECT_TRUE(persistentDestroyed);
+    EXPECT_TRUE(rawDestroyed);
+}
+
+void VerifyArenaObjectConstruction_IndividualDeleterFriendRetainsCompletedRollbackAndNormalOwningDestruction(){
+    const Name globalOwner = s_GlobalArenaCaseArenaObjectOperatorFriendGlobalDestructor;
+    const Name persistentOwner = s_GlobalArenaCaseArenaObjectOperatorFriendPersistentDestructor;
+    b8 globalPrivateAlive = false;
+    b8 persistentPrivateAlive = false;
+    native(in globalOwner, in persistentOwner, mut globalPrivateAlive, mut persistentPrivateAlive){
+        using namespace __hidden_arena_object_construction_tests;
+        GlobalArena global{ globalOwner };
+        PersistentArena persistent(persistentOwner, PersistentArena::StructureAlignedSize(4096u));
+        ConstructionState globalState;
+        ConstructionState persistentState;
+        const ConstructionArgumentSource<GlobalArena> globalArgument{ global, globalState };
+        const ConstructionArgumentSource<PersistentArena> persistentArgument{ persistent, persistentState };
+        const ArenaMemoryStats globalBefore = global.memoryStats();
+        const ArenaMemoryStats persistentBefore = persistent.memoryStats();
+        EXPECT_THROW(EXPECT_TRUE(MakeGlobalUnique<OperatorPrivateDestructorProbe<GlobalArena>>(global, globalArgument)), ConstructionFailure);
+        EXPECT_THROW(EXPECT_TRUE(MakePersistentUnique<OperatorPrivateDestructorProbe<PersistentArena>>(persistent, persistentArgument)), ConstructionFailure);
+        EXPECT_EQ(globalState.liveMembers, 0u);
+        EXPECT_EQ(globalState.memberDestructors, 1u);
+        EXPECT_EQ(persistentState.liveMembers, 0u);
+        EXPECT_EQ(persistentState.memberDestructors, 1u);
+        {
+            auto globalOwnerPtr = MakeGlobalUnique<OperatorPrivateDestructorProbe<GlobalArena>>(global, global, globalState);
+            auto persistentOwnerPtr = MakePersistentUnique<OperatorPrivateDestructorProbe<PersistentArena>>(persistent, persistent, persistentState);
+            EXPECT_TRUE(globalOwnerPtr);
+            EXPECT_TRUE(persistentOwnerPtr);
+        }
+        EXPECT_EQ(globalState.liveMembers, 0u);
+        EXPECT_EQ(globalState.memberDestructors, 2u);
+        EXPECT_EQ(persistentState.liveMembers, 0u);
+        EXPECT_EQ(persistentState.memberDestructors, 2u);
+        {
+            auto globalPrivate = MakeGlobalUnique<PrivateConstructorProbe<GlobalArena>>(global, globalPrivateAlive);
+            auto persistentPrivate = MakePersistentUnique<PrivateConstructorProbe<PersistentArena>>(persistent, persistentPrivateAlive);
+            EXPECT_TRUE(globalPrivate);
+            EXPECT_TRUE(persistentPrivate);
+            EXPECT_TRUE(globalPrivateAlive);
+            EXPECT_TRUE(persistentPrivateAlive);
+        }
+        const ArenaMemoryStats globalAfter = global.memoryStats();
+        const ArenaMemoryStats persistentAfter = persistent.memoryStats();
+        EXPECT_EQ(globalAfter.usedBytes, globalBefore.usedBytes);
+        EXPECT_EQ(globalAfter.reservedBytes, globalBefore.reservedBytes);
+        EXPECT_EQ(persistentAfter.usedBytes, persistentBefore.usedBytes);
+        EXPECT_EQ(persistentAfter.reservedBytes, persistentBefore.reservedBytes);
+        EXPECT_EQ(globalAfter.allocationCount - globalBefore.allocationCount, globalAfter.deallocationCount - globalBefore.deallocationCount);
+        EXPECT_EQ(persistentAfter.allocationCount - persistentBefore.allocationCount, persistentAfter.deallocationCount - persistentBefore.deallocationCount);
+    }
+    EXPECT_FALSE(globalPrivateAlive);
+    EXPECT_FALSE(persistentPrivateAlive);
+}
+
+void VerifyArenaObjectConstruction_PolymorphicTransfersRetainCompleteAllocationAcrossVirtualBases(){
+    const Name globalOwner = s_GlobalArenaCaseArenaObjectPolymorphicGlobal;
+    const Name persistentOwner = s_GlobalArenaCaseArenaObjectPolymorphicPersistent;
+    const Name scratchOwner = s_GlobalArenaCaseArenaObjectPolymorphicScratch;
+    native(in globalOwner, in persistentOwner, in scratchOwner){
+        using namespace __hidden_arena_object_construction_tests;
+        GlobalArena global{ globalOwner };
+        PersistentArena persistent(persistentOwner, PersistentArena::StructureAlignedSize(4096u));
+        ScratchArena scratch{ scratchOwner };
+        VerifyPolymorphicAllocationIdentity(global);
+        VerifyPolymorphicAllocationIdentity(persistent);
+        VerifyPolymorphicAllocationIdentity(scratch);
+    }
+}
+
+void VerifyArenaObjectConstruction_StatefulCleanupSurvivesPreallocatedOwnerReentry(){
+    const Name oldGlobalOwner = s_GlobalArenaCaseArenaObjectReentryOldGlobal;
+    const Name newGlobalOwner = s_GlobalArenaCaseArenaObjectReentryNewGlobal;
+    const Name oldPersistentOwner = s_GlobalArenaCaseArenaObjectReentryOldPersistent;
+    const Name newPersistentOwner = s_GlobalArenaCaseArenaObjectReentryNewPersistent;
+    const Name oldScratchOwner = s_GlobalArenaCaseArenaObjectReentryOldScratch;
+    const Name newScratchOwner = s_GlobalArenaCaseArenaObjectReentryNewScratch;
+    native(in oldGlobalOwner, in newGlobalOwner, in oldPersistentOwner, in newPersistentOwner, in oldScratchOwner, in newScratchOwner){
+        using namespace __hidden_arena_object_construction_tests;
+        GlobalArena oldGlobal{ oldGlobalOwner }, newGlobal{ newGlobalOwner };
+        PersistentArena oldPersistent(oldPersistentOwner, PersistentArena::StructureAlignedSize(4096u));
+        PersistentArena newPersistent(newPersistentOwner, PersistentArena::StructureAlignedSize(4096u));
+        ScratchArena oldScratch{ oldScratchOwner }, newScratch{ newScratchOwner };
+        VerifyScalarOwnerReentry(oldGlobal, newGlobal);
+        VerifyScalarOwnerReentry(oldPersistent, newPersistent);
+        VerifyScalarOwnerReentry(oldScratch, newScratch);
+        VerifyArrayOwnerReentry<GlobalArena, false>(oldGlobal, newGlobal);
+        VerifyArrayOwnerReentry<PersistentArena, false>(oldPersistent, newPersistent);
+        VerifyArrayOwnerReentry<ScratchArena, false>(oldScratch, newScratch);
+        VerifyArrayOwnerReentry<GlobalArena, true>(oldGlobal, newGlobal);
+        VerifyArrayOwnerReentry<PersistentArena, true>(oldPersistent, newPersistent);
+        VerifyArrayOwnerReentry<ScratchArena, true>(oldScratch, newScratch);
+    }
+}
+
+void VerifyAllocatorPropagation_SelfAssignmentPreservesArenaBinding(){
+    native{
+        using namespace __hidden_allocator_propagation_tests;
+        VerifyAllocatorSelfAssignment<ContainerDetail::ArenaAllocator<u32, GlobalArena>>();
+        VerifyAllocatorSelfAssignment<ContainerDetail::ArenaCacheAlignedAllocator<u32, GlobalArena>>();
+        VerifyAllocatorSelfAssignment<DefaultAllocator<u32>>();
+    }
+}
+
+void VerifyAllocatorPropagation_VectorMoveTransfersStorageAndItsDeallocationOwner(){
+    Array<b8, 2> flags = Array<b8, 2>();
+    flags[0u] = false;
+    flags[1u] = true;
+    for(in b8 foreignArena : flags){
+        native(in foreignArena){
+            using namespace __hidden_allocator_propagation_tests;
+            VerifyVectorMove<::Vector<u32, GlobalArena>>(foreignArena);
+            VerifyVectorMove<DefaultVector<u32, GlobalArena, DefaultOwner>>(foreignArena);
+        }
+    }
+}
+
+void VerifyAllocatorPropagation_CacheAlignedVectorMoveTransfersStorageAndItsDeallocationOwner(){
+    Array<b8, 2> flags = Array<b8, 2>();
+    flags[0u] = false;
+    flags[1u] = true;
+    Array<usize, 3> targetSizes = Array<usize, 3>();
+    targetSizes[0u] = 0u;
+    targetSizes[1u] = 1u;
+    targetSizes[2u] = 65u;
+    for(in b8 foreignArena : flags){
+        for(in usize targetSize : targetSizes){
+            native(in foreignArena, in targetSize){
+                using namespace __hidden_allocator_propagation_tests;
+                VerifyVectorMove<::ParallelVector<u32, GlobalArena>>(foreignArena, targetSize);
+            }
+        }
+    }
+}
+
+void VerifyAllocatorPropagation_CacheAlignedVectorMoveConstructionPreservesExplicitArenaOwnership(){
+    Array<b8, 2> flags = Array<b8, 2>();
+    flags[0u] = false;
+    flags[1u] = true;
+    for(in b8 explicitAllocator : flags){
+        for(in b8 foreignArena : flags){
+            const Name sourceOwner = s_GlobalArenaCaseAllocatorPropagationParallelConstructSource;
+            const Name targetOwner = s_GlobalArenaCaseAllocatorPropagationParallelConstructTarget;
+            native(in explicitAllocator, in foreignArena, in sourceOwner, in targetOwner){
+                using NWB::Core::Alloc::GlobalArena;
+                GlobalArena sourceArena{ sourceOwner };
+                GlobalArena targetArena{ targetOwner };
+                using Values = ::ParallelVector<u32, GlobalArena>;
+                {
+                    Values source{ sourceArena };
+                    for(u32 index = 0u; index < 128u; ++index)
+                        source.push_back(index);
+                    const NotNull<const u32*> firstElement = MakeNotNull(&source[0u]);
+                    GlobalArena& destinationArena = explicitAllocator && foreignArena ? targetArena : sourceArena;
+                    Values target = explicitAllocator ? Values(Move(source), destinationArena) : Values(Move(source));
+                    EXPECT_EQ(target.get_allocator().arenaPtr(), &destinationArena);
+                    ASSERT_EQ(target.size(), 128u);
+                    EXPECT_EQ(&target[0u] == firstElement.get(), &destinationArena == &sourceArena);
+                    for(u32 index = 0u; index < 128u; ++index)
+                        EXPECT_EQ(target[index], index);
+                    source.clear();
+                    source.push_back(7u);
+                    EXPECT_EQ(source[0u], 7u);
+                    target.push_back(128u);
+                    EXPECT_EQ(target[128u], 128u);
+                }
+                EXPECT_EQ(sourceArena.memoryStats().usedBytes, 0u);
+                EXPECT_EQ(sourceArena.memoryStats().reservedBytes, 0u);
+                EXPECT_EQ(targetArena.memoryStats().usedBytes, 0u);
+                EXPECT_EQ(targetArena.memoryStats().reservedBytes, 0u);
+                EXPECT_EQ(sourceArena.memoryStats().allocationCount, sourceArena.memoryStats().deallocationCount);
+                EXPECT_EQ(targetArena.memoryStats().allocationCount, targetArena.memoryStats().deallocationCount);
+            }
+        }
+    }
+}
+
+void VerifyAllocatorPropagation_StringMovePropagatesArenaForHeapAndSmallStringStorage(){
+    Array<b8, 2> flags = Array<b8, 2>();
+    flags[0u] = false;
+    flags[1u] = true;
+    for(in b8 foreignArena : flags){
+        for(in b8 shortSource : flags){
+            native(in foreignArena, in shortSource){
+                using namespace __hidden_allocator_propagation_tests;
+                VerifyStringMove<AString<GlobalArena>>(foreignArena, shortSource);
+                VerifyStringMove<DefaultAString<GlobalArena, DefaultOwner>>(foreignArena, shortSource);
+            }
+        }
+    }
+}
+
+void VerifyAllocatorPropagation_OrderedMapMoveTransfersNodesAndTheirDeallocationOwner(){
+    Array<b8, 2> flags = Array<b8, 2>();
+    flags[0u] = false;
+    flags[1u] = true;
+    for(in b8 foreignArena : flags){
+        const Name sourceOwner = s_GlobalArenaCaseAllocatorPropagationMapSource;
+        const Name targetOwner = s_GlobalArenaCaseAllocatorPropagationMapTarget;
+        native(in foreignArena, in sourceOwner, in targetOwner){
+            using NWB::Core::Alloc::GlobalArena;
+            GlobalArena sourceArena{ sourceOwner };
+            GlobalArena targetArena{ targetOwner };
             {
-                Values source{ sourceArena };
-                for(u32 index = 0u; index < 128u; ++index)
-                    source.push_back(index);
-                const NotNull<const u32*> firstElement = MakeNotNull(&source[0u]);
-                GlobalArena& destinationArena = explicitAllocator && foreignArena ? targetArena : sourceArena;
-                Values target = explicitAllocator ? Values(Move(source), destinationArena) : Values(Move(source));
-                EXPECT_EQ(target.get_allocator().arenaPtr(), &destinationArena);
-                ASSERT_EQ(target.size(), 128u);
-                EXPECT_EQ(&target[0u] == firstElement.get(), &destinationArena == &sourceArena);
-                for(u32 index = 0u; index < 128u; ++index)
-                    EXPECT_EQ(target[index], index);
-                source.clear();
-                source.push_back(7u);
-                EXPECT_EQ(source[0u], 7u);
-                target.push_back(128u);
-                EXPECT_EQ(target[128u], 128u);
+                ::Map<u32, u32, GlobalArena> target{ foreignArena ? targetArena : sourceArena };
+                ASSERT_TRUE(target.emplace(900u, 900u).second);
+                {
+                    ::Map<u32, u32, GlobalArena> source{ sourceArena };
+                    for(u32 key = 0u; key < 64u; ++key)
+                        ASSERT_TRUE(source.emplace(key, key * 3u).second);
+                    const NotNull<const u32*> sourceValue = MakeNotNull(&source.find(0u)->second);
+                    target = Move(source);
+                    EXPECT_EQ(target.get_allocator().arenaPtr(), &sourceArena);
+                    ASSERT_EQ(target.size(), 64u);
+                    EXPECT_EQ(&target.find(0u)->second, sourceValue.get());
+                    EXPECT_TRUE(source.empty());
+                    ASSERT_TRUE(source.emplace(7u, 8u).second);
+                }
+                for(u32 key = 0u; key < 64u; ++key)
+                    EXPECT_EQ(target.find(key)->second, key * 3u);
+                ASSERT_TRUE(target.emplace(65u, 195u).second);
             }
             EXPECT_EQ(sourceArena.memoryStats().usedBytes, 0u);
-            EXPECT_EQ(sourceArena.memoryStats().reservedBytes, 0u);
             EXPECT_EQ(targetArena.memoryStats().usedBytes, 0u);
-            EXPECT_EQ(targetArena.memoryStats().reservedBytes, 0u);
             EXPECT_EQ(sourceArena.memoryStats().allocationCount, sourceArena.memoryStats().deallocationCount);
             EXPECT_EQ(targetArena.memoryStats().allocationCount, targetArena.memoryStats().deallocationCount);
         }
     }
 }
 
-TEST(AllocatorPropagation, StringMovePropagatesArenaForHeapAndSmallStringStorage){
-    for(const b8 foreignArena : { false, true }){
-        for(const b8 shortSource : { false, true }){
-            VerifyStringMove<AString<GlobalArena>>(foreignArena, shortSource);
-            VerifyStringMove<DefaultAString<GlobalArena, DefaultOwner>>(foreignArena, shortSource);
+void VerifyAllocatorPropagation_VectorSwapsTransferStorageAndItsArenaForEveryAllocator(){
+    Array<b8, 2> flags = Array<b8, 2>();
+    flags[0u] = false;
+    flags[1u] = true;
+    for(in b8 foreignArena : flags){
+        native(in foreignArena){
+            using namespace __hidden_allocator_propagation_tests;
+            VerifyVectorSwap<::Vector<u32, GlobalArena>>(foreignArena);
+            VerifyVectorSwap<::ParallelVector<u32, GlobalArena>>(foreignArena);
+            VerifyVectorSwap<DefaultVector<u32, GlobalArena, DefaultOwner>>(foreignArena);
         }
     }
 }
 
-TEST(AllocatorPropagation, OrderedMapMoveTransfersNodesAndTheirDeallocationOwner){
-    for(const b8 foreignArena : { false, true }){
-        GlobalArena sourceArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationMapSource)};
-        GlobalArena targetArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationMapTarget)};
-        {
-            Map<u32, u32, GlobalArena> target{ foreignArena ? targetArena : sourceArena };
-            ASSERT_TRUE(target.emplace(900u, 900u).second);
-            {
-                Map<u32, u32, GlobalArena> source{ sourceArena };
-                for(u32 key = 0u; key < 64u; ++key)
-                    ASSERT_TRUE(source.emplace(key, key * 3u).second);
-                const NotNull<const u32*> sourceValue = MakeNotNull(&source.find(0u)->second);
-                target = Move(source);
-                EXPECT_EQ(target.get_allocator().arenaPtr(), &sourceArena);
-                ASSERT_EQ(target.size(), 64u);
-                EXPECT_EQ(&target.find(0u)->second, sourceValue.get());
-                EXPECT_TRUE(source.empty());
-                ASSERT_TRUE(source.emplace(7u, 8u).second);
+void VerifyAllocatorPropagation_StringSwapsTransferArenaForHeapAndSmallStringStorage(){
+    Array<b8, 2> flags = Array<b8, 2>();
+    flags[0u] = false;
+    flags[1u] = true;
+    for(in b8 foreignArena : flags){
+        for(in b8 shortFirst : flags){
+            native(in foreignArena, in shortFirst){
+                using namespace __hidden_allocator_propagation_tests;
+                VerifyStringSwap<AString<GlobalArena>>(foreignArena, shortFirst);
+                VerifyStringSwap<DefaultAString<GlobalArena, DefaultOwner>>(foreignArena, shortFirst);
             }
-            for(u32 key = 0u; key < 64u; ++key)
-                EXPECT_EQ(target.find(key)->second, key * 3u);
-            ASSERT_TRUE(target.emplace(65u, 195u).second);
+        }
+    }
+}
+
+void VerifyAllocatorPropagation_OrderedMapSwapsTransferNodesAndTheirArena(){
+    Array<b8, 2> flags = Array<b8, 2>();
+    flags[0u] = false;
+    flags[1u] = true;
+    for(in b8 foreignArena : flags){
+        const Name firstOwner = s_GlobalArenaCaseAllocatorPropagationOrderedSwapFirst;
+        const Name secondOwner = s_GlobalArenaCaseAllocatorPropagationOrderedSwapSecond;
+        native(in foreignArena, in firstOwner, in secondOwner){
+            using NWB::Core::Alloc::GlobalArena;
+            GlobalArena firstArena{ firstOwner };
+            GlobalArena secondArena{ secondOwner };
+            GlobalArena& secondOwnerRef = foreignArena ? secondArena : firstArena;
+            {
+                ::Map<u32, u32, GlobalArena> first{ firstArena };
+                ::Map<u32, u32, GlobalArena> second{ secondOwnerRef };
+                for(u32 key = 0u; key < 16u; ++key)
+                    ASSERT_TRUE(first.emplace(key, key * 3u).second);
+                for(u32 key = 100u; key < 132u; ++key)
+                    ASSERT_TRUE(second.emplace(key, key * 5u).second);
+                const NotNull<const u32*> firstNode = MakeNotNull(&first.find(0u)->second);
+                const NotNull<const u32*> secondNode = MakeNotNull(&second.find(100u)->second);
+                first.swap(second);
+                EXPECT_EQ(first.get_allocator().arenaPtr(), &secondOwnerRef);
+                EXPECT_EQ(second.get_allocator().arenaPtr(), &firstArena);
+                ASSERT_EQ(first.size(), 32u);
+                ASSERT_EQ(second.size(), 16u);
+                EXPECT_EQ(&first.find(100u)->second, secondNode.get());
+                EXPECT_EQ(&second.find(0u)->second, firstNode.get());
+                for(u32 key = 100u; key < 132u; ++key)
+                    EXPECT_EQ(first.at(key), key * 5u);
+                for(u32 key = 0u; key < 16u; ++key)
+                    EXPECT_EQ(second.at(key), key * 3u);
+                ASSERT_TRUE(first.emplace(999u, 7u).second);
+                ASSERT_TRUE(second.emplace(888u, 9u).second);
+            }
+            EXPECT_EQ(firstArena.memoryStats().usedBytes, 0u);
+            EXPECT_EQ(secondArena.memoryStats().usedBytes, 0u);
+            EXPECT_EQ(firstArena.memoryStats().allocationCount, firstArena.memoryStats().deallocationCount);
+            EXPECT_EQ(secondArena.memoryStats().allocationCount, secondArena.memoryStats().deallocationCount);
+        }
+    }
+}
+
+void VerifyAllocatorPropagation_HashMapSwapsAndMovesPreserveArenaAndSourceReuse(){
+    Array<b8, 2> flags = Array<b8, 2>();
+    flags[0u] = false;
+    flags[1u] = true;
+    for(in b8 foreignArena : flags){
+        const Name firstOwner = s_GlobalArenaCaseAllocatorPropagationHashMapFirst;
+        const Name secondOwner = s_GlobalArenaCaseAllocatorPropagationHashMapSecond;
+        native(in foreignArena, in firstOwner, in secondOwner){
+            using NWB::Core::Alloc::GlobalArena;
+            GlobalArena firstArena{ firstOwner };
+            GlobalArena secondArena{ secondOwner };
+            GlobalArena& secondOwnerRef = foreignArena ? secondArena : firstArena;
+            {
+                ::HashMap<u32, u32, GlobalArena> first{ firstArena };
+                ::HashMap<u32, u32, GlobalArena> second{ secondOwnerRef };
+                for(u32 key = 0u; key < 64u; ++key)
+                    ASSERT_TRUE(first.emplace(key, key * 3u).second);
+                for(u32 key = 100u; key < 132u; ++key)
+                    ASSERT_TRUE(second.emplace(key, key * 5u).second);
+                const NotNull<const u32*> firstStorage = MakeNotNull(&first.at(0u));
+                const NotNull<const u32*> secondStorage = MakeNotNull(&second.at(100u));
+                first.swap(second);
+                EXPECT_EQ(first.get_allocator().arenaPtr(), &secondOwnerRef);
+                EXPECT_EQ(second.get_allocator().arenaPtr(), &firstArena);
+                ASSERT_EQ(first.size(), 32u);
+                ASSERT_EQ(second.size(), 64u);
+                EXPECT_EQ(&first.at(100u), secondStorage.get());
+                EXPECT_EQ(&second.at(0u), firstStorage.get());
+                first = Move(second);
+                EXPECT_EQ(first.get_allocator().arenaPtr(), &firstArena);
+                ASSERT_EQ(first.size(), 64u);
+                EXPECT_EQ(&first.at(0u), firstStorage.get());
+                EXPECT_TRUE(second.empty());
+                for(u32 key = 0u; key < 64u; ++key)
+                    EXPECT_EQ(first.at(key), key * 3u);
+                first.reserve(256u);
+                ASSERT_TRUE(first.emplace(999u, 7u).second);
+                second.reserve(64u);
+                ASSERT_TRUE(second.emplace(888u, 9u).second);
+                EXPECT_EQ(second.at(888u), 9u);
+                EXPECT_EQ(first.at(999u), 7u);
+            }
+            EXPECT_EQ(firstArena.memoryStats().usedBytes, 0u);
+            EXPECT_EQ(secondArena.memoryStats().usedBytes, 0u);
+            EXPECT_EQ(firstArena.memoryStats().allocationCount, firstArena.memoryStats().deallocationCount);
+            EXPECT_EQ(secondArena.memoryStats().allocationCount, secondArena.memoryStats().deallocationCount);
+        }
+    }
+}
+
+void VerifyAllocatorPropagation_HashSetSwapsAndMovesPreserveArenaAndSourceReuse(){
+    Array<b8, 2> flags = Array<b8, 2>();
+    flags[0u] = false;
+    flags[1u] = true;
+    for(in b8 foreignArena : flags){
+        const Name firstOwner = s_GlobalArenaCaseAllocatorPropagationHashSetFirst;
+        const Name secondOwner = s_GlobalArenaCaseAllocatorPropagationHashSetSecond;
+        native(in foreignArena, in firstOwner, in secondOwner){
+            using NWB::Core::Alloc::GlobalArena;
+            GlobalArena firstArena{ firstOwner };
+            GlobalArena secondArena{ secondOwner };
+            GlobalArena& secondOwnerRef = foreignArena ? secondArena : firstArena;
+            {
+                ::HashSet<u32, GlobalArena> first{ firstArena };
+                ::HashSet<u32, GlobalArena> second{ secondOwnerRef };
+                for(u32 key = 0u; key < 64u; ++key)
+                    ASSERT_TRUE(first.insert(key).second);
+                for(u32 key = 100u; key < 132u; ++key)
+                    ASSERT_TRUE(second.insert(key).second);
+                const NotNull<const u32*> firstStorage = MakeNotNull(&*first.find(0u));
+                const NotNull<const u32*> secondStorage = MakeNotNull(&*second.find(100u));
+                first.swap(second);
+                EXPECT_EQ(first.get_allocator().arenaPtr(), &secondOwnerRef);
+                EXPECT_EQ(second.get_allocator().arenaPtr(), &firstArena);
+                ASSERT_EQ(first.size(), 32u);
+                ASSERT_EQ(second.size(), 64u);
+                EXPECT_EQ(&*first.find(100u), secondStorage.get());
+                EXPECT_EQ(&*second.find(0u), firstStorage.get());
+                first = Move(second);
+                EXPECT_EQ(first.get_allocator().arenaPtr(), &firstArena);
+                ASSERT_EQ(first.size(), 64u);
+                EXPECT_EQ(&*first.find(0u), firstStorage.get());
+                EXPECT_TRUE(second.empty());
+                for(u32 key = 0u; key < 64u; ++key)
+                    EXPECT_EQ(first.count(key), 1u);
+                first.reserve(256u);
+                ASSERT_TRUE(first.insert(999u).second);
+                second.reserve(64u);
+                ASSERT_TRUE(second.insert(888u).second);
+                EXPECT_EQ(second.count(888u), 1u);
+                EXPECT_EQ(first.count(999u), 1u);
+            }
+            EXPECT_EQ(firstArena.memoryStats().usedBytes, 0u);
+            EXPECT_EQ(secondArena.memoryStats().usedBytes, 0u);
+            EXPECT_EQ(firstArena.memoryStats().allocationCount, firstArena.memoryStats().deallocationCount);
+            EXPECT_EQ(secondArena.memoryStats().allocationCount, secondArena.memoryStats().deallocationCount);
+        }
+    }
+}
+
+void VerifyAllocatorPropagation_DefaultProviderAllocatorMovesAwayFromItsInitialOwner(){
+    const Name sourceOwner = s_GlobalArenaCaseAllocatorPropagationDefaultSource;
+    native(in sourceOwner){
+        using namespace __hidden_allocator_propagation_tests;
+        GlobalArena sourceArena{ sourceOwner };
+        const ArenaMemoryStats defaultBefore = DefaultOwner().memoryStats();
+        {
+            DefaultVector<u32, GlobalArena, DefaultOwner> target;
+            EXPECT_EQ(target.get_allocator().arenaPtr(), &DefaultOwner());
+            target.assign(32u, 9u);
+            DefaultVector<u32, GlobalArena, DefaultOwner> source{ sourceArena };
+            source.assign(64u, 8u);
+            target = Move(source);
+            EXPECT_EQ(target.get_allocator().arenaPtr(), &sourceArena);
+            EXPECT_EQ(target.size(), 64u);
+            EXPECT_EQ(target.back(), 8u);
         }
         EXPECT_EQ(sourceArena.memoryStats().usedBytes, 0u);
-        EXPECT_EQ(targetArena.memoryStats().usedBytes, 0u);
-        EXPECT_EQ(sourceArena.memoryStats().allocationCount, sourceArena.memoryStats().deallocationCount);
-        EXPECT_EQ(targetArena.memoryStats().allocationCount, targetArena.memoryStats().deallocationCount);
+        EXPECT_EQ(DefaultOwner().memoryStats().usedBytes, defaultBefore.usedBytes);
     }
 }
 
-TEST(AllocatorPropagation, VectorSwapsTransferStorageAndItsArenaForEveryAllocator){
-    for(const b8 foreignArena : { false, true }){
-        VerifyVectorSwap<Vector<u32, GlobalArena>>(foreignArena);
-        VerifyVectorSwap<ParallelVector<u32, GlobalArena>>(foreignArena);
-        VerifyVectorSwap<DefaultVector<u32, GlobalArena, DefaultOwner>>(foreignArena);
-    }
-}
-
-TEST(AllocatorPropagation, StringSwapsTransferArenaForHeapAndSmallStringStorage){
-    for(const b8 foreignArena : { false, true }){
-        for(const b8 shortFirst : { false, true }){
-            VerifyStringSwap<AString<GlobalArena>>(foreignArena, shortFirst);
-            VerifyStringSwap<DefaultAString<GlobalArena, DefaultOwner>>(foreignArena, shortFirst);
-        }
-    }
-}
-
-TEST(AllocatorPropagation, OrderedMapSwapsTransferNodesAndTheirArena){
-    for(const b8 foreignArena : { false, true }){
-        GlobalArena firstArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationOrderedSwapFirst)};
-        GlobalArena secondArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationOrderedSwapSecond)};
-        GlobalArena& secondOwner = foreignArena ? secondArena : firstArena;
-        {
-            Map<u32, u32, GlobalArena> first{ firstArena };
-            Map<u32, u32, GlobalArena> second{ secondOwner };
-            for(u32 key = 0u; key < 16u; ++key)
-                ASSERT_TRUE(first.emplace(key, key * 3u).second);
-            for(u32 key = 100u; key < 132u; ++key)
-                ASSERT_TRUE(second.emplace(key, key * 5u).second);
-            const NotNull<const u32*> firstNode = MakeNotNull(&first.find(0u)->second);
-            const NotNull<const u32*> secondNode = MakeNotNull(&second.find(100u)->second);
-            first.swap(second);
-            EXPECT_EQ(first.get_allocator().arenaPtr(), &secondOwner);
-            EXPECT_EQ(second.get_allocator().arenaPtr(), &firstArena);
-            ASSERT_EQ(first.size(), 32u);
-            ASSERT_EQ(second.size(), 16u);
-            EXPECT_EQ(&first.find(100u)->second, secondNode.get());
-            EXPECT_EQ(&second.find(0u)->second, firstNode.get());
-            for(u32 key = 100u; key < 132u; ++key)
-                EXPECT_EQ(first.at(key), key * 5u);
-            for(u32 key = 0u; key < 16u; ++key)
-                EXPECT_EQ(second.at(key), key * 3u);
-            ASSERT_TRUE(first.emplace(999u, 7u).second);
-            ASSERT_TRUE(second.emplace(888u, 9u).second);
-        }
-        EXPECT_EQ(firstArena.memoryStats().usedBytes, 0u);
-        EXPECT_EQ(secondArena.memoryStats().usedBytes, 0u);
-        EXPECT_EQ(firstArena.memoryStats().allocationCount, firstArena.memoryStats().deallocationCount);
-        EXPECT_EQ(secondArena.memoryStats().allocationCount, secondArena.memoryStats().deallocationCount);
-    }
-}
-
-TEST(AllocatorPropagation, HashMapSwapsAndMovesPreserveArenaAndSourceReuse){
-    for(const b8 foreignArena : { false, true }){
-        GlobalArena firstArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationHashMapFirst)};
-        GlobalArena secondArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationHashMapSecond)};
-        GlobalArena& secondOwner = foreignArena ? secondArena : firstArena;
-        {
-            HashMap<u32, u32, GlobalArena> first{ firstArena };
-            HashMap<u32, u32, GlobalArena> second{ secondOwner };
-            for(u32 key = 0u; key < 64u; ++key)
-                ASSERT_TRUE(first.emplace(key, key * 3u).second);
-            for(u32 key = 100u; key < 132u; ++key)
-                ASSERT_TRUE(second.emplace(key, key * 5u).second);
-            const NotNull<const u32*> firstStorage = MakeNotNull(&first.at(0u));
-            const NotNull<const u32*> secondStorage = MakeNotNull(&second.at(100u));
-            first.swap(second);
-            EXPECT_EQ(first.get_allocator().arenaPtr(), &secondOwner);
-            EXPECT_EQ(second.get_allocator().arenaPtr(), &firstArena);
-            ASSERT_EQ(first.size(), 32u);
-            ASSERT_EQ(second.size(), 64u);
-            EXPECT_EQ(&first.at(100u), secondStorage.get());
-            EXPECT_EQ(&second.at(0u), firstStorage.get());
-            first = Move(second);
-            EXPECT_EQ(first.get_allocator().arenaPtr(), &firstArena);
-            ASSERT_EQ(first.size(), 64u);
-            EXPECT_EQ(&first.at(0u), firstStorage.get());
-            EXPECT_TRUE(second.empty());
-            for(u32 key = 0u; key < 64u; ++key)
-                EXPECT_EQ(first.at(key), key * 3u);
-            first.reserve(256u);
-            ASSERT_TRUE(first.emplace(999u, 7u).second);
-            second.reserve(64u);
-            ASSERT_TRUE(second.emplace(888u, 9u).second);
-            EXPECT_EQ(second.at(888u), 9u);
-            EXPECT_EQ(first.at(999u), 7u);
-        }
-        EXPECT_EQ(firstArena.memoryStats().usedBytes, 0u);
-        EXPECT_EQ(secondArena.memoryStats().usedBytes, 0u);
-        EXPECT_EQ(firstArena.memoryStats().allocationCount, firstArena.memoryStats().deallocationCount);
-        EXPECT_EQ(secondArena.memoryStats().allocationCount, secondArena.memoryStats().deallocationCount);
-    }
-}
-
-TEST(AllocatorPropagation, HashSetSwapsAndMovesPreserveArenaAndSourceReuse){
-    for(const b8 foreignArena : { false, true }){
-        GlobalArena firstArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationHashSetFirst)};
-        GlobalArena secondArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationHashSetSecond)};
-        GlobalArena& secondOwner = foreignArena ? secondArena : firstArena;
-        {
-            HashSet<u32, GlobalArena> first{ firstArena };
-            HashSet<u32, GlobalArena> second{ secondOwner };
-            for(u32 key = 0u; key < 64u; ++key)
-                ASSERT_TRUE(first.insert(key).second);
-            for(u32 key = 100u; key < 132u; ++key)
-                ASSERT_TRUE(second.insert(key).second);
-            const NotNull<const u32*> firstStorage = MakeNotNull(&*first.find(0u));
-            const NotNull<const u32*> secondStorage = MakeNotNull(&*second.find(100u));
-            first.swap(second);
-            EXPECT_EQ(first.get_allocator().arenaPtr(), &secondOwner);
-            EXPECT_EQ(second.get_allocator().arenaPtr(), &firstArena);
-            ASSERT_EQ(first.size(), 32u);
-            ASSERT_EQ(second.size(), 64u);
-            EXPECT_EQ(&*first.find(100u), secondStorage.get());
-            EXPECT_EQ(&*second.find(0u), firstStorage.get());
-            first = Move(second);
-            EXPECT_EQ(first.get_allocator().arenaPtr(), &firstArena);
-            ASSERT_EQ(first.size(), 64u);
-            EXPECT_EQ(&*first.find(0u), firstStorage.get());
-            EXPECT_TRUE(second.empty());
-            for(u32 key = 0u; key < 64u; ++key)
-                EXPECT_EQ(first.count(key), 1u);
-            first.reserve(256u);
-            ASSERT_TRUE(first.insert(999u).second);
-            second.reserve(64u);
-            ASSERT_TRUE(second.insert(888u).second);
-            EXPECT_EQ(second.count(888u), 1u);
-            EXPECT_EQ(first.count(999u), 1u);
-        }
-        EXPECT_EQ(firstArena.memoryStats().usedBytes, 0u);
-        EXPECT_EQ(secondArena.memoryStats().usedBytes, 0u);
-        EXPECT_EQ(firstArena.memoryStats().allocationCount, firstArena.memoryStats().deallocationCount);
-        EXPECT_EQ(secondArena.memoryStats().allocationCount, secondArena.memoryStats().deallocationCount);
-    }
-}
-
-
-TEST(AllocatorPropagation, DefaultProviderAllocatorMovesAwayFromItsInitialOwner){
-    GlobalArena sourceArena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationDefaultSource)};
-    const ArenaMemoryStats defaultBefore = DefaultOwner().memoryStats();
-    {
-        DefaultVector<u32, GlobalArena, DefaultOwner> target;
-        EXPECT_EQ(target.get_allocator().arenaPtr(), &DefaultOwner());
-        target.assign(32u, 9u);
-        DefaultVector<u32, GlobalArena, DefaultOwner> source{ sourceArena };
-        source.assign(64u, 8u);
-        target = Move(source);
-        EXPECT_EQ(target.get_allocator().arenaPtr(), &sourceArena);
-        EXPECT_EQ(target.size(), 64u);
-        EXPECT_EQ(target.back(), 8u);
-    }
-    EXPECT_EQ(sourceArena.memoryStats().usedBytes, 0u);
-    EXPECT_EQ(DefaultOwner().memoryStats().usedBytes, defaultBefore.usedBytes);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/common/test_context.adhd.h>
-#include <tests/unit/global/algorithm_case_types.adhd.h>
-
-#include <core/alloc/scratch.h>
-
-#include <gtest/gtest.h>
-
-#include <global/atomic_identity.h>
-#include <global/auto_registration.h>
-#include <global/basic_string.h>
-#include <global/binary.h>
-#include <global/binary_big_endian.h>
-#include <global/binary_little_endian.h>
-#include <global/bit.h>
-#include <global/bit_matrix.h>
-#include <global/call_text.h>
-#include <global/checked_sum.h>
-#include <global/compile.h>
-#include <global/containers.h>
-#include <global/csv_text.h>
-#include <global/disjoint_set.h>
-#include <global/diagnostics.h>
-#include <global/filesystem/operations.h>
-#include <global/filesystem/path.h>
-#include <global/filesystem/utility.h>
-#include <global/fixed_buffer.h>
-#include <global/hierarchical_index_set.h>
-#include <global/integer_rect.h>
-#include <global/limit.h>
-#include <global/name_hash.h>
-#include <global/not_null.h>
-#include <global/overflow.h>
-#include <global/process_memory_map.h>
-#include <global/projected_index.h>
-#include <global/quantization.h>
-#include <global/simplemath.h>
-#include <global/simd/color.h>
-#include <global/sha1.h>
-#include <global/append_rollback.h>
-#include <global/range_partition.h>
-#include <global/range_algorithms.h>
-#include <global/latin1_text.h>
-#include <global/interval.h>
-#include <global/source_text.h>
-#include <global/string_hash.h>
-#include <global/statistics.h>
-#include <global/sync.h>
-#include <global/termination.h>
-#include <global/text_utils.h>
-#include <global/text_replacements.h>
-#include <global/unicode/grapheme.h>
-#include <global/utf8_text.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_global_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-
-
-
-
-
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(Global, AutoRegistrationQueueDeduplicatesAndSnapshots){
-    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
-    ::AutoRegistrationQueue<u32, NWB::Core::Alloc::GlobalArena> queue(NWB::Tests::s_TestArena);
-    const auto equal = [](const u32 lhs, const u32 rhs)noexcept{ return lhs == rhs; };
-
-    queue.appendUnique(7u, equal);
-    queue.appendUnique(7u, equal);
-    queue.appendUnique(19u, equal);
-
-    ::Vector<u32, NWB::Core::Alloc::ScratchArena> values(scratchArena);
+void VerifyGlobal_AutoRegistrationQueueDeduplicatesAndSnapshots(){
+    Vector<u32> values = Vector<u32>();
     values.reserve(6u);
-    queue.copyTo(values);
-    ASSERT_EQ(values.size(), 2u);
-    EXPECT_EQ(values[0u], 7u);
-    EXPECT_EQ(values[1u], 19u);
+    native(mut values){
+        ::AutoRegistrationQueue<u32, NWB::Core::Alloc::GlobalArena> queue(NWB::Tests::s_TestArena);
+        const auto equal = [](const u32 lhs, const u32 rhs)noexcept{ return lhs == rhs; };
 
-    queue.appendUnique(23u, equal);
-    EXPECT_EQ(values.size(), 2u);
+        queue.appendUnique(7u, equal);
+        queue.appendUnique(7u, equal);
+        queue.appendUnique(19u, equal);
 
-    queue.copyTo(values);
+        queue.copyTo(values);
+        ASSERT_EQ(values.size(), 2u);
+        EXPECT_EQ(values[0u], 7u);
+        EXPECT_EQ(values[1u], 19u);
+
+        queue.appendUnique(23u, equal);
+        EXPECT_EQ(values.size(), 2u);
+
+        queue.copyTo(values);
+    }
     ASSERT_EQ(values.size(), 3u);
     EXPECT_EQ(values[2u], 23u);
 }
 
-TEST(Global, GenericPathKeepsNativeFilenameCharacters){
-    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
-    const ::Path<NWB::Core::Alloc::ScratchArena> path(scratchArena, "one\\two");
-    const auto text = PathToGenericString<char>(scratchArena, path);
+void VerifyGlobal_GenericPathKeepsNativeFilenameCharacters(){
+    native{
+        NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
+        const ::Path<NWB::Core::Alloc::ScratchArena> path(scratchArena, "one\\two");
+        const auto text = PathToGenericString<char>(scratchArena, path);
 #if defined(NWB_PLATFORM_WINDOWS)
-    EXPECT_EQ(AStringView(text), "one/two");
+        EXPECT_EQ(AStringView(text), "one/two");
 #else
-    EXPECT_EQ(AStringView(text), "one\\two");
+        EXPECT_EQ(AStringView(text), "one\\two");
 #endif
+    }
 }
 
+void VerifyGlobal_BoundedRuntimeWrappersTerminateTruncatedText(){
+    native{
 #if !defined(_MSC_VER)
-TEST(Global, BoundedRuntimeWrappersTerminateTruncatedText){
-    Array<char, 4u> truncatedText = {};
-    EXPECT_NE(NWB_STRCPY(truncatedText.data(), sizeof(truncatedText), "abcdef"), 0);
-    EXPECT_STREQ(truncatedText.data(), "abc");
+        Array<char, 4u> truncatedText = {};
+        EXPECT_NE(NWB_STRCPY(truncatedText.data(), sizeof(truncatedText), "abcdef"), 0);
+        EXPECT_STREQ(truncatedText.data(), "abc");
 
-    Array<char, 4u> nullTerminatedText = { 'a', 'b', 'c', 'd' };
-    EXPECT_NE(NWB_STRCAT(nullTerminatedText.data(), sizeof(nullTerminatedText), "e"), 0);
-    EXPECT_EQ(nullTerminatedText[sizeof(nullTerminatedText) - 1u], '\0');
-}
+        Array<char, 4u> nullTerminatedText = { 'a', 'b', 'c', 'd' };
+        EXPECT_NE(NWB_STRCAT(nullTerminatedText.data(), sizeof(nullTerminatedText), "e"), 0);
+        EXPECT_EQ(nullTerminatedText[sizeof(nullTerminatedText) - 1u], '\0');
 #endif
+    }
+}
 
-TEST(Global, UnicodeAndAsciiHelpersRejectSurrogatesOverlongsAndInvalidIdentifiers){
+void VerifyGlobal_UnicodeAndAsciiHelpersRejectSurrogatesOverlongsAndInvalidIdentifiers(){
     EXPECT_FALSE(IsUtf16HighSurrogate(0xD7FFu));
     EXPECT_TRUE(IsUtf16HighSurrogate(0xD800u));
     EXPECT_TRUE(IsUtf16HighSurrogate(0xDBFFu));
@@ -1368,28 +1463,30 @@ TEST(Global, UnicodeAndAsciiHelpersRejectSurrogatesOverlongsAndInvalidIdentifier
     EXPECT_EQ(DecodeUtf16SurrogatePair(0xD800u, 0xDC00u), 0x10000u);
     EXPECT_EQ(DecodeUtf16SurrogatePair(0xDBFFu, 0xDFFFu), s_UnicodeMaxCodePoint);
 
-    const Array<char, 4u> bomPrefixed = { static_cast<char>(0xEF), static_cast<char>(0xBB), static_cast<char>(0xBF), 'a' };
-    EXPECT_TRUE(HasUtf8Bom(AStringView(bomPrefixed.data(), bomPrefixed.size())));
-    EXPECT_FALSE(HasUtf8Bom(AStringView(bomPrefixed.data(), 2u)));
+    native{
+        const Array<char, 4u> bomPrefixed = { static_cast<char>(0xEF), static_cast<char>(0xBB), static_cast<char>(0xBF), 'a' };
+        EXPECT_TRUE(HasUtf8Bom(AStringView(bomPrefixed.data(), bomPrefixed.size())));
+        EXPECT_FALSE(HasUtf8Bom(AStringView(bomPrefixed.data(), 2u)));
 
-    Array<char, s_Utf8MaxSequenceBytes> encoded = {};
-    EXPECT_FALSE(EncodeUtf8CodePoint(0xD800u, encoded));
-    EXPECT_FALSE(EncodeUtf8CodePoint(s_UnicodeMaxCodePoint + 1u, encoded));
-    const auto encodedBytes = EncodeUtf8CodePoint(s_UnicodeMaxCodePoint, encoded);
-    ASSERT_TRUE(encodedBytes);
-    ASSERT_EQ(*encodedBytes, 4u);
-    EXPECT_TRUE(IsUtf8ScalarBoundary(AStringView(encoded.data(), encoded.size()), 0u));
-    EXPECT_FALSE(IsUtf8ScalarBoundary(AStringView(encoded.data(), encoded.size()), 1u));
-    EXPECT_TRUE(IsUtf8ScalarBoundary(AStringView(encoded.data(), encoded.size()), 4u));
-    EXPECT_FALSE(IsUtf8ScalarBoundary(AStringView(encoded.data(), encoded.size()), 5u));
+        Array<char, s_Utf8MaxSequenceBytes> encoded = {};
+        EXPECT_FALSE(EncodeUtf8CodePoint(0xD800u, encoded));
+        EXPECT_FALSE(EncodeUtf8CodePoint(s_UnicodeMaxCodePoint + 1u, encoded));
+        const auto encodedBytes = EncodeUtf8CodePoint(s_UnicodeMaxCodePoint, encoded);
+        ASSERT_TRUE(encodedBytes);
+        ASSERT_EQ(*encodedBytes, 4u);
+        EXPECT_TRUE(IsUtf8ScalarBoundary(AStringView(encoded.data(), encoded.size()), 0u));
+        EXPECT_FALSE(IsUtf8ScalarBoundary(AStringView(encoded.data(), encoded.size()), 1u));
+        EXPECT_TRUE(IsUtf8ScalarBoundary(AStringView(encoded.data(), encoded.size()), 4u));
+        EXPECT_FALSE(IsUtf8ScalarBoundary(AStringView(encoded.data(), encoded.size()), 5u));
 
-    const auto decoded = DecodeUtf8Scalar(AStringView(encoded.data(), encoded.size()));
-    ASSERT_TRUE(decoded);
-    EXPECT_EQ(decoded->codePoint, s_UnicodeMaxCodePoint);
-    EXPECT_EQ(decoded->byteCount, 4);
-    EXPECT_FALSE(DecodeUtf8Scalar(AStringView(encoded.data(), 3u)));
-    const Array<char, 3u> surrogateBytes = { static_cast<char>(0xED), static_cast<char>(0xA0), static_cast<char>(0x80) };
-    EXPECT_FALSE(DecodeUtf8Scalar(AStringView(surrogateBytes.data(), surrogateBytes.size())));
+        const auto decoded = DecodeUtf8Scalar(AStringView(encoded.data(), encoded.size()));
+        ASSERT_TRUE(decoded);
+        EXPECT_EQ(decoded->codePoint, s_UnicodeMaxCodePoint);
+        EXPECT_EQ(decoded->byteCount, 4);
+        EXPECT_FALSE(DecodeUtf8Scalar(AStringView(encoded.data(), 3u)));
+        const Array<char, 3u> surrogateBytes = { static_cast<char>(0xED), static_cast<char>(0xA0), static_cast<char>(0x80) };
+        EXPECT_FALSE(DecodeUtf8Scalar(AStringView(surrogateBytes.data(), surrogateBytes.size())));
+    }
 
     EXPECT_TRUE(IsUnicodeWhitespace(0x2000u));
     EXPECT_TRUE(IsUnicodeWhitespace(0x200au));
@@ -1401,60 +1498,120 @@ TEST(Global, UnicodeAndAsciiHelpersRejectSurrogatesOverlongsAndInvalidIdentifier
     EXPECT_TRUE(IsAsciiPunctuation(0x7eu));
     EXPECT_FALSE(IsAsciiPunctuation(0x20u));
     EXPECT_FALSE(IsAsciiPunctuation(0x7fu));
-    EXPECT_EQ(StripMatchingTrailingByte("f", 'f', 'F'), "f");
-    EXPECT_EQ(StripMatchingTrailingByte("4F", 'f', 'F'), "4");
+    EXPECT_EQ(StripMatchingTrailingByte("f", 102u, 70u), "f");
+    EXPECT_EQ(StripMatchingTrailingByte("4F", 102u, 70u), "4");
+
     usize tokenCursor = 0u;
-    const auto token = ReadCommaOrSpaceDelimitedToken(" , x,,", tokenCursor);
-    ASSERT_TRUE(token);
-    EXPECT_EQ(*token, "x");
+    const Expected<StringView> token = ReadCommaOrSpaceDelimitedToken(" , x,,", tokenCursor);
+    ASSERT_TRUE(token.has_value());
+    EXPECT_EQ(token.value(), "x");
     EXPECT_EQ(tokenCursor, 4u);
-    EXPECT_FALSE(ReadCommaOrSpaceDelimitedToken(" , x,,", tokenCursor));
+    const Expected<StringView> exhaustedToken = ReadCommaOrSpaceDelimitedToken(" , x,,", tokenCursor);
+    EXPECT_FALSE(exhaustedToken.has_value());
     EXPECT_EQ(tokenCursor, 6u);
-    EXPECT_EQ(*AlignU32PowerOfTwoChecked(Limit<u32>::s_Max - 3u, 4u), Limit<u32>::s_Max - 3u);
-    EXPECT_FALSE(AlignU32PowerOfTwoChecked(Limit<u32>::s_Max, 4u));
-    EXPECT_FALSE(AlignU32PowerOfTwoChecked(1u, 3u));
-    EXPECT_EQ(*ComputeStridedRangeByteSize(0u, Limit<u64>::s_Max, Limit<u64>::s_Max), 0u);
-    EXPECT_EQ(*ComputeStridedRangeByteSize(2u, 0u, Limit<u64>::s_Max), Limit<u64>::s_Max);
-    EXPECT_FALSE(ComputeStridedRangeByteSize(2u, 1u, Limit<u64>::s_Max));
-    EXPECT_EQ(MultiplySaturatingU64(Limit<u64>::s_Max, 0u), 0u);
-    EXPECT_EQ(MultiplySaturatingU64(Limit<u64>::s_Max, 2u), Limit<u64>::s_Max);
-    EXPECT_EQ(SaturateI64ToI32(Limit<i64>::s_Min), Limit<i32>::s_Min);
-    EXPECT_EQ(SaturateI64ToI32(Limit<i64>::s_Max), Limit<i32>::s_Max);
+
+    const Expected<u32> alignedMax = AlignU32PowerOfTwoChecked(u32.max - 3u, 4u);
+    ASSERT_TRUE(alignedMax.has_value());
+    EXPECT_EQ(alignedMax.value(), u32.max - 3u);
+    EXPECT_FALSE(AlignU32PowerOfTwoChecked(u32.max, 4u).has_value());
+    EXPECT_FALSE(AlignU32PowerOfTwoChecked(1u, 3u).has_value());
+
+    const Expected<u64> zeroStrideRange = ComputeStridedRangeByteSize(0u, u64.max, u64.max);
+    const Expected<u64> twoZeroStrideRange = ComputeStridedRangeByteSize(2u, 0u, u64.max);
+    ASSERT_TRUE(zeroStrideRange.has_value());
+    ASSERT_TRUE(twoZeroStrideRange.has_value());
+    EXPECT_EQ(zeroStrideRange.value(), 0u);
+    EXPECT_EQ(twoZeroStrideRange.value(), u64.max);
+    EXPECT_FALSE(ComputeStridedRangeByteSize(2u, 1u, u64.max).has_value());
+    EXPECT_EQ(MultiplySaturatingU64(u64.max, 0u), 0u);
+    EXPECT_EQ(MultiplySaturatingU64(u64.max, 2u), u64.max);
+    EXPECT_EQ(SaturateI64ToI32(i64.min), i32.min);
+    EXPECT_EQ(SaturateI64ToI32(i64.max), i32.max);
     EXPECT_TRUE(IsRelativeSlashPathWithoutDotSegments("c:segment/file"));
     EXPECT_FALSE(IsRelativeSlashPathWithoutDotSegments("a/../b"));
     EXPECT_FALSE(IsRelativeSlashPathWithoutDotSegments("a//b"));
     EXPECT_FALSE(IsRelativeSlashPathWithoutDotSegments("a\\b"));
-    EXPECT_FALSE(FitsFixedText(AStringView{}, 0u));
-    EXPECT_TRUE(FitsFixedText(AStringView{}, 1u));
-    EXPECT_FALSE(FitsFixedText(AStringView("a\0b", 3u), 4u));
-    EXPECT_FALSE(TryFiniteF32FromF64(Limit<f64>::s_Infinity));
-    EXPECT_FALSE(TryFiniteF32FromF64(static_cast<f64>(Limit<f32>::s_Max) * 2.0));
-    EXPECT_TRUE(ParseFiniteF32ViaF64("-0.0"));
-    EXPECT_EQ(BitCast<u32>(*ParseFiniteF32ViaF64("-0.0")), 0x80000000u);
-    EXPECT_FALSE(IsAsciiIdentifier(AStringView()));
-    EXPECT_FALSE(IsAsciiIdentifier(AStringView("9abc")));
-    EXPECT_FALSE(IsAsciiIdentifier(AStringView("a-b")));
-    EXPECT_TRUE(IsAsciiIdentifier(AStringView("_a9")));
+    EXPECT_FALSE(FitsFixedText(StringView(), 0u));
+    EXPECT_TRUE(FitsFixedText(StringView(), 1u));
+    native{
+        EXPECT_FALSE(FitsFixedText(AStringView("a\0b", 3u), 4u));
+        EXPECT_FALSE(TryFiniteF32FromF64(Limit<f64>::s_Infinity));
+        EXPECT_FALSE(TryFiniteF32FromF64(static_cast<f64>(Limit<f32>::s_Max) * 2.0));
+    }
+    const Expected<f32> negZero = ParseFiniteF32ViaF64("-0.0");
+    ASSERT_TRUE(negZero.has_value());
+    EXPECT_EQ(bit_cast<u32>(negZero.value()), 0x80000000u);
+    EXPECT_FALSE(IsAsciiIdentifier(StringView()));
+    EXPECT_FALSE(IsAsciiIdentifier(StringView("9abc")));
+    EXPECT_FALSE(IsAsciiIdentifier(StringView("a-b")));
+    EXPECT_TRUE(IsAsciiIdentifier(StringView("_a9")));
     EXPECT_EQ(ToAsciiLowerByte(0xC3u), 0xC3u);
-    EXPECT_NE(ToAsciiLowerByte(static_cast<u8>('\\')), ToAsciiLowerByte(static_cast<u8>('/')));
+    EXPECT_NE(ToAsciiLowerByte(cast<u8>(92u)), ToAsciiLowerByte(cast<u8>(47u)));
 }
 
-TEST(Global, OwnershipInvariantTerminationIsAlwaysActive){
+void VerifyGlobal_OwnershipInvariantTerminationIsAlwaysActive(){
     EXPECT_DEATH(TerminateInvariant(), "");
 }
 
+native{
+namespace __hidden_allocator_propagation_tests{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+GlobalArena& DefaultOwner(){
+    static GlobalArena s_Arena{Name(NWB::Tests::GlobalCases::s_GlobalArenaCaseAllocatorPropagationDefault)};
+    return s_Arena;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 }
+
+NWB_ADHD_GTEST(ArenaObjectConstruction, RawObjectFailureReleasesAlignedStorageAndConstructedMembers, VerifyArenaObjectConstruction_RawObjectFailureReleasesAlignedStorageAndConstructedMembers)
+NWB_ADHD_GTEST(ArenaObjectConstruction, GenericUniqueObjectFailureReleasesAlignedStorageAndConstructedMembers, VerifyArenaObjectConstruction_GenericUniqueObjectFailureReleasesAlignedStorageAndConstructedMembers)
+NWB_ADHD_GTEST(ArenaObjectConstruction, GlobalUniqueObjectFailureReleasesAlignedStorageAndConstructedMembers, VerifyArenaObjectConstruction_GlobalUniqueObjectFailureReleasesAlignedStorageAndConstructedMembers)
+NWB_ADHD_GTEST(ArenaObjectConstruction, PersistentUniqueObjectFailureReleasesAlignedStorageAndConstructedMembers, VerifyArenaObjectConstruction_PersistentUniqueObjectFailureReleasesAlignedStorageAndConstructedMembers)
+NWB_ADHD_GTEST(ArenaObjectConstruction, GenericArrayFailureDestroysOnlyCompletedElementsAndReleasesStorage, VerifyArenaObjectConstruction_GenericArrayFailureDestroysOnlyCompletedElementsAndReleasesStorage)
+NWB_ADHD_GTEST(ArenaObjectConstruction, GlobalArrayFailureDestroysOnlyCompletedElementsAndReleasesStorage, VerifyArenaObjectConstruction_GlobalArrayFailureDestroysOnlyCompletedElementsAndReleasesStorage)
+NWB_ADHD_GTEST(ArenaObjectConstruction, PersistentArrayFailureDestroysOnlyCompletedElementsAndReleasesStorage, VerifyArenaObjectConstruction_PersistentArrayFailureDestroysOnlyCompletedElementsAndReleasesStorage)
+NWB_ADHD_GTEST(ArenaObjectConstruction, NestedFactorySuccessIsDestroyedWhenOuterConstructionThrows, VerifyArenaObjectConstruction_NestedFactorySuccessIsDestroyedWhenOuterConstructionThrows)
+NWB_ADHD_GTEST(ArenaObjectConstruction, FailedRawAllocationsNeverRunConstructorsOrDestructors, VerifyArenaObjectConstruction_FailedRawAllocationsNeverRunConstructorsOrDestructors)
+NWB_ADHD_GTEST(ArenaObjectConstruction, ArenaFactoriesRetainStorageIdentityAndBypassClassAllocationHooks, VerifyArenaObjectConstruction_ArenaFactoriesRetainStorageIdentityAndBypassClassAllocationHooks)
+NWB_ADHD_GTEST(ArenaObjectConstruction, ArgumentTemporaryFailureDestroysCompletedMembersBeforeReleasingArenaStorage, VerifyArenaObjectConstruction_ArgumentTemporaryFailureDestroysCompletedMembersBeforeReleasingArenaStorage)
+NWB_ADHD_GTEST(ArenaObjectConstruction, CanonicalPrivateDestructorsRetainOwningRollbackAndRawConstructionAccess, VerifyArenaObjectConstruction_CanonicalPrivateDestructorsRetainOwningRollbackAndRawConstructionAccess)
+NWB_ADHD_GTEST(ArenaObjectConstruction, IndividualDeleterFriendRetainsCompletedRollbackAndNormalOwningDestruction, VerifyArenaObjectConstruction_IndividualDeleterFriendRetainsCompletedRollbackAndNormalOwningDestruction)
+NWB_ADHD_GTEST(ArenaObjectConstruction, PolymorphicTransfersRetainCompleteAllocationAcrossVirtualBases, VerifyArenaObjectConstruction_PolymorphicTransfersRetainCompleteAllocationAcrossVirtualBases)
+NWB_ADHD_GTEST(ArenaObjectConstruction, StatefulCleanupSurvivesPreallocatedOwnerReentry, VerifyArenaObjectConstruction_StatefulCleanupSurvivesPreallocatedOwnerReentry)
+NWB_ADHD_GTEST(AllocatorPropagation, SelfAssignmentPreservesArenaBinding, VerifyAllocatorPropagation_SelfAssignmentPreservesArenaBinding)
+NWB_ADHD_GTEST(AllocatorPropagation, VectorMoveTransfersStorageAndItsDeallocationOwner, VerifyAllocatorPropagation_VectorMoveTransfersStorageAndItsDeallocationOwner)
+NWB_ADHD_GTEST(AllocatorPropagation, CacheAlignedVectorMoveTransfersStorageAndItsDeallocationOwner, VerifyAllocatorPropagation_CacheAlignedVectorMoveTransfersStorageAndItsDeallocationOwner)
+NWB_ADHD_GTEST(AllocatorPropagation, CacheAlignedVectorMoveConstructionPreservesExplicitArenaOwnership, VerifyAllocatorPropagation_CacheAlignedVectorMoveConstructionPreservesExplicitArenaOwnership)
+NWB_ADHD_GTEST(AllocatorPropagation, StringMovePropagatesArenaForHeapAndSmallStringStorage, VerifyAllocatorPropagation_StringMovePropagatesArenaForHeapAndSmallStringStorage)
+NWB_ADHD_GTEST(AllocatorPropagation, OrderedMapMoveTransfersNodesAndTheirDeallocationOwner, VerifyAllocatorPropagation_OrderedMapMoveTransfersNodesAndTheirDeallocationOwner)
+NWB_ADHD_GTEST(AllocatorPropagation, VectorSwapsTransferStorageAndItsArenaForEveryAllocator, VerifyAllocatorPropagation_VectorSwapsTransferStorageAndItsArenaForEveryAllocator)
+NWB_ADHD_GTEST(AllocatorPropagation, StringSwapsTransferArenaForHeapAndSmallStringStorage, VerifyAllocatorPropagation_StringSwapsTransferArenaForHeapAndSmallStringStorage)
+NWB_ADHD_GTEST(AllocatorPropagation, OrderedMapSwapsTransferNodesAndTheirArena, VerifyAllocatorPropagation_OrderedMapSwapsTransferNodesAndTheirArena)
+NWB_ADHD_GTEST(AllocatorPropagation, HashMapSwapsAndMovesPreserveArenaAndSourceReuse, VerifyAllocatorPropagation_HashMapSwapsAndMovesPreserveArenaAndSourceReuse)
+NWB_ADHD_GTEST(AllocatorPropagation, HashSetSwapsAndMovesPreserveArenaAndSourceReuse, VerifyAllocatorPropagation_HashSetSwapsAndMovesPreserveArenaAndSourceReuse)
+NWB_ADHD_GTEST(AllocatorPropagation, DefaultProviderAllocatorMovesAwayFromItsInitialOwner, VerifyAllocatorPropagation_DefaultProviderAllocatorMovesAwayFromItsInitialOwner)
+NWB_ADHD_GTEST(Global, AutoRegistrationQueueDeduplicatesAndSnapshots, VerifyGlobal_AutoRegistrationQueueDeduplicatesAndSnapshots)
+NWB_ADHD_GTEST(Global, GenericPathKeepsNativeFilenameCharacters, VerifyGlobal_GenericPathKeepsNativeFilenameCharacters)
+NWB_ADHD_GTEST(Global, UnicodeAndAsciiHelpersRejectSurrogatesOverlongsAndInvalidIdentifiers, VerifyGlobal_UnicodeAndAsciiHelpersRejectSurrogatesOverlongsAndInvalidIdentifiers)
+NWB_ADHD_GTEST(Global, OwnershipInvariantTerminationIsAlwaysActive, VerifyGlobal_OwnershipInvariantTerminationIsAlwaysActive)
+
+native{
+#if !defined(_MSC_VER)
+TEST(Global, BoundedRuntimeWrappersTerminateTruncatedText){
+    VerifyGlobal_BoundedRuntimeWrappersTerminateTruncatedText();
+}
+#endif
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

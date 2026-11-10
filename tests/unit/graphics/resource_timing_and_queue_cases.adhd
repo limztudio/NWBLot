@@ -1,23 +1,19 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
 
-b8 GraphicsResourceTimingAndQueueCasesReady(in u64 value){
-    return value != 0u;
-}
+#include <tests/common/gtest_macros.adhd>
+#include <tests/common/test_context.adhd>
+#include <tests/unit/graphics/resource_suite.adhd>
+#include "gpu_timing_test_names.adhd"
 
 native{
-
-#include <tests/common/test_context.adhd.h>
-#include <tests/unit/graphics/gpu_timing_test_names.adhd.h>
-
+#include <core/graphics/gpu_timing.h>
 #include <core/graphics/gpu_timing_metric_correlator.h>
+#include <core/graphics/gpu_timing_metrics.h>
+#include <core/graphics/rhi/resource.h>
+#include <core/graphics/vulkan/vulkan_viewport_policy.h>
 #include <core/perf/timing.h>
-
-#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,21 +25,23 @@ NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace Tests{
+namespace Tests::GraphicsTimingCasesDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_gpu_timing_metric_correlator_tests{
+struct GpuTimingMetricCorrelatorTestsTag;
+struct GpuTimingRecorderTestsTag;
+struct GpuTimingTestsTag;
 
+using CorrelatorTestArena = Tests::TestArena<GpuTimingMetricCorrelatorTestsTag>;
+using RecorderTestArena = Tests::TestArena<GpuTimingRecorderTestsTag>;
+using TimingTestArena = Tests::TestArena<GpuTimingTestsTag>;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using TestArena = ::NWB::Tests::TestArena<struct GpuTimingMetricCorrelatorTestsTag>;
-inline constexpr Name s_MetricScratchArena = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingMetricCorrelatorScratch;
-
+static_assert(IsNothrowDestructible_V<Core::GpuTimingFrameTransaction>, "GPU timing frame transactions must unwind without throwing");
+static_assert(IsNothrowDestructible_V<Core::GpuTimingMeasure>, "GPU timing measures stored in Optional must unwind without throwing");
+static_assert(!Core::ResourceQueueSharing::IsValid(static_cast<Core::ResourceQueueSharing::Mask>(1u << 7u)));
 
 struct RegistrationSentinel{};
 
@@ -75,728 +73,6 @@ private:
     Core::Perf::TimingRecorder& m_timing;
     usize m_registrationAttempt = 0u;
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(GpuTimingPacketEnvelopeMetrics, CorrelatesLargeOutOfOrderFrame){
-    constexpr usize s_ScopeCount = 2048u;
-    constexpr usize s_PairCount = s_ScopeCount / 2u;
-    constexpr u64 s_FrameIndex = 91u;
-    TestArena testArena;
-    Core::Perf::TimingRecorder timing(testArena.arena);
-    timing.setEnabled(true);
-    Core::GpuTimingMetricCorrelator correlator(testArena.arena, timing);
-    Core::Alloc::ScratchArena scratchArena(s_MetricScratchArena);
-    Vector<Core::GpuPacketEnvelopeMetricScope, Core::Alloc::ScratchArena> scopes{ scratchArena };
-    scopes.reserve(s_ScopeCount);
-    for(usize scopeIndex = 0u; scopeIndex < s_ScopeCount; ++scopeIndex){
-        Array<char, 32u> scopeIndexBuffer = {};
-        const auto scopeNameResult = DeriveName(Name(GraphicsTimingCases::s_GpuTimingCaseLargeEnvelope), FormatDecimal(scopeIndex, scopeIndexBuffer));
-        ASSERT_TRUE(scopeNameResult);
-        scopes.push_back(Core::GpuPacketEnvelopeMetricScope{ .scopeName = *scopeNameResult, .physicalQueue = { .index = static_cast<u16>(scopeIndex % 2u), .deviceGeneration = 7u }, });
-    }
-    const Name overlapScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingLargeEnvelopeOverlap;
-    const Array<Core::GpuPacketEnvelopeMetricQueueOutput, 2u> outputs = {
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = { .index = 0u, .deviceGeneration = 7u }, .internalIdleScopeName = Name(GraphicsTimingCases::s_GpuTimingCaseLargeIdle0) },
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = { .index = 1u, .deviceGeneration = 7u }, .internalIdleScopeName = Name(GraphicsTimingCases::s_GpuTimingCaseLargeIdle1) },
-    };
-    const b8 prepared = correlator.preparePacketEnvelopeMetrics(s_FrameIndex, scopes, overlapScope, outputs);
-
-    ASSERT_TRUE(prepared);
-
-    Core::GpuTimingSinkSampleVector samples{ scratchArena };
-    samples.reserve(1u + LengthOf(outputs));
-    b8 completedEarly = false;
-    for(usize arrivalIndex = 0u; arrivalIndex < s_ScopeCount; ++arrivalIndex){
-        // An odd stride permutes this power-of-two input count and separates arrival order from queue order.
-        const usize scopeIndex = (arrivalIndex * 773u) % s_ScopeCount;
-        const Core::GpuPacketEnvelopeMetricScope& scope = scopes[scopeIndex];
-        const u64 beginTicks = static_cast<u64>(scopeIndex / 2u) * 20u + static_cast<u64>(scopeIndex % 2u) * 5u;
-        correlator.recordTimestampRange(scope.scopeName, s_FrameIndex, Core::GpuComparableTimestampRange{ .beginTicks = beginTicks, .endTicks = beginTicks + 10u, .secondsPerTick = 0.25, .physicalQueue = scope.physicalQueue, }, scratchArena, samples);
-        if(arrivalIndex + 1u < s_ScopeCount)
-            completedEarly = completedEarly || !samples.empty();
-    }
-
-
-    EXPECT_FALSE(completedEarly);
-    ASSERT_EQ(samples.size(), 1u + LengthOf(outputs));
-    for(const Core::GpuTimingSinkSample& sample : samples)
-        timing.recordSample(sample.scope, sample.durationSeconds, sample.sourceFrameIndex);
-    timing.publishFrame(s_FrameIndex + 1u);
-
-    const Core::Perf::TimingStats& overlap = timing.stats(overlapScope);
-    ASSERT_EQ(overlap.sampleCount, 1u);
-    EXPECT_DOUBLE_EQ(overlap.seconds, static_cast<f64>(s_PairCount * 5u) * 0.25);
-    EXPECT_EQ(overlap.firstSampleFrameIndex, s_FrameIndex);
-    for(const Core::GpuPacketEnvelopeMetricQueueOutput& output : outputs){
-        const Core::Perf::TimingStats& idle = timing.stats(output.internalIdleScopeName);
-        ASSERT_EQ(idle.sampleCount, 1u);
-        EXPECT_DOUBLE_EQ(idle.seconds, static_cast<f64>((s_PairCount - 1u) * 10u) * 0.25);
-        EXPECT_EQ(idle.firstSampleFrameIndex, s_FrameIndex);
-    }
-}
-
-TEST(GpuTimingPacketEnvelopeMetrics, ReplacesDuplicateRangesWithoutCompletingMissingScopes){
-    TestArena testArena;
-    Core::Perf::TimingRecorder timing(testArena.arena);
-    timing.setEnabled(true);
-    Core::GpuTimingMetricCorrelator correlator(testArena.arena, timing);
-    Core::Alloc::ScratchArena scratchArena(s_MetricScratchArena);
-    const Core::GpuPhysicalQueueId firstQueue{ .index = 0u, .deviceGeneration = 9u };
-    const Core::GpuPhysicalQueueId secondQueue{ .index = 1u, .deviceGeneration = 9u };
-    const Name overlapScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingDuplicateEnvelopeOverlap;
-    const Array<Core::GpuPacketEnvelopeMetricScope, 2u> scopes = {
-        Core::GpuPacketEnvelopeMetricScope{ .scopeName = Name(GraphicsTimingCases::s_GpuTimingCaseDuplicateEnvelopeFirst), .physicalQueue = firstQueue },
-        Core::GpuPacketEnvelopeMetricScope{ .scopeName = Name(GraphicsTimingCases::s_GpuTimingCaseDuplicateEnvelopeSecond), .physicalQueue = secondQueue },
-    };
-    const Array<Core::GpuPacketEnvelopeMetricQueueOutput, 2u> outputs = {
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = secondQueue, .internalIdleScopeName = Name(GraphicsTimingCases::s_GpuTimingCaseDuplicateIdle1) },
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = firstQueue, .internalIdleScopeName = Name(GraphicsTimingCases::s_GpuTimingCaseDuplicateIdle0) },
-    };
-    const auto prepare = [&](){
-        return correlator.preparePacketEnvelopeMetrics(73u, scopes, overlapScope, outputs);
-    };
-    ASSERT_TRUE(prepare());
-    Core::GpuTimingSinkSampleVector samples{ scratchArena };
-    samples.reserve(1u + LengthOf(outputs));
-    Core::GpuComparableTimestampRange range{ .beginTicks = 0u, .endTicks = 100u, .secondsPerTick = 0.5, .physicalQueue = firstQueue, };
-    correlator.recordTimestampRange(scopes[0u].scopeName, 73u, range, scratchArena, samples);
-    ASSERT_TRUE(samples.empty());
-    ASSERT_TRUE(prepare());
-    range.beginTicks = 10u;
-    range.endTicks = 20u;
-    correlator.recordTimestampRange(scopes[0u].scopeName, 73u, range, scratchArena, samples);
-    ASSERT_TRUE(samples.empty());
-
-    correlator.recordTimestampRange(scopes[1u].scopeName, 73u, range, scratchArena, samples);
-    correlator.recordTimestampRange(Name(GraphicsTimingCases::s_GpuTimingCaseUnrelatedEnvelope), 73u, range, scratchArena, samples);
-    ASSERT_TRUE(samples.empty());
-    range.beginTicks = 15u;
-    range.endTicks = 25u;
-    range.physicalQueue = secondQueue;
-    correlator.recordTimestampRange(scopes[1u].scopeName, 73u, range, scratchArena, samples);
-    ASSERT_EQ(samples.size(), 3u);
-    for(const Core::GpuTimingSinkSample& sample : samples)
-        timing.recordSample(sample.scope, sample.durationSeconds, sample.sourceFrameIndex);
-    timing.publishFrame(74u);
-    EXPECT_DOUBLE_EQ(timing.stats(overlapScope).seconds, 2.5);
-    EXPECT_DOUBLE_EQ(timing.stats(outputs[0u].internalIdleScopeName).seconds, 0.0);
-    EXPECT_DOUBLE_EQ(timing.stats(outputs[1u].internalIdleScopeName).seconds, 0.0);
-
-    samples.clear();
-    correlator.recordTimestampRange(scopes[1u].scopeName, 73u, range, scratchArena, samples);
-    EXPECT_TRUE(samples.empty());
-}
-
-TEST(GpuTimingPacketEnvelopeMetrics, PreservesPartialFramesAcrossGrowthRejectedPreparesAndOutOfOrderRetirement){
-    constexpr usize s_FrameCount = 8u;
-    TestArena testArena;
-    Core::Perf::TimingRecorder timing(testArena.arena);
-    timing.setEnabled(true);
-    Core::GpuTimingMetricCorrelator correlator(testArena.arena, timing);
-    Core::Alloc::ScratchArena scratchArena(s_MetricScratchArena);
-    const Core::GpuPhysicalQueueId firstQueue{ .index = 0u, .deviceGeneration = 9u };
-    const Core::GpuPhysicalQueueId secondQueue{ .index = 1u, .deviceGeneration = 9u };
-    const Name overlapScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingGrowingEnvelopeOverlap;
-    const Array<Core::GpuPacketEnvelopeMetricScope, 2> scopes = {
-        Core::GpuPacketEnvelopeMetricScope{ .scopeName = Name(GraphicsTimingCases::s_GpuTimingCaseGrowingEnvelopeFirst), .physicalQueue = firstQueue },
-        Core::GpuPacketEnvelopeMetricScope{ .scopeName = Name(GraphicsTimingCases::s_GpuTimingCaseGrowingEnvelopeSecond), .physicalQueue = secondQueue },
-    };
-    const Array<Core::GpuPacketEnvelopeMetricScope, 2> reversedScopes = { scopes[1u], scopes[0u] };
-    const Array<Core::GpuPacketEnvelopeMetricScope, 2> duplicateScopes = { scopes[0u], Core::GpuPacketEnvelopeMetricScope{ .scopeName = scopes[0u].scopeName, .physicalQueue = secondQueue }, };
-    const Array<Core::GpuPacketEnvelopeMetricQueueOutput, 2> outputs = {
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = firstQueue, .internalIdleScopeName = Name(GraphicsTimingCases::s_GpuTimingCaseGrowingIdle0) },
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = secondQueue, .internalIdleScopeName = Name(GraphicsTimingCases::s_GpuTimingCaseGrowingIdle1) },
-    };
-    const auto prepare = [&](const u64 frameIndex, const Span<const Core::GpuPacketEnvelopeMetricScope> scopeInputs){
-        return correlator.preparePacketEnvelopeMetrics(frameIndex, scopeInputs, overlapScope, outputs);
-    };
-    EXPECT_FALSE(prepare(100u, duplicateScopes));
-    EXPECT_FALSE(correlator.hasOutputRole(overlapScope));
-    const Core::GpuComparableTimestampRange firstRange{ .beginTicks = 0u, .endTicks = 10u, .secondsPerTick = 0.5, .physicalQueue = firstQueue, };
-    const Core::GpuComparableTimestampRange secondRange{ .beginTicks = 5u, .endTicks = 15u, .secondsPerTick = 0.5, .physicalQueue = secondQueue, };
-    Core::GpuTimingSinkSampleVector samples{ scratchArena };
-    samples.reserve(3u);
-    for(usize frameOffset = 0u; frameOffset < s_FrameCount; ++frameOffset){
-        const u64 frameIndex = 100u + frameOffset;
-        const b8 reverseOrder = frameOffset % 2u != 0u;
-        ASSERT_TRUE(prepare(frameIndex, reverseOrder ? reversedScopes : scopes));
-        correlator.recordTimestampRange(scopes[0u].scopeName, frameIndex, firstRange, scratchArena, samples);
-        ASSERT_TRUE(samples.empty());
-        EXPECT_FALSE(prepare(frameIndex, duplicateScopes));
-        EXPECT_FALSE(prepare(frameIndex, reverseOrder ? scopes : reversedScopes));
-        ASSERT_TRUE(prepare(frameIndex, reverseOrder ? reversedScopes : scopes));
-    }
-    for(usize arrivalIndex = 0u; arrivalIndex < s_FrameCount; ++arrivalIndex){
-        const u64 frameIndex = 100u + (arrivalIndex * 5u) % s_FrameCount;
-        correlator.recordTimestampRange(scopes[0u].scopeName, frameIndex, firstRange, scratchArena, samples);
-        ASSERT_TRUE(samples.empty());
-        correlator.recordTimestampRange(scopes[1u].scopeName, frameIndex, secondRange, scratchArena, samples);
-        ASSERT_EQ(samples.size(), 3u);
-        EXPECT_DOUBLE_EQ(samples[0u].durationSeconds, 2.5);
-        EXPECT_DOUBLE_EQ(samples[1u].durationSeconds, 0.0);
-        EXPECT_DOUBLE_EQ(samples[2u].durationSeconds, 0.0);
-        for(const Core::GpuTimingSinkSample& sample : samples)
-            EXPECT_EQ(sample.sourceFrameIndex, frameIndex);
-        samples.clear();
-    }
-}
-
-TEST(GpuTimingPacketEnvelopeMetrics, PublishesNoPartialFrameWhenOutputRegistrationThrows){
-    TestArena testArena;
-    Core::Perf::TimingRecorder timing(testArena.arena);
-    timing.setEnabled(true);
-    ThrowOnceTimingSink sink(timing);
-    Core::GpuTimingMetricCorrelator correlator(testArena.arena, sink);
-    Core::Alloc::ScratchArena scratchArena(s_MetricScratchArena);
-    const Core::GpuPhysicalQueueId firstQueue{ .index = 0u, .deviceGeneration = 13u };
-    const Core::GpuPhysicalQueueId secondQueue{ .index = 1u, .deviceGeneration = 13u };
-    const Name overlapScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingThrowingEnvelopeOverlap;
-    const Array<Core::GpuPacketEnvelopeMetricScope, 2u> scopes = {
-        Core::GpuPacketEnvelopeMetricScope{ .scopeName = Name(GraphicsTimingCases::s_GpuTimingCaseThrowingEnvelopeFirst), .physicalQueue = firstQueue },
-        Core::GpuPacketEnvelopeMetricScope{ .scopeName = Name(GraphicsTimingCases::s_GpuTimingCaseThrowingEnvelopeSecond), .physicalQueue = secondQueue },
-    };
-    const Array<Core::GpuPacketEnvelopeMetricQueueOutput, 2u> outputs = {
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = firstQueue, .internalIdleScopeName = Name(GraphicsTimingCases::s_GpuTimingCaseThrowingIdle0) },
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = secondQueue, .internalIdleScopeName = Name(GraphicsTimingCases::s_GpuTimingCaseThrowingIdle1) },
-    };
-    const auto prepare = [&](){
-        return correlator.preparePacketEnvelopeMetrics(73u, scopes, overlapScope, outputs);
-    };
-    EXPECT_THROW(EXPECT_TRUE(prepare()), RegistrationSentinel);
-    EXPECT_TRUE(correlator.hasOutputRole(overlapScope));
-    EXPECT_TRUE(correlator.hasOutputRole(outputs[0u].internalIdleScopeName));
-    EXPECT_FALSE(correlator.hasOutputRole(outputs[1u].internalIdleScopeName));
-    ASSERT_TRUE(prepare());
-
-    Core::GpuTimingSinkSampleVector samples{ scratchArena };
-    samples.reserve(3u);
-    const Core::GpuComparableTimestampRange firstRange{ .beginTicks = 2u, .endTicks = 8u, .secondsPerTick = 0.5, .physicalQueue = firstQueue, };
-    const Core::GpuComparableTimestampRange secondRange{ .beginTicks = 4u, .endTicks = 10u, .secondsPerTick = 0.5, .physicalQueue = secondQueue, };
-    correlator.recordTimestampRange(scopes[0u].scopeName, 73u, firstRange, scratchArena, samples);
-    EXPECT_TRUE(samples.empty());
-    correlator.recordTimestampRange(scopes[1u].scopeName, 73u, secondRange, scratchArena, samples);
-    ASSERT_EQ(samples.size(), 3u);
-    EXPECT_DOUBLE_EQ(samples[0u].durationSeconds, 2.0);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/graphics/gpu_timing_test_names.adhd.h>
-
-#include <core/graphics/gpu_timing_metrics.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_gpu_timing_metrics_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(GpuPacketEnvelopeMetrics, UnionsSameQueueRangesAndOrdersEveryQueue){
-    Core::Alloc::ScratchArena scratchArena{Name(GraphicsTimingCases::s_GpuTimingCasePacketMetricsUnion)};
-    Core::GpuQueuePacketEnvelopeMetricsVector queueMetrics{scratchArena};
-    const Array<Core::GpuComparableTimestampRange, 8u> ranges{{
-        { .beginTicks = 40u, .endTicks = 50u, .secondsPerTick = 0.25, .physicalQueue = { .index = 2u, .deviceGeneration = 7u }, },
-        { .beginTicks = 100u, .endTicks = 100u, .secondsPerTick = 0.25, .physicalQueue = { .index = 1u, .deviceGeneration = 7u }, },
-        { .beginTicks = 8u, .endTicks = 20u, .secondsPerTick = 0.25, .physicalQueue = { .index = 2u, .deviceGeneration = 7u }, },
-        { .beginTicks = 5u, .endTicks = 15u, .secondsPerTick = 0.25, .physicalQueue = { .index = 0u, .deviceGeneration = 7u }, },
-        { .beginTicks = 0u, .endTicks = 10u, .secondsPerTick = 0.25, .physicalQueue = { .index = 2u, .deviceGeneration = 7u }, },
-        { .beginTicks = 20u, .endTicks = 30u, .secondsPerTick = 0.25, .physicalQueue = { .index = 2u, .deviceGeneration = 7u }, },
-        { .beginTicks = 42u, .endTicks = 45u, .secondsPerTick = 0.25, .physicalQueue = { .index = 2u, .deviceGeneration = 7u }, },
-        { .beginTicks = 0u, .endTicks = 10u, .secondsPerTick = 0.25, .physicalQueue = { .index = 2u, .deviceGeneration = 7u }, },
-    }};
-    Expected<Core::GpuPacketEnvelopeMetrics> metrics = Core::TryAggregateGpuPacketEnvelopeMetrics(ranges, scratchArena, queueMetrics);
-    ASSERT_TRUE(metrics);
-    EXPECT_DOUBLE_EQ(metrics->secondsPerTick, 0.25);
-    EXPECT_EQ(metrics->queueOverlapTicks, 10u);
-    ASSERT_EQ(queueMetrics.size(), 3u);
-    EXPECT_EQ(queueMetrics[0u].physicalQueue.index, 0u);
-    EXPECT_EQ(queueMetrics[0u].internalIdleTicks, 0u);
-    EXPECT_EQ(queueMetrics[1u].physicalQueue.index, 1u);
-    EXPECT_EQ(queueMetrics[1u].internalIdleTicks, 0u);
-    EXPECT_EQ(queueMetrics[2u].physicalQueue.index, 2u);
-    EXPECT_EQ(queueMetrics[2u].internalIdleTicks, 10u);
-}
-
-TEST(GpuPacketEnvelopeMetrics, CountsConcurrentQueueUnionOnceAtTripleOverlap){
-    Core::Alloc::ScratchArena scratchArena{Name(GraphicsTimingCases::s_GpuTimingCasePacketMetricsTriple)};
-    Core::GpuQueuePacketEnvelopeMetricsVector queueMetrics{scratchArena};
-    const Array<Core::GpuComparableTimestampRange, 3u> ranges{{
-        { .beginTicks = 0u, .endTicks = 100u, .secondsPerTick = 1.0, .physicalQueue = { .index = 0u, .deviceGeneration = 2u }, },
-        { .beginTicks = 10u, .endTicks = 90u, .secondsPerTick = 1.0, .physicalQueue = { .index = 1u, .deviceGeneration = 2u }, },
-        { .beginTicks = 20u, .endTicks = 80u, .secondsPerTick = 1.0, .physicalQueue = { .index = 2u, .deviceGeneration = 2u }, },
-    }};
-    Expected<Core::GpuPacketEnvelopeMetrics> metrics = Core::TryAggregateGpuPacketEnvelopeMetrics(ranges, scratchArena, queueMetrics);
-    ASSERT_TRUE(metrics);
-    EXPECT_EQ(metrics->queueOverlapTicks, 80u);
-    ASSERT_EQ(queueMetrics.size(), 3u);
-    EXPECT_EQ(queueMetrics[0u].internalIdleTicks, 0u);
-    EXPECT_EQ(queueMetrics[1u].internalIdleTicks, 0u);
-    EXPECT_EQ(queueMetrics[2u].internalIdleTicks, 0u);
-}
-
-TEST(GpuPacketEnvelopeMetrics, PreservesLargeAndNearLimitTickPrecision){
-    Core::Alloc::ScratchArena scratchArena{Name(GraphicsTimingCases::s_GpuTimingCasePacketMetricsPrecision)};
-    Core::GpuQueuePacketEnvelopeMetricsVector queueMetrics{scratchArena};
-    static constexpr u64 s_LargeTick = 9007199254740993u;
-    const Array<Core::GpuComparableTimestampRange, 3u> largeRanges{{
-        { .beginTicks = s_LargeTick, .endTicks = s_LargeTick + 20u, .secondsPerTick = 0.5, .physicalQueue = { .index = 5u, .deviceGeneration = 9u }, },
-        { .beginTicks = s_LargeTick + 30u, .endTicks = s_LargeTick + 40u, .secondsPerTick = 0.5, .physicalQueue = { .index = 5u, .deviceGeneration = 9u }, },
-        { .beginTicks = s_LargeTick + 5u, .endTicks = s_LargeTick + 35u, .secondsPerTick = 0.5, .physicalQueue = { .index = 6u, .deviceGeneration = 9u }, },
-    }};
-    Expected<Core::GpuPacketEnvelopeMetrics> metrics = Core::TryAggregateGpuPacketEnvelopeMetrics(largeRanges, scratchArena, queueMetrics);
-    ASSERT_TRUE(metrics);
-    EXPECT_EQ(metrics->queueOverlapTicks, 20u);
-    ASSERT_EQ(queueMetrics.size(), 2u);
-    EXPECT_EQ(queueMetrics[0u].internalIdleTicks, 10u);
-
-    const Array<Core::GpuComparableTimestampRange, 2u> nearLimitRanges{{
-        { .beginTicks = Limit<u64>::s_Max - 20u, .endTicks = Limit<u64>::s_Max - 10u, .secondsPerTick = 1.0, .physicalQueue = { .index = 1u, .deviceGeneration = 4u }, },
-        { .beginTicks = Limit<u64>::s_Max - 15u, .endTicks = Limit<u64>::s_Max - 5u, .secondsPerTick = 1.0, .physicalQueue = { .index = 2u, .deviceGeneration = 4u }, },
-    }};
-    ASSERT_TRUE((metrics = Core::TryAggregateGpuPacketEnvelopeMetrics(nearLimitRanges, scratchArena, queueMetrics)));
-    EXPECT_EQ(metrics->queueOverlapTicks, 5u);
-}
-
-TEST(GpuPacketEnvelopeMetrics, AcceptsCompleteZeroOverlapInputs){
-    Core::Alloc::ScratchArena scratchArena{Name(GraphicsTimingCases::s_GpuTimingCasePacketMetricsZero)};
-    Core::GpuQueuePacketEnvelopeMetricsVector queueMetrics{scratchArena};
-    const Array<Core::GpuComparableTimestampRange, 2u> touchingRanges{{
-        { .beginTicks = 0u, .endTicks = 10u, .secondsPerTick = 1.0, .physicalQueue = { .index = 0u, .deviceGeneration = 6u }, },
-        { .beginTicks = 10u, .endTicks = 20u, .secondsPerTick = 1.0, .physicalQueue = { .index = 1u, .deviceGeneration = 6u }, },
-    }};
-    Expected<Core::GpuPacketEnvelopeMetrics> metrics = Core::TryAggregateGpuPacketEnvelopeMetrics(touchingRanges, scratchArena, queueMetrics);
-    ASSERT_TRUE(metrics);
-    EXPECT_EQ(metrics->queueOverlapTicks, 0u);
-    ASSERT_EQ(queueMetrics.size(), 2u);
-
-    const Array<Core::GpuComparableTimestampRange, 2u> zeroLengthRanges{{
-        { .beginTicks = 25u, .endTicks = 25u, .secondsPerTick = 1.0, .physicalQueue = { .index = 3u, .deviceGeneration = 6u }, },
-        { .beginTicks = 75u, .endTicks = 75u, .secondsPerTick = 1.0, .physicalQueue = { .index = 1u, .deviceGeneration = 6u }, },
-    }};
-    ASSERT_TRUE((metrics = Core::TryAggregateGpuPacketEnvelopeMetrics(zeroLengthRanges, scratchArena, queueMetrics)));
-    EXPECT_EQ(metrics->queueOverlapTicks, 0u);
-    ASSERT_EQ(queueMetrics.size(), 2u);
-    EXPECT_EQ(queueMetrics[0u].physicalQueue.index, 1u);
-    EXPECT_EQ(queueMetrics[1u].physicalQueue.index, 3u);
-    EXPECT_EQ(queueMetrics[0u].internalIdleTicks, 0u);
-    EXPECT_EQ(queueMetrics[1u].internalIdleTicks, 0u);
-}
-
-TEST(GpuPacketEnvelopeMetrics, RejectsInvalidOrIncomparableInputAndClearsOutputs){
-    Core::Alloc::ScratchArena scratchArena{Name(GraphicsTimingCases::s_GpuTimingCasePacketMetricsRejection)};
-    Core::GpuQueuePacketEnvelopeMetricsVector queueMetrics{scratchArena};
-    const Array<Core::GpuComparableTimestampRange, 2u> validRanges{{
-        { .beginTicks = 0u, .endTicks = 10u, .secondsPerTick = 1.0, .physicalQueue = { .index = 0u, .deviceGeneration = 3u }, },
-        { .beginTicks = 5u, .endTicks = 15u, .secondsPerTick = 1.0, .physicalQueue = { .index = 1u, .deviceGeneration = 3u }, },
-    }};
-    const auto expectRejected = [&](const Span<const Core::GpuComparableTimestampRange> ranges){
-        queueMetrics.push_back(Core::GpuQueuePacketEnvelopeMetrics{ .physicalQueue = { .index = 4u, .deviceGeneration = 8u }, .internalIdleTicks = 13u, });
-        EXPECT_FALSE(Core::TryAggregateGpuPacketEnvelopeMetrics(ranges, scratchArena, queueMetrics));
-        EXPECT_TRUE(queueMetrics.empty());
-    };
-
-    expectRejected(Span<const Core::GpuComparableTimestampRange>{});
-    expectRejected(Span<const Core::GpuComparableTimestampRange>(validRanges.data(), 0u));
-    Array<Core::GpuComparableTimestampRange, 2u> invalidRanges{};
-
-    invalidRanges[0u] = validRanges[0u];
-    invalidRanges[1u] = validRanges[1u];
-    invalidRanges[0u].beginTicks = 11u;
-    expectRejected(invalidRanges);
-
-    invalidRanges[0u] = validRanges[0u];
-    invalidRanges[0u].physicalQueue = {};
-    expectRejected(invalidRanges);
-
-    invalidRanges[0u] = validRanges[0u];
-    invalidRanges[0u].secondsPerTick = Limit<f64>::s_Infinity;
-    expectRejected(invalidRanges);
-
-    invalidRanges[0u].secondsPerTick = Limit<f64>::s_QuietNaN;
-    expectRejected(invalidRanges);
-
-    invalidRanges[0u].secondsPerTick = 0.0;
-    expectRejected(invalidRanges);
-
-    invalidRanges[0u] = validRanges[0u];
-    invalidRanges[1u].secondsPerTick = 0.5;
-    expectRejected(invalidRanges);
-
-    invalidRanges[1u] = validRanges[1u];
-    invalidRanges[1u].physicalQueue.deviceGeneration = 4u;
-    expectRejected(invalidRanges);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/common/test_context.adhd.h>
-#include <tests/unit/graphics/gpu_timing_test_names.adhd.h>
-
-#include <gtest/gtest.h>
-
-#include <core/graphics/gpu_timing.h>
-#include <core/perf/timing.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_gpu_timing_recorder_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using TestArena = ::NWB::Tests::TestArena<struct GpuTimingRecorderTestsTag>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(IsNothrowDestructible_V<Core::GpuTimingFrameTransaction>, "GPU timing frame transactions must unwind without throwing");
-static_assert(IsNothrowDestructible_V<Core::GpuTimingMeasure>, "GPU timing measures stored in Optional must unwind without throwing");
-
-
-struct GpuTimingSubscriptionCapture{
-    u32 sampleCount = 0u;
-
-
-public:
-    static void Invoke(void* const context, const Core::GpuTimingSample&)noexcept{
-        GpuTimingSubscriptionCapture* const capture = static_cast<GpuTimingSubscriptionCapture*>(context);
-        if(!capture)
-            return;
-
-        ++capture->sampleCount;
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(GpuTimingSampleSubscriptions, ScopedDemandsReplaceAtomicallyAndRemainSubscriptionIsolated){
-    TestArena testArena;
-    Core::Perf::TimingRecorder timingSink(testArena.arena);
-    Core::GpuTimingRecorder recorder(testArena.arena, timingSink);
-    GpuTimingSubscriptionCapture firstCapture;
-    GpuTimingSubscriptionCapture secondCapture;
-    const Name firstScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsGpuTimingFeedbackFirst;
-    const Name sharedScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsGpuTimingFeedbackShared;
-    const Name secondScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsGpuTimingFeedbackSecond;
-    const Name metricFirstInput = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsGpuTimingFeedbackMetricFirstInput;
-    const Name metricSecondInput = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsGpuTimingFeedbackMetricSecondInput;
-    const Name metricAlternateFirstInput = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsGpuTimingFeedbackMetricAlternateFirstInput;
-    const Name metricAlternateSecondInput = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsGpuTimingFeedbackMetricAlternateSecondInput;
-    const Name metricOutput = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsGpuTimingFeedbackMetricOutput;
-    const Array<Name, 2u> firstScopes = { firstScope, sharedScope };
-    const Array<Name, 2u> secondScopes = { sharedScope, secondScope };
-    const Array<Name, 2u> invalidScopes = { firstScope, s_NameNone };
-    const Array<Name, 2u> duplicateScopes = { firstScope, firstScope };
-    const auto firstResult = recorder.subscribeSampleListener(Core::GpuTimingSampleListener{ .context = &firstCapture, .invoke = &GpuTimingSubscriptionCapture::Invoke, });
-    ASSERT_TRUE(firstResult);
-    const Core::GpuTimingSampleSubscription first = *firstResult;
-    const auto secondResult = recorder.subscribeSampleListener(Core::GpuTimingSampleListener{ .context = &secondCapture, .invoke = &GpuTimingSubscriptionCapture::Invoke, });
-    ASSERT_TRUE(secondResult);
-    const Core::GpuTimingSampleSubscription second = *secondResult;
-
-    ASSERT_TRUE(first.valid());
-    ASSERT_TRUE(second.valid());
-    static_assert(noexcept(recorder.unsubscribeSampleListener(first)));
-    EXPECT_NE(first, second);
-    EXPECT_FALSE(recorder.collectionActive());
-    ASSERT_TRUE(recorder.setFeedbackCollectionScopes(first, firstScopes));
-    ASSERT_TRUE(recorder.setFeedbackCollectionScopes(first, firstScopes));
-    EXPECT_TRUE(recorder.collectionActive());
-    EXPECT_FALSE(recorder.setFeedbackCollectionScopes(first, invalidScopes));
-    EXPECT_TRUE(recorder.collectionActive());
-    EXPECT_FALSE(recorder.setFeedbackCollectionScopes(first, duplicateScopes));
-    EXPECT_TRUE(recorder.collectionActive());
-    EXPECT_FALSE(recorder.prepareOverlapMetric(metricFirstInput, metricSecondInput, firstScope));
-    ASSERT_TRUE(recorder.prepareOverlapMetric(metricFirstInput, metricSecondInput, metricOutput));
-    EXPECT_FALSE(recorder.setFeedbackCollectionScopes(first, Span<const Name>(&metricOutput, 1u)));
-    EXPECT_TRUE(recorder.collectionActive());
-    EXPECT_FALSE(recorder.prepareOverlapMetric(metricAlternateFirstInput, metricAlternateSecondInput, firstScope));
-    ASSERT_TRUE(recorder.setFeedbackCollectionScopes(second, secondScopes));
-    ASSERT_TRUE(recorder.setFeedbackCollectionScopes(first, Span<const Name>(&firstScope, 1u)));
-    ASSERT_TRUE(recorder.clearFeedbackCollectionScopes(first));
-    EXPECT_TRUE(recorder.collectionActive());
-
-    ASSERT_TRUE(recorder.setFeedbackCollectionScopes(first, Span<const Name>(&firstScope, 1u)));
-    recorder.unsubscribeSampleListener(second);
-    EXPECT_TRUE(recorder.collectionActive());
-    EXPECT_FALSE(recorder.setFeedbackCollectionScopes(second, Span<const Name>(&secondScope, 1u)));
-    EXPECT_FALSE(recorder.clearFeedbackCollectionScopes(second));
-
-    ASSERT_TRUE(recorder.clearFeedbackCollectionScopes(first));
-    EXPECT_FALSE(recorder.collectionActive());
-    EXPECT_TRUE(recorder.clearFeedbackCollectionScopes(first));
-
-    recorder.unsubscribeSampleListener(first);
-    EXPECT_FALSE(recorder.setFeedbackCollectionScopes(first, Span<const Name>(&firstScope, 1u)));
-    EXPECT_FALSE(recorder.clearFeedbackCollectionScopes(first));
-}
-
-TEST(GpuTimingSampleAttribution, IssuesUniqueProcessIdentitiesAcrossRecorderResetAndRecreation){
-    TestArena testArena;
-    Core::Perf::TimingRecorder firstSink(testArena.arena);
-    Core::Perf::TimingRecorder secondSink(testArena.arena);
-    Core::GpuTimingRecorder firstRecorder(testArena.arena, firstSink);
-    Core::GpuTimingRecorder secondRecorder(testArena.arena, secondSink);
-
-    const auto firstResult = firstRecorder.allocateSampleAttribution();
-    ASSERT_TRUE(firstResult);
-    const Core::GpuTimingSampleAttribution first = *firstResult;
-    const auto secondResult = firstRecorder.allocateSampleAttribution();
-    ASSERT_TRUE(secondResult);
-    const Core::GpuTimingSampleAttribution second = *secondResult;
-    const auto recreatedResult = secondRecorder.allocateSampleAttribution();
-    ASSERT_TRUE(recreatedResult);
-    const Core::GpuTimingSampleAttribution recreated = *recreatedResult;
-    firstRecorder.resetQueries();
-    const auto afterResetResult = firstRecorder.allocateSampleAttribution();
-    ASSERT_TRUE(afterResetResult);
-    const Core::GpuTimingSampleAttribution afterReset = *afterResetResult;
-
-    ASSERT_TRUE(first.valid());
-    ASSERT_TRUE(second.valid());
-    ASSERT_TRUE(recreated.valid());
-    ASSERT_TRUE(afterReset.valid());
-    EXPECT_NE(first, second);
-    EXPECT_NE(first, recreated);
-    EXPECT_NE(first, afterReset);
-    EXPECT_NE(second, recreated);
-    EXPECT_NE(second, afterReset);
-    EXPECT_NE(recreated, afterReset);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(TimerQueryResult, MasksHighBitsAndWrapsPartialWidth){
-    const Core::TimerQueryResult result{ .beginTicks = 0x1fau, .endTicks = 0x105u, .secondsPerTick = 0.5, .physicalQueue = { .index = 1u, .deviceGeneration = 3u }, .timestampValidBits = 8u, .comparableAcrossSubmissions = true, };
-
-    ASSERT_TRUE(result.valid());
-    EXPECT_EQ(result.timestampMask(), 0xffu);
-    EXPECT_EQ(result.maskedBeginTicks(), 0xfau);
-    EXPECT_EQ(result.durationTicks(), 11u);
-    EXPECT_DOUBLE_EQ(result.durationSeconds(), 5.5);
-    EXPECT_FALSE(result.hasComparableRange());
-}
-
-TEST(TimerQueryResult, WrapsFullWidthWithoutShiftingBySixtyFour){
-    const Core::TimerQueryResult result{ .beginTicks = Limit<u64>::s_Max - 3u, .endTicks = 5u, .secondsPerTick = 1.0, .physicalQueue = { .index = 1u, .deviceGeneration = 3u }, .timestampValidBits = 64u, .comparableAcrossSubmissions = true, };
-
-    ASSERT_TRUE(result.valid());
-    EXPECT_EQ(result.durationTicks(), 9u);
-    EXPECT_DOUBLE_EQ(result.durationSeconds(), 9.0);
-    EXPECT_FALSE(result.hasComparableRange());
-}
-
-TEST(TimerQueryResult, RetainsNearFullWidthDurationWithoutPublishingAbsoluteRange){
-    const Core::TimerQueryResult result{ .beginTicks = (u64{ 1u } << 63u) - 3u, .endTicks = 2u, .secondsPerTick = 0.5, .physicalQueue = { .index = 1u, .deviceGeneration = 3u }, .timestampValidBits = 63u, .comparableAcrossSubmissions = true, };
-
-    ASSERT_TRUE(result.valid());
-    EXPECT_EQ(result.durationTicks(), 5u);
-    EXPECT_DOUBLE_EQ(result.durationSeconds(), 2.5);
-    EXPECT_FALSE(result.hasComparableRange());
-}
-
-TEST(TimerQueryResult, ComparableRangeRequiresCapabilityAndPhysicalQueue){
-    Core::TimerQueryResult result{ .beginTicks = 10u, .endTicks = 20u, .secondsPerTick = 1.0, .physicalQueue = { .index = 1u, .deviceGeneration = 3u }, .timestampValidBits = 64u, .comparableAcrossSubmissions = false, };
-
-    ASSERT_TRUE(result.valid());
-    EXPECT_FALSE(result.hasComparableRange());
-
-    result.comparableAcrossSubmissions = true;
-    result.physicalQueue = {};
-    EXPECT_FALSE(result.hasComparableRange());
-
-    result.physicalQueue = { .index = 1u, .deviceGeneration = 3u };
-    EXPECT_TRUE(result.hasComparableRange());
-}
-
-TEST(TimerQueryResult, RejectsUnknownOrOutOfRangeWidths){
-    Core::TimerQueryResult result{ .beginTicks = 10u, .endTicks = 20u, .secondsPerTick = 1.0, .physicalQueue = {}, .timestampValidBits = 0u, .comparableAcrossSubmissions = false, };
-
-    EXPECT_FALSE(result.valid());
-    EXPECT_EQ(result.timestampMask(), 0u);
-    EXPECT_EQ(result.durationTicks(), 0u);
-    EXPECT_DOUBLE_EQ(result.durationSeconds(), 0.0);
-
-    result.timestampValidBits = 65u;
-    EXPECT_FALSE(result.valid());
-    EXPECT_EQ(result.timestampMask(), 0u);
-
-    result.timestampValidBits = 64u;
-    result.secondsPerTick = 0.0;
-    EXPECT_FALSE(result.valid());
-    EXPECT_FALSE(result.hasComparableRange());
-}
-
-TEST(GpuComparableTimestampRange, IntersectsRawTicksBeforeFloatingPointConversion){
-    static constexpr u64 s_LargeTick = GraphicsTimingCases::s_GpuTimingLargeTick;
-    const Core::GpuComparableTimestampRange first{ .beginTicks = s_LargeTick, .endTicks = s_LargeTick + 5u, .secondsPerTick = 0.25, .physicalQueue = { .index = 0u, .deviceGeneration = 7u }, };
-    const Core::GpuComparableTimestampRange second{ .beginTicks = s_LargeTick + 4u, .endTicks = s_LargeTick + 8u, .secondsPerTick = 0.25, .physicalQueue = { .index = 3u, .deviceGeneration = 7u }, };
-
-    const auto overlapTicks = Core::TryComputeGpuTimestampOverlap(first, second);
-    ASSERT_TRUE(overlapTicks);
-    EXPECT_EQ(*overlapTicks, 1u);
-
-    Core::GpuComparableTimestampRange disjoint = second;
-    disjoint.beginTicks = first.endTicks;
-    disjoint.endTicks = first.endTicks + 2u;
-    const auto disjointOverlap = Core::TryComputeGpuTimestampOverlap(first, disjoint);
-    ASSERT_TRUE(disjointOverlap);
-    EXPECT_EQ(*disjointOverlap, 0u);
-
-    Core::GpuComparableTimestampRange recreatedDevice = second;
-    recreatedDevice.physicalQueue.deviceGeneration = 8u;
-    EXPECT_FALSE(Core::TryComputeGpuTimestampOverlap(first, recreatedDevice));
-
-    Core::GpuComparableTimestampRange mismatchedPeriod = second;
-    mismatchedPeriod.secondsPerTick = 0.5;
-    EXPECT_FALSE(Core::TryComputeGpuTimestampOverlap(first, mismatchedPeriod));
-
-    Core::GpuComparableTimestampRange infinitePeriod = second;
-    infinitePeriod.secondsPerTick = Limit<f64>::s_Infinity;
-    EXPECT_FALSE(infinitePeriod.valid());
-    EXPECT_FALSE(Core::TryComputeGpuTimestampOverlap(first, infinitePeriod));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/common/test_context.adhd.h>
-#include <tests/unit/graphics/gpu_timing_test_names.adhd.h>
-
-#include <core/graphics/gpu_timing.h>
-#include <core/graphics/gpu_timing_metric_correlator.h>
-#include <core/perf/timing.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_gpu_timing_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using TestArena = ::NWB::Tests::TestArena<struct GpuTimingTestsTag>;
-inline constexpr Name s_GpuTimingMetricScratchArena = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsGpuTimingMetricScratch;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 class FailOnceTimingSink final : public Core::Perf::TimingSink, NoCopy{
 public:
@@ -830,118 +106,816 @@ private:
     u32 m_nextScopeIndex = 0u;
 };
 
+struct CorrelatorContext{
+    CorrelatorTestArena testArena;
+    Core::Perf::TimingRecorder timing{ testArena.arena };
+    Core::GpuTimingMetricCorrelator correlator{ testArena.arena, timing };
+    Core::Alloc::ScratchArena scratchArena{ NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingMetricCorrelatorScratch };
+};
 
-void RecordAndPublishTimestampRange(const Name& scopeName, const u64 frameIndex, const Core::GpuComparableTimestampRange& range, Core::GpuTimingMetricCorrelator& correlator, Core::Perf::TimingSink& timing, Core::Alloc::ScratchArena& scratchArena){
-    Core::GpuTimingSinkSampleVector performanceSamples{ scratchArena };
-    correlator.recordTimestampRange(scopeName, frameIndex, range, scratchArena, performanceSamples);
-    for(const Core::GpuTimingSinkSample& sample : performanceSamples)
-        timing.recordSample(sample.scope, sample.durationSeconds, sample.sourceFrameIndex);
+struct ThrowOnceCorrelatorContext{
+    CorrelatorTestArena testArena;
+    Core::Perf::TimingRecorder timing{ testArena.arena };
+    ThrowOnceTimingSink sink{ timing };
+    Core::GpuTimingMetricCorrelator correlator{ testArena.arena, sink };
+    Core::Alloc::ScratchArena scratchArena{ NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingMetricCorrelatorScratch };
+};
+
+struct TimingMetricContext{
+    TimingTestArena testArena;
+    Core::Perf::TimingRecorder timing{ testArena.arena };
+    Core::GpuTimingMetricCorrelator correlator{ testArena.arena, timing };
+    Core::Alloc::ScratchArena scratchArena{ NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsGpuTimingMetricScratch };
+};
+
+struct FailOnceTimingContext{
+    TimingTestArena testArena;
+    FailOnceTimingSink timing;
+    Core::GpuTimingMetricCorrelator correlator{ testArena.arena, timing };
+
+
+public:
+    explicit FailOnceTimingContext(const usize failureAttempt)noexcept
+        : timing(failureAttempt)
+    {}
+};
+
+struct RecorderPairContext{
+    RecorderTestArena testArena;
+    Core::Perf::TimingRecorder firstSink{ testArena.arena };
+    Core::Perf::TimingRecorder secondSink{ testArena.arena };
+    Core::GpuTimingRecorder firstRecorder{ testArena.arena, firstSink };
+    Core::GpuTimingRecorder secondRecorder{ testArena.arena, secondSink };
+};
+
+struct PacketMetricsScratchContext{
+    Core::Alloc::ScratchArena scratchArena;
+    Core::GpuQueuePacketEnvelopeMetricsVector queueMetrics;
+
+
+public:
+    explicit PacketMetricsScratchContext(const Name& arenaName)noexcept
+        : scratchArena(arenaName)
+        , queueMetrics(scratchArena)
+    {}
+};
+
+struct GpuTimingSubscriptionCapture{
+    u32 sampleCount = 0u;
+
+
+public:
+    static void Invoke(void* context, const Core::GpuTimingSample&)noexcept;
+};
+
+[[nodiscard]] Core::GpuTimingSampleListener MakeSubscriptionListener(GpuTimingSubscriptionCapture& capture)noexcept;
+[[nodiscard]] Expected<Name> DeriveIndexedScopeName(const Name& prefix, usize scopeIndex)noexcept;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::GraphicsTimingCases{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using CorrelatorContext = Tests::GraphicsTimingCasesDetail::CorrelatorContext;
+using ThrowOnceCorrelatorContext = Tests::GraphicsTimingCasesDetail::ThrowOnceCorrelatorContext;
+using TimingMetricContext = Tests::GraphicsTimingCasesDetail::TimingMetricContext;
+using FailOnceTimingContext = Tests::GraphicsTimingCasesDetail::FailOnceTimingContext;
+using RecorderPairContext = Tests::GraphicsTimingCasesDetail::RecorderPairContext;
+using PacketMetricsScratchContext = Tests::GraphicsTimingCasesDetail::PacketMetricsScratchContext;
+using RegistrationSentinel = Tests::GraphicsTimingCasesDetail::RegistrationSentinel;
+using GpuTimingSubscriptionCapture = Tests::GraphicsTimingCasesDetail::GpuTimingSubscriptionCapture;
+using Tests::GraphicsTimingCasesDetail::MakeSubscriptionListener;
+using Tests::GraphicsTimingCasesDetail::DeriveIndexedScopeName;
+
+using ScratchArena = Core::Alloc::ScratchArena;
+using TimingRecorder = Core::Perf::TimingRecorder;
+using TimingScopeId = Core::Perf::TimingScopeId;
+using TimingStats = Core::Perf::TimingStats;
+
+using GpuPhysicalQueueId = Core::GpuPhysicalQueueId;
+using GpuComparableTimestampRange = Core::GpuComparableTimestampRange;
+using GpuPacketEnvelopeMetricScope = Core::GpuPacketEnvelopeMetricScope;
+using GpuPacketEnvelopeMetricQueueOutput = Core::GpuPacketEnvelopeMetricQueueOutput;
+using GpuPacketEnvelopeMetricScopeScratchVector = Vector<Core::GpuPacketEnvelopeMetricScope, Core::Alloc::ScratchArena>;
+using GpuTimingSinkSample = Core::GpuTimingSinkSample;
+using GpuTimingSinkSampleVector = Core::GpuTimingSinkSampleVector;
+using GpuTimingMetricCorrelator = Core::GpuTimingMetricCorrelator;
+using GpuPacketEnvelopeMetrics = Core::GpuPacketEnvelopeMetrics;
+using GpuQueuePacketEnvelopeMetrics = Core::GpuQueuePacketEnvelopeMetrics;
+using GpuQueuePacketEnvelopeMetricsVector = Core::GpuQueuePacketEnvelopeMetricsVector;
+using GpuTimingRecorder = Core::GpuTimingRecorder;
+using GpuTimingSampleSubscription = Core::GpuTimingSampleSubscription;
+using GpuTimingSampleAttribution = Core::GpuTimingSampleAttribution;
+using TimerQueryResult = Core::TimerQueryResult;
+using Viewport = Core::Viewport;
+using VulkanViewportPolicy = Core::GraphicsBackend::VulkanViewportPolicy;
+using ResourceQueueSharingMask = Core::ResourceQueueSharing::Mask;
+
+using Core::TryComputeGpuTimestampOverlap;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
 }
 
 
-TEST(GpuTimingOverlapRegistration, IsCanonicalIdempotentAndRejectsMetricRoleConflicts){
-    TestArena testArena;
-    Core::Perf::TimingRecorder timing(testArena.arena);
-    Core::GpuTimingMetricCorrelator correlator(testArena.arena, timing);
-    const Name firstScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapFirst;
-    const Name secondScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapSecond;
-    const Name thirdScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapThird;
-    const Name fourthScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapFourth;
-    const Name outputScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapOutput;
-    const Name alternateOutputScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapAlternateOutput;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    EXPECT_FALSE(correlator.prepareOverlapMetric(s_NameNone, secondScope, outputScope));
-    EXPECT_FALSE(correlator.prepareOverlapMetric(firstScope, s_NameNone, outputScope));
-    EXPECT_FALSE(correlator.prepareOverlapMetric(firstScope, secondScope, s_NameNone));
-    EXPECT_FALSE(correlator.prepareOverlapMetric(firstScope, firstScope, outputScope));
-    EXPECT_FALSE(correlator.prepareOverlapMetric(firstScope, secondScope, firstScope));
-    EXPECT_FALSE(correlator.prepareOverlapMetric(firstScope, secondScope, secondScope));
-    EXPECT_EQ(timing.scopeCount(), 0u);
 
-    ASSERT_TRUE(correlator.prepareOverlapMetric(firstScope, secondScope, outputScope));
-    EXPECT_EQ(timing.scopeCount(), 1u);
-    EXPECT_TRUE(correlator.prepareOverlapMetric(secondScope, firstScope, outputScope));
-    EXPECT_EQ(timing.scopeCount(), 1u);
+const u64 s_F64InfinityBits = 0x7ff0000000000000u;
+const u64 s_F64QuietNanBits = 0x7ff8000000000000u;
 
-    EXPECT_FALSE(correlator.prepareOverlapMetric(firstScope, secondScope, alternateOutputScope));
-    EXPECT_FALSE(correlator.prepareOverlapMetric(secondScope, firstScope, alternateOutputScope));
-    EXPECT_FALSE(correlator.prepareOverlapMetric(thirdScope, fourthScope, outputScope));
-    EXPECT_FALSE(correlator.prepareOverlapMetric(outputScope, thirdScope, alternateOutputScope));
-    EXPECT_FALSE(correlator.prepareOverlapMetric(thirdScope, fourthScope, firstScope));
-    EXPECT_EQ(timing.scopeCount(), 1u);
-
-    EXPECT_TRUE(correlator.prepareOverlapMetric(firstScope, thirdScope, alternateOutputScope));
-    EXPECT_EQ(timing.scopeCount(), 2u);
+GpuPhysicalQueueId MakePhysicalQueue(in u16 index, in u16 deviceGeneration){
+    GpuPhysicalQueueId queue = GpuPhysicalQueueId();
+    queue.index = index;
+    queue.deviceGeneration = deviceGeneration;
+    return queue;
 }
 
-TEST(GpuTimingOverlapRegistration, ReversedDuplicatePublishesOneSample){
-    TestArena testArena;
-    Core::Perf::TimingRecorder timing(testArena.arena);
-    timing.setEnabled(true);
-    Core::GpuTimingMetricCorrelator correlator(testArena.arena, timing);
-    const Name firstScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapSampleFirst;
-    const Name secondScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapSampleSecond;
-    const Name outputScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapSampleOutput;
-    Core::Alloc::ScratchArena scratchArena(s_GpuTimingMetricScratchArena);
-    const Core::GpuComparableTimestampRange firstRange{ .beginTicks = 10u, .endTicks = 20u, .secondsPerTick = 0.25, .physicalQueue = { .index = 0u, .deviceGeneration = 3u }, };
-    const Core::GpuComparableTimestampRange secondRange{ .beginTicks = 18u, .endTicks = 30u, .secondsPerTick = 0.25, .physicalQueue = { .index = 1u, .deviceGeneration = 3u }, };
-    Core::GpuTimingSinkSampleVector performanceSamples{ scratchArena };
+GpuComparableTimestampRange MakeComparableRange(in u64 beginTicks, in u64 endTicks, in f64 secondsPerTick, in GpuPhysicalQueueId queue){
+    GpuComparableTimestampRange range = GpuComparableTimestampRange();
+    range.beginTicks = beginTicks;
+    range.endTicks = endTicks;
+    range.secondsPerTick = secondsPerTick;
+    range.physicalQueue = queue;
+    return range;
+}
 
-    ASSERT_TRUE(correlator.prepareOverlapMetric(firstScope, secondScope, outputScope));
-    ASSERT_TRUE(correlator.prepareOverlapMetric(secondScope, firstScope, outputScope));
-    correlator.recordTimestampRange(firstScope, 41u, firstRange, scratchArena, performanceSamples);
+GpuPacketEnvelopeMetricScope MakeEnvelopeScope(in Name scopeName, in GpuPhysicalQueueId queue){
+    GpuPacketEnvelopeMetricScope scope = GpuPacketEnvelopeMetricScope();
+    scope.scopeName = scopeName;
+    scope.physicalQueue = queue;
+    return scope;
+}
+
+GpuPacketEnvelopeMetricQueueOutput MakeEnvelopeOutput(in GpuPhysicalQueueId queue, in Name idleScopeName){
+    GpuPacketEnvelopeMetricQueueOutput output = GpuPacketEnvelopeMetricQueueOutput();
+    output.physicalQueue = queue;
+    output.internalIdleScopeName = idleScopeName;
+    return output;
+}
+
+TimerQueryResult MakeTimerQueryResult(in u64 beginTicks, in u64 endTicks, in f64 secondsPerTick, in GpuPhysicalQueueId queue, in u32 validBits, in b8 comparable){
+    TimerQueryResult result = TimerQueryResult();
+    result.beginTicks = beginTicks;
+    result.endTicks = endTicks;
+    result.secondsPerTick = secondsPerTick;
+    result.physicalQueue = queue;
+    result.timestampValidBits = validBits;
+    result.comparableAcrossSubmissions = comparable;
+    return result;
+}
+
+void RecordCorrelatorTimestampRange(mut GpuTimingMetricCorrelator correlator, in Name scopeName, in u64 frameIndex, in GpuComparableTimestampRange range, mut ScratchArena scratchArena, mut GpuTimingSinkSampleVector samples){
+    native(mut correlator, in scopeName, in frameIndex, in range, mut scratchArena, mut samples){
+        correlator.recordTimestampRange(scopeName, frameIndex, range, scratchArena, samples);
+    }
+}
+
+Expected<GpuPacketEnvelopeMetrics> AggregateEnvelopeMetrics(in Span<GpuComparableTimestampRange> ranges, mut PacketMetricsScratchContext context){
+    Expected<GpuPacketEnvelopeMetrics> result = MakeUnexpected(Failure());
+    native(in ranges, mut context, mut result){
+        result = Core::TryAggregateGpuPacketEnvelopeMetrics(ranges, context.scratchArena, context.queueMetrics);
+    }
+    return result;
+}
+
+void RecordAndPublishTimestampRange(in Name scopeName, in u64 frameIndex, in GpuComparableTimestampRange range, mut TimingMetricContext context){
+    GpuTimingSinkSampleVector performanceSamples = GpuTimingSinkSampleVector(context.scratchArena);
+    RecordCorrelatorTimestampRange(context.correlator, scopeName, frameIndex, range, context.scratchArena, performanceSamples);
+    for(in GpuTimingSinkSample sample : performanceSamples)
+        context.timing.recordSample(sample.scope, sample.durationSeconds, sample.sourceFrameIndex);
+}
+
+void ExpectEnvelopeMetricsRejected(in Span<GpuComparableTimestampRange> ranges, mut PacketMetricsScratchContext context){
+    GpuQueuePacketEnvelopeMetrics stale = GpuQueuePacketEnvelopeMetrics();
+    stale.physicalQueue = MakePhysicalQueue(4u, 8u);
+    stale.internalIdleTicks = 13u;
+    context.queueMetrics.push_back(stale);
+    EXPECT_FALSE(AggregateEnvelopeMetrics(ranges, context).has_value());
+    EXPECT_TRUE(context.queueMetrics.empty());
+}
+
+void VerifyGpuTimingPacketEnvelopeMetrics_CorrelatesLargeOutOfOrderFrame(){
+    const usize scopeCount = 2048u;
+    const usize pairCount = scopeCount / 2u;
+    const u64 frameIndex = 91u;
+    CorrelatorContext context = CorrelatorContext();
+    context.timing.setEnabled(true);
+    GpuPacketEnvelopeMetricScopeScratchVector scopes = GpuPacketEnvelopeMetricScopeScratchVector(context.scratchArena);
+    scopes.reserve(scopeCount);
+    for(usize scopeIndex = 0u; scopeIndex < scopeCount; ++scopeIndex){
+        const Expected<Name> scopeNameResult = DeriveIndexedScopeName(s_GpuTimingCaseLargeEnvelope, scopeIndex);
+        ASSERT_TRUE(scopeNameResult.has_value());
+        scopes.push_back(MakeEnvelopeScope(scopeNameResult.value(), MakePhysicalQueue(cast<u16>(scopeIndex % 2u), 7u)));
+    }
+    const Name overlapScope = s_GpuTimingNameTestsTimingLargeEnvelopeOverlap;
+    Array<GpuPacketEnvelopeMetricQueueOutput, 2> outputs = Array<GpuPacketEnvelopeMetricQueueOutput, 2>();
+    outputs[0u] = MakeEnvelopeOutput(MakePhysicalQueue(0u, 7u), s_GpuTimingCaseLargeIdle0);
+    outputs[1u] = MakeEnvelopeOutput(MakePhysicalQueue(1u, 7u), s_GpuTimingCaseLargeIdle1);
+    const b8 prepared = context.correlator.preparePacketEnvelopeMetrics(frameIndex, scopes, overlapScope, outputs);
+    ASSERT_TRUE(prepared);
+
+    GpuTimingSinkSampleVector samples = GpuTimingSinkSampleVector(context.scratchArena);
+    samples.reserve(1u + outputs.size());
+    b8 completedEarly = false;
+    for(usize arrivalIndex = 0u; arrivalIndex < scopeCount; ++arrivalIndex){
+        // An odd stride permutes this power-of-two input count and separates arrival order from queue order.
+        const usize scopeIndex = (arrivalIndex * 773u) % scopeCount;
+        const GpuPacketEnvelopeMetricScope scope = scopes[scopeIndex];
+        const u64 beginTicks = cast<u64>(scopeIndex / 2u) * 20u + cast<u64>(scopeIndex % 2u) * 5u;
+        RecordCorrelatorTimestampRange(context.correlator, scope.scopeName, frameIndex, MakeComparableRange(beginTicks, beginTicks + 10u, 0.25, scope.physicalQueue), context.scratchArena, samples);
+        if(arrivalIndex + 1u < scopeCount)
+            completedEarly = completedEarly || !samples.empty();
+    }
+
+    EXPECT_FALSE(completedEarly);
+    ASSERT_EQ(samples.size(), 1u + outputs.size());
+    for(in GpuTimingSinkSample sample : samples)
+        context.timing.recordSample(sample.scope, sample.durationSeconds, sample.sourceFrameIndex);
+    context.timing.publishFrame(frameIndex + 1u);
+
+    const TimingStats overlap = context.timing.stats(overlapScope);
+    ASSERT_EQ(overlap.sampleCount, 1u);
+    EXPECT_DOUBLE_EQ(overlap.seconds, cast<f64>(pairCount * 5u) * 0.25);
+    EXPECT_EQ(overlap.firstSampleFrameIndex, frameIndex);
+    for(in GpuPacketEnvelopeMetricQueueOutput output : outputs){
+        const TimingStats idle = context.timing.stats(output.internalIdleScopeName);
+        ASSERT_EQ(idle.sampleCount, 1u);
+        EXPECT_DOUBLE_EQ(idle.seconds, cast<f64>((pairCount - 1u) * 10u) * 0.25);
+        EXPECT_EQ(idle.firstSampleFrameIndex, frameIndex);
+    }
+}
+
+void VerifyGpuTimingPacketEnvelopeMetrics_ReplacesDuplicateRangesWithoutCompletingMissingScopes(){
+    CorrelatorContext context = CorrelatorContext();
+    context.timing.setEnabled(true);
+    const GpuPhysicalQueueId firstQueue = MakePhysicalQueue(0u, 9u);
+    const GpuPhysicalQueueId secondQueue = MakePhysicalQueue(1u, 9u);
+    const Name overlapScope = s_GpuTimingNameTestsTimingDuplicateEnvelopeOverlap;
+    Array<GpuPacketEnvelopeMetricScope, 2> scopes = Array<GpuPacketEnvelopeMetricScope, 2>();
+    scopes[0u] = MakeEnvelopeScope(s_GpuTimingCaseDuplicateEnvelopeFirst, firstQueue);
+    scopes[1u] = MakeEnvelopeScope(s_GpuTimingCaseDuplicateEnvelopeSecond, secondQueue);
+    Array<GpuPacketEnvelopeMetricQueueOutput, 2> outputs = Array<GpuPacketEnvelopeMetricQueueOutput, 2>();
+    outputs[0u] = MakeEnvelopeOutput(secondQueue, s_GpuTimingCaseDuplicateIdle1);
+    outputs[1u] = MakeEnvelopeOutput(firstQueue, s_GpuTimingCaseDuplicateIdle0);
+    ASSERT_TRUE(context.correlator.preparePacketEnvelopeMetrics(73u, scopes, overlapScope, outputs));
+    GpuTimingSinkSampleVector samples = GpuTimingSinkSampleVector(context.scratchArena);
+    samples.reserve(1u + outputs.size());
+    GpuComparableTimestampRange range = MakeComparableRange(0u, 100u, 0.5, firstQueue);
+    RecordCorrelatorTimestampRange(context.correlator, scopes[0u].scopeName, 73u, range, context.scratchArena, samples);
+    ASSERT_TRUE(samples.empty());
+    ASSERT_TRUE(context.correlator.preparePacketEnvelopeMetrics(73u, scopes, overlapScope, outputs));
+    range.beginTicks = 10u;
+    range.endTicks = 20u;
+    RecordCorrelatorTimestampRange(context.correlator, scopes[0u].scopeName, 73u, range, context.scratchArena, samples);
+    ASSERT_TRUE(samples.empty());
+
+    RecordCorrelatorTimestampRange(context.correlator, scopes[1u].scopeName, 73u, range, context.scratchArena, samples);
+    RecordCorrelatorTimestampRange(context.correlator, s_GpuTimingCaseUnrelatedEnvelope, 73u, range, context.scratchArena, samples);
+    ASSERT_TRUE(samples.empty());
+    range.beginTicks = 15u;
+    range.endTicks = 25u;
+    range.physicalQueue = secondQueue;
+    RecordCorrelatorTimestampRange(context.correlator, scopes[1u].scopeName, 73u, range, context.scratchArena, samples);
+    ASSERT_EQ(samples.size(), 3u);
+    for(in GpuTimingSinkSample sample : samples)
+        context.timing.recordSample(sample.scope, sample.durationSeconds, sample.sourceFrameIndex);
+    context.timing.publishFrame(74u);
+    EXPECT_DOUBLE_EQ(context.timing.stats(overlapScope).seconds, 2.5);
+    EXPECT_DOUBLE_EQ(context.timing.stats(outputs[0u].internalIdleScopeName).seconds, 0.0);
+    EXPECT_DOUBLE_EQ(context.timing.stats(outputs[1u].internalIdleScopeName).seconds, 0.0);
+
+    samples.clear();
+    RecordCorrelatorTimestampRange(context.correlator, scopes[1u].scopeName, 73u, range, context.scratchArena, samples);
+    EXPECT_TRUE(samples.empty());
+}
+
+void VerifyGpuTimingPacketEnvelopeMetrics_PreservesPartialFramesAcrossGrowthRejectedPreparesAndOutOfOrderRetirement(){
+    const usize frameCount = 8u;
+    CorrelatorContext context = CorrelatorContext();
+    context.timing.setEnabled(true);
+    const GpuPhysicalQueueId firstQueue = MakePhysicalQueue(0u, 9u);
+    const GpuPhysicalQueueId secondQueue = MakePhysicalQueue(1u, 9u);
+    const Name overlapScope = s_GpuTimingNameTestsTimingGrowingEnvelopeOverlap;
+    Array<GpuPacketEnvelopeMetricScope, 2> scopes = Array<GpuPacketEnvelopeMetricScope, 2>();
+    scopes[0u] = MakeEnvelopeScope(s_GpuTimingCaseGrowingEnvelopeFirst, firstQueue);
+    scopes[1u] = MakeEnvelopeScope(s_GpuTimingCaseGrowingEnvelopeSecond, secondQueue);
+    Array<GpuPacketEnvelopeMetricScope, 2> reversedScopes = Array<GpuPacketEnvelopeMetricScope, 2>();
+    reversedScopes[0u] = scopes[1u];
+    reversedScopes[1u] = scopes[0u];
+    Array<GpuPacketEnvelopeMetricScope, 2> duplicateScopes = Array<GpuPacketEnvelopeMetricScope, 2>();
+    duplicateScopes[0u] = scopes[0u];
+    duplicateScopes[1u] = MakeEnvelopeScope(scopes[0u].scopeName, secondQueue);
+    Array<GpuPacketEnvelopeMetricQueueOutput, 2> outputs = Array<GpuPacketEnvelopeMetricQueueOutput, 2>();
+    outputs[0u] = MakeEnvelopeOutput(firstQueue, s_GpuTimingCaseGrowingIdle0);
+    outputs[1u] = MakeEnvelopeOutput(secondQueue, s_GpuTimingCaseGrowingIdle1);
+    EXPECT_FALSE(context.correlator.preparePacketEnvelopeMetrics(100u, duplicateScopes, overlapScope, outputs));
+    EXPECT_FALSE(context.correlator.hasOutputRole(overlapScope));
+    const GpuComparableTimestampRange firstRange = MakeComparableRange(0u, 10u, 0.5, firstQueue);
+    const GpuComparableTimestampRange secondRange = MakeComparableRange(5u, 15u, 0.5, secondQueue);
+    GpuTimingSinkSampleVector samples = GpuTimingSinkSampleVector(context.scratchArena);
+    samples.reserve(3u);
+    for(usize frameOffset = 0u; frameOffset < frameCount; ++frameOffset){
+        const u64 frameIndex = 100u + frameOffset;
+        const b8 reverseOrder = frameOffset % 2u != 0u;
+        if(reverseOrder)
+            ASSERT_TRUE(context.correlator.preparePacketEnvelopeMetrics(frameIndex, reversedScopes, overlapScope, outputs));
+        else
+            ASSERT_TRUE(context.correlator.preparePacketEnvelopeMetrics(frameIndex, scopes, overlapScope, outputs));
+        RecordCorrelatorTimestampRange(context.correlator, scopes[0u].scopeName, frameIndex, firstRange, context.scratchArena, samples);
+        ASSERT_TRUE(samples.empty());
+        EXPECT_FALSE(context.correlator.preparePacketEnvelopeMetrics(frameIndex, duplicateScopes, overlapScope, outputs));
+        if(reverseOrder){
+            EXPECT_FALSE(context.correlator.preparePacketEnvelopeMetrics(frameIndex, scopes, overlapScope, outputs));
+            ASSERT_TRUE(context.correlator.preparePacketEnvelopeMetrics(frameIndex, reversedScopes, overlapScope, outputs));
+        }
+        else{
+            EXPECT_FALSE(context.correlator.preparePacketEnvelopeMetrics(frameIndex, reversedScopes, overlapScope, outputs));
+            ASSERT_TRUE(context.correlator.preparePacketEnvelopeMetrics(frameIndex, scopes, overlapScope, outputs));
+        }
+    }
+    for(usize arrivalIndex = 0u; arrivalIndex < frameCount; ++arrivalIndex){
+        const u64 frameIndex = 100u + (arrivalIndex * 5u) % frameCount;
+        RecordCorrelatorTimestampRange(context.correlator, scopes[0u].scopeName, frameIndex, firstRange, context.scratchArena, samples);
+        ASSERT_TRUE(samples.empty());
+        RecordCorrelatorTimestampRange(context.correlator, scopes[1u].scopeName, frameIndex, secondRange, context.scratchArena, samples);
+        ASSERT_EQ(samples.size(), 3u);
+        EXPECT_DOUBLE_EQ(samples[0u].durationSeconds, 2.5);
+        EXPECT_DOUBLE_EQ(samples[1u].durationSeconds, 0.0);
+        EXPECT_DOUBLE_EQ(samples[2u].durationSeconds, 0.0);
+        for(in GpuTimingSinkSample sample : samples)
+            EXPECT_EQ(sample.sourceFrameIndex, frameIndex);
+        samples.clear();
+    }
+}
+
+void VerifyGpuTimingPacketEnvelopeMetrics_PublishesNoPartialFrameWhenOutputRegistrationThrows(){
+    ThrowOnceCorrelatorContext context = ThrowOnceCorrelatorContext();
+    context.timing.setEnabled(true);
+    const GpuPhysicalQueueId firstQueue = MakePhysicalQueue(0u, 13u);
+    const GpuPhysicalQueueId secondQueue = MakePhysicalQueue(1u, 13u);
+    const Name overlapScope = s_GpuTimingNameTestsTimingThrowingEnvelopeOverlap;
+    Array<GpuPacketEnvelopeMetricScope, 2> scopes = Array<GpuPacketEnvelopeMetricScope, 2>();
+    scopes[0u] = MakeEnvelopeScope(s_GpuTimingCaseThrowingEnvelopeFirst, firstQueue);
+    scopes[1u] = MakeEnvelopeScope(s_GpuTimingCaseThrowingEnvelopeSecond, secondQueue);
+    Array<GpuPacketEnvelopeMetricQueueOutput, 2> outputs = Array<GpuPacketEnvelopeMetricQueueOutput, 2>();
+    outputs[0u] = MakeEnvelopeOutput(firstQueue, s_GpuTimingCaseThrowingIdle0);
+    outputs[1u] = MakeEnvelopeOutput(secondQueue, s_GpuTimingCaseThrowingIdle1);
+    native(mut context, in scopes, in overlapScope, in outputs){
+        EXPECT_THROW(EXPECT_TRUE(context.correlator.preparePacketEnvelopeMetrics(73u, scopes, overlapScope, outputs)), RegistrationSentinel);
+    }
+    EXPECT_TRUE(context.correlator.hasOutputRole(overlapScope));
+    EXPECT_TRUE(context.correlator.hasOutputRole(outputs[0u].internalIdleScopeName));
+    EXPECT_FALSE(context.correlator.hasOutputRole(outputs[1u].internalIdleScopeName));
+    native(mut context, in scopes, in overlapScope, in outputs){
+        ASSERT_TRUE(context.correlator.preparePacketEnvelopeMetrics(73u, scopes, overlapScope, outputs));
+    }
+
+    GpuTimingSinkSampleVector samples = GpuTimingSinkSampleVector(context.scratchArena);
+    samples.reserve(3u);
+    const GpuComparableTimestampRange firstRange = MakeComparableRange(2u, 8u, 0.5, firstQueue);
+    const GpuComparableTimestampRange secondRange = MakeComparableRange(4u, 10u, 0.5, secondQueue);
+    RecordCorrelatorTimestampRange(context.correlator, scopes[0u].scopeName, 73u, firstRange, context.scratchArena, samples);
+    EXPECT_TRUE(samples.empty());
+    RecordCorrelatorTimestampRange(context.correlator, scopes[1u].scopeName, 73u, secondRange, context.scratchArena, samples);
+    ASSERT_EQ(samples.size(), 3u);
+    EXPECT_DOUBLE_EQ(samples[0u].durationSeconds, 2.0);
+}
+
+void VerifyGpuPacketEnvelopeMetrics_UnionsSameQueueRangesAndOrdersEveryQueue(){
+    PacketMetricsScratchContext context = PacketMetricsScratchContext(s_GpuTimingCasePacketMetricsUnion);
+    Array<GpuComparableTimestampRange, 8> ranges = Array<GpuComparableTimestampRange, 8>();
+    ranges[0u] = MakeComparableRange(40u, 50u, 0.25, MakePhysicalQueue(2u, 7u));
+    ranges[1u] = MakeComparableRange(100u, 100u, 0.25, MakePhysicalQueue(1u, 7u));
+    ranges[2u] = MakeComparableRange(8u, 20u, 0.25, MakePhysicalQueue(2u, 7u));
+    ranges[3u] = MakeComparableRange(5u, 15u, 0.25, MakePhysicalQueue(0u, 7u));
+    ranges[4u] = MakeComparableRange(0u, 10u, 0.25, MakePhysicalQueue(2u, 7u));
+    ranges[5u] = MakeComparableRange(20u, 30u, 0.25, MakePhysicalQueue(2u, 7u));
+    ranges[6u] = MakeComparableRange(42u, 45u, 0.25, MakePhysicalQueue(2u, 7u));
+    ranges[7u] = MakeComparableRange(0u, 10u, 0.25, MakePhysicalQueue(2u, 7u));
+    const Expected<GpuPacketEnvelopeMetrics> metrics = AggregateEnvelopeMetrics(ranges, context);
+    ASSERT_TRUE(metrics.has_value());
+    EXPECT_DOUBLE_EQ(metrics.value().secondsPerTick, 0.25);
+    EXPECT_EQ(metrics.value().queueOverlapTicks, 10u);
+    ASSERT_EQ(context.queueMetrics.size(), 3u);
+    EXPECT_EQ(context.queueMetrics[0u].physicalQueue.index, 0u);
+    EXPECT_EQ(context.queueMetrics[0u].internalIdleTicks, 0u);
+    EXPECT_EQ(context.queueMetrics[1u].physicalQueue.index, 1u);
+    EXPECT_EQ(context.queueMetrics[1u].internalIdleTicks, 0u);
+    EXPECT_EQ(context.queueMetrics[2u].physicalQueue.index, 2u);
+    EXPECT_EQ(context.queueMetrics[2u].internalIdleTicks, 10u);
+}
+
+void VerifyGpuPacketEnvelopeMetrics_CountsConcurrentQueueUnionOnceAtTripleOverlap(){
+    PacketMetricsScratchContext context = PacketMetricsScratchContext(s_GpuTimingCasePacketMetricsTriple);
+    Array<GpuComparableTimestampRange, 3> ranges = Array<GpuComparableTimestampRange, 3>();
+    ranges[0u] = MakeComparableRange(0u, 100u, 1.0, MakePhysicalQueue(0u, 2u));
+    ranges[1u] = MakeComparableRange(10u, 90u, 1.0, MakePhysicalQueue(1u, 2u));
+    ranges[2u] = MakeComparableRange(20u, 80u, 1.0, MakePhysicalQueue(2u, 2u));
+    const Expected<GpuPacketEnvelopeMetrics> metrics = AggregateEnvelopeMetrics(ranges, context);
+    ASSERT_TRUE(metrics.has_value());
+    EXPECT_EQ(metrics.value().queueOverlapTicks, 80u);
+    ASSERT_EQ(context.queueMetrics.size(), 3u);
+    EXPECT_EQ(context.queueMetrics[0u].internalIdleTicks, 0u);
+    EXPECT_EQ(context.queueMetrics[1u].internalIdleTicks, 0u);
+    EXPECT_EQ(context.queueMetrics[2u].internalIdleTicks, 0u);
+}
+
+void VerifyGpuPacketEnvelopeMetrics_PreservesLargeAndNearLimitTickPrecision(){
+    PacketMetricsScratchContext context = PacketMetricsScratchContext(s_GpuTimingCasePacketMetricsPrecision);
+    Array<GpuComparableTimestampRange, 3> largeRanges = Array<GpuComparableTimestampRange, 3>();
+    largeRanges[0u] = MakeComparableRange(s_GpuTimingLargeTick, s_GpuTimingLargeTick + 20u, 0.5, MakePhysicalQueue(5u, 9u));
+    largeRanges[1u] = MakeComparableRange(s_GpuTimingLargeTick + 30u, s_GpuTimingLargeTick + 40u, 0.5, MakePhysicalQueue(5u, 9u));
+    largeRanges[2u] = MakeComparableRange(s_GpuTimingLargeTick + 5u, s_GpuTimingLargeTick + 35u, 0.5, MakePhysicalQueue(6u, 9u));
+    Expected<GpuPacketEnvelopeMetrics> metrics = AggregateEnvelopeMetrics(largeRanges, context);
+    ASSERT_TRUE(metrics.has_value());
+    EXPECT_EQ(metrics.value().queueOverlapTicks, 20u);
+    ASSERT_EQ(context.queueMetrics.size(), 2u);
+    EXPECT_EQ(context.queueMetrics[0u].internalIdleTicks, 10u);
+
+    Array<GpuComparableTimestampRange, 2> nearLimitRanges = Array<GpuComparableTimestampRange, 2>();
+    nearLimitRanges[0u] = MakeComparableRange(u64.max - 20u, u64.max - 10u, 1.0, MakePhysicalQueue(1u, 4u));
+    nearLimitRanges[1u] = MakeComparableRange(u64.max - 15u, u64.max - 5u, 1.0, MakePhysicalQueue(2u, 4u));
+    metrics = AggregateEnvelopeMetrics(nearLimitRanges, context);
+    ASSERT_TRUE(metrics.has_value());
+    EXPECT_EQ(metrics.value().queueOverlapTicks, 5u);
+}
+
+void VerifyGpuPacketEnvelopeMetrics_AcceptsCompleteZeroOverlapInputs(){
+    PacketMetricsScratchContext context = PacketMetricsScratchContext(s_GpuTimingCasePacketMetricsZero);
+    Array<GpuComparableTimestampRange, 2> touchingRanges = Array<GpuComparableTimestampRange, 2>();
+    touchingRanges[0u] = MakeComparableRange(0u, 10u, 1.0, MakePhysicalQueue(0u, 6u));
+    touchingRanges[1u] = MakeComparableRange(10u, 20u, 1.0, MakePhysicalQueue(1u, 6u));
+    Expected<GpuPacketEnvelopeMetrics> metrics = AggregateEnvelopeMetrics(touchingRanges, context);
+    ASSERT_TRUE(metrics.has_value());
+    EXPECT_EQ(metrics.value().queueOverlapTicks, 0u);
+    ASSERT_EQ(context.queueMetrics.size(), 2u);
+
+    Array<GpuComparableTimestampRange, 2> zeroLengthRanges = Array<GpuComparableTimestampRange, 2>();
+    zeroLengthRanges[0u] = MakeComparableRange(25u, 25u, 1.0, MakePhysicalQueue(3u, 6u));
+    zeroLengthRanges[1u] = MakeComparableRange(75u, 75u, 1.0, MakePhysicalQueue(1u, 6u));
+    metrics = AggregateEnvelopeMetrics(zeroLengthRanges, context);
+    ASSERT_TRUE(metrics.has_value());
+    EXPECT_EQ(metrics.value().queueOverlapTicks, 0u);
+    ASSERT_EQ(context.queueMetrics.size(), 2u);
+    EXPECT_EQ(context.queueMetrics[0u].physicalQueue.index, 1u);
+    EXPECT_EQ(context.queueMetrics[1u].physicalQueue.index, 3u);
+    EXPECT_EQ(context.queueMetrics[0u].internalIdleTicks, 0u);
+    EXPECT_EQ(context.queueMetrics[1u].internalIdleTicks, 0u);
+}
+
+void VerifyGpuPacketEnvelopeMetrics_RejectsInvalidOrIncomparableInputAndClearsOutputs(){
+    PacketMetricsScratchContext context = PacketMetricsScratchContext(s_GpuTimingCasePacketMetricsRejection);
+    Array<GpuComparableTimestampRange, 2> validRanges = Array<GpuComparableTimestampRange, 2>();
+    validRanges[0u] = MakeComparableRange(0u, 10u, 1.0, MakePhysicalQueue(0u, 3u));
+    validRanges[1u] = MakeComparableRange(5u, 15u, 1.0, MakePhysicalQueue(1u, 3u));
+
+    const Span<GpuComparableTimestampRange> emptySpan = Span<GpuComparableTimestampRange>();
+    ExpectEnvelopeMetricsRejected(emptySpan, context);
+    const Span<GpuComparableTimestampRange> validSpan = validRanges;
+    ExpectEnvelopeMetricsRejected(validSpan.subspan(0u, 0u), context);
+
+    Array<GpuComparableTimestampRange, 2> invalidRanges = Array<GpuComparableTimestampRange, 2>();
+    invalidRanges[0u] = validRanges[0u];
+    invalidRanges[1u] = validRanges[1u];
+    invalidRanges[0u].beginTicks = 11u;
+    ExpectEnvelopeMetricsRejected(invalidRanges, context);
+
+    invalidRanges[0u] = validRanges[0u];
+    invalidRanges[0u].physicalQueue = GpuPhysicalQueueId();
+    ExpectEnvelopeMetricsRejected(invalidRanges, context);
+
+    invalidRanges[0u] = validRanges[0u];
+    invalidRanges[0u].secondsPerTick = bit_cast<f64>(s_F64InfinityBits);
+    ExpectEnvelopeMetricsRejected(invalidRanges, context);
+
+    invalidRanges[0u].secondsPerTick = bit_cast<f64>(s_F64QuietNanBits);
+    ExpectEnvelopeMetricsRejected(invalidRanges, context);
+
+    invalidRanges[0u].secondsPerTick = 0.0;
+    ExpectEnvelopeMetricsRejected(invalidRanges, context);
+
+    invalidRanges[0u] = validRanges[0u];
+    invalidRanges[1u].secondsPerTick = 0.5;
+    ExpectEnvelopeMetricsRejected(invalidRanges, context);
+
+    invalidRanges[1u] = validRanges[1u];
+    invalidRanges[1u].physicalQueue.deviceGeneration = 4u;
+    ExpectEnvelopeMetricsRejected(invalidRanges, context);
+}
+
+void VerifyGpuTimingSampleSubscriptions_ScopedDemandsReplaceAtomicallyAndRemainSubscriptionIsolated(){
+    RecorderPairContext context = RecorderPairContext();
+    mut GpuTimingRecorder recorder = context.firstRecorder;
+    GpuTimingSubscriptionCapture firstCapture = GpuTimingSubscriptionCapture();
+    GpuTimingSubscriptionCapture secondCapture = GpuTimingSubscriptionCapture();
+    const Name firstScope = s_GpuTimingNameTestsGpuTimingFeedbackFirst;
+    const Name sharedScope = s_GpuTimingNameTestsGpuTimingFeedbackShared;
+    const Name secondScope = s_GpuTimingNameTestsGpuTimingFeedbackSecond;
+    const Name metricFirstInput = s_GpuTimingNameTestsGpuTimingFeedbackMetricFirstInput;
+    const Name metricSecondInput = s_GpuTimingNameTestsGpuTimingFeedbackMetricSecondInput;
+    const Name metricAlternateFirstInput = s_GpuTimingNameTestsGpuTimingFeedbackMetricAlternateFirstInput;
+    const Name metricAlternateSecondInput = s_GpuTimingNameTestsGpuTimingFeedbackMetricAlternateSecondInput;
+    const Name metricOutput = s_GpuTimingNameTestsGpuTimingFeedbackMetricOutput;
+    Array<Name, 2> firstScopes = Array<Name, 2>();
+    firstScopes[0u] = firstScope;
+    firstScopes[1u] = sharedScope;
+    Array<Name, 2> secondScopes = Array<Name, 2>();
+    secondScopes[0u] = sharedScope;
+    secondScopes[1u] = secondScope;
+    Array<Name, 2> invalidScopes = Array<Name, 2>();
+    invalidScopes[0u] = firstScope;
+    invalidScopes[1u] = s_NameNone;
+    Array<Name, 2> duplicateScopes = Array<Name, 2>();
+    duplicateScopes[0u] = firstScope;
+    duplicateScopes[1u] = firstScope;
+    Array<Name, 1> singleFirstScope = Array<Name, 1>();
+    singleFirstScope[0u] = firstScope;
+    Array<Name, 1> singleSecondScope = Array<Name, 1>();
+    singleSecondScope[0u] = secondScope;
+    Array<Name, 1> singleMetricOutput = Array<Name, 1>();
+    singleMetricOutput[0u] = metricOutput;
+
+    Expected<GpuTimingSampleSubscription> firstResult = MakeUnexpected(Failure());
+    Expected<GpuTimingSampleSubscription> secondResult = MakeUnexpected(Failure());
+    native(mut recorder, mut firstCapture, mut secondCapture, mut firstResult, mut secondResult){
+        firstResult = recorder.subscribeSampleListener(MakeSubscriptionListener(firstCapture));
+        secondResult = recorder.subscribeSampleListener(MakeSubscriptionListener(secondCapture));
+    }
+    ASSERT_TRUE(firstResult.has_value());
+    const GpuTimingSampleSubscription first = firstResult.value();
+    ASSERT_TRUE(secondResult.has_value());
+    const GpuTimingSampleSubscription second = secondResult.value();
+
+    ASSERT_TRUE(first.valid());
+    ASSERT_TRUE(second.valid());
+    native(mut recorder, in first){
+        static_assert(noexcept(recorder.unsubscribeSampleListener(first)));
+    }
+    EXPECT_NE(first, second);
+    EXPECT_FALSE(recorder.collectionActive());
+    ASSERT_TRUE(recorder.setFeedbackCollectionScopes(first, firstScopes));
+    ASSERT_TRUE(recorder.setFeedbackCollectionScopes(first, firstScopes));
+    EXPECT_TRUE(recorder.collectionActive());
+    EXPECT_FALSE(recorder.setFeedbackCollectionScopes(first, invalidScopes));
+    EXPECT_TRUE(recorder.collectionActive());
+    EXPECT_FALSE(recorder.setFeedbackCollectionScopes(first, duplicateScopes));
+    EXPECT_TRUE(recorder.collectionActive());
+    EXPECT_FALSE(recorder.prepareOverlapMetric(metricFirstInput, metricSecondInput, firstScope));
+    ASSERT_TRUE(recorder.prepareOverlapMetric(metricFirstInput, metricSecondInput, metricOutput));
+    EXPECT_FALSE(recorder.setFeedbackCollectionScopes(first, singleMetricOutput));
+    EXPECT_TRUE(recorder.collectionActive());
+    EXPECT_FALSE(recorder.prepareOverlapMetric(metricAlternateFirstInput, metricAlternateSecondInput, firstScope));
+    ASSERT_TRUE(recorder.setFeedbackCollectionScopes(second, secondScopes));
+    ASSERT_TRUE(recorder.setFeedbackCollectionScopes(first, singleFirstScope));
+    ASSERT_TRUE(recorder.clearFeedbackCollectionScopes(first));
+    EXPECT_TRUE(recorder.collectionActive());
+
+    ASSERT_TRUE(recorder.setFeedbackCollectionScopes(first, singleFirstScope));
+    recorder.unsubscribeSampleListener(second);
+    EXPECT_TRUE(recorder.collectionActive());
+    EXPECT_FALSE(recorder.setFeedbackCollectionScopes(second, singleSecondScope));
+    EXPECT_FALSE(recorder.clearFeedbackCollectionScopes(second));
+
+    ASSERT_TRUE(recorder.clearFeedbackCollectionScopes(first));
+    EXPECT_FALSE(recorder.collectionActive());
+    EXPECT_TRUE(recorder.clearFeedbackCollectionScopes(first));
+
+    recorder.unsubscribeSampleListener(first);
+    EXPECT_FALSE(recorder.setFeedbackCollectionScopes(first, singleFirstScope));
+    EXPECT_FALSE(recorder.clearFeedbackCollectionScopes(first));
+}
+
+void VerifyGpuTimingSampleAttribution_IssuesUniqueProcessIdentitiesAcrossRecorderResetAndRecreation(){
+    RecorderPairContext context = RecorderPairContext();
+
+    const Expected<GpuTimingSampleAttribution> firstResult = context.firstRecorder.allocateSampleAttribution();
+    ASSERT_TRUE(firstResult.has_value());
+    const GpuTimingSampleAttribution first = firstResult.value();
+    const Expected<GpuTimingSampleAttribution> secondResult = context.firstRecorder.allocateSampleAttribution();
+    ASSERT_TRUE(secondResult.has_value());
+    const GpuTimingSampleAttribution second = secondResult.value();
+    const Expected<GpuTimingSampleAttribution> recreatedResult = context.secondRecorder.allocateSampleAttribution();
+    ASSERT_TRUE(recreatedResult.has_value());
+    const GpuTimingSampleAttribution recreated = recreatedResult.value();
+    context.firstRecorder.resetQueries();
+    const Expected<GpuTimingSampleAttribution> afterResetResult = context.firstRecorder.allocateSampleAttribution();
+    ASSERT_TRUE(afterResetResult.has_value());
+    const GpuTimingSampleAttribution afterReset = afterResetResult.value();
+
+    ASSERT_TRUE(first.valid());
+    ASSERT_TRUE(second.valid());
+    ASSERT_TRUE(recreated.valid());
+    ASSERT_TRUE(afterReset.valid());
+    EXPECT_NE(first, second);
+    EXPECT_NE(first, recreated);
+    EXPECT_NE(first, afterReset);
+    EXPECT_NE(second, recreated);
+    EXPECT_NE(second, afterReset);
+    EXPECT_NE(recreated, afterReset);
+}
+
+void VerifyTimerQueryResult_MasksHighBitsAndWrapsPartialWidth(){
+    const TimerQueryResult result = MakeTimerQueryResult(0x1fau, 0x105u, 0.5, MakePhysicalQueue(1u, 3u), 8u, true);
+    ASSERT_TRUE(result.valid());
+    EXPECT_EQ(result.timestampMask(), 0xffu);
+    EXPECT_EQ(result.maskedBeginTicks(), 0xfau);
+    EXPECT_EQ(result.durationTicks(), 11u);
+    EXPECT_DOUBLE_EQ(result.durationSeconds(), 5.5);
+    EXPECT_FALSE(result.hasComparableRange());
+}
+
+void VerifyTimerQueryResult_WrapsFullWidthWithoutShiftingBySixtyFour(){
+    const TimerQueryResult result = MakeTimerQueryResult(u64.max - 3u, 5u, 1.0, MakePhysicalQueue(1u, 3u), 64u, true);
+    ASSERT_TRUE(result.valid());
+    EXPECT_EQ(result.durationTicks(), 9u);
+    EXPECT_DOUBLE_EQ(result.durationSeconds(), 9.0);
+    EXPECT_FALSE(result.hasComparableRange());
+}
+
+void VerifyTimerQueryResult_RetainsNearFullWidthDurationWithoutPublishingAbsoluteRange(){
+    const u64 highBit = cast<u64>(1u) << 63u;
+    const TimerQueryResult result = MakeTimerQueryResult(highBit - 3u, 2u, 0.5, MakePhysicalQueue(1u, 3u), 63u, true);
+    ASSERT_TRUE(result.valid());
+    EXPECT_EQ(result.durationTicks(), 5u);
+    EXPECT_DOUBLE_EQ(result.durationSeconds(), 2.5);
+    EXPECT_FALSE(result.hasComparableRange());
+}
+
+void VerifyTimerQueryResult_ComparableRangeRequiresCapabilityAndPhysicalQueue(){
+    TimerQueryResult result = MakeTimerQueryResult(10u, 20u, 1.0, MakePhysicalQueue(1u, 3u), 64u, false);
+    ASSERT_TRUE(result.valid());
+    EXPECT_FALSE(result.hasComparableRange());
+
+    result.comparableAcrossSubmissions = true;
+    result.physicalQueue = GpuPhysicalQueueId();
+    EXPECT_FALSE(result.hasComparableRange());
+
+    result.physicalQueue = MakePhysicalQueue(1u, 3u);
+    EXPECT_TRUE(result.hasComparableRange());
+}
+
+void VerifyTimerQueryResult_RejectsUnknownOrOutOfRangeWidths(){
+    TimerQueryResult result = MakeTimerQueryResult(10u, 20u, 1.0, GpuPhysicalQueueId(), 0u, false);
+    EXPECT_FALSE(result.valid());
+    EXPECT_EQ(result.timestampMask(), 0u);
+    EXPECT_EQ(result.durationTicks(), 0u);
+    EXPECT_DOUBLE_EQ(result.durationSeconds(), 0.0);
+
+    result.timestampValidBits = 65u;
+    EXPECT_FALSE(result.valid());
+    EXPECT_EQ(result.timestampMask(), 0u);
+
+    result.timestampValidBits = 64u;
+    result.secondsPerTick = 0.0;
+    EXPECT_FALSE(result.valid());
+    EXPECT_FALSE(result.hasComparableRange());
+}
+
+void VerifyGpuComparableTimestampRange_IntersectsRawTicksBeforeFloatingPointConversion(){
+    const GpuComparableTimestampRange first = MakeComparableRange(s_GpuTimingLargeTick, s_GpuTimingLargeTick + 5u, 0.25, MakePhysicalQueue(0u, 7u));
+    const GpuComparableTimestampRange second = MakeComparableRange(s_GpuTimingLargeTick + 4u, s_GpuTimingLargeTick + 8u, 0.25, MakePhysicalQueue(3u, 7u));
+
+    const Expected<u64> overlapTicks = TryComputeGpuTimestampOverlap(first, second);
+    ASSERT_TRUE(overlapTicks.has_value());
+    EXPECT_EQ(overlapTicks.value(), 1u);
+
+    GpuComparableTimestampRange disjoint = second;
+    disjoint.beginTicks = first.endTicks;
+    disjoint.endTicks = first.endTicks + 2u;
+    const Expected<u64> disjointOverlap = TryComputeGpuTimestampOverlap(first, disjoint);
+    ASSERT_TRUE(disjointOverlap.has_value());
+    EXPECT_EQ(disjointOverlap.value(), 0u);
+
+    GpuComparableTimestampRange recreatedDevice = second;
+    recreatedDevice.physicalQueue.deviceGeneration = 8u;
+    EXPECT_FALSE(TryComputeGpuTimestampOverlap(first, recreatedDevice).has_value());
+
+    GpuComparableTimestampRange mismatchedPeriod = second;
+    mismatchedPeriod.secondsPerTick = 0.5;
+    EXPECT_FALSE(TryComputeGpuTimestampOverlap(first, mismatchedPeriod).has_value());
+
+    GpuComparableTimestampRange infinitePeriod = second;
+    infinitePeriod.secondsPerTick = bit_cast<f64>(s_F64InfinityBits);
+    EXPECT_FALSE(infinitePeriod.valid());
+    EXPECT_FALSE(TryComputeGpuTimestampOverlap(first, infinitePeriod).has_value());
+}
+
+void VerifyGpuTimingOverlapRegistration_IsCanonicalIdempotentAndRejectsMetricRoleConflicts(){
+    TimingMetricContext context = TimingMetricContext();
+    const Name firstScope = s_GpuTimingNameTestsTimingOverlapFirst;
+    const Name secondScope = s_GpuTimingNameTestsTimingOverlapSecond;
+    const Name thirdScope = s_GpuTimingNameTestsTimingOverlapThird;
+    const Name fourthScope = s_GpuTimingNameTestsTimingOverlapFourth;
+    const Name outputScope = s_GpuTimingNameTestsTimingOverlapOutput;
+    const Name alternateOutputScope = s_GpuTimingNameTestsTimingOverlapAlternateOutput;
+
+    EXPECT_FALSE(context.correlator.prepareOverlapMetric(s_NameNone, secondScope, outputScope));
+    EXPECT_FALSE(context.correlator.prepareOverlapMetric(firstScope, s_NameNone, outputScope));
+    EXPECT_FALSE(context.correlator.prepareOverlapMetric(firstScope, secondScope, s_NameNone));
+    EXPECT_FALSE(context.correlator.prepareOverlapMetric(firstScope, firstScope, outputScope));
+    EXPECT_FALSE(context.correlator.prepareOverlapMetric(firstScope, secondScope, firstScope));
+    EXPECT_FALSE(context.correlator.prepareOverlapMetric(firstScope, secondScope, secondScope));
+    EXPECT_EQ(context.timing.scopeCount(), 0u);
+
+    ASSERT_TRUE(context.correlator.prepareOverlapMetric(firstScope, secondScope, outputScope));
+    EXPECT_EQ(context.timing.scopeCount(), 1u);
+    EXPECT_TRUE(context.correlator.prepareOverlapMetric(secondScope, firstScope, outputScope));
+    EXPECT_EQ(context.timing.scopeCount(), 1u);
+
+    EXPECT_FALSE(context.correlator.prepareOverlapMetric(firstScope, secondScope, alternateOutputScope));
+    EXPECT_FALSE(context.correlator.prepareOverlapMetric(secondScope, firstScope, alternateOutputScope));
+    EXPECT_FALSE(context.correlator.prepareOverlapMetric(thirdScope, fourthScope, outputScope));
+    EXPECT_FALSE(context.correlator.prepareOverlapMetric(outputScope, thirdScope, alternateOutputScope));
+    EXPECT_FALSE(context.correlator.prepareOverlapMetric(thirdScope, fourthScope, firstScope));
+    EXPECT_EQ(context.timing.scopeCount(), 1u);
+
+    EXPECT_TRUE(context.correlator.prepareOverlapMetric(firstScope, thirdScope, alternateOutputScope));
+    EXPECT_EQ(context.timing.scopeCount(), 2u);
+}
+
+void VerifyGpuTimingOverlapRegistration_ReversedDuplicatePublishesOneSample(){
+    TimingMetricContext context = TimingMetricContext();
+    context.timing.setEnabled(true);
+    const Name firstScope = s_GpuTimingNameTestsTimingOverlapSampleFirst;
+    const Name secondScope = s_GpuTimingNameTestsTimingOverlapSampleSecond;
+    const Name outputScope = s_GpuTimingNameTestsTimingOverlapSampleOutput;
+    const GpuComparableTimestampRange firstRange = MakeComparableRange(10u, 20u, 0.25, MakePhysicalQueue(0u, 3u));
+    const GpuComparableTimestampRange secondRange = MakeComparableRange(18u, 30u, 0.25, MakePhysicalQueue(1u, 3u));
+    GpuTimingSinkSampleVector performanceSamples = GpuTimingSinkSampleVector(context.scratchArena);
+
+    ASSERT_TRUE(context.correlator.prepareOverlapMetric(firstScope, secondScope, outputScope));
+    ASSERT_TRUE(context.correlator.prepareOverlapMetric(secondScope, firstScope, outputScope));
+    RecordCorrelatorTimestampRange(context.correlator, firstScope, 41u, firstRange, context.scratchArena, performanceSamples);
     EXPECT_TRUE(performanceSamples.empty());
-    correlator.recordTimestampRange(secondScope, 41u, secondRange, scratchArena, performanceSamples);
+    RecordCorrelatorTimestampRange(context.correlator, secondScope, 41u, secondRange, context.scratchArena, performanceSamples);
     ASSERT_EQ(performanceSamples.size(), 1u);
-    const Core::GpuTimingSinkSample publishedSample = performanceSamples.front();
-    const Core::Perf::TimingScopeId outputScopeId = timing.scopeAt(0u);
+    const GpuTimingSinkSample publishedSample = performanceSamples.front();
+    const TimingScopeId outputScopeId = context.timing.scopeAt(0u);
     EXPECT_EQ(publishedSample.scope.index, outputScopeId.index);
     EXPECT_EQ(publishedSample.scope.generation, outputScopeId.generation);
     EXPECT_DOUBLE_EQ(publishedSample.durationSeconds, 0.5);
     EXPECT_EQ(publishedSample.sourceFrameIndex, 41u);
 
     performanceSamples.clear();
-    correlator.recordTimestampRange(secondScope, 41u, secondRange, scratchArena, performanceSamples);
+    RecordCorrelatorTimestampRange(context.correlator, secondScope, 41u, secondRange, context.scratchArena, performanceSamples);
     EXPECT_TRUE(performanceSamples.empty());
-    timing.recordSample(publishedSample.scope, publishedSample.durationSeconds, publishedSample.sourceFrameIndex);
-    timing.publishFrame(42u);
+    context.timing.recordSample(publishedSample.scope, publishedSample.durationSeconds, publishedSample.sourceFrameIndex);
+    context.timing.publishFrame(42u);
 
-    const Core::Perf::TimingStats& stats = timing.stats(outputScope);
+    const TimingStats stats = context.timing.stats(outputScope);
     ASSERT_EQ(stats.sampleCount, 1u);
     EXPECT_DOUBLE_EQ(stats.seconds, 0.5);
     EXPECT_EQ(stats.firstSampleFrameIndex, 41u);
     EXPECT_EQ(stats.lastSampleFrameIndex, 41u);
 }
 
-TEST(GpuTimingOverlapRegistration, CatchUpBatchBoundsSourceFramesAndPreservesLastArrivalDuration){
-    TestArena testArena;
-    Core::Perf::TimingRecorder timing(testArena.arena);
-    timing.setEnabled(true);
-    Core::GpuTimingMetricCorrelator correlator(testArena.arena, timing);
-    Core::Alloc::ScratchArena scratchArena(s_GpuTimingMetricScratchArena);
-    const Name firstScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapCatchUpFirst;
-    const Name secondScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapCatchUpSecond;
-    const Name outputScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapCatchUpOutput;
-    const Core::GpuComparableTimestampRange firstRange{ .beginTicks = 10u, .endTicks = 30u, .secondsPerTick = 0.25, .physicalQueue = { .index = 0u, .deviceGeneration = 3u }, };
-    const Core::GpuComparableTimestampRange newerRange{ .beginTicks = 18u, .endTicks = 34u, .secondsPerTick = 0.25, .physicalQueue = { .index = 1u, .deviceGeneration = 3u }, };
-    Core::GpuComparableTimestampRange olderRange = newerRange;
+void VerifyGpuTimingOverlapRegistration_CatchUpBatchBoundsSourceFramesAndPreservesLastArrivalDuration(){
+    TimingMetricContext context = TimingMetricContext();
+    context.timing.setEnabled(true);
+    const Name firstScope = s_GpuTimingNameTestsTimingOverlapCatchUpFirst;
+    const Name secondScope = s_GpuTimingNameTestsTimingOverlapCatchUpSecond;
+    const Name outputScope = s_GpuTimingNameTestsTimingOverlapCatchUpOutput;
+    const GpuComparableTimestampRange firstRange = MakeComparableRange(10u, 30u, 0.25, MakePhysicalQueue(0u, 3u));
+    const GpuComparableTimestampRange newerRange = MakeComparableRange(18u, 34u, 0.25, MakePhysicalQueue(1u, 3u));
+    GpuComparableTimestampRange olderRange = newerRange;
     olderRange.beginTicks = 26u;
-    Core::GpuTimingSinkSampleVector samples{ scratchArena };
-    ASSERT_TRUE(correlator.prepareOverlapMetric(firstScope, secondScope, outputScope));
-    correlator.recordTimestampRange(firstScope, 50u, firstRange, scratchArena, samples);
-    correlator.recordTimestampRange(firstScope, 51u, firstRange, scratchArena, samples);
-    correlator.recordTimestampRange(secondScope, 51u, newerRange, scratchArena, samples);
-    correlator.recordTimestampRange(secondScope, 50u, olderRange, scratchArena, samples);
+    GpuTimingSinkSampleVector samples = GpuTimingSinkSampleVector(context.scratchArena);
+    ASSERT_TRUE(context.correlator.prepareOverlapMetric(firstScope, secondScope, outputScope));
+    RecordCorrelatorTimestampRange(context.correlator, firstScope, 50u, firstRange, context.scratchArena, samples);
+    RecordCorrelatorTimestampRange(context.correlator, firstScope, 51u, firstRange, context.scratchArena, samples);
+    RecordCorrelatorTimestampRange(context.correlator, secondScope, 51u, newerRange, context.scratchArena, samples);
+    RecordCorrelatorTimestampRange(context.correlator, secondScope, 50u, olderRange, context.scratchArena, samples);
     ASSERT_EQ(samples.size(), 2u);
     EXPECT_EQ(samples[0u].sourceFrameIndex, 51u);
     EXPECT_EQ(samples[1u].sourceFrameIndex, 50u);
     EXPECT_DOUBLE_EQ(samples[0u].durationSeconds, 3.0);
     EXPECT_DOUBLE_EQ(samples[1u].durationSeconds, 1.0);
-    for(const Core::GpuTimingSinkSample& sample : samples)
-        timing.recordSample(sample.scope, sample.durationSeconds, sample.sourceFrameIndex);
-    timing.publishFrame(52u);
+    for(in GpuTimingSinkSample sample : samples)
+        context.timing.recordSample(sample.scope, sample.durationSeconds, sample.sourceFrameIndex);
+    context.timing.publishFrame(52u);
 
-    const Core::Perf::TimingStats& stats = timing.stats(outputScope);
+    const TimingStats stats = context.timing.stats(outputScope);
     ASSERT_EQ(stats.sampleCount, 2u);
     EXPECT_EQ(stats.publishFrameIndex, 52u);
     EXPECT_EQ(stats.firstSampleFrameIndex, 50u);
@@ -952,90 +926,82 @@ TEST(GpuTimingOverlapRegistration, CatchUpBatchBoundsSourceFramesAndPreservesLas
     EXPECT_DOUBLE_EQ(stats.lastSeconds, 1.0);
 }
 
-TEST(GpuTimingOverlapRegistration, DiscardPreservesRegistrationAndResetClearsIt){
-    TestArena testArena;
-    Core::Perf::TimingRecorder timing(testArena.arena);
-    timing.setEnabled(true);
-    Core::GpuTimingMetricCorrelator correlator(testArena.arena, timing);
-    Core::Alloc::ScratchArena scratchArena(s_GpuTimingMetricScratchArena);
-    const Name firstScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapLifecycleFirst;
-    const Name secondScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapLifecycleSecond;
-    const Name resetFirstScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapLifecycleResetFirst;
-    const Name resetSecondScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapLifecycleResetSecond;
-    const Name outputScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingOverlapLifecycleOutput;
-    const Core::GpuComparableTimestampRange firstRange{ .beginTicks = 10u, .endTicks = 20u, .secondsPerTick = 0.25, .physicalQueue = { .index = 0u, .deviceGeneration = 3u }, };
-    const Core::GpuComparableTimestampRange secondRange{ .beginTicks = 18u, .endTicks = 30u, .secondsPerTick = 0.25, .physicalQueue = { .index = 1u, .deviceGeneration = 3u }, };
+void VerifyGpuTimingOverlapRegistration_DiscardPreservesRegistrationAndResetClearsIt(){
+    TimingMetricContext context = TimingMetricContext();
+    context.timing.setEnabled(true);
+    const Name firstScope = s_GpuTimingNameTestsTimingOverlapLifecycleFirst;
+    const Name secondScope = s_GpuTimingNameTestsTimingOverlapLifecycleSecond;
+    const Name resetFirstScope = s_GpuTimingNameTestsTimingOverlapLifecycleResetFirst;
+    const Name resetSecondScope = s_GpuTimingNameTestsTimingOverlapLifecycleResetSecond;
+    const Name outputScope = s_GpuTimingNameTestsTimingOverlapLifecycleOutput;
+    const GpuComparableTimestampRange firstRange = MakeComparableRange(10u, 20u, 0.25, MakePhysicalQueue(0u, 3u));
+    const GpuComparableTimestampRange secondRange = MakeComparableRange(18u, 30u, 0.25, MakePhysicalQueue(1u, 3u));
 
-    ASSERT_TRUE(correlator.prepareOverlapMetric(firstScope, secondScope, outputScope));
-    RecordAndPublishTimestampRange(firstScope, 51u, firstRange, correlator, timing, scratchArena);
-    correlator.discardPendingRanges();
-    RecordAndPublishTimestampRange(secondScope, 51u, secondRange, correlator, timing, scratchArena);
-    timing.publishFrame(52u);
-    EXPECT_FALSE(timing.stats(outputScope).valid());
+    ASSERT_TRUE(context.correlator.prepareOverlapMetric(firstScope, secondScope, outputScope));
+    RecordAndPublishTimestampRange(firstScope, 51u, firstRange, context);
+    context.correlator.discardPendingRanges();
+    RecordAndPublishTimestampRange(secondScope, 51u, secondRange, context);
+    context.timing.publishFrame(52u);
+    EXPECT_FALSE(context.timing.stats(outputScope).valid());
 
-    RecordAndPublishTimestampRange(firstScope, 53u, firstRange, correlator, timing, scratchArena);
-    RecordAndPublishTimestampRange(secondScope, 53u, secondRange, correlator, timing, scratchArena);
-    timing.publishFrame(54u);
-    const Core::Perf::TimingStats& afterDiscard = timing.stats(outputScope);
+    RecordAndPublishTimestampRange(firstScope, 53u, firstRange, context);
+    RecordAndPublishTimestampRange(secondScope, 53u, secondRange, context);
+    context.timing.publishFrame(54u);
+    const TimingStats afterDiscard = context.timing.stats(outputScope);
     ASSERT_EQ(afterDiscard.sampleCount, 1u);
     EXPECT_DOUBLE_EQ(afterDiscard.seconds, 0.5);
     EXPECT_EQ(afterDiscard.firstSampleFrameIndex, 53u);
     EXPECT_EQ(afterDiscard.lastSampleFrameIndex, 53u);
 
-    RecordAndPublishTimestampRange(firstScope, 55u, firstRange, correlator, timing, scratchArena);
-    correlator.reset();
-    RecordAndPublishTimestampRange(secondScope, 55u, secondRange, correlator, timing, scratchArena);
-    timing.publishFrame(56u);
-    EXPECT_FALSE(timing.stats(outputScope).valid());
+    RecordAndPublishTimestampRange(firstScope, 55u, firstRange, context);
+    context.correlator.reset();
+    RecordAndPublishTimestampRange(secondScope, 55u, secondRange, context);
+    context.timing.publishFrame(56u);
+    EXPECT_FALSE(context.timing.stats(outputScope).valid());
 
-    ASSERT_TRUE(correlator.prepareOverlapMetric(resetFirstScope, resetSecondScope, outputScope));
-    RecordAndPublishTimestampRange(resetFirstScope, 57u, firstRange, correlator, timing, scratchArena);
-    RecordAndPublishTimestampRange(resetSecondScope, 57u, secondRange, correlator, timing, scratchArena);
-    timing.publishFrame(58u);
-    const Core::Perf::TimingStats& afterReset = timing.stats(outputScope);
+    ASSERT_TRUE(context.correlator.prepareOverlapMetric(resetFirstScope, resetSecondScope, outputScope));
+    RecordAndPublishTimestampRange(resetFirstScope, 57u, firstRange, context);
+    RecordAndPublishTimestampRange(resetSecondScope, 57u, secondRange, context);
+    context.timing.publishFrame(58u);
+    const TimingStats afterReset = context.timing.stats(outputScope);
     ASSERT_EQ(afterReset.sampleCount, 1u);
     EXPECT_DOUBLE_EQ(afterReset.seconds, 0.5);
     EXPECT_EQ(afterReset.firstSampleFrameIndex, 57u);
     EXPECT_EQ(afterReset.lastSampleFrameIndex, 57u);
 }
 
-TEST(GpuTimingPacketEnvelopeMetrics, PublishesCompleteOutOfOrderEnvelopeByPhysicalQueue){
-    TestArena testArena;
-    Core::Perf::TimingRecorder timing(testArena.arena);
-    timing.setEnabled(true);
-    Core::GpuTimingMetricCorrelator correlator(testArena.arena, timing);
-    Core::Alloc::ScratchArena scratchArena(s_GpuTimingMetricScratchArena);
-    const Name firstScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeFirst;
-    const Name secondScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeSecond;
-    const Name thirdScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeThird;
-    const Name overlapScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeQueueOverlap;
-    const Name firstQueueIdleScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeQueue0InternalIdle;
-    const Name secondQueueIdleScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeQueue1InternalIdle;
-    const Core::GpuPhysicalQueueId firstQueue{ .index = 0u, .deviceGeneration = 7u };
-    const Core::GpuPhysicalQueueId secondQueue{ .index = 1u, .deviceGeneration = 7u };
-    const Array<Core::GpuPacketEnvelopeMetricScope, 3u> scopes = {
-        Core::GpuPacketEnvelopeMetricScope{ .scopeName = firstScope, .physicalQueue = firstQueue },
-        Core::GpuPacketEnvelopeMetricScope{ .scopeName = secondScope, .physicalQueue = secondQueue },
-        Core::GpuPacketEnvelopeMetricScope{ .scopeName = thirdScope, .physicalQueue = firstQueue },
-    };
-    const Array<Core::GpuPacketEnvelopeMetricQueueOutput, 2u> outputs = {
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = firstQueue, .internalIdleScopeName = firstQueueIdleScope },
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = secondQueue, .internalIdleScopeName = secondQueueIdleScope },
-    };
+void VerifyGpuTimingPacketEnvelopeMetrics_PublishesCompleteOutOfOrderEnvelopeByPhysicalQueue(){
+    TimingMetricContext context = TimingMetricContext();
+    context.timing.setEnabled(true);
+    const Name firstScope = s_GpuTimingNameTestsTimingEnvelopeFirst;
+    const Name secondScope = s_GpuTimingNameTestsTimingEnvelopeSecond;
+    const Name thirdScope = s_GpuTimingNameTestsTimingEnvelopeThird;
+    const Name overlapScope = s_GpuTimingNameTestsTimingEnvelopeQueueOverlap;
+    const Name firstQueueIdleScope = s_GpuTimingNameTestsTimingEnvelopeQueue0InternalIdle;
+    const Name secondQueueIdleScope = s_GpuTimingNameTestsTimingEnvelopeQueue1InternalIdle;
+    const GpuPhysicalQueueId firstQueue = MakePhysicalQueue(0u, 7u);
+    const GpuPhysicalQueueId secondQueue = MakePhysicalQueue(1u, 7u);
+    Array<GpuPacketEnvelopeMetricScope, 3> scopes = Array<GpuPacketEnvelopeMetricScope, 3>();
+    scopes[0u] = MakeEnvelopeScope(firstScope, firstQueue);
+    scopes[1u] = MakeEnvelopeScope(secondScope, secondQueue);
+    scopes[2u] = MakeEnvelopeScope(thirdScope, firstQueue);
+    Array<GpuPacketEnvelopeMetricQueueOutput, 2> outputs = Array<GpuPacketEnvelopeMetricQueueOutput, 2>();
+    outputs[0u] = MakeEnvelopeOutput(firstQueue, firstQueueIdleScope);
+    outputs[1u] = MakeEnvelopeOutput(secondQueue, secondQueueIdleScope);
 
-    ASSERT_TRUE(correlator.preparePacketEnvelopeMetrics(73u, scopes, overlapScope, outputs));
-    EXPECT_TRUE(correlator.preparePacketEnvelopeMetrics(73u, scopes, overlapScope, outputs));
-    RecordAndPublishTimestampRange(thirdScope, 73u, Core::GpuComparableTimestampRange{ .beginTicks = 15u, .endTicks = 20u, .secondsPerTick = 0.25, .physicalQueue = firstQueue, }, correlator, timing, scratchArena);
-    RecordAndPublishTimestampRange(firstScope, 73u, Core::GpuComparableTimestampRange{ .beginTicks = 0u, .endTicks = 10u, .secondsPerTick = 0.25, .physicalQueue = firstQueue, }, correlator, timing, scratchArena);
-    timing.publishFrame(74u);
-    EXPECT_FALSE(timing.stats(overlapScope).valid());
+    ASSERT_TRUE(context.correlator.preparePacketEnvelopeMetrics(73u, scopes, overlapScope, outputs));
+    EXPECT_TRUE(context.correlator.preparePacketEnvelopeMetrics(73u, scopes, overlapScope, outputs));
+    RecordAndPublishTimestampRange(thirdScope, 73u, MakeComparableRange(15u, 20u, 0.25, firstQueue), context);
+    RecordAndPublishTimestampRange(firstScope, 73u, MakeComparableRange(0u, 10u, 0.25, firstQueue), context);
+    context.timing.publishFrame(74u);
+    EXPECT_FALSE(context.timing.stats(overlapScope).valid());
 
-    RecordAndPublishTimestampRange(secondScope, 73u, Core::GpuComparableTimestampRange{ .beginTicks = 5u, .endTicks = 18u, .secondsPerTick = 0.25, .physicalQueue = secondQueue, }, correlator, timing, scratchArena);
-    timing.publishFrame(75u);
+    RecordAndPublishTimestampRange(secondScope, 73u, MakeComparableRange(5u, 18u, 0.25, secondQueue), context);
+    context.timing.publishFrame(75u);
 
-    const Core::Perf::TimingStats& overlap = timing.stats(overlapScope);
-    const Core::Perf::TimingStats& firstQueueIdle = timing.stats(firstQueueIdleScope);
-    const Core::Perf::TimingStats& secondQueueIdle = timing.stats(secondQueueIdleScope);
+    const TimingStats overlap = context.timing.stats(overlapScope);
+    const TimingStats firstQueueIdle = context.timing.stats(firstQueueIdleScope);
+    const TimingStats secondQueueIdle = context.timing.stats(secondQueueIdleScope);
     ASSERT_EQ(overlap.sampleCount, 1u);
     ASSERT_EQ(firstQueueIdle.sampleCount, 1u);
     ASSERT_EQ(secondQueueIdle.sampleCount, 1u);
@@ -1045,292 +1011,221 @@ TEST(GpuTimingPacketEnvelopeMetrics, PublishesCompleteOutOfOrderEnvelopeByPhysic
     EXPECT_EQ(overlap.firstSampleFrameIndex, 73u);
     EXPECT_EQ(overlap.lastSampleFrameIndex, 73u);
 
-    RecordAndPublishTimestampRange(thirdScope, 73u, Core::GpuComparableTimestampRange{ .beginTicks = 15u, .endTicks = 20u, .secondsPerTick = 0.25, .physicalQueue = firstQueue, }, correlator, timing, scratchArena);
-    RecordAndPublishTimestampRange(firstScope, 73u, Core::GpuComparableTimestampRange{ .beginTicks = 0u, .endTicks = 10u, .secondsPerTick = 0.25, .physicalQueue = firstQueue, }, correlator, timing, scratchArena);
-    RecordAndPublishTimestampRange(secondScope, 73u, Core::GpuComparableTimestampRange{ .beginTicks = 5u, .endTicks = 18u, .secondsPerTick = 0.25, .physicalQueue = secondQueue, }, correlator, timing, scratchArena);
-    timing.publishFrame(76u);
-    EXPECT_FALSE(timing.stats(overlapScope).valid());
-    EXPECT_FALSE(timing.stats(firstQueueIdleScope).valid());
-    EXPECT_FALSE(timing.stats(secondQueueIdleScope).valid());
+    RecordAndPublishTimestampRange(thirdScope, 73u, MakeComparableRange(15u, 20u, 0.25, firstQueue), context);
+    RecordAndPublishTimestampRange(firstScope, 73u, MakeComparableRange(0u, 10u, 0.25, firstQueue), context);
+    RecordAndPublishTimestampRange(secondScope, 73u, MakeComparableRange(5u, 18u, 0.25, secondQueue), context);
+    context.timing.publishFrame(76u);
+    EXPECT_FALSE(context.timing.stats(overlapScope).valid());
+    EXPECT_FALSE(context.timing.stats(firstQueueIdleScope).valid());
+    EXPECT_FALSE(context.timing.stats(secondQueueIdleScope).valid());
 }
 
-TEST(GpuTimingPacketEnvelopeMetrics, RejectsOutputRoleAndPhysicalQueueCollisions){
-    TestArena testArena;
-    Core::Perf::TimingRecorder timing(testArena.arena);
-    Core::GpuTimingMetricCorrelator correlator(testArena.arena, timing);
-    const Name firstScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeRoleFirst;
-    const Name secondScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeRoleSecond;
-    const Name overlapScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeRoleOverlap;
-    const Name alternateOverlapScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeRoleAlternateOverlap;
-    const Name firstQueueIdleScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeRoleQueue0Idle;
-    const Name secondQueueIdleScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeRoleQueue1Idle;
-    const Name alternateFirstQueueIdleScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeRoleAlternateQueue0Idle;
-    const Name alternateSecondQueueIdleScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeRoleAlternateQueue1Idle;
-    const Core::GpuPhysicalQueueId firstQueue{ .index = 0u, .deviceGeneration = 9u };
-    const Core::GpuPhysicalQueueId secondQueue{ .index = 1u, .deviceGeneration = 9u };
-    const Array<Core::GpuPacketEnvelopeMetricScope, 2u> scopes = {
-        Core::GpuPacketEnvelopeMetricScope{ .scopeName = firstScope, .physicalQueue = firstQueue },
-        Core::GpuPacketEnvelopeMetricScope{ .scopeName = secondScope, .physicalQueue = secondQueue },
-    };
-    const Array<Core::GpuPacketEnvelopeMetricQueueOutput, 2u> outputs = {
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = firstQueue, .internalIdleScopeName = firstQueueIdleScope },
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = secondQueue, .internalIdleScopeName = secondQueueIdleScope },
-    };
-    ASSERT_TRUE(correlator.preparePacketEnvelopeMetrics(80u, scopes, overlapScope, outputs));
+void VerifyGpuTimingPacketEnvelopeMetrics_RejectsOutputRoleAndPhysicalQueueCollisions(){
+    TimingMetricContext context = TimingMetricContext();
+    const Name firstScope = s_GpuTimingNameTestsTimingEnvelopeRoleFirst;
+    const Name secondScope = s_GpuTimingNameTestsTimingEnvelopeRoleSecond;
+    const Name overlapScope = s_GpuTimingNameTestsTimingEnvelopeRoleOverlap;
+    const Name alternateOverlapScope = s_GpuTimingNameTestsTimingEnvelopeRoleAlternateOverlap;
+    const Name firstQueueIdleScope = s_GpuTimingNameTestsTimingEnvelopeRoleQueue0Idle;
+    const Name secondQueueIdleScope = s_GpuTimingNameTestsTimingEnvelopeRoleQueue1Idle;
+    const Name alternateFirstQueueIdleScope = s_GpuTimingNameTestsTimingEnvelopeRoleAlternateQueue0Idle;
+    const Name alternateSecondQueueIdleScope = s_GpuTimingNameTestsTimingEnvelopeRoleAlternateQueue1Idle;
+    const GpuPhysicalQueueId firstQueue = MakePhysicalQueue(0u, 9u);
+    const GpuPhysicalQueueId secondQueue = MakePhysicalQueue(1u, 9u);
+    Array<GpuPacketEnvelopeMetricScope, 2> scopes = Array<GpuPacketEnvelopeMetricScope, 2>();
+    scopes[0u] = MakeEnvelopeScope(firstScope, firstQueue);
+    scopes[1u] = MakeEnvelopeScope(secondScope, secondQueue);
+    Array<GpuPacketEnvelopeMetricQueueOutput, 2> outputs = Array<GpuPacketEnvelopeMetricQueueOutput, 2>();
+    outputs[0u] = MakeEnvelopeOutput(firstQueue, firstQueueIdleScope);
+    outputs[1u] = MakeEnvelopeOutput(secondQueue, secondQueueIdleScope);
+    ASSERT_TRUE(context.correlator.preparePacketEnvelopeMetrics(80u, scopes, overlapScope, outputs));
 
-    const Array<Core::GpuPacketEnvelopeMetricQueueOutput, 2u> overlapAsIdleOutputs = {
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = firstQueue, .internalIdleScopeName = overlapScope },
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = secondQueue, .internalIdleScopeName = alternateSecondQueueIdleScope },
-    };
-    EXPECT_FALSE(correlator.preparePacketEnvelopeMetrics(81u, scopes, alternateOverlapScope, overlapAsIdleOutputs));
+    Array<GpuPacketEnvelopeMetricQueueOutput, 2> overlapAsIdleOutputs = Array<GpuPacketEnvelopeMetricQueueOutput, 2>();
+    overlapAsIdleOutputs[0u] = MakeEnvelopeOutput(firstQueue, overlapScope);
+    overlapAsIdleOutputs[1u] = MakeEnvelopeOutput(secondQueue, alternateSecondQueueIdleScope);
+    EXPECT_FALSE(context.correlator.preparePacketEnvelopeMetrics(81u, scopes, alternateOverlapScope, overlapAsIdleOutputs));
 
-    const Array<Core::GpuPacketEnvelopeMetricQueueOutput, 2u> alternateOutputs = {
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = firstQueue, .internalIdleScopeName = alternateFirstQueueIdleScope },
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = secondQueue, .internalIdleScopeName = alternateSecondQueueIdleScope },
-    };
-    EXPECT_FALSE(correlator.preparePacketEnvelopeMetrics(81u, scopes, firstQueueIdleScope, alternateOutputs));
+    Array<GpuPacketEnvelopeMetricQueueOutput, 2> alternateOutputs = Array<GpuPacketEnvelopeMetricQueueOutput, 2>();
+    alternateOutputs[0u] = MakeEnvelopeOutput(firstQueue, alternateFirstQueueIdleScope);
+    alternateOutputs[1u] = MakeEnvelopeOutput(secondQueue, alternateSecondQueueIdleScope);
+    EXPECT_FALSE(context.correlator.preparePacketEnvelopeMetrics(81u, scopes, firstQueueIdleScope, alternateOutputs));
 
-    const Array<Core::GpuPacketEnvelopeMetricQueueOutput, 2u> remappedOutputs = {
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = firstQueue, .internalIdleScopeName = alternateFirstQueueIdleScope },
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = secondQueue, .internalIdleScopeName = firstQueueIdleScope },
-    };
-    EXPECT_FALSE(correlator.preparePacketEnvelopeMetrics(81u, scopes, alternateOverlapScope, remappedOutputs));
-    EXPECT_EQ(timing.scopeCount(), 3u);
+    Array<GpuPacketEnvelopeMetricQueueOutput, 2> remappedOutputs = Array<GpuPacketEnvelopeMetricQueueOutput, 2>();
+    remappedOutputs[0u] = MakeEnvelopeOutput(firstQueue, alternateFirstQueueIdleScope);
+    remappedOutputs[1u] = MakeEnvelopeOutput(secondQueue, firstQueueIdleScope);
+    EXPECT_FALSE(context.correlator.preparePacketEnvelopeMetrics(81u, scopes, alternateOverlapScope, remappedOutputs));
+    EXPECT_EQ(context.timing.scopeCount(), 3u);
 }
 
-TEST(GpuTimingPacketEnvelopeMetrics, RetainsSuccessfulOutputRolesWhenSinkRegistrationFails){
-    TestArena testArena;
-    FailOnceTimingSink timing(2u);
-    Core::GpuTimingMetricCorrelator correlator(testArena.arena, timing);
-    const Name firstScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeFailureFirst;
-    const Name secondScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeFailureSecond;
-    const Name retryFirstScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeFailureRetryFirst;
-    const Name retrySecondScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeFailureRetrySecond;
-    const Name overlapScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeFailureOverlap;
-    const Name firstQueueIdleScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeFailureQueue0Idle;
-    const Name secondQueueIdleScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeFailureQueue1Idle;
-    const Name alternateSecondQueueIdleScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeFailureAlternateQueue1Idle;
-    const Core::GpuPhysicalQueueId firstQueue{ .index = 0u, .deviceGeneration = 13u };
-    const Core::GpuPhysicalQueueId secondQueue{ .index = 1u, .deviceGeneration = 13u };
-    const Array<Core::GpuPacketEnvelopeMetricScope, 2u> scopes = {
-        Core::GpuPacketEnvelopeMetricScope{ .scopeName = firstScope, .physicalQueue = firstQueue },
-        Core::GpuPacketEnvelopeMetricScope{ .scopeName = secondScope, .physicalQueue = secondQueue },
-    };
-    const Array<Core::GpuPacketEnvelopeMetricQueueOutput, 2u> outputs = {
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = firstQueue, .internalIdleScopeName = firstQueueIdleScope },
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = secondQueue, .internalIdleScopeName = secondQueueIdleScope },
-    };
-    const Array<Core::GpuPacketEnvelopeMetricQueueOutput, 2u> retryOutputs = {
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = firstQueue, .internalIdleScopeName = firstQueueIdleScope },
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = secondQueue, .internalIdleScopeName = alternateSecondQueueIdleScope },
-    };
+void VerifyGpuTimingPacketEnvelopeMetrics_RetainsSuccessfulOutputRolesWhenSinkRegistrationFails(){
+    FailOnceTimingContext context = FailOnceTimingContext(2u);
+    const Name firstScope = s_GpuTimingNameTestsTimingEnvelopeFailureFirst;
+    const Name secondScope = s_GpuTimingNameTestsTimingEnvelopeFailureSecond;
+    const Name retryFirstScope = s_GpuTimingNameTestsTimingEnvelopeFailureRetryFirst;
+    const Name retrySecondScope = s_GpuTimingNameTestsTimingEnvelopeFailureRetrySecond;
+    const Name overlapScope = s_GpuTimingNameTestsTimingEnvelopeFailureOverlap;
+    const Name firstQueueIdleScope = s_GpuTimingNameTestsTimingEnvelopeFailureQueue0Idle;
+    const Name secondQueueIdleScope = s_GpuTimingNameTestsTimingEnvelopeFailureQueue1Idle;
+    const Name alternateSecondQueueIdleScope = s_GpuTimingNameTestsTimingEnvelopeFailureAlternateQueue1Idle;
+    const GpuPhysicalQueueId firstQueue = MakePhysicalQueue(0u, 13u);
+    const GpuPhysicalQueueId secondQueue = MakePhysicalQueue(1u, 13u);
+    Array<GpuPacketEnvelopeMetricScope, 2> scopes = Array<GpuPacketEnvelopeMetricScope, 2>();
+    scopes[0u] = MakeEnvelopeScope(firstScope, firstQueue);
+    scopes[1u] = MakeEnvelopeScope(secondScope, secondQueue);
+    Array<GpuPacketEnvelopeMetricQueueOutput, 2> outputs = Array<GpuPacketEnvelopeMetricQueueOutput, 2>();
+    outputs[0u] = MakeEnvelopeOutput(firstQueue, firstQueueIdleScope);
+    outputs[1u] = MakeEnvelopeOutput(secondQueue, secondQueueIdleScope);
+    Array<GpuPacketEnvelopeMetricQueueOutput, 2> retryOutputs = Array<GpuPacketEnvelopeMetricQueueOutput, 2>();
+    retryOutputs[0u] = MakeEnvelopeOutput(firstQueue, firstQueueIdleScope);
+    retryOutputs[1u] = MakeEnvelopeOutput(secondQueue, alternateSecondQueueIdleScope);
 
-    EXPECT_FALSE(correlator.preparePacketEnvelopeMetrics(90u, scopes, overlapScope, outputs));
-    EXPECT_FALSE(correlator.prepareOverlapMetric(retryFirstScope, retrySecondScope, overlapScope));
-    EXPECT_FALSE(correlator.prepareOverlapMetric(retryFirstScope, retrySecondScope, firstQueueIdleScope));
-    ASSERT_TRUE(correlator.prepareOverlapMetric(retryFirstScope, retrySecondScope, secondQueueIdleScope));
-    EXPECT_TRUE(correlator.preparePacketEnvelopeMetrics(90u, scopes, overlapScope, retryOutputs));
+    EXPECT_FALSE(context.correlator.preparePacketEnvelopeMetrics(90u, scopes, overlapScope, outputs));
+    EXPECT_FALSE(context.correlator.prepareOverlapMetric(retryFirstScope, retrySecondScope, overlapScope));
+    EXPECT_FALSE(context.correlator.prepareOverlapMetric(retryFirstScope, retrySecondScope, firstQueueIdleScope));
+    ASSERT_TRUE(context.correlator.prepareOverlapMetric(retryFirstScope, retrySecondScope, secondQueueIdleScope));
+    EXPECT_TRUE(context.correlator.preparePacketEnvelopeMetrics(90u, scopes, overlapScope, retryOutputs));
 }
 
-TEST(GpuTimingPacketEnvelopeMetrics, IsolatesFramesRejectsWrongQueuesPrunesIncompleteFramesAndResetsState){
-    TestArena testArena;
-    Core::Perf::TimingRecorder timing(testArena.arena);
-    timing.setEnabled(true);
-    Core::GpuTimingMetricCorrelator correlator(testArena.arena, timing);
-    Core::Alloc::ScratchArena scratchArena(s_GpuTimingMetricScratchArena);
-    const Name firstScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeIsolationFirst;
-    const Name secondScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeIsolationSecond;
-    const Name overlapScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeIsolationOverlap;
-    const Name firstQueueIdleScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeIsolationQueue0Idle;
-    const Name secondQueueIdleScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeIsolationQueue1Idle;
-    const Name resetFirstOutputScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeIsolationResetFirstOutput;
-    const Name resetSecondInputScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeIsolationResetSecondInput;
-    const Name resetSecondOutputScope = NWB::Tests::GraphicsTimingCases::s_GpuTimingNameTestsTimingEnvelopeIsolationResetSecondOutput;
-    const Core::GpuPhysicalQueueId firstQueue{ .index = 0u, .deviceGeneration = 11u };
-    const Core::GpuPhysicalQueueId secondQueue{ .index = 1u, .deviceGeneration = 11u };
-    const Array<Core::GpuPacketEnvelopeMetricScope, 2u> scopes = {
-        Core::GpuPacketEnvelopeMetricScope{ .scopeName = firstScope, .physicalQueue = firstQueue },
-        Core::GpuPacketEnvelopeMetricScope{ .scopeName = secondScope, .physicalQueue = secondQueue },
-    };
-    const Array<Core::GpuPacketEnvelopeMetricQueueOutput, 2u> outputs = {
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = firstQueue, .internalIdleScopeName = firstQueueIdleScope },
-        Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = secondQueue, .internalIdleScopeName = secondQueueIdleScope },
-    };
-    ASSERT_TRUE(correlator.preparePacketEnvelopeMetrics(50u, scopes, overlapScope, outputs));
-    ASSERT_TRUE(correlator.preparePacketEnvelopeMetrics(51u, scopes, overlapScope, outputs));
+void VerifyGpuTimingPacketEnvelopeMetrics_IsolatesFramesRejectsWrongQueuesPrunesIncompleteFramesAndResetsState(){
+    TimingMetricContext context = TimingMetricContext();
+    context.timing.setEnabled(true);
+    const Name firstScope = s_GpuTimingNameTestsTimingEnvelopeIsolationFirst;
+    const Name secondScope = s_GpuTimingNameTestsTimingEnvelopeIsolationSecond;
+    const Name overlapScope = s_GpuTimingNameTestsTimingEnvelopeIsolationOverlap;
+    const Name firstQueueIdleScope = s_GpuTimingNameTestsTimingEnvelopeIsolationQueue0Idle;
+    const Name secondQueueIdleScope = s_GpuTimingNameTestsTimingEnvelopeIsolationQueue1Idle;
+    const Name resetFirstOutputScope = s_GpuTimingNameTestsTimingEnvelopeIsolationResetFirstOutput;
+    const Name resetSecondInputScope = s_GpuTimingNameTestsTimingEnvelopeIsolationResetSecondInput;
+    const Name resetSecondOutputScope = s_GpuTimingNameTestsTimingEnvelopeIsolationResetSecondOutput;
+    const GpuPhysicalQueueId firstQueue = MakePhysicalQueue(0u, 11u);
+    const GpuPhysicalQueueId secondQueue = MakePhysicalQueue(1u, 11u);
+    Array<GpuPacketEnvelopeMetricScope, 2> scopes = Array<GpuPacketEnvelopeMetricScope, 2>();
+    scopes[0u] = MakeEnvelopeScope(firstScope, firstQueue);
+    scopes[1u] = MakeEnvelopeScope(secondScope, secondQueue);
+    Array<GpuPacketEnvelopeMetricQueueOutput, 2> outputs = Array<GpuPacketEnvelopeMetricQueueOutput, 2>();
+    outputs[0u] = MakeEnvelopeOutput(firstQueue, firstQueueIdleScope);
+    outputs[1u] = MakeEnvelopeOutput(secondQueue, secondQueueIdleScope);
+    ASSERT_TRUE(context.correlator.preparePacketEnvelopeMetrics(50u, scopes, overlapScope, outputs));
+    ASSERT_TRUE(context.correlator.preparePacketEnvelopeMetrics(51u, scopes, overlapScope, outputs));
 
-    const Core::GpuComparableTimestampRange firstRange{ .beginTicks = 2u, .endTicks = 8u, .secondsPerTick = 0.5, .physicalQueue = firstQueue, };
-    const Core::GpuComparableTimestampRange secondRange{ .beginTicks = 4u, .endTicks = 10u, .secondsPerTick = 0.5, .physicalQueue = secondQueue, };
-    RecordAndPublishTimestampRange(firstScope, 50u, firstRange, correlator, timing, scratchArena);
-    RecordAndPublishTimestampRange(secondScope, 51u, secondRange, correlator, timing, scratchArena);
-    RecordAndPublishTimestampRange(firstScope, 51u, secondRange, correlator, timing, scratchArena);
-    timing.publishFrame(52u);
-    EXPECT_FALSE(timing.stats(overlapScope).valid());
+    const GpuComparableTimestampRange firstRange = MakeComparableRange(2u, 8u, 0.5, firstQueue);
+    const GpuComparableTimestampRange secondRange = MakeComparableRange(4u, 10u, 0.5, secondQueue);
+    RecordAndPublishTimestampRange(firstScope, 50u, firstRange, context);
+    RecordAndPublishTimestampRange(secondScope, 51u, secondRange, context);
+    RecordAndPublishTimestampRange(firstScope, 51u, secondRange, context);
+    context.timing.publishFrame(52u);
+    EXPECT_FALSE(context.timing.stats(overlapScope).valid());
 
-    RecordAndPublishTimestampRange(firstScope, 51u, firstRange, correlator, timing, scratchArena);
-    timing.publishFrame(53u);
-    const Core::Perf::TimingStats& frameFiftyOne = timing.stats(overlapScope);
+    RecordAndPublishTimestampRange(firstScope, 51u, firstRange, context);
+    context.timing.publishFrame(53u);
+    const TimingStats frameFiftyOne = context.timing.stats(overlapScope);
     ASSERT_EQ(frameFiftyOne.sampleCount, 1u);
     EXPECT_DOUBLE_EQ(frameFiftyOne.seconds, 2.0);
     EXPECT_EQ(frameFiftyOne.firstSampleFrameIndex, 51u);
 
-    RecordAndPublishTimestampRange(secondScope, 50u, secondRange, correlator, timing, scratchArena);
-    timing.publishFrame(54u);
-    const Core::Perf::TimingStats& frameFifty = timing.stats(overlapScope);
+    RecordAndPublishTimestampRange(secondScope, 50u, secondRange, context);
+    context.timing.publishFrame(54u);
+    const TimingStats frameFifty = context.timing.stats(overlapScope);
     ASSERT_EQ(frameFifty.sampleCount, 1u);
     EXPECT_DOUBLE_EQ(frameFifty.seconds, 2.0);
     EXPECT_EQ(frameFifty.firstSampleFrameIndex, 50u);
     EXPECT_EQ(frameFifty.lastSampleFrameIndex, 50u);
 
-    ASSERT_TRUE(correlator.preparePacketEnvelopeMetrics(55u, scopes, overlapScope, outputs));
-    RecordAndPublishTimestampRange(firstScope, 55u, firstRange, correlator, timing, scratchArena);
-    correlator.discardPendingRanges();
-    RecordAndPublishTimestampRange(secondScope, 55u, secondRange, correlator, timing, scratchArena);
-    timing.publishFrame(56u);
-    EXPECT_FALSE(timing.stats(overlapScope).valid());
-    EXPECT_FALSE(timing.stats(firstQueueIdleScope).valid());
-    EXPECT_FALSE(timing.stats(secondQueueIdleScope).valid());
-    EXPECT_FALSE(correlator.prepareOverlapMetric(resetFirstOutputScope, resetSecondInputScope, overlapScope));
-    EXPECT_FALSE(correlator.prepareOverlapMetric(resetFirstOutputScope, resetSecondInputScope, firstQueueIdleScope));
-    EXPECT_FALSE(correlator.prepareOverlapMetric(resetFirstOutputScope, resetSecondInputScope, secondQueueIdleScope));
+    ASSERT_TRUE(context.correlator.preparePacketEnvelopeMetrics(55u, scopes, overlapScope, outputs));
+    RecordAndPublishTimestampRange(firstScope, 55u, firstRange, context);
+    context.correlator.discardPendingRanges();
+    RecordAndPublishTimestampRange(secondScope, 55u, secondRange, context);
+    context.timing.publishFrame(56u);
+    EXPECT_FALSE(context.timing.stats(overlapScope).valid());
+    EXPECT_FALSE(context.timing.stats(firstQueueIdleScope).valid());
+    EXPECT_FALSE(context.timing.stats(secondQueueIdleScope).valid());
+    EXPECT_FALSE(context.correlator.prepareOverlapMetric(resetFirstOutputScope, resetSecondInputScope, overlapScope));
+    EXPECT_FALSE(context.correlator.prepareOverlapMetric(resetFirstOutputScope, resetSecondInputScope, firstQueueIdleScope));
+    EXPECT_FALSE(context.correlator.prepareOverlapMetric(resetFirstOutputScope, resetSecondInputScope, secondQueueIdleScope));
 
-    ASSERT_TRUE(correlator.preparePacketEnvelopeMetrics(57u, scopes, overlapScope, outputs));
-    RecordAndPublishTimestampRange(firstScope, 57u, firstRange, correlator, timing, scratchArena);
-    RecordAndPublishTimestampRange(secondScope, 57u, secondRange, correlator, timing, scratchArena);
-    timing.publishFrame(58u);
-    const Core::Perf::TimingStats& afterDiscard = timing.stats(overlapScope);
+    ASSERT_TRUE(context.correlator.preparePacketEnvelopeMetrics(57u, scopes, overlapScope, outputs));
+    RecordAndPublishTimestampRange(firstScope, 57u, firstRange, context);
+    RecordAndPublishTimestampRange(secondScope, 57u, secondRange, context);
+    context.timing.publishFrame(58u);
+    const TimingStats afterDiscard = context.timing.stats(overlapScope);
     ASSERT_EQ(afterDiscard.sampleCount, 1u);
     EXPECT_EQ(afterDiscard.firstSampleFrameIndex, 57u);
     EXPECT_EQ(afterDiscard.lastSampleFrameIndex, 57u);
 
-    ASSERT_TRUE(correlator.preparePacketEnvelopeMetrics(60u, scopes, overlapScope, outputs));
-    RecordAndPublishTimestampRange(firstScope, 60u, firstRange, correlator, timing, scratchArena);
-    ASSERT_TRUE(correlator.preparePacketEnvelopeMetrics(1000u, scopes, overlapScope, outputs));
-    RecordAndPublishTimestampRange(secondScope, 60u, secondRange, correlator, timing, scratchArena);
-    timing.publishFrame(1001u);
-    EXPECT_FALSE(timing.stats(overlapScope).valid());
-    EXPECT_FALSE(timing.stats(firstQueueIdleScope).valid());
-    EXPECT_FALSE(timing.stats(secondQueueIdleScope).valid());
+    ASSERT_TRUE(context.correlator.preparePacketEnvelopeMetrics(60u, scopes, overlapScope, outputs));
+    RecordAndPublishTimestampRange(firstScope, 60u, firstRange, context);
+    ASSERT_TRUE(context.correlator.preparePacketEnvelopeMetrics(1000u, scopes, overlapScope, outputs));
+    RecordAndPublishTimestampRange(secondScope, 60u, secondRange, context);
+    context.timing.publishFrame(1001u);
+    EXPECT_FALSE(context.timing.stats(overlapScope).valid());
+    EXPECT_FALSE(context.timing.stats(firstQueueIdleScope).valid());
+    EXPECT_FALSE(context.timing.stats(secondQueueIdleScope).valid());
 
-    RecordAndPublishTimestampRange(firstScope, 1000u, firstRange, correlator, timing, scratchArena);
-    correlator.reset();
-    RecordAndPublishTimestampRange(secondScope, 1000u, secondRange, correlator, timing, scratchArena);
-    timing.publishFrame(1002u);
-    EXPECT_FALSE(timing.stats(overlapScope).valid());
-    EXPECT_FALSE(timing.stats(firstQueueIdleScope).valid());
-    EXPECT_FALSE(timing.stats(secondQueueIdleScope).valid());
+    RecordAndPublishTimestampRange(firstScope, 1000u, firstRange, context);
+    context.correlator.reset();
+    RecordAndPublishTimestampRange(secondScope, 1000u, secondRange, context);
+    context.timing.publishFrame(1002u);
+    EXPECT_FALSE(context.timing.stats(overlapScope).valid());
+    EXPECT_FALSE(context.timing.stats(firstQueueIdleScope).valid());
+    EXPECT_FALSE(context.timing.stats(secondQueueIdleScope).valid());
 
-    ASSERT_TRUE(correlator.prepareOverlapMetric(overlapScope, firstQueueIdleScope, resetFirstOutputScope));
-    ASSERT_TRUE(correlator.prepareOverlapMetric(secondQueueIdleScope, resetSecondInputScope, resetSecondOutputScope));
+    ASSERT_TRUE(context.correlator.prepareOverlapMetric(overlapScope, firstQueueIdleScope, resetFirstOutputScope));
+    ASSERT_TRUE(context.correlator.prepareOverlapMetric(secondQueueIdleScope, resetSecondInputScope, resetSecondOutputScope));
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <gtest/gtest.h>
-
-#include <core/graphics/vulkan/vulkan_viewport_policy.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-namespace Tests{
-
-
-TEST(VulkanViewportPolicy, FractionalBoundsAreRoundedOutAndNegativeScissorsAreRejected){
-    using Policy = Core::GraphicsBackend::VulkanViewportPolicy;
-    const Core::Viewport viewport(1.2f, 10.2f, 2.1f, 8.7f, 0.f, 1.f);
-    const auto rect = Policy::BuildImplicitScissor(viewport);
-    ASSERT_TRUE(rect);
-    EXPECT_EQ(rect->offset.x, 1);
-    EXPECT_EQ(rect->offset.y, 2);
-    EXPECT_EQ(rect->extent.width, 10u);
-    EXPECT_EQ(rect->extent.height, 7u);
-    EXPECT_FALSE(Policy::BuildImplicitScissor(Core::Viewport(-0.1f, 10.f, 0.f, 8.f, 0.f, 1.f)));
+void VerifyVulkanViewportPolicy_FractionalBoundsAreRoundedOutAndNegativeScissorsAreRejected(){
+    const Viewport viewport = Viewport(1.2f, 10.2f, 2.1f, 8.7f, 0.0f, 1.0f);
+    const Expected<VkRect2D> rect = VulkanViewportPolicy::BuildImplicitScissor(viewport);
+    ASSERT_TRUE(rect.has_value());
+    EXPECT_EQ(rect.value().offset.x, 1);
+    EXPECT_EQ(rect.value().offset.y, 2);
+    EXPECT_EQ(rect.value().extent.width, 10u);
+    EXPECT_EQ(rect.value().extent.height, 7u);
+    EXPECT_FALSE(VulkanViewportPolicy::BuildImplicitScissor(Viewport(-0.1f, 10.0f, 0.0f, 8.0f, 0.0f, 1.0f)).has_value());
 }
 
-
-};
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <gtest/gtest.h>
-
-#include <core/graphics/rhi/resource.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_resource_queue_sharing_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace Core;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(!ResourceQueueSharing::IsValid(static_cast<ResourceQueueSharing::Mask>(1u << 7u)));
-
-
-TEST(ResourceQueueSharing, RejectsEveryUnknownSharingBit){
-    constexpr u32 s_MaxValidValue = static_cast<u32>(ResourceQueueSharing::GraphicsAsyncComputeAndTransfer);
-    for(u32 rawValue = s_MaxValidValue; rawValue <= Limit<u8>::s_Max; ++rawValue){
-        SCOPED_TRACE(rawValue);
-        const ResourceQueueSharing::Mask sharing = static_cast<ResourceQueueSharing::Mask>(static_cast<u8>(rawValue));
-        EXPECT_EQ(ResourceQueueSharing::IsValid(sharing), rawValue <= s_MaxValidValue);
+void VerifyResourceQueueSharing_RejectsEveryUnknownSharingBit(){
+    const u32 maxValidValue = cast<u32>(ResourceQueueSharing::GraphicsAsyncComputeAndTransfer);
+    const u32 maxByteValue = cast<u32>(u8.max);
+    for(u32 rawValue = maxValidValue; rawValue <= maxByteValue; ++rawValue){
+        ScopedTestTrace trace(rawValue);
+        const ResourceQueueSharingMask sharing = cast<ResourceQueueSharingMask>(cast<u8>(rawValue));
+        EXPECT_EQ(ResourceQueueSharing::IsValid(sharing), rawValue <= maxValidValue);
     }
 }
 
+native{
+NWB_BEGIN
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
+namespace Tests::GraphicsTimingCasesDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void GpuTimingSubscriptionCapture::Invoke(void* const context, const Core::GpuTimingSample&)noexcept{
+    GpuTimingSubscriptionCapture* const capture = static_cast<GpuTimingSubscriptionCapture*>(context);
+    if(!capture)
+        return;
+
+    ++capture->sampleCount;
+}
+
+Core::GpuTimingSampleListener MakeSubscriptionListener(GpuTimingSubscriptionCapture& capture)noexcept{
+    return Core::GpuTimingSampleListener{
+        .context = &capture,
+        .invoke = &GpuTimingSubscriptionCapture::Invoke,
+    };
+}
+
+Expected<Name> DeriveIndexedScopeName(const Name& prefix, const usize scopeIndex)noexcept{
+    Array<char, 32u> scopeIndexBuffer = {};
+    return DeriveName(prefix, FormatDecimal(scopeIndex, scopeIndexBuffer));
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1343,10 +1238,36 @@ TEST(ResourceQueueSharing, RejectsEveryUnknownSharingBit){
 
 
 NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 }
+
+NWB_ADHD_GTEST(GpuTimingPacketEnvelopeMetrics, CorrelatesLargeOutOfOrderFrame, VerifyGpuTimingPacketEnvelopeMetrics_CorrelatesLargeOutOfOrderFrame)
+NWB_ADHD_GTEST(GpuTimingPacketEnvelopeMetrics, ReplacesDuplicateRangesWithoutCompletingMissingScopes, VerifyGpuTimingPacketEnvelopeMetrics_ReplacesDuplicateRangesWithoutCompletingMissingScopes)
+NWB_ADHD_GTEST(GpuTimingPacketEnvelopeMetrics, PreservesPartialFramesAcrossGrowthRejectedPreparesAndOutOfOrderRetirement, VerifyGpuTimingPacketEnvelopeMetrics_PreservesPartialFramesAcrossGrowthRejectedPreparesAndOutOfOrderRetirement)
+NWB_ADHD_GTEST(GpuTimingPacketEnvelopeMetrics, PublishesNoPartialFrameWhenOutputRegistrationThrows, VerifyGpuTimingPacketEnvelopeMetrics_PublishesNoPartialFrameWhenOutputRegistrationThrows)
+NWB_ADHD_GTEST(GpuPacketEnvelopeMetrics, UnionsSameQueueRangesAndOrdersEveryQueue, VerifyGpuPacketEnvelopeMetrics_UnionsSameQueueRangesAndOrdersEveryQueue)
+NWB_ADHD_GTEST(GpuPacketEnvelopeMetrics, CountsConcurrentQueueUnionOnceAtTripleOverlap, VerifyGpuPacketEnvelopeMetrics_CountsConcurrentQueueUnionOnceAtTripleOverlap)
+NWB_ADHD_GTEST(GpuPacketEnvelopeMetrics, PreservesLargeAndNearLimitTickPrecision, VerifyGpuPacketEnvelopeMetrics_PreservesLargeAndNearLimitTickPrecision)
+NWB_ADHD_GTEST(GpuPacketEnvelopeMetrics, AcceptsCompleteZeroOverlapInputs, VerifyGpuPacketEnvelopeMetrics_AcceptsCompleteZeroOverlapInputs)
+NWB_ADHD_GTEST(GpuPacketEnvelopeMetrics, RejectsInvalidOrIncomparableInputAndClearsOutputs, VerifyGpuPacketEnvelopeMetrics_RejectsInvalidOrIncomparableInputAndClearsOutputs)
+NWB_ADHD_GTEST(GpuTimingSampleSubscriptions, ScopedDemandsReplaceAtomicallyAndRemainSubscriptionIsolated, VerifyGpuTimingSampleSubscriptions_ScopedDemandsReplaceAtomicallyAndRemainSubscriptionIsolated)
+NWB_ADHD_GTEST(GpuTimingSampleAttribution, IssuesUniqueProcessIdentitiesAcrossRecorderResetAndRecreation, VerifyGpuTimingSampleAttribution_IssuesUniqueProcessIdentitiesAcrossRecorderResetAndRecreation)
+NWB_ADHD_GTEST(TimerQueryResult, MasksHighBitsAndWrapsPartialWidth, VerifyTimerQueryResult_MasksHighBitsAndWrapsPartialWidth)
+NWB_ADHD_GTEST(TimerQueryResult, WrapsFullWidthWithoutShiftingBySixtyFour, VerifyTimerQueryResult_WrapsFullWidthWithoutShiftingBySixtyFour)
+NWB_ADHD_GTEST(TimerQueryResult, RetainsNearFullWidthDurationWithoutPublishingAbsoluteRange, VerifyTimerQueryResult_RetainsNearFullWidthDurationWithoutPublishingAbsoluteRange)
+NWB_ADHD_GTEST(TimerQueryResult, ComparableRangeRequiresCapabilityAndPhysicalQueue, VerifyTimerQueryResult_ComparableRangeRequiresCapabilityAndPhysicalQueue)
+NWB_ADHD_GTEST(TimerQueryResult, RejectsUnknownOrOutOfRangeWidths, VerifyTimerQueryResult_RejectsUnknownOrOutOfRangeWidths)
+NWB_ADHD_GTEST(GpuComparableTimestampRange, IntersectsRawTicksBeforeFloatingPointConversion, VerifyGpuComparableTimestampRange_IntersectsRawTicksBeforeFloatingPointConversion)
+NWB_ADHD_GTEST(GpuTimingOverlapRegistration, IsCanonicalIdempotentAndRejectsMetricRoleConflicts, VerifyGpuTimingOverlapRegistration_IsCanonicalIdempotentAndRejectsMetricRoleConflicts)
+NWB_ADHD_GTEST(GpuTimingOverlapRegistration, ReversedDuplicatePublishesOneSample, VerifyGpuTimingOverlapRegistration_ReversedDuplicatePublishesOneSample)
+NWB_ADHD_GTEST(GpuTimingOverlapRegistration, CatchUpBatchBoundsSourceFramesAndPreservesLastArrivalDuration, VerifyGpuTimingOverlapRegistration_CatchUpBatchBoundsSourceFramesAndPreservesLastArrivalDuration)
+NWB_ADHD_GTEST(GpuTimingOverlapRegistration, DiscardPreservesRegistrationAndResetClearsIt, VerifyGpuTimingOverlapRegistration_DiscardPreservesRegistrationAndResetClearsIt)
+NWB_ADHD_GTEST(GpuTimingPacketEnvelopeMetrics, PublishesCompleteOutOfOrderEnvelopeByPhysicalQueue, VerifyGpuTimingPacketEnvelopeMetrics_PublishesCompleteOutOfOrderEnvelopeByPhysicalQueue)
+NWB_ADHD_GTEST(GpuTimingPacketEnvelopeMetrics, RejectsOutputRoleAndPhysicalQueueCollisions, VerifyGpuTimingPacketEnvelopeMetrics_RejectsOutputRoleAndPhysicalQueueCollisions)
+NWB_ADHD_GTEST(GpuTimingPacketEnvelopeMetrics, RetainsSuccessfulOutputRolesWhenSinkRegistrationFails, VerifyGpuTimingPacketEnvelopeMetrics_RetainsSuccessfulOutputRolesWhenSinkRegistrationFails)
+NWB_ADHD_GTEST(GpuTimingPacketEnvelopeMetrics, IsolatesFramesRejectsWrongQueuesPrunesIncompleteFramesAndResetsState, VerifyGpuTimingPacketEnvelopeMetrics_IsolatesFramesRejectsWrongQueuesPrunesIncompleteFramesAndResetsState)
+NWB_ADHD_GTEST(VulkanViewportPolicy, FractionalBoundsAreRoundedOutAndNegativeScissorsAreRejected, VerifyVulkanViewportPolicy_FractionalBoundsAreRoundedOutAndNegativeScissorsAreRejected)
+NWB_ADHD_GTEST(ResourceQueueSharing, RejectsEveryUnknownSharingBit, VerifyResourceQueueSharing_RejectsEveryUnknownSharingBit)
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

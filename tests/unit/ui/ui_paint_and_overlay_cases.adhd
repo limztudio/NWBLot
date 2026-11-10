@@ -1,483 +1,24 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
 
-b8 UiPaintAndOverlayCasesReady(in u64 value){
-    return value != 0u;
-}
+#include <tests/common/gtest_macros.adhd>
+#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd>
+#include <tests/unit/ui/name_cases.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 native{
-#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd.h>
+#include <tests/common/floating_point_environment_guard.adhd.h>
 
+#include <impl/ecs_ui/toolkit/paint.adhd.h>
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_paint_image_admission_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using namespace NWB::Impl::Ui;
-using namespace NWB::UiPaintImageTests;
-
-constexpr AStringView s_VersionedImagePath = "tests/ui/versioned_image";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST_F(PaintImageFixture, ThreeKindsShareSixtyFourSlotsWhileCopiesDeduplicateAndOverflowIsAtomic){
-    FixedVector<SharedGlyphPage, s_PaintMaxImages - 2u> glyphs;
-    for(usize index = 0u; index < glyphs.max_size(); ++index){
-        auto pageCreationResult = makeGlyph(100u + index);
-        ASSERT_TRUE(pageCreationResult);
-        SharedGlyphPage page = Move(*pageCreationResult);
-        ASSERT_TRUE(page);
-        glyphs.push_back(Move(page));
-    }
-    auto sdfCreationResult = makeSdf();
-    ASSERT_TRUE(sdfCreationResult);
-    const SharedSdfAtlasPage sdf = Move(*sdfCreationResult);
-    auto imageResult = makeImage();
-    ASSERT_TRUE(imageResult);
-    const SharedImageSource image = Move(*imageResult);
-    auto overflowResult = makeImage(s_DefaultImagePath, 81u);
-    ASSERT_TRUE(overflowResult);
-    const SharedImageSource overflow = Move(*overflowResult);
-    ASSERT_TRUE(sdf && image && overflow);
-    PaintBuilder reference(m_arena);
-    beginPaint(reference);
-    const Array<NotNull<PaintBuilder*>, 2u> builders{ MakeNotNull(&m_builder), MakeNotNull(&reference) };
-    for(const auto builder : builders){
-        ASSERT_TRUE(builder->prepareImages(glyphs, Span(&sdf, 1u), Span(&image, 1u)));
-        builder->fillRect({ 2.0f, 3.0f, 4.0f, 5.0f }, { 0.8f, 0.4f, 0.2f, 0.5f });
-        ASSERT_TRUE(builder->drawGlyph(glyphs[0u], { 12.0f, 3.0f, 4.0f, 5.0f }, { 0.125f, 0.25f, 0.5f, 0.5f }));
-        ASSERT_TRUE(builder->drawSdfGlyph(sdf, 3u, { 22.0f, 3.0f, 4.0f, 5.0f }, { 0.0f, 0.0f, 0.5f, 0.5f }));
-        ASSERT_TRUE(builder->drawImage(image, { 32.0f, 3.0f, 8.0f, 4.0f }));
-    }
-    const DrawSnapshot expected = reference.freeze();
-    const SharedImageSource imageCopy = image;
-    const Array<SharedGlyphPage, 3u> glyphCopies{ glyphs[0u], glyphs[1u], glyphs[0u] };
-    const Array<SharedSdfAtlasPage, 2u> sdfCopies{ sdf, sdf };
-    const Array<SharedImageSource, 3u> imageCopies{ image, imageCopy, image };
-    ASSERT_TRUE(m_builder.prepareImages(glyphCopies, sdfCopies, imageCopies));
-    EXPECT_FALSE(m_builder.prepareTextureImages(Span(&overflow, 1u)));
-    EXPECT_FALSE(m_builder.drawImage(overflow, { 48.0f, 3.0f, 8.0f, 4.0f }));
-    const DrawSnapshot actual = m_builder.freeze();
-    ASSERT_EQ(actual.glyphPages().size(), 62u);
-    ASSERT_EQ(actual.sdfPages().size(), 1u);
-    ASSERT_EQ(actual.textureImages().size(), 1u);
-    EXPECT_EQ(actual.glyphPages().size() + actual.sdfPages().size() + actual.textureImages().size(), 64u);
-    ExpectSameImagePaint(actual, expected);
-}
-
-TEST_F(PaintImageFixture, MixedOverflowPreservesCoverageGenerationSdfImageVersionsAndAllPriorGeometry){
-    FixedVector<SharedGlyphPage, s_PaintMaxImages - 2u> glyphs;
-    for(usize index = 0u; index < glyphs.max_size(); ++index){
-        auto pageCreationResult = makeGlyph(100u + index);
-        ASSERT_TRUE(pageCreationResult);
-        SharedGlyphPage page = Move(*pageCreationResult);
-        ASSERT_TRUE(page);
-        glyphs.push_back(Move(page));
-    }
-    auto sdfCreationResult = makeSdf();
-    ASSERT_TRUE(sdfCreationResult);
-    const SharedSdfAtlasPage sdf = Move(*sdfCreationResult);
-    auto imageResult = makeImage();
-    ASSERT_TRUE(imageResult);
-    const SharedImageSource image = Move(*imageResult);
-    auto upgradeCreationResult = makeGlyph(100u, 2u);
-    ASSERT_TRUE(upgradeCreationResult);
-    const SharedGlyphPage upgrade = Move(*upgradeCreationResult);
-    auto newSdfCreationResult = makeSdf(99u);
-    ASSERT_TRUE(newSdfCreationResult);
-    const SharedSdfAtlasPage newSdf = Move(*newSdfCreationResult);
-    auto newImageResult = makeImage(s_DefaultImagePath, 81u);
-    ASSERT_TRUE(newImageResult);
-    const SharedImageSource newImage = Move(*newImageResult);
-    ASSERT_TRUE(sdf && image && upgrade && newSdf && newImage);
-    PaintBuilder reference(m_arena);
-    beginPaint(reference);
-    const Array<NotNull<PaintBuilder*>, 2u> builders{ MakeNotNull(&m_builder), MakeNotNull(&reference) };
-    for(const auto builder : builders){
-        ASSERT_TRUE(builder->prepareImages(glyphs, Span(&sdf, 1u), Span(&image, 1u)));
-        builder->fillRect({ 2.0f, 3.0f, 5.0f, 7.0f }, { 0.6f, 0.3f, 0.2f, 0.5f });
-        ASSERT_TRUE(builder->drawGlyph(glyphs[0u], { 12.0f, 13.0f, 5.0f, 7.0f }, { 0.125f, 0.25f, 0.5f, 0.5f }));
-        ASSERT_TRUE(builder->beginOverlay(2u));
-        builder->pushClip({ 30.0f, 10.0f, 40.0f, 20.0f });
-        ASSERT_TRUE(builder->drawSdfGlyph(sdf, 2u, { 32.0f, 12.0f, 8.0f, 8.0f }, { 0.0f, 0.0f, 0.5f, 0.5f }));
-        ASSERT_TRUE(builder->drawImage(image, { 44.0f, 12.0f, 12.0f, 8.0f }, { 0.25f, 0.25f, 0.5f, 0.5f }));
-        ASSERT_TRUE(builder->popClip());
-        ASSERT_TRUE(builder->endOverlay());
-    }
-    const DrawSnapshot expected = reference.freeze();
-    EXPECT_FALSE(m_builder.prepareImages(Span(&upgrade, 1u), Span(&newSdf, 1u), Span(&newImage, 1u)));
-    const DrawSnapshot actual = m_builder.freeze();
-    ExpectSameImagePaint(actual, expected);
-    ASSERT_EQ(actual.glyphPages().size(), 62u);
-    EXPECT_EQ(actual.glyphPages()[0u].get(), glyphs[0u].get());
-    EXPECT_EQ(actual.glyphPages()[0u]->binding().generation, 1u);
-    EXPECT_EQ(actual.glyphPages()[0u]->pixels()[32u], 0u);
-    ASSERT_EQ(actual.sdfPages().size(), 1u);
-    EXPECT_EQ(actual.sdfPages()[0u].get(), sdf.get());
-    ASSERT_EQ(actual.textureImages().size(), 1u);
-    EXPECT_EQ(actual.textureImages()[0u].get(), image.get());
-    EXPECT_EQ(actual.textureImages()[0u]->generation(), image->generation());
-    EXPECT_EQ(actual.textureImages()[0u]->texture().payloadBytes()[0u], 37u);
-}
-
-TEST_F(PaintImageFixture, NullThirdKindRejectsEarlierCandidatesAtomicallyAndAValidRetryStillSucceeds){
-    auto glyphCreationResult = makeGlyph();
-    ASSERT_TRUE(glyphCreationResult);
-    const SharedGlyphPage glyph = Move(*glyphCreationResult);
-    auto upgradeCreationResult = makeGlyph(11u, 2u);
-    ASSERT_TRUE(upgradeCreationResult);
-    const SharedGlyphPage upgrade = Move(*upgradeCreationResult);
-    auto sdfCreationResult = makeSdf();
-    ASSERT_TRUE(sdfCreationResult);
-    const SharedSdfAtlasPage sdf = Move(*sdfCreationResult);
-    auto imageResult = makeImage();
-    ASSERT_TRUE(imageResult);
-    const SharedImageSource image = Move(*imageResult);
-    auto additionResult = makeImage("tests/ui/added_image", 81u);
-    ASSERT_TRUE(additionResult);
-    const SharedImageSource addition = Move(*additionResult);
-    ASSERT_TRUE(glyph && upgrade && sdf && image && addition);
-    const Array<SharedImageSource, 2u> invalidImages{ addition, SharedImageSource{} };
-    PaintBuilder reference(m_arena);
-    const Array<NotNull<PaintBuilder*>, 2u> builders{ MakeNotNull(&m_builder), MakeNotNull(&reference) };
-    for(u64 pass = 0u; pass < 2u; ++pass){
-        beginPaint(m_builder, pass + 1u);
-        beginPaint(reference, pass + 1u);
-        for(const auto builder : builders){
-            ASSERT_TRUE(builder->prepareImages(Span(&glyph, 1u), {}, Span(&image, 1u)));
-            ASSERT_TRUE(builder->drawGlyph(glyph, { 2.0f, 3.0f, 4.0f, 5.0f }, { 0.125f, 0.25f, 0.5f, 0.5f }));
-            ASSERT_TRUE(builder->drawImage(image, { 12.0f, 3.0f, 8.0f, 4.0f }));
-        }
-        EXPECT_FALSE(m_builder.prepareImages(Span(&upgrade, 1u), Span(&sdf, 1u), invalidImages));
-        // Retry image admission in a second builder before either builder finishes.
-        if(pass != 0u){
-            for(const auto builder : builders){
-                ASSERT_TRUE(builder->prepareImages(Span(&upgrade, 1u), Span(&sdf, 1u), Span(&addition, 1u)));
-                ASSERT_TRUE(builder->drawSdfGlyph(sdf, 1u, { 22.0f, 3.0f, 4.0f, 5.0f }, { 0.0f, 0.0f, 0.5f, 0.5f }));
-                ASSERT_TRUE(builder->drawImage(addition, { 32.0f, 3.0f, 8.0f, 4.0f }));
-            }
-        }
-        const DrawSnapshot expected = reference.freeze();
-        const DrawSnapshot actual = m_builder.freeze();
-        ExpectSameImagePaint(actual, expected);
-        ASSERT_EQ(actual.glyphPages().size(), 1u);
-        EXPECT_EQ(actual.glyphPages()[0u].get(), pass == 0u ? glyph.get() : upgrade.get());
-        EXPECT_EQ(actual.glyphPages()[0u]->binding().generation, pass == 0u ? 1u : 2u);
-        EXPECT_EQ(actual.sdfPages().size(), pass == 0u ? 0u : 1u);
-        EXPECT_EQ(actual.textureImages().size(), pass == 0u ? 1u : 2u);
-    }
-}
-
-TEST_F(PaintImageFixture, SamePathFreshVersionsCoexistWhileCopiedHandlesUseOneSlotPerVersion){
-    auto firstResult = makeImage(s_VersionedImagePath, 37u);
-    ASSERT_TRUE(firstResult);
-    SharedImageSource first = Move(*firstResult);
-    auto secondResult = makeImage(s_VersionedImagePath, 81u);
-    ASSERT_TRUE(secondResult);
-    SharedImageSource second = Move(*secondResult);
-    ASSERT_TRUE(first && second);
-    ASSERT_EQ(first->identity(), second->identity());
-    ASSERT_NE(first->generation(), second->generation());
-    ASSERT_NE(first.get(), second.get());
-    SharedImageSource copy = first;
-    const u64 firstGeneration = first->generation();
-    const u64 secondGeneration = second->generation();
-    const auto firstPointer = MakeNotNull(first.get());
-    const auto secondPointer = MakeNotNull(second.get());
-    Array<SharedImageSource, 4u> candidates{ first, copy, second, first };
-    ASSERT_TRUE(m_builder.prepareTextureImages(candidates));
-    ASSERT_TRUE(m_builder.prepareTextureImages(Span(&copy, 1u)));
-    for(SharedImageSource& candidate : candidates)
-        candidate.reset();
-    first.reset();
-    second.reset();
-    copy.reset();
-    const DrawSnapshot actual = m_builder.freeze();
-    ASSERT_EQ(actual.textureImages().size(), 2u);
-    EXPECT_EQ(actual.textureImages()[0u].get(), firstPointer.get());
-    EXPECT_EQ(actual.textureImages()[1u].get(), secondPointer.get());
-    EXPECT_EQ(actual.textureImages()[0u]->generation(), firstGeneration);
-    EXPECT_EQ(actual.textureImages()[1u]->generation(), secondGeneration);
-    EXPECT_EQ(actual.textureImages()[0u]->identity(), actual.textureImages()[1u]->identity());
-    EXPECT_EQ(actual.textureImages()[0u]->texture().payloadBytes()[0u], 37u);
-    EXPECT_EQ(actual.textureImages()[1u]->texture().payloadBytes()[0u], 81u);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace UiPaintImageTests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr AStringView s_SameImagePath = "tests/ui/same_image";
-constexpr AStringView s_ReplacementImagePath = "tests/ui/replacement";
-
-TEST_F(PaintImageFixture, CropAndNestedClipTrimFullImageGeometryAndUv){
-    auto imageResult = makeImage();
-    ASSERT_TRUE(imageResult);
-    const SharedImageSource image = Move(*imageResult);
-    ASSERT_TRUE(image);
-    m_builder.pushClip({ 10.0f, 8.0f, 60.0f, 35.0f });
-    m_builder.pushClip({ 20.0f, 10.0f, 25.0f, 20.0f });
-    ASSERT_TRUE(m_builder.drawImage(image, { 0.0f, 0.0f, 80.0f, 40.0f }, { 0.125f, 0.25f, 0.5f, 0.5f }, { 2.0f, 0.5f, 0.25f, 0.5f }));
-    ASSERT_TRUE(m_builder.popClip());
-    ASSERT_TRUE(m_builder.popClip());
-    const DrawSnapshot snapshot = m_builder.freeze();
-    ASSERT_EQ(snapshot.vertices().size(), 4u);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[0u].position.x, 20.0f);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[0u].position.y, 10.0f);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[2u].position.x, 45.0f);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[2u].position.y, 30.0f);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[0u].texCoord.x, 0.25f);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[0u].texCoord.y, 0.375f);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[2u].texCoord.x, 0.40625f);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[2u].texCoord.y, 0.625f);
-}
-
-TEST_F(PaintImageFixture, AdjacentBatchingIncludesImmutableImageIndexAndPreservesDeclarationOrder){
-    auto firstResult = makeImage(s_SameImagePath, 37u);
-    ASSERT_TRUE(firstResult);
-    const SharedImageSource first = Move(*firstResult);
-    auto secondResult = makeImage(s_SameImagePath, 73u);
-    ASSERT_TRUE(secondResult);
-    const SharedImageSource second = Move(*secondResult);
-    ASSERT_TRUE(first && second);
-    ASSERT_NE(first->generation(), second->generation());
-    const Rect rectangle{ 1.0f, 1.0f, 8.0f, 4.0f };
-    ASSERT_TRUE(m_builder.drawImage(first, rectangle));
-    ASSERT_TRUE(m_builder.drawImage(first, rectangle, { 0.0f, 0.0f, 1.0f, 1.0f }, { 1.0f, 0.0f, 0.0f, 0.5f }));
-    ASSERT_TRUE(m_builder.drawImage(second, rectangle));
-    ASSERT_TRUE(m_builder.drawImage(second, rectangle));
-    ASSERT_TRUE(m_builder.drawImage(first, rectangle));
-    const DrawSnapshot snapshot = m_builder.freeze();
-    ASSERT_EQ(snapshot.textureImages().size(), 2u);
-    ASSERT_EQ(snapshot.commands().size(), 3u);
-    EXPECT_EQ(snapshot.commands()[0u].firstIndex, 0u);
-    EXPECT_EQ(snapshot.commands()[0u].indexCount, 12u);
-    EXPECT_EQ(snapshot.commands()[0u].textureImageIndex, 0u);
-    EXPECT_EQ(snapshot.commands()[1u].firstIndex, 12u);
-    EXPECT_EQ(snapshot.commands()[1u].indexCount, 12u);
-    EXPECT_EQ(snapshot.commands()[1u].textureImageIndex, 1u);
-    EXPECT_EQ(snapshot.commands()[2u].firstIndex, 24u);
-    EXPECT_EQ(snapshot.commands()[2u].indexCount, 6u);
-    EXPECT_EQ(snapshot.commands()[2u].textureImageIndex, 0u);
-}
-
-TEST_F(PaintImageFixture, ImageCommandsKeepDistinctClipsMaterialsAndOverlayLayers){
-    auto imageResult = makeImage();
-    ASSERT_TRUE(imageResult);
-    const SharedImageSource image = Move(*imageResult);
-    auto glyphCreationResult = makeGlyph();
-    ASSERT_TRUE(glyphCreationResult);
-    const SharedGlyphPage glyph = Move(*glyphCreationResult);
-    auto sdfCreationResult = makeSdf();
-    ASSERT_TRUE(sdfCreationResult);
-    const SharedSdfAtlasPage sdf = Move(*sdfCreationResult);
-    ASSERT_TRUE(image && glyph && sdf);
-    const Rect rectangle{ 0.0f, 0.0f, 20.0f, 20.0f };
-    ASSERT_TRUE(m_builder.drawImage(image, rectangle));
-    ASSERT_TRUE(m_builder.drawGlyph(glyph, rectangle, { 0.0f, 0.0f, 1.0f, 1.0f }));
-    ASSERT_TRUE(m_builder.drawSdfGlyph(sdf, 3u, rectangle, { 0.0f, 0.0f, 1.0f, 1.0f }));
-    m_builder.pushClip({ 5.0f, 5.0f, 8.0f, 8.0f });
-    ASSERT_TRUE(m_builder.drawImage(image, rectangle));
-    ASSERT_TRUE(m_builder.beginOverlay(2u));
-    ASSERT_TRUE(m_builder.drawImage(image, rectangle));
-    ASSERT_TRUE(m_builder.endOverlay());
-    ASSERT_TRUE(m_builder.drawImage(image, rectangle));
-    ASSERT_TRUE(m_builder.popClip());
-    const DrawSnapshot snapshot = m_builder.freeze();
-    ASSERT_EQ(snapshot.commands().size(), 6u);
-    EXPECT_EQ(snapshot.commands()[0u].material, PaintMaterial::Image);
-    EXPECT_EQ(snapshot.commands()[1u].material, PaintMaterial::Glyph);
-    EXPECT_EQ(snapshot.commands()[2u].material, PaintMaterial::SdfGlyph);
-    EXPECT_EQ(snapshot.commands()[1u].textureImageIndex, Limit<u32>::s_Max);
-    EXPECT_EQ(snapshot.commands()[2u].textureImageIndex, Limit<u32>::s_Max);
-    EXPECT_EQ(snapshot.commands()[3u].firstIndex, 18u);
-    EXPECT_EQ(snapshot.commands()[4u].firstIndex, 30u);
-    EXPECT_EQ(snapshot.commands()[5u].firstIndex, 24u);
-    EXPECT_EQ(snapshot.commands()[5u].layer, 2u);
-    EXPECT_FLOAT_EQ(snapshot.commands()[3u].clip.x, 5.0f);
-    EXPECT_FLOAT_EQ(snapshot.commands()[4u].clip.width, 8.0f);
-    EXPECT_FLOAT_EQ(snapshot.commands()[5u].clip.width, 200.0f);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[12u].position.x, 5.0f);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[16u].position.x, 0.0f);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[20u].position.x, 5.0f);
-}
-
-TEST_F(PaintImageFixture, FrozenAndMovedSnapshotsRetainExactSourceVersionsAcrossHandleReleaseAndBuilderReuse){
-    auto originalResult = makeImage(s_ReplacementImagePath, 37u, 9u, 5u);
-    ASSERT_TRUE(originalResult);
-    SharedImageSource original = Move(*originalResult);
-    ASSERT_TRUE(original);
-    const u64 originalGeneration = original->generation();
-    const u8 originalByte = original->texture().payloadBytes()[0u];
-    ASSERT_TRUE(m_builder.drawImage(original, { 1.0f, 2.0f, 18.0f, 10.0f }));
-    DrawSnapshot frozen = m_builder.freeze();
-    DrawSnapshot retained(Move(frozen));
-    original.reset();
-    beginPaint(m_builder, 2u);
-    auto replacementResult = makeImage(s_ReplacementImagePath, 73u, 4u, 4u);
-    ASSERT_TRUE(replacementResult);
-    SharedImageSource replacement = Move(*replacementResult);
-    ASSERT_TRUE(replacement);
-    ASSERT_NE(replacement->generation(), originalGeneration);
-    ASSERT_TRUE(m_builder.drawImage(replacement, { 4.0f, 5.0f, 8.0f, 8.0f }));
-    const DrawSnapshot next = m_builder.freeze();
-    replacement.reset();
-    ASSERT_EQ(retained.textureImages().size(), 1u);
-    ASSERT_EQ(next.textureImages().size(), 1u);
-    EXPECT_EQ(retained.textureImages()[0u]->generation(), originalGeneration);
-    EXPECT_EQ(retained.textureImages()[0u]->texture().width(), 9u);
-    EXPECT_EQ(retained.textureImages()[0u]->texture().height(), 5u);
-    EXPECT_EQ(retained.textureImages()[0u]->texture().mipLevels().size(), 4u);
-    EXPECT_EQ(retained.textureImages()[0u]->texture().payloadBytes()[0u], originalByte);
-    const u8 replacementByte = next.textureImages()[0u]->texture().payloadBytes()[0u];
-    EXPECT_NE(retained.textureImages()[0u]->texture().payloadBytes()[0u], replacementByte);
-    EXPECT_NE(retained.textureImages()[0u].get(), next.textureImages()[0u].get());
-    EXPECT_FLOAT_EQ(retained.vertices()[0u].position.x, 1.0f);
-    EXPECT_FLOAT_EQ(retained.vertices()[2u].texCoord.x, 1.0f);
-}
-
-TEST_F(PaintImageFixture, InvalidRectangleUvTintAndNullSourcePreserveEarlierBindingsAndGeometry){
-    auto imageResult = makeImage();
-    ASSERT_TRUE(imageResult);
-    const SharedImageSource image = Move(*imageResult);
-    ASSERT_TRUE(image);
-    PaintBuilder reference(m_arena);
-    beginPaint(reference);
-    const Rect rectangle{ 1.0f, 2.0f, 10.0f, 8.0f };
-    ASSERT_TRUE(m_builder.drawImage(image, rectangle));
-    ASSERT_TRUE(reference.drawImage(image, rectangle));
-    const Array<Rect, 6> invalidRectangles{
-        Rect{ Limit<f32>::s_QuietNaN, 0.0f, 1.0f, 1.0f },
-        Rect{ 0.0f, Limit<f32>::s_Infinity, 1.0f, 1.0f },
-        Rect{ 0.0f, 0.0f, -1.0f, 1.0f },
-        Rect{ 0.0f, 0.0f, 1.0f, -1.0f },
-        Rect{ Limit<f32>::s_Max, 0.0f, Limit<f32>::s_Max, 1.0f },
-        Rect{ 0.0f, 0.0f, 1.0f, Limit<f32>::s_QuietNaN },
-    };
-    for(const Rect& invalid : invalidRectangles)
-        EXPECT_FALSE(m_builder.drawImage(image, invalid));
-    const Array<Rect, 7> invalidUvs{
-        Rect{ -0.1f, 0.0f, 1.0f, 1.0f },
-        Rect{ 0.0f, 0.0f, 0.0f, 1.0f },
-        Rect{ 0.0f, 0.0f, 1.0f, -0.1f },
-        Rect{ 0.75f, 0.0f, 0.5f, 1.0f },
-        Rect{ 0.0f, 0.75f, 1.0f, 0.5f },
-        Rect{ 0.0f, 0.0f, Limit<f32>::s_Infinity, 1.0f },
-        Rect{ 0.0f, Limit<f32>::s_QuietNaN, 1.0f, 1.0f },
-    };
-    for(const Rect& invalid : invalidUvs)
-        EXPECT_FALSE(m_builder.drawImage(image, rectangle, invalid));
-    const Array<Color, 6> invalidTints{
-        Color{ Limit<f32>::s_QuietNaN, 1.0f, 1.0f, 1.0f },
-        Color{ 1.0f, Limit<f32>::s_Infinity, 1.0f, 1.0f },
-        Color{ 1.0f, 1.0f, Limit<f32>::s_Infinity, 1.0f },
-        Color{ 1.0f, 1.0f, 1.0f, -0.1f },
-        Color{ 1.0f, 1.0f, 1.0f, 1.1f },
-        Color{ 1.0f, 1.0f, 1.0f, Limit<f32>::s_QuietNaN },
-    };
-    for(const Color& invalid : invalidTints)
-        EXPECT_FALSE(m_builder.drawImage(image, rectangle, { 0.0f, 0.0f, 1.0f, 1.0f }, invalid));
-    EXPECT_FALSE(m_builder.drawImage({}, rectangle));
-    const DrawSnapshot actual = m_builder.freeze();
-    const DrawSnapshot expected = reference.freeze();
-    ExpectSameImagePaint(actual, expected);
-}
-
-TEST_F(PaintImageFixture, InvisibleAndTransparentDrawsRemainValidAtCapacityWithoutAdmittingTheSource){
-    auto imageResult = makeImage();
-    ASSERT_TRUE(imageResult);
-    const SharedImageSource image = Move(*imageResult);
-    ASSERT_TRUE(image);
-    FixedVector<SharedGlyphPage, s_PaintMaxImages> pages;
-    for(usize index = 0u; index < pages.max_size(); ++index){
-        auto pageCreationResult = makeGlyph(100u + index);
-        ASSERT_TRUE(pageCreationResult);
-        SharedGlyphPage page = Move(*pageCreationResult);
-        ASSERT_TRUE(page);
-        pages.push_back(Move(page));
-    }
-    PaintBuilder reference(m_arena);
-    beginPaint(reference);
-    ASSERT_TRUE(m_builder.prepareGlyphPages(pages));
-    ASSERT_TRUE(reference.prepareGlyphPages(pages));
-    m_builder.fillRect({ 1.0f, 1.0f, 4.0f, 4.0f });
-    reference.fillRect({ 1.0f, 1.0f, 4.0f, 4.0f });
-    ASSERT_TRUE(m_builder.drawImage(image, { 200.0f, 0.0f, 1.0f, 1.0f }));
-    ASSERT_TRUE(m_builder.drawImage(image, { 0.0f, 0.0f, 0.0f, 1.0f }));
-    ASSERT_TRUE(m_builder.drawImage(image, { 0.0f, 0.0f, 1.0f, 0.0f }));
-    ASSERT_TRUE(m_builder.drawImage(image, { 1.0f, 1.0f, BitCast<f32>(u32{ 1u }), 1.0f }));
-    ASSERT_TRUE(m_builder.drawImage(image, { 1.0f, 1.0f, 5.0f, 5.0f }, { 0.0f, 0.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f, 0.0f }));
-    m_builder.pushClip({ 250.0f, 0.0f, 1.0f, 1.0f });
-    ASSERT_TRUE(m_builder.drawImage(image, { 0.0f, 0.0f, 20.0f, 20.0f }));
-    EXPECT_FALSE(m_builder.drawImage({}, { 0.0f, 0.0f, 20.0f, 20.0f }));
-    EXPECT_FALSE(m_builder.drawImage(image, { 0.0f, 0.0f, -1.0f, 1.0f }));
-    ASSERT_TRUE(m_builder.popClip());
-    EXPECT_FALSE(m_builder.drawImage(image, { 1.0f, 1.0f, 4.0f, 4.0f }));
-    const DrawSnapshot actual = m_builder.freeze();
-    const DrawSnapshot expected = reference.freeze();
-    ExpectSameImagePaint(actual, expected);
-    EXPECT_TRUE(actual.textureImages().empty());
-    EXPECT_EQ(actual.glyphPages().size(), s_PaintMaxImages);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ui/name_cases.adhd.h>
+#include <global/bit.h>
+#include <global/floating_point_environment.h>
+#include <global/limit.h>
+#include <global/sha256.h>
 
 #include <gtest/gtest.h>
 
@@ -503,15 +44,902 @@ class UiPaintOverlayTests : public NWB::UiPaintTextTests::PaintTextFixture{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiPaintOverlayTests, OverlayRendersAboveLaterBasePaintWithoutMergingItsBatch){
-    const Rect rectangle{ 1.0f, 1.0f, 4.0f, 4.0f };
-    m_builder.fillRect(rectangle, { 1.0f, 0.0f, 0.0f, 1.0f });
-    ASSERT_TRUE(m_builder.beginOverlay(3u));
-    m_builder.fillRect(rectangle, { 0.0f, 1.0f, 0.0f, 1.0f });
-    m_builder.fillRect(rectangle, { 0.0f, 1.0f, 0.0f, 0.5f });
-    ASSERT_TRUE(m_builder.endOverlay());
-    m_builder.fillRect(rectangle, { 0.0f, 0.0f, 1.0f, 1.0f });
-    const DrawSnapshot snapshot = m_builder.freeze();
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_paint_sdf_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl;
+using namespace NWB::Impl::Ui;
+
+struct AssetFactorySdfSample{
+    SharedSdfAtlasPage page;
+    Sha256Digest sourceHash;
+    b8 valid = false;
+};
+
+
+class UiPaintSdfTests : public NWB::UiPaintTextTests::PaintTextFixture{
+public:
+    [[nodiscard]] b8 prepareSingleSdfPage(const SharedSdfAtlasPage& page){
+        return m_builder.prepareSdfPages(Span(&page, 1u));
+    }
+
+    [[nodiscard]] b8 prepareGlyphSpanAndSingleSdf(const Span<const SharedGlyphPage> glyphs, const SharedSdfAtlasPage& sdf){
+        return m_builder.prepareImages(glyphs, Span(&sdf, 1u));
+    }
+
+    [[nodiscard]] b8 prepareSingleGlyphAndSingleSdf(const SharedGlyphPage& glyph, const SharedSdfAtlasPage& sdf){
+        return m_builder.prepareImages(Span(&glyph, 1u), Span(&sdf, 1u));
+    }
+
+    [[nodiscard]] Expected<SharedSdfAtlasPage> createMovedSdfPage(const SdfAtlasPageBinding& binding, SdfAtlasPage::Pixels& pixels){
+        return CreateSdfAtlasPage(m_arena, binding, Move(pixels));
+    }
+
+    [[nodiscard]] Expected<SharedSdfAtlasPage> createMovedSdfPage(const SdfAtlasPageBinding& binding, SdfAtlasPage::Pixels&& pixels){
+        return CreateSdfAtlasPage(m_arena, binding, Move(pixels));
+    }
+
+    [[nodiscard]] AssetFactorySdfSample createPageFromTemporaryAtlas(){
+        AssetFactorySdfSample sample;
+        FontAtlas atlas(m_arena, Name(NWB::Tests::UiCases::s_UiCaseTestsUiFontAtlas));
+        FontAtlasPayload payload(m_arena);
+        payload.font = Core::Assets::AssetRef<Font>("tests/ui/font");
+        payload.fontSha256.bytes[0u] = 99u;
+        payload.unitsPerEm = 1000u;
+        payload.sourceGlyphCount = 1u;
+        payload.ascenderUnits = 800.0f;
+        payload.descenderUnits = -200.0f;
+        payload.glyphs.push_back({});
+        FontAtlasGroup group(m_arena);
+        group.width = 8u;
+        group.height = 8u;
+        group.pixels.resize(256u, 0u);
+        group.pixels[3u] = 192u;
+        group.sha256 = ComputeSha256(BinaryByteView(group.pixels.data(), group.pixels.size()));
+        sample.sourceHash = group.sha256;
+        payload.groups.push_back(Move(group));
+        atlas.setPayload(Move(payload));
+        Core::Alloc::ScratchArena scratchArena{ Name(NWB::Tests::UiCases::s_UiCaseTestsUiPaintSdfValidationScratch) };
+        if(!atlas.validatePayload(scratchArena))
+            return sample;
+        auto pageResult = CreateSdfAtlasPage(m_arena, atlas, 7u, 123u, 0u);
+        if(!pageResult)
+            return sample;
+        sample.page = Move(*pageResult);
+        sample.valid = static_cast<b8>(sample.page != nullptr);
+        return sample;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_paint_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl;
+using namespace NWB::Impl::Ui;
+
+using UiWidgetTests::s_TestSkinPath;
+inline constexpr AStringView s_TexturePath = "tests/ui/texture";
+inline constexpr AStringView s_SpriteRegion = "sprite";
+inline constexpr AStringView s_PanelRegion = "panel";
+
+struct DrawRegionFenvSample{
+    i32 exceptions = 0;
+    b8 cleared = false;
+    b8 drawn = false;
+};
+
+class ScopedHeldFenv final : NoCopy{
+public:
+    ScopedHeldFenv()noexcept
+        : m_held(HoldFloatingPointExceptions())
+    {}
+
+    ~ScopedHeldFenv()noexcept{
+        if(m_held){
+            const auto restored = SetFloatingPointEnvironment(*m_held);
+            if(!restored){}
+        }
+    }
+
+    [[nodiscard]] b8 valid()const noexcept{
+        return m_held.has_value();
+    }
+
+
+private:
+    Expected<FloatingPointEnvironment> m_held;
+};
+
+
+class UiPaintTests : public testing::Test{
+public:
+    UiPaintTests()
+        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiPaint))
+        , m_skin(m_arena, Name(s_TestSkinPath))
+        , m_builder(m_arena)
+    {
+        UiSkin::RegionVector regions(m_arena);
+        regions.push_back({ Name(s_SpriteRegion), { 16u, 32u, 32u, 24u }, {}, {}, 0.0f, 0.0f, UiSkinDrawMode::Sprite });
+        UiSkinRegion panel{ Name(s_PanelRegion), { 0u, 0u, 32u, 24u }, { 4u, 6u, 8u, 2u }, {}, 0.0f, 0.0f, UiSkinDrawMode::NineSlice };
+        regions.push_back(panel);
+        m_skin.setAtlas(Core::Assets::AssetRef<Texture>(s_TexturePath), 128u, 64u, 2.0f, Move(regions));
+        m_builder.begin({ 200.0f, 100.0f, 1.5f, 2.0f }, 7u, 3u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
+        m_builder.reserve(32u);
+    }
+
+
+public:
+    void configurePanelBorderCase(const UiSkinSliceInsets& borders){
+        UiSkin::RegionVector regions(m_arena);
+        regions.push_back({ Name(s_PanelRegion), { 0u, 0u, 32u, 24u }, borders, {}, 0.0f, 0.0f, UiSkinDrawMode::NineSlice });
+        m_skin.setAtlas(Core::Assets::AssetRef<Texture>(s_TexturePath), 128u, 64u, 2.0f, Move(regions));
+        m_builder.begin({ 200.0f, 100.0f }, 7u, 3u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
+    }
+
+    [[nodiscard]] DrawRegionFenvSample drawPanelWithFenvCheck(const Name& region, const Rect& bounds){
+#pragma STDC FENV_ACCESS ON
+        DrawRegionFenvSample sample;
+        sample.cleared = ClearFloatingPointExceptions(FE_ALL_EXCEPT).has_value();
+        if(!sample.cleared)
+            return sample;
+        sample.drawn = m_builder.drawRegion(region, bounds);
+        sample.exceptions = TestFloatingPointExceptions(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW);
+        return sample;
+    }
+
+    void configureReplacementSpriteSkin(){
+        UiSkin::RegionVector regions(m_arena);
+        regions.push_back({ Name(s_SpriteRegion), { 0u, 0u, 4u, 4u }, {}, {}, 0.0f, 0.0f, UiSkinDrawMode::Sprite });
+        m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/replacement"), 16u, 16u, 1.0f, Move(regions));
+        m_builder.begin({ 20.0f, 20.0f }, 8u, 4u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
+    }
+
+
+public:
+    Core::Alloc::GlobalArena m_arena;
+    UiSkin m_skin;
+    PaintBuilder m_builder;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_glyph_sdf_tests{
+using PaintImageFixture = ::NWB::UiPaintImageTests::PaintImageFixture;
+using UiPaintOverlayTests = __hidden_ui_paint_overlay_tests::UiPaintOverlayTests;
+using UiPaintSdfAssetFactorySample = __hidden_ui_paint_sdf_tests::AssetFactorySdfSample;
+using UiPaintSdfPixels = ::NWB::Impl::Ui::SdfAtlasPage::Pixels;
+using UiPaintSdfTests = __hidden_ui_paint_sdf_tests::UiPaintSdfTests;
+using UiPaintDrawRegionFenvSample = __hidden_ui_paint_tests::DrawRegionFenvSample;
+using UiPaintScopedHeldFenv = __hidden_ui_paint_tests::ScopedHeldFenv;
+using UiPaintTests = __hidden_ui_paint_tests::UiPaintTests;
+
+using Color = ::NWB::Impl::Ui::Color;
+using ImageIdentity = ::NWB::Core::Assets::AssetRef<::NWB::Impl::Texture>;
+using PaintBuilder = ::NWB::Impl::Ui::PaintBuilder;
+using SdfAtlasPageBinding = ::NWB::Impl::Ui::SdfAtlasPageBinding;
+using Sha256Digest = ::Sha256Digest;
+using SharedGlyphPage = ::NWB::Impl::Ui::SharedGlyphPage;
+using SharedImageSource = ::NWB::Impl::Ui::SharedImageSource;
+using SharedSdfAtlasPage = ::NWB::Impl::Ui::SharedSdfAtlasPage;
+using UiSkinSliceInsets = ::NWB::Impl::UiSkinSliceInsets;
+
+namespace PaintMaterial = ::NWB::Impl::Ui::PaintMaterial;
+
+using ::NWB::Impl::s_FontAtlasDistanceEncoding;
+using ::NWB::Impl::s_FontAtlasMaxSpreadPixels;
+using ::NWB::Impl::Ui::s_PaintMaxImages;
+using ::NWB::Impl::Ui::s_PaintMaxOverlayDepth;
+using ::NWB::Tests::UiCases::s_UiInputNameMissing;
+using ::NWB::Tests::UiCases::s_UiInputNameSprite;
+
+inline void ExpectUiPaintOverlaySameImagePaint(const DrawSnapshot& actual, const DrawSnapshot& expected){
+    ::NWB::UiPaintImageTests::ExpectSameImagePaint(actual, expected);
+}
+
+[[nodiscard]] inline b8 UiPaintOverlayPrepareGlyphsAndSingleSdfAndImage(
+    PaintBuilder& builder,
+    const ::Span<const SharedGlyphPage> glyphs,
+    const SharedSdfAtlasPage& sdf,
+    const SharedImageSource& image
+){
+    return builder.prepareImages(glyphs, ::Span(&sdf, 1u), ::Span(&image, 1u));
+}
+[[nodiscard]] inline b8 UiPaintOverlayPrepareOneEach(
+    PaintBuilder& builder,
+    const SharedGlyphPage& glyph,
+    const SharedSdfAtlasPage& sdf,
+    const SharedImageSource& image
+){
+    return builder.prepareImages(::Span(&glyph, 1u), ::Span(&sdf, 1u), ::Span(&image, 1u));
+}
+[[nodiscard]] inline b8 UiPaintOverlayPrepareOneGlyphAndOneImage(
+    PaintBuilder& builder,
+    const SharedGlyphPage& glyph,
+    const SharedImageSource& image
+){
+    return builder.prepareImages(::Span(&glyph, 1u), {}, ::Span(&image, 1u));
+}
+[[nodiscard]] inline b8 UiPaintOverlayPrepareOneGlyphOneSdfAndImageSpan(
+    PaintBuilder& builder,
+    const SharedGlyphPage& glyph,
+    const SharedSdfAtlasPage& sdf,
+    const ::Span<const SharedImageSource> images
+){
+    return builder.prepareImages(::Span(&glyph, 1u), ::Span(&sdf, 1u), images);
+}
+[[nodiscard]] inline b8 UiPaintOverlayPrepareSingleTextureImage(PaintBuilder& builder, const SharedImageSource& image){
+    return builder.prepareTextureImages(::Span(&image, 1u));
+}
+
+[[nodiscard]] inline b8 UiPaintOverlayHasGlyphPage(const SharedGlyphPage& page)noexcept{
+    return static_cast<b8>(page != nullptr);
+}
+[[nodiscard]] inline usize UiPaintOverlayGlyphPageAddress(const SharedGlyphPage& page)noexcept{
+    return reinterpret_cast<usize>(page.get());
+}
+[[nodiscard]] inline u64 UiPaintOverlayGlyphPageGeneration(const SharedGlyphPage& page)noexcept{
+    return page->binding().generation;
+}
+[[nodiscard]] inline u8 UiPaintOverlayGlyphPagePixel(const SharedGlyphPage& page, const usize index)noexcept{
+    return page->pixels()[index];
+}
+
+[[nodiscard]] inline b8 UiPaintOverlayHasSdfPage(const SharedSdfAtlasPage& page)noexcept{
+    return static_cast<b8>(page != nullptr);
+}
+[[nodiscard]] inline usize UiPaintOverlaySdfPageAddress(const SharedSdfAtlasPage& page)noexcept{
+    return reinterpret_cast<usize>(page.get());
+}
+[[nodiscard]] inline u8 UiPaintOverlaySdfPagePixel(const SharedSdfAtlasPage& page, const usize index)noexcept{
+    return page->pixels()[index];
+}
+[[nodiscard]] inline Sha256Digest UiPaintOverlaySdfPagePixelsHash(const SharedSdfAtlasPage& page)noexcept{
+    return page->binding().pixelsSha256;
+}
+[[nodiscard]] inline u8 UiPaintOverlaySdfPageFontHashByte(const SharedSdfAtlasPage& page, const usize index)noexcept{
+    return page->binding().fontSha256.bytes[index];
+}
+[[nodiscard]] inline SdfAtlasPageBinding UiPaintOverlaySdfPageBinding(const SharedSdfAtlasPage& page)noexcept{
+    return page->binding();
+}
+
+[[nodiscard]] inline b8 UiPaintOverlayHasImage(const SharedImageSource& image)noexcept{
+    return static_cast<b8>(image != nullptr);
+}
+[[nodiscard]] inline usize UiPaintOverlayImageAddress(const SharedImageSource& image)noexcept{
+    return reinterpret_cast<usize>(image.get());
+}
+[[nodiscard]] inline u64 UiPaintOverlayImageGeneration(const SharedImageSource& image)noexcept{
+    return image->generation();
+}
+[[nodiscard]] inline ImageIdentity UiPaintOverlayImageIdentity(const SharedImageSource& image)noexcept{
+    return image->identity();
+}
+[[nodiscard]] inline u8 UiPaintOverlayImagePayloadByte(const SharedImageSource& image, const usize index)noexcept{
+    return image->texture().payloadBytes()[index];
+}
+[[nodiscard]] inline u32 UiPaintOverlayImageWidth(const SharedImageSource& image)noexcept{
+    return image->texture().width();
+}
+[[nodiscard]] inline u32 UiPaintOverlayImageHeight(const SharedImageSource& image)noexcept{
+    return image->texture().height();
+}
+[[nodiscard]] inline usize UiPaintOverlayImageMipCount(const SharedImageSource& image)noexcept{
+    return image->texture().mipLevels().size();
+}
+
+inline void TakeUiPaintOverlayGlyphPage(SharedGlyphPage& dst, ::Expected<SharedGlyphPage>& src)noexcept{
+    dst = ::Move(*src);
+}
+inline void TakeUiPaintOverlayGlyphPage(SharedGlyphPage& dst, ::Expected<SharedGlyphPage>&& src)noexcept{
+    dst = ::Move(*src);
+}
+inline void TakeUiPaintOverlaySdfPage(SharedSdfAtlasPage& dst, ::Expected<SharedSdfAtlasPage>& src)noexcept{
+    dst = ::Move(*src);
+}
+inline void TakeUiPaintOverlaySdfPage(SharedSdfAtlasPage& dst, ::Expected<SharedSdfAtlasPage>&& src)noexcept{
+    dst = ::Move(*src);
+}
+inline void TakeUiPaintOverlayImageSource(SharedImageSource& dst, ::Expected<SharedImageSource>& src)noexcept{
+    dst = ::Move(*src);
+}
+inline void TakeUiPaintOverlayImageSource(SharedImageSource& dst, ::Expected<SharedImageSource>&& src)noexcept{
+    dst = ::Move(*src);
+}
+
+[[nodiscard]] inline f32 UiPaintOverlayInfinityF32()noexcept{
+    return ::Limit<f32>::s_Infinity;
+}
+[[nodiscard]] inline f32 UiPaintOverlayQuietNaNF32()noexcept{
+    return ::Limit<f32>::s_QuietNaN;
+}
+[[nodiscard]] inline b8 UiPaintOverlaySignBit(const f32 value)noexcept{
+    return ::SignBit(value);
+}
+[[nodiscard]] inline usize UiPaintOverlayVerticesAddress(const DrawSnapshot& snapshot)noexcept{
+    return reinterpret_cast<usize>(snapshot.vertices().data());
+}
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_UiPaintOverlayDefaultImagePath = "tests/ui/image";
+const StringView s_UiPaintOverlayVersionedImagePath = "tests/ui/versioned_image";
+const StringView s_UiPaintOverlaySameImagePath = "tests/ui/same_image";
+const StringView s_UiPaintOverlayReplacementImagePath = "tests/ui/replacement";
+const u64 s_UiPaintOverlayDefaultAtlasIdentity = 11u;
+
+const Name s_UiPaintOverlayTextureName = "tests/ui/texture";
+const Name s_UiPaintOverlayPanelRegionName = "panel";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Rect MakeUiPaintOverlayRect(in f32 x, in f32 y, in f32 width, in f32 height){
+    Rect rect = Rect();
+    rect.x = x;
+    rect.y = y;
+    rect.width = width;
+    rect.height = height;
+    return rect;
+}
+
+Color MakeUiPaintOverlayColor(in f32 r, in f32 g, in f32 b, in f32 a){
+    Color color = Color();
+    color.r = r;
+    color.g = g;
+    color.b = b;
+    color.a = a;
+    return color;
+}
+
+UiSkinSliceInsets MakeUiPaintOverlaySliceInsets(in u32 left, in u32 top, in u32 right, in u32 bottom){
+    UiSkinSliceInsets insets = UiSkinSliceInsets();
+    insets.left = left;
+    insets.top = top;
+    insets.right = right;
+    insets.bottom = bottom;
+    return insets;
+}
+
+void RecordUiPaintImageAdmissionBaseline(
+    mut PaintBuilder builder,
+    in Span<SharedGlyphPage> glyphs,
+    in SharedSdfAtlasPage sdf,
+    in SharedImageSource image
+){
+    ASSERT_TRUE(UiPaintOverlayPrepareGlyphsAndSingleSdfAndImage(builder, glyphs, sdf, image));
+    builder.fillRect(MakeUiPaintOverlayRect(2.0f, 3.0f, 4.0f, 5.0f), MakeUiPaintOverlayColor(0.8f, 0.4f, 0.2f, 0.5f));
+    ASSERT_TRUE(builder.drawGlyph(glyphs[0u], MakeUiPaintOverlayRect(12.0f, 3.0f, 4.0f, 5.0f), MakeUiPaintOverlayRect(0.125f, 0.25f, 0.5f, 0.5f)));
+    ASSERT_TRUE(builder.drawSdfGlyph(sdf, 3u, MakeUiPaintOverlayRect(22.0f, 3.0f, 4.0f, 5.0f), MakeUiPaintOverlayRect(0.0f, 0.0f, 0.5f, 0.5f)));
+    ASSERT_TRUE(builder.drawImage(image, MakeUiPaintOverlayRect(32.0f, 3.0f, 8.0f, 4.0f)));
+}
+
+void RecordUiPaintImageMixedOverflowBaseline(
+    mut PaintBuilder builder,
+    in Span<SharedGlyphPage> glyphs,
+    in SharedSdfAtlasPage sdf,
+    in SharedImageSource image
+){
+    ASSERT_TRUE(UiPaintOverlayPrepareGlyphsAndSingleSdfAndImage(builder, glyphs, sdf, image));
+    builder.fillRect(MakeUiPaintOverlayRect(2.0f, 3.0f, 5.0f, 7.0f), MakeUiPaintOverlayColor(0.6f, 0.3f, 0.2f, 0.5f));
+    ASSERT_TRUE(builder.drawGlyph(glyphs[0u], MakeUiPaintOverlayRect(12.0f, 13.0f, 5.0f, 7.0f), MakeUiPaintOverlayRect(0.125f, 0.25f, 0.5f, 0.5f)));
+    ASSERT_TRUE(builder.beginOverlay(2u));
+    builder.pushClip(MakeUiPaintOverlayRect(30.0f, 10.0f, 40.0f, 20.0f));
+    ASSERT_TRUE(builder.drawSdfGlyph(sdf, 2u, MakeUiPaintOverlayRect(32.0f, 12.0f, 8.0f, 8.0f), MakeUiPaintOverlayRect(0.0f, 0.0f, 0.5f, 0.5f)));
+    ASSERT_TRUE(builder.drawImage(image, MakeUiPaintOverlayRect(44.0f, 12.0f, 12.0f, 8.0f), MakeUiPaintOverlayRect(0.25f, 0.25f, 0.5f, 0.5f)));
+    ASSERT_TRUE(builder.popClip());
+    ASSERT_TRUE(builder.endOverlay());
+}
+
+void RecordUiPaintImageNullThirdPassInitial(mut PaintBuilder builder, in SharedGlyphPage glyph, in SharedImageSource image){
+    ASSERT_TRUE(UiPaintOverlayPrepareOneGlyphAndOneImage(builder, glyph, image));
+    ASSERT_TRUE(builder.drawGlyph(glyph, MakeUiPaintOverlayRect(2.0f, 3.0f, 4.0f, 5.0f), MakeUiPaintOverlayRect(0.125f, 0.25f, 0.5f, 0.5f)));
+    ASSERT_TRUE(builder.drawImage(image, MakeUiPaintOverlayRect(12.0f, 3.0f, 8.0f, 4.0f)));
+}
+
+void RecordUiPaintImageNullThirdPassRetry(
+    mut PaintBuilder builder,
+    in SharedGlyphPage upgrade,
+    in SharedSdfAtlasPage sdf,
+    in SharedImageSource addition
+){
+    ASSERT_TRUE(UiPaintOverlayPrepareOneEach(builder, upgrade, sdf, addition));
+    ASSERT_TRUE(builder.drawSdfGlyph(sdf, 1u, MakeUiPaintOverlayRect(22.0f, 3.0f, 4.0f, 5.0f), MakeUiPaintOverlayRect(0.0f, 0.0f, 0.5f, 0.5f)));
+    ASSERT_TRUE(builder.drawImage(addition, MakeUiPaintOverlayRect(32.0f, 3.0f, 8.0f, 4.0f)));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyPaintImageFixture_ThreeKindsShareSixtyFourSlotsWhileCopiesDeduplicateAndOverflowIsAtomic(mut PaintImageFixture self){
+    ASSERT_EQ(s_PaintMaxImages, 64u);
+    FixedVector<SharedGlyphPage, 62u> glyphs = FixedVector<SharedGlyphPage, 62u>();
+    for(usize index = 0u; index < 62u; ++index){
+        auto pageCreationResult = self.makeGlyph(100u + index);
+        ASSERT_TRUE(pageCreationResult.has_value());
+        SharedGlyphPage page = SharedGlyphPage();
+        TakeUiPaintOverlayGlyphPage(page, pageCreationResult);
+        ASSERT_TRUE(UiPaintOverlayHasGlyphPage(page));
+        glyphs.push_back(page);
+    }
+    auto sdfCreationResult = self.makeSdf();
+    ASSERT_TRUE(sdfCreationResult.has_value());
+    SharedSdfAtlasPage sdf = SharedSdfAtlasPage();
+    TakeUiPaintOverlaySdfPage(sdf, sdfCreationResult);
+    auto imageResult = self.makeImage();
+    ASSERT_TRUE(imageResult.has_value());
+    SharedImageSource image = SharedImageSource();
+    TakeUiPaintOverlayImageSource(image, imageResult);
+    auto overflowResult = self.makeImage(s_UiPaintOverlayDefaultImagePath, 81u);
+    ASSERT_TRUE(overflowResult.has_value());
+    SharedImageSource overflow = SharedImageSource();
+    TakeUiPaintOverlayImageSource(overflow, overflowResult);
+    ASSERT_TRUE(UiPaintOverlayHasSdfPage(sdf) && UiPaintOverlayHasImage(image) && UiPaintOverlayHasImage(overflow));
+    PaintBuilder reference = PaintBuilder(self.m_arena);
+    self.beginPaint(reference);
+    RecordUiPaintImageAdmissionBaseline(self.m_builder, glyphs, sdf, image);
+    RecordUiPaintImageAdmissionBaseline(reference, glyphs, sdf, image);
+    const DrawSnapshot expected = reference.freeze();
+    const SharedImageSource imageCopy = image;
+    Array<SharedGlyphPage, 3u> glyphCopies = Array<SharedGlyphPage, 3u>();
+    glyphCopies[0u] = glyphs[0u];
+    glyphCopies[1u] = glyphs[1u];
+    glyphCopies[2u] = glyphs[0u];
+    Array<SharedSdfAtlasPage, 2u> sdfCopies = Array<SharedSdfAtlasPage, 2u>();
+    sdfCopies[0u] = sdf;
+    sdfCopies[1u] = sdf;
+    Array<SharedImageSource, 3u> imageCopies = Array<SharedImageSource, 3u>();
+    imageCopies[0u] = image;
+    imageCopies[1u] = imageCopy;
+    imageCopies[2u] = image;
+    ASSERT_TRUE(self.m_builder.prepareImages(glyphCopies, sdfCopies, imageCopies));
+    EXPECT_FALSE(UiPaintOverlayPrepareSingleTextureImage(self.m_builder, overflow));
+    EXPECT_FALSE(self.m_builder.drawImage(overflow, MakeUiPaintOverlayRect(48.0f, 3.0f, 8.0f, 4.0f)));
+    const DrawSnapshot actual = self.m_builder.freeze();
+    ASSERT_EQ(actual.glyphPages().size(), 62u);
+    ASSERT_EQ(actual.sdfPages().size(), 1u);
+    ASSERT_EQ(actual.textureImages().size(), 1u);
+    EXPECT_EQ(actual.glyphPages().size() + actual.sdfPages().size() + actual.textureImages().size(), 64u);
+    ExpectUiPaintOverlaySameImagePaint(actual, expected);
+}
+
+void VerifyPaintImageFixture_MixedOverflowPreservesCoverageGenerationSdfImageVersionsAndAllPriorGeometry(mut PaintImageFixture self){
+    ASSERT_EQ(s_PaintMaxImages, 64u);
+    FixedVector<SharedGlyphPage, 62u> glyphs = FixedVector<SharedGlyphPage, 62u>();
+    for(usize index = 0u; index < 62u; ++index){
+        auto pageCreationResult = self.makeGlyph(100u + index);
+        ASSERT_TRUE(pageCreationResult.has_value());
+        SharedGlyphPage page = SharedGlyphPage();
+        TakeUiPaintOverlayGlyphPage(page, pageCreationResult);
+        ASSERT_TRUE(UiPaintOverlayHasGlyphPage(page));
+        glyphs.push_back(page);
+    }
+    auto sdfCreationResult = self.makeSdf();
+    ASSERT_TRUE(sdfCreationResult.has_value());
+    SharedSdfAtlasPage sdf = SharedSdfAtlasPage();
+    TakeUiPaintOverlaySdfPage(sdf, sdfCreationResult);
+    auto imageResult = self.makeImage();
+    ASSERT_TRUE(imageResult.has_value());
+    SharedImageSource image = SharedImageSource();
+    TakeUiPaintOverlayImageSource(image, imageResult);
+    auto upgradeCreationResult = self.makeGlyph(100u, 2u);
+    ASSERT_TRUE(upgradeCreationResult.has_value());
+    SharedGlyphPage upgrade = SharedGlyphPage();
+    TakeUiPaintOverlayGlyphPage(upgrade, upgradeCreationResult);
+    auto newSdfCreationResult = self.makeSdf(99u);
+    ASSERT_TRUE(newSdfCreationResult.has_value());
+    SharedSdfAtlasPage newSdf = SharedSdfAtlasPage();
+    TakeUiPaintOverlaySdfPage(newSdf, newSdfCreationResult);
+    auto newImageResult = self.makeImage(s_UiPaintOverlayDefaultImagePath, 81u);
+    ASSERT_TRUE(newImageResult.has_value());
+    SharedImageSource newImage = SharedImageSource();
+    TakeUiPaintOverlayImageSource(newImage, newImageResult);
+    ASSERT_TRUE(UiPaintOverlayHasSdfPage(sdf) && UiPaintOverlayHasImage(image) && UiPaintOverlayHasGlyphPage(upgrade) && UiPaintOverlayHasSdfPage(newSdf) && UiPaintOverlayHasImage(newImage));
+    PaintBuilder reference = PaintBuilder(self.m_arena);
+    self.beginPaint(reference);
+    RecordUiPaintImageMixedOverflowBaseline(self.m_builder, glyphs, sdf, image);
+    RecordUiPaintImageMixedOverflowBaseline(reference, glyphs, sdf, image);
+    const DrawSnapshot expected = reference.freeze();
+    EXPECT_FALSE(UiPaintOverlayPrepareOneEach(self.m_builder, upgrade, newSdf, newImage));
+    const DrawSnapshot actual = self.m_builder.freeze();
+    ExpectUiPaintOverlaySameImagePaint(actual, expected);
+    ASSERT_EQ(actual.glyphPages().size(), 62u);
+    EXPECT_EQ(UiPaintOverlayGlyphPageAddress(actual.glyphPages()[0u]), UiPaintOverlayGlyphPageAddress(glyphs[0u]));
+    EXPECT_EQ(UiPaintOverlayGlyphPageGeneration(actual.glyphPages()[0u]), 1u);
+    EXPECT_EQ(UiPaintOverlayGlyphPagePixel(actual.glyphPages()[0u], 32u), 0u);
+    ASSERT_EQ(actual.sdfPages().size(), 1u);
+    EXPECT_EQ(UiPaintOverlaySdfPageAddress(actual.sdfPages()[0u]), UiPaintOverlaySdfPageAddress(sdf));
+    ASSERT_EQ(actual.textureImages().size(), 1u);
+    EXPECT_EQ(UiPaintOverlayImageAddress(actual.textureImages()[0u]), UiPaintOverlayImageAddress(image));
+    EXPECT_EQ(UiPaintOverlayImageGeneration(actual.textureImages()[0u]), UiPaintOverlayImageGeneration(image));
+    EXPECT_EQ(UiPaintOverlayImagePayloadByte(actual.textureImages()[0u], 0u), 37u);
+}
+
+void VerifyPaintImageFixture_NullThirdKindRejectsEarlierCandidatesAtomicallyAndAValidRetryStillSucceeds(mut PaintImageFixture self){
+    auto glyphCreationResult = self.makeGlyph();
+    ASSERT_TRUE(glyphCreationResult.has_value());
+    SharedGlyphPage glyph = SharedGlyphPage();
+    TakeUiPaintOverlayGlyphPage(glyph, glyphCreationResult);
+    auto upgradeCreationResult = self.makeGlyph(11u, 2u);
+    ASSERT_TRUE(upgradeCreationResult.has_value());
+    SharedGlyphPage upgrade = SharedGlyphPage();
+    TakeUiPaintOverlayGlyphPage(upgrade, upgradeCreationResult);
+    auto sdfCreationResult = self.makeSdf();
+    ASSERT_TRUE(sdfCreationResult.has_value());
+    SharedSdfAtlasPage sdf = SharedSdfAtlasPage();
+    TakeUiPaintOverlaySdfPage(sdf, sdfCreationResult);
+    auto imageResult = self.makeImage();
+    ASSERT_TRUE(imageResult.has_value());
+    SharedImageSource image = SharedImageSource();
+    TakeUiPaintOverlayImageSource(image, imageResult);
+    auto additionResult = self.makeImage("tests/ui/added_image", 81u);
+    ASSERT_TRUE(additionResult.has_value());
+    SharedImageSource addition = SharedImageSource();
+    TakeUiPaintOverlayImageSource(addition, additionResult);
+    ASSERT_TRUE(UiPaintOverlayHasGlyphPage(glyph) && UiPaintOverlayHasGlyphPage(upgrade) && UiPaintOverlayHasSdfPage(sdf) && UiPaintOverlayHasImage(image) && UiPaintOverlayHasImage(addition));
+    Array<SharedImageSource, 2u> invalidImages = Array<SharedImageSource, 2u>();
+    invalidImages[0u] = addition;
+    invalidImages[1u] = SharedImageSource();
+    PaintBuilder reference = PaintBuilder(self.m_arena);
+    for(u64 pass = 0u; pass < 2u; ++pass){
+        self.beginPaint(self.m_builder, pass + 1u);
+        self.beginPaint(reference, pass + 1u);
+        RecordUiPaintImageNullThirdPassInitial(self.m_builder, glyph, image);
+        RecordUiPaintImageNullThirdPassInitial(reference, glyph, image);
+        EXPECT_FALSE(UiPaintOverlayPrepareOneGlyphOneSdfAndImageSpan(self.m_builder, upgrade, sdf, invalidImages));
+        // Retry image admission in a second builder before either builder finishes.
+        if(pass != 0u){
+            RecordUiPaintImageNullThirdPassRetry(self.m_builder, upgrade, sdf, addition);
+            RecordUiPaintImageNullThirdPassRetry(reference, upgrade, sdf, addition);
+        }
+        const DrawSnapshot expected = reference.freeze();
+        const DrawSnapshot actual = self.m_builder.freeze();
+        ExpectUiPaintOverlaySameImagePaint(actual, expected);
+        ASSERT_EQ(actual.glyphPages().size(), 1u);
+        usize expectedGlyphAddress = UiPaintOverlayGlyphPageAddress(glyph);
+        u64 expectedGeneration = 1u;
+        usize expectedSdfCount = 0u;
+        usize expectedImageCount = 1u;
+        if(pass != 0u){
+            expectedGlyphAddress = UiPaintOverlayGlyphPageAddress(upgrade);
+            expectedGeneration = 2u;
+            expectedSdfCount = 1u;
+            expectedImageCount = 2u;
+        }
+        EXPECT_EQ(UiPaintOverlayGlyphPageAddress(actual.glyphPages()[0u]), expectedGlyphAddress);
+        EXPECT_EQ(UiPaintOverlayGlyphPageGeneration(actual.glyphPages()[0u]), expectedGeneration);
+        EXPECT_EQ(actual.sdfPages().size(), expectedSdfCount);
+        EXPECT_EQ(actual.textureImages().size(), expectedImageCount);
+    }
+}
+
+void VerifyPaintImageFixture_SamePathFreshVersionsCoexistWhileCopiedHandlesUseOneSlotPerVersion(mut PaintImageFixture self){
+    auto firstResult = self.makeImage(s_UiPaintOverlayVersionedImagePath, 37u);
+    ASSERT_TRUE(firstResult.has_value());
+    SharedImageSource first = SharedImageSource();
+    TakeUiPaintOverlayImageSource(first, firstResult);
+    auto secondResult = self.makeImage(s_UiPaintOverlayVersionedImagePath, 81u);
+    ASSERT_TRUE(secondResult.has_value());
+    SharedImageSource second = SharedImageSource();
+    TakeUiPaintOverlayImageSource(second, secondResult);
+    ASSERT_TRUE(UiPaintOverlayHasImage(first) && UiPaintOverlayHasImage(second));
+    ASSERT_EQ(UiPaintOverlayImageIdentity(first), UiPaintOverlayImageIdentity(second));
+    ASSERT_NE(UiPaintOverlayImageGeneration(first), UiPaintOverlayImageGeneration(second));
+    ASSERT_NE(UiPaintOverlayImageAddress(first), UiPaintOverlayImageAddress(second));
+    SharedImageSource copy = first;
+    const u64 firstGeneration = UiPaintOverlayImageGeneration(first);
+    const u64 secondGeneration = UiPaintOverlayImageGeneration(second);
+    const usize firstPointer = UiPaintOverlayImageAddress(first);
+    const usize secondPointer = UiPaintOverlayImageAddress(second);
+    Array<SharedImageSource, 4u> candidates = Array<SharedImageSource, 4u>();
+    candidates[0u] = first;
+    candidates[1u] = copy;
+    candidates[2u] = second;
+    candidates[3u] = first;
+    ASSERT_TRUE(self.m_builder.prepareTextureImages(candidates));
+    ASSERT_TRUE(UiPaintOverlayPrepareSingleTextureImage(self.m_builder, copy));
+    for(mut SharedImageSource candidate : candidates)
+        candidate.reset();
+    first.reset();
+    second.reset();
+    copy.reset();
+    const DrawSnapshot actual = self.m_builder.freeze();
+    ASSERT_EQ(actual.textureImages().size(), 2u);
+    EXPECT_EQ(UiPaintOverlayImageAddress(actual.textureImages()[0u]), firstPointer);
+    EXPECT_EQ(UiPaintOverlayImageAddress(actual.textureImages()[1u]), secondPointer);
+    EXPECT_EQ(UiPaintOverlayImageGeneration(actual.textureImages()[0u]), firstGeneration);
+    EXPECT_EQ(UiPaintOverlayImageGeneration(actual.textureImages()[1u]), secondGeneration);
+    EXPECT_EQ(UiPaintOverlayImageIdentity(actual.textureImages()[0u]), UiPaintOverlayImageIdentity(actual.textureImages()[1u]));
+    EXPECT_EQ(UiPaintOverlayImagePayloadByte(actual.textureImages()[0u], 0u), 37u);
+    EXPECT_EQ(UiPaintOverlayImagePayloadByte(actual.textureImages()[1u], 0u), 81u);
+}
+
+void VerifyPaintImageFixture_CropAndNestedClipTrimFullImageGeometryAndUv(mut PaintImageFixture self){
+    auto imageResult = self.makeImage();
+    ASSERT_TRUE(imageResult.has_value());
+    SharedImageSource image = SharedImageSource();
+    TakeUiPaintOverlayImageSource(image, imageResult);
+    ASSERT_TRUE(UiPaintOverlayHasImage(image));
+    self.m_builder.pushClip(MakeUiPaintOverlayRect(10.0f, 8.0f, 60.0f, 35.0f));
+    self.m_builder.pushClip(MakeUiPaintOverlayRect(20.0f, 10.0f, 25.0f, 20.0f));
+    ASSERT_TRUE(self.m_builder.drawImage(
+        image,
+        MakeUiPaintOverlayRect(0.0f, 0.0f, 80.0f, 40.0f),
+        MakeUiPaintOverlayRect(0.125f, 0.25f, 0.5f, 0.5f),
+        MakeUiPaintOverlayColor(2.0f, 0.5f, 0.25f, 0.5f)
+    ));
+    ASSERT_TRUE(self.m_builder.popClip());
+    ASSERT_TRUE(self.m_builder.popClip());
+    const DrawSnapshot snapshot = self.m_builder.freeze();
+    ASSERT_EQ(snapshot.vertices().size(), 4u);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[0u].position.x, 20.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[0u].position.y, 10.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[2u].position.x, 45.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[2u].position.y, 30.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[0u].texCoord.x, 0.25f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[0u].texCoord.y, 0.375f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[2u].texCoord.x, 0.40625f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[2u].texCoord.y, 0.625f);
+}
+
+void VerifyPaintImageFixture_AdjacentBatchingIncludesImmutableImageIndexAndPreservesDeclarationOrder(mut PaintImageFixture self){
+    auto firstResult = self.makeImage(s_UiPaintOverlaySameImagePath, 37u);
+    ASSERT_TRUE(firstResult.has_value());
+    SharedImageSource first = SharedImageSource();
+    TakeUiPaintOverlayImageSource(first, firstResult);
+    auto secondResult = self.makeImage(s_UiPaintOverlaySameImagePath, 73u);
+    ASSERT_TRUE(secondResult.has_value());
+    SharedImageSource second = SharedImageSource();
+    TakeUiPaintOverlayImageSource(second, secondResult);
+    ASSERT_TRUE(UiPaintOverlayHasImage(first) && UiPaintOverlayHasImage(second));
+    ASSERT_NE(UiPaintOverlayImageGeneration(first), UiPaintOverlayImageGeneration(second));
+    const Rect rectangle = MakeUiPaintOverlayRect(1.0f, 1.0f, 8.0f, 4.0f);
+    ASSERT_TRUE(self.m_builder.drawImage(first, rectangle));
+    ASSERT_TRUE(self.m_builder.drawImage(first, rectangle, MakeUiPaintOverlayRect(0.0f, 0.0f, 1.0f, 1.0f), MakeUiPaintOverlayColor(1.0f, 0.0f, 0.0f, 0.5f)));
+    ASSERT_TRUE(self.m_builder.drawImage(second, rectangle));
+    ASSERT_TRUE(self.m_builder.drawImage(second, rectangle));
+    ASSERT_TRUE(self.m_builder.drawImage(first, rectangle));
+    const DrawSnapshot snapshot = self.m_builder.freeze();
+    ASSERT_EQ(snapshot.textureImages().size(), 2u);
+    ASSERT_EQ(snapshot.commands().size(), 3u);
+    EXPECT_EQ(snapshot.commands()[0u].firstIndex, 0u);
+    EXPECT_EQ(snapshot.commands()[0u].indexCount, 12u);
+    EXPECT_EQ(snapshot.commands()[0u].textureImageIndex, 0u);
+    EXPECT_EQ(snapshot.commands()[1u].firstIndex, 12u);
+    EXPECT_EQ(snapshot.commands()[1u].indexCount, 12u);
+    EXPECT_EQ(snapshot.commands()[1u].textureImageIndex, 1u);
+    EXPECT_EQ(snapshot.commands()[2u].firstIndex, 24u);
+    EXPECT_EQ(snapshot.commands()[2u].indexCount, 6u);
+    EXPECT_EQ(snapshot.commands()[2u].textureImageIndex, 0u);
+}
+
+void VerifyPaintImageFixture_ImageCommandsKeepDistinctClipsMaterialsAndOverlayLayers(mut PaintImageFixture self){
+    auto imageResult = self.makeImage();
+    ASSERT_TRUE(imageResult.has_value());
+    SharedImageSource image = SharedImageSource();
+    TakeUiPaintOverlayImageSource(image, imageResult);
+    auto glyphCreationResult = self.makeGlyph();
+    ASSERT_TRUE(glyphCreationResult.has_value());
+    SharedGlyphPage glyph = SharedGlyphPage();
+    TakeUiPaintOverlayGlyphPage(glyph, glyphCreationResult);
+    auto sdfCreationResult = self.makeSdf();
+    ASSERT_TRUE(sdfCreationResult.has_value());
+    SharedSdfAtlasPage sdf = SharedSdfAtlasPage();
+    TakeUiPaintOverlaySdfPage(sdf, sdfCreationResult);
+    ASSERT_TRUE(UiPaintOverlayHasImage(image) && UiPaintOverlayHasGlyphPage(glyph) && UiPaintOverlayHasSdfPage(sdf));
+    const Rect rectangle = MakeUiPaintOverlayRect(0.0f, 0.0f, 20.0f, 20.0f);
+    const Rect unitUv = MakeUiPaintOverlayRect(0.0f, 0.0f, 1.0f, 1.0f);
+    ASSERT_TRUE(self.m_builder.drawImage(image, rectangle));
+    ASSERT_TRUE(self.m_builder.drawGlyph(glyph, rectangle, unitUv));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(sdf, 3u, rectangle, unitUv));
+    self.m_builder.pushClip(MakeUiPaintOverlayRect(5.0f, 5.0f, 8.0f, 8.0f));
+    ASSERT_TRUE(self.m_builder.drawImage(image, rectangle));
+    ASSERT_TRUE(self.m_builder.beginOverlay(2u));
+    ASSERT_TRUE(self.m_builder.drawImage(image, rectangle));
+    ASSERT_TRUE(self.m_builder.endOverlay());
+    ASSERT_TRUE(self.m_builder.drawImage(image, rectangle));
+    ASSERT_TRUE(self.m_builder.popClip());
+    const DrawSnapshot snapshot = self.m_builder.freeze();
+    ASSERT_EQ(snapshot.commands().size(), 6u);
+    EXPECT_EQ(snapshot.commands()[0u].material, PaintMaterial::Image);
+    EXPECT_EQ(snapshot.commands()[1u].material, PaintMaterial::Glyph);
+    EXPECT_EQ(snapshot.commands()[2u].material, PaintMaterial::SdfGlyph);
+    EXPECT_EQ(snapshot.commands()[1u].textureImageIndex, u32.max);
+    EXPECT_EQ(snapshot.commands()[2u].textureImageIndex, u32.max);
+    EXPECT_EQ(snapshot.commands()[3u].firstIndex, 18u);
+    EXPECT_EQ(snapshot.commands()[4u].firstIndex, 30u);
+    EXPECT_EQ(snapshot.commands()[5u].firstIndex, 24u);
+    EXPECT_EQ(snapshot.commands()[5u].layer, 2u);
+    EXPECT_FLOAT_EQ(snapshot.commands()[3u].clip.x, 5.0f);
+    EXPECT_FLOAT_EQ(snapshot.commands()[4u].clip.width, 8.0f);
+    EXPECT_FLOAT_EQ(snapshot.commands()[5u].clip.width, 200.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[12u].position.x, 5.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[16u].position.x, 0.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[20u].position.x, 5.0f);
+}
+
+void VerifyPaintImageFixture_FrozenAndMovedSnapshotsRetainExactSourceVersionsAcrossHandleReleaseAndBuilderReuse(mut PaintImageFixture self){
+    auto originalResult = self.makeImage(s_UiPaintOverlayReplacementImagePath, 37u, 9u, 5u);
+    ASSERT_TRUE(originalResult.has_value());
+    SharedImageSource original = SharedImageSource();
+    TakeUiPaintOverlayImageSource(original, originalResult);
+    ASSERT_TRUE(UiPaintOverlayHasImage(original));
+    const u64 originalGeneration = UiPaintOverlayImageGeneration(original);
+    const u8 originalByte = UiPaintOverlayImagePayloadByte(original, 0u);
+    ASSERT_TRUE(self.m_builder.drawImage(original, MakeUiPaintOverlayRect(1.0f, 2.0f, 18.0f, 10.0f)));
+    DrawSnapshot retained = DrawSnapshot(self.m_arena);
+    native(mut builder = self.m_builder, mut retained){
+        DrawSnapshot frozen = builder.freeze();
+        DrawSnapshot moved = ::Move(frozen);
+        retained = ::Move(moved);
+    }
+    original.reset();
+    self.beginPaint(self.m_builder, 2u);
+    auto replacementResult = self.makeImage(s_UiPaintOverlayReplacementImagePath, 73u, 4u, 4u);
+    ASSERT_TRUE(replacementResult.has_value());
+    SharedImageSource replacement = SharedImageSource();
+    TakeUiPaintOverlayImageSource(replacement, replacementResult);
+    ASSERT_TRUE(UiPaintOverlayHasImage(replacement));
+    ASSERT_NE(UiPaintOverlayImageGeneration(replacement), originalGeneration);
+    ASSERT_TRUE(self.m_builder.drawImage(replacement, MakeUiPaintOverlayRect(4.0f, 5.0f, 8.0f, 8.0f)));
+    const DrawSnapshot next = self.m_builder.freeze();
+    replacement.reset();
+    ASSERT_EQ(retained.textureImages().size(), 1u);
+    ASSERT_EQ(next.textureImages().size(), 1u);
+    EXPECT_EQ(UiPaintOverlayImageGeneration(retained.textureImages()[0u]), originalGeneration);
+    EXPECT_EQ(UiPaintOverlayImageWidth(retained.textureImages()[0u]), 9u);
+    EXPECT_EQ(UiPaintOverlayImageHeight(retained.textureImages()[0u]), 5u);
+    EXPECT_EQ(UiPaintOverlayImageMipCount(retained.textureImages()[0u]), 4u);
+    EXPECT_EQ(UiPaintOverlayImagePayloadByte(retained.textureImages()[0u], 0u), originalByte);
+    const u8 replacementByte = UiPaintOverlayImagePayloadByte(next.textureImages()[0u], 0u);
+    EXPECT_NE(UiPaintOverlayImagePayloadByte(retained.textureImages()[0u], 0u), replacementByte);
+    EXPECT_NE(UiPaintOverlayImageAddress(retained.textureImages()[0u]), UiPaintOverlayImageAddress(next.textureImages()[0u]));
+    EXPECT_FLOAT_EQ(retained.vertices()[0u].position.x, 1.0f);
+    EXPECT_FLOAT_EQ(retained.vertices()[2u].texCoord.x, 1.0f);
+}
+
+void VerifyPaintImageFixture_InvalidRectangleUvTintAndNullSourcePreserveEarlierBindingsAndGeometry(mut PaintImageFixture self){
+    auto imageResult = self.makeImage();
+    ASSERT_TRUE(imageResult.has_value());
+    SharedImageSource image = SharedImageSource();
+    TakeUiPaintOverlayImageSource(image, imageResult);
+    ASSERT_TRUE(UiPaintOverlayHasImage(image));
+    PaintBuilder reference = PaintBuilder(self.m_arena);
+    self.beginPaint(reference);
+    const Rect rectangle = MakeUiPaintOverlayRect(1.0f, 2.0f, 10.0f, 8.0f);
+    ASSERT_TRUE(self.m_builder.drawImage(image, rectangle));
+    ASSERT_TRUE(reference.drawImage(image, rectangle));
+    const f32 nan = UiPaintOverlayQuietNaNF32();
+    const f32 inf = UiPaintOverlayInfinityF32();
+    Array<Rect, 6u> invalidRectangles = Array<Rect, 6u>();
+    invalidRectangles[0u] = MakeUiPaintOverlayRect(nan, 0.0f, 1.0f, 1.0f);
+    invalidRectangles[1u] = MakeUiPaintOverlayRect(0.0f, inf, 1.0f, 1.0f);
+    invalidRectangles[2u] = MakeUiPaintOverlayRect(0.0f, 0.0f, -1.0f, 1.0f);
+    invalidRectangles[3u] = MakeUiPaintOverlayRect(0.0f, 0.0f, 1.0f, -1.0f);
+    invalidRectangles[4u] = MakeUiPaintOverlayRect(f32.max, 0.0f, f32.max, 1.0f);
+    invalidRectangles[5u] = MakeUiPaintOverlayRect(0.0f, 0.0f, 1.0f, nan);
+    for(in Rect invalid : invalidRectangles)
+        EXPECT_FALSE(self.m_builder.drawImage(image, invalid));
+
+    Array<Rect, 7u> invalidUvs = Array<Rect, 7u>();
+    invalidUvs[0u] = MakeUiPaintOverlayRect(-0.1f, 0.0f, 1.0f, 1.0f);
+    invalidUvs[1u] = MakeUiPaintOverlayRect(0.0f, 0.0f, 0.0f, 1.0f);
+    invalidUvs[2u] = MakeUiPaintOverlayRect(0.0f, 0.0f, 1.0f, -0.1f);
+    invalidUvs[3u] = MakeUiPaintOverlayRect(0.75f, 0.0f, 0.5f, 1.0f);
+    invalidUvs[4u] = MakeUiPaintOverlayRect(0.0f, 0.75f, 1.0f, 0.5f);
+    invalidUvs[5u] = MakeUiPaintOverlayRect(0.0f, 0.0f, inf, 1.0f);
+    invalidUvs[6u] = MakeUiPaintOverlayRect(0.0f, nan, 1.0f, 1.0f);
+    for(in Rect invalid : invalidUvs)
+        EXPECT_FALSE(self.m_builder.drawImage(image, rectangle, invalid));
+
+    Array<Color, 6u> invalidTints = Array<Color, 6u>();
+    invalidTints[0u] = MakeUiPaintOverlayColor(nan, 1.0f, 1.0f, 1.0f);
+    invalidTints[1u] = MakeUiPaintOverlayColor(1.0f, inf, 1.0f, 1.0f);
+    invalidTints[2u] = MakeUiPaintOverlayColor(1.0f, 1.0f, inf, 1.0f);
+    invalidTints[3u] = MakeUiPaintOverlayColor(1.0f, 1.0f, 1.0f, -0.1f);
+    invalidTints[4u] = MakeUiPaintOverlayColor(1.0f, 1.0f, 1.0f, 1.1f);
+    invalidTints[5u] = MakeUiPaintOverlayColor(1.0f, 1.0f, 1.0f, nan);
+    const Rect unitUv = MakeUiPaintOverlayRect(0.0f, 0.0f, 1.0f, 1.0f);
+    for(in Color invalid : invalidTints)
+        EXPECT_FALSE(self.m_builder.drawImage(image, rectangle, unitUv, invalid));
+
+    EXPECT_FALSE(self.m_builder.drawImage(SharedImageSource(), rectangle));
+    const DrawSnapshot actual = self.m_builder.freeze();
+    const DrawSnapshot expected = reference.freeze();
+    ExpectUiPaintOverlaySameImagePaint(actual, expected);
+}
+
+void VerifyPaintImageFixture_InvisibleAndTransparentDrawsRemainValidAtCapacityWithoutAdmittingTheSource(mut PaintImageFixture self){
+    auto imageResult = self.makeImage();
+    ASSERT_TRUE(imageResult.has_value());
+    SharedImageSource image = SharedImageSource();
+    TakeUiPaintOverlayImageSource(image, imageResult);
+    ASSERT_TRUE(UiPaintOverlayHasImage(image));
+    ASSERT_EQ(s_PaintMaxImages, 64u);
+    FixedVector<SharedGlyphPage, 64u> pages = FixedVector<SharedGlyphPage, 64u>();
+    for(usize index = 0u; index < s_PaintMaxImages; ++index){
+        auto pageCreationResult = self.makeGlyph(100u + index);
+        ASSERT_TRUE(pageCreationResult.has_value());
+        SharedGlyphPage page = SharedGlyphPage();
+        TakeUiPaintOverlayGlyphPage(page, pageCreationResult);
+        ASSERT_TRUE(UiPaintOverlayHasGlyphPage(page));
+        pages.push_back(page);
+    }
+    PaintBuilder reference = PaintBuilder(self.m_arena);
+    self.beginPaint(reference);
+    ASSERT_TRUE(self.m_builder.prepareGlyphPages(pages));
+    ASSERT_TRUE(reference.prepareGlyphPages(pages));
+    self.m_builder.fillRect(MakeUiPaintOverlayRect(1.0f, 1.0f, 4.0f, 4.0f));
+    reference.fillRect(MakeUiPaintOverlayRect(1.0f, 1.0f, 4.0f, 4.0f));
+    ASSERT_TRUE(self.m_builder.drawImage(image, MakeUiPaintOverlayRect(200.0f, 0.0f, 1.0f, 1.0f)));
+    ASSERT_TRUE(self.m_builder.drawImage(image, MakeUiPaintOverlayRect(0.0f, 0.0f, 0.0f, 1.0f)));
+    ASSERT_TRUE(self.m_builder.drawImage(image, MakeUiPaintOverlayRect(0.0f, 0.0f, 1.0f, 0.0f)));
+    ASSERT_TRUE(self.m_builder.drawImage(image, MakeUiPaintOverlayRect(1.0f, 1.0f, bit_cast<f32>(1u), 1.0f)));
+    ASSERT_TRUE(self.m_builder.drawImage(image, MakeUiPaintOverlayRect(1.0f, 1.0f, 5.0f, 5.0f), MakeUiPaintOverlayRect(0.0f, 0.0f, 1.0f, 1.0f), MakeUiPaintOverlayColor(1.0f, 1.0f, 1.0f, 0.0f)));
+    self.m_builder.pushClip(MakeUiPaintOverlayRect(250.0f, 0.0f, 1.0f, 1.0f));
+    ASSERT_TRUE(self.m_builder.drawImage(image, MakeUiPaintOverlayRect(0.0f, 0.0f, 20.0f, 20.0f)));
+    EXPECT_FALSE(self.m_builder.drawImage(SharedImageSource(), MakeUiPaintOverlayRect(0.0f, 0.0f, 20.0f, 20.0f)));
+    EXPECT_FALSE(self.m_builder.drawImage(image, MakeUiPaintOverlayRect(0.0f, 0.0f, -1.0f, 1.0f)));
+    ASSERT_TRUE(self.m_builder.popClip());
+    EXPECT_FALSE(self.m_builder.drawImage(image, MakeUiPaintOverlayRect(1.0f, 1.0f, 4.0f, 4.0f)));
+    const DrawSnapshot actual = self.m_builder.freeze();
+    const DrawSnapshot expected = reference.freeze();
+    ExpectUiPaintOverlaySameImagePaint(actual, expected);
+    EXPECT_TRUE(actual.textureImages().empty());
+    EXPECT_EQ(actual.glyphPages().size(), s_PaintMaxImages);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiPaintOverlayTests_OverlayRendersAboveLaterBasePaintWithoutMergingItsBatch(mut UiPaintOverlayTests self){
+    const Rect rectangle = MakeUiPaintOverlayRect(1.0f, 1.0f, 4.0f, 4.0f);
+    self.m_builder.fillRect(rectangle, MakeUiPaintOverlayColor(1.0f, 0.0f, 0.0f, 1.0f));
+    ASSERT_TRUE(self.m_builder.beginOverlay(3u));
+    self.m_builder.fillRect(rectangle, MakeUiPaintOverlayColor(0.0f, 1.0f, 0.0f, 1.0f));
+    self.m_builder.fillRect(rectangle, MakeUiPaintOverlayColor(0.0f, 1.0f, 0.0f, 0.5f));
+    ASSERT_TRUE(self.m_builder.endOverlay());
+    self.m_builder.fillRect(rectangle, MakeUiPaintOverlayColor(0.0f, 0.0f, 1.0f, 1.0f));
+    const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.commands().size(), 3u);
     EXPECT_EQ(snapshot.commands()[0u].layer, 0u);
     EXPECT_EQ(snapshot.commands()[0u].firstIndex, 0u);
@@ -527,19 +955,19 @@ TEST_F(UiPaintOverlayTests, OverlayRendersAboveLaterBasePaintWithoutMergingItsBa
     }
 }
 
-TEST_F(UiPaintOverlayTests, LayerOrderPrecedesDeclarationOrderAndEqualLayersKeepTheirIndexOrder){
-    const Rect rectangle{ 1.0f, 1.0f, 4.0f, 4.0f };
-    ASSERT_TRUE(m_builder.beginOverlay(7u));
-    m_builder.fillRect(rectangle, { 1.0f, 0.0f, 0.0f, 1.0f });
-    ASSERT_TRUE(m_builder.endOverlay());
-    ASSERT_TRUE(m_builder.beginOverlay(2u));
-    m_builder.fillRect(rectangle, { 0.0f, 1.0f, 0.0f, 1.0f });
-    ASSERT_TRUE(m_builder.endOverlay());
-    ASSERT_TRUE(m_builder.beginOverlay(7u));
-    m_builder.fillRect(rectangle, { 0.0f, 0.0f, 1.0f, 1.0f });
-    ASSERT_TRUE(m_builder.endOverlay());
-    m_builder.fillRect(rectangle);
-    const DrawSnapshot snapshot = m_builder.freeze();
+void VerifyUiPaintOverlayTests_LayerOrderPrecedesDeclarationOrderAndEqualLayersKeepTheirIndexOrder(mut UiPaintOverlayTests self){
+    const Rect rectangle = MakeUiPaintOverlayRect(1.0f, 1.0f, 4.0f, 4.0f);
+    ASSERT_TRUE(self.m_builder.beginOverlay(7u));
+    self.m_builder.fillRect(rectangle, MakeUiPaintOverlayColor(1.0f, 0.0f, 0.0f, 1.0f));
+    ASSERT_TRUE(self.m_builder.endOverlay());
+    ASSERT_TRUE(self.m_builder.beginOverlay(2u));
+    self.m_builder.fillRect(rectangle, MakeUiPaintOverlayColor(0.0f, 1.0f, 0.0f, 1.0f));
+    ASSERT_TRUE(self.m_builder.endOverlay());
+    ASSERT_TRUE(self.m_builder.beginOverlay(7u));
+    self.m_builder.fillRect(rectangle, MakeUiPaintOverlayColor(0.0f, 0.0f, 1.0f, 1.0f));
+    ASSERT_TRUE(self.m_builder.endOverlay());
+    self.m_builder.fillRect(rectangle);
+    const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.commands().size(), 4u);
     EXPECT_EQ(snapshot.commands()[0u].layer, 0u);
     EXPECT_EQ(snapshot.commands()[0u].firstIndex, 18u);
@@ -551,20 +979,20 @@ TEST_F(UiPaintOverlayTests, LayerOrderPrecedesDeclarationOrderAndEqualLayersKeep
     EXPECT_EQ(snapshot.commands()[3u].firstIndex, 12u);
 }
 
-TEST_F(UiPaintOverlayTests, OverlayEscapesParentClipAndRestoresItsExactPriorClip){
-    const Rect rectangle{ 0.0f, 0.0f, 100.0f, 80.0f };
-    m_builder.pushClip({ 10.0f, 10.0f, 20.0f, 20.0f });
-    m_builder.fillRect(rectangle);
-    ASSERT_TRUE(m_builder.beginOverlay(4u));
-    m_builder.pushClip({ 25.0f, 5.0f, 40.0f, 20.0f });
-    m_builder.fillRect(rectangle);
-    ASSERT_TRUE(m_builder.popClip());
-    EXPECT_FALSE(m_builder.popClip());
-    ASSERT_TRUE(m_builder.endOverlay());
-    m_builder.fillRect(rectangle);
-    ASSERT_TRUE(m_builder.popClip());
-    m_builder.fillRect(rectangle);
-    const DrawSnapshot snapshot = m_builder.freeze();
+void VerifyUiPaintOverlayTests_OverlayEscapesParentClipAndRestoresItsExactPriorClip(mut UiPaintOverlayTests self){
+    const Rect rectangle = MakeUiPaintOverlayRect(0.0f, 0.0f, 100.0f, 80.0f);
+    self.m_builder.pushClip(MakeUiPaintOverlayRect(10.0f, 10.0f, 20.0f, 20.0f));
+    self.m_builder.fillRect(rectangle);
+    ASSERT_TRUE(self.m_builder.beginOverlay(4u));
+    self.m_builder.pushClip(MakeUiPaintOverlayRect(25.0f, 5.0f, 40.0f, 20.0f));
+    self.m_builder.fillRect(rectangle);
+    ASSERT_TRUE(self.m_builder.popClip());
+    EXPECT_FALSE(self.m_builder.popClip());
+    ASSERT_TRUE(self.m_builder.endOverlay());
+    self.m_builder.fillRect(rectangle);
+    ASSERT_TRUE(self.m_builder.popClip());
+    self.m_builder.fillRect(rectangle);
+    const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.vertices().size(), 16u);
     EXPECT_FLOAT_EQ(snapshot.vertices()[0u].position.x, 10.0f);
     EXPECT_FLOAT_EQ(snapshot.vertices()[0u].position.y, 10.0f);
@@ -586,13 +1014,13 @@ TEST_F(UiPaintOverlayTests, OverlayEscapesParentClipAndRestoresItsExactPriorClip
     EXPECT_FLOAT_EQ(snapshot.commands()[3u].clip.height, 20.0f);
 }
 
-TEST_F(UiPaintOverlayTests, EscapingTheParentStillClipsOverlayGeometryAndUvsToTheLogicalViewport){
-    m_builder.pushClip({ 50.0f, 50.0f, 5.0f, 5.0f });
-    ASSERT_TRUE(m_builder.beginOverlay(2u));
-    ASSERT_TRUE(m_builder.drawRegion(Name(NWB::Tests::UiCases::s_UiInputNameSprite), { -20.0f, -10.0f, 160.0f, 100.0f }));
-    ASSERT_TRUE(m_builder.endOverlay());
-    ASSERT_TRUE(m_builder.popClip());
-    const DrawSnapshot snapshot = m_builder.freeze();
+void VerifyUiPaintOverlayTests_EscapingTheParentStillClipsOverlayGeometryAndUvsToTheLogicalViewport(mut UiPaintOverlayTests self){
+    self.m_builder.pushClip(MakeUiPaintOverlayRect(50.0f, 50.0f, 5.0f, 5.0f));
+    ASSERT_TRUE(self.m_builder.beginOverlay(2u));
+    ASSERT_TRUE(self.m_builder.drawRegion(s_UiInputNameSprite, MakeUiPaintOverlayRect(-20.0f, -10.0f, 160.0f, 100.0f)));
+    ASSERT_TRUE(self.m_builder.endOverlay());
+    ASSERT_TRUE(self.m_builder.popClip());
+    const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.commands().size(), 1u);
     ASSERT_EQ(snapshot.vertices().size(), 4u);
     EXPECT_EQ(snapshot.commands()[0u].layer, 2u);
@@ -608,26 +1036,26 @@ TEST_F(UiPaintOverlayTests, EscapingTheParentStillClipsOverlayGeometryAndUvsToTh
     EXPECT_FLOAT_EQ(snapshot.vertices()[2u].texCoord.y, 0.45f);
 }
 
-TEST_F(UiPaintOverlayTests, RejectedAdmissionAndUnbalancedClosurePreserveTheActiveLayerAndClips){
-    const Rect rectangle{ 0.0f, 0.0f, 100.0f, 80.0f };
-    m_builder.pushClip({ 5.0f, 5.0f, 10.0f, 10.0f });
-    EXPECT_FALSE(m_builder.beginOverlay(0u));
-    EXPECT_FALSE(m_builder.endOverlay());
-    m_builder.fillRect(rectangle);
-    ASSERT_TRUE(m_builder.beginOverlay(8u));
-    ASSERT_TRUE(m_builder.beginOverlay(9u));
-    ASSERT_TRUE(m_builder.endOverlay());
-    EXPECT_FALSE(m_builder.beginOverlay(0u));
-    m_builder.pushClip({ 10.0f, 10.0f, 20.0f, 20.0f });
-    EXPECT_FALSE(m_builder.endOverlay());
-    m_builder.fillRect(rectangle);
-    ASSERT_TRUE(m_builder.popClip());
-    EXPECT_FALSE(m_builder.popClip());
-    ASSERT_TRUE(m_builder.endOverlay());
-    EXPECT_FALSE(m_builder.endOverlay());
-    m_builder.fillRect(rectangle);
-    ASSERT_TRUE(m_builder.popClip());
-    const DrawSnapshot snapshot = m_builder.freeze();
+void VerifyUiPaintOverlayTests_RejectedAdmissionAndUnbalancedClosurePreserveTheActiveLayerAndClips(mut UiPaintOverlayTests self){
+    const Rect rectangle = MakeUiPaintOverlayRect(0.0f, 0.0f, 100.0f, 80.0f);
+    self.m_builder.pushClip(MakeUiPaintOverlayRect(5.0f, 5.0f, 10.0f, 10.0f));
+    EXPECT_FALSE(self.m_builder.beginOverlay(0u));
+    EXPECT_FALSE(self.m_builder.endOverlay());
+    self.m_builder.fillRect(rectangle);
+    ASSERT_TRUE(self.m_builder.beginOverlay(8u));
+    ASSERT_TRUE(self.m_builder.beginOverlay(9u));
+    ASSERT_TRUE(self.m_builder.endOverlay());
+    EXPECT_FALSE(self.m_builder.beginOverlay(0u));
+    self.m_builder.pushClip(MakeUiPaintOverlayRect(10.0f, 10.0f, 20.0f, 20.0f));
+    EXPECT_FALSE(self.m_builder.endOverlay());
+    self.m_builder.fillRect(rectangle);
+    ASSERT_TRUE(self.m_builder.popClip());
+    EXPECT_FALSE(self.m_builder.popClip());
+    ASSERT_TRUE(self.m_builder.endOverlay());
+    EXPECT_FALSE(self.m_builder.endOverlay());
+    self.m_builder.fillRect(rectangle);
+    ASSERT_TRUE(self.m_builder.popClip());
+    const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.commands().size(), 3u);
     EXPECT_EQ(snapshot.commands()[0u].layer, 0u);
     EXPECT_EQ(snapshot.commands()[1u].layer, 0u);
@@ -640,20 +1068,20 @@ TEST_F(UiPaintOverlayTests, RejectedAdmissionAndUnbalancedClosurePreserveTheActi
     EXPECT_FLOAT_EQ(snapshot.vertices()[10u].position.x, 15.0f);
 }
 
-TEST_F(UiPaintOverlayTests, NestedOverlayRestoresParentLayerAndItsClipAfterEscapingBoth){
-    const Rect rectangle{ 0.0f, 0.0f, 100.0f, 80.0f };
-    ASSERT_TRUE(m_builder.beginOverlay(2u));
-    m_builder.pushClip({ 5.0f, 5.0f, 10.0f, 10.0f });
-    m_builder.fillRect(rectangle);
-    ASSERT_TRUE(m_builder.beginOverlay(3u));
-    m_builder.fillRect(rectangle);
-    EXPECT_FALSE(m_builder.popClip());
-    ASSERT_TRUE(m_builder.endOverlay());
-    m_builder.fillRect(rectangle);
-    ASSERT_TRUE(m_builder.popClip());
-    ASSERT_TRUE(m_builder.endOverlay());
-    m_builder.fillRect(rectangle);
-    const DrawSnapshot snapshot = m_builder.freeze();
+void VerifyUiPaintOverlayTests_NestedOverlayRestoresParentLayerAndItsClipAfterEscapingBoth(mut UiPaintOverlayTests self){
+    const Rect rectangle = MakeUiPaintOverlayRect(0.0f, 0.0f, 100.0f, 80.0f);
+    ASSERT_TRUE(self.m_builder.beginOverlay(2u));
+    self.m_builder.pushClip(MakeUiPaintOverlayRect(5.0f, 5.0f, 10.0f, 10.0f));
+    self.m_builder.fillRect(rectangle);
+    ASSERT_TRUE(self.m_builder.beginOverlay(3u));
+    self.m_builder.fillRect(rectangle);
+    EXPECT_FALSE(self.m_builder.popClip());
+    ASSERT_TRUE(self.m_builder.endOverlay());
+    self.m_builder.fillRect(rectangle);
+    ASSERT_TRUE(self.m_builder.popClip());
+    ASSERT_TRUE(self.m_builder.endOverlay());
+    self.m_builder.fillRect(rectangle);
+    const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.commands().size(), 4u);
     EXPECT_EQ(snapshot.commands()[0u].layer, 0u);
     EXPECT_EQ(snapshot.commands()[1u].layer, 2u);
@@ -666,48 +1094,48 @@ TEST_F(UiPaintOverlayTests, NestedOverlayRestoresParentLayerAndItsClipAfterEscap
     EXPECT_FLOAT_EQ(snapshot.vertices()[10u].position.x, 15.0f);
 }
 
-TEST_F(UiPaintOverlayTests, BoundedOverlayDepthRejectsWithoutChangingTheLastAcceptedScope){
-    for(u32 layer = 1u; layer <= s_PaintMaxOverlayDepth; ++layer)
-        ASSERT_TRUE(m_builder.beginOverlay(layer));
-    EXPECT_FALSE(m_builder.beginOverlay(99u));
-    m_builder.fillRect({ 0.0f, 0.0f, 100.0f, 80.0f });
+void VerifyUiPaintOverlayTests_BoundedOverlayDepthRejectsWithoutChangingTheLastAcceptedScope(mut UiPaintOverlayTests self){
+    for(u32 layer = 1u; layer <= cast<u32>(s_PaintMaxOverlayDepth); ++layer)
+        ASSERT_TRUE(self.m_builder.beginOverlay(layer));
+    EXPECT_FALSE(self.m_builder.beginOverlay(99u));
+    self.m_builder.fillRect(MakeUiPaintOverlayRect(0.0f, 0.0f, 100.0f, 80.0f));
     for(usize depth = 0u; depth < s_PaintMaxOverlayDepth; ++depth)
-        ASSERT_TRUE(m_builder.endOverlay());
-    EXPECT_FALSE(m_builder.endOverlay());
-    const DrawSnapshot snapshot = m_builder.freeze();
+        ASSERT_TRUE(self.m_builder.endOverlay());
+    EXPECT_FALSE(self.m_builder.endOverlay());
+    const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.commands().size(), 1u);
-    EXPECT_EQ(snapshot.commands()[0u].layer, s_PaintMaxOverlayDepth);
+    EXPECT_EQ(snapshot.commands()[0u].layer, cast<u32>(s_PaintMaxOverlayDepth));
 }
 
-TEST_F(UiPaintOverlayTests, UnrecordedScopesAreRejectedAndBeginResetsAbandonedOverlayState){
-    PaintBuilder idle(m_arena);
+void VerifyUiPaintOverlayTests_UnrecordedScopesAreRejectedAndBeginResetsAbandonedOverlayState(mut UiPaintOverlayTests self){
+    PaintBuilder idle = PaintBuilder(self.m_arena);
     EXPECT_FALSE(idle.beginOverlay(1u));
     EXPECT_FALSE(idle.endOverlay());
-    ASSERT_TRUE(m_builder.beginOverlay(5u));
-    m_builder.pushClip({ 10.0f, 10.0f, 20.0f, 20.0f });
-    m_builder.fillRect({ 10.0f, 10.0f, 10.0f, 10.0f });
-    begin(8u);
-    EXPECT_FALSE(m_builder.endOverlay());
-    m_builder.fillRect({ 0.0f, 0.0f, 100.0f, 80.0f });
-    const DrawSnapshot snapshot = m_builder.freeze();
+    ASSERT_TRUE(self.m_builder.beginOverlay(5u));
+    self.m_builder.pushClip(MakeUiPaintOverlayRect(10.0f, 10.0f, 20.0f, 20.0f));
+    self.m_builder.fillRect(MakeUiPaintOverlayRect(10.0f, 10.0f, 10.0f, 10.0f));
+    self.begin(8u);
+    EXPECT_FALSE(self.m_builder.endOverlay());
+    self.m_builder.fillRect(MakeUiPaintOverlayRect(0.0f, 0.0f, 100.0f, 80.0f));
+    const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.commands().size(), 1u);
     EXPECT_EQ(snapshot.commands()[0u].layer, 0u);
     EXPECT_EQ(snapshot.commands()[0u].firstIndex, 0u);
     EXPECT_FLOAT_EQ(snapshot.vertices()[0u].position.x, 0.0f);
     EXPECT_FLOAT_EQ(snapshot.vertices()[2u].position.y, 80.0f);
-    EXPECT_FALSE(m_builder.beginOverlay(1u));
-    EXPECT_FALSE(m_builder.endOverlay());
+    EXPECT_FALSE(self.m_builder.beginOverlay(1u));
+    EXPECT_FALSE(self.m_builder.endOverlay());
 }
 
-TEST_F(UiPaintOverlayTests, LayerDescentAfterMergedOverlayPaintOrdersTheCompleteBatches){
-    const Rect rectangle{ 1.0f, 1.0f, 4.0f, 4.0f };
-    ASSERT_TRUE(m_builder.beginOverlay(4u));
-    m_builder.fillRect(rectangle);
-    m_builder.fillRect(rectangle);
-    ASSERT_TRUE(m_builder.endOverlay());
-    m_builder.fillRect(rectangle);
-    m_builder.fillRect(rectangle);
-    const DrawSnapshot first = m_builder.freeze();
+void VerifyUiPaintOverlayTests_LayerDescentAfterMergedOverlayPaintOrdersTheCompleteBatches(mut UiPaintOverlayTests self){
+    const Rect rectangle = MakeUiPaintOverlayRect(1.0f, 1.0f, 4.0f, 4.0f);
+    ASSERT_TRUE(self.m_builder.beginOverlay(4u));
+    self.m_builder.fillRect(rectangle);
+    self.m_builder.fillRect(rectangle);
+    ASSERT_TRUE(self.m_builder.endOverlay());
+    self.m_builder.fillRect(rectangle);
+    self.m_builder.fillRect(rectangle);
+    const DrawSnapshot first = self.m_builder.freeze();
     ASSERT_EQ(first.commands().size(), 2u);
     EXPECT_EQ(first.commands()[0u].layer, 0u);
     EXPECT_EQ(first.commands()[0u].firstIndex, 12u);
@@ -716,12 +1144,12 @@ TEST_F(UiPaintOverlayTests, LayerDescentAfterMergedOverlayPaintOrdersTheComplete
     EXPECT_EQ(first.commands()[1u].firstIndex, 0u);
     EXPECT_EQ(first.commands()[1u].indexCount, 12u);
 
-    begin(8u);
-    m_builder.fillRect(rectangle);
-    ASSERT_TRUE(m_builder.beginOverlay(4u));
-    m_builder.fillRect(rectangle);
-    ASSERT_TRUE(m_builder.endOverlay());
-    const DrawSnapshot second = m_builder.freeze();
+    self.begin(8u);
+    self.m_builder.fillRect(rectangle);
+    ASSERT_TRUE(self.m_builder.beginOverlay(4u));
+    self.m_builder.fillRect(rectangle);
+    ASSERT_TRUE(self.m_builder.endOverlay());
+    const DrawSnapshot second = self.m_builder.freeze();
     ASSERT_EQ(second.commands().size(), 2u);
     EXPECT_EQ(second.commands()[0u].layer, 0u);
     EXPECT_EQ(second.commands()[0u].firstIndex, 0u);
@@ -730,30 +1158,32 @@ TEST_F(UiPaintOverlayTests, LayerDescentAfterMergedOverlayPaintOrdersTheComplete
     EXPECT_EQ(first.commands()[0u].firstIndex, 12u);
 }
 
-TEST_F(UiPaintOverlayTests, SortingCommandsRetainsSkinCoverageDistanceBindingsAndUnchangedIndexRanges){
-    auto coverageCreationResult = makeCoverage();
-    ASSERT_TRUE(coverageCreationResult);
-    const SharedGlyphPage coverage = Move(*coverageCreationResult);
-    auto distanceCreationResult = makeDistance();
-    ASSERT_TRUE(distanceCreationResult);
-    const SharedSdfAtlasPage distance = Move(*distanceCreationResult);
-    ASSERT_TRUE(coverage && distance);
-    const Rect rectangle{ 1.0f, 1.0f, 4.0f, 4.0f };
-    const Rect uv{ 0.0f, 0.0f, 0.5f, 0.5f };
-    ASSERT_TRUE(m_builder.beginOverlay(4u));
-    ASSERT_TRUE(m_builder.drawSdfGlyph(distance, 3u, rectangle, uv));
-    ASSERT_TRUE(m_builder.drawGlyph(coverage, rectangle, uv));
-    ASSERT_TRUE(m_builder.endOverlay());
-    ASSERT_TRUE(m_builder.drawRegion(Name(NWB::Tests::UiCases::s_UiInputNameSprite), rectangle));
-    ASSERT_TRUE(m_builder.drawSdfGlyph(distance, 1u, rectangle, uv));
-    ASSERT_TRUE(m_builder.drawGlyph(coverage, rectangle, uv));
-    const DrawSnapshot snapshot = m_builder.freeze();
+void VerifyUiPaintOverlayTests_SortingCommandsRetainsSkinCoverageDistanceBindingsAndUnchangedIndexRanges(mut UiPaintOverlayTests self){
+    auto coverageCreationResult = self.makeCoverage();
+    ASSERT_TRUE(coverageCreationResult.has_value());
+    SharedGlyphPage coverage = SharedGlyphPage();
+    TakeUiPaintOverlayGlyphPage(coverage, coverageCreationResult);
+    auto distanceCreationResult = self.makeDistance();
+    ASSERT_TRUE(distanceCreationResult.has_value());
+    SharedSdfAtlasPage distance = SharedSdfAtlasPage();
+    TakeUiPaintOverlaySdfPage(distance, distanceCreationResult);
+    ASSERT_TRUE(UiPaintOverlayHasGlyphPage(coverage) && UiPaintOverlayHasSdfPage(distance));
+    const Rect rectangle = MakeUiPaintOverlayRect(1.0f, 1.0f, 4.0f, 4.0f);
+    const Rect uv = MakeUiPaintOverlayRect(0.0f, 0.0f, 0.5f, 0.5f);
+    ASSERT_TRUE(self.m_builder.beginOverlay(4u));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(distance, 3u, rectangle, uv));
+    ASSERT_TRUE(self.m_builder.drawGlyph(coverage, rectangle, uv));
+    ASSERT_TRUE(self.m_builder.endOverlay());
+    ASSERT_TRUE(self.m_builder.drawRegion(s_UiInputNameSprite, rectangle));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(distance, 1u, rectangle, uv));
+    ASSERT_TRUE(self.m_builder.drawGlyph(coverage, rectangle, uv));
+    const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.commands().size(), 5u);
     ASSERT_EQ(snapshot.sdfPages().size(), 1u);
     ASSERT_EQ(snapshot.glyphPages().size(), 1u);
-    EXPECT_EQ(snapshot.skinBinding().texture.name(), Name("tests/ui/texture"));
-    EXPECT_EQ(snapshot.sdfPages()[0u].get(), distance.get());
-    EXPECT_EQ(snapshot.glyphPages()[0u].get(), coverage.get());
+    EXPECT_EQ(snapshot.skinBinding().texture.name(), s_UiPaintOverlayTextureName);
+    EXPECT_EQ(UiPaintOverlaySdfPageAddress(snapshot.sdfPages()[0u]), UiPaintOverlaySdfPageAddress(distance));
+    EXPECT_EQ(UiPaintOverlayGlyphPageAddress(snapshot.glyphPages()[0u]), UiPaintOverlayGlyphPageAddress(coverage));
     EXPECT_EQ(snapshot.commands()[0u].material, PaintMaterial::Skin);
     EXPECT_EQ(snapshot.commands()[0u].firstIndex, 12u);
     EXPECT_EQ(snapshot.commands()[1u].material, PaintMaterial::SdfGlyph);
@@ -778,9 +1208,9 @@ TEST_F(UiPaintOverlayTests, SortingCommandsRetainsSkinCoverageDistanceBindingsAn
         EXPECT_EQ(snapshot.indices()[quad * 6u + 2u], quad * 4u + 2u);
         EXPECT_EQ(snapshot.indices()[quad * 6u + 5u], quad * 4u + 3u);
     }
-    for(const DrawCommand& command : snapshot.commands()){
+    for(in DrawCommand command : snapshot.commands()){
         EXPECT_EQ(command.indexCount, 6u);
-        EXPECT_LT(command.firstIndex + command.indexCount - 1u, snapshot.indices().size());
+        EXPECT_LT(cast<usize>(command.firstIndex + command.indexCount - 1u), snapshot.indices().size());
     }
 }
 
@@ -788,530 +1218,474 @@ TEST_F(UiPaintOverlayTests, SortingCommandsRetainsSkinCoverageDistanceBindingsAn
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ui/name_cases.adhd.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_paint_sdf_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using namespace NWB::Impl::Ui;
-
-
-class UiPaintSdfTests : public NWB::UiPaintTextTests::PaintTextFixture{
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST_F(UiPaintSdfTests, ClipTrimsSdfGeometryAndUv){
-    auto pageCreationResult = makeSdfPage();
-    ASSERT_TRUE(pageCreationResult);
-    const SharedSdfAtlasPage page = Move(*pageCreationResult);
-    ASSERT_TRUE(page);
-    m_builder.pushClip({ 10.0f, 5.0f, 20.0f, 10.0f });
-    ASSERT_TRUE(m_builder.drawSdfGlyph(page, 3u, { 0.0f, 0.0f, 40.0f, 20.0f }, { 0.125f, 0.25f, 0.5f, 0.5f }, { 0.8f, 0.4f, 0.2f, 0.5f }));
-    ASSERT_TRUE(m_builder.popClip());
-    ExpectClippedQuad(m_builder.freeze());
+void VerifyUiPaintSdfTests_ClipTrimsSdfGeometryAndUv(mut UiPaintSdfTests self){
+    auto pageCreationResult = self.makeSdfPage();
+    ASSERT_TRUE(pageCreationResult.has_value());
+    SharedSdfAtlasPage page = SharedSdfAtlasPage();
+    TakeUiPaintOverlaySdfPage(page, pageCreationResult);
+    ASSERT_TRUE(UiPaintOverlayHasSdfPage(page));
+    self.m_builder.pushClip(MakeUiPaintOverlayRect(10.0f, 5.0f, 20.0f, 10.0f));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(
+        page,
+        3u,
+        MakeUiPaintOverlayRect(0.0f, 0.0f, 40.0f, 20.0f),
+        MakeUiPaintOverlayRect(0.125f, 0.25f, 0.5f, 0.5f),
+        MakeUiPaintOverlayColor(0.8f, 0.4f, 0.2f, 0.5f)
+    ));
+    ASSERT_TRUE(self.m_builder.popClip());
+    ExpectClippedPaintTextQuad(self.m_builder.freeze());
 }
 
-TEST_F(UiPaintSdfTests, BatchesOnlyAdjacentMatchingGroupChannelMaterialAndClip){
-    auto firstCreationResult = makeSdfPage();
-    ASSERT_TRUE(firstCreationResult);
-    const SharedSdfAtlasPage first = Move(*firstCreationResult);
-    auto secondCreationResult = makeSdfPage(s_DefaultAtlasIdentity, 1u, 1u);
-    ASSERT_TRUE(secondCreationResult);
-    const SharedSdfAtlasPage second = Move(*secondCreationResult);
-    auto coverageCreationResult = makeCoverage(22u);
-    ASSERT_TRUE(coverageCreationResult);
-    const SharedGlyphPage coverage = Move(*coverageCreationResult);
-    ASSERT_TRUE(first && second && coverage);
-    const Rect rectangle{ 1.0f, 1.0f, 4.0f, 4.0f };
-    const Rect uv{ 0.0f, 0.0f, 0.5f, 0.5f };
-    ASSERT_TRUE(m_builder.drawSdfGlyph(first, 0u, rectangle, uv));
-    ASSERT_TRUE(m_builder.drawSdfGlyph(first, 0u, rectangle, uv, { 0.5f, 0.25f, 1.0f, 0.5f }));
-    ASSERT_TRUE(m_builder.drawSdfGlyph(first, 1u, rectangle, uv));
-    ASSERT_TRUE(m_builder.drawSdfGlyph(second, 1u, rectangle, uv));
-    ASSERT_TRUE(m_builder.drawGlyph(coverage, rectangle, uv));
-    ASSERT_TRUE(m_builder.drawSdfGlyph(first, 0u, rectangle, uv));
-    m_builder.fillRect(rectangle);
-    ASSERT_TRUE(m_builder.drawRegion(Name(NWB::Tests::UiCases::s_UiInputNameSprite), rectangle));
-    m_builder.pushClip({ 0.0f, 0.0f, 20.0f, 20.0f });
-    ASSERT_TRUE(m_builder.drawSdfGlyph(first, 0u, rectangle, uv));
-    ASSERT_TRUE(m_builder.popClip());
-    ASSERT_TRUE(m_builder.drawSdfGlyph(first, 0u, rectangle, uv));
-    const DrawSnapshot snapshot = m_builder.freeze();
+void VerifyUiPaintSdfTests_BatchesOnlyAdjacentMatchingGroupChannelMaterialAndClip(mut UiPaintSdfTests self){
+    auto firstCreationResult = self.makeSdfPage();
+    ASSERT_TRUE(firstCreationResult.has_value());
+    SharedSdfAtlasPage first = SharedSdfAtlasPage();
+    TakeUiPaintOverlaySdfPage(first, firstCreationResult);
+    auto secondCreationResult = self.makeSdfPage(s_UiPaintOverlayDefaultAtlasIdentity, 1u, 1u);
+    ASSERT_TRUE(secondCreationResult.has_value());
+    SharedSdfAtlasPage second = SharedSdfAtlasPage();
+    TakeUiPaintOverlaySdfPage(second, secondCreationResult);
+    auto coverageCreationResult = self.makeCoverage(22u);
+    ASSERT_TRUE(coverageCreationResult.has_value());
+    SharedGlyphPage coverage = SharedGlyphPage();
+    TakeUiPaintOverlayGlyphPage(coverage, coverageCreationResult);
+    ASSERT_TRUE(UiPaintOverlayHasSdfPage(first) && UiPaintOverlayHasSdfPage(second) && UiPaintOverlayHasGlyphPage(coverage));
+    const Rect rectangle = MakeUiPaintOverlayRect(1.0f, 1.0f, 4.0f, 4.0f);
+    const Rect uv = MakeUiPaintOverlayRect(0.0f, 0.0f, 0.5f, 0.5f);
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(first, 0u, rectangle, uv));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(first, 0u, rectangle, uv, MakeUiPaintOverlayColor(0.5f, 0.25f, 1.0f, 0.5f)));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(first, 1u, rectangle, uv));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(second, 1u, rectangle, uv));
+    ASSERT_TRUE(self.m_builder.drawGlyph(coverage, rectangle, uv));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(first, 0u, rectangle, uv));
+    self.m_builder.fillRect(rectangle);
+    ASSERT_TRUE(self.m_builder.drawRegion(s_UiInputNameSprite, rectangle));
+    self.m_builder.pushClip(MakeUiPaintOverlayRect(0.0f, 0.0f, 20.0f, 20.0f));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(first, 0u, rectangle, uv));
+    ASSERT_TRUE(self.m_builder.popClip());
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(first, 0u, rectangle, uv));
+    const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.sdfPages().size(), 2u);
     ASSERT_EQ(snapshot.glyphPages().size(), 1u);
     ASSERT_EQ(snapshot.commands().size(), 9u);
-    EXPECT_EQ(snapshot.commands()[0].indexCount, 12u);
-    EXPECT_EQ(snapshot.commands()[1].sdfChannel, 1u);
-    EXPECT_EQ(snapshot.commands()[2].sdfPageIndex, 1u);
-    EXPECT_EQ(snapshot.commands()[3].material, PaintMaterial::Glyph);
-    EXPECT_EQ(snapshot.commands()[4].material, PaintMaterial::SdfGlyph);
-    EXPECT_EQ(snapshot.commands()[5].material, PaintMaterial::Solid);
-    EXPECT_EQ(snapshot.commands()[6].material, PaintMaterial::Skin);
-    EXPECT_FLOAT_EQ(snapshot.commands()[7].clip.width, 20.0f);
-    EXPECT_FLOAT_EQ(snapshot.commands()[8].clip.width, 100.0f);
+    EXPECT_EQ(snapshot.commands()[0u].indexCount, 12u);
+    EXPECT_EQ(snapshot.commands()[1u].sdfChannel, 1u);
+    EXPECT_EQ(snapshot.commands()[2u].sdfPageIndex, 1u);
+    EXPECT_EQ(snapshot.commands()[3u].material, PaintMaterial::Glyph);
+    EXPECT_EQ(snapshot.commands()[4u].material, PaintMaterial::SdfGlyph);
+    EXPECT_EQ(snapshot.commands()[5u].material, PaintMaterial::Solid);
+    EXPECT_EQ(snapshot.commands()[6u].material, PaintMaterial::Skin);
+    EXPECT_FLOAT_EQ(snapshot.commands()[7u].clip.width, 20.0f);
+    EXPECT_FLOAT_EQ(snapshot.commands()[8u].clip.width, 100.0f);
 }
 
-TEST_F(UiPaintSdfTests, FrozenSnapshotKeepsExactPixelsAndFontHashAcrossRepackAndRelease){
-    auto originalCreationResult = makeSdfPage();
-    ASSERT_TRUE(originalCreationResult);
-    SharedSdfAtlasPage original = Move(*originalCreationResult);
-    ASSERT_TRUE(original);
-    const Sha256Digest oldPixelsHash = original->binding().pixelsSha256;
-    ASSERT_TRUE(m_builder.drawSdfGlyph(original, 2u, { 1.0f, 1.0f, 4.0f, 4.0f }, { 0.0f, 0.0f, 0.25f, 0.25f }));
-    const DrawSnapshot first = m_builder.freeze();
+void VerifyUiPaintSdfTests_FrozenSnapshotKeepsExactPixelsAndFontHashAcrossRepackAndRelease(mut UiPaintSdfTests self){
+    auto originalCreationResult = self.makeSdfPage();
+    ASSERT_TRUE(originalCreationResult.has_value());
+    SharedSdfAtlasPage original = SharedSdfAtlasPage();
+    TakeUiPaintOverlaySdfPage(original, originalCreationResult);
+    ASSERT_TRUE(UiPaintOverlayHasSdfPage(original));
+    const Sha256Digest oldPixelsHash = UiPaintOverlaySdfPagePixelsHash(original);
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(original, 2u, MakeUiPaintOverlayRect(1.0f, 1.0f, 4.0f, 4.0f), MakeUiPaintOverlayRect(0.0f, 0.0f, 0.25f, 0.25f)));
+    const DrawSnapshot first = self.m_builder.freeze();
     original.reset();
-    begin(8u);
-    auto replacementCreationResult = makeSdfPage(12u, 1u, 0u, 64u);
-    ASSERT_TRUE(replacementCreationResult);
-    SharedSdfAtlasPage replacement = Move(*replacementCreationResult);
-    ASSERT_TRUE(replacement);
-    ASSERT_TRUE(m_builder.drawSdfGlyph(replacement, 2u, { 6.0f, 1.0f, 4.0f, 4.0f }, { 0.5f, 0.5f, 0.25f, 0.25f }));
-    const DrawSnapshot second = m_builder.freeze();
+    self.begin(8u);
+    auto replacementCreationResult = self.makeSdfPage(12u, 1u, 0u, 64u);
+    ASSERT_TRUE(replacementCreationResult.has_value());
+    SharedSdfAtlasPage replacement = SharedSdfAtlasPage();
+    TakeUiPaintOverlaySdfPage(replacement, replacementCreationResult);
+    ASSERT_TRUE(UiPaintOverlayHasSdfPage(replacement));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(replacement, 2u, MakeUiPaintOverlayRect(6.0f, 1.0f, 4.0f, 4.0f), MakeUiPaintOverlayRect(0.5f, 0.5f, 0.25f, 0.25f)));
+    const DrawSnapshot second = self.m_builder.freeze();
     replacement.reset();
-    begin(9u);
+    self.begin(9u);
     ASSERT_EQ(first.sdfPages().size(), 1u);
     ASSERT_EQ(second.sdfPages().size(), 1u);
-    EXPECT_EQ(first.sdfPages()[0]->pixels()[2u], 255u);
-    EXPECT_EQ(second.sdfPages()[0]->pixels()[2u], 64u);
-    EXPECT_TRUE(first.sdfPages()[0]->binding().pixelsSha256 == oldPixelsHash);
-    EXPECT_FALSE(first.sdfPages()[0]->binding().pixelsSha256 == second.sdfPages()[0]->binding().pixelsSha256);
-    EXPECT_FLOAT_EQ(first.vertices()[0].texCoord.x, 0.0f);
-    EXPECT_FLOAT_EQ(second.vertices()[0].texCoord.x, 0.5f);
+    EXPECT_EQ(UiPaintOverlaySdfPagePixel(first.sdfPages()[0u], 2u), 255u);
+    EXPECT_EQ(UiPaintOverlaySdfPagePixel(second.sdfPages()[0u], 2u), 64u);
+    EXPECT_TRUE(UiPaintOverlaySdfPagePixelsHash(first.sdfPages()[0u]) == oldPixelsHash);
+    EXPECT_FALSE(UiPaintOverlaySdfPagePixelsHash(first.sdfPages()[0u]) == UiPaintOverlaySdfPagePixelsHash(second.sdfPages()[0u]));
+    EXPECT_FLOAT_EQ(first.vertices()[0u].texCoord.x, 0.0f);
+    EXPECT_FLOAT_EQ(second.vertices()[0u].texCoord.x, 0.5f);
 }
 
-TEST_F(UiPaintSdfTests, RejectedMixedAdmissionAtCapacityPreservesEarlierCoverageUpgradeAndGeometry){
-    FixedVector<SharedGlyphPage, s_PaintMaxImages - 1u> coverage;
-    for(usize index = 0u; index < coverage.max_size(); ++index){
-        auto pageCreationResult = makeCoverage(100u + index);
-        ASSERT_TRUE(pageCreationResult);
-        SharedGlyphPage page = Move(*pageCreationResult);
-        ASSERT_TRUE(page);
-        coverage.push_back(Move(page));
+void VerifyUiPaintSdfTests_RejectedMixedAdmissionAtCapacityPreservesEarlierCoverageUpgradeAndGeometry(mut UiPaintSdfTests self){
+    ASSERT_EQ(s_PaintMaxImages, 64u);
+    FixedVector<SharedGlyphPage, 63u> coverage = FixedVector<SharedGlyphPage, 63u>();
+    for(usize index = 0u; index < 63u; ++index){
+        auto pageCreationResult = self.makeCoverage(100u + index);
+        ASSERT_TRUE(pageCreationResult.has_value());
+        SharedGlyphPage page = SharedGlyphPage();
+        TakeUiPaintOverlayGlyphPage(page, pageCreationResult);
+        ASSERT_TRUE(UiPaintOverlayHasGlyphPage(page));
+        coverage.push_back(page);
     }
-    auto sdfCreationResult = makeSdfPage();
-    ASSERT_TRUE(sdfCreationResult);
-    const SharedSdfAtlasPage sdf = Move(*sdfCreationResult);
-    ASSERT_TRUE(sdf);
-    ASSERT_TRUE(m_builder.prepareImages(coverage, Span(&sdf, 1u)));
-    ASSERT_TRUE(m_builder.drawSdfGlyph(sdf, 3u, { 1.0f, 1.0f, 4.0f, 4.0f }, { 0.0f, 0.0f, 0.5f, 0.5f }));
-    auto upgradeCreationResult = makeCoverage(100u, 2u);
-    ASSERT_TRUE(upgradeCreationResult);
-    const SharedGlyphPage upgrade = Move(*upgradeCreationResult);
-    auto overflowCreationResult = makeSdfPage(99u);
-    ASSERT_TRUE(overflowCreationResult);
-    const SharedSdfAtlasPage overflow = Move(*overflowCreationResult);
-    EXPECT_FALSE(m_builder.prepareImages(Span(&upgrade, 1u), Span(&overflow, 1u)));
-    EXPECT_FALSE(m_builder.drawSdfGlyph(overflow, 0u, { 10.0f, 10.0f, 4.0f, 4.0f }, { 0.0f, 0.0f, 0.5f, 0.5f }));
-    const DrawSnapshot snapshot = m_builder.freeze();
+    auto sdfCreationResult = self.makeSdfPage();
+    ASSERT_TRUE(sdfCreationResult.has_value());
+    SharedSdfAtlasPage sdf = SharedSdfAtlasPage();
+    TakeUiPaintOverlaySdfPage(sdf, sdfCreationResult);
+    ASSERT_TRUE(UiPaintOverlayHasSdfPage(sdf));
+    ASSERT_TRUE(self.prepareGlyphSpanAndSingleSdf(coverage, sdf));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(sdf, 3u, MakeUiPaintOverlayRect(1.0f, 1.0f, 4.0f, 4.0f), MakeUiPaintOverlayRect(0.0f, 0.0f, 0.5f, 0.5f)));
+    auto upgradeCreationResult = self.makeCoverage(100u, 2u);
+    ASSERT_TRUE(upgradeCreationResult.has_value());
+    SharedGlyphPage upgrade = SharedGlyphPage();
+    TakeUiPaintOverlayGlyphPage(upgrade, upgradeCreationResult);
+    auto overflowCreationResult = self.makeSdfPage(99u);
+    ASSERT_TRUE(overflowCreationResult.has_value());
+    SharedSdfAtlasPage overflow = SharedSdfAtlasPage();
+    TakeUiPaintOverlaySdfPage(overflow, overflowCreationResult);
+    EXPECT_FALSE(self.prepareSingleGlyphAndSingleSdf(upgrade, overflow));
+    EXPECT_FALSE(self.m_builder.drawSdfGlyph(overflow, 0u, MakeUiPaintOverlayRect(10.0f, 10.0f, 4.0f, 4.0f), MakeUiPaintOverlayRect(0.0f, 0.0f, 0.5f, 0.5f)));
+    const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.glyphPages().size(), s_PaintMaxImages - 1u);
     ASSERT_EQ(snapshot.sdfPages().size(), 1u);
-    EXPECT_EQ(snapshot.glyphPages()[0].get(), coverage[0u].get());
-    EXPECT_EQ(snapshot.glyphPages()[0]->binding().generation, 1u);
-    EXPECT_EQ(snapshot.sdfPages()[0].get(), sdf.get());
+    EXPECT_EQ(UiPaintOverlayGlyphPageAddress(snapshot.glyphPages()[0u]), UiPaintOverlayGlyphPageAddress(coverage[0u]));
+    EXPECT_EQ(UiPaintOverlayGlyphPageGeneration(snapshot.glyphPages()[0u]), 1u);
+    EXPECT_EQ(UiPaintOverlaySdfPageAddress(snapshot.sdfPages()[0u]), UiPaintOverlaySdfPageAddress(sdf));
     EXPECT_EQ(snapshot.vertices().size(), 4u);
     EXPECT_EQ(snapshot.indices().size(), 6u);
     EXPECT_EQ(snapshot.commands().size(), 1u);
 }
 
-TEST_F(UiPaintSdfTests, EqualIdentityCannotAliasDifferentDistanceBytes){
-    auto originalCreationResult = makeSdfPage();
-    ASSERT_TRUE(originalCreationResult);
-    const SharedSdfAtlasPage original = Move(*originalCreationResult);
-    auto conflictingCreationResult = makeSdfPage(s_DefaultAtlasIdentity, 1u, 0u, 64u);
-    ASSERT_TRUE(conflictingCreationResult);
-    const SharedSdfAtlasPage conflicting = Move(*conflictingCreationResult);
-    ASSERT_TRUE(original && conflicting);
-    ASSERT_TRUE(m_builder.prepareSdfPages(Span(&original, 1u)));
-    EXPECT_FALSE(m_builder.prepareSdfPages(Span(&conflicting, 1u)));
-    const DrawSnapshot snapshot = m_builder.freeze();
+void VerifyUiPaintSdfTests_EqualIdentityCannotAliasDifferentDistanceBytes(mut UiPaintSdfTests self){
+    auto originalCreationResult = self.makeSdfPage();
+    ASSERT_TRUE(originalCreationResult.has_value());
+    SharedSdfAtlasPage original = SharedSdfAtlasPage();
+    TakeUiPaintOverlaySdfPage(original, originalCreationResult);
+    auto conflictingCreationResult = self.makeSdfPage(s_UiPaintOverlayDefaultAtlasIdentity, 1u, 0u, 64u);
+    ASSERT_TRUE(conflictingCreationResult.has_value());
+    SharedSdfAtlasPage conflicting = SharedSdfAtlasPage();
+    TakeUiPaintOverlaySdfPage(conflicting, conflictingCreationResult);
+    ASSERT_TRUE(UiPaintOverlayHasSdfPage(original) && UiPaintOverlayHasSdfPage(conflicting));
+    ASSERT_TRUE(self.prepareSingleSdfPage(original));
+    EXPECT_FALSE(self.prepareSingleSdfPage(conflicting));
+    const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.sdfPages().size(), 1u);
-    EXPECT_EQ(snapshot.sdfPages()[0].get(), original.get());
+    EXPECT_EQ(UiPaintOverlaySdfPageAddress(snapshot.sdfPages()[0u]), UiPaintOverlaySdfPageAddress(original));
     EXPECT_TRUE(snapshot.vertices().empty());
 }
 
-TEST_F(UiPaintSdfTests, InvalidChannelAndUvFailBeforeImageOrGeometryAdmission){
-    auto pageCreationResult = makeSdfPage();
-    ASSERT_TRUE(pageCreationResult);
-    const SharedSdfAtlasPage page = Move(*pageCreationResult);
-    ASSERT_TRUE(page);
-    EXPECT_FALSE(m_builder.drawSdfGlyph(page, 4u, { 1.0f, 1.0f, 4.0f, 4.0f }, { 0.0f, 0.0f, 0.5f, 0.5f }));
-    EXPECT_FALSE(m_builder.drawSdfGlyph(page, 0u, { 1.0f, 1.0f, 4.0f, 4.0f }, { 0.75f, 0.0f, 0.5f, 0.5f }));
-    const DrawSnapshot snapshot = m_builder.freeze();
+void VerifyUiPaintSdfTests_InvalidChannelAndUvFailBeforeImageOrGeometryAdmission(mut UiPaintSdfTests self){
+    auto pageCreationResult = self.makeSdfPage();
+    ASSERT_TRUE(pageCreationResult.has_value());
+    SharedSdfAtlasPage page = SharedSdfAtlasPage();
+    TakeUiPaintOverlaySdfPage(page, pageCreationResult);
+    ASSERT_TRUE(UiPaintOverlayHasSdfPage(page));
+    EXPECT_FALSE(self.m_builder.drawSdfGlyph(page, 4u, MakeUiPaintOverlayRect(1.0f, 1.0f, 4.0f, 4.0f), MakeUiPaintOverlayRect(0.0f, 0.0f, 0.5f, 0.5f)));
+    EXPECT_FALSE(self.m_builder.drawSdfGlyph(page, 0u, MakeUiPaintOverlayRect(1.0f, 1.0f, 4.0f, 4.0f), MakeUiPaintOverlayRect(0.75f, 0.0f, 0.5f, 0.5f)));
+    const DrawSnapshot snapshot = self.m_builder.freeze();
     EXPECT_TRUE(snapshot.sdfPages().empty());
     EXPECT_TRUE(snapshot.vertices().empty());
     EXPECT_TRUE(snapshot.commands().empty());
 }
 
-TEST_F(UiPaintSdfTests, DuplicateCandidatesConsumeOneImageSlot){
-    auto pageCreationResult = makeSdfPage();
-    ASSERT_TRUE(pageCreationResult);
-    const SharedSdfAtlasPage page = Move(*pageCreationResult);
-    auto reconstructedCreationResult = makeSdfPage();
-    ASSERT_TRUE(reconstructedCreationResult);
-    const SharedSdfAtlasPage reconstructed = Move(*reconstructedCreationResult);
-    ASSERT_TRUE(page && reconstructed);
-    const Array<SharedSdfAtlasPage, 3u> candidates{ page, reconstructed, page };
-    ASSERT_TRUE(m_builder.prepareSdfPages(candidates));
-    const DrawSnapshot snapshot = m_builder.freeze();
+void VerifyUiPaintSdfTests_DuplicateCandidatesConsumeOneImageSlot(mut UiPaintSdfTests self){
+    auto pageCreationResult = self.makeSdfPage();
+    ASSERT_TRUE(pageCreationResult.has_value());
+    SharedSdfAtlasPage page = SharedSdfAtlasPage();
+    TakeUiPaintOverlaySdfPage(page, pageCreationResult);
+    auto reconstructedCreationResult = self.makeSdfPage();
+    ASSERT_TRUE(reconstructedCreationResult.has_value());
+    SharedSdfAtlasPage reconstructed = SharedSdfAtlasPage();
+    TakeUiPaintOverlaySdfPage(reconstructed, reconstructedCreationResult);
+    ASSERT_TRUE(UiPaintOverlayHasSdfPage(page) && UiPaintOverlayHasSdfPage(reconstructed));
+    Array<SharedSdfAtlasPage, 3u> candidates = Array<SharedSdfAtlasPage, 3u>();
+    candidates[0u] = page;
+    candidates[1u] = reconstructed;
+    candidates[2u] = page;
+    ASSERT_TRUE(self.m_builder.prepareSdfPages(candidates));
+    const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.sdfPages().size(), 1u);
-    EXPECT_EQ(snapshot.sdfPages()[0].get(), page.get());
+    EXPECT_EQ(UiPaintOverlaySdfPageAddress(snapshot.sdfPages()[0u]), UiPaintOverlaySdfPageAddress(page));
 }
 
-TEST_F(UiPaintSdfTests, PageFactoryRejectsUnsupportedEncodingSpreadAndIncompleteRgba){
-    auto bindingPageResult = makeSdfPage();
-    ASSERT_TRUE(bindingPageResult);
-    const SharedSdfAtlasPage bindingPage = Move(*bindingPageResult);
-    SdfAtlasPageBinding binding = bindingPage->binding();
-    SdfAtlasPage::Pixels pixels(m_arena);
+void VerifyUiPaintSdfTests_PageFactoryRejectsUnsupportedEncodingSpreadAndIncompleteRgba(mut UiPaintSdfTests self){
+    auto bindingPageResult = self.makeSdfPage();
+    ASSERT_TRUE(bindingPageResult.has_value());
+    SharedSdfAtlasPage bindingPage = SharedSdfAtlasPage();
+    TakeUiPaintOverlaySdfPage(bindingPage, bindingPageResult);
+    SdfAtlasPageBinding binding = UiPaintOverlaySdfPageBinding(bindingPage);
+    UiPaintSdfPixels pixels = UiPaintSdfPixels(self.m_arena);
     pixels.resize(256u, 0u);
     binding.distanceEncoding = 2u;
-    EXPECT_FALSE(CreateSdfAtlasPage(m_arena, binding, Move(pixels)));
+    EXPECT_FALSE(self.createMovedSdfPage(binding, pixels).has_value());
     EXPECT_EQ(pixels.size(), 256u);
     binding.distanceEncoding = s_FontAtlasDistanceEncoding;
     binding.spreadPixels = s_FontAtlasMaxSpreadPixels + 1u;
-    EXPECT_FALSE(CreateSdfAtlasPage(m_arena, binding, Move(pixels)));
+    EXPECT_FALSE(self.createMovedSdfPage(binding, pixels).has_value());
     binding.spreadPixels = 8u;
     pixels.pop_back();
-    EXPECT_FALSE(CreateSdfAtlasPage(m_arena, binding, Move(pixels)));
+    EXPECT_FALSE(self.createMovedSdfPage(binding, pixels).has_value());
     EXPECT_EQ(pixels.size(), 255u);
 }
 
-TEST_F(UiPaintSdfTests, CompactPageRejectsMissingChannelsWithoutPublishingGeometry){
-    auto bindingPageResult = makeSdfPage();
-    ASSERT_TRUE(bindingPageResult);
-    const SharedSdfAtlasPage bindingPage = Move(*bindingPageResult);
-    SdfAtlasPageBinding binding = bindingPage->binding();
+void VerifyUiPaintSdfTests_CompactPageRejectsMissingChannelsWithoutPublishingGeometry(mut UiPaintSdfTests self){
+    auto bindingPageResult = self.makeSdfPage();
+    ASSERT_TRUE(bindingPageResult.has_value());
+    SharedSdfAtlasPage bindingPage = SharedSdfAtlasPage();
+    TakeUiPaintOverlaySdfPage(bindingPage, bindingPageResult);
+    SdfAtlasPageBinding binding = UiPaintOverlaySdfPageBinding(bindingPage);
     binding.width = 7u;
     binding.height = 5u;
     binding.channelCount = 2u;
-    SdfAtlasPage::Pixels pixels(m_arena);
+    UiPaintSdfPixels pixels = UiPaintSdfPixels(self.m_arena);
     pixels.resize(7u * 5u * 2u, 128u);
-    auto pageCreationResult = CreateSdfAtlasPage(m_arena, binding, Move(pixels));
-    ASSERT_TRUE(pageCreationResult);
-    const SharedSdfAtlasPage page = Move(*pageCreationResult);
-    ASSERT_TRUE(page);
-    EXPECT_FALSE(m_builder.drawSdfGlyph(page, 2u, { 1.f, 1.f, 4.f, 4.f }, { 0.f, 0.f, 0.5f, 0.5f }));
-    EXPECT_TRUE(m_builder.freeze().commands().empty());
-    begin(8u);
-    ASSERT_TRUE(m_builder.drawSdfGlyph(page, 1u, { 1.f, 1.f, 4.f, 4.f }, { 0.f, 0.f, 0.5f, 0.5f }));
-    const DrawSnapshot snapshot = m_builder.freeze();
+    auto pageCreationResult = self.createMovedSdfPage(binding, pixels);
+    ASSERT_TRUE(pageCreationResult.has_value());
+    SharedSdfAtlasPage page = SharedSdfAtlasPage();
+    TakeUiPaintOverlaySdfPage(page, pageCreationResult);
+    ASSERT_TRUE(UiPaintOverlayHasSdfPage(page));
+    EXPECT_FALSE(self.m_builder.drawSdfGlyph(page, 2u, MakeUiPaintOverlayRect(1.0f, 1.0f, 4.0f, 4.0f), MakeUiPaintOverlayRect(0.0f, 0.0f, 0.5f, 0.5f)));
+    EXPECT_TRUE(self.m_builder.freeze().commands().empty());
+    self.begin(8u);
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(page, 1u, MakeUiPaintOverlayRect(1.0f, 1.0f, 4.0f, 4.0f), MakeUiPaintOverlayRect(0.0f, 0.0f, 0.5f, 0.5f)));
+    const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.sdfPages().size(), 1u);
-    EXPECT_EQ(snapshot.commands()[0].sdfChannel, 1u);
+    EXPECT_EQ(snapshot.commands()[0u].sdfChannel, 1u);
 }
 
-TEST_F(UiPaintSdfTests, CompactFactoryRejectsInvalidChannelCountAndRgbaSizedInput){
-    auto bindingPageResult = makeSdfPage();
-    ASSERT_TRUE(bindingPageResult);
-    const SharedSdfAtlasPage bindingPage = Move(*bindingPageResult);
-    SdfAtlasPageBinding binding = bindingPage->binding();
-    SdfAtlasPage::Pixels pixels(m_arena);
+void VerifyUiPaintSdfTests_CompactFactoryRejectsInvalidChannelCountAndRgbaSizedInput(mut UiPaintSdfTests self){
+    auto bindingPageResult = self.makeSdfPage();
+    ASSERT_TRUE(bindingPageResult.has_value());
+    SharedSdfAtlasPage bindingPage = SharedSdfAtlasPage();
+    TakeUiPaintOverlaySdfPage(bindingPage, bindingPageResult);
+    SdfAtlasPageBinding binding = UiPaintOverlaySdfPageBinding(bindingPage);
+    UiPaintSdfPixels pixels = UiPaintSdfPixels(self.m_arena);
     pixels.resize(256u, 128u);
     binding.channelCount = 0u;
-    EXPECT_FALSE(CreateSdfAtlasPage(m_arena, binding, Move(pixels)));
+    EXPECT_FALSE(self.createMovedSdfPage(binding, pixels).has_value());
     binding.channelCount = 5u;
-    EXPECT_FALSE(CreateSdfAtlasPage(m_arena, binding, Move(pixels)));
+    EXPECT_FALSE(self.createMovedSdfPage(binding, pixels).has_value());
     binding.channelCount = 1u;
-    EXPECT_FALSE(CreateSdfAtlasPage(m_arena, binding, Move(pixels)));
+    EXPECT_FALSE(self.createMovedSdfPage(binding, pixels).has_value());
     EXPECT_EQ(pixels.size(), 256u);
     pixels.resize(64u);
-    auto pageResult = CreateSdfAtlasPage(m_arena, binding, Move(pixels));
-    ASSERT_TRUE(pageResult);
-    const SharedSdfAtlasPage page = Move(*pageResult);
-    ASSERT_TRUE(page);
+    auto pageResult = self.createMovedSdfPage(binding, pixels);
+    ASSERT_TRUE(pageResult.has_value());
+    SharedSdfAtlasPage page = SharedSdfAtlasPage();
+    TakeUiPaintOverlaySdfPage(page, pageResult);
+    ASSERT_TRUE(UiPaintOverlayHasSdfPage(page));
 }
 
-TEST_F(UiPaintSdfTests, AssetFactoryCopiesExactGroupBytesBeforeSourceAssetIsReleased){
-    SharedSdfAtlasPage page;
-    Sha256Digest sourceHash;
-    {
-        FontAtlas atlas(m_arena, Name(NWB::Tests::UiCases::s_UiCaseTestsUiFontAtlas));
-        FontAtlasPayload payload(m_arena);
-        payload.font = Core::Assets::AssetRef<Font>("tests/ui/font");
-        payload.fontSha256.bytes[0u] = 99u;
-        payload.unitsPerEm = 1000u;
-        payload.sourceGlyphCount = 1u;
-        payload.ascenderUnits = 800.f;
-        payload.descenderUnits = -200.f;
-        payload.glyphs.push_back({});
-        FontAtlasGroup group(m_arena);
-        group.width = 8u;
-        group.height = 8u;
-        group.pixels.resize(256u, 0u);
-        group.pixels[3u] = 192u;
-        group.sha256 = ComputeSha256(BinaryByteView(group.pixels.data(), group.pixels.size()));
-        sourceHash = group.sha256;
-        payload.groups.push_back(Move(group));
-        atlas.setPayload(Move(payload));
-        Core::Alloc::ScratchArena scratchArena{Name(NWB::Tests::UiCases::s_UiCaseTestsUiPaintSdfValidationScratch)};
-        ASSERT_TRUE(atlas.validatePayload(scratchArena));
-        auto pageResult = CreateSdfAtlasPage(m_arena, atlas, 7u, 123u, 0u);
-        ASSERT_TRUE(pageResult);
-        page = Move(*pageResult);
-        ASSERT_TRUE(page);
-    }
-    ASSERT_TRUE(m_builder.drawSdfGlyph(page, 3u, { 1.0f, 1.0f, 4.0f, 4.0f }, { 0.0f, 0.0f, 0.5f, 0.5f }));
-    const DrawSnapshot snapshot = m_builder.freeze();
-    page.reset();
+void VerifyUiPaintSdfTests_AssetFactoryCopiesExactGroupBytesBeforeSourceAssetIsReleased(mut UiPaintSdfTests self){
+    UiPaintSdfAssetFactorySample sample = self.createPageFromTemporaryAtlas();
+    ASSERT_TRUE(sample.valid);
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(sample.page, 3u, MakeUiPaintOverlayRect(1.0f, 1.0f, 4.0f, 4.0f), MakeUiPaintOverlayRect(0.0f, 0.0f, 0.5f, 0.5f)));
+    const DrawSnapshot snapshot = self.m_builder.freeze();
+    sample.page.reset();
     ASSERT_EQ(snapshot.sdfPages().size(), 1u);
-    EXPECT_EQ(snapshot.sdfPages()[0]->pixels()[3u], 192u);
-    EXPECT_EQ(snapshot.sdfPages()[0]->binding().fontSha256.bytes[0u], 99u);
-    EXPECT_TRUE(snapshot.sdfPages()[0]->binding().pixelsSha256 == sourceHash);
+    EXPECT_EQ(UiPaintOverlaySdfPagePixel(snapshot.sdfPages()[0u], 3u), 192u);
+    EXPECT_EQ(UiPaintOverlaySdfPageFontHashByte(snapshot.sdfPages()[0u], 0u), 99u);
+    EXPECT_TRUE(UiPaintOverlaySdfPagePixelsHash(snapshot.sdfPages()[0u]) == sample.sourceHash);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/common/floating_point_environment_guard.adhd.h>
-#include <tests/unit/ui/name_cases.adhd.h>
-
-#include <impl/ecs_ui/toolkit/paint.adhd.h>
-
-#include <global/floating_point_environment.h>
-#include <global/scope_exit.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_paint_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using namespace NWB::Impl::Ui;
-
-using UiWidgetTests::s_TestSkinPath;
-constexpr AStringView s_TexturePath = "tests/ui/texture";
-constexpr AStringView s_SpriteRegion = "sprite";
-constexpr AStringView s_PanelRegion = "panel";
-
-
-class UiPaintTests : public testing::Test{
-public:
-    UiPaintTests()
-        : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiPaint))
-        , m_skin(m_arena, Name(s_TestSkinPath))
-        , m_builder(m_arena)
-    {
-        UiSkin::RegionVector regions(m_arena);
-        regions.push_back({ Name(s_SpriteRegion), { 16u, 32u, 32u, 24u }, {}, {}, 0.0f, 0.0f, UiSkinDrawMode::Sprite });
-        UiSkinRegion panel{ Name(s_PanelRegion), { 0u, 0u, 32u, 24u }, { 4u, 6u, 8u, 2u }, {}, 0.0f, 0.0f, UiSkinDrawMode::NineSlice };
-        regions.push_back(panel);
-        m_skin.setAtlas(Core::Assets::AssetRef<Texture>(s_TexturePath), 128u, 64u, 2.0f, Move(regions));
-        m_builder.begin({ 200.0f, 100.0f, 1.5f, 2.0f }, 7u, 3u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
-        m_builder.reserve(32u);
-    }
-
-
-protected:
-    Core::Alloc::GlobalArena m_arena;
-    UiSkin m_skin;
-    PaintBuilder m_builder;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST_F(UiPaintTests, CurrentClipCopiesTheActiveIntersectionAndRestoresAfterOverlay){
-    m_builder.pushClip({ 10.0f, 10.0f, 30.0f, 30.0f });
-    m_builder.pushClip({ 20.0f, 5.0f, 40.0f, 20.0f });
-    const Rect nested = m_builder.currentClip();
+void VerifyUiPaintTests_CurrentClipCopiesTheActiveIntersectionAndRestoresAfterOverlay(mut UiPaintTests self){
+    self.m_builder.pushClip(MakeUiPaintOverlayRect(10.0f, 10.0f, 30.0f, 30.0f));
+    self.m_builder.pushClip(MakeUiPaintOverlayRect(20.0f, 5.0f, 40.0f, 20.0f));
+    const Rect nested = self.m_builder.currentClip();
     EXPECT_FLOAT_EQ(nested.x, 20.0f);
     EXPECT_FLOAT_EQ(nested.y, 10.0f);
     EXPECT_FLOAT_EQ(nested.width, 20.0f);
     EXPECT_FLOAT_EQ(nested.height, 15.0f);
-    ASSERT_TRUE(m_builder.beginOverlay(1u));
-    EXPECT_FLOAT_EQ(m_builder.currentClip().width, 200.0f);
-    m_builder.pushClip({ 250.0f, 0.0f, 1.0f, 1.0f });
-    EXPECT_FLOAT_EQ(m_builder.currentClip().width, 0.0f);
-    ASSERT_TRUE(m_builder.popClip());
-    ASSERT_TRUE(m_builder.endOverlay());
-    EXPECT_FLOAT_EQ(m_builder.currentClip().x, nested.x);
-    EXPECT_FLOAT_EQ(m_builder.currentClip().height, nested.height);
-    ASSERT_TRUE(m_builder.popClip());
-    ASSERT_TRUE(m_builder.popClip());
+    ASSERT_TRUE(self.m_builder.beginOverlay(1u));
+    EXPECT_FLOAT_EQ(self.m_builder.currentClip().width, 200.0f);
+    self.m_builder.pushClip(MakeUiPaintOverlayRect(250.0f, 0.0f, 1.0f, 1.0f));
+    EXPECT_FLOAT_EQ(self.m_builder.currentClip().width, 0.0f);
+    ASSERT_TRUE(self.m_builder.popClip());
+    ASSERT_TRUE(self.m_builder.endOverlay());
+    EXPECT_FLOAT_EQ(self.m_builder.currentClip().x, nested.x);
+    EXPECT_FLOAT_EQ(self.m_builder.currentClip().height, nested.height);
+    ASSERT_TRUE(self.m_builder.popClip());
+    ASSERT_TRUE(self.m_builder.popClip());
 }
 
-TEST_F(UiPaintTests, BoundaryClipsKeepEmptyExtentsAndSecondOperandSignedZeroOrigins){
-    m_builder.pushClip({ 2.0f, 3.0f, 5.0f, 7.0f });
-    for(const Rect boundary : { Rect{ 8.0f, 11.0f, 2.0f, 2.0f }, Rect{ 7.0f, 10.0f, 2.0f, 2.0f } }){
-        m_builder.pushClip(boundary);
-        const Rect clipped = m_builder.currentClip();
+void VerifyUiPaintTests_BoundaryClipsKeepEmptyExtentsAndSecondOperandSignedZeroOrigins(mut UiPaintTests self){
+    self.m_builder.pushClip(MakeUiPaintOverlayRect(2.0f, 3.0f, 5.0f, 7.0f));
+    Array<Rect, 2u> boundaries = Array<Rect, 2u>();
+    boundaries[0u] = MakeUiPaintOverlayRect(8.0f, 11.0f, 2.0f, 2.0f);
+    boundaries[1u] = MakeUiPaintOverlayRect(7.0f, 10.0f, 2.0f, 2.0f);
+    for(in Rect boundary : boundaries){
+        self.m_builder.pushClip(boundary);
+        const Rect clipped = self.m_builder.currentClip();
         EXPECT_FLOAT_EQ(clipped.x, boundary.x);
         EXPECT_FLOAT_EQ(clipped.y, boundary.y);
         EXPECT_FLOAT_EQ(clipped.width, 0.0f);
         EXPECT_FLOAT_EQ(clipped.height, 0.0f);
-        ASSERT_TRUE(m_builder.popClip());
+        ASSERT_TRUE(self.m_builder.popClip());
     }
-    ASSERT_TRUE(m_builder.popClip());
+    ASSERT_TRUE(self.m_builder.popClip());
 
-    m_builder.pushClip({ -0.0f, -0.0f, 1.0f, 1.0f });
-    m_builder.pushClip({ 0.0f, 0.0f, 1.0f, 1.0f });
-    EXPECT_FALSE(SignBit(m_builder.currentClip().x));
-    EXPECT_FALSE(SignBit(m_builder.currentClip().y));
-    ASSERT_TRUE(m_builder.popClip());
-    EXPECT_TRUE(SignBit(m_builder.currentClip().x));
-    EXPECT_TRUE(SignBit(m_builder.currentClip().y));
-    ASSERT_TRUE(m_builder.popClip());
+    self.m_builder.pushClip(MakeUiPaintOverlayRect(-0.0f, -0.0f, 1.0f, 1.0f));
+    self.m_builder.pushClip(MakeUiPaintOverlayRect(0.0f, 0.0f, 1.0f, 1.0f));
+    EXPECT_FALSE(UiPaintOverlaySignBit(self.m_builder.currentClip().x));
+    EXPECT_FALSE(UiPaintOverlaySignBit(self.m_builder.currentClip().y));
+    ASSERT_TRUE(self.m_builder.popClip());
+    EXPECT_TRUE(UiPaintOverlaySignBit(self.m_builder.currentClip().x));
+    EXPECT_TRUE(UiPaintOverlaySignBit(self.m_builder.currentClip().y));
+    ASSERT_TRUE(self.m_builder.popClip());
 
-    m_builder.pushClip({ 0.0f, 0.0f, 1.0f, 1.0f });
-    m_builder.pushClip({ -0.0f, -0.0f, 1.0f, 1.0f });
-    EXPECT_TRUE(SignBit(m_builder.currentClip().x));
-    EXPECT_TRUE(SignBit(m_builder.currentClip().y));
-    EXPECT_FLOAT_EQ(m_builder.currentClip().width, 1.0f);
-    EXPECT_FLOAT_EQ(m_builder.currentClip().height, 1.0f);
+    self.m_builder.pushClip(MakeUiPaintOverlayRect(0.0f, 0.0f, 1.0f, 1.0f));
+    self.m_builder.pushClip(MakeUiPaintOverlayRect(-0.0f, -0.0f, 1.0f, 1.0f));
+    EXPECT_TRUE(UiPaintOverlaySignBit(self.m_builder.currentClip().x));
+    EXPECT_TRUE(UiPaintOverlaySignBit(self.m_builder.currentClip().y));
+    EXPECT_FLOAT_EQ(self.m_builder.currentClip().width, 1.0f);
+    EXPECT_FLOAT_EQ(self.m_builder.currentClip().height, 1.0f);
 }
 
-TEST_F(UiPaintTests, NestedClipsTrimGeometryAndUvAndRestoreTheirParent){
-    EXPECT_FALSE(m_builder.popClip());
-    m_builder.pushClip({ 10.0f, 10.0f, 30.0f, 30.0f });
-    m_builder.pushClip({ 20.0f, 5.0f, 40.0f, 20.0f });
-    ASSERT_TRUE(m_builder.drawRegion(Name(s_SpriteRegion), { 0.0f, 0.0f, 64.0f, 48.0f }));
-    m_builder.pushClip({ 100.0f, 100.0f, 1.0f, 1.0f });
-    m_builder.fillRect({ 0.0f, 0.0f, 200.0f, 100.0f });
-    ASSERT_TRUE(m_builder.popClip());
-    ASSERT_TRUE(m_builder.popClip());
-    m_builder.fillRect({ 0.0f, 0.0f, 200.0f, 100.0f });
-    ASSERT_TRUE(m_builder.popClip());
-    const auto snapshot = m_builder.freeze();
+void VerifyUiPaintTests_NestedClipsTrimGeometryAndUvAndRestoreTheirParent(mut UiPaintTests self){
+    EXPECT_FALSE(self.m_builder.popClip());
+    self.m_builder.pushClip(MakeUiPaintOverlayRect(10.0f, 10.0f, 30.0f, 30.0f));
+    self.m_builder.pushClip(MakeUiPaintOverlayRect(20.0f, 5.0f, 40.0f, 20.0f));
+    ASSERT_TRUE(self.m_builder.drawRegion(s_UiInputNameSprite, MakeUiPaintOverlayRect(0.0f, 0.0f, 64.0f, 48.0f)));
+    self.m_builder.pushClip(MakeUiPaintOverlayRect(100.0f, 100.0f, 1.0f, 1.0f));
+    self.m_builder.fillRect(MakeUiPaintOverlayRect(0.0f, 0.0f, 200.0f, 100.0f));
+    ASSERT_TRUE(self.m_builder.popClip());
+    ASSERT_TRUE(self.m_builder.popClip());
+    self.m_builder.fillRect(MakeUiPaintOverlayRect(0.0f, 0.0f, 200.0f, 100.0f));
+    ASSERT_TRUE(self.m_builder.popClip());
+    const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.vertices().size(), 8u);
     ASSERT_EQ(snapshot.commands().size(), 2u);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[0].position.x, 20.0f);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[0].position.y, 10.0f);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[2].position.x, 40.0f);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[2].position.y, 25.0f);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[0].texCoord.x, 26.0f / 128.0f);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[0].texCoord.y, 37.0f / 64.0f);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[4].position.x, 10.0f);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[6].position.y, 40.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[0u].position.x, 20.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[0u].position.y, 10.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[2u].position.x, 40.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[2u].position.y, 25.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[0u].texCoord.x, 26.0f / 128.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[0u].texCoord.y, 37.0f / 64.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[4u].position.x, 10.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[6u].position.y, 40.0f);
 }
 
-TEST_F(UiPaintTests, UndersizedNineSliceCollapsesCenterAndScalesOpposingBorders){
-    ASSERT_TRUE(m_builder.drawRegion(Name(s_PanelRegion), { 10.0f, 20.0f, 3.0f, 2.0f }));
-    const auto snapshot = m_builder.freeze();
+void VerifyUiPaintTests_UndersizedNineSliceCollapsesCenterAndScalesOpposingBorders(mut UiPaintTests self){
+    ASSERT_TRUE(self.m_builder.drawRegion(s_UiPaintOverlayPanelRegionName, MakeUiPaintOverlayRect(10.0f, 20.0f, 3.0f, 2.0f)));
+    const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.vertices().size(), 16u);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[2].position.x, 11.0f);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[2].position.y, 21.5f);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[4].position.x, 11.0f);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[6].position.x, 13.0f);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[8].position.y, 21.5f);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[14].position.y, 22.0f);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[2].texCoord.x, 4.0f / 128.0f);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[4].texCoord.x, 24.0f / 128.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[2u].position.x, 11.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[2u].position.y, 21.5f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[4u].position.x, 11.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[6u].position.x, 13.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[8u].position.y, 21.5f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[14u].position.y, 22.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[2u].texCoord.x, 4.0f / 128.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[4u].texCoord.x, 24.0f / 128.0f);
 }
 
-TEST_F(UiPaintTests, NineSliceZeroBordersDoNotEvaluateInactiveShrinkRatios){
-#pragma STDC FENV_ACCESS ON
-    const auto originalEnvironment = HoldFloatingPointExceptions();
-    ASSERT_TRUE(originalEnvironment);
-    Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
-    const Array<UiSkinSliceInsets, 3> borders{ UiSkinSliceInsets{}, UiSkinSliceInsets{ 4u, 0u, 8u, 0u }, UiSkinSliceInsets{ 0u, 6u, 0u, 2u } };
-    for(usize index = 0u; index < LengthOf(borders); ++index){
-        SCOPED_TRACE(index);
-        UiSkin::RegionVector regions(m_arena);
-        regions.push_back({ Name(s_PanelRegion), { 0u, 0u, 32u, 24u }, borders[index], {}, 0.0f, 0.0f, UiSkinDrawMode::NineSlice });
-        m_skin.setAtlas(Core::Assets::AssetRef<Texture>(s_TexturePath), 128u, 64u, 2.0f, Move(regions));
-        m_builder.begin({ 200.0f, 100.0f }, 7u, 3u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
-        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-        const b8 drawn = m_builder.drawRegion(Name(s_PanelRegion), { 10.0f, 20.0f, 3.0f, 2.0f });
-        const i32 exceptions = TestFloatingPointExceptions(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW);
-        EXPECT_EQ(exceptions, 0);
-        ASSERT_TRUE(drawn);
-        const auto snapshot = m_builder.freeze();
-        ASSERT_EQ(snapshot.vertices().size(), index == 0u ? 4u : 8u);
-        EXPECT_FLOAT_EQ(snapshot.vertices()[2].position.x, index == 1u ? 11.0f : 13.0f);
-        EXPECT_FLOAT_EQ(snapshot.vertices()[2].position.y, index == 2u ? 21.5f : 22.0f);
+void VerifyUiPaintTests_NineSliceZeroBordersDoNotEvaluateInactiveShrinkRatios(mut UiPaintTests self){
+    const UiPaintScopedHeldFenv heldEnvironment = UiPaintScopedHeldFenv();
+    ASSERT_TRUE(heldEnvironment.valid());
+    Array<UiSkinSliceInsets, 3u> borders = Array<UiSkinSliceInsets, 3u>();
+    borders[0u] = UiSkinSliceInsets();
+    borders[1u] = MakeUiPaintOverlaySliceInsets(4u, 0u, 8u, 0u);
+    borders[2u] = MakeUiPaintOverlaySliceInsets(0u, 6u, 0u, 2u);
+    for(usize index = 0u; index < borders.size(); ++index){
+        const ScopedTestTrace trace = ScopedTestTrace(index);
+        self.configurePanelBorderCase(borders[index]);
+        const UiPaintDrawRegionFenvSample sample = self.drawPanelWithFenvCheck(s_UiPaintOverlayPanelRegionName, MakeUiPaintOverlayRect(10.0f, 20.0f, 3.0f, 2.0f));
+        ASSERT_TRUE(sample.cleared);
+        EXPECT_EQ(sample.exceptions, 0);
+        ASSERT_TRUE(sample.drawn);
+        const DrawSnapshot snapshot = self.m_builder.freeze();
+        usize expectedVertices = 8u;
+        if(index == 0u)
+            expectedVertices = 4u;
+        f32 expectedX = 13.0f;
+        if(index == 1u)
+            expectedX = 11.0f;
+        f32 expectedY = 22.0f;
+        if(index == 2u)
+            expectedY = 21.5f;
+        ASSERT_EQ(snapshot.vertices().size(), expectedVertices);
+        EXPECT_FLOAT_EQ(snapshot.vertices()[2u].position.x, expectedX);
+        EXPECT_FLOAT_EQ(snapshot.vertices()[2u].position.y, expectedY);
     }
 }
 
-TEST_F(UiPaintTests, BatchesOnlyMergeAdjacentCompatiblePaintAndKeepIndexOrder){
-    m_builder.fillRect({ 1.0f, 1.0f, 5.0f, 5.0f }, { 1.0f, 0.0f, 0.0f, 0.5f });
-    m_builder.fillRect({ 2.0f, 2.0f, 5.0f, 5.0f }, { 0.0f, 1.0f, 0.0f, 1.0f });
-    ASSERT_TRUE(m_builder.drawRegion(Name(s_SpriteRegion), { 3.0f, 3.0f, 5.0f, 5.0f }));
-    m_builder.fillRect({ 4.0f, 4.0f, 5.0f, 5.0f });
-    m_builder.pushClip({ 0.0f, 0.0f, 20.0f, 20.0f });
-    m_builder.fillRect({ 5.0f, 5.0f, 5.0f, 5.0f });
-    ASSERT_TRUE(m_builder.popClip());
-    const auto snapshot = m_builder.freeze();
+void VerifyUiPaintTests_BatchesOnlyMergeAdjacentCompatiblePaintAndKeepIndexOrder(mut UiPaintTests self){
+    self.m_builder.fillRect(MakeUiPaintOverlayRect(1.0f, 1.0f, 5.0f, 5.0f), MakeUiPaintOverlayColor(1.0f, 0.0f, 0.0f, 0.5f));
+    self.m_builder.fillRect(MakeUiPaintOverlayRect(2.0f, 2.0f, 5.0f, 5.0f), MakeUiPaintOverlayColor(0.0f, 1.0f, 0.0f, 1.0f));
+    ASSERT_TRUE(self.m_builder.drawRegion(s_UiInputNameSprite, MakeUiPaintOverlayRect(3.0f, 3.0f, 5.0f, 5.0f)));
+    self.m_builder.fillRect(MakeUiPaintOverlayRect(4.0f, 4.0f, 5.0f, 5.0f));
+    self.m_builder.pushClip(MakeUiPaintOverlayRect(0.0f, 0.0f, 20.0f, 20.0f));
+    self.m_builder.fillRect(MakeUiPaintOverlayRect(5.0f, 5.0f, 5.0f, 5.0f));
+    ASSERT_TRUE(self.m_builder.popClip());
+    const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.commands().size(), 4u);
-    EXPECT_EQ(snapshot.commands()[0].indexCount, 12u);
-    EXPECT_EQ(snapshot.commands()[1].material, PaintMaterial::Skin);
-    EXPECT_EQ(snapshot.commands()[2].firstIndex, 18u);
-    EXPECT_EQ(snapshot.commands()[3].firstIndex, 24u);
+    EXPECT_EQ(snapshot.commands()[0u].indexCount, 12u);
+    EXPECT_EQ(snapshot.commands()[1u].material, PaintMaterial::Skin);
+    EXPECT_EQ(snapshot.commands()[2u].firstIndex, 18u);
+    EXPECT_EQ(snapshot.commands()[3u].firstIndex, 24u);
 }
 
-TEST_F(UiPaintTests, FrozenSnapshotOwnsPaintAcrossBuilderReuseAndSourceSkinChanges){
-    ASSERT_TRUE(m_builder.drawRegion(Name(s_SpriteRegion), { 0.0f, 0.0f, 20.0f, 20.0f }));
-    EXPECT_FALSE(m_builder.drawRegion(Name(NWB::Tests::UiCases::s_UiInputNameMissing), { 0.0f, 0.0f, 20.0f, 20.0f }));
-    const auto first = m_builder.freeze();
-    UiSkin::RegionVector regions(m_arena);
-    regions.push_back({ Name(s_SpriteRegion), { 0u, 0u, 4u, 4u }, {}, {}, 0.0f, 0.0f, UiSkinDrawMode::Sprite });
-    m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/replacement"), 16u, 16u, 1.0f, Move(regions));
-    m_builder.begin({ 20.0f, 20.0f }, 8u, 4u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
-    ASSERT_TRUE(m_builder.drawRegion(Name(s_SpriteRegion), { 0.0f, 0.0f, 10.0f, 10.0f }));
-    const auto second = m_builder.freeze();
+void VerifyUiPaintTests_FrozenSnapshotOwnsPaintAcrossBuilderReuseAndSourceSkinChanges(mut UiPaintTests self){
+    ASSERT_TRUE(self.m_builder.drawRegion(s_UiInputNameSprite, MakeUiPaintOverlayRect(0.0f, 0.0f, 20.0f, 20.0f)));
+    EXPECT_FALSE(self.m_builder.drawRegion(s_UiInputNameMissing, MakeUiPaintOverlayRect(0.0f, 0.0f, 20.0f, 20.0f)));
+    const DrawSnapshot first = self.m_builder.freeze();
+    self.configureReplacementSpriteSkin();
+    ASSERT_TRUE(self.m_builder.drawRegion(s_UiInputNameSprite, MakeUiPaintOverlayRect(0.0f, 0.0f, 10.0f, 10.0f)));
+    const DrawSnapshot second = self.m_builder.freeze();
     EXPECT_EQ(first.generation(), 7u);
     EXPECT_EQ(first.skinBinding().generation, 3u);
-    EXPECT_EQ(first.skinBinding().texture.name(), Name(s_TexturePath));
+    EXPECT_EQ(first.skinBinding().texture.name(), s_UiPaintOverlayTextureName);
     EXPECT_EQ(first.skinBinding().atlasWidth, 128u);
     EXPECT_FLOAT_EQ(first.displayMetrics().pixelScaleX, 1.5f);
-    EXPECT_FLOAT_EQ(first.vertices()[0].texCoord.x, 16.0f / 128.0f);
-    EXPECT_FLOAT_EQ(first.vertices()[2].position.x, 20.0f);
+    EXPECT_FLOAT_EQ(first.vertices()[0u].texCoord.x, 16.0f / 128.0f);
+    EXPECT_FLOAT_EQ(first.vertices()[2u].position.x, 20.0f);
     EXPECT_EQ(second.skinBinding().generation, 4u);
-    EXPECT_FLOAT_EQ(second.vertices()[0].texCoord.x, 0.0f);
-    EXPECT_NE(first.vertices().data(), second.vertices().data());
+    EXPECT_FLOAT_EQ(second.vertices()[0u].texCoord.x, 0.0f);
+    EXPECT_NE(UiPaintOverlayVerticesAddress(first), UiPaintOverlayVerticesAddress(second));
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
+NWB_ADHD_GTEST_F(PaintImageFixture, ThreeKindsShareSixtyFourSlotsWhileCopiesDeduplicateAndOverflowIsAtomic, VerifyPaintImageFixture_ThreeKindsShareSixtyFourSlotsWhileCopiesDeduplicateAndOverflowIsAtomic)
+NWB_ADHD_GTEST_F(PaintImageFixture, MixedOverflowPreservesCoverageGenerationSdfImageVersionsAndAllPriorGeometry, VerifyPaintImageFixture_MixedOverflowPreservesCoverageGenerationSdfImageVersionsAndAllPriorGeometry)
+NWB_ADHD_GTEST_F(PaintImageFixture, NullThirdKindRejectsEarlierCandidatesAtomicallyAndAValidRetryStillSucceeds, VerifyPaintImageFixture_NullThirdKindRejectsEarlierCandidatesAtomicallyAndAValidRetryStillSucceeds)
+NWB_ADHD_GTEST_F(PaintImageFixture, SamePathFreshVersionsCoexistWhileCopiedHandlesUseOneSlotPerVersion, VerifyPaintImageFixture_SamePathFreshVersionsCoexistWhileCopiedHandlesUseOneSlotPerVersion)
+NWB_ADHD_GTEST_F(PaintImageFixture, CropAndNestedClipTrimFullImageGeometryAndUv, VerifyPaintImageFixture_CropAndNestedClipTrimFullImageGeometryAndUv)
+NWB_ADHD_GTEST_F(PaintImageFixture, AdjacentBatchingIncludesImmutableImageIndexAndPreservesDeclarationOrder, VerifyPaintImageFixture_AdjacentBatchingIncludesImmutableImageIndexAndPreservesDeclarationOrder)
+NWB_ADHD_GTEST_F(PaintImageFixture, ImageCommandsKeepDistinctClipsMaterialsAndOverlayLayers, VerifyPaintImageFixture_ImageCommandsKeepDistinctClipsMaterialsAndOverlayLayers)
+NWB_ADHD_GTEST_F(PaintImageFixture, FrozenAndMovedSnapshotsRetainExactSourceVersionsAcrossHandleReleaseAndBuilderReuse, VerifyPaintImageFixture_FrozenAndMovedSnapshotsRetainExactSourceVersionsAcrossHandleReleaseAndBuilderReuse)
+NWB_ADHD_GTEST_F(PaintImageFixture, InvalidRectangleUvTintAndNullSourcePreserveEarlierBindingsAndGeometry, VerifyPaintImageFixture_InvalidRectangleUvTintAndNullSourcePreserveEarlierBindingsAndGeometry)
+NWB_ADHD_GTEST_F(PaintImageFixture, InvisibleAndTransparentDrawsRemainValidAtCapacityWithoutAdmittingTheSource, VerifyPaintImageFixture_InvisibleAndTransparentDrawsRemainValidAtCapacityWithoutAdmittingTheSource)
 
+NWB_ADHD_GTEST_F(UiPaintOverlayTests, OverlayRendersAboveLaterBasePaintWithoutMergingItsBatch, VerifyUiPaintOverlayTests_OverlayRendersAboveLaterBasePaintWithoutMergingItsBatch)
+NWB_ADHD_GTEST_F(UiPaintOverlayTests, LayerOrderPrecedesDeclarationOrderAndEqualLayersKeepTheirIndexOrder, VerifyUiPaintOverlayTests_LayerOrderPrecedesDeclarationOrderAndEqualLayersKeepTheirIndexOrder)
+NWB_ADHD_GTEST_F(UiPaintOverlayTests, OverlayEscapesParentClipAndRestoresItsExactPriorClip, VerifyUiPaintOverlayTests_OverlayEscapesParentClipAndRestoresItsExactPriorClip)
+NWB_ADHD_GTEST_F(UiPaintOverlayTests, EscapingTheParentStillClipsOverlayGeometryAndUvsToTheLogicalViewport, VerifyUiPaintOverlayTests_EscapingTheParentStillClipsOverlayGeometryAndUvsToTheLogicalViewport)
+NWB_ADHD_GTEST_F(UiPaintOverlayTests, RejectedAdmissionAndUnbalancedClosurePreserveTheActiveLayerAndClips, VerifyUiPaintOverlayTests_RejectedAdmissionAndUnbalancedClosurePreserveTheActiveLayerAndClips)
+NWB_ADHD_GTEST_F(UiPaintOverlayTests, NestedOverlayRestoresParentLayerAndItsClipAfterEscapingBoth, VerifyUiPaintOverlayTests_NestedOverlayRestoresParentLayerAndItsClipAfterEscapingBoth)
+NWB_ADHD_GTEST_F(UiPaintOverlayTests, BoundedOverlayDepthRejectsWithoutChangingTheLastAcceptedScope, VerifyUiPaintOverlayTests_BoundedOverlayDepthRejectsWithoutChangingTheLastAcceptedScope)
+NWB_ADHD_GTEST_F(UiPaintOverlayTests, UnrecordedScopesAreRejectedAndBeginResetsAbandonedOverlayState, VerifyUiPaintOverlayTests_UnrecordedScopesAreRejectedAndBeginResetsAbandonedOverlayState)
+NWB_ADHD_GTEST_F(UiPaintOverlayTests, LayerDescentAfterMergedOverlayPaintOrdersTheCompleteBatches, VerifyUiPaintOverlayTests_LayerDescentAfterMergedOverlayPaintOrdersTheCompleteBatches)
+NWB_ADHD_GTEST_F(UiPaintOverlayTests, SortingCommandsRetainsSkinCoverageDistanceBindingsAndUnchangedIndexRanges, VerifyUiPaintOverlayTests_SortingCommandsRetainsSkinCoverageDistanceBindingsAndUnchangedIndexRanges)
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+NWB_ADHD_GTEST_F(UiPaintSdfTests, ClipTrimsSdfGeometryAndUv, VerifyUiPaintSdfTests_ClipTrimsSdfGeometryAndUv)
+NWB_ADHD_GTEST_F(UiPaintSdfTests, BatchesOnlyAdjacentMatchingGroupChannelMaterialAndClip, VerifyUiPaintSdfTests_BatchesOnlyAdjacentMatchingGroupChannelMaterialAndClip)
+NWB_ADHD_GTEST_F(UiPaintSdfTests, FrozenSnapshotKeepsExactPixelsAndFontHashAcrossRepackAndRelease, VerifyUiPaintSdfTests_FrozenSnapshotKeepsExactPixelsAndFontHashAcrossRepackAndRelease)
+NWB_ADHD_GTEST_F(UiPaintSdfTests, RejectedMixedAdmissionAtCapacityPreservesEarlierCoverageUpgradeAndGeometry, VerifyUiPaintSdfTests_RejectedMixedAdmissionAtCapacityPreservesEarlierCoverageUpgradeAndGeometry)
+NWB_ADHD_GTEST_F(UiPaintSdfTests, EqualIdentityCannotAliasDifferentDistanceBytes, VerifyUiPaintSdfTests_EqualIdentityCannotAliasDifferentDistanceBytes)
+NWB_ADHD_GTEST_F(UiPaintSdfTests, InvalidChannelAndUvFailBeforeImageOrGeometryAdmission, VerifyUiPaintSdfTests_InvalidChannelAndUvFailBeforeImageOrGeometryAdmission)
+NWB_ADHD_GTEST_F(UiPaintSdfTests, DuplicateCandidatesConsumeOneImageSlot, VerifyUiPaintSdfTests_DuplicateCandidatesConsumeOneImageSlot)
+NWB_ADHD_GTEST_F(UiPaintSdfTests, PageFactoryRejectsUnsupportedEncodingSpreadAndIncompleteRgba, VerifyUiPaintSdfTests_PageFactoryRejectsUnsupportedEncodingSpreadAndIncompleteRgba)
+NWB_ADHD_GTEST_F(UiPaintSdfTests, CompactPageRejectsMissingChannelsWithoutPublishingGeometry, VerifyUiPaintSdfTests_CompactPageRejectsMissingChannelsWithoutPublishingGeometry)
+NWB_ADHD_GTEST_F(UiPaintSdfTests, CompactFactoryRejectsInvalidChannelCountAndRgbaSizedInput, VerifyUiPaintSdfTests_CompactFactoryRejectsInvalidChannelCountAndRgbaSizedInput)
+NWB_ADHD_GTEST_F(UiPaintSdfTests, AssetFactoryCopiesExactGroupBytesBeforeSourceAssetIsReleased, VerifyUiPaintSdfTests_AssetFactoryCopiesExactGroupBytesBeforeSourceAssetIsReleased)
 
+NWB_ADHD_GTEST_F(UiPaintTests, CurrentClipCopiesTheActiveIntersectionAndRestoresAfterOverlay, VerifyUiPaintTests_CurrentClipCopiesTheActiveIntersectionAndRestoresAfterOverlay)
+NWB_ADHD_GTEST_F(UiPaintTests, BoundaryClipsKeepEmptyExtentsAndSecondOperandSignedZeroOrigins, VerifyUiPaintTests_BoundaryClipsKeepEmptyExtentsAndSecondOperandSignedZeroOrigins)
+NWB_ADHD_GTEST_F(UiPaintTests, NestedClipsTrimGeometryAndUvAndRestoreTheirParent, VerifyUiPaintTests_NestedClipsTrimGeometryAndUvAndRestoreTheirParent)
+NWB_ADHD_GTEST_F(UiPaintTests, UndersizedNineSliceCollapsesCenterAndScalesOpposingBorders, VerifyUiPaintTests_UndersizedNineSliceCollapsesCenterAndScalesOpposingBorders)
+NWB_ADHD_GTEST_F(UiPaintTests, NineSliceZeroBordersDoNotEvaluateInactiveShrinkRatios, VerifyUiPaintTests_NineSliceZeroBordersDoNotEvaluateInactiveShrinkRatios)
+NWB_ADHD_GTEST_F(UiPaintTests, BatchesOnlyMergeAdjacentCompatiblePaintAndKeepIndexOrder, VerifyUiPaintTests_BatchesOnlyMergeAdjacentCompatiblePaintAndKeepIndexOrder)
+NWB_ADHD_GTEST_F(UiPaintTests, FrozenSnapshotOwnsPaintAcrossBuilderReuseAndSourceSkinChanges, VerifyUiPaintTests_FrozenSnapshotOwnsPaintAcrossBuilderReuseAndSourceSkinChanges)
 
-}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

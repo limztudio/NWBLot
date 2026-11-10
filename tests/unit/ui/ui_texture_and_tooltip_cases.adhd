@@ -1,24 +1,24 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
 
-b8 UiTextureAndTooltipCasesReady(in u64 value){
-    return value != 0u;
-}
+#include <tests/common/gtest_macros.adhd>
+#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd>
 
-native{
-#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd.h>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+native{
 #include <impl/ecs_ui/toolkit/images/image_source.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/image_style.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/tooltip.adhd.h>
 
+#include <global/bit.h>
 #include <global/simdmath.h>
 #include <global/simplemath.h>
+
+#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,432 +35,13 @@ using namespace NWB::Impl;
 using namespace NWB::Impl::Ui;
 using namespace NWB::UiWidgetTests;
 
-constexpr AStringView s_PanelKey = "panel";
-constexpr AStringView s_BeforeKey = "before";
-constexpr AStringView s_CopiedImagePath = "tests/ui/copied_builder_image";
-constexpr AStringView s_FrozenImagePath = "tests/ui/frozen_builder_image";
-constexpr AStringView s_VersionedImagePath = "tests/ui/versioned_builder_image";
-constexpr AStringView s_CapacityImagePath = "tests/ui/capacity_image";
-
-struct TextureImagePaintSample{
-    usize quads = 0u;
-    Rect bounds;
-    Rect uv;
-    Color color;
-    u32 layer = 0u;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static Expected<TextureImagePaintSample> SampleImage(const DrawSnapshot& snapshot, const u64 generation)noexcept{
-    TextureImagePaintSample candidate;
-    // Lanes are x, y.
-    SIMDVectorSingle origin = VectorZero();
-    SIMDVectorSingle corner = VectorZero();
-    for(const DrawCommand& command : snapshot.commands()){
-        if(command.material != PaintMaterial::Image || command.textureImageIndex >= snapshot.textureImages().size())
-            continue;
-        const SharedImageSource& source = snapshot.textureImages()[command.textureImageIndex];
-        if(!source || source->generation() != generation)
-            continue;
-        for(u32 index = command.firstIndex; index + 5u < command.firstIndex + command.indexCount; index += 6u){
-            const Vertex& first = snapshot.vertices()[snapshot.indices()[index]];
-            const Vertex& opposite = snapshot.vertices()[snapshot.indices()[index + 2u]];
-            const SIMDVectorSingle firstPosition = VectorSet(first.position.x, first.position.y, 0.0f, 0.0f);
-            const SIMDVectorSingle oppositePosition = VectorSet(opposite.position.x, opposite.position.y, 0.0f, 0.0f);
-            if(candidate.quads == 0u){
-                origin = firstPosition;
-                corner = oppositePosition;
-                const SIMDVectorSingle uvSize = VectorSubtract(VectorSet(opposite.texCoord.x, opposite.texCoord.y, 0.0f, 0.0f), VectorSet(first.texCoord.x, first.texCoord.y, 0.0f, 0.0f));
-                candidate.uv = { first.texCoord.x, first.texCoord.y, VectorGetX(uvSize), VectorGetY(uvSize) };
-                candidate.color = first.color;
-                candidate.layer = command.layer;
-            }
-            origin = VectorMin(origin, firstPosition);
-            corner = VectorMax(corner, oppositePosition);
-            ++candidate.quads;
-        }
-    }
-    if(candidate.quads == 0u)
-        return MakeUnexpected(Failure{});
-    const SIMDVectorSingle size = VectorSubtract(corner, origin);
-    candidate.bounds = { VectorGetX(origin), VectorGetY(origin), VectorGetX(size), VectorGetY(size) };
-    return candidate;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class UiTextureImageBuilderTests : public WidgetFixture{
-protected:
-    [[nodiscard]] static PopupOptions ParentOptions()noexcept;
-    [[nodiscard]] static PopupOptions ChildOptions()noexcept;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-PopupOptions UiTextureImageBuilderTests::ParentOptions()noexcept{
-    PopupOptions options;
-    options.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
-    options.size = { 300.0f, 280.0f };
-    return options;
-}
-
-PopupOptions UiTextureImageBuilderTests::ChildOptions()noexcept{
-    PopupOptions options;
-    options.anchor = { 420.0f, 20.0f, 80.0f, 20.0f };
-    options.size = { 280.0f, 240.0f };
-    return options;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST_F(UiTextureImageBuilderTests, DeclarationRetainsSourceAndOptionsAcrossCallerReplacementAndRelease){
-    auto sourceResult = UiFixtureSupport::MakeSeededImage(s_CopiedImagePath, 37u, 20u, 12u, m_arena);
-    ASSERT_TRUE(sourceResult);
-    SharedImageSource source = Move(*sourceResult);
-    ASSERT_TRUE(source);
-    const u64 generation = source->generation();
-    ImageOptions options = Fixed(80.0f, 32.0f);
-    options.tint = { 2.0f, 0.8f, 0.6f, 0.5f };
-    ASSERT_TRUE(panel(1u));
-    ASSERT_TRUE(m_builder.image("image", source, options));
-    auto sourceReplacement = UiFixtureSupport::MakeSeededImage(s_CopiedImagePath, 73u, 9u, 7u, m_arena);
-    ASSERT_TRUE(sourceReplacement);
-    source = Move(*sourceReplacement);
-    ASSERT_TRUE(source);
-    ASSERT_NE(source->generation(), generation);
-    source.reset();
-    options = Fixed(5.0f, 6.0f);
-    options.tint = { 0.0f, 0.0f, 0.0f, 0.0f };
-    ASSERT_TRUE(finishPanel());
-    const DrawSnapshot snapshot = m_paint.freeze();
-    ASSERT_EQ(snapshot.textureImages().size(), 1u);
-    EXPECT_EQ(snapshot.textureImages()[0u]->generation(), generation);
-    EXPECT_EQ(snapshot.textureImages()[0u]->texture().width(), 20u);
-    EXPECT_EQ(snapshot.textureImages()[0u]->texture().payloadBytes()[0u], 37u);
-    const auto sample = SampleImage(snapshot, generation);
-    ASSERT_TRUE(sample);
-    EXPECT_FLOAT_EQ(sample->bounds.width, 80.0f);
-    EXPECT_FLOAT_EQ(sample->bounds.height, 32.0f);
-    EXPECT_FLOAT_EQ(sample->color.r, 1.0f);
-    EXPECT_FLOAT_EQ(sample->color.g, 0.4f);
-    EXPECT_FLOAT_EQ(sample->color.b, 0.3f);
-    EXPECT_FLOAT_EQ(sample->color.a, 0.5f);
-}
-
-TEST_F(UiTextureImageBuilderTests, FrozenSnapshotsKeepVersionsAcrossBuilderResetAndSourceRelease){
-    auto sourceResult = UiFixtureSupport::MakeSeededImage(s_FrozenImagePath, 37u, 20u, 12u, m_arena);
-    ASSERT_TRUE(sourceResult);
-    SharedImageSource source = Move(*sourceResult);
-    ASSERT_TRUE(source);
-    const u64 original = source->generation();
-    ASSERT_TRUE(panel(1u));
-    ASSERT_TRUE(m_builder.image("image", source));
-    ASSERT_TRUE(finishPanel());
-    DrawSnapshot retained = m_paint.freeze();
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    source.reset();
-    auto sourceReplacement = UiFixtureSupport::MakeSeededImage(s_FrozenImagePath, 73u, 9u, 7u, m_arena);
-    ASSERT_TRUE(sourceReplacement);
-    source = Move(*sourceReplacement);
-    ASSERT_TRUE(source);
-    const u64 replacement = source->generation();
-    ASSERT_TRUE(panel(2u));
-    ASSERT_TRUE(m_builder.image("image", source));
-    ASSERT_TRUE(finishPanel());
-    const DrawSnapshot next = m_paint.freeze();
-    ASSERT_TRUE(m_context.commitFrame(2u));
-    source.reset();
-    ASSERT_TRUE(panel(3u));
-    ASSERT_TRUE(finishPanel());
-    const DrawSnapshot empty = m_paint.freeze();
-    ASSERT_TRUE(m_context.commitFrame(3u));
-    ASSERT_EQ(retained.textureImages().size(), 1u);
-    ASSERT_EQ(next.textureImages().size(), 1u);
-    EXPECT_TRUE(empty.textureImages().empty());
-    EXPECT_EQ(retained.textureImages()[0u]->generation(), original);
-    EXPECT_EQ(next.textureImages()[0u]->generation(), replacement);
-    EXPECT_NE(original, replacement);
-    EXPECT_EQ(retained.textureImages()[0u]->texture().payloadBytes()[0u], 37u);
-    EXPECT_EQ(next.textureImages()[0u]->texture().payloadBytes()[0u], 73u);
-    const auto oldSample = SampleImage(retained, original);
-    ASSERT_TRUE(oldSample);
-    const auto nextSample = SampleImage(next, replacement);
-    ASSERT_TRUE(nextSample);
-    EXPECT_FLOAT_EQ(oldSample->bounds.width, 20.0f);
-    EXPECT_FLOAT_EQ(nextSample->bounds.width, 9.0f);
-}
-
-TEST_F(UiTextureImageBuilderTests, SamePathVersionsStayDistinctAndRepeatedHandlesKeepOneBinding){
-    auto firstResult = UiFixtureSupport::MakeSeededImage(s_VersionedImagePath, 37u, 20u, 12u, m_arena);
-    ASSERT_TRUE(firstResult);
-    const SharedImageSource first = Move(*firstResult);
-    auto secondResult = UiFixtureSupport::MakeSeededImage(s_VersionedImagePath, 73u, 9u, 7u, m_arena);
-    ASSERT_TRUE(secondResult);
-    const SharedImageSource second = Move(*secondResult);
-    ASSERT_TRUE(first && second);
-    ASSERT_EQ(first->identity(), second->identity());
-    ASSERT_NE(first->generation(), second->generation());
-    ASSERT_TRUE(panel(1u));
-    ASSERT_TRUE(m_builder.image("first", first));
-    ASSERT_TRUE(m_builder.image("second", second));
-    ASSERT_TRUE(m_builder.image("again", first));
-    ASSERT_TRUE(finishPanel());
-    const DrawSnapshot snapshot = m_paint.freeze();
-    ASSERT_EQ(snapshot.textureImages().size(), 2u);
-    EXPECT_EQ(snapshot.textureImages()[0u].get(), first.get());
-    EXPECT_EQ(snapshot.textureImages()[1u].get(), second.get());
-    FixedVector<u32, 3u> indices;
-    for(const DrawCommand& command : snapshot.commands()){
-        if(command.material == PaintMaterial::Image)
-            indices.push_back(command.textureImageIndex);
-    }
-    ASSERT_EQ(indices.size(), 3u);
-    EXPECT_EQ(indices[0u], 0u);
-    EXPECT_EQ(indices[1u], 1u);
-    EXPECT_EQ(indices[2u], 0u);
-}
-
-TEST_F(UiTextureImageBuilderTests, ExternalClipTrimsFullImageUvsAndRestoresThePaintStack){
-    auto sourceResult = UiFixtureSupport::MakeSeededImage("tests/ui/builder_image", 37u, 20u, 12u, m_arena);
-    ASSERT_TRUE(sourceResult);
-    const SharedImageSource source = Move(*sourceResult);
-    ASSERT_TRUE(source);
-    ASSERT_TRUE(panel(1u));
-    ASSERT_TRUE(m_builder.image("image", source, Fixed()));
-    m_paint.pushClip({ 20.0f, 0.0f, 20.0f, 600.0f });
-    ASSERT_TRUE(finishPanel());
-    ASSERT_TRUE(m_paint.popClip());
-    m_paint.fillRect({ 60.0f, 80.0f, 8.0f, 8.0f }, { 1.0f, 0.0f, 0.0f, 1.0f });
-    const DrawSnapshot snapshot = m_paint.freeze();
-    const auto sample = SampleImage(snapshot, source->generation());
-    ASSERT_TRUE(sample);
-    EXPECT_FLOAT_EQ(sample->bounds.x, 20.0f);
-    EXPECT_FLOAT_EQ(sample->bounds.width, 20.0f);
-    EXPECT_NEAR(sample->uv.x, 7.0f / 96.0f, 0.000001f);
-    EXPECT_NEAR(sample->uv.x + sample->uv.width, 27.0f / 96.0f, 0.000001f);
-    b8 sentinel = false;
-    for(const DrawCommand& command : snapshot.commands()){
-        if(command.material != PaintMaterial::Solid)
-            continue;
-        const Vertex& vertex = snapshot.vertices()[snapshot.indices()[command.firstIndex]];
-        sentinel |= vertex.position.x == 60.0f && vertex.position.y == 80.0f;
-    }
-    EXPECT_TRUE(sentinel);
-}
-
-TEST_F(UiTextureImageBuilderTests, TransparentAndZeroAxisImagesAreValidWithoutBindingsOrQuads){
-    auto sourceResult = UiFixtureSupport::MakeSeededImage("tests/ui/builder_image", 37u, 20u, 12u, m_arena);
-    ASSERT_TRUE(sourceResult);
-    const SharedImageSource source = Move(*sourceResult);
-    ASSERT_TRUE(source);
-    ASSERT_TRUE(panel(1u));
-    ImageOptions transparent = Fixed();
-    transparent.tint.a = 0.0f;
-    ASSERT_TRUE(m_builder.image("transparent", source, transparent));
-    ASSERT_TRUE(m_builder.image("zero_width", source, Fixed(0.0f, 20.0f)));
-    ASSERT_TRUE(m_builder.image("zero_height", source, Fixed(20.0f, 0.0f)));
-    ASSERT_TRUE(finishPanel());
-    const DrawSnapshot snapshot = m_paint.freeze();
-    EXPECT_TRUE(snapshot.textureImages().empty());
-    EXPECT_FALSE(SampleImage(snapshot, source->generation()));
-}
-
-TEST_F(UiTextureImageBuilderTests, ActiveNullSourceRejectsEvenTransparentPolicyWithoutReplacingAcceptedInput){
-    auto sourceResult = UiFixtureSupport::MakeSeededImage("tests/ui/builder_image", 37u, 20u, 12u, m_arena);
-    ASSERT_TRUE(sourceResult);
-    const SharedImageSource source = Move(*sourceResult);
-    ASSERT_TRUE(source);
-    ASSERT_TRUE(panel(1u));
-    EXPECT_FALSE(m_builder.button(s_BeforeKey, "Before"));
-    ASSERT_TRUE(m_builder.image("image", source));
-    ASSERT_TRUE(finishPanel());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    const WidgetId before = id(s_BeforeKey, s_PanelKey);
-    ASSERT_NE(target(before), nullptr);
-    const HitTarget accepted = *target(before);
-    const usize count = m_context.input().targets().size();
-    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Tab , .type = InputEventType::KeyDown}).commandConsumed);
-    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Tab , .type = InputEventType::KeyUp}).commandConsumed);
-    ASSERT_EQ(m_context.input().focus(), before);
-    ASSERT_TRUE(panel(2u));
-    ImageOptions options = Fixed(0.0f, 0.0f);
-    options.tint.a = 0.0f;
-    EXPECT_FALSE(m_builder.image("image", SharedImageSource{}, options));
-    EXPECT_TRUE(m_context.failed());
-    EXPECT_FALSE(m_context.commitFrame(2u));
-    ASSERT_NE(target(before), nullptr);
-    EXPECT_EQ(target(before)->declarationGeneration, accepted.declarationGeneration);
-    EXPECT_FLOAT_EQ(target(before)->rectangle.x, accepted.rectangle.x);
-    EXPECT_EQ(m_context.input().targets().size(), count);
-    EXPECT_EQ(m_context.input().focus(), before);
-}
-
-TEST_F(UiTextureImageBuilderTests, InvalidOptionsDoNotReplaceTheAcceptedInputFrame){
-    auto sourceResult = UiFixtureSupport::MakeSeededImage("tests/ui/builder_image", 37u, 20u, 12u, m_arena);
-    ASSERT_TRUE(sourceResult);
-    const SharedImageSource source = Move(*sourceResult);
-    ASSERT_TRUE(source);
-    ASSERT_TRUE(panel(1u));
-    EXPECT_FALSE(m_builder.button(s_BeforeKey, "Before"));
-    ASSERT_TRUE(m_builder.image("image", source));
-    ASSERT_TRUE(finishPanel());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    const WidgetId before = id(s_BeforeKey, s_PanelKey);
-    ASSERT_NE(target(before), nullptr);
-    const HitTarget accepted = *target(before);
-    const usize count = m_context.input().targets().size();
-    ASSERT_TRUE(panel(2u));
-    ImageOptions options = Fixed();
-    options.tint.r = Limit<f32>::s_QuietNaN;
-    EXPECT_FALSE(m_builder.image("image", source, options));
-    EXPECT_TRUE(m_context.failed());
-    EXPECT_FALSE(m_context.commitFrame(2u));
-    ASSERT_NE(target(before), nullptr);
-    EXPECT_EQ(target(before)->declarationGeneration, accepted.declarationGeneration);
-    EXPECT_FLOAT_EQ(target(before)->rectangle.width, accepted.rectangle.width);
-    EXPECT_EQ(m_context.input().targets().size(), count);
-}
-
-TEST_F(UiTextureImageBuilderTests, EndedNestedChildRetainsSourceAndOptionsUntilTheOuterPopupPaints){
-    PopupState parent;
-    PopupState child;
-    parent.open();
-    child.open();
-    auto sourceResult = UiFixtureSupport::MakeSeededImage("tests/ui/nested_builder_image", 37u, 20u, 12u, m_arena);
-    ASSERT_TRUE(sourceResult);
-    SharedImageSource source = Move(*sourceResult);
-    ASSERT_TRUE(source);
-    const u64 generation = source->generation();
-    ImageOptions options = Fixed(80.0f, 32.0f);
-    options.tint = { 0.8f, 1.0f, 0.6f, 0.5f };
-    ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPopup("parent", parent, ParentOptions()));
-    ASSERT_TRUE(m_builder.beginPopup("child", child, ChildOptions()));
-    ASSERT_TRUE(m_builder.image("image", source, options));
-    ASSERT_TRUE(m_builder.endPopup());
-    source.reset();
-    options = Fixed(0.0f, 0.0f);
-    options.tint.a = 0.0f;
-    ASSERT_TRUE(m_builder.endPopup());
-    ASSERT_TRUE(m_context.endRoot());
-    ASSERT_TRUE(m_context.finishFrame());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    const DrawSnapshot snapshot = m_paint.freeze();
-    ASSERT_EQ(snapshot.textureImages().size(), 1u);
-    EXPECT_EQ(snapshot.textureImages()[0u]->generation(), generation);
-    EXPECT_EQ(snapshot.textureImages()[0u]->texture().payloadBytes()[0u], 37u);
-    const auto sample = SampleImage(snapshot, generation);
-    ASSERT_TRUE(sample);
-    EXPECT_FLOAT_EQ(sample->bounds.width, 80.0f);
-    EXPECT_FLOAT_EQ(sample->bounds.height, 32.0f);
-    EXPECT_FLOAT_EQ(sample->color.r, 0.4f);
-    EXPECT_FLOAT_EQ(sample->color.a, 0.5f);
-    EXPECT_EQ(sample->layer, 2u);
-    EXPECT_EQ(m_context.input().popupCount(), 2u);
-}
-
-TEST_F(UiTextureImageBuilderTests, AncestorClosureSuppressesEndedChildImageAndAnnotation){
-    PopupState parent;
-    PopupState child;
-    TooltipState tooltip;
-    parent.open();
-    child.open();
-    auto sourceResult = UiFixtureSupport::MakeSeededImage("tests/ui/builder_image", 37u, 20u, 12u, m_arena);
-    ASSERT_TRUE(sourceResult);
-    SharedImageSource source = Move(*sourceResult);
-    ASSERT_TRUE(source);
-    ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPopup("parent", parent, ParentOptions()));
-    ASSERT_TRUE(m_builder.beginPopup("child", child, ChildOptions()));
-    ASSERT_TRUE(m_builder.image("image", source, Fixed()));
-    ASSERT_TRUE(m_builder.tooltip("hint", "image", "Child image", tooltip));
-    ASSERT_TRUE(m_builder.endPopup());
-    source.reset();
-    parent.close();
-    ASSERT_TRUE(m_builder.endPopup());
-    ASSERT_TRUE(m_context.endRoot());
-    ASSERT_TRUE(m_context.finishFrame());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    const DrawSnapshot snapshot = m_paint.freeze();
-    EXPECT_TRUE(snapshot.textureImages().empty());
-    EXPECT_EQ(m_context.input().popupCount(), 0u);
-    const WidgetId parentId = UiTestSupport::RequireWidgetId(UiTestSupport::RequireRootId(m_root), "parent");
-    EXPECT_EQ(target(UiTestSupport::RequireWidgetId(UiTestSupport::RequireWidgetId(parentId, "child"), "image")), nullptr);
-}
-
-TEST_F(UiTextureImageBuilderTests, VisibleImageAtFullBindingCapacityRejectsDeferredPaint){
-    FixedVector<SharedImageSource, s_PaintMaxImages> images;
-    for(usize index = 0u; index < images.max_size(); ++index){
-        auto imageResult = UiFixtureSupport::MakeSeededImage(s_CapacityImagePath, static_cast<u8>(index), 4u, 4u, m_arena);
-        ASSERT_TRUE(imageResult);
-        SharedImageSource image = Move(*imageResult);
-        ASSERT_TRUE(image);
-        images.push_back(Move(image));
-    }
-    auto additionResult = UiFixtureSupport::MakeSeededImage("tests/ui/builder_image", 37u, 20u, 12u, m_arena);
-    ASSERT_TRUE(additionResult);
-    const SharedImageSource addition = Move(*additionResult);
-    ASSERT_TRUE(addition);
-    ASSERT_TRUE(panel(1u));
-    ASSERT_TRUE(m_paint.prepareTextureImages(images));
-    ASSERT_TRUE(m_builder.image("image", addition, Fixed()));
-    EXPECT_FALSE(m_builder.endPanel());
-    EXPECT_TRUE(m_context.failed());
-    EXPECT_FALSE(m_context.commitFrame(1u));
-    const DrawSnapshot snapshot = m_paint.freeze();
-    EXPECT_EQ(snapshot.textureImages().size(), s_PaintMaxImages);
-    EXPECT_FALSE(SampleImage(snapshot, addition->generation()));
-}
-
-TEST_F(UiTextureImageBuilderTests, FullyClippedImageAtFullBindingCapacityConsumesNoAdditionalSlot){
-    FixedVector<SharedImageSource, s_PaintMaxImages> images;
-    for(usize index = 0u; index < images.max_size(); ++index){
-        auto imageResult = UiFixtureSupport::MakeSeededImage(s_CapacityImagePath, static_cast<u8>(index), 4u, 4u, m_arena);
-        ASSERT_TRUE(imageResult);
-        SharedImageSource image = Move(*imageResult);
-        ASSERT_TRUE(image);
-        images.push_back(Move(image));
-    }
-    auto additionResult = UiFixtureSupport::MakeSeededImage("tests/ui/builder_image", 37u, 20u, 12u, m_arena);
-    ASSERT_TRUE(additionResult);
-    const SharedImageSource addition = Move(*additionResult);
-    ASSERT_TRUE(addition);
-    ASSERT_TRUE(panel(1u));
-    ASSERT_TRUE(m_paint.prepareTextureImages(images));
-    ASSERT_TRUE(m_builder.image("image", addition, Fixed()));
-    m_paint.pushClip({ 0.0f, 0.0f, 1.0f, 1.0f });
-    ASSERT_TRUE(finishPanel());
-    ASSERT_TRUE(m_paint.popClip());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    const DrawSnapshot snapshot = m_paint.freeze();
-    EXPECT_EQ(snapshot.textureImages().size(), s_PaintMaxImages);
-    EXPECT_FALSE(SampleImage(snapshot, addition->generation()));
-    EXPECT_FALSE(m_context.failed());
-}
+class UiTextureImageBuilderTests : public WidgetFixture{};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_ui/toolkit/widgets/image_style.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -484,104 +65,6 @@ using TextureImageLayoutFixture = PaintImageFixture;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr AStringView s_LayoutVersionImagePath = "tests/ui/layout_version";
-
-TEST_F(TextureImageLayoutFixture, SameIdentityVersionsMeasureTheirOwnImmutableDimensions){
-    auto firstResult = makeImage(s_LayoutVersionImagePath, 37u, 20u, 12u);
-    ASSERT_TRUE(firstResult);
-    const SharedImageSource first = Move(*firstResult);
-    auto secondResult = makeImage(s_LayoutVersionImagePath, 73u, 9u, 7u);
-    ASSERT_TRUE(secondResult);
-    const SharedImageSource second = Move(*secondResult);
-    ASSERT_TRUE(first && second);
-    ASSERT_EQ(first->identity(), second->identity());
-    ASSERT_NE(first->generation(), second->generation());
-    ImageMetrics metrics;
-    const auto metricsResult = MeasureImage({}, *first);
-    ASSERT_TRUE(metricsResult);
-    metrics = *metricsResult;
-    EXPECT_FLOAT_EQ(metrics.contentSize.x, 20.0f);
-    EXPECT_FLOAT_EQ(metrics.contentSize.y, 12.0f);
-    const auto metricsResult2 = MeasureImage({}, *second);
-    ASSERT_TRUE(metricsResult2);
-    metrics = *metricsResult2;
-    EXPECT_FLOAT_EQ(metrics.contentSize.x, 9.0f);
-    EXPECT_FLOAT_EQ(metrics.contentSize.y, 7.0f);
-    const auto metricsResult3 = MeasureImage({}, *first);
-    ASSERT_TRUE(metricsResult3);
-    metrics = *metricsResult3;
-    EXPECT_FLOAT_EQ(metrics.contentSize.x, 20.0f);
-    EXPECT_FLOAT_EQ(metrics.contentSize.y, 12.0f);
-}
-
-TEST_F(TextureImageLayoutFixture, ZeroFixedExtentAndEmptyPlacementRemainValid){
-    auto imageResult = makeImage();
-    ASSERT_TRUE(imageResult);
-    const SharedImageSource image = Move(*imageResult);
-    ASSERT_TRUE(image);
-    ImageOptions options;
-    options.width = { LayoutSizePolicy::Fixed, 0.0f };
-    options.height = { LayoutSizePolicy::Fixed, 0.0f };
-    ImageMetrics metrics;
-    const auto metricsResult = MeasureImage(options, *image);
-    ASSERT_TRUE(metricsResult);
-    metrics = *metricsResult;
-    EXPECT_FLOAT_EQ(metrics.contentSize.x, 8.0f);
-    EXPECT_FLOAT_EQ(metrics.contentSize.y, 4.0f);
-    ImagePlacement placement;
-    const auto placementResult = PlaceImage({ 10.0f, 20.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 100.0f, 100.0f });
-    ASSERT_TRUE(placementResult);
-    placement = *placementResult;
-    EXPECT_FLOAT_EQ(placement.bounds.width, 0.0f);
-    EXPECT_FLOAT_EQ(placement.clip.height, 0.0f);
-}
-
-TEST_F(TextureImageLayoutFixture, InvalidSizePoliciesAndValuesRejectMeasurement){
-    auto imageResult = makeImage();
-    ASSERT_TRUE(imageResult);
-    const SharedImageSource image = Move(*imageResult);
-    ASSERT_TRUE(image);
-    for(u32 field = 0u; field < 8u; ++field){
-        ImageOptions options;
-        switch(field){
-        case 0u: options.width.policy = static_cast<LayoutSizePolicy::Enum>(3u); break;
-        case 1u: options.height.policy = static_cast<LayoutSizePolicy::Enum>(3u); break;
-        case 2u: options.width.value = -1.0f; break;
-        case 3u: options.height.value = -1.0f; break;
-        case 4u: options.width = { LayoutSizePolicy::Stretch, 0.0f }; break;
-        case 5u: options.height = { LayoutSizePolicy::Stretch, 0.0f }; break;
-        case 6u: options.width.value = Limit<f32>::s_QuietNaN; break;
-        default: options.height.value = Limit<f32>::s_Infinity; break;
-        }
-        EXPECT_FALSE(MeasureImage(options, *image));
-    }
-}
-
-TEST_F(TextureImageLayoutFixture, InvalidTintRejectsMeasurement){
-    auto imageResult = makeImage();
-    ASSERT_TRUE(imageResult);
-    const SharedImageSource image = Move(*imageResult);
-    ASSERT_TRUE(image);
-    for(u32 field = 0u; field < 8u; ++field){
-        ImageOptions options;
-        switch(field){
-        case 0u: options.tint.r = -1.0f; break;
-        case 1u: options.tint.g = -1.0f; break;
-        case 2u: options.tint.b = -1.0f; break;
-        case 3u: options.tint.r = Limit<f32>::s_Infinity; break;
-        case 4u: options.tint.g = Limit<f32>::s_QuietNaN; break;
-        case 5u: options.tint.b = Limit<f32>::s_Infinity; break;
-        case 6u: options.tint.a = -0.01f; break;
-        default: options.tint.a = 1.01f; break;
-        }
-        EXPECT_FALSE(MeasureImage(options, *image));
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 
@@ -589,17 +72,6 @@ TEST_F(TextureImageLayoutFixture, InvalidTintRejectsMeasurement){
 
 
 NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_ui/toolkit/widgets/tooltip.adhd.h>
-
-#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -617,347 +89,1106 @@ using namespace NWB::Impl::Ui;
 static_assert(!IsConstructible_V<TooltipState, const TooltipState&>);
 static_assert(!IsConstructible_V<TooltipState, TooltipState&&>);
 
-inline constexpr WidgetId s_Anchor{ 201u };
-inline constexpr u64 s_Declaration = 17u;
-inline constexpr PopupToken s_Popup{ WidgetId{ 301u }, 19u, 23u, 7u };
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(UiTooltipBehaviorTests, NewHoverDoesNotCountTimeFromBeforeTheBindingWasKnown){
-    TooltipState state;
-    const TooltipOptions options;
+namespace __hidden_ui_glyph_sdf_tests{
+using UiTextureImageBuilderTests = ::__hidden_ui_texture_image_builder_tests::UiTextureImageBuilderTests;
+using TextureImageLayoutFixture = ::NWB::UiPaintImageTests::TextureImageLayoutFixture;
+using SharedImageSource = ::NWB::Impl::Ui::SharedImageSource;
+using ImageOptions = ::NWB::Impl::Ui::ImageOptions;
+using ImageMetrics = ::NWB::Impl::Ui::ImageMetrics;
+using ImagePlacement = ::NWB::Impl::Ui::ImagePlacement;
+using PopupState = ::NWB::Impl::Ui::PopupState;
+using PopupToken = ::NWB::Impl::Ui::PopupToken;
+using TooltipState = ::NWB::Impl::Ui::TooltipState;
+using TooltipOptions = ::NWB::Impl::Ui::TooltipOptions;
+using TooltipBehavior = ::NWB::Impl::Ui::TooltipBehavior;
+using Color = ::NWB::Impl::Ui::Color;
+using LayoutSize = ::NWB::Impl::Ui::LayoutSize;
+using InputEvent = ::NWB::Impl::Ui::InputEvent;
+namespace InputEventType = ::NWB::Impl::Ui::InputEventType;
+using InputEventTypeEnum = ::NWB::Impl::Ui::InputEventType::Enum;
+namespace PopupPlacementSide = ::NWB::Impl::Ui::PopupPlacementSide;
+using PopupPlacementSideEnum = ::NWB::Impl::Ui::PopupPlacementSide::Enum;
+namespace PaintMaterial = ::NWB::Impl::Ui::PaintMaterial;
+namespace UiTextureKey = ::NWB::Core::Key;
+using ::NWB::Impl::Ui::PlaceImage;
+
+[[nodiscard]] inline Expected<::NWB::Impl::Ui::SharedImageSource> MakeUiTextureSeededImage(
+    const StringView path,
+    const u8 seed,
+    const u32 width,
+    const u32 height,
+    ::NWB::Core::Alloc::GlobalArena& arena
+){
+    return ::NWB::UiFixtureSupport::MakeSeededImage(path, seed, width, height, arena);
+}
+
+[[nodiscard]] inline ::NWB::Impl::Ui::ImageOptions MakeUiTextureFixedOptions(const f32 width = 96.0f, const f32 height = 40.0f)noexcept{
+    return ::NWB::UiWidgetTests::WidgetFixture::Fixed(width, height);
+}
+
+[[nodiscard]] inline b8 UiTextureImageMatchesGeneration(const ::NWB::Impl::Ui::SharedImageSource& source, const u64 generation)noexcept{
+    return static_cast<b8>(source) && source->generation() == generation;
+}
+
+[[nodiscard]] inline u64 UiTextureImageGeneration(const ::NWB::Impl::Ui::SharedImageSource& source)noexcept{
+    return source->generation();
+}
+
+[[nodiscard]] inline u32 UiTextureImageWidth(const ::NWB::Impl::Ui::SharedImageSource& source)noexcept{
+    return source->texture().width();
+}
+
+[[nodiscard]] inline u8 UiTextureImageFirstByte(const ::NWB::Impl::Ui::SharedImageSource& source)noexcept{
+    return source->texture().payloadBytes()[0u];
+}
+
+[[nodiscard]] inline Expected<::NWB::Impl::Ui::ImageMetrics> UiMeasureTextureImage(
+    const ::NWB::Impl::Ui::ImageOptions& options,
+    const ::NWB::Impl::Ui::SharedImageSource& source
+)noexcept{
+    return ::NWB::Impl::Ui::MeasureImage(options, *source);
+}
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_UiTextureQuietNaNF32Bits = 0x7fc00000u;
+const u32 s_UiTexturePosInfF32Bits = 0x7f800000u;
+const u32 s_UiTextureNegInfF32Bits = 0xff800000u;
+const u32 s_UiTextureMaxF32Bits = 0x7f7fffffu;
+const AStringView s_UiTexturePanelKey = "panel";
+const AStringView s_UiTextureBeforeKey = "before";
+const AStringView s_UiTextureCopiedImagePath = "tests/ui/copied_builder_image";
+const AStringView s_UiTextureFrozenImagePath = "tests/ui/frozen_builder_image";
+const AStringView s_UiTextureVersionedImagePath = "tests/ui/versioned_builder_image";
+const AStringView s_UiTextureCapacityImagePath = "tests/ui/capacity_image";
+const AStringView s_UiTextureLayoutVersionImagePath = "tests/ui/layout_version";
+const u64 s_UiTooltipDeclaration = 17u;
+
+
+class UiTextureImagePaintSample{
+    public usize quads = 0u;
+    public Rect bounds = Rect();
+    public Rect uv = Rect();
+    public Color color = Color();
+    public u32 layer = 0u;
+}
+
+class UiTooltipTestBinding{
+    public WidgetId anchor = WidgetId();
+    public u64 declaration = 0u;
+    public PopupToken popup = PopupToken();
+}
+
+UiTooltipTestBinding MakeUiTooltipTestBinding(in WidgetId inAnchor, in u64 inDeclaration, in PopupToken inPopup){
+    UiTooltipTestBinding binding = UiTooltipTestBinding();
+    binding.anchor = inAnchor;
+    binding.declaration = inDeclaration;
+    binding.popup = inPopup;
+    return binding;
+}
+
+
+Expected<UiTextureImagePaintSample> SampleUiTextureImage(in DrawSnapshot snapshot, in u64 generation){
+    UiTextureImagePaintSample candidate = UiTextureImagePaintSample();
+    // Lanes are x, y.
+    f32 originX = 0.0f;
+    f32 originY = 0.0f;
+    f32 cornerX = 0.0f;
+    f32 cornerY = 0.0f;
+    const usize commandCount = snapshot.commands().size();
+    for(usize cmdIndex = 0u; cmdIndex < commandCount; ++cmdIndex){
+        const DrawCommand command = snapshot.commands()[cmdIndex];
+        if(command.material != PaintMaterial::Image || command.textureImageIndex >= snapshot.textureImages().size())
+            continue;
+        if(!UiTextureImageMatchesGeneration(snapshot.textureImages()[command.textureImageIndex], generation))
+            continue;
+        for(u32 index = command.firstIndex; index + 5u < command.firstIndex + command.indexCount; index += 6u){
+            const Vertex first = snapshot.vertices()[snapshot.indices()[index]];
+            const Vertex opposite = snapshot.vertices()[snapshot.indices()[index + 2u]];
+            if(candidate.quads == 0u){
+                originX = first.position.x;
+                originY = first.position.y;
+                cornerX = opposite.position.x;
+                cornerY = opposite.position.y;
+                const VectorSingle uvSize = VectorSingle(opposite.texCoord.x, opposite.texCoord.y, 0.0f, 0.0f) - VectorSingle(first.texCoord.x, first.texCoord.y, 0.0f, 0.0f);
+                candidate.uv = Rect(first.texCoord.x, first.texCoord.y, uvSize.x, uvSize.y);
+                candidate.color = first.color;
+                candidate.layer = command.layer;
+            }
+            originX = Min(originX, first.position.x);
+            originY = Min(originY, first.position.y);
+            cornerX = Max(cornerX, opposite.position.x);
+            cornerY = Max(cornerY, opposite.position.y);
+            ++candidate.quads;
+        }
+    }
+    if(candidate.quads == 0u)
+        return MakeUnexpected(Failure());
+    candidate.bounds = Rect(originX, originY, cornerX - originX, cornerY - originY);
+    return candidate;
+}
+
+PopupOptions MakeUiTextureParentOptions(){
+    PopupOptions options = PopupOptions();
+    options.anchor = Rect(20.0f, 20.0f, 80.0f, 20.0f);
+    options.size = Point(300.0f, 280.0f);
+    return options;
+}
+
+PopupOptions MakeUiTextureChildOptions(){
+    PopupOptions options = PopupOptions();
+    options.anchor = Rect(420.0f, 20.0f, 80.0f, 20.0f);
+    options.size = Point(280.0f, 240.0f);
+    return options;
+}
+
+InputEvent MakeUiTextureTabKeyEvent(in InputEventTypeEnum eventType){
+    InputEvent event = InputEvent();
+    event.key = UiTextureKey::Tab;
+    event.type = eventType;
+    return event;
+}
+
+WidgetId MakeUiTooltipAnchor(){
+    return WidgetId(201u);
+}
+
+PopupToken MakeUiTooltipPopup(){
+    PopupToken token = PopupToken();
+    token.widget = WidgetId(301u);
+    token.declarationGeneration = 19u;
+    token.instanceGeneration = 23u;
+    token.openGeneration = 7u;
+    return token;
+}
+
+PopupToken MakeUiTooltipPartialPopup(in WidgetId widget, in u64 declaration, in u64 instance, in u64 openGen){
+    PopupToken token = PopupToken();
+    token.widget = widget;
+    token.declarationGeneration = declaration;
+    token.instanceGeneration = instance;
+    token.openGeneration = openGen;
+    return token;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiTextureImageBuilderTests_DeclarationRetainsSourceAndOptionsAcrossCallerReplacementAndRelease(mut UiTextureImageBuilderTests self){
+    auto sourceResult = MakeUiTextureSeededImage(s_UiTextureCopiedImagePath, 37u, 20u, 12u, self.m_arena);
+    ASSERT_TRUE(sourceResult.has_value());
+    SharedImageSource source = SharedImageSource();
+    u64 generation = 0u;
+    native(mut sourceResult, mut source, mut generation){
+        source = Move(*sourceResult);
+        ASSERT_TRUE(source);
+        generation = source->generation();
+    }
+    ImageOptions options = MakeUiTextureFixedOptions(80.0f, 32.0f);
+    options.tint = Color(2.0f, 0.8f, 0.6f, 0.5f);
+    ASSERT_TRUE(self.panel(1u));
+    ASSERT_TRUE(self.m_builder.image("image", source, options));
+    auto sourceReplacement = MakeUiTextureSeededImage(s_UiTextureCopiedImagePath, 73u, 9u, 7u, self.m_arena);
+    ASSERT_TRUE(sourceReplacement.has_value());
+    native(mut sourceReplacement, mut source, in generation){
+        source = Move(*sourceReplacement);
+        ASSERT_TRUE(source);
+        ASSERT_NE(source->generation(), generation);
+        source.reset();
+    }
+    options = MakeUiTextureFixedOptions(5.0f, 6.0f);
+    options.tint = Color(0.0f, 0.0f, 0.0f, 0.0f);
+    ASSERT_TRUE(self.finishPanel());
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    ASSERT_EQ(snapshot.textureImages().size(), 1u);
+    EXPECT_EQ(UiTextureImageGeneration(snapshot.textureImages()[0u]), generation);
+    EXPECT_EQ(UiTextureImageWidth(snapshot.textureImages()[0u]), 20u);
+    EXPECT_EQ(UiTextureImageFirstByte(snapshot.textureImages()[0u]), 37u);
+    const auto sample = SampleUiTextureImage(snapshot, generation);
+    ASSERT_TRUE(sample.has_value());
+    EXPECT_FLOAT_EQ(sample.value().bounds.width, 80.0f);
+    EXPECT_FLOAT_EQ(sample.value().bounds.height, 32.0f);
+    EXPECT_FLOAT_EQ(sample.value().color.r, 1.0f);
+    EXPECT_FLOAT_EQ(sample.value().color.g, 0.4f);
+    EXPECT_FLOAT_EQ(sample.value().color.b, 0.3f);
+    EXPECT_FLOAT_EQ(sample.value().color.a, 0.5f);
+}
+
+void VerifyUiTextureImageBuilderTests_FrozenSnapshotsKeepVersionsAcrossBuilderResetAndSourceRelease(mut UiTextureImageBuilderTests self){
+    auto sourceResult = MakeUiTextureSeededImage(s_UiTextureFrozenImagePath, 37u, 20u, 12u, self.m_arena);
+    ASSERT_TRUE(sourceResult.has_value());
+    SharedImageSource source = SharedImageSource();
+    u64 original = 0u;
+    native(mut sourceResult, mut source, mut original){
+        source = Move(*sourceResult);
+        ASSERT_TRUE(source);
+        original = source->generation();
+    }
+    ASSERT_TRUE(self.panel(1u));
+    ASSERT_TRUE(self.m_builder.image("image", source));
+    ASSERT_TRUE(self.finishPanel());
+    DrawSnapshot retained = self.m_paint.freeze();
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    source.reset();
+    auto sourceReplacement = MakeUiTextureSeededImage(s_UiTextureFrozenImagePath, 73u, 9u, 7u, self.m_arena);
+    ASSERT_TRUE(sourceReplacement.has_value());
+    u64 replacement = 0u;
+    native(mut sourceReplacement, mut source, mut replacement){
+        source = Move(*sourceReplacement);
+        ASSERT_TRUE(source);
+        replacement = source->generation();
+    }
+    ASSERT_TRUE(self.panel(2u));
+    ASSERT_TRUE(self.m_builder.image("image", source));
+    ASSERT_TRUE(self.finishPanel());
+    const DrawSnapshot next = self.m_paint.freeze();
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    source.reset();
+    ASSERT_TRUE(self.panel(3u));
+    ASSERT_TRUE(self.finishPanel());
+    const DrawSnapshot empty = self.m_paint.freeze();
+    ASSERT_TRUE(self.m_context.commitFrame(3u));
+    ASSERT_EQ(retained.textureImages().size(), 1u);
+    ASSERT_EQ(next.textureImages().size(), 1u);
+    EXPECT_TRUE(empty.textureImages().empty());
+    EXPECT_EQ(UiTextureImageGeneration(retained.textureImages()[0u]), original);
+    EXPECT_EQ(UiTextureImageGeneration(next.textureImages()[0u]), replacement);
+    EXPECT_NE(original, replacement);
+    EXPECT_EQ(UiTextureImageFirstByte(retained.textureImages()[0u]), 37u);
+    EXPECT_EQ(UiTextureImageFirstByte(next.textureImages()[0u]), 73u);
+    const auto oldSample = SampleUiTextureImage(retained, original);
+    ASSERT_TRUE(oldSample.has_value());
+    const auto nextSample = SampleUiTextureImage(next, replacement);
+    ASSERT_TRUE(nextSample.has_value());
+    EXPECT_FLOAT_EQ(oldSample.value().bounds.width, 20.0f);
+    EXPECT_FLOAT_EQ(nextSample.value().bounds.width, 9.0f);
+}
+
+void VerifyUiTextureImageBuilderTests_SamePathVersionsStayDistinctAndRepeatedHandlesKeepOneBinding(mut UiTextureImageBuilderTests self){
+    auto firstResult = MakeUiTextureSeededImage(s_UiTextureVersionedImagePath, 37u, 20u, 12u, self.m_arena);
+    ASSERT_TRUE(firstResult.has_value());
+    auto secondResult = MakeUiTextureSeededImage(s_UiTextureVersionedImagePath, 73u, 9u, 7u, self.m_arena);
+    ASSERT_TRUE(secondResult.has_value());
+    SharedImageSource first = SharedImageSource();
+    SharedImageSource second = SharedImageSource();
+    native(mut firstResult, mut secondResult, mut first, mut second){
+        first = Move(*firstResult);
+        second = Move(*secondResult);
+        ASSERT_TRUE(first && second);
+        ASSERT_EQ(first->identity(), second->identity());
+        ASSERT_NE(first->generation(), second->generation());
+    }
+    ASSERT_TRUE(self.panel(1u));
+    ASSERT_TRUE(self.m_builder.image("first", first));
+    ASSERT_TRUE(self.m_builder.image("second", second));
+    ASSERT_TRUE(self.m_builder.image("again", first));
+    ASSERT_TRUE(self.finishPanel());
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    ASSERT_EQ(snapshot.textureImages().size(), 2u);
+    native(in snapshot, in first, in second){
+        EXPECT_EQ(snapshot.textureImages()[0u].get(), first.get());
+        EXPECT_EQ(snapshot.textureImages()[1u].get(), second.get());
+    }
+    Array<u32, 3u> indices;
+    usize foundCount = 0u;
+    const usize commandCount = snapshot.commands().size();
+    for(usize cmdIndex = 0u; cmdIndex < commandCount; ++cmdIndex){
+        const DrawCommand command = snapshot.commands()[cmdIndex];
+        if(command.material == PaintMaterial::Image){
+            ASSERT_LT(foundCount, 3u);
+            indices[foundCount] = command.textureImageIndex;
+            ++foundCount;
+        }
+    }
+    ASSERT_EQ(foundCount, 3u);
+    EXPECT_EQ(indices[0u], 0u);
+    EXPECT_EQ(indices[1u], 1u);
+    EXPECT_EQ(indices[2u], 0u);
+}
+
+void VerifyUiTextureImageBuilderTests_ExternalClipTrimsFullImageUvsAndRestoresThePaintStack(mut UiTextureImageBuilderTests self){
+    auto sourceResult = MakeUiTextureSeededImage("tests/ui/builder_image", 37u, 20u, 12u, self.m_arena);
+    ASSERT_TRUE(sourceResult.has_value());
+    SharedImageSource source = SharedImageSource();
+    native(mut sourceResult, mut source){
+        source = Move(*sourceResult);
+        ASSERT_TRUE(source);
+    }
+    ASSERT_TRUE(self.panel(1u));
+    ASSERT_TRUE(self.m_builder.image("image", source, MakeUiTextureFixedOptions()));
+    self.m_paint.pushClip(Rect(20.0f, 0.0f, 20.0f, 600.0f));
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_paint.popClip());
+    self.m_paint.fillRect(Rect(60.0f, 80.0f, 8.0f, 8.0f), Color(1.0f, 0.0f, 0.0f, 1.0f));
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    const auto sample = SampleUiTextureImage(snapshot, UiTextureImageGeneration(source));
+    ASSERT_TRUE(sample.has_value());
+    EXPECT_FLOAT_EQ(sample.value().bounds.x, 20.0f);
+    EXPECT_FLOAT_EQ(sample.value().bounds.width, 20.0f);
+    EXPECT_NEAR(sample.value().uv.x, 7.0f / 96.0f, 0.000001f);
+    EXPECT_NEAR(sample.value().uv.x + sample.value().uv.width, 27.0f / 96.0f, 0.000001f);
+    b8 sentinel = false;
+    const usize commandCount = snapshot.commands().size();
+    for(usize cmdIndex = 0u; cmdIndex < commandCount; ++cmdIndex){
+        const DrawCommand command = snapshot.commands()[cmdIndex];
+        if(command.material != PaintMaterial::Solid)
+            continue;
+        const Vertex vertex = snapshot.vertices()[snapshot.indices()[command.firstIndex]];
+        if(vertex.position.x == 60.0f && vertex.position.y == 80.0f)
+            sentinel = true;
+    }
+    EXPECT_TRUE(sentinel);
+}
+
+void VerifyUiTextureImageBuilderTests_TransparentAndZeroAxisImagesAreValidWithoutBindingsOrQuads(mut UiTextureImageBuilderTests self){
+    auto sourceResult = MakeUiTextureSeededImage("tests/ui/builder_image", 37u, 20u, 12u, self.m_arena);
+    ASSERT_TRUE(sourceResult.has_value());
+    SharedImageSource source = SharedImageSource();
+    native(mut sourceResult, mut source){
+        source = Move(*sourceResult);
+        ASSERT_TRUE(source);
+    }
+    ASSERT_TRUE(self.panel(1u));
+    ImageOptions transparent = MakeUiTextureFixedOptions();
+    transparent.tint.a = 0.0f;
+    ASSERT_TRUE(self.m_builder.image("transparent", source, transparent));
+    ASSERT_TRUE(self.m_builder.image("zero_width", source, MakeUiTextureFixedOptions(0.0f, 20.0f)));
+    ASSERT_TRUE(self.m_builder.image("zero_height", source, MakeUiTextureFixedOptions(20.0f, 0.0f)));
+    ASSERT_TRUE(self.finishPanel());
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    EXPECT_TRUE(snapshot.textureImages().empty());
+    EXPECT_FALSE(SampleUiTextureImage(snapshot, UiTextureImageGeneration(source)).has_value());
+}
+
+void VerifyUiTextureImageBuilderTests_ActiveNullSourceRejectsEvenTransparentPolicyWithoutReplacingAcceptedInput(mut UiTextureImageBuilderTests self){
+    auto sourceResult = MakeUiTextureSeededImage("tests/ui/builder_image", 37u, 20u, 12u, self.m_arena);
+    ASSERT_TRUE(sourceResult.has_value());
+    SharedImageSource source = SharedImageSource();
+    native(mut sourceResult, mut source){
+        source = Move(*sourceResult);
+        ASSERT_TRUE(source);
+    }
+    ASSERT_TRUE(self.panel(1u));
+    EXPECT_FALSE(self.m_builder.button(s_UiTextureBeforeKey, "Before"));
+    ASSERT_TRUE(self.m_builder.image("image", source));
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    const WidgetId before = self.id(s_UiTextureBeforeKey, s_UiTexturePanelKey);
+    HitTarget accepted = HitTarget();
+    native(in self, in before, mut accepted){
+        const HitTarget* found = self.target(before);
+        ASSERT_NE(found, nullptr);
+        accepted = *found;
+    }
+    const usize count = self.m_context.input().targets().size();
+    EXPECT_TRUE(self.send(MakeUiTextureTabKeyEvent(InputEventType::KeyDown)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiTextureTabKeyEvent(InputEventType::KeyUp)).commandConsumed);
+    ASSERT_EQ(self.m_context.input().focus(), before);
+    ASSERT_TRUE(self.panel(2u));
+    ImageOptions options = MakeUiTextureFixedOptions(0.0f, 0.0f);
+    options.tint.a = 0.0f;
+    EXPECT_FALSE(self.m_builder.image("image", SharedImageSource(), options));
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_FALSE(self.m_context.commitFrame(2u));
+    HitTarget current = HitTarget();
+    native(in self, in before, mut current){
+        const HitTarget* found = self.target(before);
+        ASSERT_NE(found, nullptr);
+        current = *found;
+    }
+    EXPECT_EQ(current.declarationGeneration, accepted.declarationGeneration);
+    EXPECT_FLOAT_EQ(current.rectangle.x, accepted.rectangle.x);
+    EXPECT_EQ(self.m_context.input().targets().size(), count);
+    EXPECT_EQ(self.m_context.input().focus(), before);
+}
+
+void VerifyUiTextureImageBuilderTests_InvalidOptionsDoNotReplaceTheAcceptedInputFrame(mut UiTextureImageBuilderTests self){
+    auto sourceResult = MakeUiTextureSeededImage("tests/ui/builder_image", 37u, 20u, 12u, self.m_arena);
+    ASSERT_TRUE(sourceResult.has_value());
+    SharedImageSource source = SharedImageSource();
+    native(mut sourceResult, mut source){
+        source = Move(*sourceResult);
+        ASSERT_TRUE(source);
+    }
+    ASSERT_TRUE(self.panel(1u));
+    EXPECT_FALSE(self.m_builder.button(s_UiTextureBeforeKey, "Before"));
+    ASSERT_TRUE(self.m_builder.image("image", source));
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    const WidgetId before = self.id(s_UiTextureBeforeKey, s_UiTexturePanelKey);
+    HitTarget accepted = HitTarget();
+    native(in self, in before, mut accepted){
+        const HitTarget* found = self.target(before);
+        ASSERT_NE(found, nullptr);
+        accepted = *found;
+    }
+    const usize count = self.m_context.input().targets().size();
+    ASSERT_TRUE(self.panel(2u));
+    ImageOptions options = MakeUiTextureFixedOptions();
+    options.tint.r = bit_cast<f32>(s_UiTextureQuietNaNF32Bits);
+    EXPECT_FALSE(self.m_builder.image("image", source, options));
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_FALSE(self.m_context.commitFrame(2u));
+    HitTarget current = HitTarget();
+    native(in self, in before, mut current){
+        const HitTarget* found = self.target(before);
+        ASSERT_NE(found, nullptr);
+        current = *found;
+    }
+    EXPECT_EQ(current.declarationGeneration, accepted.declarationGeneration);
+    EXPECT_FLOAT_EQ(current.rectangle.width, accepted.rectangle.width);
+    EXPECT_EQ(self.m_context.input().targets().size(), count);
+}
+
+void VerifyUiTextureImageBuilderTests_EndedNestedChildRetainsSourceAndOptionsUntilTheOuterPopupPaints(mut UiTextureImageBuilderTests self){
+    PopupState parent = PopupState();
+    PopupState child = PopupState();
+    parent.open();
+    child.open();
+    auto sourceResult = MakeUiTextureSeededImage("tests/ui/nested_builder_image", 37u, 20u, 12u, self.m_arena);
+    ASSERT_TRUE(sourceResult.has_value());
+    SharedImageSource source = SharedImageSource();
+    u64 generation = 0u;
+    native(mut sourceResult, mut source, mut generation){
+        source = Move(*sourceResult);
+        ASSERT_TRUE(source);
+        generation = source->generation();
+    }
+    ImageOptions options = MakeUiTextureFixedOptions(80.0f, 32.0f);
+    options.tint = Color(0.8f, 1.0f, 0.6f, 0.5f);
+    ASSERT_TRUE(self.begin(1u));
+    ASSERT_TRUE(self.m_builder.beginPopup("parent", parent, MakeUiTextureParentOptions()));
+    ASSERT_TRUE(self.m_builder.beginPopup("child", child, MakeUiTextureChildOptions()));
+    ASSERT_TRUE(self.m_builder.image("image", source, options));
+    ASSERT_TRUE(self.m_builder.endPopup());
+    source.reset();
+    options = MakeUiTextureFixedOptions(0.0f, 0.0f);
+    options.tint.a = 0.0f;
+    ASSERT_TRUE(self.m_builder.endPopup());
+    ASSERT_TRUE(self.m_context.endRoot());
+    ASSERT_TRUE(self.m_context.finishFrame());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    ASSERT_EQ(snapshot.textureImages().size(), 1u);
+    EXPECT_EQ(UiTextureImageGeneration(snapshot.textureImages()[0u]), generation);
+    EXPECT_EQ(UiTextureImageFirstByte(snapshot.textureImages()[0u]), 37u);
+    const auto sample = SampleUiTextureImage(snapshot, generation);
+    ASSERT_TRUE(sample.has_value());
+    EXPECT_FLOAT_EQ(sample.value().bounds.width, 80.0f);
+    EXPECT_FLOAT_EQ(sample.value().bounds.height, 32.0f);
+    EXPECT_FLOAT_EQ(sample.value().color.r, 0.4f);
+    EXPECT_FLOAT_EQ(sample.value().color.a, 0.5f);
+    EXPECT_EQ(sample.value().layer, 2u);
+    EXPECT_EQ(self.m_context.input().popupCount(), 2u);
+    EXPECT_TRUE(parent.isOpen());
+    EXPECT_TRUE(child.isOpen());
+}
+
+void VerifyUiTextureImageBuilderTests_AncestorClosureSuppressesEndedChildImageAndAnnotation(mut UiTextureImageBuilderTests self){
+    PopupState parent = PopupState();
+    PopupState child = PopupState();
+    TooltipState tooltip = TooltipState();
+    parent.open();
+    child.open();
+    auto sourceResult = MakeUiTextureSeededImage("tests/ui/builder_image", 37u, 20u, 12u, self.m_arena);
+    ASSERT_TRUE(sourceResult.has_value());
+    SharedImageSource source = SharedImageSource();
+    native(mut sourceResult, mut source){
+        source = Move(*sourceResult);
+        ASSERT_TRUE(source);
+    }
+    ASSERT_TRUE(self.begin(1u));
+    ASSERT_TRUE(self.m_builder.beginPopup("parent", parent, MakeUiTextureParentOptions()));
+    ASSERT_TRUE(self.m_builder.beginPopup("child", child, MakeUiTextureChildOptions()));
+    ASSERT_TRUE(self.m_builder.image("image", source, MakeUiTextureFixedOptions()));
+    ASSERT_TRUE(self.m_builder.tooltip("hint", "image", "Child image", tooltip));
+    ASSERT_TRUE(self.m_builder.endPopup());
+    source.reset();
+    parent.close();
+    ASSERT_TRUE(self.m_builder.endPopup());
+    ASSERT_TRUE(self.m_context.endRoot());
+    ASSERT_TRUE(self.m_context.finishFrame());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    EXPECT_TRUE(snapshot.textureImages().empty());
+    EXPECT_EQ(self.m_context.input().popupCount(), 0u);
+    const WidgetId parentId = RequireUiWidgetId(RequireUiRootId(self.m_root), "parent");
+    const WidgetId imageId = RequireUiWidgetId(RequireUiWidgetId(parentId, "child"), "image");
+    native(in self, in imageId){
+        EXPECT_EQ(self.target(imageId), nullptr);
+    }
+    EXPECT_FALSE(parent.isOpen());
+    EXPECT_TRUE(child.isOpen());
+    EXPECT_FALSE(tooltip.visible());
+}
+
+void VerifyUiTextureImageBuilderTests_VisibleImageAtFullBindingCapacityRejectsDeferredPaint(mut UiTextureImageBuilderTests self){
+    auto additionResult = MakeUiTextureSeededImage("tests/ui/builder_image", 37u, 20u, 12u, self.m_arena);
+    ASSERT_TRUE(additionResult.has_value());
+    SharedImageSource addition = SharedImageSource();
+    native(mut self, mut additionResult, mut addition){
+        FixedVector<NWB::Impl::Ui::SharedImageSource, NWB::Impl::Ui::s_PaintMaxImages> images;
+        for(usize index = 0u; index < images.max_size(); ++index){
+            auto imageResult = NWB::UiFixtureSupport::MakeSeededImage(s_UiTextureCapacityImagePath, static_cast<u8>(index), 4u, 4u, self.m_arena);
+            ASSERT_TRUE(imageResult);
+            NWB::Impl::Ui::SharedImageSource image = Move(*imageResult);
+            ASSERT_TRUE(image);
+            images.push_back(Move(image));
+        }
+        addition = Move(*additionResult);
+        ASSERT_TRUE(addition);
+        ASSERT_TRUE(self.panel(1u));
+        ASSERT_TRUE(self.m_paint.prepareTextureImages(images));
+    }
+    ASSERT_TRUE(self.m_builder.image("image", addition, MakeUiTextureFixedOptions()));
+    EXPECT_FALSE(self.m_builder.endPanel());
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_FALSE(self.m_context.commitFrame(1u));
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    native(in snapshot){
+        EXPECT_EQ(snapshot.textureImages().size(), NWB::Impl::Ui::s_PaintMaxImages);
+    }
+    EXPECT_FALSE(SampleUiTextureImage(snapshot, UiTextureImageGeneration(addition)).has_value());
+}
+
+void VerifyUiTextureImageBuilderTests_FullyClippedImageAtFullBindingCapacityConsumesNoAdditionalSlot(mut UiTextureImageBuilderTests self){
+    auto additionResult = MakeUiTextureSeededImage("tests/ui/builder_image", 37u, 20u, 12u, self.m_arena);
+    ASSERT_TRUE(additionResult.has_value());
+    SharedImageSource addition = SharedImageSource();
+    native(mut self, mut additionResult, mut addition){
+        FixedVector<NWB::Impl::Ui::SharedImageSource, NWB::Impl::Ui::s_PaintMaxImages> images;
+        for(usize index = 0u; index < images.max_size(); ++index){
+            auto imageResult = NWB::UiFixtureSupport::MakeSeededImage(s_UiTextureCapacityImagePath, static_cast<u8>(index), 4u, 4u, self.m_arena);
+            ASSERT_TRUE(imageResult);
+            NWB::Impl::Ui::SharedImageSource image = Move(*imageResult);
+            ASSERT_TRUE(image);
+            images.push_back(Move(image));
+        }
+        addition = Move(*additionResult);
+        ASSERT_TRUE(addition);
+        ASSERT_TRUE(self.panel(1u));
+        ASSERT_TRUE(self.m_paint.prepareTextureImages(images));
+    }
+    ASSERT_TRUE(self.m_builder.image("image", addition, MakeUiTextureFixedOptions()));
+    self.m_paint.pushClip(Rect(0.0f, 0.0f, 1.0f, 1.0f));
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_paint.popClip());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    native(in snapshot){
+        EXPECT_EQ(snapshot.textureImages().size(), NWB::Impl::Ui::s_PaintMaxImages);
+    }
+    EXPECT_FALSE(SampleUiTextureImage(snapshot, UiTextureImageGeneration(addition)).has_value());
+    EXPECT_FALSE(self.m_context.failed());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyTextureImageLayoutFixture_SameIdentityVersionsMeasureTheirOwnImmutableDimensions(mut TextureImageLayoutFixture self){
+    auto firstResult = self.makeImage(s_UiTextureLayoutVersionImagePath, 37u, 20u, 12u);
+    ASSERT_TRUE(firstResult.has_value());
+    auto secondResult = self.makeImage(s_UiTextureLayoutVersionImagePath, 73u, 9u, 7u);
+    ASSERT_TRUE(secondResult.has_value());
+    SharedImageSource first = SharedImageSource();
+    SharedImageSource second = SharedImageSource();
+    native(mut firstResult, mut secondResult, mut first, mut second){
+        first = Move(*firstResult);
+        second = Move(*secondResult);
+        ASSERT_TRUE(first && second);
+        ASSERT_EQ(first->identity(), second->identity());
+        ASSERT_NE(first->generation(), second->generation());
+    }
+    const auto metricsResult = UiMeasureTextureImage(ImageOptions(), first);
+    ASSERT_TRUE(metricsResult.has_value());
+    EXPECT_FLOAT_EQ(metricsResult.value().contentSize.x, 20.0f);
+    EXPECT_FLOAT_EQ(metricsResult.value().contentSize.y, 12.0f);
+    const auto metricsResult2 = UiMeasureTextureImage(ImageOptions(), second);
+    ASSERT_TRUE(metricsResult2.has_value());
+    EXPECT_FLOAT_EQ(metricsResult2.value().contentSize.x, 9.0f);
+    EXPECT_FLOAT_EQ(metricsResult2.value().contentSize.y, 7.0f);
+    const auto metricsResult3 = UiMeasureTextureImage(ImageOptions(), first);
+    ASSERT_TRUE(metricsResult3.has_value());
+    EXPECT_FLOAT_EQ(metricsResult3.value().contentSize.x, 20.0f);
+    EXPECT_FLOAT_EQ(metricsResult3.value().contentSize.y, 12.0f);
+}
+
+void VerifyTextureImageLayoutFixture_ZeroFixedExtentAndEmptyPlacementRemainValid(mut TextureImageLayoutFixture self){
+    auto imageResult = self.makeImage();
+    ASSERT_TRUE(imageResult.has_value());
+    SharedImageSource image = SharedImageSource();
+    native(mut imageResult, mut image){
+        image = Move(*imageResult);
+        ASSERT_TRUE(image);
+    }
+    ImageOptions options = ImageOptions();
+    options.width = LayoutSize(LayoutSizePolicy::Fixed, 0.0f);
+    options.height = LayoutSize(LayoutSizePolicy::Fixed, 0.0f);
+    const auto metricsResult = UiMeasureTextureImage(options, image);
+    ASSERT_TRUE(metricsResult.has_value());
+    EXPECT_FLOAT_EQ(metricsResult.value().contentSize.x, 8.0f);
+    EXPECT_FLOAT_EQ(metricsResult.value().contentSize.y, 4.0f);
+    const auto placementResult = PlaceImage(Rect(10.0f, 20.0f, 0.0f, 0.0f), Rect(0.0f, 0.0f, 100.0f, 100.0f));
+    ASSERT_TRUE(placementResult.has_value());
+    EXPECT_FLOAT_EQ(placementResult.value().bounds.width, 0.0f);
+    EXPECT_FLOAT_EQ(placementResult.value().clip.height, 0.0f);
+}
+
+void VerifyTextureImageLayoutFixture_InvalidSizePoliciesAndValuesRejectMeasurement(mut TextureImageLayoutFixture self){
+    auto imageResult = self.makeImage();
+    ASSERT_TRUE(imageResult.has_value());
+    SharedImageSource image = SharedImageSource();
+    native(mut imageResult, mut image){
+        image = Move(*imageResult);
+        ASSERT_TRUE(image);
+    }
+    for(u32 field = 0u; field < 8u; ++field){
+        ImageOptions options = ImageOptions();
+        if(field == 0u){
+            native(mut options){
+                options.width.policy = static_cast<NWB::Impl::Ui::LayoutSizePolicy::Enum>(3u);
+            }
+        }
+        else if(field == 1u){
+            native(mut options){
+                options.height.policy = static_cast<NWB::Impl::Ui::LayoutSizePolicy::Enum>(3u);
+            }
+        }
+        else if(field == 2u)
+            options.width.value = -1.0f;
+        else if(field == 3u)
+            options.height.value = -1.0f;
+        else if(field == 4u)
+            options.width = LayoutSize(LayoutSizePolicy::Stretch, 0.0f);
+        else if(field == 5u)
+            options.height = LayoutSize(LayoutSizePolicy::Stretch, 0.0f);
+        else if(field == 6u)
+            options.width.value = bit_cast<f32>(s_UiTextureQuietNaNF32Bits);
+        else
+            options.height.value = bit_cast<f32>(s_UiTexturePosInfF32Bits);
+        EXPECT_FALSE(UiMeasureTextureImage(options, image).has_value());
+    }
+}
+
+void VerifyTextureImageLayoutFixture_InvalidTintRejectsMeasurement(mut TextureImageLayoutFixture self){
+    auto imageResult = self.makeImage();
+    ASSERT_TRUE(imageResult.has_value());
+    SharedImageSource image = SharedImageSource();
+    native(mut imageResult, mut image){
+        image = Move(*imageResult);
+        ASSERT_TRUE(image);
+    }
+    for(u32 field = 0u; field < 8u; ++field){
+        ImageOptions options = ImageOptions();
+        if(field == 0u)
+            options.tint.r = -1.0f;
+        else if(field == 1u)
+            options.tint.g = -1.0f;
+        else if(field == 2u)
+            options.tint.b = -1.0f;
+        else if(field == 3u)
+            options.tint.r = bit_cast<f32>(s_UiTexturePosInfF32Bits);
+        else if(field == 4u)
+            options.tint.g = bit_cast<f32>(s_UiTextureQuietNaNF32Bits);
+        else if(field == 5u)
+            options.tint.b = bit_cast<f32>(s_UiTextureNegInfF32Bits);
+        else if(field == 6u)
+            options.tint.a = -0.01f;
+        else
+            options.tint.a = 1.01f;
+        EXPECT_FALSE(UiMeasureTextureImage(options, image).has_value());
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiTooltipBehaviorTests_NewHoverDoesNotCountTimeFromBeforeTheBindingWasKnown(){
+    TooltipState state = TooltipState();
+    const TooltipOptions options = TooltipOptions();
+    const WidgetId anchor = MakeUiTooltipAnchor();
     const u64 revision = state.revision();
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 100.0f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 100.0f, options));
     EXPECT_FALSE(state.visible());
     EXPECT_GT(state.revision(), revision);
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.25f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
     EXPECT_FALSE(state.visible());
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.25f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
     EXPECT_TRUE(state.visible());
 }
 
-TEST(UiTooltipBehaviorTests, ContiguousHoverAppearsAtTheExactDelayBoundary){
-    TooltipState state;
-    const TooltipOptions options;
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.0f, options));
+void VerifyUiTooltipBehaviorTests_ContiguousHoverAppearsAtTheExactDelayBoundary(){
+    TooltipState state = TooltipState();
+    const TooltipOptions options = TooltipOptions();
+    const WidgetId anchor = MakeUiTooltipAnchor();
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
     for(u32 frame = 0u; frame < 3u; ++frame){
-        ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.125f, options));
+        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.125f, options));
         EXPECT_FALSE(state.visible());
     }
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.125f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.125f, options));
     EXPECT_TRUE(state.visible());
 }
 
-TEST(UiTooltipBehaviorTests, ChangedHoverActivityRestartsDelayWithoutAnObservedUnhoveredFrame){
-    TooltipState state;
-    const TooltipOptions options;
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 7u, true, 0.0f, options));
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 7u, true, 0.25f, options));
+void VerifyUiTooltipBehaviorTests_ChangedHoverActivityRestartsDelayWithoutAnObservedUnhoveredFrame(){
+    TooltipState state = TooltipState();
+    const TooltipOptions options = TooltipOptions();
+    const WidgetId anchor = MakeUiTooltipAnchor();
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 7u, true, 0.0f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 7u, true, 0.25f, options));
     const u64 previousRevision = state.revision();
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 8u, true, 100.0f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 8u, true, 100.0f, options));
     EXPECT_FALSE(state.visible());
     EXPECT_GT(state.revision(), previousRevision);
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 8u, true, 0.25f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 8u, true, 0.25f, options));
     EXPECT_FALSE(state.visible());
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 8u, true, 0.25f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 8u, true, 0.25f, options));
     EXPECT_TRUE(state.visible());
     const u64 visibleRevision = state.revision();
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 9u, true, 100.0f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 9u, true, 100.0f, options));
     EXPECT_FALSE(state.visible());
     EXPECT_GT(state.revision(), visibleRevision);
 }
 
-TEST(UiTooltipBehaviorTests, UnchangedHoverActivityPreservesAccumulatedDelay){
-    TooltipState state;
-    const TooltipOptions options;
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 7u, true, 0.0f, options));
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 7u, true, 0.25f, options));
+void VerifyUiTooltipBehaviorTests_UnchangedHoverActivityPreservesAccumulatedDelay(){
+    TooltipState state = TooltipState();
+    const TooltipOptions options = TooltipOptions();
+    const WidgetId anchor = MakeUiTooltipAnchor();
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 7u, true, 0.0f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 7u, true, 0.25f, options));
     const u64 waitingRevision = state.revision();
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 7u, true, 0.0f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 7u, true, 0.0f, options));
     EXPECT_EQ(state.revision(), waitingRevision);
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 7u, true, 0.25f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 7u, true, 0.25f, options));
     EXPECT_TRUE(state.visible());
 }
 
-TEST(UiTooltipBehaviorTests, ZeroDelayAppearsOnTheFirstEnabledAcceptedHover){
-    TooltipState state;
-    TooltipOptions options;
+void VerifyUiTooltipBehaviorTests_ZeroDelayAppearsOnTheFirstEnabledAcceptedHover(){
+    TooltipState state = TooltipState();
+    TooltipOptions options = TooltipOptions();
     options.delaySeconds = 0.0f;
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, false, 0.0f, options));
+    const WidgetId anchor = MakeUiTooltipAnchor();
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, false, 0.0f, options));
     EXPECT_FALSE(state.visible());
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.0f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
     EXPECT_TRUE(state.visible());
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, false, 0.0f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, false, 0.0f, options));
     EXPECT_FALSE(state.visible());
     options.enabled = false;
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 10.0f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 10.0f, options));
     EXPECT_FALSE(state.visible());
 }
 
-TEST(UiTooltipBehaviorTests, ZeroDeltaAndSaturatedHoverDoNotInventTimeOrRevisionChanges){
-    TooltipState state;
-    const TooltipOptions options;
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.0f, options));
+void VerifyUiTooltipBehaviorTests_ZeroDeltaAndSaturatedHoverDoNotInventTimeOrRevisionChanges(){
+    TooltipState state = TooltipState();
+    const TooltipOptions options = TooltipOptions();
+    const WidgetId anchor = MakeUiTooltipAnchor();
+    const f32 maxF32 = bit_cast<f32>(s_UiTextureMaxF32Bits);
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
     const u64 waitingRevision = state.revision();
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.0f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
     EXPECT_FALSE(state.visible());
     EXPECT_EQ(state.revision(), waitingRevision);
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, Limit<f32>::s_Max, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, maxF32, options));
     EXPECT_TRUE(state.visible());
     const u64 visibleRevision = state.revision();
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, Limit<f32>::s_Max, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, maxF32, options));
     EXPECT_TRUE(state.visible());
     EXPECT_EQ(state.revision(), visibleRevision);
 }
 
-TEST(UiTooltipBehaviorTests, LeavingAVisibleAnchorRequiresACompleteNewHoverDelay){
-    TooltipState state;
-    const TooltipOptions options;
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.0f, options));
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.5f, options));
+void VerifyUiTooltipBehaviorTests_LeavingAVisibleAnchorRequiresACompleteNewHoverDelay(){
+    TooltipState state = TooltipState();
+    const TooltipOptions options = TooltipOptions();
+    const WidgetId anchor = MakeUiTooltipAnchor();
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.5f, options));
     ASSERT_TRUE(state.visible());
     const u64 visibleRevision = state.revision();
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, false, 100.0f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, false, 100.0f, options));
     EXPECT_FALSE(state.visible());
     EXPECT_GT(state.revision(), visibleRevision);
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 100.0f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 100.0f, options));
     EXPECT_FALSE(state.visible());
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.25f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
     EXPECT_FALSE(state.visible());
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.25f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
     EXPECT_TRUE(state.visible());
 }
 
-TEST(UiTooltipBehaviorTests, LeavingBeforeTheDelayAlsoDiscardsAccumulatedTime){
-    TooltipState state;
-    const TooltipOptions options;
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.0f, options));
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.25f, options));
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, false, 0.0f, options));
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.25f, options));
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.25f, options));
+void VerifyUiTooltipBehaviorTests_LeavingBeforeTheDelayAlsoDiscardsAccumulatedTime(){
+    TooltipState state = TooltipState();
+    const TooltipOptions options = TooltipOptions();
+    const WidgetId anchor = MakeUiTooltipAnchor();
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, false, 0.0f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
     EXPECT_FALSE(state.visible());
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.25f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
     EXPECT_TRUE(state.visible());
 }
 
-TEST(UiTooltipBehaviorTests, DisablingAndReenablingDoesNotCarryOldHoverTime){
-    TooltipState state;
-    TooltipOptions options;
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.0f, options));
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.5f, options));
+void VerifyUiTooltipBehaviorTests_DisablingAndReenablingDoesNotCarryOldHoverTime(){
+    TooltipState state = TooltipState();
+    TooltipOptions options = TooltipOptions();
+    const WidgetId anchor = MakeUiTooltipAnchor();
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.5f, options));
     ASSERT_TRUE(state.visible());
     options.enabled = false;
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 100.0f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 100.0f, options));
     EXPECT_FALSE(state.visible());
     options.enabled = true;
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 100.0f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 100.0f, options));
     EXPECT_FALSE(state.visible());
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.5f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.5f, options));
     EXPECT_TRUE(state.visible());
 }
 
-TEST(UiTooltipBehaviorTests, ReplacingTheAnchorRetiresAVisibleTooltip){
-    TooltipState state;
-    const TooltipOptions options;
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.0f, options));
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.5f, options));
+void VerifyUiTooltipBehaviorTests_ReplacingTheAnchorRetiresAVisibleTooltip(){
+    TooltipState state = TooltipState();
+    const TooltipOptions options = TooltipOptions();
+    const WidgetId anchor = MakeUiTooltipAnchor();
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.5f, options));
     const u64 visibleRevision = state.revision();
-    const WidgetId replacement{ 202u };
-    ASSERT_TRUE(TooltipBehavior::Update(state, replacement, s_Declaration, {}, 0u, 0u, true, 100.0f, options));
+    const WidgetId replacement = WidgetId(202u);
+    ASSERT_TRUE(TooltipBehavior::Update(state, replacement, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 100.0f, options));
     EXPECT_FALSE(state.visible());
     EXPECT_GT(state.revision(), visibleRevision);
-    ASSERT_TRUE(TooltipBehavior::Update(state, replacement, s_Declaration, {}, 0u, 0u, true, 0.5f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, replacement, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.5f, options));
     EXPECT_TRUE(state.visible());
 }
 
-TEST(UiTooltipBehaviorTests, RenewedDeclarationRestartsTheDelayEvenWithTheSameAnchorKey){
-    TooltipState state;
-    const TooltipOptions options;
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.0f, options));
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.25f, options));
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration + 1u, {}, 0u, 0u, true, 100.0f, options));
+void VerifyUiTooltipBehaviorTests_RenewedDeclarationRestartsTheDelayEvenWithTheSameAnchorKey(){
+    TooltipState state = TooltipState();
+    const TooltipOptions options = TooltipOptions();
+    const WidgetId anchor = MakeUiTooltipAnchor();
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration + 1u, PopupToken(), 0u, 0u, true, 100.0f, options));
     EXPECT_FALSE(state.visible());
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration + 1u, {}, 0u, 0u, true, 0.25f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration + 1u, PopupToken(), 0u, 0u, true, 0.25f, options));
     EXPECT_FALSE(state.visible());
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration + 1u, {}, 0u, 0u, true, 0.25f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration + 1u, PopupToken(), 0u, 0u, true, 0.25f, options));
     EXPECT_TRUE(state.visible());
 }
 
-TEST(UiTooltipBehaviorTests, EveryPopupLifetimeFieldParticipatesInTheHoverBinding){
-    Array<PopupToken, 5u> replacements = { s_Popup, s_Popup, s_Popup, s_Popup, PopupToken{} };
+void VerifyUiTooltipBehaviorTests_EveryPopupLifetimeFieldParticipatesInTheHoverBinding(){
+    const PopupToken basePopup = MakeUiTooltipPopup();
+    Array<PopupToken, 5u> replacements;
+    replacements[0u] = basePopup;
+    replacements[1u] = basePopup;
+    replacements[2u] = basePopup;
+    replacements[3u] = basePopup;
+    replacements[4u] = PopupToken();
     ++replacements[0u].widget.value;
     ++replacements[1u].declarationGeneration;
     ++replacements[2u].instanceGeneration;
     ++replacements[3u].openGeneration;
-    const TooltipOptions options;
-    for(const PopupToken& replacement : replacements){
-        TooltipState state;
-        ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, s_Popup, 0u, 0u, true, 0.0f, options));
-        ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, s_Popup, 0u, 0u, true, 0.5f, options));
+    const TooltipOptions options = TooltipOptions();
+    const WidgetId anchor = MakeUiTooltipAnchor();
+    for(usize index = 0u; index < replacements.size(); ++index){
+        const PopupToken replacement = replacements[index];
+        TooltipState state = TooltipState();
+        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, basePopup, 0u, 0u, true, 0.0f, options));
+        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, basePopup, 0u, 0u, true, 0.5f, options));
         ASSERT_TRUE(state.visible());
         const u64 revision = state.revision();
-        ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, replacement, 0u, 0u, true, 100.0f, options));
+        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, replacement, 0u, 0u, true, 100.0f, options));
         EXPECT_FALSE(state.visible());
         EXPECT_GT(state.revision(), revision);
-        ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, replacement, 0u, 0u, true, 0.5f, options));
+        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, replacement, 0u, 0u, true, 0.5f, options));
         EXPECT_TRUE(state.visible());
-        ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, s_Popup, 0u, 0u, true, 100.0f, options));
+        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, basePopup, 0u, 0u, true, 100.0f, options));
         EXPECT_FALSE(state.visible());
     }
 }
 
-TEST(UiTooltipBehaviorTests, FocusLossRetiresHoverEvenWhenPointerAndFocusReturnBeforeTheNextUpdate){
-    TooltipState state;
-    const TooltipOptions options;
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.0f, options));
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.5f, options));
+void VerifyUiTooltipBehaviorTests_FocusLossRetiresHoverEvenWhenPointerAndFocusReturnBeforeTheNextUpdate(){
+    TooltipState state = TooltipState();
+    const TooltipOptions options = TooltipOptions();
+    const WidgetId anchor = MakeUiTooltipAnchor();
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.5f, options));
     ASSERT_TRUE(state.visible());
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 1u, 0u, true, 100.0f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 1u, 0u, true, 100.0f, options));
     EXPECT_FALSE(state.visible());
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 1u, 0u, true, 0.5f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 1u, 0u, true, 0.5f, options));
     EXPECT_TRUE(state.visible());
 }
 
-TEST(UiTooltipBehaviorTests, ChangingDelayCannotMakePreviousElapsedTimeQualifyTheNewOptions){
-    TooltipState state;
-    TooltipOptions options;
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.0f, options));
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.25f, options));
+void VerifyUiTooltipBehaviorTests_ChangingDelayCannotMakePreviousElapsedTimeQualifyTheNewOptions(){
+    TooltipState state = TooltipState();
+    TooltipOptions options = TooltipOptions();
+    const WidgetId anchor = MakeUiTooltipAnchor();
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
     options.delaySeconds = 0.125f;
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 100.0f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 100.0f, options));
     EXPECT_FALSE(state.visible());
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.125f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.125f, options));
     EXPECT_TRUE(state.visible());
 }
 
-TEST(UiTooltipBehaviorTests, ChangingWidthGapOrSideAlsoStartsANewHoverLifetime){
+void VerifyUiTooltipBehaviorTests_ChangingWidthGapOrSideAlsoStartsANewHoverLifetime(){
     Array<TooltipOptions, 3u> replacements;
     replacements[0u].maximumWidth = 256.0f;
     replacements[1u].gap = 8.0f;
     replacements[2u].side = PopupPlacementSide::Right;
-    const TooltipOptions options;
-    for(const TooltipOptions& replacement : replacements){
-        TooltipState state;
-        ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.0f, options));
-        ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.5f, options));
+    const TooltipOptions options = TooltipOptions();
+    const WidgetId anchor = MakeUiTooltipAnchor();
+    for(usize index = 0u; index < replacements.size(); ++index){
+        const TooltipOptions replacement = replacements[index];
+        TooltipState state = TooltipState();
+        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
+        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.5f, options));
         ASSERT_TRUE(state.visible());
-        ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 100.0f, replacement));
+        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 100.0f, replacement));
         EXPECT_FALSE(state.visible());
-        ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.5f, replacement));
+        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.5f, replacement));
         EXPECT_TRUE(state.visible());
     }
 }
 
-TEST(UiTooltipBehaviorTests, FiniteMaximumLimitsAndMaximumDelayAreAcceptedWithoutOverflow){
-    TooltipState zeroDelay;
-    TooltipOptions extreme;
+void VerifyUiTooltipBehaviorTests_FiniteMaximumLimitsAndMaximumDelayAreAcceptedWithoutOverflow(){
+    const WidgetId anchor = MakeUiTooltipAnchor();
+    const f32 maxF32 = bit_cast<f32>(s_UiTextureMaxF32Bits);
+    TooltipState zeroDelay = TooltipState();
+    TooltipOptions extreme = TooltipOptions();
     extreme.delaySeconds = 0.0f;
-    extreme.maximumWidth = Limit<f32>::s_Max;
-    extreme.gap = Limit<f32>::s_Max;
+    extreme.maximumWidth = maxF32;
+    extreme.gap = maxF32;
     extreme.side = PopupPlacementSide::Right;
-    ASSERT_TRUE(TooltipBehavior::Update(zeroDelay, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.0f, extreme));
+    ASSERT_TRUE(TooltipBehavior::Update(zeroDelay, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, extreme));
     EXPECT_TRUE(zeroDelay.visible());
-    TooltipState state;
-    TooltipOptions options;
-    options.delaySeconds = Limit<f32>::s_Max;
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.0f, options));
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, Limit<f32>::s_Max, options));
+    TooltipState state = TooltipState();
+    TooltipOptions options = TooltipOptions();
+    options.delaySeconds = maxF32;
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, maxF32, options));
     EXPECT_TRUE(state.visible());
 }
 
-TEST(UiTooltipBehaviorTests, InvalidTimingPreservesTheOldBindingAndItsAccumulatedDelay){
-    const Array<f32, 4> invalidDeltas = { -1.0f, Limit<f32>::s_QuietNaN, Limit<f32>::s_Infinity, -Limit<f32>::s_Infinity };
-    const TooltipOptions options;
-    for(const f32 delta : invalidDeltas){
-        TooltipState state;
-        ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.0f, options));
-        ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.25f, options));
+void VerifyUiTooltipBehaviorTests_InvalidTimingPreservesTheOldBindingAndItsAccumulatedDelay(){
+    Array<f32, 4u> invalidDeltas;
+    invalidDeltas[0u] = -1.0f;
+    invalidDeltas[1u] = bit_cast<f32>(s_UiTextureQuietNaNF32Bits);
+    invalidDeltas[2u] = bit_cast<f32>(s_UiTexturePosInfF32Bits);
+    invalidDeltas[3u] = bit_cast<f32>(s_UiTextureNegInfF32Bits);
+    const TooltipOptions options = TooltipOptions();
+    const WidgetId anchor = MakeUiTooltipAnchor();
+    const PopupToken popup = MakeUiTooltipPopup();
+    for(usize index = 0u; index < invalidDeltas.size(); ++index){
+        const f32 delta = invalidDeltas[index];
+        TooltipState state = TooltipState();
+        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
+        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
         const u64 revision = state.revision();
-        EXPECT_FALSE(TooltipBehavior::Update(state, WidgetId{ 202u }, s_Declaration + 1u, s_Popup, 1u, 0u, false, delta, options));
+        EXPECT_FALSE(TooltipBehavior::Update(state, WidgetId(202u), s_UiTooltipDeclaration + 1u, popup, 1u, 0u, false, delta, options));
         EXPECT_FALSE(state.visible());
         EXPECT_EQ(state.revision(), revision);
-        ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.25f, options));
+        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
         EXPECT_TRUE(state.visible());
     }
 }
 
-TEST(UiTooltipBehaviorTests, InvalidOptionsAreRejectedBeforeAnyBindingOrDelayMutation){
+void VerifyUiTooltipBehaviorTests_InvalidOptionsAreRejectedBeforeAnyBindingOrDelayMutation(){
     Array<TooltipOptions, 12u> invalid;
     invalid[0u].delaySeconds = -1.0f;
-    invalid[1u].delaySeconds = Limit<f32>::s_QuietNaN;
-    invalid[2u].delaySeconds = Limit<f32>::s_Infinity;
+    invalid[1u].delaySeconds = bit_cast<f32>(s_UiTextureQuietNaNF32Bits);
+    invalid[2u].delaySeconds = bit_cast<f32>(s_UiTexturePosInfF32Bits);
     invalid[3u].maximumWidth = 0.0f;
     invalid[4u].maximumWidth = -1.0f;
-    invalid[5u].maximumWidth = Limit<f32>::s_QuietNaN;
-    invalid[6u].maximumWidth = Limit<f32>::s_Infinity;
+    invalid[5u].maximumWidth = bit_cast<f32>(s_UiTextureQuietNaNF32Bits);
+    invalid[6u].maximumWidth = bit_cast<f32>(s_UiTexturePosInfF32Bits);
     invalid[7u].gap = -1.0f;
-    invalid[8u].gap = Limit<f32>::s_QuietNaN;
-    invalid[9u].gap = Limit<f32>::s_Infinity;
-    invalid[10u].side = static_cast<PopupPlacementSide::Enum>(255u);
+    invalid[8u].gap = bit_cast<f32>(s_UiTextureQuietNaNF32Bits);
+    invalid[9u].gap = bit_cast<f32>(s_UiTexturePosInfF32Bits);
+    native(mut invalid){
+        invalid[10u].side = static_cast<NWB::Impl::Ui::PopupPlacementSide::Enum>(255u);
+    }
     invalid[11u].enabled = false;
     invalid[11u].maximumWidth = 0.0f;
-    const TooltipOptions options;
-    for(const TooltipOptions& rejected : invalid){
-        TooltipState state;
-        ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.0f, options));
-        ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.25f, options));
+    const TooltipOptions options = TooltipOptions();
+    const WidgetId anchor = MakeUiTooltipAnchor();
+    const PopupToken popup = MakeUiTooltipPopup();
+    for(usize index = 0u; index < invalid.size(); ++index){
+        const TooltipOptions rejected = invalid[index];
+        TooltipState state = TooltipState();
+        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
+        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
         const u64 revision = state.revision();
-        EXPECT_FALSE(TooltipBehavior::Update(state, WidgetId{ 202u }, s_Declaration + 1u, s_Popup, 1u, 0u, false, 0.5f, rejected));
+        EXPECT_FALSE(TooltipBehavior::Update(state, WidgetId(202u), s_UiTooltipDeclaration + 1u, popup, 1u, 0u, false, 0.5f, rejected));
         EXPECT_FALSE(state.visible());
         EXPECT_EQ(state.revision(), revision);
-        ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.25f, options));
+        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
         EXPECT_TRUE(state.visible());
     }
 }
 
-TEST(UiTooltipBehaviorTests, InvalidAnchorsDeclarationsAndPartialPopupTokensPreserveState){
-    struct Binding{
-        WidgetId anchor;
-        u64 declaration;
-        PopupToken popup;
-    };
-    const Array<Binding, 7> invalid = {
-        Binding{ {}, s_Declaration, s_Popup },
-        Binding{ s_Anchor, 0u, s_Popup },
-        Binding{ s_Anchor, s_Declaration, { {}, 19u, 23u, 7u } },
-        Binding{ s_Anchor, s_Declaration, { s_Popup.widget, 0u, 23u, 7u } },
-        Binding{ s_Anchor, s_Declaration, { s_Popup.widget, 19u, 0u, 7u } },
-        Binding{ s_Anchor, s_Declaration, { s_Popup.widget, 19u, 23u, 0u } },
-        Binding{ s_Anchor, s_Declaration, { s_Popup.widget, 0u, 0u, 0u } }
-    };
-    const TooltipOptions options;
-    for(const Binding& rejected : invalid){
-        TooltipState state;
-        ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.0f, options));
-        ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.25f, options));
+void VerifyUiTooltipBehaviorTests_InvalidAnchorsDeclarationsAndPartialPopupTokensPreserveState(){
+    const WidgetId anchor = MakeUiTooltipAnchor();
+    const PopupToken popup = MakeUiTooltipPopup();
+    Array<UiTooltipTestBinding, 7u> invalid;
+    invalid[0u] = MakeUiTooltipTestBinding(WidgetId(), s_UiTooltipDeclaration, popup);
+    invalid[1u] = MakeUiTooltipTestBinding(anchor, 0u, popup);
+    invalid[2u] = MakeUiTooltipTestBinding(anchor, s_UiTooltipDeclaration, MakeUiTooltipPartialPopup(WidgetId(), 19u, 23u, 7u));
+    invalid[3u] = MakeUiTooltipTestBinding(anchor, s_UiTooltipDeclaration, MakeUiTooltipPartialPopup(popup.widget, 0u, 23u, 7u));
+    invalid[4u] = MakeUiTooltipTestBinding(anchor, s_UiTooltipDeclaration, MakeUiTooltipPartialPopup(popup.widget, 19u, 0u, 7u));
+    invalid[5u] = MakeUiTooltipTestBinding(anchor, s_UiTooltipDeclaration, MakeUiTooltipPartialPopup(popup.widget, 19u, 23u, 0u));
+    invalid[6u] = MakeUiTooltipTestBinding(anchor, s_UiTooltipDeclaration, MakeUiTooltipPartialPopup(popup.widget, 0u, 0u, 0u));
+    const TooltipOptions options = TooltipOptions();
+    for(usize index = 0u; index < invalid.size(); ++index){
+        const UiTooltipTestBinding rejected = invalid[index];
+        TooltipState state = TooltipState();
+        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
+        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
         const u64 revision = state.revision();
         EXPECT_FALSE(TooltipBehavior::Update(state, rejected.anchor, rejected.declaration, rejected.popup, 1u, 0u, false, 0.5f, options));
         EXPECT_FALSE(state.visible());
         EXPECT_EQ(state.revision(), revision);
-        ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.25f, options));
+        ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.25f, options));
         EXPECT_TRUE(state.visible());
     }
 }
 
-TEST(UiTooltipBehaviorTests, InvalidUpdatesCannotHideAnAlreadyVisibleTooltip){
-    TooltipState state;
-    TooltipOptions options;
+void VerifyUiTooltipBehaviorTests_InvalidUpdatesCannotHideAnAlreadyVisibleTooltip(){
+    TooltipState state = TooltipState();
+    TooltipOptions options = TooltipOptions();
     options.delaySeconds = 0.0f;
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.0f, options));
+    const WidgetId anchor = MakeUiTooltipAnchor();
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, true, 0.0f, options));
     ASSERT_TRUE(state.visible());
     const u64 revision = state.revision();
     options.enabled = false;
     options.maximumWidth = 0.0f;
-    EXPECT_FALSE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, false, 0.0f, options));
+    EXPECT_FALSE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, PopupToken(), 0u, 0u, false, 0.0f, options));
     EXPECT_TRUE(state.visible());
     EXPECT_EQ(state.revision(), revision);
 }
 
-TEST(UiTooltipBehaviorTests, ExplicitResetInvalidatesEvenAnAlreadyHiddenStateWithoutReplacingItsInstance){
-    TooltipState state;
+void VerifyUiTooltipBehaviorTests_ExplicitResetInvalidatesEvenAnAlreadyHiddenStateWithoutReplacingItsInstance(){
+    TooltipState state = TooltipState();
     const u64 instance = state.instanceGeneration();
     const u64 revision = state.revision();
     state.reset();
@@ -970,22 +1201,24 @@ TEST(UiTooltipBehaviorTests, ExplicitResetInvalidatesEvenAnAlreadyHiddenStateWit
     EXPECT_EQ(state.instanceGeneration(), instance);
 }
 
-TEST(UiTooltipBehaviorTests, ExplicitResetRetiresVisibleStateAndAllAccumulatedHoverTime){
-    TooltipState state;
-    const TooltipOptions options;
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, s_Popup, 5u, 0u, true, 0.0f, options));
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, s_Popup, 5u, 0u, true, 0.5f, options));
+void VerifyUiTooltipBehaviorTests_ExplicitResetRetiresVisibleStateAndAllAccumulatedHoverTime(){
+    TooltipState state = TooltipState();
+    const TooltipOptions options = TooltipOptions();
+    const WidgetId anchor = MakeUiTooltipAnchor();
+    const PopupToken popup = MakeUiTooltipPopup();
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, popup, 5u, 0u, true, 0.0f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, popup, 5u, 0u, true, 0.5f, options));
     ASSERT_TRUE(state.visible());
     const u64 revision = state.revision();
     state.reset();
     EXPECT_FALSE(state.visible());
     EXPECT_GT(state.revision(), revision);
     EXPECT_FLOAT_EQ(state.placement().bounds.width, 0.0f);
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, s_Popup, 5u, 0u, true, 100.0f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, popup, 5u, 0u, true, 100.0f, options));
     EXPECT_FALSE(state.visible());
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, s_Popup, 5u, 0u, true, 0.25f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, popup, 5u, 0u, true, 0.25f, options));
     EXPECT_FALSE(state.visible());
-    ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, s_Popup, 5u, 0u, true, 0.25f, options));
+    ASSERT_TRUE(TooltipBehavior::Update(state, anchor, s_UiTooltipDeclaration, popup, 5u, 0u, true, 0.25f, options));
     EXPECT_TRUE(state.visible());
 }
 
@@ -993,12 +1226,46 @@ TEST(UiTooltipBehaviorTests, ExplicitResetRetiresVisibleStateAndAllAccumulatedHo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
+NWB_ADHD_GTEST_F(UiTextureImageBuilderTests, DeclarationRetainsSourceAndOptionsAcrossCallerReplacementAndRelease, VerifyUiTextureImageBuilderTests_DeclarationRetainsSourceAndOptionsAcrossCallerReplacementAndRelease)
+NWB_ADHD_GTEST_F(UiTextureImageBuilderTests, FrozenSnapshotsKeepVersionsAcrossBuilderResetAndSourceRelease, VerifyUiTextureImageBuilderTests_FrozenSnapshotsKeepVersionsAcrossBuilderResetAndSourceRelease)
+NWB_ADHD_GTEST_F(UiTextureImageBuilderTests, SamePathVersionsStayDistinctAndRepeatedHandlesKeepOneBinding, VerifyUiTextureImageBuilderTests_SamePathVersionsStayDistinctAndRepeatedHandlesKeepOneBinding)
+NWB_ADHD_GTEST_F(UiTextureImageBuilderTests, ExternalClipTrimsFullImageUvsAndRestoresThePaintStack, VerifyUiTextureImageBuilderTests_ExternalClipTrimsFullImageUvsAndRestoresThePaintStack)
+NWB_ADHD_GTEST_F(UiTextureImageBuilderTests, TransparentAndZeroAxisImagesAreValidWithoutBindingsOrQuads, VerifyUiTextureImageBuilderTests_TransparentAndZeroAxisImagesAreValidWithoutBindingsOrQuads)
+NWB_ADHD_GTEST_F(UiTextureImageBuilderTests, ActiveNullSourceRejectsEvenTransparentPolicyWithoutReplacingAcceptedInput, VerifyUiTextureImageBuilderTests_ActiveNullSourceRejectsEvenTransparentPolicyWithoutReplacingAcceptedInput)
+NWB_ADHD_GTEST_F(UiTextureImageBuilderTests, InvalidOptionsDoNotReplaceTheAcceptedInputFrame, VerifyUiTextureImageBuilderTests_InvalidOptionsDoNotReplaceTheAcceptedInputFrame)
+NWB_ADHD_GTEST_F(UiTextureImageBuilderTests, EndedNestedChildRetainsSourceAndOptionsUntilTheOuterPopupPaints, VerifyUiTextureImageBuilderTests_EndedNestedChildRetainsSourceAndOptionsUntilTheOuterPopupPaints)
+NWB_ADHD_GTEST_F(UiTextureImageBuilderTests, AncestorClosureSuppressesEndedChildImageAndAnnotation, VerifyUiTextureImageBuilderTests_AncestorClosureSuppressesEndedChildImageAndAnnotation)
+NWB_ADHD_GTEST_F(UiTextureImageBuilderTests, VisibleImageAtFullBindingCapacityRejectsDeferredPaint, VerifyUiTextureImageBuilderTests_VisibleImageAtFullBindingCapacityRejectsDeferredPaint)
+NWB_ADHD_GTEST_F(UiTextureImageBuilderTests, FullyClippedImageAtFullBindingCapacityConsumesNoAdditionalSlot, VerifyUiTextureImageBuilderTests_FullyClippedImageAtFullBindingCapacityConsumesNoAdditionalSlot)
 
+NWB_ADHD_GTEST_F(TextureImageLayoutFixture, SameIdentityVersionsMeasureTheirOwnImmutableDimensions, VerifyTextureImageLayoutFixture_SameIdentityVersionsMeasureTheirOwnImmutableDimensions)
+NWB_ADHD_GTEST_F(TextureImageLayoutFixture, ZeroFixedExtentAndEmptyPlacementRemainValid, VerifyTextureImageLayoutFixture_ZeroFixedExtentAndEmptyPlacementRemainValid)
+NWB_ADHD_GTEST_F(TextureImageLayoutFixture, InvalidSizePoliciesAndValuesRejectMeasurement, VerifyTextureImageLayoutFixture_InvalidSizePoliciesAndValuesRejectMeasurement)
+NWB_ADHD_GTEST_F(TextureImageLayoutFixture, InvalidTintRejectsMeasurement, VerifyTextureImageLayoutFixture_InvalidTintRejectsMeasurement)
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+NWB_ADHD_GTEST(UiTooltipBehaviorTests, NewHoverDoesNotCountTimeFromBeforeTheBindingWasKnown, VerifyUiTooltipBehaviorTests_NewHoverDoesNotCountTimeFromBeforeTheBindingWasKnown)
+NWB_ADHD_GTEST(UiTooltipBehaviorTests, ContiguousHoverAppearsAtTheExactDelayBoundary, VerifyUiTooltipBehaviorTests_ContiguousHoverAppearsAtTheExactDelayBoundary)
+NWB_ADHD_GTEST(UiTooltipBehaviorTests, ChangedHoverActivityRestartsDelayWithoutAnObservedUnhoveredFrame, VerifyUiTooltipBehaviorTests_ChangedHoverActivityRestartsDelayWithoutAnObservedUnhoveredFrame)
+NWB_ADHD_GTEST(UiTooltipBehaviorTests, UnchangedHoverActivityPreservesAccumulatedDelay, VerifyUiTooltipBehaviorTests_UnchangedHoverActivityPreservesAccumulatedDelay)
+NWB_ADHD_GTEST(UiTooltipBehaviorTests, ZeroDelayAppearsOnTheFirstEnabledAcceptedHover, VerifyUiTooltipBehaviorTests_ZeroDelayAppearsOnTheFirstEnabledAcceptedHover)
+NWB_ADHD_GTEST(UiTooltipBehaviorTests, ZeroDeltaAndSaturatedHoverDoNotInventTimeOrRevisionChanges, VerifyUiTooltipBehaviorTests_ZeroDeltaAndSaturatedHoverDoNotInventTimeOrRevisionChanges)
+NWB_ADHD_GTEST(UiTooltipBehaviorTests, LeavingAVisibleAnchorRequiresACompleteNewHoverDelay, VerifyUiTooltipBehaviorTests_LeavingAVisibleAnchorRequiresACompleteNewHoverDelay)
+NWB_ADHD_GTEST(UiTooltipBehaviorTests, LeavingBeforeTheDelayAlsoDiscardsAccumulatedTime, VerifyUiTooltipBehaviorTests_LeavingBeforeTheDelayAlsoDiscardsAccumulatedTime)
+NWB_ADHD_GTEST(UiTooltipBehaviorTests, DisablingAndReenablingDoesNotCarryOldHoverTime, VerifyUiTooltipBehaviorTests_DisablingAndReenablingDoesNotCarryOldHoverTime)
+NWB_ADHD_GTEST(UiTooltipBehaviorTests, ReplacingTheAnchorRetiresAVisibleTooltip, VerifyUiTooltipBehaviorTests_ReplacingTheAnchorRetiresAVisibleTooltip)
+NWB_ADHD_GTEST(UiTooltipBehaviorTests, RenewedDeclarationRestartsTheDelayEvenWithTheSameAnchorKey, VerifyUiTooltipBehaviorTests_RenewedDeclarationRestartsTheDelayEvenWithTheSameAnchorKey)
+NWB_ADHD_GTEST(UiTooltipBehaviorTests, EveryPopupLifetimeFieldParticipatesInTheHoverBinding, VerifyUiTooltipBehaviorTests_EveryPopupLifetimeFieldParticipatesInTheHoverBinding)
+NWB_ADHD_GTEST(UiTooltipBehaviorTests, FocusLossRetiresHoverEvenWhenPointerAndFocusReturnBeforeTheNextUpdate, VerifyUiTooltipBehaviorTests_FocusLossRetiresHoverEvenWhenPointerAndFocusReturnBeforeTheNextUpdate)
+NWB_ADHD_GTEST(UiTooltipBehaviorTests, ChangingDelayCannotMakePreviousElapsedTimeQualifyTheNewOptions, VerifyUiTooltipBehaviorTests_ChangingDelayCannotMakePreviousElapsedTimeQualifyTheNewOptions)
+NWB_ADHD_GTEST(UiTooltipBehaviorTests, ChangingWidthGapOrSideAlsoStartsANewHoverLifetime, VerifyUiTooltipBehaviorTests_ChangingWidthGapOrSideAlsoStartsANewHoverLifetime)
+NWB_ADHD_GTEST(UiTooltipBehaviorTests, FiniteMaximumLimitsAndMaximumDelayAreAcceptedWithoutOverflow, VerifyUiTooltipBehaviorTests_FiniteMaximumLimitsAndMaximumDelayAreAcceptedWithoutOverflow)
+NWB_ADHD_GTEST(UiTooltipBehaviorTests, InvalidTimingPreservesTheOldBindingAndItsAccumulatedDelay, VerifyUiTooltipBehaviorTests_InvalidTimingPreservesTheOldBindingAndItsAccumulatedDelay)
+NWB_ADHD_GTEST(UiTooltipBehaviorTests, InvalidOptionsAreRejectedBeforeAnyBindingOrDelayMutation, VerifyUiTooltipBehaviorTests_InvalidOptionsAreRejectedBeforeAnyBindingOrDelayMutation)
+NWB_ADHD_GTEST(UiTooltipBehaviorTests, InvalidAnchorsDeclarationsAndPartialPopupTokensPreserveState, VerifyUiTooltipBehaviorTests_InvalidAnchorsDeclarationsAndPartialPopupTokensPreserveState)
+NWB_ADHD_GTEST(UiTooltipBehaviorTests, InvalidUpdatesCannotHideAnAlreadyVisibleTooltip, VerifyUiTooltipBehaviorTests_InvalidUpdatesCannotHideAnAlreadyVisibleTooltip)
+NWB_ADHD_GTEST(UiTooltipBehaviorTests, ExplicitResetInvalidatesEvenAnAlreadyHiddenStateWithoutReplacingItsInstance, VerifyUiTooltipBehaviorTests_ExplicitResetInvalidatesEvenAnAlreadyHiddenStateWithoutReplacingItsInstance)
+NWB_ADHD_GTEST(UiTooltipBehaviorTests, ExplicitResetRetiresVisibleStateAndAllAccumulatedHoverTime, VerifyUiTooltipBehaviorTests_ExplicitResetRetiresVisibleStateAndAllAccumulatedHoverTime)
 
-}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

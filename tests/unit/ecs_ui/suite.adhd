@@ -1,23 +1,24 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include "ecs_ui_edit_host_and_action_cases.adhd"
-#include "ecs_ui_navigation_and_pointer_cases.adhd"
-#include "ecs_ui_popup_and_selection_cases.adhd"
+
+#include <tests/common/gtest_macros.adhd>
+#include <tests/common/test_context.adhd>
 
 native{
-// limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 #include <impl/ecs_ui/edit_box_host.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/vertical_navigation.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/popup.adhd.h>
+
+#include <tests/unit/ui/fixture_text_shaping.adhd.h>
+#include <tests/unit/ui/name_cases.adhd.h>
+#include <tests/unit/ui/native_input.adhd.h>
 
 #include <core/os/clipboard_service.h>
 #include <core/os/text_input_service.h>
+
+#include <global/simd/vector.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -63,8 +64,6 @@ public:
         return emitDeleteSurrounding(activeSession(), before, after, revision, basis);
     }
 
-
-protected:
     [[nodiscard]] virtual TextInputAdmission::Enum startNativeSession(TextInputSessionToken, const TextInputSessionDesc&)noexcept override;
 
     virtual void endNativeSession(const TextInputSessionToken)noexcept override{ ++ends; }
@@ -97,8 +96,6 @@ public:
         return completeNativeRequest(token, ClipboardStatus::Success, text);
     }
 
-
-protected:
     virtual void startNativeRequest(ClipboardRequestToken token, ClipboardOperation::Enum operation, ClipboardChannel::Enum channel, AStringView text)override;
 
 
@@ -123,19 +120,6 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ui/fixture_text_shaping.adhd.h>
-#include <tests/unit/ui/native_input.adhd.h>
-
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace UiEditBoxTestSupport{
 
 
@@ -152,8 +136,6 @@ class UiEditBoxHostTests : public testing::Test{
 public:
     UiEditBoxHostTests();
 
-
-protected:
     virtual void SetUp()override{ ASSERT_TRUE(m_textInput.setFocused(true)); }
 
     [[nodiscard]] b8 beginEditFrame();
@@ -172,6 +154,14 @@ protected:
     [[nodiscard]] b8 dispatch(const Ui::InputEvent& event);
     [[nodiscard]] b8 dispatchPointer(const Ui::PointerInput& input);
 
+    [[nodiscard]] b8 dispatchType(const Ui::InputEventType::Enum type){
+        return dispatch({ .type = type });
+    }
+
+    [[nodiscard]] b8 dispatchPoint(const Ui::Point position, const Ui::InputEventType::Enum type, const b8 shift = false){
+        return dispatch({ .position = position, .type = type, .shift = shift });
+    }
+
     [[nodiscard]] b8 key(Core::Key::Enum value, b8 shift = false, b8 control = false){
         return dispatch({ .key = value, .type = Ui::InputEventType::KeyDown, .shift = shift, .control = control }) && dispatch({ .key = value, .type = Ui::InputEventType::KeyUp, .shift = shift, .control = control });
     }
@@ -183,7 +173,7 @@ protected:
     [[nodiscard]] b8 emptyFrame();
 
 
-protected:
+public:
     Alloc::GlobalArena m_arena;
     Ui::Context m_context;
     FakeTextInput m_textInput;
@@ -210,12 +200,6 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace UiEditActionTestSupport{
 
 
@@ -225,6 +209,7 @@ namespace UiEditActionTestSupport{
 using namespace UiEditBoxTestSupport;
 
 struct ActionRecord{
+public:
     AString<Alloc::GlobalArena> text;
     Ui::EditAction::Enum action = Ui::EditAction::Submit;
 
@@ -262,8 +247,6 @@ class UiEditActionHostTests : public UiEditBoxHostTests{
 public:
     UiEditActionHostTests() : m_actions(m_arena){ m_includeButton = true; }
 
-
-protected:
     [[nodiscard]] b8 actionFrame(const Ui::EditBoxOptions& options = {}){
         return prepare(m_model, options, { 10.0f, 20.0f, 180.0f, 30.0f }, &m_actions) && commit();
     }
@@ -288,8 +271,12 @@ protected:
 
     [[nodiscard]] usize actionCount(Ui::EditAction::Enum action)const noexcept;
 
+    void enableHostResetOnSubmit()noexcept{
+        m_actions.resetHost = &m_host;
+    }
 
-protected:
+
+public:
     RecordingActions m_actions;
 };
 
@@ -298,17 +285,6 @@ protected:
 
 
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_ui/toolkit/edit/vertical_navigation.adhd.h>
-
-#include <global/simd/vector.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -323,6 +299,7 @@ namespace UiEditNavigationTestSupport{
 using namespace UiEditBoxTestSupport;
 
 struct NavigationCall{
+public:
     AString<Alloc::GlobalArena> text;
     Ui::EditNavigationSnapshot navigation;
     Expected<Ui::EditNavigationResult> result = MakeUnexpected(Failure{});
@@ -350,7 +327,7 @@ public:
 
 
 public:
-    Vector<NavigationCall, Alloc::GlobalArena> records;
+    ::Vector<NavigationCall, Alloc::GlobalArena> records;
     Function<void()> hook;
     Expected<Ui::EditNavigationResult> forcedResult = MakeUnexpected(Failure{});
     b8 forceResult = false;
@@ -362,6 +339,7 @@ private:
 };
 
 struct NavigationAction{
+public:
     AString<Alloc::GlobalArena> text;
     Ui::EditAction::Enum action = Ui::EditAction::Abandon;
 
@@ -385,23 +363,17 @@ public:
 
 
 public:
-    Vector<NavigationAction, Alloc::GlobalArena> records;
+    ::Vector<NavigationAction, Alloc::GlobalArena> records;
 
 
 private:
     Alloc::GlobalArena& m_arena;
 };
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class UiEditNavigationHostTests : public UiEditBoxHostTests{
 public:
     UiEditNavigationHostTests();
 
-
-protected:
     [[nodiscard]] b8 prepareNavigation(const Ui::EditBoxOptions& options = {}, const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 48.0f }, const Ui::Point previousScroll = {}){
         return prepareNavigationModel(m_navigationModel, m_navigation, options, bounds, previousScroll);
     }
@@ -431,7 +403,7 @@ protected:
     }
 
 
-protected:
+public:
     Ui::EditModel m_navigationModel;
     Ui::EditNavigationState m_navigation;
     RecordingNavigationResolver m_resolver;
@@ -443,20 +415,6 @@ protected:
 
 
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ui/fixture_text_shaping.adhd.h>
-#include <tests/unit/ui/native_input.adhd.h>
-
-#include <impl/ecs_ui/toolkit/widgets/popup.adhd.h>
-
-#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -475,7 +433,7 @@ using UiEditHostFixtureSupport::FakeClipboard;
 using UiEditHostFixtureSupport::FakeTextInput;
 
 class UiPopupInputTests : public testing::Test{
-protected:
+public:
     struct DeclaredEdit{
         Ui::WidgetState widget;
         Ui::EditBoxResult result;
@@ -491,8 +449,6 @@ private:
 public:
     UiPopupInputTests();
 
-
-protected:
     virtual void SetUp()override;
 
     [[nodiscard]] Expected<DeclaredEdit> declareEdit(AStringView key, const Ui::Rect& bounds, Ui::EditModel& model);
@@ -515,7 +471,7 @@ protected:
     void focusPopup();
 
 
-protected:
+public:
     Alloc::GlobalArena m_arena;
     Ui::Context m_context;
     FakeTextInput m_textInput;
@@ -548,23 +504,88 @@ protected:
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::EcsUi{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using FakeClipboard = UiEditHostFixtureSupport::FakeClipboard;
+using FakeTextInput = UiEditHostFixtureSupport::FakeTextInput;
+using UiEditBoxHostTests = UiEditBoxTestSupport::UiEditBoxHostTests;
+using RecordingActions = UiEditActionTestSupport::RecordingActions;
+using UiEditActionHostTests = UiEditActionTestSupport::UiEditActionHostTests;
+using UiEditNavigationHostTests = UiEditNavigationTestSupport::UiEditNavigationHostTests;
+using UiPopupInputTests = EcsUiPopupInputTestDetail::UiPopupInputTests;
+
+using ClipboardCompletion = NWB::Core::ClipboardCompletion;
+using ClipboardRequestToken = NWB::Core::ClipboardRequestToken;
+using TextInputRect = NWB::Core::TextInputRect;
+using TextInputSessionToken = NWB::Core::TextInputSessionToken;
+namespace ClipboardChannel = NWB::Core::ClipboardChannel;
+namespace ClipboardOperation = NWB::Core::ClipboardOperation;
+namespace ClipboardPollResult = NWB::Core::ClipboardPollResult;
+namespace ClipboardStatus = NWB::Core::ClipboardStatus;
+namespace Key = NWB::Core::Key;
+namespace TextInputAdmission = NWB::Core::TextInputAdmission;
+namespace TextInputDeletionBasis = NWB::Core::TextInputDeletionBasis;
+
+using UiEditBoxOptions = NWB::Impl::Ui::EditBoxOptions;
+using UiEditBoxView = NWB::Impl::Ui::EditBoxView;
+using UiEditModel = NWB::Impl::Ui::EditModel;
+using UiInputEvent = NWB::Impl::Ui::InputEvent;
+using UiInputSource = NWB::Impl::Ui::InputSource;
+using UiPoint = NWB::Impl::Ui::Point;
+using UiPointerInput = NWB::Impl::Ui::PointerInput;
+using UiPopupToken = NWB::Impl::Ui::PopupToken;
+using UiRect = NWB::Impl::Ui::Rect;
+using UiWidgetState = NWB::Impl::Ui::WidgetState;
+namespace UiEditAction = NWB::Impl::Ui::EditAction;
+namespace UiEditClipboardAction = NWB::Impl::Ui::EditClipboardAction;
+namespace UiInputCommand = NWB::Impl::Ui::InputCommand;
+namespace UiInputEventType = NWB::Impl::Ui::InputEventType;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 }
 
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
 
-b8 EcsUiSuiteReady(in u64 value){
-    return value != 0u;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_EcsUiViewportWidth = 500.0f;
+const f32 s_EcsUiViewportHeight = 200.0f;
+const usize s_EcsUiInputMaxEvents = 256u;
+
+UiRect MakeEcsUiRect(in f32 x, in f32 y, in f32 width, in f32 height){
+    UiRect rect = UiRect();
+    rect.x = x;
+    rect.y = y;
+    rect.width = width;
+    rect.height = height;
+    return rect;
+}
+
+UiPoint MakeEcsUiPoint(in f32 x, in f32 y){
+    UiPoint point = UiPoint();
+    point.x = x;
+    point.y = y;
+    return point;
+}
+
+UiInputSource MakeEcsUiInputSource(in u32 device, in u32 control){
+    UiInputSource source = UiInputSource();
+    source.device = device;
+    source.control = control;
+    return source;
 }
 
 native{
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace UiEditActionTestSupport{
 
 
@@ -618,15 +639,6 @@ usize UiEditActionHostTests::actionCount(const Ui::EditAction::Enum action)const
 
 
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ui/name_cases.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -762,15 +774,6 @@ b8 UiEditBoxHostTests::emptyFrame(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace UiEditHostFixtureSupport{
 
 
@@ -813,14 +816,6 @@ b8 PrepareEditView(const Ui::EditModel& model, Ui::TextLayoutBuilder& layoutBuil
 
 };
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -928,15 +923,6 @@ b8 UiEditNavigationHostTests::commitNative(const AStringView text){
 
 
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ui/name_cases.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1215,14 +1201,8 @@ void UiPopupInputTests::focusPopup(){
 
 
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 }
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

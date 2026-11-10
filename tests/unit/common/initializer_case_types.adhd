@@ -7,9 +7,33 @@ const u32 s_EventCapacity = 16u;
 const i32 s_InitializationFailureCode = 37;
 const i32 s_OwnerFailureCode = 53;
 
-
 class InitializerFailure{
     public i32 code = 0;
+}
+
+class InitializerState{
+    public Array<u32, 2> initializeCounts = Array<u32, 2>();
+    public Array<u32, 2> finalizeCounts = Array<u32, 2>();
+    public Array<u32, 16> events = Array<u32, 16>();
+    public usize eventCount = 0u;
+    public b8 failNext = false;
+    public b8 throwNext = false;
+
+    public void reset(){
+        this.initializeCounts = Array<u32, 2>();
+        this.finalizeCounts = Array<u32, 2>();
+        this.events = Array<u32, 16>();
+        this.eventCount = 0u;
+        this.failNext = false;
+        this.throwNext = false;
+    }
+
+    public void record(in u32 event){
+        if(this.eventCount >= this.events.size())
+            TerminateInvariant();
+        this.events[this.eventCount] = event;
+        ++this.eventCount;
+    }
 }
 
 

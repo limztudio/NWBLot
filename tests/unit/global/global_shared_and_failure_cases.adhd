@@ -1,22 +1,17 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
 
-b8 GlobalSharedAndFailureCasesReady(in u64 value){
-    return value != 0u;
-}
+#include <tests/common/gtest_macros.adhd>
+#include <tests/unit/global/global_tests.adhd>
 
 native{
-
-#include <tests/common/test_context.adhd.h>
+#include <tests/unit/global/fixed_vector_case_types.adhd.h>
+#include <tests/unit/global/hex_case_types.adhd.h>
 
 #include <core/alloc/scratch.h>
 
-#include <gtest/gtest.h>
-
+#include <global/append_rollback.h>
 #include <global/atomic_identity.h>
 #include <global/auto_registration.h>
 #include <global/basic_string.h>
@@ -27,40 +22,47 @@ native{
 #include <global/bit_matrix.h>
 #include <global/call_text.h>
 #include <global/checked_sum.h>
+#include <global/compact_string.h>
 #include <global/compile.h>
 #include <global/containers.h>
 #include <global/csv_text.h>
-#include <global/disjoint_set.h>
 #include <global/diagnostics.h>
+#include <global/disjoint_set.h>
 #include <global/filesystem/operations.h>
+#include <global/filesystem/operations_file_io.h>
 #include <global/filesystem/path.h>
 #include <global/filesystem/utility.h>
 #include <global/fixed_buffer.h>
+#include <global/fixed_vector.h>
+#include <global/hash_utils.h>
 #include <global/hierarchical_index_set.h>
+#include <global/inplace_function.h>
 #include <global/integer_rect.h>
+#include <global/interval.h>
+#include <global/latin1_text.h>
 #include <global/limit.h>
 #include <global/name_hash.h>
 #include <global/not_null.h>
+#include <global/numeric_text.h>
 #include <global/overflow.h>
 #include <global/process_memory_map.h>
 #include <global/projected_index.h>
 #include <global/quantization.h>
-#include <global/simplemath.h>
-#include <global/simd/color.h>
-#include <global/sha1.h>
-#include <global/append_rollback.h>
-#include <global/range_partition.h>
 #include <global/range_algorithms.h>
-#include <global/latin1_text.h>
-#include <global/interval.h>
+#include <global/range_partition.h>
+#include <global/refcount_ptr.h>
+#include <global/sha1.h>
+#include <global/simd/color.h>
+#include <global/simplemath.h>
 #include <global/source_text.h>
-#include <global/string_hash.h>
 #include <global/statistics.h>
+#include <global/string_hash.h>
 #include <global/sync.h>
 #include <global/termination.h>
-#include <global/text_utils.h>
 #include <global/text_replacements.h>
+#include <global/text_utils.h>
 #include <global/unicode/grapheme.h>
+#include <global/unique_ptr.h>
 #include <global/utf8_text.h>
 
 
@@ -75,6 +77,7 @@ namespace __hidden_global_binary_shared_tests{
 
 struct ThrowingByteSize{};
 struct ThrowingByteSizeComparison{
+public:
     explicit operator b8()const{ throw RuntimeException("byte size comparison failure"); }
 };
 [[nodiscard]] inline ThrowingByteSizeComparison operator>(const usize, const ThrowingByteSize)noexcept{ return {}; }
@@ -83,563 +86,7 @@ struct ThrowingByteSizeComparison{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(Global, BinarySharedHelpersPreserveEdgeCases){
-    const Array<u8, 2> bytes{ 0u, 255u };
-    const Array<u8, 2> different{ 0u, 254u };
-    EXPECT_TRUE(BytesMatch(Span<const u8>{}, Span<const u8>{}));
-    EXPECT_FALSE(BytesMatch(bytes, Span<const u8>(bytes.data(), 1u)));
-    EXPECT_FALSE(BytesMatch(bytes, different));
-    const Array<u8, 3> pattern{ 1u, 2u, 3u };
-    Array<u8, 7> repeated{};
-    FillRepeatingBytes(repeated.size(), pattern, repeated.data());
-    EXPECT_EQ(repeated, (Array<u8, 7>{ 1u, 2u, 3u, 1u, 2u, 3u, 1u }));
-    FillRepeatingBytes(0u, pattern, nullptr);
-    usize emptyCursor = 0u;
-    const auto emptyText = ReadBinaryText(BinaryByteView{}, 0u, emptyCursor);
-    ASSERT_TRUE(emptyText);
-    EXPECT_TRUE(emptyText->empty());
-    EXPECT_EQ(emptyCursor, 0u);
-    usize cursor = bytes.size();
-    EXPECT_FALSE(ReadBinaryText(BinaryByteView{ bytes.data(), bytes.size() }, 1u, cursor));
-    EXPECT_EQ(cursor, bytes.size());
-
-    const Array<u8, 3u> partialBytes{ 0x12u, 0x34u, 0x56u };
-    EXPECT_EQ(ReadPartialU32LittleEndian(partialBytes, 0u), 0x00563412u);
-    EXPECT_EQ(ReadPartialU32LittleEndian(partialBytes, 2u), 0x56u);
-    EXPECT_EQ(ReadPartialU32LittleEndian(partialBytes, 3u), 0u);
-    EXPECT_EQ(ReadPartialU32LittleEndian(partialBytes, Limit<usize>::s_Max), 0x56341200u);
-    EXPECT_EQ(ReadAdmittedU16BigEndian(partialBytes, 1u), 0x3456u);
-    struct ThrowingByteContainer{
-        [[nodiscard]] usize size()const noexcept{ return 4u; }
-        u8& operator[](usize){ throw RuntimeException("byte assignment failure"); }
-    };
-    ThrowingByteContainer throwingBytes;
-    EXPECT_THROW(WriteF32LittleEndianAt(1.0f, 0u, throwingBytes), RuntimeException);
-    struct ThrowingLvalueByteContainer{
-        u8 byte = 0u;
-        [[nodiscard]] usize size()const noexcept{ return 4u; }
-        u8& operator[](const usize&){ throw RuntimeException("lvalue byte index failure"); }
-        u8& operator[](usize&&)noexcept{ return byte; }
-    };
-    ThrowingLvalueByteContainer lvalueBytes;
-    static_assert(!noexcept(WriteF32LittleEndianAt(1.0f, 0u, lvalueBytes)));
-    EXPECT_THROW(WriteF32LittleEndianAt(1.0f, 0u, lvalueBytes), RuntimeException);
-    struct ThrowingSizeByteContainer{
-        u8 byte = 0u;
-        [[nodiscard]] ThrowingByteSize size()const noexcept{ return {}; }
-        u8& operator[](usize)noexcept{ return byte; }
-    };
-    ThrowingSizeByteContainer sizeBytes;
-    static_assert(!noexcept(WriteF32LittleEndianAt(1.0f, 0u, sizeBytes)));
-    EXPECT_THROW(WriteF32LittleEndianAt(1.0f, 0u, sizeBytes), RuntimeException);
-    FixedVector<u8, 8u> floatBytes;
-    floatBytes.resize(7u);
-    WriteF32LittleEndianAt(BitCast<f32>(0x80000000u), 0u, floatBytes);
-    EXPECT_EQ(floatBytes[3u], 0x80u);
-    WriteF32LittleEndianAt(BitCast<f32>(0x7fc01234u), 4u, floatBytes);
-    EXPECT_EQ(floatBytes[4u], 0u);
-    floatBytes.resize(8u);
-    WriteF32LittleEndianAt(BitCast<f32>(0x7fc01234u), 4u, floatBytes);
-    EXPECT_EQ(floatBytes[4u], 0x34u);
-    EXPECT_EQ(floatBytes[5u], 0x12u);
-    EXPECT_EQ(floatBytes[6u], 0xc0u);
-    EXPECT_EQ(floatBytes[7u], 0x7fu);
-    EXPECT_DEATH(WriteF32LittleEndianAt(0.0f, Limit<usize>::s_Max, floatBytes), "");
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/common/test_context.adhd.h>
-
-#include <core/alloc/scratch.h>
-
-#include <gtest/gtest.h>
-
-#include <global/atomic_identity.h>
-#include <global/auto_registration.h>
-#include <global/basic_string.h>
-#include <global/binary.h>
-#include <global/binary_big_endian.h>
-#include <global/binary_little_endian.h>
-#include <global/bit.h>
-#include <global/bit_matrix.h>
-#include <global/call_text.h>
-#include <global/checked_sum.h>
-#include <global/compile.h>
-#include <global/containers.h>
-#include <global/csv_text.h>
-#include <global/disjoint_set.h>
-#include <global/diagnostics.h>
-#include <global/filesystem/operations.h>
-#include <global/filesystem/path.h>
-#include <global/filesystem/utility.h>
-#include <global/fixed_buffer.h>
-#include <global/hierarchical_index_set.h>
-#include <global/integer_rect.h>
-#include <global/limit.h>
-#include <global/name_hash.h>
-#include <global/not_null.h>
-#include <global/overflow.h>
-#include <global/process_memory_map.h>
-#include <global/projected_index.h>
-#include <global/quantization.h>
-#include <global/simplemath.h>
-#include <global/simd/color.h>
-#include <global/sha1.h>
-#include <global/append_rollback.h>
-#include <global/range_partition.h>
-#include <global/range_algorithms.h>
-#include <global/latin1_text.h>
-#include <global/interval.h>
-#include <global/source_text.h>
-#include <global/string_hash.h>
-#include <global/statistics.h>
-#include <global/sync.h>
-#include <global/termination.h>
-#include <global/text_utils.h>
-#include <global/text_replacements.h>
-#include <global/unicode/grapheme.h>
-#include <global/utf8_text.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_global_numeric_shared_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(Global, NumericSharedHelpersPreserveEdgeCases){
-    const Array<f64, 2u> signedZeroSamples{ 0.0, -0.0 };
-    const OnlineF64Statistics zeroStatistics = ComputeOnlineF64Statistics(signedZeroSamples);
-    EXPECT_EQ(zeroStatistics.count, 2u);
-    EXPECT_EQ(BitCast<u64>(zeroStatistics.minimum), 0x8000000000000000ull);
-    EXPECT_EQ(BitCast<u64>(zeroStatistics.maximum), 0x8000000000000000ull);
-    EXPECT_EQ(QuantizeUNormScalar(-Limit<f32>::s_Infinity, 255.0f), 0.0f);
-    EXPECT_EQ(QuantizeUNormScalar(Limit<f32>::s_Infinity, 255.0f), 255.0f);
-    EXPECT_EQ(QuantizeUNormScalar(0.5f, 255.0f), 128.0f);
-    EXPECT_EQ(QuantizeSNormScalar(-0.5f, 127.0f), -64.0f);
-    EXPECT_EQ(BitCast<u32>(QuantizeSNormScalar(-0.0f, 127.0f)), 0u);
-    EXPECT_EQ(QuantizeSNormScalar(BitCast<f32>(0x7fc01234u), 127.0f), -127.0f);
-    const SIMDVectorSingle signedColor = VectorQuantizeSNorm(VectorSet(-0.0f, -0.5f, 0.5f, -2.0f), VectorReplicate(127.0f));
-    EXPECT_EQ(VectorGetX(signedColor), 0.0f);
-    EXPECT_EQ(VectorGetY(signedColor), -64.0f);
-    EXPECT_EQ(VectorGetZ(signedColor), 64.0f);
-    EXPECT_EQ(VectorGetW(signedColor), -127.0f);
-    const SIMDVectorSingle quantizedColor = VectorQuantizeUNorm(VectorSet(-1.0f, 0.5f, 1.0f, 2.0f), VectorReplicate(255.0f));
-    EXPECT_EQ(VectorGetX(quantizedColor), 0.0f);
-    EXPECT_EQ(VectorGetY(quantizedColor), 128.0f);
-    EXPECT_EQ(VectorGetZ(quantizedColor), 255.0f);
-    EXPECT_EQ(VectorGetW(quantizedColor), 255.0f);
-    const SIMDVectorSingle encodedColor = VectorLinearToSRGB(VectorSet(-1.0f, 0.0031308f, 1.0f, 2.0f));
-    EXPECT_EQ(VectorGetX(encodedColor), 0.0f);
-    EXPECT_NEAR(VectorGetY(encodedColor), 0.0031308f * 12.92f, 0.000001f);
-    EXPECT_NEAR(VectorGetZ(encodedColor), 1.0f, 0.000001f);
-    EXPECT_NEAR(VectorGetW(encodedColor), 1.0f, 0.000001f);
-    const Array<u32, 2u> narrowSum{ Limit<u32>::s_Max, 1u };
-    const auto wrappedNarrowSum = TrySumUnsignedWithU64Limit<u32>(narrowSum);
-    ASSERT_TRUE(wrappedNarrowSum);
-    EXPECT_EQ(*wrappedNarrowSum, 0u);
-    const Array<u64, 2u> wideSumOverflow{ Limit<u64>::s_Max, 1u };
-    EXPECT_FALSE(TrySumUnsignedWithU64Limit<u64>(wideSumOverflow));
-    EXPECT_EQ(TrySumUnsignedWithU64Limit<u64>(Span<const u64>{}).value(), 0u);
-    const Array<u64, 2u> exactMaximumSum{ Limit<u64>::s_Max - 1u, 1u };
-    EXPECT_EQ(TrySumUnsignedWithU64Limit<u64>(exactMaximumSum).value(), Limit<u64>::s_Max);
-    const Array<u64, 2u> maximumThenZero{ Limit<u64>::s_Max, 0u };
-    EXPECT_FALSE(TrySumNonzeroU64(maximumThenZero));
-    const Array<u64, 1u> maximumCount{ Limit<u64>::s_Max };
-    const Array<u64, 2u> overflowingCounts{ Limit<u64>::s_Max, 1u };
-    const Array<u64, 1u> zeroCount{ 0u };
-    EXPECT_EQ(TrySumNonzeroU64(Span<const u64>{}).value(), 0u);
-    EXPECT_EQ(TrySumNonzeroU64(maximumCount).value(), Limit<u64>::s_Max);
-    EXPECT_FALSE(TrySumNonzeroU64(overflowingCounts));
-    EXPECT_FALSE(TrySumNonzeroU64(zeroCount));
-    u64 total = 11u;
-    EXPECT_FALSE(AccumulateBoundedCount(0u, 10u, total));
-    EXPECT_EQ(total, 11u);
-    total = Limit<u64>::s_Max - 1u;
-    EXPECT_FALSE(AccumulateBoundedCount(2u, Limit<u64>::s_Max, total));
-    EXPECT_EQ(total, Limit<u64>::s_Max - 1u);
-
-    EXPECT_EQ(PackUnorderedU32Pair(0u, Limit<u32>::s_Max), 0xffffffffull);
-    EXPECT_EQ(PackUnorderedU32Pair(Limit<u32>::s_Max, 0u), 0xffffffffull);
-    EXPECT_EQ(PackUnorderedU32Pair(Limit<u32>::s_Max, Limit<u32>::s_Max), Limit<u64>::s_Max);
-    constexpr u64 packedWords = PackU32Words(0xffffffffu, 0x12345678u);
-    EXPECT_EQ(packedWords, 0x12345678ffffffffull);
-    EXPECT_EQ(LowU32Word(packedWords), 0xffffffffu);
-    EXPECT_EQ(HighU32Word(packedWords), 0x12345678u);
-    EXPECT_EQ(PackFourCharTag('H', 'a', 'n', 'g'), 0x48616e67u);
-    EXPECT_EQ(PackFourCharTag(static_cast<char>(0x80), 'a', 'b', 'c'), (static_cast<u32>(static_cast<char>(0x80)) << 24u) | 0x00616263u);
-    EXPECT_EQ(*SignedDifference(0u, static_cast<u64>(Limit<i64>::s_Max) + 1u), Limit<i64>::s_Min);
-    EXPECT_FALSE(SignedDifference(0u, static_cast<u64>(Limit<i64>::s_Max) + 2u));
-    EXPECT_FALSE(SignedDifference(static_cast<u64>(Limit<i64>::s_Max) + 1u, 0u));
-    EXPECT_FALSE(AlignUpCheckedSize(Limit<usize>::s_Max, 4u));
-    EXPECT_FALSE(AlignUpChecked(Limit<usize>::s_Max, usize{4u}));
-    ASSERT_TRUE(AlignUpChecked(Limit<usize>::s_Max - 3u, usize{4u}));
-    EXPECT_EQ(*AlignUpChecked(Limit<usize>::s_Max - 3u, usize{4u}), Limit<usize>::s_Max - 3u);
-    EXPECT_TRUE(DifferentF64Bits(0.0, -0.0));
-    EXPECT_FALSE(DifferentF64Bits(BitCast<f64>(0x7ff8000000001234ull), BitCast<f64>(0x7ff8000000001234ull)));
-    EXPECT_TRUE(DifferentF64Bits(BitCast<f64>(0x7ff8000000001234ull), BitCast<f64>(0x7ff8000000001235ull)));
-    EXPECT_EQ(SaturateU64ToI32(static_cast<u64>(Limit<i32>::s_Max) + 1u), Limit<i32>::s_Max);
-
-    EXPECT_EQ(AddSignedOffset(u64(1) << 63u, Limit<i64>::s_Min).value(), 0u);
-    EXPECT_FALSE(AddSignedOffset(0u, Limit<i64>::s_Min));
-    EXPECT_FALSE(AddSignedOffset(Limit<u64>::s_Max, 1));
-    EXPECT_EQ(DivideUpWrapping(Limit<u32>::s_Max, 8u), 0u);
-    EXPECT_EQ(DivideUpWrapping(Limit<u64>::s_Max, u64(2)), 0u);
-    EXPECT_EQ(DivideUpWrapping(usize(9), 8u), usize(2));
-    const BalancedPartitionRange firstRange = ComputeBalancedPartitionRange(10u, 0u, 2u, 1u);
-    const BalancedPartitionRange lastRange = ComputeBalancedPartitionRange(10u, 2u, 2u, 1u);
-    EXPECT_EQ(firstRange.first, 10u);
-    EXPECT_EQ(firstRange.last, 13u);
-    EXPECT_EQ(lastRange.first, 15u);
-    EXPECT_EQ(lastRange.last, 17u);
-    Atomic<u64> wrappingIdentity{ Limit<u64>::s_Max };
-    EXPECT_EQ(NextAtomicWrappingNonzero(wrappingIdentity), 1u);
-    u64 wrappingRevision = Limit<u64>::s_Max;
-    AdvanceWrappingNonzero(wrappingRevision);
-    EXPECT_EQ(wrappingRevision, 1u);
-    EXPECT_FALSE(HasSingleSetBit(u16(0)));
-    EXPECT_TRUE(HasSingleSetBit(u16(0x8000)));
-    EXPECT_EQ(LowestSetBit(u8(0x90)), u8(0x10));
-    EXPECT_EQ(AlignmentOffsetPowerOfTwo(Limit<usize>::s_Max, 8u), 1u);
-    EXPECT_EQ(SubtractSaturating(u64(1), u64(2)), 0u);
-    EXPECT_EQ(BitWidthLowU32(0xffffffffu, 0u), 0u);
-    EXPECT_EQ(BitWidthLowU32(0x80000100u, 8u), 0u);
-    EXPECT_EQ(BitWidthLowU32(0x80000000u, 32u), 32u);
-    EXPECT_TRUE(IsNewerSerialU32(0u, Limit<u32>::s_Max));
-    EXPECT_FALSE(IsNewerSerialU32(0x80000000u, 0u));
-    EXPECT_FALSE(IsNewerSerialU32(7u, 7u));
-    EXPECT_TRUE(IsNotOlderSerialU32(7u, 7u));
-    EXPECT_TRUE(IsNotOlderSerialU32(0u, Limit<u32>::s_Max));
-    EXPECT_TRUE(IsNotOlderSerialU32(0x7fffffffu, 0u));
-    EXPECT_FALSE(IsNotOlderSerialU32(0x80000000u, 0u));
-    EXPECT_FALSE(IsNotOlderSerialU32(0x80000001u, 0u));
-    EXPECT_TRUE(IsSerialU32InWindow(0u, 0xfffffffeu, 1u));
-    EXPECT_TRUE(IsSerialU32InWindow(1u, 0xfffffffeu, 1u));
-    EXPECT_FALSE(IsSerialU32InWindow(2u, 0xfffffffeu, 1u));
-    EXPECT_FALSE(IsSerialU32InWindow(0xfffffffdu, 0xfffffffeu, 1u));
-    EXPECT_TRUE(IsSerialU32InWindow(0x7fffffffu, 0u, 0x7fffffffu));
-    EXPECT_FALSE(IsSerialU32InWindow(0x80000000u, 0u, 0x7fffffffu));
-    EXPECT_FALSE(IsSerialU32InWindow(0x80000001u, 0u, 0x7fffffffu));
-    EXPECT_FALSE(IsSerialU32InWindow(0u, 0u, 0x80000000u));
-    EXPECT_EQ(ComputeSobol2U32(0u), 0u);
-    EXPECT_EQ(ComputeSobol2U32(1u), 0x8000000080000000ull);
-    EXPECT_EQ(ComputeSobol2U32(2u), 0xc000000040000000ull);
-    EXPECT_EQ(ComputeSobol2U32(3u), 0x40000000c0000000ull);
-    EXPECT_EQ(DivideFloorI64(Limit<i64>::s_Min, 1), Limit<i64>::s_Min);
-    EXPECT_EQ(DivideFloorI64(-3, 2), -2);
-    EXPECT_EQ(DivideCeilI64(-3, 2), -1);
-    EXPECT_EQ(DivideCeilI64(Limit<i64>::s_Max, 2), Limit<i64>::s_Max / 2 + 1);
-    EXPECT_EQ(BitCast<u32>(RoundF64ToF32Bound(0x1p-150, false)), 0u);
-    EXPECT_EQ(BitCast<u32>(RoundF64ToF32Bound(0x1p-150, true)), 1u);
-    EXPECT_EQ(BitCast<u32>(RoundF64ToF32Bound(-0x1p-150, false)), 0x80000001u);
-    EXPECT_EQ(BitCast<u32>(RoundF64ToF32Bound(-0x1p-150, true)), 0x80000000u);
-    EXPECT_EQ(BitCast<u32>(RoundF64ToF32Bound(-0.0, false)), 0x80000000u);
-    EXPECT_EQ(BitCast<u32>(RoundF64ToF32Bound(1.0 + 0x1p-24, false)), 0x3f800000u);
-    EXPECT_EQ(BitCast<u32>(RoundF64ToF32Bound(1.0 + 0x1p-24, true)), 0x3f800001u);
-    EXPECT_EQ(ClassifyIntegerGrammar("-"), s_NumericGrammarIncomplete);
-    EXPECT_EQ(ClassifyIntegerGrammar("--1"), s_NumericGrammarInvalid);
-    EXPECT_EQ(ClassifyIntegerGrammar(" 1"), s_NumericGrammarInvalid);
-    EXPECT_EQ(ClassifyFloatGrammar("."), s_NumericGrammarIncomplete);
-    EXPECT_EQ(ClassifyFloatGrammar("1e+"), s_NumericGrammarIncomplete);
-    EXPECT_EQ(ClassifyFloatGrammar("1e+x"), s_NumericGrammarInvalid);
-    EXPECT_EQ(ClassifyFloatGrammar(".e"), s_NumericGrammarInvalid);
-    EXPECT_EQ(ClassifyFloatGrammar("1."), s_NumericGrammarComplete);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/common/test_context.adhd.h>
-
-#include <core/alloc/scratch.h>
-
-#include <gtest/gtest.h>
-
-#include <global/atomic_identity.h>
-#include <global/auto_registration.h>
-#include <global/basic_string.h>
-#include <global/binary.h>
-#include <global/binary_big_endian.h>
-#include <global/binary_little_endian.h>
-#include <global/bit.h>
-#include <global/bit_matrix.h>
-#include <global/call_text.h>
-#include <global/checked_sum.h>
-#include <global/compile.h>
-#include <global/containers.h>
-#include <global/csv_text.h>
-#include <global/disjoint_set.h>
-#include <global/diagnostics.h>
-#include <global/filesystem/operations.h>
-#include <global/filesystem/path.h>
-#include <global/filesystem/utility.h>
-#include <global/fixed_buffer.h>
-#include <global/hierarchical_index_set.h>
-#include <global/integer_rect.h>
-#include <global/limit.h>
-#include <global/name_hash.h>
-#include <global/not_null.h>
-#include <global/overflow.h>
-#include <global/process_memory_map.h>
-#include <global/projected_index.h>
-#include <global/quantization.h>
-#include <global/simplemath.h>
-#include <global/simd/color.h>
-#include <global/sha1.h>
-#include <global/append_rollback.h>
-#include <global/range_partition.h>
-#include <global/range_algorithms.h>
-#include <global/latin1_text.h>
-#include <global/interval.h>
-#include <global/source_text.h>
-#include <global/string_hash.h>
-#include <global/statistics.h>
-#include <global/sync.h>
-#include <global/termination.h>
-#include <global/text_utils.h>
-#include <global/text_replacements.h>
-#include <global/unicode/grapheme.h>
-#include <global/utf8_text.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_global_collection_shared_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(Global, CollectionSharedHelpersPreserveEdgeCases){
-    EXPECT_FALSE(UnsignedRangesOverlap(1u, 0u, Limit<u64>::s_Max, 2u));
-    EXPECT_TRUE(UnsignedRangesOverlap(Limit<u64>::s_Max, 2u, 0u, 1u));
-    Array<u64, s_BitsPerU64> matrix{};
-    matrix[1u] = u64(1) << 63u;
-    TransposeBitMatrix64(matrix);
-    EXPECT_EQ(matrix[63u], 2u);
-    TransposeBitMatrix64(matrix);
-    EXPECT_EQ(matrix[1u], u64(1) << 63u);
-
-    const Array<usize, 4> ordered{ 1u, 3u, 3u, 8u };
-    EXPECT_EQ(LowerBoundIndex(Span<const usize>{}, 3u), 0u);
-    EXPECT_EQ(LowerBoundIndex(ordered, 3u), 1u);
-    EXPECT_EQ(LowerBoundIndex(ordered, 9u), ordered.size());
-    NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
-    Vector<u32, NWB::Core::Alloc::ScratchArena> cachedValues(scratchArena);
-    cachedValues.push_back(1u); cachedValues.push_back(2u); cachedValues.push_back(4u);
-    const Array<u32, 3u> requestedValues{ 2u, 3u, 3u };
-    const auto sameValue = [](const u32 cached, const u32 requested)noexcept{ return cached == requested; };
-    EXPECT_EQ(CountMissingCacheEntries(cachedValues, requestedValues, sameValue), 2u);
-    const auto throwingKey = [](const u32, const u32) -> b8 { throw RuntimeException("predicate failure"); };
-    EXPECT_THROW(static_cast<void>(CountMissingCacheEntries(cachedValues, requestedValues, throwingKey)), RuntimeException);
-    EXPECT_THROW(RetainReferencedCacheEntries(requestedValues, throwingKey, cachedValues), RuntimeException);
-    RetainReferencedCacheEntries(requestedValues, sameValue, cachedValues);
-    ASSERT_EQ(cachedValues.size(), 1u);
-    EXPECT_EQ(cachedValues[0u], 2u);
-    Vector<u32, NWB::Core::Alloc::ScratchArena> rollbackValues(scratchArena);
-    rollbackValues.push_back(7u);
-    u32 underflows = 0u;
-    {
-        AppendedContainerRollbackScope rollback(rollbackValues, [&underflows]()noexcept{ ++underflows; });
-        rollbackValues.push_back(8u);
-    }
-    EXPECT_EQ(rollbackValues.size(), 1u);
-    EXPECT_EQ(rollbackValues[0u], 7u);
-    {
-        AppendedContainerRollbackScope rollback(rollbackValues, [&underflows]()noexcept{ ++underflows; });
-        rollbackValues.pop_back();
-    }
-    EXPECT_EQ(underflows, 1u);
-    Array<u32, 130u> indexFlags{};
-    indexFlags.fill(1u);
-    indexFlags[0u] = 0u;
-    indexFlags[64u] = 0u;
-    indexFlags[129u] = 0u;
-    HierarchicalIndexSet<NWB::Core::Alloc::ScratchArena> ready(scratchArena);
-    ready.initializeZeros(Span<const u32>(indexFlags));
-    EXPECT_EQ(ready.takeLowest(), 0u);
-    EXPECT_EQ(ready.takeLowest(), 64u);
-    EXPECT_EQ(ready.takeLowest(), 129u);
-    EXPECT_EQ(ready.takeLowest(), 130u);
-    ready.add(64u);
-    ready.add(64u);
-    EXPECT_EQ(ready.takeLowest(), 64u);
-    EXPECT_EQ(ready.takeLowest(), 130u);
-
-    Vector<u64, NWB::Core::Alloc::ScratchArena> denseMatrix(130u, 0u, scratchArena);
-    denseMatrix[1u] = 1u;
-    denseMatrix[2u] = 1u;
-    SymmetrizeDenseBitMatrix(denseMatrix, 65u, 2u);
-    EXPECT_EQ(denseMatrix[128u] & 1u, 1u);
-    EXPECT_EQ(denseMatrix[0u] & 2u, 2u);
-
-    using WordRange = NWB::Tests::GlobalCases::WordRangeProbe;
-    Array<WordRange, 65u> ranges{};
-    Array<usize, 65u> offsets{};
-    usize wordCount = 0u;
-    for(usize i = 0u; i < ranges.size(); ++i){
-        ranges[i] = WordRange{ 0u, i == 0u || i == 1u || i == 64u ? 2u : 1u };
-        offsets[i] = wordCount;
-        wordCount += ranges[i].end;
-    }
-    Vector<u64, NWB::Core::Alloc::ScratchArena> compactMatrix(wordCount, 0u, scratchArena);
-    compactMatrix[offsets[0u] + 1u] = 1u;
-    compactMatrix[offsets[1u]] = 1u;
-    compactMatrix[offsets[64u]] = 2u;
-    SymmetrizeCompactBitMatrix(compactMatrix, offsets, ranges, 65u, 2u);
-    EXPECT_EQ(compactMatrix[offsets[64u]] & 1u, 1u);
-    EXPECT_EQ(compactMatrix[offsets[0u]] & 2u, 2u);
-    EXPECT_EQ(compactMatrix[offsets[1u] + 1u] & 1u, 1u);
-
-    Vector<IntegerRectBounds, NWB::Core::Alloc::ScratchArena> fragments(scratchArena);
-    AppendIntegerRectRemainder(IntegerRectBounds{ 0u, 4u, 0u, 4u }, IntegerRectBounds{ 1u, 3u, 1u, 3u }, fragments);
-    ASSERT_EQ(fragments.size(), 4u);
-    EXPECT_EQ(fragments[0u].xEnd, 1u);
-    EXPECT_EQ(fragments[1u].xBegin, 3u);
-    EXPECT_EQ(fragments[2u].yEnd, 1u);
-    EXPECT_EQ(fragments[3u].yBegin, 3u);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/common/test_context.adhd.h>
-
-#include <core/alloc/scratch.h>
-
-#include <gtest/gtest.h>
-
-#include <global/atomic_identity.h>
-#include <global/auto_registration.h>
-#include <global/basic_string.h>
-#include <global/binary.h>
-#include <global/binary_big_endian.h>
-#include <global/binary_little_endian.h>
-#include <global/bit.h>
-#include <global/bit_matrix.h>
-#include <global/call_text.h>
-#include <global/checked_sum.h>
-#include <global/compile.h>
-#include <global/containers.h>
-#include <global/csv_text.h>
-#include <global/disjoint_set.h>
-#include <global/diagnostics.h>
-#include <global/filesystem/operations.h>
-#include <global/filesystem/path.h>
-#include <global/filesystem/utility.h>
-#include <global/fixed_buffer.h>
-#include <global/hierarchical_index_set.h>
-#include <global/integer_rect.h>
-#include <global/limit.h>
-#include <global/name_hash.h>
-#include <global/not_null.h>
-#include <global/overflow.h>
-#include <global/process_memory_map.h>
-#include <global/projected_index.h>
-#include <global/quantization.h>
-#include <global/simplemath.h>
-#include <global/simd/color.h>
-#include <global/sha1.h>
-#include <global/append_rollback.h>
-#include <global/range_partition.h>
-#include <global/range_algorithms.h>
-#include <global/latin1_text.h>
-#include <global/interval.h>
-#include <global/source_text.h>
-#include <global/string_hash.h>
-#include <global/statistics.h>
-#include <global/sync.h>
-#include <global/termination.h>
-#include <global/text_utils.h>
-#include <global/text_replacements.h>
-#include <global/unicode/grapheme.h>
-#include <global/utf8_text.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_global_hash_shared_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(Global, HashSharedHelpersPreserveEdgeCases){
-    EXPECT_EQ(MixMurmur64Finalizer(0u), 0u);
-    EXPECT_EQ(MixMurmur64Finalizer(1u), 0xb456bcfc34c2cb2cull);
-    EXPECT_EQ(BoolToYesNoText(true), "yes");
-    EXPECT_EQ(BoolToYesNoText(false), "no");
-    EXPECT_EQ(UpdateFnv64U32LittleEndian(s_Fnv64OffsetBasis, 0x12345678u), 0xcccfd053e47c3365ull);
-    EXPECT_EQ(UpdateFnv64U64LittleEndian(s_Fnv64OffsetBasis, 0x0123456789abcdefull), 0x37eb3f3347761c55ull);
-    NameHash lanes{};
-    lanes.qwords = { 0x0123456789abcdefull, 0u, 0xffffffffffffffffull, 0x0102030405060708ull, 5u, 6u, 7u, 8u };
-    EXPECT_EQ(UpdateFnv64NameHash(0x123456789abcdef0ull, lanes), 0x08d4d531507706dcull);
-    EXPECT_EQ(FoldNameHash64(lanes), 0xe33b773ee6cabb20ull);
-    struct CharSink{
-        Array<char, Sha1Digest::s_HexTextLength> data{};
-        usize size = 0u;
-        CharSink& operator+=(const char ch)noexcept{ data[size++] = ch; return *this; }
-    };
-    CharSink sink;
-    AppendHexByte(0xAFu, sink);
-    EXPECT_EQ(sink.data[0u], 'a');
-    EXPECT_EQ(sink.data[1u], 'f');
-    sink.size = 0u;
-    AppendSha1Hex(Sha1Digest{}, sink);
-    EXPECT_EQ(sink.size, Sha1Digest::s_HexTextLength);
-    EXPECT_EQ(sink.data[0u], '0');
-    EXPECT_EQ(sink.data[sink.size - 1u], '0');
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <global/binary.h>
-#include <global/compact_string.h>
-#include <global/diagnostics.h>
-#include <global/filesystem/operations_file_io.h>
-#include <global/hash_utils.h>
-#include <global/inplace_function.h>
-#include <global/numeric_text.h>
-#include <global/refcount_ptr.h>
-#include <global/unique_ptr.h>
-
-#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -655,11 +102,8 @@ inline constexpr u32 s_PlacementFailure = 0xE201u;
 inline constexpr u32 s_ReadFailure = 0xE202u;
 inline constexpr u32 s_HashFailure = 0xE203u;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 struct ThrowingPlacementCallable{
+public:
     static void* operator new(usize, void*){
         throw s_PlacementFailure;
     }
@@ -668,6 +112,7 @@ struct ThrowingPlacementCallable{
 };
 
 struct ThrowingPodAddress{
+public:
     u32 value = 0u;
 
 
@@ -677,10 +122,12 @@ public:
 static_assert(IsTriviallyCopyable_V<ThrowingPodAddress>);
 
 struct ThrowingMutableByteSource{
+public:
     [[nodiscard]] u8* data(){ throw s_ReadFailure; }
 };
 
 struct ThrowingDiagnosticView{
+public:
     u32& calls;
 
 
@@ -692,6 +139,7 @@ public:
 };
 
 struct ThrowingDiagnosticTemporary{
+public:
     ~ThrowingDiagnosticTemporary()noexcept(false){ throw s_ReadFailure; }
 
 
@@ -700,6 +148,7 @@ public:
 };
 
 struct ThrowingDiagnosticCleanup{
+public:
     u32& calls;
 
 
@@ -711,6 +160,7 @@ public:
 };
 
 struct StatefulPlacementCallable{
+public:
     static inline u32 s_Allocations = 0u;
     u32& calls;
 
@@ -728,12 +178,14 @@ public:
 struct HashProbe{};
 
 struct ThrowingHashValue{
+public:
     operator usize()const{
         throw s_HashFailure;
     }
 };
 
 struct ThrowingByteSource{
+public:
     using value_type = u8;
 
 
@@ -778,115 +230,6 @@ struct hash<__hidden_noexcept_failure_tests::HashProbe>{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
-
-TEST(NoexceptFailureTests, HashResultConversionFailurePreservesCombinedSeed){
-    using namespace __hidden_noexcept_failure_tests;
-    HashProbe value;
-    usize seed = 17u;
-    static_assert(!noexcept(HashCombine(seed, value)));
-
-    EXPECT_THROW(HashCombine(seed, value), u32);
-    EXPECT_EQ(seed, 17u);
-}
-
-TEST(NoexceptFailureTests, PlacementAllocationFailurePropagatesThroughCaptureConstructionAndReplacement){
-    using namespace __hidden_noexcept_failure_tests;
-    using Storage = InplaceFunction<64u>;
-    ThrowingPlacementCallable callable;
-    static_assert(!noexcept(Storage(callable)));
-    static_assert(!noexcept(DeclVal<Storage&>() = callable));
-
-    EXPECT_THROW(EXPECT_TRUE(Storage(callable)), u32);
-
-    u32 previousInvocations = 0u;
-    Storage stored([&previousInvocations]()noexcept{ ++previousInvocations; });
-    EXPECT_THROW(stored = callable, u32);
-    EXPECT_FALSE(stored);
-    EXPECT_EQ(previousInvocations, 0u);
-}
-
-TEST(NoexceptFailureTests, ThrowingByteGetterPreservesReadOffset){
-    using namespace __hidden_noexcept_failure_tests;
-    ThrowingByteSource source;
-    usize offset = 0u;
-    static_assert(!noexcept(ReadPOD<u32>(source, offset)));
-
-    EXPECT_THROW(EXPECT_TRUE(ReadPOD<u32>(source, offset)), u32);
-    EXPECT_EQ(offset, 0u);
-}
-
-
-
-
-
-
-TEST(NoexceptFailureTests, PodAddressAndMutableBufferGetterFailuresPropagateBeforeReading){
-    using namespace __hidden_noexcept_failure_tests;
-    const Array<u8, sizeof(ThrowingPodAddress)> bytes = {};
-    const BinaryByteView source{ bytes.data(), bytes.size() };
-    usize offset = 0u;
-    static_assert(!noexcept(ReadPOD<ThrowingPodAddress>(source, offset)));
-    EXPECT_THROW(EXPECT_TRUE(ReadPOD<ThrowingPodAddress>(source, offset)), u32);
-    EXPECT_EQ(offset, 0u);
-
-    ThrowingMutableByteSource mutableSource;
-    static_assert(!noexcept(GlobalFilesystemDetail::MutableReadBuffer(mutableSource)));
-    EXPECT_THROW(EXPECT_EQ(GlobalFilesystemDetail::MutableReadBuffer(mutableSource), nullptr), u32);
-}
-
-TEST(NoexceptFailureTests, BoundedDiagnosticsNeverInvokeThrowingConversionOrCleanupAdapters){
-    using namespace __hidden_noexcept_failure_tests;
-    u32 calls = 0u;
-    const ThrowingDiagnosticView conversion{ calls };
-    const ThrowingDiagnosticCleanup cleanup{ calls };
-    EXPECT_EQ(MakeDiagnosticEventText(AStringView("{}"), conversion).view(), AStringView("<unprintable>"));
-    EXPECT_EQ(MakeDiagnosticEventText(AStringView("{}"), cleanup).view(), AStringView("<unprintable>"));
-    EXPECT_EQ(calls, 0u);
-}
-
-TEST(NoexceptFailureTests, CaptureMoveTransportDoesNotReinvokeClassPlacementAllocation){
-    using namespace __hidden_noexcept_failure_tests;
-    StatefulPlacementCallable::s_Allocations = 0u;
-    u32 calls = 0u;
-    StatefulPlacementCallable callable{ calls };
-    InplaceFunction<64u> source(callable);
-    EXPECT_EQ(StatefulPlacementCallable::s_Allocations, 1u);
-    InplaceFunction<64u> moved(Move(source));
-    EXPECT_FALSE(source);
-    ASSERT_TRUE(moved);
-    moved();
-    EXPECT_EQ(calls, 1u);
-    EXPECT_EQ(StatefulPlacementCallable::s_Allocations, 1u);
-}
-
-
-
-
-
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/global/name_case_types.adhd.h>
-
-#include <global/binary.h>
-#include <global/compact_string.h>
-#include <global/diagnostics.h>
-#include <global/filesystem/operations_file_io.h>
-#include <global/hash_utils.h>
-#include <global/inplace_function.h>
-#include <global/numeric_text.h>
-#include <global/refcount_ptr.h>
-#include <global/unique_ptr.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace __hidden_pointer_failure_tests{
 
 
@@ -896,10 +239,10 @@ namespace __hidden_pointer_failure_tests{
 inline constexpr u32 s_PointerFailure = NWB::Tests::GlobalCases::s_GlobalPointerFailure;
 inline constexpr u32 s_ComparisonFailure = NWB::Tests::GlobalCases::s_GlobalComparisonFailure;
 
-
 struct RefCountTarget{};
 
 struct ThrowingFancyPointer{
+public:
     RefCountTarget* target = nullptr;
 
 
@@ -927,15 +270,16 @@ public:
     explicit operator b8()const noexcept{ return target != nullptr; }
 };
 
-[[nodiscard]] b8 operator==(const ThrowingFancyPointer& lhs, const ThrowingFancyPointer& rhs)noexcept{
+[[nodiscard]] inline b8 operator==(const ThrowingFancyPointer& lhs, const ThrowingFancyPointer& rhs)noexcept{
     return lhs.target == rhs.target;
 }
 
-u32 RefCountAddReference(ThrowingFancyPointer)noexcept{ return 1u; }
+inline u32 RefCountAddReference(ThrowingFancyPointer)noexcept{ return 1u; }
 
-u32 RefCountRelease(ThrowingFancyPointer)noexcept{ return 1u; }
+inline u32 RefCountRelease(ThrowingFancyPointer)noexcept{ return 1u; }
 
 struct FancyPointerDeleter{
+public:
     using pointer = ThrowingFancyPointer;
 
 
@@ -944,6 +288,7 @@ public:
 };
 
 struct ThrowingComparisonResult{
+public:
     operator b8()const{ throw s_ComparisonFailure; }
 
     [[nodiscard]] ThrowingComparisonResult operator!()const noexcept{ return {}; }
@@ -951,10 +296,12 @@ struct ThrowingComparisonResult{
 
 template<typename T>
 struct ComparisonProxyDeleter{
+public:
     void operator()(T*)const noexcept{}
 };
 
 struct ComparisonReferenceTarget{
+public:
     u32 references = 1u;
 
 
@@ -967,21 +314,21 @@ public:
 using UniqueComparisonOwner = UniquePtr<int, ComparisonProxyDeleter<int>>;
 using ReferenceComparisonOwner = RefCountPtr<ComparisonReferenceTarget, ComparisonProxyDeleter<ComparisonReferenceTarget>>;
 
-[[nodiscard]] ThrowingComparisonResult operator<(const UniqueComparisonOwner&, const UniqueComparisonOwner&)noexcept{ return {}; }
+[[nodiscard]] inline ThrowingComparisonResult operator<(const UniqueComparisonOwner&, const UniqueComparisonOwner&)noexcept{ return {}; }
 
-[[nodiscard]] ThrowingComparisonResult operator<(const UniqueComparisonOwner&, decltype(nullptr))noexcept{ return {}; }
+[[nodiscard]] inline ThrowingComparisonResult operator<(const UniqueComparisonOwner&, decltype(nullptr))noexcept{ return {}; }
 
-[[nodiscard]] ThrowingComparisonResult operator<(decltype(nullptr), const UniqueComparisonOwner&)noexcept{ return {}; }
+[[nodiscard]] inline ThrowingComparisonResult operator<(decltype(nullptr), const UniqueComparisonOwner&)noexcept{ return {}; }
 
-[[nodiscard]] ThrowingComparisonResult operator<(const ReferenceComparisonOwner&, const ReferenceComparisonOwner&)noexcept{ return {}; }
+[[nodiscard]] inline ThrowingComparisonResult operator<(const ReferenceComparisonOwner&, const ReferenceComparisonOwner&)noexcept{ return {}; }
 
-[[nodiscard]] ThrowingComparisonResult operator<(const ReferenceComparisonOwner&, decltype(nullptr))noexcept{ return {}; }
+[[nodiscard]] inline ThrowingComparisonResult operator<(const ReferenceComparisonOwner&, decltype(nullptr))noexcept{ return {}; }
 
-[[nodiscard]] ThrowingComparisonResult operator<(decltype(nullptr), const ReferenceComparisonOwner&)noexcept{ return {}; }
+[[nodiscard]] inline ThrowingComparisonResult operator<(decltype(nullptr), const ReferenceComparisonOwner&)noexcept{ return {}; }
 
-[[nodiscard]] ThrowingComparisonResult operator!(const UniqueComparisonOwner&)noexcept{ return {}; }
+[[nodiscard]] inline ThrowingComparisonResult operator!(const UniqueComparisonOwner&)noexcept{ return {}; }
 
-[[nodiscard]] ThrowingComparisonResult operator!(const ReferenceComparisonOwner&)noexcept{ return {}; }
+[[nodiscard]] inline ThrowingComparisonResult operator!(const ReferenceComparisonOwner&)noexcept{ return {}; }
 
 template<typename OwnerT>
 void VerifyComparisonResultConversions(){
@@ -1015,6 +362,7 @@ void VerifyComparisonResultConversions(){
 }
 
 struct ObservationPointer{
+public:
     static inline b8 s_FailCopy = false;
     RefCountTarget* target = nullptr;
 
@@ -1046,13 +394,14 @@ public:
     explicit operator b8()const noexcept{ return target != nullptr; }
 };
 
-[[nodiscard]] b8 operator==(const ObservationPointer& first, const ObservationPointer& second)noexcept{ return first.target == second.target; }
+[[nodiscard]] inline b8 operator==(const ObservationPointer& first, const ObservationPointer& second)noexcept{ return first.target == second.target; }
 
-u32 RefCountAddReference(ObservationPointer)noexcept{ return 1u; }
+inline u32 RefCountAddReference(ObservationPointer)noexcept{ return 1u; }
 
-u32 RefCountRelease(ObservationPointer)noexcept{ return 1u; }
+inline u32 RefCountRelease(ObservationPointer)noexcept{ return 1u; }
 
 struct ObservationDeleter{
+public:
     using pointer = ObservationPointer;
 
 
@@ -1061,91 +410,10 @@ public:
 };
 
 
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(NoexceptFailureTests, FancyPointerDereferenceAndRawConversionFailuresPreserveBorrowedTarget){
-    using namespace __hidden_pointer_failure_tests;
-    using Storage = RefCountPtr<RefCountTarget, FancyPointerDeleter>;
-    RefCountTarget target;
-    Storage stored(ThrowingFancyPointer::Borrow(&target), s_AdoptRef);
-    static_assert(!noexcept(*stored));
-    static_assert(!noexcept(stored = &target));
-
-    EXPECT_THROW(EXPECT_EQ(&*stored, &target), u32);
-    EXPECT_THROW(stored = &target, u32);
-    EXPECT_EQ(stored.get().target, &target);
-}
-
-TEST(NoexceptFailureTests, UniqueOwnerComparisonResultConversionUnwindsThroughEveryBooleanWrapper){
-    using namespace __hidden_pointer_failure_tests;
-    UniquePtr<int> first;
-    UniquePtr<int> second;
-    static_assert(noexcept(::operator==(first, nullptr)));
-    static_assert(noexcept(::operator>(first, second)));
-    static_assert(noexcept(::operator<=(first, second)));
-    static_assert(noexcept(::operator>=(first, second)));
-    VerifyComparisonResultConversions<UniqueComparisonOwner>();
-}
-
-TEST(NoexceptFailureTests, ReferenceOwnerComparisonResultConversionUnwindsThroughEveryBooleanWrapper){
-    using namespace __hidden_pointer_failure_tests;
-    RefCountPtr<ComparisonReferenceTarget> first;
-    RefCountPtr<ComparisonReferenceTarget> second;
-    static_assert(noexcept(::operator==(first, nullptr)));
-    static_assert(noexcept(::operator>(first, second)));
-    static_assert(noexcept(::operator<=(first, second)));
-    static_assert(noexcept(::operator>=(first, second)));
-    VerifyComparisonResultConversions<ReferenceComparisonOwner>();
-}
-
-TEST(NoexceptFailureTests, OwnerObservationUsesImplicitCopyAndPreservesBorrowedTargetsOnFailure){
-    using namespace __hidden_pointer_failure_tests;
-    static_assert(noexcept(ObservationPointer(DeclVal<const ObservationPointer&>())));
-    static_assert(!noexcept(DeclVal<void(*)(ObservationPointer)noexcept>()(DeclVal<const ObservationPointer&>())));
-    RefCountTarget target;
-    UniquePtr<RefCountTarget, ObservationDeleter> unique(ObservationPointer{ &target });
-    RefCountPtr<RefCountTarget, ObservationDeleter> shared(ObservationPointer{ &target }, s_AdoptRef);
-    ScopeExit disarm([]()noexcept{ ObservationPointer::s_FailCopy = false; });
-    static_assert(!noexcept(unique.get()));
-    static_assert(!noexcept(unique.operator->()));
-    static_assert(!noexcept(shared.get()));
-    static_assert(!noexcept(shared.operator->()));
-    ObservationPointer::s_FailCopy = true;
-    EXPECT_THROW(EXPECT_EQ(unique.get().target, &target), u32);
-    EXPECT_THROW(EXPECT_EQ(unique.operator->().target, &target), u32);
-    EXPECT_THROW(EXPECT_EQ(shared.get().target, &target), u32);
-    EXPECT_THROW(EXPECT_EQ(shared.operator->().target, &target), u32);
-    ObservationPointer::s_FailCopy = false;
-    EXPECT_EQ(unique.get().target, &target);
-    EXPECT_EQ(shared.get().target, &target);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/global/hex_case_types.adhd.h>
-
-#include <global/binary.h>
-#include <global/compact_string.h>
-#include <global/diagnostics.h>
-#include <global/filesystem/operations_file_io.h>
-#include <global/hash_utils.h>
-#include <global/inplace_function.h>
-#include <global/numeric_text.h>
-#include <global/refcount_ptr.h>
-#include <global/unique_ptr.h>
-
-#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1158,16 +426,18 @@ namespace __hidden_hex_failure_tests{
 
 
 struct ThrowingHexCapacityPredicate{
+public:
     explicit operator b8()const{
         throw s_HexCapacityFailure;
     }
 };
 
-[[nodiscard]] ThrowingHexCapacityPredicate operator>(HexCapacityValue, HexCapacityValue)noexcept{ return {}; }
+[[nodiscard]] inline ThrowingHexCapacityPredicate operator>(HexCapacityValue, HexCapacityValue)noexcept{ return {}; }
 
-[[nodiscard]] usize operator-(const HexCapacityValue lhs, const HexCapacityValue rhs)noexcept{ return lhs.value - rhs.value; }
+[[nodiscard]] inline usize operator-(const HexCapacityValue lhs, const HexCapacityValue rhs)noexcept{ return lhs.value - rhs.value; }
 
 struct ThrowingHexCapacityString{
+public:
     using value_type = char;
 
 
@@ -1184,6 +454,7 @@ public:
 };
 
 struct ThrowingHexAppendString{
+public:
     using value_type = char;
 
 
@@ -1211,48 +482,10 @@ public:
 };
 
 
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(NoexceptFailureTests, HexAppendCapacityAndOutputFailuresPreservePublishedCharacters){
-    using namespace __hidden_hex_failure_tests;
-    ACompactString fixed;
-    static_assert(noexcept(AppendHexU32(u32{}, fixed)));
-    static_assert(noexcept(AppendHexU64(u64{}, fixed)));
-    static_assert(noexcept(AppendHexU32UnsignedLiteral(u32{}, fixed)));
-
-    ThrowingHexCapacityString capacity;
-    static_assert(!noexcept(AppendHexU64(u64{}, capacity)));
-    EXPECT_THROW(AppendHexU64(1u, capacity), u32);
-    EXPECT_TRUE(capacity.text.empty());
-
-    ThrowingHexAppendString output;
-    static_assert(!noexcept(AppendHexU64(u64{}, output)));
-    EXPECT_THROW(AppendHexU64(0xabcdef0123456789u, output), u32);
-    EXPECT_EQ(output.text.view(), AStringView("ab"));
-    output.text.clear();
-    static_assert(!noexcept(AppendHexU32UnsignedLiteral(u32{}, output)));
-    EXPECT_THROW(AppendHexU32UnsignedLiteral(0x89abcdefu, output), u32);
-    EXPECT_EQ(output.text.view(), AStringView("0x"));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/global/fixed_vector_case_types.adhd.h>
-
-#include <global/fixed_vector.h>
-
-#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1265,6 +498,7 @@ namespace __hidden_fixed_vector_failure_tests{
 
 
 struct ThrowingFixedVectorAssignment{
+public:
     u32 value = 0u;
 
 
@@ -1282,6 +516,7 @@ public:
 };
 
 struct FixedVectorResource{
+public:
     u32* live = nullptr;
     b8* failReset = nullptr;
 
@@ -1304,6 +539,7 @@ struct FixedVectorResource{
 };
 
 struct FixedVectorCopyOnly{
+public:
     u32* live = nullptr;
     FixedVectorCopyOnly()noexcept = default;
     explicit FixedVectorCopyOnly(u32& count)noexcept : live(&count){ ++*live; }
@@ -1322,16 +558,18 @@ struct FixedVectorCopyOnly{
 };
 
 struct FixedVectorNoDefault{
+public:
     FixedVectorNoDefault() = delete;
 };
 
 struct FixedVectorNonAssignable{
+public:
     FixedVectorNonAssignable()noexcept = default;
     FixedVectorNonAssignable& operator=(const FixedVectorNonAssignable&) = delete;
     FixedVectorNonAssignable& operator=(FixedVectorNonAssignable&&) = delete;
 };
 
-void swap([[maybe_unused]] ThrowingFixedVectorSwap& lhs, [[maybe_unused]] ThrowingFixedVectorSwap& rhs){
+inline void swap([[maybe_unused]] ThrowingFixedVectorSwap& lhs, [[maybe_unused]] ThrowingFixedVectorSwap& rhs){
     throw s_ElementSwapFailure;
 }
 
@@ -1340,94 +578,661 @@ void swap([[maybe_unused]] ThrowingFixedVectorSwap& lhs, [[maybe_unused]] Throwi
 
 
 };
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(NoexceptFailureTests, FixedVectorRemovalSupportsCopyOnlyAndEmptyZeroCapacity){
-    using namespace __hidden_fixed_vector_failure_tests;
-    u32 live = 0u;
-    FixedVector<FixedVectorCopyOnly, 2u> stored;
-    FixedVectorCopyOnly value(live);
-    stored.push_back(value);
-    EXPECT_EQ(live, 2u);
-    stored.pop_back();
-    EXPECT_EQ(live, 1u);
-    stored.push_back(value);
-    stored.clear();
-    EXPECT_TRUE(stored.empty());
-    EXPECT_EQ(live, 1u);
-    FixedVector<FixedVectorNoDefault, 0u> empty;
-    static_assert(noexcept(empty.clear()));
-    empty.clear();
-    EXPECT_TRUE(empty.empty());
-    FixedVector<FixedVectorNonAssignable, 1u> nonAssignable;
-    static_assert(noexcept(nonAssignable.clear()));
-    nonAssignable.clear();
-    EXPECT_TRUE(nonAssignable.empty());
+void VerifyGlobal_BinarySharedHelpersPreserveEdgeCases(){
+    Array<u8, 2> bytes = Array<u8, 2>();
+    bytes[0u] = 0u;
+    bytes[1u] = 255u;
+    Array<u8, 2> different = Array<u8, 2>();
+    different[0u] = 0u;
+    different[1u] = 254u;
+    EXPECT_TRUE(BytesMatch(Span<u8>(), Span<u8>()));
+    EXPECT_FALSE(BytesMatch(bytes, Span<u8>(bytes).subspan(0u, 1u)));
+    EXPECT_FALSE(BytesMatch(bytes, different));
+
+    Array<u8, 3> partialBytes = Array<u8, 3>();
+    partialBytes[0u] = 0x12u;
+    partialBytes[1u] = 0x34u;
+    partialBytes[2u] = 0x56u;
+    const Span<u8> partialSpan = partialBytes;
+    EXPECT_EQ(ReadPartialU32LittleEndian(partialSpan, 0u), 0x00563412u);
+    EXPECT_EQ(ReadPartialU32LittleEndian(partialSpan, 2u), 0x56u);
+    EXPECT_EQ(ReadPartialU32LittleEndian(partialSpan, 3u), 0u);
+    EXPECT_EQ(ReadPartialU32LittleEndian(partialSpan, usize.max), 0x56341200u);
+    EXPECT_EQ(ReadAdmittedU16BigEndian(partialSpan, 1u), 0x3456u);
+
+    FixedVector<u8, 8> floatBytes = FixedVector<u8, 8>();
+    floatBytes.resize(7u);
+    WriteF32LittleEndianAt(bit_cast<f32>(0x80000000u), 0u, floatBytes);
+    EXPECT_EQ(floatBytes[3u], 0x80u);
+    WriteF32LittleEndianAt(bit_cast<f32>(0x7fc01234u), 4u, floatBytes);
+    EXPECT_EQ(floatBytes[4u], 0u);
+    floatBytes.resize(8u);
+    WriteF32LittleEndianAt(bit_cast<f32>(0x7fc01234u), 4u, floatBytes);
+    EXPECT_EQ(floatBytes[4u], 0x34u);
+    EXPECT_EQ(floatBytes[5u], 0x12u);
+    EXPECT_EQ(floatBytes[6u], 0xc0u);
+    EXPECT_EQ(floatBytes[7u], 0x7fu);
+
+    native(in bytes, mut floatBytes){
+        using namespace __hidden_global_binary_shared_tests;
+        const Array<u8, 3> pattern{ 1u, 2u, 3u };
+        Array<u8, 7> repeated{};
+        FillRepeatingBytes(repeated.size(), pattern, repeated.data());
+        EXPECT_EQ(repeated, (Array<u8, 7>{ 1u, 2u, 3u, 1u, 2u, 3u, 1u }));
+        FillRepeatingBytes(0u, pattern, nullptr);
+        usize emptyCursor = 0u;
+        const auto emptyText = ReadBinaryText(BinaryByteView{}, 0u, emptyCursor);
+        ASSERT_TRUE(emptyText);
+        EXPECT_TRUE(emptyText->empty());
+        EXPECT_EQ(emptyCursor, 0u);
+        usize cursor = bytes.size();
+        EXPECT_FALSE(ReadBinaryText(BinaryByteView{ bytes.data(), bytes.size() }, 1u, cursor));
+        EXPECT_EQ(cursor, bytes.size());
+
+        struct ThrowingByteContainer{
+            [[nodiscard]] usize size()const noexcept{ return 4u; }
+            u8& operator[](usize){ throw RuntimeException("byte assignment failure"); }
+        };
+        ThrowingByteContainer throwingBytes;
+        EXPECT_THROW(WriteF32LittleEndianAt(1.0f, 0u, throwingBytes), RuntimeException);
+        struct ThrowingLvalueByteContainer{
+            u8 byte = 0u;
+            [[nodiscard]] usize size()const noexcept{ return 4u; }
+            u8& operator[](const usize&){ throw RuntimeException("lvalue byte index failure"); }
+            u8& operator[](usize&&)noexcept{ return byte; }
+        };
+        ThrowingLvalueByteContainer lvalueBytes;
+        static_assert(!noexcept(WriteF32LittleEndianAt(1.0f, 0u, lvalueBytes)));
+        EXPECT_THROW(WriteF32LittleEndianAt(1.0f, 0u, lvalueBytes), RuntimeException);
+        struct ThrowingSizeByteContainer{
+            u8 byte = 0u;
+            [[nodiscard]] ThrowingByteSize size()const noexcept{ return {}; }
+            u8& operator[](usize)noexcept{ return byte; }
+        };
+        ThrowingSizeByteContainer sizeBytes;
+        static_assert(!noexcept(WriteF32LittleEndianAt(1.0f, 0u, sizeBytes)));
+        EXPECT_THROW(WriteF32LittleEndianAt(1.0f, 0u, sizeBytes), RuntimeException);
+        EXPECT_DEATH(WriteF32LittleEndianAt(0.0f, Limit<usize>::s_Max, floatBytes), "");
+    }
 }
 
-TEST(NoexceptFailureTests, FixedVectorRemovalReleasesResourcesAndRetainsSizeOnResetFailure){
-    using namespace __hidden_fixed_vector_failure_tests;
+void VerifyGlobal_NumericSharedHelpersPreserveEdgeCases(){
+    EXPECT_EQ(PackUnorderedU32Pair(0u, u32.max), 0xffffffffu);
+    EXPECT_EQ(PackUnorderedU32Pair(u32.max, 0u), 0xffffffffu);
+    EXPECT_EQ(PackUnorderedU32Pair(u32.max, u32.max), u64.max);
+    const u64 packedWords = PackU32Words(0xffffffffu, 0x12345678u);
+    EXPECT_EQ(packedWords, 0x12345678ffffffffu);
+    EXPECT_EQ(LowU32Word(packedWords), 0xffffffffu);
+    EXPECT_EQ(HighU32Word(packedWords), 0x12345678u);
+
+    EXPECT_FALSE(AlignUpChecked(usize.max, 4u).has_value());
+    const Expected<usize> aligned = AlignUpChecked(usize.max - 3u, 4u);
+    ASSERT_TRUE(aligned.has_value());
+    EXPECT_EQ(aligned.value(), usize.max - 3u);
+
+    EXPECT_EQ(DivideUpWrappingU32(u32.max, 8u), 0u);
+    EXPECT_EQ(DivideUpWrappingU64(u64.max, cast<u64>(2u)), 0u);
+    u64 wrappingRevision = u64.max;
+    AdvanceWrappingNonzeroU64(wrappingRevision);
+    EXPECT_EQ(wrappingRevision, 1u);
+
+    EXPECT_EQ(BitWidthLowU32(0xffffffffu, 0u), 0u);
+    EXPECT_EQ(BitWidthLowU32(0x80000100u, 8u), 0u);
+    EXPECT_EQ(BitWidthLowU32(0x80000000u, 32u), 32u);
+    EXPECT_TRUE(IsNewerSerialU32(0u, u32.max));
+    EXPECT_FALSE(IsNewerSerialU32(0x80000000u, 0u));
+    EXPECT_FALSE(IsNewerSerialU32(7u, 7u));
+    EXPECT_TRUE(IsNotOlderSerialU32(7u, 7u));
+    EXPECT_TRUE(IsNotOlderSerialU32(0u, u32.max));
+    EXPECT_TRUE(IsNotOlderSerialU32(0x7fffffffu, 0u));
+    EXPECT_FALSE(IsNotOlderSerialU32(0x80000000u, 0u));
+    EXPECT_FALSE(IsNotOlderSerialU32(0x80000001u, 0u));
+    EXPECT_TRUE(IsSerialU32InWindow(0u, 0xfffffffeu, 1u));
+    EXPECT_TRUE(IsSerialU32InWindow(1u, 0xfffffffeu, 1u));
+    EXPECT_FALSE(IsSerialU32InWindow(2u, 0xfffffffeu, 1u));
+    EXPECT_FALSE(IsSerialU32InWindow(0xfffffffdu, 0xfffffffeu, 1u));
+    EXPECT_TRUE(IsSerialU32InWindow(0x7fffffffu, 0u, 0x7fffffffu));
+    EXPECT_FALSE(IsSerialU32InWindow(0x80000000u, 0u, 0x7fffffffu));
+    EXPECT_FALSE(IsSerialU32InWindow(0x80000001u, 0u, 0x7fffffffu));
+    EXPECT_FALSE(IsSerialU32InWindow(0u, 0u, 0x80000000u));
+    EXPECT_EQ(ComputeSobol2U32(0u), 0u);
+    EXPECT_EQ(ComputeSobol2U32(1u), 0x8000000080000000u);
+    EXPECT_EQ(ComputeSobol2U32(2u), 0xc000000040000000u);
+    EXPECT_EQ(ComputeSobol2U32(3u), 0x40000000c0000000u);
+    EXPECT_EQ(DivideFloorI64(i64.min, 1), i64.min);
+    EXPECT_EQ(DivideFloorI64(-3, 2), -2);
+    EXPECT_EQ(DivideCeilI64(-3, 2), -1);
+    EXPECT_EQ(DivideCeilI64(i64.max, 2), i64.max / 2 + 1);
+    EXPECT_EQ(ClassifyIntegerGrammar("-"), s_NumericGrammarIncomplete);
+    EXPECT_EQ(ClassifyIntegerGrammar("--1"), s_NumericGrammarInvalid);
+    EXPECT_EQ(ClassifyIntegerGrammar(" 1"), s_NumericGrammarInvalid);
+    EXPECT_EQ(ClassifyFloatGrammar("."), s_NumericGrammarIncomplete);
+    EXPECT_EQ(ClassifyFloatGrammar("1e+"), s_NumericGrammarIncomplete);
+    EXPECT_EQ(ClassifyFloatGrammar("1e+x"), s_NumericGrammarInvalid);
+    EXPECT_EQ(ClassifyFloatGrammar(".e"), s_NumericGrammarInvalid);
+    EXPECT_EQ(ClassifyFloatGrammar("1."), s_NumericGrammarComplete);
+
+    native{
+        const Array<f64, 2u> signedZeroSamples{ 0.0, -0.0 };
+        const OnlineF64Statistics zeroStatistics = ComputeOnlineF64Statistics(signedZeroSamples);
+        EXPECT_EQ(zeroStatistics.count, 2u);
+        EXPECT_EQ(BitCast<u64>(zeroStatistics.minimum), 0x8000000000000000ull);
+        EXPECT_EQ(BitCast<u64>(zeroStatistics.maximum), 0x8000000000000000ull);
+        EXPECT_EQ(QuantizeUNormScalar(-Limit<f32>::s_Infinity, 255.0f), 0.0f);
+        EXPECT_EQ(QuantizeUNormScalar(Limit<f32>::s_Infinity, 255.0f), 255.0f);
+        EXPECT_EQ(QuantizeUNormScalar(0.5f, 255.0f), 128.0f);
+        EXPECT_EQ(QuantizeSNormScalar(-0.5f, 127.0f), -64.0f);
+        EXPECT_EQ(BitCast<u32>(QuantizeSNormScalar(-0.0f, 127.0f)), 0u);
+        EXPECT_EQ(QuantizeSNormScalar(BitCast<f32>(0x7fc01234u), 127.0f), -127.0f);
+        const SIMDVectorSingle signedColor = VectorQuantizeSNorm(VectorSet(-0.0f, -0.5f, 0.5f, -2.0f), VectorReplicate(127.0f));
+        EXPECT_EQ(VectorGetX(signedColor), 0.0f);
+        EXPECT_EQ(VectorGetY(signedColor), -64.0f);
+        EXPECT_EQ(VectorGetZ(signedColor), 64.0f);
+        EXPECT_EQ(VectorGetW(signedColor), -127.0f);
+        const SIMDVectorSingle quantizedColor = VectorQuantizeUNorm(VectorSet(-1.0f, 0.5f, 1.0f, 2.0f), VectorReplicate(255.0f));
+        EXPECT_EQ(VectorGetX(quantizedColor), 0.0f);
+        EXPECT_EQ(VectorGetY(quantizedColor), 128.0f);
+        EXPECT_EQ(VectorGetZ(quantizedColor), 255.0f);
+        EXPECT_EQ(VectorGetW(quantizedColor), 255.0f);
+        const SIMDVectorSingle encodedColor = VectorLinearToSRGB(VectorSet(-1.0f, 0.0031308f, 1.0f, 2.0f));
+        EXPECT_EQ(VectorGetX(encodedColor), 0.0f);
+        EXPECT_NEAR(VectorGetY(encodedColor), 0.0031308f * 12.92f, 0.000001f);
+        EXPECT_NEAR(VectorGetZ(encodedColor), 1.0f, 0.000001f);
+        EXPECT_NEAR(VectorGetW(encodedColor), 1.0f, 0.000001f);
+        const Array<u32, 2u> narrowSum{ Limit<u32>::s_Max, 1u };
+        const auto wrappedNarrowSum = TrySumUnsignedWithU64Limit<u32>(narrowSum);
+        ASSERT_TRUE(wrappedNarrowSum);
+        EXPECT_EQ(*wrappedNarrowSum, 0u);
+        const Array<u64, 2u> wideSumOverflow{ Limit<u64>::s_Max, 1u };
+        EXPECT_FALSE(TrySumUnsignedWithU64Limit<u64>(wideSumOverflow));
+        EXPECT_EQ(TrySumUnsignedWithU64Limit<u64>(Span<const u64>{}).value(), 0u);
+        const Array<u64, 2u> exactMaximumSum{ Limit<u64>::s_Max - 1u, 1u };
+        EXPECT_EQ(TrySumUnsignedWithU64Limit<u64>(exactMaximumSum).value(), Limit<u64>::s_Max);
+        const Array<u64, 2u> maximumThenZero{ Limit<u64>::s_Max, 0u };
+        EXPECT_FALSE(TrySumNonzeroU64(maximumThenZero));
+        const Array<u64, 1u> maximumCount{ Limit<u64>::s_Max };
+        const Array<u64, 2u> overflowingCounts{ Limit<u64>::s_Max, 1u };
+        const Array<u64, 1u> zeroCount{ 0u };
+        EXPECT_EQ(TrySumNonzeroU64(Span<const u64>{}).value(), 0u);
+        EXPECT_EQ(TrySumNonzeroU64(maximumCount).value(), Limit<u64>::s_Max);
+        EXPECT_FALSE(TrySumNonzeroU64(overflowingCounts));
+        EXPECT_FALSE(TrySumNonzeroU64(zeroCount));
+        u64 total = 11u;
+        EXPECT_FALSE(AccumulateBoundedCount(0u, 10u, total));
+        EXPECT_EQ(total, 11u);
+        total = Limit<u64>::s_Max - 1u;
+        EXPECT_FALSE(AccumulateBoundedCount(2u, Limit<u64>::s_Max, total));
+        EXPECT_EQ(total, Limit<u64>::s_Max - 1u);
+        EXPECT_EQ(PackFourCharTag('H', 'a', 'n', 'g'), 0x48616e67u);
+        EXPECT_EQ(PackFourCharTag(static_cast<char>(0x80), 'a', 'b', 'c'), (static_cast<u32>(static_cast<char>(0x80)) << 24u) | 0x00616263u);
+        EXPECT_EQ(*SignedDifference(0u, static_cast<u64>(Limit<i64>::s_Max) + 1u), Limit<i64>::s_Min);
+        EXPECT_FALSE(SignedDifference(0u, static_cast<u64>(Limit<i64>::s_Max) + 2u));
+        EXPECT_FALSE(SignedDifference(static_cast<u64>(Limit<i64>::s_Max) + 1u, 0u));
+        EXPECT_FALSE(AlignUpCheckedSize(Limit<usize>::s_Max, 4u));
+        EXPECT_TRUE(DifferentF64Bits(0.0, -0.0));
+        EXPECT_FALSE(DifferentF64Bits(BitCast<f64>(0x7ff8000000001234ull), BitCast<f64>(0x7ff8000000001234ull)));
+        EXPECT_TRUE(DifferentF64Bits(BitCast<f64>(0x7ff8000000001234ull), BitCast<f64>(0x7ff8000000001235ull)));
+        EXPECT_EQ(SaturateU64ToI32(static_cast<u64>(Limit<i32>::s_Max) + 1u), Limit<i32>::s_Max);
+        EXPECT_EQ(AddSignedOffset(u64(1) << 63u, Limit<i64>::s_Min).value(), 0u);
+        EXPECT_FALSE(AddSignedOffset(0u, Limit<i64>::s_Min));
+        EXPECT_FALSE(AddSignedOffset(Limit<u64>::s_Max, 1));
+        EXPECT_EQ(DivideUpWrapping(usize(9), 8u), usize(2));
+        const BalancedPartitionRange firstRange = ComputeBalancedPartitionRange(10u, 0u, 2u, 1u);
+        const BalancedPartitionRange lastRange = ComputeBalancedPartitionRange(10u, 2u, 2u, 1u);
+        EXPECT_EQ(firstRange.first, 10u);
+        EXPECT_EQ(firstRange.last, 13u);
+        EXPECT_EQ(lastRange.first, 15u);
+        EXPECT_EQ(lastRange.last, 17u);
+        Atomic<u64> wrappingIdentity{ Limit<u64>::s_Max };
+        EXPECT_EQ(NextAtomicWrappingNonzero(wrappingIdentity), 1u);
+        EXPECT_FALSE(HasSingleSetBit(u16(0)));
+        EXPECT_TRUE(HasSingleSetBit(u16(0x8000)));
+        EXPECT_EQ(LowestSetBit(u8(0x90)), u8(0x10));
+        EXPECT_EQ(AlignmentOffsetPowerOfTwo(Limit<usize>::s_Max, 8u), 1u);
+        EXPECT_EQ(SubtractSaturating(u64(1), u64(2)), 0u);
+        EXPECT_EQ(BitCast<u32>(RoundF64ToF32Bound(0x1p-150, false)), 0u);
+        EXPECT_EQ(BitCast<u32>(RoundF64ToF32Bound(0x1p-150, true)), 1u);
+        EXPECT_EQ(BitCast<u32>(RoundF64ToF32Bound(-0x1p-150, false)), 0x80000001u);
+        EXPECT_EQ(BitCast<u32>(RoundF64ToF32Bound(-0x1p-150, true)), 0x80000000u);
+        EXPECT_EQ(BitCast<u32>(RoundF64ToF32Bound(-0.0, false)), 0x80000000u);
+        EXPECT_EQ(BitCast<u32>(RoundF64ToF32Bound(1.0 + 0x1p-24, false)), 0x3f800000u);
+        EXPECT_EQ(BitCast<u32>(RoundF64ToF32Bound(1.0 + 0x1p-24, true)), 0x3f800001u);
+    }
+}
+
+void VerifyGlobal_CollectionSharedHelpersPreserveEdgeCases(){
+    EXPECT_FALSE(UnsignedRangesOverlap(1u, 0u, u64.max, 2u));
+    EXPECT_TRUE(UnsignedRangesOverlap(u64.max, 2u, 0u, 1u));
+
+    Array<usize, 4> ordered = Array<usize, 4>();
+    ordered[0u] = 1u;
+    ordered[1u] = 3u;
+    ordered[2u] = 3u;
+    ordered[3u] = 8u;
+    const Span<usize> orderedSpan = ordered;
+    EXPECT_EQ(LowerBoundIndex(Span<usize>(), 3u), 0u);
+    EXPECT_EQ(LowerBoundIndex(orderedSpan, 3u), 1u);
+    EXPECT_EQ(LowerBoundIndex(orderedSpan, 9u), ordered.size());
+
+    native{
+        Array<u64, s_BitsPerU64> matrix{};
+        matrix[1u] = u64(1) << 63u;
+        TransposeBitMatrix64(matrix);
+        EXPECT_EQ(matrix[63u], 2u);
+        TransposeBitMatrix64(matrix);
+        EXPECT_EQ(matrix[1u], u64(1) << 63u);
+
+        NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
+        ::Vector<u32, NWB::Core::Alloc::ScratchArena> cachedValues(scratchArena);
+        cachedValues.push_back(1u);
+        cachedValues.push_back(2u);
+        cachedValues.push_back(4u);
+        const Array<u32, 3u> requestedValues{ 2u, 3u, 3u };
+        const auto sameValue = [](const u32 cached, const u32 requested)noexcept{ return cached == requested; };
+        EXPECT_EQ(CountMissingCacheEntries(cachedValues, requestedValues, sameValue), 2u);
+        const auto throwingKey = [](const u32, const u32) -> b8 { throw RuntimeException("predicate failure"); };
+        EXPECT_THROW(static_cast<void>(CountMissingCacheEntries(cachedValues, requestedValues, throwingKey)), RuntimeException);
+        EXPECT_THROW(RetainReferencedCacheEntries(requestedValues, throwingKey, cachedValues), RuntimeException);
+        RetainReferencedCacheEntries(requestedValues, sameValue, cachedValues);
+        ASSERT_EQ(cachedValues.size(), 1u);
+        EXPECT_EQ(cachedValues[0u], 2u);
+        ::Vector<u32, NWB::Core::Alloc::ScratchArena> rollbackValues(scratchArena);
+        rollbackValues.push_back(7u);
+        u32 underflows = 0u;
+        {
+            AppendedContainerRollbackScope rollback(rollbackValues, [&underflows]()noexcept{ ++underflows; });
+            rollbackValues.push_back(8u);
+        }
+        EXPECT_EQ(rollbackValues.size(), 1u);
+        EXPECT_EQ(rollbackValues[0u], 7u);
+        {
+            AppendedContainerRollbackScope rollback(rollbackValues, [&underflows]()noexcept{ ++underflows; });
+            rollbackValues.pop_back();
+        }
+        EXPECT_EQ(underflows, 1u);
+        Array<u32, 130u> indexFlags{};
+        indexFlags.fill(1u);
+        indexFlags[0u] = 0u;
+        indexFlags[64u] = 0u;
+        indexFlags[129u] = 0u;
+        HierarchicalIndexSet<NWB::Core::Alloc::ScratchArena> ready(scratchArena);
+        ready.initializeZeros(Span<const u32>(indexFlags));
+        EXPECT_EQ(ready.takeLowest(), 0u);
+        EXPECT_EQ(ready.takeLowest(), 64u);
+        EXPECT_EQ(ready.takeLowest(), 129u);
+        EXPECT_EQ(ready.takeLowest(), 130u);
+        ready.add(64u);
+        ready.add(64u);
+        EXPECT_EQ(ready.takeLowest(), 64u);
+        EXPECT_EQ(ready.takeLowest(), 130u);
+
+        ::Vector<u64, NWB::Core::Alloc::ScratchArena> denseMatrix(130u, 0u, scratchArena);
+        denseMatrix[1u] = 1u;
+        denseMatrix[2u] = 1u;
+        SymmetrizeDenseBitMatrix(denseMatrix, 65u, 2u);
+        EXPECT_EQ(denseMatrix[128u] & 1u, 1u);
+        EXPECT_EQ(denseMatrix[0u] & 2u, 2u);
+
+        using WordRange = NWB::Tests::GlobalCases::WordRangeProbe;
+        Array<WordRange, 65u> ranges{};
+        Array<usize, 65u> offsets{};
+        usize wordCount = 0u;
+        for(usize i = 0u; i < ranges.size(); ++i){
+            WordRange entry;
+            entry.begin = 0u;
+            entry.end = (i == 0u || i == 1u || i == 64u) ? 2u : 1u;
+            ranges[i] = entry;
+            offsets[i] = wordCount;
+            wordCount += ranges[i].end;
+        }
+        ::Vector<u64, NWB::Core::Alloc::ScratchArena> compactMatrix(wordCount, 0u, scratchArena);
+        compactMatrix[offsets[0u] + 1u] = 1u;
+        compactMatrix[offsets[1u]] = 1u;
+        compactMatrix[offsets[64u]] = 2u;
+        SymmetrizeCompactBitMatrix(compactMatrix, offsets, ranges, 65u, 2u);
+        EXPECT_EQ(compactMatrix[offsets[64u]] & 1u, 1u);
+        EXPECT_EQ(compactMatrix[offsets[0u]] & 2u, 2u);
+        EXPECT_EQ(compactMatrix[offsets[1u] + 1u] & 1u, 1u);
+
+        ::Vector<IntegerRectBounds, NWB::Core::Alloc::ScratchArena> fragments(scratchArena);
+        AppendIntegerRectRemainder(IntegerRectBounds{ 0u, 4u, 0u, 4u }, IntegerRectBounds{ 1u, 3u, 1u, 3u }, fragments);
+        ASSERT_EQ(fragments.size(), 4u);
+        EXPECT_EQ(fragments[0u].xEnd, 1u);
+        EXPECT_EQ(fragments[1u].xBegin, 3u);
+        EXPECT_EQ(fragments[2u].yEnd, 1u);
+        EXPECT_EQ(fragments[3u].yBegin, 3u);
+    }
+}
+
+void VerifyGlobal_HashSharedHelpersPreserveEdgeCases(){
+    EXPECT_EQ(MixMurmur64Finalizer(0u), 0u);
+    EXPECT_EQ(MixMurmur64Finalizer(1u), 0xb456bcfc34c2cb2cu);
+    EXPECT_EQ(BoolToYesNoText(true), "yes");
+    EXPECT_EQ(BoolToYesNoText(false), "no");
+    EXPECT_EQ(UpdateFnv64U32(s_Fnv64OffsetBasis, 0x12345678u), 0xcccfd053e47c3365u);
+    EXPECT_EQ(UpdateFnv64U64(s_Fnv64OffsetBasis, 0x0123456789abcdefu), 0x37eb3f3347761c55u);
+    NameHash lanes = NameHash();
+    lanes.qwords[0u] = 0x0123456789abcdefu;
+    lanes.qwords[1u] = 0u;
+    lanes.qwords[2u] = 0xffffffffffffffffu;
+    lanes.qwords[3u] = 0x0102030405060708u;
+    lanes.qwords[4u] = 5u;
+    lanes.qwords[5u] = 6u;
+    lanes.qwords[6u] = 7u;
+    lanes.qwords[7u] = 8u;
+    EXPECT_EQ(UpdateFnv64NameHash(0x123456789abcdef0u, lanes), 0x08d4d531507706dcu);
+    EXPECT_EQ(FoldNameHash64(lanes), 0xe33b773ee6cabb20u);
+
+    native{
+        struct CharSink{
+            Array<char, Sha1Digest::s_HexTextLength> data{};
+            usize size = 0u;
+            CharSink& operator+=(const char ch)noexcept{ data[size++] = ch; return *this; }
+        };
+        CharSink sink;
+        AppendHexByte(0xAFu, sink);
+        EXPECT_EQ(sink.data[0u], 'a');
+        EXPECT_EQ(sink.data[1u], 'f');
+        sink.size = 0u;
+        AppendSha1Hex(Sha1Digest{}, sink);
+        EXPECT_EQ(sink.size, Sha1Digest::s_HexTextLength);
+        EXPECT_EQ(sink.data[0u], '0');
+        EXPECT_EQ(sink.data[sink.size - 1u], '0');
+    }
+}
+
+void VerifyNoexceptFailureTests_HashResultConversionFailurePreservesCombinedSeed(){
+    usize seed = 17u;
+    native(mut seed){
+        using namespace __hidden_noexcept_failure_tests;
+        HashProbe value;
+        static_assert(!noexcept(HashCombine(seed, value)));
+        EXPECT_THROW(HashCombine(seed, value), u32);
+    }
+    EXPECT_EQ(seed, 17u);
+}
+
+void VerifyNoexceptFailureTests_PlacementAllocationFailurePropagatesThroughCaptureConstructionAndReplacement(){
+    u32 previousInvocations = 0u;
+    native(mut previousInvocations){
+        using namespace __hidden_noexcept_failure_tests;
+        using Storage = InplaceFunction<64u>;
+        ThrowingPlacementCallable callable;
+        static_assert(!noexcept(Storage(callable)));
+        static_assert(!noexcept(DeclVal<Storage&>() = callable));
+
+        EXPECT_THROW(EXPECT_TRUE(Storage(callable)), u32);
+
+        Storage stored([&previousInvocations]()noexcept{ ++previousInvocations; });
+        EXPECT_THROW(stored = callable, u32);
+        EXPECT_FALSE(stored);
+    }
+    EXPECT_EQ(previousInvocations, 0u);
+}
+
+void VerifyNoexceptFailureTests_ThrowingByteGetterPreservesReadOffset(){
+    usize offset = 0u;
+    native(mut offset){
+        using namespace __hidden_noexcept_failure_tests;
+        ThrowingByteSource source;
+        static_assert(!noexcept(ReadPOD<u32>(source, offset)));
+        EXPECT_THROW(EXPECT_TRUE(ReadPOD<u32>(source, offset)), u32);
+    }
+    EXPECT_EQ(offset, 0u);
+}
+
+void VerifyNoexceptFailureTests_PodAddressAndMutableBufferGetterFailuresPropagateBeforeReading(){
+    usize offset = 0u;
+    native(mut offset){
+        using namespace __hidden_noexcept_failure_tests;
+        const Array<u8, sizeof(ThrowingPodAddress)> bytes = {};
+        const BinaryByteView source{ bytes.data(), bytes.size() };
+        static_assert(!noexcept(ReadPOD<ThrowingPodAddress>(source, offset)));
+        EXPECT_THROW(EXPECT_TRUE(ReadPOD<ThrowingPodAddress>(source, offset)), u32);
+
+        ThrowingMutableByteSource mutableSource;
+        static_assert(!noexcept(GlobalFilesystemDetail::MutableReadBuffer(mutableSource)));
+        EXPECT_THROW(EXPECT_EQ(GlobalFilesystemDetail::MutableReadBuffer(mutableSource), nullptr), u32);
+    }
+    EXPECT_EQ(offset, 0u);
+}
+
+void VerifyNoexceptFailureTests_BoundedDiagnosticsNeverInvokeThrowingConversionOrCleanupAdapters(){
+    u32 calls = 0u;
+    native(mut calls){
+        using namespace __hidden_noexcept_failure_tests;
+        const ThrowingDiagnosticView conversion{ calls };
+        const ThrowingDiagnosticCleanup cleanup{ calls };
+        EXPECT_EQ(MakeDiagnosticEventText(AStringView("{}"), conversion).view(), AStringView("<unprintable>"));
+        EXPECT_EQ(MakeDiagnosticEventText(AStringView("{}"), cleanup).view(), AStringView("<unprintable>"));
+    }
+    EXPECT_EQ(calls, 0u);
+}
+
+void VerifyNoexceptFailureTests_CaptureMoveTransportDoesNotReinvokeClassPlacementAllocation(){
+    u32 calls = 0u;
+    native(mut calls){
+        using namespace __hidden_noexcept_failure_tests;
+        StatefulPlacementCallable::s_Allocations = 0u;
+        StatefulPlacementCallable callable{ calls };
+        InplaceFunction<64u> source(callable);
+        EXPECT_EQ(StatefulPlacementCallable::s_Allocations, 1u);
+        InplaceFunction<64u> moved(Move(source));
+        EXPECT_FALSE(source);
+        ASSERT_TRUE(moved);
+        moved();
+        EXPECT_EQ(StatefulPlacementCallable::s_Allocations, 1u);
+    }
+    EXPECT_EQ(calls, 1u);
+}
+
+void VerifyNoexceptFailureTests_FancyPointerDereferenceAndRawConversionFailuresPreserveBorrowedTarget(){
+    native{
+        using namespace __hidden_pointer_failure_tests;
+        using Storage = RefCountPtr<RefCountTarget, FancyPointerDeleter>;
+        RefCountTarget target;
+        Storage stored(ThrowingFancyPointer::Borrow(&target), s_AdoptRef);
+        static_assert(!noexcept(*stored));
+        static_assert(!noexcept(stored = &target));
+
+        EXPECT_THROW(EXPECT_EQ(&*stored, &target), u32);
+        EXPECT_THROW(stored = &target, u32);
+        EXPECT_EQ(stored.get().target, &target);
+    }
+}
+
+void VerifyNoexceptFailureTests_UniqueOwnerComparisonResultConversionUnwindsThroughEveryBooleanWrapper(){
+    native{
+        using namespace __hidden_pointer_failure_tests;
+        UniquePtr<int> first;
+        UniquePtr<int> second;
+        static_assert(noexcept(::operator==(first, nullptr)));
+        static_assert(noexcept(::operator>(first, second)));
+        static_assert(noexcept(::operator<=(first, second)));
+        static_assert(noexcept(::operator>=(first, second)));
+        VerifyComparisonResultConversions<UniqueComparisonOwner>();
+    }
+}
+
+void VerifyNoexceptFailureTests_ReferenceOwnerComparisonResultConversionUnwindsThroughEveryBooleanWrapper(){
+    native{
+        using namespace __hidden_pointer_failure_tests;
+        RefCountPtr<ComparisonReferenceTarget> first;
+        RefCountPtr<ComparisonReferenceTarget> second;
+        static_assert(noexcept(::operator==(first, nullptr)));
+        static_assert(noexcept(::operator>(first, second)));
+        static_assert(noexcept(::operator<=(first, second)));
+        static_assert(noexcept(::operator>=(first, second)));
+        VerifyComparisonResultConversions<ReferenceComparisonOwner>();
+    }
+}
+
+void VerifyNoexceptFailureTests_OwnerObservationUsesImplicitCopyAndPreservesBorrowedTargetsOnFailure(){
+    native{
+        using namespace __hidden_pointer_failure_tests;
+        static_assert(noexcept(ObservationPointer(DeclVal<const ObservationPointer&>())));
+        static_assert(!noexcept(DeclVal<void(*)(ObservationPointer)noexcept>()(DeclVal<const ObservationPointer&>())));
+        RefCountTarget target;
+        UniquePtr<RefCountTarget, ObservationDeleter> unique(ObservationPointer{ &target });
+        RefCountPtr<RefCountTarget, ObservationDeleter> shared(ObservationPointer{ &target }, s_AdoptRef);
+        ScopeExit disarm([]()noexcept{ ObservationPointer::s_FailCopy = false; });
+        static_assert(!noexcept(unique.get()));
+        static_assert(!noexcept(unique.operator->()));
+        static_assert(!noexcept(shared.get()));
+        static_assert(!noexcept(shared.operator->()));
+        ObservationPointer::s_FailCopy = true;
+        EXPECT_THROW(EXPECT_EQ(unique.get().target, &target), u32);
+        EXPECT_THROW(EXPECT_EQ(unique.operator->().target, &target), u32);
+        EXPECT_THROW(EXPECT_EQ(shared.get().target, &target), u32);
+        EXPECT_THROW(EXPECT_EQ(shared.operator->().target, &target), u32);
+        ObservationPointer::s_FailCopy = false;
+        EXPECT_EQ(unique.get().target, &target);
+        EXPECT_EQ(shared.get().target, &target);
+    }
+}
+
+void VerifyNoexceptFailureTests_HexAppendCapacityAndOutputFailuresPreservePublishedCharacters(){
+    CompactString fixed = CompactString();
+    AppendHexU32(0u, fixed);
+    fixed.clear();
+    native{
+        using namespace __hidden_hex_failure_tests;
+        ACompactString compactFixed;
+        static_assert(noexcept(AppendHexU32(u32{}, compactFixed)));
+        static_assert(noexcept(AppendHexU64(u64{}, compactFixed)));
+        static_assert(noexcept(AppendHexU32UnsignedLiteral(u32{}, compactFixed)));
+
+        ThrowingHexCapacityString capacity;
+        static_assert(!noexcept(AppendHexU64(u64{}, capacity)));
+        EXPECT_THROW(AppendHexU64(1u, capacity), u32);
+        EXPECT_TRUE(capacity.text.empty());
+
+        ThrowingHexAppendString output;
+        static_assert(!noexcept(AppendHexU64(u64{}, output)));
+        EXPECT_THROW(AppendHexU64(0xabcdef0123456789u, output), u32);
+        EXPECT_EQ(output.text.view(), AStringView("ab"));
+        output.text.clear();
+        static_assert(!noexcept(AppendHexU32UnsignedLiteral(u32{}, output)));
+        EXPECT_THROW(AppendHexU32UnsignedLiteral(0x89abcdefu, output), u32);
+        EXPECT_EQ(output.text.view(), AStringView("0x"));
+    }
+}
+
+void VerifyNoexceptFailureTests_FixedVectorRemovalSupportsCopyOnlyAndEmptyZeroCapacity(){
     u32 live = 0u;
-    b8 firstFails = false;
-    b8 secondFails = false;
-    FixedVector<FixedVectorResource, 3u> stored;
-    static_assert(!noexcept(stored.clear()));
-    stored.emplace_back(live, firstFails);
-    stored.emplace_back(live, secondFails);
-    ASSERT_EQ(live, 2u);
-    stored.pop_back();
-    EXPECT_EQ(live, 1u);
-    stored.emplace_back(live, secondFails);
-    secondFails = true;
-    EXPECT_THROW(stored.pop_back(), u32);
-    EXPECT_EQ(stored.size(), 2u);
-    EXPECT_EQ(live, 2u);
-    secondFails = false;
-    firstFails = true;
-    EXPECT_THROW(stored.clear(), u32);
-    EXPECT_EQ(stored.size(), 1u);
-    EXPECT_EQ(live, 1u);
-    firstFails = false;
-    stored.clear();
-    EXPECT_TRUE(stored.empty());
+    native(mut live){
+        using namespace __hidden_fixed_vector_failure_tests;
+        FixedVector<FixedVectorCopyOnly, 2u> stored;
+        FixedVectorCopyOnly value(live);
+        stored.push_back(value);
+        EXPECT_EQ(live, 2u);
+        stored.pop_back();
+        EXPECT_EQ(live, 1u);
+        stored.push_back(value);
+        stored.clear();
+        EXPECT_TRUE(stored.empty());
+        EXPECT_EQ(live, 1u);
+        FixedVector<FixedVectorNoDefault, 0u> empty;
+        static_assert(noexcept(empty.clear()));
+        empty.clear();
+        EXPECT_TRUE(empty.empty());
+        FixedVector<FixedVectorNonAssignable, 1u> nonAssignable;
+        static_assert(noexcept(nonAssignable.clear()));
+        nonAssignable.clear();
+        EXPECT_TRUE(nonAssignable.empty());
+    }
     EXPECT_EQ(live, 0u);
 }
 
-TEST(NoexceptFailureTests, FixedVectorElementAssignmentFailurePropagatesWithoutPublishingFullSize){
-    using namespace __hidden_fixed_vector_failure_tests;
-    FixedVector<ThrowingFixedVectorAssignment, 4u> stored;
-    stored.resize(1u);
-    stored[0u].value = 17u;
-    ThrowingFixedVectorAssignment replacement;
-    replacement.value = 29u;
-    static_assert(!noexcept(stored.fill(replacement)));
-    EXPECT_THROW(stored.fill(replacement), u32);
-    EXPECT_EQ(stored.size(), 1u);
-    EXPECT_EQ(stored[0u].value, 17u);
+void VerifyNoexceptFailureTests_FixedVectorRemovalReleasesResourcesAndRetainsSizeOnResetFailure(){
+    u32 live = 0u;
+    b8 firstFails = false;
+    b8 secondFails = false;
+    native(mut live, mut firstFails, mut secondFails){
+        using namespace __hidden_fixed_vector_failure_tests;
+        FixedVector<FixedVectorResource, 3u> stored;
+        static_assert(!noexcept(stored.clear()));
+        stored.emplace_back(live, firstFails);
+        stored.emplace_back(live, secondFails);
+        ASSERT_EQ(live, 2u);
+        stored.pop_back();
+        EXPECT_EQ(live, 1u);
+        stored.emplace_back(live, secondFails);
+        secondFails = true;
+        EXPECT_THROW(stored.pop_back(), u32);
+        EXPECT_EQ(stored.size(), 2u);
+        EXPECT_EQ(live, 2u);
+        secondFails = false;
+        firstFails = true;
+        EXPECT_THROW(stored.clear(), u32);
+        EXPECT_EQ(stored.size(), 1u);
+        EXPECT_EQ(live, 1u);
+        firstFails = false;
+        stored.clear();
+        EXPECT_TRUE(stored.empty());
+    }
+    EXPECT_EQ(live, 0u);
 }
 
-TEST(NoexceptFailureTests, FixedVectorElementSwapFailurePropagatesWithoutSwappingSizes){
-    using namespace __hidden_fixed_vector_failure_tests;
-    FixedVector<ThrowingFixedVectorSwap, 4u> first;
-    FixedVector<ThrowingFixedVectorSwap, 4u> second;
-    first.resize(1u);
-    second.resize(2u);
-    first[0u].value = 17u;
-    second[0u].value = 29u;
-    static_assert(!noexcept(first.swap(second)));
-    EXPECT_THROW(first.swap(second), u32);
-    EXPECT_EQ(first.size(), 1u);
-    EXPECT_EQ(second.size(), 2u);
-    EXPECT_EQ(first[0u].value, 17u);
-    EXPECT_EQ(second[0u].value, 29u);
+void VerifyNoexceptFailureTests_FixedVectorElementAssignmentFailurePropagatesWithoutPublishingFullSize(){
+    native{
+        using namespace __hidden_fixed_vector_failure_tests;
+        FixedVector<ThrowingFixedVectorAssignment, 4u> stored;
+        stored.resize(1u);
+        stored[0u].value = 17u;
+        ThrowingFixedVectorAssignment replacement;
+        replacement.value = 29u;
+        static_assert(!noexcept(stored.fill(replacement)));
+        EXPECT_THROW(stored.fill(replacement), u32);
+        EXPECT_EQ(stored.size(), 1u);
+        EXPECT_EQ(stored[0u].value, 17u);
+    }
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void VerifyNoexceptFailureTests_FixedVectorElementSwapFailurePropagatesWithoutSwappingSizes(){
+    native{
+        using namespace __hidden_fixed_vector_failure_tests;
+        FixedVector<ThrowingFixedVectorSwap, 4u> first;
+        FixedVector<ThrowingFixedVectorSwap, 4u> second;
+        first.resize(1u);
+        second.resize(2u);
+        first[0u].value = 17u;
+        second[0u].value = 29u;
+        static_assert(!noexcept(first.swap(second)));
+        EXPECT_THROW(first.swap(second), u32);
+        EXPECT_EQ(first.size(), 1u);
+        EXPECT_EQ(second.size(), 2u);
+        EXPECT_EQ(first[0u].value, 17u);
+        EXPECT_EQ(second[0u].value, 29u);
+    }
 }
+
+NWB_ADHD_GTEST(Global, BinarySharedHelpersPreserveEdgeCases, VerifyGlobal_BinarySharedHelpersPreserveEdgeCases)
+NWB_ADHD_GTEST(Global, NumericSharedHelpersPreserveEdgeCases, VerifyGlobal_NumericSharedHelpersPreserveEdgeCases)
+NWB_ADHD_GTEST(Global, CollectionSharedHelpersPreserveEdgeCases, VerifyGlobal_CollectionSharedHelpersPreserveEdgeCases)
+NWB_ADHD_GTEST(Global, HashSharedHelpersPreserveEdgeCases, VerifyGlobal_HashSharedHelpersPreserveEdgeCases)
+NWB_ADHD_GTEST(NoexceptFailureTests, HashResultConversionFailurePreservesCombinedSeed, VerifyNoexceptFailureTests_HashResultConversionFailurePreservesCombinedSeed)
+NWB_ADHD_GTEST(NoexceptFailureTests, PlacementAllocationFailurePropagatesThroughCaptureConstructionAndReplacement, VerifyNoexceptFailureTests_PlacementAllocationFailurePropagatesThroughCaptureConstructionAndReplacement)
+NWB_ADHD_GTEST(NoexceptFailureTests, ThrowingByteGetterPreservesReadOffset, VerifyNoexceptFailureTests_ThrowingByteGetterPreservesReadOffset)
+NWB_ADHD_GTEST(NoexceptFailureTests, PodAddressAndMutableBufferGetterFailuresPropagateBeforeReading, VerifyNoexceptFailureTests_PodAddressAndMutableBufferGetterFailuresPropagateBeforeReading)
+NWB_ADHD_GTEST(NoexceptFailureTests, BoundedDiagnosticsNeverInvokeThrowingConversionOrCleanupAdapters, VerifyNoexceptFailureTests_BoundedDiagnosticsNeverInvokeThrowingConversionOrCleanupAdapters)
+NWB_ADHD_GTEST(NoexceptFailureTests, CaptureMoveTransportDoesNotReinvokeClassPlacementAllocation, VerifyNoexceptFailureTests_CaptureMoveTransportDoesNotReinvokeClassPlacementAllocation)
+NWB_ADHD_GTEST(NoexceptFailureTests, FancyPointerDereferenceAndRawConversionFailuresPreserveBorrowedTarget, VerifyNoexceptFailureTests_FancyPointerDereferenceAndRawConversionFailuresPreserveBorrowedTarget)
+NWB_ADHD_GTEST(NoexceptFailureTests, UniqueOwnerComparisonResultConversionUnwindsThroughEveryBooleanWrapper, VerifyNoexceptFailureTests_UniqueOwnerComparisonResultConversionUnwindsThroughEveryBooleanWrapper)
+NWB_ADHD_GTEST(NoexceptFailureTests, ReferenceOwnerComparisonResultConversionUnwindsThroughEveryBooleanWrapper, VerifyNoexceptFailureTests_ReferenceOwnerComparisonResultConversionUnwindsThroughEveryBooleanWrapper)
+NWB_ADHD_GTEST(NoexceptFailureTests, OwnerObservationUsesImplicitCopyAndPreservesBorrowedTargetsOnFailure, VerifyNoexceptFailureTests_OwnerObservationUsesImplicitCopyAndPreservesBorrowedTargetsOnFailure)
+NWB_ADHD_GTEST(NoexceptFailureTests, HexAppendCapacityAndOutputFailuresPreservePublishedCharacters, VerifyNoexceptFailureTests_HexAppendCapacityAndOutputFailuresPreservePublishedCharacters)
+NWB_ADHD_GTEST(NoexceptFailureTests, FixedVectorRemovalSupportsCopyOnlyAndEmptyZeroCapacity, VerifyNoexceptFailureTests_FixedVectorRemovalSupportsCopyOnlyAndEmptyZeroCapacity)
+NWB_ADHD_GTEST(NoexceptFailureTests, FixedVectorRemovalReleasesResourcesAndRetainsSizeOnResetFailure, VerifyNoexceptFailureTests_FixedVectorRemovalReleasesResourcesAndRetainsSizeOnResetFailure)
+NWB_ADHD_GTEST(NoexceptFailureTests, FixedVectorElementAssignmentFailurePropagatesWithoutPublishingFullSize, VerifyNoexceptFailureTests_FixedVectorElementAssignmentFailurePropagatesWithoutPublishingFullSize)
+NWB_ADHD_GTEST(NoexceptFailureTests, FixedVectorElementSwapFailurePropagatesWithoutSwappingSizes, VerifyNoexceptFailureTests_FixedVectorElementSwapFailurePropagatesWithoutSwappingSizes)
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

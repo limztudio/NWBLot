@@ -1,22 +1,30 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
 
-b8 UiTextAreaScrollAndBakedCasesReady(in u64 value){
-    return value != 0u;
-}
+#include <tests/common/gtest_macros.adhd>
+#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd>
 
-native{
-#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd.h>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+native{
+#include <tests/common/capturing_logger.adhd.h>
+#include <tests/common/font_fixture.adhd.h>
+#include <tests/unit/ui/native_input.adhd.h>
+#include <tests/unit/ui/name_cases.adhd.h>
+
 #include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
+#include <impl/ecs_ui/toolkit/input/router.adhd.h>
+#include <impl/ecs_ui/toolkit/text/service.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/text_area.adhd.h>
+
+#include <global/bit.h>
+#include <global/filesystem.h>
 #include <global/simdmath.h>
+
+#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,40 +41,8 @@ using namespace NWB::Impl::Ui;
 using namespace NWB::UiTextAreaTests;
 
 
-struct AreaModelSnapshot{
-    AString<Core::Alloc::GlobalArena> text;
-    u64 instance = 0u;
-    u64 revision = 0u;
-    u64 external = 0u;
-    u64 selection = 0u;
-    u64 composition = 0u;
-    usize anchor = 0u;
-    usize caret = 0u;
-    b8 composing = false;
-    b8 undo = false;
-    b8 redo = false;
-
-
-public:
-    AreaModelSnapshot(Core::Alloc::GlobalArena& arena, const EditModel& model)
-        : text(arena)
-        , instance(model.instanceGeneration())
-        , revision(model.revision())
-        , external(model.externalRevision())
-        , selection(model.selectionGeneration())
-        , composition(model.compositionGeneration())
-        , anchor(model.anchor())
-        , caret(model.caret())
-        , composing(model.composition().active)
-        , undo(model.canUndo())
-        , redo(model.canRedo())
-    {
-        text.assign(model.text().data(), model.text().size());
-    }
-};
-
 class UiTextAreaScrollLifetimeTests : public TextAreaFixture{
-protected:
+public:
     [[nodiscard]] static TextAreaOptions SmallOptions()noexcept{
         TextAreaOptions options;
         options.width = { LayoutSizePolicy::Fixed, 180.0f };
@@ -88,7 +64,11 @@ public:
     }
 
 
-protected:
+public:
+    [[nodiscard]] AStringView denseView()const noexcept{
+        return AStringView(m_dense.data(), m_dense.size());
+    }
+
     [[nodiscard]] b8 seedModel(){
         return m_model.setText(AStringView(m_dense)) && m_model.setSelection(0u, 0u) && m_state.scrollTo({});
     }
@@ -124,27 +104,11 @@ protected:
             return false;
         const Point origin = UiWidgetTests::Center(thumb->rectangle);
         const Point destination{ origin.x, origin.y + 24.0f };
-        return send({ .position = origin , .type = InputEventType::PrimaryDown }).pointerConsumed && send({ .position = destination , .type = InputEventType::PointerMove }).pointerConsumed && m_context.input().capture() == thumbId;
-    }
-
-    void expectModel(const EditModel& model, const AreaModelSnapshot& before)const{
-        EXPECT_EQ(model.text(), AStringView(before.text));
-        EXPECT_EQ(model.instanceGeneration(), before.instance);
-        EXPECT_EQ(model.revision(), before.revision);
-        EXPECT_EQ(model.externalRevision(), before.external);
-        EXPECT_EQ(model.selectionGeneration(), before.selection);
-        EXPECT_EQ(model.compositionGeneration(), before.composition);
-        EXPECT_EQ(model.anchor(), before.anchor);
-        EXPECT_EQ(model.caret(), before.caret);
-        EXPECT_EQ(model.composition().active, before.composing);
-        EXPECT_EQ(model.canUndo(), before.undo);
-        EXPECT_EQ(model.canRedo(), before.redo);
-        EXPECT_EQ(m_host.loans, 0u);
-        EXPECT_EQ(m_host.publishes, 0u);
+        return send({ .position = origin, .type = InputEventType::PrimaryDown }).pointerConsumed && send({ .position = destination, .type = InputEventType::PointerMove }).pointerConsumed && m_context.input().capture() == thumbId;
     }
 
 
-protected:
+public:
     PopupState m_parent;
     PopupState m_child;
     AString<Core::Alloc::GlobalArena> m_dense;
@@ -154,264 +118,7 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiTextAreaScrollLifetimeTests, IdenticalExternalScrollIntentRetiresAnAcceptedTrackPage){
-    ASSERT_TRUE(prepareOverflow());
-    const AreaModelSnapshot model(m_arena, m_model);
-    const WidgetId afterId = UiTestSupport::RequireWidgetId(id(s_TextAreaKey, s_TextAreaPanelKey), "scroll.y.after");
-    const HitTarget* after = target(afterId);
-    ASSERT_NE(after, nullptr);
-    click(UiWidgetTests::Center(after->rectangle));
-    const Point scroll = m_state.scroll();
-    const u64 revision = m_state.revision();
-    ASSERT_TRUE(m_state.scrollTo(scroll));
-    EXPECT_GT(m_state.revision(), revision);
-    ASSERT_TRUE(frameArea(2u, SmallOptions()));
-    EXPECT_FLOAT_EQ(m_state.scroll().x, scroll.x);
-    EXPECT_FLOAT_EQ(m_state.scroll().y, scroll.y);
-    expectModel(m_model, model);
-    after = target(afterId);
-    ASSERT_NE(after, nullptr);
-    click(UiWidgetTests::Center(after->rectangle));
-    ASSERT_TRUE(frameArea(3u, SmallOptions()));
-    EXPECT_GT(m_state.scroll().y, scroll.y);
-    expectModel(m_model, model);
-}
-
-TEST_F(UiTextAreaScrollLifetimeTests, IdenticalAndAwayBackSelectionIntentsRetireAcceptedWheel){
-    ASSERT_TRUE(prepareOverflow());
-    u64 generation = 2u;
-    for(const b8 awayBack : { false, true }){
-        ASSERT_TRUE(wheel());
-        const u64 revision = m_model.revision();
-        const u64 selection = m_model.selectionGeneration();
-        if(awayBack){
-            ASSERT_TRUE(m_model.setSelection(1u, 1u));
-            ASSERT_TRUE(m_model.setSelection(0u, 0u));
-        }
-        else
-            ASSERT_TRUE(m_model.setSelection(0u, 0u));
-        const AreaModelSnapshot model(m_arena, m_model);
-        EXPECT_EQ(m_model.revision(), revision);
-        EXPECT_GT(m_model.selectionGeneration(), selection);
-        ASSERT_TRUE(frameArea(generation, SmallOptions()));
-        ++generation;
-        EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
-        expectModel(m_model, model);
-        ASSERT_TRUE(wheel());
-        ASSERT_TRUE(frameArea(generation, SmallOptions()));
-        ++generation;
-        EXPECT_GT(m_state.scroll().y, 0.0f);
-        expectModel(m_model, model);
-        ASSERT_TRUE(m_state.scrollTo({}));
-        ASSERT_TRUE(frameArea(generation, SmallOptions()));
-        ++generation;
-        EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
-    }
-}
-
-TEST_F(UiTextAreaScrollLifetimeTests, SameTextReplacementAndModelRebindingRetireCopiedWheel){
-    ASSERT_TRUE(prepareOverflow());
-    ASSERT_TRUE(m_model.setSelection(m_model.text().size(), m_model.text().size()));
-    ASSERT_TRUE(frameArea(2u, SmallOptions()));
-    ASSERT_GT(m_state.scroll().y, 0.0f);
-    ASSERT_TRUE(wheel(1.0));
-    const u64 revision = m_model.revision();
-    const u64 external = m_model.externalRevision();
-    ASSERT_TRUE(m_model.setText(AStringView(m_dense)));
-    const AreaModelSnapshot replaced(m_arena, m_model);
-    EXPECT_EQ(m_model.revision(), revision);
-    EXPECT_GT(m_model.externalRevision(), external);
-    ASSERT_TRUE(frameArea(3u, SmallOptions()));
-    EXPECT_NEAR(m_state.scroll().y, m_state.scrollbars().vertical.maximum, 0.001);
-    expectModel(m_model, replaced);
-    const f32 maximum = m_state.scroll().y;
-    ASSERT_TRUE(wheel(1.0));
-    ASSERT_TRUE(frameArea(4u, SmallOptions()));
-    EXPECT_LT(m_state.scroll().y, maximum);
-    expectModel(m_model, replaced);
-
-    ASSERT_TRUE(m_model.setSelection(0u, 0u));
-    ASSERT_TRUE(m_state.scrollTo({}));
-    ASSERT_TRUE(frameArea(5u, SmallOptions()));
-    ASSERT_TRUE(wheel());
-    const AreaModelSnapshot original(m_arena, m_model);
-    EditModel replacement(m_arena, {}, EditTextMode::Multiline);
-    ASSERT_TRUE(replacement.setText(AStringView(m_dense)));
-    ASSERT_TRUE(replacement.setSelection(0u, 0u));
-    const AreaModelSnapshot rebound(m_arena, replacement);
-    ASSERT_TRUE(beginArea(6u));
-    ASSERT_TRUE(m_builder.textArea(s_TextAreaKey, replacement, m_state, SmallOptions()).valid);
-    ASSERT_TRUE(acceptArea());
-    EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
-    expectModel(m_model, original);
-    expectModel(replacement, rebound);
-    ASSERT_TRUE(wheel());
-    ASSERT_TRUE(beginArea(7u));
-    ASSERT_TRUE(m_builder.textArea(s_TextAreaKey, replacement, m_state, SmallOptions()).valid);
-    ASSERT_TRUE(acceptArea());
-    EXPECT_GT(m_state.scroll().y, 0.0f);
-    expectModel(m_model, original);
-    expectModel(replacement, rebound);
-}
-
-TEST_F(UiTextAreaScrollLifetimeTests, ActualViewportResizeRetiresWheelWithUnchangedOptions){
-    TextAreaOptions options = SmallOptions();
-    options.width = { LayoutSizePolicy::Stretch, 1.0f };
-    const Rect narrow{ 20.0f, 20.0f, 240.0f, 160.0f };
-    const Rect wider{ 20.0f, 20.0f, 320.0f, 160.0f };
-    ASSERT_TRUE(prepareOverflow(1u, options, narrow));
-    const AreaModelSnapshot model(m_arena, m_model);
-    const Rect accepted = m_state.scrollbars().viewport;
-    const u64 revision = m_state.revision();
-    ASSERT_TRUE(wheel());
-    ASSERT_TRUE(beginArea(2u, wider));
-    ASSERT_TRUE(m_builder.textArea(s_TextAreaKey, m_model, m_state, options).valid);
-    EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
-    ASSERT_TRUE(acceptArea());
-    EXPECT_GT(m_state.scrollbars().viewport.width, accepted.width);
-    EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
-    EXPECT_EQ(m_state.revision(), revision);
-    expectModel(m_model, model);
-    ASSERT_TRUE(wheel());
-    ASSERT_TRUE(frameArea(3u, options, wider));
-    EXPECT_GT(m_state.scroll().y, 0.0f);
-    expectModel(m_model, model);
-}
-
-TEST_F(UiTextAreaScrollLifetimeTests, ChangedWheelLinesRetiresTheCopiedStepAndAcceptsItsNewPolicy){
-    ASSERT_TRUE(prepareOverflow());
-    const AreaModelSnapshot model(m_arena, m_model);
-    const HitTarget* host = target(id(s_TextAreaKey, s_TextAreaPanelKey));
-    ASSERT_NE(host, nullptr);
-    const f64 oldStep = host->scrollStep;
-    ASSERT_GT(oldStep, 0.0);
-    ASSERT_TRUE(wheel());
-    TextAreaOptions options = SmallOptions();
-    options.wheelLines = 7.0f;
-    ASSERT_TRUE(frameArea(2u, options));
-    EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
-    expectModel(m_model, model);
-    host = target(id(s_TextAreaKey, s_TextAreaPanelKey));
-    ASSERT_NE(host, nullptr);
-    EXPECT_GT(host->scrollStep, oldStep);
-    ASSERT_TRUE(wheel());
-    ASSERT_TRUE(frameArea(3u, options));
-    EXPECT_GT(m_state.scroll().y, static_cast<f32>(oldStep));
-    expectModel(m_model, model);
-}
-
-TEST_F(UiTextAreaScrollLifetimeTests, ClosingAnAncestorRetiresWheelAndCaptureBeforeFreshPopupReuse){
-    ASSERT_TRUE(seedModel());
-    m_parent.open();
-    m_child.open();
-    ASSERT_TRUE(popupFrame(1u));
-    const AreaModelSnapshot model(m_arena, m_model);
-    ASSERT_TRUE(wheel());
-    ASSERT_TRUE(startThumb(popupArea()));
-    const Point release = UiWidgetTests::Center(m_state.scrollbars().vertical.thumb);
-    ASSERT_TRUE(begin(2u));
-    ASSERT_TRUE(m_builder.beginPopup(s_ParentPopupKey, m_parent, LargeLoanParentOptions()));
-    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, LargeLoanChildOptions()));
-    ASSERT_TRUE(m_builder.textArea(s_TextAreaKey, m_model, m_state, SmallOptions()).valid);
-    ASSERT_TRUE(m_builder.endPopup());
-    m_parent.close();
-    ASSERT_TRUE(m_builder.endPopup());
-    ASSERT_TRUE(m_context.endRoot());
-    ASSERT_TRUE(m_context.finishFrame());
-    ASSERT_TRUE(m_context.commitFrame(2u));
-    EXPECT_FALSE(m_context.input().capture().valid());
-    EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
-    EXPECT_TRUE(send({ .position = release , .type = InputEventType::PrimaryUp }).pointerConsumed);
-    expectModel(m_model, model);
-    m_parent.open();
-    ASSERT_TRUE(begin(3u));
-    ASSERT_TRUE(m_builder.beginPopup(s_ParentPopupKey, m_parent, LargeLoanParentOptions()));
-    EXPECT_FALSE(m_builder.beginPopup(s_ChildPopupKey, m_child, LargeLoanChildOptions()));
-    EXPECT_FALSE(m_child.isOpen());
-    ASSERT_TRUE(m_builder.endPopup());
-    ASSERT_TRUE(m_context.endRoot());
-    ASSERT_TRUE(m_context.finishFrame());
-    ASSERT_TRUE(m_context.commitFrame(3u));
-    m_child.open();
-    ASSERT_TRUE(popupFrame(4u));
-    EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
-    ASSERT_TRUE(wheel());
-    ASSERT_TRUE(popupFrame(5u));
-    EXPECT_GT(m_state.scroll().y, 0.0f);
-    expectModel(m_model, model);
-}
-
-TEST_F(UiTextAreaScrollLifetimeTests, CaptureLossCancelsTheUnfinishedThumbAndPreservesCompletedWheel){
-    ASSERT_TRUE(prepareOverflow());
-    const AreaModelSnapshot model(m_arena, m_model);
-    ASSERT_TRUE(wheel());
-    ASSERT_TRUE(startThumb(id(s_TextAreaKey, s_TextAreaPanelKey)));
-    EXPECT_FALSE(send({ .type = InputEventType::PointerCaptureLost }).capture.valid());
-    ASSERT_TRUE(frameArea(2u, SmallOptions()));
-    ASSERT_GT(m_state.scroll().y, 0.0f);
-    const f32 wheelOnly = m_state.scroll().y;
-    expectModel(m_model, model);
-    ASSERT_TRUE(m_state.scrollTo({}));
-    ASSERT_TRUE(frameArea(3u, SmallOptions()));
-    ASSERT_TRUE(wheel());
-    ASSERT_TRUE(frameArea(4u, SmallOptions()));
-    EXPECT_FLOAT_EQ(m_state.scroll().y, wheelOnly);
-    expectModel(m_model, model);
-}
-
-TEST_F(UiTextAreaScrollLifetimeTests, NativeFocusLossCancelsCopiedWheelAndAnActiveThumb){
-    ASSERT_TRUE(prepareOverflow());
-    const AreaModelSnapshot model(m_arena, m_model);
-    ASSERT_TRUE(wheel());
-    ASSERT_TRUE(startThumb(id(s_TextAreaKey, s_TextAreaPanelKey)));
-    EXPECT_FALSE(send({ .type = InputEventType::FocusLost }).wantsCommands);
-    ASSERT_TRUE(frameArea(2u, SmallOptions()));
-    EXPECT_FALSE(m_context.input().capture().valid());
-    EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
-    expectModel(m_model, model);
-    EXPECT_FALSE(send({ .type = InputEventType::FocusGained }).wantsCommands);
-    ASSERT_TRUE(wheel());
-    ASSERT_TRUE(frameArea(3u, SmallOptions()));
-    EXPECT_GT(m_state.scroll().y, 0.0f);
-    expectModel(m_model, model);
-}
-
-TEST_F(UiTextAreaScrollLifetimeTests, DisablingRetiresPendingWheelAndThumbWithoutReplayingOnEnable){
-    ASSERT_TRUE(prepareOverflow());
-    const AreaModelSnapshot model(m_arena, m_model);
-    ASSERT_TRUE(wheel());
-    ASSERT_TRUE(startThumb(id(s_TextAreaKey, s_TextAreaPanelKey)));
-    const Point release = UiWidgetTests::Center(m_state.scrollbars().vertical.thumb);
-    TextAreaOptions disabled = SmallOptions();
-    disabled.enabled = false;
-    ASSERT_TRUE(frameArea(2u, disabled));
-    EXPECT_FALSE(m_context.input().capture().valid());
-    EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
-    EXPECT_TRUE(send({ .position = release , .type = InputEventType::PrimaryUp }).pointerConsumed);
-    expectModel(m_model, model);
-    ASSERT_TRUE(frameArea(3u, SmallOptions()));
-    EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
-    ASSERT_TRUE(wheel());
-    ASSERT_TRUE(frameArea(4u, SmallOptions()));
-    EXPECT_GT(m_state.scroll().y, 0.0f);
-    expectModel(m_model, model);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
-#include <global/simdmath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -427,9 +134,9 @@ using namespace NWB;
 using namespace NWB::UiTextAreaTests;
 
 class UiTextAreaScrollTests : public TextAreaFixture{
-protected:
+public:
     [[nodiscard]] static AStringView DenseText()noexcept{
-        return "aaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa\n" "aaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa";
+        return "aaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa";
     }
 
     [[nodiscard]] static TextAreaOptions SmallOptions()noexcept{
@@ -444,424 +151,7 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiTextAreaScrollTests, ExplicitTwoAxisScrollSurvivesTheFirstModelBinding){
-    ASSERT_TRUE(m_model.setText(DenseText()));
-    auto layout = m_text.layout({ .text = DenseText(), .fontSize = m_builder.style().fontSize });
-    ASSERT_TRUE(layout);
-    const auto visual = m_text.measure(*layout, { 800.0f, 600.0f, 1.0f, 1.0f });
-    ASSERT_TRUE(visual);
-    ASSERT_LT(visual->x, 0.0f);
-    ASSERT_TRUE(m_state.scrollTo({ 17.0f, 19.0f }));
-    const u64 revision = m_state.revision();
-    ASSERT_TRUE(frameArea(1u, SmallOptions()));
-    EXPECT_FLOAT_EQ(m_state.scroll().x, 17.0f);
-    EXPECT_FLOAT_EQ(m_state.scroll().y, 19.0f);
-    EXPECT_EQ(m_state.revision(), revision);
-    const EditBoxPlacement& placement = m_state.placement();
-    EXPECT_FLOAT_EQ(placement.textOrigin.x, placement.content.x - visual->x - 17.0f);
-    EXPECT_FLOAT_EQ(placement.textOrigin.y, placement.content.y - visual->y - 19.0f);
-    EXPECT_GT(placement.caret.x, placement.content.x + placement.content.width);
-    EXPECT_GT(placement.caret.y, placement.content.y + placement.content.height);
-}
-
-TEST_F(UiTextAreaScrollTests, IdleAndResizeClampExplicitViewportWithoutAdvancingItsIntentEpoch){
-    useHost();
-    ASSERT_TRUE(m_model.setText(DenseText()));
-    auto layout = m_text.layout({ .text = DenseText(), .fontSize = m_builder.style().fontSize });
-    ASSERT_TRUE(layout);
-    const auto visual = m_text.measure(*layout, { 800.0f, 600.0f, 1.0f, 1.0f });
-    ASSERT_TRUE(visual);
-    ASSERT_LT(visual->x, 0.0f);
-    ASSERT_TRUE(m_state.scrollTo({ 17.0f, 19.0f }));
-    const u64 revision = m_state.revision();
-    ASSERT_TRUE(frameArea(1u, SmallOptions()));
-    ASSERT_TRUE(frameArea(2u, SmallOptions()));
-    EXPECT_FLOAT_EQ(m_state.scroll().x, 17.0f);
-    EXPECT_FLOAT_EQ(m_state.scroll().y, 19.0f);
-    EXPECT_EQ(m_state.revision(), revision);
-    TextAreaOptions larger;
-    larger.width = { LayoutSizePolicy::Fixed, 500.0f };
-    larger.height = { LayoutSizePolicy::Fixed, 300.0f };
-    ASSERT_TRUE(frameArea(3u, larger));
-    EXPECT_FLOAT_EQ(m_state.scroll().x, 0.0f);
-    EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
-    EXPECT_EQ(m_state.revision(), revision);
-    EXPECT_FLOAT_EQ(m_state.placement().textOrigin.x, m_state.placement().content.x - visual->x);
-    EXPECT_FLOAT_EQ(m_state.placement().textOrigin.y, m_state.placement().content.y - visual->y);
-    ASSERT_EQ(m_host.publications.size(), 3u);
-    EXPECT_FLOAT_EQ(m_host.publications[0u].placement.scroll, 17.0f);
-    EXPECT_FLOAT_EQ(m_host.publications[0u].placement.scrollY, 19.0f);
-}
-
-TEST_F(UiTextAreaScrollTests, AutomaticRevealSurvivesIdleViewportShrinkWithoutNewModelIntent){
-    useHost();
-    ASSERT_TRUE(m_model.setText(DenseText()));
-    TextAreaOptions larger;
-    larger.width = { LayoutSizePolicy::Fixed, 500.0f };
-    larger.height = { LayoutSizePolicy::Fixed, 300.0f };
-    ASSERT_TRUE(frameArea(1u, larger));
-    EXPECT_FLOAT_EQ(m_state.scroll().x, 0.0f);
-    EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
-    const u64 revision = m_model.revision();
-    const u64 selection = m_model.selectionGeneration();
-    const u64 stateRevision = m_state.revision();
-    TextAreaOptions compact = SmallOptions();
-    compact.height.value = compact.height.value + m_builder.scrollbarStyle().thickness;
-    ASSERT_TRUE(frameArea(2u, compact));
-    EXPECT_GT(m_state.scroll().x, 0.0f);
-    EXPECT_GT(m_state.scroll().y, 0.0f);
-    const EditBoxPlacement& placement = m_state.placement();
-    ASSERT_GE(placement.content.height, placement.caret.height);
-    EXPECT_GE(placement.caret.x, placement.content.x);
-    EXPECT_GE(placement.caret.y, placement.content.y);
-    // Lanes are caret right, caret bottom, content right, content bottom.
-    const SIMDVectorSingle ends = VectorAdd(VectorSet(placement.caret.x, placement.caret.y, placement.content.x, placement.content.y), VectorSet(placement.caret.width, placement.caret.height, placement.content.width, placement.content.height));
-    const SIMDVectorSingle limits = VectorAdd(ends, VectorReplicate(0.001f));
-    EXPECT_LE(VectorGetX(ends), VectorGetZ(limits));
-    EXPECT_LE(VectorGetY(ends), VectorGetW(limits));
-    EXPECT_EQ(m_model.revision(), revision);
-    EXPECT_EQ(m_model.selectionGeneration(), selection);
-    EXPECT_EQ(m_state.revision(), stateRevision);
-    EXPECT_FALSE(m_result.textChanged || m_result.selectionChanged);
-}
-
-TEST_F(UiTextAreaScrollTests, ExplicitOverscrollClampsToBothContentExtents){
-    ASSERT_TRUE(m_model.setText(DenseText()));
-    ASSERT_TRUE(m_state.scrollTo({ 10000.0f, 10000.0f }));
-    const u64 revision = m_state.revision();
-    ASSERT_TRUE(frameArea(1u, SmallOptions()));
-    const EditBoxPlacement& placement = m_state.placement();
-    EXPECT_GT(m_state.scroll().x, 0.0f);
-    EXPECT_GT(m_state.scroll().y, 0.0f);
-    EXPECT_LT(m_state.scroll().x, 10000.0f);
-    EXPECT_LT(m_state.scroll().y, 10000.0f);
-    // Lanes are caret right, caret bottom, content right, content bottom.
-    const SIMDVectorSingle ends = VectorAdd(VectorSet(placement.caret.x, placement.caret.y, placement.content.x, placement.content.y), VectorSet(placement.caret.width, placement.caret.height, placement.content.width, placement.content.height));
-    EXPECT_NEAR(VectorGetX(ends), VectorGetZ(ends), 0.001f);
-    EXPECT_NEAR(VectorGetY(ends), VectorGetW(ends), 0.001f);
-    EXPECT_EQ(m_state.revision(), revision);
-}
-
-TEST_F(UiTextAreaScrollTests, AcceptedIdenticalSelectionResumesRevealAfterManualScrolling){
-    ASSERT_TRUE(m_model.setText(DenseText()));
-    ASSERT_TRUE(frameArea(1u, SmallOptions()));
-    EXPECT_GT(m_state.scroll().x, 0.0f);
-    EXPECT_GT(m_state.scroll().y, 0.0f);
-    ASSERT_TRUE(m_state.scrollTo({ 0.0f, 0.0f }));
-    const u64 revision = m_state.revision();
-    ASSERT_TRUE(frameArea(2u, SmallOptions()));
-    EXPECT_FLOAT_EQ(m_state.scroll().x, 0.0f);
-    EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
-    const u64 selectionGeneration = m_model.selectionGeneration();
-    ASSERT_TRUE(m_model.setSelection(m_model.anchor(), m_model.caret()));
-    EXPECT_GT(m_model.selectionGeneration(), selectionGeneration);
-    ASSERT_TRUE(frameArea(3u, SmallOptions()));
-    EXPECT_GT(m_state.scroll().x, 0.0f);
-    EXPECT_GT(m_state.scroll().y, 0.0f);
-    EXPECT_EQ(m_state.revision(), revision);
-}
-
-TEST_F(UiTextAreaScrollTests, CopyAndUnchangedSubmitPreserveTheExplicitViewport){
-    useHost();
-    ASSERT_TRUE(m_model.setText(DenseText()));
-    ASSERT_TRUE(frameArea(1u, SmallOptions()));
-    ASSERT_TRUE(m_state.scrollTo({ 0.0f, 0.0f }));
-    const u64 revision = m_state.revision();
-    const u64 selectionGeneration = m_model.selectionGeneration();
-    m_host.key(Core::Key::C, true);
-    m_host.key(Core::Key::Enter, true);
-    ASSERT_TRUE(frameArea(2u, SmallOptions()));
-    EXPECT_TRUE(m_result.submitted);
-    EXPECT_FALSE(m_result.textChanged || m_result.selectionChanged);
-    EXPECT_FLOAT_EQ(m_state.scroll().x, 0.0f);
-    EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
-    EXPECT_EQ(m_state.revision(), revision);
-    EXPECT_EQ(m_model.selectionGeneration(), selectionGeneration);
-    EXPECT_EQ(m_model.text(), DenseText());
-    ASSERT_EQ(m_host.actionTexts.size(), 1u);
-    EXPECT_EQ(m_host.actionTexts.front(), DenseText());
-    m_host.selection(m_model.anchor(), m_model.caret());
-    ASSERT_TRUE(frameArea(3u, SmallOptions()));
-    EXPECT_FALSE(m_result.selectionChanged);
-    EXPECT_GT(m_model.selectionGeneration(), selectionGeneration);
-    EXPECT_GT(m_state.scroll().x, 0.0f);
-    EXPECT_GT(m_state.scroll().y, 0.0f);
-}
-
-TEST_F(UiTextAreaScrollTests, AcceptedTextResumesRevealAndPublicationOwnsItsBytes){
-    useHost();
-    ASSERT_TRUE(m_model.setText(DenseText()));
-    ASSERT_TRUE(frameArea(1u, SmallOptions()));
-    ASSERT_TRUE(m_state.scrollTo({ 0.0f, 0.0f }));
-    ASSERT_TRUE(frameArea(2u, SmallOptions()));
-    m_host.text("b");
-    ASSERT_TRUE(frameArea(3u, SmallOptions()));
-    EXPECT_TRUE(m_result.textChanged);
-    EXPECT_GT(m_state.scroll().x, 0.0f);
-    EXPECT_GT(m_state.scroll().y, 0.0f);
-    AString<Core::Alloc::GlobalArena> displayed(m_arena);
-    displayed.assign(DenseText().data(), DenseText().size());
-    displayed.push_back('b');
-    ASSERT_EQ(m_host.publications.size(), 3u);
-    EXPECT_EQ(m_host.publications.back().text, displayed);
-    ASSERT_TRUE(m_model.undo());
-    EXPECT_EQ(m_model.text(), DenseText());
-    EXPECT_EQ(m_host.publications.back().text, displayed);
-    EXPECT_FALSE(m_model.canUndo());
-}
-
-TEST_F(UiTextAreaScrollTests, KnownModelRebindingResetsAndRevealsTheNewCaret){
-    ASSERT_TRUE(m_model.setText(DenseText()));
-    ASSERT_TRUE(m_state.scrollTo({ 17.0f, 19.0f }));
-    ASSERT_TRUE(frameArea(1u, SmallOptions()));
-    EditModel replacement(m_arena, {}, EditTextMode::Multiline);
-    ASSERT_TRUE(replacement.setText(DenseText()));
-    const u64 revision = m_state.revision();
-    ASSERT_TRUE(beginArea(2u));
-    ASSERT_TRUE(m_builder.textArea(s_TextAreaKey, replacement, m_state, SmallOptions()).valid);
-    ASSERT_TRUE(acceptArea());
-    EXPECT_GT(m_state.scroll().x, 17.0f);
-    EXPECT_GT(m_state.scroll().y, 19.0f);
-    EXPECT_EQ(m_state.revision(), revision);
-}
-
-TEST_F(UiTextAreaScrollTests, ResetThenScrollSeedsANewInitialBinding){
-    ASSERT_TRUE(m_model.setText(DenseText()));
-    ASSERT_TRUE(frameArea(1u, SmallOptions()));
-    m_state.reset();
-    ASSERT_TRUE(m_state.scrollTo({ 17.0f, 19.0f }));
-    const u64 revision = m_state.revision();
-    ASSERT_TRUE(frameArea(2u, SmallOptions()));
-    EXPECT_FLOAT_EQ(m_state.scroll().x, 17.0f);
-    EXPECT_FLOAT_EQ(m_state.scroll().y, 19.0f);
-    EXPECT_EQ(m_state.revision(), revision);
-}
-
-TEST_F(UiTextAreaScrollTests, DocumentEdgesRevealCombiningMarksAndFallbackInkBeyondLogicalLines){
-    ASSERT_TRUE(installKoreanFallback());
-    useHost();
-    m_builder.style().fontSize = 24.0f;
-    const StringView text = "A\xCC\x81\xCC\x81\n\xED\x95\x9C\xEA\xB8\x80 \xEC\xA1\xB0\xED\x95\xA9\nMMMMMMMMMMMMMMMMMMMMMMMMg\xCC\xA3";
-    ASSERT_TRUE(m_model.setText(text));
-    ASSERT_TRUE(m_model.setSelection(0u, 0u));
-    EditBoxView reference(m_arena);
-    ASSERT_TRUE(reference.snapshot(m_model));
-    ASSERT_EQ(reference.shape(m_text, { .text = {}, .fontSize = 24.0f }), TextLayoutStatus::Success);
-    ASSERT_TRUE(reference.measure(m_text, { 800.0f, 600.0f, 1.0f, 1.0f }));
-    const Rect visual = reference.visualBounds();
-    const Point logical = reference.layout().measure();
-    ASSERT_LT(visual.y, 0.0f);
-    ASSERT_GT(visual.y + visual.height, logical.y);
-    b8 sawLatin = false;
-    b8 sawKorean = false;
-    for(const PlacedGlyph& glyph : reference.layout().glyphs()){
-        ASSERT_TRUE(glyph.face);
-        sawLatin = sawLatin || glyph.face->identity().name() == Name("tests/ui/fonts/latin");
-        sawKorean = sawKorean || glyph.face->identity().name() == Name("tests/ui/fonts/korean");
-    }
-    ASSERT_TRUE(sawLatin && sawKorean);
-    TextAreaOptions options;
-    options.width = { LayoutSizePolicy::Fixed, 120.0f };
-    options.height = { LayoutSizePolicy::Fixed, 90.0f };
-    ASSERT_TRUE(frameArea(1u, options));
-    const EditBoxPlacement first = m_state.placement();
-    EXPECT_FLOAT_EQ(first.scroll, 0.0f);
-    EXPECT_FLOAT_EQ(first.scrollY, 0.0f);
-    EXPECT_NEAR(first.textOrigin.x + visual.x, first.content.x, 0.001f);
-    EXPECT_NEAR(first.textOrigin.y + visual.y, first.content.y, 0.001f);
-    EXPECT_GE(first.caret.y, first.content.y);
-    EXPECT_LE(first.caret.y + first.caret.height, first.content.y + first.content.height);
-    m_host.key(Core::Key::End, true);
-    ASSERT_TRUE(frameArea(2u, options));
-    EXPECT_EQ(m_model.caret(), text.size());
-    const EditBoxPlacement last = m_state.placement();
-    ASSERT_GT(last.scroll, 0.0f);
-    ASSERT_GT(last.scrollY, 0.0f);
-    EXPECT_NEAR(last.scroll, m_state.scrollbars().horizontal.maximum, 0.001);
-    EXPECT_NEAR(last.scrollY, m_state.scrollbars().vertical.maximum, 0.001);
-    EXPECT_NEAR(last.textOrigin.x + visual.x + visual.width + last.caret.width, last.content.x + last.content.width, 0.001f);
-    EXPECT_NEAR(last.textOrigin.y + visual.y + visual.height, last.content.y + last.content.height, 0.001f);
-    const auto endCaret = reference.caretGeometry().caretRect(text.size());
-    ASSERT_TRUE(endCaret);
-    EXPECT_FLOAT_EQ(last.caret.x, last.textOrigin.x + endCaret->x);
-    EXPECT_FLOAT_EQ(last.caret.y, last.textOrigin.y + endCaret->y);
-    const auto hit = reference.hitTest({ last.caret.x, last.caret.height * 0.5f + last.caret.y }, last);
-    ASSERT_TRUE(hit);
-    EXPECT_EQ(*hit, text.size());
-    ASSERT_EQ(m_host.publications.size(), 2u);
-    UiPaintAssertions::ExpectRect(m_host.publications.back().placement.caret, last.caret);
-    m_host.key(Core::Key::Home, true);
-    ASSERT_TRUE(frameArea(3u, options));
-    EXPECT_EQ(m_model.caret(), 0u);
-    EXPECT_FLOAT_EQ(m_state.scroll().x, 0.0f);
-    EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
-    EXPECT_NEAR(m_state.placement().textOrigin.y + visual.y, m_state.placement().content.y, 0.001f);
-    ASSERT_TRUE(m_state.scrollTo({ 10000.0f, 10000.0f }));
-    ASSERT_TRUE(frameArea(4u, options));
-    EXPECT_EQ(m_model.caret(), 0u);
-    EXPECT_NEAR(m_state.scroll().x, last.scroll, 0.001f);
-    EXPECT_NEAR(m_state.scroll().y, last.scrollY, 0.001f);
-    const EditBoxPlacement& scrolled = m_state.placement();
-    const f32 scrolledInkBottom = scrolled.textOrigin.y + visual.y + visual.height;
-    EXPECT_NEAR(scrolledInkBottom, scrolled.content.y + scrolled.content.height, 0.001f);
-}
-
-TEST_F(UiTextAreaScrollTests, SingleLineVisualMeasurementRefreshesAcrossDpiAndTextChangesWithoutMovingCaretStops){
-    EditModel model(m_arena);
-    EditBoxView view(m_arena);
-    ASSERT_TRUE(model.setText("A\xCC\x81\xCC\x81 g\xCC\xA3"));
-    ASSERT_TRUE(view.snapshot(model));
-    ASSERT_EQ(view.shape(m_text, { .text = {}, .fontSize = 17.3f }), TextLayoutStatus::Success);
-    const Point logical = view.layout().measure();
-    UiPaintAssertions::ExpectRect(view.visualBounds(), { 0.0f, 0.0f, logical.x, logical.y });
-    const auto logicalCaret = view.caretGeometry().caretRect(view.displayCaret());
-    ASSERT_TRUE(logicalCaret);
-    Rect previous;
-    b8 changedWithScale = false;
-    for(const f32 scale : { 1.0f, 1.5f, 2.0f }){
-        const DisplayMetrics display{ 800.0f, 600.0f, scale, scale };
-        const auto expected = m_text.measure(view.layout(), display);
-        ASSERT_TRUE(expected);
-        ASSERT_TRUE(view.measure(m_text, display));
-        UiPaintAssertions::ExpectRect(view.visualBounds(), *expected);
-        EXPECT_FLOAT_EQ(view.layout().measure().x, logical.x);
-        EXPECT_FLOAT_EQ(view.layout().measure().y, logical.y);
-        const auto caret = view.caretGeometry().caretRect(view.displayCaret());
-        ASSERT_TRUE(caret);
-        UiPaintAssertions::ExpectRect(*caret, *logicalCaret);
-        const f32 caretWidth = 1.0f / scale;
-        const Rect bounds{ 20.25f, 30.75f, expected->width + caretWidth, expected->height };
-        const auto placement = view.arrange(bounds, {}, { 0.0f, 0.0f, 800.0f, 600.0f }, {}, caretWidth);
-        ASSERT_TRUE(placement);
-        EXPECT_NEAR(placement->textOrigin.x + expected->x, bounds.x, 0.001f);
-        EXPECT_NEAR(placement->textOrigin.y + expected->y, bounds.y, 0.001f);
-        EXPECT_NEAR(placement->textOrigin.y + expected->y + expected->height, bounds.y + bounds.height, 0.001f);
-        EXPECT_FLOAT_EQ(placement->caret.x, placement->textOrigin.x + logicalCaret->x);
-        EXPECT_FLOAT_EQ(placement->caret.y, placement->textOrigin.y + logicalCaret->y);
-        if(scale != 1.0f)
-            changedWithScale = changedWithScale || previous.x != expected->x || previous.y != expected->y || previous.width != expected->width || previous.height != expected->height;
-        previous = *expected;
-    }
-    EXPECT_TRUE(changedWithScale);
-    EXPECT_FALSE(view.measure(m_text, { 800.0f, 600.0f, 0.0f, 1.0f }));
-    UiPaintAssertions::ExpectRect(view.visualBounds(), previous);
-    ASSERT_TRUE(model.setText("x"));
-    ASSERT_TRUE(view.snapshot(model));
-    EXPECT_FALSE(view.ready());
-    ASSERT_EQ(view.shape(m_text, { .text = {}, .fontSize = 17.3f }), TextLayoutStatus::Success);
-    const Point replacementLogical = view.layout().measure();
-    UiPaintAssertions::ExpectRect(view.visualBounds(), { 0.0f, 0.0f, replacementLogical.x, replacementLogical.y });
-    ASSERT_TRUE(view.measure(m_text, { 800.0f, 600.0f, 1.0f, 1.0f }));
-    const auto replacement = m_text.measure(view.layout(), { 800.0f, 600.0f, 1.0f, 1.0f });
-    ASSERT_TRUE(replacement);
-    UiPaintAssertions::ExpectRect(view.visualBounds(), *replacement);
-    EXPECT_LT(view.visualBounds().height, previous.height);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_ui/toolkit/widgets/text_area.adhd.h>
-
-#include <global/bit.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_text_area_state_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(UiTextAreaStateTests, NavigationRejectsAnotherOwnersSnapshotBeforeAnyEdits){
-    TextAreaState first;
-    TextAreaState second;
-    EXPECT_FALSE(second.navigation().matches(first.navigation().snapshot()));
-}
-
-TEST(UiTextAreaStateTests, ViewportIntentAwayAndBackRetiresAnEarlierLoan){
-    TextAreaState state;
-    ASSERT_TRUE(state.scrollTo({ 20.0f, 30.0f }));
-    const u64 accepted = state.revision();
-    ASSERT_TRUE(state.scrollTo({ 40.0f, 60.0f }));
-    ASSERT_TRUE(state.scrollTo({ 20.0f, 30.0f }));
-    EXPECT_GT(state.revision(), accepted);
-    EXPECT_FLOAT_EQ(state.scroll().x, 20.0f);
-    EXPECT_FLOAT_EQ(state.scroll().y, 30.0f);
-    const u64 identical = state.revision();
-    ASSERT_TRUE(state.scrollTo(state.scroll()));
-    EXPECT_GT(state.revision(), identical);
-}
-
-TEST(UiTextAreaStateTests, InvalidViewportPreservesBothAxesAndBorrowEpoch){
-    TextAreaState state;
-    ASSERT_TRUE(state.scrollTo({ 20.0f, 30.0f }));
-    const u64 accepted = state.revision();
-    constexpr u32 s_Float32PositiveInfinityBits = 0x7f800000u;
-    constexpr u32 s_Float32QuietNaNBits = 0x7fc00000u;
-    const f32 infinity = BitCast<f32>(s_Float32PositiveInfinityBits);
-    const f32 nan = BitCast<f32>(s_Float32QuietNaNBits);
-    const Array<Point, 5> invalid{ Point{ -1.0f, 0.0f }, Point{ 0.0f, -1.0f }, Point{ infinity, 0.0f }, Point{ 0.0f, infinity }, Point{ nan, nan } };
-    for(const Point point : invalid){
-        EXPECT_FALSE(state.scrollTo(point));
-        EXPECT_EQ(state.revision(), accepted);
-        EXPECT_FLOAT_EQ(state.scroll().x, 20.0f);
-        EXPECT_FLOAT_EQ(state.scroll().y, 30.0f);
-    }
-}
-
-TEST(UiTextAreaStateTests, ResetRetiresExternalAndNavigationEpochsWithoutChangingIdentity){
-    TextAreaState state;
-    const u64 identity = state.instanceGeneration();
-    ASSERT_TRUE(state.scrollTo({ 20.0f, 30.0f }));
-    const u64 accepted = state.revision();
-    const auto navigation = state.navigation().snapshot();
-    state.reset();
-    EXPECT_EQ(state.instanceGeneration(), identity);
-    EXPECT_GT(state.revision(), accepted);
-    EXPECT_FALSE(state.navigation().matches(navigation));
-    EXPECT_FLOAT_EQ(state.scroll().x, 0.0f);
-    EXPECT_FLOAT_EQ(state.scroll().y, 0.0f);
-    const u64 empty = state.revision();
-    state.reset();
-    EXPECT_GT(state.revision(), empty);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <global/simdmath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -877,7 +167,7 @@ using namespace NWB;
 using namespace NWB::UiMultilineViewTests;
 
 class UiTextAreaViewTests : public MultilineViewFixture{
-protected:
+public:
     [[nodiscard]] b8 prepareDense(){ return m_model.setText("abcdef\nabcdef\nabcdef") && shapeView(); }
 
     [[nodiscard]] b8 manualPlace(const Point scroll, const f32 width = 20.0f, const f32 height = 12.0f)noexcept{
@@ -893,91 +183,7 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiTextAreaViewTests, SuppressedCaretRevealPreservesBothRequestedAxesAndHitMapping){
-    ASSERT_TRUE(prepareDense());
-    ASSERT_TRUE(manualPlace({ 5.0f, 6.0f }));
-    EXPECT_FLOAT_EQ(m_placement.scroll, 5.0f);
-    EXPECT_FLOAT_EQ(m_placement.scrollY, 6.0f);
-    EXPECT_FLOAT_EQ(m_placement.textOrigin.x, 5.0f);
-    EXPECT_FLOAT_EQ(m_placement.textOrigin.y, 14.0f);
-    const SIMDVectorSingle clipEnd = VectorAdd(VectorSet(m_placement.clip.x, m_placement.clip.y, 0.0f, 0.0f), VectorSet(m_placement.clip.width, m_placement.clip.height, 0.0f, 0.0f));
-    EXPECT_GT(m_placement.caret.x, VectorGetX(clipEnd));
-    EXPECT_GT(m_placement.caret.y, VectorGetY(clipEnd));
-    const Expected<usize> hit = m_view.hitTest({ 15.0f, 20.0f }, m_placement);
-    ASSERT_TRUE(hit);
-    EXPECT_EQ(*hit, 1u);
-}
-
-TEST_F(UiTextAreaViewTests, SuppressedRevealStillClampsToBothContentExtents){
-    ASSERT_TRUE(prepareDense());
-    ASSERT_TRUE(manualPlace({ 100.0f, 100.0f }));
-    EXPECT_FLOAT_EQ(m_placement.scroll, 41.0f);
-    EXPECT_FLOAT_EQ(m_placement.scrollY, 24.0f);
-    UiPaintAssertions::ExpectRect(m_placement.caret, { 29.0f, 20.0f, 1.0f, 12.0f });
-}
-
-TEST_F(UiTextAreaViewTests, ShrinkingContentClampsExplicitScrollWithoutCaretFollowing){
-    ASSERT_TRUE(prepareDense());
-    ASSERT_TRUE(manualPlace({ 100.0f, 100.0f }));
-    ASSERT_TRUE(m_model.setText("x\n"));
-    ASSERT_TRUE(m_model.setSelection(0u, 0u));
-    ASSERT_TRUE(shapeView());
-    ASSERT_TRUE(manualPlace({ 41.0f, 24.0f }, 200.0f, 100.0f));
-    EXPECT_FLOAT_EQ(m_placement.scroll, 0.0f);
-    EXPECT_FLOAT_EQ(m_placement.scrollY, 0.0f);
-    EXPECT_FLOAT_EQ(m_placement.textOrigin.x, 10.0f);
-    EXPECT_FLOAT_EQ(m_placement.textOrigin.y, 20.0f);
-    UiPaintAssertions::ExpectRect(m_placement.caret, { 10.0f, 20.0f, 1.0f, 12.0f });
-}
-
-TEST_F(UiTextAreaViewTests, ZeroViewportDoesNotForceManualScrollToTheCaret){
-    ASSERT_TRUE(prepareDense());
-    ASSERT_TRUE(manualPlace({ 5.0f, 6.0f }, 0.0f, 0.0f));
-    EXPECT_FLOAT_EQ(m_placement.scroll, 5.0f);
-    EXPECT_FLOAT_EQ(m_placement.scrollY, 6.0f);
-    EXPECT_FLOAT_EQ(m_placement.content.width, 0.0f);
-    EXPECT_FLOAT_EQ(m_placement.content.height, 0.0f);
-    EXPECT_FLOAT_EQ(m_placement.clip.width, 0.0f);
-    EXPECT_FLOAT_EQ(m_placement.clip.height, 0.0f);
-    EXPECT_TRUE(m_view.ready());
-}
-
-TEST_F(UiTextAreaViewTests, FailedManualArrangementPreservesThePriorPlacement){
-    ASSERT_TRUE(prepareDense());
-    ASSERT_TRUE(manualPlace({ 5.0f, 6.0f }));
-    const EditBoxPlacement previous = m_placement;
-    const Array<Point, 3> invalid{ Point{ -1.0f, 0.0f }, Point{ 0.0f, Limit<f32>::s_QuietNaN }, Point{ Limit<f32>::s_Infinity, 0.0f } };
-    for(const Point scroll : invalid){
-        EXPECT_FALSE(manualPlace(scroll));
-        ExpectPlacement(m_placement, previous);
-    }
-    EXPECT_FALSE(m_view.arrange({ 10.0f, 20.0f, 20.0f, 12.0f }, {}, { 0.0f, 0.0f, 500.0f, 500.0f }, Point{ 5.0f, 6.0f }, 0.0f, false));
-    ExpectPlacement(m_placement, previous);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/common/capturing_logger.adhd.h>
-#include <tests/common/font_fixture.adhd.h>
-#include <tests/unit/ui/name_cases.adhd.h>
-
-#include <impl/ecs_ui/toolkit/text/service.adhd.h>
-
-#include <global/filesystem.h>
-#include <global/simdmath.h>
-
-#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -995,7 +201,6 @@ using namespace NWB::Impl::Ui;
 
 using UiWidgetTests::s_TestLatinFontPath;
 using UiWidgetTests::s_TestSkinPath;
-constexpr AStringView s_SampleGlyphText = "A";
 
 class TextBakedTests : public testing::Test{
 public:
@@ -1012,7 +217,7 @@ public:
     {}
 
 
-protected:
+public:
     virtual void SetUp()override{
         ASSERT_TRUE(Tests::LoadBundledFont(m_font, m_arena, NWB_TEST_FONT_DIRECTORY, "latin.font"));
         const FontSource source{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_font, 1u };
@@ -1066,6 +271,14 @@ protected:
         return m_text.setFonts(m_scratchArena, Span(&source, 1u));
     }
 
+    [[nodiscard]] b8 applyLayout(const ShapeRequest& request){
+        auto layoutResult = m_text.layout(request);
+        if(!layoutResult)
+            return false;
+        m_layout = Move(*layoutResult);
+        return true;
+    }
+
     [[nodiscard]] DrawSnapshot paint(f32 scale = 1.f){
         m_paint.begin({ 800.f, 600.f, scale, scale }, 1u, 1u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
         EXPECT_TRUE(m_text.paint(m_paint, m_layout, { 20.f, 20.f }));
@@ -1073,7 +286,7 @@ protected:
     }
 
 
-protected:
+public:
     Tests::CapturingLogger m_logger;
     Core::Common::LoggerRegistrationGuard m_loggerGuard;
     Core::Alloc::GlobalArena m_arena;
@@ -1090,153 +303,7 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(TextBakedTests, FontHashMismatchUsesCoverageForTheAlreadySelectedFace){
-    const auto binary = SerializeFontAtlasPayload(m_atlas.payload(), m_arena, m_scratchArena);
-    ASSERT_TRUE(binary);
-    auto payload = DeserializeFontAtlasPayload(*binary, m_arena, m_scratchArena);
-    ASSERT_TRUE(payload);
-    payload->fontSha256.bytes[0u] ^= 1u;
-    m_atlas.setPayload(Move(*payload));
-    ASSERT_TRUE(installAtlas());
-    {
-        auto layoutResult = m_text.layout({ s_SampleGlyphText });
-        ASSERT_TRUE(layoutResult);
-        m_layout = Move(*layoutResult);
-    }
-    EXPECT_FALSE(m_layout.glyphs()[0u].face->bakedAtlas());
-    const DrawSnapshot snapshot = paint();
-    EXPECT_TRUE(snapshot.sdfPages().empty());
-    EXPECT_FALSE(snapshot.glyphPages().empty());
-    EXPECT_EQ(m_layout.glyphs()[0u].face->identity().name(), Name(s_TestLatinFontPath));
-}
-
-TEST_F(TextBakedTests, LogicalFontIdentityMustMatchEvenWhenTheBytesMatch){
-    const auto binary = SerializeFontAtlasPayload(m_atlas.payload(), m_arena, m_scratchArena);
-    ASSERT_TRUE(binary);
-    auto payload = DeserializeFontAtlasPayload(*binary, m_arena, m_scratchArena);
-    ASSERT_TRUE(payload);
-    payload->font = Core::Assets::AssetRef<Font>("tests/ui/fonts/other");
-    m_atlas.setPayload(Move(*payload));
-    ASSERT_TRUE(installAtlas());
-    {
-        auto layoutResult = m_text.layout({ .text = s_SampleGlyphText, .fontSize = 24.f });
-        ASSERT_TRUE(layoutResult);
-        m_layout = Move(*layoutResult);
-    }
-    EXPECT_FALSE(m_layout.glyphs()[0u].face->bakedAtlas());
-    EXPECT_TRUE(paint().sdfPages().empty());
-}
-
-TEST_F(TextBakedTests, OldLayoutAndSnapshotOwnTheirAtlasAfterFontReplacementAndAssetRelease){
-    ASSERT_TRUE(installAtlas());
-    {
-        auto layoutResult = m_text.layout({ .text = s_SampleGlyphText, .fontSize = 24.f });
-        ASSERT_TRUE(layoutResult);
-        m_layout = Move(*layoutResult);
-    }
-    const SharedBakedFontAtlas retained = m_layout.glyphs()[0u].face->bakedAtlas();
-    const DrawSnapshot first = paint();
-    ASSERT_EQ(first.sdfPages().size(), 1u);
-    const FontSource source{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_font, 2u };
-    ASSERT_TRUE(m_text.setFonts(m_scratchArena, Span(&source, 1u)));
-    m_atlas.setPayload(FontAtlasPayload(m_arena));
-    const DrawSnapshot second = paint();
-    ASSERT_EQ(second.sdfPages().size(), 1u);
-    EXPECT_EQ(first.sdfPages()[0u].get(), second.sdfPages()[0u].get());
-    EXPECT_EQ(second.sdfPages()[0u]->binding().fontGeneration, 1u);
-    EXPECT_EQ(retained.get(), m_layout.glyphs()[0u].face->bakedAtlas().get());
-    EXPECT_EQ(first.sdfPages()[0u]->pixels()[0u], 128u);
-}
-
-TEST_F(TextBakedTests, OutsideBakedSizeRangeUsesCoverageWithLowerThresholdControl){
-    ASSERT_TRUE(installAtlas());
-    {
-        auto layoutResult = m_text.layout({ .text = s_SampleGlyphText, .fontSize = 24.f });
-        ASSERT_TRUE(layoutResult);
-        m_layout = Move(*layoutResult);
-    }
-    const DrawSnapshot first = paint();
-    ASSERT_EQ(first.sdfPages().size(), 1u);
-    {
-        auto layoutResult = m_text.layout({ .text = s_SampleGlyphText, .fontSize = 8.f });
-        ASSERT_TRUE(layoutResult);
-        m_layout = Move(*layoutResult);
-    }
-    const DrawSnapshot small = paint();
-    EXPECT_TRUE(small.sdfPages().empty());
-    EXPECT_FALSE(small.glyphPages().empty());
-    {
-        auto layoutResult = m_text.layout({ .text = s_SampleGlyphText, .fontSize = 129.f });
-        ASSERT_TRUE(layoutResult);
-        m_layout = Move(*layoutResult);
-    }
-    EXPECT_TRUE(paint().sdfPages().empty());
-}
-
-TEST_F(TextBakedTests, FractionalPhysicalSizeBelowSdfThresholdUsesCoverage){
-    ASSERT_TRUE(installAtlas());
-    {
-        auto layoutResult = m_text.layout({ .text = s_SampleGlyphText, .fontSize = 23.5f });
-        ASSERT_TRUE(layoutResult);
-        m_layout = Move(*layoutResult);
-    }
-    const DrawSnapshot fractionalFont = paint();
-    EXPECT_TRUE(fractionalFont.sdfPages().empty());
-    ASSERT_EQ(fractionalFont.glyphPages().size(), 1u);
-    ASSERT_EQ(fractionalFont.commands().size(), 1u);
-    EXPECT_EQ(fractionalFont.commands()[0u].material, PaintMaterial::Glyph);
-
-    {
-        auto layoutResult = m_text.layout({ .text = s_SampleGlyphText, .fontSize = 16.0f });
-        ASSERT_TRUE(layoutResult);
-        m_layout = Move(*layoutResult);
-    }
-    const DrawSnapshot fractionalDpi = paint(1.49f);
-    EXPECT_TRUE(fractionalDpi.sdfPages().empty());
-    ASSERT_EQ(fractionalDpi.glyphPages().size(), 1u);
-    ASSERT_EQ(fractionalDpi.commands().size(), 1u);
-    EXPECT_EQ(fractionalDpi.commands()[0u].material, PaintMaterial::Glyph);
-
-    const DrawSnapshot thresholdDpi = paint(1.5f);
-    EXPECT_TRUE(thresholdDpi.glyphPages().empty());
-    ASSERT_EQ(thresholdDpi.sdfPages().size(), 1u);
-    ASSERT_EQ(thresholdDpi.commands().size(), 1u);
-    EXPECT_EQ(thresholdDpi.commands()[0u].material, PaintMaterial::SdfGlyph);
-}
-
-TEST_F(TextBakedTests, WhitespaceKeepsItsAdvanceWithoutAdmittingAnImage){
-    ASSERT_TRUE(installAtlas());
-    {
-        auto layoutResult = m_text.layout({ .text = "   ", .fontSize = 24.f });
-        ASSERT_TRUE(layoutResult);
-        m_layout = Move(*layoutResult);
-    }
-    EXPECT_GT(m_layout.measure().x, 0.f);
-    const DrawSnapshot snapshot = paint();
-    EXPECT_TRUE(snapshot.sdfPages().empty());
-    EXPECT_TRUE(snapshot.glyphPages().empty());
-    EXPECT_TRUE(snapshot.vertices().empty());
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ui/native_input.adhd.h>
-#include <tests/unit/ui/name_cases.adhd.h>
-
-#include <impl/ecs_ui/toolkit/input/router.adhd.h>
-
-#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1250,9 +317,6 @@ namespace __hidden_ui_text_control_lifetime_tests{
 
 using namespace NWB;
 using namespace NWB::Impl::Ui;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 class UiTextControlLifetimeTests : public UiTestSupport::RouterTestFixture{
@@ -1285,14 +349,18 @@ public:
     }
 
 
-protected:
+public:
     void revise()noexcept{
-        for(auto& target : m_targets)
-            ++target.control.contentRevision;
+        for(auto& item : m_targets)
+            ++item.control.contentRevision;
+    }
+
+    [[nodiscard]] b8 commitFirstTarget(const u64 generation){
+        return m_router.commitTargets(Span(&m_targets[0u], 1u), generation);
     }
 
 
-protected:
+public:
     Array<HitTarget, 2u> m_targets;
 };
 
@@ -1300,191 +368,1224 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiTextControlLifetimeTests, AcceptedAuxiliaryEpochChangePreservesTextFocusAndMainCapture){
-    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
-    EXPECT_TRUE(send({ .position = { 10.0f, 10.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    EXPECT_TRUE(send({ .scrollX = 1.0, .scrollY = -1.0 , .position = { 10.0f, 10.0f }, .type = InputEventType::PointerWheel}).pointerConsumed);
-    ASSERT_EQ(m_router.controlActions().size(), 1u);
-    revise();
-    ASSERT_TRUE(m_router.commitTargets(m_targets, 2u));
-    EXPECT_EQ(m_router.focus(), m_targets[0u].id);
-    EXPECT_EQ(m_router.capture(), m_targets[0u].id);
-    EXPECT_TRUE(m_router.controlActions().empty());
-    EXPECT_TRUE(send({ .position = { 160.0f, 150.0f } , .type = InputEventType::PointerMove}).pointerConsumed);
-    EXPECT_EQ(m_router.capture(), m_targets[0u].id);
-    EXPECT_TRUE(send({ .position = { 160.0f, 150.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
-    EXPECT_EQ(m_router.focus(), m_targets[0u].id);
-    EXPECT_FALSE(m_router.capture().valid());
-}
-
-TEST_F(UiTextControlLifetimeTests, AcceptedAuxiliaryEpochChangeRetiresOwnedPartCaptureAndGesture){
-    m_targets[1u].textEditable = true;
-    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
-    EXPECT_TRUE(send({ .position = { 95.0f, 25.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    EXPECT_EQ(m_router.focus(), m_targets[0u].id);
-    EXPECT_EQ(m_router.capture(), m_targets[1u].id);
-    revise();
-    ASSERT_TRUE(m_router.commitTargets(m_targets, 2u));
-    EXPECT_EQ(m_router.focus(), m_targets[0u].id);
-    EXPECT_FALSE(m_router.capture().valid());
-    EXPECT_FALSE(m_router.consumePointerGesture(m_targets[1u].id, 7u));
-}
-
-TEST_F(UiTextControlLifetimeTests, PrepublicationFencePreservesTextCaptureAndRejectsOldWheelUntilAcceptance){
-    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
-    EXPECT_TRUE(send({ .position = { 10.0f, 10.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    EXPECT_TRUE(send({ .scrollY = -1.0 , .position = { 10.0f, 10.0f }, .type = InputEventType::PointerWheel}).pointerConsumed);
-    revise();
-    m_router.fenceControl(m_targets[0u].id, 7u, m_targets[0u].control);
-    EXPECT_EQ(m_router.focus(), m_targets[0u].id);
-    EXPECT_EQ(m_router.capture(), m_targets[0u].id);
-    EXPECT_TRUE(m_router.controlActions().empty());
-    ASSERT_EQ(m_router.targets().size(), 2u);
-    EXPECT_TRUE(m_router.targets()[0u].enabled);
-    EXPECT_FALSE(m_router.targets()[0u].scrollable);
-    EXPECT_TRUE(m_router.targets()[0u].control.empty());
-    EXPECT_FALSE(m_router.targets()[1u].enabled);
-    EXPECT_TRUE(send({ .scrollX = 1.0, .scrollY = -1.0 , .position = { 10.0f, 10.0f }, .type = InputEventType::PointerWheel}).pointerConsumed);
-    EXPECT_TRUE(m_router.controlActions().empty());
-    ASSERT_TRUE(m_router.commitTargets(m_targets, 2u));
-    EXPECT_EQ(m_router.focus(), m_targets[0u].id);
-    EXPECT_EQ(m_router.capture(), m_targets[0u].id);
-    EXPECT_TRUE(send({ .scrollX = 1.0 , .position = { 10.0f, 10.0f }, .type = InputEventType::PointerWheel}).pointerConsumed);
-    ControlAction action;
-    const auto actionResult = m_router.consumeControlAction(m_targets[0u].id, 7u, m_targets[0u].control);
-    ASSERT_TRUE(actionResult);
-    action = *actionResult;
-    EXPECT_EQ(action.control, m_targets[0u].control);
-}
-
-TEST_F(UiTextControlLifetimeTests, RepeatedAuxiliaryFenceKeepsTextCaptureBeforeAnyNewAcceptance){
-    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
-    EXPECT_TRUE(send({ .position = { 10.0f, 10.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    revise();
-    m_router.fenceControl(m_targets[0u].id, 7u, m_targets[0u].control);
-    revise();
-    m_router.fenceControl(m_targets[0u].id, 7u, m_targets[0u].control);
-    EXPECT_EQ(m_router.focus(), m_targets[0u].id);
-    EXPECT_EQ(m_router.capture(), m_targets[0u].id);
-    EXPECT_TRUE(m_router.targets()[0u].enabled);
-    EXPECT_FALSE(m_router.targets()[1u].enabled);
-    EXPECT_TRUE(m_router.controlActions().empty());
-    ASSERT_TRUE(m_router.commitTargets(m_targets, 2u));
-    EXPECT_EQ(m_router.focus(), m_targets[0u].id);
-    EXPECT_EQ(m_router.capture(), m_targets[0u].id);
-}
-
-TEST_F(UiTextControlLifetimeTests, PrepublicationFenceRetiresOwnedPartDragWithoutBlurringEditor){
-    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
-    EXPECT_TRUE(send({ .position = { 95.0f, 25.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    revise();
-    m_router.fenceControl(m_targets[0u].id, 7u, m_targets[0u].control);
-    EXPECT_EQ(m_router.focus(), m_targets[0u].id);
-    EXPECT_FALSE(m_router.capture().valid());
-    EXPECT_FALSE(m_router.consumePointerGesture(m_targets[1u].id, 7u));
-}
-
-TEST_F(UiTextControlLifetimeTests, DifferentDeclarationFenceStillRetiresTextFocusAndCapture){
-    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
-    EXPECT_TRUE(send({ .position = { 10.0f, 10.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    m_router.fenceControl(m_targets[0u].id, 8u, m_targets[0u].control);
-    EXPECT_FALSE(m_router.focus().valid());
-    EXPECT_FALSE(m_router.capture().valid());
-    EXPECT_FALSE(m_router.targets()[0u].enabled);
-    EXPECT_FALSE(m_router.targets()[1u].enabled);
-}
-
-TEST_F(UiTextControlLifetimeTests, ReplacedDeclarationStillRetiresTextFocusAndMainCapture){
-    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
-    EXPECT_TRUE(send({ .position = { 10.0f, 10.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    ++m_targets[0u].declarationGeneration;
-    ++m_targets[1u].ownerDeclarationGeneration;
-    ASSERT_TRUE(m_router.commitTargets(m_targets, 2u));
-    EXPECT_FALSE(m_router.focus().valid());
-    EXPECT_FALSE(m_router.capture().valid());
-}
-
-TEST_F(UiTextControlLifetimeTests, DisabledTextHostCannotKeepFocusOrMainCapture){
-    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
-    EXPECT_TRUE(send({ .position = { 10.0f, 10.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    revise();
-    m_targets[0u].enabled = false;
-    ASSERT_TRUE(m_router.commitTargets(Span(&m_targets[0u], 1u), 2u));
-    EXPECT_FALSE(m_router.focus().valid());
-    EXPECT_FALSE(m_router.capture().valid());
-}
-
-TEST_F(UiTextControlLifetimeTests, FullyClippedTextHostCannotKeepFocusOrMainCapture){
-    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
-    EXPECT_TRUE(send({ .position = { 10.0f, 10.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    revise();
-    for(auto& target : m_targets)
-        target.clip = { 200.0f, 0.0f, 10.0f, 100.0f };
-    ASSERT_TRUE(m_router.commitTargets(m_targets, 2u));
-    EXPECT_FALSE(m_router.focus().valid());
-    EXPECT_FALSE(m_router.capture().valid());
-}
-
-TEST_F(UiTextControlLifetimeTests, RefreshedAuxiliaryTokenSupportsLaterOrdinaryControlRules){
-    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
-    EXPECT_TRUE(send({ .position = { 10.0f, 10.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    revise();
-    ASSERT_TRUE(m_router.commitTargets(m_targets, 2u));
-    m_targets[0u].textEditable = false;
-    ASSERT_TRUE(m_router.commitTargets(m_targets, 3u));
-    EXPECT_EQ(m_router.focus(), m_targets[0u].id);
-    EXPECT_EQ(m_router.capture(), m_targets[0u].id);
-    revise();
-    ASSERT_TRUE(m_router.commitTargets(m_targets, 4u));
-    EXPECT_FALSE(m_router.focus().valid());
-    EXPECT_FALSE(m_router.capture().valid());
-}
-
-TEST_F(UiTextControlLifetimeTests, NonTextScrollHostKeepsItsExistingFullFenceBehavior){
-    m_targets[0u].textEditable = false;
-    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
-    EXPECT_TRUE(send({ .position = { 10.0f, 10.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    revise();
-    m_router.fenceControl(m_targets[0u].id, 7u, m_targets[0u].control);
-    EXPECT_FALSE(m_router.focus().valid());
-    EXPECT_FALSE(m_router.capture().valid());
-    EXPECT_FALSE(m_router.targets()[0u].enabled);
-    EXPECT_FALSE(m_router.targets()[1u].enabled);
-}
-
-TEST_F(UiTextControlLifetimeTests, AuxiliaryTokenRestorationPreservesMainTextCaptureWithoutRevivingSubmission){
-    m_targets[0u].activatable = true;
-    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
-    EXPECT_TRUE(send({ .position = { 10.0f, 10.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    EXPECT_EQ(m_router.capture(), m_targets[0u].id);
-    EXPECT_TRUE(m_router.pressed(m_targets[0u].id));
-    const ControlToken original = m_targets[0u].control;
-    revise();
-    ASSERT_TRUE(m_router.commitTargets(m_targets, 2u));
-    EXPECT_EQ(m_router.capture(), m_targets[0u].id);
-    EXPECT_FALSE(m_router.pressed(m_targets[0u].id));
-    for(auto& target : m_targets)
-        target.control = original;
-    ASSERT_TRUE(m_router.commitTargets(m_targets, 3u));
-    EXPECT_EQ(m_router.capture(), m_targets[0u].id);
-    EXPECT_TRUE(send({ .position = { 10.0f, 10.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
-    EXPECT_FALSE(m_router.consumeActivation(m_targets[0u].id));
-    EXPECT_TRUE(send({ .position = { 10.0f, 10.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    EXPECT_TRUE(send({ .position = { 10.0f, 10.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
-    EXPECT_TRUE(m_router.consumeActivation(m_targets[0u].id));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_ui_glyph_sdf_tests{
+using UiTextAreaScrollLifetimeTests = ::__hidden_ui_text_area_scroll_lifetime_tests::UiTextAreaScrollLifetimeTests;
+using UiTextAreaScrollTests = ::__hidden_ui_text_area_scroll_tests::UiTextAreaScrollTests;
+using UiTextAreaViewTests = ::__hidden_ui_text_area_view_tests::UiTextAreaViewTests;
+using TextBakedTests = ::__hidden_ui_text_baked_tests::TextBakedTests;
+using UiTextControlLifetimeTests = ::__hidden_ui_text_control_lifetime_tests::UiTextControlLifetimeTests;
+using EditModel = ::NWB::Impl::Ui::EditModel;
+using EditLimits = ::NWB::Impl::Ui::EditLimits;
+namespace EditTextMode = ::NWB::Impl::Ui::EditTextMode;
+using EditBoxView = ::NWB::Impl::Ui::EditBoxView;
+using EditBoxPlacement = ::NWB::Impl::Ui::EditBoxPlacement;
+using EditNavigationSnapshot = ::NWB::Impl::Ui::EditNavigationSnapshot;
+using TextAreaOptions = ::NWB::Impl::Ui::TextAreaOptions;
+using TextAreaState = ::NWB::Impl::Ui::TextAreaState;
+using DisplayMetrics = ::NWB::Impl::Ui::DisplayMetrics;
+using Insets = ::NWB::Impl::Ui::Insets;
+using LayoutSize = ::NWB::Impl::Ui::LayoutSize;
+using ShapeRequest = ::NWB::Impl::Ui::ShapeRequest;
+namespace TextLayoutStatus = ::NWB::Impl::Ui::TextLayoutStatus;
+namespace PaintMaterial = ::NWB::Impl::Ui::PaintMaterial;
+using ControlAction = ::NWB::Impl::Ui::ControlAction;
+using ControlToken = ::NWB::Impl::Ui::ControlToken;
+using InputEvent = ::NWB::Impl::Ui::InputEvent;
+namespace InputEventType = ::NWB::Impl::Ui::InputEventType;
+using InputEventTypeEnum = ::NWB::Impl::Ui::InputEventType::Enum;
+namespace UiTextScrollBakedKey = ::NWB::Core::Key;
+
+[[nodiscard]] inline TextAreaOptions UiTextAreaScrollLifetimeSmallOptions()noexcept{
+    return ::__hidden_ui_text_area_scroll_lifetime_tests::UiTextAreaScrollLifetimeTests::SmallOptions();
 }
+
+[[nodiscard]] inline TextAreaOptions UiTextAreaScrollSmallOptions()noexcept{
+    return ::__hidden_ui_text_area_scroll_tests::UiTextAreaScrollTests::SmallOptions();
+}
+
+[[nodiscard]] inline AStringView UiTextAreaScrollDenseText()noexcept{
+    return ::__hidden_ui_text_area_scroll_tests::UiTextAreaScrollTests::DenseText();
+}
+
+[[nodiscard]] inline PopupOptions UiTextScrollLargeLoanParentOptions()noexcept{
+    return ::NWB::UiWidgetTests::LargeLoanParentOptions();
+}
+
+[[nodiscard]] inline PopupOptions UiTextScrollLargeLoanChildOptions()noexcept{
+    return ::NWB::UiWidgetTests::LargeLoanChildOptions();
+}
+
+inline void ExpectUiMultilineViewPlacement(const ::NWB::Impl::Ui::EditBoxPlacement& actual, const ::NWB::Impl::Ui::EditBoxPlacement& expected){
+    ::NWB::UiMultilineViewTests::ExpectPlacement(actual, expected);
+}
+
+[[nodiscard]] inline AStringView UiTextScrollPublicationText(const ::NWB::UiTextAreaTests::AreaPublication& item)noexcept{
+    return AStringView(item.text.data(), item.text.size());
+}
+
+[[nodiscard]] inline AStringView UiTextScrollActionText(const AString<::NWB::Core::Alloc::GlobalArena>& text)noexcept{
+    return AStringView(text.data(), text.size());
+}
+};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_UiTextScrollPosInfF32Bits = 0x7f800000u;
+const u32 s_UiTextScrollQuietNaNF32Bits = 0x7fc00000u;
+const AStringView s_UiTextScrollPanelKey = "panel";
+const AStringView s_UiTextScrollAreaKey = "area";
+const AStringView s_UiTextScrollParentPopupKey = "parent";
+const AStringView s_UiTextScrollChildPopupKey = "child";
+const AStringView s_UiTextBakedSampleGlyphText = "A";
+
+
+class UiTextAreaModelSnapshot{
+    public String text;
+    public u64 instance;
+    public u64 revision;
+    public u64 external;
+    public u64 selection;
+    public u64 composition;
+    public usize anchor;
+    public usize caret;
+    public b8 composing;
+    public b8 undo;
+    public b8 redo;
+
+    public UiTextAreaModelSnapshot(in EditModel model){
+        const StringView view = model.text();
+        if(!view.empty())
+            this.text.assign(view.data(), view.size());
+        this.instance = model.instanceGeneration();
+        this.revision = model.revision();
+        this.external = model.externalRevision();
+        this.selection = model.selectionGeneration();
+        this.composition = model.compositionGeneration();
+        this.anchor = model.anchor();
+        this.caret = model.caret();
+        this.composing = model.composition().active;
+        this.undo = model.canUndo();
+        this.redo = model.canRedo();
+    }
+}
+
+void ExpectUiTextAreaScrollLifetimeModel(in UiTextAreaScrollLifetimeTests self, in EditModel model, in UiTextAreaModelSnapshot before){
+    EXPECT_EQ(model.text(), StringView(before.text.data(), before.text.size()));
+    EXPECT_EQ(model.instanceGeneration(), before.instance);
+    EXPECT_EQ(model.revision(), before.revision);
+    EXPECT_EQ(model.externalRevision(), before.external);
+    EXPECT_EQ(model.selectionGeneration(), before.selection);
+    EXPECT_EQ(model.compositionGeneration(), before.composition);
+    EXPECT_EQ(model.anchor(), before.anchor);
+    EXPECT_EQ(model.caret(), before.caret);
+    EXPECT_EQ(model.composition().active, before.composing);
+    EXPECT_EQ(model.canUndo(), before.undo);
+    EXPECT_EQ(model.canRedo(), before.redo);
+    EXPECT_EQ(self.m_host.loans, 0u);
+    EXPECT_EQ(self.m_host.publishes, 0u);
+}
+
+InputEvent MakeUiTextScrollPointerEvent(in Point position, in InputEventTypeEnum eventType){
+    InputEvent event = InputEvent();
+    event.position = position;
+    event.type = eventType;
+    return event;
+}
+
+InputEvent MakeUiTextScrollWheelEvent(in Point position, in f64 scrollX, in f64 scrollY){
+    InputEvent event = InputEvent();
+    event.position = position;
+    event.scrollX = scrollX;
+    event.scrollY = scrollY;
+    event.type = InputEventType::PointerWheel;
+    return event;
+}
+
+DisplayMetrics MakeUiTextScrollDisplayMetrics(in f32 width, in f32 height, in f32 scaleX, in f32 scaleY){
+    DisplayMetrics display = DisplayMetrics();
+    display.logicalWidth = width;
+    display.logicalHeight = height;
+    display.pixelScaleX = scaleX;
+    display.pixelScaleY = scaleY;
+    return display;
+}
+
+ShapeRequest MakeUiTextScrollShapeRequest(in StringView text, in f32 fontSize){
+    ShapeRequest request = ShapeRequest();
+    request.text = text;
+    request.fontSize = fontSize;
+    return request;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiTextAreaScrollLifetimeTests_IdenticalExternalScrollIntentRetiresAnAcceptedTrackPage(mut UiTextAreaScrollLifetimeTests self){
+    ASSERT_TRUE(self.prepareOverflow());
+    const UiTextAreaModelSnapshot model = UiTextAreaModelSnapshot(self.m_model);
+    const WidgetId afterId = RequireUiWidgetId(self.id(s_UiTextScrollAreaKey, s_UiTextScrollPanelKey), "scroll.y.after");
+    Rect afterRect = Rect();
+    native(in self, in afterId, mut afterRect){
+        const auto* after = self.target(afterId);
+        ASSERT_NE(after, nullptr);
+        afterRect = after->rectangle;
+    }
+    self.click(CenterUiRect(afterRect));
+    const Point scroll = self.m_state.scroll();
+    const u64 revision = self.m_state.revision();
+    ASSERT_TRUE(self.m_state.scrollTo(scroll));
+    EXPECT_GT(self.m_state.revision(), revision);
+    ASSERT_TRUE(self.frameArea(2u, UiTextAreaScrollLifetimeSmallOptions()));
+    EXPECT_FLOAT_EQ(self.m_state.scroll().x, scroll.x);
+    EXPECT_FLOAT_EQ(self.m_state.scroll().y, scroll.y);
+    ExpectUiTextAreaScrollLifetimeModel(self, self.m_model, model);
+    native(in self, in afterId, mut afterRect){
+        const auto* after = self.target(afterId);
+        ASSERT_NE(after, nullptr);
+        afterRect = after->rectangle;
+    }
+    self.click(CenterUiRect(afterRect));
+    ASSERT_TRUE(self.frameArea(3u, UiTextAreaScrollLifetimeSmallOptions()));
+    EXPECT_GT(self.m_state.scroll().y, scroll.y);
+    ExpectUiTextAreaScrollLifetimeModel(self, self.m_model, model);
+}
+
+void VerifyUiTextAreaScrollLifetimeTests_IdenticalAndAwayBackSelectionIntentsRetireAcceptedWheel(mut UiTextAreaScrollLifetimeTests self){
+    ASSERT_TRUE(self.prepareOverflow());
+    u64 generation = 2u;
+    Array<b8, 2u> modes;
+    modes[0u] = false;
+    modes[1u] = true;
+    for(in b8 awayBack : modes){
+        ASSERT_TRUE(self.wheel());
+        const u64 revision = self.m_model.revision();
+        const u64 selection = self.m_model.selectionGeneration();
+        if(awayBack){
+            ASSERT_TRUE(self.m_model.setSelection(1u, 1u));
+            ASSERT_TRUE(self.m_model.setSelection(0u, 0u));
+        }
+        else
+            ASSERT_TRUE(self.m_model.setSelection(0u, 0u));
+        const UiTextAreaModelSnapshot model = UiTextAreaModelSnapshot(self.m_model);
+        EXPECT_EQ(self.m_model.revision(), revision);
+        EXPECT_GT(self.m_model.selectionGeneration(), selection);
+        ASSERT_TRUE(self.frameArea(generation, UiTextAreaScrollLifetimeSmallOptions()));
+        ++generation;
+        EXPECT_FLOAT_EQ(self.m_state.scroll().y, 0.0f);
+        ExpectUiTextAreaScrollLifetimeModel(self, self.m_model, model);
+        ASSERT_TRUE(self.wheel());
+        ASSERT_TRUE(self.frameArea(generation, UiTextAreaScrollLifetimeSmallOptions()));
+        ++generation;
+        EXPECT_GT(self.m_state.scroll().y, 0.0f);
+        ExpectUiTextAreaScrollLifetimeModel(self, self.m_model, model);
+        ASSERT_TRUE(self.m_state.scrollTo(Point()));
+        ASSERT_TRUE(self.frameArea(generation, UiTextAreaScrollLifetimeSmallOptions()));
+        ++generation;
+        EXPECT_FLOAT_EQ(self.m_state.scroll().y, 0.0f);
+    }
+}
+
+void VerifyUiTextAreaScrollLifetimeTests_SameTextReplacementAndModelRebindingRetireCopiedWheel(mut UiTextAreaScrollLifetimeTests self){
+    ASSERT_TRUE(self.prepareOverflow());
+    ASSERT_TRUE(self.m_model.setSelection(self.m_model.text().size(), self.m_model.text().size()));
+    ASSERT_TRUE(self.frameArea(2u, UiTextAreaScrollLifetimeSmallOptions()));
+    ASSERT_GT(self.m_state.scroll().y, 0.0f);
+    ASSERT_TRUE(self.wheel(1.0));
+    const u64 revision = self.m_model.revision();
+    const u64 external = self.m_model.externalRevision();
+    ASSERT_TRUE(self.m_model.setText(self.denseView()));
+    const UiTextAreaModelSnapshot replaced = UiTextAreaModelSnapshot(self.m_model);
+    EXPECT_EQ(self.m_model.revision(), revision);
+    EXPECT_GT(self.m_model.externalRevision(), external);
+    ASSERT_TRUE(self.frameArea(3u, UiTextAreaScrollLifetimeSmallOptions()));
+    EXPECT_NEAR(cast<f64>(self.m_state.scroll().y), self.m_state.scrollbars().vertical.maximum, 0.001);
+    ExpectUiTextAreaScrollLifetimeModel(self, self.m_model, replaced);
+    const f32 maximum = self.m_state.scroll().y;
+    ASSERT_TRUE(self.wheel(1.0));
+    ASSERT_TRUE(self.frameArea(4u, UiTextAreaScrollLifetimeSmallOptions()));
+    EXPECT_LT(self.m_state.scroll().y, maximum);
+    ExpectUiTextAreaScrollLifetimeModel(self, self.m_model, replaced);
+
+    ASSERT_TRUE(self.m_model.setSelection(0u, 0u));
+    ASSERT_TRUE(self.m_state.scrollTo(Point()));
+    ASSERT_TRUE(self.frameArea(5u, UiTextAreaScrollLifetimeSmallOptions()));
+    ASSERT_TRUE(self.wheel());
+    const UiTextAreaModelSnapshot original = UiTextAreaModelSnapshot(self.m_model);
+    EditModel replacement = EditModel(self.m_arena, EditLimits(), EditTextMode::Multiline);
+    ASSERT_TRUE(replacement.setText(self.denseView()));
+    ASSERT_TRUE(replacement.setSelection(0u, 0u));
+    const UiTextAreaModelSnapshot rebound = UiTextAreaModelSnapshot(replacement);
+    ASSERT_TRUE(self.beginArea(6u));
+    ASSERT_TRUE(self.m_builder.textArea(s_UiTextScrollAreaKey, replacement, self.m_state, UiTextAreaScrollLifetimeSmallOptions()).valid);
+    ASSERT_TRUE(self.acceptArea());
+    EXPECT_FLOAT_EQ(self.m_state.scroll().y, 0.0f);
+    ExpectUiTextAreaScrollLifetimeModel(self, self.m_model, original);
+    ExpectUiTextAreaScrollLifetimeModel(self, replacement, rebound);
+    ASSERT_TRUE(self.wheel());
+    ASSERT_TRUE(self.beginArea(7u));
+    ASSERT_TRUE(self.m_builder.textArea(s_UiTextScrollAreaKey, replacement, self.m_state, UiTextAreaScrollLifetimeSmallOptions()).valid);
+    ASSERT_TRUE(self.acceptArea());
+    EXPECT_GT(self.m_state.scroll().y, 0.0f);
+    ExpectUiTextAreaScrollLifetimeModel(self, self.m_model, original);
+    ExpectUiTextAreaScrollLifetimeModel(self, replacement, rebound);
+}
+
+void VerifyUiTextAreaScrollLifetimeTests_ActualViewportResizeRetiresWheelWithUnchangedOptions(mut UiTextAreaScrollLifetimeTests self){
+    TextAreaOptions options = UiTextAreaScrollLifetimeSmallOptions();
+    options.width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+    const Rect narrow = Rect(20.0f, 20.0f, 240.0f, 160.0f);
+    const Rect wider = Rect(20.0f, 20.0f, 320.0f, 160.0f);
+    ASSERT_TRUE(self.prepareOverflow(1u, options, narrow));
+    const UiTextAreaModelSnapshot model = UiTextAreaModelSnapshot(self.m_model);
+    const Rect accepted = self.m_state.scrollbars().viewport;
+    const u64 revision = self.m_state.revision();
+    ASSERT_TRUE(self.wheel());
+    ASSERT_TRUE(self.beginArea(2u, wider));
+    ASSERT_TRUE(self.m_builder.textArea(s_UiTextScrollAreaKey, self.m_model, self.m_state, options).valid);
+    EXPECT_FLOAT_EQ(self.m_state.scroll().y, 0.0f);
+    ASSERT_TRUE(self.acceptArea());
+    EXPECT_GT(self.m_state.scrollbars().viewport.width, accepted.width);
+    EXPECT_FLOAT_EQ(self.m_state.scroll().y, 0.0f);
+    EXPECT_EQ(self.m_state.revision(), revision);
+    ExpectUiTextAreaScrollLifetimeModel(self, self.m_model, model);
+    ASSERT_TRUE(self.wheel());
+    ASSERT_TRUE(self.frameArea(3u, options, wider));
+    EXPECT_GT(self.m_state.scroll().y, 0.0f);
+    ExpectUiTextAreaScrollLifetimeModel(self, self.m_model, model);
+}
+
+void VerifyUiTextAreaScrollLifetimeTests_ChangedWheelLinesRetiresTheCopiedStepAndAcceptsItsNewPolicy(mut UiTextAreaScrollLifetimeTests self){
+    ASSERT_TRUE(self.prepareOverflow());
+    const UiTextAreaModelSnapshot model = UiTextAreaModelSnapshot(self.m_model);
+    f64 oldStep = 0.0;
+    native(in self, mut oldStep){
+        const auto* host = self.target(self.id("area", "panel"));
+        ASSERT_NE(host, nullptr);
+        oldStep = host->scrollStep;
+    }
+    ASSERT_GT(oldStep, 0.0);
+    ASSERT_TRUE(self.wheel());
+    TextAreaOptions options = UiTextAreaScrollLifetimeSmallOptions();
+    options.wheelLines = 7.0f;
+    ASSERT_TRUE(self.frameArea(2u, options));
+    EXPECT_FLOAT_EQ(self.m_state.scroll().y, 0.0f);
+    ExpectUiTextAreaScrollLifetimeModel(self, self.m_model, model);
+    f64 newStep = 0.0;
+    native(in self, mut newStep){
+        const auto* host = self.target(self.id("area", "panel"));
+        ASSERT_NE(host, nullptr);
+        newStep = host->scrollStep;
+    }
+    EXPECT_GT(newStep, oldStep);
+    ASSERT_TRUE(self.wheel());
+    ASSERT_TRUE(self.frameArea(3u, options));
+    EXPECT_GT(self.m_state.scroll().y, cast<f32>(oldStep));
+    ExpectUiTextAreaScrollLifetimeModel(self, self.m_model, model);
+}
+
+void VerifyUiTextAreaScrollLifetimeTests_ClosingAnAncestorRetiresWheelAndCaptureBeforeFreshPopupReuse(mut UiTextAreaScrollLifetimeTests self){
+    ASSERT_TRUE(self.seedModel());
+    self.m_parent.open();
+    self.m_child.open();
+    ASSERT_TRUE(self.popupFrame(1u));
+    const UiTextAreaModelSnapshot model = UiTextAreaModelSnapshot(self.m_model);
+    ASSERT_TRUE(self.wheel());
+    ASSERT_TRUE(self.startThumb(self.popupArea()));
+    const Point release = CenterUiRect(self.m_state.scrollbars().vertical.thumb);
+    ASSERT_TRUE(self.begin(2u));
+    ASSERT_TRUE(self.m_builder.beginPopup(s_UiTextScrollParentPopupKey, self.m_parent, UiTextScrollLargeLoanParentOptions()));
+    ASSERT_TRUE(self.m_builder.beginPopup(s_UiTextScrollChildPopupKey, self.m_child, UiTextScrollLargeLoanChildOptions()));
+    ASSERT_TRUE(self.m_builder.textArea(s_UiTextScrollAreaKey, self.m_model, self.m_state, UiTextAreaScrollLifetimeSmallOptions()).valid);
+    ASSERT_TRUE(self.m_builder.endPopup());
+    self.m_parent.close();
+    ASSERT_TRUE(self.m_builder.endPopup());
+    ASSERT_TRUE(self.m_context.endRoot());
+    ASSERT_TRUE(self.m_context.finishFrame());
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    EXPECT_FALSE(self.m_context.input().capture().valid());
+    EXPECT_FLOAT_EQ(self.m_state.scroll().y, 0.0f);
+    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(release, InputEventType::PrimaryUp)).pointerConsumed);
+    ExpectUiTextAreaScrollLifetimeModel(self, self.m_model, model);
+    self.m_parent.open();
+    ASSERT_TRUE(self.begin(3u));
+    ASSERT_TRUE(self.m_builder.beginPopup(s_UiTextScrollParentPopupKey, self.m_parent, UiTextScrollLargeLoanParentOptions()));
+    EXPECT_FALSE(self.m_builder.beginPopup(s_UiTextScrollChildPopupKey, self.m_child, UiTextScrollLargeLoanChildOptions()));
+    EXPECT_FALSE(self.m_child.isOpen());
+    ASSERT_TRUE(self.m_builder.endPopup());
+    ASSERT_TRUE(self.m_context.endRoot());
+    ASSERT_TRUE(self.m_context.finishFrame());
+    ASSERT_TRUE(self.m_context.commitFrame(3u));
+    self.m_child.open();
+    ASSERT_TRUE(self.popupFrame(4u));
+    EXPECT_FLOAT_EQ(self.m_state.scroll().y, 0.0f);
+    ASSERT_TRUE(self.wheel());
+    ASSERT_TRUE(self.popupFrame(5u));
+    EXPECT_GT(self.m_state.scroll().y, 0.0f);
+    ExpectUiTextAreaScrollLifetimeModel(self, self.m_model, model);
+}
+
+void VerifyUiTextAreaScrollLifetimeTests_CaptureLossCancelsTheUnfinishedThumbAndPreservesCompletedWheel(mut UiTextAreaScrollLifetimeTests self){
+    ASSERT_TRUE(self.prepareOverflow());
+    const UiTextAreaModelSnapshot model = UiTextAreaModelSnapshot(self.m_model);
+    ASSERT_TRUE(self.wheel());
+    ASSERT_TRUE(self.startThumb(self.id(s_UiTextScrollAreaKey, s_UiTextScrollPanelKey)));
+    EXPECT_FALSE(self.send(MakeUiTextScrollPointerEvent(Point(), InputEventType::PointerCaptureLost)).capture.valid());
+    ASSERT_TRUE(self.frameArea(2u, UiTextAreaScrollLifetimeSmallOptions()));
+    ASSERT_GT(self.m_state.scroll().y, 0.0f);
+    const f32 wheelOnly = self.m_state.scroll().y;
+    ExpectUiTextAreaScrollLifetimeModel(self, self.m_model, model);
+    ASSERT_TRUE(self.m_state.scrollTo(Point()));
+    ASSERT_TRUE(self.frameArea(3u, UiTextAreaScrollLifetimeSmallOptions()));
+    ASSERT_TRUE(self.wheel());
+    ASSERT_TRUE(self.frameArea(4u, UiTextAreaScrollLifetimeSmallOptions()));
+    EXPECT_FLOAT_EQ(self.m_state.scroll().y, wheelOnly);
+    ExpectUiTextAreaScrollLifetimeModel(self, self.m_model, model);
+}
+
+void VerifyUiTextAreaScrollLifetimeTests_NativeFocusLossCancelsCopiedWheelAndAnActiveThumb(mut UiTextAreaScrollLifetimeTests self){
+    ASSERT_TRUE(self.prepareOverflow());
+    const UiTextAreaModelSnapshot model = UiTextAreaModelSnapshot(self.m_model);
+    ASSERT_TRUE(self.wheel());
+    ASSERT_TRUE(self.startThumb(self.id(s_UiTextScrollAreaKey, s_UiTextScrollPanelKey)));
+    EXPECT_FALSE(self.send(MakeUiTextScrollPointerEvent(Point(), InputEventType::FocusLost)).wantsCommands);
+    ASSERT_TRUE(self.frameArea(2u, UiTextAreaScrollLifetimeSmallOptions()));
+    EXPECT_FALSE(self.m_context.input().capture().valid());
+    EXPECT_FLOAT_EQ(self.m_state.scroll().y, 0.0f);
+    ExpectUiTextAreaScrollLifetimeModel(self, self.m_model, model);
+    EXPECT_FALSE(self.send(MakeUiTextScrollPointerEvent(Point(), InputEventType::FocusGained)).wantsCommands);
+    ASSERT_TRUE(self.wheel());
+    ASSERT_TRUE(self.frameArea(3u, UiTextAreaScrollLifetimeSmallOptions()));
+    EXPECT_GT(self.m_state.scroll().y, 0.0f);
+    ExpectUiTextAreaScrollLifetimeModel(self, self.m_model, model);
+}
+
+void VerifyUiTextAreaScrollLifetimeTests_DisablingRetiresPendingWheelAndThumbWithoutReplayingOnEnable(mut UiTextAreaScrollLifetimeTests self){
+    ASSERT_TRUE(self.prepareOverflow());
+    const UiTextAreaModelSnapshot model = UiTextAreaModelSnapshot(self.m_model);
+    ASSERT_TRUE(self.wheel());
+    ASSERT_TRUE(self.startThumb(self.id(s_UiTextScrollAreaKey, s_UiTextScrollPanelKey)));
+    const Point release = CenterUiRect(self.m_state.scrollbars().vertical.thumb);
+    TextAreaOptions disabled = UiTextAreaScrollLifetimeSmallOptions();
+    disabled.enabled = false;
+    ASSERT_TRUE(self.frameArea(2u, disabled));
+    EXPECT_FALSE(self.m_context.input().capture().valid());
+    EXPECT_FLOAT_EQ(self.m_state.scroll().y, 0.0f);
+    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(release, InputEventType::PrimaryUp)).pointerConsumed);
+    ExpectUiTextAreaScrollLifetimeModel(self, self.m_model, model);
+    ASSERT_TRUE(self.frameArea(3u, UiTextAreaScrollLifetimeSmallOptions()));
+    EXPECT_FLOAT_EQ(self.m_state.scroll().y, 0.0f);
+    ASSERT_TRUE(self.wheel());
+    ASSERT_TRUE(self.frameArea(4u, UiTextAreaScrollLifetimeSmallOptions()));
+    EXPECT_GT(self.m_state.scroll().y, 0.0f);
+    ExpectUiTextAreaScrollLifetimeModel(self, self.m_model, model);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiTextAreaScrollTests_ExplicitTwoAxisScrollSurvivesTheFirstModelBinding(mut UiTextAreaScrollTests self){
+    const AStringView dense = UiTextAreaScrollDenseText();
+    ASSERT_TRUE(self.m_model.setText(dense));
+    const auto layout = self.m_text.layout(MakeUiTextScrollShapeRequest(dense, self.m_builder.style().fontSize));
+    ASSERT_TRUE(layout.has_value());
+    const auto visual = self.m_text.measure(layout.value(), MakeUiTextScrollDisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f));
+    ASSERT_TRUE(visual.has_value());
+    ASSERT_LT(visual.value().x, 0.0f);
+    ASSERT_TRUE(self.m_state.scrollTo(Point(17.0f, 19.0f)));
+    const u64 revision = self.m_state.revision();
+    ASSERT_TRUE(self.frameArea(1u, UiTextAreaScrollSmallOptions()));
+    EXPECT_FLOAT_EQ(self.m_state.scroll().x, 17.0f);
+    EXPECT_FLOAT_EQ(self.m_state.scroll().y, 19.0f);
+    EXPECT_EQ(self.m_state.revision(), revision);
+    const EditBoxPlacement placement = self.m_state.placement();
+    EXPECT_FLOAT_EQ(placement.textOrigin.x, placement.content.x - visual.value().x - 17.0f);
+    EXPECT_FLOAT_EQ(placement.textOrigin.y, placement.content.y - visual.value().y - 19.0f);
+    EXPECT_GT(placement.caret.x, placement.content.x + placement.content.width);
+    EXPECT_GT(placement.caret.y, placement.content.y + placement.content.height);
+}
+
+void VerifyUiTextAreaScrollTests_IdleAndResizeClampExplicitViewportWithoutAdvancingItsIntentEpoch(mut UiTextAreaScrollTests self){
+    self.useHost();
+    const AStringView dense = UiTextAreaScrollDenseText();
+    ASSERT_TRUE(self.m_model.setText(dense));
+    const auto layout = self.m_text.layout(MakeUiTextScrollShapeRequest(dense, self.m_builder.style().fontSize));
+    ASSERT_TRUE(layout.has_value());
+    const auto visual = self.m_text.measure(layout.value(), MakeUiTextScrollDisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f));
+    ASSERT_TRUE(visual.has_value());
+    ASSERT_LT(visual.value().x, 0.0f);
+    ASSERT_TRUE(self.m_state.scrollTo(Point(17.0f, 19.0f)));
+    const u64 revision = self.m_state.revision();
+    ASSERT_TRUE(self.frameArea(1u, UiTextAreaScrollSmallOptions()));
+    ASSERT_TRUE(self.frameArea(2u, UiTextAreaScrollSmallOptions()));
+    EXPECT_FLOAT_EQ(self.m_state.scroll().x, 17.0f);
+    EXPECT_FLOAT_EQ(self.m_state.scroll().y, 19.0f);
+    EXPECT_EQ(self.m_state.revision(), revision);
+    TextAreaOptions larger = TextAreaOptions();
+    larger.width = LayoutSize(LayoutSizePolicy::Fixed, 500.0f);
+    larger.height = LayoutSize(LayoutSizePolicy::Fixed, 300.0f);
+    ASSERT_TRUE(self.frameArea(3u, larger));
+    EXPECT_FLOAT_EQ(self.m_state.scroll().x, 0.0f);
+    EXPECT_FLOAT_EQ(self.m_state.scroll().y, 0.0f);
+    EXPECT_EQ(self.m_state.revision(), revision);
+    EXPECT_FLOAT_EQ(self.m_state.placement().textOrigin.x, self.m_state.placement().content.x - visual.value().x);
+    EXPECT_FLOAT_EQ(self.m_state.placement().textOrigin.y, self.m_state.placement().content.y - visual.value().y);
+    ASSERT_EQ(self.m_host.publications.size(), 3u);
+    EXPECT_FLOAT_EQ(self.m_host.publications[0u].placement.scroll, 17.0f);
+    EXPECT_FLOAT_EQ(self.m_host.publications[0u].placement.scrollY, 19.0f);
+}
+
+void VerifyUiTextAreaScrollTests_AutomaticRevealSurvivesIdleViewportShrinkWithoutNewModelIntent(mut UiTextAreaScrollTests self){
+    self.useHost();
+    ASSERT_TRUE(self.m_model.setText(UiTextAreaScrollDenseText()));
+    TextAreaOptions larger = TextAreaOptions();
+    larger.width = LayoutSize(LayoutSizePolicy::Fixed, 500.0f);
+    larger.height = LayoutSize(LayoutSizePolicy::Fixed, 300.0f);
+    ASSERT_TRUE(self.frameArea(1u, larger));
+    EXPECT_FLOAT_EQ(self.m_state.scroll().x, 0.0f);
+    EXPECT_FLOAT_EQ(self.m_state.scroll().y, 0.0f);
+    const u64 revision = self.m_model.revision();
+    const u64 selection = self.m_model.selectionGeneration();
+    const u64 stateRevision = self.m_state.revision();
+    TextAreaOptions compact = UiTextAreaScrollSmallOptions();
+    compact.height.value = compact.height.value + self.m_builder.scrollbarStyle().thickness;
+    ASSERT_TRUE(self.frameArea(2u, compact));
+    EXPECT_GT(self.m_state.scroll().x, 0.0f);
+    EXPECT_GT(self.m_state.scroll().y, 0.0f);
+    const EditBoxPlacement placement = self.m_state.placement();
+    ASSERT_GE(placement.content.height, placement.caret.height);
+    EXPECT_GE(placement.caret.x, placement.content.x);
+    EXPECT_GE(placement.caret.y, placement.content.y);
+    // Lanes are caret right, caret bottom, content right, content bottom.
+    const VectorSingle ends = VectorSingle(placement.caret.x, placement.caret.y, placement.content.x, placement.content.y) + VectorSingle(placement.caret.width, placement.caret.height, placement.content.width, placement.content.height);
+    const VectorSingle limits = ends + VectorSingle(0.001f, 0.001f, 0.001f, 0.001f);
+    EXPECT_LE(ends.x, limits.z);
+    EXPECT_LE(ends.y, limits.w);
+    EXPECT_EQ(self.m_model.revision(), revision);
+    EXPECT_EQ(self.m_model.selectionGeneration(), selection);
+    EXPECT_EQ(self.m_state.revision(), stateRevision);
+    EXPECT_FALSE(self.m_result.textChanged || self.m_result.selectionChanged);
+}
+
+void VerifyUiTextAreaScrollTests_ExplicitOverscrollClampsToBothContentExtents(mut UiTextAreaScrollTests self){
+    ASSERT_TRUE(self.m_model.setText(UiTextAreaScrollDenseText()));
+    ASSERT_TRUE(self.m_state.scrollTo(Point(10000.0f, 10000.0f)));
+    const u64 revision = self.m_state.revision();
+    ASSERT_TRUE(self.frameArea(1u, UiTextAreaScrollSmallOptions()));
+    const EditBoxPlacement placement = self.m_state.placement();
+    EXPECT_GT(self.m_state.scroll().x, 0.0f);
+    EXPECT_GT(self.m_state.scroll().y, 0.0f);
+    EXPECT_LT(self.m_state.scroll().x, 10000.0f);
+    EXPECT_LT(self.m_state.scroll().y, 10000.0f);
+    // Lanes are caret right, caret bottom, content right, content bottom.
+    const VectorSingle ends = VectorSingle(placement.caret.x, placement.caret.y, placement.content.x, placement.content.y) + VectorSingle(placement.caret.width, placement.caret.height, placement.content.width, placement.content.height);
+    EXPECT_NEAR(ends.x, ends.z, 0.001f);
+    EXPECT_NEAR(ends.y, ends.w, 0.001f);
+    EXPECT_EQ(self.m_state.revision(), revision);
+}
+
+void VerifyUiTextAreaScrollTests_AcceptedIdenticalSelectionResumesRevealAfterManualScrolling(mut UiTextAreaScrollTests self){
+    ASSERT_TRUE(self.m_model.setText(UiTextAreaScrollDenseText()));
+    ASSERT_TRUE(self.frameArea(1u, UiTextAreaScrollSmallOptions()));
+    EXPECT_GT(self.m_state.scroll().x, 0.0f);
+    EXPECT_GT(self.m_state.scroll().y, 0.0f);
+    ASSERT_TRUE(self.m_state.scrollTo(Point(0.0f, 0.0f)));
+    const u64 revision = self.m_state.revision();
+    ASSERT_TRUE(self.frameArea(2u, UiTextAreaScrollSmallOptions()));
+    EXPECT_FLOAT_EQ(self.m_state.scroll().x, 0.0f);
+    EXPECT_FLOAT_EQ(self.m_state.scroll().y, 0.0f);
+    const u64 selectionGeneration = self.m_model.selectionGeneration();
+    ASSERT_TRUE(self.m_model.setSelection(self.m_model.anchor(), self.m_model.caret()));
+    EXPECT_GT(self.m_model.selectionGeneration(), selectionGeneration);
+    ASSERT_TRUE(self.frameArea(3u, UiTextAreaScrollSmallOptions()));
+    EXPECT_GT(self.m_state.scroll().x, 0.0f);
+    EXPECT_GT(self.m_state.scroll().y, 0.0f);
+    EXPECT_EQ(self.m_state.revision(), revision);
+}
+
+void VerifyUiTextAreaScrollTests_CopyAndUnchangedSubmitPreserveTheExplicitViewport(mut UiTextAreaScrollTests self){
+    self.useHost();
+    const AStringView dense = UiTextAreaScrollDenseText();
+    ASSERT_TRUE(self.m_model.setText(dense));
+    ASSERT_TRUE(self.frameArea(1u, UiTextAreaScrollSmallOptions()));
+    ASSERT_TRUE(self.m_state.scrollTo(Point(0.0f, 0.0f)));
+    const u64 revision = self.m_state.revision();
+    const u64 selectionGeneration = self.m_model.selectionGeneration();
+    self.m_host.key(UiTextScrollBakedKey::C, true);
+    self.m_host.key(UiTextScrollBakedKey::Enter, true);
+    ASSERT_TRUE(self.frameArea(2u, UiTextAreaScrollSmallOptions()));
+    EXPECT_TRUE(self.m_result.submitted);
+    EXPECT_FALSE(self.m_result.textChanged || self.m_result.selectionChanged);
+    EXPECT_FLOAT_EQ(self.m_state.scroll().x, 0.0f);
+    EXPECT_FLOAT_EQ(self.m_state.scroll().y, 0.0f);
+    EXPECT_EQ(self.m_state.revision(), revision);
+    EXPECT_EQ(self.m_model.selectionGeneration(), selectionGeneration);
+    EXPECT_EQ(self.m_model.text(), dense);
+    ASSERT_EQ(self.m_host.actionTexts.size(), 1u);
+    EXPECT_EQ(UiTextScrollActionText(self.m_host.actionTexts[0u]), dense);
+    self.m_host.selection(self.m_model.anchor(), self.m_model.caret());
+    ASSERT_TRUE(self.frameArea(3u, UiTextAreaScrollSmallOptions()));
+    EXPECT_FALSE(self.m_result.selectionChanged);
+    EXPECT_GT(self.m_model.selectionGeneration(), selectionGeneration);
+    EXPECT_GT(self.m_state.scroll().x, 0.0f);
+    EXPECT_GT(self.m_state.scroll().y, 0.0f);
+}
+
+void VerifyUiTextAreaScrollTests_AcceptedTextResumesRevealAndPublicationOwnsItsBytes(mut UiTextAreaScrollTests self){
+    self.useHost();
+    const AStringView dense = UiTextAreaScrollDenseText();
+    ASSERT_TRUE(self.m_model.setText(dense));
+    ASSERT_TRUE(self.frameArea(1u, UiTextAreaScrollSmallOptions()));
+    ASSERT_TRUE(self.m_state.scrollTo(Point(0.0f, 0.0f)));
+    ASSERT_TRUE(self.frameArea(2u, UiTextAreaScrollSmallOptions()));
+    self.m_host.text("b");
+    ASSERT_TRUE(self.frameArea(3u, UiTextAreaScrollSmallOptions()));
+    EXPECT_TRUE(self.m_result.textChanged);
+    EXPECT_GT(self.m_state.scroll().x, 0.0f);
+    EXPECT_GT(self.m_state.scroll().y, 0.0f);
+    String displayed = "";
+    displayed.assign(dense.data(), dense.size());
+    displayed.append("b", 1u);
+    ASSERT_EQ(self.m_host.publications.size(), 3u);
+    EXPECT_EQ(UiTextScrollPublicationText(self.m_host.publications[2u]), StringView(displayed.data(), displayed.size()));
+    ASSERT_TRUE(self.m_model.undo());
+    EXPECT_EQ(self.m_model.text(), dense);
+    EXPECT_EQ(UiTextScrollPublicationText(self.m_host.publications[2u]), StringView(displayed.data(), displayed.size()));
+    EXPECT_FALSE(self.m_model.canUndo());
+}
+
+void VerifyUiTextAreaScrollTests_KnownModelRebindingResetsAndRevealsTheNewCaret(mut UiTextAreaScrollTests self){
+    const AStringView dense = UiTextAreaScrollDenseText();
+    ASSERT_TRUE(self.m_model.setText(dense));
+    ASSERT_TRUE(self.m_state.scrollTo(Point(17.0f, 19.0f)));
+    ASSERT_TRUE(self.frameArea(1u, UiTextAreaScrollSmallOptions()));
+    EditModel replacement = EditModel(self.m_arena, EditLimits(), EditTextMode::Multiline);
+    ASSERT_TRUE(replacement.setText(dense));
+    const u64 revision = self.m_state.revision();
+    ASSERT_TRUE(self.beginArea(2u));
+    ASSERT_TRUE(self.m_builder.textArea(s_UiTextScrollAreaKey, replacement, self.m_state, UiTextAreaScrollSmallOptions()).valid);
+    ASSERT_TRUE(self.acceptArea());
+    EXPECT_GT(self.m_state.scroll().x, 17.0f);
+    EXPECT_GT(self.m_state.scroll().y, 19.0f);
+    EXPECT_EQ(self.m_state.revision(), revision);
+}
+
+void VerifyUiTextAreaScrollTests_ResetThenScrollSeedsANewInitialBinding(mut UiTextAreaScrollTests self){
+    ASSERT_TRUE(self.m_model.setText(UiTextAreaScrollDenseText()));
+    ASSERT_TRUE(self.frameArea(1u, UiTextAreaScrollSmallOptions()));
+    self.m_state.reset();
+    ASSERT_TRUE(self.m_state.scrollTo(Point(17.0f, 19.0f)));
+    const u64 revision = self.m_state.revision();
+    ASSERT_TRUE(self.frameArea(2u, UiTextAreaScrollSmallOptions()));
+    EXPECT_FLOAT_EQ(self.m_state.scroll().x, 17.0f);
+    EXPECT_FLOAT_EQ(self.m_state.scroll().y, 19.0f);
+    EXPECT_EQ(self.m_state.revision(), revision);
+}
+
+void VerifyUiTextAreaScrollTests_DocumentEdgesRevealCombiningMarksAndFallbackInkBeyondLogicalLines(mut UiTextAreaScrollTests self){
+    ASSERT_TRUE(self.installKoreanFallback());
+    self.useHost();
+    self.m_builder.style().fontSize = 24.0f;
+    const StringView text = "A\xcc\x81\xcc\x81\n\xed\x95\x9c\xea\xb8\x80 \xec\xa1\xb0\xed\x95\xa9\nMMMMMMMMMMMMMMMMMMMMMMMMg\xcc\xa3";
+    ASSERT_TRUE(self.m_model.setText(text));
+    ASSERT_TRUE(self.m_model.setSelection(0u, 0u));
+    EditBoxView reference = EditBoxView(self.m_arena);
+    ASSERT_TRUE(reference.snapshot(self.m_model));
+    ASSERT_EQ(reference.shape(self.m_text, MakeUiTextScrollShapeRequest("", 24.0f)), TextLayoutStatus::Success);
+    ASSERT_TRUE(reference.measure(self.m_text, MakeUiTextScrollDisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f)));
+    const Rect visual = reference.visualBounds();
+    const Point logical = reference.layout().measure();
+    ASSERT_LT(visual.y, 0.0f);
+    ASSERT_GT(visual.y + visual.height, logical.y);
+    b8 sawLatin = false;
+    b8 sawKorean = false;
+    native(in reference, mut sawLatin, mut sawKorean){
+        for(const auto& glyph : reference.layout().glyphs()){
+            ASSERT_TRUE(glyph.face);
+            sawLatin = sawLatin || glyph.face->identity().name() == Name("tests/ui/fonts/latin");
+            sawKorean = sawKorean || glyph.face->identity().name() == Name("tests/ui/fonts/korean");
+        }
+    }
+    ASSERT_TRUE(sawLatin && sawKorean);
+    TextAreaOptions options = TextAreaOptions();
+    options.width = LayoutSize(LayoutSizePolicy::Fixed, 120.0f);
+    options.height = LayoutSize(LayoutSizePolicy::Fixed, 90.0f);
+    ASSERT_TRUE(self.frameArea(1u, options));
+    const EditBoxPlacement first = self.m_state.placement();
+    EXPECT_FLOAT_EQ(first.scroll, 0.0f);
+    EXPECT_FLOAT_EQ(first.scrollY, 0.0f);
+    EXPECT_NEAR(first.textOrigin.x + visual.x, first.content.x, 0.001f);
+    EXPECT_NEAR(first.textOrigin.y + visual.y, first.content.y, 0.001f);
+    EXPECT_GE(first.caret.y, first.content.y);
+    EXPECT_LE(first.caret.y + first.caret.height, first.content.y + first.content.height);
+    self.m_host.key(UiTextScrollBakedKey::End, true);
+    ASSERT_TRUE(self.frameArea(2u, options));
+    EXPECT_EQ(self.m_model.caret(), text.size());
+    const EditBoxPlacement last = self.m_state.placement();
+    ASSERT_GT(last.scroll, 0.0f);
+    ASSERT_GT(last.scrollY, 0.0f);
+    EXPECT_NEAR(cast<f64>(last.scroll), self.m_state.scrollbars().horizontal.maximum, 0.001);
+    EXPECT_NEAR(cast<f64>(last.scrollY), self.m_state.scrollbars().vertical.maximum, 0.001);
+    EXPECT_NEAR(last.textOrigin.x + visual.x + visual.width + last.caret.width, last.content.x + last.content.width, 0.001f);
+    EXPECT_NEAR(last.textOrigin.y + visual.y + visual.height, last.content.y + last.content.height, 0.001f);
+    const auto endCaret = reference.caretGeometry().caretRect(text.size());
+    ASSERT_TRUE(endCaret.has_value());
+    EXPECT_FLOAT_EQ(last.caret.x, last.textOrigin.x + endCaret.value().x);
+    EXPECT_FLOAT_EQ(last.caret.y, last.textOrigin.y + endCaret.value().y);
+    const auto hit = reference.hitTest(Point(last.caret.x, last.caret.height * 0.5f + last.caret.y), last);
+    ASSERT_TRUE(hit.has_value());
+    EXPECT_EQ(hit.value(), text.size());
+    ASSERT_EQ(self.m_host.publications.size(), 2u);
+    ExpectUiRect(self.m_host.publications[1u].placement.caret, last.caret);
+    self.m_host.key(UiTextScrollBakedKey::Home, true);
+    ASSERT_TRUE(self.frameArea(3u, options));
+    EXPECT_EQ(self.m_model.caret(), 0u);
+    EXPECT_FLOAT_EQ(self.m_state.scroll().x, 0.0f);
+    EXPECT_FLOAT_EQ(self.m_state.scroll().y, 0.0f);
+    EXPECT_NEAR(self.m_state.placement().textOrigin.y + visual.y, self.m_state.placement().content.y, 0.001f);
+    ASSERT_TRUE(self.m_state.scrollTo(Point(10000.0f, 10000.0f)));
+    ASSERT_TRUE(self.frameArea(4u, options));
+    EXPECT_EQ(self.m_model.caret(), 0u);
+    EXPECT_NEAR(self.m_state.scroll().x, last.scroll, 0.001f);
+    EXPECT_NEAR(self.m_state.scroll().y, last.scrollY, 0.001f);
+    const EditBoxPlacement scrolled = self.m_state.placement();
+    const f32 scrolledInkBottom = scrolled.textOrigin.y + visual.y + visual.height;
+    EXPECT_NEAR(scrolledInkBottom, scrolled.content.y + scrolled.content.height, 0.001f);
+}
+
+void VerifyUiTextAreaScrollTests_SingleLineVisualMeasurementRefreshesAcrossDpiAndTextChangesWithoutMovingCaretStops(mut UiTextAreaScrollTests self){
+    EditModel model = EditModel(self.m_arena);
+    EditBoxView view = EditBoxView(self.m_arena);
+    ASSERT_TRUE(model.setText("A\xcc\x81\xcc\x81 g\xcc\xa3"));
+    ASSERT_TRUE(view.snapshot(model));
+    ASSERT_EQ(view.shape(self.m_text, MakeUiTextScrollShapeRequest("", 17.3f)), TextLayoutStatus::Success);
+    const Point logical = view.layout().measure();
+    ExpectUiRect(view.visualBounds(), Rect(0.0f, 0.0f, logical.x, logical.y));
+    const auto logicalCaret = view.caretGeometry().caretRect(view.displayCaret());
+    ASSERT_TRUE(logicalCaret.has_value());
+    Rect previous = Rect();
+    b8 changedWithScale = false;
+    Array<f32, 3u> scales;
+    scales[0u] = 1.0f;
+    scales[1u] = 1.5f;
+    scales[2u] = 2.0f;
+    for(in f32 scale : scales){
+        const DisplayMetrics display = MakeUiTextScrollDisplayMetrics(800.0f, 600.0f, scale, scale);
+        const auto expected = self.m_text.measure(view.layout(), display);
+        ASSERT_TRUE(expected.has_value());
+        ASSERT_TRUE(view.measure(self.m_text, display));
+        ExpectUiRect(view.visualBounds(), expected.value());
+        EXPECT_FLOAT_EQ(view.layout().measure().x, logical.x);
+        EXPECT_FLOAT_EQ(view.layout().measure().y, logical.y);
+        const auto caret = view.caretGeometry().caretRect(view.displayCaret());
+        ASSERT_TRUE(caret.has_value());
+        ExpectUiRect(caret.value(), logicalCaret.value());
+        const f32 caretWidth = 1.0f / scale;
+        const Rect bounds = Rect(20.25f, 30.75f, expected.value().width + caretWidth, expected.value().height);
+        const auto placement = view.arrange(bounds, Insets(), Rect(0.0f, 0.0f, 800.0f, 600.0f), Point(), caretWidth);
+        ASSERT_TRUE(placement.has_value());
+        EXPECT_NEAR(placement.value().textOrigin.x + expected.value().x, bounds.x, 0.001f);
+        EXPECT_NEAR(placement.value().textOrigin.y + expected.value().y, bounds.y, 0.001f);
+        EXPECT_NEAR(placement.value().textOrigin.y + expected.value().y + expected.value().height, bounds.y + bounds.height, 0.001f);
+        EXPECT_FLOAT_EQ(placement.value().caret.x, placement.value().textOrigin.x + logicalCaret.value().x);
+        EXPECT_FLOAT_EQ(placement.value().caret.y, placement.value().textOrigin.y + logicalCaret.value().y);
+        if(scale != 1.0f)
+            changedWithScale = changedWithScale || previous.x != expected.value().x || previous.y != expected.value().y || previous.width != expected.value().width || previous.height != expected.value().height;
+        previous = expected.value();
+    }
+    EXPECT_TRUE(changedWithScale);
+    EXPECT_FALSE(view.measure(self.m_text, MakeUiTextScrollDisplayMetrics(800.0f, 600.0f, 0.0f, 1.0f)));
+    ExpectUiRect(view.visualBounds(), previous);
+    ASSERT_TRUE(model.setText("x"));
+    ASSERT_TRUE(view.snapshot(model));
+    EXPECT_FALSE(view.ready());
+    ASSERT_EQ(view.shape(self.m_text, MakeUiTextScrollShapeRequest("", 17.3f)), TextLayoutStatus::Success);
+    const Point replacementLogical = view.layout().measure();
+    ExpectUiRect(view.visualBounds(), Rect(0.0f, 0.0f, replacementLogical.x, replacementLogical.y));
+    ASSERT_TRUE(view.measure(self.m_text, MakeUiTextScrollDisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f)));
+    const auto replacement = self.m_text.measure(view.layout(), MakeUiTextScrollDisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f));
+    ASSERT_TRUE(replacement.has_value());
+    ExpectUiRect(view.visualBounds(), replacement.value());
+    EXPECT_LT(view.visualBounds().height, previous.height);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiTextAreaStateTests_NavigationRejectsAnotherOwnersSnapshotBeforeAnyEdits(){
+    TextAreaState first = TextAreaState();
+    TextAreaState second = TextAreaState();
+    EXPECT_FALSE(second.navigation().matches(first.navigation().snapshot()));
+}
+
+void VerifyUiTextAreaStateTests_ViewportIntentAwayAndBackRetiresAnEarlierLoan(){
+    TextAreaState state = TextAreaState();
+    ASSERT_TRUE(state.scrollTo(Point(20.0f, 30.0f)));
+    const u64 accepted = state.revision();
+    ASSERT_TRUE(state.scrollTo(Point(40.0f, 60.0f)));
+    ASSERT_TRUE(state.scrollTo(Point(20.0f, 30.0f)));
+    EXPECT_GT(state.revision(), accepted);
+    EXPECT_FLOAT_EQ(state.scroll().x, 20.0f);
+    EXPECT_FLOAT_EQ(state.scroll().y, 30.0f);
+    const u64 identical = state.revision();
+    ASSERT_TRUE(state.scrollTo(state.scroll()));
+    EXPECT_GT(state.revision(), identical);
+}
+
+void VerifyUiTextAreaStateTests_InvalidViewportPreservesBothAxesAndBorrowEpoch(){
+    TextAreaState state = TextAreaState();
+    ASSERT_TRUE(state.scrollTo(Point(20.0f, 30.0f)));
+    const u64 accepted = state.revision();
+    const f32 infinity = bit_cast<f32>(s_UiTextScrollPosInfF32Bits);
+    const f32 nan = bit_cast<f32>(s_UiTextScrollQuietNaNF32Bits);
+    Array<Point, 5u> invalid;
+    invalid[0u] = Point(-1.0f, 0.0f);
+    invalid[1u] = Point(0.0f, -1.0f);
+    invalid[2u] = Point(infinity, 0.0f);
+    invalid[3u] = Point(0.0f, infinity);
+    invalid[4u] = Point(nan, nan);
+    for(in Point point : invalid){
+        EXPECT_FALSE(state.scrollTo(point));
+        EXPECT_EQ(state.revision(), accepted);
+        EXPECT_FLOAT_EQ(state.scroll().x, 20.0f);
+        EXPECT_FLOAT_EQ(state.scroll().y, 30.0f);
+    }
+}
+
+void VerifyUiTextAreaStateTests_ResetRetiresExternalAndNavigationEpochsWithoutChangingIdentity(){
+    TextAreaState state = TextAreaState();
+    const u64 identity = state.instanceGeneration();
+    ASSERT_TRUE(state.scrollTo(Point(20.0f, 30.0f)));
+    const u64 accepted = state.revision();
+    const EditNavigationSnapshot navigation = state.navigation().snapshot();
+    state.reset();
+    EXPECT_EQ(state.instanceGeneration(), identity);
+    EXPECT_GT(state.revision(), accepted);
+    EXPECT_FALSE(state.navigation().matches(navigation));
+    EXPECT_FLOAT_EQ(state.scroll().x, 0.0f);
+    EXPECT_FLOAT_EQ(state.scroll().y, 0.0f);
+    const u64 empty = state.revision();
+    state.reset();
+    EXPECT_GT(state.revision(), empty);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiTextAreaViewTests_SuppressedCaretRevealPreservesBothRequestedAxesAndHitMapping(mut UiTextAreaViewTests self){
+    ASSERT_TRUE(self.prepareDense());
+    ASSERT_TRUE(self.manualPlace(Point(5.0f, 6.0f)));
+    EXPECT_FLOAT_EQ(self.m_placement.scroll, 5.0f);
+    EXPECT_FLOAT_EQ(self.m_placement.scrollY, 6.0f);
+    EXPECT_FLOAT_EQ(self.m_placement.textOrigin.x, 5.0f);
+    EXPECT_FLOAT_EQ(self.m_placement.textOrigin.y, 14.0f);
+    const VectorSingle clipEnd = VectorSingle(self.m_placement.clip.x, self.m_placement.clip.y, 0.0f, 0.0f) + VectorSingle(self.m_placement.clip.width, self.m_placement.clip.height, 0.0f, 0.0f);
+    EXPECT_GT(self.m_placement.caret.x, clipEnd.x);
+    EXPECT_GT(self.m_placement.caret.y, clipEnd.y);
+    const auto hit = self.m_view.hitTest(Point(15.0f, 20.0f), self.m_placement);
+    ASSERT_TRUE(hit.has_value());
+    EXPECT_EQ(hit.value(), 1u);
+}
+
+void VerifyUiTextAreaViewTests_SuppressedRevealStillClampsToBothContentExtents(mut UiTextAreaViewTests self){
+    ASSERT_TRUE(self.prepareDense());
+    ASSERT_TRUE(self.manualPlace(Point(100.0f, 100.0f)));
+    EXPECT_FLOAT_EQ(self.m_placement.scroll, 41.0f);
+    EXPECT_FLOAT_EQ(self.m_placement.scrollY, 24.0f);
+    ExpectUiRect(self.m_placement.caret, Rect(29.0f, 20.0f, 1.0f, 12.0f));
+}
+
+void VerifyUiTextAreaViewTests_ShrinkingContentClampsExplicitScrollWithoutCaretFollowing(mut UiTextAreaViewTests self){
+    ASSERT_TRUE(self.prepareDense());
+    ASSERT_TRUE(self.manualPlace(Point(100.0f, 100.0f)));
+    ASSERT_TRUE(self.m_model.setText("x\n"));
+    ASSERT_TRUE(self.m_model.setSelection(0u, 0u));
+    ASSERT_TRUE(self.shapeView());
+    ASSERT_TRUE(self.manualPlace(Point(41.0f, 24.0f), 200.0f, 100.0f));
+    EXPECT_FLOAT_EQ(self.m_placement.scroll, 0.0f);
+    EXPECT_FLOAT_EQ(self.m_placement.scrollY, 0.0f);
+    EXPECT_FLOAT_EQ(self.m_placement.textOrigin.x, 10.0f);
+    EXPECT_FLOAT_EQ(self.m_placement.textOrigin.y, 20.0f);
+    ExpectUiRect(self.m_placement.caret, Rect(10.0f, 20.0f, 1.0f, 12.0f));
+}
+
+void VerifyUiTextAreaViewTests_ZeroViewportDoesNotForceManualScrollToTheCaret(mut UiTextAreaViewTests self){
+    ASSERT_TRUE(self.prepareDense());
+    ASSERT_TRUE(self.manualPlace(Point(5.0f, 6.0f), 0.0f, 0.0f));
+    EXPECT_FLOAT_EQ(self.m_placement.scroll, 5.0f);
+    EXPECT_FLOAT_EQ(self.m_placement.scrollY, 6.0f);
+    EXPECT_FLOAT_EQ(self.m_placement.content.width, 0.0f);
+    EXPECT_FLOAT_EQ(self.m_placement.content.height, 0.0f);
+    EXPECT_FLOAT_EQ(self.m_placement.clip.width, 0.0f);
+    EXPECT_FLOAT_EQ(self.m_placement.clip.height, 0.0f);
+    EXPECT_TRUE(self.m_view.ready());
+}
+
+void VerifyUiTextAreaViewTests_FailedManualArrangementPreservesThePriorPlacement(mut UiTextAreaViewTests self){
+    ASSERT_TRUE(self.prepareDense());
+    ASSERT_TRUE(self.manualPlace(Point(5.0f, 6.0f)));
+    const EditBoxPlacement previous = self.m_placement;
+    Array<Point, 3u> invalid;
+    invalid[0u] = Point(-1.0f, 0.0f);
+    invalid[1u] = Point(0.0f, bit_cast<f32>(s_UiTextScrollQuietNaNF32Bits));
+    invalid[2u] = Point(bit_cast<f32>(s_UiTextScrollPosInfF32Bits), 0.0f);
+    for(in Point scroll : invalid){
+        EXPECT_FALSE(self.manualPlace(scroll));
+        ExpectUiMultilineViewPlacement(self.m_placement, previous);
+    }
+    EXPECT_FALSE(self.m_view.arrange(Rect(10.0f, 20.0f, 20.0f, 12.0f), Insets(), Rect(0.0f, 0.0f, 500.0f, 500.0f), Point(5.0f, 6.0f), 0.0f, false).has_value());
+    ExpectUiMultilineViewPlacement(self.m_placement, previous);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyTextBakedTests_FontHashMismatchUsesCoverageForTheAlreadySelectedFace(mut TextBakedTests self){
+    native(mut self){
+        const auto binary = ::NWB::Impl::SerializeFontAtlasPayload(self.m_atlas.payload(), self.m_arena, self.m_scratchArena);
+        ASSERT_TRUE(binary);
+        auto payload = ::NWB::Impl::DeserializeFontAtlasPayload(*binary, self.m_arena, self.m_scratchArena);
+        ASSERT_TRUE(payload);
+        payload->fontSha256.bytes[0u] ^= 1u;
+        self.m_atlas.setPayload(Move(*payload));
+    }
+    ASSERT_TRUE(self.installAtlas());
+    ShapeRequest request = ShapeRequest();
+    request.text = s_UiTextBakedSampleGlyphText;
+    ASSERT_TRUE(self.applyLayout(request));
+    native(in self){
+        EXPECT_FALSE(self.m_layout.glyphs()[0u].face->bakedAtlas());
+        EXPECT_EQ(self.m_layout.glyphs()[0u].face->identity().name(), Name("tests/ui/fonts/latin"));
+    }
+    const DrawSnapshot snapshot = self.paint();
+    EXPECT_TRUE(snapshot.sdfPages().empty());
+    EXPECT_FALSE(snapshot.glyphPages().empty());
+}
+
+void VerifyTextBakedTests_LogicalFontIdentityMustMatchEvenWhenTheBytesMatch(mut TextBakedTests self){
+    native(mut self){
+        const auto binary = ::NWB::Impl::SerializeFontAtlasPayload(self.m_atlas.payload(), self.m_arena, self.m_scratchArena);
+        ASSERT_TRUE(binary);
+        auto payload = ::NWB::Impl::DeserializeFontAtlasPayload(*binary, self.m_arena, self.m_scratchArena);
+        ASSERT_TRUE(payload);
+        payload->font = ::NWB::Core::Assets::AssetRef<::NWB::Impl::Font>("tests/ui/fonts/other");
+        self.m_atlas.setPayload(Move(*payload));
+    }
+    ASSERT_TRUE(self.installAtlas());
+    ASSERT_TRUE(self.applyLayout(MakeUiTextScrollShapeRequest(s_UiTextBakedSampleGlyphText, 24.0f)));
+    native(in self){
+        EXPECT_FALSE(self.m_layout.glyphs()[0u].face->bakedAtlas());
+    }
+    EXPECT_TRUE(self.paint().sdfPages().empty());
+}
+
+void VerifyTextBakedTests_OldLayoutAndSnapshotOwnTheirAtlasAfterFontReplacementAndAssetRelease(mut TextBakedTests self){
+    ASSERT_TRUE(self.installAtlas());
+    ASSERT_TRUE(self.applyLayout(MakeUiTextScrollShapeRequest(s_UiTextBakedSampleGlyphText, 24.0f)));
+    native(mut self){
+        const auto retained = self.m_layout.glyphs()[0u].face->bakedAtlas();
+        const DrawSnapshot first = self.paint();
+        ASSERT_EQ(first.sdfPages().size(), 1u);
+        const ::NWB::Impl::Ui::FontSource source{ ::NWB::Core::Assets::AssetRef<::NWB::Impl::Font>("tests/ui/fonts/latin"), self.m_font, 2u };
+        ASSERT_TRUE(self.m_text.setFonts(self.m_scratchArena, Span(&source, 1u)));
+        self.m_atlas.setPayload(::NWB::Impl::FontAtlasPayload(self.m_arena));
+        const DrawSnapshot second = self.paint();
+        ASSERT_EQ(second.sdfPages().size(), 1u);
+        EXPECT_EQ(first.sdfPages()[0u].get(), second.sdfPages()[0u].get());
+        EXPECT_EQ(second.sdfPages()[0u]->binding().fontGeneration, 1u);
+        EXPECT_EQ(retained.get(), self.m_layout.glyphs()[0u].face->bakedAtlas().get());
+        EXPECT_EQ(first.sdfPages()[0u]->pixels()[0u], 128u);
+    }
+}
+
+void VerifyTextBakedTests_OutsideBakedSizeRangeUsesCoverageWithLowerThresholdControl(mut TextBakedTests self){
+    ASSERT_TRUE(self.installAtlas());
+    ASSERT_TRUE(self.applyLayout(MakeUiTextScrollShapeRequest(s_UiTextBakedSampleGlyphText, 24.0f)));
+    const DrawSnapshot first = self.paint();
+    ASSERT_EQ(first.sdfPages().size(), 1u);
+    ASSERT_TRUE(self.applyLayout(MakeUiTextScrollShapeRequest(s_UiTextBakedSampleGlyphText, 8.0f)));
+    const DrawSnapshot small = self.paint();
+    EXPECT_TRUE(small.sdfPages().empty());
+    EXPECT_FALSE(small.glyphPages().empty());
+    ASSERT_TRUE(self.applyLayout(MakeUiTextScrollShapeRequest(s_UiTextBakedSampleGlyphText, 129.0f)));
+    EXPECT_TRUE(self.paint().sdfPages().empty());
+}
+
+void VerifyTextBakedTests_FractionalPhysicalSizeBelowSdfThresholdUsesCoverage(mut TextBakedTests self){
+    ASSERT_TRUE(self.installAtlas());
+    ASSERT_TRUE(self.applyLayout(MakeUiTextScrollShapeRequest(s_UiTextBakedSampleGlyphText, 23.5f)));
+    const DrawSnapshot fractionalFont = self.paint();
+    EXPECT_TRUE(fractionalFont.sdfPages().empty());
+    ASSERT_EQ(fractionalFont.glyphPages().size(), 1u);
+    ASSERT_EQ(fractionalFont.commands().size(), 1u);
+    EXPECT_EQ(fractionalFont.commands()[0u].material, PaintMaterial::Glyph);
+
+    ASSERT_TRUE(self.applyLayout(MakeUiTextScrollShapeRequest(s_UiTextBakedSampleGlyphText, 16.0f)));
+    const DrawSnapshot fractionalDpi = self.paint(1.49f);
+    EXPECT_TRUE(fractionalDpi.sdfPages().empty());
+    ASSERT_EQ(fractionalDpi.glyphPages().size(), 1u);
+    ASSERT_EQ(fractionalDpi.commands().size(), 1u);
+    EXPECT_EQ(fractionalDpi.commands()[0u].material, PaintMaterial::Glyph);
+
+    const DrawSnapshot thresholdDpi = self.paint(1.5f);
+    EXPECT_TRUE(thresholdDpi.glyphPages().empty());
+    ASSERT_EQ(thresholdDpi.sdfPages().size(), 1u);
+    ASSERT_EQ(thresholdDpi.commands().size(), 1u);
+    EXPECT_EQ(thresholdDpi.commands()[0u].material, PaintMaterial::SdfGlyph);
+}
+
+void VerifyTextBakedTests_WhitespaceKeepsItsAdvanceWithoutAdmittingAnImage(mut TextBakedTests self){
+    ASSERT_TRUE(self.installAtlas());
+    ASSERT_TRUE(self.applyLayout(MakeUiTextScrollShapeRequest("   ", 24.0f)));
+    EXPECT_GT(self.m_layout.measure().x, 0.0f);
+    const DrawSnapshot snapshot = self.paint();
+    EXPECT_TRUE(snapshot.sdfPages().empty());
+    EXPECT_TRUE(snapshot.glyphPages().empty());
+    EXPECT_TRUE(snapshot.vertices().empty());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiTextControlLifetimeTests_AcceptedAuxiliaryEpochChangePreservesTextFocusAndMainCapture(mut UiTextControlLifetimeTests self){
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(10.0f, 10.0f), InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiTextScrollWheelEvent(Point(10.0f, 10.0f), 1.0, -1.0)).pointerConsumed);
+    ASSERT_EQ(self.m_router.controlActions().size(), 1u);
+    self.revise();
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
+    EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
+    EXPECT_EQ(self.m_router.capture(), self.m_targets[0u].id);
+    EXPECT_TRUE(self.m_router.controlActions().empty());
+    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(160.0f, 150.0f), InputEventType::PointerMove)).pointerConsumed);
+    EXPECT_EQ(self.m_router.capture(), self.m_targets[0u].id);
+    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(160.0f, 150.0f), InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
+    EXPECT_FALSE(self.m_router.capture().valid());
+}
+
+void VerifyUiTextControlLifetimeTests_AcceptedAuxiliaryEpochChangeRetiresOwnedPartCaptureAndGesture(mut UiTextControlLifetimeTests self){
+    self.m_targets[1u].textEditable = true;
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(95.0f, 25.0f), InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
+    EXPECT_EQ(self.m_router.capture(), self.m_targets[1u].id);
+    self.revise();
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
+    EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
+    EXPECT_FALSE(self.m_router.capture().valid());
+    EXPECT_FALSE(self.m_router.consumePointerGesture(self.m_targets[1u].id, 7u).has_value());
+}
+
+void VerifyUiTextControlLifetimeTests_PrepublicationFencePreservesTextCaptureAndRejectsOldWheelUntilAcceptance(mut UiTextControlLifetimeTests self){
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(10.0f, 10.0f), InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiTextScrollWheelEvent(Point(10.0f, 10.0f), 0.0, -1.0)).pointerConsumed);
+    self.revise();
+    self.m_router.fenceControl(self.m_targets[0u].id, 7u, self.m_targets[0u].control);
+    EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
+    EXPECT_EQ(self.m_router.capture(), self.m_targets[0u].id);
+    EXPECT_TRUE(self.m_router.controlActions().empty());
+    ASSERT_EQ(self.m_router.targets().size(), 2u);
+    EXPECT_TRUE(self.m_router.targets()[0u].enabled);
+    EXPECT_FALSE(self.m_router.targets()[0u].scrollable);
+    EXPECT_TRUE(self.m_router.targets()[0u].control.empty());
+    EXPECT_FALSE(self.m_router.targets()[1u].enabled);
+    EXPECT_TRUE(self.send(MakeUiTextScrollWheelEvent(Point(10.0f, 10.0f), 1.0, -1.0)).pointerConsumed);
+    EXPECT_TRUE(self.m_router.controlActions().empty());
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
+    EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
+    EXPECT_EQ(self.m_router.capture(), self.m_targets[0u].id);
+    EXPECT_TRUE(self.send(MakeUiTextScrollWheelEvent(Point(10.0f, 10.0f), 1.0, 0.0)).pointerConsumed);
+    const auto actionResult = self.m_router.consumeControlAction(self.m_targets[0u].id, 7u, self.m_targets[0u].control);
+    ASSERT_TRUE(actionResult.has_value());
+    const ControlAction action = actionResult.value();
+    EXPECT_EQ(action.control, self.m_targets[0u].control);
+}
+
+void VerifyUiTextControlLifetimeTests_RepeatedAuxiliaryFenceKeepsTextCaptureBeforeAnyNewAcceptance(mut UiTextControlLifetimeTests self){
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(10.0f, 10.0f), InputEventType::PrimaryDown)).pointerConsumed);
+    self.revise();
+    self.m_router.fenceControl(self.m_targets[0u].id, 7u, self.m_targets[0u].control);
+    self.revise();
+    self.m_router.fenceControl(self.m_targets[0u].id, 7u, self.m_targets[0u].control);
+    EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
+    EXPECT_EQ(self.m_router.capture(), self.m_targets[0u].id);
+    EXPECT_TRUE(self.m_router.targets()[0u].enabled);
+    EXPECT_FALSE(self.m_router.targets()[1u].enabled);
+    EXPECT_TRUE(self.m_router.controlActions().empty());
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
+    EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
+    EXPECT_EQ(self.m_router.capture(), self.m_targets[0u].id);
+}
+
+void VerifyUiTextControlLifetimeTests_PrepublicationFenceRetiresOwnedPartDragWithoutBlurringEditor(mut UiTextControlLifetimeTests self){
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(95.0f, 25.0f), InputEventType::PrimaryDown)).pointerConsumed);
+    self.revise();
+    self.m_router.fenceControl(self.m_targets[0u].id, 7u, self.m_targets[0u].control);
+    EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
+    EXPECT_FALSE(self.m_router.capture().valid());
+    EXPECT_FALSE(self.m_router.consumePointerGesture(self.m_targets[1u].id, 7u).has_value());
+}
+
+void VerifyUiTextControlLifetimeTests_DifferentDeclarationFenceStillRetiresTextFocusAndCapture(mut UiTextControlLifetimeTests self){
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(10.0f, 10.0f), InputEventType::PrimaryDown)).pointerConsumed);
+    self.m_router.fenceControl(self.m_targets[0u].id, 8u, self.m_targets[0u].control);
+    EXPECT_FALSE(self.m_router.focus().valid());
+    EXPECT_FALSE(self.m_router.capture().valid());
+    EXPECT_FALSE(self.m_router.targets()[0u].enabled);
+    EXPECT_FALSE(self.m_router.targets()[1u].enabled);
+}
+
+void VerifyUiTextControlLifetimeTests_ReplacedDeclarationStillRetiresTextFocusAndMainCapture(mut UiTextControlLifetimeTests self){
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(10.0f, 10.0f), InputEventType::PrimaryDown)).pointerConsumed);
+    ++self.m_targets[0u].declarationGeneration;
+    ++self.m_targets[1u].ownerDeclarationGeneration;
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
+    EXPECT_FALSE(self.m_router.focus().valid());
+    EXPECT_FALSE(self.m_router.capture().valid());
+}
+
+void VerifyUiTextControlLifetimeTests_DisabledTextHostCannotKeepFocusOrMainCapture(mut UiTextControlLifetimeTests self){
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(10.0f, 10.0f), InputEventType::PrimaryDown)).pointerConsumed);
+    self.revise();
+    self.m_targets[0u].enabled = false;
+    ASSERT_TRUE(self.commitFirstTarget(2u));
+    EXPECT_FALSE(self.m_router.focus().valid());
+    EXPECT_FALSE(self.m_router.capture().valid());
+}
+
+void VerifyUiTextControlLifetimeTests_FullyClippedTextHostCannotKeepFocusOrMainCapture(mut UiTextControlLifetimeTests self){
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(10.0f, 10.0f), InputEventType::PrimaryDown)).pointerConsumed);
+    self.revise();
+    self.m_targets[0u].clip = Rect(200.0f, 0.0f, 10.0f, 100.0f);
+    self.m_targets[1u].clip = Rect(200.0f, 0.0f, 10.0f, 100.0f);
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
+    EXPECT_FALSE(self.m_router.focus().valid());
+    EXPECT_FALSE(self.m_router.capture().valid());
+}
+
+void VerifyUiTextControlLifetimeTests_RefreshedAuxiliaryTokenSupportsLaterOrdinaryControlRules(mut UiTextControlLifetimeTests self){
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(10.0f, 10.0f), InputEventType::PrimaryDown)).pointerConsumed);
+    self.revise();
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
+    self.m_targets[0u].textEditable = false;
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 3u));
+    EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
+    EXPECT_EQ(self.m_router.capture(), self.m_targets[0u].id);
+    self.revise();
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 4u));
+    EXPECT_FALSE(self.m_router.focus().valid());
+    EXPECT_FALSE(self.m_router.capture().valid());
+}
+
+void VerifyUiTextControlLifetimeTests_NonTextScrollHostKeepsItsExistingFullFenceBehavior(mut UiTextControlLifetimeTests self){
+    self.m_targets[0u].textEditable = false;
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(10.0f, 10.0f), InputEventType::PrimaryDown)).pointerConsumed);
+    self.revise();
+    self.m_router.fenceControl(self.m_targets[0u].id, 7u, self.m_targets[0u].control);
+    EXPECT_FALSE(self.m_router.focus().valid());
+    EXPECT_FALSE(self.m_router.capture().valid());
+    EXPECT_FALSE(self.m_router.targets()[0u].enabled);
+    EXPECT_FALSE(self.m_router.targets()[1u].enabled);
+}
+
+void VerifyUiTextControlLifetimeTests_AuxiliaryTokenRestorationPreservesMainTextCaptureWithoutRevivingSubmission(mut UiTextControlLifetimeTests self){
+    self.m_targets[0u].activatable = true;
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(10.0f, 10.0f), InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_EQ(self.m_router.capture(), self.m_targets[0u].id);
+    EXPECT_TRUE(self.m_router.pressed(self.m_targets[0u].id));
+    const ControlToken original = self.m_targets[0u].control;
+    self.revise();
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
+    EXPECT_EQ(self.m_router.capture(), self.m_targets[0u].id);
+    EXPECT_FALSE(self.m_router.pressed(self.m_targets[0u].id));
+    self.m_targets[0u].control = original;
+    self.m_targets[1u].control = original;
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 3u));
+    EXPECT_EQ(self.m_router.capture(), self.m_targets[0u].id);
+    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(10.0f, 10.0f), InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_FALSE(self.m_router.consumeActivation(self.m_targets[0u].id));
+    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(10.0f, 10.0f), InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiTextScrollPointerEvent(Point(10.0f, 10.0f), InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_TRUE(self.m_router.consumeActivation(self.m_targets[0u].id));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_GTEST_F(UiTextAreaScrollLifetimeTests, IdenticalExternalScrollIntentRetiresAnAcceptedTrackPage, VerifyUiTextAreaScrollLifetimeTests_IdenticalExternalScrollIntentRetiresAnAcceptedTrackPage)
+NWB_ADHD_GTEST_F(UiTextAreaScrollLifetimeTests, IdenticalAndAwayBackSelectionIntentsRetireAcceptedWheel, VerifyUiTextAreaScrollLifetimeTests_IdenticalAndAwayBackSelectionIntentsRetireAcceptedWheel)
+NWB_ADHD_GTEST_F(UiTextAreaScrollLifetimeTests, SameTextReplacementAndModelRebindingRetireCopiedWheel, VerifyUiTextAreaScrollLifetimeTests_SameTextReplacementAndModelRebindingRetireCopiedWheel)
+NWB_ADHD_GTEST_F(UiTextAreaScrollLifetimeTests, ActualViewportResizeRetiresWheelWithUnchangedOptions, VerifyUiTextAreaScrollLifetimeTests_ActualViewportResizeRetiresWheelWithUnchangedOptions)
+NWB_ADHD_GTEST_F(UiTextAreaScrollLifetimeTests, ChangedWheelLinesRetiresTheCopiedStepAndAcceptsItsNewPolicy, VerifyUiTextAreaScrollLifetimeTests_ChangedWheelLinesRetiresTheCopiedStepAndAcceptsItsNewPolicy)
+NWB_ADHD_GTEST_F(UiTextAreaScrollLifetimeTests, ClosingAnAncestorRetiresWheelAndCaptureBeforeFreshPopupReuse, VerifyUiTextAreaScrollLifetimeTests_ClosingAnAncestorRetiresWheelAndCaptureBeforeFreshPopupReuse)
+NWB_ADHD_GTEST_F(UiTextAreaScrollLifetimeTests, CaptureLossCancelsTheUnfinishedThumbAndPreservesCompletedWheel, VerifyUiTextAreaScrollLifetimeTests_CaptureLossCancelsTheUnfinishedThumbAndPreservesCompletedWheel)
+NWB_ADHD_GTEST_F(UiTextAreaScrollLifetimeTests, NativeFocusLossCancelsCopiedWheelAndAnActiveThumb, VerifyUiTextAreaScrollLifetimeTests_NativeFocusLossCancelsCopiedWheelAndAnActiveThumb)
+NWB_ADHD_GTEST_F(UiTextAreaScrollLifetimeTests, DisablingRetiresPendingWheelAndThumbWithoutReplayingOnEnable, VerifyUiTextAreaScrollLifetimeTests_DisablingRetiresPendingWheelAndThumbWithoutReplayingOnEnable)
+NWB_ADHD_GTEST_F(UiTextAreaScrollTests, ExplicitTwoAxisScrollSurvivesTheFirstModelBinding, VerifyUiTextAreaScrollTests_ExplicitTwoAxisScrollSurvivesTheFirstModelBinding)
+NWB_ADHD_GTEST_F(UiTextAreaScrollTests, IdleAndResizeClampExplicitViewportWithoutAdvancingItsIntentEpoch, VerifyUiTextAreaScrollTests_IdleAndResizeClampExplicitViewportWithoutAdvancingItsIntentEpoch)
+NWB_ADHD_GTEST_F(UiTextAreaScrollTests, AutomaticRevealSurvivesIdleViewportShrinkWithoutNewModelIntent, VerifyUiTextAreaScrollTests_AutomaticRevealSurvivesIdleViewportShrinkWithoutNewModelIntent)
+NWB_ADHD_GTEST_F(UiTextAreaScrollTests, ExplicitOverscrollClampsToBothContentExtents, VerifyUiTextAreaScrollTests_ExplicitOverscrollClampsToBothContentExtents)
+NWB_ADHD_GTEST_F(UiTextAreaScrollTests, AcceptedIdenticalSelectionResumesRevealAfterManualScrolling, VerifyUiTextAreaScrollTests_AcceptedIdenticalSelectionResumesRevealAfterManualScrolling)
+NWB_ADHD_GTEST_F(UiTextAreaScrollTests, CopyAndUnchangedSubmitPreserveTheExplicitViewport, VerifyUiTextAreaScrollTests_CopyAndUnchangedSubmitPreserveTheExplicitViewport)
+NWB_ADHD_GTEST_F(UiTextAreaScrollTests, AcceptedTextResumesRevealAndPublicationOwnsItsBytes, VerifyUiTextAreaScrollTests_AcceptedTextResumesRevealAndPublicationOwnsItsBytes)
+NWB_ADHD_GTEST_F(UiTextAreaScrollTests, KnownModelRebindingResetsAndRevealsTheNewCaret, VerifyUiTextAreaScrollTests_KnownModelRebindingResetsAndRevealsTheNewCaret)
+NWB_ADHD_GTEST_F(UiTextAreaScrollTests, ResetThenScrollSeedsANewInitialBinding, VerifyUiTextAreaScrollTests_ResetThenScrollSeedsANewInitialBinding)
+NWB_ADHD_GTEST_F(UiTextAreaScrollTests, DocumentEdgesRevealCombiningMarksAndFallbackInkBeyondLogicalLines, VerifyUiTextAreaScrollTests_DocumentEdgesRevealCombiningMarksAndFallbackInkBeyondLogicalLines)
+NWB_ADHD_GTEST_F(UiTextAreaScrollTests, SingleLineVisualMeasurementRefreshesAcrossDpiAndTextChangesWithoutMovingCaretStops, VerifyUiTextAreaScrollTests_SingleLineVisualMeasurementRefreshesAcrossDpiAndTextChangesWithoutMovingCaretStops)
+NWB_ADHD_GTEST(UiTextAreaStateTests, NavigationRejectsAnotherOwnersSnapshotBeforeAnyEdits, VerifyUiTextAreaStateTests_NavigationRejectsAnotherOwnersSnapshotBeforeAnyEdits)
+NWB_ADHD_GTEST(UiTextAreaStateTests, ViewportIntentAwayAndBackRetiresAnEarlierLoan, VerifyUiTextAreaStateTests_ViewportIntentAwayAndBackRetiresAnEarlierLoan)
+NWB_ADHD_GTEST(UiTextAreaStateTests, InvalidViewportPreservesBothAxesAndBorrowEpoch, VerifyUiTextAreaStateTests_InvalidViewportPreservesBothAxesAndBorrowEpoch)
+NWB_ADHD_GTEST(UiTextAreaStateTests, ResetRetiresExternalAndNavigationEpochsWithoutChangingIdentity, VerifyUiTextAreaStateTests_ResetRetiresExternalAndNavigationEpochsWithoutChangingIdentity)
+NWB_ADHD_GTEST_F(UiTextAreaViewTests, SuppressedCaretRevealPreservesBothRequestedAxesAndHitMapping, VerifyUiTextAreaViewTests_SuppressedCaretRevealPreservesBothRequestedAxesAndHitMapping)
+NWB_ADHD_GTEST_F(UiTextAreaViewTests, SuppressedRevealStillClampsToBothContentExtents, VerifyUiTextAreaViewTests_SuppressedRevealStillClampsToBothContentExtents)
+NWB_ADHD_GTEST_F(UiTextAreaViewTests, ShrinkingContentClampsExplicitScrollWithoutCaretFollowing, VerifyUiTextAreaViewTests_ShrinkingContentClampsExplicitScrollWithoutCaretFollowing)
+NWB_ADHD_GTEST_F(UiTextAreaViewTests, ZeroViewportDoesNotForceManualScrollToTheCaret, VerifyUiTextAreaViewTests_ZeroViewportDoesNotForceManualScrollToTheCaret)
+NWB_ADHD_GTEST_F(UiTextAreaViewTests, FailedManualArrangementPreservesThePriorPlacement, VerifyUiTextAreaViewTests_FailedManualArrangementPreservesThePriorPlacement)
+NWB_ADHD_GTEST_F(TextBakedTests, FontHashMismatchUsesCoverageForTheAlreadySelectedFace, VerifyTextBakedTests_FontHashMismatchUsesCoverageForTheAlreadySelectedFace)
+NWB_ADHD_GTEST_F(TextBakedTests, LogicalFontIdentityMustMatchEvenWhenTheBytesMatch, VerifyTextBakedTests_LogicalFontIdentityMustMatchEvenWhenTheBytesMatch)
+NWB_ADHD_GTEST_F(TextBakedTests, OldLayoutAndSnapshotOwnTheirAtlasAfterFontReplacementAndAssetRelease, VerifyTextBakedTests_OldLayoutAndSnapshotOwnTheirAtlasAfterFontReplacementAndAssetRelease)
+NWB_ADHD_GTEST_F(TextBakedTests, OutsideBakedSizeRangeUsesCoverageWithLowerThresholdControl, VerifyTextBakedTests_OutsideBakedSizeRangeUsesCoverageWithLowerThresholdControl)
+NWB_ADHD_GTEST_F(TextBakedTests, FractionalPhysicalSizeBelowSdfThresholdUsesCoverage, VerifyTextBakedTests_FractionalPhysicalSizeBelowSdfThresholdUsesCoverage)
+NWB_ADHD_GTEST_F(TextBakedTests, WhitespaceKeepsItsAdvanceWithoutAdmittingAnImage, VerifyTextBakedTests_WhitespaceKeepsItsAdvanceWithoutAdmittingAnImage)
+NWB_ADHD_GTEST_F(UiTextControlLifetimeTests, AcceptedAuxiliaryEpochChangePreservesTextFocusAndMainCapture, VerifyUiTextControlLifetimeTests_AcceptedAuxiliaryEpochChangePreservesTextFocusAndMainCapture)
+NWB_ADHD_GTEST_F(UiTextControlLifetimeTests, AcceptedAuxiliaryEpochChangeRetiresOwnedPartCaptureAndGesture, VerifyUiTextControlLifetimeTests_AcceptedAuxiliaryEpochChangeRetiresOwnedPartCaptureAndGesture)
+NWB_ADHD_GTEST_F(UiTextControlLifetimeTests, PrepublicationFencePreservesTextCaptureAndRejectsOldWheelUntilAcceptance, VerifyUiTextControlLifetimeTests_PrepublicationFencePreservesTextCaptureAndRejectsOldWheelUntilAcceptance)
+NWB_ADHD_GTEST_F(UiTextControlLifetimeTests, RepeatedAuxiliaryFenceKeepsTextCaptureBeforeAnyNewAcceptance, VerifyUiTextControlLifetimeTests_RepeatedAuxiliaryFenceKeepsTextCaptureBeforeAnyNewAcceptance)
+NWB_ADHD_GTEST_F(UiTextControlLifetimeTests, PrepublicationFenceRetiresOwnedPartDragWithoutBlurringEditor, VerifyUiTextControlLifetimeTests_PrepublicationFenceRetiresOwnedPartDragWithoutBlurringEditor)
+NWB_ADHD_GTEST_F(UiTextControlLifetimeTests, DifferentDeclarationFenceStillRetiresTextFocusAndCapture, VerifyUiTextControlLifetimeTests_DifferentDeclarationFenceStillRetiresTextFocusAndCapture)
+NWB_ADHD_GTEST_F(UiTextControlLifetimeTests, ReplacedDeclarationStillRetiresTextFocusAndMainCapture, VerifyUiTextControlLifetimeTests_ReplacedDeclarationStillRetiresTextFocusAndMainCapture)
+NWB_ADHD_GTEST_F(UiTextControlLifetimeTests, DisabledTextHostCannotKeepFocusOrMainCapture, VerifyUiTextControlLifetimeTests_DisabledTextHostCannotKeepFocusOrMainCapture)
+NWB_ADHD_GTEST_F(UiTextControlLifetimeTests, FullyClippedTextHostCannotKeepFocusOrMainCapture, VerifyUiTextControlLifetimeTests_FullyClippedTextHostCannotKeepFocusOrMainCapture)
+NWB_ADHD_GTEST_F(UiTextControlLifetimeTests, RefreshedAuxiliaryTokenSupportsLaterOrdinaryControlRules, VerifyUiTextControlLifetimeTests_RefreshedAuxiliaryTokenSupportsLaterOrdinaryControlRules)
+NWB_ADHD_GTEST_F(UiTextControlLifetimeTests, NonTextScrollHostKeepsItsExistingFullFenceBehavior, VerifyUiTextControlLifetimeTests_NonTextScrollHostKeepsItsExistingFullFenceBehavior)
+NWB_ADHD_GTEST_F(UiTextControlLifetimeTests, AuxiliaryTokenRestorationPreservesMainTextCaptureWithoutRevivingSubmission, VerifyUiTextControlLifetimeTests_AuxiliaryTokenRestorationPreservesMainTextCaptureWithoutRevivingSubmission)
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

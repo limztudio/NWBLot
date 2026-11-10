@@ -1,33 +1,36 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
 
-b8 EcsGraphicsReflectionAndRefractionCasesReady(in u64 value){
-    return value != 0u;
-}
+#include <tests/common/gtest_macros.adhd>
+#include <tests/unit/ecs_graphics/suite.adhd>
 
 native{
-#include <tests/unit/ecs_graphics/suite.adhd.h>
-
-
-#include <tests/unit/ecs_graphics/name_cases.adhd.h>
-
+#include <impl/assets/graphics/reflection/frame_constants.h>
+#include <impl/ecs_mesh/system.adhd.h>
+#include <impl/ecs_render/deferred/scene_shading_upload_tracker.adhd.h>
+#include <impl/ecs_render/mesh/runtime_mesh_pruning.adhd.h>
 #include <impl/ecs_render/reflection/feedback.adhd.h>
 #include <impl/ecs_render/reflection/feedback_resources.adhd.h>
+#include <impl/ecs_render/reflection/history.adhd.h>
+#include <impl/ecs_render/reflection/reflection_system.adhd.h>
+#include <impl/ecs_render/reflection/settings.adhd.h>
+#include <impl/ecs_render/reflection/statistics_readback.adhd.h>
+#include <impl/ecs_render/refraction/statistics_readback.adhd.h>
+#include <impl/ecs_render/shadow/shadow_material_context_policy.adhd.h>
 
 #include <core/alloc/general.h>
+#include <core/ecs/entity.h>
 #include <core/task/gpu/task_graph.h>
 
-#include <gtest/gtest.h>
+#include <global/limit.h>
+#include <global/name.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_reflection_feedback_tests{
+namespace EcsGraphicsReflectionRefractionDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,55 +38,244 @@ namespace __hidden_reflection_feedback_tests{
 
 using namespace NWB;
 using namespace NWB::Impl;
-using ReflectionStatisticsTestHelpers::Accept;
-using ReflectionStatisticsTestHelpers::Stamp;
-using ReflectionStatisticsTestHelpers::Token;
-using LeaseTask = ReflectionStatisticsTestHelpers::ReservationLeaseTask<ReflectionFeedbackReservation>;
+
+inline constexpr usize s_ReflectionCounterWordCount = NWB_REFLECTION_COUNTER_SIZE / sizeof(u32);
+inline constexpr usize s_RefractionCounterWordCount = NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE / sizeof(u32);
+
+using ReflectionCounterArray = Array<u32, s_ReflectionCounterWordCount>;
+using RefractionCounterArray = Array<u32, s_RefractionCounterWordCount>;
+
+[[nodiscard]] inline ReflectionCounterArray MakeSampleReflectionCounters()noexcept{
+    constexpr ReflectionCounterArray s_Counters = {
+        100u, 64u, 30u, 80u, 20u, 50u, 90u, 20u, 98u, 42u, 12u, 2u, 1u, 3u, 4u, 5u, 123u, 25u, 70u, 2u, 17u, 3u, 6u, 19u, 31u,
+    };
+    static_assert(sizeof(s_Counters) == NWB_REFLECTION_COUNTER_SIZE);
+    return s_Counters;
+}
+
+[[nodiscard]] inline RefractionCounterArray MakeSampleRefractionCounters()noexcept{
+    constexpr RefractionCounterArray s_Counters = {
+        23u, 41u, 2u, 3u, 5u, 7u, 11u, 43u, 13u, 17u, 19u, 29u, 31u, 47u, 37u, 53u,
+        59u, 61u, 67u, 71u, 73u, 79u, 83u, 89u, 97u, 101u, 103u, 107u, 1u,
+    };
+    return s_Counters;
+}
+
+inline void ExpectRefractionDiagnosticCountersMatch(const RefractionStatistics& statistics, const RefractionCounterArray& counters){
+#define NWB_CHECK_REFRACTION_COUNTER(field, byteOffset) EXPECT_EQ(statistics.field, counters[(byteOffset) / NWB_REFRACTION_DIAGNOSTIC_WORD_BYTES]);
+    NWB_REFRACTION_DIAGNOSTIC_COUNTER_FIELDS(NWB_CHECK_REFRACTION_COUNTER)
+#undef NWB_CHECK_REFRACTION_COUNTER
+}
+
+struct ReflectionStatsContext{
+    ReflectionStatisticsTestHelpers::StatisticsContext<ReflectionStatisticsControl> inner;
+
+
+public:
+    [[nodiscard]] b8 valid()const noexcept{ return static_cast<b8>(inner.control); }
+    [[nodiscard]] auto reserve(const ReflectionStatistics& metadata){ return inner.control->reserve(metadata); }
+    void discard(const StatisticsReservationKey& key){ inner.control->discard(key); }
+    void accept(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const b8 hardwareReady){
+        inner.control->accept(key, token, hardwareReady);
+    }
+    void acceptWithFeedback(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const b8 hardwareReady, const ReflectionFeedbackOutcome& feedback){
+        inner.control->accept(key, token, hardwareReady, nullptr, &feedback);
+    }
+    void complete(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const Span<const u32> counters){
+        inner.control->complete(key, token, counters);
+    }
+    void completeEmpty(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token){
+        inner.control->complete(key, token, {});
+    }
+    void reset(const u16 generation){ inner.control->reset(generation); }
+    [[nodiscard]] Expected<ReflectionStatistics> tryGetLatestStatistics(){ return inner.control->tryGetLatestStatistics(); }
+    [[nodiscard]] auto pending(const u32 slot){ return inner.control->pending(slot); }
+};
+
+struct RefractionStatsContext{
+    ReflectionStatisticsTestHelpers::StatisticsContext<RefractionStatisticsControl> inner;
+
+
+public:
+    [[nodiscard]] b8 valid()const noexcept{ return static_cast<b8>(inner.control); }
+    [[nodiscard]] auto reserve(const RefractionStatistics& metadata){ return inner.control->reserve(metadata); }
+    void discard(const StatisticsReservationKey& key){ inner.control->discard(key); }
+    void accept(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const b8 hardwareReady){
+        inner.control->accept(key, token, hardwareReady);
+    }
+    void complete(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const Span<const u32> counters){
+        inner.control->complete(key, token, counters);
+    }
+    void completeEmpty(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token){
+        inner.control->complete(key, token, {});
+    }
+    void reset(const u16 generation){ inner.control->reset(generation); }
+    [[nodiscard]] Expected<RefractionStatistics> tryGetLatestStatistics(){ return inner.control->tryGetLatestStatistics(); }
+    [[nodiscard]] auto pending(const u32 slot){ return inner.control->pending(slot); }
+};
+
+struct PruneContext : Tests::EcsTestWorld{
+    MeshSystem& meshSystem = world.addSystem<MeshSystem>(world);
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(ReflectionFeedback, ExtentAccountsForTwoSurfaceClassesAndPartialTiles){
-    const Expected<ReflectionFeedbackExtent> partial = TryComputeReflectionFeedbackExtent(9u, 17u);
-    ASSERT_TRUE(partial);
-    EXPECT_EQ(partial->tilesX, 2u);
-    EXPECT_EQ(partial->tilesY, 3u);
-    EXPECT_EQ(partial->entryCount, 12u);
-    EXPECT_EQ(partial->byteCount, 64u);
-    const Expected<ReflectionFeedbackExtent> single = TryComputeReflectionFeedbackExtent(1u, 1u);
-    ASSERT_TRUE(single);
-    EXPECT_EQ(single->byteCount, 24u);
-    EXPECT_FALSE(TryComputeReflectionFeedbackExtent(0u, 1u));
-    EXPECT_FALSE(TryComputeReflectionFeedbackExtent(1u, 0u));
-    EXPECT_FALSE(TryComputeReflectionFeedbackExtent(Limit<u32>::s_Max, 1u));
-    EXPECT_FALSE(TryComputeReflectionFeedbackExtent(Limit<u32>::s_Max, Limit<u32>::s_Max));
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::EcsGraphicsCases{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using ReflectionStatisticsTestHelpers::Stamp;
+using ReflectionStatisticsTestHelpers::Token;
+using QueueSubmissionToken = Core::QueueSubmissionToken;
+namespace CommandQueue = Core::CommandQueue;
+
+using ReflectionFeedbackExtent = Impl::ReflectionFeedbackExtent;
+using ReflectionFeedbackState = Impl::ReflectionFeedbackState;
+using ReflectionFeedbackPlan = Impl::ReflectionFeedbackPlan;
+using ReflectionFeedbackOutcome = Impl::ReflectionFeedbackOutcome;
+using ReflectionFeedbackControl = Impl::ReflectionFeedbackControl;
+using ReflectionFeedbackReservation = Impl::ReflectionFeedbackReservation;
+namespace ReflectionFeedbackResetReason = Impl::ReflectionFeedbackResetReason;
+using Impl::TryComputeReflectionFeedbackExtent;
+using Impl::ResolveReflectionFeedbackOutcome;
+
+using ReflectionHistoryState = Impl::ReflectionHistoryState;
+using ReflectionHistoryPlan = Impl::ReflectionHistoryPlan;
+using ReflectionHistoryOutcome = Impl::ReflectionHistoryOutcome;
+using ReflectionHistoryControl = Impl::ReflectionHistoryControl;
+using ReflectionHistoryReservation = Impl::ReflectionHistoryReservation;
+namespace ReflectionHistoryResetReason = Impl::ReflectionHistoryResetReason;
+using Impl::ResolveReflectionHistoryOutcome;
+
+using ReflectionSceneContentStamp = Impl::ReflectionSceneContentStamp;
+using ReflectionSettings = Impl::ReflectionSettings;
+using ReflectionFrameSnapshot = Impl::ReflectionFrameSnapshot;
+namespace ReflectionTraceMode = Impl::ReflectionTraceMode;
+using ReflectionTraceModeEnum = Impl::ReflectionTraceMode::Enum;
+namespace ReflectionDebugView = Impl::ReflectionDebugView;
+using ReflectionDebugViewEnum = Impl::ReflectionDebugView::Enum;
+using Impl::ValidateReflectionSettings;
+
+using StatisticsReservationKey = Impl::StatisticsReservationKey;
+using ReflectionStatistics = Impl::ReflectionStatistics;
+using RefractionStatistics = Impl::RefractionStatistics;
+using ReflectionPendingEntry = decltype(DeclVal<EcsGraphicsReflectionRefractionDetail::ReflectionStatsContext&>().pending(0u));
+using ReflectionStatsContext = EcsGraphicsReflectionRefractionDetail::ReflectionStatsContext;
+using RefractionStatsContext = EcsGraphicsReflectionRefractionDetail::RefractionStatsContext;
+using ReflectionCounterArray = EcsGraphicsReflectionRefractionDetail::ReflectionCounterArray;
+using RefractionCounterArray = EcsGraphicsReflectionRefractionDetail::RefractionCounterArray;
+using Impl::s_StatisticsReadbackSlotCount;
+using EcsGraphicsReflectionRefractionDetail::MakeSampleReflectionCounters;
+using EcsGraphicsReflectionRefractionDetail::MakeSampleRefractionCounters;
+using EcsGraphicsReflectionRefractionDetail::ExpectRefractionDiagnosticCountersMatch;
+
+using PruneContext = EcsGraphicsReflectionRefractionDetail::PruneContext;
+namespace RenderableMeshResolution = Impl::RenderableMeshResolution;
+using RuntimeMeshRequestSet = Impl::RuntimeMeshRequestSet;
+
+using SceneShadingUploadTracker = Impl::SceneShadingUploadTracker;
+using SceneShadingGpuData = Impl::SceneShadingGpuData;
+using SceneLightSpan = Span<const Impl::SceneLightGpuData>;
+
+using ShadowMaterialContextPolicy = Impl::ShadowMaterialContextPolicy;
+namespace PreparedShadowMaterialContextRoute = Impl::PreparedShadowMaterialContextRoute;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
 }
 
 
-TEST(ReflectionFeedback, SpeculativePlansAndRejectedWriterDoNotAdvanceCadence){
-    ReflectionFeedbackState state(1u);
-    const auto first = state.plan(Stamp(), ReflectionSettings{}, true, 1u);
-    Accept(first, state);
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void ReflectionFeedback_Accept(in ReflectionFeedbackPlan plan, mut ReflectionFeedbackState state){
+    native(in plan, mut state){
+        ReflectionStatisticsTestHelpers::Accept(plan, state);
+    }
+}
+
+void ReflectionFeedback_AcceptWithHardware(in ReflectionFeedbackPlan plan, mut ReflectionFeedbackState state, in b8 hardwareReady){
+    native(in plan, mut state, in hardwareReady){
+        ReflectionStatisticsTestHelpers::Accept(plan, state, hardwareReady);
+    }
+}
+
+void ReflectionHistory_Accept(in ReflectionHistoryPlan plan, mut ReflectionHistoryState state){
+    native(in plan, mut state){
+        ReflectionStatisticsTestHelpers::Accept(plan, state);
+    }
+}
+
+void ReflectionHistory_AcceptWithHardware(in ReflectionHistoryPlan plan, mut ReflectionHistoryState state, in b8 hardwareReady){
+    native(in plan, mut state, in hardwareReady){
+        ReflectionStatisticsTestHelpers::Accept(plan, state, hardwareReady);
+    }
+}
+
+void VerifyReflectionFeedback_ExtentAccountsForTwoSurfaceClassesAndPartialTiles(){
+    const Expected<ReflectionFeedbackExtent> partial = TryComputeReflectionFeedbackExtent(9u, 17u);
+    ASSERT_TRUE(partial.has_value());
+    EXPECT_EQ(partial.value().tilesX, 2u);
+    EXPECT_EQ(partial.value().tilesY, 3u);
+    EXPECT_EQ(partial.value().entryCount, 12u);
+    EXPECT_EQ(partial.value().byteCount, 64u);
+    const Expected<ReflectionFeedbackExtent> single = TryComputeReflectionFeedbackExtent(1u, 1u);
+    ASSERT_TRUE(single.has_value());
+    EXPECT_EQ(single.value().byteCount, 24u);
+    EXPECT_FALSE(TryComputeReflectionFeedbackExtent(0u, 1u).has_value());
+    EXPECT_FALSE(TryComputeReflectionFeedbackExtent(1u, 0u).has_value());
+    EXPECT_FALSE(TryComputeReflectionFeedbackExtent(u32.max, 1u).has_value());
+    EXPECT_FALSE(TryComputeReflectionFeedbackExtent(u32.max, u32.max).has_value());
+}
+
+void VerifyReflectionFeedback_SpeculativePlansAndRejectedWriterDoNotAdvanceCadence(){
+    ReflectionFeedbackState state = ReflectionFeedbackState(1u);
+    const ReflectionFeedbackPlan first = state.plan(Stamp(), ReflectionSettings(), true, 1u);
+    ReflectionFeedback_Accept(first, state);
     for(u32 index = 0u; index < 8u; ++index){
-        const auto rejected = state.plan(Stamp(), ReflectionSettings{}, true, 2u + index);
+        const ReflectionFeedbackPlan rejected = state.plan(Stamp(), ReflectionSettings(), true, 2u + index);
         EXPECT_EQ(rejected.probeIndex, 1u);
         EXPECT_NE(rejected.currentBank, first.currentBank);
         ASSERT_TRUE(state.reserve(rejected));
         state.discard(rejected);
     }
-    const auto retry = state.plan(Stamp(), ReflectionSettings{}, true, 10u);
+    const ReflectionFeedbackPlan retry = state.plan(Stamp(), ReflectionSettings(), true, 10u);
     EXPECT_EQ(retry.probeIndex, 1u);
     EXPECT_EQ(retry.acceptedSequence, first.sequence);
     EXPECT_EQ(retry.previousBank, first.currentBank);
     EXPECT_TRUE(retry.reused);
 }
 
-TEST(ReflectionFeedback, EveryTrustedContentDomainInvalidatesPreviousTileState){
+void VerifyReflectionFeedback_EveryTrustedContentDomainInvalidatesPreviousTileState(){
     for(u32 domain = 0u; domain < 4u; ++domain){
-        ReflectionFeedbackState state(1u);
-        Accept(state.plan(Stamp(), ReflectionSettings{}, true, 1u), state);
-        auto stamp = Stamp();
+        ReflectionFeedbackState state = ReflectionFeedbackState(1u);
+        ReflectionFeedback_Accept(state.plan(Stamp(), ReflectionSettings(), true, 1u), state);
+        ReflectionSceneContentStamp stamp = Stamp();
         if(domain == 0u)
             ++stamp.geometry;
         else if(domain == 1u)
@@ -92,81 +284,97 @@ TEST(ReflectionFeedback, EveryTrustedContentDomainInvalidatesPreviousTileState){
             ++stamp.lighting;
         else
             ++stamp.view;
-        const auto changed = state.plan(stamp, ReflectionSettings{}, true, 2u);
+        const ReflectionFeedbackPlan changed = state.plan(stamp, ReflectionSettings(), true, 2u);
         EXPECT_TRUE(changed.reset);
         EXPECT_FALSE(changed.reused);
         EXPECT_EQ(changed.probeIndex, 0u);
-        EXPECT_EQ(changed.resetReason, domain == 3u ? ReflectionFeedbackResetReason::ViewChanged : ReflectionFeedbackResetReason::SceneChanged);
-        Accept(changed, state);
-        const auto stable = state.plan(stamp, ReflectionSettings{}, true, 3u);
+        if(domain == 3u)
+            EXPECT_EQ(changed.resetReason, ReflectionFeedbackResetReason::ViewChanged);
+        else
+            EXPECT_EQ(changed.resetReason, ReflectionFeedbackResetReason::SceneChanged);
+        ReflectionFeedback_Accept(changed, state);
+        const ReflectionFeedbackPlan stable = state.plan(stamp, ReflectionSettings(), true, 3u);
         EXPECT_FALSE(stable.reset);
         EXPECT_TRUE(stable.reused);
         EXPECT_EQ(stable.probeIndex, 1u);
     }
 }
 
-TEST(ReflectionFeedback, ScreenRangeBudgetAndSeedChangesInvalidateFeedback){
+void VerifyReflectionFeedback_ScreenRangeBudgetAndSeedChangesInvalidateFeedback(){
     for(u32 field = 0u; field < 10u; ++field){
-        ReflectionFeedbackState state(1u);
-        ReflectionSettings settings;
-        Accept(state.plan(Stamp(), settings, true, 1u), state);
-        switch(field){
-        case 0u: ++settings.samplingSeed; break;
-        case 1u: --settings.maxHardwareRaysPerFrame; break;
-        case 2u: --settings.maxOpticalQueries; break;
-        case 3u: settings.maxRayDistance = settings.maxRayDistance + 1.0f; break;
-        case 4u: settings.distanceFadeStart = settings.distanceFadeStart - 1.0f; break;
-        case 5u: settings.roughnessCutoff = settings.roughnessCutoff - 0.1f; break;
-        case 6u: --settings.screenMaxSteps; break;
-        case 7u: settings.screenThickness = settings.screenThickness + 0.01f; break;
-        case 8u: settings.screenConfidenceThreshold = settings.screenConfidenceThreshold - 0.1f; break;
-        case 9u: settings.screenEdgeFade = settings.screenEdgeFade + 0.01f; break;
-        }
-        const auto next = state.plan(Stamp(), settings, true, 2u);
+        ReflectionFeedbackState state = ReflectionFeedbackState(1u);
+        ReflectionSettings settings = ReflectionSettings();
+        ReflectionFeedback_Accept(state.plan(Stamp(), settings, true, 1u), state);
+        if(field == 0u)
+            ++settings.samplingSeed;
+        else if(field == 1u)
+            --settings.maxHardwareRaysPerFrame;
+        else if(field == 2u)
+            --settings.maxOpticalQueries;
+        else if(field == 3u)
+            settings.maxRayDistance = settings.maxRayDistance + 1.0f;
+        else if(field == 4u)
+            settings.distanceFadeStart = settings.distanceFadeStart - 1.0f;
+        else if(field == 5u)
+            settings.roughnessCutoff = settings.roughnessCutoff - 0.1f;
+        else if(field == 6u)
+            --settings.screenMaxSteps;
+        else if(field == 7u)
+            settings.screenThickness = settings.screenThickness + 0.01f;
+        else if(field == 8u)
+            settings.screenConfidenceThreshold = settings.screenConfidenceThreshold - 0.1f;
+        else
+            settings.screenEdgeFade = settings.screenEdgeFade + 0.01f;
+        const ReflectionFeedbackPlan next = state.plan(Stamp(), settings, true, 2u);
         EXPECT_EQ(next.resetReason, ReflectionFeedbackResetReason::SettingsChanged);
         EXPECT_FALSE(next.reused);
         EXPECT_EQ(next.probeIndex, 0u);
     }
 }
 
-TEST(ReflectionFeedback, OnlyTrustedEnabledHybridWithAvailableHardwareCanUseFeedback){
+void VerifyReflectionFeedback_OnlyTrustedEnabledHybridWithAvailableHardwareCanUseFeedback(){
     for(u32 reason = 0u; reason < 7u; ++reason){
-        ReflectionFeedbackState state(1u);
-        auto stamp = Stamp();
-        ReflectionSettings settings;
+        ReflectionFeedbackState state = ReflectionFeedbackState(1u);
+        ReflectionSceneContentStamp stamp = Stamp();
+        ReflectionSettings settings = ReflectionSettings();
         b8 enabled = true;
         b8 hardwareReady = true;
-        switch(reason){
-        case 0u: enabled = false; break;
-        case 1u: stamp.trusted = false; break;
-        case 2u: settings.traceMode = ReflectionTraceMode::Disabled; break;
-        case 3u: settings.traceMode = ReflectionTraceMode::ScreenSpace; break;
-        case 4u: settings.traceMode = ReflectionTraceMode::Hardware; break;
-        case 5u: settings.maxHardwareRaysPerFrame = 0u; break;
-        case 6u: hardwareReady = false; break;
-        }
-        const auto plan = state.plan(stamp, settings, enabled, 1u);
-        const auto outcome = ResolveReflectionFeedbackOutcome(plan, hardwareReady);
+        if(reason == 0u)
+            enabled = false;
+        else if(reason == 1u)
+            stamp.trusted = false;
+        else if(reason == 2u)
+            settings.traceMode = ReflectionTraceMode::Disabled;
+        else if(reason == 3u)
+            settings.traceMode = ReflectionTraceMode::ScreenSpace;
+        else if(reason == 4u)
+            settings.traceMode = ReflectionTraceMode::Hardware;
+        else if(reason == 5u)
+            settings.maxHardwareRaysPerFrame = 0u;
+        else
+            hardwareReady = false;
+        const ReflectionFeedbackPlan plan = state.plan(stamp, settings, enabled, 1u);
+        const ReflectionFeedbackOutcome outcome = ResolveReflectionFeedbackOutcome(plan, hardwareReady);
         EXPECT_FALSE(outcome.eligible);
         EXPECT_FALSE(outcome.reused);
-        Accept(plan, state, hardwareReady);
-        const auto next = state.plan(stamp, settings, enabled, 2u);
+        ReflectionFeedback_AcceptWithHardware(plan, state, hardwareReady);
+        const ReflectionFeedbackPlan next = state.plan(stamp, settings, enabled, 2u);
         EXPECT_EQ(next.probeIndex, 0u);
         EXPECT_FALSE(next.reused);
     }
 }
 
-TEST(ReflectionFeedback, RejectedDisablePreservesAcceptedBankButAcceptedDisableInvalidatesReuse){
-    ReflectionFeedbackState state(1u);
-    const auto first = state.plan(Stamp(), ReflectionSettings{}, true, 1u);
-    Accept(first, state);
-    const auto disabled = state.plan(Stamp(), ReflectionSettings{}, false, 2u);
+void VerifyReflectionFeedback_RejectedDisablePreservesAcceptedBankButAcceptedDisableInvalidatesReuse(){
+    ReflectionFeedbackState state = ReflectionFeedbackState(1u);
+    const ReflectionFeedbackPlan first = state.plan(Stamp(), ReflectionSettings(), true, 1u);
+    ReflectionFeedback_Accept(first, state);
+    const ReflectionFeedbackPlan disabled = state.plan(Stamp(), ReflectionSettings(), false, 2u);
     EXPECT_NE(disabled.currentBank, first.currentBank);
     ASSERT_TRUE(state.reserve(disabled));
     state.discard(disabled);
-    EXPECT_TRUE(state.plan(Stamp(), ReflectionSettings{}, true, 3u).reused);
-    Accept(state.plan(Stamp(), ReflectionSettings{}, false, 4u), state);
-    const auto enabled = state.plan(Stamp(), ReflectionSettings{}, true, 5u);
+    EXPECT_TRUE(state.plan(Stamp(), ReflectionSettings(), true, 3u).reused);
+    ReflectionFeedback_Accept(state.plan(Stamp(), ReflectionSettings(), false, 4u), state);
+    const ReflectionFeedbackPlan enabled = state.plan(Stamp(), ReflectionSettings(), true, 5u);
     EXPECT_FALSE(enabled.reused);
     EXPECT_TRUE(enabled.reset);
     EXPECT_EQ(enabled.probeIndex, 0u);
@@ -174,66 +382,70 @@ TEST(ReflectionFeedback, RejectedDisablePreservesAcceptedBankButAcceptedDisableI
     EXPECT_NE(enabled.currentBank, first.currentBank);
 }
 
-TEST(ReflectionFeedback, RejectedUntrustedPrefixPreservesAcceptedFeedback){
-    ReflectionFeedbackState state(1u);
-    const auto first = state.plan(Stamp(), ReflectionSettings{}, true, 1u);
-    Accept(first, state);
-    auto untrusted = Stamp();
+void VerifyReflectionFeedback_RejectedUntrustedPrefixPreservesAcceptedFeedback(){
+    ReflectionFeedbackState state = ReflectionFeedbackState(1u);
+    const ReflectionFeedbackPlan first = state.plan(Stamp(), ReflectionSettings(), true, 1u);
+    ReflectionFeedback_Accept(first, state);
+    ReflectionSceneContentStamp untrusted = Stamp();
     untrusted.trusted = false;
-    const auto rejected = state.plan(untrusted, ReflectionSettings{}, true, 2u);
+    const ReflectionFeedbackPlan rejected = state.plan(untrusted, ReflectionSettings(), true, 2u);
     EXPECT_FALSE(rejected.eligible);
     EXPECT_NE(rejected.currentBank, first.currentBank);
     ASSERT_TRUE(state.reserve(rejected));
     state.discard(rejected);
-    EXPECT_TRUE(state.plan(Stamp(), ReflectionSettings{}, true, 3u).reused);
-    Accept(state.plan(untrusted, ReflectionSettings{}, true, 4u), state);
-    EXPECT_FALSE(state.plan(Stamp(), ReflectionSettings{}, true, 5u).reused);
+    EXPECT_TRUE(state.plan(Stamp(), ReflectionSettings(), true, 3u).reused);
+    ReflectionFeedback_Accept(state.plan(untrusted, ReflectionSettings(), true, 4u), state);
+    EXPECT_FALSE(state.plan(Stamp(), ReflectionSettings(), true, 5u).reused);
 }
 
-TEST(ReflectionFeedback, LateHardwareFailureDisablesBypassAndRecoveryRestartsObservation){
-    ReflectionFeedbackState state(1u);
-    const auto first = state.plan(Stamp(), ReflectionSettings{}, true, 1u);
-    Accept(first, state);
-    const auto failed = state.plan(Stamp(), ReflectionSettings{}, true, 2u);
+void VerifyReflectionFeedback_LateHardwareFailureDisablesBypassAndRecoveryRestartsObservation(){
+    ReflectionFeedbackState state = ReflectionFeedbackState(1u);
+    const ReflectionFeedbackPlan first = state.plan(Stamp(), ReflectionSettings(), true, 1u);
+    ReflectionFeedback_Accept(first, state);
+    const ReflectionFeedbackPlan failed = state.plan(Stamp(), ReflectionSettings(), true, 2u);
     ASSERT_TRUE(failed.reused);
-    const auto outcome = ResolveReflectionFeedbackOutcome(failed, false);
+    const ReflectionFeedbackOutcome outcome = ResolveReflectionFeedbackOutcome(failed, false);
     EXPECT_FALSE(outcome.eligible);
     EXPECT_FALSE(outcome.reused);
     EXPECT_EQ(outcome.resetReason, ReflectionFeedbackResetReason::HardwareChanged);
     EXPECT_EQ(outcome.probeIndex, 0u);
     EXPECT_EQ(outcome.epoch, first.epoch + 1u);
     EXPECT_EQ(outcome.startGraphicsFrame, 2u);
-    Accept(failed, state, false);
-    const auto recovery = state.plan(Stamp(), ReflectionSettings{}, true, 3u);
-    const auto recovered = ResolveReflectionFeedbackOutcome(recovery, true);
+    ReflectionFeedback_AcceptWithHardware(failed, state, false);
+    const ReflectionFeedbackPlan recovery = state.plan(Stamp(), ReflectionSettings(), true, 3u);
+    const ReflectionFeedbackOutcome recovered = ResolveReflectionFeedbackOutcome(recovery, true);
     EXPECT_TRUE(recovered.eligible);
     EXPECT_FALSE(recovered.reused);
     EXPECT_EQ(recovered.probeIndex, 0u);
     EXPECT_EQ(recovered.resetReason, ReflectionFeedbackResetReason::HardwareChanged);
     EXPECT_EQ(recovered.startGraphicsFrame, 3u);
     EXPECT_EQ(recovery.previousBank, first.currentBank);
-    Accept(recovery, state);
-    EXPECT_TRUE(state.plan(Stamp(), ReflectionSettings{}, true, 4u).reused);
+    ReflectionFeedback_Accept(recovery, state);
+    EXPECT_TRUE(state.plan(Stamp(), ReflectionSettings(), true, 4u).reused);
 }
 
-TEST(ReflectionFeedback, InvalidAcceptedTokensQuarantineBankReuseUntilJoinedOwnerReset){
+void VerifyReflectionFeedback_InvalidAcceptedTokensQuarantineBankReuseUntilJoinedOwnerReset(){
     for(u32 invalid = 0u; invalid < 6u; ++invalid){
-        ReflectionFeedbackState state(1u);
-        const auto first = state.plan(Stamp(), ReflectionSettings{}, true, 1u);
-        Accept(first, state);
-        const auto plan = state.plan(Stamp(), ReflectionSettings{}, true, 2u + invalid);
+        ReflectionFeedbackState state = ReflectionFeedbackState(1u);
+        const ReflectionFeedbackPlan first = state.plan(Stamp(), ReflectionSettings(), true, 1u);
+        ReflectionFeedback_Accept(first, state);
+        const ReflectionFeedbackPlan plan = state.plan(Stamp(), ReflectionSettings(), true, 2u + invalid);
         ASSERT_TRUE(state.reserve(plan));
-        auto token = Token(plan.sequence);
-        switch(invalid){
-        case 0u: token.value = 0u; break;
-        case 1u: token.physicalQueueIndex = Limit<u16>::s_Max; break;
-        case 2u: token.deviceGeneration = 2u; break;
-        case 3u: token.queue = Core::CommandQueue::Compute; break;
-        case 4u: token.value = first.sequence; break;
-        case 5u: token.physicalQueueIndex = 1u; break;
-        }
+        QueueSubmissionToken token = Token(plan.sequence);
+        if(invalid == 0u)
+            token.value = 0u;
+        else if(invalid == 1u)
+            token.physicalQueueIndex = u16.max;
+        else if(invalid == 2u)
+            token.deviceGeneration = 2u;
+        else if(invalid == 3u)
+            token.queue = CommandQueue::Compute;
+        else if(invalid == 4u)
+            token.value = first.sequence;
+        else
+            token.physicalQueueIndex = 1u;
         EXPECT_FALSE(state.accept(plan, token, true));
-        const auto retry = state.plan(Stamp(), ReflectionSettings{}, true, 20u + invalid);
+        const ReflectionFeedbackPlan retry = state.plan(Stamp(), ReflectionSettings(), true, 20u + invalid);
         EXPECT_EQ(retry.acceptedSequence, first.sequence);
         EXPECT_TRUE(retry.quarantined);
         EXPECT_FALSE(retry.eligible);
@@ -241,10 +453,10 @@ TEST(ReflectionFeedback, InvalidAcceptedTokensQuarantineBankReuseUntilJoinedOwne
         EXPECT_EQ(retry.resetReason, ReflectionFeedbackResetReason::InvalidAcceptance);
         EXPECT_FALSE(state.reserve(retry));
         state.discard(plan);
-        EXPECT_TRUE(state.plan(Stamp(), ReflectionSettings{}, true, 30u + invalid).quarantined);
+        EXPECT_TRUE(state.plan(Stamp(), ReflectionSettings(), true, 30u + invalid).quarantined);
         // Reset models the renderer's explicit join/discard boundary, not an ordinary rejected frame.
         state.reset(1u);
-        const auto reset = state.plan(Stamp(), ReflectionSettings{}, true, 40u + invalid);
+        const ReflectionFeedbackPlan reset = state.plan(Stamp(), ReflectionSettings(), true, 40u + invalid);
         EXPECT_FALSE(reset.quarantined);
         EXPECT_EQ(reset.probeIndex, 0u);
         EXPECT_EQ(reset.resetReason, ReflectionFeedbackResetReason::ResourcesChanged);
@@ -253,223 +465,189 @@ TEST(ReflectionFeedback, InvalidAcceptedTokensQuarantineBankReuseUntilJoinedOwne
     }
 }
 
-TEST(ReflectionFeedback, StalePlanCannotReserveAfterAnIndependentPlanAccepts){
-    ReflectionFeedbackState state(1u);
-    const auto stale = state.plan(Stamp(), ReflectionSettings{}, true, 1u);
-    const auto current = state.plan(Stamp(), ReflectionSettings{}, true, 2u);
-    Accept(current, state);
+void VerifyReflectionFeedback_StalePlanCannotReserveAfterAnIndependentPlanAccepts(){
+    ReflectionFeedbackState state = ReflectionFeedbackState(1u);
+    const ReflectionFeedbackPlan stale = state.plan(Stamp(), ReflectionSettings(), true, 1u);
+    const ReflectionFeedbackPlan current = state.plan(Stamp(), ReflectionSettings(), true, 2u);
+    ReflectionFeedback_Accept(current, state);
     EXPECT_FALSE(state.reserve(stale));
     EXPECT_FALSE(state.accept(stale, Token(99u), true));
     state.discard(stale);
-    EXPECT_EQ(state.plan(Stamp(), ReflectionSettings{}, true, 3u).acceptedSequence, current.sequence);
+    EXPECT_EQ(state.plan(Stamp(), ReflectionSettings(), true, 3u).acceptedSequence, current.sequence);
 }
 
-TEST(ReflectionFeedback, ResourceGenerationBlocksOldCallbacksWithoutDiscardingTheNewLease){
-    ReflectionFeedbackState state(1u);
-    const auto old = state.plan(Stamp(), ReflectionSettings{}, true, 1u);
+void VerifyReflectionFeedback_ResourceGenerationBlocksOldCallbacksWithoutDiscardingTheNewLease(){
+    ReflectionFeedbackState state = ReflectionFeedbackState(1u);
+    const ReflectionFeedbackPlan old = state.plan(Stamp(), ReflectionSettings(), true, 1u);
     ASSERT_TRUE(state.reserve(old));
     state.reset(2u);
-    const auto next = state.plan(Stamp(), ReflectionSettings{}, true, 2u);
+    const ReflectionFeedbackPlan next = state.plan(Stamp(), ReflectionSettings(), true, 2u);
     EXPECT_GT(next.generation, old.generation);
     EXPECT_EQ(next.resetReason, ReflectionFeedbackResetReason::ResourcesChanged);
     ASSERT_TRUE(state.reserve(next));
     state.discard(old);
     EXPECT_FALSE(state.accept(old, Token(1u), true));
-    auto token = Token(1u);
+    QueueSubmissionToken token = Token(1u);
     token.deviceGeneration = 2u;
     EXPECT_TRUE(state.accept(next, token, true));
-    EXPECT_TRUE(state.plan(Stamp(), ReflectionSettings{}, true, 3u).reused);
+    EXPECT_TRUE(state.plan(Stamp(), ReflectionSettings(), true, 3u).reused);
 }
 
-TEST(ReflectionFeedback, RejectedGraphAndResetReleaseTheMoveOnlyReservation){
-    Core::Alloc::GlobalArena arena{Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsReflectionFeedbackGraph)};
-    auto controlResult = CreateStatisticsControl<ReflectionFeedbackControl>(arena, 1u);
-    ASSERT_TRUE(controlResult);
-    auto control = Move(*controlResult);
-    Core::GpuTaskGraph graph(arena);
-    const auto rejected = control->plan(Stamp(), ReflectionSettings{}, true, 1u);
-    EXPECT_FALSE(graph.addTask<LeaseTask>(Core::GpuTaskDesc{}, LeaseTask::Payload{ReflectionFeedbackReservation(control, rejected)}).has_value());
-    Core::GpuTaskDesc desc;
-    desc.setIdentity(Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsFeedbackLease)).setMarkerLabel("Feedback Lease");
-    const auto pending = control->plan(Stamp(), ReflectionSettings{}, true, 2u);
-    {
-        const auto gpuTaskAdmission = graph.addTask<LeaseTask>(desc, LeaseTask::Payload{ReflectionFeedbackReservation(control, pending)});
-        ASSERT_TRUE(gpuTaskAdmission);
-        ASSERT_TRUE(gpuTaskAdmission->valid());
+void VerifyReflectionFeedback_RejectedGraphAndResetReleaseTheMoveOnlyReservation(){
+    native{
+        using LeaseTask = ReflectionStatisticsTestHelpers::ReservationLeaseTask<ReflectionFeedbackReservation>;
+        Core::Alloc::GlobalArena arena{ Name(s_EcsCaseTestsReflectionFeedbackGraph) };
+        auto controlResult = Impl::CreateStatisticsControl<ReflectionFeedbackControl>(arena, 1u);
+        ASSERT_TRUE(controlResult);
+        auto control = Move(*controlResult);
+        Core::GpuTaskGraph graph(arena);
+        const auto rejected = control->plan(Stamp(), ReflectionSettings{}, true, 1u);
+        EXPECT_FALSE(graph.addTask<LeaseTask>(Core::GpuTaskDesc{}, LeaseTask::Payload{ ReflectionFeedbackReservation(control, rejected) }).has_value());
+        Core::GpuTaskDesc desc;
+        desc.setIdentity(Name(s_EcsCaseTestsFeedbackLease)).setMarkerLabel("Feedback Lease");
+        const auto pending = control->plan(Stamp(), ReflectionSettings{}, true, 2u);
+        {
+            const auto gpuTaskAdmission = graph.addTask<LeaseTask>(desc, LeaseTask::Payload{ ReflectionFeedbackReservation(control, pending) });
+            ASSERT_TRUE(gpuTaskAdmission);
+            ASSERT_TRUE(gpuTaskAdmission->valid());
+        }
+        graph.reset();
+        const auto retry = control->plan(Stamp(), ReflectionSettings{}, true, 3u);
+        ASSERT_TRUE(control->reserve(retry));
+        EXPECT_EQ(retry.probeIndex, 0u);
+        control->discard(retry);
     }
-    graph.reset();
-    const auto retry = control->plan(Stamp(), ReflectionSettings{}, true, 3u);
-    ASSERT_TRUE(control->reserve(retry));
-    EXPECT_EQ(retry.probeIndex, 0u);
-    control->discard(retry);
 }
 
-TEST(ReflectionFeedback, MovedLeasePublishesOnceAndInvalidAcceptanceRetainsQuarantineAfterDestruction){
-    Core::Alloc::GlobalArena arena{Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsReflectionFeedbackMove)};
-    auto controlResult = CreateStatisticsControl<ReflectionFeedbackControl>(arena, 1u);
-    ASSERT_TRUE(controlResult);
-    auto control = Move(*controlResult);
-    const auto first = control->plan(Stamp(), ReflectionSettings{}, true, 1u);
-    ReflectionFeedbackReservation original(control, first);
-    ASSERT_TRUE(original.valid());
-    ReflectionFeedbackReservation moved(Move(original));
-    EXPECT_FALSE(original.valid());
-    EXPECT_TRUE(moved.valid());
-    moved.accept(Token(first.sequence), true);
-    EXPECT_FALSE(moved.valid());
-    moved.accept(Token(99u), true);
-    const auto retry = control->plan(Stamp(), ReflectionSettings{}, true, 2u);
-    EXPECT_EQ(retry.probeIndex, 1u);
-    {
-        ReflectionFeedbackReservation accepted(control, retry);
-        ASSERT_TRUE(accepted.valid());
-        accepted.accept({}, true);
+void VerifyReflectionFeedback_MovedLeasePublishesOnceAndInvalidAcceptanceRetainsQuarantineAfterDestruction(){
+    native{
+        Core::Alloc::GlobalArena arena{ Name(s_EcsCaseTestsReflectionFeedbackMove) };
+        auto controlResult = Impl::CreateStatisticsControl<ReflectionFeedbackControl>(arena, 1u);
+        ASSERT_TRUE(controlResult);
+        auto control = Move(*controlResult);
+        const auto first = control->plan(Stamp(), ReflectionSettings{}, true, 1u);
+        ReflectionFeedbackReservation original(control, first);
+        ASSERT_TRUE(original.valid());
+        ReflectionFeedbackReservation moved(Move(original));
+        EXPECT_FALSE(original.valid());
+        EXPECT_TRUE(moved.valid());
+        moved.accept(Token(first.sequence), true);
+        EXPECT_FALSE(moved.valid());
+        moved.accept(Token(99u), true);
+        const auto retry = control->plan(Stamp(), ReflectionSettings{}, true, 2u);
+        EXPECT_EQ(retry.probeIndex, 1u);
+        {
+            ReflectionFeedbackReservation accepted(control, retry);
+            ASSERT_TRUE(accepted.valid());
+            accepted.accept({}, true);
+        }
+        const auto quarantined = control->plan(Stamp(), ReflectionSettings{}, true, 3u);
+        EXPECT_TRUE(quarantined.quarantined);
+        ReflectionFeedbackReservation blocked(control, quarantined);
+        EXPECT_FALSE(blocked.valid());
     }
-    const auto quarantined = control->plan(Stamp(), ReflectionSettings{}, true, 3u);
-    EXPECT_TRUE(quarantined.quarantined);
-    ReflectionFeedbackReservation blocked(control, quarantined);
-    EXPECT_FALSE(blocked.valid());
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ecs_graphics/name_cases.adhd.h>
-
-#include <impl/ecs_render/reflection/history.adhd.h>
-
-#include <core/alloc/general.h>
-#include <core/task/gpu/task_graph.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_reflection_history_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using ReflectionStatisticsTestHelpers::Accept;
-using ReflectionStatisticsTestHelpers::Stamp;
-using ReflectionStatisticsTestHelpers::Token;
-using LeaseTask = ReflectionStatisticsTestHelpers::ReservationLeaseTask<ReflectionHistoryReservation>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(ReflectionHistory, AcceptedSampleCountCapsWhileSamplingIndexContinues){
-    ReflectionHistoryState state(1u);
-    ReflectionSettings settings;
+void VerifyReflectionHistory_AcceptedSampleCountCapsWhileSamplingIndexContinues(){
+    ReflectionHistoryState state = ReflectionHistoryState(1u);
+    ReflectionSettings settings = ReflectionSettings();
     settings.temporalMaxSamples = 8u;
     for(u32 index = 0u; index < 40u; ++index){
-        const auto plan = state.plan(Stamp(), settings, 100u + index);
-        const auto outcome = ResolveReflectionHistoryOutcome(plan, true);
+        const ReflectionHistoryPlan plan = state.plan(Stamp(), settings, 100u + index);
+        const ReflectionHistoryOutcome outcome = ResolveReflectionHistoryOutcome(plan, true);
         EXPECT_EQ(outcome.sampleIndex, index);
         EXPECT_EQ(outcome.sampleCount, Min(index + 1u, 8u));
         EXPECT_EQ(outcome.historyStartGraphicsFrame, 100u);
-        Accept(plan, state);
+        ReflectionHistory_Accept(plan, state);
     }
 }
 
-TEST(ReflectionHistory, SingleSampleLimitStillPublishesBanksAndAdvancesAcceptedSampling){
-    Core::Alloc::GlobalArena arena{Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsReflectionSingleSampleHistory)};
-    auto controlResult = CreateStatisticsControl<ReflectionHistoryControl>(arena, 1u);
-    ASSERT_TRUE(controlResult);
-    auto control = Move(*controlResult);
-    ReflectionSettings settings;
-    settings.temporalMaxSamples = 1u;
-    u64 epoch = 0u;
-    for(u32 index = 0u; index < 4u; ++index){
-        const auto plan = control->plan(Stamp(), settings, 100u + index);
-        const auto outcome = ResolveReflectionHistoryOutcome(plan, true);
-        EXPECT_TRUE(outcome.eligible);
-        EXPECT_EQ(outcome.reused, index != 0u);
-        EXPECT_EQ(outcome.sampleCount, 1u);
-        EXPECT_EQ(outcome.sampleIndex, index);
-        EXPECT_EQ(plan.currentBank, index & 1u);
-        EXPECT_EQ(outcome.historyStartGraphicsFrame, 100u);
-        if(index == 0u)
-            epoch = outcome.epoch;
-        EXPECT_EQ(outcome.epoch, epoch);
-        ReflectionHistoryReservation reservation(control, plan);
-        ASSERT_TRUE(reservation.valid());
-        reservation.accept(Token(plan.sequence), true);
-        const auto next = control->plan(Stamp(), settings, 101u + index);
-        EXPECT_EQ(next.acceptedSequence, plan.sequence);
-        EXPECT_EQ(next.previousBank, plan.currentBank);
-        EXPECT_EQ(next.previousSampleCount, 1u);
-        EXPECT_EQ(next.sampleIndex, index + 1u);
+void VerifyReflectionHistory_SingleSampleLimitStillPublishesBanksAndAdvancesAcceptedSampling(){
+    native{
+        Core::Alloc::GlobalArena arena{ Name(s_EcsCaseTestsReflectionSingleSampleHistory) };
+        auto controlResult = Impl::CreateStatisticsControl<ReflectionHistoryControl>(arena, 1u);
+        ASSERT_TRUE(controlResult);
+        auto control = Move(*controlResult);
+        ReflectionSettings settings;
+        settings.temporalMaxSamples = 1u;
+        u64 epoch = 0u;
+        for(u32 index = 0u; index < 4u; ++index){
+            const auto plan = control->plan(Stamp(), settings, 100u + index);
+            const auto outcome = ResolveReflectionHistoryOutcome(plan, true);
+            EXPECT_TRUE(outcome.eligible);
+            EXPECT_EQ(outcome.reused, index != 0u);
+            EXPECT_EQ(outcome.sampleCount, 1u);
+            EXPECT_EQ(outcome.sampleIndex, index);
+            EXPECT_EQ(plan.currentBank, index & 1u);
+            EXPECT_EQ(outcome.historyStartGraphicsFrame, 100u);
+            if(index == 0u)
+                epoch = outcome.epoch;
+            EXPECT_EQ(outcome.epoch, epoch);
+            ReflectionHistoryReservation reservation(control, plan);
+            ASSERT_TRUE(reservation.valid());
+            reservation.accept(Token(plan.sequence), true);
+            const auto next = control->plan(Stamp(), settings, 101u + index);
+            EXPECT_EQ(next.acceptedSequence, plan.sequence);
+            EXPECT_EQ(next.previousBank, plan.currentBank);
+            EXPECT_EQ(next.previousSampleCount, 1u);
+            EXPECT_EQ(next.sampleIndex, index + 1u);
+        }
     }
 }
 
-TEST(ReflectionHistory, DiscardedLateHardwareResetKeepsHistoryUntilAnAcceptedRetry){
-    Core::Alloc::GlobalArena arena{Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsReflectionLateResetHistory)};
-    auto controlResult = CreateStatisticsControl<ReflectionHistoryControl>(arena, 1u);
-    ASSERT_TRUE(controlResult);
-    auto control = Move(*controlResult);
-    const ReflectionSettings settings;
-    const auto first = control->plan(Stamp(), settings, 10u);
-    ReflectionHistoryReservation initial(control, first);
-    ASSERT_TRUE(initial.valid());
-    initial.accept(Token(first.sequence), true);
+void VerifyReflectionHistory_DiscardedLateHardwareResetKeepsHistoryUntilAnAcceptedRetry(){
+    native{
+        Core::Alloc::GlobalArena arena{ Name(s_EcsCaseTestsReflectionLateResetHistory) };
+        auto controlResult = Impl::CreateStatisticsControl<ReflectionHistoryControl>(arena, 1u);
+        ASSERT_TRUE(controlResult);
+        auto control = Move(*controlResult);
+        const ReflectionSettings settings;
+        const auto first = control->plan(Stamp(), settings, 10u);
+        ReflectionHistoryReservation initial(control, first);
+        ASSERT_TRUE(initial.valid());
+        initial.accept(Token(first.sequence), true);
 
-    const auto rejected = control->plan(Stamp(), settings, 11u);
-    ASSERT_TRUE(rejected.reused);
-    const auto lateReset = ResolveReflectionHistoryOutcome(rejected, false);
-    EXPECT_EQ(lateReset.resetReason, ReflectionHistoryResetReason::HardwareChanged);
-    EXPECT_FALSE(lateReset.reused);
-    EXPECT_EQ(lateReset.sampleIndex, 0u);
-    EXPECT_EQ(lateReset.sampleCount, 1u);
-    ReflectionHistoryReservation abandoned(control, rejected);
-    ASSERT_TRUE(abandoned.valid());
-    abandoned.discard();
-    const auto retry = control->plan(Stamp(), settings, 12u);
-    EXPECT_EQ(retry.acceptedSequence, first.sequence);
-    EXPECT_EQ(retry.epoch, rejected.epoch);
-    EXPECT_EQ(retry.currentBank, rejected.currentBank);
-    EXPECT_EQ(retry.previousBank, first.currentBank);
-    const auto restoredReady = ResolveReflectionHistoryOutcome(retry, true);
-    EXPECT_TRUE(restoredReady.reused);
-    EXPECT_FALSE(restoredReady.reset);
-    EXPECT_EQ(restoredReady.sampleIndex, 1u);
+        const auto rejected = control->plan(Stamp(), settings, 11u);
+        ASSERT_TRUE(rejected.reused);
+        const auto lateReset = ResolveReflectionHistoryOutcome(rejected, false);
+        EXPECT_EQ(lateReset.resetReason, ReflectionHistoryResetReason::HardwareChanged);
+        EXPECT_FALSE(lateReset.reused);
+        EXPECT_EQ(lateReset.sampleIndex, 0u);
+        EXPECT_EQ(lateReset.sampleCount, 1u);
+        ReflectionHistoryReservation abandoned(control, rejected);
+        ASSERT_TRUE(abandoned.valid());
+        abandoned.discard();
+        const auto retry = control->plan(Stamp(), settings, 12u);
+        EXPECT_EQ(retry.acceptedSequence, first.sequence);
+        EXPECT_EQ(retry.epoch, rejected.epoch);
+        EXPECT_EQ(retry.currentBank, rejected.currentBank);
+        EXPECT_EQ(retry.previousBank, first.currentBank);
+        const auto restoredReady = ResolveReflectionHistoryOutcome(retry, true);
+        EXPECT_TRUE(restoredReady.reused);
+        EXPECT_FALSE(restoredReady.reset);
+        EXPECT_EQ(restoredReady.sampleIndex, 1u);
 
-    ReflectionHistoryReservation accepted(control, retry);
-    ASSERT_TRUE(accepted.valid());
-    accepted.accept(Token(retry.sequence), false);
-    const auto next = control->plan(Stamp(), settings, 13u);
-    const auto stable = ResolveReflectionHistoryOutcome(next, false);
-    EXPECT_EQ(next.acceptedSequence, retry.sequence);
-    EXPECT_EQ(next.previousBank, retry.currentBank);
-    EXPECT_EQ(stable.epoch, lateReset.epoch);
-    EXPECT_EQ(stable.sampleIndex, 1u);
-    EXPECT_EQ(stable.sampleCount, 2u);
-    EXPECT_EQ(stable.historyStartGraphicsFrame, 12u);
-    EXPECT_TRUE(stable.reused);
-    EXPECT_FALSE(stable.reset);
+        ReflectionHistoryReservation accepted(control, retry);
+        ASSERT_TRUE(accepted.valid());
+        accepted.accept(Token(retry.sequence), false);
+        const auto next = control->plan(Stamp(), settings, 13u);
+        const auto stable = ResolveReflectionHistoryOutcome(next, false);
+        EXPECT_EQ(next.acceptedSequence, retry.sequence);
+        EXPECT_EQ(next.previousBank, retry.currentBank);
+        EXPECT_EQ(stable.epoch, lateReset.epoch);
+        EXPECT_EQ(stable.sampleIndex, 1u);
+        EXPECT_EQ(stable.sampleCount, 2u);
+        EXPECT_EQ(stable.historyStartGraphicsFrame, 12u);
+        EXPECT_TRUE(stable.reused);
+        EXPECT_FALSE(stable.reset);
+    }
 }
 
-TEST(ReflectionHistory, EverySceneDomainAndViewChangeResetsOnce){
+void VerifyReflectionHistory_EverySceneDomainAndViewChangeResetsOnce(){
     for(u32 domain = 0u; domain < 4u; ++domain){
-        ReflectionHistoryState state(1u);
-        Accept(state.plan(Stamp(), ReflectionSettings{}, 10u), state);
-        auto stamp = Stamp();
+        ReflectionHistoryState state = ReflectionHistoryState(1u);
+        ReflectionHistory_Accept(state.plan(Stamp(), ReflectionSettings(), 10u), state);
+        ReflectionSceneContentStamp stamp = Stamp();
         if(domain == 0u)
             ++stamp.geometry;
         else if(domain == 1u)
@@ -478,13 +656,16 @@ TEST(ReflectionHistory, EverySceneDomainAndViewChangeResetsOnce){
             ++stamp.lighting;
         else
             ++stamp.view;
-        const auto changed = state.plan(stamp, ReflectionSettings{}, 11u);
+        const ReflectionHistoryPlan changed = state.plan(stamp, ReflectionSettings(), 11u);
         EXPECT_TRUE(changed.reset);
         EXPECT_EQ(changed.sampleIndex, 0u);
         EXPECT_FALSE(changed.reused);
-        EXPECT_EQ(changed.resetReason, domain == 3u ? ReflectionHistoryResetReason::ViewChanged : ReflectionHistoryResetReason::SceneChanged);
-        Accept(changed, state);
-        const auto next = state.plan(stamp, ReflectionSettings{}, 12u);
+        if(domain == 3u)
+            EXPECT_EQ(changed.resetReason, ReflectionHistoryResetReason::ViewChanged);
+        else
+            EXPECT_EQ(changed.resetReason, ReflectionHistoryResetReason::SceneChanged);
+        ReflectionHistory_Accept(changed, state);
+        const ReflectionHistoryPlan next = state.plan(stamp, ReflectionSettings(), 12u);
         EXPECT_FALSE(next.reset);
         EXPECT_EQ(next.sampleIndex, 1u);
         EXPECT_EQ(next.epoch, changed.epoch);
@@ -492,81 +673,81 @@ TEST(ReflectionHistory, EverySceneDomainAndViewChangeResetsOnce){
     }
 }
 
-TEST(ReflectionHistory, SeedAndBudgetChangesRestartTheSamplingSequence){
-    ReflectionHistoryState state(1u);
-    ReflectionSettings settings;
-    Accept(state.plan(Stamp(), settings, 1u), state);
+void VerifyReflectionHistory_SeedAndBudgetChangesRestartTheSamplingSequence(){
+    ReflectionHistoryState state = ReflectionHistoryState(1u);
+    ReflectionSettings settings = ReflectionSettings();
+    ReflectionHistory_Accept(state.plan(Stamp(), settings, 1u), state);
     ++settings.samplingSeed;
-    const auto seed = state.plan(Stamp(), settings, 2u);
+    const ReflectionHistoryPlan seed = state.plan(Stamp(), settings, 2u);
     EXPECT_EQ(seed.resetReason, ReflectionHistoryResetReason::SettingsChanged);
     EXPECT_EQ(seed.sampleIndex, 0u);
-    Accept(seed, state);
+    ReflectionHistory_Accept(seed, state);
     settings.maxHardwareRaysPerFrame = 0u;
-    const auto budget = state.plan(Stamp(), settings, 3u);
+    const ReflectionHistoryPlan budget = state.plan(Stamp(), settings, 3u);
     EXPECT_EQ(budget.resetReason, ReflectionHistoryResetReason::SettingsChanged);
     EXPECT_EQ(budget.sampleIndex, 0u);
-    Accept(budget, state);
+    ReflectionHistory_Accept(budget, state);
     --settings.maxOpticalQueries;
-    const auto queries = state.plan(Stamp(), settings, 4u);
+    const ReflectionHistoryPlan queries = state.plan(Stamp(), settings, 4u);
     EXPECT_EQ(queries.resetReason, ReflectionHistoryResetReason::SettingsChanged);
     EXPECT_EQ(queries.sampleIndex, 0u);
 }
 
-TEST(ReflectionHistory, SpatialAndDiagnosticSettingsDoNotResetUnfilteredHistory){
-    ReflectionHistoryState state(1u);
-    ReflectionSettings settings;
-    Accept(state.plan(Stamp(), settings, 1u), state);
+void VerifyReflectionHistory_SpatialAndDiagnosticSettingsDoNotResetUnfilteredHistory(){
+    ReflectionHistoryState state = ReflectionHistoryState(1u);
+    ReflectionSettings settings = ReflectionSettings();
+    ReflectionHistory_Accept(state.plan(Stamp(), settings, 1u), state);
     settings.spatialFilterEnabled = false;
     settings.spatialRadius = 3u;
     settings.diagnosticsEnabled = true;
     settings.debugView = ReflectionDebugView::TraceSource;
-    const auto next = state.plan(Stamp(), settings, 2u);
+    const ReflectionHistoryPlan next = state.plan(Stamp(), settings, 2u);
     EXPECT_TRUE(next.reused);
     EXPECT_FALSE(next.reset);
     EXPECT_EQ(next.resetReason, ReflectionHistoryResetReason::None);
 }
 
-TEST(ReflectionHistory, RejectedDisabledTransitionCannotOverwriteAcceptedHistoryBank){
-    ReflectionHistoryState state(1u);
-    ReflectionSettings settings;
-    const auto first = state.plan(Stamp(), settings, 1u);
-    Accept(first, state);
+void VerifyReflectionHistory_RejectedDisabledTransitionCannotOverwriteAcceptedHistoryBank(){
+    ReflectionHistoryState state = ReflectionHistoryState(1u);
+    ReflectionSettings settings = ReflectionSettings();
+    const ReflectionHistoryPlan first = state.plan(Stamp(), settings, 1u);
+    ReflectionHistory_Accept(first, state);
     settings.temporalEnabled = false;
-    const auto disabled = state.plan(Stamp(), settings, 2u);
+    const ReflectionHistoryPlan disabled = state.plan(Stamp(), settings, 2u);
     EXPECT_FALSE(disabled.eligible);
     EXPECT_NE(disabled.currentBank, first.currentBank);
     ASSERT_TRUE(state.reserve(disabled));
     state.discard(disabled);
     settings.temporalEnabled = true;
-    const auto retry = state.plan(Stamp(), settings, 3u);
+    const ReflectionHistoryPlan retry = state.plan(Stamp(), settings, 3u);
     EXPECT_TRUE(retry.reused);
     EXPECT_EQ(retry.previousBank, first.currentBank);
     EXPECT_EQ(retry.previousSampleCount, 1u);
 }
 
-TEST(ReflectionHistory, RejectedUntrustedTransitionCannotOverwriteAcceptedHistoryBank){
-    ReflectionHistoryState state(1u);
-    const auto first = state.plan(Stamp(), ReflectionSettings{}, 1u);
-    Accept(first, state);
-    auto stamp = Stamp();
+void VerifyReflectionHistory_RejectedUntrustedTransitionCannotOverwriteAcceptedHistoryBank(){
+    ReflectionHistoryState state = ReflectionHistoryState(1u);
+    const ReflectionHistoryPlan first = state.plan(Stamp(), ReflectionSettings(), 1u);
+    ReflectionHistory_Accept(first, state);
+    ReflectionSceneContentStamp stamp = Stamp();
     stamp.trusted = false;
-    const auto untrusted = state.plan(stamp, ReflectionSettings{}, 2u);
+    const ReflectionHistoryPlan untrusted = state.plan(stamp, ReflectionSettings(), 2u);
     EXPECT_FALSE(untrusted.eligible);
     EXPECT_NE(untrusted.currentBank, first.currentBank);
     ASSERT_TRUE(state.reserve(untrusted));
     state.discard(untrusted);
-    EXPECT_TRUE(state.plan(Stamp(), ReflectionSettings{}, 3u).reused);
+    EXPECT_TRUE(state.plan(Stamp(), ReflectionSettings(), 3u).reused);
 }
 
-TEST(ReflectionHistory, StableUntrustedSceneNeverAccumulatesButDoesAdvanceAcceptedSampling){
-    ReflectionHistoryState state(1u);
-    auto stamp = Stamp();
+void VerifyReflectionHistory_StableUntrustedSceneNeverAccumulatesButDoesAdvanceAcceptedSampling(){
+    ReflectionHistoryState state = ReflectionHistoryState(1u);
+    ReflectionSceneContentStamp stamp = Stamp();
     stamp.trusted = false;
-    const auto first = state.plan(stamp, ReflectionSettings{}, 1u);
+    const ReflectionHistoryPlan first = state.plan(stamp, ReflectionSettings(), 1u);
     EXPECT_EQ(first.resetReason, ReflectionHistoryResetReason::UntrustedScene);
     EXPECT_EQ(ResolveReflectionHistoryOutcome(first, false).sampleCount, 0u);
-    Accept(first, state, false);
-    const auto next = state.plan(stamp, ReflectionSettings{}, 2u);
+    ReflectionHistory_AcceptWithHardware(first, state, false);
+    const ReflectionHistoryPlan next = state.plan(stamp, ReflectionSettings(), 2u);
     EXPECT_FALSE(next.reset);
     EXPECT_FALSE(next.eligible);
     EXPECT_EQ(next.resetReason, ReflectionHistoryResetReason::None);
@@ -574,90 +755,61 @@ TEST(ReflectionHistory, StableUntrustedSceneNeverAccumulatesButDoesAdvanceAccept
     EXPECT_EQ(ResolveReflectionHistoryOutcome(next, false).historyStartGraphicsFrame, 0u);
 }
 
-TEST(ReflectionHistory, StalePlanCannotReserveAfterAnotherFrameAccepts){
-    ReflectionHistoryState state(1u);
-    const auto old = state.plan(Stamp(), ReflectionSettings{}, 1u);
-    const auto accepted = state.plan(Stamp(), ReflectionSettings{}, 2u);
-    Accept(accepted, state);
+void VerifyReflectionHistory_StalePlanCannotReserveAfterAnotherFrameAccepts(){
+    ReflectionHistoryState state = ReflectionHistoryState(1u);
+    const ReflectionHistoryPlan old = state.plan(Stamp(), ReflectionSettings(), 1u);
+    const ReflectionHistoryPlan accepted = state.plan(Stamp(), ReflectionSettings(), 2u);
+    ReflectionHistory_Accept(accepted, state);
     EXPECT_FALSE(state.reserve(old));
     state.discard(old);
     state.accept(old, Token(99u), true);
-    EXPECT_EQ(state.plan(Stamp(), ReflectionSettings{}, 3u).acceptedSequence, accepted.sequence);
+    EXPECT_EQ(state.plan(Stamp(), ReflectionSettings(), 3u).acceptedSequence, accepted.sequence);
 }
 
-TEST(ReflectionHistory, ResourceGenerationRejectsOldAcceptanceAndResetsEpoch){
-    ReflectionHistoryState state(1u);
-    const auto old = state.plan(Stamp(), ReflectionSettings{}, 1u);
+void VerifyReflectionHistory_ResourceGenerationRejectsOldAcceptanceAndResetsEpoch(){
+    ReflectionHistoryState state = ReflectionHistoryState(1u);
+    const ReflectionHistoryPlan old = state.plan(Stamp(), ReflectionSettings(), 1u);
     ASSERT_TRUE(state.reserve(old));
     state.reset(2u);
     state.accept(old, Token(), true);
-    const auto next = state.plan(Stamp(), ReflectionSettings{}, 2u);
+    const ReflectionHistoryPlan next = state.plan(Stamp(), ReflectionSettings(), 2u);
     EXPECT_GT(next.generation, old.generation);
     EXPECT_EQ(next.resetReason, ReflectionHistoryResetReason::ResourcesChanged);
     EXPECT_EQ(next.sampleIndex, 0u);
     ASSERT_TRUE(state.reserve(next));
-    Core::QueueSubmissionToken token = Token();
+    QueueSubmissionToken token = Token();
     token.deviceGeneration = 2u;
     state.accept(next, token, false);
-    EXPECT_EQ(state.plan(Stamp(), ReflectionSettings{}, 3u).previousSampleCount, 1u);
+    EXPECT_EQ(state.plan(Stamp(), ReflectionSettings(), 3u).previousSampleCount, 1u);
 }
 
-TEST(ReflectionHistory, GraphRejectionAndResetReleaseUnacceptedLease){
-    Core::Alloc::GlobalArena arena{Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsReflectionHistoryLease)};
-    auto controlResult = CreateStatisticsControl<ReflectionHistoryControl>(arena, 1u);
-    ASSERT_TRUE(controlResult);
-    auto control = Move(*controlResult);
-    Core::GpuTaskGraph graph(arena);
-    const auto rejected = control->plan(Stamp(), ReflectionSettings{}, 1u);
-    EXPECT_FALSE(graph.addTask<LeaseTask>(Core::GpuTaskDesc{}, LeaseTask::Payload{ReflectionHistoryReservation(control, rejected)}).has_value());
-    Core::GpuTaskDesc desc;
-    desc.setIdentity(Name(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsHistoryLease)).setMarkerLabel("History Lease");
-    const auto pending = control->plan(Stamp(), ReflectionSettings{}, 2u);
-    {
-        const auto gpuTaskAdmission = graph.addTask<LeaseTask>(desc, LeaseTask::Payload{ReflectionHistoryReservation(control, pending)});
-        ASSERT_TRUE(gpuTaskAdmission);
-        ASSERT_TRUE(gpuTaskAdmission->valid());
+void VerifyReflectionHistory_GraphRejectionAndResetReleaseUnacceptedLease(){
+    native{
+        using LeaseTask = ReflectionStatisticsTestHelpers::ReservationLeaseTask<ReflectionHistoryReservation>;
+        Core::Alloc::GlobalArena arena{ Name(s_EcsCaseTestsReflectionHistoryLease) };
+        auto controlResult = Impl::CreateStatisticsControl<ReflectionHistoryControl>(arena, 1u);
+        ASSERT_TRUE(controlResult);
+        auto control = Move(*controlResult);
+        Core::GpuTaskGraph graph(arena);
+        const auto rejected = control->plan(Stamp(), ReflectionSettings{}, 1u);
+        EXPECT_FALSE(graph.addTask<LeaseTask>(Core::GpuTaskDesc{}, LeaseTask::Payload{ ReflectionHistoryReservation(control, rejected) }).has_value());
+        Core::GpuTaskDesc desc;
+        desc.setIdentity(Name(s_EcsCaseTestsHistoryLease)).setMarkerLabel("History Lease");
+        const auto pending = control->plan(Stamp(), ReflectionSettings{}, 2u);
+        {
+            const auto gpuTaskAdmission = graph.addTask<LeaseTask>(desc, LeaseTask::Payload{ ReflectionHistoryReservation(control, pending) });
+            ASSERT_TRUE(gpuTaskAdmission);
+            ASSERT_TRUE(gpuTaskAdmission->valid());
+        }
+        graph.reset();
+        const auto retry = control->plan(Stamp(), ReflectionSettings{}, 3u);
+        EXPECT_TRUE(control->reserve(retry));
+        EXPECT_EQ(retry.sampleIndex, 0u);
     }
-    graph.reset();
-    const auto retry = control->plan(Stamp(), ReflectionSettings{}, 3u);
-    EXPECT_TRUE(control->reserve(retry));
-    EXPECT_EQ(retry.sampleIndex, 0u);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_render/reflection/reflection_system.adhd.h>
-#include <impl/ecs_render/reflection/settings.adhd.h>
-
-#include <global/limit.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_reflection_settings_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB::Impl;
-
-TEST(ReflectionSettings, AcceptsZeroHardwareBudgetWithScreenFeedback){
-    ReflectionSettings settings;
+void VerifyReflectionSettings_AcceptsZeroHardwareBudgetWithScreenFeedback(){
+    ReflectionSettings settings = ReflectionSettings();
     settings.screenFeedbackEnabled = true;
     settings.maxHardwareRaysPerFrame = 0u;
     EXPECT_TRUE(ValidateReflectionSettings(settings));
@@ -665,8 +817,8 @@ TEST(ReflectionSettings, AcceptsZeroHardwareBudgetWithScreenFeedback){
     EXPECT_TRUE(ValidateReflectionSettings(settings));
 }
 
-TEST(ReflectionSettings, BoundsAllSceneQueriesPerAdmittedPath){
-    ReflectionSettings settings;
+void VerifyReflectionSettings_BoundsAllSceneQueriesPerAdmittedPath(){
+    ReflectionSettings settings = ReflectionSettings();
     settings.maxOpticalQueries = 0u;
     EXPECT_FALSE(ValidateReflectionSettings(settings));
     settings.maxOpticalQueries = 1u;
@@ -677,8 +829,8 @@ TEST(ReflectionSettings, BoundsAllSceneQueriesPerAdmittedPath){
     EXPECT_FALSE(ValidateReflectionSettings(settings));
 }
 
-TEST(ReflectionSettings, BoundsTemporalReferenceCountAndSpatialRadius){
-    ReflectionSettings settings;
+void VerifyReflectionSettings_BoundsTemporalReferenceCountAndSpatialRadius(){
+    ReflectionSettings settings = ReflectionSettings();
     settings.temporalMaxSamples = 0u;
     EXPECT_FALSE(ValidateReflectionSettings(settings));
     settings.temporalMaxSamples = 257u;
@@ -691,78 +843,78 @@ TEST(ReflectionSettings, BoundsTemporalReferenceCountAndSpatialRadius){
     settings.spatialRadius = 3u;
     EXPECT_TRUE(ValidateReflectionSettings(settings));
     settings.spatialRadius = 0u;
-    settings.samplingSeed = Limit<u32>::s_Max;
+    settings.samplingSeed = u32.max;
     EXPECT_TRUE(ValidateReflectionSettings(settings));
 }
 
-TEST(ReflectionSettings, RejectsNonFiniteAndUnorderedDistanceControls){
-    ReflectionSettings settings;
-    settings.maxRayDistance = Limit<f32>::s_QuietNaN;
+void VerifyReflectionSettings_RejectsNonFiniteAndUnorderedDistanceControls(){
+    ReflectionSettings settings = ReflectionSettings();
+    settings.maxRayDistance = bit_cast<f32>(0x7FC00000u);
     EXPECT_FALSE(ValidateReflectionSettings(settings));
-    settings.maxRayDistance = Limit<f32>::s_Infinity;
+    settings.maxRayDistance = bit_cast<f32>(0x7F800000u);
     EXPECT_FALSE(ValidateReflectionSettings(settings));
-    settings.maxRayDistance = 0.f;
+    settings.maxRayDistance = 0.0f;
     EXPECT_FALSE(ValidateReflectionSettings(settings));
     settings.maxRayDistance = settings.distanceFadeStart;
     EXPECT_FALSE(ValidateReflectionSettings(settings));
-    settings.distanceFadeStart = -1.f;
+    settings.distanceFadeStart = -1.0f;
     EXPECT_FALSE(ValidateReflectionSettings(settings));
-    settings.distanceFadeStart = 0.f;
+    settings.distanceFadeStart = 0.0f;
     EXPECT_TRUE(ValidateReflectionSettings(settings));
 }
 
-TEST(ReflectionSettings, BoundsScreenTraversalAndFiniteConfidenceInputs){
-    ReflectionSettings settings;
+void VerifyReflectionSettings_BoundsScreenTraversalAndFiniteConfidenceInputs(){
+    ReflectionSettings settings = ReflectionSettings();
     settings.screenMaxSteps = 0u;
     EXPECT_FALSE(ValidateReflectionSettings(settings));
     settings.screenMaxSteps = 257u;
     EXPECT_FALSE(ValidateReflectionSettings(settings));
     settings.screenMaxSteps = 256u;
     EXPECT_TRUE(ValidateReflectionSettings(settings));
-    settings.screenThickness = 0.f;
+    settings.screenThickness = 0.0f;
     EXPECT_FALSE(ValidateReflectionSettings(settings));
-    settings.screenThickness = Limit<f32>::s_Infinity;
+    settings.screenThickness = bit_cast<f32>(0x7F800000u);
     EXPECT_FALSE(ValidateReflectionSettings(settings));
-    settings = ReflectionSettings{};
-    settings.screenConfidenceThreshold = 0.f;
+    settings = ReflectionSettings();
+    settings.screenConfidenceThreshold = 0.0f;
     EXPECT_FALSE(ValidateReflectionSettings(settings));
     settings.screenConfidenceThreshold = 1.01f;
     EXPECT_FALSE(ValidateReflectionSettings(settings));
-    settings.screenConfidenceThreshold = Limit<f32>::s_QuietNaN;
+    settings.screenConfidenceThreshold = bit_cast<f32>(0x7FC00000u);
     EXPECT_FALSE(ValidateReflectionSettings(settings));
-    settings = ReflectionSettings{};
+    settings = ReflectionSettings();
     settings.screenEdgeFade = -0.1f;
     EXPECT_FALSE(ValidateReflectionSettings(settings));
     settings.screenEdgeFade = 0.26f;
     EXPECT_FALSE(ValidateReflectionSettings(settings));
-    settings.screenEdgeFade = 0.f;
+    settings.screenEdgeFade = 0.0f;
     EXPECT_TRUE(ValidateReflectionSettings(settings));
 }
 
-TEST(ReflectionSettings, RejectsInvalidMaterialThresholdsModesAndEnvironmentRadiance){
-    ReflectionSettings settings;
+void VerifyReflectionSettings_RejectsInvalidMaterialThresholdsModesAndEnvironmentRadiance(){
+    ReflectionSettings settings = ReflectionSettings();
     settings.roughnessCutoff = -0.1f;
     EXPECT_FALSE(ValidateReflectionSettings(settings));
     settings.roughnessCutoff = 1.1f;
     EXPECT_FALSE(ValidateReflectionSettings(settings));
-    settings.roughnessCutoff = Limit<f32>::s_QuietNaN;
+    settings.roughnessCutoff = bit_cast<f32>(0x7FC00000u);
     EXPECT_FALSE(ValidateReflectionSettings(settings));
-    settings = ReflectionSettings{};
-    settings.traceMode = static_cast<ReflectionTraceMode::Enum>(255u);
+    settings = ReflectionSettings();
+    settings.traceMode = cast<ReflectionTraceModeEnum>(255u);
     EXPECT_FALSE(ValidateReflectionSettings(settings));
-    settings = ReflectionSettings{};
-    settings.debugView = static_cast<ReflectionDebugView::Enum>(255u);
+    settings = ReflectionSettings();
+    settings.debugView = cast<ReflectionDebugViewEnum>(255u);
     EXPECT_FALSE(ValidateReflectionSettings(settings));
-    settings = ReflectionSettings{};
+    settings = ReflectionSettings();
     settings.environmentTop.x = -0.1f;
     EXPECT_FALSE(ValidateReflectionSettings(settings));
-    settings = ReflectionSettings{};
-    settings.environmentBottom.z = Limit<f32>::s_Infinity;
+    settings = ReflectionSettings();
+    settings.environmentBottom.z = bit_cast<f32>(0x7F800000u);
     EXPECT_FALSE(ValidateReflectionSettings(settings));
 }
 
-TEST(ReflectionSettings, ReflectionHardwareWorkRequiresAnEnabledRouteAndPositiveRayBudget){
-    ReflectionFrameSnapshot snapshot;
+void VerifyReflectionSettings_ReflectionHardwareWorkRequiresAnEnabledRouteAndPositiveRayBudget(){
+    ReflectionFrameSnapshot snapshot = ReflectionFrameSnapshot();
     snapshot.parameters.hardwareEnabled = 1u;
     snapshot.parameters.maxHardwareRays = 0u;
     EXPECT_FALSE(snapshot.hasHardwareWork());
@@ -772,620 +924,468 @@ TEST(ReflectionSettings, ReflectionHardwareWorkRequiresAnEnabledRouteAndPositive
     EXPECT_FALSE(snapshot.hasHardwareWork());
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ecs_graphics/name_cases.adhd.h>
-
-#include <impl/ecs_render/reflection/statistics_readback.adhd.h>
-#include <impl/assets/graphics/reflection/frame_constants.h>
-
-#include <core/task/gpu/task_graph.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_reflection_statistics_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using ReflectionStatisticsTestHelpers::Token;
-using StatisticsContext = ReflectionStatisticsTestHelpers::StatisticsContext<ReflectionStatisticsControl>;
-using LeaseTask = ReflectionStatisticsTestHelpers::ReservationLeaseTask<ReflectionStatisticsReservation>;
-using DestructorLeaseTask = ReflectionStatisticsTestHelpers::DestructorReservationLeaseTask<ReflectionStatisticsReservation>;
-
-inline constexpr usize s_ReflectionCounterWordCount = NWB_REFLECTION_COUNTER_SIZE / sizeof(u32);
-using NWB::Tests::EcsGraphicsCases::MakeReflectionStatisticsMetadata;
-using NWB::Tests::EcsGraphicsCases::MakeReflectionStatisticsMetadataAt;
-using NWB::Tests::EcsGraphicsCases::MakeReflectionStatisticsTaskDesc;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(ReflectionStatistics, RingSkipsWhenThreeReservationsAreOutstanding){
-    StatisticsContext context;
-    ASSERT_TRUE(context.control);
-    const auto first = context.control->reserve(MakeReflectionStatisticsMetadata());
-    const auto second = context.control->reserve(MakeReflectionStatisticsMetadata());
-    const auto third = context.control->reserve(MakeReflectionStatisticsMetadata());
+void VerifyReflectionStatistics_RingSkipsWhenThreeReservationsAreOutstanding(){
+    ReflectionStatsContext context = ReflectionStatsContext();
+    ASSERT_TRUE(context.valid());
+    const StatisticsReservationKey first = context.reserve(MakeReflectionStatisticsMetadata());
+    const StatisticsReservationKey second = context.reserve(MakeReflectionStatisticsMetadata());
+    const StatisticsReservationKey third = context.reserve(MakeReflectionStatisticsMetadata());
     ASSERT_TRUE(first.valid());
     ASSERT_TRUE(second.valid());
     ASSERT_TRUE(third.valid());
     EXPECT_NE(first.slot, second.slot);
     EXPECT_NE(second.slot, third.slot);
-    EXPECT_FALSE(context.control->reserve(MakeReflectionStatisticsMetadata()).valid());
+    EXPECT_FALSE(context.reserve(MakeReflectionStatisticsMetadata()).valid());
 }
 
-TEST(ReflectionStatistics, DiscardedReservationCanBeReusedWithoutStaleCallbackMutation){
-    StatisticsContext context;
-    ASSERT_TRUE(context.control);
-    const auto previous = context.control->reserve(MakeReflectionStatisticsMetadata());
-    context.control->discard(previous);
-    const auto current = context.control->reserve(MakeReflectionStatisticsMetadataAt(10u));
+void VerifyReflectionStatistics_DiscardedReservationCanBeReusedWithoutStaleCallbackMutation(){
+    ReflectionStatsContext context = ReflectionStatsContext();
+    ASSERT_TRUE(context.valid());
+    const StatisticsReservationKey previous = context.reserve(MakeReflectionStatisticsMetadata());
+    context.discard(previous);
+    const StatisticsReservationKey current = context.reserve(MakeReflectionStatisticsMetadataAt(10u));
     ASSERT_EQ(previous.slot, current.slot);
     ASSERT_GT(current.sequence, previous.sequence);
-    context.control->discard(previous);
-    context.control->accept(previous, Token(), true);
-    context.control->accept(current, Token(21u), false);
-    const auto pending = context.control->pending(current.slot);
-    ASSERT_TRUE(pending);
-    EXPECT_EQ(pending->key.sequence, current.sequence);
-    EXPECT_EQ(pending->token.value, 21u);
+    context.discard(previous);
+    context.accept(previous, Token(), true);
+    context.accept(current, Token(21u), false);
+    const ReflectionPendingEntry pending = context.pending(current.slot);
+    ASSERT_TRUE(pending.has_value());
+    EXPECT_EQ(pending.value().key.sequence, current.sequence);
+    EXPECT_EQ(pending.value().token.value, 21u);
 }
 
-TEST(ReflectionStatistics, PublishesFrozenMetadataAndNonzeroCountersOnlyAtCompletion){
-    static constexpr Array<b8, 2> s_Variants = { false, true };
-    for(const b8 csgHardwareEnabled : s_Variants){
-        StatisticsContext context;
-        ASSERT_TRUE(context.control);
+void VerifyReflectionStatistics_PublishesFrozenMetadataAndNonzeroCountersOnlyAtCompletion(){
+    Array<b8, 2> variants = Array<b8, 2>();
+    variants[0u] = false;
+    variants[1u] = true;
+    const ReflectionCounterArray counters = MakeSampleReflectionCounters();
+    for(in b8 csgHardwareEnabled : variants){
+        ReflectionStatsContext context = ReflectionStatsContext();
+        ASSERT_TRUE(context.valid());
         ReflectionStatistics metadata = MakeReflectionStatisticsMetadata();
         metadata.csgHardwareEnabled = csgHardwareEnabled;
-        const auto key = context.control->reserve(metadata);
+        const StatisticsReservationKey key = context.reserve(metadata);
         metadata.frameIndex = 500u;
         metadata.width = 1u;
         metadata.csgHardwareEnabled = !csgHardwareEnabled;
-        context.control->accept(key, Token(), true);
-        context.control->discard(key);
-        Expected<ReflectionStatistics> statistics;
-        EXPECT_FALSE(context.control->tryGetLatestStatistics());
-        static constexpr Array<u32, s_ReflectionCounterWordCount> s_Counters = {
-            100u, 64u, 30u, 80u, 20u, 50u, 90u, 20u, 98u, 42u, 12u, 2u, 1u, 3u, 4u, 5u, 123u, 25u, 70u, 2u, 17u, 3u, 6u, 19u, 31u,
-        };
-        static_assert(sizeof(s_Counters) == NWB_REFLECTION_COUNTER_SIZE);
-        context.control->complete(key, Token(), s_Counters);
-        statistics = context.control->tryGetLatestStatistics();
-        ASSERT_TRUE(statistics);
+        context.accept(key, Token(), true);
+        context.discard(key);
+        EXPECT_FALSE(context.tryGetLatestStatistics().has_value());
+        context.complete(key, Token(), counters);
+        const Expected<ReflectionStatistics> statistics = context.tryGetLatestStatistics();
+        ASSERT_TRUE(statistics.has_value());
 
-        EXPECT_EQ(statistics->frameIndex, 9u);
-        EXPECT_EQ(statistics->width, 320u);
-        EXPECT_EQ(statistics->csgHardwareEnabled, csgHardwareEnabled);
-        EXPECT_EQ(statistics->queryBudgetUnits, 98u);
-        EXPECT_EQ(statistics->physicalQueries, csgHardwareEnabled ? 31u : 98u);
-        EXPECT_EQ(statistics->candidates, 100u);
+        EXPECT_EQ(statistics.value().frameIndex, 9u);
+        EXPECT_EQ(statistics.value().width, 320u);
+        EXPECT_EQ(statistics.value().csgHardwareEnabled, csgHardwareEnabled);
+        EXPECT_EQ(statistics.value().queryBudgetUnits, 98u);
+        u32 expectedQueries = 98u;
+        if(csgHardwareEnabled)
+            expectedQueries = 31u;
+        EXPECT_EQ(statistics.value().physicalQueries, expectedQueries);
+        EXPECT_EQ(statistics.value().candidates, 100u);
     }
 }
 
-TEST(ReflectionStatistics, FeedbackEpochSurvivesAcceptedInputMutation){
-    StatisticsContext context;
-    ASSERT_TRUE(context.control);
+void VerifyReflectionStatistics_FeedbackEpochSurvivesAcceptedInputMutation(){
+    ReflectionStatsContext context = ReflectionStatsContext();
+    ASSERT_TRUE(context.valid());
     ReflectionStatistics metadata = MakeReflectionStatisticsMetadata();
     metadata.feedbackRequested = true;
     metadata.feedbackSequence = 12u;
     metadata.schedulingCounterValid = true;
-    const auto key = context.control->reserve(metadata);
-    ReflectionFeedbackOutcome feedback;
+    const StatisticsReservationKey key = context.reserve(metadata);
+    ReflectionFeedbackOutcome feedback = ReflectionFeedbackOutcome();
     feedback.epoch = 4u;
     feedback.startGraphicsFrame = 90u;
     feedback.probeIndex = 7u;
     feedback.eligible = true;
     feedback.reused = true;
-    context.control->accept(key, Token(), true, nullptr, &feedback);
+    context.acceptWithFeedback(key, Token(), true, feedback);
     feedback.epoch = 999u;
-    const Array<u32, s_ReflectionCounterWordCount> counters = {};
-    context.control->complete(key, Token(), counters);
-    Expected<ReflectionStatistics> statistics;
-    statistics = context.control->tryGetLatestStatistics();
-    ASSERT_TRUE(statistics);
-
-    EXPECT_EQ(statistics->feedbackEpoch, 4u);
+    const ReflectionCounterArray counters = ReflectionCounterArray();
+    context.complete(key, Token(), counters);
+    const Expected<ReflectionStatistics> statistics = context.tryGetLatestStatistics();
+    ASSERT_TRUE(statistics.has_value());
+    EXPECT_EQ(statistics.value().feedbackEpoch, 4u);
 }
 
-TEST(ReflectionStatistics, OlderCompletionsCannotReplaceNewerPublishedWork){
-    StatisticsContext context;
-    ASSERT_TRUE(context.control);
-    const auto older = context.control->reserve(MakeReflectionStatisticsMetadataAt(10u));
-    const auto newer = context.control->reserve(MakeReflectionStatisticsMetadataAt(11u));
-    context.control->accept(older, Token(20u), true);
-    context.control->accept(newer, Token(21u), false);
-    const Array<u32, s_ReflectionCounterWordCount> counters = {};
-    context.control->complete(newer, Token(21u), counters);
-    context.control->complete(older, Token(20u), counters);
-    Expected<ReflectionStatistics> statistics;
-    statistics = context.control->tryGetLatestStatistics();
-    ASSERT_TRUE(statistics);
-    EXPECT_EQ(statistics->sequence, newer.sequence);
-    EXPECT_EQ(statistics->frameIndex, 11u);
-    EXPECT_FALSE(statistics->hardwareReady);
-    EXPECT_EQ(context.control->reserve(MakeReflectionStatisticsMetadata()).slot, older.slot);
+void VerifyReflectionStatistics_OlderCompletionsCannotReplaceNewerPublishedWork(){
+    ReflectionStatsContext context = ReflectionStatsContext();
+    ASSERT_TRUE(context.valid());
+    const StatisticsReservationKey older = context.reserve(MakeReflectionStatisticsMetadataAt(10u));
+    const StatisticsReservationKey newer = context.reserve(MakeReflectionStatisticsMetadataAt(11u));
+    context.accept(older, Token(20u), true);
+    context.accept(newer, Token(21u), false);
+    const ReflectionCounterArray counters = ReflectionCounterArray();
+    context.complete(newer, Token(21u), counters);
+    context.complete(older, Token(20u), counters);
+    const Expected<ReflectionStatistics> statistics = context.tryGetLatestStatistics();
+    ASSERT_TRUE(statistics.has_value());
+    EXPECT_EQ(statistics.value().sequence, newer.sequence);
+    EXPECT_EQ(statistics.value().frameIndex, 11u);
+    EXPECT_FALSE(statistics.value().hardwareReady);
+    EXPECT_EQ(context.reserve(MakeReflectionStatisticsMetadata()).slot, older.slot);
 }
 
-TEST(ReflectionStatistics, CompletionRequiresExactAcceptedPhysicalToken){
-    StatisticsContext context;
-    ASSERT_TRUE(context.control);
-    const auto key = context.control->reserve(MakeReflectionStatisticsMetadata());
-    context.control->accept(key, Token(), true);
-    const Array<u32, s_ReflectionCounterWordCount> counters = {};
-    Core::QueueSubmissionToken wrong = Token();
+void VerifyReflectionStatistics_CompletionRequiresExactAcceptedPhysicalToken(){
+    ReflectionStatsContext context = ReflectionStatsContext();
+    ASSERT_TRUE(context.valid());
+    const StatisticsReservationKey key = context.reserve(MakeReflectionStatisticsMetadata());
+    context.accept(key, Token(), true);
+    const ReflectionCounterArray counters = ReflectionCounterArray();
+    QueueSubmissionToken wrong = Token();
     wrong.physicalQueueIndex = 1u;
-    context.control->complete(key, wrong, counters);
+    context.complete(key, wrong, counters);
     wrong = Token();
     wrong.deviceGeneration = 8u;
-    context.control->complete(key, wrong, counters);
-    context.control->complete(key, Token(19u), counters);
-    Expected<ReflectionStatistics> statistics;
-    EXPECT_FALSE(context.control->tryGetLatestStatistics());
-    context.control->complete(key, Token(), counters);
-    statistics = context.control->tryGetLatestStatistics();
-    ASSERT_TRUE(statistics);
+    context.complete(key, wrong, counters);
+    context.complete(key, Token(19u), counters);
+    EXPECT_FALSE(context.tryGetLatestStatistics().has_value());
+    context.complete(key, Token(), counters);
+    const Expected<ReflectionStatistics> statistics = context.tryGetLatestStatistics();
+    ASSERT_TRUE(statistics.has_value());
 }
 
-TEST(ReflectionStatistics, ResetRejectsOldCallbacksAndClearsPublication){
-    StatisticsContext context;
-    ASSERT_TRUE(context.control);
-    const auto previous = context.control->reserve(MakeReflectionStatisticsMetadata());
-    context.control->accept(previous, Token(), true);
-    const Array<u32, s_ReflectionCounterWordCount> counters = {};
-    context.control->complete(previous, Token(), counters);
-    context.control->reset(8u);
-    Expected<ReflectionStatistics> statistics;
-    EXPECT_FALSE(context.control->tryGetLatestStatistics());
-    const auto current = context.control->reserve(MakeReflectionStatisticsMetadataAt(12u));
+void VerifyReflectionStatistics_ResetRejectsOldCallbacksAndClearsPublication(){
+    ReflectionStatsContext context = ReflectionStatsContext();
+    ASSERT_TRUE(context.valid());
+    const StatisticsReservationKey previous = context.reserve(MakeReflectionStatisticsMetadata());
+    context.accept(previous, Token(), true);
+    const ReflectionCounterArray counters = ReflectionCounterArray();
+    context.complete(previous, Token(), counters);
+    context.reset(8u);
+    EXPECT_FALSE(context.tryGetLatestStatistics().has_value());
+    const StatisticsReservationKey current = context.reserve(MakeReflectionStatisticsMetadataAt(12u));
     EXPECT_GT(current.generation, previous.generation);
-    context.control->accept(previous, Token(), true);
-    context.control->discard(previous);
-    context.control->complete(previous, Token(), counters);
-    Core::QueueSubmissionToken next = Token(1u);
+    context.accept(previous, Token(), true);
+    context.discard(previous);
+    context.complete(previous, Token(), counters);
+    QueueSubmissionToken next = Token(1u);
     next.deviceGeneration = 8u;
-    context.control->accept(current, next, false);
-    context.control->complete(current, next, counters);
-    statistics = context.control->tryGetLatestStatistics();
-    ASSERT_TRUE(statistics);
-    EXPECT_EQ(statistics->frameIndex, 12u);
-    EXPECT_EQ(statistics->acceptedToken.deviceGeneration, 8u);
+    context.accept(current, next, false);
+    context.complete(current, next, counters);
+    const Expected<ReflectionStatistics> statistics = context.tryGetLatestStatistics();
+    ASSERT_TRUE(statistics.has_value());
+    EXPECT_EQ(statistics.value().frameIndex, 12u);
+    EXPECT_EQ(statistics.value().acceptedToken.deviceGeneration, 8u);
 }
 
-TEST(ReflectionStatistics, FailedMappingRetiresSlotWithoutPublishingZeros){
-    StatisticsContext context;
-    ASSERT_TRUE(context.control);
-    const auto key = context.control->reserve(MakeReflectionStatisticsMetadata());
-    context.control->accept(key, Token(), true);
-    context.control->complete(key, Token(), {});
-    EXPECT_FALSE(context.control->tryGetLatestStatistics());
-    EXPECT_EQ(context.control->reserve(MakeReflectionStatisticsMetadata()).slot, key.slot);
+void VerifyReflectionStatistics_FailedMappingRetiresSlotWithoutPublishingZeros(){
+    ReflectionStatsContext context = ReflectionStatsContext();
+    ASSERT_TRUE(context.valid());
+    const StatisticsReservationKey key = context.reserve(MakeReflectionStatisticsMetadata());
+    context.accept(key, Token(), true);
+    context.completeEmpty(key, Token());
+    EXPECT_FALSE(context.tryGetLatestStatistics().has_value());
+    EXPECT_EQ(context.reserve(MakeReflectionStatisticsMetadata()).slot, key.slot);
 }
 
-TEST(ReflectionStatistics, InvalidAcceptedTokenQuarantinesSlotUntilReset){
-    StatisticsContext context;
-    ASSERT_TRUE(context.control);
-    const auto key = context.control->reserve(MakeReflectionStatisticsMetadata());
-    context.control->accept(key, {}, true);
-    context.control->discard(key);
-    EXPECT_FALSE(context.control->pending(key.slot));
-    EXPECT_FALSE(context.control->pending(s_StatisticsReadbackSlotCount));
-    EXPECT_FALSE(context.control->pending(Limit<u32>::s_Max));
-    EXPECT_NE(context.control->reserve(MakeReflectionStatisticsMetadata()).slot, key.slot);
-    context.control->reset(7u);
-    EXPECT_EQ(context.control->reserve(MakeReflectionStatisticsMetadata()).slot, key.slot);
+void VerifyReflectionStatistics_InvalidAcceptedTokenQuarantinesSlotUntilReset(){
+    ReflectionStatsContext context = ReflectionStatsContext();
+    ASSERT_TRUE(context.valid());
+    const StatisticsReservationKey key = context.reserve(MakeReflectionStatisticsMetadata());
+    context.accept(key, QueueSubmissionToken(), true);
+    context.discard(key);
+    EXPECT_FALSE(context.pending(key.slot).has_value());
+    EXPECT_FALSE(context.pending(s_StatisticsReadbackSlotCount).has_value());
+    EXPECT_FALSE(context.pending(u32.max).has_value());
+    EXPECT_NE(context.reserve(MakeReflectionStatisticsMetadata()).slot, key.slot);
+    context.reset(7u);
+    EXPECT_EQ(context.reserve(MakeReflectionStatisticsMetadata()).slot, key.slot);
 }
 
-TEST(ReflectionStatistics, MovingLeaseTransfersOwnershipAndReclaimsAssignmentDestination){
-    StatisticsContext context;
-    ASSERT_TRUE(context.control);
-    ReflectionStatisticsReservation first(context.control, MakeReflectionStatisticsMetadata());
-    const u32 firstSlot = first.slotIndex();
-    ReflectionStatisticsReservation second(Move(first));
-    EXPECT_FALSE(first.valid());
-    EXPECT_EQ(second.slotIndex(), firstSlot);
-    ReflectionStatisticsReservation third(context.control, MakeReflectionStatisticsMetadata());
-    const u32 replacedSlot = third.slotIndex();
-    third = Move(second);
-    EXPECT_FALSE(second.valid());
-    EXPECT_EQ(third.slotIndex(), firstSlot);
-    EXPECT_EQ(context.control->reserve(MakeReflectionStatisticsMetadata()).slot, replacedSlot);
+void VerifyReflectionStatistics_MovingLeaseTransfersOwnershipAndReclaimsAssignmentDestination(){
+    ReflectionStatsContext context = ReflectionStatsContext();
+    ASSERT_TRUE(context.valid());
+    native(mut context){
+        Impl::ReflectionStatisticsReservation first(context.inner.control, MakeReflectionStatisticsMetadata());
+        const u32 firstSlot = first.slotIndex();
+        Impl::ReflectionStatisticsReservation second(Move(first));
+        EXPECT_FALSE(first.valid());
+        EXPECT_EQ(second.slotIndex(), firstSlot);
+        Impl::ReflectionStatisticsReservation third(context.inner.control, MakeReflectionStatisticsMetadata());
+        const u32 replacedSlot = third.slotIndex();
+        third = Move(second);
+        EXPECT_FALSE(second.valid());
+        EXPECT_EQ(third.slotIndex(), firstSlot);
+        EXPECT_EQ(context.reserve(MakeReflectionStatisticsMetadata()).slot, replacedSlot);
+    }
 }
 
-TEST(ReflectionStatistics, AcceptedLeaseRemainsInFlightAfterPayloadDestruction){
-    StatisticsContext context;
-    ASSERT_TRUE(context.control);
+void VerifyReflectionStatistics_AcceptedLeaseRemainsInFlightAfterPayloadDestruction(){
+    ReflectionStatsContext context = ReflectionStatsContext();
+    ASSERT_TRUE(context.valid());
     u32 index = 0u;
-    {
-        ReflectionStatisticsReservation lease(context.control, MakeReflectionStatisticsMetadata());
+    native(mut context, mut index){
+        Impl::ReflectionStatisticsReservation lease(context.inner.control, MakeReflectionStatisticsMetadata());
         index = lease.slotIndex();
         lease.acceptReservation(Token(), true);
     }
-    EXPECT_NE(context.control->reserve(MakeReflectionStatisticsMetadata()).slot, index);
-    const auto pending = context.control->pending(index);
-    ASSERT_TRUE(pending);
-    const Array<u32, s_ReflectionCounterWordCount> counters = {};
-    context.control->complete(pending->key, pending->token, counters);
-    EXPECT_EQ(context.control->reserve(MakeReflectionStatisticsMetadata()).slot, index);
+    EXPECT_NE(context.reserve(MakeReflectionStatisticsMetadata()).slot, index);
+    const ReflectionPendingEntry pending = context.pending(index);
+    ASSERT_TRUE(pending.has_value());
+    const ReflectionCounterArray counters = ReflectionCounterArray();
+    context.complete(pending.value().key, pending.value().token, counters);
+    EXPECT_EQ(context.reserve(MakeReflectionStatisticsMetadata()).slot, index);
 }
 
-TEST(ReflectionStatistics, RejectedGraphRegistrationAndGraphResetReleaseUnacceptedLeases){
-    StatisticsContext context;
-    ASSERT_TRUE(context.control);
-    Core::GpuTaskGraph graph(context.arena);
-    EXPECT_FALSE(graph.addTask<LeaseTask>(Core::GpuTaskDesc{}, LeaseTask::Payload{ReflectionStatisticsReservation(context.control, MakeReflectionStatisticsMetadata())}).has_value());
-    EXPECT_EQ(context.control->reserve(MakeReflectionStatisticsMetadata()).slot, 0u);
-    context.control->reset(1u);
-    {
-        const auto gpuTaskAdmission = graph.addTask<LeaseTask>(MakeReflectionStatisticsTaskDesc(), LeaseTask::Payload{ReflectionStatisticsReservation(context.control, MakeReflectionStatisticsMetadata())});
-        ASSERT_TRUE(gpuTaskAdmission);
-        ASSERT_TRUE(gpuTaskAdmission->valid());
+void VerifyReflectionStatistics_RejectedGraphRegistrationAndGraphResetReleaseUnacceptedLeases(){
+    ReflectionStatsContext context = ReflectionStatsContext();
+    ASSERT_TRUE(context.valid());
+    native(mut context){
+        using LeaseTask = ReflectionStatisticsTestHelpers::ReservationLeaseTask<Impl::ReflectionStatisticsReservation>;
+        Core::GpuTaskGraph graph(context.inner.arena);
+        EXPECT_FALSE(graph.addTask<LeaseTask>(Core::GpuTaskDesc{}, LeaseTask::Payload{ Impl::ReflectionStatisticsReservation(context.inner.control, MakeReflectionStatisticsMetadata()) }).has_value());
+        EXPECT_EQ(context.reserve(MakeReflectionStatisticsMetadata()).slot, 0u);
+        context.reset(1u);
+        {
+            const auto gpuTaskAdmission = graph.addTask<LeaseTask>(MakeReflectionStatisticsTaskDesc(), LeaseTask::Payload{ Impl::ReflectionStatisticsReservation(context.inner.control, MakeReflectionStatisticsMetadata()) });
+            ASSERT_TRUE(gpuTaskAdmission);
+            ASSERT_TRUE(gpuTaskAdmission->valid());
+        }
+        graph.reset();
+        EXPECT_EQ(context.reserve(MakeReflectionStatisticsMetadata()).slot, 0u);
     }
-    graph.reset();
-    EXPECT_EQ(context.control->reserve(MakeReflectionStatisticsMetadata()).slot, 0u);
 }
 
-TEST(ReflectionStatistics, PayloadDestructionReclaimsLeaseWithoutDiscardCallback){
-    StatisticsContext context;
-    ASSERT_TRUE(context.control);
-    Core::GpuTaskGraph graph(context.arena);
-    {
-        const auto gpuTaskAdmission = graph.addTask<DestructorLeaseTask>(MakeReflectionStatisticsTaskDesc(), DestructorLeaseTask::Payload{ReflectionStatisticsReservation(context.control, MakeReflectionStatisticsMetadata())});
-        ASSERT_TRUE(gpuTaskAdmission);
-        ASSERT_TRUE(gpuTaskAdmission->valid());
+void VerifyReflectionStatistics_PayloadDestructionReclaimsLeaseWithoutDiscardCallback(){
+    ReflectionStatsContext context = ReflectionStatsContext();
+    ASSERT_TRUE(context.valid());
+    native(mut context){
+        using DestructorLeaseTask = ReflectionStatisticsTestHelpers::DestructorReservationLeaseTask<Impl::ReflectionStatisticsReservation>;
+        Core::GpuTaskGraph graph(context.inner.arena);
+        {
+            const auto gpuTaskAdmission = graph.addTask<DestructorLeaseTask>(MakeReflectionStatisticsTaskDesc(), DestructorLeaseTask::Payload{ Impl::ReflectionStatisticsReservation(context.inner.control, MakeReflectionStatisticsMetadata()) });
+            ASSERT_TRUE(gpuTaskAdmission);
+            ASSERT_TRUE(gpuTaskAdmission->valid());
+        }
+        graph.reset();
+        EXPECT_EQ(context.reserve(MakeReflectionStatisticsMetadata()).slot, 0u);
     }
-    graph.reset();
-    EXPECT_EQ(context.control->reserve(MakeReflectionStatisticsMetadata()).slot, 0u);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_render/refraction/statistics_readback.adhd.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_refraction_statistics_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-using ReflectionStatisticsTestHelpers::Token;
-using StatisticsContext = ReflectionStatisticsTestHelpers::StatisticsContext<RefractionStatisticsControl>;
-
-inline constexpr usize s_RefractionCounterWordCount = NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE / sizeof(u32);
-using NWB::Tests::EcsGraphicsCases::MakeRefractionStatisticsMetadata;
-using NWB::Tests::EcsGraphicsCases::MakeRefractionStatisticsMetadataAt;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(RefractionStatistics, RingSaturationDoesNotRecycleOutstandingGpuWork){
-    StatisticsContext context;
-    ASSERT_TRUE(context.control);
-    const auto first = context.control->reserve(MakeRefractionStatisticsMetadata());
-    const auto second = context.control->reserve(MakeRefractionStatisticsMetadata());
-    const auto third = context.control->reserve(MakeRefractionStatisticsMetadata());
+void VerifyRefractionStatistics_RingSaturationDoesNotRecycleOutstandingGpuWork(){
+    RefractionStatsContext context = RefractionStatsContext();
+    ASSERT_TRUE(context.valid());
+    const StatisticsReservationKey first = context.reserve(MakeRefractionStatisticsMetadata());
+    const StatisticsReservationKey second = context.reserve(MakeRefractionStatisticsMetadata());
+    const StatisticsReservationKey third = context.reserve(MakeRefractionStatisticsMetadata());
     ASSERT_TRUE(first.valid());
     ASSERT_TRUE(second.valid());
     ASSERT_TRUE(third.valid());
     EXPECT_NE(first.slot, second.slot);
     EXPECT_NE(first.slot, third.slot);
     EXPECT_NE(second.slot, third.slot);
-    context.control->accept(first, Token(), true);
-    context.control->discard(first);
-    EXPECT_FALSE(context.control->reserve(MakeRefractionStatisticsMetadata()).valid());
-    context.control->discard(second);
-    const auto reused = context.control->reserve(MakeRefractionStatisticsMetadataAt(10u));
+    context.accept(first, Token(), true);
+    context.discard(first);
+    EXPECT_FALSE(context.reserve(MakeRefractionStatisticsMetadata()).valid());
+    context.discard(second);
+    const StatisticsReservationKey reused = context.reserve(MakeRefractionStatisticsMetadataAt(10u));
     EXPECT_EQ(reused.slot, second.slot);
     EXPECT_GT(reused.sequence, second.sequence);
-    EXPECT_FALSE(context.control->reserve(MakeRefractionStatisticsMetadata()).valid());
+    EXPECT_FALSE(context.reserve(MakeRefractionStatisticsMetadata()).valid());
 }
 
-TEST(RefractionStatistics, CompletionRequiresExactAcceptedPhysicalToken){
-    StatisticsContext context;
-    ASSERT_TRUE(context.control);
-    const auto key = context.control->reserve(MakeRefractionStatisticsMetadata());
-    context.control->accept(key, Token(), true);
-    const Array<u32, s_RefractionCounterWordCount> counters = {};
-    Core::QueueSubmissionToken wrong = Token();
+void VerifyRefractionStatistics_CompletionRequiresExactAcceptedPhysicalToken(){
+    RefractionStatsContext context = RefractionStatsContext();
+    ASSERT_TRUE(context.valid());
+    const StatisticsReservationKey key = context.reserve(MakeRefractionStatisticsMetadata());
+    context.accept(key, Token(), true);
+    const RefractionCounterArray counters = RefractionCounterArray();
+    QueueSubmissionToken wrong = Token();
     wrong.physicalQueueIndex = 1u;
-    context.control->complete(key, wrong, counters);
+    context.complete(key, wrong, counters);
     wrong = Token();
     wrong.deviceGeneration = 8u;
-    context.control->complete(key, wrong, counters);
+    context.complete(key, wrong, counters);
     wrong = Token();
-    wrong.queue = Core::CommandQueue::Compute;
-    context.control->complete(key, wrong, counters);
-    context.control->complete(key, Token(19u), counters);
-    context.control->complete(key, {}, counters);
-    EXPECT_FALSE(context.control->tryGetLatestStatistics());
-    EXPECT_TRUE(context.control->pending(key.slot));
-    context.control->complete(key, Token(), counters);
-    const auto statistics = context.control->tryGetLatestStatistics();
-    ASSERT_TRUE(statistics);
-    EXPECT_EQ(statistics->acceptedToken.value, Token().value);
-    EXPECT_EQ(statistics->acceptedToken.physicalQueueIndex, 0u);
-    EXPECT_FALSE(context.control->pending(key.slot));
+    wrong.queue = CommandQueue::Compute;
+    context.complete(key, wrong, counters);
+    context.complete(key, Token(19u), counters);
+    context.complete(key, QueueSubmissionToken(), counters);
+    EXPECT_FALSE(context.tryGetLatestStatistics().has_value());
+    EXPECT_TRUE(context.pending(key.slot).has_value());
+    context.complete(key, Token(), counters);
+    const Expected<RefractionStatistics> statistics = context.tryGetLatestStatistics();
+    ASSERT_TRUE(statistics.has_value());
+    EXPECT_EQ(statistics.value().acceptedToken.value, Token().value);
+    EXPECT_EQ(statistics.value().acceptedToken.physicalQueueIndex, 0u);
+    EXPECT_FALSE(context.pending(key.slot).has_value());
 }
 
-TEST(RefractionStatistics, OlderCompletionsCannotReplaceFrozenNewerPublication){
-    StatisticsContext context;
-    ASSERT_TRUE(context.control);
+void VerifyRefractionStatistics_OlderCompletionsCannotReplaceFrozenNewerPublication(){
+    RefractionStatsContext context = RefractionStatsContext();
+    ASSERT_TRUE(context.valid());
     RefractionStatistics metadata = MakeRefractionStatisticsMetadataAt(10u);
-    const auto older = context.control->reserve(metadata);
+    const StatisticsReservationKey older = context.reserve(metadata);
     metadata.frameIndex = 11u;
     metadata.graphicsFrameIndex = 111u;
-    const auto newer = context.control->reserve(metadata);
+    const StatisticsReservationKey newer = context.reserve(metadata);
     metadata.frameIndex = 999u;
     metadata.width = 1u;
-    context.control->accept(older, Token(20u), true);
-    context.control->accept(newer, Token(21u), false);
-    static constexpr Array<u32, s_RefractionCounterWordCount> s_Counters = {
-        23u, 41u, 2u, 3u, 5u, 7u, 11u, 43u, 13u, 17u, 19u, 29u, 31u, 47u, 37u, 53u,
-        59u, 61u, 67u, 71u, 73u, 79u, 83u, 89u, 97u, 101u, 103u, 107u, 1u,
-    };
-    context.control->complete(newer, Token(21u), s_Counters);
-    const Array<u32, s_RefractionCounterWordCount> olderCounters = {};
-    context.control->complete(older, Token(20u), olderCounters);
-    const auto statistics = context.control->tryGetLatestStatistics();
-    ASSERT_TRUE(statistics);
-    EXPECT_EQ(statistics->sequence, newer.sequence);
-    EXPECT_EQ(statistics->frameIndex, 11u);
-    EXPECT_EQ(statistics->graphicsFrameIndex, 111u);
-    EXPECT_EQ(statistics->width, 320u);
-    EXPECT_EQ(statistics->height, 180u);
-    EXPECT_FALSE(statistics->hardwareReady);
-    EXPECT_FALSE(statistics->csgHardwareEnabled);
-    EXPECT_EQ(statistics->hardwarePixels, 23u);
-    EXPECT_EQ(statistics->entryQueries, 41u);
-    EXPECT_EQ(statistics->exitQueries, 43u);
-    EXPECT_EQ(statistics->backgroundQueries, 47u);
-    EXPECT_EQ(statistics->physicalQueries, 103u);
-    EXPECT_EQ(statistics->queryBudgetUnits, 107u);
-    EXPECT_EQ(statistics->overflowFlags, 1u);
-#define NWB_CHECK_REFRACTION_COUNTER(field, byteOffset) EXPECT_EQ(statistics->field, s_Counters[(byteOffset) / NWB_REFRACTION_DIAGNOSTIC_WORD_BYTES]);
-    NWB_REFRACTION_DIAGNOSTIC_COUNTER_FIELDS(NWB_CHECK_REFRACTION_COUNTER)
-#undef NWB_CHECK_REFRACTION_COUNTER
-    EXPECT_EQ(context.control->reserve(MakeRefractionStatisticsMetadata()).slot, older.slot);
+    context.accept(older, Token(20u), true);
+    context.accept(newer, Token(21u), false);
+    const RefractionCounterArray counters = MakeSampleRefractionCounters();
+    context.complete(newer, Token(21u), counters);
+    const RefractionCounterArray olderCounters = RefractionCounterArray();
+    context.complete(older, Token(20u), olderCounters);
+    const Expected<RefractionStatistics> statistics = context.tryGetLatestStatistics();
+    ASSERT_TRUE(statistics.has_value());
+    EXPECT_EQ(statistics.value().sequence, newer.sequence);
+    EXPECT_EQ(statistics.value().frameIndex, 11u);
+    EXPECT_EQ(statistics.value().graphicsFrameIndex, 111u);
+    EXPECT_EQ(statistics.value().width, 320u);
+    EXPECT_EQ(statistics.value().height, 180u);
+    EXPECT_FALSE(statistics.value().hardwareReady);
+    EXPECT_FALSE(statistics.value().csgHardwareEnabled);
+    EXPECT_EQ(statistics.value().hardwarePixels, 23u);
+    EXPECT_EQ(statistics.value().entryQueries, 41u);
+    EXPECT_EQ(statistics.value().exitQueries, 43u);
+    EXPECT_EQ(statistics.value().backgroundQueries, 47u);
+    EXPECT_EQ(statistics.value().physicalQueries, 103u);
+    EXPECT_EQ(statistics.value().queryBudgetUnits, 107u);
+    EXPECT_EQ(statistics.value().overflowFlags, 1u);
+    ExpectRefractionDiagnosticCountersMatch(statistics.value(), counters);
+    EXPECT_EQ(context.reserve(MakeRefractionStatisticsMetadata()).slot, older.slot);
 }
 
-TEST(RefractionStatistics, DeviceResetRejectsStaleAcceptanceAndCompletion){
-    StatisticsContext context;
-    ASSERT_TRUE(context.control);
-    const auto previous = context.control->reserve(MakeRefractionStatisticsMetadata());
-    context.control->accept(previous, Token(), true);
-    const Array<u32, s_RefractionCounterWordCount> counters = {};
-    context.control->complete(previous, Token(), counters);
-    context.control->reset(0u);
-    EXPECT_FALSE(context.control->tryGetLatestStatistics());
-    EXPECT_FALSE(context.control->reserve(MakeRefractionStatisticsMetadata()).valid());
-    context.control->reset(8u);
-    const auto current = context.control->reserve(MakeRefractionStatisticsMetadataAt(12u));
+void VerifyRefractionStatistics_DeviceResetRejectsStaleAcceptanceAndCompletion(){
+    RefractionStatsContext context = RefractionStatsContext();
+    ASSERT_TRUE(context.valid());
+    const StatisticsReservationKey previous = context.reserve(MakeRefractionStatisticsMetadata());
+    context.accept(previous, Token(), true);
+    const RefractionCounterArray counters = RefractionCounterArray();
+    context.complete(previous, Token(), counters);
+    context.reset(0u);
+    EXPECT_FALSE(context.tryGetLatestStatistics().has_value());
+    EXPECT_FALSE(context.reserve(MakeRefractionStatisticsMetadata()).valid());
+    context.reset(8u);
+    const StatisticsReservationKey current = context.reserve(MakeRefractionStatisticsMetadataAt(12u));
     ASSERT_TRUE(current.valid());
     EXPECT_GT(current.generation, previous.generation);
-    context.control->accept(previous, Token(), true);
-    context.control->discard(previous);
-    context.control->complete(previous, Token(), counters);
-    EXPECT_FALSE(context.control->tryGetLatestStatistics());
-    Core::QueueSubmissionToken next = Token(1u);
+    context.accept(previous, Token(), true);
+    context.discard(previous);
+    context.complete(previous, Token(), counters);
+    EXPECT_FALSE(context.tryGetLatestStatistics().has_value());
+    QueueSubmissionToken next = Token(1u);
     next.deviceGeneration = 8u;
-    context.control->accept(current, next, true);
-    context.control->complete(current, next, counters);
-    const auto statistics = context.control->tryGetLatestStatistics();
-    ASSERT_TRUE(statistics);
-    EXPECT_EQ(statistics->frameIndex, 12u);
-    EXPECT_EQ(statistics->acceptedToken.deviceGeneration, 8u);
-    EXPECT_TRUE(statistics->hardwareReady);
-    EXPECT_TRUE(statistics->csgHardwareEnabled);
+    context.accept(current, next, true);
+    context.complete(current, next, counters);
+    const Expected<RefractionStatistics> statistics = context.tryGetLatestStatistics();
+    ASSERT_TRUE(statistics.has_value());
+    EXPECT_EQ(statistics.value().frameIndex, 12u);
+    EXPECT_EQ(statistics.value().acceptedToken.deviceGeneration, 8u);
+    EXPECT_TRUE(statistics.value().hardwareReady);
+    EXPECT_TRUE(statistics.value().csgHardwareEnabled);
 }
 
-TEST(RefractionStatistics, FailedMappingRetiresSlotWithoutReplacingPublication){
-    StatisticsContext context;
-    ASSERT_TRUE(context.control);
-    const auto first = context.control->reserve(MakeRefractionStatisticsMetadata());
-    context.control->accept(first, Token(), true);
-    const Array<u32, s_RefractionCounterWordCount> counters = {};
-    context.control->complete(first, Token(), counters);
-    const auto failed = context.control->reserve(MakeRefractionStatisticsMetadataAt(10u));
-    context.control->accept(failed, Token(21u), true);
-    context.control->complete(failed, Token(21u), {});
-    const auto statistics = context.control->tryGetLatestStatistics();
-    ASSERT_TRUE(statistics);
-    EXPECT_EQ(statistics->sequence, first.sequence);
-    EXPECT_EQ(context.control->reserve(MakeRefractionStatisticsMetadata()).slot, failed.slot);
+void VerifyRefractionStatistics_FailedMappingRetiresSlotWithoutReplacingPublication(){
+    RefractionStatsContext context = RefractionStatsContext();
+    ASSERT_TRUE(context.valid());
+    const StatisticsReservationKey first = context.reserve(MakeRefractionStatisticsMetadata());
+    context.accept(first, Token(), true);
+    const RefractionCounterArray counters = RefractionCounterArray();
+    context.complete(first, Token(), counters);
+    const StatisticsReservationKey failed = context.reserve(MakeRefractionStatisticsMetadataAt(10u));
+    context.accept(failed, Token(21u), true);
+    context.completeEmpty(failed, Token(21u));
+    const Expected<RefractionStatistics> statistics = context.tryGetLatestStatistics();
+    ASSERT_TRUE(statistics.has_value());
+    EXPECT_EQ(statistics.value().sequence, first.sequence);
+    EXPECT_EQ(context.reserve(MakeRefractionStatisticsMetadata()).slot, failed.slot);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/common/ecs_test_world.adhd.h>
-#include <tests/unit/ecs_graphics/name_cases.adhd.h>
-
-#include <impl/ecs_mesh/system.adhd.h>
-#include <impl/ecs_render/mesh/runtime_mesh_pruning.adhd.h>
-
-#include <core/ecs/entity.h>
-
-#include <global/name.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_runtime_mesh_pruning_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-
-struct PruneContext : Tests::EcsTestWorld{
-    MeshSystem& meshSystem = world.addSystem<MeshSystem>(world);
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(RenderableMeshResolution, StaticAttachmentWithoutAssetIsUnavailable){
-    PruneContext context;
-    auto entity = context.world.createEntity();
-    auto& mesh = entity.addComponent<MeshComponent>();
-    const auto unavailable = context.meshSystem.resolveRenderableMeshStatus(entity.id());
-    ASSERT_FALSE(unavailable);
-    EXPECT_EQ(unavailable.error(), RenderableMeshResolution::Unavailable);
-    mesh.mesh = Core::Assets::AssetRef<Mesh>("tests/runtime_mesh_pruning/static_attachment");
-    const auto description = context.meshSystem.resolveRenderableMeshStatus(entity.id());
-    ASSERT_TRUE(description);
-}
-
-TEST(RenderableMeshResolution, SkinnedAttachmentWithoutProviderIsUnavailable){
-    PruneContext context;
-    auto entity = context.world.createEntity();
-    entity.addComponent<SkinnedMeshBindingComponent>();
-    const auto unavailable = context.meshSystem.resolveRenderableMeshStatus(entity.id());
-    ASSERT_FALSE(unavailable);
-    EXPECT_EQ(unavailable.error(), RenderableMeshResolution::Unavailable);
-}
-
-TEST(RuntimeMeshPruning, RequestedIdentitiesKeepFullNameAndVersionAcrossHintedAndGrowingIndices){
-    Array<Name, 40> names{};
-    for(usize index = 0u; index < 40u; ++index){
-        NameHash hash = ComputeNameHash(MakeNotNull("tests/runtime_mesh_pruning/full_identity"));
-        hash.qwords[s_NameHashLaneCount - 1u] ^= index + 1u;
-        names[index] = Name(hash);
+void VerifyRenderableMeshResolution_StaticAttachmentWithoutAssetIsUnavailable(){
+    PruneContext context = PruneContext();
+    native(mut context){
+        auto entity = context.world.createEntity();
+        auto& mesh = entity.addComponent<Impl::MeshComponent>();
+        const auto unavailable = context.meshSystem.resolveRenderableMeshStatus(entity.id());
+        ASSERT_FALSE(unavailable);
+        EXPECT_EQ(unavailable.error(), RenderableMeshResolution::Unavailable);
+        mesh.mesh = Core::Assets::AssetRef<Impl::Mesh>("tests/runtime_mesh_pruning/static_attachment");
+        const auto description = context.meshSystem.resolveRenderableMeshStatus(entity.id());
+        ASSERT_TRUE(description);
     }
-    for(const usize capacityHint : { 0u, 64u }){
-        Core::Alloc::ScratchArena scratch{Name(NWB::Tests::EcsGraphicsCases::s_EcsGraphicsCaseTestsRuntimeMeshPruningRequestScratch)};
-        RuntimeMeshRequestSet requests(scratch, capacityHint);
-        requests.add(s_NameNone, 7u);
-        requests.markLive(s_NameNone, 7u);
-        EXPECT_TRUE(requests.complete());
-        EXPECT_FALSE(requests.containsLive(s_NameNone, 7u));
+}
+
+void VerifyRenderableMeshResolution_SkinnedAttachmentWithoutProviderIsUnavailable(){
+    PruneContext context = PruneContext();
+    native(mut context){
+        auto entity = context.world.createEntity();
+        entity.addComponent<Impl::SkinnedMeshBindingComponent>();
+        const auto unavailable = context.meshSystem.resolveRenderableMeshStatus(entity.id());
+        ASSERT_FALSE(unavailable);
+        EXPECT_EQ(unavailable.error(), RenderableMeshResolution::Unavailable);
+    }
+}
+
+void VerifyRuntimeMeshPruning_RequestedIdentitiesKeepFullNameAndVersionAcrossHintedAndGrowingIndices(){
+    Array<Name, 40> names = Array<Name, 40>();
+    native(mut names){
         for(usize index = 0u; index < 40u; ++index){
-            requests.add(names[index], 7u);
-            requests.add(names[index], 7u);
-            if(index < 16u)
+            NameHash hash = ComputeNameHash(MakeNotNull("tests/runtime_mesh_pruning/full_identity"));
+            hash.qwords[s_NameHashLaneCount - 1u] ^= index + 1u;
+            names[index] = Name(hash);
+        }
+    }
+    Array<usize, 2> hints = Array<usize, 2>();
+    hints[0u] = 0u;
+    hints[1u] = 64u;
+    for(in usize capacityHint : hints){
+        native(in names, in capacityHint){
+            Core::Alloc::ScratchArena scratch{ Name(s_EcsGraphicsCaseTestsRuntimeMeshPruningRequestScratch) };
+            RuntimeMeshRequestSet requests(scratch, capacityHint);
+            requests.add(s_NameNone, 7u);
+            requests.markLive(s_NameNone, 7u);
+            EXPECT_TRUE(requests.complete());
+            EXPECT_FALSE(requests.containsLive(s_NameNone, 7u));
+            for(usize index = 0u; index < 40u; ++index){
+                requests.add(names[index], 7u);
+                requests.add(names[index], 7u);
+                if(index < 16u)
+                    requests.markLive(names[index], 7u);
+            }
+            requests.add(names[0u], 0u);
+            requests.add(names[0u], (1ull << 40u) + 7u);
+            for(usize index = 0u; index < 40u; ++index){
+                EXPECT_EQ(requests.containsLive(names[index], 7u), index < 16u);
+                EXPECT_FALSE(requests.containsLive(names[index], 8u));
+            }
+            requests.markLive(Name(s_EcsGraphicsCaseTestsRuntimeMeshPruningNotRequested), 7u);
+            EXPECT_FALSE(requests.complete());
+            for(usize index = 0u; index < 40u; ++index){
                 requests.markLive(names[index], 7u);
+                requests.markLive(names[index], 7u);
+            }
+            EXPECT_FALSE(requests.complete());
+            EXPECT_FALSE(requests.containsLive(names[0u], 0u));
+            EXPECT_FALSE(requests.containsLive(names[0u], (1ull << 40u) + 7u));
+            requests.markLive(names[0u], (1ull << 40u) + 7u);
+            EXPECT_FALSE(requests.complete());
+            requests.markLive(names[0u], 0u);
+            EXPECT_TRUE(requests.complete());
+            requests.add(names[0u], 7u);
+            EXPECT_TRUE(requests.complete());
+            for(usize index = 0u; index < 40u; ++index)
+                EXPECT_TRUE(requests.containsLive(names[index], 7u));
         }
-        requests.add(names[0u], 0u);
-        requests.add(names[0u], (1ull << 40u) + 7u);
-        for(usize index = 0u; index < 40u; ++index){
-            EXPECT_EQ(requests.containsLive(names[index], 7u), index < 16u);
-            EXPECT_FALSE(requests.containsLive(names[index], 8u));
-        }
-        requests.markLive(Name(NWB::Tests::EcsGraphicsCases::s_EcsGraphicsCaseTestsRuntimeMeshPruningNotRequested), 7u);
-        EXPECT_FALSE(requests.complete());
-        for(usize index = 0u; index < 40u; ++index){
-            requests.markLive(names[index], 7u);
-            requests.markLive(names[index], 7u);
-        }
-        EXPECT_FALSE(requests.complete());
-        EXPECT_FALSE(requests.containsLive(names[0u], 0u));
-        EXPECT_FALSE(requests.containsLive(names[0u], (1ull << 40u) + 7u));
-        requests.markLive(names[0u], (1ull << 40u) + 7u);
-        EXPECT_FALSE(requests.complete());
-        requests.markLive(names[0u], 0u);
-        EXPECT_TRUE(requests.complete());
-        requests.add(names[0u], 7u);
-        EXPECT_TRUE(requests.complete());
-        for(usize index = 0u; index < 40u; ++index)
-            EXPECT_TRUE(requests.containsLive(names[index], 7u));
     }
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_render/deferred/scene_shading_upload_tracker.adhd.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_scene_shading_upload_tests{
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-
-
-TEST(SceneShadingUploads, EmptyLightTransitionInvalidatesThePreviousLightMirror){
-    SceneShadingUploadTracker tracker;
-    Array<u8, 5120u> lightBytes{};
-    Array<u8, 16u> shadingBytes{};
+void VerifySceneShadingUploads_EmptyLightTransitionInvalidatesThePreviousLightMirror(){
+    SceneShadingUploadTracker tracker = SceneShadingUploadTracker();
+    Array<u8, 5120> lightBytes = Array<u8, 5120>();
+    Array<u8, 16> shadingBytes = Array<u8, 16>();
     u32 lightCount = 0u;
     b8 lightValid = false;
     b8 shadingValid = false;
-    SceneShadingGpuData shading{};
-    Array<SceneLightGpuData, 1u> light{};
-    const Span<const SceneLightGpuData> empty{};
-    const Span<const SceneLightGpuData> one(light.data(), light.size());
+    SceneShadingGpuData shading = SceneShadingGpuData();
+    Array<SceneLightGpuData, 1> light = Array<SceneLightGpuData, 1>();
+    const SceneLightSpan empty = SceneLightSpan();
+    const SceneLightSpan one = SceneLightSpan(light.data(), light.size());
 
     EXPECT_FALSE(tracker.lightUploadRequired(lightValid, lightCount, lightBytes, empty));
     EXPECT_TRUE(tracker.shadingUploadRequired(shadingValid, shadingBytes, shading));
@@ -1397,49 +1397,17 @@ TEST(SceneShadingUploads, EmptyLightTransitionInvalidatesThePreviousLightMirror)
     ASSERT_TRUE(tracker.lightUploadRequired(lightValid, lightCount, lightBytes, one));
     tracker.confirm(one, true, shading, false, lightBytes, lightCount, lightValid, shadingBytes, shadingValid);
     EXPECT_FALSE(tracker.lightUploadRequired(lightValid, lightCount, lightBytes, one));
-    light[0].position.x = 1.0f;
+    light[0u].position.x = 1.0f;
     EXPECT_TRUE(tracker.lightUploadRequired(lightValid, lightCount, lightBytes, one));
-    tracker.confirm(empty, false, shading, false, lightBytes, lightCount, lightValid, shadingBytes, shadingValid);
+    native(mut tracker, in empty, in shading, mut lightBytes, mut lightCount, mut lightValid, mut shadingBytes, mut shadingValid){
+        tracker.confirm(empty, false, shading, false, lightBytes, lightCount, lightValid, shadingBytes, shadingValid);
+    }
     EXPECT_EQ(lightCount, 0u);
     EXPECT_TRUE(tracker.lightUploadRequired(lightValid, lightCount, lightBytes, one));
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_render/shadow/shadow_material_context_policy.adhd.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_shadow_material_context_policy_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(ShadowMaterialContextPolicy, RejectedAndCrossRouteUploadsDoNotAdmitStaleCache){
-    const ShadowMaterialContextPolicy policy;
+void VerifyShadowMaterialContextPolicy_RejectedAndCrossRouteUploadsDoNotAdmitStaleCache(){
+    const ShadowMaterialContextPolicy policy = ShadowMaterialContextPolicy();
     u64 hardwareHash = 11u;
     u64 softwareHash = 22u;
     b8 hardwareValid = true;
@@ -1461,15 +1429,62 @@ TEST(ShadowMaterialContextPolicy, RejectedAndCrossRouteUploadsDoNotAdmitStaleCac
     EXPECT_TRUE(policy.softwareSnapshotAccepted(false, true, true, 22u, 22u, 2u, 2u));
 }
 
+NWB_ADHD_GTEST(ReflectionFeedback, ExtentAccountsForTwoSurfaceClassesAndPartialTiles, VerifyReflectionFeedback_ExtentAccountsForTwoSurfaceClassesAndPartialTiles)
+NWB_ADHD_GTEST(ReflectionFeedback, SpeculativePlansAndRejectedWriterDoNotAdvanceCadence, VerifyReflectionFeedback_SpeculativePlansAndRejectedWriterDoNotAdvanceCadence)
+NWB_ADHD_GTEST(ReflectionFeedback, EveryTrustedContentDomainInvalidatesPreviousTileState, VerifyReflectionFeedback_EveryTrustedContentDomainInvalidatesPreviousTileState)
+NWB_ADHD_GTEST(ReflectionFeedback, ScreenRangeBudgetAndSeedChangesInvalidateFeedback, VerifyReflectionFeedback_ScreenRangeBudgetAndSeedChangesInvalidateFeedback)
+NWB_ADHD_GTEST(ReflectionFeedback, OnlyTrustedEnabledHybridWithAvailableHardwareCanUseFeedback, VerifyReflectionFeedback_OnlyTrustedEnabledHybridWithAvailableHardwareCanUseFeedback)
+NWB_ADHD_GTEST(ReflectionFeedback, RejectedDisablePreservesAcceptedBankButAcceptedDisableInvalidatesReuse, VerifyReflectionFeedback_RejectedDisablePreservesAcceptedBankButAcceptedDisableInvalidatesReuse)
+NWB_ADHD_GTEST(ReflectionFeedback, RejectedUntrustedPrefixPreservesAcceptedFeedback, VerifyReflectionFeedback_RejectedUntrustedPrefixPreservesAcceptedFeedback)
+NWB_ADHD_GTEST(ReflectionFeedback, LateHardwareFailureDisablesBypassAndRecoveryRestartsObservation, VerifyReflectionFeedback_LateHardwareFailureDisablesBypassAndRecoveryRestartsObservation)
+NWB_ADHD_GTEST(ReflectionFeedback, InvalidAcceptedTokensQuarantineBankReuseUntilJoinedOwnerReset, VerifyReflectionFeedback_InvalidAcceptedTokensQuarantineBankReuseUntilJoinedOwnerReset)
+NWB_ADHD_GTEST(ReflectionFeedback, StalePlanCannotReserveAfterAnIndependentPlanAccepts, VerifyReflectionFeedback_StalePlanCannotReserveAfterAnIndependentPlanAccepts)
+NWB_ADHD_GTEST(ReflectionFeedback, ResourceGenerationBlocksOldCallbacksWithoutDiscardingTheNewLease, VerifyReflectionFeedback_ResourceGenerationBlocksOldCallbacksWithoutDiscardingTheNewLease)
+NWB_ADHD_GTEST(ReflectionFeedback, RejectedGraphAndResetReleaseTheMoveOnlyReservation, VerifyReflectionFeedback_RejectedGraphAndResetReleaseTheMoveOnlyReservation)
+NWB_ADHD_GTEST(ReflectionFeedback, MovedLeasePublishesOnceAndInvalidAcceptanceRetainsQuarantineAfterDestruction, VerifyReflectionFeedback_MovedLeasePublishesOnceAndInvalidAcceptanceRetainsQuarantineAfterDestruction)
+NWB_ADHD_GTEST(ReflectionHistory, AcceptedSampleCountCapsWhileSamplingIndexContinues, VerifyReflectionHistory_AcceptedSampleCountCapsWhileSamplingIndexContinues)
+NWB_ADHD_GTEST(ReflectionHistory, SingleSampleLimitStillPublishesBanksAndAdvancesAcceptedSampling, VerifyReflectionHistory_SingleSampleLimitStillPublishesBanksAndAdvancesAcceptedSampling)
+NWB_ADHD_GTEST(ReflectionHistory, DiscardedLateHardwareResetKeepsHistoryUntilAnAcceptedRetry, VerifyReflectionHistory_DiscardedLateHardwareResetKeepsHistoryUntilAnAcceptedRetry)
+NWB_ADHD_GTEST(ReflectionHistory, EverySceneDomainAndViewChangeResetsOnce, VerifyReflectionHistory_EverySceneDomainAndViewChangeResetsOnce)
+NWB_ADHD_GTEST(ReflectionHistory, SeedAndBudgetChangesRestartTheSamplingSequence, VerifyReflectionHistory_SeedAndBudgetChangesRestartTheSamplingSequence)
+NWB_ADHD_GTEST(ReflectionHistory, SpatialAndDiagnosticSettingsDoNotResetUnfilteredHistory, VerifyReflectionHistory_SpatialAndDiagnosticSettingsDoNotResetUnfilteredHistory)
+NWB_ADHD_GTEST(ReflectionHistory, RejectedDisabledTransitionCannotOverwriteAcceptedHistoryBank, VerifyReflectionHistory_RejectedDisabledTransitionCannotOverwriteAcceptedHistoryBank)
+NWB_ADHD_GTEST(ReflectionHistory, RejectedUntrustedTransitionCannotOverwriteAcceptedHistoryBank, VerifyReflectionHistory_RejectedUntrustedTransitionCannotOverwriteAcceptedHistoryBank)
+NWB_ADHD_GTEST(ReflectionHistory, StableUntrustedSceneNeverAccumulatesButDoesAdvanceAcceptedSampling, VerifyReflectionHistory_StableUntrustedSceneNeverAccumulatesButDoesAdvanceAcceptedSampling)
+NWB_ADHD_GTEST(ReflectionHistory, StalePlanCannotReserveAfterAnotherFrameAccepts, VerifyReflectionHistory_StalePlanCannotReserveAfterAnotherFrameAccepts)
+NWB_ADHD_GTEST(ReflectionHistory, ResourceGenerationRejectsOldAcceptanceAndResetsEpoch, VerifyReflectionHistory_ResourceGenerationRejectsOldAcceptanceAndResetsEpoch)
+NWB_ADHD_GTEST(ReflectionHistory, GraphRejectionAndResetReleaseUnacceptedLease, VerifyReflectionHistory_GraphRejectionAndResetReleaseUnacceptedLease)
+NWB_ADHD_GTEST(ReflectionSettings, AcceptsZeroHardwareBudgetWithScreenFeedback, VerifyReflectionSettings_AcceptsZeroHardwareBudgetWithScreenFeedback)
+NWB_ADHD_GTEST(ReflectionSettings, BoundsAllSceneQueriesPerAdmittedPath, VerifyReflectionSettings_BoundsAllSceneQueriesPerAdmittedPath)
+NWB_ADHD_GTEST(ReflectionSettings, BoundsTemporalReferenceCountAndSpatialRadius, VerifyReflectionSettings_BoundsTemporalReferenceCountAndSpatialRadius)
+NWB_ADHD_GTEST(ReflectionSettings, RejectsNonFiniteAndUnorderedDistanceControls, VerifyReflectionSettings_RejectsNonFiniteAndUnorderedDistanceControls)
+NWB_ADHD_GTEST(ReflectionSettings, BoundsScreenTraversalAndFiniteConfidenceInputs, VerifyReflectionSettings_BoundsScreenTraversalAndFiniteConfidenceInputs)
+NWB_ADHD_GTEST(ReflectionSettings, RejectsInvalidMaterialThresholdsModesAndEnvironmentRadiance, VerifyReflectionSettings_RejectsInvalidMaterialThresholdsModesAndEnvironmentRadiance)
+NWB_ADHD_GTEST(ReflectionSettings, ReflectionHardwareWorkRequiresAnEnabledRouteAndPositiveRayBudget, VerifyReflectionSettings_ReflectionHardwareWorkRequiresAnEnabledRouteAndPositiveRayBudget)
+NWB_ADHD_GTEST(ReflectionStatistics, RingSkipsWhenThreeReservationsAreOutstanding, VerifyReflectionStatistics_RingSkipsWhenThreeReservationsAreOutstanding)
+NWB_ADHD_GTEST(ReflectionStatistics, DiscardedReservationCanBeReusedWithoutStaleCallbackMutation, VerifyReflectionStatistics_DiscardedReservationCanBeReusedWithoutStaleCallbackMutation)
+NWB_ADHD_GTEST(ReflectionStatistics, PublishesFrozenMetadataAndNonzeroCountersOnlyAtCompletion, VerifyReflectionStatistics_PublishesFrozenMetadataAndNonzeroCountersOnlyAtCompletion)
+NWB_ADHD_GTEST(ReflectionStatistics, FeedbackEpochSurvivesAcceptedInputMutation, VerifyReflectionStatistics_FeedbackEpochSurvivesAcceptedInputMutation)
+NWB_ADHD_GTEST(ReflectionStatistics, OlderCompletionsCannotReplaceNewerPublishedWork, VerifyReflectionStatistics_OlderCompletionsCannotReplaceNewerPublishedWork)
+NWB_ADHD_GTEST(ReflectionStatistics, CompletionRequiresExactAcceptedPhysicalToken, VerifyReflectionStatistics_CompletionRequiresExactAcceptedPhysicalToken)
+NWB_ADHD_GTEST(ReflectionStatistics, ResetRejectsOldCallbacksAndClearsPublication, VerifyReflectionStatistics_ResetRejectsOldCallbacksAndClearsPublication)
+NWB_ADHD_GTEST(ReflectionStatistics, FailedMappingRetiresSlotWithoutPublishingZeros, VerifyReflectionStatistics_FailedMappingRetiresSlotWithoutPublishingZeros)
+NWB_ADHD_GTEST(ReflectionStatistics, InvalidAcceptedTokenQuarantinesSlotUntilReset, VerifyReflectionStatistics_InvalidAcceptedTokenQuarantinesSlotUntilReset)
+NWB_ADHD_GTEST(ReflectionStatistics, MovingLeaseTransfersOwnershipAndReclaimsAssignmentDestination, VerifyReflectionStatistics_MovingLeaseTransfersOwnershipAndReclaimsAssignmentDestination)
+NWB_ADHD_GTEST(ReflectionStatistics, AcceptedLeaseRemainsInFlightAfterPayloadDestruction, VerifyReflectionStatistics_AcceptedLeaseRemainsInFlightAfterPayloadDestruction)
+NWB_ADHD_GTEST(ReflectionStatistics, RejectedGraphRegistrationAndGraphResetReleaseUnacceptedLeases, VerifyReflectionStatistics_RejectedGraphRegistrationAndGraphResetReleaseUnacceptedLeases)
+NWB_ADHD_GTEST(ReflectionStatistics, PayloadDestructionReclaimsLeaseWithoutDiscardCallback, VerifyReflectionStatistics_PayloadDestructionReclaimsLeaseWithoutDiscardCallback)
+NWB_ADHD_GTEST(RefractionStatistics, RingSaturationDoesNotRecycleOutstandingGpuWork, VerifyRefractionStatistics_RingSaturationDoesNotRecycleOutstandingGpuWork)
+NWB_ADHD_GTEST(RefractionStatistics, CompletionRequiresExactAcceptedPhysicalToken, VerifyRefractionStatistics_CompletionRequiresExactAcceptedPhysicalToken)
+NWB_ADHD_GTEST(RefractionStatistics, OlderCompletionsCannotReplaceFrozenNewerPublication, VerifyRefractionStatistics_OlderCompletionsCannotReplaceFrozenNewerPublication)
+NWB_ADHD_GTEST(RefractionStatistics, DeviceResetRejectsStaleAcceptanceAndCompletion, VerifyRefractionStatistics_DeviceResetRejectsStaleAcceptanceAndCompletion)
+NWB_ADHD_GTEST(RefractionStatistics, FailedMappingRetiresSlotWithoutReplacingPublication, VerifyRefractionStatistics_FailedMappingRetiresSlotWithoutReplacingPublication)
+NWB_ADHD_GTEST(RenderableMeshResolution, StaticAttachmentWithoutAssetIsUnavailable, VerifyRenderableMeshResolution_StaticAttachmentWithoutAssetIsUnavailable)
+NWB_ADHD_GTEST(RenderableMeshResolution, SkinnedAttachmentWithoutProviderIsUnavailable, VerifyRenderableMeshResolution_SkinnedAttachmentWithoutProviderIsUnavailable)
+NWB_ADHD_GTEST(RuntimeMeshPruning, RequestedIdentitiesKeepFullNameAndVersionAcrossHintedAndGrowingIndices, VerifyRuntimeMeshPruning_RequestedIdentitiesKeepFullNameAndVersionAcrossHintedAndGrowingIndices)
+NWB_ADHD_GTEST(SceneShadingUploads, EmptyLightTransitionInvalidatesThePreviousLightMirror, VerifySceneShadingUploads_EmptyLightTransitionInvalidatesThePreviousLightMirror)
+NWB_ADHD_GTEST(ShadowMaterialContextPolicy, RejectedAndCrossRouteUploadsDoNotAdmitStaleCache, VerifyShadowMaterialContextPolicy_RejectedAndCrossRouteUploadsDoNotAdmitStaleCache)
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

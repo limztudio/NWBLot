@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "name_cases.adhd"
+#include <tests/performance/ui_input/name_cases.adhd>
 
 native{
 #include <impl/ecs_ui/edit_box_host.adhd.h>
@@ -126,6 +126,13 @@ InputSource MakeInputSource(in u64 deviceId, in u64 sourceId){
         source = { deviceId, sourceId };
     }
     return source;
+}
+
+DisplayMetrics MakeDisplayMetrics(in f32 width, in f32 height){
+    DisplayMetrics metrics = DisplayMetrics();
+    metrics.logicalWidth = width;
+    metrics.logicalHeight = height;
+    return metrics;
 }
 
 void ConfigureBenchmarkSkinAtlas(mut GlobalArena arena, mut UiSkin skin){
@@ -304,7 +311,7 @@ class PublicationCase : IUiBenchmarkCase{
         ++this.m_generation;
         if(!this.m_context.beginFrame(this.m_generation))
             return false;
-        this.m_host.beginFrame(this.m_generation, Point(500.0f, 200.0f));
+        this.m_host.beginFrame(this.m_generation, MakeDisplayMetrics(500.0f, 200.0f));
 
         b8 declared = false;
         mut Context context = this.m_context;
@@ -413,7 +420,7 @@ class EmptySelectionCase : IUiBenchmarkCase{
     }
 
     public b8 operation()override{
-        this.m_paint.begin(Point(500.0f, 200.0f), 1u, 1u, AssetRef<UiSkin>(s_SkinPath), this.m_skin);
+        this.m_paint.begin(MakeDisplayMetrics(500.0f, 200.0f), 1u, 1u, AssetRef<UiSkin>(s_SkinPath), this.m_skin);
         if(!this.m_view.paint(this.m_text, this.m_paint, this.m_skin, this.m_placement))
             return false;
         this.m_snapshot = this.m_paint.freeze();
@@ -451,7 +458,7 @@ class PaintCase : IUiBenchmarkCase{
     }
 
     public b8 operation()override{
-        this.m_builder.begin(Point(128.0f, 128.0f), 1u, 1u, AssetRef<UiSkin>(s_SkinPath), this.m_skin);
+        this.m_builder.begin(MakeDisplayMetrics(128.0f, 128.0f), 1u, 1u, AssetRef<UiSkin>(s_SkinPath), this.m_skin);
         this.m_builder.reserve(this.m_commands);
         for(u32 command = 0u; command < this.m_commands; ++command){
             if(this.m_descending && !this.m_builder.beginOverlay(this.m_commands - command))
@@ -687,7 +694,7 @@ b8 MeasurePointerWorkload(mut GlobalArena arena, mut PointerWorkload workload){
     const usize contactCount = workload.contactCount();
     const u64 setupChecksum = workload.setupChecksum();
     native(mut arena, in workloadName, in targetCount, in contactCount, in setupChecksum, mut workload, mut measured){
-        const auto name = NWB::StringFormat(arena, "{}_targets_{}_sources_{}", workloadName, targetCount, contactCount);
+        const auto name = ::StringFormat(arena, "{}_targets_{}_sources_{}", workloadName, targetCount, contactCount);
         measured = Measure(AStringView(name.data(), name.size()), setupChecksum, workload);
     }
     return measured;

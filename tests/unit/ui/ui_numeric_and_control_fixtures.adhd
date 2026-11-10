@@ -1,7 +1,13 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+#include <tests/common/gtest_macros.adhd>
 #include "ui_core_and_list_fixtures.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 native{
 
@@ -96,7 +102,7 @@ public:
     NumericFixture();
 
 
-protected:
+public:
     [[nodiscard]] b8 beginNumeric(const u64 generation){
         return begin(generation) && m_builder.beginPanel(s_NumericPanelKey, { 20.0f, 20.0f, 740.0f, 520.0f });
     }
@@ -109,7 +115,7 @@ protected:
     void useHost()noexcept{ m_builder.setEditHost(&m_host); }
 
 
-protected:
+public:
     IntegerEditModel m_integer;
     FloatEditModel m_float;
     EditBoxState m_integerState;
@@ -176,7 +182,7 @@ public:
     {}
 
 
-protected:
+public:
     Core::Alloc::GlobalArena m_arena;
     Model m_model;
 };
@@ -239,14 +245,14 @@ public:
     PaintImageFixture();
 
 
-protected:
+public:
     void beginPaint(PaintBuilder& builder, u64 generation = 1u);
     [[nodiscard]] Expected<SharedGlyphPage> makeGlyph(u64 atlasIdentity = 11u, u64 generation = 1u);
     [[nodiscard]] Expected<SharedSdfAtlasPage> makeSdf(u64 atlasIdentity = 22u);
     [[nodiscard]] Expected<SharedImageSource> makeImage(StringView path = s_DefaultImagePath, u8 seed = 37u, u32 width = 8u, u32 height = 4u);
 
 
-protected:
+public:
     Core::Alloc::GlobalArena m_arena;
     UiSkin m_skin;
     PaintBuilder m_builder;
@@ -311,7 +317,7 @@ public:
     PaintTextFixture();
 
 
-protected:
+public:
     void begin(const u64 generation);
     [[nodiscard]] Expected<SharedGlyphPage> makeCoverage(const u64 atlasIdentity = s_DefaultAtlasIdentity, const u64 generation = 1u);
     [[nodiscard]] Expected<SharedGlyphPage> makeGlyphPage(const u64 atlasIdentity = s_DefaultAtlasIdentity, const u64 generation = 1u, const u32 index = 0u);
@@ -319,7 +325,7 @@ protected:
     [[nodiscard]] Expected<SharedSdfAtlasPage> makeSdfPage(const u64 atlasIdentity = s_DefaultAtlasIdentity, const u64 generation = 1u, const u32 index = 0u, const u8 interior = 255u);
 
 
-protected:
+public:
     Core::Alloc::GlobalArena m_arena;
     UiSkin m_skin;
     PaintBuilder m_builder;
@@ -400,7 +406,7 @@ public:
 
 
 class PopupToolsFixture : public WidgetFixture{
-protected:
+public:
     virtual void SetUp()override;
     [[nodiscard]] b8 declareTools(u64 generation, b8 tooltip = true, b8 menu = true, const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f });
     [[nodiscard]] b8 prepareTools(const u64 generation, const b8 tooltip = true, const b8 menu = true, const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f }){
@@ -417,7 +423,7 @@ protected:
     [[nodiscard]] b8 openBySecondary(u64 generation);
 
 
-protected:
+public:
     PopupToolsSource m_source;
     TooltipState m_tooltip;
     ContextMenuState m_menu;
@@ -541,11 +547,11 @@ private:
 };
 
 class RadioGroupFixture : public WidgetFixture{
-protected:
+public:
     using WidgetFixture::press;
 
 
-protected:
+public:
     virtual void SetUp()override;
     void configureRadioSkin(b8 fallbackOnly = false);
     [[nodiscard]] b8 declare(const u64 generation, const RadioGroupOptions& options = {}, const Rect& bounds = { 10.0f, 10.0f, 340.0f, 320.0f });
@@ -562,7 +568,7 @@ protected:
     [[nodiscard]] usize regionQuads(const DrawSnapshot& snapshot, const Name& name)const noexcept;
 
 
-protected:
+public:
     RadioSource m_source;
     RadioGroupState m_state;
     RadioGroupResult m_result;
@@ -706,7 +712,7 @@ private:
 
 
 class SearchFixture : public ComboFixture{
-protected:
+public:
     [[nodiscard]] static SearchComboOptions Options()noexcept;
 
 
@@ -714,7 +720,7 @@ public:
     SearchFixture();
 
 
-protected:
+public:
     virtual void SetUp()override;
     [[nodiscard]] b8 declareSearch(u64 generation);
     [[nodiscard]] b8 prepareSearch(const u64 generation){ return declareSearch(generation) && finishPanel(); }
@@ -723,7 +729,7 @@ protected:
     [[nodiscard]] b8 openSearch(u64 generation);
 
 
-protected:
+public:
     SearchSource m_searchSource;
     SearchComboState m_search;
     SearchEditHost m_host;
@@ -808,16 +814,16 @@ private:
 };
 
 class SliderFixture : public WidgetFixture{
-protected:
+public:
     using WidgetFixture::press;
 
 
-protected:
+public:
     [[nodiscard]] static SliderOptions Options()noexcept;
     [[nodiscard]] static ListOptions SiblingOptions()noexcept;
 
 
-protected:
+public:
     virtual void SetUp()override;
     void configureSliderSkin();
     [[nodiscard]] b8 declare(u64 generation, const SliderOptions& settings = Options(), const Rect& bounds = { 10.0f, 10.0f, 360.0f, 240.0f });
@@ -835,7 +841,7 @@ protected:
     }
 
 
-protected:
+public:
     SliderState m_state;
     SliderCallbackSource m_laterSource;
     ListState m_laterState;
@@ -987,7 +993,7 @@ public:
     TextAreaFixture();
 
 
-protected:
+public:
     [[nodiscard]] b8 beginArea(const u64 generation, const Rect& bounds = { 20.0f, 20.0f, 740.0f, 520.0f }){
         return begin(generation) && m_builder.beginPanel(s_TextAreaPanelKey, bounds);
     }
@@ -996,7 +1002,7 @@ protected:
     void useHost()noexcept{ m_builder.setEditHost(&m_host); }
 
 
-protected:
+public:
     EditModel m_model;
     TextAreaState m_state;
     TextAreaHost m_host;
@@ -1004,11 +1010,11 @@ protected:
 };
 
 class TextAreaLoanFixture : public TextAreaFixture{
-protected:
+public:
     [[nodiscard]] static TextAreaOptions AreaOptions()noexcept;
 
 
-protected:
+public:
     [[nodiscard]] b8 acceptBaseline();
     [[nodiscard]] b8 beginParent(const u64 generation){
         return begin(generation) && m_builder.beginPopup(s_ParentPopupKey, m_parent, UiWidgetTests::LargeLoanParentOptions());
@@ -1018,7 +1024,7 @@ protected:
     void expectRejected(const UiWidgetTests::AcceptedInputState<16u>& frame);
 
 
-protected:
+public:
     PopupState m_parent;
     PopupState m_child;
 };
@@ -1075,7 +1081,7 @@ using UiWidgetTests::s_TestSkinPath;
 
 
 class TextVisibleFixture : public testing::Test{
-protected:
+public:
     [[nodiscard]] static Rect OutlineRectangle(const PlacedGlyph& glyph, Point origin)noexcept;
 
 
@@ -1083,7 +1089,7 @@ public:
     TextVisibleFixture();
 
 
-protected:
+public:
     virtual void SetUp()override;
     [[nodiscard]] b8 loadFont(StringView filename, Font& font);
     [[nodiscard]] b8 installCoverageFonts();
@@ -1091,7 +1097,7 @@ protected:
     [[nodiscard]] Expected<SharedGlyphPage> makePage(u64 atlasIdentity);
 
 
-protected:
+public:
     Core::Alloc::GlobalArena m_arena;
     Font m_latin;
     Font m_korean;
@@ -1115,15 +1121,72 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+namespace __hidden_ui_glyph_sdf_tests{
+using NumericEditResult = ::NWB::Impl::Ui::NumericEditResult;
+using DrawSnapshot = ::NWB::Impl::Ui::DrawSnapshot;
+using Vertex = ::NWB::Impl::Ui::Vertex;
+using SliderOptions = ::NWB::Impl::Ui::SliderOptions;
+using PlacedGlyph = ::NWB::Impl::Ui::PlacedGlyph;
+};
 }
 
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
 
-b8 UiNumericAndControlFixturesReady(in u64 value){
-    return value != 0u;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void ExpectNumericEditRejected(in NumericEditResult result, in b8 restored){
+    EXPECT_TRUE(result.valid);
+    EXPECT_TRUE(result.rejected);
+    EXPECT_FALSE(result.committed);
+    EXPECT_FALSE(result.valueChanged);
+    EXPECT_FALSE(result.cancelled);
+    EXPECT_FALSE(result.clamped);
+    EXPECT_EQ(result.restored, restored);
 }
+
+void ExpectClippedPaintTextQuad(in DrawSnapshot snapshot){
+    ASSERT_EQ(snapshot.vertices().size(), 4u);
+    const Vertex first = snapshot.vertices()[0u];
+    const Vertex opposite = snapshot.vertices()[2u];
+    EXPECT_FLOAT_EQ(first.position.x, 10.0f);
+    EXPECT_FLOAT_EQ(first.position.y, 5.0f);
+    EXPECT_FLOAT_EQ(opposite.position.x, 30.0f);
+    EXPECT_FLOAT_EQ(opposite.position.y, 15.0f);
+    EXPECT_FLOAT_EQ(first.texCoord.x, 0.25f);
+    EXPECT_FLOAT_EQ(first.texCoord.y, 0.375f);
+    EXPECT_FLOAT_EQ(opposite.texCoord.x, 0.5f);
+    EXPECT_FLOAT_EQ(opposite.texCoord.y, 0.625f);
+}
+
+SliderOptions MakeSliderFixtureOptions(){
+    SliderOptions settings = SliderOptions();
+    settings.width.policy = LayoutSizePolicy::Fixed;
+    settings.width.value = 280.0f;
+    settings.keyStep = 0.125;
+    return settings;
+}
+
+ListOptions MakeSliderSiblingListOptions(){
+    ListOptions settings = ListOptions();
+    settings.width.policy = LayoutSizePolicy::Fixed;
+    settings.width.value = 280.0f;
+    settings.height.policy = LayoutSizePolicy::Fixed;
+    settings.height.value = 48.0f;
+    return settings;
+}
+
+Rect ComputePlacedGlyphOutlineRect(in PlacedGlyph glyph, in Point origin){
+    Rect rect = Rect();
+    rect.x = origin.x + glyph.position.x + glyph.ink.x;
+    rect.y = origin.y + glyph.position.y + glyph.ink.y;
+    rect.width = glyph.ink.width;
+    rect.height = glyph.ink.height;
+    return rect;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 native{
 
@@ -1306,13 +1369,7 @@ namespace UiNumericTests{
 
 
 void ExpectRejected(const NumericEditResult& result, const b8 restored){
-    EXPECT_TRUE(result.valid);
-    EXPECT_TRUE(result.rejected);
-    EXPECT_FALSE(result.committed);
-    EXPECT_FALSE(result.valueChanged);
-    EXPECT_FALSE(result.cancelled);
-    EXPECT_FALSE(result.clamped);
-    EXPECT_EQ(result.restored, restored);
+    ::__hidden_ui_glyph_sdf_tests::ExpectNumericEditRejected(result, restored);
 }
 
 
@@ -1353,10 +1410,7 @@ namespace UiPaintAssertions{
 
 
 void ExpectRect(const Impl::Ui::Rect& actual, const Impl::Ui::Rect& expected){
-    EXPECT_FLOAT_EQ(actual.x, expected.x);
-    EXPECT_FLOAT_EQ(actual.y, expected.y);
-    EXPECT_FLOAT_EQ(actual.width, expected.width);
-    EXPECT_FLOAT_EQ(actual.height, expected.height);
+    ::__hidden_ui_glyph_sdf_tests::ExpectUiRect(actual, expected);
 }
 
 void ExpectSameVertices(const Impl::Ui::DrawSnapshot& actual, const Impl::Ui::DrawSnapshot& expected){
@@ -1375,14 +1429,7 @@ void ExpectSameVertices(const Impl::Ui::DrawSnapshot& actual, const Impl::Ui::Dr
 }
 
 void ExpectSameCommandFields(const Impl::Ui::DrawCommand& actual, const Impl::Ui::DrawCommand& expected){
-    EXPECT_EQ(actual.firstIndex, expected.firstIndex);
-    EXPECT_EQ(actual.indexCount, expected.indexCount);
-    EXPECT_EQ(actual.material, expected.material);
-    EXPECT_EQ(actual.glyphPageIndex, expected.glyphPageIndex);
-    EXPECT_EQ(actual.sdfPageIndex, expected.sdfPageIndex);
-    EXPECT_EQ(actual.textureImageIndex, expected.textureImageIndex);
-    EXPECT_EQ(actual.sdfChannel, expected.sdfChannel);
-    EXPECT_EQ(actual.layer, expected.layer);
+    ::__hidden_ui_glyph_sdf_tests::ExpectUiDrawCommandFields(actual, expected);
 }
 
 void ExpectSamePaint(const Impl::Ui::DrawSnapshot& actual, const Impl::Ui::DrawSnapshot& expected){
@@ -1579,17 +1626,7 @@ constexpr AStringView s_PaintTextSkinPath = "tests/ui/skin";
 constexpr AStringView s_PaintTextFontPath = "tests/ui/font";
 
 void PaintTextFixture::ExpectClippedQuad(const DrawSnapshot& snapshot){
-    ASSERT_EQ(snapshot.vertices().size(), 4u);
-    const Vertex& first = snapshot.vertices()[0];
-    const Vertex& opposite = snapshot.vertices()[2];
-    EXPECT_FLOAT_EQ(first.position.x, 10.0f);
-    EXPECT_FLOAT_EQ(first.position.y, 5.0f);
-    EXPECT_FLOAT_EQ(opposite.position.x, 30.0f);
-    EXPECT_FLOAT_EQ(opposite.position.y, 15.0f);
-    EXPECT_FLOAT_EQ(first.texCoord.x, 0.25f);
-    EXPECT_FLOAT_EQ(first.texCoord.y, 0.375f);
-    EXPECT_FLOAT_EQ(opposite.texCoord.x, 0.5f);
-    EXPECT_FLOAT_EQ(opposite.texCoord.y, 0.625f);
+    ::__hidden_ui_glyph_sdf_tests::ExpectClippedPaintTextQuad(snapshot);
 }
 
 

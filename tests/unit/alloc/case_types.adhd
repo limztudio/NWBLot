@@ -2,15 +2,29 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/gtest_macros.adhd>
+
 native{
 #include <global/arena_memory.h>
-#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace NWB::Tests::AllocCases{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 using ArenaStatsValue = ::ArenaMemoryStats;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 }
-
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -56,13 +70,11 @@ const Name s_ScratchReuseOwnerLifecycle = "tests/scratch_reuse/owner_lifecycle";
 const Name s_AllocationOwnersOddReallocation = "tests/allocation_owners/odd_reallocation";
 const Name s_AllocationOwnersObjectAndZero = "tests/allocation_owners/object_and_zero";
 
-
 class PersistentArenaWorkerResult{
     public b8 allocationFailed = false;
     public b8 contentsPreserved = true;
     public b8 alignmentPreserved = true;
 }
-
 
 class PersistentArenaSlotRecord{
     public u64 serial = 0u;
@@ -70,17 +82,22 @@ class PersistentArenaSlotRecord{
     public u32 marker = 0u;
 }
 
-
 class AllocationRequest{
     public usize alignment = 0u;
     public usize bytes = 0u;
 }
 
-
 class AllocatorWorkerResult{
     public ArenaStatsValue stats = ArenaStatsValue();
     public b8 allocationFailed = false;
     public b8 contentsPreserved = true;
+}
+
+AllocationRequest MakeAllocationRequest(in usize alignment, in usize bytes){
+    AllocationRequest request = AllocationRequest();
+    request.alignment = alignment;
+    request.bytes = bytes;
+    return request;
 }
 
 void FillPattern(mut Span<u8> bytes){

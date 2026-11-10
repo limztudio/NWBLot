@@ -1,41 +1,35 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+#include <tests/common/gtest_macros.adhd>
 #include "ui_core_and_list_fixtures.adhd"
 #include "ui_numeric_and_control_fixtures.adhd"
-#include "ui_builder_and_combo_cases.adhd"
-#include "ui_combo_loan_and_command_cases.adhd"
-#include "ui_context_and_control_input_cases.adhd"
-#include "ui_control_and_edit_caret_cases.adhd"
-#include "ui_edit_model_and_selection_cases.adhd"
-#include "ui_horizontal_nav_and_image_cases.adhd"
-#include "ui_input_and_list_behavior_cases.adhd"
-#include "ui_list_and_multiline_model_cases.adhd"
-#include "ui_multiline_and_nested_popup_context_cases.adhd"
-#include "ui_nested_popup_router_and_trigger_cases.adhd"
-#include "ui_numeric_edit_and_glyph_cases.adhd"
-#include "ui_paint_and_overlay_cases.adhd"
-#include "ui_pointer_gesture_and_sources_cases.adhd"
-#include "ui_popup_builder_and_layout_cases.adhd"
-#include "ui_popup_router_and_tools_cases.adhd"
-#include "ui_progress_and_radio_builder_cases.adhd"
-#include "ui_radio_and_scroll_layout_cases.adhd"
-#include "ui_search_combo_and_separator_cases.adhd"
-#include "ui_slider_cases.adhd"
-#include "ui_text_area_input_and_reentry_cases.adhd"
-#include "ui_text_area_scroll_and_baked_cases.adhd"
-#include "ui_text_font_and_layout_cases.adhd"
-#include "ui_text_region_and_visible_cases.adhd"
-#include "ui_texture_and_tooltip_cases.adhd"
-#include "ui_wheel_and_window_cases.adhd"
 
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
 
-b8 UiSuiteReady(in u64 value){
-    return value != 0u;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+namespace __hidden_ui_glyph_sdf_tests{
+using TextAreaOptions = ::NWB::Impl::Ui::TextAreaOptions;
+};
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TextAreaOptions MakeTextAreaLoanFixtureOptions(){
+    TextAreaOptions options = TextAreaOptions();
+    options.height.policy = LayoutSizePolicy::Fixed;
+    options.height.value = 96.0f;
+    return options;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 native{
 #include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd.h>
@@ -599,17 +593,11 @@ void SliderCallbackSource::clearCounters()const noexcept{
 
 
 SliderOptions SliderFixture::Options()noexcept{
-    SliderOptions settings;
-    settings.width = { LayoutSizePolicy::Fixed, 280.0f };
-    settings.keyStep = 0.125;
-    return settings;
+    return ::__hidden_ui_glyph_sdf_tests::MakeSliderFixtureOptions();
 }
 
 ListOptions SliderFixture::SiblingOptions()noexcept{
-    ListOptions settings;
-    settings.width = { LayoutSizePolicy::Fixed, 280.0f };
-    settings.height = { LayoutSizePolicy::Fixed, 48.0f };
-    return settings;
+    return ::__hidden_ui_glyph_sdf_tests::MakeSliderSiblingListOptions();
 }
 
 void SliderFixture::SetUp(){
@@ -892,9 +880,7 @@ b8 TextAreaFixture::frameArea(const u64 generation, const TextAreaOptions& optio
 
 
 TextAreaOptions TextAreaLoanFixture::AreaOptions()noexcept{
-    TextAreaOptions options;
-    options.height = { LayoutSizePolicy::Fixed, 96.0f };
-    return options;
+    return ::__hidden_ui_glyph_sdf_tests::MakeTextAreaLoanFixtureOptions();
 }
 
 b8 TextAreaLoanFixture::acceptBaseline(){
@@ -953,7 +939,7 @@ namespace UiTextVisibleTests{
 
 
 Rect TextVisibleFixture::OutlineRectangle(const PlacedGlyph& glyph, const Point origin)noexcept{
-    return Rect{ origin.x + glyph.position.x + glyph.ink.x, origin.y + glyph.position.y + glyph.ink.y, glyph.ink.width, glyph.ink.height };
+    return ::__hidden_ui_glyph_sdf_tests::ComputePlacedGlyphOutlineRect(glyph, origin);
 }
 
 TextVisibleFixture::TextVisibleFixture()
@@ -1036,56 +1022,35 @@ namespace UiWidgetTests{
 
 
 Point Center(const Rect& bounds)noexcept{
-    return { bounds.x + (bounds.width * 0.5f), bounds.y + (bounds.height * 0.5f) };
+    return ::__hidden_ui_glyph_sdf_tests::CenterUiRect(bounds);
 }
 
 void ExpectRectExact(const Rect& actual, const Rect& expected){
-    EXPECT_EQ(BitCast<u32>(actual.x), BitCast<u32>(expected.x));
-    EXPECT_EQ(BitCast<u32>(actual.y), BitCast<u32>(expected.y));
-    EXPECT_EQ(BitCast<u32>(actual.width), BitCast<u32>(expected.width));
-    EXPECT_EQ(BitCast<u32>(actual.height), BitCast<u32>(expected.height));
+    ::__hidden_ui_glyph_sdf_tests::ExpectUiRectExact(actual, expected);
 }
 
 void ExpectHitTargetIdentity(const HitTarget& actual, const HitTarget& expected){
-    EXPECT_EQ(actual.id, expected.id);
-    EXPECT_EQ(actual.declarationGeneration, expected.declarationGeneration);
-    EXPECT_EQ(actual.control, expected.control);
-    EXPECT_EQ(actual.owner, expected.owner);
-    EXPECT_EQ(actual.enabled, expected.enabled);
+    ::__hidden_ui_glyph_sdf_tests::ExpectUiHitTargetIdentity(actual, expected);
 }
 
 PopupOptions NestedParentOptions()noexcept{
-    PopupOptions options;
-    options.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
-    options.size = { 300.0f, 380.0f };
-    return options;
+    return ::__hidden_ui_glyph_sdf_tests::MakeNestedParentPopupOptions();
 }
 
 PopupOptions NestedChildOptions()noexcept{
-    PopupOptions options;
-    options.anchor = { 420.0f, 60.0f, 80.0f, 24.0f };
-    options.size = { 340.0f, 380.0f };
-    return options;
+    return ::__hidden_ui_glyph_sdf_tests::MakeNestedChildPopupOptions();
 }
 
 PopupOptions LargeLoanParentOptions()noexcept{
-    PopupOptions options;
-    options.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
-    options.size = { 340.0f, 420.0f };
-    return options;
+    return ::__hidden_ui_glyph_sdf_tests::MakeLargeLoanParentPopupOptions();
 }
 
 PopupOptions LargeLoanChildOptions()noexcept{
-    PopupOptions options;
-    options.anchor = { 420.0f, 20.0f, 80.0f, 20.0f };
-    options.size = { 340.0f, 420.0f };
-    return options;
+    return ::__hidden_ui_glyph_sdf_tests::MakeLargeLoanChildPopupOptions();
 }
 
 NWB::Impl::Ui::ListOptions LargeLoanListOptions()noexcept{
-    NWB::Impl::Ui::ListOptions options;
-    options.height = { LayoutSizePolicy::Fixed, 140.0f };
-    return options;
+    return ::__hidden_ui_glyph_sdf_tests::MakeLargeLoanListOptions();
 }
 
 b8 LoadBundledFixtureFont(Core::Alloc::GlobalArena& arena, const StringView filename, Font& font){
@@ -1321,21 +1286,15 @@ namespace UiTestSupport{
 
 
 NWB::Impl::Ui::WidgetId RequireRootId(const NWB::Impl::Ui::WidgetRoot& root){
-    const auto id = NWB::Impl::Ui::TryMakeRootId(root);
-    EXPECT_TRUE(id.has_value());
-    return id.value_or(NWB::Impl::Ui::WidgetId{});
+    return ::__hidden_ui_glyph_sdf_tests::RequireUiRootId(root);
 }
 
 NWB::Impl::Ui::WidgetId RequireWidgetId(const NWB::Impl::Ui::WidgetId parent, const AStringView stableKey){
-    const auto id = NWB::Impl::Ui::TryMakeWidgetId(parent, stableKey);
-    EXPECT_TRUE(id.has_value());
-    return id.value_or(NWB::Impl::Ui::WidgetId{});
+    return ::__hidden_ui_glyph_sdf_tests::RequireUiWidgetId(parent, stableKey);
 }
 
 NWB::Impl::Ui::WidgetId RequireWidgetPartId(const NWB::Impl::Ui::WidgetId parent, const u64 partKey){
-    const auto id = NWB::Impl::Ui::TryMakeWidgetPartId(parent, partKey);
-    EXPECT_TRUE(id.has_value());
-    return id.value_or(NWB::Impl::Ui::WidgetId{});
+    return ::__hidden_ui_glyph_sdf_tests::RequireUiWidgetPartId(parent, partKey);
 }
 
 

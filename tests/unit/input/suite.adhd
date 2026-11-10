@@ -2,26 +2,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
-
-b8 InputSuiteReady(in u64 value){
-    return value != 0u;
-}
+#include <tests/common/gtest_macros.adhd>
 
 native{
-// limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 #include <core/input/module.h>
 
-#include <gtest/gtest.h>
+#include <global/optional.h>
+
+#include <new>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,7 +27,7 @@ namespace InputDispatcherTestsImpl{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using namespace NWB::Core;
+using namespace Core;
 
 class FocusHandler final : public IInputEventHandler{
 public:
@@ -43,46 +37,12 @@ public:
 
 
 public:
-    virtual void windowFocusUpdate(const b8 focused)override{
-        ASSERT_LT(m_focusCount, m_focusValues.size());
-        m_focusValues[m_focusCount] = focused;
-        ++m_focusCount;
-        if(m_removeTarget){
-            m_dispatcher.removeHandler(*m_removeTarget);
-            m_removeTarget = nullptr;
-        }
-        if(m_addTarget){
-            m_dispatcher.addHandlerToBack(*m_addTarget);
-            m_addTarget = nullptr;
-        }
-        if(m_removeSelf)
-            m_dispatcher.removeHandler(*this);
-    }
+    virtual void windowFocusUpdate(b8 focused)override;
+    virtual KeyboardInputResult keyboardUpdate(i32, i32, i32 action, i32)override;
+    virtual b8 mouseButtonUpdate(i32, i32 action, i32)noexcept override;
 
-    virtual ::NWB::Core::KeyboardInputResult keyboardUpdate(i32, i32, const i32 action, i32)override{
-        if(action == InputAction::Release)
-            ++m_keyReleases;
-        else
-            ++m_keyPresses;
-        if(m_loseFocusOnPress && action == InputAction::Press){
-            m_dispatcher.windowFocusUpdate(false);
-            if(m_regainFocusOnPress)
-                m_dispatcher.windowFocusUpdate(true);
-        }
-        if(m_removeSelfOnPress && action != InputAction::Release)
-            m_dispatcher.removeHandler(*this);
-        if(m_consumeKeys && action != InputAction::Release)
-            ++m_textPolicyQueries;
-        return { m_consumeKeys, m_blockText };
-    }
-
-    virtual b8 mouseButtonUpdate(i32, const i32 action, i32)noexcept override{
-        if(action == InputAction::Release)
-            ++m_buttonReleases;
-        else
-            ++m_buttonPresses;
-        return m_consumeButtons;
-    }
+    void setRemoveTarget(IInputEventHandler& target)noexcept{ m_removeTarget = &target; }
+    void setAddTarget(IInputEventHandler& target)noexcept{ m_addTarget = &target; }
 
 
 public:
@@ -105,45 +65,17 @@ public:
     b8 m_consumeButtons = false;
 };
 
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <global/optional.h>
-
-#include <new>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace InputDispatcherTestsImpl{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class SelfDestroyingKeyHandler final : public IInputEventHandler{
 public:
     SelfDestroyingKeyHandler(InputDispatcher& dispatcher, Optional<SelfDestroyingKeyHandler>& owner)noexcept
-        : m_dispatcher(dispatcher), m_owner(owner){}
+        : m_dispatcher(dispatcher)
+        , m_owner(owner)
+    {}
 
-    virtual KeyboardInputResult keyboardUpdate(i32, i32, i32, i32)override{
-        m_dispatcher.removeHandler(*this);
-        auto* const owner = &m_owner;
-        owner->reset();
-        return { true, true };
-    }
+
+public:
+    virtual KeyboardInputResult keyboardUpdate(i32, i32, i32, i32)override;
+
 
 private:
     InputDispatcher& m_dispatcher;
@@ -153,15 +85,14 @@ private:
 class DestroyOtherKeyHandler final : public IInputEventHandler{
 public:
     DestroyOtherKeyHandler(InputDispatcher& dispatcher, Optional<FocusHandler>& victim)noexcept
-        : m_dispatcher(dispatcher), m_victim(victim){}
+        : m_dispatcher(dispatcher)
+        , m_victim(victim)
+    {}
 
-    virtual KeyboardInputResult keyboardUpdate(i32, i32, i32, i32)override{
-        if(m_victim){
-            m_dispatcher.removeHandler(*m_victim);
-            m_victim.reset();
-        }
-        return false;
-    }
+
+public:
+    virtual KeyboardInputResult keyboardUpdate(i32, i32, i32, i32)override;
+
 
 private:
     InputDispatcher& m_dispatcher;
@@ -171,22 +102,16 @@ private:
 class ReplacingKeyHandler final : public IInputEventHandler{
 public:
     ReplacingKeyHandler(InputDispatcher& dispatcher, ReplacingKeyHandler*& slot, usize& calls, const b8 replace)noexcept
-        : m_dispatcher(dispatcher), m_slot(slot), m_calls(calls), m_replace(replace){}
+        : m_dispatcher(dispatcher)
+        , m_slot(slot)
+        , m_calls(calls)
+        , m_replace(replace)
+    {}
 
-    virtual KeyboardInputResult keyboardUpdate(i32, i32, i32, i32)override{
-        ++m_calls;
-        if(!m_replace)
-            return { true, false };
-        InputDispatcher* const dispatcher = &m_dispatcher;
-        ReplacingKeyHandler** const slot = &m_slot;
-        usize* const calls = &m_calls;
-        void* const storage = this;
-        dispatcher->removeHandler(*this);
-        this->~ReplacingKeyHandler();
-        *slot = new (storage) ReplacingKeyHandler(*dispatcher, *slot, *calls, false);
-        dispatcher->addHandlerToBack(**slot);
-        return { true, true };
-    }
+
+public:
+    virtual KeyboardInputResult keyboardUpdate(i32, i32, i32, i32)override;
+
 
 private:
     InputDispatcher& m_dispatcher;
@@ -194,77 +119,6 @@ private:
     usize& m_calls;
     b8 m_replace;
 };
-
-TEST(InputDispatcher, ReplacementAtRemovedHandlerAddressStartsOnNextDispatch){
-    InputDispatcher dispatcher;
-    alignas(ReplacingKeyHandler) u8 storage[sizeof(ReplacingKeyHandler)];
-    ReplacingKeyHandler* handler = nullptr;
-    usize calls = 0u;
-    handler = new (storage) ReplacingKeyHandler(dispatcher, handler, calls, true);
-    dispatcher.addHandlerToBack(*handler);
-    dispatcher.keyboardUpdate(Key::A, 30, InputAction::Press, 0);
-    EXPECT_EQ(calls, 1u);
-    EXPECT_TRUE(dispatcher.keyboardTextBlocked(30));
-    dispatcher.keyboardUpdate(Key::A, 30, InputAction::Press, 0);
-    EXPECT_EQ(calls, 2u);
-    EXPECT_FALSE(dispatcher.keyboardTextBlocked(30));
-    dispatcher.removeHandler(*handler);
-    handler->~ReplacingKeyHandler();
-}
-
-TEST(InputDispatcher, KeyHandlerCanRemoveAndDestroyItselfBeforeReturningPolicy){
-    InputDispatcher dispatcher;
-    Optional<SelfDestroyingKeyHandler> owner;
-    owner.emplace(dispatcher, owner);
-    dispatcher.addHandlerToBack(*owner);
-    dispatcher.keyboardUpdate(Key::A, 30, InputAction::Press, 0);
-    EXPECT_FALSE(owner);
-    EXPECT_TRUE(dispatcher.keyboardTextBlocked(30));
-    dispatcher.keyboardUpdate(Key::A, 30, InputAction::Press, 0);
-    EXPECT_FALSE(dispatcher.keyboardTextBlocked(30));
-}
-
-TEST(InputDispatcher, RemovedHandlerCanBeDestroyedBeforeItsTurn){
-    InputDispatcher dispatcher;
-    Optional<FocusHandler> victim;
-    victim.emplace(dispatcher);
-    DestroyOtherKeyHandler killer(dispatcher, victim);
-    dispatcher.addHandlerToFront(*victim);
-    dispatcher.addHandlerToBack(killer);
-    dispatcher.keyboardUpdate(Key::A, 30, InputAction::Press, 0);
-    EXPECT_FALSE(victim);
-    dispatcher.keyboardUpdate(Key::A, 30, InputAction::Press, 0);
-    EXPECT_FALSE(dispatcher.keyboardTextBlocked(30));
-}
-
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <gtest/gtest.h>
-
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace InputDispatcherTestsImpl{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB::Core;
 
 class ThrowingHandler final : public IInputEventHandler{
 public:
@@ -279,14 +133,8 @@ public:
 
 
 public:
-    virtual ::NWB::Core::KeyboardInputResult keyboardUpdate(i32, i32, i32, i32)override{
-        ++m_keyUpdates;
-        if(m_nestedDispatch)
-            m_dispatcher.pointerLeave();
-        throw s_Failure;
-    }
-
-    virtual void pointerLeave()override{ throw s_Failure; }
+    virtual KeyboardInputResult keyboardUpdate(i32, i32, i32, i32)override;
+    virtual void pointerLeave()override;
 
 
 public:
@@ -295,12 +143,134 @@ public:
     const b8 m_nestedDispatch;
 };
 
+class PointerLifecycleHandler final : public IInputEventHandler{
+public:
+    explicit PointerLifecycleHandler(InputDispatcher& dispatcher)noexcept
+        : m_dispatcher(dispatcher)
+    {}
+
+
+public:
+    virtual void windowFocusUpdate(b8)noexcept override{ ++m_focusChanges; }
+    virtual void pointerLeave()override;
+    virtual void pointerCaptureLost()override;
+    virtual KeyboardInputResult keyboardUpdate(i32, i32, i32 action, i32)noexcept override;
+
+    void setAddOnLeave(IInputEventHandler& target)noexcept{ m_addOnLeave = &target; }
+    void setRemoveOnCaptureLoss(IInputEventHandler& target)noexcept{ m_removeOnCaptureLoss = &target; }
+
+
+public:
+    InputDispatcher& m_dispatcher;
+    IInputEventHandler* m_addOnLeave = nullptr;
+    IInputEventHandler* m_removeOnCaptureLoss = nullptr;
+    usize m_leaves = 0u;
+    usize m_captureLosses = 0u;
+    usize m_focusChanges = 0u;
+    usize m_keyPresses = 0u;
+    usize m_keyReleases = 0u;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(InputDispatcher, WindowFocusTransitionsReachEveryHandlerAndDeduplicate){
-    InputDispatcher dispatcher;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Input{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using InputDispatcher = Core::InputDispatcher;
+namespace Key = Core::Key;
+namespace InputAction = Core::InputAction;
+namespace MouseButton = Core::MouseButton;
+using FocusHandler = InputDispatcherTestsImpl::FocusHandler;
+using SelfDestroyingKeyHandler = InputDispatcherTestsImpl::SelfDestroyingKeyHandler;
+using DestroyOtherKeyHandler = InputDispatcherTestsImpl::DestroyOtherKeyHandler;
+using ReplacingKeyHandler = InputDispatcherTestsImpl::ReplacingKeyHandler;
+using ThrowingHandler = InputDispatcherTestsImpl::ThrowingHandler;
+using PointerLifecycleHandler = InputDispatcherTestsImpl::PointerLifecycleHandler;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyInputDispatcher_ReplacementAtRemovedHandlerAddressStartsOnNextDispatch(){
+    InputDispatcher dispatcher = InputDispatcher();
+    native(mut dispatcher){
+        alignas(ReplacingKeyHandler) u8 storage[sizeof(ReplacingKeyHandler)];
+        ReplacingKeyHandler* handler = nullptr;
+        usize calls = 0u;
+        handler = new (storage) ReplacingKeyHandler(dispatcher, handler, calls, true);
+        dispatcher.addHandlerToBack(*handler);
+        dispatcher.keyboardUpdate(Key::A, 30, InputAction::Press, 0);
+        EXPECT_EQ(calls, 1u);
+        EXPECT_TRUE(dispatcher.keyboardTextBlocked(30));
+        dispatcher.keyboardUpdate(Key::A, 30, InputAction::Press, 0);
+        EXPECT_EQ(calls, 2u);
+        EXPECT_FALSE(dispatcher.keyboardTextBlocked(30));
+        dispatcher.removeHandler(*handler);
+        handler->~ReplacingKeyHandler();
+    }
+}
+
+void VerifyInputDispatcher_KeyHandlerCanRemoveAndDestroyItselfBeforeReturningPolicy(){
+    InputDispatcher dispatcher = InputDispatcher();
+    native(mut dispatcher){
+        Optional<SelfDestroyingKeyHandler> owner;
+        owner.emplace(dispatcher, owner);
+        dispatcher.addHandlerToBack(*owner);
+        dispatcher.keyboardUpdate(Key::A, 30, InputAction::Press, 0);
+        EXPECT_FALSE(owner);
+        EXPECT_TRUE(dispatcher.keyboardTextBlocked(30));
+        dispatcher.keyboardUpdate(Key::A, 30, InputAction::Press, 0);
+        EXPECT_FALSE(dispatcher.keyboardTextBlocked(30));
+    }
+}
+
+void VerifyInputDispatcher_RemovedHandlerCanBeDestroyedBeforeItsTurn(){
+    InputDispatcher dispatcher = InputDispatcher();
+    native(mut dispatcher){
+        Optional<FocusHandler> victim;
+        victim.emplace(dispatcher);
+        DestroyOtherKeyHandler killer(dispatcher, victim);
+        dispatcher.addHandlerToFront(*victim);
+        dispatcher.addHandlerToBack(killer);
+        dispatcher.keyboardUpdate(Key::A, 30, InputAction::Press, 0);
+        EXPECT_FALSE(victim);
+        dispatcher.keyboardUpdate(Key::A, 30, InputAction::Press, 0);
+        EXPECT_FALSE(dispatcher.keyboardTextBlocked(30));
+    }
+}
+
+void VerifyFocusTransitionHistory(in FocusHandler handler){
+    ASSERT_EQ(handler.m_focusCount, 2u);
+    EXPECT_FALSE(handler.m_focusValues[0u]);
+    EXPECT_TRUE(handler.m_focusValues[1u]);
+}
+
+void VerifyInputDispatcher_WindowFocusTransitionsReachEveryHandlerAndDeduplicate(){
+    InputDispatcher dispatcher = InputDispatcher();
     FocusHandler scene(dispatcher);
     FocusHandler legacyUi(dispatcher);
     FocusHandler customUi(dispatcher);
@@ -315,22 +285,20 @@ TEST(InputDispatcher, WindowFocusTransitionsReachEveryHandlerAndDeduplicate){
     dispatcher.windowFocusUpdate(true);
     dispatcher.windowFocusUpdate(true);
     EXPECT_TRUE(dispatcher.windowFocused());
-    for(const auto handler : { MakeNotNull(&scene), MakeNotNull(&legacyUi), MakeNotNull(&customUi) }){
-        ASSERT_EQ(handler->m_focusCount, 2u);
-        EXPECT_FALSE(handler->m_focusValues[0u]);
-        EXPECT_TRUE(handler->m_focusValues[1u]);
-    }
+    VerifyFocusTransitionHistory(scene);
+    VerifyFocusTransitionHistory(legacyUi);
+    VerifyFocusTransitionHistory(customUi);
 }
 
-TEST(InputDispatcher, FocusBroadcastSkipsPendingRemovalWithoutSkippingOtherOwners){
-    InputDispatcher dispatcher;
+void VerifyInputDispatcher_FocusBroadcastSkipsPendingRemovalWithoutSkippingOtherOwners(){
+    InputDispatcher dispatcher = InputDispatcher();
     FocusHandler scene(dispatcher);
     FocusHandler removed(dispatcher);
     FocusHandler router(dispatcher);
     dispatcher.addHandlerToFront(scene);
     dispatcher.addHandlerToBack(removed);
     dispatcher.addHandlerToBack(router);
-    router.m_removeTarget = &removed;
+    router.setRemoveTarget(removed);
 
     dispatcher.windowFocusUpdate(false);
     EXPECT_EQ(router.m_focusCount, 1u);
@@ -342,12 +310,12 @@ TEST(InputDispatcher, FocusBroadcastSkipsPendingRemovalWithoutSkippingOtherOwner
     EXPECT_EQ(removed.m_focusCount, 0u);
 }
 
-TEST(InputDispatcher, HandlerAddedDuringFocusBroadcastWaitsUntilNextTransition){
-    InputDispatcher dispatcher;
+void VerifyInputDispatcher_HandlerAddedDuringFocusBroadcastWaitsUntilNextTransition(){
+    InputDispatcher dispatcher = InputDispatcher();
     FocusHandler existing(dispatcher);
     FocusHandler added(dispatcher);
     dispatcher.addHandlerToBack(existing);
-    existing.m_addTarget = &added;
+    existing.setAddTarget(added);
 
     dispatcher.windowFocusUpdate(false);
     EXPECT_EQ(existing.m_focusCount, 1u);
@@ -358,8 +326,8 @@ TEST(InputDispatcher, HandlerAddedDuringFocusBroadcastWaitsUntilNextTransition){
     EXPECT_TRUE(added.m_focusValues[0u]);
 }
 
-TEST(InputDispatcher, HandlerMayRemoveItselfDuringFocusBroadcast){
-    InputDispatcher dispatcher;
+void VerifyInputDispatcher_HandlerMayRemoveItselfDuringFocusBroadcast(){
+    InputDispatcher dispatcher = InputDispatcher();
     FocusHandler scene(dispatcher);
     FocusHandler transient(dispatcher);
     dispatcher.addHandlerToFront(scene);
@@ -372,14 +340,14 @@ TEST(InputDispatcher, HandlerMayRemoveItselfDuringFocusBroadcast){
     EXPECT_EQ(transient.m_focusCount, 1u);
 }
 
-TEST(InputDispatcher, NestedFocusBroadcastDefersHandlerMutationUntilOuterDispatchEnds){
-    InputDispatcher dispatcher;
+void VerifyInputDispatcher_NestedFocusBroadcastDefersHandlerMutationUntilOuterDispatchEnds(){
+    InputDispatcher dispatcher = InputDispatcher();
     FocusHandler scene(dispatcher);
     FocusHandler router(dispatcher);
     dispatcher.addHandlerToFront(scene);
     dispatcher.addHandlerToBack(router);
     router.m_loseFocusOnPress = true;
-    router.m_removeTarget = &scene;
+    router.setRemoveTarget(scene);
 
     dispatcher.keyboardUpdate(Key::W, 0, InputAction::Press, 0);
     EXPECT_FALSE(dispatcher.windowFocused());
@@ -392,8 +360,8 @@ TEST(InputDispatcher, NestedFocusBroadcastDefersHandlerMutationUntilOuterDispatc
     EXPECT_EQ(scene.m_keyReleases, 0u);
 }
 
-TEST(InputDispatcher, KeyboardReleaseClearsSceneEvenWhenUiConsumesAfterPress){
-    InputDispatcher dispatcher;
+void VerifyInputDispatcher_KeyboardReleaseClearsSceneEvenWhenUiConsumesAfterPress(){
+    InputDispatcher dispatcher = InputDispatcher();
     FocusHandler scene(dispatcher);
     FocusHandler ui(dispatcher);
     dispatcher.addHandlerToFront(scene);
@@ -410,8 +378,8 @@ TEST(InputDispatcher, KeyboardReleaseClearsSceneEvenWhenUiConsumesAfterPress){
     EXPECT_EQ(scene.m_keyPresses, 1u);
 }
 
-TEST(InputDispatcher, KeyboardTextPolicyComesOnlyFromTheFirstConsumingHandler){
-    InputDispatcher dispatcher;
+void VerifyInputDispatcher_KeyboardTextPolicyComesOnlyFromTheFirstConsumingHandler(){
+    InputDispatcher dispatcher = InputDispatcher();
     FocusHandler lower(dispatcher);
     FocusHandler higher(dispatcher);
     lower.m_consumeKeys = true;
@@ -442,8 +410,8 @@ TEST(InputDispatcher, KeyboardTextPolicyComesOnlyFromTheFirstConsumingHandler){
     EXPECT_EQ(lower.m_textPolicyQueries, 2u);
 }
 
-TEST(InputDispatcher, KeyboardTextScancodesRetainIndependentQueuedPoliciesAcrossReleases){
-    InputDispatcher dispatcher;
+void VerifyInputDispatcher_KeyboardTextScancodesRetainIndependentQueuedPoliciesAcrossReleases(){
+    InputDispatcher dispatcher = InputDispatcher();
     FocusHandler handler(dispatcher);
     handler.m_consumeKeys = true;
     handler.m_blockText = true;
@@ -475,8 +443,8 @@ TEST(InputDispatcher, KeyboardTextScancodesRetainIndependentQueuedPoliciesAcross
     EXPECT_FALSE(dispatcher.keyboardTextBlocked());
 }
 
-TEST(InputDispatcher, FocusLossClearsKeyboardTextPoliciesAndNestedRegainCannotReviveThem){
-    InputDispatcher dispatcher;
+void VerifyInputDispatcher_FocusLossClearsKeyboardTextPoliciesAndNestedRegainCannotReviveThem(){
+    InputDispatcher dispatcher = InputDispatcher();
     FocusHandler handler(dispatcher);
     handler.m_consumeKeys = true;
     handler.m_blockText = true;
@@ -500,8 +468,8 @@ TEST(InputDispatcher, FocusLossClearsKeyboardTextPoliciesAndNestedRegainCannotRe
     EXPECT_FALSE(dispatcher.keyboardTextBlocked());
 }
 
-TEST(InputDispatcher, RemovingTheConsumingHandlerPreservesOnlyItsQueuedCharacterPolicy){
-    InputDispatcher dispatcher;
+void VerifyInputDispatcher_RemovingTheConsumingHandlerPreservesOnlyItsQueuedCharacterPolicy(){
+    InputDispatcher dispatcher = InputDispatcher();
     FocusHandler scene(dispatcher);
     FocusHandler transient(dispatcher);
     scene.m_consumeKeys = true;
@@ -524,14 +492,19 @@ TEST(InputDispatcher, RemovingTheConsumingHandlerPreservesOnlyItsQueuedCharacter
     EXPECT_EQ(scene.m_textPolicyQueries, 1u);
 }
 
-TEST(InputDispatcher, HandlerExceptionsRestoreDirectAndNestedDispatchDepth){
-    for(const b8 nestedDispatch : { false, true }){
-        InputDispatcher dispatcher;
+void VerifyInputDispatcher_HandlerExceptionsRestoreDirectAndNestedDispatchDepth(){
+    Array<b8, 2> modes = Array<b8, 2>();
+    modes[0u] = false;
+    modes[1u] = true;
+    for(in b8 nestedDispatch : modes){
+        InputDispatcher dispatcher = InputDispatcher();
         ThrowingHandler throwing(dispatcher, nestedDispatch);
         FocusHandler added(dispatcher);
         dispatcher.addHandlerToBack(throwing);
 
-        EXPECT_THROW(dispatcher.keyboardUpdate(Key::W, 0, InputAction::Press, 0), u32);
+        native(mut dispatcher){
+            EXPECT_THROW(dispatcher.keyboardUpdate(Key::W, 0, InputAction::Press, 0), u32);
+        }
         EXPECT_EQ(throwing.m_keyUpdates, 1u);
         dispatcher.removeHandler(throwing);
         dispatcher.addHandlerToBack(added);
@@ -541,8 +514,8 @@ TEST(InputDispatcher, HandlerExceptionsRestoreDirectAndNestedDispatchDepth){
     }
 }
 
-TEST(InputDispatcher, MouseReleaseClearsSceneEvenWhenUiConsumesAfterPress){
-    InputDispatcher dispatcher;
+void VerifyInputDispatcher_MouseReleaseClearsSceneEvenWhenUiConsumesAfterPress(){
+    InputDispatcher dispatcher = InputDispatcher();
     FocusHandler scene(dispatcher);
     FocusHandler ui(dispatcher);
     dispatcher.addHandlerToFront(scene);
@@ -559,99 +532,15 @@ TEST(InputDispatcher, MouseReleaseClearsSceneEvenWhenUiConsumesAfterPress){
     EXPECT_EQ(scene.m_buttonPresses, 1u);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/input/module.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_input_pointer_lifecycle_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB::Core;
-
-class PointerLifecycleHandler final : public IInputEventHandler{
-public:
-    explicit PointerLifecycleHandler(InputDispatcher& dispatcher)noexcept
-        : m_dispatcher(dispatcher)
-    {}
-
-
-public:
-    virtual void windowFocusUpdate(b8)noexcept override{ ++m_focusChanges; }
-
-    virtual void pointerLeave()override{
-        ++m_leaves;
-        if(m_addOnLeave){
-            m_dispatcher.addHandlerToBack(*m_addOnLeave);
-            m_addOnLeave = nullptr;
-        }
-    }
-
-    virtual void pointerCaptureLost()override{
-        ++m_captureLosses;
-        if(m_removeOnCaptureLoss){
-            m_dispatcher.removeHandler(*m_removeOnCaptureLoss);
-            m_removeOnCaptureLoss = nullptr;
-        }
-    }
-
-    virtual ::NWB::Core::KeyboardInputResult keyboardUpdate(i32, i32, const i32 action, i32)noexcept override{
-        if(action == InputAction::Release)
-            ++m_keyReleases;
-        else
-            ++m_keyPresses;
-        return false;
-    }
-
-
-public:
-    InputDispatcher& m_dispatcher;
-    IInputEventHandler* m_addOnLeave = nullptr;
-    IInputEventHandler* m_removeOnCaptureLoss = nullptr;
-    usize m_leaves = 0u;
-    usize m_captureLosses = 0u;
-    usize m_focusChanges = 0u;
-    usize m_keyPresses = 0u;
-    usize m_keyReleases = 0u;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(InputDispatcher, CaptureLossSkipsPendingRemovalAndKeepsOtherOwners){
-    InputDispatcher dispatcher;
+void VerifyInputDispatcher_CaptureLossSkipsPendingRemovalAndKeepsOtherOwners(){
+    InputDispatcher dispatcher = InputDispatcher();
     PointerLifecycleHandler scene(dispatcher);
     PointerLifecycleHandler removed(dispatcher);
     PointerLifecycleHandler ui(dispatcher);
     dispatcher.addHandlerToFront(scene);
     dispatcher.addHandlerToBack(removed);
     dispatcher.addHandlerToBack(ui);
-    ui.m_removeOnCaptureLoss = &removed;
+    ui.setRemoveOnCaptureLoss(removed);
     dispatcher.pointerCaptureLost();
     EXPECT_EQ(ui.m_captureLosses, 1u);
     EXPECT_EQ(scene.m_captureLosses, 1u);
@@ -662,12 +551,12 @@ TEST(InputDispatcher, CaptureLossSkipsPendingRemovalAndKeepsOtherOwners){
     EXPECT_EQ(removed.m_captureLosses, 0u);
 }
 
-TEST(InputDispatcher, OwnerAddedDuringPointerLeaveWaitsForNextEvent){
-    InputDispatcher dispatcher;
+void VerifyInputDispatcher_OwnerAddedDuringPointerLeaveWaitsForNextEvent(){
+    InputDispatcher dispatcher = InputDispatcher();
     PointerLifecycleHandler existing(dispatcher);
     PointerLifecycleHandler added(dispatcher);
     dispatcher.addHandlerToBack(existing);
-    existing.m_addOnLeave = &added;
+    existing.setAddOnLeave(added);
     dispatcher.pointerLeave();
     EXPECT_EQ(existing.m_leaves, 1u);
     EXPECT_EQ(added.m_leaves, 0u);
@@ -676,8 +565,8 @@ TEST(InputDispatcher, OwnerAddedDuringPointerLeaveWaitsForNextEvent){
     EXPECT_EQ(added.m_leaves, 1u);
 }
 
-TEST(InputDispatcher, PointerLifecycleDoesNotSynthesizeFocusOrKeyboardRelease){
-    InputDispatcher dispatcher;
+void VerifyInputDispatcher_PointerLifecycleDoesNotSynthesizeFocusOrKeyboardRelease(){
+    InputDispatcher dispatcher = InputDispatcher();
     PointerLifecycleHandler handler(dispatcher);
     dispatcher.addHandlerToBack(handler);
     dispatcher.keyboardUpdate(Key::W, 0, InputAction::Press, 0);
@@ -691,6 +580,125 @@ TEST(InputDispatcher, PointerLifecycleDoesNotSynthesizeFocusOrKeyboardRelease){
     EXPECT_EQ(handler.m_keyReleases, 1u);
 }
 
+native{
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace InputDispatcherTestsImpl{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void FocusHandler::windowFocusUpdate(const b8 focused){
+    ASSERT_LT(m_focusCount, m_focusValues.size());
+    m_focusValues[m_focusCount] = focused;
+    ++m_focusCount;
+    if(m_removeTarget){
+        m_dispatcher.removeHandler(*m_removeTarget);
+        m_removeTarget = nullptr;
+    }
+    if(m_addTarget){
+        m_dispatcher.addHandlerToBack(*m_addTarget);
+        m_addTarget = nullptr;
+    }
+    if(m_removeSelf)
+        m_dispatcher.removeHandler(*this);
+}
+
+KeyboardInputResult FocusHandler::keyboardUpdate(i32, i32, const i32 action, i32){
+    if(action == InputAction::Release)
+        ++m_keyReleases;
+    else
+        ++m_keyPresses;
+    if(m_loseFocusOnPress && action == InputAction::Press){
+        m_dispatcher.windowFocusUpdate(false);
+        if(m_regainFocusOnPress)
+            m_dispatcher.windowFocusUpdate(true);
+    }
+    if(m_removeSelfOnPress && action != InputAction::Release)
+        m_dispatcher.removeHandler(*this);
+    if(m_consumeKeys && action != InputAction::Release)
+        ++m_textPolicyQueries;
+    return { m_consumeKeys, m_blockText };
+}
+
+b8 FocusHandler::mouseButtonUpdate(i32, const i32 action, i32)noexcept{
+    if(action == InputAction::Release)
+        ++m_buttonReleases;
+    else
+        ++m_buttonPresses;
+    return m_consumeButtons;
+}
+
+KeyboardInputResult SelfDestroyingKeyHandler::keyboardUpdate(i32, i32, i32, i32){
+    m_dispatcher.removeHandler(*this);
+    auto* const owner = &m_owner;
+    owner->reset();
+    return { true, true };
+}
+
+KeyboardInputResult DestroyOtherKeyHandler::keyboardUpdate(i32, i32, i32, i32){
+    if(m_victim){
+        m_dispatcher.removeHandler(*m_victim);
+        m_victim.reset();
+    }
+    return false;
+}
+
+KeyboardInputResult ReplacingKeyHandler::keyboardUpdate(i32, i32, i32, i32){
+    ++m_calls;
+    if(!m_replace)
+        return { true, false };
+    InputDispatcher* const dispatcher = &m_dispatcher;
+    ReplacingKeyHandler** const slot = &m_slot;
+    usize* const calls = &m_calls;
+    void* const storage = this;
+    dispatcher->removeHandler(*this);
+    this->~ReplacingKeyHandler();
+    *slot = new (storage) ReplacingKeyHandler(*dispatcher, *slot, *calls, false);
+    dispatcher->addHandlerToBack(**slot);
+    return { true, true };
+}
+
+KeyboardInputResult ThrowingHandler::keyboardUpdate(i32, i32, i32, i32){
+    ++m_keyUpdates;
+    if(m_nestedDispatch)
+        m_dispatcher.pointerLeave();
+    throw s_Failure;
+}
+
+void ThrowingHandler::pointerLeave(){
+    throw s_Failure;
+}
+
+void PointerLifecycleHandler::pointerLeave(){
+    ++m_leaves;
+    if(m_addOnLeave){
+        m_dispatcher.addHandlerToBack(*m_addOnLeave);
+        m_addOnLeave = nullptr;
+    }
+}
+
+void PointerLifecycleHandler::pointerCaptureLost(){
+    ++m_captureLosses;
+    if(m_removeOnCaptureLoss){
+        m_dispatcher.removeHandler(*m_removeOnCaptureLoss);
+        m_removeOnCaptureLoss = nullptr;
+    }
+}
+
+KeyboardInputResult PointerLifecycleHandler::keyboardUpdate(i32, i32, const i32 action, i32)noexcept{
+    if(action == InputAction::Release)
+        ++m_keyReleases;
+    else
+        ++m_keyPresses;
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -699,7 +707,29 @@ TEST(InputDispatcher, PointerLifecycleDoesNotSynthesizeFocusOrKeyboardRelease){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
 }
+
+NWB_ADHD_GTEST(InputDispatcher, ReplacementAtRemovedHandlerAddressStartsOnNextDispatch, VerifyInputDispatcher_ReplacementAtRemovedHandlerAddressStartsOnNextDispatch)
+NWB_ADHD_GTEST(InputDispatcher, KeyHandlerCanRemoveAndDestroyItselfBeforeReturningPolicy, VerifyInputDispatcher_KeyHandlerCanRemoveAndDestroyItselfBeforeReturningPolicy)
+NWB_ADHD_GTEST(InputDispatcher, RemovedHandlerCanBeDestroyedBeforeItsTurn, VerifyInputDispatcher_RemovedHandlerCanBeDestroyedBeforeItsTurn)
+NWB_ADHD_GTEST(InputDispatcher, WindowFocusTransitionsReachEveryHandlerAndDeduplicate, VerifyInputDispatcher_WindowFocusTransitionsReachEveryHandlerAndDeduplicate)
+NWB_ADHD_GTEST(InputDispatcher, FocusBroadcastSkipsPendingRemovalWithoutSkippingOtherOwners, VerifyInputDispatcher_FocusBroadcastSkipsPendingRemovalWithoutSkippingOtherOwners)
+NWB_ADHD_GTEST(InputDispatcher, HandlerAddedDuringFocusBroadcastWaitsUntilNextTransition, VerifyInputDispatcher_HandlerAddedDuringFocusBroadcastWaitsUntilNextTransition)
+NWB_ADHD_GTEST(InputDispatcher, HandlerMayRemoveItselfDuringFocusBroadcast, VerifyInputDispatcher_HandlerMayRemoveItselfDuringFocusBroadcast)
+NWB_ADHD_GTEST(InputDispatcher, NestedFocusBroadcastDefersHandlerMutationUntilOuterDispatchEnds, VerifyInputDispatcher_NestedFocusBroadcastDefersHandlerMutationUntilOuterDispatchEnds)
+NWB_ADHD_GTEST(InputDispatcher, KeyboardReleaseClearsSceneEvenWhenUiConsumesAfterPress, VerifyInputDispatcher_KeyboardReleaseClearsSceneEvenWhenUiConsumesAfterPress)
+NWB_ADHD_GTEST(InputDispatcher, KeyboardTextPolicyComesOnlyFromTheFirstConsumingHandler, VerifyInputDispatcher_KeyboardTextPolicyComesOnlyFromTheFirstConsumingHandler)
+NWB_ADHD_GTEST(InputDispatcher, KeyboardTextScancodesRetainIndependentQueuedPoliciesAcrossReleases, VerifyInputDispatcher_KeyboardTextScancodesRetainIndependentQueuedPoliciesAcrossReleases)
+NWB_ADHD_GTEST(InputDispatcher, FocusLossClearsKeyboardTextPoliciesAndNestedRegainCannotReviveThem, VerifyInputDispatcher_FocusLossClearsKeyboardTextPoliciesAndNestedRegainCannotReviveThem)
+NWB_ADHD_GTEST(InputDispatcher, RemovingTheConsumingHandlerPreservesOnlyItsQueuedCharacterPolicy, VerifyInputDispatcher_RemovingTheConsumingHandlerPreservesOnlyItsQueuedCharacterPolicy)
+NWB_ADHD_GTEST(InputDispatcher, HandlerExceptionsRestoreDirectAndNestedDispatchDepth, VerifyInputDispatcher_HandlerExceptionsRestoreDirectAndNestedDispatchDepth)
+NWB_ADHD_GTEST(InputDispatcher, MouseReleaseClearsSceneEvenWhenUiConsumesAfterPress, VerifyInputDispatcher_MouseReleaseClearsSceneEvenWhenUiConsumesAfterPress)
+NWB_ADHD_GTEST(InputDispatcher, CaptureLossSkipsPendingRemovalAndKeepsOtherOwners, VerifyInputDispatcher_CaptureLossSkipsPendingRemovalAndKeepsOtherOwners)
+NWB_ADHD_GTEST(InputDispatcher, OwnerAddedDuringPointerLeaveWaitsForNextEvent, VerifyInputDispatcher_OwnerAddedDuringPointerLeaveWaitsForNextEvent)
+NWB_ADHD_GTEST(InputDispatcher, PointerLifecycleDoesNotSynthesizeFocusOrKeyboardRelease, VerifyInputDispatcher_PointerLifecycleDoesNotSynthesizeFocusOrKeyboardRelease)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

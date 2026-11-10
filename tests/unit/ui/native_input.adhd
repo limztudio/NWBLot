@@ -2,15 +2,23 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-#include <impl/ecs_ui/toolkit/context.adhd.h>
+#include <tests/common/gtest_macros.adhd>
+#include <impl/ecs_ui/toolkit/context.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
 #include <gtest/gtest.h>
 
 namespace UiTestSupport{
 
 using namespace NWB;
 using namespace NWB::Impl::Ui;
+namespace InputEventType = NWB::Impl::Ui::InputEventType;
+
+[[nodiscard]] InputEvent NativeInput(const InputEvent& event)noexcept;
 
 [[nodiscard]] inline const HitTarget* FindHitTarget(const Span<const HitTarget> targets, const WidgetId widget)noexcept{
     for(const auto& target : targets){
@@ -18,28 +26,6 @@ using namespace NWB::Impl::Ui;
             return &target;
     }
     return nullptr;
-}
-
-// Native cursor adapter helpers for UI unit test fixtures.
-[[nodiscard]] inline InputEvent NativeInput(const InputEvent& event)noexcept{
-    InputEvent resolved = event;
-    switch(event.type){
-    case InputEventType::PointerMove:
-    case InputEventType::PrimaryDown:
-    case InputEventType::PrimaryUp:
-    case InputEventType::SecondaryDown:
-    case InputEventType::SecondaryUp:
-    case InputEventType::PointerWheel:
-    case InputEventType::PointerLeave:
-    case InputEventType::PointerCaptureLost:
-        resolved.source = { 0u, 1u };
-        resolved.hoverCapable = true;
-        resolved.extend = event.shift;
-        break;
-    default:
-        break;
-    }
-    return resolved;
 }
 
 [[nodiscard]] inline InputEvent Pointer(const InputEventType::Enum type, const Point& position = { 15.0f, 15.0f })noexcept{
@@ -86,7 +72,7 @@ public:
     {}
 
 
-protected:
+public:
     [[nodiscard]] virtual InputRouter& inputRouter()noexcept = 0;
     InputRoutingResult send(const InputEvent& event){
         EXPECT_TRUE(inputRouter().queue(NativeInput(event)));
@@ -106,7 +92,7 @@ protected:
     }
 
 
-protected:
+public:
     Core::Alloc::GlobalArena m_arena;
 };
 
@@ -118,11 +104,11 @@ public:
     {}
 
 
-protected:
+public:
     [[nodiscard]] virtual InputRouter& inputRouter()noexcept override{ return m_router; }
 
 
-protected:
+public:
     InputRouter m_router;
 };
 
@@ -134,19 +120,41 @@ public:
     {}
 
 
-protected:
+public:
     [[nodiscard]] virtual InputRouter& inputRouter()noexcept override{ return m_context.input(); }
 
 
-protected:
+public:
     Context m_context;
 };
 
 };
 }
 
-b8 NativeInputFixtureReady(in u32 value){
-    return value != 0u;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+InputEvent NativeInput(in InputEvent event){
+    InputEvent resolved = event;
+    switch(event.type){
+    case InputEventType::PointerMove:
+    case InputEventType::PrimaryDown:
+    case InputEventType::PrimaryUp:
+    case InputEventType::SecondaryDown:
+    case InputEventType::SecondaryUp:
+    case InputEventType::PointerWheel:
+    case InputEventType::PointerLeave:
+    case InputEventType::PointerCaptureLost:
+        resolved.source.device = 0u;
+        resolved.source.control = 1u;
+        resolved.hoverCapable = true;
+        resolved.extend = event.shift;
+        break;
+    default:
+        break;
+    }
+    return resolved;
 }
 
 

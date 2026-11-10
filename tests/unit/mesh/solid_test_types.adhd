@@ -12,10 +12,16 @@ const Name s_SolidCaseAssetsMeshSolidMembershipWordBoundary = "tests/assets_mesh
 
 const Name s_OneOffNameTestsMeshSolidCodec = "tests/mesh/solid_codec";
 
-
 class MeshSolidVolumeCase{
-    public f32x3u origin = f32x3u(0.f, 0.f, 0.f);
-    public f32 size = 0.f;
+    public f32x3u origin = f32x3u(0.0f, 0.0f, 0.0f);
+    public f32 size = 0.0f;
+}
+
+MeshSolidVolumeCase MakeMeshSolidVolumeCase(in f32 ox, in f32 oy, in f32 oz, in f32 size){
+    MeshSolidVolumeCase item = MeshSolidVolumeCase();
+    item.origin = f32x3u(ox, oy, oz);
+    item.size = size;
+    return item;
 }
 
 

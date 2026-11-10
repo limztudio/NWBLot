@@ -1,26 +1,26 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
 
-b8 UiWheelAndWindowCasesReady(in u64 value){
-    return value != 0u;
-}
-
-native{
-#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd.h>
+#include <tests/common/gtest_macros.adhd>
+#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+native{
 #include <tests/unit/ui/glyph_shader_case_types.adhd.h>
+#include <tests/unit/ui/native_input.adhd.h>
+#include <tests/unit/ui/name_cases.adhd.h>
 
 #include <impl/assets_font_atlas/model.adhd.h>
+#include <impl/ecs_ui/toolkit/input/router.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/window_style.adhd.h>
 
+#include <global/bit.h>
 #include <global/simd/vector.h>
+#include <global/simdmath.h>
 
 #include <gtest/gtest.h>
 
@@ -28,25 +28,26 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_glyph_sdf_tests{
+namespace __hidden_ui_glyph_sdf_slang_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using ShaderFloat4 = ::__hidden_ui_glyph_sdf_tests::ShaderFloat4;
 using float4 = ShaderFloat4;
 using uint = u32;
 
-[[nodiscard]] ShaderFloat4 operator*(const ShaderFloat4 value, const f32 scale)noexcept{
+[[nodiscard]] inline ShaderFloat4 operator*(const ShaderFloat4 value, const f32 scale)noexcept{
     const SIMDVectorSingle scaled = VectorScale(VectorSet(value.x, value.y, value.z, value.w), scale);
     return { .x = VectorGetX(scaled), .y = VectorGetY(scaled), .z = VectorGetZ(scaled), .w = VectorGetW(scaled) };
 }
 
-[[nodiscard]] f32 saturate(const f32 value)noexcept{
+[[nodiscard]] inline f32 saturate(const f32 value)noexcept{
     return value > 0.0f ? Min(1.0f, value) : 0.0f;
 }
 
-[[nodiscard]] f32 max(const f32 first, const f32 second)noexcept{
+[[nodiscard]] inline f32 max(const f32 first, const f32 second)noexcept{
     return Max(first, second);
 }
 
@@ -62,46 +63,7 @@ using uint = u32;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(UiGlyphSdf, FreeTypeZeroIs128Over255AndExteriorInteriorClampToEndpoints){
-    EXPECT_NEAR(nwbUiSdfDistance(128.f / 255.f, 8u), 0.f, 0.000001f);
-    EXPECT_NEAR(nwbUiSdfCoverage(nwbUiSdfDistance(128.f / 255.f, 8u), 1.f), 0.5f, 0.000001f);
-    EXPECT_FLOAT_EQ(nwbUiSdfDistance(0.f, 8u), -8.f);
-    EXPECT_FLOAT_EQ(nwbUiSdfDistance(1.f, 8u), 7.9375f);
-    EXPECT_FLOAT_EQ(nwbUiSdfCoverage(nwbUiSdfDistance(0.f, 8u), 1.f), 0.f);
-    EXPECT_FLOAT_EQ(nwbUiSdfCoverage(nwbUiSdfDistance(1.f, 8u), 1.f), 1.f);
-    // A generic 0.5 threshold is incorrect for FreeType's asymmetric u8 encoding.
-    EXPECT_FLOAT_EQ(nwbUiSdfCoverage(nwbUiSdfDistance(0.5f, 8u), 1.f), 0.46875f);
-}
-
-
-TEST(UiGlyphSdf, FlatFieldsRemainFiniteAcrossEveryAdmittedSpread){
-    EXPECT_FLOAT_EQ(nwbUiSdfCoverage(0.f, 0.f), 0.5f);
-    // The flat-field epsilon bounds FP32 decode residuals across all spreads.
-    for(u32 spread = NWB::Impl::s_FontAtlasMinSpreadPixels; spread <= NWB::Impl::s_FontAtlasMaxSpreadPixels; ++spread)
-        EXPECT_NEAR(nwbUiSdfCoverage(nwbUiSdfDistance(128.f / 255.f, spread), 0.f), 0.5f, 0.01f);
-    EXPECT_FLOAT_EQ(nwbUiSdfCoverage(-1.f, 0.f), 0.f);
-    EXPECT_FLOAT_EQ(nwbUiSdfCoverage(1.f, 0.f), 1.f);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ui/native_input.adhd.h>
-#include <tests/unit/ui/name_cases.adhd.h>
-
-#include <impl/ecs_ui/toolkit/input/router.adhd.h>
-
-#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -116,7 +78,7 @@ namespace __hidden_ui_wheel_input_tests{
 using namespace NWB;
 using namespace NWB::Impl::Ui;
 
-HitTarget WheelHost()noexcept{
+inline HitTarget WheelHost()noexcept{
     HitTarget target;
     target.id = { 1u };
     target.declarationGeneration = 7u;
@@ -132,7 +94,7 @@ HitTarget WheelHost()noexcept{
     return target;
 }
 
-HitTarget WheelPart(const HitTarget& host)noexcept{
+inline HitTarget WheelPart(const HitTarget& host)noexcept{
     HitTarget part;
     part.id = { 2u };
     part.declarationGeneration = host.declarationGeneration;
@@ -163,7 +125,7 @@ public:
     }
 
 
-protected:
+public:
     [[nodiscard]] InputRoutingResult wheel(const f64 deltaX, const f64 deltaY, const Point position = { 10.0f, 10.0f }){
         InputEvent event;
         event.type = InputEventType::PointerWheel;
@@ -174,8 +136,15 @@ protected:
         return m_router.process();
     }
 
+    [[nodiscard]] b8 queuePointer(const Point& position, const InputEventType::Enum type){
+        InputEvent event;
+        event.position = position;
+        event.type = type;
+        return m_router.queue(UiTestSupport::NativeInput(event)).has_value();
+    }
 
-protected:
+
+public:
     Core::Alloc::GlobalArena m_arena;
     InputRouter m_router;
     Array<HitTarget, 2u> m_targets;
@@ -185,208 +154,7 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiWheelInputTests, DiagonalWheelCopiesBothAcceptedAxesIntoOneAction){
-    ASSERT_TRUE(m_router.commitTargets(m_targets, 5u));
-    EXPECT_TRUE(wheel(0.25, -0.5, { 95.0f, 25.0f }).pointerConsumed);
-    ASSERT_EQ(m_router.controlActions().size(), 1u);
-    EXPECT_FALSE(m_router.focus().valid());
-    m_targets[0u].scrollStep = 99.0;
-    m_targets[0u].scrollStepX = 101.0;
-    m_targets[0u].gestureMaximum = 999.0;
-    m_targets[0u].gestureMaximumX = 1001.0;
-    ControlAction action;
-    const auto actionResult = m_router.consumeControlAction(m_targets[0u].id, 7u, m_targets[0u].control);
-    ASSERT_TRUE(actionResult);
-    action = *actionResult;
-    EXPECT_DOUBLE_EQ(action.delta, -0.5);
-    EXPECT_DOUBLE_EQ(action.deltaX, 0.25);
-    EXPECT_DOUBLE_EQ(action.step, 48.0);
-    EXPECT_DOUBLE_EQ(action.stepX, 32.0);
-    EXPECT_DOUBLE_EQ(action.maximum, 360.0);
-    EXPECT_DOUBLE_EQ(action.maximumX, 180.0);
-    EXPECT_TRUE(m_router.controlActions().empty());
-    EXPECT_TRUE(m_router.actions().empty());
-}
-
-TEST_F(UiWheelInputTests, VerticalOnlyListConsumesPureXWithoutDeliveringAControlAction){
-    m_targets[0u].scrollStepX = 0.0;
-    m_targets[0u].gestureMaximumX = 0.0;
-    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
-    EXPECT_TRUE(wheel(2.0, 0.0).pointerConsumed);
-    EXPECT_TRUE(m_router.controlActions().empty());
-    EXPECT_FALSE(wheel(2.0, 0.0, { 250.0f, 180.0f }).pointerConsumed);
-    EXPECT_TRUE(m_router.controlActions().empty());
-}
-
-TEST_F(UiWheelInputTests, VerticalOnlyListDiagonalStillDeliversItsExactVerticalStep){
-    m_targets[0u].scrollStepX = 0.0;
-    m_targets[0u].gestureMaximumX = 0.0;
-    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
-    EXPECT_TRUE(wheel(2.0, 0.5).pointerConsumed);
-    ControlAction action;
-    const auto actionResult = m_router.consumeControlAction(m_targets[0u].id, 7u, m_targets[0u].control);
-    ASSERT_TRUE(actionResult);
-    action = *actionResult;
-    EXPECT_DOUBLE_EQ(action.delta, 0.5);
-    EXPECT_DOUBLE_EQ(action.step, 48.0);
-    EXPECT_DOUBLE_EQ(action.maximum, 360.0);
-    EXPECT_DOUBLE_EQ(action.deltaX, 2.0);
-    EXPECT_DOUBLE_EQ(action.stepX, 0.0);
-    EXPECT_DOUBLE_EQ(action.maximumX, 0.0);
-    EXPECT_TRUE(m_router.controlActions().empty());
-}
-
-TEST_F(UiWheelInputTests, DiagonalWheelOccupiesOnePositionBetweenGestureUpdates){
-    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
-    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .position = { 95.0f, 25.0f } , .type = InputEventType::PrimaryDown})));
-    EXPECT_TRUE(m_router.process().pointerConsumed);
-    PointerGesture first;
-    const auto firstResult = m_router.consumePointerGesture(m_targets[1u].id, 7u);
-    ASSERT_TRUE(firstResult);
-    first = *firstResult;
-    EXPECT_TRUE(wheel(1.0, -1.0, { 95.0f, 25.0f }).pointerConsumed);
-    ASSERT_EQ(m_router.controlActions().size(), 1u);
-    ControlAction action;
-    const auto actionResult = m_router.consumeControlAction(m_targets[0u].id, 7u, m_targets[0u].control);
-    ASSERT_TRUE(actionResult);
-    action = *actionResult;
-    EXPECT_EQ(action.id.sequence, first.updateSequence + 1u);
-    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .position = { 95.0f, 60.0f } , .type = InputEventType::PointerMove})));
-    EXPECT_TRUE(m_router.process().pointerConsumed);
-    PointerGesture moved;
-    const auto movedResult = m_router.consumePointerGesture(m_targets[1u].id, 7u);
-    ASSERT_TRUE(movedResult);
-    moved = *movedResult;
-    EXPECT_EQ(moved.updateSequence, action.id.sequence + 1u);
-    EXPECT_EQ(moved.id.sequence, first.id.sequence);
-}
-
-TEST_F(UiWheelInputTests, InvalidHorizontalMetadataRejectsPublicationAndPreservesPendingAction){
-    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
-    EXPECT_TRUE(wheel(1.0, -1.0).pointerConsumed);
-    const HitTarget accepted = m_targets[0u];
-    const Array<f64, 3> invalid{ -1.0, Limit<f64>::s_QuietNaN, Limit<f64>::s_Infinity };
-    for(const f64 value : invalid){
-        m_targets[0u] = accepted;
-        m_targets[0u].scrollStepX = value;
-        EXPECT_FALSE(m_router.commitTargets(m_targets, 2u));
-        m_targets[0u] = accepted;
-        m_targets[0u].gestureMaximumX = value;
-        EXPECT_FALSE(m_router.commitTargets(m_targets, 2u));
-    }
-    EXPECT_EQ(m_router.layoutGeneration(), 1u);
-    ASSERT_EQ(m_router.controlActions().size(), 1u);
-    ControlAction action;
-    const auto actionResult = m_router.consumeControlAction(accepted.id, 7u, accepted.control);
-    ASSERT_TRUE(actionResult);
-    action = *actionResult;
-    EXPECT_DOUBLE_EQ(action.deltaX, 1.0);
-    EXPECT_DOUBLE_EQ(action.maximumX, 180.0);
-}
-
-TEST_F(UiWheelInputTests, SceneOwnedPressCannotAcquireEitherWheelAxisOverAHost){
-    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
-    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .position = { 250.0f, 180.0f } , .type = InputEventType::PrimaryDown})));
-    EXPECT_FALSE(m_router.process().pointerConsumed);
-    EXPECT_FALSE(wheel(1.0, -1.0).pointerConsumed);
-    EXPECT_TRUE(m_router.controlActions().empty());
-    ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .position = { 10.0f, 10.0f } , .type = InputEventType::PrimaryUp})));
-    EXPECT_FALSE(m_router.process().pointerConsumed);
-    EXPECT_TRUE(wheel(1.0, -1.0).pointerConsumed);
-    EXPECT_EQ(m_router.controlActions().size(), 1u);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_ui/toolkit/widgets/window_style.adhd.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_window_behavior_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace NWB::Impl::Ui;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(UiWindowBehaviorTests, OverflowingMinimumRejectsInitializationWithoutPublishingModel){
-    WindowState state;
-    state.bounds = { 5.0f, 6.0f, 7.0f, 8.0f };
-    WindowOptions options;
-    options.initialBounds = { Limit<f32>::s_Max * 0.75f, 0.0f, 1.0f, 110.0f };
-    WindowMetrics metrics;
-    metrics.minimumSize = { Limit<f32>::s_Max * 0.75f, 110.0f };
-    EXPECT_FALSE(TryInitializeWindow(options, metrics, state));
-    EXPECT_FALSE(state.initialized);
-    EXPECT_FLOAT_EQ(state.bounds.x, 5.0f);
-    EXPECT_FLOAT_EQ(state.bounds.y, 6.0f);
-    EXPECT_FLOAT_EQ(state.bounds.width, 7.0f);
-    EXPECT_FLOAT_EQ(state.bounds.height, 8.0f);
-}
-
-TEST(UiWindowBehaviorTests, OverflowingMoveRejectsBoundsAndGestureBaselineAtomically){
-    WindowState state;
-    state.bounds = { 20.0f, 30.0f, 200.0f, 140.0f };
-    state.initialized = true;
-    PointerGesture gesture;
-    gesture.id = { { 1u }, 1u, 1u, 1u };
-    gesture.referenceRectangle = { Limit<f32>::s_Max * 0.75f, 30.0f, 200.0f, 140.0f };
-    gesture.position.x = Limit<f32>::s_Max * 0.75f;
-    EXPECT_FALSE(TryApplyWindowMove(gesture, state));
-    EXPECT_FLOAT_EQ(state.bounds.x, 20.0f);
-    EXPECT_FLOAT_EQ(state.bounds.y, 30.0f);
-    EXPECT_EQ(state.moveGesture.id.sequence, 0u);
-}
-
-TEST(UiWindowBehaviorTests, OverflowingResizeRejectsBoundsAndGestureBaselineAtomically){
-    WindowState state;
-    state.bounds = { 20.0f, 30.0f, 200.0f, 140.0f };
-    state.initialized = true;
-    PointerGesture gesture;
-    gesture.id = { { 1u }, 1u, 1u, 1u };
-    gesture.referenceRectangle = { 0.0f, 30.0f, Limit<f32>::s_Max * 0.75f, 140.0f };
-    gesture.position.x = Limit<f32>::s_Max * 0.75f;
-    EXPECT_FALSE(TryApplyWindowResize(gesture, { 160.0f, 80.0f }, state));
-    EXPECT_FLOAT_EQ(state.bounds.width, 200.0f);
-    EXPECT_FLOAT_EQ(state.bounds.height, 140.0f);
-    EXPECT_EQ(state.resizeGesture.id.sequence, 0u);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <tests/unit/ui/name_cases.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -403,114 +171,13 @@ using namespace NWB::Impl;
 using namespace NWB::Impl::Ui;
 using namespace NWB::UiWidgetTests;
 
-constexpr AStringView s_ApplyKey = "apply";
-
 class UiWindowSkinTests : public WidgetFixture{};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiWindowSkinTests, ReplacingAtlasChangesMetricsAndBindingsWithoutChangingWidgetIdentity){
-    WindowState state;
-    WindowOptions options;
-    options.initialBounds = { 30.0f, 40.0f, 240.0f, 150.0f };
-    ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Theme", state, options));
-    EXPECT_FALSE(m_builder.button(s_ApplyKey, "Apply"));
-    ASSERT_TRUE(finishWindow());
-    const DrawSnapshot first = m_paint.freeze();
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    const HitTarget* original = target(id(s_ApplyKey));
-    ASSERT_NE(original, nullptr);
-    const HitTarget oldTarget = *original;
-    EXPECT_FLOAT_EQ(oldTarget.rectangle.x, 33.0f);
-    EXPECT_FLOAT_EQ(oldTarget.rectangle.y, 78.0f);
-    EXPECT_EQ(m_context.input().hitTest({ 40.0f, 86.0f }), oldTarget.id);
-
-    UiSkin::RegionVector regions(m_arena);
-    regions.assign(m_skin.regions().begin(), m_skin.regions().end());
-    for(UiSkinRegion& region : regions){
-        region.rectangle.x += 128u;
-        region.rectangle.y = 8u;
-        if(region.name == Name(NWB::Tests::UiCases::s_UiInputNameWindowNormal)){
-            region.padding = { 11.0f, 12.0f, 13.0f, 14.0f };
-            region.minimumWidth = 280.0f;
-            region.minimumHeight = 200.0f;
-        }
-        else if(region.name == Name(NWB::Tests::UiCases::s_UiInputNameWindowTitle)){
-            region.padding = { 7.0f, 9.0f, 11.0f, 13.0f };
-            region.minimumHeight = 44.0f;
-        }
-        else if(region.name == Name(NWB::Tests::UiCases::s_UiInputNameWindowCollapse)){
-            region.minimumWidth = 26.0f;
-            region.minimumHeight = 28.0f;
-        }
-        else if(region.name == Name(NWB::Tests::UiCases::s_UiInputNameButtonNormal)
-            || region.name == Name(NWB::Tests::UiCases::s_UiInputNameButtonHover)
-            || region.name == Name(NWB::Tests::UiCases::s_UiInputNameButtonPressed)
-            || region.name == Name(NWB::Tests::UiCases::s_UiInputNameButtonDisabled)){
-            region.padding = { 13.0f, 14.0f, 15.0f, 16.0f };
-            region.minimumWidth = 120.0f;
-            region.minimumHeight = 60.0f;
-        }
-    }
-    regions.push_back({ Name(NWB::Tests::UiCases::s_UiInputNameWindowResize), { 224u, 8u, 8u, 8u }, {}, {}, 18.0f, 22.0f, UiSkinDrawMode::Sprite });
-    const Core::Assets::AssetRef<Texture> replacementTexture("tests/ui/alternate_texture");
-    m_skin.setAtlas(replacementTexture, 256u, 32u, 2.0f, Move(regions));
-    ASSERT_TRUE(m_skin.validatePayload());
-    m_skinGeneration = 2u;
-    ASSERT_TRUE(begin(2u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Theme", state, options));
-    EXPECT_FALSE(m_builder.button(s_ApplyKey, "Apply"));
-    ASSERT_TRUE(finishWindow());
-    const DrawSnapshot second = m_paint.freeze();
-    EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
-    EXPECT_EQ(m_context.input().hitTest({ 40.0f, 86.0f }), oldTarget.id);
-    ASSERT_TRUE(m_context.commitFrame(2u));
-    const HitTarget* updated = target(id(s_ApplyKey));
-    ASSERT_NE(updated, nullptr);
-    EXPECT_EQ(updated->id, oldTarget.id);
-    EXPECT_EQ(updated->declarationGeneration, oldTarget.declarationGeneration);
-    EXPECT_FLOAT_EQ(updated->rectangle.x, 41.0f);
-    EXPECT_FLOAT_EQ(updated->rectangle.y, 102.0f);
-    EXPECT_FLOAT_EQ(updated->rectangle.width, 120.0f);
-    EXPECT_FLOAT_EQ(updated->rectangle.height, 60.0f);
-    EXPECT_NE(m_context.input().hitTest({ 40.0f, 86.0f }), updated->id);
-    EXPECT_EQ(m_context.input().hitTest({ 55.0f, 115.0f }), updated->id);
-    EXPECT_FLOAT_EQ(state.bounds.width, 280.0f);
-    EXPECT_FLOAT_EQ(state.bounds.height, 200.0f);
-    EXPECT_EQ(first.skinBinding().texture, Core::Assets::AssetRef<Texture>("tests/ui/texture"));
-    EXPECT_EQ(first.skinBinding().generation, 1u);
-    EXPECT_EQ(first.skinBinding().atlasWidth, 128u);
-    EXPECT_EQ(second.skinBinding().texture, replacementTexture);
-    EXPECT_EQ(second.skinBinding().generation, 2u);
-    EXPECT_EQ(second.skinBinding().atlasWidth, 256u);
-    EXPECT_FLOAT_EQ(second.skinBinding().referenceDensity, 2.0f);
-    ASSERT_FALSE(first.commands().empty());
-    ASSERT_FALSE(second.commands().empty());
-    const Vertex& firstWindow = first.vertices()[first.indices()[first.commands().front().firstIndex]];
-    const Vertex& secondWindow = second.vertices()[second.indices()[second.commands().front().firstIndex]];
-    EXPECT_FLOAT_EQ(firstWindow.texCoord.x, 0.0f);
-    EXPECT_FLOAT_EQ(firstWindow.texCoord.y, 0.0f);
-    EXPECT_FLOAT_EQ(secondWindow.texCoord.x, 0.5f);
-    EXPECT_FLOAT_EQ(secondWindow.texCoord.y, 0.25f);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <global/simdmath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -533,402 +200,806 @@ class UiWindowTests : public WidgetFixture{};
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiWindowTests, ContentHeightFitsOnlyFirstUseAndPreservesLaterHostGeometry){
-    WindowState state;
-    WindowOptions options;
-    options.initialBounds = { 18.0f, 22.0f, 240.0f, 400.0f };
-    options.minimumSize = { 120.0f, 60.0f };
-    options.contentHeightFirstUse = true;
-    ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Title", state, options));
-    ASSERT_TRUE(m_builder.label("caption", "One label"));
-    EXPECT_FALSE(m_builder.button("apply", "Apply"));
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    const HitTarget* apply = target(id("apply"));
-    ASSERT_NE(apply, nullptr);
-    EXPECT_FLOAT_EQ(state.bounds.height, apply->rectangle.y + apply->rectangle.height + 6.0f - state.bounds.y);
-    EXPECT_LT(state.bounds.height, 400.0f);
-    const f32 firstHeight = state.bounds.height;
-    options.initialBounds = { 500.0f, 500.0f, 500.0f, 500.0f };
-    ASSERT_TRUE(begin(2u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Title", state, options));
-    ASSERT_TRUE(m_builder.label("caption", "A changed label"));
-    ASSERT_TRUE(m_builder.label("extra", "Another label"));
-    EXPECT_FALSE(m_builder.button("apply", "Apply"));
-    ASSERT_TRUE(finishWindow());
-    EXPECT_FLOAT_EQ(state.bounds.x, 18.0f);
-    EXPECT_FLOAT_EQ(state.bounds.y, 22.0f);
-    EXPECT_FLOAT_EQ(state.bounds.width, 240.0f);
-    EXPECT_FLOAT_EQ(state.bounds.height, firstHeight);
-    ASSERT_TRUE(m_context.commitFrame(2u));
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_glyph_sdf_tests{
+using UiWheelInputTests = ::__hidden_ui_wheel_input_tests::UiWheelInputTests;
+using UiWindowSkinTests = ::__hidden_ui_window_skin_tests::UiWindowSkinTests;
+using UiWindowTests = ::__hidden_ui_window_tests::UiWindowTests;
+using ControlAction = ::NWB::Impl::Ui::ControlAction;
+using PointerGesture = ::NWB::Impl::Ui::PointerGesture;
+using InputActionId = ::NWB::Impl::Ui::InputActionId;
+using InputEvent = ::NWB::Impl::Ui::InputEvent;
+namespace InputEventType = ::NWB::Impl::Ui::InputEventType;
+using InputEventTypeEnum = ::NWB::Impl::Ui::InputEventType::Enum;
+using DisplayMetrics = ::NWB::Impl::Ui::DisplayMetrics;
+using WindowState = ::NWB::Impl::Ui::WindowState;
+using WindowOptions = ::NWB::Impl::Ui::WindowOptions;
+using WindowMetrics = ::NWB::Impl::Ui::WindowMetrics;
+namespace UiWindowKey = ::NWB::Core::Key;
+using UiWindowKeyEnum = ::NWB::Core::Key::Enum;
+using ::NWB::Impl::s_FontAtlasMinSpreadPixels;
+using ::NWB::Impl::s_FontAtlasMaxSpreadPixels;
+using ::NWB::Impl::Ui::TryInitializeWindow;
+using ::NWB::Impl::Ui::TryApplyWindowMove;
+using ::NWB::Impl::Ui::TryApplyWindowResize;
+
+[[nodiscard]] inline f32 UiGlyphSdfDistance(const f32 encoded, const u32 spreadPixels)noexcept{
+    return ::__hidden_ui_glyph_sdf_slang_tests::nwbUiSdfDistance(encoded, spreadPixels);
 }
 
-TEST_F(UiWindowTests, CompletedDragBeforeCallbackMovesExactlyOnce){
-    WindowState state;
-    WindowOptions options;
-    options.initialBounds = { 30.0f, 40.0f, 240.0f, 150.0f };
-    ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Move", state, options));
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    drag({ 130.0f, 55.0f }, { 165.0f, 81.0f });
-    ASSERT_TRUE(begin(2u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Move", state, options));
-    EXPECT_FLOAT_EQ(state.bounds.x, 65.0f);
-    EXPECT_FLOAT_EQ(state.bounds.y, 66.0f);
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(2u));
-    ASSERT_TRUE(begin(3u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Move", state, options));
-    EXPECT_FLOAT_EQ(state.bounds.x, 65.0f);
-    EXPECT_FLOAT_EQ(state.bounds.y, 66.0f);
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(3u));
+[[nodiscard]] inline f32 UiGlyphSdfCoverage(const f32 distance, const f32 pixelWidth)noexcept{
+    return ::__hidden_ui_glyph_sdf_slang_tests::nwbUiSdfCoverage(distance, pixelWidth);
+}
+};
 }
 
-TEST_F(UiWindowTests, ActiveDragRetainsBaselineAcrossAcceptedLayouts){
-    WindowState state;
-    WindowOptions options;
-    options.initialBounds = { 30.0f, 40.0f, 240.0f, 150.0f };
-    ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Move", state, options));
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    ASSERT_TRUE(send({ .position = { 130.0f, 55.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    ASSERT_TRUE(send({ .position = { 140.0f, 65.0f } , .type = InputEventType::PointerMove}).pointerConsumed);
-    ASSERT_TRUE(begin(2u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Move", state, options));
-    EXPECT_FLOAT_EQ(state.bounds.x, 40.0f);
-    EXPECT_FLOAT_EQ(state.bounds.y, 50.0f);
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(2u));
-    ASSERT_TRUE(send({ .position = { 160.0f, 80.0f } , .type = InputEventType::PointerMove}).pointerConsumed);
-    ASSERT_TRUE(send({ .position = { 160.0f, 80.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
-    ASSERT_TRUE(begin(3u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Move", state, options));
-    EXPECT_FLOAT_EQ(state.bounds.x, 60.0f);
-    EXPECT_FLOAT_EQ(state.bounds.y, 65.0f);
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(3u));
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_UiWheelWindowQuietNaNF32Bits = 0x7fc00000u;
+const u32 s_UiWheelWindowMaxF32Bits = 0x7f7fffffu;
+const u64 s_UiWheelQuietNaNF64Bits = 0x7ff8000000000000u;
+const u64 s_UiWheelPosInfF64Bits = 0x7ff0000000000000u;
+const AStringView s_UiWindowSkinApplyKey = "apply";
+
+
+InputEvent MakeUiWindowPointerEvent(in Point position, in InputEventTypeEnum eventType){
+    InputEvent event = InputEvent();
+    event.position = position;
+    event.type = eventType;
+    return event;
 }
 
-TEST_F(UiWindowTests, MultipleCompletedDragsUseTheDisplayedReferenceForEachPress){
-    WindowState state;
-    WindowOptions options;
-    options.initialBounds = { 30.0f, 40.0f, 240.0f, 150.0f };
-    ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Move", state, options));
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    drag({ 130.0f, 55.0f }, { 140.0f, 60.0f });
-    drag({ 130.0f, 55.0f }, { 150.0f, 65.0f });
-    ASSERT_TRUE(begin(2u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Move", state, options));
-    EXPECT_FLOAT_EQ(state.bounds.x, 50.0f);
-    EXPECT_FLOAT_EQ(state.bounds.y, 50.0f);
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(2u));
+InputEvent MakeUiWindowKeyEvent(in UiWindowKeyEnum key, in InputEventTypeEnum eventType, in b8 repeat){
+    InputEvent event = InputEvent();
+    event.key = key;
+    event.type = eventType;
+    event.repeat = repeat;
+    return event;
 }
 
-TEST_F(UiWindowTests, CompletedResizeRetainsPositionAndRunsOnce){
-    WindowState state;
-    WindowOptions options;
-    options.initialBounds = { 30.0f, 40.0f, 240.0f, 150.0f };
-    ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Resize", state, options));
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    drag({ 262.0f, 182.0f }, { 297.0f, 197.0f });
-    ASSERT_TRUE(begin(2u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Resize", state, options));
-    EXPECT_FLOAT_EQ(state.bounds.x, 30.0f);
-    EXPECT_FLOAT_EQ(state.bounds.y, 40.0f);
-    EXPECT_FLOAT_EQ(state.bounds.width, 275.0f);
-    EXPECT_FLOAT_EQ(state.bounds.height, 165.0f);
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(2u));
-    ASSERT_TRUE(begin(3u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Resize", state, options));
-    EXPECT_FLOAT_EQ(state.bounds.width, 275.0f);
-    EXPECT_FLOAT_EQ(state.bounds.height, 165.0f);
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(3u));
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiGlyphSdf_FreeTypeZeroIs128Over255AndExteriorInteriorClampToEndpoints(){
+    EXPECT_NEAR(UiGlyphSdfDistance(128.0f / 255.0f, 8u), 0.0f, 0.000001f);
+    EXPECT_NEAR(UiGlyphSdfCoverage(UiGlyphSdfDistance(128.0f / 255.0f, 8u), 1.0f), 0.5f, 0.000001f);
+    EXPECT_FLOAT_EQ(UiGlyphSdfDistance(0.0f, 8u), -8.0f);
+    EXPECT_FLOAT_EQ(UiGlyphSdfDistance(1.0f, 8u), 7.9375f);
+    EXPECT_FLOAT_EQ(UiGlyphSdfCoverage(UiGlyphSdfDistance(0.0f, 8u), 1.0f), 0.0f);
+    EXPECT_FLOAT_EQ(UiGlyphSdfCoverage(UiGlyphSdfDistance(1.0f, 8u), 1.0f), 1.0f);
+    // A generic 0.5 threshold is incorrect for FreeType's asymmetric u8 encoding.
+    EXPECT_FLOAT_EQ(UiGlyphSdfCoverage(UiGlyphSdfDistance(0.5f, 8u), 1.0f), 0.46875f);
 }
 
-TEST_F(UiWindowTests, ResizeMinimumDoesNotLoseOriginalPointerBaseline){
-    WindowState state;
-    WindowOptions options;
-    options.initialBounds = { 30.0f, 40.0f, 240.0f, 150.0f };
-    options.minimumSize = { 180.0f, 110.0f };
-    ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Resize", state, options));
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    ASSERT_TRUE(send({ .position = { 262.0f, 182.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    ASSERT_TRUE(send({ .position = { 0.0f, 0.0f } , .type = InputEventType::PointerMove}).pointerConsumed);
-    ASSERT_TRUE(begin(2u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Resize", state, options));
-    EXPECT_FLOAT_EQ(state.bounds.width, 180.0f);
-    EXPECT_FLOAT_EQ(state.bounds.height, 110.0f);
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(2u));
-    ASSERT_TRUE(send({ .position = { 282.0f, 192.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
-    ASSERT_TRUE(begin(3u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Resize", state, options));
-    EXPECT_FLOAT_EQ(state.bounds.width, 260.0f);
-    EXPECT_FLOAT_EQ(state.bounds.height, 160.0f);
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(3u));
+void VerifyUiGlyphSdf_FlatFieldsRemainFiniteAcrossEveryAdmittedSpread(){
+    EXPECT_FLOAT_EQ(UiGlyphSdfCoverage(0.0f, 0.0f), 0.5f);
+    // The flat-field epsilon bounds FP32 decode residuals across all spreads.
+    for(u32 spread = s_FontAtlasMinSpreadPixels; spread <= s_FontAtlasMaxSpreadPixels; ++spread)
+        EXPECT_NEAR(UiGlyphSdfCoverage(UiGlyphSdfDistance(128.0f / 255.0f, spread), 0.0f), 0.5f, 0.01f);
+    EXPECT_FLOAT_EQ(UiGlyphSdfCoverage(-1.0f, 0.0f), 0.0f);
+    EXPECT_FLOAT_EQ(UiGlyphSdfCoverage(1.0f, 0.0f), 1.0f);
 }
 
-TEST_F(UiWindowTests, CollapseKeepsHostSizeAndRequiresBalancedEnd){
-    WindowState state;
-    WindowOptions options;
-    options.initialBounds = { 30.0f, 40.0f, 240.0f, 150.0f };
-    ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Collapse", state, options));
-    EXPECT_FALSE(m_builder.button("apply", "Apply"));
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    click({ 42.0f, 57.0f });
-    ASSERT_TRUE(begin(2u));
-    EXPECT_FALSE(m_builder.beginWindow("window", "Collapse", state, options));
-    EXPECT_FALSE(m_context.failed());
-    EXPECT_FALSE(m_builder.balanced());
-    EXPECT_TRUE(state.collapsed);
-    EXPECT_FLOAT_EQ(state.bounds.height, 150.0f);
-    ASSERT_TRUE(finishWindow());
-    EXPECT_TRUE(m_builder.balanced());
-    const DrawSnapshot collapsed = m_paint.freeze();
-    ASSERT_TRUE(m_context.commitFrame(2u));
-    EXPECT_EQ(target(id("apply")), nullptr);
-    EXPECT_EQ(target(id("@window.resize")), nullptr);
-    const auto skin = skinQuad(collapsed, 0u);
-    ASSERT_TRUE(skin);
-    EXPECT_FLOAT_EQ(skin->height, 34.0f);
-    EXPECT_FALSE(send({ .position = { 100.0f, 120.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    EXPECT_FALSE(send({ .position = { 100.0f, 120.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiWheelInputTests_DiagonalWheelCopiesBothAcceptedAxesIntoOneAction(mut UiWheelInputTests self){
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 5u));
+    EXPECT_TRUE(self.wheel(0.25, -0.5, Point(95.0f, 25.0f)).pointerConsumed);
+    ASSERT_EQ(self.m_router.controlActions().size(), 1u);
+    EXPECT_FALSE(self.m_router.focus().valid());
+    self.m_targets[0u].scrollStep = 99.0;
+    self.m_targets[0u].scrollStepX = 101.0;
+    self.m_targets[0u].gestureMaximum = 999.0;
+    self.m_targets[0u].gestureMaximumX = 1001.0;
+    const auto actionResult = self.m_router.consumeControlAction(self.m_targets[0u].id, 7u, self.m_targets[0u].control);
+    ASSERT_TRUE(actionResult.has_value());
+    const ControlAction action = actionResult.value();
+    EXPECT_DOUBLE_EQ(action.delta, -0.5);
+    EXPECT_DOUBLE_EQ(action.deltaX, 0.25);
+    EXPECT_DOUBLE_EQ(action.step, 48.0);
+    EXPECT_DOUBLE_EQ(action.stepX, 32.0);
+    EXPECT_DOUBLE_EQ(action.maximum, 360.0);
+    EXPECT_DOUBLE_EQ(action.maximumX, 180.0);
+    EXPECT_TRUE(self.m_router.controlActions().empty());
+    EXPECT_TRUE(self.m_router.actions().empty());
 }
 
-TEST_F(UiWindowTests, KeyboardCollapseUsesTabFocusAndSuppressesRepeat){
-    WindowState state;
-    ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Keyboard", state));
-    EXPECT_FALSE(m_builder.button("apply", "Apply"));
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Tab , .type = InputEventType::KeyDown}).commandConsumed);
-    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Tab , .type = InputEventType::KeyUp}).commandConsumed);
-    EXPECT_EQ(m_context.input().focus(), id("@window.collapse"));
-    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Enter , .type = InputEventType::KeyDown}).commandConsumed);
-    InputEvent repeat;
-    repeat.type = InputEventType::KeyDown;
-    repeat.key = Core::Key::Enter;
-    repeat.repeat = true;
-    EXPECT_TRUE(send(repeat).commandConsumed);
-    ASSERT_TRUE(begin(2u));
-    EXPECT_TRUE(m_builder.beginWindow("window", "Keyboard", state));
-    EXPECT_FALSE(state.collapsed);
-    EXPECT_FALSE(m_builder.button("apply", "Apply"));
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(2u));
-    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Enter , .type = InputEventType::KeyUp}).commandConsumed);
-    ASSERT_TRUE(begin(3u));
-    EXPECT_FALSE(m_builder.beginWindow("window", "Keyboard", state));
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(3u));
-    EXPECT_TRUE(state.collapsed);
-    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Space , .type = InputEventType::KeyDown}).commandConsumed);
-    EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Space , .type = InputEventType::KeyUp}).commandConsumed);
-    ASSERT_TRUE(begin(4u));
-    EXPECT_TRUE(m_builder.beginWindow("window", "Keyboard", state));
-    EXPECT_FALSE(state.collapsed);
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(4u));
+void VerifyUiWheelInputTests_VerticalOnlyListConsumesPureXWithoutDeliveringAControlAction(mut UiWheelInputTests self){
+    self.m_targets[0u].scrollStepX = 0.0;
+    self.m_targets[0u].gestureMaximumX = 0.0;
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    EXPECT_TRUE(self.wheel(2.0, 0.0).pointerConsumed);
+    EXPECT_TRUE(self.m_router.controlActions().empty());
+    EXPECT_FALSE(self.wheel(2.0, 0.0, Point(250.0f, 180.0f)).pointerConsumed);
+    EXPECT_TRUE(self.m_router.controlActions().empty());
 }
 
-TEST_F(UiWindowTests, DisablingChromeCancelsPendingGesturesAndRestoresContent){
-    WindowState state;
-    WindowOptions options;
-    ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Disabled", state, options));
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    drag({ 130.0f, 35.0f }, { 165.0f, 61.0f });
-    state.collapsed = true;
-    options.movable = false;
-    options.resizable = false;
-    options.collapsible = false;
-    ASSERT_TRUE(begin(2u));
-    EXPECT_TRUE(m_builder.beginWindow("window", "Disabled", state, options));
-    EXPECT_FALSE(state.collapsed);
-    EXPECT_FLOAT_EQ(state.bounds.x, 20.0f);
-    EXPECT_FLOAT_EQ(state.bounds.y, 20.0f);
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(2u));
-    EXPECT_EQ(target(id("@window.collapse")), nullptr);
-    EXPECT_EQ(target(id("@window.resize")), nullptr);
-    ASSERT_NE(target(id("@window.title")), nullptr);
-    EXPECT_FALSE(target(id("@window.title"))->pointerGesture);
+void VerifyUiWheelInputTests_VerticalOnlyListDiagonalStillDeliversItsExactVerticalStep(mut UiWheelInputTests self){
+    self.m_targets[0u].scrollStepX = 0.0;
+    self.m_targets[0u].gestureMaximumX = 0.0;
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    EXPECT_TRUE(self.wheel(2.0, 0.5).pointerConsumed);
+    const auto actionResult = self.m_router.consumeControlAction(self.m_targets[0u].id, 7u, self.m_targets[0u].control);
+    ASSERT_TRUE(actionResult.has_value());
+    const ControlAction action = actionResult.value();
+    EXPECT_DOUBLE_EQ(action.delta, 0.5);
+    EXPECT_DOUBLE_EQ(action.step, 48.0);
+    EXPECT_DOUBLE_EQ(action.maximum, 360.0);
+    EXPECT_DOUBLE_EQ(action.deltaX, 2.0);
+    EXPECT_DOUBLE_EQ(action.stepX, 0.0);
+    EXPECT_DOUBLE_EQ(action.maximumX, 0.0);
+    EXPECT_TRUE(self.m_router.controlActions().empty());
 }
 
-TEST_F(UiWindowTests, FocusLossCancelsUnconsumedWindowDrag){
-    WindowState state;
-    ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Focus", state));
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    ASSERT_TRUE(send({ .position = { 130.0f, 35.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    ASSERT_TRUE(send({ .position = { 180.0f, 80.0f } , .type = InputEventType::PointerMove}).pointerConsumed);
-    EXPECT_FALSE(send({ .position = {} , .type = InputEventType::FocusLost}).capture.valid());
-    ASSERT_TRUE(begin(2u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Focus", state));
-    EXPECT_FLOAT_EQ(state.bounds.x, 20.0f);
-    EXPECT_FLOAT_EQ(state.bounds.y, 20.0f);
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(2u));
+void VerifyUiWheelInputTests_DiagonalWheelOccupiesOnePositionBetweenGestureUpdates(mut UiWheelInputTests self){
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.queuePointer(Point(95.0f, 25.0f), InputEventType::PrimaryDown));
+    EXPECT_TRUE(self.m_router.process().pointerConsumed);
+    const auto firstResult = self.m_router.consumePointerGesture(self.m_targets[1u].id, 7u);
+    ASSERT_TRUE(firstResult.has_value());
+    const PointerGesture first = firstResult.value();
+    EXPECT_TRUE(self.wheel(1.0, -1.0, Point(95.0f, 25.0f)).pointerConsumed);
+    ASSERT_EQ(self.m_router.controlActions().size(), 1u);
+    const auto actionResult = self.m_router.consumeControlAction(self.m_targets[0u].id, 7u, self.m_targets[0u].control);
+    ASSERT_TRUE(actionResult.has_value());
+    const ControlAction action = actionResult.value();
+    EXPECT_EQ(action.id.sequence, first.updateSequence + 1u);
+    ASSERT_TRUE(self.queuePointer(Point(95.0f, 60.0f), InputEventType::PointerMove));
+    EXPECT_TRUE(self.m_router.process().pointerConsumed);
+    const auto movedResult = self.m_router.consumePointerGesture(self.m_targets[1u].id, 7u);
+    ASSERT_TRUE(movedResult.has_value());
+    const PointerGesture moved = movedResult.value();
+    EXPECT_EQ(moved.updateSequence, action.id.sequence + 1u);
+    EXPECT_EQ(moved.id.sequence, first.id.sequence);
 }
 
-TEST_F(UiWindowTests, ClientResizeKeepsTitleReachableAndClipsOversizedWindow){
-    WindowState state;
-    WindowOptions options;
-    options.initialBounds = { 500.0f, 300.0f, 240.0f, 150.0f };
-    ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Viewport", state, options));
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    ASSERT_TRUE(begin(2u, { 100.0f, 80.0f, 2.0f, 2.0f }));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Viewport", state, options));
-    EXPECT_FLOAT_EQ(state.bounds.x, 0.0f);
-    EXPECT_FLOAT_EQ(state.bounds.y, 0.0f);
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(2u));
-    const HitTarget* title = target(id("@window.title"));
-    ASSERT_NE(title, nullptr);
-    EXPECT_FLOAT_EQ(title->clip.width, 100.0f);
-    EXPECT_LE(title->clip.height, 80.0f);
-    EXPECT_FALSE(m_context.input().hitTest({ 150.0f, 15.0f }).valid());
+void VerifyUiWheelInputTests_InvalidHorizontalMetadataRejectsPublicationAndPreservesPendingAction(mut UiWheelInputTests self){
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    EXPECT_TRUE(self.wheel(1.0, -1.0).pointerConsumed);
+    const HitTarget accepted = self.m_targets[0u];
+    Array<f64, 3u> invalid;
+    invalid[0u] = -1.0;
+    invalid[1u] = bit_cast<f64>(s_UiWheelQuietNaNF64Bits);
+    invalid[2u] = bit_cast<f64>(s_UiWheelPosInfF64Bits);
+    for(usize index = 0u; index < invalid.size(); ++index){
+        const f64 value = invalid[index];
+        self.m_targets[0u] = accepted;
+        self.m_targets[0u].scrollStepX = value;
+        EXPECT_FALSE(self.m_router.commitTargets(self.m_targets, 2u));
+        self.m_targets[0u] = accepted;
+        self.m_targets[0u].gestureMaximumX = value;
+        EXPECT_FALSE(self.m_router.commitTargets(self.m_targets, 2u));
+    }
+    EXPECT_EQ(self.m_router.layoutGeneration(), 1u);
+    ASSERT_EQ(self.m_router.controlActions().size(), 1u);
+    const auto actionResult = self.m_router.consumeControlAction(accepted.id, 7u, accepted.control);
+    ASSERT_TRUE(actionResult.has_value());
+    const ControlAction action = actionResult.value();
+    EXPECT_DOUBLE_EQ(action.deltaX, 1.0);
+    EXPECT_DOUBLE_EQ(action.maximumX, 180.0);
 }
 
-TEST_F(UiWindowTests, ContentWidthFitsFirstUseWithAStableHostMinimum){
-    WindowState state;
-    WindowOptions options;
-    options.initialBounds = { 30.0f, 40.0f, 400.0f, 140.0f };
-    options.contentWidthFirstUse = true;
-    ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Short", state, options));
-    ASSERT_TRUE(m_builder.label("caption", "Content"));
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    EXPECT_FLOAT_EQ(state.bounds.width, 160.0f);
-    EXPECT_FLOAT_EQ(state.bounds.height, 140.0f);
-    options.initialBounds.width = 700.0f;
-    ASSERT_TRUE(begin(2u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Short", state, options));
-    ASSERT_TRUE(m_builder.label("caption", "Changed content"));
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(2u));
-    EXPECT_FLOAT_EQ(state.bounds.width, 160.0f);
+void VerifyUiWheelInputTests_SceneOwnedPressCannotAcquireEitherWheelAxisOverAHost(mut UiWheelInputTests self){
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.queuePointer(Point(250.0f, 180.0f), InputEventType::PrimaryDown));
+    EXPECT_FALSE(self.m_router.process().pointerConsumed);
+    EXPECT_FALSE(self.wheel(1.0, -1.0).pointerConsumed);
+    EXPECT_TRUE(self.m_router.controlActions().empty());
+    ASSERT_TRUE(self.queuePointer(Point(10.0f, 10.0f), InputEventType::PrimaryUp));
+    EXPECT_FALSE(self.m_router.process().pointerConsumed);
+    EXPECT_TRUE(self.wheel(1.0, -1.0).pointerConsumed);
+    EXPECT_EQ(self.m_router.controlActions().size(), 1u);
 }
 
-TEST_F(UiWindowTests, NewMoveAnchorsDisplayedGeometryWhenHostModelIsAhead){
-    WindowState state;
-    WindowOptions options;
-    options.initialBounds = { 30.0f, 40.0f, 240.0f, 150.0f };
-    ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Pending", state, options));
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    state.bounds = { 300.0f, 200.0f, 400.0f, 300.0f };
-    drag({ 130.0f, 55.0f }, { 145.0f, 70.0f });
-    ASSERT_TRUE(begin(2u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Pending", state, options));
-    EXPECT_FLOAT_EQ(state.bounds.x, 45.0f);
-    EXPECT_FLOAT_EQ(state.bounds.y, 55.0f);
-    EXPECT_FLOAT_EQ(state.bounds.width, 400.0f);
-    EXPECT_FLOAT_EQ(state.bounds.height, 300.0f);
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(2u));
-}
 
-TEST_F(UiWindowTests, NewResizeAnchorsDisplayedSizeWhenHostModelIsAhead){
-    WindowState state;
-    WindowOptions options;
-    options.initialBounds = { 30.0f, 40.0f, 240.0f, 150.0f };
-    ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Pending", state, options));
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    state.bounds = { 300.0f, 200.0f, 400.0f, 300.0f };
-    drag({ 262.0f, 182.0f }, { 287.0f, 202.0f });
-    ASSERT_TRUE(begin(2u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Pending", state, options));
-    EXPECT_FLOAT_EQ(state.bounds.x, 300.0f);
-    EXPECT_FLOAT_EQ(state.bounds.y, 200.0f);
-    EXPECT_FLOAT_EQ(state.bounds.width, 265.0f);
-    EXPECT_FLOAT_EQ(state.bounds.height, 170.0f);
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(2u));
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-TEST_F(UiWindowTests, MissingResizeFallbackRejectsAdmissionBeforeChangingHostState){
-    WindowState state;
-    state.bounds = { 5.0f, 6.0f, 7.0f, 8.0f };
-    configureSkin("white");
-    ASSERT_TRUE(begin(1u));
-    EXPECT_FALSE(m_builder.beginWindow("window", "Skin", state));
-    EXPECT_TRUE(m_context.failed());
+
+void VerifyUiWindowBehaviorTests_OverflowingMinimumRejectsInitializationWithoutPublishingModel(){
+    const f32 largeExtent = bit_cast<f32>(s_UiWheelWindowMaxF32Bits) * 0.75f;
+    WindowState state = WindowState();
+    state.bounds = Rect(5.0f, 6.0f, 7.0f, 8.0f);
+    WindowOptions options = WindowOptions();
+    options.initialBounds = Rect(largeExtent, 0.0f, 1.0f, 110.0f);
+    WindowMetrics metrics = WindowMetrics();
+    metrics.minimumSize = Point(largeExtent, 110.0f);
+    EXPECT_FALSE(TryInitializeWindow(options, metrics, state));
     EXPECT_FALSE(state.initialized);
     EXPECT_FLOAT_EQ(state.bounds.x, 5.0f);
     EXPECT_FLOAT_EQ(state.bounds.y, 6.0f);
     EXPECT_FLOAT_EQ(state.bounds.width, 7.0f);
     EXPECT_FLOAT_EQ(state.bounds.height, 8.0f);
-    EXPECT_FALSE(m_context.finishFrame());
 }
 
-TEST_F(UiWindowTests, MissingRequiredSkinKeepsPreviousAcceptedTargets){
-    WindowState state;
-    ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Skin", state));
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    configureSkin("window.title");
-    ASSERT_TRUE(begin(2u));
-    EXPECT_FALSE(m_builder.beginWindow("window", "Skin", state));
-    EXPECT_TRUE(m_context.failed());
-    EXPECT_FALSE(m_context.finishFrame());
-    EXPECT_FALSE(m_context.commitFrame(2u));
-    EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
-    EXPECT_NE(target(id("@window.title")), nullptr);
+void VerifyUiWindowBehaviorTests_OverflowingMoveRejectsBoundsAndGestureBaselineAtomically(){
+    const f32 largeCoordinate = bit_cast<f32>(s_UiWheelWindowMaxF32Bits) * 0.75f;
+    WindowState state = WindowState();
+    state.bounds = Rect(20.0f, 30.0f, 200.0f, 140.0f);
+    state.initialized = true;
+    PointerGesture gesture = PointerGesture();
+    native(mut gesture){
+        gesture.id = { { 1u }, 1u, 1u, 1u };
+    }
+    gesture.referenceRectangle = Rect(largeCoordinate, 30.0f, 200.0f, 140.0f);
+    gesture.position.x = largeCoordinate;
+    EXPECT_FALSE(TryApplyWindowMove(gesture, state));
+    EXPECT_FLOAT_EQ(state.bounds.x, 20.0f);
+    EXPECT_FLOAT_EQ(state.bounds.y, 30.0f);
+    EXPECT_EQ(state.moveGesture.id.sequence, 0u);
 }
 
-TEST_F(UiWindowTests, InvalidOptionsAndWrongEndRejectCandidatePublication){
-    WindowState state;
-    WindowOptions options;
-    options.minimumSize.x = Limit<f32>::s_QuietNaN;
-    ASSERT_TRUE(begin(1u));
-    EXPECT_FALSE(m_builder.beginWindow("window", "Invalid", state, options));
-    EXPECT_TRUE(m_context.failed());
-    EXPECT_FALSE(m_context.finishFrame());
-    m_context.abandonFrame();
-    m_builder.reset();
-    ASSERT_TRUE(begin(2u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Invalid", state));
-    EXPECT_FALSE(m_builder.endPanel());
-    EXPECT_TRUE(m_context.failed());
-    EXPECT_FALSE(m_context.finishFrame());
+void VerifyUiWindowBehaviorTests_OverflowingResizeRejectsBoundsAndGestureBaselineAtomically(){
+    const f32 largeCoordinate = bit_cast<f32>(s_UiWheelWindowMaxF32Bits) * 0.75f;
+    WindowState state = WindowState();
+    state.bounds = Rect(20.0f, 30.0f, 200.0f, 140.0f);
+    state.initialized = true;
+    PointerGesture gesture = PointerGesture();
+    native(mut gesture){
+        gesture.id = { { 1u }, 1u, 1u, 1u };
+    }
+    gesture.referenceRectangle = Rect(0.0f, 30.0f, largeCoordinate, 140.0f);
+    gesture.position.x = largeCoordinate;
+    EXPECT_FALSE(TryApplyWindowResize(gesture, Point(160.0f, 80.0f), state));
+    EXPECT_FLOAT_EQ(state.bounds.width, 200.0f);
+    EXPECT_FLOAT_EQ(state.bounds.height, 140.0f);
+    EXPECT_EQ(state.resizeGesture.id.sequence, 0u);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
+void VerifyUiWindowSkinTests_ReplacingAtlasChangesMetricsAndBindingsWithoutChangingWidgetIdentity(mut UiWindowSkinTests self){
+    WindowState state = WindowState();
+    WindowOptions options = WindowOptions();
+    options.initialBounds = Rect(30.0f, 40.0f, 240.0f, 150.0f);
+    ASSERT_TRUE(self.begin(1u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Theme", state, options));
+    EXPECT_FALSE(self.m_builder.button(s_UiWindowSkinApplyKey, "Apply"));
+    ASSERT_TRUE(self.finishWindow());
+    const DrawSnapshot first = self.m_paint.freeze();
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    HitTarget oldTarget = HitTarget();
+    native(in self, mut oldTarget){
+        const HitTarget* original = self.target(self.id(s_UiWindowSkinApplyKey));
+        ASSERT_NE(original, nullptr);
+        oldTarget = *original;
+    }
+    EXPECT_FLOAT_EQ(oldTarget.rectangle.x, 33.0f);
+    EXPECT_FLOAT_EQ(oldTarget.rectangle.y, 78.0f);
+    EXPECT_EQ(self.m_context.input().hitTest(Point(40.0f, 86.0f)), oldTarget.id);
+
+    native(mut self){
+        NWB::Impl::UiSkin::RegionVector regions(self.m_arena);
+        regions.assign(self.m_skin.regions().begin(), self.m_skin.regions().end());
+        for(NWB::Impl::UiSkinRegion& region : regions){
+            region.rectangle.x += 128u;
+            region.rectangle.y = 8u;
+            if(region.name == Name(NWB::Tests::UiCases::s_UiInputNameWindowNormal)){
+                region.padding = { 11.0f, 12.0f, 13.0f, 14.0f };
+                region.minimumWidth = 280.0f;
+                region.minimumHeight = 200.0f;
+            }
+            else if(region.name == Name(NWB::Tests::UiCases::s_UiInputNameWindowTitle)){
+                region.padding = { 7.0f, 9.0f, 11.0f, 13.0f };
+                region.minimumHeight = 44.0f;
+            }
+            else if(region.name == Name(NWB::Tests::UiCases::s_UiInputNameWindowCollapse)){
+                region.minimumWidth = 26.0f;
+                region.minimumHeight = 28.0f;
+            }
+            else if(region.name == Name(NWB::Tests::UiCases::s_UiInputNameButtonNormal)
+                || region.name == Name(NWB::Tests::UiCases::s_UiInputNameButtonHover)
+                || region.name == Name(NWB::Tests::UiCases::s_UiInputNameButtonPressed)
+                || region.name == Name(NWB::Tests::UiCases::s_UiInputNameButtonDisabled)){
+                region.padding = { 13.0f, 14.0f, 15.0f, 16.0f };
+                region.minimumWidth = 120.0f;
+                region.minimumHeight = 60.0f;
+            }
+        }
+        regions.push_back({ Name(NWB::Tests::UiCases::s_UiInputNameWindowResize), { 224u, 8u, 8u, 8u }, {}, {}, 18.0f, 22.0f, NWB::Impl::UiSkinDrawMode::Sprite });
+        const NWB::Core::Assets::AssetRef<NWB::Impl::Texture> replacementTexture("tests/ui/alternate_texture");
+        self.m_skin.setAtlas(replacementTexture, 256u, 32u, 2.0f, Move(regions));
+        ASSERT_TRUE(self.m_skin.validatePayload());
+        self.m_skinGeneration = 2u;
+    }
+    ASSERT_TRUE(self.begin(2u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Theme", state, options));
+    EXPECT_FALSE(self.m_builder.button(s_UiWindowSkinApplyKey, "Apply"));
+    ASSERT_TRUE(self.finishWindow());
+    const DrawSnapshot second = self.m_paint.freeze();
+    EXPECT_EQ(self.m_context.input().layoutGeneration(), 1u);
+    EXPECT_EQ(self.m_context.input().hitTest(Point(40.0f, 86.0f)), oldTarget.id);
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    HitTarget updated = HitTarget();
+    native(in self, mut updated){
+        const HitTarget* found = self.target(self.id(s_UiWindowSkinApplyKey));
+        ASSERT_NE(found, nullptr);
+        updated = *found;
+    }
+    EXPECT_EQ(updated.id, oldTarget.id);
+    EXPECT_EQ(updated.declarationGeneration, oldTarget.declarationGeneration);
+    EXPECT_FLOAT_EQ(updated.rectangle.x, 41.0f);
+    EXPECT_FLOAT_EQ(updated.rectangle.y, 102.0f);
+    EXPECT_FLOAT_EQ(updated.rectangle.width, 120.0f);
+    EXPECT_FLOAT_EQ(updated.rectangle.height, 60.0f);
+    EXPECT_NE(self.m_context.input().hitTest(Point(40.0f, 86.0f)), updated.id);
+    EXPECT_EQ(self.m_context.input().hitTest(Point(55.0f, 115.0f)), updated.id);
+    EXPECT_FLOAT_EQ(state.bounds.width, 280.0f);
+    EXPECT_FLOAT_EQ(state.bounds.height, 200.0f);
+    native(in first, in second){
+        EXPECT_EQ(first.skinBinding().texture, NWB::Core::Assets::AssetRef<NWB::Impl::Texture>("tests/ui/texture"));
+        EXPECT_EQ(first.skinBinding().generation, 1u);
+        EXPECT_EQ(first.skinBinding().atlasWidth, 128u);
+        EXPECT_EQ(second.skinBinding().texture, NWB::Core::Assets::AssetRef<NWB::Impl::Texture>("tests/ui/alternate_texture"));
+        EXPECT_EQ(second.skinBinding().generation, 2u);
+        EXPECT_EQ(second.skinBinding().atlasWidth, 256u);
+        EXPECT_FLOAT_EQ(second.skinBinding().referenceDensity, 2.0f);
+    }
+    ASSERT_FALSE(first.commands().empty());
+    ASSERT_FALSE(second.commands().empty());
+    const Vertex firstWindow = first.vertices()[first.indices()[first.commands()[0u].firstIndex]];
+    const Vertex secondWindow = second.vertices()[second.indices()[second.commands()[0u].firstIndex]];
+    EXPECT_FLOAT_EQ(firstWindow.texCoord.x, 0.0f);
+    EXPECT_FLOAT_EQ(firstWindow.texCoord.y, 0.0f);
+    EXPECT_FLOAT_EQ(secondWindow.texCoord.x, 0.5f);
+    EXPECT_FLOAT_EQ(secondWindow.texCoord.y, 0.25f);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiWindowTests_ContentHeightFitsOnlyFirstUseAndPreservesLaterHostGeometry(mut UiWindowTests self){
+    WindowState state = WindowState();
+    WindowOptions options = WindowOptions();
+    options.initialBounds = Rect(18.0f, 22.0f, 240.0f, 400.0f);
+    options.minimumSize = Point(120.0f, 60.0f);
+    options.contentHeightFirstUse = true;
+    ASSERT_TRUE(self.begin(1u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Title", state, options));
+    ASSERT_TRUE(self.m_builder.label("caption", "One label"));
+    EXPECT_FALSE(self.m_builder.button("apply", "Apply"));
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    HitTarget apply = HitTarget();
+    native(in self, mut apply){
+        const HitTarget* found = self.target(self.id("apply"));
+        ASSERT_NE(found, nullptr);
+        apply = *found;
+    }
+    EXPECT_FLOAT_EQ(state.bounds.height, apply.rectangle.y + apply.rectangle.height + 6.0f - state.bounds.y);
+    EXPECT_LT(state.bounds.height, 400.0f);
+    const f32 firstHeight = state.bounds.height;
+    options.initialBounds = Rect(500.0f, 500.0f, 500.0f, 500.0f);
+    ASSERT_TRUE(self.begin(2u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Title", state, options));
+    ASSERT_TRUE(self.m_builder.label("caption", "A changed label"));
+    ASSERT_TRUE(self.m_builder.label("extra", "Another label"));
+    EXPECT_FALSE(self.m_builder.button("apply", "Apply"));
+    ASSERT_TRUE(self.finishWindow());
+    EXPECT_FLOAT_EQ(state.bounds.x, 18.0f);
+    EXPECT_FLOAT_EQ(state.bounds.y, 22.0f);
+    EXPECT_FLOAT_EQ(state.bounds.width, 240.0f);
+    EXPECT_FLOAT_EQ(state.bounds.height, firstHeight);
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
 }
+
+void VerifyUiWindowTests_CompletedDragBeforeCallbackMovesExactlyOnce(mut UiWindowTests self){
+    WindowState state = WindowState();
+    WindowOptions options = WindowOptions();
+    options.initialBounds = Rect(30.0f, 40.0f, 240.0f, 150.0f);
+    ASSERT_TRUE(self.begin(1u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Move", state, options));
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    self.drag(Point(130.0f, 55.0f), Point(165.0f, 81.0f));
+    ASSERT_TRUE(self.begin(2u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Move", state, options));
+    EXPECT_FLOAT_EQ(state.bounds.x, 65.0f);
+    EXPECT_FLOAT_EQ(state.bounds.y, 66.0f);
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    ASSERT_TRUE(self.begin(3u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Move", state, options));
+    EXPECT_FLOAT_EQ(state.bounds.x, 65.0f);
+    EXPECT_FLOAT_EQ(state.bounds.y, 66.0f);
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(3u));
+}
+
+void VerifyUiWindowTests_ActiveDragRetainsBaselineAcrossAcceptedLayouts(mut UiWindowTests self){
+    WindowState state = WindowState();
+    WindowOptions options = WindowOptions();
+    options.initialBounds = Rect(30.0f, 40.0f, 240.0f, 150.0f);
+    ASSERT_TRUE(self.begin(1u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Move", state, options));
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    ASSERT_TRUE(self.send(MakeUiWindowPointerEvent(Point(130.0f, 55.0f), InputEventType::PrimaryDown)).pointerConsumed);
+    ASSERT_TRUE(self.send(MakeUiWindowPointerEvent(Point(140.0f, 65.0f), InputEventType::PointerMove)).pointerConsumed);
+    ASSERT_TRUE(self.begin(2u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Move", state, options));
+    EXPECT_FLOAT_EQ(state.bounds.x, 40.0f);
+    EXPECT_FLOAT_EQ(state.bounds.y, 50.0f);
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    ASSERT_TRUE(self.send(MakeUiWindowPointerEvent(Point(160.0f, 80.0f), InputEventType::PointerMove)).pointerConsumed);
+    ASSERT_TRUE(self.send(MakeUiWindowPointerEvent(Point(160.0f, 80.0f), InputEventType::PrimaryUp)).pointerConsumed);
+    ASSERT_TRUE(self.begin(3u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Move", state, options));
+    EXPECT_FLOAT_EQ(state.bounds.x, 60.0f);
+    EXPECT_FLOAT_EQ(state.bounds.y, 65.0f);
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(3u));
+}
+
+void VerifyUiWindowTests_MultipleCompletedDragsUseTheDisplayedReferenceForEachPress(mut UiWindowTests self){
+    WindowState state = WindowState();
+    WindowOptions options = WindowOptions();
+    options.initialBounds = Rect(30.0f, 40.0f, 240.0f, 150.0f);
+    ASSERT_TRUE(self.begin(1u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Move", state, options));
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    self.drag(Point(130.0f, 55.0f), Point(140.0f, 60.0f));
+    self.drag(Point(130.0f, 55.0f), Point(150.0f, 65.0f));
+    ASSERT_TRUE(self.begin(2u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Move", state, options));
+    EXPECT_FLOAT_EQ(state.bounds.x, 50.0f);
+    EXPECT_FLOAT_EQ(state.bounds.y, 50.0f);
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+}
+
+void VerifyUiWindowTests_CompletedResizeRetainsPositionAndRunsOnce(mut UiWindowTests self){
+    WindowState state = WindowState();
+    WindowOptions options = WindowOptions();
+    options.initialBounds = Rect(30.0f, 40.0f, 240.0f, 150.0f);
+    ASSERT_TRUE(self.begin(1u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Resize", state, options));
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    self.drag(Point(262.0f, 182.0f), Point(297.0f, 197.0f));
+    ASSERT_TRUE(self.begin(2u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Resize", state, options));
+    EXPECT_FLOAT_EQ(state.bounds.x, 30.0f);
+    EXPECT_FLOAT_EQ(state.bounds.y, 40.0f);
+    EXPECT_FLOAT_EQ(state.bounds.width, 275.0f);
+    EXPECT_FLOAT_EQ(state.bounds.height, 165.0f);
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    ASSERT_TRUE(self.begin(3u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Resize", state, options));
+    EXPECT_FLOAT_EQ(state.bounds.width, 275.0f);
+    EXPECT_FLOAT_EQ(state.bounds.height, 165.0f);
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(3u));
+}
+
+void VerifyUiWindowTests_ResizeMinimumDoesNotLoseOriginalPointerBaseline(mut UiWindowTests self){
+    WindowState state = WindowState();
+    WindowOptions options = WindowOptions();
+    options.initialBounds = Rect(30.0f, 40.0f, 240.0f, 150.0f);
+    options.minimumSize = Point(180.0f, 110.0f);
+    ASSERT_TRUE(self.begin(1u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Resize", state, options));
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    ASSERT_TRUE(self.send(MakeUiWindowPointerEvent(Point(262.0f, 182.0f), InputEventType::PrimaryDown)).pointerConsumed);
+    ASSERT_TRUE(self.send(MakeUiWindowPointerEvent(Point(0.0f, 0.0f), InputEventType::PointerMove)).pointerConsumed);
+    ASSERT_TRUE(self.begin(2u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Resize", state, options));
+    EXPECT_FLOAT_EQ(state.bounds.width, 180.0f);
+    EXPECT_FLOAT_EQ(state.bounds.height, 110.0f);
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    ASSERT_TRUE(self.send(MakeUiWindowPointerEvent(Point(282.0f, 192.0f), InputEventType::PrimaryUp)).pointerConsumed);
+    ASSERT_TRUE(self.begin(3u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Resize", state, options));
+    EXPECT_FLOAT_EQ(state.bounds.width, 260.0f);
+    EXPECT_FLOAT_EQ(state.bounds.height, 160.0f);
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(3u));
+}
+
+void VerifyUiWindowTests_CollapseKeepsHostSizeAndRequiresBalancedEnd(mut UiWindowTests self){
+    WindowState state = WindowState();
+    WindowOptions options = WindowOptions();
+    options.initialBounds = Rect(30.0f, 40.0f, 240.0f, 150.0f);
+    ASSERT_TRUE(self.begin(1u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Collapse", state, options));
+    EXPECT_FALSE(self.m_builder.button("apply", "Apply"));
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    self.click(Point(42.0f, 57.0f));
+    ASSERT_TRUE(self.begin(2u));
+    EXPECT_FALSE(self.m_builder.beginWindow("window", "Collapse", state, options));
+    EXPECT_FALSE(self.m_context.failed());
+    EXPECT_FALSE(self.m_builder.balanced());
+    EXPECT_TRUE(state.collapsed);
+    EXPECT_FLOAT_EQ(state.bounds.height, 150.0f);
+    ASSERT_TRUE(self.finishWindow());
+    EXPECT_TRUE(self.m_builder.balanced());
+    const DrawSnapshot collapsed = self.m_paint.freeze();
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    native(in self){
+        EXPECT_EQ(self.target(self.id("apply")), nullptr);
+        EXPECT_EQ(self.target(self.id("@window.resize")), nullptr);
+    }
+    const auto skin = self.skinQuad(collapsed, 0u);
+    ASSERT_TRUE(skin.has_value());
+    EXPECT_FLOAT_EQ(skin.value().height, 34.0f);
+    EXPECT_FALSE(self.send(MakeUiWindowPointerEvent(Point(100.0f, 120.0f), InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_FALSE(self.send(MakeUiWindowPointerEvent(Point(100.0f, 120.0f), InputEventType::PrimaryUp)).pointerConsumed);
+}
+
+void VerifyUiWindowTests_KeyboardCollapseUsesTabFocusAndSuppressesRepeat(mut UiWindowTests self){
+    WindowState state = WindowState();
+    ASSERT_TRUE(self.begin(1u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Keyboard", state));
+    EXPECT_FALSE(self.m_builder.button("apply", "Apply"));
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    EXPECT_TRUE(self.send(MakeUiWindowKeyEvent(UiWindowKey::Tab, InputEventType::KeyDown, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiWindowKeyEvent(UiWindowKey::Tab, InputEventType::KeyUp, false)).commandConsumed);
+    EXPECT_EQ(self.m_context.input().focus(), self.id("@window.collapse"));
+    EXPECT_TRUE(self.send(MakeUiWindowKeyEvent(UiWindowKey::Enter, InputEventType::KeyDown, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiWindowKeyEvent(UiWindowKey::Enter, InputEventType::KeyDown, true)).commandConsumed);
+    ASSERT_TRUE(self.begin(2u));
+    EXPECT_TRUE(self.m_builder.beginWindow("window", "Keyboard", state));
+    EXPECT_FALSE(state.collapsed);
+    EXPECT_FALSE(self.m_builder.button("apply", "Apply"));
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    EXPECT_TRUE(self.send(MakeUiWindowKeyEvent(UiWindowKey::Enter, InputEventType::KeyUp, false)).commandConsumed);
+    ASSERT_TRUE(self.begin(3u));
+    EXPECT_FALSE(self.m_builder.beginWindow("window", "Keyboard", state));
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(3u));
+    EXPECT_TRUE(state.collapsed);
+    EXPECT_TRUE(self.send(MakeUiWindowKeyEvent(UiWindowKey::Space, InputEventType::KeyDown, false)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiWindowKeyEvent(UiWindowKey::Space, InputEventType::KeyUp, false)).commandConsumed);
+    ASSERT_TRUE(self.begin(4u));
+    EXPECT_TRUE(self.m_builder.beginWindow("window", "Keyboard", state));
+    EXPECT_FALSE(state.collapsed);
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(4u));
+}
+
+void VerifyUiWindowTests_DisablingChromeCancelsPendingGesturesAndRestoresContent(mut UiWindowTests self){
+    WindowState state = WindowState();
+    WindowOptions options = WindowOptions();
+    ASSERT_TRUE(self.begin(1u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Disabled", state, options));
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    self.drag(Point(130.0f, 35.0f), Point(165.0f, 61.0f));
+    state.collapsed = true;
+    options.movable = false;
+    options.resizable = false;
+    options.collapsible = false;
+    ASSERT_TRUE(self.begin(2u));
+    EXPECT_TRUE(self.m_builder.beginWindow("window", "Disabled", state, options));
+    EXPECT_FALSE(state.collapsed);
+    EXPECT_FLOAT_EQ(state.bounds.x, 20.0f);
+    EXPECT_FLOAT_EQ(state.bounds.y, 20.0f);
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    HitTarget title = HitTarget();
+    native(in self, mut title){
+        EXPECT_EQ(self.target(self.id("@window.collapse")), nullptr);
+        EXPECT_EQ(self.target(self.id("@window.resize")), nullptr);
+        const HitTarget* found = self.target(self.id("@window.title"));
+        ASSERT_NE(found, nullptr);
+        title = *found;
+    }
+    EXPECT_FALSE(title.pointerGesture);
+}
+
+void VerifyUiWindowTests_FocusLossCancelsUnconsumedWindowDrag(mut UiWindowTests self){
+    WindowState state = WindowState();
+    ASSERT_TRUE(self.begin(1u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Focus", state));
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    ASSERT_TRUE(self.send(MakeUiWindowPointerEvent(Point(130.0f, 35.0f), InputEventType::PrimaryDown)).pointerConsumed);
+    ASSERT_TRUE(self.send(MakeUiWindowPointerEvent(Point(180.0f, 80.0f), InputEventType::PointerMove)).pointerConsumed);
+    EXPECT_FALSE(self.send(MakeUiWindowPointerEvent(Point(), InputEventType::FocusLost)).capture.valid());
+    ASSERT_TRUE(self.begin(2u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Focus", state));
+    EXPECT_FLOAT_EQ(state.bounds.x, 20.0f);
+    EXPECT_FLOAT_EQ(state.bounds.y, 20.0f);
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+}
+
+void VerifyUiWindowTests_ClientResizeKeepsTitleReachableAndClipsOversizedWindow(mut UiWindowTests self){
+    WindowState state = WindowState();
+    WindowOptions options = WindowOptions();
+    options.initialBounds = Rect(500.0f, 300.0f, 240.0f, 150.0f);
+    ASSERT_TRUE(self.begin(1u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Viewport", state, options));
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    ASSERT_TRUE(self.begin(2u, DisplayMetrics(100.0f, 80.0f, 2.0f, 2.0f)));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Viewport", state, options));
+    EXPECT_FLOAT_EQ(state.bounds.x, 0.0f);
+    EXPECT_FLOAT_EQ(state.bounds.y, 0.0f);
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    HitTarget title = HitTarget();
+    native(in self, mut title){
+        const HitTarget* found = self.target(self.id("@window.title"));
+        ASSERT_NE(found, nullptr);
+        title = *found;
+    }
+    EXPECT_FLOAT_EQ(title.clip.width, 100.0f);
+    EXPECT_LE(title.clip.height, 80.0f);
+    EXPECT_FALSE(self.m_context.input().hitTest(Point(150.0f, 15.0f)).valid());
+}
+
+void VerifyUiWindowTests_ContentWidthFitsFirstUseWithAStableHostMinimum(mut UiWindowTests self){
+    WindowState state = WindowState();
+    WindowOptions options = WindowOptions();
+    options.initialBounds = Rect(30.0f, 40.0f, 400.0f, 140.0f);
+    options.contentWidthFirstUse = true;
+    ASSERT_TRUE(self.begin(1u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Short", state, options));
+    ASSERT_TRUE(self.m_builder.label("caption", "Content"));
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    EXPECT_FLOAT_EQ(state.bounds.width, 160.0f);
+    EXPECT_FLOAT_EQ(state.bounds.height, 140.0f);
+    options.initialBounds.width = 700.0f;
+    ASSERT_TRUE(self.begin(2u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Short", state, options));
+    ASSERT_TRUE(self.m_builder.label("caption", "Changed content"));
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    EXPECT_FLOAT_EQ(state.bounds.width, 160.0f);
+}
+
+void VerifyUiWindowTests_NewMoveAnchorsDisplayedGeometryWhenHostModelIsAhead(mut UiWindowTests self){
+    WindowState state = WindowState();
+    WindowOptions options = WindowOptions();
+    options.initialBounds = Rect(30.0f, 40.0f, 240.0f, 150.0f);
+    ASSERT_TRUE(self.begin(1u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Pending", state, options));
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    state.bounds = Rect(300.0f, 200.0f, 400.0f, 300.0f);
+    self.drag(Point(130.0f, 55.0f), Point(145.0f, 70.0f));
+    ASSERT_TRUE(self.begin(2u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Pending", state, options));
+    EXPECT_FLOAT_EQ(state.bounds.x, 45.0f);
+    EXPECT_FLOAT_EQ(state.bounds.y, 55.0f);
+    EXPECT_FLOAT_EQ(state.bounds.width, 400.0f);
+    EXPECT_FLOAT_EQ(state.bounds.height, 300.0f);
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+}
+
+void VerifyUiWindowTests_NewResizeAnchorsDisplayedSizeWhenHostModelIsAhead(mut UiWindowTests self){
+    WindowState state = WindowState();
+    WindowOptions options = WindowOptions();
+    options.initialBounds = Rect(30.0f, 40.0f, 240.0f, 150.0f);
+    ASSERT_TRUE(self.begin(1u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Pending", state, options));
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    state.bounds = Rect(300.0f, 200.0f, 400.0f, 300.0f);
+    self.drag(Point(262.0f, 182.0f), Point(287.0f, 202.0f));
+    ASSERT_TRUE(self.begin(2u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Pending", state, options));
+    EXPECT_FLOAT_EQ(state.bounds.x, 300.0f);
+    EXPECT_FLOAT_EQ(state.bounds.y, 200.0f);
+    EXPECT_FLOAT_EQ(state.bounds.width, 265.0f);
+    EXPECT_FLOAT_EQ(state.bounds.height, 170.0f);
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+}
+
+void VerifyUiWindowTests_MissingResizeFallbackRejectsAdmissionBeforeChangingHostState(mut UiWindowTests self){
+    WindowState state = WindowState();
+    state.bounds = Rect(5.0f, 6.0f, 7.0f, 8.0f);
+    self.configureSkin("white");
+    ASSERT_TRUE(self.begin(1u));
+    EXPECT_FALSE(self.m_builder.beginWindow("window", "Skin", state));
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_FALSE(state.initialized);
+    EXPECT_FLOAT_EQ(state.bounds.x, 5.0f);
+    EXPECT_FLOAT_EQ(state.bounds.y, 6.0f);
+    EXPECT_FLOAT_EQ(state.bounds.width, 7.0f);
+    EXPECT_FLOAT_EQ(state.bounds.height, 8.0f);
+    EXPECT_FALSE(self.m_context.finishFrame());
+}
+
+void VerifyUiWindowTests_MissingRequiredSkinKeepsPreviousAcceptedTargets(mut UiWindowTests self){
+    WindowState state = WindowState();
+    ASSERT_TRUE(self.begin(1u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Skin", state));
+    ASSERT_TRUE(self.finishWindow());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    self.configureSkin("window.title");
+    ASSERT_TRUE(self.begin(2u));
+    EXPECT_FALSE(self.m_builder.beginWindow("window", "Skin", state));
+    EXPECT_TRUE(state.initialized);
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_FALSE(self.m_context.finishFrame());
+    EXPECT_FALSE(self.m_context.commitFrame(2u));
+    EXPECT_EQ(self.m_context.input().layoutGeneration(), 1u);
+    native(in self){
+        EXPECT_NE(self.target(self.id("@window.title")), nullptr);
+    }
+}
+
+void VerifyUiWindowTests_InvalidOptionsAndWrongEndRejectCandidatePublication(mut UiWindowTests self){
+    WindowState state = WindowState();
+    WindowOptions options = WindowOptions();
+    options.minimumSize.x = bit_cast<f32>(s_UiWheelWindowQuietNaNF32Bits);
+    ASSERT_TRUE(self.begin(1u));
+    EXPECT_FALSE(self.m_builder.beginWindow("window", "Invalid", state, options));
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_FALSE(self.m_context.finishFrame());
+    self.m_context.abandonFrame();
+    self.m_builder.reset();
+    ASSERT_TRUE(self.begin(2u));
+    ASSERT_TRUE(self.m_builder.beginWindow("window", "Invalid", state));
+    EXPECT_TRUE(state.initialized);
+    EXPECT_FALSE(self.m_builder.endPanel());
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_FALSE(self.m_context.finishFrame());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_GTEST(UiGlyphSdf, FreeTypeZeroIs128Over255AndExteriorInteriorClampToEndpoints, VerifyUiGlyphSdf_FreeTypeZeroIs128Over255AndExteriorInteriorClampToEndpoints)
+NWB_ADHD_GTEST(UiGlyphSdf, FlatFieldsRemainFiniteAcrossEveryAdmittedSpread, VerifyUiGlyphSdf_FlatFieldsRemainFiniteAcrossEveryAdmittedSpread)
+
+NWB_ADHD_GTEST_F(UiWheelInputTests, DiagonalWheelCopiesBothAcceptedAxesIntoOneAction, VerifyUiWheelInputTests_DiagonalWheelCopiesBothAcceptedAxesIntoOneAction)
+NWB_ADHD_GTEST_F(UiWheelInputTests, VerticalOnlyListConsumesPureXWithoutDeliveringAControlAction, VerifyUiWheelInputTests_VerticalOnlyListConsumesPureXWithoutDeliveringAControlAction)
+NWB_ADHD_GTEST_F(UiWheelInputTests, VerticalOnlyListDiagonalStillDeliversItsExactVerticalStep, VerifyUiWheelInputTests_VerticalOnlyListDiagonalStillDeliversItsExactVerticalStep)
+NWB_ADHD_GTEST_F(UiWheelInputTests, DiagonalWheelOccupiesOnePositionBetweenGestureUpdates, VerifyUiWheelInputTests_DiagonalWheelOccupiesOnePositionBetweenGestureUpdates)
+NWB_ADHD_GTEST_F(UiWheelInputTests, InvalidHorizontalMetadataRejectsPublicationAndPreservesPendingAction, VerifyUiWheelInputTests_InvalidHorizontalMetadataRejectsPublicationAndPreservesPendingAction)
+NWB_ADHD_GTEST_F(UiWheelInputTests, SceneOwnedPressCannotAcquireEitherWheelAxisOverAHost, VerifyUiWheelInputTests_SceneOwnedPressCannotAcquireEitherWheelAxisOverAHost)
+
+NWB_ADHD_GTEST(UiWindowBehaviorTests, OverflowingMinimumRejectsInitializationWithoutPublishingModel, VerifyUiWindowBehaviorTests_OverflowingMinimumRejectsInitializationWithoutPublishingModel)
+NWB_ADHD_GTEST(UiWindowBehaviorTests, OverflowingMoveRejectsBoundsAndGestureBaselineAtomically, VerifyUiWindowBehaviorTests_OverflowingMoveRejectsBoundsAndGestureBaselineAtomically)
+NWB_ADHD_GTEST(UiWindowBehaviorTests, OverflowingResizeRejectsBoundsAndGestureBaselineAtomically, VerifyUiWindowBehaviorTests_OverflowingResizeRejectsBoundsAndGestureBaselineAtomically)
+
+NWB_ADHD_GTEST_F(UiWindowSkinTests, ReplacingAtlasChangesMetricsAndBindingsWithoutChangingWidgetIdentity, VerifyUiWindowSkinTests_ReplacingAtlasChangesMetricsAndBindingsWithoutChangingWidgetIdentity)
+
+NWB_ADHD_GTEST_F(UiWindowTests, ContentHeightFitsOnlyFirstUseAndPreservesLaterHostGeometry, VerifyUiWindowTests_ContentHeightFitsOnlyFirstUseAndPreservesLaterHostGeometry)
+NWB_ADHD_GTEST_F(UiWindowTests, CompletedDragBeforeCallbackMovesExactlyOnce, VerifyUiWindowTests_CompletedDragBeforeCallbackMovesExactlyOnce)
+NWB_ADHD_GTEST_F(UiWindowTests, ActiveDragRetainsBaselineAcrossAcceptedLayouts, VerifyUiWindowTests_ActiveDragRetainsBaselineAcrossAcceptedLayouts)
+NWB_ADHD_GTEST_F(UiWindowTests, MultipleCompletedDragsUseTheDisplayedReferenceForEachPress, VerifyUiWindowTests_MultipleCompletedDragsUseTheDisplayedReferenceForEachPress)
+NWB_ADHD_GTEST_F(UiWindowTests, CompletedResizeRetainsPositionAndRunsOnce, VerifyUiWindowTests_CompletedResizeRetainsPositionAndRunsOnce)
+NWB_ADHD_GTEST_F(UiWindowTests, ResizeMinimumDoesNotLoseOriginalPointerBaseline, VerifyUiWindowTests_ResizeMinimumDoesNotLoseOriginalPointerBaseline)
+NWB_ADHD_GTEST_F(UiWindowTests, CollapseKeepsHostSizeAndRequiresBalancedEnd, VerifyUiWindowTests_CollapseKeepsHostSizeAndRequiresBalancedEnd)
+NWB_ADHD_GTEST_F(UiWindowTests, KeyboardCollapseUsesTabFocusAndSuppressesRepeat, VerifyUiWindowTests_KeyboardCollapseUsesTabFocusAndSuppressesRepeat)
+NWB_ADHD_GTEST_F(UiWindowTests, DisablingChromeCancelsPendingGesturesAndRestoresContent, VerifyUiWindowTests_DisablingChromeCancelsPendingGesturesAndRestoresContent)
+NWB_ADHD_GTEST_F(UiWindowTests, FocusLossCancelsUnconsumedWindowDrag, VerifyUiWindowTests_FocusLossCancelsUnconsumedWindowDrag)
+NWB_ADHD_GTEST_F(UiWindowTests, ClientResizeKeepsTitleReachableAndClipsOversizedWindow, VerifyUiWindowTests_ClientResizeKeepsTitleReachableAndClipsOversizedWindow)
+NWB_ADHD_GTEST_F(UiWindowTests, ContentWidthFitsFirstUseWithAStableHostMinimum, VerifyUiWindowTests_ContentWidthFitsFirstUseWithAStableHostMinimum)
+NWB_ADHD_GTEST_F(UiWindowTests, NewMoveAnchorsDisplayedGeometryWhenHostModelIsAhead, VerifyUiWindowTests_NewMoveAnchorsDisplayedGeometryWhenHostModelIsAhead)
+NWB_ADHD_GTEST_F(UiWindowTests, NewResizeAnchorsDisplayedSizeWhenHostModelIsAhead, VerifyUiWindowTests_NewResizeAnchorsDisplayedSizeWhenHostModelIsAhead)
+NWB_ADHD_GTEST_F(UiWindowTests, MissingResizeFallbackRejectsAdmissionBeforeChangingHostState, VerifyUiWindowTests_MissingResizeFallbackRejectsAdmissionBeforeChangingHostState)
+NWB_ADHD_GTEST_F(UiWindowTests, MissingRequiredSkinKeepsPreviousAcceptedTargets, VerifyUiWindowTests_MissingRequiredSkinKeepsPreviousAcceptedTargets)
+NWB_ADHD_GTEST_F(UiWindowTests, InvalidOptionsAndWrongEndRejectCandidatePublication, VerifyUiWindowTests_InvalidOptionsAndWrongEndRejectCandidatePublication)
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

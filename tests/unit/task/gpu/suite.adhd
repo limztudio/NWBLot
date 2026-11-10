@@ -1,18 +1,13 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include "gpu_task_analysis_and_placement_cases.adhd"
-#include "gpu_task_barrier_and_callback_cases.adhd"
-#include "gpu_task_command_ir_cases.adhd"
-#include "gpu_task_declaration_and_dependency_cases.adhd"
-#include "gpu_task_external_and_frontier_cases.adhd"
-#include "gpu_task_hazard_and_ownership_cases.adhd"
-#include "gpu_task_packet_and_prelude_cases.adhd"
-#include "gpu_task_queue_ownership_and_routing_cases.adhd"
-#include "gpu_task_queue_scoring_and_timing_cases.adhd"
-#include "gpu_task_resource_set_and_version_cases.adhd"
-#include "gpu_task_revision_and_submission_cases.adhd"
-#include "gpu_task_telemetry_and_timing_cases.adhd"
+
+#include <tests/common/gtest_macros.adhd>
+#include <tests/unit/task/gpu/case_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 native{
 // limztudio@gmail.com
@@ -695,13 +690,10 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 }
 
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
 
-b8 GpuSuiteReady(in u64 value){
-    return value != 0u;
-}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 Expected<GpuGraphResourceId> AddHazardDomain(mut GpuTaskGraph graph, in Name identity, in AStringView label){
     GpuGraphResourceDesc desc = GpuGraphResourceDesc();

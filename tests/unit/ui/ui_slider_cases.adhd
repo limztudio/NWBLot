@@ -1,20 +1,15 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define EXPECT_TRUE(...) native{ EXPECT_TRUE(...) }
-#define EXPECT_FALSE(...) native{ EXPECT_FALSE(...) }
-#define EXPECT_EQ(...) native{ EXPECT_EQ(...) }
 
-b8 UiSliderCasesReady(in u64 value){
-    return value != 0u;
-}
+#include <tests/common/gtest_macros.adhd>
+#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd>
 
-native{
-#include <tests/unit/ui/ui_numeric_and_control_fixtures.adhd.h>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+native{
 #include <impl/ecs_ui/toolkit/widgets/slider.adhd.h>
 
 #include <global/simdmath.h>
@@ -41,16 +36,8 @@ namespace __hidden_ui_slider_behavior_tests{
 using namespace Impl::Ui;
 
 
-static void ExpectResult(const SliderResult& actual, const SliderResult& expected){
-    EXPECT_EQ(actual.valid, expected.valid);
-    EXPECT_EQ(actual.valueChanged, expected.valueChanged);
-    EXPECT_EQ(actual.focused, expected.focused);
-    EXPECT_EQ(actual.dragging, expected.dragging);
-}
-
-
 class UiSliderBehaviorTests : public testing::Test{
-protected:
+public:
     virtual void SetUp()override{
         ASSERT_TRUE(refresh());
     }
@@ -82,344 +69,26 @@ protected:
     }
 
     [[nodiscard]] PointerGesture gesture(const b8 thumb = true)const noexcept{
-        PointerGesture gesture;
-        gesture.id = { { thumb ? 42u : 43u }, 3u, 7u, 11u };
-        gesture.origin = { m_placement.thumb.width * 0.5f + m_placement.thumb.x, 36.0f };
-        gesture.position = gesture.origin;
-        gesture.targetRectangle = thumb ? m_placement.thumb : m_placement.track;
-        gesture.referenceRectangle = thumb ? m_placement.travelBounds : m_placement.centerTravel;
-        gesture.control = m_state.controlToken();
-        gesture.updateSequence = 12u;
-        gesture.value = BitCast<u64>(m_state.value());
-        return gesture;
+        PointerGesture item;
+        item.id = { { thumb ? 42u : 43u }, 3u, 7u, 11u };
+        item.origin = { m_placement.thumb.width * 0.5f + m_placement.thumb.x, 36.0f };
+        item.position = item.origin;
+        item.targetRectangle = thumb ? m_placement.thumb : m_placement.track;
+        item.referenceRectangle = thumb ? m_placement.travelBounds : m_placement.centerTravel;
+        item.control = m_state.controlToken();
+        item.updateSequence = 12u;
+        item.value = BitCast<u64>(m_state.value());
+        return item;
     }
 
 
-protected:
+public:
     SliderState m_state;
     SliderOptions m_options;
     SliderPlacement m_placement;
     Rect m_bounds = { 10.0f, 20.0f, 240.0f, 32.0f };
     SliderResult m_result;
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST_F(UiSliderBehaviorTests, AdmissionKeepsAnExternalOutOfRangeValueUntilAcceptedInput){
-    ASSERT_TRUE(set(20.0));
-    EXPECT_EQ(m_state.value(), 20.0);
-    EXPECT_FLOAT_EQ(m_placement.thumb.x, 222.0f);
-    ASSERT_TRUE(SliderBehavior::Apply(m_options, key(ControlActionKind::Left), m_state, m_result));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.99);
-    EXPECT_TRUE(m_result.valueChanged);
-}
-
-TEST_F(UiSliderBehaviorTests, PolicyAndStableGeometryChangesRetirePreviouslyCopiedInput){
-    const ControlAction stale = key(ControlActionKind::Right);
-    const u64 input = m_state.inputGeneration();
-    const u64 first = m_state.admissionGeneration();
-    m_options.keyStep = 0.1;
-    ASSERT_TRUE(refresh());
-    EXPECT_GT(m_state.admissionGeneration(), first);
-    EXPECT_EQ(m_state.inputGeneration(), input);
-    const SliderSnapshot before = m_state.snapshot();
-    const SliderResult result = m_result;
-    EXPECT_FALSE(SliderBehavior::Apply(m_options, stale, m_state, m_result));
-    EXPECT_TRUE(m_state.matches(before));
-    ExpectResult(m_result, result);
-    const u64 policy = m_state.admissionGeneration();
-    m_bounds.width = 280.0f;
-    ASSERT_TRUE(refresh());
-    EXPECT_GT(m_state.admissionGeneration(), policy);
-    SliderPlacement clipped = m_placement;
-    clipped.clip.width = 100.0f;
-    const u64 geometry = m_state.admissionGeneration();
-    ASSERT_TRUE(SliderBehavior::Admit(m_state, m_options, clipped));
-    EXPECT_GT(m_state.admissionGeneration(), geometry);
-}
-
-TEST_F(UiSliderBehaviorTests, ExactSignedZeroPolicyChangesAdvanceAdmissionWithoutChangingTheValue){
-    const SliderSnapshot before = m_state.snapshot();
-    m_options.minimum = -0.0;
-    ASSERT_TRUE(refresh());
-    EXPECT_GT(m_state.admissionGeneration(), before.admissionGeneration);
-    EXPECT_EQ(BitCast<u64>(m_state.value()), before.valueBits);
-    const u64 range = m_state.admissionGeneration();
-    m_options.keyStep = -0.0;
-    ASSERT_TRUE(refresh());
-    EXPECT_GT(m_state.admissionGeneration(), range);
-}
-
-TEST_F(UiSliderBehaviorTests, PublicIdenticalAndAwayBackIntentsRejectOldCopiedActionsAtomically){
-    ASSERT_TRUE(set(0.25));
-    const ControlAction stale = key(ControlActionKind::Right);
-    ASSERT_TRUE(m_state.setValue(0.25));
-    SliderSnapshot before = m_state.snapshot();
-    EXPECT_FALSE(SliderBehavior::Apply(m_options, stale, m_state, m_result));
-    EXPECT_TRUE(m_state.matches(before));
-    EXPECT_FALSE(m_result.valid);
-    ASSERT_TRUE(m_state.setValue(0.5));
-    ASSERT_TRUE(m_state.setValue(0.25));
-    before = m_state.snapshot();
-    EXPECT_FALSE(SliderBehavior::Apply(m_options, stale, m_state, m_result));
-    EXPECT_TRUE(m_state.matches(before));
-    EXPECT_FALSE(m_result.valid);
-}
-
-TEST_F(UiSliderBehaviorTests, AutomaticStepsRemainFiniteAcrossOppositeExtremeBounds){
-    m_options.minimum = -Limit<f64>::s_Max;
-    m_options.maximum = Limit<f64>::s_Max;
-    ASSERT_TRUE(set(0.0));
-    ASSERT_TRUE(SliderBehavior::Apply(m_options, key(ControlActionKind::Right), m_state, m_result));
-    EXPECT_TRUE(IsFinite(m_state.value()));
-    EXPECT_GT(m_state.value(), 0.0);
-    EXPECT_NEAR(m_state.value() / (Limit<f64>::s_Max), 0.02, 1.0e-15);
-    ASSERT_TRUE(SliderBehavior::Apply(m_options, key(ControlActionKind::PageUp), m_state, m_result));
-    EXPECT_TRUE(IsFinite(m_state.value()));
-    EXPECT_NEAR(m_state.value() / (Limit<f64>::s_Max), 0.22, 1.0e-15);
-}
-
-TEST_F(UiSliderBehaviorTests, AutomaticSubnormalStepUsesTheRepresentableSpanWhenDivisionUnderflows){
-    m_options.maximum = BitCast<f64>(1ull);
-    ASSERT_TRUE(refresh());
-    ASSERT_TRUE(SliderBehavior::Apply(m_options, key(ControlActionKind::Right), m_state, m_result));
-    EXPECT_EQ(BitCast<u64>(m_state.value()), 1u);
-    ASSERT_TRUE(SliderBehavior::Apply(m_options, key(ControlActionKind::Left), m_state, m_result));
-    EXPECT_EQ(BitCast<u64>(m_state.value()), 0u);
-}
-
-TEST_F(UiSliderBehaviorTests, ExplicitExtremeStepsAndPageIterationSaturateWithoutOverflow){
-    m_options.minimum = -Limit<f64>::s_Max;
-    m_options.maximum = Limit<f64>::s_Max;
-    m_options.keyStep = Limit<f64>::s_Max;
-    ASSERT_TRUE(refresh());
-    ASSERT_TRUE(SliderBehavior::Apply(m_options, key(ControlActionKind::PageUp), m_state, m_result));
-    EXPECT_EQ(BitCast<u64>(m_state.value()), BitCast<u64>(m_options.maximum));
-    ASSERT_TRUE(SliderBehavior::Apply(m_options, key(ControlActionKind::PageDown), m_state, m_result));
-    EXPECT_EQ(BitCast<u64>(m_state.value()), BitCast<u64>(m_options.minimum));
-    ASSERT_TRUE(SliderBehavior::Apply(m_options, key(ControlActionKind::Right), m_state, m_result));
-    EXPECT_EQ(m_state.value(), 0.0);
-}
-
-TEST_F(UiSliderBehaviorTests, DisabledAndConstantRangesAreValidWithoutApplyingInput){
-    m_options.enabled = false;
-    ASSERT_TRUE(set(0.25));
-    SliderSnapshot before = m_state.snapshot();
-    ASSERT_TRUE(SliderBehavior::Apply(m_options, key(ControlActionKind::Right), m_state, m_result));
-    EXPECT_TRUE(m_state.matches(before));
-    EXPECT_TRUE(m_result.valid);
-    EXPECT_FALSE(m_result.valueChanged);
-    m_options.enabled = true;
-    m_options.minimum = 5.0;
-    m_options.maximum = 5.0;
-    ASSERT_TRUE(refresh());
-    before = m_state.snapshot();
-    ASSERT_TRUE(SliderBehavior::Seek(m_options, gesture(false), m_state, m_result));
-    EXPECT_TRUE(m_state.matches(before));
-    EXPECT_EQ(m_state.value(), 0.25);
-    EXPECT_FALSE(m_result.dragging);
-}
-
-TEST_F(UiSliderBehaviorTests, SubmitActivationAndWheelLeaveTheValueAndSemanticSnapshotUnchanged){
-    ASSERT_TRUE(set(-0.0));
-    const SliderSnapshot before = m_state.snapshot();
-    for(const auto kind : { ControlActionKind::Submit, ControlActionKind::Activate, ControlActionKind::Wheel }){
-        ASSERT_TRUE(SliderBehavior::Apply(m_options, key(kind), m_state, m_result));
-        EXPECT_TRUE(m_state.matches(before));
-        EXPECT_TRUE(m_result.valid);
-        EXPECT_FALSE(m_result.valueChanged);
-    }
-}
-
-TEST_F(UiSliderBehaviorTests, InvalidPolicyTokenAndUnadmittedInputPreserveStateAndResult){
-    const SliderSnapshot before = m_state.snapshot();
-    const SliderResult result{ true, true, true, true };
-    m_result = result;
-    ControlAction action = key(ControlActionKind::Right);
-    ++action.control.contentGeneration;
-    EXPECT_FALSE(SliderBehavior::Apply(m_options, action, m_state, m_result));
-    EXPECT_TRUE(m_state.matches(before));
-    ExpectResult(m_result, result);
-    SliderOptions invalid = m_options;
-    invalid.keyStep = -1.0;
-    EXPECT_FALSE(SliderBehavior::Apply(invalid, key(ControlActionKind::Right), m_state, m_result));
-    EXPECT_TRUE(m_state.matches(before));
-    ExpectResult(m_result, result);
-    SliderState unadmitted;
-    action.control = unadmitted.controlToken();
-    const SliderSnapshot unknown = unadmitted.snapshot();
-    EXPECT_FALSE(SliderBehavior::Apply(m_options, action, unadmitted, m_result));
-    EXPECT_TRUE(unadmitted.matches(unknown));
-    ExpectResult(m_result, result);
-}
-
-TEST_F(UiSliderBehaviorTests, InvalidAdmissionGeometryOrOptionsPreserveThePreviousBinding){
-    const SliderSnapshot before = m_state.snapshot();
-    SliderPlacement invalid = m_placement;
-    invalid.track.width = Limit<f32>::s_Infinity;
-    EXPECT_FALSE(SliderBehavior::Admit(m_state, m_options, invalid));
-    EXPECT_TRUE(m_state.matches(before));
-    SliderOptions policy = m_options;
-    policy.minimum = 2.0;
-    EXPECT_FALSE(SliderBehavior::Admit(m_state, policy, m_placement));
-    EXPECT_TRUE(m_state.matches(before));
-    invalid = m_placement;
-    invalid.thumbExtent.x = invalid.travelBounds.width + 1.0f;
-    EXPECT_FALSE(SliderBehavior::Admit(m_state, m_options, invalid));
-    EXPECT_TRUE(m_state.matches(before));
-}
-
-TEST_F(UiSliderBehaviorTests, TrackSeekUsesAbsoluteAcceptedCenterTravelAndExactEndpoints){
-    PointerGesture seek = gesture(false);
-    seek.position.x = -Limit<f32>::s_Max;
-    ASSERT_TRUE(SliderBehavior::Seek(m_options, seek, m_state, m_result));
-    EXPECT_EQ(BitCast<u64>(m_state.value()), BitCast<u64>(m_options.minimum));
-    seek.position.x = Limit<f32>::s_Max;
-    seek.state = PointerGestureState::Completed;
-    ASSERT_TRUE(SliderBehavior::Seek(m_options, seek, m_state, m_result));
-    EXPECT_EQ(BitCast<u64>(m_state.value()), BitCast<u64>(m_options.maximum));
-    EXPECT_FALSE(m_result.dragging);
-}
-
-TEST_F(UiSliderBehaviorTests, TrackSeekRejectsAChangedCopiedReferenceWithoutPublishingResult){
-    PointerGesture seek = gesture(false);
-    seek.referenceRectangle.x = seek.referenceRectangle.x + 1.0f;
-    const SliderSnapshot before = m_state.snapshot();
-    const SliderResult result = m_result;
-    EXPECT_FALSE(SliderBehavior::Seek(m_options, seek, m_state, m_result));
-    EXPECT_TRUE(m_state.matches(before));
-    ExpectResult(m_result, result);
-}
-
-TEST_F(UiSliderBehaviorTests, RepeatedThumbUpdatesUseOriginalCopiedBaselineWithoutAccumulatingDelta){
-    ASSERT_TRUE(set(0.25));
-    PointerGesture drag = gesture();
-    const f32 widthGap = drag.referenceRectangle.width - drag.targetRectangle.width;
-    drag.position.x = widthGap * 0.25f + drag.position.x;
-    ASSERT_TRUE(SliderBehavior::Drag(m_options, drag, m_state, m_result));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.5);
-    drag.position.x = widthGap * 0.25f + drag.position.x;
-    ++drag.updateSequence;
-    ASSERT_TRUE(SliderBehavior::Drag(m_options, drag, m_state, m_result));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.75);
-}
-
-TEST_F(UiSliderBehaviorTests, AStationaryThumbCompletionPreservesAnOrderedKeyChange){
-    m_options.keyStep = 0.125;
-    ASSERT_TRUE(set(0.25));
-    PointerGesture drag = gesture();
-    ASSERT_TRUE(SliderBehavior::Drag(m_options, drag, m_state, m_result));
-    EXPECT_FALSE(m_result.valueChanged);
-    ASSERT_TRUE(SliderBehavior::Apply(m_options, key(ControlActionKind::Right, 13u), m_state, m_result));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.375);
-    drag.state = PointerGestureState::Completed;
-    ++drag.updateSequence;
-    ASSERT_TRUE(SliderBehavior::Drag(m_options, drag, m_state, m_result));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.375);
-    EXPECT_FALSE(m_result.dragging);
-    EXPECT_FALSE(m_state.snapshot().press.valid());
-}
-
-TEST_F(UiSliderBehaviorTests, ReturningAfterAnAppliedMoveRestoresTheExactSignedZeroBaseline){
-    m_options.minimum = -1.0;
-    ASSERT_TRUE(set(-0.0));
-    PointerGesture drag = gesture();
-    const f32 widthGap = drag.referenceRectangle.width - drag.targetRectangle.width;
-    drag.position.x = widthGap * 0.25f + drag.position.x;
-    ASSERT_TRUE(SliderBehavior::Drag(m_options, drag, m_state, m_result));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.5);
-    EXPECT_TRUE(m_state.snapshot().pressMoved);
-    drag.position = drag.origin;
-    drag.state = PointerGestureState::Completed;
-    ++drag.updateSequence;
-    ASSERT_TRUE(SliderBehavior::Drag(m_options, drag, m_state, m_result));
-    EXPECT_EQ(BitCast<u64>(m_state.value()), 0x8000000000000000ull);
-    EXPECT_FALSE(m_state.snapshot().pressMoved);
-}
-
-TEST_F(UiSliderBehaviorTests, ANewStationaryPressDoesNotBorrowTheOldPressMovedFlag){
-    ASSERT_TRUE(set(0.25));
-    PointerGesture first = gesture();
-    first.position.x = first.position.x + 52.0f;
-    ASSERT_TRUE(SliderBehavior::Drag(m_options, first, m_state, m_result));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.5);
-    PointerGesture second = first;
-    ++second.id.sequence;
-    ++second.updateSequence;
-    second.position = second.origin;
-    second.state = PointerGestureState::Completed;
-    ASSERT_TRUE(SliderBehavior::Drag(m_options, second, m_state, m_result));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.5);
-}
-
-TEST_F(UiSliderBehaviorTests, AdmissionRetirementEndsThePressAndKeepsItsLastAppliedValue){
-    ASSERT_TRUE(set(0.25));
-    PointerGesture drag = gesture();
-    drag.position.x = drag.position.x + 52.0f;
-    ASSERT_TRUE(SliderBehavior::Drag(m_options, drag, m_state, m_result));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.5);
-    m_options.enabled = false;
-    ASSERT_TRUE(refresh());
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.5);
-    EXPECT_FALSE(m_state.snapshot().press.valid());
-    EXPECT_FALSE(m_state.snapshot().pressMoved);
-    const SliderSnapshot before = m_state.snapshot();
-    EXPECT_FALSE(SliderBehavior::Drag(m_options, drag, m_state, m_result));
-    EXPECT_TRUE(m_state.matches(before));
-}
-
-TEST_F(UiSliderBehaviorTests, ThumbDisplacementCastsBeforeSubtractingExtremeFloatCoordinates){
-    PointerGesture drag = gesture();
-    drag.origin.x = -Limit<f32>::s_Max;
-    drag.position.x = Limit<f32>::s_Max;
-    ASSERT_TRUE(SliderBehavior::Drag(m_options, drag, m_state, m_result));
-    EXPECT_EQ(BitCast<u64>(m_state.value()), BitCast<u64>(m_options.maximum));
-    drag.origin.x = Limit<f32>::s_Max;
-    drag.position.x = -Limit<f32>::s_Max;
-    ++drag.updateSequence;
-    ASSERT_TRUE(SliderBehavior::Drag(m_options, drag, m_state, m_result));
-    EXPECT_EQ(BitCast<u64>(m_state.value()), BitCast<u64>(m_options.minimum));
-}
-
-TEST_F(UiSliderBehaviorTests, InvalidThumbPayloadGeometryOrTokenIsRejectedAtomically){
-    ASSERT_TRUE(set(-0.0));
-    const SliderSnapshot before = m_state.snapshot();
-    m_result = { true, true, true, true };
-    const SliderResult result = m_result;
-    for(u32 field = 0u; field < 7u; ++field){
-        PointerGesture drag = gesture();
-        switch(field){
-        case 0u: drag.value = BitCast<u64>(Limit<f64>::s_QuietNaN); break;
-        case 1u: ++drag.control.instanceGeneration; break;
-        case 2u: drag.targetRectangle.width = drag.targetRectangle.width + 1.0f; break;
-        case 3u: drag.referenceRectangle.x = drag.referenceRectangle.x + 1.0f; break;
-        case 4u: drag.position.x = Limit<f32>::s_Infinity; break;
-        case 5u: drag.id.sequence = 0u; break;
-        default: drag.updateSequence = 0u; break;
-        }
-        EXPECT_FALSE(SliderBehavior::Drag(m_options, drag, m_state, m_result));
-        EXPECT_TRUE(m_state.matches(before));
-        ExpectResult(m_result, result);
-    }
-}
-
-TEST_F(UiSliderBehaviorTests, AClampedNonzeroMoveStillRestoresItsBaselineWhenReturningAfterAKeyChange){
-    m_options.keyStep = 0.125;
-    ASSERT_TRUE(set(1.0));
-    PointerGesture drag = gesture();
-    drag.position.x = drag.position.x + 20.0f;
-    ASSERT_TRUE(SliderBehavior::Drag(m_options, drag, m_state, m_result));
-    EXPECT_FALSE(m_result.valueChanged);
-    EXPECT_TRUE(m_state.snapshot().pressMoved);
-    ASSERT_TRUE(SliderBehavior::Apply(m_options, key(ControlActionKind::Left), m_state, m_result));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.875);
-    drag.position = drag.origin;
-    drag.state = PointerGestureState::Completed;
-    ASSERT_TRUE(SliderBehavior::Drag(m_options, drag, m_state, m_result));
-    EXPECT_DOUBLE_EQ(m_state.value(), 1.0);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -432,15 +101,6 @@ TEST_F(UiSliderBehaviorTests, AClampedNonzeroMoveStillRestoresItsBaselineWhenRet
 
 
 NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <global/simdmath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -462,117 +122,7 @@ class UiSliderBuilderTests : public SliderFixture{};
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiSliderBuilderTests, DeclarationPublishesItsResultAndOwnedPartsOnlyAfterScopeValidation){
-    ASSERT_TRUE(declare(1u));
-    EXPECT_FALSE(m_state.result().valid);
-    EXPECT_EQ(target(host()), nullptr);
-    ASSERT_TRUE(finishPanel());
-    EXPECT_TRUE(m_state.result().valid);
-    EXPECT_EQ(target(host()), nullptr);
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    ASSERT_NE(target(host()), nullptr);
-    ASSERT_NE(target(track()), nullptr);
-    ASSERT_NE(target(thumb()), nullptr);
-}
-
-TEST_F(UiSliderBuilderTests, FiniteExternalValueOutsideTheRangeIsRetainedWhileItsThumbClampsVisually){
-    ASSERT_TRUE(m_state.setValue(2.0));
-    ASSERT_TRUE(accept(1u));
-    EXPECT_DOUBLE_EQ(m_state.value(), 2.0);
-    EXPECT_FALSE(m_state.result().valueChanged);
-    const SliderPlacement& placement = m_state.placement();
-    EXPECT_FLOAT_EQ(UiWidgetTests::Center(placement.thumb).x, placement.centerTravel.x + placement.centerTravel.width);
-    press(Core::Key::Tab);
-    press(Core::Key::Home);
-    ASSERT_TRUE(accept(2u));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.0);
-    EXPECT_TRUE(m_state.result().valueChanged);
-}
-
-TEST_F(UiSliderBuilderTests, IdleFramesPreserveSignedZeroBitsAndDoNotInventChangeNotifications){
-    ASSERT_TRUE(m_state.setValue(BitCast<f64>(0x8000000000000000ull)));
-    ASSERT_TRUE(accept(1u));
-    EXPECT_EQ(BitCast<u64>(m_state.value()), 0x8000000000000000ull);
-    ASSERT_TRUE(accept(2u));
-    EXPECT_EQ(BitCast<u64>(m_state.value()), 0x8000000000000000ull);
-    EXPECT_TRUE(m_state.result().valid);
-    EXPECT_FALSE(m_state.result().valueChanged);
-}
-
-TEST_F(UiSliderBuilderTests, DisabledSliderKeepsAPointerBarrierWithoutApplyingQueuedInput){
-    ASSERT_TRUE(accept(1u));
-    press(Core::Key::Tab);
-    press(Core::Key::Right);
-    SliderOptions disabled = Options();
-    disabled.enabled = false;
-    ASSERT_TRUE(accept(2u, disabled));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.25);
-    EXPECT_FALSE(m_state.result().valueChanged);
-    ASSERT_NE(target(host()), nullptr);
-    EXPECT_FALSE(target(host())->enabled);
-    EXPECT_FALSE(target(host())->focusable);
-    EXPECT_TRUE(send({ .position = UiWidgetTests::Center(m_state.placement().bounds) , .type = InputEventType::PrimaryDown }).pointerConsumed);
-    EXPECT_TRUE(send({ .position = UiWidgetTests::Center(m_state.placement().bounds) , .type = InputEventType::PrimaryUp }).pointerConsumed);
-    EXPECT_FALSE(m_context.input().focus().valid());
-    ASSERT_TRUE(accept(3u, disabled));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.25);
-}
-
-TEST_F(UiSliderBuilderTests, ConstantRangeIsValidAndNoninteractiveWithoutRewritingTheApplicationValue){
-    SliderOptions constant = Options();
-    constant.minimum = 0.5;
-    constant.maximum = 0.5;
-    ASSERT_TRUE(accept(1u, constant));
-    EXPECT_TRUE(m_state.result().valid);
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.25);
-    ASSERT_NE(target(host()), nullptr);
-    EXPECT_FALSE(target(host())->focusable);
-    EXPECT_FALSE(target(host())->enabled);
-    click(UiWidgetTests::Center(m_state.placement().bounds));
-    ASSERT_TRUE(accept(2u, constant));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.25);
-    EXPECT_FALSE(m_state.result().valueChanged);
-}
-
-TEST_F(UiSliderBuilderTests, InvalidPolicyRejectsTheCandidateWithoutReplacingItsAcceptedLayout){
-    ASSERT_TRUE(accept(1u));
-    const AcceptedInputState<64u> displayed = accepted();
-    const SliderSnapshot before = m_state.snapshot();
-    SliderOptions invalid = Options();
-    invalid.minimum = 2.0;
-    EXPECT_FALSE(declare(2u, invalid));
-    EXPECT_TRUE(m_context.failed());
-    EXPECT_TRUE(m_state.matches(before));
-    EXPECT_FALSE(m_state.result().valid);
-    EXPECT_FALSE(m_context.commitFrame(2u));
-    expectAccepted(displayed);
-}
-
-TEST_F(UiSliderBuilderTests, FrozenSliderStyleOwnsItsMetricsThroughTheDeferredPaint){
-    ASSERT_TRUE(declare(1u));
-    m_builder.sliderStyle().thumbExtent = { 40.0f, 40.0f };
-    m_builder.sliderStyle().trackHeight = 20.0f;
-    ASSERT_TRUE(finishPanel());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    EXPECT_FLOAT_EQ(m_state.placement().thumb.width, 24.0f);
-    EXPECT_FLOAT_EQ(m_state.placement().thumb.height, 24.0f);
-    EXPECT_FLOAT_EQ(m_state.placement().track.height, 12.0f);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <global/simdmath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -594,370 +144,7 @@ class UiSliderInputTests : public SliderFixture{};
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiSliderInputTests, PageKeysSaturateAtExactEndpoints){
-    ASSERT_TRUE(accept(1u));
-    press(Core::Key::Tab);
-    press(Core::Key::PageUp);
-    ASSERT_TRUE(accept(4u));
-    EXPECT_DOUBLE_EQ(m_state.value(), 1.0);
-    press(Core::Key::PageDown);
-    ASSERT_TRUE(accept(5u));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.0);
-}
-
-TEST_F(UiSliderInputTests, AcceptedKeyRepeatsRemainAddressedToTheSurvivingControlLifetime){
-    ASSERT_TRUE(accept(1u));
-    press(Core::Key::Tab);
-    InputEvent key;
-    key.type = InputEventType::KeyDown;
-    key.key = Core::Key::Right;
-    EXPECT_TRUE(send(key).commandConsumed);
-    ASSERT_TRUE(accept(2u));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.375);
-    key.repeat = true;
-    EXPECT_TRUE(send(key).commandConsumed);
-    ASSERT_TRUE(accept(3u));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.5);
-    key.type = InputEventType::KeyUp;
-    EXPECT_TRUE(send(key).commandConsumed);
-}
-
-TEST_F(UiSliderInputTests, TrackPressSeeksDuringFinalPaintAndReleaseOutsideAppliesTheFinalEndpoint){
-    ASSERT_TRUE(accept(1u));
-    const Point point = trackPoint(0.75, m_state);
-    EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    ASSERT_TRUE(declare(2u));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.25);
-    EXPECT_FALSE(m_state.result().valid);
-    ASSERT_TRUE(finishPanel());
-    ASSERT_TRUE(m_context.commitFrame(2u));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.75);
-    EXPECT_TRUE(m_state.result().valueChanged);
-    EXPECT_TRUE(m_state.result().dragging);
-    EXPECT_EQ(m_context.input().capture(), track());
-    EXPECT_TRUE(send({ .position = { 700.0f, 500.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
-    ASSERT_TRUE(accept(3u));
-    EXPECT_DOUBLE_EQ(m_state.value(), 1.0);
-    EXPECT_FALSE(m_state.result().dragging);
-}
-
-TEST_F(UiSliderInputTests, OffCenterThumbPressHasNoJumpAndZeroDeltaDoesNotOverwriteAnEarlierKey){
-    const f64 baseline = 0.1;
-    ASSERT_TRUE(m_state.setValue(baseline));
-    ASSERT_TRUE(accept(1u));
-    press(Core::Key::Tab);
-    press(Core::Key::Right);
-    const Rect thumbBounds = m_state.placement().thumb;
-    const Point origin{ thumbBounds.x + 3.0f, UiWidgetTests::Center(thumbBounds).y };
-    const f64 stepped = baseline + 0.125;
-    EXPECT_TRUE(send({ .position = origin , .type = InputEventType::PrimaryDown }).pointerConsumed);
-    ASSERT_TRUE(accept(2u));
-    EXPECT_DOUBLE_EQ(m_state.value(), stepped);
-    EXPECT_TRUE(m_state.result().dragging);
-    EXPECT_EQ(m_context.input().capture(), thumb());
-    EXPECT_TRUE(send({ .position = origin , .type = InputEventType::PrimaryUp }).pointerConsumed);
-    ASSERT_TRUE(accept(3u));
-    EXPECT_DOUBLE_EQ(m_state.value(), stepped);
-    EXPECT_FALSE(m_state.result().valueChanged);
-}
-
-TEST_F(UiSliderInputTests, HeldThumbRepaintPreservesCaptureAndReturningToOriginRestoresExactBaselineBits){
-    const f64 baseline = 0.1;
-    ASSERT_TRUE(m_state.setValue(baseline));
-    ASSERT_TRUE(accept(1u));
-    const Point origin = thumbPoint();
-    const Point destination{ origin.x + 50.0f, origin.y };
-    const f64 travel = m_state.placement().centerTravel.width;
-    EXPECT_TRUE(send({ .position = origin , .type = InputEventType::PrimaryDown }).pointerConsumed);
-    EXPECT_TRUE(send({ .position = destination , .type = InputEventType::PointerMove }).pointerConsumed);
-    ASSERT_TRUE(accept(2u));
-    const f64 displacement = static_cast<f64>(destination.x) - static_cast<f64>(origin.x);
-    EXPECT_NEAR(m_state.value(), baseline + displacement / travel, 0.00000001);
-    EXPECT_EQ(m_context.input().capture(), thumb());
-    const ControlToken token = target(host())->control;
-    ASSERT_TRUE(accept(3u));
-    EXPECT_EQ(target(host())->control, token);
-    EXPECT_EQ(m_context.input().capture(), thumb());
-    EXPECT_TRUE(m_state.result().dragging);
-    EXPECT_FALSE(m_state.result().valueChanged);
-    EXPECT_TRUE(send({ .position = origin , .type = InputEventType::PointerMove }).pointerConsumed);
-    ASSERT_TRUE(accept(4u));
-    EXPECT_EQ(BitCast<u64>(m_state.value()), BitCast<u64>(baseline));
-    EXPECT_TRUE(m_state.result().valueChanged);
-    EXPECT_TRUE(send({ .position = origin , .type = InputEventType::PrimaryUp }).pointerConsumed);
-    ASSERT_TRUE(accept(5u));
-    EXPECT_FALSE(m_state.result().dragging);
-}
-
-TEST_F(UiSliderInputTests, LatestCoalescedMoveAfterAKeyAppliesAfterTheCopiedKeySequence){
-    ASSERT_TRUE(accept(1u));
-    const Point origin = thumbPoint();
-    const f64 travel = m_state.placement().centerTravel.width;
-    EXPECT_TRUE(send({ .position = origin , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    EXPECT_TRUE(send({ .position = { origin.x + 30.0f, origin.y } , .type = InputEventType::PointerMove}).pointerConsumed);
-    press(Core::Key::Right);
-    EXPECT_TRUE(send({ .position = { origin.x + 60.0f, origin.y } , .type = InputEventType::PointerMove}).pointerConsumed);
-    ASSERT_TRUE(accept(2u));
-    EXPECT_NEAR(m_state.value(), 0.25 + 60.0 / travel, 0.00000001);
-    EXPECT_TRUE(m_state.result().dragging);
-}
-
-TEST_F(UiSliderInputTests, AKeyAfterTheLatestCoalescedMoveAppliesToTheDraggedValue){
-    ASSERT_TRUE(accept(1u));
-    const Point origin = thumbPoint();
-    const f64 travel = m_state.placement().centerTravel.width;
-    EXPECT_TRUE(send({ .position = origin , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    EXPECT_TRUE(send({ .position = { origin.x + 60.0f, origin.y } , .type = InputEventType::PointerMove}).pointerConsumed);
-    press(Core::Key::Right);
-    ASSERT_TRUE(accept(2u));
-    const f64 dragged = 0.25 + 60.0 / travel;
-    EXPECT_NEAR(m_state.value(), dragged + 0.125, 0.00000001);
-}
-
-TEST_F(UiSliderInputTests, DragOutsideTravelSaturatesBothEndsWithoutLosingOwnedCapture){
-    ASSERT_TRUE(accept(1u));
-    const Point origin = thumbPoint();
-    EXPECT_TRUE(send({ .position = origin , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    EXPECT_TRUE(send({ .position = { 790.0f, origin.y } , .type = InputEventType::PointerMove}).pointerConsumed);
-    ASSERT_TRUE(accept(2u));
-    EXPECT_DOUBLE_EQ(m_state.value(), 1.0);
-    EXPECT_EQ(m_context.input().capture(), thumb());
-    EXPECT_TRUE(send({ .position = { 1.0f, origin.y } , .type = InputEventType::PointerMove}).pointerConsumed);
-    ASSERT_TRUE(accept(3u));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.0);
-    EXPECT_EQ(m_context.input().capture(), thumb());
-    EXPECT_TRUE(send({ .position = { 1.0f, origin.y } , .type = InputEventType::PrimaryUp}).pointerConsumed);
-    ASSERT_TRUE(accept(4u));
-    EXPECT_FALSE(m_state.result().dragging);
-}
-
-TEST_F(UiSliderInputTests, CaptureLossCancelsPendingMotionAndRetainsTheLastAppliedValue){
-    ASSERT_TRUE(accept(1u));
-    const Point origin = thumbPoint();
-    EXPECT_TRUE(send({ .position = origin , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    EXPECT_TRUE(send({ .position = { origin.x + 40.0f, origin.y } , .type = InputEventType::PointerMove}).pointerConsumed);
-    ASSERT_TRUE(accept(2u));
-    const u64 retained = BitCast<u64>(m_state.value());
-    EXPECT_TRUE(send({ .position = { origin.x + 80.0f, origin.y } , .type = InputEventType::PointerMove}).pointerConsumed);
-    EXPECT_TRUE(send({ .type = InputEventType::PointerCaptureLost }).pointerConsumed);
-    ASSERT_TRUE(accept(3u));
-    EXPECT_EQ(BitCast<u64>(m_state.value()), retained);
-    EXPECT_FALSE(m_state.result().valueChanged);
-    EXPECT_FALSE(m_state.result().dragging);
-    EXPECT_FALSE(m_context.input().capture().valid());
-}
-
-TEST_F(UiSliderInputTests, FocusLossRetiresPendingDragAndHeldNavigationWithoutRollingBackAppliedInput){
-    ASSERT_TRUE(accept(1u));
-    const Point origin = thumbPoint();
-    EXPECT_TRUE(send({ .position = origin , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    press(Core::Key::Right);
-    ASSERT_TRUE(accept(2u));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.375);
-    EXPECT_TRUE(send({ .position = { origin.x + 80.0f, origin.y } , .type = InputEventType::PointerMove}).pointerConsumed);
-    EXPECT_TRUE(send({ .type = InputEventType::FocusLost }).pointerConsumed);
-    EXPECT_FALSE(send({ .type = InputEventType::FocusGained }).pointerConsumed);
-    ASSERT_TRUE(accept(3u));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.375);
-    EXPECT_FALSE(m_state.result().dragging);
-    EXPECT_FALSE(m_state.result().focused);
-}
-
-TEST_F(UiSliderInputTests, EnterAndWheelDoNotChangeTheSliderOrCreateActivationActions){
-    ASSERT_TRUE(accept(1u));
-    press(Core::Key::Tab);
-    press(Core::Key::Enter);
-    InputEvent wheel;
-    wheel.type = InputEventType::PointerWheel;
-    wheel.position = thumbPoint();
-    wheel.scrollY = 3.0;
-    EXPECT_TRUE(send(wheel).pointerConsumed);
-    ASSERT_TRUE(accept(2u));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.25);
-    EXPECT_FALSE(m_state.result().valueChanged);
-    EXPECT_TRUE(m_context.input().actions().empty());
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_ui/toolkit/widgets/slider.adhd.h>
-
-#include <global/simdmath.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_slider_layout_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace Impl::Ui;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(UiSliderLayoutTests, EndpointThumbPositionsMeetTheExactPaddedBounds){
-    const auto metrics = MeasureSlider({}, {});
-    ASSERT_TRUE(metrics);
-    const Rect bounds{ 10.0f, 20.0f, 240.0f, 32.0f };
-    const auto first = PlaceSlider(bounds, bounds, *metrics, 0.0);
-    ASSERT_TRUE(first);
-    const auto last = PlaceSlider(bounds, bounds, *metrics, 1.0);
-    ASSERT_TRUE(last);
-    EXPECT_FLOAT_EQ(first->thumb.x, first->travelBounds.x);
-    // Lanes are the thumb end and the travel end.
-    const SIMDVectorSingle ends = VectorAdd(VectorSet(last->thumb.x, last->travelBounds.x, 0.0f, 0.0f), VectorSet(last->thumb.width, last->travelBounds.width, 0.0f, 0.0f));
-    EXPECT_FLOAT_EQ(VectorGetX(ends), VectorGetY(ends));
-}
-
-TEST(UiSliderLayoutTests, ClipChangesOnlyVisibilityAndPreservesAcceptedTravelGeometry){
-    const auto metrics = MeasureSlider({}, {});
-    ASSERT_TRUE(metrics);
-    const Rect bounds{ 10.0f, 20.0f, 240.0f, 32.0f };
-    const auto full = PlaceSlider(bounds, bounds, *metrics, 0.25);
-    ASSERT_TRUE(full);
-    const auto clipped = PlaceSlider(bounds, { 50.0f, 25.0f, 100.0f, 10.0f }, *metrics, 0.25);
-    ASSERT_TRUE(clipped);
-    UiPaintAssertions::ExpectRect(clipped->clip, { 50.0f, 25.0f, 100.0f, 10.0f });
-    UiPaintAssertions::ExpectRect(clipped->travelBounds, full->travelBounds);
-    UiPaintAssertions::ExpectRect(clipped->centerTravel, full->centerTravel);
-    UiPaintAssertions::ExpectRect(clipped->track, full->track);
-    UiPaintAssertions::ExpectRect(clipped->thumb, full->thumb);
-}
-
-TEST(UiSliderLayoutTests, TinyAreasBoundThumbDimensionsAndProduceZeroTravelSafely){
-    const auto metrics = MeasureSlider({}, {});
-    ASSERT_TRUE(metrics);
-    const Rect bounds{ 10.0f, 20.0f, 20.0f, 12.0f };
-    const auto placement = PlaceSlider(bounds, bounds, *metrics, 0.5);
-    ASSERT_TRUE(placement);
-    UiPaintAssertions::ExpectRect(placement->travelBounds, { 14.0f, 24.0f, 12.0f, 4.0f });
-    UiPaintAssertions::ExpectRect(placement->thumb, placement->travelBounds);
-    EXPECT_FLOAT_EQ(placement->thumbExtent.x, 12.0f);
-    EXPECT_FLOAT_EQ(placement->thumbExtent.y, 4.0f);
-    EXPECT_FLOAT_EQ(placement->centerTravel.width, 0.0f);
-    EXPECT_FLOAT_EQ(placement->track.width, 0.0f);
-}
-
-TEST(UiSliderLayoutTests, PaddingLargerThanTheAreaAndEmptyAreasRemainValid){
-    const auto metrics = MeasureSlider({}, {});
-    ASSERT_TRUE(metrics);
-    for(const Rect bounds : { Rect{ 10.0f, 20.0f, 4.0f, 3.0f }, Rect{ 10.0f, 20.0f, 0.0f, 0.0f } }){
-        const auto placement = PlaceSlider(bounds, bounds, *metrics, 1.0);
-        ASSERT_TRUE(placement);
-        EXPECT_FLOAT_EQ(placement->travelBounds.width, 0.0f);
-        EXPECT_FLOAT_EQ(placement->travelBounds.height, 0.0f);
-        EXPECT_FLOAT_EQ(placement->thumb.width, 0.0f);
-        EXPECT_FLOAT_EQ(placement->thumb.height, 0.0f);
-        EXPECT_FLOAT_EQ(placement->centerTravel.width, 0.0f);
-    }
-}
-
-TEST(UiSliderLayoutTests, InvalidOptionsStylesAndTintsRejectMetrics){
-    for(u32 field = 0u; field < 13u; ++field){
-        SliderOptions options;
-        SliderStyle style;
-        switch(field){
-        case 0u: options.minimum = 2.0; break;
-        case 1u: options.maximum = Limit<f64>::s_Infinity; break;
-        case 2u: options.keyStep = -1.0; break;
-        case 3u: options.height = -1.0f; break;
-        case 4u: options.width.value = 0.0f; break;
-        case 5u: style.padding.left = -1.0f; break;
-        case 6u: style.thumbExtent.x = 0.0f; break;
-        case 7u: style.thumbExtent.y = Limit<f32>::s_QuietNaN; break;
-        case 8u: style.trackHeight = 0.0f; break;
-        case 9u: style.hoverTint.r = -1.0f; break;
-        case 10u: style.pressedTint.a = 1.01f; break;
-        case 11u: style.disabledTint.a = Limit<f32>::s_QuietNaN; break;
-        default: style.padding.right = Limit<f32>::s_Infinity; break;
-        }
-        EXPECT_FALSE(MeasureSlider(options, style));
-    }
-}
-
-TEST(UiSliderLayoutTests, OverflowingIntrinsicMetricsAreRejected){
-    SliderStyle style;
-    style.thumbExtent.x = Limit<f32>::s_Max;
-    style.padding.left = Limit<f32>::s_Max;
-    EXPECT_FALSE(MeasureSlider({}, style));
-}
-
-TEST(UiSliderLayoutTests, InvalidProspectivePlacementRejectsGeometry){
-    const auto metrics = MeasureSlider({}, {});
-    ASSERT_TRUE(metrics);
-    const Rect normal{ 10.0f, 20.0f, 240.0f, 32.0f };
-    for(u32 field = 0u; field < 10u; ++field){
-        Rect bounds = normal;
-        Rect clip = normal;
-        SliderMetrics invalid = *metrics;
-        f64 normalized = 0.5;
-        switch(field){
-        case 0u: bounds.width = -1.0f; break;
-        case 1u: bounds.x = Limit<f32>::s_QuietNaN; break;
-        case 2u: bounds = { Limit<f32>::s_Max, 0.0f, Limit<f32>::s_Max, 32.0f }; break;
-        case 3u: clip.height = -1.0f; break;
-        case 4u: invalid.thumbExtent.x = -1.0f; break;
-        case 5u: invalid.contentSize.y = 1.0f; break;
-        case 6u: normalized = -0.01; break;
-        case 7u: normalized = 1.01; break;
-        case 8u: normalized = Limit<f64>::s_Infinity; break;
-        default: normalized = Limit<f64>::s_QuietNaN; break;
-        }
-        EXPECT_FALSE(PlaceSlider(bounds, clip, invalid, normalized));
-    }
-}
-
-TEST(UiSliderLayoutTests, PositiveDimensionsThatCollapseAtExtremeCoordinatesAreRejected){
-    const auto metrics = MeasureSlider({}, {});
-    ASSERT_TRUE(metrics);
-    const Rect bounds{ Limit<f32>::s_Max, 0.0f, 1.0f, 32.0f };
-    EXPECT_FALSE(PlaceSlider(bounds, bounds, *metrics, 0.5));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <global/simdmath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -979,369 +166,7 @@ class UiSliderLifetimeTests : public SliderFixture{};
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiSliderLifetimeTests, IdenticalPublicValueIntentRetiresAlreadyCopiedKeyboardAndThumbInput){
-    ASSERT_TRUE(accept(1u));
-    const Point origin = thumbPoint();
-    EXPECT_TRUE(send({ .position = origin , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    press(Core::Key::Right);
-    EXPECT_TRUE(send({ .position = { origin.x + 50.0f, origin.y } , .type = InputEventType::PointerMove}).pointerConsumed);
-    const u64 token = m_state.inputGeneration();
-    ASSERT_TRUE(m_state.setValue(0.25));
-    ASSERT_TRUE(accept(2u));
-    EXPECT_NE(m_state.inputGeneration(), token);
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.25);
-    EXPECT_FALSE(m_state.result().valueChanged);
-    EXPECT_FALSE(m_state.result().dragging);
-    EXPECT_FALSE(m_context.input().capture().valid());
-}
-
-TEST_F(UiSliderLifetimeTests, PublicValueAwayAndBackDuringTheLoanRejectsTheCandidateWithoutUndoingTheIntent){
-    ASSERT_TRUE(accept(1u));
-    const AcceptedInputState<64u> displayed = accepted();
-    const u64 token = m_state.inputGeneration();
-    ASSERT_TRUE(declare(2u));
-    ASSERT_TRUE(m_state.setValue(0.9));
-    ASSERT_TRUE(m_state.setValue(0.25));
-    EXPECT_FALSE(m_builder.endPanel());
-    EXPECT_TRUE(m_context.failed());
-    EXPECT_NE(m_state.inputGeneration(), token);
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.25);
-    EXPECT_FALSE(m_state.result().valid);
-    EXPECT_FALSE(m_context.commitFrame(2u));
-    expectAccepted(displayed);
-}
-
-TEST_F(UiSliderLifetimeTests, ChangingKeyStepRetiresAHeldKeyBeforeApplyingItsCopiedRepeat){
-    ASSERT_TRUE(accept(1u));
-    press(Core::Key::Tab);
-    InputEvent held;
-    held.type = InputEventType::KeyDown;
-    held.key = Core::Key::Right;
-    EXPECT_TRUE(send(held).commandConsumed);
-    ASSERT_TRUE(accept(2u));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.375);
-    held.repeat = true;
-    EXPECT_TRUE(send(held).commandConsumed);
-    SliderOptions coarse = Options();
-    coarse.keyStep = 0.25;
-    ASSERT_TRUE(accept(3u, coarse));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.375);
-    EXPECT_FALSE(m_state.result().valueChanged);
-    EXPECT_TRUE(send(held).commandConsumed);
-    ASSERT_TRUE(accept(4u, coarse));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.375);
-    held.type = InputEventType::KeyUp;
-    EXPECT_TRUE(send(held).commandConsumed);
-    press(Core::Key::Right);
-    ASSERT_TRUE(accept(5u, coarse));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.625);
-}
-
-TEST_F(UiSliderLifetimeTests, ChangedRangeDropsTheOldDragAndRetainsAnAuthoritativeOutOfRangeValue){
-    ASSERT_TRUE(m_state.setValue(0.75));
-    ASSERT_TRUE(accept(1u));
-    const Point origin = thumbPoint();
-    EXPECT_TRUE(send({ .position = origin , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    EXPECT_TRUE(send({ .position = { origin.x - 50.0f, origin.y } , .type = InputEventType::PointerMove}).pointerConsumed);
-    SliderOptions narrow = Options();
-    narrow.maximum = 0.5;
-    ASSERT_TRUE(accept(2u, narrow));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.75);
-    EXPECT_FALSE(m_state.result().valueChanged);
-    EXPECT_FALSE(m_state.result().dragging);
-    EXPECT_FALSE(m_context.input().capture().valid());
-    const SliderPlacement& placement = m_state.placement();
-    EXPECT_FLOAT_EQ(UiWidgetTests::Center(placement.thumb).x, placement.centerTravel.x + placement.centerTravel.width);
-}
-
-TEST_F(UiSliderLifetimeTests, ChangedFinalTrackGeometryFencesTheCopiedDragBeforeApplication){
-    ASSERT_TRUE(accept(1u));
-    const Point origin = thumbPoint();
-    const u64 admission = m_state.admissionGeneration();
-    EXPECT_TRUE(send({ .position = origin , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    EXPECT_TRUE(send({ .position = { origin.x + 60.0f, origin.y } , .type = InputEventType::PointerMove}).pointerConsumed);
-    SliderOptions wider = Options();
-    wider.width = { LayoutSizePolicy::Fixed, 340.0f };
-    ASSERT_TRUE(accept(2u, wider, { 10.0f, 10.0f, 420.0f, 240.0f }));
-    EXPECT_NE(m_state.admissionGeneration(), admission);
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.25);
-    EXPECT_FALSE(m_state.result().valueChanged);
-    EXPECT_FALSE(m_context.input().capture().valid());
-}
-
-TEST_F(UiSliderLifetimeTests, ChangedClipRetiresOldPointerGeometryEvenWhenTheFullTrackSizeIsUnchanged){
-    ASSERT_TRUE(accept(1u));
-    const Point origin = thumbPoint();
-    const SliderPlacement before = m_state.placement();
-    EXPECT_TRUE(send({ .position = origin , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    EXPECT_TRUE(send({ .position = { origin.x + 30.0f, origin.y } , .type = InputEventType::PointerMove}).pointerConsumed);
-    ASSERT_TRUE(begin(2u, { 180.0f, 600.0f, 1.0f, 1.0f }));
-    ASSERT_TRUE(m_builder.beginPanel(s_SliderPanelKey, { 10.0f, 10.0f, 360.0f, 240.0f }));
-    ASSERT_TRUE(m_builder.slider(s_SliderKey, m_state, Options()));
-    ASSERT_TRUE(finishPanel());
-    ASSERT_TRUE(m_context.commitFrame(2u));
-    EXPECT_FLOAT_EQ(m_state.placement().track.width, before.track.width);
-    EXPECT_LT(m_state.placement().clip.width, before.clip.width);
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.25);
-    EXPECT_FALSE(m_context.input().capture().valid());
-}
-
-TEST_F(UiSliderLifetimeTests, ChangedThumbExtentRetiresTheOldGrabOffset){
-    ASSERT_TRUE(accept(1u));
-    const Point origin = thumbPoint();
-    EXPECT_TRUE(send({ .position = origin , .type = InputEventType::PrimaryDown}).pointerConsumed);
-    EXPECT_TRUE(send({ .position = { origin.x + 40.0f, origin.y } , .type = InputEventType::PointerMove}).pointerConsumed);
-    m_builder.sliderStyle().thumbExtent.x = 40.0f;
-    ASSERT_TRUE(accept(2u));
-    EXPECT_FLOAT_EQ(m_state.placement().thumb.width, 40.0f);
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.25);
-    EXPECT_FALSE(m_state.result().dragging);
-    EXPECT_FALSE(m_context.input().capture().valid());
-}
-
-TEST_F(UiSliderLifetimeTests, AStateCannotBeAliasedByTwoDeclarationsInTheSameLiveScope){
-    ASSERT_TRUE(accept(1u));
-    const AcceptedInputState<64u> displayed = accepted();
-    ASSERT_TRUE(declare(2u));
-    EXPECT_FALSE(m_builder.slider("alias", m_state, Options()));
-    EXPECT_TRUE(m_context.failed());
-    EXPECT_FALSE(m_state.result().valid);
-    EXPECT_FALSE(m_context.commitFrame(2u));
-    expectAccepted(displayed);
-}
-
-TEST_F(UiSliderLifetimeTests, LaterDeferredCallbackRejectsTheSliderCandidateAndPreservesItsExplicitApplicationValue){
-    ASSERT_TRUE(accept(1u));
-    press(Core::Key::Tab);
-    const AcceptedInputState<64u> displayed = accepted();
-    press(Core::Key::Right);
-    ASSERT_TRUE(declare(2u));
-    m_laterSource.arm(SliderCallbackMutation::SetValue, &m_state);
-    ASSERT_TRUE(sibling());
-    EXPECT_FALSE(m_builder.endPanel());
-    EXPECT_TRUE(m_context.failed());
-    EXPECT_EQ(m_laterSource.m_mutations, 1u);
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.9);
-    EXPECT_FALSE(m_state.result().valid);
-    EXPECT_FALSE(m_context.commitFrame(2u));
-    expectAccepted(displayed);
-}
-
-TEST_F(UiSliderLifetimeTests, FinalWholeScopeValidationCannotPublishAnEarlierSliderBeforeALaterCallbackABA){
-    ASSERT_TRUE(accept(1u));
-    SliderState other;
-    ASSERT_TRUE(other.setValue(0.5));
-    ASSERT_TRUE(declare(2u));
-    ASSERT_TRUE(m_builder.slider("other", other, Options()));
-    const u64 token = m_state.inputGeneration();
-    m_laterSource.arm(SliderCallbackMutation::AwayAndBack, &m_state);
-    ASSERT_TRUE(sibling());
-    EXPECT_FALSE(m_builder.endPanel());
-    EXPECT_TRUE(m_context.failed());
-    EXPECT_NE(m_state.inputGeneration(), token);
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.25);
-    EXPECT_FALSE(m_state.result().valid);
-    EXPECT_FALSE(other.result().valid);
-}
-
-TEST_F(UiSliderLifetimeTests, DeferredCallbackBuilderResetCannotPublishStagedSliderDiagnostics){
-    ASSERT_TRUE(accept(1u));
-    const AcceptedInputState<64u> displayed = accepted();
-    ASSERT_TRUE(declare(2u));
-    m_laterSource.arm(SliderCallbackMutation::ResetBuilder, nullptr, &m_builder);
-    ASSERT_TRUE(sibling());
-    EXPECT_FALSE(m_builder.endPanel());
-    EXPECT_TRUE(m_context.failed());
-    EXPECT_EQ(m_laterSource.m_mutations, 1u);
-    EXPECT_FALSE(m_state.result().valid);
-    expectAccepted(displayed);
-}
-
-TEST_F(UiSliderLifetimeTests, DeferredBalancedScopeReentryRejectsBothAttemptsAndEveryStagedResult){
-    ASSERT_TRUE(accept(1u));
-    ASSERT_TRUE(declare(2u));
-    m_laterSource.arm(SliderCallbackMutation::PanelBuilder, nullptr, &m_builder);
-    ASSERT_TRUE(sibling());
-    EXPECT_FALSE(m_builder.endPanel());
-    EXPECT_TRUE(m_context.failed());
-    EXPECT_FALSE(m_laterSource.m_beginAccepted);
-    EXPECT_FALSE(m_laterSource.m_endAccepted);
-    EXPECT_EQ(m_laterSource.m_mutations, 1u);
-    EXPECT_FALSE(m_state.result().valid);
-}
-
-TEST_F(UiSliderLifetimeTests, SuccessfulScopeEndReleasesTheValueLoanBeforeLaterFramePublication){
-    ASSERT_TRUE(prepare(1u));
-    EXPECT_TRUE(m_state.result().valid);
-    ASSERT_TRUE(m_state.setValue(0.9));
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.9);
-    EXPECT_FALSE(m_context.failed());
-    ASSERT_NE(target(host()), nullptr);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_ui/toolkit/widgets/slider.adhd.h>
-
-#include <global/simdmath.h>
-#include <global/simplemath.h>
-
-#include <gtest/gtest.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_slider_math_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace Impl::Ui;
-
-
-TEST(UiSliderMathTests, OutOfRangeAndConstantSpansClampNormalization){
-    Expected<f64> normalized = SliderBehavior::Normalize(10.0, 30.0, -100.0);
-    ASSERT_TRUE(normalized);
-    EXPECT_EQ(*normalized, 0.0);
-    normalized = SliderBehavior::Normalize(10.0, 30.0, 100.0);
-    ASSERT_TRUE(normalized);
-    EXPECT_EQ(*normalized, 1.0);
-    normalized = SliderBehavior::Normalize(10.0, 10.0, 100.0);
-    ASSERT_TRUE(normalized);
-    EXPECT_EQ(*normalized, 0.0);
-}
-
-TEST(UiSliderMathTests, OppositeExtremeBoundsNormalizeAndInterpolateWithoutAnOverflowingSpan){
-    const f64 maximum = Limit<f64>::s_Max;
-    const f64 minimum = -maximum;
-    Expected<f64> value = SliderBehavior::Normalize(minimum, maximum, 0.0);
-    ASSERT_TRUE(value);
-    EXPECT_DOUBLE_EQ(*value, 0.5);
-    value = SliderBehavior::Normalize(minimum, maximum, maximum * 0.5);
-    ASSERT_TRUE(value);
-    EXPECT_DOUBLE_EQ(*value, 0.75);
-    value = SliderBehavior::Interpolate(minimum, maximum, 0.25);
-    ASSERT_TRUE(value);
-    EXPECT_TRUE(IsFinite(*value));
-    EXPECT_DOUBLE_EQ(*value / maximum, -0.5);
-    value = SliderBehavior::Interpolate(minimum, maximum, 0.75);
-    ASSERT_TRUE(value);
-    EXPECT_DOUBLE_EQ(*value / maximum, 0.5);
-}
-
-TEST(UiSliderMathTests, SameSignExtremeBoundsUseABoundedDifference){
-    const f64 maximum = Limit<f64>::s_Max;
-    // Lanes are the positive and negative bounds.
-    const SIMDVectorDouble bounds = VectorDoubleXorInt(VectorDoubleSet(maximum, maximum, 0.0, 0.0), VectorDoubleAndInt(s_DoubleSIMDNegativeZero, s_DoubleSIMDMaskY));
-    const SIMDVectorDouble threeQuarters = VectorDoubleMultiply(bounds, VectorDoubleReplicate(0.75));
-    for(const b8 negative : { false, true }){
-        const f64 minimum = negative ? VectorDoubleGetY(bounds) : VectorDoubleGetX(threeQuarters);
-        const f64 upper = negative ? VectorDoubleGetY(threeQuarters) : maximum;
-        const Expected<f64> value = SliderBehavior::Interpolate(minimum, upper, 0.5);
-        ASSERT_TRUE(value);
-        EXPECT_TRUE(IsFinite(*value));
-        EXPECT_GE(*value, minimum);
-        EXPECT_LE(*value, upper);
-        const Expected<f64> normalized = SliderBehavior::Normalize(minimum, upper, *value);
-        ASSERT_TRUE(normalized);
-        EXPECT_NEAR(*normalized, 0.5, 1.0e-15);
-    }
-}
-
-TEST(UiSliderMathTests, TinyAndAdjacentSpansStayInTheOrdinaryNormalizationPath){
-    const f64 tiny = BitCast<f64>(1ull);
-    Expected<f64> normalized = SliderBehavior::Normalize(-tiny, tiny, 0.0);
-    ASSERT_TRUE(normalized);
-    EXPECT_DOUBLE_EQ(*normalized, 0.5);
-    normalized = SliderBehavior::Normalize(tiny, BitCast<f64>(2ull), tiny);
-    ASSERT_TRUE(normalized);
-    EXPECT_DOUBLE_EQ(*normalized, 0.0);
-    const f64 lower = BitCast<f64>(0x3ff0000000000000ull);
-    const f64 upper = BitCast<f64>(0x3ff0000000000001ull);
-    normalized = SliderBehavior::Normalize(lower, upper, upper);
-    ASSERT_TRUE(normalized);
-    EXPECT_DOUBLE_EQ(*normalized, 1.0);
-    const Expected<f64> value = SliderBehavior::Interpolate(lower, upper, 1.0);
-    ASSERT_TRUE(value);
-    EXPECT_EQ(BitCast<u64>(*value), BitCast<u64>(upper));
-}
-
-TEST(UiSliderMathTests, InterpolationPreservesExactEndpointAndSignedZeroBits){
-    Expected<f64> value = SliderBehavior::Interpolate(-0.0, 1.0, 0.0);
-    ASSERT_TRUE(value);
-    EXPECT_EQ(BitCast<u64>(*value), 0x8000000000000000ull);
-    value = SliderBehavior::Interpolate(-1.0, 0.0, 1.0);
-    ASSERT_TRUE(value);
-    EXPECT_EQ(BitCast<u64>(*value), 0u);
-    value = SliderBehavior::Interpolate(-0.0, 0.0, 0.0);
-    ASSERT_TRUE(value);
-    EXPECT_EQ(BitCast<u64>(*value), 0x8000000000000000ull);
-    value = SliderBehavior::Interpolate(-0.0, 0.0, 1.0);
-    ASSERT_TRUE(value);
-    EXPECT_EQ(BitCast<u64>(*value), 0u);
-}
-
-TEST(UiSliderMathTests, InvalidRangeValueOrNormalizedInputRejectsTheQuery){
-    for(u32 field = 0u; field < 7u; ++field){
-        f64 minimum = 0.0;
-        f64 maximum = 1.0;
-        f64 query = 0.5;
-        switch(field){
-        case 0u: minimum = 2.0; break;
-        case 1u: minimum = Limit<f64>::s_QuietNaN; break;
-        case 2u: maximum = Limit<f64>::s_Infinity; break;
-        case 3u: query = Limit<f64>::s_Infinity; break;
-        case 4u: query = Limit<f64>::s_QuietNaN; break;
-        case 5u: query = -0.1; break;
-        default: query = 1.1; break;
-        }
-        if(field < 5u){
-            EXPECT_FALSE(SliderBehavior::Normalize(minimum, maximum, query));
-        }
-        EXPECT_FALSE(SliderBehavior::Interpolate(minimum, maximum, query));
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <global/simdmath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1358,7 +183,7 @@ using namespace NWB::Impl::Ui;
 using namespace NWB::UiSliderTests;
 
 class UiSliderPopupTests : public SliderFixture{
-protected:
+public:
     virtual void SetUp()override{
         SliderFixture::SetUp();
         ASSERT_TRUE(m_childState.setValue(0.5));
@@ -1387,7 +212,7 @@ protected:
     }
 
 
-protected:
+public:
     PopupState m_parent;
     PopupState m_child;
     SliderState m_childState;
@@ -1397,146 +222,1388 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiSliderPopupTests, ChildResultsRemainStagedUntilTheOutermostPopupValidatesTheCompleteFamily){
-    ASSERT_TRUE(beginParent(1u));
-    EXPECT_FALSE(m_state.result().valid);
-    ASSERT_TRUE(beginChild());
-    EXPECT_FALSE(m_childState.result().valid);
-    ASSERT_TRUE(m_builder.endPopup());
-    EXPECT_FALSE(m_childState.result().valid);
-    EXPECT_FALSE(m_state.result().valid);
-    ASSERT_TRUE(finishParent());
-    EXPECT_TRUE(m_state.result().valid);
-    EXPECT_TRUE(m_childState.result().valid);
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    EXPECT_EQ(m_context.input().popupCount(), 2u);
-}
-
-TEST_F(UiSliderPopupTests, AnIdenticalIntentOnTheEndedChildRejectsBothUnpublishedResults){
-    ASSERT_TRUE(acceptFamily(1u));
-    const AcceptedInputState<64u> displayed = accepted();
-    ASSERT_TRUE(declareFamily(2u));
-    const u64 token = m_childState.inputGeneration();
-    ASSERT_TRUE(m_childState.setValue(0.5));
-    EXPECT_FALSE(m_builder.endPopup());
-    EXPECT_TRUE(m_context.failed());
-    EXPECT_NE(m_childState.inputGeneration(), token);
-    EXPECT_DOUBLE_EQ(m_childState.value(), 0.5);
-    EXPECT_FALSE(m_state.result().valid);
-    EXPECT_FALSE(m_childState.result().valid);
-    EXPECT_FALSE(m_context.commitFrame(2u));
-    expectAccepted(displayed, false);
-}
-
-TEST_F(UiSliderPopupTests, LaterParentLabelCallbackCannotPublishAPreviouslyPaintedChildLoan){
-    ASSERT_TRUE(acceptFamily(1u));
-    ASSERT_TRUE(declareFamily(2u));
-    m_laterSource.arm(SliderCallbackMutation::SameValue, &m_childState);
-    ASSERT_TRUE(sibling());
-    EXPECT_FALSE(m_builder.endPopup());
-    EXPECT_TRUE(m_context.failed());
-    EXPECT_EQ(m_laterSource.m_mutations, 1u);
-    EXPECT_FALSE(m_state.result().valid);
-    EXPECT_FALSE(m_childState.result().valid);
-    EXPECT_DOUBLE_EQ(m_childState.value(), 0.5);
-}
-
-TEST_F(UiSliderPopupTests, ChildCallbackRejectsTheEarlierParentLoanInTheFinalCallbackFreePass){
-    ASSERT_TRUE(acceptFamily(1u));
-    ASSERT_TRUE(beginParent(2u));
-    ASSERT_TRUE(beginChild());
-    m_laterSource.arm(SliderCallbackMutation::SetValue, &m_state);
-    ASSERT_TRUE(sibling());
-    if(m_builder.endPopup())
-        EXPECT_FALSE(m_builder.endPopup());
-    EXPECT_TRUE(m_context.failed());
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.9);
-    EXPECT_FALSE(m_state.result().valid);
-    EXPECT_FALSE(m_childState.result().valid);
-}
-
-TEST_F(UiSliderPopupTests, ParentAndChildCannotBorrowTheSameSliderStateAtTheSameTime){
-    ASSERT_TRUE(acceptFamily(1u));
-    ASSERT_TRUE(beginParent(2u));
-    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions()));
-    EXPECT_FALSE(m_builder.slider("alias", m_state, Options()));
-    EXPECT_TRUE(m_context.failed());
-    EXPECT_FALSE(m_state.result().valid);
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.25);
-}
-
-TEST_F(UiSliderPopupTests, AncestorClosureBeforePaintSuppressesCallbacksAndRetiresTheOldChildDrag){
-    ASSERT_TRUE(acceptFamily(1u));
-    const Point origin = UiWidgetTests::Center(m_childState.placement().thumb);
-    const Point moved{ origin.x + 60.0f, origin.y };
-    EXPECT_TRUE(send({ .position = origin , .type = InputEventType::PrimaryDown }).pointerConsumed);
-    EXPECT_TRUE(send({ .position = moved , .type = InputEventType::PointerMove }).pointerConsumed);
-    ASSERT_TRUE(beginParent(2u));
-    ASSERT_TRUE(beginChild());
-    m_laterSource.clearCounters();
-    ASSERT_TRUE(sibling());
-    m_parent.close();
-    ASSERT_TRUE(m_builder.endPopup());
-    ASSERT_TRUE(finishParent());
-    ASSERT_TRUE(m_context.commitFrame(2u));
-    EXPECT_EQ(m_laterSource.m_calls, 0u);
-    EXPECT_DOUBLE_EQ(m_childState.value(), 0.5);
-    EXPECT_FALSE(m_childState.result().valid);
-    EXPECT_EQ(m_context.input().popupCount(), 0u);
-    EXPECT_FALSE(m_context.input().capture().valid());
-    m_parent.open();
-    ASSERT_TRUE(beginParent(3u));
-    EXPECT_FALSE(m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions()));
-    EXPECT_FALSE(m_child.isOpen());
-    ASSERT_TRUE(finishParent());
-    ASSERT_TRUE(m_context.commitFrame(3u));
-    m_child.open();
-    ASSERT_TRUE(acceptFamily(4u));
-    EXPECT_TRUE(send({ .position = moved , .type = InputEventType::PrimaryUp }).pointerConsumed);
-    ASSERT_TRUE(acceptFamily(5u));
-    EXPECT_DOUBLE_EQ(m_childState.value(), 0.5);
-    EXPECT_FALSE(m_childState.result().valueChanged);
-    EXPECT_FALSE(m_childState.result().dragging);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_ui_glyph_sdf_tests{
+using UiSliderBehaviorTests = ::NWB::__hidden_ui_slider_behavior_tests::UiSliderBehaviorTests;
+using UiSliderBuilderTests = ::__hidden_ui_slider_builder_tests::UiSliderBuilderTests;
+using UiSliderInputTests = ::__hidden_ui_slider_input_tests::UiSliderInputTests;
+using UiSliderLifetimeTests = ::__hidden_ui_slider_lifetime_tests::UiSliderLifetimeTests;
+using UiSliderPopupTests = ::__hidden_ui_slider_popup_tests::UiSliderPopupTests;
+using SliderState = ::NWB::Impl::Ui::SliderState;
+using SliderStyle = ::NWB::Impl::Ui::SliderStyle;
+using SliderMetrics = ::NWB::Impl::Ui::SliderMetrics;
+using SliderPlacement = ::NWB::Impl::Ui::SliderPlacement;
+using SliderSnapshot = ::NWB::Impl::Ui::SliderSnapshot;
+using SliderResult = ::NWB::Impl::Ui::SliderResult;
+using ControlAction = ::NWB::Impl::Ui::ControlAction;
+using ControlToken = ::NWB::Impl::Ui::ControlToken;
+namespace ControlActionKind = ::NWB::Impl::Ui::ControlActionKind;
+using ControlActionKindEnum = ::NWB::Impl::Ui::ControlActionKind::Enum;
+using PointerGesture = ::NWB::Impl::Ui::PointerGesture;
+namespace PointerGestureState = ::NWB::Impl::Ui::PointerGestureState;
+using DisplayMetrics = ::NWB::Impl::Ui::DisplayMetrics;
+using LayoutSize = ::NWB::Impl::Ui::LayoutSize;
+using InputEvent = ::NWB::Impl::Ui::InputEvent;
+namespace InputEventType = ::NWB::Impl::Ui::InputEventType;
+using InputEventTypeEnum = ::NWB::Impl::Ui::InputEventType::Enum;
+namespace UiSliderKey = ::NWB::Core::Key;
+namespace UiSliderCallbackMutation = ::NWB::UiSliderTests::SliderCallbackMutation;
+using UiSliderAcceptedInput64 = ::NWB::UiWidgetTests::AcceptedInputState<64u>;
+using ::NWB::Impl::Ui::MeasureSlider;
+using ::NWB::Impl::Ui::PlaceSlider;
+
+[[nodiscard]] inline b8 UiSliderAdmit(::NWB::Impl::Ui::SliderState& state, const ::NWB::Impl::Ui::SliderOptions& options, const ::NWB::Impl::Ui::SliderPlacement& placement)noexcept{
+    return ::NWB::Impl::Ui::SliderBehavior::Admit(state, options, placement);
+}
+
+[[nodiscard]] inline b8 UiSliderApply(const ::NWB::Impl::Ui::SliderOptions& options, const ::NWB::Impl::Ui::ControlAction& action, ::NWB::Impl::Ui::SliderState& state, ::NWB::Impl::Ui::SliderResult& result)noexcept{
+    return ::NWB::Impl::Ui::SliderBehavior::Apply(options, action, state, result);
+}
+
+[[nodiscard]] inline b8 UiSliderSeek(const ::NWB::Impl::Ui::SliderOptions& options, const ::NWB::Impl::Ui::PointerGesture& gesture, ::NWB::Impl::Ui::SliderState& state, ::NWB::Impl::Ui::SliderResult& result)noexcept{
+    return ::NWB::Impl::Ui::SliderBehavior::Seek(options, gesture, state, result);
+}
+
+[[nodiscard]] inline b8 UiSliderDrag(const ::NWB::Impl::Ui::SliderOptions& options, const ::NWB::Impl::Ui::PointerGesture& gesture, ::NWB::Impl::Ui::SliderState& state, ::NWB::Impl::Ui::SliderResult& result)noexcept{
+    return ::NWB::Impl::Ui::SliderBehavior::Drag(options, gesture, state, result);
+}
+
+[[nodiscard]] inline Expected<f64> UiSliderNormalize(const f64 minimum, const f64 maximum, const f64 value)noexcept{
+    return ::NWB::Impl::Ui::SliderBehavior::Normalize(minimum, maximum, value);
+}
+
+[[nodiscard]] inline Expected<f64> UiSliderInterpolate(const f64 minimum, const f64 maximum, const f64 normalized)noexcept{
+    return ::NWB::Impl::Ui::SliderBehavior::Interpolate(minimum, maximum, normalized);
+}
+};
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_ui/toolkit/widgets/slider.adhd.h>
+const u32 s_UiSliderQuietNaNF32Bits = 0x7fc00000u;
+const u32 s_UiSliderPosInfF32Bits = 0x7f800000u;
+const u64 s_UiSliderQuietNaNF64Bits = 0x7ff8000000000000u;
+const u64 s_UiSliderPosInfF64Bits = 0x7ff0000000000000u;
+const u64 s_UiSliderNegInfF64Bits = 0xfff0000000000000u;
+const u64 s_UiSliderNegZeroF64Bits = 0x8000000000000000u;
+const AStringView s_UiSliderPanelKey = "panel";
+const AStringView s_UiSliderKey = "slider";
+const AStringView s_UiSliderChildPopupKey = "child";
 
-#include <gtest/gtest.h>
+
+void ExpectUiSliderResult(in SliderResult actual, in SliderResult expected){
+    EXPECT_EQ(actual.valid, expected.valid);
+    EXPECT_EQ(actual.valueChanged, expected.valueChanged);
+    EXPECT_EQ(actual.focused, expected.focused);
+    EXPECT_EQ(actual.dragging, expected.dragging);
+}
+
+SliderResult MakeUiSliderResult(in b8 valid, in b8 valueChanged, in b8 focused, in b8 dragging){
+    SliderResult result = SliderResult();
+    result.valid = valid;
+    result.valueChanged = valueChanged;
+    result.focused = focused;
+    result.dragging = dragging;
+    return result;
+}
+
+InputEvent MakeUiSliderPointerEvent(in Point position, in InputEventTypeEnum eventType){
+    InputEvent event = InputEvent();
+    event.position = position;
+    event.type = eventType;
+    return event;
+}
+
+DisplayMetrics MakeUiSliderDisplayMetrics(in f32 width, in f32 height, in f32 scaleX, in f32 scaleY){
+    DisplayMetrics metrics = DisplayMetrics();
+    metrics.logicalWidth = width;
+    metrics.logicalHeight = height;
+    metrics.pixelScaleX = scaleX;
+    metrics.pixelScaleY = scaleY;
+    return metrics;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_BEGIN
+void VerifyUiSliderBehaviorTests_AdmissionKeepsAnExternalOutOfRangeValueUntilAcceptedInput(mut UiSliderBehaviorTests self){
+    ASSERT_TRUE(self.set(20.0));
+    EXPECT_EQ(self.m_state.value(), 20.0);
+    EXPECT_FLOAT_EQ(self.m_placement.thumb.x, 222.0f);
+    ASSERT_TRUE(UiSliderApply(self.m_options, self.key(ControlActionKind::Left), self.m_state, self.m_result));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.99);
+    EXPECT_TRUE(self.m_result.valueChanged);
+}
+
+void VerifyUiSliderBehaviorTests_PolicyAndStableGeometryChangesRetirePreviouslyCopiedInput(mut UiSliderBehaviorTests self){
+    const ControlAction stale = self.key(ControlActionKind::Right);
+    const u64 input = self.m_state.inputGeneration();
+    const u64 first = self.m_state.admissionGeneration();
+    self.m_options.keyStep = 0.1;
+    ASSERT_TRUE(self.refresh());
+    EXPECT_GT(self.m_state.admissionGeneration(), first);
+    EXPECT_EQ(self.m_state.inputGeneration(), input);
+    const SliderSnapshot before = self.m_state.snapshot();
+    const SliderResult result = self.m_result;
+    EXPECT_FALSE(UiSliderApply(self.m_options, stale, self.m_state, self.m_result));
+    EXPECT_TRUE(self.m_state.matches(before));
+    ExpectUiSliderResult(self.m_result, result);
+    const u64 policy = self.m_state.admissionGeneration();
+    self.m_bounds.width = 280.0f;
+    ASSERT_TRUE(self.refresh());
+    EXPECT_GT(self.m_state.admissionGeneration(), policy);
+    SliderPlacement clipped = self.m_placement;
+    clipped.clip.width = 100.0f;
+    const u64 geometry = self.m_state.admissionGeneration();
+    ASSERT_TRUE(UiSliderAdmit(self.m_state, self.m_options, clipped));
+    EXPECT_GT(self.m_state.admissionGeneration(), geometry);
+}
+
+void VerifyUiSliderBehaviorTests_ExactSignedZeroPolicyChangesAdvanceAdmissionWithoutChangingTheValue(mut UiSliderBehaviorTests self){
+    const SliderSnapshot before = self.m_state.snapshot();
+    self.m_options.minimum = bit_cast<f64>(s_UiSliderNegZeroF64Bits);
+    ASSERT_TRUE(self.refresh());
+    EXPECT_GT(self.m_state.admissionGeneration(), before.admissionGeneration);
+    EXPECT_EQ(bit_cast<u64>(self.m_state.value()), before.valueBits);
+    const u64 range = self.m_state.admissionGeneration();
+    self.m_options.keyStep = bit_cast<f64>(s_UiSliderNegZeroF64Bits);
+    ASSERT_TRUE(self.refresh());
+    EXPECT_GT(self.m_state.admissionGeneration(), range);
+}
+
+void VerifyUiSliderBehaviorTests_PublicIdenticalAndAwayBackIntentsRejectOldCopiedActionsAtomically(mut UiSliderBehaviorTests self){
+    ASSERT_TRUE(self.set(0.25));
+    const ControlAction stale = self.key(ControlActionKind::Right);
+    ASSERT_TRUE(self.m_state.setValue(0.25));
+    SliderSnapshot before = self.m_state.snapshot();
+    EXPECT_FALSE(UiSliderApply(self.m_options, stale, self.m_state, self.m_result));
+    EXPECT_TRUE(self.m_state.matches(before));
+    EXPECT_FALSE(self.m_result.valid);
+    ASSERT_TRUE(self.m_state.setValue(0.5));
+    ASSERT_TRUE(self.m_state.setValue(0.25));
+    before = self.m_state.snapshot();
+    EXPECT_FALSE(UiSliderApply(self.m_options, stale, self.m_state, self.m_result));
+    EXPECT_TRUE(self.m_state.matches(before));
+    EXPECT_FALSE(self.m_result.valid);
+}
+
+void VerifyUiSliderBehaviorTests_AutomaticStepsRemainFiniteAcrossOppositeExtremeBounds(mut UiSliderBehaviorTests self){
+    self.m_options.minimum = -f64.max;
+    self.m_options.maximum = f64.max;
+    ASSERT_TRUE(self.set(0.0));
+    ASSERT_TRUE(UiSliderApply(self.m_options, self.key(ControlActionKind::Right), self.m_state, self.m_result));
+    EXPECT_TRUE(IsFinite(self.m_state.value()));
+    EXPECT_GT(self.m_state.value(), 0.0);
+    EXPECT_NEAR(self.m_state.value() / f64.max, 0.02, 1.0e-15);
+    ASSERT_TRUE(UiSliderApply(self.m_options, self.key(ControlActionKind::PageUp), self.m_state, self.m_result));
+    EXPECT_TRUE(IsFinite(self.m_state.value()));
+    EXPECT_NEAR(self.m_state.value() / f64.max, 0.22, 1.0e-15);
+}
+
+void VerifyUiSliderBehaviorTests_AutomaticSubnormalStepUsesTheRepresentableSpanWhenDivisionUnderflows(mut UiSliderBehaviorTests self){
+    self.m_options.maximum = bit_cast<f64>(cast<u64>(1u));
+    ASSERT_TRUE(self.refresh());
+    ASSERT_TRUE(UiSliderApply(self.m_options, self.key(ControlActionKind::Right), self.m_state, self.m_result));
+    EXPECT_EQ(bit_cast<u64>(self.m_state.value()), 1u);
+    ASSERT_TRUE(UiSliderApply(self.m_options, self.key(ControlActionKind::Left), self.m_state, self.m_result));
+    EXPECT_EQ(bit_cast<u64>(self.m_state.value()), 0u);
+}
+
+void VerifyUiSliderBehaviorTests_ExplicitExtremeStepsAndPageIterationSaturateWithoutOverflow(mut UiSliderBehaviorTests self){
+    self.m_options.minimum = -f64.max;
+    self.m_options.maximum = f64.max;
+    self.m_options.keyStep = f64.max;
+    ASSERT_TRUE(self.refresh());
+    ASSERT_TRUE(UiSliderApply(self.m_options, self.key(ControlActionKind::PageUp), self.m_state, self.m_result));
+    EXPECT_EQ(bit_cast<u64>(self.m_state.value()), bit_cast<u64>(self.m_options.maximum));
+    ASSERT_TRUE(UiSliderApply(self.m_options, self.key(ControlActionKind::PageDown), self.m_state, self.m_result));
+    EXPECT_EQ(bit_cast<u64>(self.m_state.value()), bit_cast<u64>(self.m_options.minimum));
+    ASSERT_TRUE(UiSliderApply(self.m_options, self.key(ControlActionKind::Right), self.m_state, self.m_result));
+    EXPECT_EQ(self.m_state.value(), 0.0);
+}
+
+void VerifyUiSliderBehaviorTests_DisabledAndConstantRangesAreValidWithoutApplyingInput(mut UiSliderBehaviorTests self){
+    self.m_options.enabled = false;
+    ASSERT_TRUE(self.set(0.25));
+    SliderSnapshot before = self.m_state.snapshot();
+    ASSERT_TRUE(UiSliderApply(self.m_options, self.key(ControlActionKind::Right), self.m_state, self.m_result));
+    EXPECT_TRUE(self.m_state.matches(before));
+    EXPECT_TRUE(self.m_result.valid);
+    EXPECT_FALSE(self.m_result.valueChanged);
+    self.m_options.enabled = true;
+    self.m_options.minimum = 5.0;
+    self.m_options.maximum = 5.0;
+    ASSERT_TRUE(self.refresh());
+    before = self.m_state.snapshot();
+    ASSERT_TRUE(UiSliderSeek(self.m_options, self.gesture(false), self.m_state, self.m_result));
+    EXPECT_TRUE(self.m_state.matches(before));
+    EXPECT_EQ(self.m_state.value(), 0.25);
+    EXPECT_FALSE(self.m_result.dragging);
+}
+
+void VerifyUiSliderBehaviorTests_SubmitActivationAndWheelLeaveTheValueAndSemanticSnapshotUnchanged(mut UiSliderBehaviorTests self){
+    ASSERT_TRUE(self.set(bit_cast<f64>(s_UiSliderNegZeroF64Bits)));
+    const SliderSnapshot before = self.m_state.snapshot();
+    Array<ControlActionKindEnum, 3u> kinds;
+    kinds[0u] = ControlActionKind::Submit;
+    kinds[1u] = ControlActionKind::Activate;
+    kinds[2u] = ControlActionKind::Wheel;
+    for(in ControlActionKindEnum kind : kinds){
+        ASSERT_TRUE(UiSliderApply(self.m_options, self.key(kind), self.m_state, self.m_result));
+        EXPECT_TRUE(self.m_state.matches(before));
+        EXPECT_TRUE(self.m_result.valid);
+        EXPECT_FALSE(self.m_result.valueChanged);
+    }
+}
+
+void VerifyUiSliderBehaviorTests_InvalidPolicyTokenAndUnadmittedInputPreserveStateAndResult(mut UiSliderBehaviorTests self){
+    const SliderSnapshot before = self.m_state.snapshot();
+    const SliderResult result = MakeUiSliderResult(true, true, true, true);
+    self.m_result = result;
+    ControlAction action = self.key(ControlActionKind::Right);
+    ++action.control.contentGeneration;
+    EXPECT_FALSE(UiSliderApply(self.m_options, action, self.m_state, self.m_result));
+    EXPECT_TRUE(self.m_state.matches(before));
+    ExpectUiSliderResult(self.m_result, result);
+    SliderOptions invalid = self.m_options;
+    invalid.keyStep = -1.0;
+    EXPECT_FALSE(UiSliderApply(invalid, self.key(ControlActionKind::Right), self.m_state, self.m_result));
+    EXPECT_TRUE(self.m_state.matches(before));
+    ExpectUiSliderResult(self.m_result, result);
+    SliderState unadmitted = SliderState();
+    action.control = unadmitted.controlToken();
+    const SliderSnapshot unknown = unadmitted.snapshot();
+    EXPECT_FALSE(UiSliderApply(self.m_options, action, unadmitted, self.m_result));
+    EXPECT_TRUE(unadmitted.matches(unknown));
+    ExpectUiSliderResult(self.m_result, result);
+}
+
+void VerifyUiSliderBehaviorTests_InvalidAdmissionGeometryOrOptionsPreserveThePreviousBinding(mut UiSliderBehaviorTests self){
+    const SliderSnapshot before = self.m_state.snapshot();
+    SliderPlacement invalid = self.m_placement;
+    invalid.track.width = bit_cast<f32>(s_UiSliderPosInfF32Bits);
+    EXPECT_FALSE(UiSliderAdmit(self.m_state, self.m_options, invalid));
+    EXPECT_TRUE(self.m_state.matches(before));
+    SliderOptions policy = self.m_options;
+    policy.minimum = 2.0;
+    EXPECT_FALSE(UiSliderAdmit(self.m_state, policy, self.m_placement));
+    EXPECT_TRUE(self.m_state.matches(before));
+    invalid = self.m_placement;
+    invalid.thumbExtent.x = invalid.travelBounds.width + 1.0f;
+    EXPECT_FALSE(UiSliderAdmit(self.m_state, self.m_options, invalid));
+    EXPECT_TRUE(self.m_state.matches(before));
+}
+
+void VerifyUiSliderBehaviorTests_TrackSeekUsesAbsoluteAcceptedCenterTravelAndExactEndpoints(mut UiSliderBehaviorTests self){
+    PointerGesture seek = self.gesture(false);
+    seek.position.x = -f32.max;
+    ASSERT_TRUE(UiSliderSeek(self.m_options, seek, self.m_state, self.m_result));
+    EXPECT_EQ(bit_cast<u64>(self.m_state.value()), bit_cast<u64>(self.m_options.minimum));
+    seek.position.x = f32.max;
+    seek.state = PointerGestureState::Completed;
+    ASSERT_TRUE(UiSliderSeek(self.m_options, seek, self.m_state, self.m_result));
+    EXPECT_EQ(bit_cast<u64>(self.m_state.value()), bit_cast<u64>(self.m_options.maximum));
+    EXPECT_FALSE(self.m_result.dragging);
+}
+
+void VerifyUiSliderBehaviorTests_TrackSeekRejectsAChangedCopiedReferenceWithoutPublishingResult(mut UiSliderBehaviorTests self){
+    PointerGesture seek = self.gesture(false);
+    seek.referenceRectangle.x = seek.referenceRectangle.x + 1.0f;
+    const SliderSnapshot before = self.m_state.snapshot();
+    const SliderResult result = self.m_result;
+    EXPECT_FALSE(UiSliderSeek(self.m_options, seek, self.m_state, self.m_result));
+    EXPECT_TRUE(self.m_state.matches(before));
+    ExpectUiSliderResult(self.m_result, result);
+}
+
+void VerifyUiSliderBehaviorTests_RepeatedThumbUpdatesUseOriginalCopiedBaselineWithoutAccumulatingDelta(mut UiSliderBehaviorTests self){
+    ASSERT_TRUE(self.set(0.25));
+    PointerGesture drag = self.gesture();
+    const f32 widthGap = drag.referenceRectangle.width - drag.targetRectangle.width;
+    drag.position.x = widthGap * 0.25f + drag.position.x;
+    ASSERT_TRUE(UiSliderDrag(self.m_options, drag, self.m_state, self.m_result));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.5);
+    drag.position.x = widthGap * 0.25f + drag.position.x;
+    ++drag.updateSequence;
+    ASSERT_TRUE(UiSliderDrag(self.m_options, drag, self.m_state, self.m_result));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.75);
+}
+
+void VerifyUiSliderBehaviorTests_AStationaryThumbCompletionPreservesAnOrderedKeyChange(mut UiSliderBehaviorTests self){
+    self.m_options.keyStep = 0.125;
+    ASSERT_TRUE(self.set(0.25));
+    PointerGesture drag = self.gesture();
+    ASSERT_TRUE(UiSliderDrag(self.m_options, drag, self.m_state, self.m_result));
+    EXPECT_FALSE(self.m_result.valueChanged);
+    ASSERT_TRUE(UiSliderApply(self.m_options, self.key(ControlActionKind::Right, 13u), self.m_state, self.m_result));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.375);
+    drag.state = PointerGestureState::Completed;
+    ++drag.updateSequence;
+    ASSERT_TRUE(UiSliderDrag(self.m_options, drag, self.m_state, self.m_result));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.375);
+    EXPECT_FALSE(self.m_result.dragging);
+    EXPECT_FALSE(self.m_state.snapshot().press.valid());
+}
+
+void VerifyUiSliderBehaviorTests_ReturningAfterAnAppliedMoveRestoresTheExactSignedZeroBaseline(mut UiSliderBehaviorTests self){
+    self.m_options.minimum = -1.0;
+    ASSERT_TRUE(self.set(bit_cast<f64>(s_UiSliderNegZeroF64Bits)));
+    PointerGesture drag = self.gesture();
+    const f32 widthGap = drag.referenceRectangle.width - drag.targetRectangle.width;
+    drag.position.x = widthGap * 0.25f + drag.position.x;
+    ASSERT_TRUE(UiSliderDrag(self.m_options, drag, self.m_state, self.m_result));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.5);
+    EXPECT_TRUE(self.m_state.snapshot().pressMoved);
+    drag.position = drag.origin;
+    drag.state = PointerGestureState::Completed;
+    ++drag.updateSequence;
+    ASSERT_TRUE(UiSliderDrag(self.m_options, drag, self.m_state, self.m_result));
+    EXPECT_EQ(bit_cast<u64>(self.m_state.value()), s_UiSliderNegZeroF64Bits);
+    EXPECT_FALSE(self.m_state.snapshot().pressMoved);
+}
+
+void VerifyUiSliderBehaviorTests_ANewStationaryPressDoesNotBorrowTheOldPressMovedFlag(mut UiSliderBehaviorTests self){
+    ASSERT_TRUE(self.set(0.25));
+    PointerGesture first = self.gesture();
+    first.position.x = first.position.x + 52.0f;
+    ASSERT_TRUE(UiSliderDrag(self.m_options, first, self.m_state, self.m_result));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.5);
+    PointerGesture second = first;
+    ++second.id.sequence;
+    ++second.updateSequence;
+    second.position = second.origin;
+    second.state = PointerGestureState::Completed;
+    ASSERT_TRUE(UiSliderDrag(self.m_options, second, self.m_state, self.m_result));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.5);
+}
+
+void VerifyUiSliderBehaviorTests_AdmissionRetirementEndsThePressAndKeepsItsLastAppliedValue(mut UiSliderBehaviorTests self){
+    ASSERT_TRUE(self.set(0.25));
+    PointerGesture drag = self.gesture();
+    drag.position.x = drag.position.x + 52.0f;
+    ASSERT_TRUE(UiSliderDrag(self.m_options, drag, self.m_state, self.m_result));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.5);
+    self.m_options.enabled = false;
+    ASSERT_TRUE(self.refresh());
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.5);
+    EXPECT_FALSE(self.m_state.snapshot().press.valid());
+    EXPECT_FALSE(self.m_state.snapshot().pressMoved);
+    const SliderSnapshot before = self.m_state.snapshot();
+    EXPECT_FALSE(UiSliderDrag(self.m_options, drag, self.m_state, self.m_result));
+    EXPECT_TRUE(self.m_state.matches(before));
+}
+
+void VerifyUiSliderBehaviorTests_ThumbDisplacementCastsBeforeSubtractingExtremeFloatCoordinates(mut UiSliderBehaviorTests self){
+    PointerGesture drag = self.gesture();
+    drag.origin.x = -f32.max;
+    drag.position.x = f32.max;
+    ASSERT_TRUE(UiSliderDrag(self.m_options, drag, self.m_state, self.m_result));
+    EXPECT_EQ(bit_cast<u64>(self.m_state.value()), bit_cast<u64>(self.m_options.maximum));
+    drag.origin.x = f32.max;
+    drag.position.x = -f32.max;
+    ++drag.updateSequence;
+    ASSERT_TRUE(UiSliderDrag(self.m_options, drag, self.m_state, self.m_result));
+    EXPECT_EQ(bit_cast<u64>(self.m_state.value()), bit_cast<u64>(self.m_options.minimum));
+}
+
+void VerifyUiSliderBehaviorTests_InvalidThumbPayloadGeometryOrTokenIsRejectedAtomically(mut UiSliderBehaviorTests self){
+    ASSERT_TRUE(self.set(bit_cast<f64>(s_UiSliderNegZeroF64Bits)));
+    const SliderSnapshot before = self.m_state.snapshot();
+    self.m_result = MakeUiSliderResult(true, true, true, true);
+    const SliderResult result = self.m_result;
+    for(u32 field = 0u; field < 7u; ++field){
+        PointerGesture drag = self.gesture();
+        switch(field){
+        case 0u:
+            drag.value = s_UiSliderQuietNaNF64Bits;
+            break;
+        case 1u:
+            ++drag.control.instanceGeneration;
+            break;
+        case 2u:
+            drag.targetRectangle.width = drag.targetRectangle.width + 1.0f;
+            break;
+        case 3u:
+            drag.referenceRectangle.x = drag.referenceRectangle.x + 1.0f;
+            break;
+        case 4u:
+            drag.position.x = bit_cast<f32>(s_UiSliderPosInfF32Bits);
+            break;
+        case 5u:
+            drag.id.sequence = 0u;
+            break;
+        default:
+            drag.updateSequence = 0u;
+            break;
+        }
+        EXPECT_FALSE(UiSliderDrag(self.m_options, drag, self.m_state, self.m_result));
+        EXPECT_TRUE(self.m_state.matches(before));
+        ExpectUiSliderResult(self.m_result, result);
+    }
+}
+
+void VerifyUiSliderBehaviorTests_AClampedNonzeroMoveStillRestoresItsBaselineWhenReturningAfterAKeyChange(mut UiSliderBehaviorTests self){
+    self.m_options.keyStep = 0.125;
+    ASSERT_TRUE(self.set(1.0));
+    PointerGesture drag = self.gesture();
+    drag.position.x = drag.position.x + 20.0f;
+    ASSERT_TRUE(UiSliderDrag(self.m_options, drag, self.m_state, self.m_result));
+    EXPECT_FALSE(self.m_result.valueChanged);
+    EXPECT_TRUE(self.m_state.snapshot().pressMoved);
+    ASSERT_TRUE(UiSliderApply(self.m_options, self.key(ControlActionKind::Left), self.m_state, self.m_result));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.875);
+    drag.position = drag.origin;
+    drag.state = PointerGestureState::Completed;
+    ASSERT_TRUE(UiSliderDrag(self.m_options, drag, self.m_state, self.m_result));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 1.0);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_slider_state_tests{
+void VerifyUiSliderBuilderTests_DeclarationPublishesItsResultAndOwnedPartsOnlyAfterScopeValidation(mut UiSliderBuilderTests self){
+    ASSERT_TRUE(self.declare(1u));
+    EXPECT_FALSE(self.m_state.result().valid);
+    native(in self){
+        EXPECT_EQ(self.target(self.host()), nullptr);
+    }
+    ASSERT_TRUE(self.finishPanel());
+    EXPECT_TRUE(self.m_state.result().valid);
+    native(in self){
+        EXPECT_EQ(self.target(self.host()), nullptr);
+    }
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    native(in self){
+        ASSERT_NE(self.target(self.host()), nullptr);
+        ASSERT_NE(self.target(self.track()), nullptr);
+        ASSERT_NE(self.target(self.thumb()), nullptr);
+    }
+}
+
+void VerifyUiSliderBuilderTests_FiniteExternalValueOutsideTheRangeIsRetainedWhileItsThumbClampsVisually(mut UiSliderBuilderTests self){
+    ASSERT_TRUE(self.m_state.setValue(2.0));
+    ASSERT_TRUE(self.accept(1u));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 2.0);
+    EXPECT_FALSE(self.m_state.result().valueChanged);
+    const SliderPlacement placement = self.m_state.placement();
+    EXPECT_FLOAT_EQ(CenterUiRect(placement.thumb).x, placement.centerTravel.x + placement.centerTravel.width);
+    self.press(UiSliderKey::Tab);
+    self.press(UiSliderKey::Home);
+    ASSERT_TRUE(self.accept(2u));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.0);
+    EXPECT_TRUE(self.m_state.result().valueChanged);
+}
+
+void VerifyUiSliderBuilderTests_IdleFramesPreserveSignedZeroBitsAndDoNotInventChangeNotifications(mut UiSliderBuilderTests self){
+    ASSERT_TRUE(self.m_state.setValue(bit_cast<f64>(s_UiSliderNegZeroF64Bits)));
+    ASSERT_TRUE(self.accept(1u));
+    EXPECT_EQ(bit_cast<u64>(self.m_state.value()), s_UiSliderNegZeroF64Bits);
+    ASSERT_TRUE(self.accept(2u));
+    EXPECT_EQ(bit_cast<u64>(self.m_state.value()), s_UiSliderNegZeroF64Bits);
+    EXPECT_TRUE(self.m_state.result().valid);
+    EXPECT_FALSE(self.m_state.result().valueChanged);
+}
+
+void VerifyUiSliderBuilderTests_DisabledSliderKeepsAPointerBarrierWithoutApplyingQueuedInput(mut UiSliderBuilderTests self){
+    ASSERT_TRUE(self.accept(1u));
+    self.press(UiSliderKey::Tab);
+    self.press(UiSliderKey::Right);
+    SliderOptions disabled = MakeSliderFixtureOptions();
+    disabled.enabled = false;
+    ASSERT_TRUE(self.accept(2u, disabled));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.25);
+    EXPECT_FALSE(self.m_state.result().valueChanged);
+    native(in self){
+        ASSERT_NE(self.target(self.host()), nullptr);
+        EXPECT_FALSE(self.target(self.host())->enabled);
+        EXPECT_FALSE(self.target(self.host())->focusable);
+    }
+    const Point center = CenterUiRect(self.m_state.placement().bounds);
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(center, InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(center, InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_FALSE(self.m_context.input().focus().valid());
+    ASSERT_TRUE(self.accept(3u, disabled));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.25);
+}
+
+void VerifyUiSliderBuilderTests_ConstantRangeIsValidAndNoninteractiveWithoutRewritingTheApplicationValue(mut UiSliderBuilderTests self){
+    SliderOptions constant = MakeSliderFixtureOptions();
+    constant.minimum = 0.5;
+    constant.maximum = 0.5;
+    ASSERT_TRUE(self.accept(1u, constant));
+    EXPECT_TRUE(self.m_state.result().valid);
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.25);
+    native(in self){
+        ASSERT_NE(self.target(self.host()), nullptr);
+        EXPECT_FALSE(self.target(self.host())->focusable);
+        EXPECT_FALSE(self.target(self.host())->enabled);
+    }
+    self.click(CenterUiRect(self.m_state.placement().bounds));
+    ASSERT_TRUE(self.accept(2u, constant));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.25);
+    EXPECT_FALSE(self.m_state.result().valueChanged);
+}
+
+void VerifyUiSliderBuilderTests_InvalidPolicyRejectsTheCandidateWithoutReplacingItsAcceptedLayout(mut UiSliderBuilderTests self){
+    ASSERT_TRUE(self.accept(1u));
+    const UiSliderAcceptedInput64 displayed = self.accepted();
+    const SliderSnapshot before = self.m_state.snapshot();
+    SliderOptions invalid = MakeSliderFixtureOptions();
+    invalid.minimum = 2.0;
+    EXPECT_FALSE(self.declare(2u, invalid));
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_TRUE(self.m_state.matches(before));
+    EXPECT_FALSE(self.m_state.result().valid);
+    EXPECT_FALSE(self.m_context.commitFrame(2u));
+    self.expectAccepted(displayed);
+}
+
+void VerifyUiSliderBuilderTests_FrozenSliderStyleOwnsItsMetricsThroughTheDeferredPaint(mut UiSliderBuilderTests self){
+    ASSERT_TRUE(self.declare(1u));
+    self.m_builder.sliderStyle().thumbExtent = Point(40.0f, 40.0f);
+    self.m_builder.sliderStyle().trackHeight = 20.0f;
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    EXPECT_FLOAT_EQ(self.m_state.placement().thumb.width, 24.0f);
+    EXPECT_FLOAT_EQ(self.m_state.placement().thumb.height, 24.0f);
+    EXPECT_FLOAT_EQ(self.m_state.placement().track.height, 12.0f);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using namespace Impl::Ui;
+void VerifyUiSliderInputTests_PageKeysSaturateAtExactEndpoints(mut UiSliderInputTests self){
+    ASSERT_TRUE(self.accept(1u));
+    self.press(UiSliderKey::Tab);
+    self.press(UiSliderKey::PageUp);
+    ASSERT_TRUE(self.accept(4u));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 1.0);
+    self.press(UiSliderKey::PageDown);
+    ASSERT_TRUE(self.accept(5u));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.0);
+}
+
+void VerifyUiSliderInputTests_AcceptedKeyRepeatsRemainAddressedToTheSurvivingControlLifetime(mut UiSliderInputTests self){
+    ASSERT_TRUE(self.accept(1u));
+    self.press(UiSliderKey::Tab);
+    InputEvent key = InputEvent();
+    key.type = InputEventType::KeyDown;
+    key.key = UiSliderKey::Right;
+    EXPECT_TRUE(self.send(key).commandConsumed);
+    ASSERT_TRUE(self.accept(2u));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.375);
+    key.repeat = true;
+    EXPECT_TRUE(self.send(key).commandConsumed);
+    ASSERT_TRUE(self.accept(3u));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.5);
+    key.type = InputEventType::KeyUp;
+    EXPECT_TRUE(self.send(key).commandConsumed);
+}
+
+void VerifyUiSliderInputTests_TrackPressSeeksDuringFinalPaintAndReleaseOutsideAppliesTheFinalEndpoint(mut UiSliderInputTests self){
+    ASSERT_TRUE(self.accept(1u));
+    const Point point = self.trackPoint(0.75, self.m_state);
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(point, InputEventType::PrimaryDown)).pointerConsumed);
+    ASSERT_TRUE(self.declare(2u));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.25);
+    EXPECT_FALSE(self.m_state.result().valid);
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.75);
+    EXPECT_TRUE(self.m_state.result().valueChanged);
+    EXPECT_TRUE(self.m_state.result().dragging);
+    EXPECT_EQ(self.m_context.input().capture(), self.track());
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(700.0f, 500.0f), InputEventType::PrimaryUp)).pointerConsumed);
+    ASSERT_TRUE(self.accept(3u));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 1.0);
+    EXPECT_FALSE(self.m_state.result().dragging);
+}
+
+void VerifyUiSliderInputTests_OffCenterThumbPressHasNoJumpAndZeroDeltaDoesNotOverwriteAnEarlierKey(mut UiSliderInputTests self){
+    const f64 baseline = 0.1;
+    ASSERT_TRUE(self.m_state.setValue(baseline));
+    ASSERT_TRUE(self.accept(1u));
+    self.press(UiSliderKey::Tab);
+    self.press(UiSliderKey::Right);
+    const Rect thumbBounds = self.m_state.placement().thumb;
+    const Point origin = Point(thumbBounds.x + 3.0f, CenterUiRect(thumbBounds).y);
+    const f64 stepped = baseline + 0.125;
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed);
+    ASSERT_TRUE(self.accept(2u));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), stepped);
+    EXPECT_TRUE(self.m_state.result().dragging);
+    EXPECT_EQ(self.m_context.input().capture(), self.thumb());
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PrimaryUp)).pointerConsumed);
+    ASSERT_TRUE(self.accept(3u));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), stepped);
+    EXPECT_FALSE(self.m_state.result().valueChanged);
+}
+
+void VerifyUiSliderInputTests_HeldThumbRepaintPreservesCaptureAndReturningToOriginRestoresExactBaselineBits(mut UiSliderInputTests self){
+    const f64 baseline = 0.1;
+    ASSERT_TRUE(self.m_state.setValue(baseline));
+    ASSERT_TRUE(self.accept(1u));
+    const Point origin = self.thumbPoint();
+    const Point destination = Point(origin.x + 50.0f, origin.y);
+    const f64 travel = cast<f64>(self.m_state.placement().centerTravel.width);
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(destination, InputEventType::PointerMove)).pointerConsumed);
+    ASSERT_TRUE(self.accept(2u));
+    const f64 displacement = cast<f64>(destination.x) - cast<f64>(origin.x);
+    EXPECT_NEAR(self.m_state.value(), baseline + displacement / travel, 0.00000001);
+    EXPECT_EQ(self.m_context.input().capture(), self.thumb());
+    ControlToken token = ControlToken();
+    native(in self, mut token){
+        ASSERT_NE(self.target(self.host()), nullptr);
+        token = self.target(self.host())->control;
+    }
+    ASSERT_TRUE(self.accept(3u));
+    native(in self, in token){
+        ASSERT_NE(self.target(self.host()), nullptr);
+        EXPECT_EQ(self.target(self.host())->control, token);
+    }
+    EXPECT_EQ(self.m_context.input().capture(), self.thumb());
+    EXPECT_TRUE(self.m_state.result().dragging);
+    EXPECT_FALSE(self.m_state.result().valueChanged);
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PointerMove)).pointerConsumed);
+    ASSERT_TRUE(self.accept(4u));
+    EXPECT_EQ(bit_cast<u64>(self.m_state.value()), bit_cast<u64>(baseline));
+    EXPECT_TRUE(self.m_state.result().valueChanged);
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PrimaryUp)).pointerConsumed);
+    ASSERT_TRUE(self.accept(5u));
+    EXPECT_FALSE(self.m_state.result().dragging);
+}
+
+void VerifyUiSliderInputTests_LatestCoalescedMoveAfterAKeyAppliesAfterTheCopiedKeySequence(mut UiSliderInputTests self){
+    ASSERT_TRUE(self.accept(1u));
+    const Point origin = self.thumbPoint();
+    const f64 travel = cast<f64>(self.m_state.placement().centerTravel.width);
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(origin.x + 30.0f, origin.y), InputEventType::PointerMove)).pointerConsumed);
+    self.press(UiSliderKey::Right);
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(origin.x + 60.0f, origin.y), InputEventType::PointerMove)).pointerConsumed);
+    ASSERT_TRUE(self.accept(2u));
+    EXPECT_NEAR(self.m_state.value(), 0.25 + 60.0 / travel, 0.00000001);
+    EXPECT_TRUE(self.m_state.result().dragging);
+}
+
+void VerifyUiSliderInputTests_AKeyAfterTheLatestCoalescedMoveAppliesToTheDraggedValue(mut UiSliderInputTests self){
+    ASSERT_TRUE(self.accept(1u));
+    const Point origin = self.thumbPoint();
+    const f64 travel = cast<f64>(self.m_state.placement().centerTravel.width);
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(origin.x + 60.0f, origin.y), InputEventType::PointerMove)).pointerConsumed);
+    self.press(UiSliderKey::Right);
+    ASSERT_TRUE(self.accept(2u));
+    const f64 dragged = 0.25 + 60.0 / travel;
+    EXPECT_NEAR(self.m_state.value(), dragged + 0.125, 0.00000001);
+}
+
+void VerifyUiSliderInputTests_DragOutsideTravelSaturatesBothEndsWithoutLosingOwnedCapture(mut UiSliderInputTests self){
+    ASSERT_TRUE(self.accept(1u));
+    const Point origin = self.thumbPoint();
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(790.0f, origin.y), InputEventType::PointerMove)).pointerConsumed);
+    ASSERT_TRUE(self.accept(2u));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 1.0);
+    EXPECT_EQ(self.m_context.input().capture(), self.thumb());
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(1.0f, origin.y), InputEventType::PointerMove)).pointerConsumed);
+    ASSERT_TRUE(self.accept(3u));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.0);
+    EXPECT_EQ(self.m_context.input().capture(), self.thumb());
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(1.0f, origin.y), InputEventType::PrimaryUp)).pointerConsumed);
+    ASSERT_TRUE(self.accept(4u));
+    EXPECT_FALSE(self.m_state.result().dragging);
+}
+
+void VerifyUiSliderInputTests_CaptureLossCancelsPendingMotionAndRetainsTheLastAppliedValue(mut UiSliderInputTests self){
+    ASSERT_TRUE(self.accept(1u));
+    const Point origin = self.thumbPoint();
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(origin.x + 40.0f, origin.y), InputEventType::PointerMove)).pointerConsumed);
+    ASSERT_TRUE(self.accept(2u));
+    const u64 retained = bit_cast<u64>(self.m_state.value());
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(origin.x + 80.0f, origin.y), InputEventType::PointerMove)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(), InputEventType::PointerCaptureLost)).pointerConsumed);
+    ASSERT_TRUE(self.accept(3u));
+    EXPECT_EQ(bit_cast<u64>(self.m_state.value()), retained);
+    EXPECT_FALSE(self.m_state.result().valueChanged);
+    EXPECT_FALSE(self.m_state.result().dragging);
+    EXPECT_FALSE(self.m_context.input().capture().valid());
+}
+
+void VerifyUiSliderInputTests_FocusLossRetiresPendingDragAndHeldNavigationWithoutRollingBackAppliedInput(mut UiSliderInputTests self){
+    ASSERT_TRUE(self.accept(1u));
+    const Point origin = self.thumbPoint();
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed);
+    self.press(UiSliderKey::Right);
+    ASSERT_TRUE(self.accept(2u));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.375);
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(origin.x + 80.0f, origin.y), InputEventType::PointerMove)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(), InputEventType::FocusLost)).pointerConsumed);
+    EXPECT_FALSE(self.send(MakeUiSliderPointerEvent(Point(), InputEventType::FocusGained)).pointerConsumed);
+    ASSERT_TRUE(self.accept(3u));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.375);
+    EXPECT_FALSE(self.m_state.result().dragging);
+    EXPECT_FALSE(self.m_state.result().focused);
+}
+
+void VerifyUiSliderInputTests_EnterAndWheelDoNotChangeTheSliderOrCreateActivationActions(mut UiSliderInputTests self){
+    ASSERT_TRUE(self.accept(1u));
+    self.press(UiSliderKey::Tab);
+    self.press(UiSliderKey::Enter);
+    InputEvent wheel = InputEvent();
+    wheel.type = InputEventType::PointerWheel;
+    wheel.position = self.thumbPoint();
+    wheel.scrollY = 3.0;
+    EXPECT_TRUE(self.send(wheel).pointerConsumed);
+    ASSERT_TRUE(self.accept(2u));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.25);
+    EXPECT_FALSE(self.m_state.result().valueChanged);
+    EXPECT_TRUE(self.m_context.input().actions().empty());
+}
 
 
-TEST(UiSliderStateTests, IdenticalFinitePublicValuesRetireCopiedInputAndAdvanceRevision){
-    SliderState state;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiSliderLayoutTests_EndpointThumbPositionsMeetTheExactPaddedBounds(){
+    const auto metrics = MeasureSlider(SliderOptions(), SliderStyle());
+    ASSERT_TRUE(metrics.has_value());
+    const Rect bounds = Rect(10.0f, 20.0f, 240.0f, 32.0f);
+    const auto first = PlaceSlider(bounds, bounds, metrics.value(), 0.0);
+    ASSERT_TRUE(first.has_value());
+    const auto last = PlaceSlider(bounds, bounds, metrics.value(), 1.0);
+    ASSERT_TRUE(last.has_value());
+    EXPECT_FLOAT_EQ(first.value().thumb.x, first.value().travelBounds.x);
+    // Lanes are the thumb end and the travel end.
+    const VectorSingle ends = VectorSingle(last.value().thumb.x, last.value().travelBounds.x, 0.0f, 0.0f) + VectorSingle(last.value().thumb.width, last.value().travelBounds.width, 0.0f, 0.0f);
+    EXPECT_FLOAT_EQ(ends.x, ends.y);
+}
+
+void VerifyUiSliderLayoutTests_ClipChangesOnlyVisibilityAndPreservesAcceptedTravelGeometry(){
+    const auto metrics = MeasureSlider(SliderOptions(), SliderStyle());
+    ASSERT_TRUE(metrics.has_value());
+    const Rect bounds = Rect(10.0f, 20.0f, 240.0f, 32.0f);
+    const auto full = PlaceSlider(bounds, bounds, metrics.value(), 0.25);
+    ASSERT_TRUE(full.has_value());
+    const auto clipped = PlaceSlider(bounds, Rect(50.0f, 25.0f, 100.0f, 10.0f), metrics.value(), 0.25);
+    ASSERT_TRUE(clipped.has_value());
+    ExpectUiRect(clipped.value().clip, Rect(50.0f, 25.0f, 100.0f, 10.0f));
+    ExpectUiRect(clipped.value().travelBounds, full.value().travelBounds);
+    ExpectUiRect(clipped.value().centerTravel, full.value().centerTravel);
+    ExpectUiRect(clipped.value().track, full.value().track);
+    ExpectUiRect(clipped.value().thumb, full.value().thumb);
+}
+
+void VerifyUiSliderLayoutTests_TinyAreasBoundThumbDimensionsAndProduceZeroTravelSafely(){
+    const auto metrics = MeasureSlider(SliderOptions(), SliderStyle());
+    ASSERT_TRUE(metrics.has_value());
+    const Rect bounds = Rect(10.0f, 20.0f, 20.0f, 12.0f);
+    const auto placement = PlaceSlider(bounds, bounds, metrics.value(), 0.5);
+    ASSERT_TRUE(placement.has_value());
+    ExpectUiRect(placement.value().travelBounds, Rect(14.0f, 24.0f, 12.0f, 4.0f));
+    ExpectUiRect(placement.value().thumb, placement.value().travelBounds);
+    EXPECT_FLOAT_EQ(placement.value().thumbExtent.x, 12.0f);
+    EXPECT_FLOAT_EQ(placement.value().thumbExtent.y, 4.0f);
+    EXPECT_FLOAT_EQ(placement.value().centerTravel.width, 0.0f);
+    EXPECT_FLOAT_EQ(placement.value().track.width, 0.0f);
+}
+
+void VerifyUiSliderLayoutTests_PaddingLargerThanTheAreaAndEmptyAreasRemainValid(){
+    const auto metrics = MeasureSlider(SliderOptions(), SliderStyle());
+    ASSERT_TRUE(metrics.has_value());
+    Array<Rect, 2u> boundsList;
+    boundsList[0u] = Rect(10.0f, 20.0f, 4.0f, 3.0f);
+    boundsList[1u] = Rect(10.0f, 20.0f, 0.0f, 0.0f);
+    for(in Rect bounds : boundsList){
+        const auto placement = PlaceSlider(bounds, bounds, metrics.value(), 1.0);
+        ASSERT_TRUE(placement.has_value());
+        EXPECT_FLOAT_EQ(placement.value().travelBounds.width, 0.0f);
+        EXPECT_FLOAT_EQ(placement.value().travelBounds.height, 0.0f);
+        EXPECT_FLOAT_EQ(placement.value().thumb.width, 0.0f);
+        EXPECT_FLOAT_EQ(placement.value().thumb.height, 0.0f);
+        EXPECT_FLOAT_EQ(placement.value().centerTravel.width, 0.0f);
+    }
+}
+
+void VerifyUiSliderLayoutTests_InvalidOptionsStylesAndTintsRejectMetrics(){
+    for(u32 field = 0u; field < 13u; ++field){
+        SliderOptions options = SliderOptions();
+        SliderStyle style = SliderStyle();
+        switch(field){
+        case 0u:
+            options.minimum = 2.0;
+            break;
+        case 1u:
+            options.maximum = bit_cast<f64>(s_UiSliderPosInfF64Bits);
+            break;
+        case 2u:
+            options.keyStep = -1.0;
+            break;
+        case 3u:
+            options.height = -1.0f;
+            break;
+        case 4u:
+            options.width.value = 0.0f;
+            break;
+        case 5u:
+            style.padding.left = -1.0f;
+            break;
+        case 6u:
+            style.thumbExtent.x = 0.0f;
+            break;
+        case 7u:
+            style.thumbExtent.y = bit_cast<f32>(s_UiSliderQuietNaNF32Bits);
+            break;
+        case 8u:
+            style.trackHeight = 0.0f;
+            break;
+        case 9u:
+            style.hoverTint.r = -1.0f;
+            break;
+        case 10u:
+            style.pressedTint.a = 1.01f;
+            break;
+        case 11u:
+            style.disabledTint.a = bit_cast<f32>(s_UiSliderQuietNaNF32Bits);
+            break;
+        default:
+            style.padding.right = bit_cast<f32>(s_UiSliderPosInfF32Bits);
+            break;
+        }
+        EXPECT_FALSE(MeasureSlider(options, style).has_value());
+    }
+}
+
+void VerifyUiSliderLayoutTests_OverflowingIntrinsicMetricsAreRejected(){
+    SliderStyle style = SliderStyle();
+    style.thumbExtent.x = f32.max;
+    style.padding.left = f32.max;
+    EXPECT_FALSE(MeasureSlider(SliderOptions(), style).has_value());
+}
+
+void VerifyUiSliderLayoutTests_InvalidProspectivePlacementRejectsGeometry(){
+    const auto metrics = MeasureSlider(SliderOptions(), SliderStyle());
+    ASSERT_TRUE(metrics.has_value());
+    const Rect normal = Rect(10.0f, 20.0f, 240.0f, 32.0f);
+    for(u32 field = 0u; field < 10u; ++field){
+        Rect bounds = normal;
+        Rect clip = normal;
+        SliderMetrics invalid = metrics.value();
+        f64 normalized = 0.5;
+        switch(field){
+        case 0u:
+            bounds.width = -1.0f;
+            break;
+        case 1u:
+            bounds.x = bit_cast<f32>(s_UiSliderQuietNaNF32Bits);
+            break;
+        case 2u:
+            bounds = Rect(f32.max, 0.0f, f32.max, 32.0f);
+            break;
+        case 3u:
+            clip.height = -1.0f;
+            break;
+        case 4u:
+            invalid.thumbExtent.x = -1.0f;
+            break;
+        case 5u:
+            invalid.contentSize.y = 1.0f;
+            break;
+        case 6u:
+            normalized = -0.01;
+            break;
+        case 7u:
+            normalized = 1.01;
+            break;
+        case 8u:
+            normalized = bit_cast<f64>(s_UiSliderPosInfF64Bits);
+            break;
+        default:
+            normalized = bit_cast<f64>(s_UiSliderQuietNaNF64Bits);
+            break;
+        }
+        EXPECT_FALSE(PlaceSlider(bounds, clip, invalid, normalized).has_value());
+    }
+}
+
+void VerifyUiSliderLayoutTests_PositiveDimensionsThatCollapseAtExtremeCoordinatesAreRejected(){
+    const auto metrics = MeasureSlider(SliderOptions(), SliderStyle());
+    ASSERT_TRUE(metrics.has_value());
+    const Rect bounds = Rect(f32.max, 0.0f, 1.0f, 32.0f);
+    EXPECT_FALSE(PlaceSlider(bounds, bounds, metrics.value(), 0.5).has_value());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiSliderLifetimeTests_IdenticalPublicValueIntentRetiresAlreadyCopiedKeyboardAndThumbInput(mut UiSliderLifetimeTests self){
+    ASSERT_TRUE(self.accept(1u));
+    const Point origin = self.thumbPoint();
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed);
+    self.press(UiSliderKey::Right);
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(origin.x + 50.0f, origin.y), InputEventType::PointerMove)).pointerConsumed);
+    const u64 token = self.m_state.inputGeneration();
+    ASSERT_TRUE(self.m_state.setValue(0.25));
+    ASSERT_TRUE(self.accept(2u));
+    EXPECT_NE(self.m_state.inputGeneration(), token);
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.25);
+    EXPECT_FALSE(self.m_state.result().valueChanged);
+    EXPECT_FALSE(self.m_state.result().dragging);
+    EXPECT_FALSE(self.m_context.input().capture().valid());
+}
+
+void VerifyUiSliderLifetimeTests_PublicValueAwayAndBackDuringTheLoanRejectsTheCandidateWithoutUndoingTheIntent(mut UiSliderLifetimeTests self){
+    ASSERT_TRUE(self.accept(1u));
+    const UiSliderAcceptedInput64 displayed = self.accepted();
+    const u64 token = self.m_state.inputGeneration();
+    ASSERT_TRUE(self.declare(2u));
+    ASSERT_TRUE(self.m_state.setValue(0.9));
+    ASSERT_TRUE(self.m_state.setValue(0.25));
+    EXPECT_FALSE(self.m_builder.endPanel());
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_NE(self.m_state.inputGeneration(), token);
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.25);
+    EXPECT_FALSE(self.m_state.result().valid);
+    EXPECT_FALSE(self.m_context.commitFrame(2u));
+    self.expectAccepted(displayed);
+}
+
+void VerifyUiSliderLifetimeTests_ChangingKeyStepRetiresAHeldKeyBeforeApplyingItsCopiedRepeat(mut UiSliderLifetimeTests self){
+    ASSERT_TRUE(self.accept(1u));
+    self.press(UiSliderKey::Tab);
+    InputEvent held = InputEvent();
+    held.type = InputEventType::KeyDown;
+    held.key = UiSliderKey::Right;
+    EXPECT_TRUE(self.send(held).commandConsumed);
+    ASSERT_TRUE(self.accept(2u));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.375);
+    held.repeat = true;
+    EXPECT_TRUE(self.send(held).commandConsumed);
+    SliderOptions coarse = MakeSliderFixtureOptions();
+    coarse.keyStep = 0.25;
+    ASSERT_TRUE(self.accept(3u, coarse));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.375);
+    EXPECT_FALSE(self.m_state.result().valueChanged);
+    EXPECT_TRUE(self.send(held).commandConsumed);
+    ASSERT_TRUE(self.accept(4u, coarse));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.375);
+    held.type = InputEventType::KeyUp;
+    EXPECT_TRUE(self.send(held).commandConsumed);
+    self.press(UiSliderKey::Right);
+    ASSERT_TRUE(self.accept(5u, coarse));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.625);
+}
+
+void VerifyUiSliderLifetimeTests_ChangedRangeDropsTheOldDragAndRetainsAnAuthoritativeOutOfRangeValue(mut UiSliderLifetimeTests self){
+    ASSERT_TRUE(self.m_state.setValue(0.75));
+    ASSERT_TRUE(self.accept(1u));
+    const Point origin = self.thumbPoint();
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(origin.x - 50.0f, origin.y), InputEventType::PointerMove)).pointerConsumed);
+    SliderOptions narrow = MakeSliderFixtureOptions();
+    narrow.maximum = 0.5;
+    ASSERT_TRUE(self.accept(2u, narrow));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.75);
+    EXPECT_FALSE(self.m_state.result().valueChanged);
+    EXPECT_FALSE(self.m_state.result().dragging);
+    EXPECT_FALSE(self.m_context.input().capture().valid());
+    const SliderPlacement placement = self.m_state.placement();
+    EXPECT_FLOAT_EQ(CenterUiRect(placement.thumb).x, placement.centerTravel.x + placement.centerTravel.width);
+}
+
+void VerifyUiSliderLifetimeTests_ChangedFinalTrackGeometryFencesTheCopiedDragBeforeApplication(mut UiSliderLifetimeTests self){
+    ASSERT_TRUE(self.accept(1u));
+    const Point origin = self.thumbPoint();
+    const u64 admission = self.m_state.admissionGeneration();
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(origin.x + 60.0f, origin.y), InputEventType::PointerMove)).pointerConsumed);
+    SliderOptions wider = MakeSliderFixtureOptions();
+    wider.width = LayoutSize(LayoutSizePolicy::Fixed, 340.0f);
+    ASSERT_TRUE(self.accept(2u, wider, Rect(10.0f, 10.0f, 420.0f, 240.0f)));
+    EXPECT_NE(self.m_state.admissionGeneration(), admission);
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.25);
+    EXPECT_FALSE(self.m_state.result().valueChanged);
+    EXPECT_FALSE(self.m_context.input().capture().valid());
+}
+
+void VerifyUiSliderLifetimeTests_ChangedClipRetiresOldPointerGeometryEvenWhenTheFullTrackSizeIsUnchanged(mut UiSliderLifetimeTests self){
+    ASSERT_TRUE(self.accept(1u));
+    const Point origin = self.thumbPoint();
+    const SliderPlacement before = self.m_state.placement();
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(origin.x + 30.0f, origin.y), InputEventType::PointerMove)).pointerConsumed);
+    ASSERT_TRUE(self.begin(2u, MakeUiSliderDisplayMetrics(180.0f, 600.0f, 1.0f, 1.0f)));
+    ASSERT_TRUE(self.m_builder.beginPanel(s_UiSliderPanelKey, Rect(10.0f, 10.0f, 360.0f, 240.0f)));
+    ASSERT_TRUE(self.m_builder.slider(s_UiSliderKey, self.m_state, MakeSliderFixtureOptions()));
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    EXPECT_FLOAT_EQ(self.m_state.placement().track.width, before.track.width);
+    EXPECT_LT(self.m_state.placement().clip.width, before.clip.width);
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.25);
+    EXPECT_FALSE(self.m_context.input().capture().valid());
+}
+
+void VerifyUiSliderLifetimeTests_ChangedThumbExtentRetiresTheOldGrabOffset(mut UiSliderLifetimeTests self){
+    ASSERT_TRUE(self.accept(1u));
+    const Point origin = self.thumbPoint();
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(Point(origin.x + 40.0f, origin.y), InputEventType::PointerMove)).pointerConsumed);
+    self.m_builder.sliderStyle().thumbExtent.x = 40.0f;
+    ASSERT_TRUE(self.accept(2u));
+    EXPECT_FLOAT_EQ(self.m_state.placement().thumb.width, 40.0f);
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.25);
+    EXPECT_FALSE(self.m_state.result().dragging);
+    EXPECT_FALSE(self.m_context.input().capture().valid());
+}
+
+void VerifyUiSliderLifetimeTests_AStateCannotBeAliasedByTwoDeclarationsInTheSameLiveScope(mut UiSliderLifetimeTests self){
+    ASSERT_TRUE(self.accept(1u));
+    const UiSliderAcceptedInput64 displayed = self.accepted();
+    ASSERT_TRUE(self.declare(2u));
+    EXPECT_FALSE(self.m_builder.slider("alias", self.m_state, MakeSliderFixtureOptions()));
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_FALSE(self.m_state.result().valid);
+    EXPECT_FALSE(self.m_context.commitFrame(2u));
+    self.expectAccepted(displayed);
+}
+
+void VerifyUiSliderLifetimeTests_LaterDeferredCallbackRejectsTheSliderCandidateAndPreservesItsExplicitApplicationValue(mut UiSliderLifetimeTests self){
+    ASSERT_TRUE(self.accept(1u));
+    self.press(UiSliderKey::Tab);
+    const UiSliderAcceptedInput64 displayed = self.accepted();
+    self.press(UiSliderKey::Right);
+    ASSERT_TRUE(self.declare(2u));
+    native(mut self){
+        self.m_laterSource.arm(UiSliderCallbackMutation::SetValue, &self.m_state);
+    }
+    ASSERT_TRUE(self.sibling());
+    EXPECT_FALSE(self.m_builder.endPanel());
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_EQ(self.m_laterSource.m_mutations, 1u);
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.9);
+    EXPECT_FALSE(self.m_state.result().valid);
+    EXPECT_FALSE(self.m_context.commitFrame(2u));
+    self.expectAccepted(displayed);
+}
+
+void VerifyUiSliderLifetimeTests_FinalWholeScopeValidationCannotPublishAnEarlierSliderBeforeALaterCallbackABA(mut UiSliderLifetimeTests self){
+    ASSERT_TRUE(self.accept(1u));
+    SliderState other = SliderState();
+    ASSERT_TRUE(other.setValue(0.5));
+    ASSERT_TRUE(self.declare(2u));
+    ASSERT_TRUE(self.m_builder.slider("other", other, MakeSliderFixtureOptions()));
+    const u64 token = self.m_state.inputGeneration();
+    native(mut self){
+        self.m_laterSource.arm(UiSliderCallbackMutation::AwayAndBack, &self.m_state);
+    }
+    ASSERT_TRUE(self.sibling());
+    EXPECT_FALSE(self.m_builder.endPanel());
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_NE(self.m_state.inputGeneration(), token);
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.25);
+    EXPECT_FALSE(self.m_state.result().valid);
+    EXPECT_FALSE(other.result().valid);
+}
+
+void VerifyUiSliderLifetimeTests_DeferredCallbackBuilderResetCannotPublishStagedSliderDiagnostics(mut UiSliderLifetimeTests self){
+    ASSERT_TRUE(self.accept(1u));
+    const UiSliderAcceptedInput64 displayed = self.accepted();
+    ASSERT_TRUE(self.declare(2u));
+    native(mut self){
+        self.m_laterSource.arm(UiSliderCallbackMutation::ResetBuilder, nullptr, &self.m_builder);
+    }
+    ASSERT_TRUE(self.sibling());
+    EXPECT_FALSE(self.m_builder.endPanel());
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_EQ(self.m_laterSource.m_mutations, 1u);
+    EXPECT_FALSE(self.m_state.result().valid);
+    self.expectAccepted(displayed);
+}
+
+void VerifyUiSliderLifetimeTests_DeferredBalancedScopeReentryRejectsBothAttemptsAndEveryStagedResult(mut UiSliderLifetimeTests self){
+    ASSERT_TRUE(self.accept(1u));
+    ASSERT_TRUE(self.declare(2u));
+    native(mut self){
+        self.m_laterSource.arm(UiSliderCallbackMutation::PanelBuilder, nullptr, &self.m_builder);
+    }
+    ASSERT_TRUE(self.sibling());
+    EXPECT_FALSE(self.m_builder.endPanel());
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_FALSE(self.m_laterSource.m_beginAccepted);
+    EXPECT_FALSE(self.m_laterSource.m_endAccepted);
+    EXPECT_EQ(self.m_laterSource.m_mutations, 1u);
+    EXPECT_FALSE(self.m_state.result().valid);
+}
+
+void VerifyUiSliderLifetimeTests_SuccessfulScopeEndReleasesTheValueLoanBeforeLaterFramePublication(mut UiSliderLifetimeTests self){
+    ASSERT_TRUE(self.prepare(1u));
+    EXPECT_TRUE(self.m_state.result().valid);
+    ASSERT_TRUE(self.m_state.setValue(0.9));
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.9);
+    EXPECT_FALSE(self.m_context.failed());
+    native(in self){
+        ASSERT_NE(self.target(self.host()), nullptr);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiSliderMathTests_OutOfRangeAndConstantSpansClampNormalization(){
+    auto normalized = UiSliderNormalize(10.0, 30.0, -100.0);
+    ASSERT_TRUE(normalized.has_value());
+    EXPECT_EQ(normalized.value(), 0.0);
+    normalized = UiSliderNormalize(10.0, 30.0, 100.0);
+    ASSERT_TRUE(normalized.has_value());
+    EXPECT_EQ(normalized.value(), 1.0);
+    normalized = UiSliderNormalize(10.0, 10.0, 100.0);
+    ASSERT_TRUE(normalized.has_value());
+    EXPECT_EQ(normalized.value(), 0.0);
+}
+
+void VerifyUiSliderMathTests_OppositeExtremeBoundsNormalizeAndInterpolateWithoutAnOverflowingSpan(){
+    const f64 maximum = f64.max;
+    const f64 minimum = -maximum;
+    auto value = UiSliderNormalize(minimum, maximum, 0.0);
+    ASSERT_TRUE(value.has_value());
+    EXPECT_DOUBLE_EQ(value.value(), 0.5);
+    value = UiSliderNormalize(minimum, maximum, maximum * 0.5);
+    ASSERT_TRUE(value.has_value());
+    EXPECT_DOUBLE_EQ(value.value(), 0.75);
+    value = UiSliderInterpolate(minimum, maximum, 0.25);
+    ASSERT_TRUE(value.has_value());
+    EXPECT_TRUE(IsFinite(value.value()));
+    EXPECT_DOUBLE_EQ(value.value() / maximum, -0.5);
+    value = UiSliderInterpolate(minimum, maximum, 0.75);
+    ASSERT_TRUE(value.has_value());
+    EXPECT_DOUBLE_EQ(value.value() / maximum, 0.5);
+}
+
+void VerifyUiSliderMathTests_SameSignExtremeBoundsUseABoundedDifference(){
+    const f64 maximum = f64.max;
+    // Lanes are the positive and negative bounds.
+    const VectorDouble bounds = VectorDouble(maximum, -maximum, 0.0, 0.0);
+    const VectorDouble threeQuarters = bounds * VectorDouble(0.75, 0.75, 0.75, 0.75);
+    Array<b8, 2u> signs;
+    signs[0u] = false;
+    signs[1u] = true;
+    for(in b8 negative : signs){
+        f64 minimum = threeQuarters.x;
+        f64 upper = maximum;
+        if(negative){
+            minimum = bounds.y;
+            upper = threeQuarters.y;
+        }
+        const auto value = UiSliderInterpolate(minimum, upper, 0.5);
+        ASSERT_TRUE(value.has_value());
+        EXPECT_TRUE(IsFinite(value.value()));
+        EXPECT_GE(value.value(), minimum);
+        EXPECT_LE(value.value(), upper);
+        const auto normalized = UiSliderNormalize(minimum, upper, value.value());
+        ASSERT_TRUE(normalized.has_value());
+        EXPECT_NEAR(normalized.value(), 0.5, 1.0e-15);
+    }
+}
+
+void VerifyUiSliderMathTests_TinyAndAdjacentSpansStayInTheOrdinaryNormalizationPath(){
+    const f64 tiny = bit_cast<f64>(cast<u64>(1u));
+    auto normalized = UiSliderNormalize(-tiny, tiny, 0.0);
+    ASSERT_TRUE(normalized.has_value());
+    EXPECT_DOUBLE_EQ(normalized.value(), 0.5);
+    normalized = UiSliderNormalize(tiny, bit_cast<f64>(cast<u64>(2u)), tiny);
+    ASSERT_TRUE(normalized.has_value());
+    EXPECT_DOUBLE_EQ(normalized.value(), 0.0);
+    const f64 lower = bit_cast<f64>(cast<u64>(0x3ff0000000000000u));
+    const f64 upper = bit_cast<f64>(cast<u64>(0x3ff0000000000001u));
+    normalized = UiSliderNormalize(lower, upper, upper);
+    ASSERT_TRUE(normalized.has_value());
+    EXPECT_DOUBLE_EQ(normalized.value(), 1.0);
+    const auto value = UiSliderInterpolate(lower, upper, 1.0);
+    ASSERT_TRUE(value.has_value());
+    EXPECT_EQ(bit_cast<u64>(value.value()), bit_cast<u64>(upper));
+}
+
+void VerifyUiSliderMathTests_InterpolationPreservesExactEndpointAndSignedZeroBits(){
+    const f64 negZero = bit_cast<f64>(s_UiSliderNegZeroF64Bits);
+    auto value = UiSliderInterpolate(negZero, 1.0, 0.0);
+    ASSERT_TRUE(value.has_value());
+    EXPECT_EQ(bit_cast<u64>(value.value()), s_UiSliderNegZeroF64Bits);
+    value = UiSliderInterpolate(-1.0, 0.0, 1.0);
+    ASSERT_TRUE(value.has_value());
+    EXPECT_EQ(bit_cast<u64>(value.value()), 0u);
+    value = UiSliderInterpolate(negZero, 0.0, 0.0);
+    ASSERT_TRUE(value.has_value());
+    EXPECT_EQ(bit_cast<u64>(value.value()), s_UiSliderNegZeroF64Bits);
+    value = UiSliderInterpolate(negZero, 0.0, 1.0);
+    ASSERT_TRUE(value.has_value());
+    EXPECT_EQ(bit_cast<u64>(value.value()), 0u);
+}
+
+void VerifyUiSliderMathTests_InvalidRangeValueOrNormalizedInputRejectsTheQuery(){
+    for(u32 field = 0u; field < 7u; ++field){
+        f64 minimum = 0.0;
+        f64 maximum = 1.0;
+        f64 query = 0.5;
+        switch(field){
+        case 0u:
+            minimum = 2.0;
+            break;
+        case 1u:
+            minimum = bit_cast<f64>(s_UiSliderQuietNaNF64Bits);
+            break;
+        case 2u:
+            maximum = bit_cast<f64>(s_UiSliderPosInfF64Bits);
+            break;
+        case 3u:
+            query = bit_cast<f64>(s_UiSliderPosInfF64Bits);
+            break;
+        case 4u:
+            query = bit_cast<f64>(s_UiSliderQuietNaNF64Bits);
+            break;
+        case 5u:
+            query = -0.1;
+            break;
+        default:
+            query = 1.1;
+            break;
+        }
+        if(field < 5u)
+            EXPECT_FALSE(UiSliderNormalize(minimum, maximum, query).has_value());
+        EXPECT_FALSE(UiSliderInterpolate(minimum, maximum, query).has_value());
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiSliderPopupTests_ChildResultsRemainStagedUntilTheOutermostPopupValidatesTheCompleteFamily(mut UiSliderPopupTests self){
+    ASSERT_TRUE(self.beginParent(1u));
+    EXPECT_FALSE(self.m_state.result().valid);
+    ASSERT_TRUE(self.beginChild());
+    EXPECT_FALSE(self.m_childState.result().valid);
+    ASSERT_TRUE(self.m_builder.endPopup());
+    EXPECT_FALSE(self.m_childState.result().valid);
+    EXPECT_FALSE(self.m_state.result().valid);
+    ASSERT_TRUE(self.finishParent());
+    EXPECT_TRUE(self.m_state.result().valid);
+    EXPECT_TRUE(self.m_childState.result().valid);
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    EXPECT_EQ(self.m_context.input().popupCount(), 2u);
+}
+
+void VerifyUiSliderPopupTests_AnIdenticalIntentOnTheEndedChildRejectsBothUnpublishedResults(mut UiSliderPopupTests self){
+    ASSERT_TRUE(self.acceptFamily(1u));
+    const UiSliderAcceptedInput64 displayed = self.accepted();
+    ASSERT_TRUE(self.declareFamily(2u));
+    const u64 token = self.m_childState.inputGeneration();
+    ASSERT_TRUE(self.m_childState.setValue(0.5));
+    EXPECT_FALSE(self.m_builder.endPopup());
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_NE(self.m_childState.inputGeneration(), token);
+    EXPECT_DOUBLE_EQ(self.m_childState.value(), 0.5);
+    EXPECT_FALSE(self.m_state.result().valid);
+    EXPECT_FALSE(self.m_childState.result().valid);
+    EXPECT_FALSE(self.m_context.commitFrame(2u));
+    self.expectAccepted(displayed, false);
+}
+
+void VerifyUiSliderPopupTests_LaterParentLabelCallbackCannotPublishAPreviouslyPaintedChildLoan(mut UiSliderPopupTests self){
+    ASSERT_TRUE(self.acceptFamily(1u));
+    ASSERT_TRUE(self.declareFamily(2u));
+    native(mut self){
+        self.m_laterSource.arm(UiSliderCallbackMutation::SameValue, &self.m_childState);
+    }
+    ASSERT_TRUE(self.sibling());
+    EXPECT_FALSE(self.m_builder.endPopup());
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_EQ(self.m_laterSource.m_mutations, 1u);
+    EXPECT_FALSE(self.m_state.result().valid);
+    EXPECT_FALSE(self.m_childState.result().valid);
+    EXPECT_DOUBLE_EQ(self.m_childState.value(), 0.5);
+}
+
+void VerifyUiSliderPopupTests_ChildCallbackRejectsTheEarlierParentLoanInTheFinalCallbackFreePass(mut UiSliderPopupTests self){
+    ASSERT_TRUE(self.acceptFamily(1u));
+    ASSERT_TRUE(self.beginParent(2u));
+    ASSERT_TRUE(self.beginChild());
+    native(mut self){
+        self.m_laterSource.arm(UiSliderCallbackMutation::SetValue, &self.m_state);
+    }
+    ASSERT_TRUE(self.sibling());
+    if(self.m_builder.endPopup())
+        EXPECT_FALSE(self.m_builder.endPopup());
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.9);
+    EXPECT_FALSE(self.m_state.result().valid);
+    EXPECT_FALSE(self.m_childState.result().valid);
+}
+
+void VerifyUiSliderPopupTests_ParentAndChildCannotBorrowTheSameSliderStateAtTheSameTime(mut UiSliderPopupTests self){
+    ASSERT_TRUE(self.acceptFamily(1u));
+    ASSERT_TRUE(self.beginParent(2u));
+    ASSERT_TRUE(self.m_builder.beginPopup(s_UiSliderChildPopupKey, self.m_child, MakeNestedChildPopupOptions()));
+    EXPECT_FALSE(self.m_builder.slider("alias", self.m_state, MakeSliderFixtureOptions()));
+    EXPECT_TRUE(self.m_context.failed());
+    EXPECT_FALSE(self.m_state.result().valid);
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.25);
+}
+
+void VerifyUiSliderPopupTests_AncestorClosureBeforePaintSuppressesCallbacksAndRetiresTheOldChildDrag(mut UiSliderPopupTests self){
+    ASSERT_TRUE(self.acceptFamily(1u));
+    const Point origin = CenterUiRect(self.m_childState.placement().thumb);
+    const Point moved = Point(origin.x + 60.0f, origin.y);
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(moved, InputEventType::PointerMove)).pointerConsumed);
+    ASSERT_TRUE(self.beginParent(2u));
+    ASSERT_TRUE(self.beginChild());
+    self.m_laterSource.clearCounters();
+    ASSERT_TRUE(self.sibling());
+    self.m_parent.close();
+    ASSERT_TRUE(self.m_builder.endPopup());
+    ASSERT_TRUE(self.finishParent());
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    EXPECT_EQ(self.m_laterSource.m_calls, 0u);
+    EXPECT_DOUBLE_EQ(self.m_childState.value(), 0.5);
+    EXPECT_FALSE(self.m_childState.result().valid);
+    EXPECT_EQ(self.m_context.input().popupCount(), 0u);
+    EXPECT_FALSE(self.m_context.input().capture().valid());
+    self.m_parent.open();
+    ASSERT_TRUE(self.beginParent(3u));
+    EXPECT_FALSE(self.m_builder.beginPopup(s_UiSliderChildPopupKey, self.m_child, MakeNestedChildPopupOptions()));
+    EXPECT_FALSE(self.m_child.isOpen());
+    ASSERT_TRUE(self.finishParent());
+    ASSERT_TRUE(self.m_context.commitFrame(3u));
+    self.m_child.open();
+    ASSERT_TRUE(self.acceptFamily(4u));
+    EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(moved, InputEventType::PrimaryUp)).pointerConsumed);
+    ASSERT_TRUE(self.acceptFamily(5u));
+    EXPECT_DOUBLE_EQ(self.m_childState.value(), 0.5);
+    EXPECT_FALSE(self.m_childState.result().valueChanged);
+    EXPECT_FALSE(self.m_childState.result().dragging);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiSliderStateTests_IdenticalFinitePublicValuesRetireCopiedInputAndAdvanceRevision(){
+    SliderState state = SliderState();
     ASSERT_TRUE(state.setValue(2.0));
     const SliderSnapshot before = state.snapshot();
     ASSERT_TRUE(state.setValue(2.0));
@@ -1548,36 +1615,41 @@ TEST(UiSliderStateTests, IdenticalFinitePublicValuesRetireCopiedInputAndAdvanceR
     EXPECT_FALSE(state.matches(before));
 }
 
-TEST(UiSliderStateTests, PublicValuesPreserveSignedZeroBitsAndRetireIdenticalSignedZeroIntents){
-    SliderState state;
-    ASSERT_TRUE(state.setValue(-0.0));
+void VerifyUiSliderStateTests_PublicValuesPreserveSignedZeroBitsAndRetireIdenticalSignedZeroIntents(){
+    SliderState state = SliderState();
+    const f64 negZero = bit_cast<f64>(s_UiSliderNegZeroF64Bits);
+    ASSERT_TRUE(state.setValue(negZero));
     const SliderSnapshot negative = state.snapshot();
-    EXPECT_EQ(negative.valueBits, 0x8000000000000000ull);
-    ASSERT_TRUE(state.setValue(-0.0));
-    EXPECT_EQ(BitCast<u64>(state.value()), negative.valueBits);
+    EXPECT_EQ(negative.valueBits, s_UiSliderNegZeroF64Bits);
+    ASSERT_TRUE(state.setValue(negZero));
+    EXPECT_EQ(bit_cast<u64>(state.value()), negative.valueBits);
     EXPECT_NE(state.inputGeneration(), negative.inputGeneration);
     ASSERT_TRUE(state.setValue(0.0));
-    EXPECT_EQ(BitCast<u64>(state.value()), 0u);
+    EXPECT_EQ(bit_cast<u64>(state.value()), 0u);
     EXPECT_EQ(state.revision(), negative.revision + 2u);
 }
 
-TEST(UiSliderStateTests, ValueAwayAndBackCannotRestoreTheOldSnapshot){
-    SliderState state;
+void VerifyUiSliderStateTests_ValueAwayAndBackCannotRestoreTheOldSnapshot(){
+    SliderState state = SliderState();
     ASSERT_TRUE(state.setValue(2.0));
     const SliderSnapshot before = state.snapshot();
     ASSERT_TRUE(state.setValue(3.0));
     ASSERT_TRUE(state.setValue(2.0));
-    EXPECT_EQ(BitCast<u64>(state.value()), before.valueBits);
+    EXPECT_EQ(bit_cast<u64>(state.value()), before.valueBits);
     EXPECT_NE(state.inputGeneration(), before.inputGeneration);
     EXPECT_EQ(state.revision(), before.revision + 2u);
     EXPECT_FALSE(state.matches(before));
 }
 
-TEST(UiSliderStateTests, NonfinitePublicValuesAreRejectedAtomically){
-    SliderState state;
-    ASSERT_TRUE(state.setValue(-0.0));
+void VerifyUiSliderStateTests_NonfinitePublicValuesAreRejectedAtomically(){
+    SliderState state = SliderState();
+    ASSERT_TRUE(state.setValue(bit_cast<f64>(s_UiSliderNegZeroF64Bits)));
     const SliderSnapshot before = state.snapshot();
-    for(const f64 invalid : { Limit<f64>::s_QuietNaN, Limit<f64>::s_Infinity, -Limit<f64>::s_Infinity }){
+    Array<f64, 3u> invalids;
+    invalids[0u] = bit_cast<f64>(s_UiSliderQuietNaNF64Bits);
+    invalids[1u] = bit_cast<f64>(s_UiSliderPosInfF64Bits);
+    invalids[2u] = bit_cast<f64>(s_UiSliderNegInfF64Bits);
+    for(in f64 invalid : invalids){
         EXPECT_FALSE(state.setValue(invalid));
         EXPECT_TRUE(state.matches(before));
     }
@@ -1587,19 +1659,83 @@ TEST(UiSliderStateTests, NonfinitePublicValuesAreRejectedAtomically){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
+NWB_ADHD_GTEST_F(UiSliderBehaviorTests, AdmissionKeepsAnExternalOutOfRangeValueUntilAcceptedInput, VerifyUiSliderBehaviorTests_AdmissionKeepsAnExternalOutOfRangeValueUntilAcceptedInput)
+NWB_ADHD_GTEST_F(UiSliderBehaviorTests, PolicyAndStableGeometryChangesRetirePreviouslyCopiedInput, VerifyUiSliderBehaviorTests_PolicyAndStableGeometryChangesRetirePreviouslyCopiedInput)
+NWB_ADHD_GTEST_F(UiSliderBehaviorTests, ExactSignedZeroPolicyChangesAdvanceAdmissionWithoutChangingTheValue, VerifyUiSliderBehaviorTests_ExactSignedZeroPolicyChangesAdvanceAdmissionWithoutChangingTheValue)
+NWB_ADHD_GTEST_F(UiSliderBehaviorTests, PublicIdenticalAndAwayBackIntentsRejectOldCopiedActionsAtomically, VerifyUiSliderBehaviorTests_PublicIdenticalAndAwayBackIntentsRejectOldCopiedActionsAtomically)
+NWB_ADHD_GTEST_F(UiSliderBehaviorTests, AutomaticStepsRemainFiniteAcrossOppositeExtremeBounds, VerifyUiSliderBehaviorTests_AutomaticStepsRemainFiniteAcrossOppositeExtremeBounds)
+NWB_ADHD_GTEST_F(UiSliderBehaviorTests, AutomaticSubnormalStepUsesTheRepresentableSpanWhenDivisionUnderflows, VerifyUiSliderBehaviorTests_AutomaticSubnormalStepUsesTheRepresentableSpanWhenDivisionUnderflows)
+NWB_ADHD_GTEST_F(UiSliderBehaviorTests, ExplicitExtremeStepsAndPageIterationSaturateWithoutOverflow, VerifyUiSliderBehaviorTests_ExplicitExtremeStepsAndPageIterationSaturateWithoutOverflow)
+NWB_ADHD_GTEST_F(UiSliderBehaviorTests, DisabledAndConstantRangesAreValidWithoutApplyingInput, VerifyUiSliderBehaviorTests_DisabledAndConstantRangesAreValidWithoutApplyingInput)
+NWB_ADHD_GTEST_F(UiSliderBehaviorTests, SubmitActivationAndWheelLeaveTheValueAndSemanticSnapshotUnchanged, VerifyUiSliderBehaviorTests_SubmitActivationAndWheelLeaveTheValueAndSemanticSnapshotUnchanged)
+NWB_ADHD_GTEST_F(UiSliderBehaviorTests, InvalidPolicyTokenAndUnadmittedInputPreserveStateAndResult, VerifyUiSliderBehaviorTests_InvalidPolicyTokenAndUnadmittedInputPreserveStateAndResult)
+NWB_ADHD_GTEST_F(UiSliderBehaviorTests, InvalidAdmissionGeometryOrOptionsPreserveThePreviousBinding, VerifyUiSliderBehaviorTests_InvalidAdmissionGeometryOrOptionsPreserveThePreviousBinding)
+NWB_ADHD_GTEST_F(UiSliderBehaviorTests, TrackSeekUsesAbsoluteAcceptedCenterTravelAndExactEndpoints, VerifyUiSliderBehaviorTests_TrackSeekUsesAbsoluteAcceptedCenterTravelAndExactEndpoints)
+NWB_ADHD_GTEST_F(UiSliderBehaviorTests, TrackSeekRejectsAChangedCopiedReferenceWithoutPublishingResult, VerifyUiSliderBehaviorTests_TrackSeekRejectsAChangedCopiedReferenceWithoutPublishingResult)
+NWB_ADHD_GTEST_F(UiSliderBehaviorTests, RepeatedThumbUpdatesUseOriginalCopiedBaselineWithoutAccumulatingDelta, VerifyUiSliderBehaviorTests_RepeatedThumbUpdatesUseOriginalCopiedBaselineWithoutAccumulatingDelta)
+NWB_ADHD_GTEST_F(UiSliderBehaviorTests, AStationaryThumbCompletionPreservesAnOrderedKeyChange, VerifyUiSliderBehaviorTests_AStationaryThumbCompletionPreservesAnOrderedKeyChange)
+NWB_ADHD_GTEST_F(UiSliderBehaviorTests, ReturningAfterAnAppliedMoveRestoresTheExactSignedZeroBaseline, VerifyUiSliderBehaviorTests_ReturningAfterAnAppliedMoveRestoresTheExactSignedZeroBaseline)
+NWB_ADHD_GTEST_F(UiSliderBehaviorTests, ANewStationaryPressDoesNotBorrowTheOldPressMovedFlag, VerifyUiSliderBehaviorTests_ANewStationaryPressDoesNotBorrowTheOldPressMovedFlag)
+NWB_ADHD_GTEST_F(UiSliderBehaviorTests, AdmissionRetirementEndsThePressAndKeepsItsLastAppliedValue, VerifyUiSliderBehaviorTests_AdmissionRetirementEndsThePressAndKeepsItsLastAppliedValue)
+NWB_ADHD_GTEST_F(UiSliderBehaviorTests, ThumbDisplacementCastsBeforeSubtractingExtremeFloatCoordinates, VerifyUiSliderBehaviorTests_ThumbDisplacementCastsBeforeSubtractingExtremeFloatCoordinates)
+NWB_ADHD_GTEST_F(UiSliderBehaviorTests, InvalidThumbPayloadGeometryOrTokenIsRejectedAtomically, VerifyUiSliderBehaviorTests_InvalidThumbPayloadGeometryOrTokenIsRejectedAtomically)
+NWB_ADHD_GTEST_F(UiSliderBehaviorTests, AClampedNonzeroMoveStillRestoresItsBaselineWhenReturningAfterAKeyChange, VerifyUiSliderBehaviorTests_AClampedNonzeroMoveStillRestoresItsBaselineWhenReturningAfterAKeyChange)
+NWB_ADHD_GTEST_F(UiSliderBuilderTests, DeclarationPublishesItsResultAndOwnedPartsOnlyAfterScopeValidation, VerifyUiSliderBuilderTests_DeclarationPublishesItsResultAndOwnedPartsOnlyAfterScopeValidation)
+NWB_ADHD_GTEST_F(UiSliderBuilderTests, FiniteExternalValueOutsideTheRangeIsRetainedWhileItsThumbClampsVisually, VerifyUiSliderBuilderTests_FiniteExternalValueOutsideTheRangeIsRetainedWhileItsThumbClampsVisually)
+NWB_ADHD_GTEST_F(UiSliderBuilderTests, IdleFramesPreserveSignedZeroBitsAndDoNotInventChangeNotifications, VerifyUiSliderBuilderTests_IdleFramesPreserveSignedZeroBitsAndDoNotInventChangeNotifications)
+NWB_ADHD_GTEST_F(UiSliderBuilderTests, DisabledSliderKeepsAPointerBarrierWithoutApplyingQueuedInput, VerifyUiSliderBuilderTests_DisabledSliderKeepsAPointerBarrierWithoutApplyingQueuedInput)
+NWB_ADHD_GTEST_F(UiSliderBuilderTests, ConstantRangeIsValidAndNoninteractiveWithoutRewritingTheApplicationValue, VerifyUiSliderBuilderTests_ConstantRangeIsValidAndNoninteractiveWithoutRewritingTheApplicationValue)
+NWB_ADHD_GTEST_F(UiSliderBuilderTests, InvalidPolicyRejectsTheCandidateWithoutReplacingItsAcceptedLayout, VerifyUiSliderBuilderTests_InvalidPolicyRejectsTheCandidateWithoutReplacingItsAcceptedLayout)
+NWB_ADHD_GTEST_F(UiSliderBuilderTests, FrozenSliderStyleOwnsItsMetricsThroughTheDeferredPaint, VerifyUiSliderBuilderTests_FrozenSliderStyleOwnsItsMetricsThroughTheDeferredPaint)
+NWB_ADHD_GTEST_F(UiSliderInputTests, PageKeysSaturateAtExactEndpoints, VerifyUiSliderInputTests_PageKeysSaturateAtExactEndpoints)
+NWB_ADHD_GTEST_F(UiSliderInputTests, AcceptedKeyRepeatsRemainAddressedToTheSurvivingControlLifetime, VerifyUiSliderInputTests_AcceptedKeyRepeatsRemainAddressedToTheSurvivingControlLifetime)
+NWB_ADHD_GTEST_F(UiSliderInputTests, TrackPressSeeksDuringFinalPaintAndReleaseOutsideAppliesTheFinalEndpoint, VerifyUiSliderInputTests_TrackPressSeeksDuringFinalPaintAndReleaseOutsideAppliesTheFinalEndpoint)
+NWB_ADHD_GTEST_F(UiSliderInputTests, OffCenterThumbPressHasNoJumpAndZeroDeltaDoesNotOverwriteAnEarlierKey, VerifyUiSliderInputTests_OffCenterThumbPressHasNoJumpAndZeroDeltaDoesNotOverwriteAnEarlierKey)
+NWB_ADHD_GTEST_F(UiSliderInputTests, HeldThumbRepaintPreservesCaptureAndReturningToOriginRestoresExactBaselineBits, VerifyUiSliderInputTests_HeldThumbRepaintPreservesCaptureAndReturningToOriginRestoresExactBaselineBits)
+NWB_ADHD_GTEST_F(UiSliderInputTests, LatestCoalescedMoveAfterAKeyAppliesAfterTheCopiedKeySequence, VerifyUiSliderInputTests_LatestCoalescedMoveAfterAKeyAppliesAfterTheCopiedKeySequence)
+NWB_ADHD_GTEST_F(UiSliderInputTests, AKeyAfterTheLatestCoalescedMoveAppliesToTheDraggedValue, VerifyUiSliderInputTests_AKeyAfterTheLatestCoalescedMoveAppliesToTheDraggedValue)
+NWB_ADHD_GTEST_F(UiSliderInputTests, DragOutsideTravelSaturatesBothEndsWithoutLosingOwnedCapture, VerifyUiSliderInputTests_DragOutsideTravelSaturatesBothEndsWithoutLosingOwnedCapture)
+NWB_ADHD_GTEST_F(UiSliderInputTests, CaptureLossCancelsPendingMotionAndRetainsTheLastAppliedValue, VerifyUiSliderInputTests_CaptureLossCancelsPendingMotionAndRetainsTheLastAppliedValue)
+NWB_ADHD_GTEST_F(UiSliderInputTests, FocusLossRetiresPendingDragAndHeldNavigationWithoutRollingBackAppliedInput, VerifyUiSliderInputTests_FocusLossRetiresPendingDragAndHeldNavigationWithoutRollingBackAppliedInput)
+NWB_ADHD_GTEST_F(UiSliderInputTests, EnterAndWheelDoNotChangeTheSliderOrCreateActivationActions, VerifyUiSliderInputTests_EnterAndWheelDoNotChangeTheSliderOrCreateActivationActions)
+NWB_ADHD_GTEST(UiSliderLayoutTests, EndpointThumbPositionsMeetTheExactPaddedBounds, VerifyUiSliderLayoutTests_EndpointThumbPositionsMeetTheExactPaddedBounds)
+NWB_ADHD_GTEST(UiSliderLayoutTests, ClipChangesOnlyVisibilityAndPreservesAcceptedTravelGeometry, VerifyUiSliderLayoutTests_ClipChangesOnlyVisibilityAndPreservesAcceptedTravelGeometry)
+NWB_ADHD_GTEST(UiSliderLayoutTests, TinyAreasBoundThumbDimensionsAndProduceZeroTravelSafely, VerifyUiSliderLayoutTests_TinyAreasBoundThumbDimensionsAndProduceZeroTravelSafely)
+NWB_ADHD_GTEST(UiSliderLayoutTests, PaddingLargerThanTheAreaAndEmptyAreasRemainValid, VerifyUiSliderLayoutTests_PaddingLargerThanTheAreaAndEmptyAreasRemainValid)
+NWB_ADHD_GTEST(UiSliderLayoutTests, InvalidOptionsStylesAndTintsRejectMetrics, VerifyUiSliderLayoutTests_InvalidOptionsStylesAndTintsRejectMetrics)
+NWB_ADHD_GTEST(UiSliderLayoutTests, OverflowingIntrinsicMetricsAreRejected, VerifyUiSliderLayoutTests_OverflowingIntrinsicMetricsAreRejected)
+NWB_ADHD_GTEST(UiSliderLayoutTests, InvalidProspectivePlacementRejectsGeometry, VerifyUiSliderLayoutTests_InvalidProspectivePlacementRejectsGeometry)
+NWB_ADHD_GTEST(UiSliderLayoutTests, PositiveDimensionsThatCollapseAtExtremeCoordinatesAreRejected, VerifyUiSliderLayoutTests_PositiveDimensionsThatCollapseAtExtremeCoordinatesAreRejected)
+NWB_ADHD_GTEST_F(UiSliderLifetimeTests, IdenticalPublicValueIntentRetiresAlreadyCopiedKeyboardAndThumbInput, VerifyUiSliderLifetimeTests_IdenticalPublicValueIntentRetiresAlreadyCopiedKeyboardAndThumbInput)
+NWB_ADHD_GTEST_F(UiSliderLifetimeTests, PublicValueAwayAndBackDuringTheLoanRejectsTheCandidateWithoutUndoingTheIntent, VerifyUiSliderLifetimeTests_PublicValueAwayAndBackDuringTheLoanRejectsTheCandidateWithoutUndoingTheIntent)
+NWB_ADHD_GTEST_F(UiSliderLifetimeTests, ChangingKeyStepRetiresAHeldKeyBeforeApplyingItsCopiedRepeat, VerifyUiSliderLifetimeTests_ChangingKeyStepRetiresAHeldKeyBeforeApplyingItsCopiedRepeat)
+NWB_ADHD_GTEST_F(UiSliderLifetimeTests, ChangedRangeDropsTheOldDragAndRetainsAnAuthoritativeOutOfRangeValue, VerifyUiSliderLifetimeTests_ChangedRangeDropsTheOldDragAndRetainsAnAuthoritativeOutOfRangeValue)
+NWB_ADHD_GTEST_F(UiSliderLifetimeTests, ChangedFinalTrackGeometryFencesTheCopiedDragBeforeApplication, VerifyUiSliderLifetimeTests_ChangedFinalTrackGeometryFencesTheCopiedDragBeforeApplication)
+NWB_ADHD_GTEST_F(UiSliderLifetimeTests, ChangedClipRetiresOldPointerGeometryEvenWhenTheFullTrackSizeIsUnchanged, VerifyUiSliderLifetimeTests_ChangedClipRetiresOldPointerGeometryEvenWhenTheFullTrackSizeIsUnchanged)
+NWB_ADHD_GTEST_F(UiSliderLifetimeTests, ChangedThumbExtentRetiresTheOldGrabOffset, VerifyUiSliderLifetimeTests_ChangedThumbExtentRetiresTheOldGrabOffset)
+NWB_ADHD_GTEST_F(UiSliderLifetimeTests, AStateCannotBeAliasedByTwoDeclarationsInTheSameLiveScope, VerifyUiSliderLifetimeTests_AStateCannotBeAliasedByTwoDeclarationsInTheSameLiveScope)
+NWB_ADHD_GTEST_F(UiSliderLifetimeTests, LaterDeferredCallbackRejectsTheSliderCandidateAndPreservesItsExplicitApplicationValue, VerifyUiSliderLifetimeTests_LaterDeferredCallbackRejectsTheSliderCandidateAndPreservesItsExplicitApplicationValue)
+NWB_ADHD_GTEST_F(UiSliderLifetimeTests, FinalWholeScopeValidationCannotPublishAnEarlierSliderBeforeALaterCallbackABA, VerifyUiSliderLifetimeTests_FinalWholeScopeValidationCannotPublishAnEarlierSliderBeforeALaterCallbackABA)
+NWB_ADHD_GTEST_F(UiSliderLifetimeTests, DeferredCallbackBuilderResetCannotPublishStagedSliderDiagnostics, VerifyUiSliderLifetimeTests_DeferredCallbackBuilderResetCannotPublishStagedSliderDiagnostics)
+NWB_ADHD_GTEST_F(UiSliderLifetimeTests, DeferredBalancedScopeReentryRejectsBothAttemptsAndEveryStagedResult, VerifyUiSliderLifetimeTests_DeferredBalancedScopeReentryRejectsBothAttemptsAndEveryStagedResult)
+NWB_ADHD_GTEST_F(UiSliderLifetimeTests, SuccessfulScopeEndReleasesTheValueLoanBeforeLaterFramePublication, VerifyUiSliderLifetimeTests_SuccessfulScopeEndReleasesTheValueLoanBeforeLaterFramePublication)
+NWB_ADHD_GTEST(UiSliderMathTests, OutOfRangeAndConstantSpansClampNormalization, VerifyUiSliderMathTests_OutOfRangeAndConstantSpansClampNormalization)
+NWB_ADHD_GTEST(UiSliderMathTests, OppositeExtremeBoundsNormalizeAndInterpolateWithoutAnOverflowingSpan, VerifyUiSliderMathTests_OppositeExtremeBoundsNormalizeAndInterpolateWithoutAnOverflowingSpan)
+NWB_ADHD_GTEST(UiSliderMathTests, SameSignExtremeBoundsUseABoundedDifference, VerifyUiSliderMathTests_SameSignExtremeBoundsUseABoundedDifference)
+NWB_ADHD_GTEST(UiSliderMathTests, TinyAndAdjacentSpansStayInTheOrdinaryNormalizationPath, VerifyUiSliderMathTests_TinyAndAdjacentSpansStayInTheOrdinaryNormalizationPath)
+NWB_ADHD_GTEST(UiSliderMathTests, InterpolationPreservesExactEndpointAndSignedZeroBits, VerifyUiSliderMathTests_InterpolationPreservesExactEndpointAndSignedZeroBits)
+NWB_ADHD_GTEST(UiSliderMathTests, InvalidRangeValueOrNormalizedInputRejectsTheQuery, VerifyUiSliderMathTests_InvalidRangeValueOrNormalizedInputRejectsTheQuery)
+NWB_ADHD_GTEST_F(UiSliderPopupTests, ChildResultsRemainStagedUntilTheOutermostPopupValidatesTheCompleteFamily, VerifyUiSliderPopupTests_ChildResultsRemainStagedUntilTheOutermostPopupValidatesTheCompleteFamily)
+NWB_ADHD_GTEST_F(UiSliderPopupTests, AnIdenticalIntentOnTheEndedChildRejectsBothUnpublishedResults, VerifyUiSliderPopupTests_AnIdenticalIntentOnTheEndedChildRejectsBothUnpublishedResults)
+NWB_ADHD_GTEST_F(UiSliderPopupTests, LaterParentLabelCallbackCannotPublishAPreviouslyPaintedChildLoan, VerifyUiSliderPopupTests_LaterParentLabelCallbackCannotPublishAPreviouslyPaintedChildLoan)
+NWB_ADHD_GTEST_F(UiSliderPopupTests, ChildCallbackRejectsTheEarlierParentLoanInTheFinalCallbackFreePass, VerifyUiSliderPopupTests_ChildCallbackRejectsTheEarlierParentLoanInTheFinalCallbackFreePass)
+NWB_ADHD_GTEST_F(UiSliderPopupTests, ParentAndChildCannotBorrowTheSameSliderStateAtTheSameTime, VerifyUiSliderPopupTests_ParentAndChildCannotBorrowTheSameSliderStateAtTheSameTime)
+NWB_ADHD_GTEST_F(UiSliderPopupTests, AncestorClosureBeforePaintSuppressesCallbacksAndRetiresTheOldChildDrag, VerifyUiSliderPopupTests_AncestorClosureBeforePaintSuppressesCallbacksAndRetiresTheOldChildDrag)
+NWB_ADHD_GTEST(UiSliderStateTests, IdenticalFinitePublicValuesRetireCopiedInputAndAdvanceRevision, VerifyUiSliderStateTests_IdenticalFinitePublicValuesRetireCopiedInputAndAdvanceRevision)
+NWB_ADHD_GTEST(UiSliderStateTests, PublicValuesPreserveSignedZeroBitsAndRetireIdenticalSignedZeroIntents, VerifyUiSliderStateTests_PublicValuesPreserveSignedZeroBitsAndRetireIdenticalSignedZeroIntents)
+NWB_ADHD_GTEST(UiSliderStateTests, ValueAwayAndBackCannotRestoreTheOldSnapshot, VerifyUiSliderStateTests_ValueAwayAndBackCannotRestoreTheOldSnapshot)
+NWB_ADHD_GTEST(UiSliderStateTests, NonfinitePublicValuesAreRejectedAtomically, VerifyUiSliderStateTests_NonfinitePublicValuesAreRejectedAtomically)
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

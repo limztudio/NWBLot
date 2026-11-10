@@ -1,0 +1,199 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "constants.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <engine_namespace.h>
+
+#include <core/global.h>
+#include <core/assets/gather_merge_registry.h>
+#include <core/assets/module.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#define NWB_ASSET_GATHERER_BEGIN NWB_BEGIN namespace Pipeline{ namespace AssetGatherer{
+#define NWB_ASSET_GATHERER_END }; }; NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ASSET_GATHERER_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct AssetGatherOptions{
+    Core::Assets::AssetVector<Core::Assets::AssetString> inputs;
+    Core::Assets::AssetString outputDirectory;
+    ACompactString configuration;
+    Core::Assets::AssetGatherMergeFunction mergePayloads = nullptr;
+
+
+public:
+    explicit AssetGatherOptions(Core::Assets::AssetArena& arena)noexcept
+        : inputs(arena)
+        , outputDirectory(arena)
+    {}
+};
+
+
+[[nodiscard]] b8 GatherAssets(const AssetGatherOptions& options, Core::Alloc::ScratchArena& scratchArena);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ASSET_GATHERER_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+StringView SelectEffectiveGatherConfiguration(in StringView canonicalConfiguration){
+    if(canonicalConfiguration.empty())
+        return s_DefaultGatherConfig;
+    return canonicalConfiguration;
+}
+
+void LogConflictingBuiltAssetIdentity(in Name virtualPath){
+    error("AssetGatherer: conflicting built asset identity '{}'", virtualPath.resolvedText());
+}
+
+void LogGatherOutputResolveFailure(in StringView outputDirectory){
+    error("AssetGatherer: failed to resolve output '{}'", outputDirectory);
+}
+
+void LogAssetsGathered(in u64 fileCount, in StringView outputDirectory){
+    [essential] info("AssetGatherer: gathered {} assets into '{}'", fileCount, outputDirectory);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <pipeline/asset_gatherer/gather_input_discovery.adhd.h>
+
+#include <core/assets/volume/asset_volume_writer.h>
+#include <core/assets/volume/built_asset.h>
+#include <core/common/log.h>
+
+#include <global/binary.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ASSET_GATHERER_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Assets = Core::Assets;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 GatherAssets(const AssetGatherOptions& options, Core::Alloc::ScratchArena& scratchArena){
+    Assets::AssetArena& arena = options.inputs.get_allocator().arena();
+    if(!ValidateAssetGathererOutputDirectory(!options.outputDirectory.empty()))
+        return false;
+
+    const auto filesResult = AssetGatherInputDiscovery::Collect(options, scratchArena);
+    if(!filesResult)
+        return false;
+    const auto& files = *filesResult;
+    Assets::AssetsVolumeCookDetail::AssetVolumePackManifest manifest(arena);
+    if(!Assets::AssetsVolumeCookDetail::ReserveAssetVolumePackManifest(files.size(), manifest))
+        return false;
+
+    HashMap<Name, usize, Core::Alloc::ScratchArena> entryIndices(scratchArena);
+    entryIndices.reserve(files.size());
+    Assets::AssetBytes bytes(arena);
+    for(const Assets::AssetString& file : files){
+        const auto payload = Assets::BuiltAssetDetail::ReadBuiltAsset(Path(arena, file), bytes);
+        if(!payload)
+            return false;
+        const Name& virtualPath = payload->virtualPath;
+        const usize payloadOffset = payload->payloadOffset;
+        const Span<const u8> payloadBytes = Span<const u8>(bytes).subspan(payloadOffset);
+        const auto inserted = entryIndices.try_emplace(virtualPath, manifest.entries.size());
+        if(!inserted.second){
+            auto& existing = manifest.entries[inserted.first.value()];
+            const b8 identical = AreGatheredAssetPayloadsIdentical(existing.payloadBytes, payloadBytes);
+            if(!identical){
+                if(!options.mergePayloads || !options.mergePayloads(virtualPath, payloadBytes, scratchArena, existing.payloadBytes)){
+                    LogConflictingBuiltAssetIdentity(virtualPath);
+                    return false;
+                }
+                existing.identity.payloadSize = existing.payloadBytes.size();
+                existing.identity.payloadHash = ComputeFnv64Bytes(existing.payloadBytes.data(), existing.payloadBytes.size());
+            }
+            --manifest.plannedFileCount;
+            continue;
+        }
+        if(!Assets::AssetsVolumeCookDetail::AppendPayloadBytesToManifest(virtualPath, payloadBytes, manifest, 0u))
+            return false;
+    }
+
+    Assets::ResolvedCookPaths paths(arena);
+    const auto outputDirectory = AbsolutePath(Path(arena, options.outputDirectory));
+    if(!outputDirectory){
+        LogGatherOutputResolveFailure(options.outputDirectory);
+        return false;
+    }
+    paths.outputDirectory = outputDirectory->lexicallyNormal();
+    Assets::CookString configuration = BuildCanonicalSafeCacheName(arena, options.configuration.view());
+    if(configuration.empty())
+        configuration = SelectEffectiveGatherConfiguration(configuration);
+
+    const auto result = Assets::AssetsVolumeCookDetail::WriteAssetVolume(paths, configuration, manifest, arena, scratchArena);
+    if(!result)
+        return false;
+    LogAssetsGathered(result->fileCount, options.outputDirectory);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ASSET_GATHERER_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

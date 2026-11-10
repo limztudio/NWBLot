@@ -8,6 +8,10 @@
 #include <tests/unit/math/suite.adhd>
 #include "case_types.adhd"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -1580,6 +1584,10 @@ void VerifyMath_DoubleFixedRoundingIgnoresAmbientDirectedModesAndKeepsNearestTie
     }
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -1675,6 +1683,10 @@ NWB_NOINLINE SIMDVectorDouble DoubleMultiplyThenAdd(const SIMDVectorDouble first
 
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_GTEST(Math, SignedZeroStorageEqualityProducesEqualHashes, VerifyMath_SignedZeroStorageEqualityProducesEqualHashes)
 NWB_ADHD_GTEST(Math, DoubleStorageHashesCanonicalizeSignedZeroAndRetainSubFloatResiduals, VerifyMath_DoubleStorageHashesCanonicalizeSignedZeroAndRetainSubFloatResiduals)
 NWB_ADHD_GTEST(Math, AlignedShortDoubleStoresAndStreamsPreservePoisonedPaddingAndNeighborStorage, VerifyMath_AlignedShortDoubleStoresAndStreamsPreservePoisonedPaddingAndNeighborStorage)
@@ -1713,6 +1725,11 @@ NWB_ADHD_GTEST(MathTriangleIntersection, ExactlyContainedDyadicPointSurvivesDoub
 NWB_ADHD_GTEST(MathTriangleIntersection, ProjectionRoundoffAllowancePreservesSmallRealGaps, VerifyMathTriangleIntersection_ProjectionRoundoffAllowancePreservesSmallRealGaps)
 NWB_ADHD_GTEST(MathTriangleIntersection, ProjectionRoundoffAllowancePreservesTranslatedOneUlpGaps, VerifyMathTriangleIntersection_ProjectionRoundoffAllowancePreservesTranslatedOneUlpGaps)
 NWB_ADHD_GTEST(Math, VectorPowerPreservesMixedSpecialsAndAdjacentSrgbRoundingWithSeededState, VerifyMath_VectorPowerPreservesMixedSpecialsAndAdjacentSrgbRoundingWithSeededState)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -1738,6 +1755,11 @@ TEST(Math, VectorPowerKeepsDenormalInputStatusWithInvalidTrapEnabled){ VerifyMat
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_GTEST(Math, MultiplyExpressionsPreserveCompilerRoundingPolicyAndSignedZero, VerifyMath_MultiplyExpressionsPreserveCompilerRoundingPolicyAndSignedZero)
 NWB_ADHD_GTEST(Math, OrderedDoubleClampPreservesZeroNanAndSubnormalPayloads, VerifyMath_OrderedDoubleClampPreservesZeroNanAndSubnormalPayloads)
 NWB_ADHD_GTEST(Math, MinMaxReturnSecondOperandForSignedZeroAndUnorderedLanes, VerifyMath_MinMaxReturnSecondOperandForSignedZeroAndUnorderedLanes)

@@ -6,6 +6,7 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
 native{
 
 
@@ -453,7 +454,9 @@ using __hidden_os_suite_support::ViewGlobalString;
 
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void VerifyTextInputSelection_ReverseSelectionHasTheSameOuterByteLimits(){
     SelectionTextInputContext ctx = SelectionTextInputContext();
@@ -1502,6 +1505,7 @@ NWB_ADHD_GTEST(TextInputText, ValidatesStrictUtf8AndEmbeddedNul, VerifyTextInput
 NWB_ADHD_GTEST(TextInputText, BoundariesUseBytesForBmpAndSupplementaryScalars, VerifyTextInputText_BoundariesUseBytesForBmpAndSupplementaryScalars)
 NWB_ADHD_GTEST(TextInputText, CaretBoundsRejectEmptyAndOverflowWhileAllowingClippedOrigins, VerifyTextInputText_CaretBoundsRejectEmptyAndOverflowWhileAllowingClippedOrigins)
 NWB_ADHD_GTEST(TextInputText, RejectsInvalidScalarsWithoutPublishingAnEncodedLength, VerifyTextInputText_RejectsInvalidScalarsWithoutPublishingAnEncodedLength)
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

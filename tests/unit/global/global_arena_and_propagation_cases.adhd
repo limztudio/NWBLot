@@ -5,6 +5,10 @@
 #include <tests/common/gtest_macros.adhd>
 #include <tests/unit/global/global_tests.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -1563,6 +1567,10 @@ void VerifyGlobal_OwnershipInvariantTerminationIsAlwaysActive(){
     EXPECT_DEATH(TerminateInvariant(), "");
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -1591,6 +1599,10 @@ GlobalArena& DefaultOwner(){
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_ADHD_GTEST(ArenaObjectConstruction, RawObjectFailureReleasesAlignedStorageAndConstructedMembers, VerifyArenaObjectConstruction_RawObjectFailureReleasesAlignedStorageAndConstructedMembers)
 NWB_ADHD_GTEST(ArenaObjectConstruction, GenericUniqueObjectFailureReleasesAlignedStorageAndConstructedMembers, VerifyArenaObjectConstruction_GenericUniqueObjectFailureReleasesAlignedStorageAndConstructedMembers)
@@ -1623,6 +1635,10 @@ NWB_ADHD_GTEST(Global, AutoRegistrationQueueDeduplicatesAndSnapshots, VerifyGlob
 NWB_ADHD_GTEST(Global, GenericPathKeepsNativeFilenameCharacters, VerifyGlobal_GenericPathKeepsNativeFilenameCharacters)
 NWB_ADHD_GTEST(Global, UnicodeAndAsciiHelpersRejectSurrogatesOverlongsAndInvalidIdentifiers, VerifyGlobal_UnicodeAndAsciiHelpersRejectSurrogatesOverlongsAndInvalidIdentifiers)
 NWB_ADHD_GTEST(Global, OwnershipInvariantTerminationIsAlwaysActive, VerifyGlobal_OwnershipInvariantTerminationIsAlwaysActive)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 native{
 

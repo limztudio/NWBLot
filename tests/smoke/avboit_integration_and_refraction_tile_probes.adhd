@@ -5,6 +5,10 @@
 #include "scene_types.adhd"
 #include "presentation_types.adhd"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -13,7 +17,7 @@ native{
 
 #include <tests/smoke/assets/shaders/refraction_tile_probe_layout.h>
 
-#include <loader/project_entry.h>
+#include <loader/project_entry.adhd.h>
 
 #include <impl/assets/graphics/refraction/push_constants.h>
 #include <impl/assets_graphics/components.adhd.h>

@@ -7,6 +7,10 @@
 #include <tests/common/gtest_macros.adhd>
 #include <tests/unit/scene/name_cases.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -568,6 +572,10 @@ void VerifySceneSubsystemAssets_DeduplicatesSubsystemRefsAndPreservesPreviousSce
     EXPECT_EQ(active.findSceneAsset(s_SceneFixtureNameCesiumManModel).name(), Name("project/characters/cesium_man/model"));
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -670,6 +678,10 @@ NWB_END
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_ADHD_GTEST(SceneCameraSelection, ActiveGenerationAndMissingComponentsRecover, VerifySceneCameraSelection_ActiveGenerationAndMissingComponentsRecover)
 NWB_ADHD_GTEST(SceneCameraSelection, FirstSelectorRemainsAuthoritativeAcrossRemovalAndRebinding, VerifySceneCameraSelection_FirstSelectorRemainsAuthoritativeAcrossRemovalAndRebinding)

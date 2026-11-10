@@ -9,6 +9,7 @@
 #include <core/metascript/adhd/ast/operator_semantics.h>
 
 #include "decl_parser.h"
+#include "native_block_classifier.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -44,6 +45,9 @@ b8 DeclParser::ValidateMemberOperatorArity(const MStringView opName, const usize
 
 b8 DeclParser::parseTranslationUnit(TranslationUnit& outUnit){
     m_pendingImplicitSourceNativeBlocks.clear();
+    m_hasPriorLocalDecl = false;
+    m_hasPriorLocalNativeBlock = false;
+    m_hasPendingImportedNativeBlock = false;
     while(!m_cursor.check(TokenType::EndOfFile)){
         if(!parseTopLevelDeclaration(outUnit))
             return false;
@@ -83,65 +87,42 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
     }
 
     if(m_cursor.matchIdentifier("native")){
-        b8 hasExplicitTarget = false;
-        b8 explicitIsSource = false;
-        for(const ParsedAttribute& attr : attributes){
-            b8 attrIsSource = false;
-            if(!KeywordSemantics::TryParseTopLevelNativeAttribute(attr.name, attrIsSource)){
-                m_cursor.error(attr.line, attr.column, "unsupported attribute on top-level 'native' block; only '[header]' or '[source]' is permitted");
-                return false;
-            }
-            if(!attr.arguments.empty()){
-                m_cursor.error(attr.line, attr.column, "top-level 'native' target attribute does not accept arguments");
-                return false;
-            }
-            if(hasExplicitTarget){
-                m_cursor.error(attr.line, attr.column, "duplicate or conflicting target attribute on top-level 'native' block");
-                return false;
-            }
-            hasExplicitTarget = true;
-            explicitIsSource = attrIsSource;
+        if(!attributes.empty()){
+            const ParsedAttribute& attr = attributes[0];
+            const MStringView prohibitedAttrErr = KeywordSemantics::FindProhibitedNativeAttributeError(attr.name);
+            m_cursor.error(attr.line, attr.column, prohibitedAttrErr.empty() ? MStringView("attributes are not permitted on top-level 'native' blocks") : prohibitedAttrErr);
+            return false;
         }
         MStringView code;
         if(!m_cursor.consumeBalancedBracesRaw(code))
             return false;
         if(!isImported){
-            if(hasExplicitTarget){
-                if(explicitIsSource){
-                    for(const MStringView& pending : m_pendingImplicitSourceNativeBlocks)
-                        outUnit.sourceNativeBlocks.push_back(pending);
-                    m_pendingImplicitSourceNativeBlocks.clear();
-                    outUnit.sourceNativeBlocks.push_back(code);
-                }
-                else{
-                    outUnit.topLevelNativeBlocks.push_back(code);
-                }
-            }
-            else{
-                b8 hasPriorLocalDecl = !outUnit.sourceNativeBlocks.empty();
-                if(!hasPriorLocalDecl){ for(const Stmt* s : outUnit.globalConstants){ if(s && !s->isImported){ hasPriorLocalDecl = true; break; } } }
-                if(!hasPriorLocalDecl){ for(const TypeAliasDecl* a : outUnit.typeAliases){ if(a && !a->isImported){ hasPriorLocalDecl = true; break; } } }
-                if(!hasPriorLocalDecl){ for(const EnumDecl* e : outUnit.enums){ if(e && !e->isImported){ hasPriorLocalDecl = true; break; } } }
-                if(!hasPriorLocalDecl){ for(const InterfaceDecl* i : outUnit.interfaces){ if(i && !i->isImported){ hasPriorLocalDecl = true; break; } } }
-                if(!hasPriorLocalDecl){ for(const ClassDecl* c : outUnit.classes){ if(c && !c->isImported){ hasPriorLocalDecl = true; break; } } }
-                if(!hasPriorLocalDecl){ for(const MethodDecl* f : outUnit.freeFunctions){ if(f && !f->isImported){ hasPriorLocalDecl = true; break; } } }
-                if(!hasPriorLocalDecl){ for(const MethodDecl* m : outUnit.outOfLineMethods){ if(m && !m->isImported){ hasPriorLocalDecl = true; break; } } }
-                if(hasPriorLocalDecl)
-                    m_pendingImplicitSourceNativeBlocks.push_back(code);
-                else
-                    outUnit.topLevelNativeBlocks.push_back(code);
-            }
+            if(m_hasPriorLocalDecl || m_hasPriorLocalNativeBlock || NativeBlockClassifier::HasCppSourceOdrDefinition(code))
+                m_pendingImplicitSourceNativeBlocks.push_back(code);
+            else
+                outUnit.topLevelNativeBlocks.push_back(code);
+            m_hasPriorLocalNativeBlock = true;
         }
-        else if(!(hasExplicitTarget && explicitIsSource)){
+        else if(!NativeBlockClassifier::HasCppSourceOdrDefinition(code)){
             outUnit.hasImportedNativeBlocks = true;
+        }
+        else{
+            m_hasPendingImportedNativeBlock = true;
         }
         return true;
     }
 
-    if(!isImported && !m_pendingImplicitSourceNativeBlocks.empty()){
-        for(const MStringView& pending : m_pendingImplicitSourceNativeBlocks)
-            outUnit.topLevelNativeBlocks.push_back(pending);
-        m_pendingImplicitSourceNativeBlocks.clear();
+    if(!isImported){
+        if(!m_pendingImplicitSourceNativeBlocks.empty()){
+            for(const MStringView& pending : m_pendingImplicitSourceNativeBlocks)
+                outUnit.topLevelNativeBlocks.push_back(pending);
+            m_pendingImplicitSourceNativeBlocks.clear();
+        }
+        m_hasPriorLocalDecl = true;
+    }
+    else if(m_hasPendingImportedNativeBlock){
+        outUnit.hasImportedNativeBlocks = true;
+        m_hasPendingImportedNativeBlock = false;
     }
 
     if(m_cursor.matchIdentifier("const")){

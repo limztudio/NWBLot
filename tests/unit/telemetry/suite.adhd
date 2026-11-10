@@ -5,6 +5,10 @@
 #include <tests/common/gtest_macros.adhd>
 #include <tests/unit/telemetry/perf_case_types.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -13,7 +17,7 @@ native{
 
 #include <tests/common/test_context.adhd.h>
 
-#include <logger/telemetry/report.h>
+#include <logger/telemetry/report.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/common/name_symbols.h>
@@ -835,6 +839,10 @@ void VerifyAllocationOwnerTelemetry_ResolvesLoadedOwnerSymbolsByFullIdentityAndP
     }
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -1455,6 +1463,10 @@ Telemetry::EncodedFrameGraphRuntimeStatistics EncodeTestFrameGraphRuntimeStatist
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_ADHD_GTEST(AllocationOwnerTelemetry, RejectsMalformedMemoryPayloadsWithoutInvalidatingPriorValue, VerifyAllocationOwnerTelemetry_RejectsMalformedMemoryPayloadsWithoutInvalidatingPriorValue)
 NWB_ADHD_GTEST(AllocationOwnerTelemetry, SeparatesRecorderSourcesAndKeepsPreviousFrameDuringReplacement, VerifyAllocationOwnerTelemetry_SeparatesRecorderSourcesAndKeepsPreviousFrameDuringReplacement)

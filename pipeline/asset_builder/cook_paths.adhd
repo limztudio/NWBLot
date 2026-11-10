@@ -1,0 +1,124 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "constants.adhd"
+#include "build.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void LogUnsupportedAssetBuildVirtualRoot(in StringView assetRootPath, in StringView virtualRoot){
+    error("AssetBuilder: asset root '{}' uses unsupported virtual root '{}'", assetRootPath, virtualRoot);
+}
+
+void LogAssetRootResolveFailure(in StringView assetRootPath, in StringView reason){
+    error("AssetBuilder: failed to resolve asset root '{}': {}", assetRootPath, reason);
+}
+
+void LogOutputDirectoryResolveFailure(in StringView outputDirectory, in StringView reason){
+    error("AssetBuilder: failed to resolve output directory '{}': {}", outputDirectory, reason);
+}
+
+void LogCacheDirectoryCreateFailure(in StringView cacheDirectory, in StringView reason){
+    error("AssetBuilder: failed to create cache directory '{}': {}", cacheDirectory, reason);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_COOK)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <pipeline/root_discovery.h>
+
+#include <core/common/log.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ASSET_BUILDER_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Assets = Core::Assets;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<Assets::ResolvedCookPaths> ResolveCookPaths(const AssetBuildOptions& options, Assets::AssetArena& arena){
+    if(!ValidateAssetBuilderPathInputs(!options.assetRoots.empty(), !options.outputDirectory.empty()))
+        return MakeUnexpected(Failure{});
+
+    Assets::ResolvedCookPaths paths(arena);
+    auto repoRoot = ResolvePipelineRepoRoot(options.repoRoot, NWB_TEXT("AssetBuilder"), arena);
+    if(!repoRoot)
+        return MakeUnexpected(Failure{});
+    paths.repoRoot = Move(*repoRoot);
+
+    paths.assetRoots.reserve(options.assetRoots.size());
+    for(const AssetBuildRoot& assetRoot : options.assetRoots){
+        if(!IsValidAssetBuildVirtualRoot(assetRoot.virtualRoot.view(), Assets::s_EngineVirtualRoot, Assets::s_ProjectVirtualRoot)){
+            LogUnsupportedAssetBuildVirtualRoot(PathToString<char>(arena, assetRoot.path), assetRoot.virtualRoot.view());
+            return MakeUnexpected(Failure{});
+        }
+        auto resolvedAssetRoot = ResolveAbsolutePath(arena, paths.repoRoot, assetRoot.path);
+        if(!resolvedAssetRoot){
+            LogAssetRootResolveFailure(PathToString<char>(arena, assetRoot.path), resolvedAssetRoot.error().message());
+            return MakeUnexpected(Failure{});
+        }
+        paths.assetRoots.emplace_back(Move(*resolvedAssetRoot), assetRoot.virtualRoot);
+    }
+
+    auto outputDirectory = ResolveAbsolutePath(arena, paths.repoRoot, options.outputDirectory);
+    if(!outputDirectory){
+        LogOutputDirectoryResolveFailure(PathToString<char>(arena, options.outputDirectory), outputDirectory.error().message());
+        return MakeUnexpected(Failure{});
+    }
+    paths.outputDirectory = Move(*outputDirectory);
+
+    paths.cacheDirectory = paths.repoRoot / s_AssetCacheDirectory;
+    const auto created = EnsureDirectories(paths.cacheDirectory);
+    if(!created){
+        LogCacheDirectoryCreateFailure(PathToString<char>(arena, paths.cacheDirectory), created.error().message());
+        return MakeUnexpected(Failure{});
+    }
+    return paths;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ASSET_BUILDER_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

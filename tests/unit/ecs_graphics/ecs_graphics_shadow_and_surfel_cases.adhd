@@ -5,6 +5,10 @@
 #include <tests/common/gtest_macros.adhd>
 #include <tests/unit/ecs_graphics/suite.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -1372,6 +1376,10 @@ void VerifyRendererTaskTimingFeedbackState_DeviceGenerationChangeDropsEntryBefor
     }
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -1578,6 +1586,10 @@ namespace EcsGraphicsSurfelSpawnPolicyDetail{
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_ADHD_GTEST(ShadowMaterialContext, TypedByteCountPreservesAlignmentAndWrapping, VerifyShadowMaterialContext_TypedByteCountPreservesAlignmentAndWrapping)
 NWB_ADHD_GTEST(ShadowMaterialContext, RetainedPayloadUsesActualInstanceStrideAndRejectsTruncation, VerifyShadowMaterialContext_RetainedPayloadUsesActualInstanceStrideAndRejectsTruncation)

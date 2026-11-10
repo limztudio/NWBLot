@@ -1,0 +1,234 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "constants.adhd"
+#include "dependency_path_hints.adhd"
+#include "provider_catalog.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class DependencyQueueState{
+    public Vector<u8> included;
+    public Vector<u8> processed;
+    public Vector<usize> fileQueue;
+
+    public void initialize(in usize fileCount, in Span<u8> initialSelected, in Span<usize> initialOrder){
+        this.included.clear();
+        this.included.reserve(initialSelected.size());
+        for(usize i = 0u; i < initialSelected.size(); ++i)
+            this.included.push_back(initialSelected[i]);
+
+        this.processed.clear();
+        this.processed.resize(fileCount, 0u);
+
+        this.fileQueue.clear();
+        this.fileQueue.reserve(fileCount);
+        for(usize i = 0u; i < initialOrder.size(); ++i)
+            this.fileQueue.push_back(initialOrder[i]);
+    }
+
+    public b8 claimIncluded(in usize providerIndex){
+        if(this.included[providerIndex] != 0u)
+            return false;
+        this.included[providerIndex] = 1u;
+        return true;
+    }
+
+    public void enqueueIfUnprocessed(in usize providerIndex){
+        if(this.processed[providerIndex] == 0u)
+            this.fileQueue.push_back(providerIndex);
+    }
+
+    public b8 claimProcessed(in usize fileIndex){
+        if(this.processed[fileIndex] != 0u)
+            return false;
+        this.processed[fileIndex] = 1u;
+        return true;
+    }
+}
+
+b8 ValidateSingleProviderAssetDeclaration(in usize declarationCount, in StringView providerPathText){
+    if(declarationCount != 1u){
+        error("DependencyComputer: provider '{}' declares multiple assets without an asset_bunch", providerPathText);
+        return false;
+    }
+    return true;
+}
+
+void LogMissingMetadataAssetDeclaration(in StringView providerPathText){
+    error("DependencyComputer: meta '{}' is missing asset declaration 'asset'", providerPathText);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <core/assets/bunch/cook.h>
+#include <core/assets/cook_dependency_registry.h>
+#include <core/assets/paths.h>
+#include <core/common/log.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_DEPENDENCY_COMPUTER_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<Core::Assets::AssetVector<Core::Assets::AssetString>> ComputeAssetDependencies(const PipelineOptions& options, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+    namespace Assets = Core::Assets;
+
+    Assets::CookDependencyRegistry dependencyRegistry(arena);
+    if(!Assets::RegisterAutoCollectedCookDependencyTypes(dependencyRegistry, scratchArena))
+        return MakeUnexpected(Failure{});
+
+    DependencyProviderCatalog catalog(arena);
+    if(!catalog.discover(options, scratchArena))
+        return MakeUnexpected(Failure{});
+    auto selection = catalog.selectInputs(options, dependencyRegistry, scratchArena);
+    if(!selection)
+        return MakeUnexpected(Failure{});
+
+    const auto& files = catalog.files();
+    Assets::AssetVector<Assets::AssetString> candidate(arena);
+    if(!options.inputs.empty()){
+        candidate.reserve(options.inputs.size());
+        for(const auto& input : options.inputs)
+            candidate.emplace_back(input, arena);
+    }
+    else{
+        candidate.reserve(selection->order.size());
+        for(const usize index : selection->order)
+            candidate.emplace_back(PathToString(arena, files[index].filePath.lexicallyNormal()));
+    }
+
+    DependencyQueueState queueState;
+    queueState.initialize(files.size(), selection->selected, selection->order);
+    DependencyPathHints knownVirtualPathTexts;
+    knownVirtualPathTexts.reserve(files.size());
+
+    const auto enqueueDependency = [&](const Name& depVirtualPath, const Name& expectedAssetType) -> b8{
+        if(!depVirtualPath)
+            return false;
+        const AStringView hint = knownVirtualPathTexts.lookup(depVirtualPath);
+        const auto provider = catalog.resolve(depVirtualPath, expectedAssetType, hint, &dependencyRegistry, scratchArena);
+        if(!provider)
+            return false;
+        if(queueState.claimIncluded(*provider))
+            candidate.emplace_back(PathToString(arena, files[*provider].filePath.lexicallyNormal()));
+        queueState.enqueueIfUnprocessed(*provider);
+        return true;
+    };
+
+    class DependencyCollector final : public Assets::ICookDependencyCollector{
+    public:
+        explicit DependencyCollector(const Function<b8(const Name&, const Name&)>& enqueue)noexcept
+            : m_enqueue(enqueue)
+        {}
+
+
+    public:
+        [[nodiscard]] virtual b8 addAssetDependency(const Name& virtualPath, const Name& expectedAssetType = s_NameNone)override{
+            return m_enqueue(virtualPath, expectedAssetType);
+        }
+
+
+    private:
+        const Function<b8(const Name&, const Name&)>& m_enqueue;
+    };
+
+    const Function<b8(const Name&, const Name&)> enqueueCallback(enqueueDependency);
+    DependencyCollector collector(enqueueCallback);
+
+    const auto processAssetItem = [&](
+        const usize fileIndex,
+        const Name& assetType,
+        const Name& virtualPath,
+        const Core::Metascript::Value& assetValue,
+        const Core::Metascript::Document* documentOrNull
+    ) -> b8{
+        const auto& file = files[fileIndex];
+        const Assets::CookDependencyItemContext itemContext{
+            .assetRoot = file.assetRoot,
+            .virtualRoot = file.virtualRoot,
+            .nwbFilePath = file.filePath,
+            .assetType = assetType,
+            .virtualPath = virtualPath,
+            .asset = assetValue,
+            .document = documentOrNull,
+            .arena = arena,
+            .scratchArena = scratchArena,
+        };
+        return dependencyRegistry.extractDependencies(itemContext, collector);
+    };
+
+    for(usize queueCursor = 0u; queueCursor < queueState.fileQueue.size(); ++queueCursor){
+        const usize fileIndex = queueState.fileQueue[queueCursor];
+        if(!queueState.claimProcessed(fileIndex))
+            continue;
+
+        const auto document = catalog.read(fileIndex, scratchArena);
+        if(!document)
+            return MakeUnexpected(Failure{});
+        knownVirtualPathTexts.collectDocument(*document);
+
+        const auto expandedAssets = TryExpandBunchOrCompositeDocument(files[fileIndex], *document, scratchArena);
+        if(!expandedAssets)
+            return MakeUnexpected(Failure{});
+        if(*expandedAssets){
+            for(const Assets::ExpandedAssetMetadata& expanded : **expandedAssets)
+                knownVirtualPathTexts.collectValue(expanded.value);
+            for(const Assets::ExpandedAssetMetadata& expanded : **expandedAssets){
+                if(!processAssetItem(fileIndex, expanded.assetType, expanded.virtualPath, expanded.value, nullptr))
+                    return MakeUnexpected(Failure{});
+            }
+            continue;
+        }
+
+        if(!ValidateSingleProviderAssetDeclaration(document->declarations().size(), PathToString<char>(scratchArena, files[fileIndex].filePath)))
+            return MakeUnexpected(Failure{});
+        const auto* assetDeclaration = document->findDeclaration(Assets::s_MetadataAssetVariable);
+        if(!assetDeclaration){
+            LogMissingMetadataAssetDeclaration(PathToString<char>(scratchArena, files[fileIndex].filePath));
+            return MakeUnexpected(Failure{});
+        }
+        const auto documentAssetType = Name::FromText(AStringView(assetDeclaration->type.data(), assetDeclaration->type.size()));
+        if(!documentAssetType)
+            return MakeUnexpected(Failure{});
+        const auto assetValue = Assets::FindMetadataAssetValue<Core::Metascript::Document, Core::Metascript::Value>(files[fileIndex].filePath, *document, s_DiagnosticPrefix);
+        if(!assetValue)
+            return MakeUnexpected(Failure{});
+        if(!processAssetItem(fileIndex, *documentAssetType, catalog.virtualPaths()[fileIndex], **assetValue, &*document))
+            return MakeUnexpected(Failure{});
+    }
+
+    return candidate;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_DEPENDENCY_COMPUTER_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

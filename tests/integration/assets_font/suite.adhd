@@ -8,6 +8,10 @@
 #include <tests/common/gtest_macros.adhd>
 #include "name_cases.adhd"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -844,6 +848,10 @@ void VerifyPreparedFontSource_InvalidSerializationInputsRejectWithoutAllocating(
     EXPECT_EQ(logger.errorCount(), invalidCaseCount);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -877,6 +885,10 @@ SourceFixture::SourceFixture(Core::Assets::AssetArena& arena)
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_ADHD_GTEST(AssetsFont, SfntDirectoryRejectsTruncatedRecordsAndUnsupportedTableCounts, VerifyAssetsFont_SfntDirectoryRejectsTruncatedRecordsAndUnsupportedTableCounts)
 NWB_ADHD_GTEST(AssetsFont, SfntTableViewsCheckBoundsWithoutCopyingOrScanningOtherRecords, VerifyAssetsFont_SfntTableViewsCheckBoundsWithoutCopyingOrScanningOtherRecords)

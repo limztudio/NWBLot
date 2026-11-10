@@ -4,6 +4,10 @@
 
 #include <tests/common/gtest_macros.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -590,6 +594,10 @@ void VerifyInputDispatcher_PointerLifecycleDoesNotSynthesizeFocusOrKeyboardRelea
     EXPECT_EQ(handler.m_keyReleases, 1u);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -731,6 +739,10 @@ NWB_END
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_ADHD_GTEST(InputDispatcher, ReplacementAtRemovedHandlerAddressStartsOnNextDispatch, VerifyInputDispatcher_ReplacementAtRemovedHandlerAddressStartsOnNextDispatch)
 NWB_ADHD_GTEST(InputDispatcher, KeyHandlerCanRemoveAndDestroyItselfBeforeReturningPolicy, VerifyInputDispatcher_KeyHandlerCanRemoveAndDestroyItselfBeforeReturningPolicy)

@@ -7,14 +7,18 @@
 #include <tests/common/gtest_macros.adhd>
 #include "skin_name_cases.adhd"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <utilities/fbx_to_nwb/skin.h>
-#include <utilities/fbx_to_nwb/asset_writer_skeleton.h>
+#include <utilities/fbx_to_nwb/skin.adhd.h>
+#include <utilities/fbx_to_nwb/asset_writer_skeleton.adhd.h>
 #include <utilities/fbx_to_nwb/mesh_stream_types.adhd.h>
 
 #include <global/simdmath.h>

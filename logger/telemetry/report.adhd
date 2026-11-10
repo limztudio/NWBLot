@@ -1,0 +1,407 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <logger/telemetry/report_types.adhd>
+#include <logger/telemetry/report_values.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <logger/global.h>
+
+#include <core/alloc/scratch.h>
+#include <core/telemetry/perf.h>
+
+#include <global/name_hash_text.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr usize s_TelemetryReportEventKindCount = static_cast<usize>(Core::Telemetry::EventKind::MemoryFrame) + 1u;
+inline constexpr usize s_TelemetryMemorySourceCount = static_cast<usize>(Core::Perf::MemorySource::HeapBacking) + 1u;
+
+struct TelemetryReportSummary{
+    u64 eventCount = 0u;
+    Array<u64, s_TelemetryReportEventKindCount> eventKindCounts{};
+    u64 parseFailureCount = 0u;
+
+    u64 minFrameIndex = 0u;
+    u64 maxFrameIndex = 0u;
+
+    u64 cpuTimingEventCount = 0u;
+    u64 cpuTimingSampleCount = 0u;
+    f64 cpuTimingSeconds = 0.0;
+    f64 maxCpuTimingSeconds = 0.0;
+
+    u64 gpuTimingEventCount = 0u;
+    u64 gpuTimingSampleCount = 0u;
+    f64 gpuTimingSeconds = 0.0;
+    f64 maxGpuTimingSeconds = 0.0;
+
+    u64 memoryEventCount = 0u;
+    Array<TelemetryMemorySummary, s_TelemetryMemorySourceCount> memorySources;
+
+    u64 frameGraphFrameCount = 0u;
+    u64 frameGraphNodeCount = 0u;
+    u64 frameGraphEdgeCount = 0u;
+    u32 maxFrameGraphNodeCount = 0u;
+    u32 maxFrameGraphEdgeCount = 0u;
+    b8 gpuTimingSecondsValid = true;
+    b8 cpuTimingSecondsValid = true;
+    b8 hasFrameRange = false;
+};
+
+struct TelemetryReport{
+    TelemetryReportSummary summary;
+    AString<Core::Telemetry::TelemetryArena> json;
+    AString<Core::Telemetry::TelemetryArena> perfCsv;
+    AString<Core::Telemetry::TelemetryArena> graph;
+
+
+public:
+    explicit TelemetryReport(Core::Telemetry::TelemetryArena& arena)noexcept
+        : json(arena)
+        , perfCsv(arena)
+        , graph(arena)
+    {}
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace TelemetryReportDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] AStringView FormatNameIdentityText(const Name& name, Array<char, NameHashTextCodec::s_TextLength + 1u>& outIdentityText)noexcept;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] Expected<TelemetryReport> BuildTelemetryReport(const Core::Telemetry::EventView& events, Core::Telemetry::TelemetryArena& arena, Core::Alloc::ScratchArena& scratchArena);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_TelemetryPerfCsvHeader = "source,scope,publish_frame,seconds,min_seconds,max_seconds,last_seconds,sample_count,first_sample_frame,last_sample_frame\n";
+const StringView s_TelemetryEventKindTextLog = "textLog";
+const StringView s_TelemetryEventKindDiagnostic = "diagnostic";
+const StringView s_TelemetryEventKindPerfFrame = "perfFrame";
+const StringView s_TelemetryEventKindFrameGraphFrame = "frameGraphFrame";
+const StringView s_TelemetryEventKindMemoryFrame = "memoryFrame";
+const StringView s_TelemetryPerfSourceCpu = "cpu";
+const StringView s_TelemetryPerfSourceGpu = "gpu";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+usize ComputeTelemetryPerfCsvReserveBytes(in usize eventCount){
+    return s_LogTelemetryReportPerfCsvFixedReserveBytes + eventCount * s_LogTelemetryReportPerfCsvBytesPerEvent;
+}
+
+usize SelectTelemetryEventKindBucket(in usize kindIndex, in usize kindCount, in usize unknownBucket){
+    if(kindIndex < kindCount)
+        return kindIndex;
+    return unknownBucket;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <logger/telemetry/report_dot.adhd.h>
+#include <logger/telemetry/memory_report.adhd.h>
+
+#include <core/telemetry/diagnostic.h>
+#include <core/telemetry/text_log.h>
+
+#include <global/bit.h>
+#include <global/csv_text.h>
+#include <global/name_hash_text.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace TelemetryReportDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] AStringView FormatNameIdentityText(const Name& name, Array<char, NameHashTextCodec::s_TextLength + 1u>& outIdentityText)noexcept{
+    NameHashTextCodec::Format(outIdentityText.data(), outIdentityText.size(), name.hash());
+    return AStringView(outIdentityText.data(), NameHashTextCodec::s_TextLength);
+}
+
+[[nodiscard]] usize EventKindBucket(const Core::Telemetry::EventKind::Enum kind)noexcept{
+    return SelectTelemetryEventKindBucket(
+        static_cast<usize>(kind),
+        s_TelemetryReportEventKindCount,
+        static_cast<usize>(Core::Telemetry::EventKind::Unknown)
+    );
+}
+
+void RecordFrameRange(const u64 frameIndex, TelemetryReportSummary& summary)noexcept{
+    if(!summary.hasFrameRange){
+        summary.hasFrameRange = true;
+        summary.minFrameIndex = frameIndex;
+        summary.maxFrameIndex = frameIndex;
+        return;
+    }
+
+    if(frameIndex < summary.minFrameIndex)
+        summary.minFrameIndex = frameIndex;
+    if(frameIndex > summary.maxFrameIndex)
+        summary.maxFrameIndex = frameIndex;
+}
+
+[[nodiscard]] AStringView EventKindText(const Core::Telemetry::EventKind::Enum kind)noexcept{
+    switch(kind){
+    case Core::Telemetry::EventKind::TextLog:
+        return s_TelemetryEventKindTextLog;
+    case Core::Telemetry::EventKind::Diagnostic:
+        return s_TelemetryEventKindDiagnostic;
+    case Core::Telemetry::EventKind::PerfFrame:
+        return s_TelemetryEventKindPerfFrame;
+    case Core::Telemetry::EventKind::FrameGraphFrame:
+        return s_TelemetryEventKindFrameGraphFrame;
+    case Core::Telemetry::EventKind::MemoryFrame:
+        return s_TelemetryEventKindMemoryFrame;
+    case Core::Telemetry::EventKind::Unknown:
+    default:
+        return s_UnknownReportField;
+    }
+}
+
+[[nodiscard]] AStringView PerfTimingSourceText(const Core::Telemetry::PerfTimingSource::Enum source)noexcept{
+    switch(source){
+    case Core::Telemetry::PerfTimingSource::Cpu:
+        return s_TelemetryPerfSourceCpu;
+    case Core::Telemetry::PerfTimingSource::Gpu:
+        return s_TelemetryPerfSourceGpu;
+    case Core::Telemetry::PerfTimingSource::Unknown:
+    default:
+        return s_UnknownReportField;
+    }
+}
+
+void AppendPerfCsvRow(const Core::Telemetry::PerfTimingSource::Enum source, const Core::Telemetry::PerfTimingPayload& payload, AString<Core::Telemetry::TelemetryArena>& out){
+    out += PerfTimingSourceText(source);
+    out += ',';
+    AppendCsvCell(payload.scopeText, out);
+    StringAppendFormat(
+        out,
+        ",{},{:.9},{:.9},{:.9},{:.9},{},{},{}\n",
+        payload.stats.publishFrameIndex,
+        payload.stats.seconds,
+        payload.stats.minSeconds,
+        payload.stats.maxSeconds,
+        payload.stats.lastSeconds,
+        payload.stats.sampleCount,
+        payload.stats.firstSampleFrameIndex,
+        payload.stats.lastSampleFrameIndex
+    );
+}
+
+void AddTiming(const Core::Telemetry::PerfTimingPayload& payload, TelemetryReportSummary& summary)noexcept{
+#pragma STDC FENV_ACCESS ON
+    if(payload.source == Core::Telemetry::PerfTimingSource::Cpu){
+        ++summary.cpuTimingEventCount;
+        summary.cpuTimingSampleCount += payload.stats.sampleCount;
+        if(summary.cpuTimingSecondsValid){
+            const f64 total = summary.cpuTimingSeconds + payload.stats.seconds;
+            if((BitCast<u64>(total) & s_LogTelemetryReportTimingSecondsExponentMask) != s_LogTelemetryReportTimingSecondsExponentMask)
+                summary.cpuTimingSeconds = total;
+            else
+                summary.cpuTimingSecondsValid = false;
+        }
+        if(payload.stats.seconds > summary.maxCpuTimingSeconds)
+            summary.maxCpuTimingSeconds = payload.stats.seconds;
+    }
+    else if(payload.source == Core::Telemetry::PerfTimingSource::Gpu){
+        ++summary.gpuTimingEventCount;
+        summary.gpuTimingSampleCount += payload.stats.sampleCount;
+        if(summary.gpuTimingSecondsValid){
+            const f64 total = summary.gpuTimingSeconds + payload.stats.seconds;
+            if((BitCast<u64>(total) & s_LogTelemetryReportTimingSecondsExponentMask) != s_LogTelemetryReportTimingSecondsExponentMask)
+                summary.gpuTimingSeconds = total;
+            else
+                summary.gpuTimingSecondsValid = false;
+        }
+        if(payload.stats.seconds > summary.maxGpuTimingSeconds)
+            summary.maxGpuTimingSeconds = payload.stats.seconds;
+    }
+}
+
+void AddFrameGraph(const Core::Telemetry::FrameGraphPayload& payload, TelemetryReportSummary& summary)noexcept{
+    ++summary.frameGraphFrameCount;
+    summary.frameGraphNodeCount += payload.nodes.size();
+    summary.frameGraphEdgeCount += payload.edges.size();
+    const u32 nodeCount = static_cast<u32>(payload.nodes.size());
+    const u32 edgeCount = static_cast<u32>(payload.edges.size());
+    if(nodeCount > summary.maxFrameGraphNodeCount)
+        summary.maxFrameGraphNodeCount = nodeCount;
+    if(edgeCount > summary.maxFrameGraphEdgeCount)
+        summary.maxFrameGraphEdgeCount = edgeCount;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<TelemetryReport> BuildTelemetryReport(const Core::Telemetry::EventView& events, Core::Telemetry::TelemetryArena& arena, Core::Alloc::ScratchArena& scratchArena){
+    if(!events.valid())
+        return MakeUnexpected(Failure{});
+
+    TelemetryReport report(arena);
+    report.perfCsv.reserve(ComputeTelemetryPerfCsvReserveBytes(events.eventCount()));
+    report.perfCsv += s_TelemetryPerfCsvHeader;
+
+    report.summary.eventCount = events.eventCount();
+    AString<Core::Alloc::ScratchArena> memoryRecords(scratchArena);
+
+    TelemetryReportDetail::GraphTimingMap timingByFrameAndScope(0, TelemetryReportDetail::GraphTimingKeyHasher(), EqualTo<TelemetryReportDetail::GraphTimingKey>(), scratchArena);
+    timingByFrameAndScope.reserve(events.eventCount());
+    TelemetryReportDetail::FrameGraphReportRecords frameGraphs(scratchArena);
+    frameGraphs.reserve(events.eventCount());
+
+    for(usize i = 0u; i < events.eventCount(); ++i){
+        const Core::Telemetry::EventRecord& event = *MakeNotNull(events.eventAt(i));
+
+        ++report.summary.eventKindCounts[TelemetryReportDetail::EventKindBucket(event.header.kind)];
+        TelemetryReportDetail::RecordFrameRange(event.header.frameIndex, report.summary);
+
+        switch(event.header.kind){
+        case Core::Telemetry::EventKind::TextLog: {
+            const auto payload = Core::Telemetry::ParseTextLogPayload(event.payload.data(), event.payload.size());
+            if(!payload)
+                ++report.summary.parseFailureCount;
+            break;
+        }
+        case Core::Telemetry::EventKind::Diagnostic: {
+            const auto payload = Core::Telemetry::ParseDiagnosticPayload(event.payload.data(), event.payload.size());
+            if(!payload)
+                ++report.summary.parseFailureCount;
+            break;
+        }
+        case Core::Telemetry::EventKind::PerfFrame: {
+            const auto payload = Core::Telemetry::ParsePerfTimingPayload(event.payload.data(), event.payload.size());
+            if(!payload){
+                ++report.summary.parseFailureCount;
+                break;
+            }
+            TelemetryReportDetail::AddTiming(*payload, report.summary);
+            TelemetryReportDetail::AppendPerfCsvRow(payload->source, *payload, report.perfCsv);
+            // first/last are arrival endpoints, so only one sample proves an exact source-frame association when different queues complete out of order.
+            // Aggregated windows remain available in the Perf CSV.
+            if(payload->stats.sampleCount == 1u && payload->stats.firstSampleFrameIndex == payload->stats.lastSampleFrameIndex){
+                timingByFrameAndScope.insert_or_assign(TelemetryReportDetail::GraphTimingKey{ payload->stats.firstSampleFrameIndex, payload->scopeName }, payload->stats.seconds);
+            }
+            break;
+        }
+        case Core::Telemetry::EventKind::MemoryFrame: {
+            const auto payload = Core::Telemetry::ParsePerfMemoryPayload(event.payload.data(), event.payload.size());
+            if(!payload){
+                ++report.summary.parseFailureCount;
+                break;
+            }
+            AddTelemetryMemorySummary(*payload, report.summary);
+            AppendTelemetryMemoryRecordJson(*payload, event.header.streamId, memoryRecords);
+            break;
+        }
+        case Core::Telemetry::EventKind::FrameGraphFrame: {
+            TelemetryReportDetail::FrameGraphReportRecord& record = frameGraphs.emplace_back(arena);
+            record.streamId = event.header.streamId;
+            auto payload = Core::Telemetry::ParseFrameGraphPayload(arena, scratchArena, event.payload.data(), event.payload.size());
+            if(!payload){
+                frameGraphs.pop_back();
+                ++report.summary.parseFailureCount;
+                break;
+            }
+            record.payload = Move(*payload);
+            TelemetryReportDetail::AddFrameGraph(record.payload, report.summary);
+            break;
+        }
+        default:
+            break;
+        }
+    }
+
+    TelemetryReportDetail::BuildTimedGraphsDot(frameGraphs, timingByFrameAndScope, scratchArena, report.graph);
+    TelemetryReportDetail::BuildJson(report.summary, frameGraphs, memoryRecords, report.json);
+    return report;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

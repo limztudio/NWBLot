@@ -1,0 +1,226 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <logger/server/crash_symbolicate_internal.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_PLATFORM_WINDOWS)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <global/limit.h>
+#include <global/not_null.h>
+
+#include <windows.h>
+#include <dbghelp.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace LoggerCrashSymbolicateDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename T>
+struct MinidumpRecords{
+    NotNull<const u8*> bytes;
+    usize count = 0u;
+
+
+public:
+    [[nodiscard]] T record(const usize index)const noexcept{
+        static_assert(IsTriviallyCopyable_V<T> && IsNothrowConstructible_V<T> && IsNothrowMoveConstructible_V<T>);
+        NWB_ASSERT(index < count);
+        T value;
+        NWB_MEMCPY(&value, sizeof(value), bytes.get() + index * sizeof(T), sizeof(value));
+        return value;
+    }
+};
+
+struct DumpImage{
+    const u8* bytes = nullptr;
+    usize byteCount = 0u;
+
+
+public:
+    [[nodiscard]] const u8* rva(const u64 offset, const u64 size)const noexcept{
+        if(!bytes || offset > static_cast<u64>(byteCount) || size > static_cast<u64>(byteCount) - offset)
+            return nullptr;
+        return bytes + static_cast<usize>(offset);
+    }
+
+    template<typename T>
+    [[nodiscard]] Expected<T> read(const u64 offset)const noexcept{
+        static_assert(IsTriviallyCopyable_V<T> && IsNothrowConstructible_V<T> && IsNothrowMoveConstructible_V<T>);
+        const u8* const source = rva(offset, sizeof(T));
+        if(!source)
+            return MakeUnexpected(Failure{});
+        T value;
+        NWB_MEMCPY(&value, sizeof(value), source, sizeof(value));
+        return value;
+    }
+
+    [[nodiscard]] Expected<WString<Core::Alloc::ScratchArena>> readString(RVA rvaValue, Core::Alloc::ScratchArena& scratchArena)const;
+    [[nodiscard]] Expected<Optional<DumpImage>> stream(MINIDUMP_STREAM_TYPE streamType)const noexcept;
+
+    template<typename T>
+    [[nodiscard]] Expected<MinidumpRecords<T>> records(const usize recordsOffset, const u64 count)const noexcept{
+        if(!bytes || recordsOffset > byteCount || count > static_cast<u64>((byteCount - recordsOffset) / sizeof(T)))
+            return MakeUnexpected(Failure{});
+        return MinidumpRecords<T>{ MakeNotNull(bytes + recordsOffset), static_cast<usize>(count) };
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsValidMinidumpByteRange(in u64 byteCount, in u64 offset, in u64 size){
+    if(offset > byteCount)
+        return false;
+    return size <= byteCount - offset;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_PLATFORM_WINDOWS)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace LoggerCrashSymbolicateDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<WString<Core::Alloc::ScratchArena>> DumpImage::readString(const RVA rvaValue, Core::Alloc::ScratchArena& scratchArena)const{
+    const auto textByteCount = read<ULONG32>(rvaValue);
+    if(!textByteCount || (*textByteCount % sizeof(wchar)) != 0u)
+        return MakeUnexpected(Failure{});
+    const u64 textOffset = static_cast<u64>(rvaValue) + offsetof(MINIDUMP_STRING, Buffer);
+    if(!IsValidMinidumpByteRange(static_cast<u64>(byteCount), textOffset, static_cast<u64>(*textByteCount) + sizeof(wchar)))
+        return MakeUnexpected(Failure{});
+    const u8* const textBytes = rva(textOffset, static_cast<u64>(*textByteCount) + sizeof(wchar));
+    if(!textBytes)
+        return MakeUnexpected(Failure{});
+    const auto terminator = read<wchar>(textOffset + *textByteCount);
+    if(!terminator || *terminator != 0)
+        return MakeUnexpected(Failure{});
+    WString<Core::Alloc::ScratchArena> text(scratchArena);
+    text.resize(static_cast<usize>(*textByteCount / sizeof(wchar)));
+    if(*textByteCount != 0u)
+        NWB_MEMCPY(text.data(), *textByteCount, textBytes, *textByteCount);
+    return text;
+}
+
+Expected<Optional<DumpImage>> DumpImage::stream(const MINIDUMP_STREAM_TYPE streamType)const noexcept{
+    const auto header = read<MINIDUMP_HEADER>(0u);
+    if(!header || header->Signature != MINIDUMP_SIGNATURE || (header->Version & Limit<u16>::s_Max) != MINIDUMP_VERSION)
+        return MakeUnexpected(Failure{});
+    const u64 directoryBytes = static_cast<u64>(header->NumberOfStreams) * sizeof(MINIDUMP_DIRECTORY);
+    if(!rva(header->StreamDirectoryRva, directoryBytes))
+        return MakeUnexpected(Failure{});
+
+    Optional<DumpImage> selected;
+    for(u32 index = 0u; index < header->NumberOfStreams; ++index){
+        const u64 directoryOffset = static_cast<u64>(header->StreamDirectoryRva) + static_cast<u64>(index) * sizeof(MINIDUMP_DIRECTORY);
+        const auto directory = read<MINIDUMP_DIRECTORY>(directoryOffset);
+        if(!directory)
+            return MakeUnexpected(Failure{});
+        const u8* const streamBytes = rva(directory->Location.Rva, directory->Location.DataSize);
+        if(!streamBytes)
+            return MakeUnexpected(Failure{});
+        if(directory->StreamType == static_cast<ULONG32>(streamType) && !selected)
+            selected = DumpImage{ streamBytes, static_cast<usize>(directory->Location.DataSize) };
+    }
+    return selected;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

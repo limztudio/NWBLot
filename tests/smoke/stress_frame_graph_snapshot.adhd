@@ -5,6 +5,10 @@
 #include "presentation_types.adhd"
 #include "scene_types.adhd"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -13,7 +17,7 @@ native{
 
 #include <tests/common/frame_graph_snapshot_validation.adhd.h>
 
-#include <loader/project_entry.h>
+#include <loader/project_entry.adhd.h>
 
 #include <core/common/log.h>
 #include <core/global.h>

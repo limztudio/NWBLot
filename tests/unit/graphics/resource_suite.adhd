@@ -7,6 +7,10 @@
 #include <tests/common/test_context.adhd>
 #include "gpu_timing_test_names.adhd"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -649,6 +653,10 @@ void VerifyGpuTextureTransferLayoutTests_CompressedPaddedSlicesPreserveTouchedBy
     EXPECT_FALSE(TextureTransferLayout::BuildBufferImageCopyLayout(extent, block, 17u, 0u, BufferImageCopyRequiredSize::TouchedBytes, BufferImageCopyPitchFields::OmitImplicit).has_value());
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -811,8 +819,17 @@ NWB_END
 
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_GTEST(QueueBarrierScopePolicy, TransferQueueRemovesUnsupportedShaderAccess, VerifyQueueBarrierScopePolicy_TransferQueueRemovesUnsupportedShaderAccess)
 NWB_ADHD_GTEST(GpuBlasOpacityMicromapPolicyTests, AttachmentSkipsAbsentAndHandlesEmptyUsageCounts, VerifyGpuBlasOpacityMicromapPolicyTests_AttachmentSkipsAbsentAndHandlesEmptyUsageCounts)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -840,6 +857,11 @@ TEST(GpuClusterOperation, NativeInputRebindsUnionPointersAfterCopy){ VerifyGpuCl
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_GTEST(GpuCrashMarkerTracker, CopiesExactNonTerminatedViewAndEmbeddedNullBytes, VerifyGpuCrashMarkerTracker_CopiesExactNonTerminatedViewAndEmbeddedNullBytes)
 NWB_ADHD_GTEST(GpuCrashMarkerTracker, SharedDeviceTrackerPreservesHistoryAcrossCommandListTrackerReset, VerifyGpuCrashMarkerTracker_SharedDeviceTrackerPreservesHistoryAcrossCommandListTrackerReset)
 NWB_ADHD_GTEST(GpuCrashMarkerTracker, DestroyedCommandListTrackersLeaveAllDeviceHistoryResolvable, VerifyGpuCrashMarkerTracker_DestroyedCommandListTrackersLeaveAllDeviceHistoryResolvable)

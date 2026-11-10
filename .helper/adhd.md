@@ -96,9 +96,9 @@ f32 ComputePaddedWidth(in ElementBox box){
 
 ## 2. Compiler-Owned Decisions & Prohibited Constructs
 
-1. **No `[inline]` / `[noinline]` Attributes and No `inline` / `noinline` Keywords**:
-   - Inlining is decided **exclusively and automatically by the `adhd` compiler itself** (`ShouldAutoInlineCallable`), never by the user.
-   - Writing `[inline]`, `[noinline]`, `inline`, or `noinline` anywhere in `.adhd` is a compile-time error.
+1. **No `[inline]` / `[noinline]` or `[header]` / `[source]` Attributes, and No `inline` / `noinline` Keywords**:
+   - Both callable inlining (`ShouldAutoInlineCallable`) and top-level `native{}` header-vs-source placement (`NativeBlockClassifier`) are decided **exclusively and automatically by the `adhd` compiler itself**, never by the user.
+   - Writing `[inline]`, `[noinline]`, `inline`, `noinline`, `[header]`, or `[source]` in `.adhd` is a compile-time error.
 2. **No `namespace` Keyword**:
    - `.adhd` files never declare `namespace`. The C++ namespace is configured on the CMake target via `nwb_target_adhd_sources(<target> NAMESPACE "NWB::...")`.
 3. **No `struct` or `union` Keywords**:
@@ -205,9 +205,9 @@ f32 ComputePaddedWidth(in ElementBox box){
   - `method` (`class` / `interface`): `[reflect]` (never `[inline]` or `[noinline]`)
   - `parallel` / `parallel_for`: `[core(Any|Heavy|Light|MainThread)]`, `[priority(Normal|Critical|Background)]`
   - `assert` / `info` / `warning` / `error`: `[essential]`
-  - top-level `native`: `[header]` / `[source]`
+  - top-level `native`: no attributes permitted
 - **C++ Interop (`native` Blocks)**:
-  - **Top-level `native{ ... }` / `[header] native{ ... }` / `[source] native{ ... }`**: Emits raw C++ blocks into `.adhd.h` (`[header]` or leading `native{}`) or `.adhd.cpp` (`[source]` or trailing `native{}`). Separate `native{` and `}` from their inner contents with two blank lines, a 128-slash separator, and two blank lines.
+  - **Top-level `native{ ... }`**: Automatically routed by `adhd_compiler` into `.adhd.h` or `.adhd.cpp` based on declaration order and C++ ODR definitions (never write `[header]` or `[source]`). Frame both the outside and inside of every top-level `native{ ... }` block with two blank lines, a 128-slash separator, and two blank lines (and when the entire `native{}` body is wrapped in an outer `#if ...` / `#endif`, place two blank lines + 128-slash + two blank lines inside `#if ...` and before `#endif` as well).
   - **Statement-level `native(in x, mut y = this.member){ ... }`**: Binds `.adhd` variables/fields into a scoped C++ block (`in` as `const` reference/value, `mut` as mutable reference) while preserving `.adhd` mutability and concurrency analysis.
 
 ---

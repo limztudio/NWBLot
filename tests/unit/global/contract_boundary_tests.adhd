@@ -6,6 +6,10 @@
 #include <tests/common/test_context.adhd>
 #include <tests/unit/global/contract_name_cases.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -362,6 +366,10 @@ void VerifyGlobalContractBoundaries_ConvertingCopyFromAConstReferenceOwnerRetain
     EXPECT_EQ(destroyedCount, 1u);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -425,6 +433,10 @@ void VerifyCapturedOutputWithClosedDescriptors(const u32 mask){
 
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_GTEST(GlobalContractBoundaries, SignedAdditionClampsNegativeOverflowToTheLowerBound, VerifyGlobalContractBoundaries_SignedAdditionClampsNegativeOverflowToTheLowerBound)
 NWB_ADHD_GTEST(GlobalContractBoundaries, AlignmentOverflowKeepsTheLastRepresentableAlignedSize, VerifyGlobalContractBoundaries_AlignmentOverflowKeepsTheLastRepresentableAlignedSize)
 NWB_ADHD_GTEST(GlobalContractBoundaries, CommonAlignmentRejectsZeroAndChecksOverflowAfterReducingSharedFactors, VerifyGlobalContractBoundaries_CommonAlignmentRejectsZeroAndChecksOverflowAfterReducingSharedFactors)
@@ -434,6 +446,10 @@ NWB_ADHD_GTEST(GlobalContractBoundaries, Utf8OffsetRejectsMalformedPrefixesWitho
 NWB_ADHD_GTEST(GlobalContractBoundaries, FixedIndexMapCollisionWrapAndCapacityFailurePreserveExistingEntries, VerifyGlobalContractBoundaries_FixedIndexMapCollisionWrapAndCapacityFailurePreserveExistingEntries)
 NWB_ADHD_GTEST(GlobalContractBoundaries, ThrowingNotNullConversionPropagatesAndPreservesThePriorPointer, VerifyGlobalContractBoundaries_ThrowingNotNullConversionPropagatesAndPreservesThePriorPointer)
 NWB_ADHD_GTEST(GlobalContractBoundaries, ConvertingCopyFromAConstReferenceOwnerRetainsItsValueDeleterAndLifetime, VerifyGlobalContractBoundaries_ConvertingCopyFromAConstReferenceOwnerRetainsItsValueDeleterAndLifetime)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 native{
 

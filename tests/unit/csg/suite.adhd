@@ -7,6 +7,10 @@
 #include <tests/common/gtest_macros.adhd>
 #include <tests/unit/csg/name_cases.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -684,6 +688,10 @@ void VerifyCsg_ReceiverLookupExcludesIncompleteInactiveUntypedAndWrongPassInputs
     }
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -770,6 +778,10 @@ NWB_END
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_ADHD_GTEST(Csg, SequentialCutsPreserveEarlierHalfSpaceAndUnweldedSourceVertices, VerifyCsg_SequentialCutsPreserveEarlierHalfSpaceAndUnweldedSourceVertices)
 NWB_ADHD_GTEST(Csg, CsgDeformCutViabilityRejectsDegenerateCommit, VerifyCsg_CsgDeformCutViabilityRejectsDegenerateCommit)

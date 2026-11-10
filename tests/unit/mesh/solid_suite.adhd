@@ -6,6 +6,10 @@
 #include <tests/common/gtest_macros.adhd>
 #include <tests/unit/mesh/solid_test_types.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -446,6 +450,10 @@ void VerifyMeshSolidTopology_RelativeComponentVolumePreservesTinyAndTranslatedSo
     }
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -514,6 +522,10 @@ NWB_END
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_ADHD_GTEST(MeshSolidCodec, MissingTruncatedOrExtraMembershipWordsAreRejected, VerifyMeshSolidCodec_MissingTruncatedOrExtraMembershipWordsAreRejected)
 NWB_ADHD_GTEST(MeshSolidCodec, UnaddressableBoundsCountIsRejectedBeforeStreamReadAndPreservesLoadedMesh, VerifyMeshSolidCodec_UnaddressableBoundsCountIsRejectedBeforeStreamReadAndPreservesLoadedMesh)

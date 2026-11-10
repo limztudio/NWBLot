@@ -1,0 +1,248 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <logger/telemetry/report.adhd>
+#include <logger/telemetry/report_types.adhd>
+#include <logger/telemetry/report_values.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <logger/global.h>
+
+#include <core/alloc/scratch.h>
+#include <core/telemetry/perf.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr AStringView s_JsonNullText = ::NWB::Log::s_LogTelemetryMemoryReportJsonNullText;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void AddTelemetryMemorySummary(const Core::Telemetry::PerfMemoryPayload& payload, TelemetryReportSummary& summary)noexcept;
+void AppendTelemetryMemorySourcesJson(const TelemetryReportSummary& summary, AString<Core::Telemetry::TelemetryArena>& out);
+void AppendTelemetryMemoryRecordJson(const Core::Telemetry::PerfMemoryPayload& payload, u32 streamId, AString<Core::Alloc::ScratchArena>& out);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void AccumulateTelemetryMemorySourceSummary(
+    in u64 snapshotUsedBytes,
+    in u64 snapshotPeakUsedBytes,
+    in b8 deltaHasSamples,
+    in i64 deltaUsedBytes,
+    mut TelemetryMemorySummary source
+){
+    ++source.eventCount;
+    if(snapshotUsedBytes > source.maxUsedBytes)
+        source.maxUsedBytes = snapshotUsedBytes;
+    if(snapshotPeakUsedBytes > source.maxPeakUsedBytes)
+        source.maxPeakUsedBytes = snapshotPeakUsedBytes;
+    if(deltaHasSamples && source.totalUsedDeltaValid){
+        if(deltaUsedBytes > 0 && source.totalUsedDeltaBytes > i64.max - deltaUsedBytes)
+            source.totalUsedDeltaValid = false;
+        else if(deltaUsedBytes < 0 && source.totalUsedDeltaBytes < i64.min - deltaUsedBytes)
+            source.totalUsedDeltaValid = false;
+        else
+            source.totalUsedDeltaBytes += deltaUsedBytes;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <core/common/name_symbols.h>
+
+#include <global/json_text.h>
+#include <global/name_hash_text.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_memory_report{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr char s_JsonRecordClose = '}';
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] AStringView MemorySourceText(const Core::Perf::MemorySource::Enum source)noexcept{
+    switch(source){
+    case Core::Perf::MemorySource::Arena:
+        return s_LogTelemetryMemoryReportArenaSourceText;
+    case Core::Perf::MemorySource::HeapBacking:
+        return s_LogTelemetryMemoryReportHeapBackingSourceText;
+    case Core::Perf::MemorySource::ExplicitScope:
+    default:
+        return s_LogTelemetryMemoryReportExplicitScopeSourceText;
+    }
+}
+
+[[nodiscard]] AStringView MemoryPeakBasisText(const Core::Perf::MemorySource::Enum source)noexcept{
+    switch(source){
+    case Core::Perf::MemorySource::Arena:
+        return s_LogTelemetryMemoryReportLargestArenaPeakBasis;
+    case Core::Perf::MemorySource::HeapBacking:
+        return s_LogTelemetryMemoryReportSampledHeapPeakBasis;
+    case Core::Perf::MemorySource::ExplicitScope:
+    default:
+        return s_LogTelemetryMemoryReportScopePeakBasis;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void AddTelemetryMemorySummary(const Core::Telemetry::PerfMemoryPayload& payload, TelemetryReportSummary& summary)noexcept{
+    const usize sourceIndex = static_cast<usize>(payload.snapshot.source);
+    NWB_ASSERT(sourceIndex < s_TelemetryMemorySourceCount);
+
+    ++summary.memoryEventCount;
+    AccumulateTelemetryMemorySourceSummary(
+        payload.snapshot.usedBytes,
+        payload.snapshot.peakUsedBytes,
+        payload.delta.hasSamples,
+        payload.delta.usedBytes,
+        summary.memorySources[sourceIndex]
+    );
+}
+
+void AppendTelemetryMemorySourcesJson(const TelemetryReportSummary& summary, AString<Core::Telemetry::TelemetryArena>& out){
+    out += s_LogTelemetryMemoryReportMemorySourcesSectionHeader;
+    for(usize sourceIndex = 0u; sourceIndex < s_TelemetryMemorySourceCount; ++sourceIndex){
+        const auto memorySource = static_cast<Core::Perf::MemorySource::Enum>(sourceIndex);
+        out += s_LogTelemetryMemoryReportMemorySourceEntryIndent;
+        AppendJsonQuotedText(out, __hidden_memory_report::MemorySourceText(memorySource));
+        out += s_LogTelemetryMemoryReportPeakBasisKeyPrefix;
+        AppendJsonQuotedText(out, __hidden_memory_report::MemoryPeakBasisText(memorySource));
+        const TelemetryMemorySummary& source = summary.memorySources[sourceIndex];
+        StringAppendFormat(out, s_LogTelemetryMemoryReportMemorySourceMetricsFormat, source.eventCount, source.maxUsedBytes, source.maxPeakUsedBytes);
+        if(source.totalUsedDeltaValid)
+            StringAppendFormat(out, s_LogTelemetryMemoryReportMemorySourceDeltaFormat, source.totalUsedDeltaBytes);
+        else
+            out += s_JsonNullText;
+        out += __hidden_memory_report::s_JsonRecordClose;
+        out += sourceIndex + 1u == s_TelemetryMemorySourceCount ? s_LogTelemetryMemoryReportJsonEntryTerminator : s_LogTelemetryMemoryReportJsonEntrySeparator;
+    }
+    out += s_LogTelemetryMemoryReportMemorySourcesSectionFooter;
+}
+
+void AppendTelemetryMemoryRecordJson(const Core::Telemetry::PerfMemoryPayload& payload, const u32 streamId, AString<Core::Alloc::ScratchArena>& out){
+    if(!out.empty())
+        out += s_LogTelemetryMemoryReportMemoryRecordSeparator;
+    out += s_LogTelemetryMemoryReportMemoryRecordOpen;
+    AppendJsonQuotedText(out, __hidden_memory_report::MemorySourceText(payload.snapshot.source));
+    out += s_LogTelemetryMemoryReportMemoryRecordPeakBasisKey;
+    AppendJsonQuotedText(out, __hidden_memory_report::MemoryPeakBasisText(payload.snapshot.source));
+    Array<char, NameHashTextCodec::s_TextLength + 1u> identityText;
+    const AStringView identity = TelemetryReportDetail::FormatNameIdentityText(payload.scopeName, identityText);
+    Array<char, Core::Common::NameSymbols::s_MaxResolvedTextLength> resolvedText;
+    AStringView scopeText = payload.scopeText;
+    if(scopeText == identity && Core::Common::NameSymbols::Resolve(resolvedText.data(), resolvedText.size(), payload.scopeName.hash()))
+        scopeText = AStringView(resolvedText.data());
+    out += s_LogTelemetryMemoryReportMemoryRecordScopeKey;
+    AppendJsonQuotedText(out, scopeText);
+    out += s_LogTelemetryMemoryReportMemoryRecordIdentityKey;
+    AppendJsonQuotedText(out, identity);
+    StringAppendFormat(
+        out,
+        s_LogTelemetryMemoryReportMemoryRecordMetricsFormat,
+        streamId,
+        payload.snapshot.frameIndex,
+        payload.snapshot.reservedBytes,
+        payload.snapshot.usedBytes,
+        payload.snapshot.peakUsedBytes,
+        payload.snapshot.allocationCount,
+        payload.snapshot.reallocationCount,
+        payload.snapshot.deallocationCount
+    );
+    if(payload.delta.hasSamples){
+        StringAppendFormat(
+            out,
+            s_LogTelemetryMemoryReportMemoryDeltaMetricsFormat,
+            payload.delta.previousFrameIndex,
+            payload.delta.reservedBytes,
+            payload.delta.usedBytes,
+            payload.delta.peakUsedBytes,
+            payload.delta.allocationCount,
+            payload.delta.reallocationCount,
+            payload.delta.deallocationCount
+        );
+    }
+    else
+        out += s_JsonNullText;
+    out += __hidden_memory_report::s_JsonRecordClose;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

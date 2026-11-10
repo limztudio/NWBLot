@@ -1,0 +1,131 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "constants.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <engine_namespace.h>
+
+#include <core/global.h>
+#include <core/assets/global.h>
+#include <core/metascript/parser.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#define NWB_DEPENDENCY_COMPUTER_BEGIN NWB_BEGIN namespace Pipeline{ namespace DependencyComputer{
+#define NWB_DEPENDENCY_COMPUTER_END }; }; NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_DEPENDENCY_COMPUTER_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using MetascriptDocument = Core::Metascript::Document;
+using MetascriptValue = Core::Metascript::Value;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_DEPENDENCY_COMPUTER_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class DependencyPathHints{
+    private HashMap<Name, String> m_texts;
+
+    public void reserve(in usize count){
+        this.m_texts.reserve(count);
+    }
+
+    public void record(in StringView rawText){
+        const Expected<StringView> trimmed = TryTrimVirtualPathText(rawText);
+        if(!trimmed.has_value())
+            return;
+
+        const StringView trimmedText = trimmed.value();
+        Optional<Name> parsedName = Optional<Name>();
+        native(in trimmedText, mut parsedName){
+            if(const auto name = Name::FromText(trimmedText); name && *name)
+                parsedName = *name;
+        }
+        if(!parsedName.has_value())
+            return;
+
+        const Name key = parsedName.value();
+        if(!this.m_texts.contains(key))
+            this.m_texts.try_emplace(key, String(trimmedText));
+    }
+
+    public void collectValue(in MetascriptValue value){
+        native(mut texts = this.m_texts, in value){
+            (void)texts;
+            if(value.isString()){
+                const Core::Metascript::MStringView str = value.asString();
+                this->record(AStringView(str.data(), str.size()));
+                return;
+            }
+            if(value.isList()){
+                for(const Core::Metascript::Value& item : value.asList())
+                    this->collectValue(item);
+                return;
+            }
+            if(value.isMap()){
+                for(const auto& [key, fieldValue] : value.asMap()){
+                    this->record(AStringView(key.data(), key.size()));
+                    this->collectValue(fieldValue);
+                }
+            }
+        }
+    }
+
+    public void collectDocument(in MetascriptDocument doc){
+        native(mut texts = this.m_texts, in doc){
+            (void)texts;
+            for(const Core::Metascript::Document::Declaration& declaration : doc.declarations()){
+                const Core::Metascript::MStringView varView(declaration.variable.data(), declaration.variable.size());
+                if(const Core::Metascript::Value* value = doc.findVariable(varView))
+                    this->collectValue(*value);
+            }
+        }
+    }
+
+    public StringView lookup(in Name virtualPath)const{
+        StringView resolved = virtualPath.resolvedText();
+        native(in texts = this.m_texts, in virtualPath, mut resolved){
+            const auto found = texts.find(virtualPath);
+            if(found != texts.end())
+                resolved = AStringView(found.value());
+        }
+        return resolved;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

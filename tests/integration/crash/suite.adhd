@@ -8,6 +8,10 @@
 #include <tests/integration/crash/crash_test_paths.adhd>
 #include "name_cases.adhd"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -896,6 +900,10 @@ void VerifyCrash_LinuxSignalHandlerWritesCrashPackage(){
     }
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -975,11 +983,19 @@ void CrashArchiveUpload::TearDown(){
 
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_GTEST_F(CrashArchiveUpload, PreservesNativeMissingDirectoryError, VerifyCrashArchiveUpload_PreservesNativeMissingDirectoryError)
 NWB_ADHD_GTEST_F(CrashArchiveUpload, ResultOwnsBytesAfterWorkingScratchExpires, VerifyCrashArchiveUpload_ResultOwnsBytesAfterWorkingScratchExpires)
 NWB_ADHD_GTEST_F(CrashArchiveUpload, UnsupportedProtocolPreservesFailureAndPendingRetry, VerifyCrashArchiveUpload_UnsupportedProtocolPreservesFailureAndPendingRetry)
 NWB_ADHD_GTEST(Crash, RequestAdmissionRejectsCorruptCountsAndUnterminatedText, VerifyCrash_RequestAdmissionRejectsCorruptCountsAndUnterminatedText)
 NWB_ADHD_GTEST(Crash, AckAdmissionRequiresBoundedTerminatedIdentity, VerifyCrash_AckAdmissionRequiresBoundedTerminatedIdentity)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 native{
 

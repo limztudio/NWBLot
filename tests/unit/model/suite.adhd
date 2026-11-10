@@ -7,6 +7,10 @@
 #include <tests/common/gtest_macros.adhd>
 #include "name_cases.adhd"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -473,6 +477,10 @@ void VerifyModelRuntimeFailedReplacementClearsOnlyThatOwner(){
     EXPECT_EQ(context.source.readCount, 2u);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -536,6 +544,10 @@ NWB_END
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_ADHD_GTEST(ModelAttachment, RevalidatesPoseHierarchyAndParentBindingOnEveryUpdate, VerifyModelAttachmentRevalidatesPoseAndParent)
 NWB_ADHD_GTEST(ModelAttachment, InvalidUnrequestedJointsRejectWholePoseAndRecover, VerifyModelAttachmentInvalidUnrequestedJoints)

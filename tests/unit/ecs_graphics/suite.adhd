@@ -7,6 +7,10 @@
 #include <tests/common/gtest_macros.adhd>
 #include <tests/unit/ecs_graphics/name_cases.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -1474,6 +1478,10 @@ void VerifyEcsGraphics_CsgReceiverWorkRegionFallsBackConservativelyAndClampsLarg
     EXPECT_EQ(large.resolveRect(1000u, 600u).maxX, 1000);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -1520,6 +1528,10 @@ b8 RegisterCustomCsgShape(CsgShadowSnapshotContext& context, const Name name){
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_ADHD_GTEST(CausticEmissionTargetBuilderTests, SupportedVolumesDoNotRetireFirstUnsupportedIdentity, VerifyCausticEmissionTargetBuilderTests_SupportedVolumesDoNotRetireFirstUnsupportedIdentity)
 NWB_ADHD_GTEST(CausticLightSelectorTests, MissingInputsPreserveSlotsAndPointLightsCannotWin, VerifyCausticLightSelectorTests_MissingInputsPreserveSlotsAndPointLightsCannotWin)

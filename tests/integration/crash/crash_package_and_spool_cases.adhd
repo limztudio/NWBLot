@@ -5,6 +5,10 @@
 #include "suite.adhd"
 #include <tests/common/gtest_macros.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -479,6 +483,10 @@ void VerifyCrash_FlushReportsFailsWhenUploadingRecoveryIsBlocked(){
     RemoveTestArtifacts(testArena.arena, group);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -511,6 +519,10 @@ void ForeignSignalOwner(const int)noexcept{}
 
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_GTEST(Crash, MetadataRejectsTruncationAndEmbeddedNullWithoutChangingPublishedValue, VerifyCrash_MetadataRejectsTruncationAndEmbeddedNullWithoutChangingPublishedValue)
 NWB_ADHD_GTEST(Crash, SnapshotKeepsPublishedMetadataDuringInterruptedWriter, VerifyCrash_SnapshotKeepsPublishedMetadataDuringInterruptedWriter)
 NWB_ADHD_GTEST(Crash, ConcurrentPublicWritersPublishCompleteMetadataAndBreadcrumbRecords, VerifyCrash_ConcurrentPublicWritersPublishCompleteMetadataAndBreadcrumbRecords)
@@ -519,6 +531,10 @@ NWB_ADHD_GTEST(Crash, CrashSpoolRetentionPrunesOldestPackages, VerifyCrash_Crash
 NWB_ADHD_GTEST(Crash, CrashSpoolRetentionZeroDisablesPruning, VerifyCrash_CrashSpoolRetentionZeroDisablesPruning)
 NWB_ADHD_GTEST(Crash, CrashSpoolRetentionProtectsActivePendingPackage, VerifyCrash_CrashSpoolRetentionProtectsActivePendingPackage)
 NWB_ADHD_GTEST(Crash, FlushReportsFailsWhenUploadingRecoveryIsBlocked, VerifyCrash_FlushReportsFailsWhenUploadingRecoveryIsBlocked)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 native{
 

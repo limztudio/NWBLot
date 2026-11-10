@@ -5,6 +5,10 @@
 #include <tests/common/gtest_macros.adhd>
 #include <tests/unit/telemetry/suite.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -1554,6 +1558,10 @@ void VerifyTelemetry_TextLogPayloadEmptyAndInvalidTypeReplacePreviousBytes(){
     EXPECT_TRUE(payload.empty());
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -1657,6 +1665,10 @@ void CheckTextLogPayload(const Span<const u8> payload, const Span<const u8> expe
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_ADHD_GTEST(Telemetry, PerfMemoryPayloadRejectsInvalidInput, VerifyTelemetry_PerfMemoryPayloadRejectsInvalidInput)
 NWB_ADHD_GTEST(Telemetry, MemoryDifferencePreservesSignedLimitsAndLargeUnsignedCounters, VerifyTelemetry_MemoryDifferencePreservesSignedLimitsAndLargeUnsignedCounters)

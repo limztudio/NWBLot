@@ -7,6 +7,10 @@
 #include <tests/common/test_context.adhd>
 #include <tests/unit/mesh/skinning_name_cases.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -849,6 +853,10 @@ void VerifyMesh_RejectsDegenerateTangentFrameTriangle(){
     }
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -913,6 +921,10 @@ NWB_END
 
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_GTEST(SkinningGraphResourceUses, DeduplicatesRepeatedAndPermutedInputsWithoutChangingFirstOccurrence, VerifySkinningGraphResourceUses_DeduplicatesRepeatedAndPermutedInputsWithoutChangingFirstOccurrence)
 NWB_ADHD_GTEST(SkinningGraphResourceUses, PreservesFullResourceGenerationAndRebuildsChangedFlags, VerifySkinningGraphResourceUses_PreservesFullResourceGenerationAndRebuildsChangedFlags)
 NWB_ADHD_GTEST(SkinningGraphResourceUses, RejectsEveryPhaseConflictOrMissingResourceAndRecovers, VerifySkinningGraphResourceUses_RejectsEveryPhaseConflictOrMissingResourceAndRecovers)
@@ -928,6 +940,11 @@ NWB_ADHD_GTEST(SkinningPayload, GpuInfluencesPreserveUpperU16JointBitsAndFp32Wei
 NWB_ADHD_GTEST(SkinningPayload, PaletteCanExceedSkeletonWithoutInverseBindMatrices, VerifySkinningPayload_PaletteCanExceedSkeletonWithoutInverseBindMatrices)
 NWB_ADHD_GTEST(SkinningPayload, RuntimeScratchAllocationDoesNotScaleWithInfluenceCount, VerifySkinningPayload_RuntimeScratchAllocationDoesNotScaleWithInfluenceCount)
 NWB_ADHD_GTEST(SkinningPayload, PayloadScopeDestructionReclaimsScratchUsageAcrossMeshes, VerifySkinningPayload_PayloadScopeDestructionReclaimsScratchUsageAcrossMeshes)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -955,6 +972,11 @@ TEST(SkinningPayload, StaticInfluenceEncodingRejectsInvalidMeshEditsAndRecovers)
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_GTEST(SkinningDeformation, MissingResourceRejectsWithoutCandidateOrArenaPublication, VerifySkinningDeformation_MissingResourceRejectsWithoutCandidateOrArenaPublication)
 NWB_ADHD_GTEST(Mesh, DegenerateUvsUseStableTangentFallback, VerifyMesh_DegenerateUvsUseStableTangentFallback)
 NWB_ADHD_GTEST(Mesh, RejectsDegenerateTangentFrameTriangle, VerifyMesh_RejectsDegenerateTangentFrameTriangle)

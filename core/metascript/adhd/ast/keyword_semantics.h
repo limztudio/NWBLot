@@ -138,12 +138,12 @@ public:
         return TryParseBoolLiteral(text);
     }
 
-    [[nodiscard]] static constexpr b8 TryParseTopLevelNativeAttribute(const MStringView text, b8& outIsSource)noexcept{
-    #define NWB_ADHD_EXPORT_TOP_LEVEL_NATIVE_ATTRIBUTE(attrName, isSource) \
-        if(text == attrName){ outIsSource = isSource; return true; }
+    [[nodiscard]] static constexpr MStringView FindProhibitedNativeAttributeError(const MStringView text)noexcept{
+    #define NWB_ADHD_EXPORT_PROHIBITED_NATIVE_ATTRIBUTE(attrName, errorMessage) \
+        if(text == attrName) return errorMessage;
     #include "../export_keywords.h"
-    #undef NWB_ADHD_EXPORT_TOP_LEVEL_NATIVE_ATTRIBUTE
-        return false;
+    #undef NWB_ADHD_EXPORT_PROHIBITED_NATIVE_ATTRIBUTE
+        return {};
     }
 
     [[nodiscard]] static constexpr b8 TryParseEnumDeclKeyword(const MStringView text, b8* outIsFlag = nullptr)noexcept{

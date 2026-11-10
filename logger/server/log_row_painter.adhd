@@ -1,0 +1,299 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <logger/server/clipboard_text.adhd>
+#include <logger/server/server_values.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_PLATFORM_WINDOWS)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace FrameDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class LogRowPainter final{
+public:
+    static constexpr int s_FontHeight = ::NWB::Log::s_LogServerValueFrameWinLogFontHeight;
+    static void Measure(HWND hwnd, HWND listHwnd, MEASUREITEMSTRUCT& item, const MessageItem& message);
+    static void Draw(DRAWITEMSTRUCT& item, const MessageItem& message);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class LogRowColorPair{
+    public u32 text = 0u;
+    public u32 background = 0u;
+}
+
+u32 PackWin32RgbColor(in u8 red, in u8 green, in u8 blue){
+    return cast<u32>(red) | (cast<u32>(green) << 8u) | (cast<u32>(blue) << 16u);
+}
+
+LogRowColorPair MakeLogRowColorPair(in u8 textRed, in u8 textGreen, in u8 textBlue, in u8 bgRed, in u8 bgGreen, in u8 bgBlue){
+    LogRowColorPair pair;
+    pair.text = PackWin32RgbColor(textRed, textGreen, textBlue);
+    pair.background = PackWin32RgbColor(bgRed, bgGreen, bgBlue);
+    return pair;
+}
+
+LogRowColorPair SelectAlternateLogRowColorPair(in b8 alternate, in LogRowColorPair even, in LogRowColorPair odd){
+    if(alternate)
+        return odd;
+    return even;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_PLATFORM_WINDOWS)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <global/diagnostics.h>
+#include <global/scope_exit.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace FrameDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_log_row_painter{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static LogRowColorPair ResolveLogRowColors(const Core::Common::LogType::Enum type, const b8 alternate)noexcept{
+    const LogRowColorPair defaultEven = MakeLogRowColorPair(0u, 0u, 0u, 230u, 230u, 230u);
+    const LogRowColorPair infoOdd = MakeLogRowColorPair(80u, 80u, 80u, 255u, 255u, 255u);
+
+    switch(type){
+    case Core::Common::LogType::EssentialInfo:
+    case Core::Common::LogType::Info:
+        return SelectAlternateLogRowColorPair(alternate, defaultEven, infoOdd);
+    case Core::Common::LogType::Warning:
+        return SelectAlternateLogRowColorPair(
+            alternate,
+            MakeLogRowColorPair(0u, 0u, 0u, 170u, 170u, 0u),
+            MakeLogRowColorPair(60u, 60u, 60u, 200u, 200u, 0u)
+        );
+    case Core::Common::LogType::CriticalWarning:
+        return SelectAlternateLogRowColorPair(
+            alternate,
+            MakeLogRowColorPair(240u, 240u, 240u, 170u, 80u, 0u),
+            MakeLogRowColorPair(255u, 255u, 255u, 200u, 100u, 0u)
+        );
+    case Core::Common::LogType::Assert:
+        return SelectAlternateLogRowColorPair(
+            alternate,
+            MakeLogRowColorPair(200u, 200u, 200u, 120u, 0u, 160u),
+            MakeLogRowColorPair(255u, 255u, 255u, 145u, 20u, 190u)
+        );
+    case Core::Common::LogType::Error:
+        return SelectAlternateLogRowColorPair(
+            alternate,
+            MakeLogRowColorPair(200u, 200u, 200u, 170u, 0u, 0u),
+            MakeLogRowColorPair(255u, 255u, 255u, 200u, 0u, 0u)
+        );
+    case Core::Common::LogType::Fatal:
+        return SelectAlternateLogRowColorPair(
+            alternate,
+            MakeLogRowColorPair(200u, 200u, 0u, 220u, 0u, 0u),
+            MakeLogRowColorPair(255u, 255u, 0u, 250u, 0u, 0u)
+        );
+    default:
+        return SelectAlternateLogRowColorPair(alternate, defaultEven, infoOdd);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void LogRowPainter::Measure(const HWND hwnd, const HWND listHwnd, MEASUREITEMSTRUCT& mis, const MessageItem& curStr){
+    mis.itemHeight = static_cast<UINT>(s_FontHeight);
+    RECT rect = {};
+    if(!GetClientRect(hwnd, &rect)){
+        CaptureDiagnosticEvent(s_LogServerValueFrameWinLayoutDiagnosticCategory, "Log server: failed to query its text measurement rectangle", __FILE__, __LINE__);
+        return;
+    }
+    rect.right -= rect.left;
+    rect.left = rect.top = rect.bottom = 0;
+
+    const HDC hdc = GetDC(listHwnd);
+    if(!hdc){
+        CaptureDiagnosticEvent(s_LogServerValueFrameWinPaintDiagnosticCategory, "Log server: failed to acquire its text measurement device context", __FILE__, __LINE__);
+        return;
+    }
+    ScopeExit releaseDc([&]()noexcept{
+        if(!ReleaseDC(listHwnd, hdc))
+            CaptureDiagnosticEvent(s_LogServerValueFrameWinPaintDiagnosticCategory, "Log server: failed to release its text measurement device context", __FILE__, __LINE__);
+    });
+
+    const HFONT font = reinterpret_cast<HFONT>(SendMessage(listHwnd, WM_GETFONT, 0, 0));
+    HGDIOBJ oldFont = nullptr;
+    if(font){
+        oldFont = SelectObject(hdc, font);
+        if(!oldFont || oldFont == HGDI_ERROR){
+            CaptureDiagnosticEvent(s_LogServerValueFrameWinPaintDiagnosticCategory, "Log server: failed to select its text measurement font", __FILE__, __LINE__);
+            return;
+        }
+    }
+    ScopeExit restoreFont([&]()noexcept{
+        if(oldFont){
+            const HGDIOBJ restored = SelectObject(hdc, oldFont);
+            if(!restored || restored == HGDI_ERROR)
+                CaptureDiagnosticEvent(s_LogServerValueFrameWinPaintDiagnosticCategory, "Log server: failed to restore its text measurement font", __FILE__, __LINE__);
+        }
+    });
+
+    if(!curStr.first().empty()){
+        if(DrawText(hdc, curStr.first().c_str(), -1, &rect, DT_WORDBREAK | DT_LEFT | DT_CALCRECT) == 0)
+            CaptureDiagnosticEvent(s_LogServerValueFrameWinPaintDiagnosticCategory, "Log server: failed to measure its log text", __FILE__, __LINE__);
+        else
+            mis.itemHeight = static_cast<UINT>(rect.bottom - rect.top);
+    }
+}
+
+void LogRowPainter::Draw(DRAWITEMSTRUCT& dis, const MessageItem& curData){
+    HDC hdc = dis.hDC;
+    RECT rect = dis.rcItem;
+
+    const LogRowColorPair colors = __hidden_log_row_painter::ResolveLogRowColors(curData.second(), (dis.itemID & 1) != 0);
+    const HBRUSH brush = CreateSolidBrush(static_cast<COLORREF>(colors.background));
+    if(!brush){
+        CaptureDiagnosticEvent(s_LogServerValueFrameWinPaintDiagnosticCategory, "Log server: failed to create its row background brush", __FILE__, __LINE__);
+        return;
+    }
+    ScopeExit releaseBrush([&]()noexcept{
+        if(!DeleteObject(brush))
+            CaptureDiagnosticEvent(s_LogServerValueFrameWinPaintDiagnosticCategory, "Log server: failed to delete its row background brush", __FILE__, __LINE__);
+    });
+
+    if(!FillRect(hdc, &rect, brush))
+        CaptureDiagnosticEvent(s_LogServerValueFrameWinPaintDiagnosticCategory, "Log server: failed to fill its row background", __FILE__, __LINE__);
+    const COLORREF oldTextColor = SetTextColor(hdc, static_cast<COLORREF>(colors.text));
+    if(oldTextColor == CLR_INVALID){
+        CaptureDiagnosticEvent(s_LogServerValueFrameWinPaintDiagnosticCategory, "Log server: failed to set its log text color", __FILE__, __LINE__);
+        return;
+    }
+    ScopeExit restoreTextColor([&]()noexcept{
+        if(SetTextColor(hdc, oldTextColor) == CLR_INVALID)
+            CaptureDiagnosticEvent(s_LogServerValueFrameWinPaintDiagnosticCategory, "Log server: failed to restore its log text color", __FILE__, __LINE__);
+    });
+
+    const int oldBackgroundMode = SetBkMode(hdc, TRANSPARENT);
+    if(oldBackgroundMode == 0){
+        CaptureDiagnosticEvent(s_LogServerValueFrameWinPaintDiagnosticCategory, "Log server: failed to set its log text background mode", __FILE__, __LINE__);
+        return;
+    }
+    ScopeExit restoreBackgroundMode([&]()noexcept{
+        if(!SetBkMode(hdc, oldBackgroundMode))
+            CaptureDiagnosticEvent(s_LogServerValueFrameWinPaintDiagnosticCategory, "Log server: failed to restore its log text background mode", __FILE__, __LINE__);
+    });
+
+    if(!curData.first().empty() && DrawText(hdc, curData.first().c_str(), -1, &rect, DT_WORDBREAK | DT_LEFT) == 0)
+        CaptureDiagnosticEvent(s_LogServerValueFrameWinPaintDiagnosticCategory, "Log server: failed to draw its log text", __FILE__, __LINE__);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -5,6 +5,10 @@
 #include <tests/common/gtest_macros.adhd>
 #include <tests/common/test_context.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -443,6 +447,10 @@ void VerifyPresentationReceipt_ResetAtLifetimeBoundaryRemovesEarlierAcquisitionE
     EXPECT_EQ(receipt.status(acquired), PresentationReceiptStatus::Pending);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -512,6 +520,10 @@ NWB_END
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_ADHD_GTEST(CooperativeVectorFeatureQuery, EmptyDriverPropertyListDoesNotReadOrPublishFormats, VerifyCooperativeVectorFeatureQuery_EmptyDriverPropertyListDoesNotReadOrPublishFormats)
 NWB_ADHD_GTEST(CooperativeVectorMatrixPolicy, RejectsTightMisalignedAndOverflowingStrides, VerifyCooperativeVectorMatrixPolicy_RejectsTightMisalignedAndOverflowingStrides)

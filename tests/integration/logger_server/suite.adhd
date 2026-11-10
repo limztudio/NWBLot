@@ -10,6 +10,10 @@
 
 #include <tests/integration/logger_server/name_cases.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -39,9 +43,9 @@ native{
 
 #include <logger/client/module.h>
 #include <logger/common.h>
-#include <logger/server/crash_ingest.h>
-#include <logger/server/crash_paths.h>
-#include <logger/server/crash_report_composer.h>
+#include <logger/server/crash_ingest.adhd.h>
+#include <logger/server/crash_paths.adhd.h>
+#include <logger/server/crash_report_composer.adhd.h>
 
 #include <microhttpd.h>
 
@@ -1168,6 +1172,9 @@ void VerifyLoggerServerCrash_CrashRetentionPrunesOldestInvalidUploads(mut Logger
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -1474,6 +1481,10 @@ NWB_NOINLINE void CaptureRecoverableErrorForCrashObservation(const AStringView m
 
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_GTEST(CrashReportComposerTests, TombstoneStackMovesBeforeDetailsWithoutBorrowingClearedText, VerifyCrashReportComposerTests_TombstoneStackMovesBeforeDetailsWithoutBorrowingClearedText)
 NWB_ADHD_GTEST(CrashReportComposerTests, EmptyPrimaryStackTakesPrecedenceOverTombstone, VerifyCrashReportComposerTests_EmptyPrimaryStackTakesPrecedenceOverTombstone)
 
@@ -1501,6 +1512,10 @@ NWB_ADHD_GTEST_F(LoggerServerCrash, InvalidManifestBooleanIsRejectedWhileFalseAn
 NWB_ADHD_GTEST_F(LoggerServerCrash, CrashRetentionPrunesOldestAcceptedUploads, VerifyLoggerServerCrash_CrashRetentionPrunesOldestAcceptedUploads)
 NWB_ADHD_GTEST_F(LoggerServerCrash, AcceptedCrashWarnsWhenRawArchiveCannotBeRetained, VerifyLoggerServerCrash_AcceptedCrashWarnsWhenRawArchiveCannotBeRetained)
 NWB_ADHD_GTEST_F(LoggerServerCrash, CrashRetentionPrunesOldestInvalidUploads, VerifyLoggerServerCrash_CrashRetentionPrunesOldestInvalidUploads)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 native{
 

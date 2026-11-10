@@ -5,6 +5,10 @@
 #include <tests/common/gtest_macros.adhd>
 #include <tests/unit/common/initializer_case_types.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -194,6 +198,10 @@ void VerifyCommonInitializerLifetime_GuardUnwindFinalizesAllItemsBeforeTheTermin
     EXPECT_EQ(afterUnwind.events[3u], s_InitializerCount + 1u);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -243,10 +251,18 @@ void InitializerProbe::finalize()noexcept{
 
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_GTEST(CommonInitializerLifetime, FailedInitializationRollsBackOnlyTheSuccessfulPrefixAndAllowsReacquire, VerifyCommonInitializerLifetime_FailedInitializationRollsBackOnlyTheSuccessfulPrefixAndAllowsReacquire)
 NWB_ADHD_GTEST(CommonInitializerLifetime, ThrowingInitializationRollsBackOnlyTheSuccessfulPrefixAndAllowsReacquire, VerifyCommonInitializerLifetime_ThrowingInitializationRollsBackOnlyTheSuccessfulPrefixAndAllowsReacquire)
 NWB_ADHD_GTEST(CommonInitializerLifetime, NestedGuardsFinalizeOnlyTheLastOwnerAndAllowReacquire, VerifyCommonInitializerLifetime_NestedGuardsFinalizeOnlyTheLastOwnerAndAllowReacquire)
 NWB_ADHD_GTEST(CommonInitializerLifetime, GuardUnwindFinalizesAllItemsBeforeTheTerminalEntryHandlesTheOriginalFailure, VerifyCommonInitializerLifetime_GuardUnwindFinalizesAllItemsBeforeTheTerminalEntryHandlesTheOriginalFailure)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 native{
 

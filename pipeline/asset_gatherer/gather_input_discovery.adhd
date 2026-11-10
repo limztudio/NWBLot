@@ -1,0 +1,165 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "gather.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ASSET_GATHERER_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class AssetGatherInputDiscovery final{
+public:
+    [[nodiscard]] static Expected<Core::Assets::AssetVector<Core::Assets::AssetString>> Collect(const AssetGatherOptions& options, Core::Alloc::ScratchArena& scratchArena);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ASSET_GATHERER_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsBuiltAssetEntryExtension(in b8 isRegularFile, in StringView extensionText, in StringView expectedExtension){
+    return isRegularFile && extensionText == expectedExtension;
+}
+
+void LogGatherInputResolveFailure(in StringView inputPath){
+    error("AssetGatherer: failed to resolve input '{}'", inputPath);
+}
+
+void LogGatherInputInspectFailure(in StringView inputPath){
+    error("AssetGatherer: failed to inspect input '{}'", inputPath);
+}
+
+void LogGatherBuildManifestInspectFailure(in StringView manifestPath){
+    error("AssetGatherer: failed to inspect build manifest '{}'", manifestPath);
+}
+
+void LogGatherInputScanFailure(in StringView inputPath){
+    error("AssetGatherer: failed to scan input '{}'", inputPath);
+}
+
+void LogGatherInputEntryInspectFailure(in StringView entryPath){
+    error("AssetGatherer: failed to inspect input entry '{}'", entryPath);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <core/assets/input_list.h>
+#include <core/assets/volume/built_asset.h>
+#include <core/common/log.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ASSET_GATHERER_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Assets = Core::Assets;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<Assets::AssetVector<Assets::AssetString>> AssetGatherInputDiscovery::Collect(const AssetGatherOptions& options, Core::Alloc::ScratchArena& scratchArena){
+    Assets::AssetArena& arena = options.inputs.get_allocator().arena();
+    Assets::AssetVector<Assets::AssetString> files(arena);
+    files.reserve(options.inputs.size());
+    for(const Assets::AssetString& input : options.inputs){
+        const auto absolutePath = AbsolutePath(Path(arena, input));
+        if(!absolutePath){
+            LogGatherInputResolveFailure(input);
+            return MakeUnexpected(Failure{});
+        }
+        const Path path = absolutePath->lexicallyNormal();
+        const auto directory = IsDirectory(path);
+        if(!directory){
+            LogGatherInputInspectFailure(input);
+            return MakeUnexpected(Failure{});
+        }
+        if(!*directory){
+            files.emplace_back(PathToString(arena, path));
+            continue;
+        }
+
+        const Path manifest = path / Assets::BuiltAssetDetail::s_ManifestFilename;
+        const auto manifestExists = FileExists(manifest);
+        if(!manifestExists){
+            LogGatherBuildManifestInspectFailure(PathToString<char>(scratchArena, manifest));
+            return MakeUnexpected(Failure{});
+        }
+        if(*manifestExists){
+            if(!Assets::ReadAssetInputList(manifest, scratchArena, files, true))
+                return MakeUnexpected(Failure{});
+            continue;
+        }
+        const auto entries = RecursiveDirectoryIterator<Assets::AssetArena>::Create(path);
+        if(!entries){
+            LogGatherInputScanFailure(input);
+            return MakeUnexpected(Failure{});
+        }
+        for(const auto& entry : *entries){
+            const auto regular = entry.isRegularFile();
+            if(!regular){
+                LogGatherInputEntryInspectFailure(PathToString<char>(scratchArena, entry.path()));
+                return MakeUnexpected(Failure{});
+            }
+            const Assets::ScratchString extText = PathToString(scratchArena, entry.path().extensionView());
+            if(IsBuiltAssetEntryExtension(*regular, extText, Assets::BuiltAssetDetail::s_Extension))
+                files.emplace_back(PathToString(arena, entry.path()));
+        }
+    }
+    Sort(files.begin(), files.end());
+    files.erase(Unique(files.begin(), files.end()), files.end());
+    return files;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ASSET_GATHERER_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

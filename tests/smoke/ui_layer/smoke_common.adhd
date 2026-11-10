@@ -34,6 +34,10 @@
 #include <impl/assets_ui_skin/types.adhd>
 #include <impl/assets_graphics/bindless/runtime_abi.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -50,7 +54,7 @@ native{
 #include <core/graphics/runtime/runtime.h>
 #include <core/input/module.h>
 #include <core/task/gpu/persistent_state.h>
-#include <loader/project_entry.h>
+#include <loader/project_entry.adhd.h>
 
 #include <global/array.h>
 #include <global/assert.h>

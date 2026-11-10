@@ -5,6 +5,10 @@
 #include <tests/common/gtest_macros.adhd>
 #include <tests/unit/ecs_graphics/suite.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -1681,6 +1685,11 @@ NWB_ADHD_GTEST(EcsGraphics, MaterialPipelineKeyDistinguishesFramebufferFormatsAn
 NWB_ADHD_GTEST(EcsGraphics, MaterialPipelineCacheRejectsReplacedCsgEvaluatorInclude, VerifyEcsGraphics_MaterialPipelineCacheRejectsReplacedCsgEvaluatorInclude)
 NWB_ADHD_GTEST(EcsGraphics, NonUniformScaleCannotBecomeRigidJointRotation, VerifyEcsGraphics_NonUniformScaleCannotBecomeRigidJointRotation)
 NWB_ADHD_GTEST(EcsGraphics, InvalidSkeletonParentsAndJointCountsAreRejected, VerifyEcsGraphics_InvalidSkeletonParentsAndJointCountsAreRejected)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -1706,6 +1715,11 @@ TEST(EcsGraphics, MeshSkinningPayloadValidatesSkeletonAndPalette){ VerifyEcsGrap
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_GTEST(EcsGraphics, FrameGraphPhysicalQueueRuntimeStatisticsRejectsMixedSnapshots, VerifyEcsGraphics_FrameGraphPhysicalQueueRuntimeStatisticsRejectsMixedSnapshots)
 NWB_ADHD_GTEST(EcsGraphics, FrameGraphPacketSubmissionStatisticsRejectsInvalidQueueOrOwner, VerifyEcsGraphics_FrameGraphPacketSubmissionStatisticsRejectsInvalidQueueOrOwner)
 NWB_ADHD_GTEST(EcsGraphics, FrameGraphBuilderCopiesOwnerBoundPacketSubmissionStatistics, VerifyEcsGraphics_FrameGraphBuilderCopiesOwnerBoundPacketSubmissionStatistics)

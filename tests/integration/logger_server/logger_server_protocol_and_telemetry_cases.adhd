@@ -5,6 +5,10 @@
 #include "suite.adhd"
 #include <tests/common/gtest_macros.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -33,9 +37,9 @@ native{
 #include <logger/server/crash_auth.adhd.h>
 
 #if defined(NWB_PLATFORM_WINDOWS)
-#include <logger/server/clipboard_text_internal.h>
-#include <logger/server/crash_symbolicate.h>
-#include <logger/server/log_row_painter.h>
+#include <logger/server/clipboard_text.adhd.h>
+#include <logger/server/crash_symbolicate.adhd.h>
+#include <logger/server/log_row_painter.adhd.h>
 
 #include <windows.h>
 #include <dbghelp.h>
@@ -774,6 +778,9 @@ void VerifyLoggerClipboardText_ByteCountRejectsOverflowBeforeNativeAllocation(){
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -833,6 +840,10 @@ DumpBytes ExceptionDump(Core::Alloc::GlobalArena& arena, const MINIDUMP_STREAM_T
 
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_GTEST_F(LoggerProtocolTests, MessagePayloadReadsUnalignedBytesAndPreservesEmbeddedNulls, VerifyLoggerProtocolTests_MessagePayloadReadsUnalignedBytesAndPreservesEmbeddedNulls)
 NWB_ADHD_GTEST_F(LoggerProtocolTests, CrashUploadAuthorizationMatchesBearerToken, VerifyLoggerProtocolTests_CrashUploadAuthorizationMatchesBearerToken)
 
@@ -844,6 +855,10 @@ NWB_ADHD_GTEST_F(LoggerTelemetryPublication, TelemetryPublicationMovesCompletedB
 NWB_ADHD_GTEST_F(LoggerProducerContracts, MessagePayloadRejectsInvalidTypeWithoutPublishingStaleBytes, VerifyLoggerProducerContracts_MessagePayloadRejectsInvalidTypeWithoutPublishingStaleBytes)
 NWB_ADHD_GTEST_F(LoggerProducerContracts, SimultaneousProcessedFilesKeepIndependentRecords, VerifyLoggerProducerContracts_SimultaneousProcessedFilesKeepIndependentRecords)
 NWB_ADHD_GTEST_F(LoggerProducerContracts, MissingArchiveRetainsNativeReadFailureInOwningRejection, VerifyLoggerProducerContracts_MissingArchiveRetainsNativeReadFailureInOwningRejection)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 native{
 

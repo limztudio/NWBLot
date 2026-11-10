@@ -6,6 +6,10 @@
 #include <tests/common/gtest_macros.adhd>
 #include <tests/unit/common/name_cases.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -666,6 +670,10 @@ void VerifyFrameData_CopiesIndependentWindowState(){
     }
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -722,8 +730,17 @@ NWB_END
 
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_GTEST(NameSymbolDecodeTests, UnknownAndBoundaryNarrowTokensDoNotAllocate, VerifyNameSymbolDecodeTests_UnknownAndBoundaryNarrowTokensDoNotAllocate)
 NWB_ADHD_GTEST(NameSymbolDecodeTests, ResolvesNarrowSpansWithoutChangingUnresolvedText, VerifyNameSymbolDecodeTests_ResolvesNarrowSpansWithoutChangingUnresolvedText)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -750,6 +767,11 @@ TEST(NameSymbolDecodeTests, ResolvesWideSpansWithoutChangingUnresolvedText){ Ver
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_GTEST(NameSymbolDecodeTests, EscapedDocumentRoundTripsAndMalformedRecordsStayUnpublished, VerifyNameSymbolDecodeTests_EscapedDocumentRoundTripsAndMalformedRecordsStayUnpublished)
 NWB_ADHD_GTEST(NameSymbolDecodeTests, RejectsNoncurrentDocumentHeaderBeforePublishingSymbols, VerifyNameSymbolDecodeTests_RejectsNoncurrentDocumentHeaderBeforePublishingSymbols)
 NWB_ADHD_GTEST(NameSymbolDecodeTests, FileLoadSeparatesHeaderAnswerFromNativeReadFailure, VerifyNameSymbolDecodeTests_FileLoadSeparatesHeaderAnswerFromNativeReadFailure)

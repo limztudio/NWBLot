@@ -1,0 +1,270 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "constants.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <engine_namespace.h>
+
+#include <core/global.h>
+#include <core/task/cpu/scheduler.h>
+#include <core/assets/volume/cook_types.h>
+#include <core/assets/cook_paths.h>
+#include <core/assets/global.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#define NWB_ASSET_BUILDER_BEGIN NWB_BEGIN namespace Pipeline{ namespace AssetBuilder{
+#define NWB_ASSET_BUILDER_END }; }; NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ASSET_BUILDER_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct AssetBuildServices{
+    Core::CpuTaskScheduler& cpuScheduler;
+
+
+public:
+    explicit AssetBuildServices(Core::CpuTaskScheduler& cpuScheduler)noexcept
+        : cpuScheduler(cpuScheduler)
+    {}
+};
+
+struct AssetBuildRoot{
+    Path path;
+    ACompactString virtualRoot;
+
+
+public:
+    AssetBuildRoot(Path inPath, const AStringView inVirtualRoot)noexcept
+        : path(Move(inPath))
+        , virtualRoot(inVirtualRoot)
+    {}
+    AssetBuildRoot(Path inPath, const ACompactString& inVirtualRoot)noexcept
+        : path(Move(inPath))
+        , virtualRoot(inVirtualRoot)
+    {}
+};
+
+struct AssetBuildOptions{
+    Path repoRoot;
+    Core::Assets::AssetVector<AssetBuildRoot> assetRoots;
+    Path outputDirectory;
+    ACompactString configuration;
+    ACompactString assetType{ Core::Assets::AssetsVolumeCookDetail::s_AssetVolumeName };
+    AssetBuildServices services;
+    Core::Assets::AssetVector<Core::Assets::AssetString> inputs;
+    b8 useExplicitInputs = false;
+
+
+public:
+    explicit AssetBuildOptions(Core::Assets::AssetArena& arena, Core::CpuTaskScheduler& cpuScheduler)noexcept
+        : repoRoot(arena)
+        , assetRoots(arena)
+        , outputDirectory(arena)
+        , services(cpuScheduler)
+        , inputs(arena)
+    {}
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] Expected<Core::Assets::ResolvedCookPaths> ResolveCookPaths(const AssetBuildOptions& options, Core::Assets::AssetArena& arena);
+[[nodiscard]] b8 SelectBuildInputs(const AssetBuildOptions& options, const Core::Assets::ResolvedCookPaths& paths, Core::Assets::ScratchArena& scratchArena, Core::Assets::DiscoveredNwbFileVector& files);
+[[nodiscard]] b8 BuildAssets(const AssetBuildOptions& options, Core::Assets::ScratchArena& scratchArena);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ASSET_BUILDER_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+StringView SelectEffectiveBuildConfiguration(in StringView canonicalConfiguration){
+    if(canonicalConfiguration.empty())
+        return s_DefaultPipelineConfig;
+    return canonicalConfiguration;
+}
+
+b8 ShouldSelectExplicitBuildInputs(in b8 useExplicitInputs, in b8 hasInputs){
+    return useExplicitInputs || hasInputs;
+}
+
+Optional<usize> TryClampManifestHashReserveCount(in u64 plannedFileCount){
+    if(plannedFileCount <= cast<u64>(usize.max))
+        return Optional<usize>(cast<usize>(plannedFileCount));
+    return Optional<usize>();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_COOK)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <pipeline/root_discovery.h>
+
+#include <core/assets/asset_file_discovery.h>
+#include <core/assets/cook_input_selection.h>
+#include <core/assets/volume/built_asset.h>
+#include <core/assets/volume/cooked_object_cache.h>
+#include <core/assets/volume/pack_manifest.h>
+#include <core/assets/volume/volume_prepare_registry.h>
+#include <core/assets/cook_metadata.h>
+#include <core/assets/paths.h>
+#include <core/common/log.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ASSET_BUILDER_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Assets = Core::Assets;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 SelectBuildInputs(const AssetBuildOptions& options, const Assets::ResolvedCookPaths& paths, Assets::ScratchArena& scratchArena, Assets::DiscoveredNwbFileVector& files){
+    if(options.inputs.empty()){
+        files.clear();
+        return true;
+    }
+
+    Vector<u8, Assets::ScratchArena> selected(files.size(), u8(0), scratchArena);
+    // Borrow discovered canonical paths until selection finishes; compact the owning file vector only afterward.
+    const auto selectionResult = Assets::CookInputSelector::Select(paths.repoRoot, paths.assetRoots, files, options.inputs, true, scratchArena, selected);
+    if(!selectionResult){
+        LogCookInputSelectionFailure(selectionResult.error(), NWB_TEXT("AssetBuilder"));
+        return false;
+    }
+
+    Assets::CookInputSelector::Compact(selected, files);
+    return true;
+}
+
+b8 BuildAssets(const AssetBuildOptions& options, Assets::ScratchArena& scratchArena){
+    Assets::AssetArena& arena = options.assetRoots.get_allocator().arena();
+    if(!ValidateAssetBuildType(options.assetType.view(), Assets::AssetsVolumeCookDetail::s_AssetVolumeName))
+        return false;
+
+    auto paths = ResolveCookPaths(options, arena);
+    if(!paths)
+        return false;
+    const Assets::ResolvedCookPaths& resolvedPaths = *paths;
+
+    auto discoveredFiles = Assets::AssetFileDiscovery::Discover(resolvedPaths.assetRoots, Assets::s_NwbExtension, arena, scratchArena);
+    if(!discoveredFiles)
+        return false;
+
+    auto& nwbFiles = *discoveredFiles;
+
+    if(ShouldSelectExplicitBuildInputs(options.useExplicitInputs, !options.inputs.empty()) && !SelectBuildInputs(options, resolvedPaths, scratchArena, nwbFiles))
+        return false;
+
+    Assets::ParsedAssetMetadata parsedMetadata(arena);
+    if(!Assets::RegisterAutoCollectedCookEntryTypes(parsedMetadata.entryRegistry, scratchArena))
+        return false;
+    if(!Assets::ParseAssetMetadata(nwbFiles, resolvedPaths.repoRoot, resolvedPaths.cacheDirectory, arena, options.services.cpuScheduler, scratchArena, parsedMetadata))
+        return false;
+
+    Assets::CookString configurationSafeName = BuildCanonicalSafeCacheName(arena, options.configuration.view());
+    if(configurationSafeName.empty())
+        configurationSafeName = SelectEffectiveBuildConfiguration(configurationSafeName);
+
+    u64 plannedFileCount = 0u;
+    Assets::AssetsVolumeCookDetail::AssetVolumeManifestCookerVector manifestCookers(arena);
+    Assets::AssetsVolumeCookDetail::AssetVolumePrepareContext prepareContext{ arena, resolvedPaths, configurationSafeName, parsedMetadata, plannedFileCount, manifestCookers, scratchArena };
+    if(!Assets::AssetsVolumeCookDetail::RegisterAutoCollectedAssetVolumePreparers(prepareContext))
+        return false;
+    if(!Assets::AddPlannedFileCount(parsedMetadata.entryRegistry.entryCount(), plannedFileCount))
+        return false;
+
+    Assets::AssetsVolumeCookDetail::AssetVolumePackManifest manifest(arena);
+    if(!Assets::AssetsVolumeCookDetail::ReserveAssetVolumePackManifest(plannedFileCount, manifest))
+        return false;
+
+    Assets::CookEntryPathHashSet seenVirtualPathHashes{scratchArena};
+    if(const Optional<usize> reserveCount = TryClampManifestHashReserveCount(plannedFileCount); reserveCount.has_value())
+        seenVirtualPathHashes.reserve(*reserveCount);
+
+    for(const Assets::AssetsVolumeCookDetail::AssetVolumeManifestCooker& manifestCooker : manifestCookers){
+        if(!manifestCooker(manifest, seenVirtualPathHashes, scratchArena))
+            return false;
+    }
+    if(!Assets::AssetsVolumeCookDetail::BuildRegistryObjectManifestEntries(configurationSafeName, arena, options.services.cpuScheduler, scratchArena, parsedMetadata, manifest, seenVirtualPathHashes))
+        return false;
+
+    if(!Assets::BuiltAssetDetail::WriteBuiltAssets(resolvedPaths.outputDirectory, manifest, scratchArena))
+        return false;
+
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AssetBuilder: built {} assets into '{}'"), manifest.entries.size(), PathToString<tchar>(options.outputDirectory));
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ASSET_BUILDER_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

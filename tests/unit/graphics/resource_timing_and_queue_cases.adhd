@@ -7,6 +7,10 @@
 #include <tests/unit/graphics/resource_suite.adhd>
 #include "gpu_timing_test_names.adhd"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -1204,6 +1208,10 @@ void VerifyResourceQueueSharing_RejectsEveryUnknownSharingBit(){
     }
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -1259,6 +1267,10 @@ NWB_END
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_ADHD_GTEST(GpuTimingPacketEnvelopeMetrics, CorrelatesLargeOutOfOrderFrame, VerifyGpuTimingPacketEnvelopeMetrics_CorrelatesLargeOutOfOrderFrame)
 NWB_ADHD_GTEST(GpuTimingPacketEnvelopeMetrics, ReplacesDuplicateRangesWithoutCompletingMissingScopes, VerifyGpuTimingPacketEnvelopeMetrics_ReplacesDuplicateRangesWithoutCompletingMissingScopes)

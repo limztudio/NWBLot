@@ -1,0 +1,109 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <logger/rgd/decode.adhd>
+#include <logger/server/crash_symbolicate_internal.adhd>
+#include <logger/server/crash_values.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_RgdInspectFailedStatusLine = "status=inspect_failed\n";
+
+b8 NeedsTrailingReportNewline(in StringView text){
+    if(text.empty())
+        return true;
+    return text.back() != 10u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <core/crash/package_names.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace LoggerCrashSymbolicateDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace CrashNames = ::NWB::Core::Crash::PackageNames;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Expected decode failures retain the ingest report; unexpected exceptions remain terminal.
+void AppendRadeonGpuDetectiveSummary(const CrashScratchPath& packageDirectory, Core::Alloc::ScratchArena& arena, CrashReportText& outReport){
+    const CrashScratchPath rgdCapture = packageDirectory / CrashNames::s_GpuDetectiveCaptureFileName;
+    const auto regularCapture = IsRegularFile(rgdCapture);
+    if(!regularCapture){
+        NWB_LOGGER_WARNING(NWB_TEXT("Log server: failed to inspect Radeon GPU Detective capture '{}': {}"), PathToString<tchar>(rgdCapture), ConvertString(regularCapture.error().message()));
+        outReport += s_CrashSymbolicateRgdGpuDetectiveSectionHeader;
+        outReport += s_RgdInspectFailedStatusLine;
+        return;
+    }
+    if(!*regularCapture)
+        return; // An absent capture has no decode work.
+
+    const AString<Core::Alloc::ScratchArena> capturePath = PathToString<char>(arena, rgdCapture);
+
+    const auto decoded = Rgd::DecodeCrashDumpToText(capturePath);
+    if(!decoded){
+        outReport += s_CrashSymbolicateRgdGpuDetectiveSectionHeader;
+        outReport += s_CrashSymbolicateRgdGpuDetectiveDecodeFailedStatus;
+        const StringView detail = decoded.error();
+        if(!detail.empty()){
+            outReport += s_CrashSymbolicateRgdReportDetailPrefix;
+            outReport.append(detail.data(), detail.size());
+            outReport.push_back('\n');
+        }
+        return;
+    }
+
+    outReport += s_CrashSymbolicateRgdGpuDetectiveSectionHeader;
+    outReport.append(decoded->data(), decoded->size());
+    if(NeedsTrailingReportNewline(StringView(decoded->data(), decoded->size())))
+        outReport.push_back('\n');
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

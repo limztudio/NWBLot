@@ -8,6 +8,10 @@
 #include <tests/unit/global/algorithm_case_types.adhd>
 #include <tests/unit/global/name_case_types.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -1315,6 +1319,10 @@ void VerifyAllocationOwners_ConcurrentSharedOwnerChurnPreservesTotals(){
     RecordUnsignedTestProperty("shared_owner_churn_ns", elapsed);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -1411,6 +1419,10 @@ void WaitForFlag(const Atomic<b8>& flag)noexcept{
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_ADHD_GTEST(Base64, RejectsMalformedAlphabetLengthPaddingAndUnusedBits, VerifyBase64_RejectsMalformedAlphabetLengthPaddingAndUnusedBits)
 NWB_ADHD_GTEST(Base64, ExactDecodedBoundsAreCheckedBeforeAllocation, VerifyBase64_ExactDecodedBoundsAreCheckedBeforeAllocation)

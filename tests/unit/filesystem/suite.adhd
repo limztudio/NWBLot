@@ -7,6 +7,10 @@
 #include <tests/common/test_context.adhd>
 #include <tests/unit/filesystem/name_cases.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -947,6 +951,10 @@ void VerifyFilesystemVolumeTest_ThrowingPromotionDiagnosticRestoresPublishedByte
     }
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -1018,6 +1026,10 @@ NWB_END
 
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_GTEST_F(FilesystemVolumeTest, SegmentProbePreservesInspectionErrors, VerifyFilesystemVolumeTest_SegmentProbePreservesInspectionErrors)
 NWB_ADHD_GTEST_F(FilesystemVolumeTest, SegmentCreatedAfterMountIsNotTruncated, VerifyFilesystemVolumeTest_SegmentCreatedAfterMountIsNotTruncated)
 NWB_ADHD_GTEST_F(FilesystemVolumeTest, FailedMultiSegmentGrowthKeepsTrimmedVolumeMountable, VerifyFilesystemVolumeTest_FailedMultiSegmentGrowthKeepsTrimmedVolumeMountable)
@@ -1030,6 +1042,11 @@ NWB_ADHD_GTEST_F(FilesystemVolumeTest, ExplicitFlushSurvivesResourceOnlyDestruct
 NWB_ADHD_GTEST_F(FilesystemVolumeTest, RemountFlushesPendingMetadata, VerifyFilesystemVolumeTest_RemountFlushesPendingMetadata)
 NWB_ADHD_GTEST_F(FilesystemVolumeTest, ReplacesRemovesAndReadsEmptyFiles, VerifyFilesystemVolumeTest_ReplacesRemovesAndReadsEmptyFiles)
 NWB_ADHD_GTEST_F(FilesystemVolumeTest, CompactionPreservesExistingRecoveryDirectories, VerifyFilesystemVolumeTest_CompactionPreservesExistingRecoveryDirectories)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -1055,7 +1072,17 @@ TEST_F(FilesystemVolumeTest, IncompleteCompactionRollbackUnmountsTheVolume){ Ver
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_GTEST_F(FilesystemVolumeTest, FailedCompactionPreservesOverlappingSourcePayloadBytes, VerifyFilesystemVolumeTest_FailedCompactionPreservesOverlappingSourcePayloadBytes)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -1081,6 +1108,11 @@ TEST_F(FilesystemVolumeTest, ImmediateMutationUnwindPreservesIndexedPayloadsAndM
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_GTEST_F(FilesystemVolumeTest, CompactionPreservesCapacityUntilRequestedTrimAndRetainsCursorIdentity, VerifyFilesystemVolumeTest_CompactionPreservesCapacityUntilRequestedTrimAndRetainsCursorIdentity)
 NWB_ADHD_GTEST_F(FilesystemVolumeTest, RejectsInvalidPathHashFromMetadataIndex, VerifyFilesystemVolumeTest_RejectsInvalidPathHashFromMetadataIndex)
 NWB_ADHD_GTEST_F(FilesystemVolumeTest, MetadataImagePreservesCompleteHashesAndClearsRemovedRecords, VerifyFilesystemVolumeTest_MetadataImagePreservesCompleteHashesAndClearsRemovedRecords)

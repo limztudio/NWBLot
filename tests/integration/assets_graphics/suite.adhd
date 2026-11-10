@@ -7,14 +7,18 @@
 #include <tests/common/test_context.adhd>
 #include <tests/common/gtest_macros.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <pipeline/asset_builder/build.h>
-#include <pipeline/asset_gatherer/gather.h>
+#include <pipeline/asset_builder/build.adhd.h>
+#include <pipeline/asset_gatherer/gather.adhd.h>
 
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/assets_csg/cook.adhd.h>

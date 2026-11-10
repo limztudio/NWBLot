@@ -80,6 +80,9 @@ private:
     MStringView m_activeSource;
     const Preprocessor* m_preprocessor = nullptr;
     MVector<MStringView> m_pendingImplicitSourceNativeBlocks;
+    b8 m_hasPriorLocalDecl = false;
+    b8 m_hasPriorLocalNativeBlock = false;
+    b8 m_hasPendingImportedNativeBlock = false;
 };
 
 

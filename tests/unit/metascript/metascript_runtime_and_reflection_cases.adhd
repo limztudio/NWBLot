@@ -5,6 +5,10 @@
 #include <tests/common/gtest_macros.adhd>
 #include <tests/unit/metascript/suite.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -877,6 +881,11 @@ NWB_ADHD_GTEST(Metascript, UnexpectedReaderExceptionsPropagateWithoutBecomingPar
 NWB_ADHD_GTEST(Metascript, ReportedReaderFailureRemainsAnExplicitParseError, VerifyMetascript_ReportedReaderFailureRemainsAnExplicitParseError)
 NWB_ADHD_GTEST(Metascript, SuccessfulZeroReaderCountIsEndOfFileInsteadOfReadFailure, VerifyMetascript_SuccessfulZeroReaderCountIsEndOfFileInsteadOfReadFailure)
 NWB_ADHD_GTEST(Metascript, OversizedReaderResultIsRejectedBeforeUsingItsBuffer, VerifyMetascript_OversizedReaderResultIsRejectedBeforeUsingItsBuffer)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -890,6 +899,11 @@ native{
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_GTEST(AdhdReflection, RejectsInvalidContainerEntriesWithoutPublishingEmptyNames, VerifyAdhdReflection_RejectsInvalidContainerEntriesWithoutPublishingEmptyNames)
 NWB_ADHD_GTEST(AdhdCompactString, SearchAndBoundariesUseCanonicalStoredText, VerifyAdhdCompactString_SearchAndBoundariesUseCanonicalStoredText)
 NWB_ADHD_GTEST(AdhdCompiler, ScalarLerpEvaluatesSideEffectOnce, VerifyAdhdCompiler_ScalarLerpEvaluatesSideEffectOnce)
@@ -909,6 +923,11 @@ NWB_ADHD_GTEST(AdhdCompiler, TrimViewBorrowsLocalCompactString, VerifyAdhdCompil
 NWB_ADHD_GTEST(AdhdCompiler, StringAndCompactSubstrPreserveOwnershipAndSingleEvaluation, VerifyAdhdCompiler_StringAndCompactSubstrPreserveOwnershipAndSingleEvaluation)
 NWB_ADHD_GTEST(AdhdCompiler, HighByteFrontBackAndIndexMaintainUnsignedSemanticsAndMutation, VerifyAdhdCompiler_HighByteFrontBackAndIndexMaintainUnsignedSemanticsAndMutation)
 NWB_ADHD_GTEST(AdhdCompiler, SimdLaneComparisonAndFiniteChecksIgnoreInactiveAndShortCircuitedSignalingNaNs, VerifyAdhdCompiler_SimdLaneComparisonAndFiniteChecksIgnoreInactiveAndShortCircuitedSignalingNaNs)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 

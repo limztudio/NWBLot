@@ -5,6 +5,10 @@
 #include <tests/common/gtest_macros.adhd>
 #include <tests/unit/metascript/suite.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -875,6 +879,10 @@ void VerifyAdhdCompiler_KeepsDynamicLaneIndicesDynamicWhileFoldingConstantIndice
     EXPECT_NE(generated.find("::VectorGetByIndex("), usize.max);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -937,6 +945,10 @@ NWB_END
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_ADHD_GTEST(AdhdCompiler, RejectsNonPodNestedSerializeArrayAndUnknownWaitTarget, VerifyAdhdCompiler_RejectsNonPodNestedSerializeArrayAndUnknownWaitTarget)
 NWB_ADHD_GTEST(AdhdCompiler, RejectsMismatchedTemplatedInterfaceOverrideSignature, VerifyAdhdCompiler_RejectsMismatchedTemplatedInterfaceOverrideSignature)

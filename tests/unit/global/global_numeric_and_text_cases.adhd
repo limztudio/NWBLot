@@ -6,6 +6,10 @@
 #include <tests/common/simd_memory_guard_fixture.adhd>
 #include <tests/unit/global/global_tests.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -1121,6 +1125,10 @@ NWB_ADHD_GTEST(SIMDMemory, AdjacentRangesInOneLiveByteArrayAreAcceptedWithoutClo
 NWB_ADHD_GTEST(SIMDMemory, ProtectedPageEdgesRejectOverreadsUnderreadsAndOutOfRangeStores, VerifySIMDMemory_ProtectedPageEdgesRejectOverreadsUnderreadsAndOutOfRangeStores)
 NWB_ADHD_GTEST(SIMDMemory, ZeroLengthAllowsNullOnePastAndInaccessiblePointersWithoutAccess, VerifySIMDMemory_ZeroLengthAllowsNullOnePastAndInaccessiblePointersWithoutAccess)
 NWB_ADHD_GTEST(SIMDMemory, InvalidCapacityNullAlignmentHugeCountsAndOverlapAbortBeforeRangeAccess, VerifySIMDMemory_InvalidCapacityNullAlignmentHugeCountsAndOverlapAbortBeforeRangeAccess)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 native{
 

@@ -70,6 +70,10 @@ class SkeletonJointBinary{
     public SkeletonJointMatrix localBindPose(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -85,6 +89,10 @@ using ScratchSkeletonNameHashVector = Vector<NameHash, Core::Alloc::ScratchArena
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 SkeletonHeaderBinary MakeSkeletonHeaderBinary(in u64 jointCount){
     SkeletonHeaderBinary header;

@@ -5,6 +5,10 @@
 #include <tests/common/gtest_macros.adhd>
 #include <tests/unit/ecs_ui/suite.adhd>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -1508,6 +1512,10 @@ void VerifyUiMultilineNativeTests_LaterOversizedCommitPreservesEarlierAcceptedNa
     }
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -1668,6 +1676,10 @@ b8 UiEditPointerCaptureTests::publishPart(const b8 gesture){
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_ADHD_GTEST_F(UiEditNavigationHostTests, CandidateGeometryCannotReplacePublishedYHitsBeforeAcceptance, VerifyUiEditNavigationHostTests_CandidateGeometryCannotReplacePublishedYHitsBeforeAcceptance)
 NWB_ADHD_GTEST_F(UiEditNavigationHostTests, EmptyAndTrailingHardLinesPublishDistinctEndpoints, VerifyUiEditNavigationHostTests_EmptyAndTrailingHardLinesPublishDistinctEndpoints)

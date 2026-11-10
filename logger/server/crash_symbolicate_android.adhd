@@ -1,0 +1,121 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <logger/server/crash_symbolicate_internal.adhd>
+#include <logger/server/crash_values.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsAndroidTombstoneFrameLine(in StringView trimmedLine){
+    if(trimmedLine.size() < s_CrashSymbolicateAndroidAndroidTombstoneFrameMinimumTextLength)
+        return false;
+    if(trimmedLine.front() != 35u)
+        return false;
+    return trimmedLine.find(s_CrashSymbolicateAndroidTombstoneProgramCounterToken) < trimmedLine.size();
+}
+
+StringView SelectAndroidTombstoneStatusLine(in b8 hasFrames){
+    if(hasFrames)
+        return s_CrashSymbolicateAndroidAndroidTombstoneParsedStatus;
+    return s_CrashSymbolicateAndroidAndroidTombstoneUndecodedStatus;
+}
+
+StringView SelectAndroidTombstoneDetailLine(in b8 hasFrames){
+    if(hasFrames)
+        return s_CrashSymbolicateAndroidAndroidTombstoneFramesDetail;
+    return s_CrashSymbolicateAndroidAndroidTombstoneNoFramesDetail;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <core/crash/package_names.h>
+
+#include <global/text_utils.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace LoggerCrashSymbolicateDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace CrashNames = ::NWB::Core::Crash::PackageNames;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void AppendAndroidTombstoneSummary(const CrashScratchPath& packageDirectory, Core::Alloc::ScratchArena& arena, CrashReportText& outReport){
+    AString<Core::Alloc::ScratchArena> tombstone{arena};
+    const b8 tombstonePresent = ReadTextFile(packageDirectory / CrashNames::s_AndroidTombstoneFileName, tombstone) && !tombstone.empty();
+    if(!tombstonePresent){
+        outReport += s_CrashSymbolicateAndroidAndroidTombstoneMissingReport;
+        return;
+    }
+
+    AString<Core::Alloc::ScratchArena> frames{arena};
+    frames.reserve(AddSize(tombstone.size(), 1u));
+    const AStringView tombstoneText(tombstone.data(), tombstone.size());
+    usize cursor = 0u;
+    while(const auto line = NextTextLine(tombstoneText, cursor)){
+        const AStringView trimmed = TrimLeftView(*line);
+        if(!IsAndroidTombstoneFrameLine(trimmed))
+            continue;
+
+        frames.append(trimmed.data(), trimmed.size());
+        frames += '\n';
+    }
+
+    const b8 hasFrames = !frames.empty();
+    outReport += SelectAndroidTombstoneStatusLine(hasFrames);
+    outReport += s_CrashSymbolicateAndroidAndroidTombstoneResolverLine;
+    outReport += s_CrashSymbolicateAndroidAndroidTombstonePresentLine;
+    outReport += SelectAndroidTombstoneDetailLine(hasFrames);
+
+    if(hasFrames){
+        outReport += s_CrashSymbolicateAndroidTombstoneCallstackSectionHeader;
+        outReport += frames;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

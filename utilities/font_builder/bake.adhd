@@ -1,0 +1,237 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/font_builder/global.adhd>
+#include <utilities/font_builder/bake_types.adhd>
+#include <utilities/font_builder/font_atlas_packer.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_font_atlas/model.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_FONT_BUILDER_UTILITY_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct BakeOptions{
+    Path source;
+    Path output;
+    u32 ppem = Impl::s_FontAtlasDefaultBakePpem;
+    u32 spread = Impl::s_FontAtlasDefaultSpreadPixels;
+    u32 extent = s_DefaultBakeExtent;
+    u32 maxGroups = Impl::s_FontAtlasMaxGroupCount;
+    b8 outline = false;
+    b8 overwrite = false;
+
+
+public:
+    explicit BakeOptions(Core::Alloc::GlobalArena& arena)noexcept
+        : source(arena)
+        , output(arena)
+    {}
+};
+
+struct RasterGlyph{
+    Impl::FontAtlasGlyph record;
+    Core::Assets::AssetBytes pixels;
+
+
+public:
+    explicit RasterGlyph(Core::Assets::AssetArena& arena)noexcept
+        : pixels(arena)
+    {}
+};
+
+using RasterGlyphs = Core::Assets::AssetVector<RasterGlyph>;
+using MetadataString = ::AString<Core::Alloc::ScratchArena>;
+
+[[nodiscard]] b8 ValidateOptions(const BakeOptions& options);
+// Options must already pass ValidateOptions.
+[[nodiscard]] Expected<Impl::FontAtlasPayload> Bake(const BakeOptions& options, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratch, Core::Assets::AssetBytes& outSourceFontBytes);
+[[nodiscard]] b8 PackGlyphs(const BakeOptions& options, Span<const RasterGlyph> glyphs, Core::Alloc::ScratchArena& scratch, Impl::FontAtlasPayload& outPayload);
+inline void CompactAtlasGroups(Impl::FontAtlasPayload& payload){
+    for(usize groupIndex = 0u; groupIndex < payload.groups.size(); ++groupIndex){
+        auto& group = payload.groups[groupIndex];
+        const Impl::FontAtlasGroupCompactBounds bounds = Impl::ComputeFontAtlasGroupCompactBounds(
+            payload.glyphs,
+            static_cast<u32>(groupIndex),
+            group.width,
+            group.height,
+            group.channelCount,
+            payload.guardTexels
+        );
+        if(bounds.unchanged)
+            continue;
+
+        Core::Assets::AssetBytes compactPixels(group.pixels.get_allocator().arena());
+        FontAtlasPacker{}.compactGroupPixels(bounds, group.width, group.channelCount, group.pixels, compactPixels);
+        for(auto& glyph : payload.glyphs)
+            Impl::OffsetFontAtlasGroupGlyph(static_cast<u32>(groupIndex), bounds.firstX, bounds.firstY, glyph);
+        group.width = bounds.width;
+        group.height = bounds.height;
+        group.channelCount = bounds.channelCount;
+        group.pixels = Move(compactPixels);
+    }
+}
+void BuildFontMetadata(const Impl::FontAtlasPayload& payload, MetadataString& outText);
+[[nodiscard]] Expected<Core::Assets::AssetBytes, AStringView> BuildPreparedFont(Span<const u8> sourceFontBytes, const Impl::FontAtlasPayload& atlas, Core::Alloc::ScratchArena& scratch);
+[[nodiscard]] Expected<Core::Assets::AssetBytes, AStringView> ReadFontSourceInput(const Path& path, Core::Assets::AssetArena& arena);
+[[nodiscard]] b8 WriteOutputs(const BakeOptions& options, Span<const u8> sourceFontBytes, const Impl::FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratch);
+i32 Run(i32 argc, char** argv);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_FONT_BUILDER_UTILITY_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+StringView ResolveBakeFontAtlasRasterModeText(in FontAtlasRasterMode mode){
+    if(mode == FontAtlasRasterMode::Bitmap)
+        return s_FontAtlasRasterModeBitmap;
+    return s_FontAtlasRasterModeOutline;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <utilities/font_builder/font_source.adhd.h>
+
+#include <impl/assets_font/prepared_source.adhd.h>
+#include <impl/assets_font_atlas/asset.adhd.h>
+
+#include <core/common/log.h>
+
+#include <global/sha256.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_FONT_BUILDER_UTILITY_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ValidateOptions(const BakeOptions& options){
+    if(!ValidateBakeInitialOptions(options.ppem, options.spread, options.extent, options.maxGroups, !options.source.empty(), !options.output.empty()))
+        return false;
+    if(options.output.extensionView() != NWB_TEXT(".nwb")){
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: --output must name a .nwb font asset bunch"));
+        return false;
+    }
+    const auto stem = options.output.stemView();
+    if(stem.empty() || IsDot(stem) || IsDotDot(stem)){
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: output must have a nonempty asset stem"));
+        return false;
+    }
+    static constexpr Array<AStringView, 3u> s_SourceExtensions = { s_TrueTypeExtension, s_OpenTypeExtension, Impl::s_PreparedFontExtension };
+    if(!PathHasListedExtension(options.source, s_SourceExtensions)){
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: --font must name a .ttf, .otf, or prepared .font source"));
+        return false;
+    }
+    return true;
+}
+
+Expected<Impl::FontAtlasPayload> Bake(const BakeOptions& options, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratch, Core::Assets::AssetBytes& outSourceFontBytes){
+    Impl::FontAtlasPayload candidate(arena);
+    FontSource source(candidate.glyphs.get_allocator().arena());
+    if(!source.open(options, scratch, candidate))
+        return MakeUnexpected(Failure{});
+    auto glyphs = Rasterize(options, source);
+    if(!glyphs || !PackGlyphs(options, *glyphs, scratch, candidate) || !ExportPositioning(source, candidate))
+        return MakeUnexpected(Failure{});
+    if(!Impl::ValidateFontAtlasPayload(candidate, scratch))
+        return MakeUnexpected(Failure{});
+    outSourceFontBytes = source.takeBytes();
+    return candidate;
+}
+
+void BuildFontMetadata(const Impl::FontAtlasPayload& payload, MetadataString& outText){
+    outText = "font face;\r\n";
+    outText += "\r\nfont_atlas atlas;\r\natlas.font = face;\r\n";
+    StringAppendFormat(outText, "atlas.bake_ppem = {};\r\n", payload.bakePpem);
+    StringAppendFormat(outText, "atlas.spread_pixels = {};\r\n", payload.spreadPixels);
+    StringAppendFormat(outText, "atlas.raster_mode = \"{}\";\r\n", ResolveBakeFontAtlasRasterModeText(payload.rasterMode));
+    StringAppendFormat(outText, "atlas.ascender_units = {:#.9g};\r\n", payload.ascenderUnits);
+    StringAppendFormat(outText, "atlas.descender_units = {:#.9g};\r\n", payload.descenderUnits);
+    StringAppendFormat(outText, "atlas.line_gap_units = {:#.9g};\r\n", payload.lineGapUnits);
+    outText += "atlas.glyphs = [\r\n";
+    for(const auto& glyph : payload.glyphs){
+        if(glyph.drawable == 0u){
+            StringAppendFormat(outText, "    {{ \"advance_units\": {:#.9g} }},\r\n", glyph.advanceUnits);
+            continue;
+        }
+        StringAppendFormat(
+            outText,
+            "    {{ \"group\": {}, \"channel\": {}, \"x\": {}, \"y\": {}, \"width\": {}, \"height\": {}, "
+            "\"plane_left\": {:#.9g}, \"plane_top\": {:#.9g}, \"advance_units\": {:#.9g} }},\r\n",
+            glyph.group, glyph.channel, glyph.x, glyph.y, glyph.width, glyph.height,
+            glyph.planeLeft, glyph.planeTop, glyph.advanceUnits
+        );
+    }
+    outText += "];\r\n\r\nasset_bunch bunch = [face, atlas];\r\n";
+}
+
+Expected<Core::Assets::AssetBytes, AStringView> BuildPreparedFont(const Span<const u8> sourceFontBytes, const Impl::FontAtlasPayload& atlas, Core::Alloc::ScratchArena& scratch){
+    Core::Assets::AssetArena& arena = atlas.glyphs.get_allocator().arena();
+    if(ComputeSha256({ sourceFontBytes.data(), sourceFontBytes.size() }) != atlas.fontSha256){
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: source changed during bake"));
+        return MakeUnexpected(AStringView("source changed during bake"));
+    }
+
+    Vector<Impl::PreparedFontImageView, Core::Alloc::ScratchArena> images(scratch);
+    images.reserve(atlas.groups.size());
+    for(const auto& group : atlas.groups){
+        images.push_back(Impl::PreparedFontImageView(group.width, group.height, group.channelCount, { group.pixels.data(), group.pixels.size() }));
+    }
+    return Impl::SerializePreparedFontSource({ sourceFontBytes.data(), sourceFontBytes.size() }, atlas.faceIndex, images, arena);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_FONT_BUILDER_UTILITY_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

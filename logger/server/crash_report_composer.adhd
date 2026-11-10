@@ -1,0 +1,261 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <logger/server/crash_symbolicate.adhd>
+#include <logger/server/crash_symbolicate_internal.adhd>
+#include <logger/server/crash_values.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace LoggerCrashSymbolicateDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class CrashReportComposer final{
+public:
+    [[nodiscard]] static CrashReportText BuildOrderedCrashReport(const CrashPackageSummary& summary, Core::Alloc::ScratchArena& scratchArena, CrashReportText&& detailReport);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_ComposerCallstackBareHeader = "[callstack]\n";
+const StringView s_ComposerTombstoneBareHeader = "[tombstone_callstack]\n";
+const StringView s_ComposerCallstackHeading = "callstack:\n";
+const StringView s_ComposerCallstackUnavailableLine = "<unavailable>\n";
+const StringView s_ComposerDetailsHeading = "\ndetails:\n";
+
+class CrashReportSectionRange{
+    public usize removeBegin = usize.max;
+    public usize removeEnd = usize.max;
+    public usize contentBegin = usize.max;
+    public usize contentEnd = usize.max;
+
+    public b8 found()const{
+        return this.removeBegin != usize.max;
+    }
+}
+
+Expected<CrashReportSectionRange> FindCrashReportSectionRange(in StringView report, in StringView header, in StringView headerWithLeadingNewline){
+    CrashReportSectionRange outRange;
+
+    if(report.starts_with(header)){
+        outRange.removeBegin = 0u;
+        outRange.contentBegin = header.size();
+    }
+    else{
+        const usize headerBegin = report.find(headerWithLeadingNewline);
+        if(headerBegin >= report.size())
+            return MakeUnexpected(Failure());
+
+        outRange.removeBegin = headerBegin;
+        outRange.contentBegin = headerBegin + headerWithLeadingNewline.size();
+    }
+
+    const usize nextSection = report.find(s_CrashSymbolicateReportSectionOpen, outRange.contentBegin);
+    if(nextSection >= report.size())
+        outRange.contentEnd = report.size();
+    else
+        outRange.contentEnd = nextSection;
+    outRange.removeEnd = outRange.contentEnd;
+    return outRange;
+}
+
+CrashReportSectionRange FindCrashCallstackSectionRange(in StringView report){
+    const Expected<CrashReportSectionRange> callstack = FindCrashReportSectionRange(report, s_ComposerCallstackBareHeader, s_CrashSymbolicateInternalCallstackSectionHeader);
+    if(callstack.has_value())
+        return callstack.value();
+    const Expected<CrashReportSectionRange> tombstone = FindCrashReportSectionRange(report, s_ComposerTombstoneBareHeader, s_CrashSymbolicateAndroidTombstoneCallstackSectionHeader);
+    if(tombstone.has_value())
+        return tombstone.value();
+    CrashReportSectionRange emptyRange;
+    return emptyRange;
+}
+
+StringView ExtractCrashReportSectionContent(in StringView report, in CrashReportSectionRange range){
+    if(!range.found())
+        return "";
+    return TrimView(report.substr(range.contentBegin, range.contentEnd - range.contentBegin));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <global/text_utils.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace LoggerCrashSymbolicateDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_crash_report_composer{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void AppendReportWithoutSection(const AStringView report, const CrashReportSectionRange& range, AString<Core::Alloc::ScratchArena>& outReport){
+    if(!range.found()){
+        outReport.append(report.data(), report.size());
+        return;
+    }
+
+    if(range.removeBegin > 0u)
+        outReport.append(report.data(), range.removeBegin);
+    if(range.removeEnd < report.size())
+        outReport.append(report.data() + range.removeEnd, report.size() - range.removeEnd);
+}
+
+[[nodiscard]] b8 AppendCrashHeadline(const CrashPackageSummary& summary, CrashReportText& outReport){
+    b8 wrote = false;
+    if(!summary.triggerExpression.empty()){
+        outReport += summary.triggerExpression;
+        outReport += s_ReportLineEnd;
+        wrote = true;
+    }
+    if(!summary.triggerMessage.empty()){
+        outReport += summary.triggerMessage;
+        outReport += s_ReportLineEnd;
+        wrote = true;
+    }
+    if(!summary.triggerFile.empty() || summary.triggerLine != 0u){
+        outReport += "at ";
+        if(!summary.triggerFile.empty())
+            outReport += summary.triggerFile;
+        else
+            outReport += "line ";
+        if(summary.triggerLine != 0u){
+            if(!summary.triggerFile.empty())
+                outReport += ":";
+            Array<char, s_DecimalTextBufferCapacity> buffer{};
+            outReport += FormatDecimal(static_cast<usize>(summary.triggerLine), buffer);
+        }
+        outReport += s_ReportLineEnd;
+        wrote = true;
+    }
+    return wrote;
+}
+
+void AppendVisibleCallstack(const AStringView callstack, CrashReportText& outReport){
+    outReport += s_ComposerCallstackHeading;
+    if(callstack.empty()){
+        outReport += s_ComposerCallstackUnavailableLine;
+        return;
+    }
+
+    outReport.append(callstack.data(), callstack.size());
+    if(outReport.back() != '\n')
+        outReport += s_ReportLineEnd;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+CrashReportText CrashReportComposer::BuildOrderedCrashReport(const CrashPackageSummary& summary, Core::Alloc::ScratchArena& scratchArena, CrashReportText&& detailReport){
+    CrashReportText report(Move(detailReport));
+    const AStringView detailReportView(report.data(), report.size());
+    const CrashReportSectionRange callstackSection = FindCrashCallstackSectionRange(detailReportView);
+    const AStringView callstack = ExtractCrashReportSectionContent(detailReportView, callstackSection);
+
+    AString<Core::Alloc::ScratchArena> details(scratchArena);
+    details.reserve(report.size());
+    __hidden_crash_report_composer::AppendReportWithoutSection(detailReportView, callstackSection, details);
+    const AStringView detailsView = TrimView(AStringView(details.data(), details.size()));
+
+    const AString<Core::Alloc::ScratchArena> callstackCopy(callstack.data(), callstack.size(), scratchArena);
+    report.clear();
+    report.reserve(AddSize(AddSize(detailsView.size(), callstackCopy.size()), s_CrashReportReserveBytes));
+    if(__hidden_crash_report_composer::AppendCrashHeadline(summary, report))
+        report += s_ReportLineEnd;
+    __hidden_crash_report_composer::AppendVisibleCallstack(AStringView(callstackCopy.data(), callstackCopy.size()), report);
+    report += s_ComposerDetailsHeading;
+    if(!detailsView.empty()){
+        report.append(detailsView.data(), detailsView.size());
+        if(report.back() != '\n')
+            report += s_ReportLineEnd;
+    }
+    return report;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,296 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <logger/server/crash_ingest_failure.adhd>
+#include <logger/server/crash_symbolicate.adhd>
+#include <logger/server/crash_values.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class CrashManifestValidator final{
+public:
+    [[nodiscard]] static Expected<CrashPackageSummary, CrashIngestFailure> Validate(LogArena& arena, Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& packageDirectory);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_ManifestJsonTrueLiteral = "true";
+const StringView s_ManifestJsonFalseLiteral = "false";
+const StringView s_ManifestJsonQuote = "\"";
+const StringView s_ManifestJsonKeySuffix = "\": ";
+
+Expected<usize> FindGeneratedCrashJsonValueCursor(in StringView manifest, in StringView key){
+    String needle;
+    needle.reserve(key.size() + s_CrashIngestGeneratedJsonNeedleReserveSlack);
+    needle.append(s_ManifestJsonQuote);
+    needle.append(key);
+    needle.append(s_ManifestJsonKeySuffix);
+
+    const usize cursor = manifest.find(needle);
+    if(cursor >= manifest.size())
+        return MakeUnexpected(Failure());
+    return cursor + needle.size();
+}
+
+Expected<u64> FindGeneratedCrashJsonUnsignedValue(in StringView manifest, in StringView key){
+    const Expected<usize> valueCursor = FindGeneratedCrashJsonValueCursor(manifest, key);
+    if(!valueCursor.has_value())
+        return MakeUnexpected(Failure());
+
+    usize cursor = valueCursor.value();
+    const usize begin = cursor;
+    while(cursor < manifest.size()){
+        const u8 ch = cast<u8>(manifest[cursor]);
+        if(ch < 48u || ch > 57u)
+            break;
+        ++cursor;
+    }
+    if(cursor == begin)
+        return MakeUnexpected(Failure());
+
+    return ParseU64(manifest.substr(begin, cursor - begin));
+}
+
+Expected<b8> FindGeneratedCrashJsonBoolValue(in StringView manifest, in StringView key){
+    const Expected<usize> valueCursor = FindGeneratedCrashJsonValueCursor(manifest, key);
+    if(!valueCursor.has_value())
+        return MakeUnexpected(Failure());
+
+    const StringView tail = manifest.substr(valueCursor.value());
+    if(tail.starts_with(s_ManifestJsonTrueLiteral))
+        return true;
+    if(tail.starts_with(s_ManifestJsonFalseLiteral))
+        return false;
+    return MakeUnexpected(Failure());
+}
+
+b8 HasNonEmptyRequiredManifestSummary(
+    in StringView crashId,
+    in StringView platform,
+    in StringView reasonKind,
+    in StringView artifactStrategy,
+    in StringView event
+){
+    return !crashId.empty() && !platform.empty() && !reasonKind.empty() && !artifactStrategy.empty() && !event.empty();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <global/text_utils.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_crash_manifest_validator{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename ArenaT>
+[[nodiscard]] static Expected<AString<ArenaT>> FindGeneratedJsonStringValue(ArenaT& arena, const AStringView manifest, const AStringView key){
+    const auto valueCursor = FindGeneratedCrashJsonValueCursor(manifest, key);
+    if(!valueCursor)
+        return MakeUnexpected(Failure{});
+    usize cursor = *valueCursor;
+    if(cursor >= manifest.size() || manifest[cursor] != '"')
+        return MakeUnexpected(Failure{});
+    ++cursor;
+
+    usize reserveEnd = cursor;
+    for(; reserveEnd < manifest.size(); ++reserveEnd){
+        if(manifest[reserveEnd] == '\\' && reserveEnd + 1u < manifest.size()){
+            ++reserveEnd;
+            continue;
+        }
+        if(manifest[reserveEnd] == '"')
+            break;
+    }
+    AString<ArenaT> parsedValue{arena};
+    parsedValue.reserve(reserveEnd - cursor);
+    for(; cursor < manifest.size(); ++cursor){
+        const char ch = manifest[cursor];
+        if(ch == '"')
+            return parsedValue;
+
+        if(ch != '\\'){
+            parsedValue.push_back(ch);
+            continue;
+        }
+
+        ++cursor;
+        if(cursor >= manifest.size())
+            return MakeUnexpected(Failure{});
+
+        switch(manifest[cursor]){
+        case '"':
+        case '\\':
+            parsedValue.push_back(manifest[cursor]);
+            break;
+        case 'n':
+            parsedValue.push_back('\n');
+            break;
+        case 'r':
+            parsedValue.push_back('\r');
+            break;
+        case 't':
+            parsedValue.push_back('\t');
+            break;
+        default:
+            return MakeUnexpected(Failure{});
+        }
+    }
+
+    return MakeUnexpected(Failure{});
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<CrashPackageSummary, CrashIngestFailure> CrashManifestValidator::Validate(LogArena& arena, Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& packageDirectory){
+    using namespace __hidden_crash_manifest_validator;
+    CrashPackageSummary outSummary(arena);
+    AString<Core::Alloc::ScratchArena> manifest{scratchArena};
+    const auto read = ReadTextFile(packageDirectory / Core::Crash::PackageNames::s_ManifestFileName, manifest);
+    if(!read)
+        return MakeUnexpected(CrashIngestFailure{ .detail = "missing manifest.json", .code = read.error(), });
+
+    const AStringView manifestText(manifest.data(), manifest.size());
+    const auto manifestFormat = FindGeneratedJsonStringValue(scratchArena, manifestText, Core::Crash::PackageNames::s_ManifestFormatKey);
+    const auto requireString = [&scratchArena, manifestText](const AStringView key){
+        return FindGeneratedJsonStringValue(scratchArena, manifestText, key);
+    };
+    const auto requireUnsigned = [manifestText](const AStringView key){
+        return FindGeneratedCrashJsonUnsignedValue(manifestText, key);
+    };
+    const auto requireBool = [manifestText](const AStringView key){
+        return FindGeneratedCrashJsonBoolValue(manifestText, key);
+    };
+    auto crashId = FindGeneratedJsonStringValue(arena, manifestText, Core::Crash::PackageNames::s_ManifestCrashIdKey);
+    auto platform = FindGeneratedJsonStringValue(arena, manifestText, Core::Crash::PackageNames::s_ManifestPlatformKey);
+    auto reasonKind = FindGeneratedJsonStringValue(arena, manifestText, Core::Crash::PackageNames::s_ManifestReasonKindKey);
+    auto reasonCode = FindGeneratedCrashJsonUnsignedValue(manifestText, Core::Crash::PackageNames::s_ManifestReasonCodeKey);
+    auto threadId = FindGeneratedCrashJsonUnsignedValue(manifestText, Core::Crash::PackageNames::s_ManifestThreadIdKey);
+    auto event = FindGeneratedJsonStringValue(arena, manifestText, Core::Crash::PackageNames::s_ManifestEventKey);
+    auto triggerExpression = FindGeneratedJsonStringValue(arena, manifestText, Core::Crash::PackageNames::s_ManifestTriggerExpressionKey);
+    auto triggerMessage = FindGeneratedJsonStringValue(arena, manifestText, Core::Crash::PackageNames::s_ManifestTriggerMessageKey);
+    auto triggerFile = FindGeneratedJsonStringValue(arena, manifestText, Core::Crash::PackageNames::s_ManifestTriggerFileKey);
+    auto triggerLine = FindGeneratedCrashJsonUnsignedValue(manifestText, Core::Crash::PackageNames::s_ManifestTriggerLineKey);
+    auto artifactStrategy = FindGeneratedJsonStringValue(arena, manifestText, Core::Crash::PackageNames::s_ManifestArtifactStrategyKey);
+    if(
+        !manifestFormat
+        || !crashId
+        || !requireString(Core::Crash::PackageNames::s_ManifestApplicationKey)
+        || !requireString(Core::Crash::PackageNames::s_ManifestVersionKey)
+        || !requireString(Core::Crash::PackageNames::s_ManifestBuildIdKey)
+        || !requireString(Core::Crash::PackageNames::s_ManifestAbiKey)
+        || !platform
+        || !reasonKind
+        || !reasonCode
+        || !requireUnsigned(Core::Crash::PackageNames::s_ManifestProcessIdKey)
+        || !threadId
+        || !requireBool(Core::Crash::PackageNames::s_ManifestHasExceptionContextKey)
+        || !requireUnsigned(Core::Crash::PackageNames::s_ManifestFaultAddressKey)
+        || !requireUnsigned(Core::Crash::PackageNames::s_ManifestInstructionPointerKey)
+        || !requireUnsigned(Core::Crash::PackageNames::s_ManifestStackPointerKey)
+        || !requireUnsigned(Core::Crash::PackageNames::s_ManifestFramePointerKey)
+        || !event
+        || !requireString(Core::Crash::PackageNames::s_ManifestTriggerCategoryKey)
+        || !triggerExpression
+        || !triggerMessage
+        || !triggerFile
+        || !triggerLine
+        || !requireString(Core::Crash::PackageNames::s_ManifestDumpDetailModeKey)
+        || !artifactStrategy
+        || !requireString(Core::Crash::PackageNames::s_ManifestHandlerLifetimeKey)
+    ){
+        return MakeUnexpected(CrashIngestFailure{ .detail = "manifest.json is missing required fields", });
+    }
+
+    outSummary.crashId = Move(*crashId);
+    outSummary.platform = Move(*platform);
+    outSummary.reasonKind = Move(*reasonKind);
+    outSummary.reasonCode = *reasonCode;
+    outSummary.threadId = *threadId;
+    outSummary.event = Move(*event);
+    outSummary.triggerExpression = Move(*triggerExpression);
+    outSummary.triggerMessage = Move(*triggerMessage);
+    outSummary.triggerFile = Move(*triggerFile);
+    outSummary.triggerLine = *triggerLine;
+    outSummary.artifactStrategy = Move(*artifactStrategy);
+
+    if(*manifestFormat != Core::Crash::PackageNames::s_ManifestFormatValue)
+        return MakeUnexpected(CrashIngestFailure{ .detail = "manifest.json has unsupported crash package format", });
+
+    if(!HasNonEmptyRequiredManifestSummary(outSummary.crashId, outSummary.platform, outSummary.reasonKind, outSummary.artifactStrategy, outSummary.event))
+        return MakeUnexpected(CrashIngestFailure{ .detail = "manifest.json contains empty required fields", });
+
+    return outSummary;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

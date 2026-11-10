@@ -1,0 +1,198 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "runtime_constants.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <core/alloc/module.h>
+#include <core/crash/module.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace LoaderDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] b8 InstallCrashReporting(Core::Alloc::PersistentArena& crashArena);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+StringView ResolveCrashUploadServerUrl(in b8 useStandaloneLogger, in StringView logAddress){
+    if(useStandaloneLogger)
+        return "";
+    return logAddress;
+}
+
+StringView SelectGpuDebugMetadataValue(in b8 enableGpuDebug){
+    if(enableGpuDebug)
+        return s_EnabledText;
+    return s_DisabledText;
+}
+
+b8 ShouldWarnOnGpuCrashDumpCapture(in b8 requestAccepted, in b8 packageWriteFailed){
+    return !requestAccepted || packageWriteFailed;
+}
+
+void ConfigureCrashReporting(
+    in b8 crashReportingInstalled,
+    in b8 useStandaloneLogger,
+    in StringView logAddress,
+    in StringView crashUploadToken,
+    in b8 enableGpuDebug
+){
+    if(!crashReportingInstalled){
+        error("Loader: crash reporting unavailable - ERROR/FATAL/crash dumps will NOT be captured this run");
+        return;
+    }
+
+    const StringView logServerUrl = ResolveCrashUploadServerUrl(useStandaloneLogger, logAddress);
+    const StringView gpuDebugText = SelectGpuDebugMetadataValue(enableGpuDebug);
+    b8 uploadDestinationConfigured = false;
+    b8 runtimeMetadataConfigured = false;
+    b8 gpuDebugMetadataConfigured = false;
+    native(
+        in logServerUrl,
+        in crashUploadToken,
+        in gpuDebugText,
+        mut uploadDestinationConfigured,
+        mut runtimeMetadataConfigured,
+        mut gpuDebugMetadataConfigured
+    ){
+        uploadDestinationConfigured = NWB::Core::Crash::SetCrashUploadDestination(logServerUrl, crashUploadToken);
+        runtimeMetadataConfigured = NWB::Core::Crash::SetCrashMetadata(s_RuntimeCrashMetadataKey, s_LoaderCrashMetadataValue);
+        gpuDebugMetadataConfigured = NWB::Core::Crash::SetCrashMetadata(s_GpuDebugCrashMetadataKey, gpuDebugText);
+    }
+    if(!uploadDestinationConfigured)
+        warning("Loader: failed to set crash upload destination");
+    if(!runtimeMetadataConfigured)
+        warning("Loader: failed to set 'runtime' crash metadata");
+    if(!gpuDebugMetadataConfigured)
+        warning("Loader: failed to set 'gpu_debug' crash metadata");
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <core/common/log.h>
+#include <core/crash/package_names.h>
+#include <core/graphics/rhi/gpu_crash_diagnostics.h>
+
+#include <global/filesystem/executable_paths.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace LoaderDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using CrashArena = Core::Alloc::PersistentArena;
+
+b8 InstallCrashReporting(CrashArena& crashArena){
+    auto executableDirectory = ExecutablePaths(crashArena).directory();
+    if(!executableDirectory)
+        executableDirectory = ::Path<CrashArena>(crashArena, s_FallbackExecutableDirectory);
+
+    auto executableName = ExecutablePaths(crashArena).name();
+    if(!executableName)
+        executableName = ::Path<CrashArena>(crashArena, s_FallbackExecutableName);
+
+    AString<CrashArena> applicationName = PathToString<char>(crashArena, *executableName);
+
+    NWB::Core::Crash::CrashConfig crashConfig(crashArena);
+    crashConfig.applicationName = AStringView(applicationName.data(), applicationName.size());
+    crashConfig.buildId = s_UnknownBuildLabel;
+    crashConfig.version = s_UnknownBuildLabel;
+    crashConfig.spoolDirectory = *executableDirectory / NWB::Core::Crash::PackageNames::s_DefaultRootDirectoryName;
+    crashConfig.dumpDetailMode = NWB::Core::Crash::DumpDetailMode::Small;
+
+    if(!NWB::Core::Crash::InstallCrashHandler(crashConfig))
+        return false;
+
+    NWB::Core::RegisterGpuCrashSink([](void*, const NWB::Core::GpuCrashReport& report){
+        const AStringView binaryDump = report.binaryDump ? AStringView(reinterpret_cast<const char*>(report.binaryDump), report.binaryDumpSize) : AStringView();
+        const auto dumpKind = report.binaryDumpKind == NWB::Core::GpuCrashDumpKind::RadeonGpuDetective ? NWB::Core::Crash::GpuCrashDumpKind::RadeonGpuDetective : NWB::Core::Crash::GpuCrashDumpKind::Aftermath;
+        const NWB::Core::Crash::CrashDumpResult dumpResult = NWB::Core::Crash::CaptureGpuCrashDump(AStringView(report.details.data(), report.details.size()), binaryDump, dumpKind);
+        if(ShouldWarnOnGpuCrashDumpCapture(dumpResult.requestAccepted(), dumpResult.status == NWB::Core::Crash::CrashDumpStatus::PackageWriteFailed))
+            NWB_LOGGER_WARNING(NWB_TEXT("Loader: GPU crash dump capture failed (status {})"), static_cast<u32>(dumpResult.status));
+    }, nullptr);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

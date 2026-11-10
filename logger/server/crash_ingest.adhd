@@ -1,0 +1,235 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <logger/server/arena_names.adhd>
+#include <logger/server/crash_archive_extractor.adhd>
+#include <logger/server/crash_manifest_validator.adhd>
+#include <logger/server/crash_paths.adhd>
+#include <logger/server/crash_retention.adhd>
+#include <logger/server/crash_symbolicate.adhd>
+#include <logger/server/crash_values.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <logger/common.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct CrashIngestConfig{
+    Path storageDirectory;
+    CrashSymbolicationConfig symbolication;
+    CrashRetentionConfig retention;
+
+
+public:
+    explicit CrashIngestConfig(LogArena& arena)noexcept
+        : storageDirectory(arena)
+        , symbolication(arena)
+    {}
+};
+
+struct CrashIngestResult{
+    LogString message;
+    Core::Common::LogType::Enum type = Core::Common::LogType::EssentialInfo;
+    b8 accepted = false;
+
+
+public:
+    explicit CrashIngestResult(LogArena& arena)noexcept
+        : message(arena)
+    {}
+};
+
+
+[[nodiscard]] CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, const CrashIngestConfig& config);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_CrashIngestAcceptedSectionHeader = "\ningest:\n";
+const StringView s_CrashIngestAcceptedRawArchivePrefix = "ingest_status=accepted\nraw_archive=";
+const StringView s_CrashIngestRawNotRetainedWarning = "warning=raw upload archive could not be retained\n";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <global/binary.h>
+#include <global/filesystem/archive.h>
+#include <global/filesystem/retention.h>
+#include <global/text_utils.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_logger_crash_ingest{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using CrashText = CrashReportText;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static void ApplyRetention(Core::Alloc::ScratchArena& arena, const CrashIngestConfig& config){
+    const CrashScratchPath storageDirectory = CrashStorageDirectory(arena, config.storageDirectory);
+    const auto extracted = ApplyDirectoryRetention(arena, storageDirectory / s_CrashExtractedDirectoryName, config.retention.maxExtractedPackages);
+    if(!extracted)
+        NWB_LOGGER_WARNING(NWB_TEXT("Failed to apply retention to extracted crash packages: {}"), ConvertString(extracted.error().message()));
+    const auto raw = ApplyDirectoryRetention(arena, storageDirectory / s_CrashRawDirectoryName, config.retention.maxRawArchives);
+    if(!raw)
+        NWB_LOGGER_WARNING(NWB_TEXT("Failed to apply retention to raw crash archives: {}"), ConvertString(raw.error().message()));
+    const auto invalid = ApplyDirectoryRetention(arena, storageDirectory / s_CrashInvalidDirectoryName, config.retention.maxInvalidArchives);
+    if(!invalid)
+        NWB_LOGGER_WARNING(NWB_TEXT("Failed to apply retention to invalid crash archives: {}"), ConvertString(invalid.error().message()));
+}
+
+[[nodiscard]] static Core::Common::LogType::Enum AcceptedCrashLogType(const CrashPackageSummary& summary)noexcept{
+    const AStringView event(summary.event.data(), summary.event.size());
+    if(event == DiagnosticEventName::s_Assert)
+        return Core::Common::LogType::Assert;
+    if(event == DiagnosticEventName::s_Error)
+        return Core::Common::LogType::Error;
+    if(event == DiagnosticEventName::s_Fatal)
+        return Core::Common::LogType::Fatal;
+
+    return Core::Common::LogType::EssentialInfo;
+}
+
+static void AppendAcceptedIngestDetails(const CrashScratchPath& rawPath, const b8 rawArchived, Core::Alloc::ScratchArena& arena, CrashText& outReport){
+    if(!outReport.empty() && outReport.back() != '\n')
+        outReport += s_ReportLineEnd;
+
+    outReport += s_CrashIngestAcceptedSectionHeader;
+    outReport += s_CrashIngestAcceptedRawArchivePrefix;
+    outReport += PathToString<char>(arena, rawPath);
+    outReport += s_ReportLineEnd;
+    if(!rawArchived)
+        outReport += s_CrashIngestRawNotRetainedWarning;
+}
+
+[[nodiscard]] static CrashIngestResult RejectCrashUpload(LogArena& arena, Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& archivePath, const CrashScratchPath& packageDirectory, const CrashIngestConfig& config, const CrashIngestFailure& failure){
+    if(!RemoveAllIfExists(packageDirectory))
+        NWB_LOGGER_WARNING(NWB_TEXT("Failed to remove rejected crash package directory"));
+
+    const auto invalidPath = ::MovePathToDirectory(archivePath, CrashInvalidDirectory(scratchArena, config.storageDirectory));
+    if(!invalidPath)
+        NWB_LOGGER_WARNING(NWB_TEXT("Failed to move rejected crash archive to invalid directory"));
+    ApplyRetention(scratchArena, config);
+
+    CrashIngestResult result(arena);
+    result.type = Core::Common::LogType::Error;
+    result.message = StringFormat(arena, NWB_TEXT("Crash upload rejected: {}; raw='{}'"), ConvertString(failure.detail), PathToString<tchar>(invalidPath ? *invalidPath : archivePath));
+    if(failure.code)
+        result.message += StringFormat(arena, NWB_TEXT("; native_category='{}'; native_code={}"), ConvertString(failure.code->category().name()), failure.code->value());
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, const CrashIngestConfig& config){
+    namespace Ingest = __hidden_logger_crash_ingest;
+
+    Core::Alloc::ScratchArena scratchArena(s_LogServerArenaNameLoggerServerCrashIngestScratch);
+    CrashIngestResult result(arena);
+    const CrashScratchPath operationArchivePath(scratchArena, archivePath);
+    const CrashScratchPath packageDirectory = CrashExtractedPackageDirectory(scratchArena, config.storageDirectory, operationArchivePath);
+
+    const auto extracted = CrashArchiveExtractor::Extract(scratchArena, operationArchivePath, packageDirectory);
+    if(!extracted)
+        return Ingest::RejectCrashUpload(arena, scratchArena, operationArchivePath, packageDirectory, config, extracted.error());
+
+    auto summaryResult = CrashManifestValidator::Validate(arena, scratchArena, packageDirectory);
+    if(!summaryResult)
+        return Ingest::RejectCrashUpload(arena, scratchArena, operationArchivePath, packageDirectory, config, summaryResult.error());
+    const CrashPackageSummary& summary = *summaryResult;
+
+    CrashReportText symbolicationReport = BuildCrashSymbolicationReport(packageDirectory, summary, config.symbolication, arena, scratchArena);
+    // Report-write failure retains the valid package and in-memory report; it is not a malformed crash.
+    if(!WriteTextFile(packageDirectory / s_ServerSymbolicationFileName, AStringView(symbolicationReport.data(), symbolicationReport.size())))
+        NWB_LOGGER_WARNING(NWB_TEXT("Failed to persist server crash symbolication report; retaining the package and returning the in-memory report"));
+
+    const auto rawPath = ::MovePathToDirectory(operationArchivePath, CrashRawDirectory(scratchArena, config.storageDirectory));
+    const b8 rawArchived = rawPath.has_value();
+    if(!rawArchived){
+        if(const auto removed = RemoveFile(archivePath); !removed || !*removed)
+            NWB_LOGGER_WARNING(NWB_TEXT("Failed to remove crash archive that could not be retained"));
+    }
+    Ingest::ApplyRetention(scratchArena, config);
+
+    result.accepted = true;
+    result.type = rawArchived ? Ingest::AcceptedCrashLogType(summary) : Core::Common::LogType::Warning;
+    Ingest::AppendAcceptedIngestDetails(rawArchived ? *rawPath : operationArchivePath, rawArchived, scratchArena, symbolicationReport);
+    result.message = ConvertString(arena, AStringView(symbolicationReport.data(), symbolicationReport.size()));
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_LOG_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

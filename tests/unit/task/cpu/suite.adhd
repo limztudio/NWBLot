@@ -5,6 +5,7 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
 native{
 
 
@@ -14,7 +15,7 @@ native{
 #include <tests/unit/task/cpu/cleanup_case_types.adhd.h>
 #include <tests/unit/task/cpu/scheduler_test_config.adhd.h>
 
-#include <loader/callback_shutdown.h>
+#include <loader/callback_shutdown.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
@@ -307,7 +308,9 @@ using __hidden_cpu_task_fanin_tests::RunFanInWithScratch;
 
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void VerifyCpuTaskCancellationTests_OldGenerationsKeepDistinctResultsAcrossRepeatedReuse(){
     const usize count = 1024u;
@@ -1589,6 +1592,10 @@ NWB_ADHD_GTEST(CpuTaskProfilingTests, EmptyCompletedAndCanceledScopeJoinsRetainT
 NWB_ADHD_GTEST(CpuTaskProgressTests, ScopeJoinWakesForANewlyReadyUnscopedMainThreadPrerequisite, VerifyCpuTaskProgressTests_ScopeJoinWakesForANewlyReadyUnscopedMainThreadPrerequisite)
 NWB_ADHD_GTEST(CpuTaskProgressTests, ConcurrentSameScopeJoinsRetainLatePublishedDescendantsAcrossScopeReuse, VerifyCpuTaskProgressTests_ConcurrentSameScopeJoinsRetainLatePublishedDescendantsAcrossScopeReuse)
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 native{
 
 
@@ -1815,6 +1822,7 @@ void Produce(CpuTaskScheduler& scheduler, CpuTaskScope& scope, ProducerState& st
 
 
 }
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

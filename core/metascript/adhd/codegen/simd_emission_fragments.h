@@ -14,6 +14,9 @@
 NWB_ADHD_BEGIN
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class SimdEmissionFragments final{
 public:
     static void EmitSimdMatrixBinaryRowInitSuffix(MString& out, MStringView matRegType, MStringView fnPrefix);
@@ -21,6 +24,9 @@ public:
     static void EmitSimdIntTwosComplementNegatePrefix(MString& out, b8 isDouble);
     static void EmitSimdIntTwosComplementNegateSuffix(MString& out, b8 isDouble);
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_ADHD_END

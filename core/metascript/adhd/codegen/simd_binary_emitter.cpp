@@ -6,10 +6,17 @@
 #include "simd_emission_fragments.h"
 #include "simd_optimization_analysis.h"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ADHD_BEGIN
 
-b8 SimdBinaryEmitter::tryEmit(MString& out, const TokenType::Enum binaryOp, const Expr& lhs, const Expr& rhs, const MStringView simdType)const{
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 SimdBinaryEmitter::tryEmit(MString& out, const TokenType::Enum binaryOp, const Expr& lhs, const Expr& rhs, const MStringView simdType)const{
     const b8 isDouble = IsDoubleSimdType(simdType);
     const b8 isInt = IsIntSimdType(simdType);
     const b8 isMatrix = SymbolTable::IsSimdMatrixType(simdType);

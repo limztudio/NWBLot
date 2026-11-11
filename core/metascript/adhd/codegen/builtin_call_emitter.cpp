@@ -11,6 +11,9 @@
 NWB_ADHD_BEGIN
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
     if(expr.isBuiltinCall && expr.lhs && expr.lhs->kind == ExprKind::Identifier){
         const MStringView callee = expr.lhs->text;
@@ -178,6 +181,9 @@ b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
     }
     return false;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_ADHD_END

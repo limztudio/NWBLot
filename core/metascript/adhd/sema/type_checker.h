@@ -98,6 +98,7 @@ private:
     )const noexcept;
     void reportError(MVector<ParseError>& errors, const SourceSpan span, const MStringView message)const{ ReportAdhdDiagnostic(m_arena, errors, span, message); }
     void recordRequiredHeader(MStringView header)noexcept;
+    void recordBuiltinTypeHeader(MStringView typeName)noexcept;
 
     [[nodiscard]] b8 checkTemplateParamBounds(Span<const TemplateParamDecl> params, const ClassDecl* enclosingClass, const MethodDecl* enclosingMethod, MVector<ParseError>& errors);
     [[nodiscard]] b8 interfaceInheritsFrom(const TypeRef& ifaceRef, const TypeRef& requiredIface, u32 depth = 0u)const noexcept;

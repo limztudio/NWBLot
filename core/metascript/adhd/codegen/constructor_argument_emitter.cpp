@@ -95,10 +95,12 @@ void ConstructorArgumentEmitter::emit(MString& out, const MStringView baseTypeNa
         out.push_back(')');
     }
     else{
-        const b8 arenaLast = !baseTypeName.empty() && SymbolTable::IsArenaBackedContainer(baseTypeName) && !IsArenaFirstCtorType(baseTypeName);
-        const b8 arenaFirst = !injectedArenaName.empty() && !arenaLast;
+        const b8 omitsArena = !baseTypeName.empty() && !m_emitter.m_symbols.hasTypeSymbol(baseTypeName) && OmitsArenaInCtorType(baseTypeName);
+        const MStringView effArenaName = omitsArena ? MStringView{} : injectedArenaName;
+        const b8 arenaLast = !baseTypeName.empty() && !m_emitter.m_symbols.hasTypeSymbol(baseTypeName) && SymbolTable::IsArenaBackedContainer(baseTypeName) && !IsArenaFirstCtorType(baseTypeName);
+        const b8 arenaFirst = !effArenaName.empty() && !arenaLast;
         if(arenaFirst){
-            out.append(injectedArenaName.data(), injectedArenaName.size());
+            out.append(effArenaName.data(), effArenaName.size());
             if(!arguments.empty())
                 out.append(", ");
         }
@@ -108,10 +110,10 @@ void ConstructorArgumentEmitter::emit(MString& out, const MStringView baseTypeNa
             if(arguments[i])
                 m_emitter.emitExpr(out, *arguments[i]);
         }
-        if(!injectedArenaName.empty() && !arenaFirst){
+        if(!effArenaName.empty() && !arenaFirst){
             if(!arguments.empty())
                 out.append(", ");
-            out.append(injectedArenaName.data(), injectedArenaName.size());
+            out.append(effArenaName.data(), effArenaName.size());
         }
     }
     out.push_back(useBracesForList ? '}' : ')');

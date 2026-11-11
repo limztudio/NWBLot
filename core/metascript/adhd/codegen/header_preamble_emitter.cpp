@@ -35,9 +35,11 @@ void HeaderPreambleEmitter::Emit(MString& out, const TranslationUnit& unit, cons
         out.append("#include <global/not_null.h>\r\n");
         out.append("#include <global/termination.h>\r\n");
         for(const MStringView hdr : unit.requiredGlobalHeaders){
-            out.append("#include ");
-            out.append(hdr.data(), hdr.size());
-            out.append("\r\n");
+            if(hdr.starts_with("<global/")){
+                out.append("#include ");
+                out.append(hdr.data(), hdr.size());
+                out.append("\r\n");
+            }
         }
         out.append("#include <core/alloc/global.h>\r\n");
         out.append("#include <core/alloc/general.h>\r\n");
@@ -45,6 +47,13 @@ void HeaderPreambleEmitter::Emit(MString& out, const TranslationUnit& unit, cons
         out.append("#include <core/alloc/adhd_arena.h>\r\n");
         out.append("#include <core/assets/ref.h>\r\n");
         out.append("#include <core/ecs/entity_id.h>\r\n");
+        for(const MStringView hdr : unit.requiredGlobalHeaders){
+            if(!hdr.starts_with("<global/")){
+                out.append("#include ");
+                out.append(hdr.data(), hdr.size());
+                out.append("\r\n");
+            }
+        }
         if(namespacePath == "NWB::Impl::Scene")
             out.append("#include <impl/ecs_scene/global.adhd.h>\r\n");
         else if(namespacePath.size() >= 9u && namespacePath.substr(0u, 9u) == "NWB::Impl")

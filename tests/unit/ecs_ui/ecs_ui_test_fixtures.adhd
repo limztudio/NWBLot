@@ -240,8 +240,8 @@ namespace UiInputEventType = NWB::Impl::Ui::InputEventType;
 namespace UiWidgetKind = NWB::Impl::Ui::WidgetKind;
 using UiTestSupport::NativeInput;
 
-b8 DeliverEcsUiFakeClipboard(FakeClipboard& self, const ClipboardRequestToken& token, const ClipboardStatusEnum& status, AStringView text)noexcept;
-void StartEcsUiFakeClipboardRequest(FakeClipboard& self, const ClipboardRequestToken& token, const ClipboardOperationEnum& operation, AStringView text)noexcept;
+b8 DeliverEcsUiFakeClipboard(FakeClipboard& self, ClipboardRequestToken token, const ClipboardStatusEnum& status, AStringView text)noexcept;
+void StartEcsUiFakeClipboardRequest(FakeClipboard& self, ClipboardRequestToken token, const ClipboardOperationEnum& operation, AStringView text)noexcept;
 b8 PrepareEcsUiEditBoxFrame(UiEditBoxHostTests& self, UiEditModel& model, const UiEditBoxOptions& options, const UiRect& bounds)noexcept;
 b8 PrepareEcsUiEditActionsFrame(UiEditBoxHostTests& self, UiEditModel& model, const UiEditBoxOptions& options, const UiRect& bounds, UiIEditActionSink& actions)noexcept;
 b8 CommitEcsUiEditFrame(UiEditBoxHostTests& self)noexcept;

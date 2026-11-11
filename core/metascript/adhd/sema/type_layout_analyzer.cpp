@@ -22,7 +22,7 @@ b8 TypeLayoutAnalyzer::containsArenaBackedContainer(const TypeRef& type, const u
     const TypeRef* unwrapped = m_symbols.unwrapTypeAlias(&type);
     if(!unwrapped || unwrapped->refMode != ParamPassingMode::None)
         return false;
-    if(SymbolTable::IsArenaBackedContainer(unwrapped->name))
+    if(!m_symbols.hasTypeSymbol(unwrapped->name) && SymbolTable::IsArenaBackedContainer(unwrapped->name))
         return true;
     for(const TypeArg& targ : unwrapped->templateArgs){
         if(targ.type && containsArenaBackedContainer(*targ.type, depth + 1u))
@@ -60,14 +60,16 @@ b8 TypeLayoutAnalyzer::requiresMotherArena(const TypeRef& type, const u32 depth)
     const TypeRef* unwrapped = m_symbols.unwrapTypeAlias(&type);
     if(!unwrapped || unwrapped->refMode != ParamPassingMode::None || unwrapped->isFuncType)
         return false;
-    if(SymbolTable::IsArenaBackedContainer(unwrapped->name))
+    if(!m_symbols.hasTypeSymbol(unwrapped->name) && SymbolTable::IsArenaBackedContainer(unwrapped->name))
         return true;
     if(isNonRootMotherArenaType(*unwrapped, depth))
         return true;
-    if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(unwrapped->name); genericInfo && genericInfo->byteSize == 0u){
-        for(const TypeArg& targ : unwrapped->templateArgs){
-            if(targ.type && requiresMotherArena(*targ.type, depth + 1u))
-                return true;
+    if(!m_symbols.hasTypeSymbol(unwrapped->name)){
+        if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(unwrapped->name); genericInfo && genericInfo->byteSize == 0u){
+            for(const TypeArg& targ : unwrapped->templateArgs){
+                if(targ.type && requiresMotherArena(*targ.type, depth + 1u))
+                    return true;
+            }
         }
     }
     return false;
@@ -77,7 +79,7 @@ b8 TypeLayoutAnalyzer::isFixedArrayNeedingArenaDefaultInit(const TypeRef& type)c
     if(m_symbols.resolveRefMode(&type) != ParamPassingMode::None)
         return false;
     const TypeRef* unwrapped = m_symbols.unwrapTypeAlias(&type);
-    if(!unwrapped || unwrapped->refMode != ParamPassingMode::None || !IsFixedArrayContainerType(unwrapped->name))
+    if(!unwrapped || unwrapped->refMode != ParamPassingMode::None || m_symbols.hasTypeSymbol(unwrapped->name) || !IsFixedArrayContainerType(unwrapped->name))
         return false;
     if(unwrapped->templateArgs.empty() || !unwrapped->templateArgs[0].type)
         return false;
@@ -89,6 +91,10 @@ b8 TypeLayoutAnalyzer::interfaceInheritsNoCopy(const TypeRef& ifaceRef, const u3
         return false;
     if(IsNonCopyableBaseInterfaceName(ifaceRef.name))
         return true;
+    if(!m_symbols.hasTypeSymbol(ifaceRef.name)){
+        if(const BuiltinObjectTypeInfo* builtinObj = FindBuiltinObjectType(ifaceRef.name); builtinObj && !builtinObj->isCopyMoveConstructible)
+            return true;
+    }
     if(const InterfaceDecl* iface = m_symbols.findInterface(ifaceRef.name)){
         for(const TypeRef* baseRef : iface->baseInterfaces){
             if(baseRef && interfaceInheritsNoCopy(*baseRef, depth + 1u))
@@ -105,19 +111,6 @@ b8 TypeLayoutAnalyzer::isTypeConstructible(const TypeRef& type, const b8 require
     if(!unwrapped || unwrapped->refMode != ParamPassingMode::None || unwrapped->isFuncType)
         return true;
     const MStringView name = unwrapped->name;
-    if(IsMoveOnlyTypeName(name))
-        return !requireCopy;
-    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(name); objInfo && !objInfo->isCopyMoveConstructible)
-        return false;
-    if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(name)){
-        if(!genericInfo->isCopyMoveConstructible)
-            return false;
-        for(const TypeArg& targ : unwrapped->templateArgs){
-            if(targ.type && !isTypeConstructible(*targ.type, requireCopy, depth + 1u))
-                return false;
-        }
-        return true;
-    }
     if(const ClassDecl* cls = m_symbols.findClass(name)){
         if(!cls->subsystemTypeName.empty())
             return false;
@@ -141,6 +134,21 @@ b8 TypeLayoutAnalyzer::isTypeConstructible(const TypeRef& type, const b8 require
         }
         return isClassConstructible(*cls, cls->fields, requireCopy, depth + 1u);
     }
+    if(m_symbols.hasTypeSymbol(name))
+        return true;
+    if(IsMoveOnlyTypeName(name))
+        return !requireCopy;
+    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(name); objInfo && !objInfo->isCopyMoveConstructible)
+        return false;
+    if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(name)){
+        if(!genericInfo->isCopyMoveConstructible)
+            return false;
+        for(const TypeArg& targ : unwrapped->templateArgs){
+            if(targ.type && !isTypeConstructible(*targ.type, requireCopy, depth + 1u))
+                return false;
+        }
+        return true;
+    }
     return true;
 }
 
@@ -153,17 +161,6 @@ b8 TypeLayoutAnalyzer::isTypeAssignable(const TypeRef& type, const b8 requireCop
     if(!unwrapped || unwrapped->refMode != ParamPassingMode::None || unwrapped->isFuncType)
         return true;
     const MStringView name = unwrapped->name;
-    if(IsMoveOnlyTypeName(name))
-        return !requireCopy;
-    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(name); objInfo && !objInfo->isAssignable)
-        return false;
-    if(FindBuiltinGenericType(name)){
-        for(const TypeArg& targ : unwrapped->templateArgs){
-            if(targ.type && !isTypeAssignable(*targ.type, requireCopy, depth + 1u))
-                return false;
-        }
-        return true;
-    }
     if(const ClassDecl* cls = m_symbols.findClass(name)){
         if(!cls->templateParams.empty() && !unwrapped->templateArgs.empty()){
             for(const FieldDecl* f : cls->fields){
@@ -176,6 +173,19 @@ b8 TypeLayoutAnalyzer::isTypeAssignable(const TypeRef& type, const b8 requireCop
             return true;
         }
         return isClassAssignableImpl(*cls, cls->fields, requireCopy, depth + 1u);
+    }
+    if(m_symbols.hasTypeSymbol(name))
+        return true;
+    if(IsMoveOnlyTypeName(name))
+        return !requireCopy;
+    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(name); objInfo && !objInfo->isAssignable)
+        return false;
+    if(FindBuiltinGenericType(name)){
+        for(const TypeArg& targ : unwrapped->templateArgs){
+            if(targ.type && !isTypeAssignable(*targ.type, requireCopy, depth + 1u))
+                return false;
+        }
+        return true;
     }
     return true;
 }
@@ -234,7 +244,8 @@ b8 TypeLayoutAnalyzer::containsSimdRegisterType(const TypeRef& type, const u32 d
     const TypeRef* unwrapped = m_symbols.unwrapTypeAlias(&type);
     if(!unwrapped || unwrapped->isFuncType)
         return false;
-    if(SymbolTable::IsSimdRegisterType(m_symbols.resolveBaseTypeName(unwrapped->name)))
+    const MStringView baseName = m_symbols.resolveBaseTypeName(unwrapped->name);
+    if(!m_symbols.hasTypeSymbol(baseName) && (SymbolTable::IsSimdRegisterType(baseName) || HasBuiltinSimdRegisterField(baseName)))
         return true;
     for(const TypeArg& targ : unwrapped->templateArgs){
         if(targ.type && containsSimdRegisterType(*targ.type, depth + 1u))
@@ -243,18 +254,32 @@ b8 TypeLayoutAnalyzer::containsSimdRegisterType(const TypeRef& type, const u32 d
     return false;
 }
 
-b8 TypeLayoutAnalyzer::shouldPackSerializeClass(const Span<const FieldDecl* const> fields)const noexcept{
+b8 TypeLayoutAnalyzer::containsOverAlignedPackType(const TypeRef& type, const u32 depth)const noexcept{
+    if(depth >= 8u || m_symbols.resolveRefMode(&type) != ParamPassingMode::None)
+        return false;
+    const TypeRef* unwrapped = m_symbols.unwrapTypeAlias(&type);
+    if(!unwrapped || unwrapped->refMode != ParamPassingMode::None || unwrapped->isFuncType)
+        return false;
+    const MStringView baseName = unwrapped->name;
+    if(const ClassDecl* cls = m_symbols.findClass(baseName))
+        return !shouldPackSerializeClass(cls->fields, depth + 1u);
+    if(m_symbols.hasTypeSymbol(baseName))
+        return false;
+    if(IsOverAlignedBuiltinType(baseName))
+        return true;
+    for(const TypeArg& targ : unwrapped->templateArgs){
+        if(targ.type && containsOverAlignedPackType(*targ.type, depth + 1u))
+            return true;
+    }
+    return false;
+}
+
+b8 TypeLayoutAnalyzer::shouldPackSerializeClass(const Span<const FieldDecl* const> fields, const u32 depth)const noexcept{
+    if(depth >= 8u)
+        return true;
     for(const FieldDecl* field : fields){
-        if(!field || !field->type)
-            continue;
-        const TypeRef* resolved = m_symbols.unwrapTypeAlias(field->type);
-        const MStringView baseName = resolved ? resolved->name : field->type->name;
-        if(SymbolTable::IsSimdType(baseName) || (m_symbols.findClass(baseName) && !shouldPackSerializeClass(m_symbols.findClass(baseName)->fields)))
+        if(field && field->type && containsOverAlignedPackType(*field->type, depth))
             return false;
-        if(IsFixedArrayContainerType(baseName) && resolved && !resolved->templateArgs.empty() && resolved->templateArgs[0].type){
-            if(SymbolTable::IsSimdType(m_symbols.resolveBaseTypeName(resolved->templateArgs[0].type->name)))
-                return false;
-        }
     }
     return true;
 }

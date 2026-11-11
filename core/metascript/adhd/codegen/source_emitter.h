@@ -84,7 +84,7 @@ private:
 
 
 private:
-    void emitCallTargetExpr(MString& out, const Expr* lhs, b8 isBuiltinCall, Span<const TypeArg> callTemplateArgs = {})const;
+    void emitCallTargetExpr(MString& out, const Expr* lhs, b8 isBuiltinCall, b8 isUserCallableCall, Span<const TypeArg> callTemplateArgs = {})const;
     void emitIndent(MString& out, u32 indent)const;
     void emitScratchArenaPrologue(MString& out, u32 indent, MStringView arenaName)const;
     [[nodiscard]] b8 statementsNeedSimdFloatingPointEnv(Span<const Stmt* const> statements)const noexcept;

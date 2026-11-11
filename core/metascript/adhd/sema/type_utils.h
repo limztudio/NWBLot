@@ -68,6 +68,18 @@ namespace BuiltinFunctionReturnRule{
         MatrixMultiply,
         Unexpected,
         CallTemplateArg0,
+        CallTemplateArg0OrFixedType,
+    };
+};
+
+namespace BuiltinCallLowering{
+    enum Enum : u8{
+        None = 0u,
+        BinaryByteViewArg0,
+        StagedWriteTextAtomic,
+        StagedWriteBinaryAtomic,
+        StagedWriteAtomicChecked,
+        Arg0AndBytePtrSizeArg1,
     };
 };
 
@@ -102,9 +114,12 @@ struct BuiltinObjectTypeInfo{
     b8 isNonThreadSafeContainer;
     b8 isNwbMapKey;
     b8 requiresTCharAdaptation;
-    b8 arenaFirstInCtor;
+    u8 arenaCtorMode;
     b8 isCopyMoveConstructible;
     b8 isAssignable;
+    b8 isAbstract;
+    b8 isPolymorphicBase;
+    u8 formatArgWrapKind;
 };
 
 struct BuiltinEnumInfo{
@@ -125,6 +140,7 @@ struct BuiltinEnumEntryInfo{
 struct BuiltinGenericTypeInfo{
     MStringView adhdName;
     MStringView cppExportName;
+    MStringView requiredHeader;
     GenericParamKind::Enum paramKind;
     InlineLayoutKind::Enum inlineLayoutKind;
     ReflectedLinearKind::Enum reflectedLinearKind;
@@ -144,6 +160,7 @@ struct BuiltinGenericTypeInfo{
     b8 isAssetHandle;
     b8 isCopyMoveConstructible;
     b8 emitsFirstTypeArgOnlyInCpp;
+    b8 arenaFirstInCtor;
 };
 
 struct BuiltinBinaryHashTypeInfo{
@@ -231,6 +248,7 @@ struct BuiltinReceiverMethodInfo{
     MStringView returnTypeArgName;
     MStringView returnErrorTypeName;
     b8 synthesizeTypeRef;
+    b8 isMutating;
 };
 
 struct BuiltinFieldInfo{
@@ -262,16 +280,21 @@ struct BuiltinFunctionInfo{
     usize minArity;
     usize arity;
     BuiltinFunctionReturnRule::Enum returnRule;
+    BuiltinCallLowering::Enum callLowering;
     b8 prependsScratchArena;
     b8 isVariadic;
     b8 wrapsFormatArgs;
-    Array<BuiltinFunctionArgRule::Enum, 5> argRules;
+    b8 requiresExplicitTypeArg;
+    b8 returnsBorrowedView;
+    b8 rejectsSimdStorage;
+    Array<BuiltinFunctionArgRule::Enum, 9> argRules;
 };
 
 struct BuiltinGlobalConstantInfo{
     MStringView adhdName;
     MStringView cppExportName;
     MStringView adhdTypeName;
+    MStringView requiredHeader;
 };
 
 
@@ -294,6 +317,7 @@ struct BuiltinGlobalConstantInfo{
 [[nodiscard]] const BuiltinEnumInfo* FindBuiltinEnum(MStringView name)noexcept;
 [[nodiscard]] b8 HasBuiltinEnumEntry(MStringView enumName, MStringView entryName)noexcept;
 [[nodiscard]] b8 IsArenaFirstCtorType(MStringView name)noexcept;
+[[nodiscard]] b8 OmitsArenaInCtorType(MStringView name)noexcept;
 [[nodiscard]] const BuiltinGenericTypeInfo* FindBuiltinGenericType(MStringView name)noexcept;
 [[nodiscard]] b8 FindBuiltinBinaryHashMemberSuffix(MStringView name, MStringView& outMemberSuffix)noexcept;
 [[nodiscard]] const BuiltinNwbValueTypeInfo* FindBuiltinNwbValueType(MStringView name)noexcept;
@@ -307,7 +331,9 @@ struct BuiltinGlobalConstantInfo{
 [[nodiscard]] const BuiltinFieldInfo* FindBuiltinField(MStringView receiverTypeName, MStringView fieldName)noexcept;
 [[nodiscard]] const BuiltinFunctionArgRuleInfo* FindBuiltinFunctionArgRule(BuiltinFunctionArgRule::Enum rule)noexcept;
 [[nodiscard]] const BuiltinFunctionInfo* FindBuiltinFunction(MStringView name)noexcept;
+[[nodiscard]] const BuiltinFunctionInfo* FindBuiltinScopedFunction(MStringView scopeTypeName, MStringView memberName)noexcept;
 [[nodiscard]] const BuiltinGlobalConstantInfo* FindBuiltinGlobalConstant(MStringView name)noexcept;
+[[nodiscard]] const BuiltinGlobalConstantInfo* FindBuiltinScopedConstant(MStringView scopeTypeName, MStringView memberName)noexcept;
 [[nodiscard]] b8 IsBorrowViewType(MStringView name)noexcept;
 [[nodiscard]] b8 IsNonSerializableBuiltinType(MStringView name)noexcept;
 [[nodiscard]] b8 IsSingleValueCtorBuiltinType(MStringView name)noexcept;
@@ -339,6 +365,8 @@ struct BuiltinGlobalConstantInfo{
 [[nodiscard]] b8 IsReflectedMapContainerType(MStringView baseName)noexcept;
 [[nodiscard]] b8 IsNonCopyableBaseInterfaceName(MStringView name)noexcept;
 [[nodiscard]] b8 IsMoveOnlyTypeName(MStringView name)noexcept;
+[[nodiscard]] b8 HasBuiltinSimdRegisterField(MStringView typeName)noexcept;
+[[nodiscard]] b8 IsOverAlignedBuiltinType(MStringView typeName)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

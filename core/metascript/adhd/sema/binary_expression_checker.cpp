@@ -95,7 +95,7 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
             if(lhsThisField && lhsThisField->type){
                 const MStringView baseFieldTypeName = m_checker.m_symbols.resolveBaseTypeName(lhsThisField->type->name);
                 const ParamPassingMode::Enum fieldRefMode = m_checker.m_symbols.resolveRefMode(lhsThisField->type);
-                if(fieldRefMode != ParamPassingMode::None && (method.isConstructor || m_checker.m_symbols.findInterface(baseFieldTypeName))){
+                if(fieldRefMode != ParamPassingMode::None && (method.isConstructor || m_checker.m_symbols.findInterface(baseFieldTypeName) || m_checker.m_symbols.isAbstractBuiltinType(baseFieldTypeName))){
                     if(m_checker.isThisConstInScope(method, scope)){
                         m_checker.reportError(errors, expr.lhs->span, "cannot mutate 'this.member' inside a 'const' method or 'in this' lambda");
                         ok = false;
@@ -109,7 +109,7 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
             if(lhsLocal && lhsLocal->type && !lhsLocal->isParam){
                 const MStringView baseLocalTypeName = m_checker.m_symbols.resolveBaseTypeName(lhsLocal->type->name);
                 const ParamPassingMode::Enum localRefMode = (lhsLocal->mode != ParamPassingMode::None) ? lhsLocal->mode : m_checker.m_symbols.resolveRefMode(lhsLocal->type);
-                if(localRefMode != ParamPassingMode::None && m_checker.m_symbols.findInterface(baseLocalTypeName))
+                if(localRefMode != ParamPassingMode::None && (m_checker.m_symbols.findInterface(baseLocalTypeName) || m_checker.m_symbols.isAbstractBuiltinType(baseLocalTypeName)))
                     lhsNeedsMut = false;
             }
         }
@@ -117,7 +117,7 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
             lhsMemberOrIndexTypeRef = m_checker.inferExprTypeRef(ownerClass, &method, *expr.lhs, scope);
             const ParamPassingMode::Enum lhsRefMode = m_checker.m_symbols.resolveRefMode(lhsMemberOrIndexTypeRef);
             const MStringView baseLhsTypeName = lhsMemberOrIndexTypeRef ? m_checker.m_symbols.resolveBaseTypeName(lhsMemberOrIndexTypeRef->name) : MStringView{};
-            if(lhsRefMode != ParamPassingMode::None && m_checker.m_symbols.findInterface(baseLhsTypeName)){
+            if(lhsRefMode != ParamPassingMode::None && (m_checker.m_symbols.findInterface(baseLhsTypeName) || m_checker.m_symbols.isAbstractBuiltinType(baseLhsTypeName))){
                 lhsNeedsMut = false;
                 if(expr.lhs->lhs){
                     const b8 savedDeref = expr.lhs->lhs->derefNotNull;
@@ -136,7 +136,7 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
         if(lhsThisField->type && TypeLayoutAnalyzer(m_checker.m_symbols).requiresMotherArena(*lhsThisField->type))
             rhsInClassArenaCtx = true;
         const ParamPassingMode::Enum fieldRefMode = lhsThisField->type ? m_checker.m_symbols.resolveRefMode(lhsThisField->type) : ParamPassingMode::None;
-        if(fieldRefMode != ParamPassingMode::None && (method.isConstructor || m_checker.m_symbols.findInterface(baseFieldTypeName))){
+        if(fieldRefMode != ParamPassingMode::None && (method.isConstructor || m_checker.m_symbols.findInterface(baseFieldTypeName) || m_checker.m_symbols.isAbstractBuiltinType(baseFieldTypeName))){
             if(!applyInterfaceRefRebind(
                 ownerClass,
                 method,
@@ -155,7 +155,7 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
     }
     else if(lhsLocal && lhsLocal->type){
         const MStringView baseLocalTypeName = m_checker.m_symbols.resolveBaseTypeName(lhsLocal->type->name);
-        if(expr.lhs->derefNotNull && m_checker.m_symbols.findInterface(baseLocalTypeName)){
+        if(expr.lhs->derefNotNull && (m_checker.m_symbols.findInterface(baseLocalTypeName) || m_checker.m_symbols.isAbstractBuiltinType(baseLocalTypeName))){
             const ParamPassingMode::Enum localRefMode = (lhsLocal->mode == ParamPassingMode::Mut || m_checker.m_symbols.resolveRefMode(lhsLocal->type) == ParamPassingMode::Mut)
                 ? ParamPassingMode::Mut
                 : ParamPassingMode::In;
@@ -192,7 +192,7 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
         LambdaCaptureAnalyzer(scope, m_checker.m_symbols).propagateFuncCaptureBytes(const_cast<TypeRef*>(lhsMemberOrIndexTypeRef), expr.rhs);
         const ParamPassingMode::Enum lhsRefMode = m_checker.m_symbols.resolveRefMode(lhsMemberOrIndexTypeRef);
         const MStringView baseLhsTypeName = m_checker.m_symbols.resolveBaseTypeName(lhsMemberOrIndexTypeRef->name);
-        if(lhsRefMode != ParamPassingMode::None && m_checker.m_symbols.findInterface(baseLhsTypeName)){
+        if(lhsRefMode != ParamPassingMode::None && (m_checker.m_symbols.findInterface(baseLhsTypeName) || m_checker.m_symbols.isAbstractBuiltinType(baseLhsTypeName))){
             if(!applyInterfaceRefRebind(
                 ownerClass,
                 method,
@@ -277,8 +277,8 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
         }
         const EnumDecl* lhsEnum = m_checker.m_symbols.findEnum(lhsType);
         const EnumDecl* rhsEnum = m_checker.m_symbols.findEnum(rhsType);
-        const BuiltinEnumInfo* lhsBuiltinEnum = lhsEnum ? nullptr : FindBuiltinEnum(lhsType);
-        const BuiltinEnumInfo* rhsBuiltinEnum = rhsEnum ? nullptr : FindBuiltinEnum(rhsType);
+        const BuiltinEnumInfo* lhsBuiltinEnum = (lhsEnum || m_checker.m_symbols.hasTypeSymbol(lhsType)) ? nullptr : FindBuiltinEnum(lhsType);
+        const BuiltinEnumInfo* rhsBuiltinEnum = (rhsEnum || m_checker.m_symbols.hasTypeSymbol(rhsType)) ? nullptr : FindBuiltinEnum(rhsType);
         if(OperatorSemantics::IsBitwiseFlagOperatorToken(expr.op)){
             const b8 lhsNonFlag = (lhsEnum && !lhsEnum->isFlag) || (lhsBuiltinEnum && !lhsBuiltinEnum->isFlag);
             const b8 rhsNonFlag = !m_checker.m_symbols.findClass(lhsType) && ((rhsEnum && !rhsEnum->isFlag) || (rhsBuiltinEnum && !rhsBuiltinEnum->isFlag));
@@ -295,7 +295,7 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
             m_checker.reportError(errors, expr.span, "arithmetic and shift compound assignment operators are not supported on 'enum' or 'flag' types");
             ok = false;
         }
-        if(RequiresTCharAdaptation(lhsType))
+        if(!m_checker.m_symbols.hasTypeSymbol(lhsType) && RequiresTCharAdaptation(lhsType))
             m_checker.markStringToPathAdaptation(ownerClass, &method, scope, *expr.rhs);
         if(expr.op == TokenType::Equal && lhsType == "StringView"){
             if(BorrowLifetimeAnalyzer(m_checker).borrowsTemporaryStringOwner(ownerClass, &method, *expr.rhs, scope)){

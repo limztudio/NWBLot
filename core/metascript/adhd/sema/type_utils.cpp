@@ -22,141 +22,147 @@ namespace __hidden_adhd_type_utils{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Array s_BuiltinObjectTypes = {
-#define NWB_ADHD_EXPORT_OBJECT_TYPE(adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isStringLike, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey, requiresTCharAdaptation, arenaFirstInCtor, isCopyMoveConstructible, isAssignable, requiredHeader) \
-    BuiltinObjectTypeInfo{ adhdName, cppExportName, requiredHeader, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isStringLike, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey, requiresTCharAdaptation, arenaFirstInCtor, isCopyMoveConstructible, isAssignable },
+inline constexpr BuiltinObjectTypeInfo s_BuiltinObjectTypes[] = {
+#define NWB_ADHD_EXPORT_OBJECT_TYPE(adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isStringLike, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey, requiresTCharAdaptation, arenaCtorMode, isCopyMoveConstructible, isAssignable, isAbstract, isPolymorphicBase, formatArgWrapKind, requiredHeader) \
+    BuiltinObjectTypeInfo{ adhdName, cppExportName, requiredHeader, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isStringLike, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey, requiresTCharAdaptation, static_cast<u8>(arenaCtorMode), isCopyMoveConstructible, isAssignable, isAbstract, isPolymorphicBase, formatArgWrapKind },
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_OBJECT_TYPE
 };
 
-inline constexpr Array s_BuiltinEnums = {
+inline constexpr BuiltinEnumInfo s_BuiltinEnums[] = {
 #define NWB_ADHD_EXPORT_BUILTIN_ENUM(adhdName, cppTypeName, cppScopeName, byteSize, byteAlign, isFlag, requiredHeader) \
     BuiltinEnumInfo{ adhdName, cppTypeName, cppScopeName, requiredHeader, byteSize, byteAlign, isFlag },
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_BUILTIN_ENUM
 };
 
-inline constexpr Array s_BuiltinEnumEntries = {
+inline constexpr BuiltinEnumEntryInfo s_BuiltinEnumEntries[] = {
 #define NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY(adhdEnumName, entryName) \
     BuiltinEnumEntryInfo{ adhdEnumName, entryName },
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_BUILTIN_ENUM_ENTRY
 };
 
-inline constexpr Array s_BuiltinGenericTypes = {
-#define NWB_ADHD_EXPORT_GENERIC_TYPE(adhdName, cppExportName, paramKind, inlineLayoutKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, reflectedLinearKind, isReflectedMap, isAssetHandle, isCopyMoveConstructible, emitsFirstTypeArgOnlyInCpp) \
-    BuiltinGenericTypeInfo{ adhdName, cppExportName, GenericParamKind::paramKind, InlineLayoutKind::inlineLayoutKind, ReflectedLinearKind::reflectedLinearKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, isReflectedMap, isAssetHandle, isCopyMoveConstructible, emitsFirstTypeArgOnlyInCpp },
+inline constexpr BuiltinGenericTypeInfo s_BuiltinGenericTypes[] = {
+#define NWB_ADHD_EXPORT_GENERIC_TYPE(adhdName, cppExportName, paramKind, inlineLayoutKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, reflectedLinearKind, isReflectedMap, isAssetHandle, isCopyMoveConstructible, emitsFirstTypeArgOnlyInCpp, arenaFirstInCtor, requiredHeader) \
+    BuiltinGenericTypeInfo{ adhdName, cppExportName, requiredHeader, GenericParamKind::paramKind, InlineLayoutKind::inlineLayoutKind, ReflectedLinearKind::reflectedLinearKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, isReflectedMap, isAssetHandle, isCopyMoveConstructible, emitsFirstTypeArgOnlyInCpp, arenaFirstInCtor },
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_GENERIC_TYPE
 };
 
-inline constexpr Array s_NonCopyableBaseInterfaceNames = {
+inline constexpr MStringView s_NonCopyableBaseInterfaceNames[] = {
 #define NWB_ADHD_EXPORT_NON_COPYABLE_BASE_INTERFACE(ifaceName) MStringView(ifaceName),
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_NON_COPYABLE_BASE_INTERFACE
 };
 
-inline constexpr Array s_MoveOnlyTypeNames = {
+inline constexpr MStringView s_MoveOnlyTypeNames[] = {
 #define NWB_ADHD_EXPORT_MOVE_ONLY_TYPE(typeName) MStringView(typeName),
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_MOVE_ONLY_TYPE
 };
 
-inline constexpr Array s_BuiltinBinaryHashTypes = {
+inline constexpr BuiltinBinaryHashTypeInfo s_BuiltinBinaryHashTypes[] = {
 #define NWB_ADHD_EXPORT_BINARY_HASH_TYPE(adhdName, memberSuffix) \
     BuiltinBinaryHashTypeInfo{ adhdName, memberSuffix },
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_BINARY_HASH_TYPE
 };
 
-inline constexpr Array s_BuiltinNwbValueTypes = {
+inline constexpr BuiltinNwbValueTypeInfo s_BuiltinNwbValueTypes[] = {
 #define NWB_ADHD_EXPORT_NWB_VALUE_TYPE(adhdName, nwbCheckMethod, nwbAccessorMethod, valuePrefix, valueSuffix, directFieldPrefix, directFieldSuffix, optionalFieldPrefix, optionalFieldSuffix, requiresNameAdmission) \
     BuiltinNwbValueTypeInfo{ adhdName, nwbCheckMethod, nwbAccessorMethod, valuePrefix, valueSuffix, directFieldPrefix, directFieldSuffix, optionalFieldPrefix, optionalFieldSuffix, requiresNameAdmission },
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_NWB_VALUE_TYPE
 };
 
-inline constexpr Array s_BuiltinImplicitConversions = {
+inline constexpr BuiltinImplicitConversionInfo s_BuiltinImplicitConversions[] = {
 #define NWB_ADHD_EXPORT_IMPLICIT_CONVERSION(fromTypeName, toTypeName, propagatesFirstTypeArg) \
     BuiltinImplicitConversionInfo{ fromTypeName, toTypeName, propagatesFirstTypeArg },
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_IMPLICIT_CONVERSION
 };
 
-inline constexpr Array s_BuiltinUnalignedVectorTypes = {
+inline constexpr BuiltinUnalignedVectorInfo s_BuiltinUnalignedVectorTypes[] = {
 #define NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE(adhdName, cppExportName, lanes, altCtorArity, byteSize, byteAlign, laneScalarType, isHalfFloat) \
     BuiltinUnalignedVectorInfo{ adhdName, cppExportName, laneScalarType, lanes, altCtorArity, byteSize, byteAlign, isHalfFloat },
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE
 };
 
-inline constexpr Array s_BuiltinSimdVectorTypes = {
+inline constexpr BuiltinSimdVectorInfo s_BuiltinSimdVectorTypes[] = {
 #define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, altCtorArity, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
     BuiltinSimdVectorInfo{ adhdName, cppExportName, xyzScalarType, wScalarType, regCppType, loadCppFunc, storeCppFunc, lanes, altCtorArity, byteSize, byteAlign, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed },
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
 };
 
-inline constexpr Array s_BuiltinSimdMatrixTypes = {
+inline constexpr BuiltinSimdMatrixInfo s_BuiltinSimdMatrixTypes[] = {
 #define NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE(adhdName, cppExportName, elemCount, byteSize, byteAlign, elemScalarType, rowVectorType, isDoubleReg, regCppType, loadCppFunc, storeCppFunc) \
     BuiltinSimdMatrixInfo{ adhdName, cppExportName, elemScalarType, rowVectorType, regCppType, loadCppFunc, storeCppFunc, elemCount, byteSize, byteAlign, isDoubleReg },
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE
 };
 
-inline constexpr Array s_BuiltinMemberMethods = {
+inline constexpr BuiltinMemberMethodInfo s_BuiltinMemberMethods[] = {
 #define NWB_ADHD_EXPORT_MEMBER_METHOD(methodName, isMutating, firstArgIsMut, adaptsFirstArgToElement, adaptsSecondArgToElement, returnRule, returnTypeName) \
     BuiltinMemberMethodInfo{ methodName, returnTypeName, BuiltinMemberReturnRule::returnRule, isMutating, firstArgIsMut, adaptsFirstArgToElement, adaptsSecondArgToElement },
 #include "../export_functions.h"
 #undef NWB_ADHD_EXPORT_MEMBER_METHOD
 };
 
-inline constexpr Array s_BuiltinReceiverMethods = {
+inline constexpr BuiltinReceiverMethodInfo s_BuiltinReceiverMethods[] = {
 #define NWB_ADHD_EXPORT_RECEIVER_METHOD(receiverTypeName, methodName, returnTypeName, synthesizeTypeRef) \
-    BuiltinReceiverMethodInfo{ receiverTypeName, methodName, returnTypeName, "", "", synthesizeTypeRef },
+    BuiltinReceiverMethodInfo{ receiverTypeName, methodName, returnTypeName, "", "", synthesizeTypeRef, false },
 #define NWB_ADHD_EXPORT_RECEIVER_METHOD_EX(receiverTypeName, methodName, returnTypeName, returnTypeArgName, returnErrorTypeName, synthesizeTypeRef) \
-    BuiltinReceiverMethodInfo{ receiverTypeName, methodName, returnTypeName, returnTypeArgName, returnErrorTypeName, synthesizeTypeRef },
+    BuiltinReceiverMethodInfo{ receiverTypeName, methodName, returnTypeName, returnTypeArgName, returnErrorTypeName, synthesizeTypeRef, false },
+#define NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT(receiverTypeName, methodName, returnTypeName, returnTypeArgName, returnErrorTypeName, synthesizeTypeRef, isMutating) \
+    BuiltinReceiverMethodInfo{ receiverTypeName, methodName, returnTypeName, returnTypeArgName, returnErrorTypeName, synthesizeTypeRef, isMutating },
 #include "../export_functions.h"
+#undef NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT
 #undef NWB_ADHD_EXPORT_RECEIVER_METHOD_EX
 #undef NWB_ADHD_EXPORT_RECEIVER_METHOD
 };
 
-inline constexpr Array s_BuiltinFields = {
+inline constexpr BuiltinFieldInfo s_BuiltinFields[] = {
 #define NWB_ADHD_EXPORT_BUILTIN_FIELD(receiverTypeName, fieldName, fieldTypeName, elemTypeName, countText) \
     BuiltinFieldInfo{ receiverTypeName, fieldName, fieldTypeName, elemTypeName, countText },
 #include "../export_functions.h"
 #undef NWB_ADHD_EXPORT_BUILTIN_FIELD
 };
 
-inline constexpr Array s_BuiltinFunctionArgRules = {
+inline constexpr BuiltinFunctionArgRuleInfo s_BuiltinFunctionArgRules[] = {
 #define NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(ruleName, expectedParamType, isMut, requiredExactType, requiresStringLike, requiresIntegerScalar, errorMessage) \
     BuiltinFunctionArgRuleInfo{ BuiltinFunctionArgRule::ruleName, expectedParamType, requiredExactType, errorMessage, isMut, requiresStringLike, requiresIntegerScalar },
 #include "../export_functions.h"
 #undef NWB_ADHD_EXPORT_FUNCTION_ARG_RULE
 };
 
-inline constexpr Array s_BuiltinFunctions = {
+inline constexpr BuiltinFunctionInfo s_BuiltinFunctions[] = {
 #define NWB_ADHD_EXPORT_FUNCTION(adhdName, cppExportName, arity, returnRule, returnTypeName, returnTypeArgName, arg0Rule, arg1Rule, arg2Rule) \
-    BuiltinFunctionInfo{ adhdName, cppExportName, returnTypeName, returnTypeArgName, "", "", "", arity, arity, BuiltinFunctionReturnRule::returnRule, false, false, false, { BuiltinFunctionArgRule::arg0Rule, BuiltinFunctionArgRule::arg1Rule, BuiltinFunctionArgRule::arg2Rule } },
+    BuiltinFunctionInfo{ adhdName, cppExportName, returnTypeName, returnTypeArgName, "", "", "", arity, arity, BuiltinFunctionReturnRule::returnRule, BuiltinCallLowering::None, false, false, false, false, false, false, { BuiltinFunctionArgRule::arg0Rule, BuiltinFunctionArgRule::arg1Rule, BuiltinFunctionArgRule::arg2Rule, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any } },
 #define NWB_ADHD_EXPORT_FUNCTION5(adhdName, cppExportName, arity, returnRule, returnTypeName, returnTypeArgName, arg0Rule, arg1Rule, arg2Rule, arg3Rule, arg4Rule) \
-    BuiltinFunctionInfo{ adhdName, cppExportName, returnTypeName, returnTypeArgName, "", "", "", arity, arity, BuiltinFunctionReturnRule::returnRule, false, false, false, { BuiltinFunctionArgRule::arg0Rule, BuiltinFunctionArgRule::arg1Rule, BuiltinFunctionArgRule::arg2Rule, BuiltinFunctionArgRule::arg3Rule, BuiltinFunctionArgRule::arg4Rule } },
+    BuiltinFunctionInfo{ adhdName, cppExportName, returnTypeName, returnTypeArgName, "", "", "", arity, arity, BuiltinFunctionReturnRule::returnRule, BuiltinCallLowering::None, false, false, false, false, false, false, { BuiltinFunctionArgRule::arg0Rule, BuiltinFunctionArgRule::arg1Rule, BuiltinFunctionArgRule::arg2Rule, BuiltinFunctionArgRule::arg3Rule, BuiltinFunctionArgRule::arg4Rule, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any } },
 #define NWB_ADHD_EXPORT_FUNCTION_EX(adhdName, cppExportName, minArity, arity, returnRule, returnTypeName, returnTypeArgName, returnNestedTypeArgName, returnErrorTypeName, requiredHeader, prependsScratchArena, isVariadic, wrapsFormatArgs, arg0Rule, arg1Rule, arg2Rule, arg3Rule, arg4Rule) \
-    BuiltinFunctionInfo{ adhdName, cppExportName, returnTypeName, returnTypeArgName, returnNestedTypeArgName, returnErrorTypeName, requiredHeader, minArity, arity, BuiltinFunctionReturnRule::returnRule, prependsScratchArena, isVariadic, wrapsFormatArgs, { BuiltinFunctionArgRule::arg0Rule, BuiltinFunctionArgRule::arg1Rule, BuiltinFunctionArgRule::arg2Rule, BuiltinFunctionArgRule::arg3Rule, BuiltinFunctionArgRule::arg4Rule } },
+    BuiltinFunctionInfo{ adhdName, cppExportName, returnTypeName, returnTypeArgName, returnNestedTypeArgName, returnErrorTypeName, requiredHeader, minArity, arity, BuiltinFunctionReturnRule::returnRule, BuiltinCallLowering::None, prependsScratchArena, isVariadic, wrapsFormatArgs, (BuiltinFunctionReturnRule::returnRule == BuiltinFunctionReturnRule::CallTemplateArg0), false, false, { BuiltinFunctionArgRule::arg0Rule, BuiltinFunctionArgRule::arg1Rule, BuiltinFunctionArgRule::arg2Rule, BuiltinFunctionArgRule::arg3Rule, BuiltinFunctionArgRule::arg4Rule, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any } },
+#define NWB_ADHD_EXPORT_FUNCTION_CALL(adhdName, cppExportName, minArity, arity, returnRule, returnTypeName, returnTypeArgName, returnNestedTypeArgName, returnErrorTypeName, requiredHeader, prependsScratchArena, isVariadic, wrapsFormatArgs, callLowering, requiresExplicitTypeArg, returnsBorrowedView, rejectsSimdStorage, arg0Rule, arg1Rule, arg2Rule, arg3Rule, arg4Rule, arg5Rule, arg6Rule, arg7Rule, arg8Rule) \
+    BuiltinFunctionInfo{ adhdName, cppExportName, returnTypeName, returnTypeArgName, returnNestedTypeArgName, returnErrorTypeName, requiredHeader, minArity, arity, BuiltinFunctionReturnRule::returnRule, BuiltinCallLowering::callLowering, prependsScratchArena, isVariadic, wrapsFormatArgs, requiresExplicitTypeArg, returnsBorrowedView, rejectsSimdStorage, { BuiltinFunctionArgRule::arg0Rule, BuiltinFunctionArgRule::arg1Rule, BuiltinFunctionArgRule::arg2Rule, BuiltinFunctionArgRule::arg3Rule, BuiltinFunctionArgRule::arg4Rule, BuiltinFunctionArgRule::arg5Rule, BuiltinFunctionArgRule::arg6Rule, BuiltinFunctionArgRule::arg7Rule, BuiltinFunctionArgRule::arg8Rule } },
 #include "../export_functions.h"
+#undef NWB_ADHD_EXPORT_FUNCTION_CALL
 #undef NWB_ADHD_EXPORT_FUNCTION_EX
 #undef NWB_ADHD_EXPORT_FUNCTION5
 #undef NWB_ADHD_EXPORT_FUNCTION
 };
 
-inline constexpr Array s_BuiltinGlobalConstants = {
-#define NWB_ADHD_EXPORT_GLOBAL_CONSTANT(adhdName, cppExportName, adhdTypeName) \
-    BuiltinGlobalConstantInfo{ adhdName, cppExportName, adhdTypeName },
+inline constexpr BuiltinGlobalConstantInfo s_BuiltinGlobalConstants[] = {
+#define NWB_ADHD_EXPORT_GLOBAL_CONSTANT(adhdName, cppExportName, adhdTypeName, requiredHeader) \
+    BuiltinGlobalConstantInfo{ adhdName, cppExportName, adhdTypeName, requiredHeader },
 #include "../export_functions.h"
 #undef NWB_ADHD_EXPORT_GLOBAL_CONSTANT
 };
 
 template<typename EntryT, usize N>
-[[nodiscard]] constexpr const EntryT* FindBuiltinByAdhdName(const Array<EntryT, N>& table, const MStringView name)noexcept{
+[[nodiscard]] constexpr const EntryT* FindBuiltinByAdhdName(const EntryT (&table)[N], const MStringView name)noexcept{
     for(const EntryT& info : table){
         if(info.adhdName == name)
             return &info;
@@ -192,7 +198,15 @@ b8 HasBuiltinEnumEntry(const MStringView enumName, const MStringView entryName)n
 
 b8 IsArenaFirstCtorType(const MStringView name)noexcept{
     if(const BuiltinObjectTypeInfo* info = FindBuiltinObjectType(name))
-        return info->arenaFirstInCtor;
+        return info->arenaCtorMode == 1u;
+    if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(name))
+        return genericInfo->arenaFirstInCtor;
+    return false;
+}
+
+b8 OmitsArenaInCtorType(const MStringView name)noexcept{
+    if(const BuiltinObjectTypeInfo* info = FindBuiltinObjectType(name))
+        return info->arenaCtorMode == 2u;
     return false;
 }
 
@@ -323,8 +337,58 @@ const BuiltinFunctionInfo* FindBuiltinFunction(const MStringView name)noexcept{
     return __hidden_adhd_type_utils::FindBuiltinByAdhdName(__hidden_adhd_type_utils::s_BuiltinFunctions, name);
 }
 
+const BuiltinFunctionInfo* FindBuiltinScopedFunction(const MStringView scopeTypeName, const MStringView memberName)noexcept{
+    if(memberName.empty())
+        return nullptr;
+    MStringView prefix{};
+    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(scopeTypeName))
+        prefix = objInfo->cppExportName;
+    else if(const BuiltinEnumInfo* enumInfo = FindBuiltinEnum(scopeTypeName))
+        prefix = enumInfo->cppScopeName;
+    if(prefix.empty())
+        return nullptr;
+    constexpr MStringView kArenaSuffix = "<::ArenaBase>::";
+    for(const BuiltinFunctionInfo& info : __hidden_adhd_type_utils::s_BuiltinFunctions){
+        if(!info.cppExportName.starts_with(prefix) || !info.cppExportName.ends_with(memberName))
+            continue;
+        if(info.cppExportName.size() == prefix.size() + 2u + memberName.size()
+            && info.cppExportName.substr(prefix.size(), 2u) == "::"
+        ){
+            return &info;
+        }
+        if(info.cppExportName.size() == prefix.size() + kArenaSuffix.size() + memberName.size()
+            && info.cppExportName.substr(prefix.size(), kArenaSuffix.size()) == kArenaSuffix
+        ){
+            return &info;
+        }
+    }
+    return nullptr;
+}
+
 const BuiltinGlobalConstantInfo* FindBuiltinGlobalConstant(const MStringView name)noexcept{
     return __hidden_adhd_type_utils::FindBuiltinByAdhdName(__hidden_adhd_type_utils::s_BuiltinGlobalConstants, name);
+}
+
+const BuiltinGlobalConstantInfo* FindBuiltinScopedConstant(const MStringView scopeTypeName, const MStringView memberName)noexcept{
+    if(memberName.empty())
+        return nullptr;
+    MStringView prefix{};
+    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(scopeTypeName))
+        prefix = objInfo->cppExportName;
+    else if(const BuiltinEnumInfo* enumInfo = FindBuiltinEnum(scopeTypeName))
+        prefix = enumInfo->cppScopeName;
+    if(prefix.empty())
+        return nullptr;
+    for(const BuiltinGlobalConstantInfo& info : __hidden_adhd_type_utils::s_BuiltinGlobalConstants){
+        if(info.cppExportName.size() == prefix.size() + 2u + memberName.size()
+            && info.cppExportName.starts_with(prefix)
+            && info.cppExportName.substr(prefix.size(), 2u) == "::"
+            && info.cppExportName.ends_with(memberName)
+        ){
+            return &info;
+        }
+    }
+    return nullptr;
 }
 
 b8 IsBorrowViewType(const MStringView name)noexcept{
@@ -395,9 +459,7 @@ b8 IsStringReceiverBorrowViewMethod(const MStringView receiverTypeName, const MS
 
 b8 IsBuiltinStringViewBorrowFunction(const MStringView name)noexcept{
     const BuiltinFunctionInfo* fn = FindBuiltinFunction(name);
-    return fn && fn->returnRule == BuiltinFunctionReturnRule::FixedType && fn->returnTypeName == "StringView"
-        && (fn->argRules[0] == BuiltinFunctionArgRule::StringView || fn->argRules[0] == BuiltinFunctionArgRule::TextView)
-        && name != "DiagnosticEventNameFromCategory";
+    return fn && fn->returnsBorrowedView;
 }
 
 b8 IsContainerOrWrapperValueAccessMethod(const MStringView receiverTypeName, const MStringView methodName, const b8 includeStrings)noexcept{
@@ -562,6 +624,20 @@ b8 IsMoveOnlyTypeName(const MStringView name)noexcept{
             return true;
     }
     return false;
+}
+
+b8 HasBuiltinSimdRegisterField(const MStringView typeName)noexcept{
+    for(const BuiltinFieldInfo& info : __hidden_adhd_type_utils::s_BuiltinFields){
+        if(info.receiverTypeName == typeName && SymbolTable::IsSimdRegisterType(info.fieldTypeName))
+            return true;
+    }
+    return false;
+}
+
+b8 IsOverAlignedBuiltinType(const MStringView typeName)noexcept{
+    usize byteSize = 0u;
+    usize byteAlign = 0u;
+    return FindBuiltinFixedLayout(typeName, byteSize, byteAlign) && byteAlign >= 16u;
 }
 
 

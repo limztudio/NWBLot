@@ -110,7 +110,7 @@ inline constexpr u32 s_MaxCrashMetadata = static_cast<u32>(Core::Crash::CrashDet
 inline constexpr u32 s_MaxCrashBreadcrumbs = static_cast<u32>(Core::Crash::CrashDetail::s_MaxBreadcrumbs);
 inline constexpr u32 s_MaxCrashCallstackFrames = static_cast<u32>(Core::Crash::CrashDetail::s_MaxCallstackFrames);
 inline constexpr auto s_WindowsCrashPlatform = Core::Crash::CrashDetail::PlatformKind::Windows;
-inline constexpr auto s_ManualDumpReasonKind = Core::Crash::CrashDetail::CrashReasonKind::ManualDump;
+inline constexpr auto s_ManualDumpCrashReasonKind = Core::Crash::CrashDetail::CrashReasonKind::ManualDump;
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 inline constexpr b8 s_IsDesktopLinuxCrashPlatform = true;
 #else
@@ -215,7 +215,7 @@ b8 CreatePackageDirectory(in StringView testGroup, in StringView bucketName, in 
 void FillPackageRequest(in Path spoolDirectory, in StringView crashId, mut CrashRequest request){
     request = CrashRequest();
     request.platform = CurrentCrashPlatformKind();
-    request.reasonKind = s_ManualDumpReasonKind;
+    request.reasonKind = s_ManualDumpCrashReasonKind;
     request.processId = CurrentProcessId();
     request.threadId = CurrentThreadId();
     CopyFixedBuffer(request.crashId, crashId);

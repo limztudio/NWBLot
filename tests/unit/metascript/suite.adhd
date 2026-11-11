@@ -760,6 +760,50 @@ inline constexpr MStringView s_SuiteMotherArenaHierarchyAndGenericSpecSource =
     "    public UniquePtr<i32> handle = UniquePtr<i32>();\r\n"
     "}\r\n";
 
+inline constexpr MStringView s_SuiteCoreGlobalExportsShadowAndLayoutSource =
+    "enum<u8> Format {\r\n"
+    "    Custom8 = 0,\r\n"
+    "}\r\n"
+    "class Color {\r\n"
+    "    public f32 luma = 1.0f;\r\n"
+    "}\r\n"
+    "f32 Viewport(in Color c) {\r\n"
+    "    return c.luma;\r\n"
+    "}\r\n"
+    "[serialize]\r\n"
+    "class PackedUnalignedMat {\r\n"
+    "    public u8 tag = 1u;\r\n"
+    "    public f32x4x4u world = f32x4x4u();\r\n"
+    "}\r\n"
+    "[serialize]\r\n"
+    "class AlignedBoundsPacket {\r\n"
+    "    public u8 tag = 1u;\r\n"
+    "    public BoundingBox bounds = BoundingBox();\r\n"
+    "}\r\n"
+    "class CustomInputHandler : IInputEventHandler {\r\n"
+    "    public b8 keyboardCharInput(in u32 codePoint, in i32 mods)override {\r\n"
+    "        return codePoint != 0u || mods != 0;\r\n"
+    "    }\r\n"
+    "}\r\n"
+    "b8 InspectExports(in IFilesystem fs, in Path entryPath, in Span<u8> rawBytes, in f32x4x4u srcMat, mut f32x4x4u dstMat) {\r\n"
+    "    Color localColor;\r\n"
+    "    Format localFmt = Format::Custom8;\r\n"
+    "    in IFilesystem localFs = fs;\r\n"
+    "    DirectoryEntry entry = DirectoryEntry(entryPath);\r\n"
+    "    ResourceStates mask = (ResourceStates::ShaderResource | ResourceStates::CopySource) ^ ResourceStates::CopySource;\r\n"
+    "    MatrixSingle reg = MatrixSingle(srcMat);\r\n"
+    "    dstMat = f32x4x4u(reg);\r\n"
+    "    MatrixDecomposition decomp = MatrixDecomposition();\r\n"
+    "    Sha1Digest digest = ComputeSha1(rawBytes);\r\n"
+    "    usize alignedBytes = PersistentArena::StructureAlignedSize(64u);\r\n"
+    "    DescriptorWriteItem emptyWrite = DescriptorWriteItem::None();\r\n"
+    "    f32x3x4 joint = MatrixIdentity<f32x3x4>();\r\n"
+    "    joint._14 = 2.0f;\r\n"
+    "    MatrixSingle ident = MatrixIdentity();\r\n"
+    "    f32x4x4 identStore = f32x4x4(ident);\r\n"
+    "    return joint._14 == 2.0f && identStore._11 == 1.0f && localFs.mounted() && CanRepresentU64<u32>(cast<u32>(localFmt)) && Viewport(localColor) > 0.0f && mask == ResourceStates::ShaderResource && digest.bytes[0u] <= 255u && Sha1Digest::s_HexTextLength == 40u && BufferRange::s_AllBytes > 0u && alignedBytes >= 64u && emptyWrite.slot == 0u && !entry.path().empty() && IsFinite(decomp.scale.xyz);\r\n"
+    "}\r\n";
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1274,6 +1318,74 @@ void VerifyAdhdCompiler_EnforcesArenaAttributeConflictsAndPropagatesMotherArenaA
     ExpectCompileFails(arena, "class UnrootedComp {\r\n    public String tag = \"bad\";\r\n}\r\n[component_asset(\"unrooted_comp\")]\r\nclass BadUnrootedCompAsset {\r\n    public UnrootedComp component;\r\n}\r\n", "impl/sim/bad_unrooted_comp_asset.adhd");
 }
 
+void VerifyAdhdCompiler_ResolvesCoreAndGlobalExportsShadowingAbstractInterfacesMatrixPackingAndHeaderOrder(){
+    AdhdTestArena arena = AdhdTestArena();
+
+    CompileResult res = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile(s_SuiteCoreGlobalExportsShadowAndLayoutSource, "impl/sim/core_global_exports.adhd", arena.arena, res));
+
+    const StringView hdrView = GeneratedHeaderView(res);
+
+    const usize sha1HdrPos = hdrView.find("#include <global/sha1.h>");
+    const usize allocGlobalPos = hdrView.find("#include <core/alloc/global.h>");
+    const usize entityIdPos = hdrView.find("#include <core/ecs/entity_id.h>");
+    const usize fsHdrPos = hdrView.find("#include <core/filesystem/filesystem.h>");
+    const usize resHdrPos = hdrView.find("#include <core/graphics/rhi/resource.h>");
+    const usize implGlobalPos = hdrView.find("#include <impl/global.adhd.h>");
+    ASSERT_NE(sha1HdrPos, usize.max);
+    ASSERT_NE(allocGlobalPos, usize.max);
+    ASSERT_NE(entityIdPos, usize.max);
+    ASSERT_NE(fsHdrPos, usize.max);
+    ASSERT_NE(resHdrPos, usize.max);
+    ASSERT_NE(implGlobalPos, usize.max);
+    EXPECT_LT(sha1HdrPos, allocGlobalPos);
+    EXPECT_LT(entityIdPos, fsHdrPos);
+    EXPECT_LT(entityIdPos, resHdrPos);
+    EXPECT_LT(fsHdrPos, implGlobalPos);
+    EXPECT_LT(resHdrPos, implGlobalPos);
+    EXPECT_EQ(hdrView.find("#include <core/graphics/rhi/primitives.h>"), usize.max);
+    EXPECT_EQ(hdrView.find("#include <core/graphics/rhi/format.h>"), usize.max);
+
+    ASSERT_EQ(UnitClassCount(res), 4u);
+    EXPECT_EQ(UnitClassName(res, 1u), "PackedUnalignedMat");
+    EXPECT_EQ(UnitClassTotalAlign(res, 1u), 1u);
+    EXPECT_EQ(UnitClassTotalSize(res, 1u), 65u);
+
+    const usize packedMatPos = hdrView.find("class PackedUnalignedMat final{");
+    const usize alignedBoundsPos = hdrView.find("class AlignedBoundsPacket final{");
+    const usize handlerPos = hdrView.find("class CustomInputHandler final : public ::NWB::Core::IInputEventHandler{");
+    ASSERT_NE(packedMatPos, usize.max);
+    ASSERT_NE(alignedBoundsPos, usize.max);
+    ASSERT_NE(handlerPos, usize.max);
+    EXPECT_NE(hdrView.find("#include <core/input/input_event.h>"), usize.max);
+    EXPECT_NE(hdrView.substr(0u, alignedBoundsPos).find("#pragma pack(push, 1)"), usize.max);
+    EXPECT_EQ(hdrView.substr(alignedBoundsPos).find("#pragma pack(push, 1)"), usize.max);
+
+    EXPECT_NE(hdrView.find("::DirectoryEntry<::ArenaBase> entry = ::DirectoryEntry<::ArenaBase>(entryPath);"), usize.max);
+    EXPECT_NE(hdrView.find("::LoadFloat(srcMat)"), usize.max);
+    EXPECT_NE(hdrView.find("::StoreFloat(reg, dstMat);"), usize.max);
+    EXPECT_NE(hdrView.find("::ComputeSha1(::BinaryByteView{"), usize.max);
+    EXPECT_NE(hdrView.find("::NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u)"), usize.max);
+    EXPECT_NE(hdrView.find("::NWB::Core::DescriptorWriteItem::None()"), usize.max);
+    EXPECT_NE(hdrView.find("::Sha1Digest::s_HexTextLength"), usize.max);
+    EXPECT_NE(hdrView.find("::NWB::Core::BufferRange::s_AllBytes"), usize.max);
+    EXPECT_NE(hdrView.find("::MatrixIdentity<Float34>()"), usize.max);
+    EXPECT_NE(hdrView.find("::MatrixIdentity()"), usize.max);
+    EXPECT_NE(hdrView.find("::VectorIsFinite(decomp.scale, ::VectorComponentMask::s_XYZ)"), usize.max);
+
+    ExpectCompileFails(arena, "void BadAbstractLocal() {\r\n    IFilesystem fs = IFilesystem();\r\n}\r\n", "impl/sim/bad_abs_local.adhd");
+    ExpectCompileFails(arena, "class BadAbstractField {\r\n    public IFilesystem fs;\r\n}\r\n", "impl/sim/bad_abs_field.adhd");
+    ExpectCompileFails(arena, "IFilesystem BadAbstractRet(in IFilesystem fs) {\r\n    return fs;\r\n}\r\n", "impl/sim/bad_abs_ret.adhd");
+    ExpectCompileFails(arena, "void BadAbstractMut(in IFilesystem fs) {\r\n    fs.flush();\r\n}\r\n", "impl/sim/bad_abs_mut.adhd");
+    ExpectCompileFails(arena, "void BadEnumBitwise() {\r\n    auto m = TelemetryCaptureFlag::None | TelemetryCaptureFlag::TextLog;\r\n}\r\n", "impl/sim/bad_enum_bit.adhd");
+    ExpectCompileFails(arena, "class BadSimdStructField {\r\n    public MatrixDecomposition decomp = MatrixDecomposition();\r\n}\r\n", "impl/sim/bad_simd_fld.adhd");
+    ExpectCompileFails(arena, "void BadSimdStructVec() {\r\n    Vector<MatrixDecomposition> list;\r\n}\r\n", "impl/sim/bad_simd_vec.adhd");
+    ExpectCompileFails(arena, "class BadBorrowWriterField {\r\n    public StagedFileWriter writer;\r\n}\r\n", "impl/sim/bad_borrow_writer.adhd");
+    ExpectCompileFails(arena, "class BadPodBase : BoundingBox {\r\n    public u32 x = 0u;\r\n}\r\n", "impl/sim/bad_pod_base.adhd");
+    ExpectCompileFails(arena, "b8 BadMissingTypeArg() {\r\n    return CanRepresentU64(7u);\r\n}\r\n", "impl/sim/bad_no_targ.adhd");
+    ExpectCompileFails(arena, "u32 BadScopedMember() {\r\n    return Sha1Digest::s_NoSuchConstant;\r\n}\r\n", "impl/sim/bad_scoped_const.adhd");
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1366,6 +1478,7 @@ NWB_ADHD_GTEST(AdhdCompiler, ValidatesDigitSeparatorsEnumForwardRefsFlagOpsSwitc
 NWB_ADHD_GTEST(AdhdCompiler, ValidatesHexFloatsSnakeCaseEnumParsingNestedDeductionAndStrictTypeRules, VerifyAdhdCompiler_ValidatesHexFloatsSnakeCaseEnumParsingNestedDeductionAndStrictTypeRules)
 NWB_ADHD_GTEST(AdhdCompiler, RequiresExplicitHeaderOrSourceOnTopLevelNativeBlocks, VerifyAdhdCompiler_RequiresExplicitHeaderOrSourceOnTopLevelNativeBlocks)
 NWB_ADHD_GTEST(AdhdCompiler, EnforcesArenaAttributeConflictsAndPropagatesMotherArenaAcrossNestedAndGenericClasses, VerifyAdhdCompiler_EnforcesArenaAttributeConflictsAndPropagatesMotherArenaAcrossNestedAndGenericClasses)
+NWB_ADHD_GTEST(AdhdCompiler, ResolvesCoreAndGlobalExportsShadowingAbstractInterfacesMatrixPackingAndHeaderOrder, VerifyAdhdCompiler_ResolvesCoreAndGlobalExportsShadowingAbstractInterfacesMatrixPackingAndHeaderOrder)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

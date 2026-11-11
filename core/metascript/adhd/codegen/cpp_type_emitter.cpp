@@ -29,7 +29,7 @@ namespace __hidden_adhd_cpp_type_emitter{
     if(symbols.resolveRefMode(p.type) != ParamPassingMode::None)
         return false;
     const TypeRef* unwrapped = symbols.unwrapTypeAlias(p.type);
-    return unwrapped && unwrapped->refMode == ParamPassingMode::None && SymbolTable::IsArenaBackedContainer(unwrapped->name);
+    return unwrapped && unwrapped->refMode == ParamPassingMode::None && !symbols.hasTypeSymbol(unwrapped->name) && SymbolTable::IsArenaBackedContainer(unwrapped->name);
 }
 
 
@@ -105,6 +105,17 @@ void CppTypeEmitter::emitTypeCpp(MString& out, const TypeRef& type)const{
     }
 
     const MStringView name = type.name;
+    if(const EnumDecl* enumDecl = m_symbols.findEnum(name)){
+        out.append(name.data(), name.size());
+        out.append(enumDecl->isFlag ? "::Flag" : "::Enum");
+        return;
+    }
+    if(m_symbols.hasTypeSymbol(name)){
+        out.append(name.data(), name.size());
+        if(!type.templateArgs.empty())
+            emitTypeArgListCpp(out, type.templateArgs);
+        return;
+    }
     if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(name); genericInfo && (genericInfo->inlineLayoutKind == InlineLayoutKind::Expected || genericInfo->inlineLayoutKind == InlineLayoutKind::Optional) && !type.templateArgs.empty() && type.templateArgs[0].type){
         const MStringView valBase = m_symbols.resolveBaseTypeName(type.templateArgs[0].type->name);
         if(const BuiltinSimdVectorInfo* simdVecInfo = FindBuiltinSimdVectorType(valBase); simdVecInfo && simdVecInfo->cppExportName == simdVecInfo->regCppType){
@@ -146,12 +157,6 @@ void CppTypeEmitter::emitTypeCpp(MString& out, const TypeRef& type)const{
         return;
     }
 
-    if(const EnumDecl* enumDecl = m_symbols.findEnum(name)){
-        out.append(name.data(), name.size());
-        out.append(enumDecl->isFlag ? "::Flag" : "::Enum");
-        return;
-    }
-
     out.append(name.data(), name.size());
     if(!type.templateArgs.empty())
         emitTypeArgListCpp(out, type.templateArgs);
@@ -161,41 +166,43 @@ void CppTypeEmitter::emitTypeWithCustomArenaCpp(MString& out, const TypeRef& typ
     const TypeRef* unwrapped = m_symbols.unwrapTypeAlias(&type);
     const TypeRef& target = unwrapped ? *unwrapped : type;
     const MStringView name = target.name;
-    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(name); objInfo && objInfo->isArenaBacked){
-        const MStringView cppObjName = !objInfo->cppExportName.empty() ? objInfo->cppExportName : name;
-        out.append(cppObjName.data(), cppObjName.size());
-        out.push_back('<');
-        out.append(arenaExpr.data(), arenaExpr.size());
-        out.push_back('>');
-        return;
-    }
-    if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(name); genericInfo && genericInfo->isArenaBacked){
-        const MStringView cppGenericName = !genericInfo->cppExportName.empty() ? genericInfo->cppExportName : name;
-        out.append(cppGenericName.data(), cppGenericName.size());
-        out.push_back('<');
-        if(genericInfo->emitsFirstTypeArgOnlyInCpp){
-            if(!target.templateArgs.empty() && target.templateArgs[0].type){
-                emitTypeCpp(out, *target.templateArgs[0].type);
-                out.append(", ");
-            }
+    if(!m_symbols.hasTypeSymbol(name)){
+        if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(name); objInfo && objInfo->isArenaBacked){
+            const MStringView cppObjName = !objInfo->cppExportName.empty() ? objInfo->cppExportName : name;
+            out.append(cppObjName.data(), cppObjName.size());
+            out.push_back('<');
             out.append(arenaExpr.data(), arenaExpr.size());
+            out.push_back('>');
+            return;
         }
-        else{
-            for(usize i = 0u; i < target.templateArgs.size(); ++i){
-                if(i > 0u)
+        if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(name); genericInfo && genericInfo->isArenaBacked){
+            const MStringView cppGenericName = !genericInfo->cppExportName.empty() ? genericInfo->cppExportName : name;
+            out.append(cppGenericName.data(), cppGenericName.size());
+            out.push_back('<');
+            if(genericInfo->emitsFirstTypeArgOnlyInCpp){
+                if(!target.templateArgs.empty() && target.templateArgs[0].type){
+                    emitTypeCpp(out, *target.templateArgs[0].type);
                     out.append(", ");
-                const TypeArg& arg = target.templateArgs[i];
-                if(arg.type)
-                    emitTypeCpp(out, *arg.type);
-                else if(!arg.constantText.empty())
-                    out.append(arg.constantText.data(), arg.constantText.size());
+                }
+                out.append(arenaExpr.data(), arenaExpr.size());
             }
-            if(!target.templateArgs.empty())
-                out.append(", ");
-            out.append(arenaExpr.data(), arenaExpr.size());
+            else{
+                for(usize i = 0u; i < target.templateArgs.size(); ++i){
+                    if(i > 0u)
+                        out.append(", ");
+                    const TypeArg& arg = target.templateArgs[i];
+                    if(arg.type)
+                        emitTypeCpp(out, *arg.type);
+                    else if(!arg.constantText.empty())
+                        out.append(arg.constantText.data(), arg.constantText.size());
+                }
+                if(!target.templateArgs.empty())
+                    out.append(", ");
+                out.append(arenaExpr.data(), arenaExpr.size());
+            }
+            out.push_back('>');
+            return;
         }
-        out.push_back('>');
-        return;
     }
     emitTypeCpp(out, type);
 }
@@ -216,15 +223,17 @@ void CppTypeEmitter::emitTypeArgListCpp(MString& out, const Span<const TypeArg> 
 
 void CppTypeEmitter::emitParamTypeCpp(MString& out, const ParamPassingMode::Enum mode, const TypeRef& type, const b8 topLevelConst)const{
     if(mode == ParamPassingMode::Mut){
-        if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(type.name); genericInfo && genericInfo->isBorrowView && type.templateArgs.size() == 1u && type.templateArgs[0].type){
-            if(topLevelConst)
-                out.append("const ");
-            const MStringView cppViewName = !genericInfo->cppExportName.empty() ? genericInfo->cppExportName : MStringView(type.name);
-            out.append(cppViewName.data(), cppViewName.size());
-            out.push_back('<');
-            emitTypeCpp(out, *type.templateArgs[0].type);
-            out.push_back('>');
-            return;
+        if(!m_symbols.hasTypeSymbol(type.name)){
+            if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(type.name); genericInfo && genericInfo->isBorrowView && type.templateArgs.size() == 1u && type.templateArgs[0].type){
+                if(topLevelConst)
+                    out.append("const ");
+                const MStringView cppViewName = !genericInfo->cppExportName.empty() ? genericInfo->cppExportName : MStringView(type.name);
+                out.append(cppViewName.data(), cppViewName.size());
+                out.push_back('<');
+                emitTypeCpp(out, *type.templateArgs[0].type);
+                out.push_back('>');
+                return;
+            }
         }
         emitTypeCpp(out, type);
         out.push_back('&');

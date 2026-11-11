@@ -82,7 +82,7 @@ b8 TypeChecker::checkTemplateParamBounds(const Span<const TemplateParamDecl> par
                 reportError(errors, param.span, "template parameter bound must be an 'interface', not a concrete 'class'");
                 ok = false;
             }
-            else if(!m_symbols.findInterface(boundName)){
+            else if(!m_symbols.findInterface(boundName) && !m_symbols.isPolymorphicBaseBuiltinType(boundName)){
                 reportError(errors, param.span, "unknown interface bound on template parameter");
                 ok = false;
             }
@@ -235,7 +235,8 @@ b8 TypeChecker::checkTemplateArgTypes(const Span<const TypeArg> templateArgs, co
             if(!checkTypeRef(*targ.type, enclosingClass, enclosingMethod, errors))
                 ok = false;
             const ParamPassingMode::Enum argRefMode = m_symbols.resolveRefMode(targ.type);
-            if(argRefMode == ParamPassingMode::None && m_symbols.findInterface(m_symbols.resolveBaseTypeName(targ.type->name))){
+            const MStringView argBaseName = m_symbols.resolveBaseTypeName(targ.type->name);
+            if(argRefMode == ParamPassingMode::None && (m_symbols.findInterface(argBaseName) || m_symbols.isAbstractBuiltinType(argBaseName))){
                 reportError(errors, targ.type->span.line > 0u ? targ.type->span : fallbackSpan, "template type argument of 'interface' type must specify 'in' or 'mut'; interfaces cannot be stored or instantiated by value");
                 ok = false;
             }
@@ -248,10 +249,8 @@ b8 TypeChecker::checkTypeRef(const TypeRef& typeRef, const ClassDecl* enclosingC
     b8 ok = true;
     const TypeRef* unwrapped = m_symbols.unwrapTypeAlias(&typeRef);
     const MStringView resolvedHeaderTypeName = unwrapped ? unwrapped->name : typeRef.name;
-    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(resolvedHeaderTypeName))
-        recordRequiredHeader(objInfo->requiredHeader);
-    else if(const BuiltinEnumInfo* enumInfo = FindBuiltinEnum(resolvedHeaderTypeName))
-        recordRequiredHeader(enumInfo->requiredHeader);
+    if(!FindTemplateParam(enclosingClass, enclosingMethod, resolvedHeaderTypeName))
+        recordBuiltinTypeHeader(resolvedHeaderTypeName);
     const b8 isVoid = IsVoidTypeRef(&typeRef) || IsVoidTypeRef(unwrapped);
     if(isVoid){
         if(typeRef.refMode != ParamPassingMode::None || (unwrapped && unwrapped->refMode != ParamPassingMode::None)){
@@ -285,7 +284,26 @@ b8 TypeChecker::checkTypeRef(const TypeRef& typeRef, const ClassDecl* enclosingC
             }
         }
     }
-    if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(typeRef.name)){
+    if(const ClassDecl* targetCls = m_symbols.findClass(typeRef.name)){
+        if(!targetCls->templateParams.empty() || !typeRef.templateArgs.empty()){
+            if(!checkTemplateArgBounds(targetCls->templateParams, typeRef.templateArgs, enclosingClass, enclosingMethod, typeRef.span, errors))
+                ok = false;
+        }
+    }
+    else if(const InterfaceDecl* targetIface = m_symbols.findInterface(typeRef.name)){
+        if(!targetIface->templateParams.empty() || !typeRef.templateArgs.empty()){
+            if(!checkTemplateArgBounds(targetIface->templateParams, typeRef.templateArgs, enclosingClass, enclosingMethod, typeRef.span, errors))
+                ok = false;
+        }
+    }
+    else if(const TypeAliasDecl* targetAlias = m_symbols.findTypeAlias(typeRef.name)){
+        if(!targetAlias->templateParams.empty() || !typeRef.templateArgs.empty()){
+            if(!checkTemplateArgBounds(targetAlias->templateParams, typeRef.templateArgs, enclosingClass, enclosingMethod, typeRef.span, errors))
+                ok = false;
+        }
+    }
+    else if(!m_symbols.hasTypeSymbol(typeRef.name) && FindBuiltinGenericType(typeRef.name) != nullptr){
+        const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(typeRef.name);
         switch(genericInfo->paramKind){
         case GenericParamKind::SingleType:{
             if(typeRef.templateArgs.size() != 1u || !typeRef.templateArgs[0].type){
@@ -335,29 +353,10 @@ b8 TypeChecker::checkTypeRef(const TypeRef& typeRef, const ClassDecl* enclosingC
         }
         }
     }
-    else if(const ClassDecl* targetCls = m_symbols.findClass(typeRef.name)){
-        if(!targetCls->templateParams.empty() || !typeRef.templateArgs.empty()){
-            if(!checkTemplateArgBounds(targetCls->templateParams, typeRef.templateArgs, enclosingClass, enclosingMethod, typeRef.span, errors))
-                ok = false;
-        }
-    }
-    else if(const InterfaceDecl* targetIface = m_symbols.findInterface(typeRef.name)){
-        if(!targetIface->templateParams.empty() || !typeRef.templateArgs.empty()){
-            if(!checkTemplateArgBounds(targetIface->templateParams, typeRef.templateArgs, enclosingClass, enclosingMethod, typeRef.span, errors))
-                ok = false;
-        }
-    }
-    else if(const TypeAliasDecl* targetAlias = m_symbols.findTypeAlias(typeRef.name)){
-        if(!targetAlias->templateParams.empty() || !typeRef.templateArgs.empty()){
-            if(!checkTemplateArgBounds(targetAlias->templateParams, typeRef.templateArgs, enclosingClass, enclosingMethod, typeRef.span, errors))
-                ok = false;
-        }
-    }
     else if(!typeRef.templateArgs.empty()){
-        const b8 isKnownNonTemplated = BuiltinTypeSemantics::IsBuiltinTypeName(typeRef.name)
-            || m_symbols.findEnum(typeRef.name) != nullptr
-            || FindBuiltinEnum(typeRef.name) != nullptr
-            || FindTemplateParam(enclosingClass, enclosingMethod, typeRef.name) != nullptr;
+        const b8 isKnownNonTemplated = m_symbols.findEnum(typeRef.name) != nullptr
+            || FindTemplateParam(enclosingClass, enclosingMethod, typeRef.name) != nullptr
+            || (!m_symbols.hasTypeSymbol(typeRef.name) && (BuiltinTypeSemantics::IsBuiltinTypeName(typeRef.name) || FindBuiltinEnum(typeRef.name) != nullptr));
         if(isKnownNonTemplated || !m_hasTopLevelNativeBlocks){
             reportError(errors, typeRef.span, "type does not accept template arguments");
             ok = false;
@@ -367,7 +366,7 @@ b8 TypeChecker::checkTypeRef(const TypeRef& typeRef, const ClassDecl* enclosingC
     if(!checkTemplateArgTypes(typeRef.templateArgs, enclosingClass, enclosingMethod, typeRef.span, errors))
         ok = false;
     if(!typeRef.templateArgs.empty()){
-        const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(typeRef.name);
+        const BuiltinGenericTypeInfo* genericInfo = m_symbols.hasTypeSymbol(typeRef.name) ? nullptr : FindBuiltinGenericType(typeRef.name);
         const b8 allowsDirectSimdValueArg = genericInfo && (genericInfo->inlineLayoutKind == InlineLayoutKind::Expected || genericInfo->inlineLayoutKind == InlineLayoutKind::Optional);
         for(usize argIdx = 0u; argIdx < typeRef.templateArgs.size(); ++argIdx){
             const TypeRef* argType = typeRef.templateArgs[argIdx].type;
@@ -405,7 +404,8 @@ b8 TypeChecker::checkTypeRef(const TypeRef& typeRef, const ClassDecl* enclosingC
 
 b8 TypeChecker::checkReturnTypeRef(const TypeRef& returnType, const ClassDecl* enclosingClass, const MethodDecl* enclosingMethod, const SourceSpan errorSpan, MVector<ParseError>& errors){
     b8 ok = checkTypeRef(returnType, enclosingClass, enclosingMethod, true, errors);
-    if(m_symbols.resolveRefMode(&returnType) == ParamPassingMode::None && m_symbols.findInterface(m_symbols.resolveBaseTypeName(returnType.name))){
+    const MStringView retBaseName = m_symbols.resolveBaseTypeName(returnType.name);
+    if(m_symbols.resolveRefMode(&returnType) == ParamPassingMode::None && (m_symbols.findInterface(retBaseName) || m_symbols.isAbstractBuiltinType(retBaseName))){
         reportError(errors, errorSpan, "cannot return an 'interface' type by value");
         ok = false;
     }

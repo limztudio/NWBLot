@@ -350,7 +350,8 @@ NWB_ADHD_BEGIN
         if(expr->isBuiltinCall){
             if(!expr->resolvedSimdType.empty() || !expr->resolvedUnalignedType.empty())
                 return true;
-            if(IsSimdScalarReductionFunction(callee) || !MapSimdRegisterCall(callee).empty() || callee == "IsFinite"){
+            const BuiltinFunctionInfo* fnInfo = FindBuiltinFunction(callee);
+            if(IsSimdScalarReductionFunction(callee) || !MapSimdRegisterCall(callee).empty() || (fnInfo && fnInfo->rejectsSimdStorage)){
                 for(const Expr* arg : expr->arguments){
                     if(arg && (!arg->resolvedSimdType.empty() || !arg->resolvedUnalignedType.empty()))
                         return true;

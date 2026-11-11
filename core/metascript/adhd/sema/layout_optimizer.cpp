@@ -254,83 +254,9 @@ void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, const u32 dep
         }
     }
 
-    if(FindBuiltinFixedLayout(name, outSize, outAlign))
-        return;
-
-    if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(name)){
-        switch(genericInfo->inlineLayoutKind){
-        case InlineLayoutKind::Atomic:{
-            if(!type.templateArgs.empty() && type.templateArgs[0].type){
-                resolveTypeSizeAndAlign(*type.templateArgs[0].type, depth + 1u, outSize, outAlign);
-                return;
-            }
-            outSize = 8u;
-            outAlign = 8u;
-            return;
-        }
-        case InlineLayoutKind::Optional:{
-            if(!type.templateArgs.empty() && type.templateArgs[0].type){
-                usize innerSize = 8u;
-                usize innerAlign = 8u;
-                resolveTypeSizeAndAlign(*type.templateArgs[0].type, depth + 1u, innerSize, innerAlign);
-                outAlign = innerAlign;
-                outSize = ::AlignUp(innerSize + 1u, innerAlign);
-                return;
-            }
-            outSize = __hidden_adhd_layout_optimizer::s_BareOptionalFallbackBytes;
-            outAlign = 8u;
-            return;
-        }
-        case InlineLayoutKind::Expected:{
-            if(!type.templateArgs.empty() && type.templateArgs[0].type){
-                usize valSize = 8u;
-                usize valAlign = 8u;
-                usize errSize = 1u;
-                usize errAlign = 1u;
-                resolveTypeSizeAndAlign(*type.templateArgs[0].type, depth + 1u, valSize, valAlign);
-                if(type.templateArgs.size() >= 2u && type.templateArgs[1].type)
-                    resolveTypeSizeAndAlign(*type.templateArgs[1].type, depth + 1u, errSize, errAlign);
-                outAlign = valAlign > errAlign ? valAlign : errAlign;
-                const usize payloadSize = valSize > errSize ? valSize : errSize;
-                outSize = ::AlignUp(payloadSize + 1u, outAlign);
-                return;
-            }
-            outSize = __hidden_adhd_layout_optimizer::s_BareExpectedFallbackBytes;
-            outAlign = 8u;
-            return;
-        }
-        case InlineLayoutKind::Array:
-        case InlineLayoutKind::FixedVector:{
-            usize elemSize = 4u;
-            usize elemAlign = 4u;
-            usize count = 1u;
-            if(!type.templateArgs.empty() && type.templateArgs[0].type)
-                resolveTypeSizeAndAlign(*type.templateArgs[0].type, depth + 1u, elemSize, elemAlign);
-            if(type.templateArgs.size() >= 2u)
-                count = ParseUnsignedConstant(type.templateArgs[1].constantOrTypeName(), m_symbols);
-            if(genericInfo->inlineLayoutKind == InlineLayoutKind::Array){
-                outSize = elemSize * count;
-                outAlign = elemAlign;
-            }
-            else{
-                outAlign = elemAlign > 4u ? elemAlign : 4u;
-                outSize = ::AlignUp(elemSize * count + 4u, outAlign);
-            }
-            return;
-        }
-        case InlineLayoutKind::None:
-            break;
-        }
-    }
-
     if(const EnumDecl* enumDecl = m_symbols.findEnum(name)){
         outSize = enumDecl->underlyingSize;
         outAlign = enumDecl->underlyingAlign;
-        return;
-    }
-    if(const BuiltinEnumInfo* builtinEnum = FindBuiltinEnum(name)){
-        outSize = builtinEnum->byteSize;
-        outAlign = builtinEnum->byteAlign;
         return;
     }
 
@@ -347,6 +273,83 @@ void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, const u32 dep
         outSize = classDecl->totalSize;
         outAlign = classDecl->totalAlign;
         return;
+    }
+
+    if(!m_symbols.hasTypeSymbol(name)){
+        if(FindBuiltinFixedLayout(name, outSize, outAlign))
+            return;
+
+        if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(name)){
+            switch(genericInfo->inlineLayoutKind){
+            case InlineLayoutKind::Atomic:{
+                if(!type.templateArgs.empty() && type.templateArgs[0].type){
+                    resolveTypeSizeAndAlign(*type.templateArgs[0].type, depth + 1u, outSize, outAlign);
+                    return;
+                }
+                outSize = 8u;
+                outAlign = 8u;
+                return;
+            }
+            case InlineLayoutKind::Optional:{
+                if(!type.templateArgs.empty() && type.templateArgs[0].type){
+                    usize innerSize = 8u;
+                    usize innerAlign = 8u;
+                    resolveTypeSizeAndAlign(*type.templateArgs[0].type, depth + 1u, innerSize, innerAlign);
+                    outAlign = innerAlign;
+                    outSize = ::AlignUp(innerSize + 1u, innerAlign);
+                    return;
+                }
+                outSize = __hidden_adhd_layout_optimizer::s_BareOptionalFallbackBytes;
+                outAlign = 8u;
+                return;
+            }
+            case InlineLayoutKind::Expected:{
+                if(!type.templateArgs.empty() && type.templateArgs[0].type){
+                    usize valSize = 8u;
+                    usize valAlign = 8u;
+                    usize errSize = 1u;
+                    usize errAlign = 1u;
+                    resolveTypeSizeAndAlign(*type.templateArgs[0].type, depth + 1u, valSize, valAlign);
+                    if(type.templateArgs.size() >= 2u && type.templateArgs[1].type)
+                        resolveTypeSizeAndAlign(*type.templateArgs[1].type, depth + 1u, errSize, errAlign);
+                    outAlign = valAlign > errAlign ? valAlign : errAlign;
+                    const usize payloadSize = valSize > errSize ? valSize : errSize;
+                    outSize = ::AlignUp(payloadSize + 1u, outAlign);
+                    return;
+                }
+                outSize = __hidden_adhd_layout_optimizer::s_BareExpectedFallbackBytes;
+                outAlign = 8u;
+                return;
+            }
+            case InlineLayoutKind::Array:
+            case InlineLayoutKind::FixedVector:{
+                usize elemSize = 4u;
+                usize elemAlign = 4u;
+                usize count = 1u;
+                if(!type.templateArgs.empty() && type.templateArgs[0].type)
+                    resolveTypeSizeAndAlign(*type.templateArgs[0].type, depth + 1u, elemSize, elemAlign);
+                if(type.templateArgs.size() >= 2u)
+                    count = ParseUnsignedConstant(type.templateArgs[1].constantOrTypeName(), m_symbols);
+                if(genericInfo->inlineLayoutKind == InlineLayoutKind::Array){
+                    outSize = elemSize * count;
+                    outAlign = elemAlign;
+                }
+                else{
+                    outAlign = elemAlign > 4u ? elemAlign : 4u;
+                    outSize = ::AlignUp(elemSize * count + 4u, outAlign);
+                }
+                return;
+            }
+            case InlineLayoutKind::None:
+                break;
+            }
+        }
+
+        if(const BuiltinEnumInfo* builtinEnum = FindBuiltinEnum(name)){
+            outSize = builtinEnum->byteSize;
+            outAlign = builtinEnum->byteAlign;
+            return;
+        }
     }
 
     outSize = 8u;

@@ -334,7 +334,7 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
             if(!checkTypeRef(*gc->varType, nullptr, nullptr, errors))
                 ok = false;
             const MStringView baseGcType = m_symbols.resolveBaseTypeName(gc->varType->name);
-            if(m_symbols.findInterface(baseGcType)){
+            if(m_symbols.findInterface(baseGcType) || m_symbols.isAbstractBuiltinType(baseGcType)){
                 reportError(errors, gc->span, "file-level 'const' cannot have an 'interface' type");
                 ok = false;
             }
@@ -342,11 +342,11 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
                 reportError(errors, gc->span, "file-level 'const' cannot declare an 'in' or 'mut' reference");
                 ok = false;
             }
-            if(SymbolTable::IsArenaBackedContainer(baseGcType) || TypeLayoutAnalyzer(m_symbols).requiresMotherArena(*gc->varType) || IsAtomicGenericType(baseGcType)){
+            if((!m_symbols.hasTypeSymbol(baseGcType) && (SymbolTable::IsArenaBackedContainer(baseGcType) || IsAtomicGenericType(baseGcType))) || TypeLayoutAnalyzer(m_symbols).requiresMotherArena(*gc->varType)){
                 reportError(errors, gc->span, "file-level 'const' cannot have an arena-backed or 'Atomic' type; use compile-time fixed types");
                 ok = false;
             }
-            if(RequiresTCharAdaptation(baseGcType)){
+            if(!m_symbols.hasTypeSymbol(baseGcType) && RequiresTCharAdaptation(baseGcType)){
                 if(gc->expr)
                     markStringToPathAdaptation(nullptr, &dummyGlobalCtx, emptyScope, *gc->expr);
                 for(Expr* arg : gc->arguments){
@@ -453,6 +453,20 @@ void TypeChecker::recordRequiredHeader(const MStringView header)noexcept{
     m_activeUnit->requiredGlobalHeaders.push_back(header);
 }
 
+void TypeChecker::recordBuiltinTypeHeader(const MStringView typeName)noexcept{
+    if(!m_recordGlobalHeaders || !m_activeUnit || typeName.empty())
+        return;
+    const MStringView base = m_symbols.resolveBaseTypeName(typeName);
+    if(base.empty() || m_symbols.hasTypeSymbol(base))
+        return;
+    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(base))
+        recordRequiredHeader(objInfo->requiredHeader);
+    else if(const BuiltinEnumInfo* enumInfo = FindBuiltinEnum(base))
+        recordRequiredHeader(enumInfo->requiredHeader);
+    else if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(base))
+        recordRequiredHeader(genericInfo->requiredHeader);
+}
+
 void TypeChecker::buildCallArgHints(const ClassDecl* ownerClass, const MethodDecl* method, const Span<const Expr* const> args, const Span<const ScopedVarInfo> scope, MVector<MStringView>& outArgTypes, MVector<u8>& outArgIsMut)const{
     outArgTypes.clear();
     outArgIsMut.clear();
@@ -506,9 +520,13 @@ b8 TypeChecker::validateThisAccess(const ClassDecl* ownerClass, const SourceSpan
 }
 
 b8 TypeChecker::isConstructibleTypeName(const MStringView calleeName, const MStringView baseCallee)const noexcept{
-    return m_symbols.findClass(baseCallee) != nullptr
-        || m_symbols.findTypeAlias(calleeName) != nullptr
-        || SymbolTable::IsSimdType(baseCallee)
+    if(m_symbols.findClass(baseCallee) != nullptr || m_symbols.findTypeAlias(calleeName) != nullptr)
+        return true;
+    if(m_symbols.hasTypeSymbol(baseCallee))
+        return false;
+    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(baseCallee))
+        return !objInfo->isAbstract;
+    return SymbolTable::IsSimdType(baseCallee)
         || SymbolTable::IsArenaBackedContainer(baseCallee)
         || m_symbols.isSelfDefaultedType(baseCallee);
 }
@@ -565,7 +583,7 @@ MStringView TypeChecker::resolveScopeAccessEnumTypeName(const ClassDecl* ownerCl
         if(ownerClass){
             if(const FieldDecl* field = SymbolTable::FindClassField(*ownerClass, rootName); field && field->type){
                 const MStringView fieldTypeName = m_symbols.resolveBaseTypeName(field->type->name);
-                if(m_symbols.findEnum(fieldTypeName) || FindBuiltinEnum(fieldTypeName))
+                if(m_symbols.findEnum(fieldTypeName) || (!m_symbols.hasTypeSymbol(fieldTypeName) && FindBuiltinEnum(fieldTypeName)))
                     return fieldTypeName;
             }
         }
@@ -574,11 +592,6 @@ MStringView TypeChecker::resolveScopeAccessEnumTypeName(const ClassDecl* ownerCl
     if(expr.lhs){
         const TypeRef* lhsTypeRef = nullptr;
         const MStringView lhsBase = inferExprBaseType(ownerClass, method, *expr.lhs, scope, &lhsTypeRef);
-        if(const BuiltinFieldInfo* bf = FindBuiltinField(lhsBase, rootName)){
-            const MStringView bfTypeName = m_symbols.resolveBaseTypeName(bf->fieldTypeName);
-            if(!bfTypeName.empty() && (m_symbols.findEnum(bfTypeName) || FindBuiltinEnum(bfTypeName)))
-                return bfTypeName;
-        }
         if(const ClassDecl* targetCls = m_symbols.findClass(lhsBase)){
             if(const FieldDecl* field = SymbolTable::FindClassField(*targetCls, rootName); field && field->type){
                 if(outAccessedClass)
@@ -587,26 +600,33 @@ MStringView TypeChecker::resolveScopeAccessEnumTypeName(const ClassDecl* ownerCl
                     *outAccessedField = field;
                 const TypeRef* ft = m_symbols.substituteTypeParams(field->type, targetCls->templateParams, lhsTypeRef);
                 const MStringView fieldTypeName = ft ? m_symbols.resolveBaseTypeName(ft->name) : MStringView{};
-                if(!fieldTypeName.empty() && (m_symbols.findEnum(fieldTypeName) || FindBuiltinEnum(fieldTypeName)))
+                if(!fieldTypeName.empty() && (m_symbols.findEnum(fieldTypeName) || (!m_symbols.hasTypeSymbol(fieldTypeName) && FindBuiltinEnum(fieldTypeName))))
                     return fieldTypeName;
+            }
+        }
+        else if(!m_symbols.hasTypeSymbol(lhsBase)){
+            if(const BuiltinFieldInfo* bf = FindBuiltinField(lhsBase, rootName)){
+                const MStringView bfTypeName = m_symbols.resolveBaseTypeName(bf->fieldTypeName);
+                if(!bfTypeName.empty() && (m_symbols.findEnum(bfTypeName) || (!m_symbols.hasTypeSymbol(bfTypeName) && FindBuiltinEnum(bfTypeName))))
+                    return bfTypeName;
             }
         }
         return {};
     }
     if(const ScopedVarInfo* local = FindScopedVar(scope, rootName)){
         const MStringView localTypeName = resolveScopedVarBaseType(*local);
-        if(!localTypeName.empty() && (m_symbols.findEnum(localTypeName) || FindBuiltinEnum(localTypeName)))
+        if(!localTypeName.empty() && (m_symbols.findEnum(localTypeName) || (!m_symbols.hasTypeSymbol(localTypeName) && FindBuiltinEnum(localTypeName))))
             return localTypeName;
         return {};
     }
     if(const Stmt* gc = m_symbols.findGlobalConstant(rootName); gc && gc->varType){
         const MStringView gcTypeName = m_symbols.resolveBaseTypeName(gc->varType->name);
-        if(!gcTypeName.empty() && (m_symbols.findEnum(gcTypeName) || FindBuiltinEnum(gcTypeName)))
+        if(!gcTypeName.empty() && (m_symbols.findEnum(gcTypeName) || (!m_symbols.hasTypeSymbol(gcTypeName) && FindBuiltinEnum(gcTypeName))))
             return gcTypeName;
         return {};
     }
     const MStringView resolvedRoot = m_symbols.resolveBaseTypeName(rootName);
-    if(!resolvedRoot.empty() && (m_symbols.findEnum(resolvedRoot) || FindBuiltinEnum(resolvedRoot)))
+    if(!resolvedRoot.empty() && (m_symbols.findEnum(resolvedRoot) || (!m_symbols.hasTypeSymbol(resolvedRoot) && FindBuiltinEnum(resolvedRoot))))
         return resolvedRoot;
     return {};
 }

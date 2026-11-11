@@ -139,7 +139,7 @@ Stmt* StmtParser::parseStatement(){
                 const MStringView firstIdent = cp.current.text;
                 while(m_cursor.check(TokenType::Star) || m_cursor.check(TokenType::Ampersand))
                     m_cursor.advance();
-                if(BuiltinTypeSemantics::IsBuiltinTypeName(firstIdent))
+                if(BuiltinTypeSemantics::IsReservedPrimitiveOrContainerTypeName(firstIdent))
                     return nullptr;
                 if(m_cursor.check(TokenType::Identifier)){
                     m_cursor.advance();
@@ -149,7 +149,7 @@ Stmt* StmtParser::parseStatement(){
             }
             else if(m_cursor.check(TokenType::LeftBracket)){
                 const MStringView firstIdent = cp.current.text;
-                if(BuiltinTypeSemantics::IsBuiltinTypeName(firstIdent))
+                if(BuiltinTypeSemantics::IsReservedPrimitiveOrContainerTypeName(firstIdent))
                     return nullptr;
                 u32 bracketDepth = 1u;
                 m_cursor.advance();

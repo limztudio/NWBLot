@@ -320,14 +320,16 @@ void ParallelStatementEmitter::emitParallelStmt(MString& out, const Stmt& stmt, 
                 ? m_emitter.m_symbols.resolveBaseTypeName(parallelCallee)
                 : MStringView{};
             const b8 parallelArenaLast = !stmt.expr->isBuiltinCall
+                && !stmt.expr->isUserCallableCall
                 && !baseParallelCallee.empty()
+                && !m_emitter.m_symbols.hasTypeSymbol(baseParallelCallee)
                 && SymbolTable::IsArenaBackedContainer(baseParallelCallee)
                 && !IsArenaFirstCtorType(baseParallelCallee);
             const b8 parallelArenaFirst = !parallelArenaLast;
             const MStringView parallelArena = stmt.expr->injectClassArena
                 ? m_emitter.activeClassArenaExpr()
                 : (stmt.expr->injectScratchArena ? MStringView("__adhd_scratch") : MStringView{});
-            m_emitter.emitCallTargetExpr(out, stmt.expr->lhs, stmt.expr->isBuiltinCall, stmt.expr->callTemplateArgs);
+            m_emitter.emitCallTargetExpr(out, stmt.expr->lhs, stmt.expr->isBuiltinCall, stmt.expr->isUserCallableCall, stmt.expr->callTemplateArgs);
             out.push_back('(');
             if(!parallelArena.empty() && parallelArenaFirst){
                 out.append(parallelArena.data(), parallelArena.size());

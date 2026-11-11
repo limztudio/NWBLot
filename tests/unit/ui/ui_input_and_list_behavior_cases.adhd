@@ -256,7 +256,7 @@ using ControlAction = ::NWB::Impl::Ui::ControlAction;
 using ControlToken = ::NWB::Impl::Ui::ControlToken;
 using DisplayMetrics = ::NWB::Impl::Ui::DisplayMetrics;
 using HitTarget = ::NWB::Impl::Ui::HitTarget;
-using InputAction = ::NWB::Impl::Ui::InputAction;
+using UiInputAction = ::NWB::Impl::Ui::InputAction;
 using InputEvent = ::NWB::Impl::Ui::InputEvent;
 using InputKeyBinding = ::NWB::Impl::Ui::InputKeyBinding;
 using InputRoutingResult = ::NWB::Impl::Ui::InputRoutingResult;
@@ -668,7 +668,7 @@ void VerifyUiInputTests_FirstClickConsumesBeforeFocusExistsAndActivationIsNotRep
     EXPECT_TRUE(released.pointerConsumed);
     EXPECT_FALSE(released.capture.valid());
     ASSERT_EQ(self.m_router.actions().size(), 1u);
-    const InputAction action = self.m_router.actions()[0u];
+    const UiInputAction action = self.m_router.actions()[0u];
     EXPECT_FALSE(self.m_router.process().pointerConsumed);
     EXPECT_EQ(self.m_router.actions()[0u].id.sequence, action.id.sequence);
     EXPECT_FALSE(self.commitSingle(target, 7u));

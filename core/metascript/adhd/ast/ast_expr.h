@@ -162,6 +162,7 @@ struct Expr{
     b8 isVectorRawIndex = false;
     b8 isMatrixRowIndex = false;
     b8 isBuiltinCall = false;
+    b8 isUserCallableCall = false;
     b8 isBuiltinConstant = false;
     b8 isStringSubstr = false;
     b8 isStringByteRead = false;

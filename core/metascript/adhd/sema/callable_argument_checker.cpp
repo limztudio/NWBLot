@@ -82,7 +82,7 @@ b8 CallableArgumentChecker::check(
                 LambdaCaptureAnalyzer(scope, m_checker.m_symbols).propagateFuncCaptureBytes(localCallable->lambdaExpr->lambdaParams[i].type, arg);
             }
         }
-        else if(recvTypeRef && !recvTypeRef->templateArgs.empty()){
+        else if(recvTypeRef && !recvTypeRef->templateArgs.empty() && !m_checker.m_symbols.hasTypeSymbol(m_checker.m_symbols.resolveBaseTypeName(recvTypeRef->name))){
             if(const BuiltinMemberMethodInfo* memberInfo = FindBuiltinMemberMethod(calledMemberName)){
                 if(i == 0u && memberInfo->firstArgIsMut)
                     paramIsMut = true;
@@ -109,16 +109,14 @@ b8 CallableArgumentChecker::check(
             ok = false;
         if(builtinFnInfo && builtinFnInfo->wrapsFormatArgs && i >= builtinFnInfo->minArity){
             const MStringView fmtArgType = m_checker.inferExprBaseType(ownerClass, &method, *arg, scope);
-            if(fmtArgType == "String" || fmtArgType == "CompactString")
-                arg->formatArgWrapKind = 1u;
-            else if(fmtArgType == "Path")
-                arg->formatArgWrapKind = 2u;
-            else if(fmtArgType == "Name")
-                arg->formatArgWrapKind = 3u;
+            if(!m_checker.m_symbols.hasTypeSymbol(fmtArgType)){
+                if(const BuiltinObjectTypeInfo* fmtObj = FindBuiltinObjectType(fmtArgType))
+                    arg->formatArgWrapKind = fmtObj->formatArgWrapKind;
+            }
         }
         if(expectedParamTypeRef){
             const TypeRef* unwrappedParam = m_checker.m_symbols.unwrapTypeAlias(expectedParamTypeRef);
-            if(unwrappedParam && !unwrappedParam->templateArgs.empty() && unwrappedParam->templateArgs[0].type){
+            if(unwrappedParam && !unwrappedParam->templateArgs.empty() && unwrappedParam->templateArgs[0].type && !m_checker.m_symbols.hasTypeSymbol(unwrappedParam->name)){
                 if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(unwrappedParam->name); genericInfo && (genericInfo->inlineLayoutKind == InlineLayoutKind::Expected || genericInfo->inlineLayoutKind == InlineLayoutKind::Optional)){
                     const MStringView valBase = m_checker.m_symbols.resolveBaseTypeName(unwrappedParam->templateArgs[0].type->name);
                     if(SymbolTable::IsSimdRegisterVectorType(valBase) && arg->resolvedSimdType == valBase)
@@ -126,7 +124,7 @@ b8 CallableArgumentChecker::check(
                 }
             }
         }
-        if(builtinFnInfo && (builtinFnInfo->returnRule == BuiltinFunctionReturnRule::PromoteSimd || builtinFnInfo->returnRule == BuiltinFunctionReturnRule::LaneScalar || builtinFnInfo->returnRule == BuiltinFunctionReturnRule::MatrixMultiply || calledMemberName == "IsFinite")){
+        if(builtinFnInfo && (builtinFnInfo->returnRule == BuiltinFunctionReturnRule::PromoteSimd || builtinFnInfo->returnRule == BuiltinFunctionReturnRule::LaneScalar || builtinFnInfo->returnRule == BuiltinFunctionReturnRule::MatrixMultiply || builtinFnInfo->rejectsSimdStorage)){
             const MStringView actualArgType = m_checker.inferExprBaseType(ownerClass, &method, *arg, scope);
             if(SymbolTable::IsSimdStorageType(actualArgType) || SymbolTable::IsUnalignedVectorType(actualArgType)){
                 m_checker.reportError(errors, arg->span, "SIMD math intrinsics require 'VectorSingle', 'VectorDouble', 'MatrixSingle', or 'MatrixDouble'; load memory-layout values first");
@@ -139,7 +137,7 @@ b8 CallableArgumentChecker::check(
             const b8 isKnownAdhdType = !actualArgType.empty()
                 && (BuiltinTypeSemantics::IsBuiltinTypeName(actualArgType) || m_checker.m_symbols.hasTypeSymbol(actualArgType));
             b8 typeMismatch = (!builtinArgRule->requiredExactType.empty() && isKnownAdhdType && actualArgType != builtinArgRule->requiredExactType)
-                || (builtinArgRule->requiresStringLike && isKnownAdhdType && !IsStringLikeType(actualArgType))
+                || (builtinArgRule->requiresStringLike && isKnownAdhdType && !(builtinArgRule->isMut ? IsOwningStringType(actualArgType) : IsStringLikeType(actualArgType)))
                 || (builtinArgRule->requiresIntegerScalar && isKnownAdhdType && !BuiltinTypeSemantics::IsIntegerScalarType(actualArgType));
             if(!typeMismatch && (builtinArgRule->rule == BuiltinFunctionArgRule::UsizeSpan || builtinArgRule->rule == BuiltinFunctionArgRule::ByteSpan || builtinArgRule->rule == BuiltinFunctionArgRule::MutByteFixedVector)){
                 const TypeRef* containerType = actualRef ? m_checker.m_symbols.unwrapTypeAlias(actualRef) : nullptr;

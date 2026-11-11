@@ -188,6 +188,14 @@ void AppendIntSimdLaneExtract(MString& out, const MStringView varName, const u32
     return !MapSimdScalarReductionSuffix(callee).empty();
 }
 
+[[nodiscard]] b8 IsSimdZeroPreservingCall(const MStringView callee)noexcept{
+#define NWB_ADHD_EXPORT_SIMD_ZERO_PRESERVING_CALL(adhdName) \
+    if(callee == adhdName) return true;
+#include "../export_functions.h"
+#undef NWB_ADHD_EXPORT_SIMD_ZERO_PRESERVING_CALL
+    return false;
+}
+
 [[nodiscard]] MStringView MapSimdUnaryFloatIntrinsic(const MStringView callee, const b8 isDouble)noexcept{
 #define NWB_ADHD_EXPORT_SIMD_FLOAT_INTRINSIC(adhdName, floatIntrinsicPrefix, doubleIntrinsicPrefix) \
     if(callee == adhdName) return isDouble ? doubleIntrinsicPrefix : floatIntrinsicPrefix;

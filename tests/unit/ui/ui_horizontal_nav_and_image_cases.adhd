@@ -573,7 +573,7 @@ using ControlActionKindEnum = ::NWB::Impl::Ui::ControlActionKind::Enum;
 namespace InputEventType = ::NWB::Impl::Ui::InputEventType;
 namespace PaintMaterial = ::NWB::Impl::Ui::PaintMaterial;
 namespace TextureAlphaMode = ::TextureAlphaMode;
-namespace TextureDimension = ::TextureDimension;
+namespace AssetTextureDimension = ::TextureDimension;
 using TextureDimensionEnum = ::TextureDimension::Enum;
 namespace TexturePayloadFormat = ::TexturePayloadFormat;
 namespace UiSkinDrawMode = ::NWB::Impl::UiSkinDrawMode;
@@ -1798,16 +1798,16 @@ void VerifyUiImageSourceTests_SeparateHdrAlphaOwnsTheCompleteTrailingPayloadStre
 
 void VerifyUiImageSourceTests_RejectsValidCubeAndVolumeAssetsRatherThanFlatteningTheirSlices(mut UiImageSourceTests self){
     Array<TextureDimensionEnum, 2u> dimensions = Array<TextureDimensionEnum, 2u>();
-    dimensions[0u] = TextureDimension::TextureCube;
-    dimensions[1u] = TextureDimension::Texture3D;
+    dimensions[0u] = AssetTextureDimension::TextureCube;
+    dimensions[1u] = AssetTextureDimension::Texture3D;
     for(in TextureDimensionEnum dimension : dimensions){
         UiImageSourceTextureDescription description = UiImageSourceTextureDescription();
         description.dimension = dimension;
-        if(dimension == TextureDimension::TextureCube)
+        if(dimension == AssetTextureDimension::TextureCube)
             description.height = 9u;
         else
             description.height = 5u;
-        if(dimension == TextureDimension::Texture3D)
+        if(dimension == AssetTextureDimension::Texture3D)
             description.depth = 4u;
         else
             description.depth = 1u;

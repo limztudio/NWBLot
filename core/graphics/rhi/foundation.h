@@ -145,8 +145,10 @@ using GraphicsDeque = Deque<T, GraphicsArena>;
 #define NWB_DEFINE_GRAPHICS_MASK_OPERATORS(MaskType) \
     constexpr MaskType operator|(MaskType lhs, MaskType rhs)noexcept{ return static_cast<MaskType>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); } \
     constexpr MaskType operator&(MaskType lhs, MaskType rhs)noexcept{ return static_cast<MaskType>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); } \
+    constexpr MaskType operator^(MaskType lhs, MaskType rhs)noexcept{ return static_cast<MaskType>(static_cast<u32>(lhs) ^ static_cast<u32>(rhs)); } \
     constexpr MaskType& operator|=(MaskType& lhs, MaskType rhs)noexcept{ lhs = lhs | rhs; return lhs; } \
     constexpr MaskType& operator&=(MaskType& lhs, MaskType rhs)noexcept{ lhs = lhs & rhs; return lhs; } \
+    constexpr MaskType& operator^=(MaskType& lhs, MaskType rhs)noexcept{ lhs = lhs ^ rhs; return lhs; } \
     constexpr MaskType operator~(MaskType value)noexcept{ return static_cast<MaskType>(~static_cast<u32>(value)); } \
     constexpr b8 operator!(MaskType value)noexcept{ return static_cast<u32>(value) == 0; } \
     constexpr b8 operator==(MaskType lhs, MaskType rhs)noexcept{ return static_cast<u32>(lhs) == static_cast<u32>(rhs); } \

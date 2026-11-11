@@ -40,6 +40,7 @@ void AppendIntSimdLaneExtract(MString& out, MStringView varName, u32 lane, b8 is
 [[nodiscard]] MStringView MapSimdRegisterCall(MStringView callee)noexcept;
 [[nodiscard]] MStringView MapSimdScalarReductionSuffix(MStringView callee)noexcept;
 [[nodiscard]] b8 IsSimdScalarReductionFunction(MStringView callee)noexcept;
+[[nodiscard]] b8 IsSimdZeroPreservingCall(MStringView callee)noexcept;
 [[nodiscard]] MStringView MapSimdUnaryFloatIntrinsic(MStringView callee, b8 isDouble)noexcept;
 void AppendSimdLaneCountIntrinsicPrefix(MString& out, b8 isDouble, u32 effLanes, MStringView suffix);
 [[nodiscard]] TokenType::Enum MapSimdAssignToBinaryOp(TokenType::Enum op)noexcept;

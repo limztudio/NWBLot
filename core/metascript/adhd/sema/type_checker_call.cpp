@@ -56,77 +56,76 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
     if(expr.lhs){
         if(expr.lhs->kind == ExprKind::Identifier){
             const MStringView baseCallee = m_symbols.resolveBaseTypeName(expr.lhs->text);
-            if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(baseCallee))
-                recordRequiredHeader(objInfo->requiredHeader);
-            else if(const BuiltinEnumInfo* enumInfo = FindBuiltinEnum(baseCallee))
-                recordRequiredHeader(enumInfo->requiredHeader);
-            if(m_symbols.findInterface(baseCallee)){
-                reportError(errors, expr.span, "cannot instantiate an 'interface' type directly");
+            if(expr.lhs->text == "wait"){
+                reportError(errors, expr.span, "'wait' can only be used as a standalone join statement");
                 ok = false;
             }
-            if(SymbolTable::IsArenaBackedContainer(baseCallee))
-                injectActiveArena();
             targetCallable = m_symbols.findFreeFunction(expr.lhs->text, &callArgCount, argTypeHints, argIsMutHints);
             if(!targetCallable){
                 localCallable = FindScopedVar(scope, expr.lhs->text);
                 if(localCallable && localCallable->type)
                     invokedFuncType = m_symbols.unwrapTypeAlias(localCallable->type);
             }
-            if(!targetCallable && !localCallable){
-                if(const ClassDecl* ctorCls = m_symbols.findClass(baseCallee)){
-                    targetOwnerCls = ctorCls;
-                    targetCallable = m_symbols.findClassConstructor(*ctorCls, callArgCount, ownerClass != ctorCls, argTypeHints, argIsMutHints);
-                    if(targetCallable && ownerClass != ctorCls && targetCallable->access != AccessSpecifier::Public){
-                        reportError(errors, expr.span, "cannot call 'private' or 'protected' constructor outside of its declaring class");
-                        ok = false;
-                    }
-                    if(!ctorCls->templateParams.empty() && !expr.callTemplateArgs.empty()){
-                        TypeRef* tempClsRef = AllocateAstNode<TypeRef>(m_arena);
-                        tempClsRef->name = baseCallee;
-                        tempClsRef->templateArgs = expr.callTemplateArgs;
-                        recvTypeRef = tempClsRef;
-                    }
-                    TypeRef constructedRef(m_arena);
-                    constructedRef.name = expr.lhs->text;
-                    constructedRef.templateArgs = expr.callTemplateArgs;
-                    if(TypeLayoutAnalyzer(m_symbols).isNonRootMotherArenaType(constructedRef))
-                        injectActiveArena();
-                }
+            if(targetCallable || localCallable){
+                expr.isUserCallableCall = true;
             }
-            if(expr.lhs->text == "wait"){
-                reportError(errors, expr.span, "'wait' can only be used as a standalone join statement");
+            else if(m_symbols.findInterface(baseCallee) || m_symbols.isAbstractBuiltinType(baseCallee)){
+                recordBuiltinTypeHeader(baseCallee);
+                reportError(errors, expr.span, "cannot instantiate an 'interface' type directly");
                 ok = false;
             }
-            if(!targetCallable && !localCallable){
-                if(const BuiltinFunctionInfo* fnInfo = FindBuiltinFunction(expr.lhs->text)){
-                    expr.isBuiltinCall = true;
-                    calledMemberName = expr.lhs->text;
-                    recordRequiredHeader(fnInfo->requiredHeader);
-                    if(fnInfo->prependsScratchArena)
-                        injectActiveArena();
-                    const b8 badArity = fnInfo->isVariadic
-                        ? (callArgCount < fnInfo->minArity)
-                        : (callArgCount < fnInfo->minArity || callArgCount > fnInfo->arity);
-                    if(badArity){
-                        reportError(errors, expr.span, "wrong number of arguments to built-in math/SIMD function");
-                        ok = false;
-                    }
-                    const b8 requiresExplicitTypeArg = fnInfo->returnRule == BuiltinFunctionReturnRule::CallTemplateArg0
-                        || fnInfo->adhdName == "NegateOverflows"
-                        || fnInfo->adhdName == "AddOverflows"
-                        || fnInfo->adhdName == "SubtractOverflows"
-                        || fnInfo->adhdName == "MultiplyOverflows"
-                        || fnInfo->adhdName == "DivideOverflows";
-                    if(requiresExplicitTypeArg && (expr.callTemplateArgs.size() != 1u || !expr.callTemplateArgs[0].type)){
-                        reportError(errors, expr.span, "built-in function requires exactly 1 explicit type argument '<T>'");
-                        ok = false;
-                    }
+            else if(const ClassDecl* ctorCls = m_symbols.findClass(baseCallee)){
+                targetOwnerCls = ctorCls;
+                targetCallable = m_symbols.findClassConstructor(*ctorCls, callArgCount, ownerClass != ctorCls, argTypeHints, argIsMutHints);
+                if(targetCallable && ownerClass != ctorCls && targetCallable->access != AccessSpecifier::Public){
+                    reportError(errors, expr.span, "cannot call 'private' or 'protected' constructor outside of its declaring class");
+                    ok = false;
                 }
-                if(!IsValidBuiltinVectorOrMatrixCtorArity(baseCallee, callArgCount)){
+                if(!ctorCls->templateParams.empty() && !expr.callTemplateArgs.empty()){
+                    TypeRef* tempClsRef = AllocateAstNode<TypeRef>(m_arena);
+                    tempClsRef->name = baseCallee;
+                    tempClsRef->templateArgs = expr.callTemplateArgs;
+                    recvTypeRef = tempClsRef;
+                }
+                TypeRef constructedRef(m_arena);
+                constructedRef.name = expr.lhs->text;
+                constructedRef.templateArgs = expr.callTemplateArgs;
+                if(TypeLayoutAnalyzer(m_symbols).isNonRootMotherArenaType(constructedRef))
+                    injectActiveArena();
+            }
+            else if(!m_symbols.hasTypeSymbol(baseCallee) && FindBuiltinFunction(expr.lhs->text) != nullptr){
+                const BuiltinFunctionInfo* fnInfo = FindBuiltinFunction(expr.lhs->text);
+                expr.isBuiltinCall = true;
+                calledMemberName = expr.lhs->text;
+                recordRequiredHeader(fnInfo->requiredHeader);
+                recordBuiltinTypeHeader(fnInfo->returnTypeName);
+                recordBuiltinTypeHeader(fnInfo->returnTypeArgName);
+                recordBuiltinTypeHeader(fnInfo->returnNestedTypeArgName);
+                recordBuiltinTypeHeader(fnInfo->returnErrorTypeName);
+                if(fnInfo->prependsScratchArena)
+                    injectActiveArena();
+                const b8 badArity = fnInfo->isVariadic
+                    ? (callArgCount < fnInfo->minArity)
+                    : (callArgCount < fnInfo->minArity || callArgCount > fnInfo->arity);
+                if(badArity){
+                    reportError(errors, expr.span, "wrong number of arguments to built-in math/SIMD function");
+                    ok = false;
+                }
+                const b8 requiresExplicitTypeArg = fnInfo->requiresExplicitTypeArg;
+                if(requiresExplicitTypeArg && (expr.callTemplateArgs.size() != 1u || !expr.callTemplateArgs[0].type)){
+                    reportError(errors, expr.span, "built-in function requires exactly 1 explicit type argument '<T>'");
+                    ok = false;
+                }
+            }
+            else{
+                recordBuiltinTypeHeader(baseCallee);
+                if(!m_symbols.hasTypeSymbol(baseCallee) && SymbolTable::IsArenaBackedContainer(baseCallee))
+                    injectActiveArena();
+                if(!m_symbols.hasTypeSymbol(baseCallee) && !IsValidBuiltinVectorOrMatrixCtorArity(baseCallee, callArgCount)){
                     reportError(errors, expr.span, "wrong number of arguments to built-in vector/matrix constructor");
                     ok = false;
                 }
-                else if(callArgCount == 2u && expr.arguments[0] && !SymbolTable::IsSimdRegisterVectorType(baseCallee)){
+                else if(!m_symbols.hasTypeSymbol(baseCallee) && callArgCount == 2u && expr.arguments[0] && !SymbolTable::IsSimdRegisterVectorType(baseCallee)){
                     const BuiltinSimdVectorInfo* simdVecInfo = FindBuiltinSimdVectorType(baseCallee);
                     const BuiltinUnalignedVectorInfo* unalignedInfo = simdVecInfo ? nullptr : FindBuiltinUnalignedVectorType(baseCallee);
                     const b8 requiresSimdRegArg0 = (simdVecInfo && simdVecInfo->lanes == 4u && simdVecInfo->altCtorArity != 2u)
@@ -136,18 +135,20 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                         ok = false;
                     }
                 }
-                if(const BuiltinSimdVectorInfo* simdVecInfo = FindBuiltinSimdVectorType(baseCallee); simdVecInfo && simdVecInfo->isMixed && callArgCount == 1u && expr.arguments[0]){
-                    const MStringView arg0Type = inferExprTypeName(ownerClass, &method, *expr.arguments[0], scope);
-                    if(arg0Type != baseCallee){
-                        reportError(errors, expr.span, "mixed float/integer SIMD vector type does not support single-scalar splat construction; provide all 4 lane arguments");
-                        ok = false;
+                if(!m_symbols.hasTypeSymbol(baseCallee)){
+                    if(const BuiltinSimdVectorInfo* simdVecInfo = FindBuiltinSimdVectorType(baseCallee); simdVecInfo && simdVecInfo->isMixed && callArgCount == 1u && expr.arguments[0]){
+                        const MStringView arg0Type = inferExprTypeName(ownerClass, &method, *expr.arguments[0], scope);
+                        if(arg0Type != baseCallee){
+                            reportError(errors, expr.span, "mixed float/integer SIMD vector type does not support single-scalar splat construction; provide all 4 lane arguments");
+                            ok = false;
+                        }
                     }
                 }
-            }
-            if(RequiresTCharAdaptation(baseCallee)){
-                for(Expr* arg : expr.arguments){
-                    if(arg)
-                        markStringToPathAdaptation(ownerClass, &method, scope, *arg);
+                if(!m_symbols.hasTypeSymbol(baseCallee) && RequiresTCharAdaptation(baseCallee)){
+                    for(Expr* arg : expr.arguments){
+                        if(arg)
+                            markStringToPathAdaptation(ownerClass, &method, scope, *arg);
+                    }
                 }
             }
         }
@@ -174,8 +175,15 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
             const MStringView mName = expr.lhs->text;
             calledMemberName = mName;
             const b8 recvIsConst = isReceiverConst(ownerClass, method, *expr.lhs->lhs, scope);
-            const BuiltinMemberMethodInfo* builtinMemberInfo = FindBuiltinMemberMethod(mName);
-            const b8 isMutatingContainerOp = builtinMemberInfo && builtinMemberInfo->isMutating;
+            const b8 isUserObjType = m_symbols.hasTypeSymbol(objType) || FindTemplateParam(ownerClass, &method, objType) != nullptr;
+            const BuiltinReceiverMethodInfo* builtinRecvInfo = isUserObjType ? nullptr : FindBuiltinReceiverMethod(objType, mName);
+            const BuiltinMemberMethodInfo* builtinMemberInfo = isUserObjType ? nullptr : FindBuiltinMemberMethod(mName);
+            const b8 isMutatingContainerOp = builtinRecvInfo ? builtinRecvInfo->isMutating : (builtinMemberInfo && builtinMemberInfo->isMutating);
+            if(builtinRecvInfo){
+                recordBuiltinTypeHeader(builtinRecvInfo->returnTypeName);
+                recordBuiltinTypeHeader(builtinRecvInfo->returnTypeArgName);
+                recordBuiltinTypeHeader(builtinRecvInfo->returnErrorTypeName);
+            }
             if(const ClassDecl* targetCls = m_symbols.findClass(objType)){
                 targetOwnerCls = targetCls;
                 targetCallable = m_symbols.findClassMethod(*targetCls, mName, &callArgCount, recvIsConst, ownerClass != targetCls, argTypeHints, argIsMutHints);
@@ -239,7 +247,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                 }
             }
 
-            const b8 isStringFamily = IsStringLikeType(objType);
+            const b8 isStringFamily = !isUserObjType && IsStringLikeType(objType);
             if(isStringFamily && mName == "substr"){
                 if(callArgCount > 2u){
                     reportError(errors, expr.span, "'substr' accepts at most 2 arguments");
@@ -252,13 +260,13 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                     ok = false;
                 }
             }
-            else if(mName == "value" && recvTypeRef && !recvTypeRef->templateArgs.empty() && recvTypeRef->templateArgs[0].type){
+            else if(!isUserObjType && mName == "value" && recvTypeRef && !recvTypeRef->templateArgs.empty() && recvTypeRef->templateArgs[0].type){
                 if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(objType); genericInfo && (genericInfo->inlineLayoutKind == InlineLayoutKind::Expected || genericInfo->inlineLayoutKind == InlineLayoutKind::Optional)){
                     if(SymbolTable::IsSimdRegisterVectorType(m_symbols.resolveBaseTypeName(recvTypeRef->templateArgs[0].type->name)))
                         expr.unwrapSimdResultValue = true;
                 }
             }
-            else if(IsStringByteAccessorMethod(objType, mName)){
+            else if(!isUserObjType && IsStringByteAccessorMethod(objType, mName)){
                 if(callArgCount != 0u){
                     reportError(errors, expr.span, "'front' and 'back' do not accept arguments");
                     ok = false;
@@ -288,6 +296,40 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
             tempInlineLambdaVar.lambdaExpr = expr.lhs;
             tempInlineLambdaVar.declaredParallelDepth = m_parallelDepth;
             localCallable = &tempInlineLambdaVar;
+        }
+        else if(
+            expr.lhs->kind == ExprKind::ScopeAccess
+            && expr.lhs->scopeChain.size() == 2u
+            && !FindScopedVar(scope, expr.lhs->scopeChain[0])
+            && !m_symbols.findGlobalConstant(expr.lhs->scopeChain[0])
+            && !m_symbols.hasTypeSymbol(expr.lhs->scopeChain[0])
+            && FindBuiltinScopedFunction(expr.lhs->scopeChain[0], expr.lhs->scopeChain[1]) != nullptr
+        ){
+            const BuiltinFunctionInfo* fnInfo = FindBuiltinScopedFunction(expr.lhs->scopeChain[0], expr.lhs->scopeChain[1]);
+            recordBuiltinTypeHeader(expr.lhs->scopeChain[0]);
+            recordRequiredHeader(fnInfo->requiredHeader);
+            const b8 badArity = fnInfo->isVariadic
+                ? (callArgCount < fnInfo->minArity)
+                : (callArgCount < fnInfo->minArity || callArgCount > fnInfo->arity);
+            if(!badArity || !m_hasTopLevelNativeBlocks){
+                expr.isBuiltinCall = true;
+                calledMemberName = fnInfo->adhdName;
+                recordBuiltinTypeHeader(fnInfo->returnTypeName);
+                recordBuiltinTypeHeader(fnInfo->returnTypeArgName);
+                recordBuiltinTypeHeader(fnInfo->returnNestedTypeArgName);
+                recordBuiltinTypeHeader(fnInfo->returnErrorTypeName);
+                if(fnInfo->prependsScratchArena)
+                    injectActiveArena();
+                if(badArity){
+                    reportError(errors, expr.span, "wrong number of arguments to built-in math/SIMD function");
+                    ok = false;
+                }
+                const b8 requiresExplicitTypeArg = fnInfo->requiresExplicitTypeArg;
+                if(requiresExplicitTypeArg && (expr.callTemplateArgs.size() != 1u || !expr.callTemplateArgs[0].type)){
+                    reportError(errors, expr.span, "built-in function requires exactly 1 explicit type argument '<T>'");
+                    ok = false;
+                }
+            }
         }
         else{
             const TypeRef* lhsTypeRef = inferExprTypeRef(ownerClass, &method, *expr.lhs, scope);

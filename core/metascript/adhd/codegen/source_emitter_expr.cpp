@@ -176,7 +176,13 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
         break;
     }
     case ExprKind::ScopeAccess:{
-        if(expr.scopeChain.size() == 2u){
+        if(expr.isBuiltinConstant && expr.scopeChain.size() == 2u){
+            if(const BuiltinGlobalConstantInfo* scopedConst = FindBuiltinScopedConstant(expr.scopeChain[0], expr.scopeChain[1])){
+                out.append(scopedConst->cppExportName.data(), scopedConst->cppExportName.size());
+                break;
+            }
+        }
+        if(expr.scopeChain.size() == 2u && !m_symbols.findEnum(expr.scopeChain[0])){
             if(const BuiltinEnumInfo* builtinEnum = FindBuiltinEnum(expr.scopeChain[0])){
                 out.append(builtinEnum->cppScopeName.data(), builtinEnum->cppScopeName.size());
                 out.append("::");
@@ -252,11 +258,11 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
             out.append("))");
             break;
         }
-        MStringView baseCallee = (expr.lhs && expr.lhs->kind == ExprKind::Identifier)
+        MStringView baseCallee = (expr.lhs && expr.lhs->kind == ExprKind::Identifier && !expr.isUserCallableCall && !expr.isBuiltinCall)
             ? m_symbols.resolveBaseTypeName(expr.lhs->text)
             : MStringView{};
         MStringView substitutedArena{};
-        if(!m_activeTemplateParams.empty() && expr.lhs && expr.lhs->kind == ExprKind::Identifier && !expr.isBuiltinCall && !m_symbols.findFreeFunction(expr.lhs->text)){
+        if(!m_activeTemplateParams.empty() && expr.lhs && expr.lhs->kind == ExprKind::Identifier && !expr.isUserCallableCall && !expr.isBuiltinCall && !m_symbols.findFreeFunction(expr.lhs->text)){
             TypeRef candidateType(m_arena);
             candidateType.name = expr.lhs->text;
             candidateType.templateArgs = expr.callTemplateArgs;
@@ -301,7 +307,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
             out.append("static_cast<::u8>(");
         if(expr.derefNotNull)
             out.append("(*");
-        emitCallTargetExpr(out, expr.lhs, expr.isBuiltinCall, expr.callTemplateArgs);
+        emitCallTargetExpr(out, expr.lhs, expr.isBuiltinCall, expr.isUserCallableCall, expr.callTemplateArgs);
         const MStringView injectedArena = expr.injectClassArena
             ? activeClassArenaExpr()
             : (expr.injectScratchArena ? MStringView("__adhd_scratch") : substitutedArena);
@@ -573,10 +579,16 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
     }
 }
 
-void SourceEmitter::emitCallTargetExpr(MString& out, const Expr* lhs, const b8 isBuiltinCall, const Span<const TypeArg> callTemplateArgs)const{
+void SourceEmitter::emitCallTargetExpr(MString& out, const Expr* lhs, const b8 isBuiltinCall, const b8 isUserCallableCall, const Span<const TypeArg> callTemplateArgs)const{
     if(!lhs)
         return;
     if(lhs->kind == ExprKind::Identifier){
+        if(isUserCallableCall){
+            out.append(lhs->text.data(), lhs->text.size());
+            if(!callTemplateArgs.empty())
+                m_typeEmitter.emitTypeArgListCpp(out, callTemplateArgs);
+            return;
+        }
         const MStringView mappedMath = isBuiltinCall ? MapBuiltinMathFunction(lhs->text) : MStringView{};
         if(!mappedMath.empty()){
             out.append(mappedMath.data(), mappedMath.size());
@@ -589,6 +601,17 @@ void SourceEmitter::emitCallTargetExpr(MString& out, const Expr* lhs, const b8 i
             maybeType.templateArgs.assign(callTemplateArgs.begin(), callTemplateArgs.end());
             m_typeEmitter.emitTypeCpp(out, maybeType);
         }
+    }
+    else if(isBuiltinCall && lhs->kind == ExprKind::ScopeAccess && lhs->scopeChain.size() == 2u){
+        if(const BuiltinFunctionInfo* scopedFn = FindBuiltinScopedFunction(lhs->scopeChain[0], lhs->scopeChain[1])){
+            out.append(scopedFn->cppExportName.data(), scopedFn->cppExportName.size());
+            if(!callTemplateArgs.empty())
+                m_typeEmitter.emitTypeArgListCpp(out, callTemplateArgs);
+            return;
+        }
+        emitExpr(out, *lhs);
+        if(!callTemplateArgs.empty())
+            m_typeEmitter.emitTypeArgListCpp(out, callTemplateArgs);
     }
     else{
         emitExpr(out, *lhs);

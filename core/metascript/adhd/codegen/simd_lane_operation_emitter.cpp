@@ -368,22 +368,7 @@ b8 SimdLaneOperationEmitter::tryEmit()const{
                                 break;
                             }
                         }
-                        const b8 zeroPreservingFn = callee == "Abs"
-                            || callee == "Sqrt"
-                            || callee == "Floor"
-                            || callee == "Ceil"
-                            || callee == "Round"
-                            || callee == "trunc"
-                            || callee == "frac"
-                            || callee == "Saturate"
-                            || callee == "Sin"
-                            || callee == "Tan"
-                            || callee == "ASin"
-                            || callee == "ATan"
-                            || callee == "Min"
-                            || callee == "Max"
-                            || callee == "Clamp"
-                            || callee == "Lerp";
+                        const b8 zeroPreservingFn = IsSimdZeroPreservingCall(callee);
                         const b8 alreadyZeroedAbove = (activeLanes == 4u) || (zeroPreservingFn && allParamsZeroedAtActive);
                         const u8 activeMask = static_cast<u8>((1u << activeLanes) - 1u);
                         const MStringView maskConst = !alreadyZeroedAbove ? SimdInPlaceLaneMaskConstant(activeMask, isDouble) : MStringView{};

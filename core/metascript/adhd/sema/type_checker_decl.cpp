@@ -229,7 +229,8 @@ b8 TypeChecker::checkCallableSignature(const ClassDecl* enclosingClass, MethodDe
         if(p.type){
             if(!checkTypeRef(*p.type, enclosingClass, &method, errors))
                 ok = false;
-            if(!p.type->isFuncType && SymbolTable::IsSimdStorageType(m_symbols.resolveBaseTypeName(p.type->name))){
+            const MStringView paramBase = m_symbols.resolveBaseTypeName(p.type->name);
+            if(!p.type->isFuncType && !m_symbols.hasTypeSymbol(paramBase) && SymbolTable::IsSimdStorageType(paramBase) && IsOverAlignedBuiltinType(paramBase)){
                 reportError(errors, p.span, "SIMD memory-layout type cannot be used as a parameter; use 'VectorSingle', 'VectorDouble', 'MatrixSingle', or 'MatrixDouble' instead");
                 ok = false;
             }
@@ -336,12 +337,14 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
             continue;
         }
         if(!m_symbols.findInterface(ifaceName)){
+            const BuiltinObjectTypeInfo* builtinObj = FindBuiltinObjectType(ifaceName);
+            const b8 isBuiltinInterface = builtinObj && builtinObj->isPolymorphicBase;
             if(
-                !m_hasTopLevelNativeBlocks
+                (!isBuiltinInterface && !m_hasTopLevelNativeBlocks)
                 || m_symbols.findEnum(ifaceName)
                 || FindBuiltinEnum(ifaceName)
                 || BuiltinTypeSemantics::IsScalarType(ifaceName)
-                || FindBuiltinObjectType(ifaceName)
+                || (builtinObj && !builtinObj->isPolymorphicBase)
                 || FindBuiltinGenericType(ifaceName)
                 || SymbolTable::IsSimdType(ifaceName)
                 || SymbolTable::IsUnalignedVectorType(ifaceName)
@@ -482,7 +485,7 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
             if(!checkTypeRef(*field->type, &classDecl, nullptr, errors))
                 ok = false;
             const MStringView baseFieldType = m_symbols.resolveBaseTypeName(field->type->name);
-            if(m_symbols.resolveRefMode(field->type) == ParamPassingMode::None && m_symbols.findInterface(baseFieldType)){
+            if(m_symbols.resolveRefMode(field->type) == ParamPassingMode::None && (m_symbols.findInterface(baseFieldType) || m_symbols.isAbstractBuiltinType(baseFieldType))){
                 reportError(errors, field->span, "class member of 'interface' type must specify 'in' or 'mut'; interfaces cannot be stored by value");
                 ok = false;
             }
@@ -498,7 +501,7 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
         }
         MethodDecl fieldInitDummy(m_arena);
         MVector<ScopedVarInfo> emptyScope(m_arena);
-        if(unwrappedFieldType && RequiresTCharAdaptation(unwrappedFieldType->name)){
+        if(unwrappedFieldType && !m_symbols.hasTypeSymbol(unwrappedFieldType->name) && RequiresTCharAdaptation(unwrappedFieldType->name)){
             if(field->defaultExpr)
                 markStringToPathAdaptation(&classDecl, &fieldInitDummy, emptyScope, *field->defaultExpr);
             for(Expr* arg : field->ctorArgs){

@@ -333,6 +333,9 @@ void VerifyTelemetry_TextCaptureCountsRejectedPayloadsWithoutCountingFilteredEve
 void VerifyTelemetry_DiagnosticPayloadPreservesBoundedTextAndRejectsCorruptedHeader(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
+    String embeddedMessage = String("d");
+    embeddedMessage.resize(2u);
+    embeddedMessage.append("m");
     DiagnosticEventRecord source = DiagnosticEventRecord();
     source.event = StringView("error.trailing").substr(0u, 5u);
     source.category = "unit_category";
@@ -341,9 +344,6 @@ void VerifyTelemetry_DiagnosticPayloadPreservesBoundedTextAndRejectsCorruptedHea
     source.instructionPointer = 0x1234u;
     source.line = 77u;
     source.terminatesProcess = true;
-    String embeddedMessage = String("d");
-    embeddedMessage.resize(2u);
-    embeddedMessage.append("m");
     source.message = StringView(embeddedMessage);
     ASSERT_TRUE(BuildTestDiagnosticPayload(source, testArena.arena, payload));
     const Expected<DiagnosticPayload> parsed = ParseDiagnosticBytes(payload);

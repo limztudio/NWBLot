@@ -50,12 +50,14 @@ namespace __hidden_adhd_source_emitter{
             || SimdExpressionAnalysis::ExprContainsSimdMath(expr->rhs, symbols))
             return true;
     }
-    if(expr->kind == ExprKind::Call && expr->isBuiltinCall && expr->lhs && expr->lhs->kind == ExprKind::Identifier && expr->lhs->text == "IsFinite"){
-        if(hasSimdScalarLocal)
-            return true;
-        for(const Expr* arg : expr->arguments){
-            if(SimdExpressionAnalysis::ExprContainsSimdMath(arg, symbols))
+    if(expr->kind == ExprKind::Call && expr->isBuiltinCall && expr->lhs && expr->lhs->kind == ExprKind::Identifier){
+        if(const BuiltinFunctionInfo* fnInfo = FindBuiltinFunction(expr->lhs->text); fnInfo && fnInfo->rejectsSimdStorage){
+            if(hasSimdScalarLocal)
                 return true;
+            for(const Expr* arg : expr->arguments){
+                if(SimdExpressionAnalysis::ExprContainsSimdMath(arg, symbols))
+                    return true;
+            }
         }
     }
     if(expr->kind == ExprKind::Lambda && StatementsNeedSimdFloatingPointEnv(expr->lambdaBody, symbols, hasSimdScalarLocal))
@@ -256,7 +258,7 @@ namespace __hidden_adhd_source_emitter{
 }
 
 b8 IsNameLiteralOnlyUnit(const TranslationUnit& unit)noexcept{
-    if(!HasOnlyGlobalConstants(unit))
+    if(!HasOnlyGlobalConstants(unit) || !unit.requiredGlobalHeaders.empty())
         return false;
     for(const Stmt* constant : unit.globalConstants){
         if(!constant || constant->isImported || !constant->varType || constant->varType->name != "Name" || !constant->varType->templateArgs.empty() || constant->isCtorInit || !constant->expr || constant->expr->kind != ExprKind::StringLiteral)
@@ -287,7 +289,7 @@ b8 IsNameLiteralOnlyUnit(const TranslationUnit& unit)noexcept{
 }
 
 b8 IsScalarLiteralOnlyUnit(const TranslationUnit& unit)noexcept{
-    if(!HasOnlyGlobalConstants(unit))
+    if(!HasOnlyGlobalConstants(unit) || !unit.requiredGlobalHeaders.empty())
         return false;
     for(usize index = 0u; index < unit.globalConstants.size(); ++index){
         const Stmt* constant = unit.globalConstants[index];

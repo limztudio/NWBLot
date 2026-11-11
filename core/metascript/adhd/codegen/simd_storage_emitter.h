@@ -14,14 +14,24 @@
 NWB_ADHD_BEGIN
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class SimdStorageEmitter final{
 public:
     explicit SimdStorageEmitter(const SourceEmitter& emitter)noexcept : m_emitter(emitter){}
+
+
+public:
     [[nodiscard]] b8 tryEmit(MString& out, MStringView storageTypeName, Span<const Expr* const> arguments, MStringView dstExprText)const;
+
 
 private:
     const SourceEmitter& m_emitter;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_ADHD_END

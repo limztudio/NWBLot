@@ -556,7 +556,7 @@ b8 MeshCookSourceStreams::ParseSourceVertexRefsInto(
     const ::Path<PathArenaT>& nwbFilePath,
     const Core::Metascript::Value& asset,
     const TStringView metaKind,
-    Core::Alloc::ScratchArena&,
+    Core::Alloc::ScratchArena& scratchArena,
     VertexRefVectorT& outVertexRefs
 ){
     outVertexRefs.clear();
@@ -594,7 +594,7 @@ b8 MeshCookSourceStreams::ParseSourceVertexRefsInto(
         for(usize componentIndex = 0u; componentIndex < expectedComponentCount; ++componentIndex){
             const auto component = MeshCookMetadata::ValidateMetadataU32Value(components[componentIndex]);
             if(!component){
-                const auto componentLabel = FormatMeshVertexRefComponentLabel(vertexRefIndex, componentNames[componentIndex]);
+                const auto componentLabel = FormatMeshVertexRefComponentLabel(scratchArena, vertexRefIndex, componentNames[componentIndex]);
                 MeshCookMetadata::LogMetadataU32ValueFailure(nwbFilePath, metaKind, AStringView(componentLabel), component.error());
                 return false;
             }

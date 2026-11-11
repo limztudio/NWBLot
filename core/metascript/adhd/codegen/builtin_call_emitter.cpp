@@ -165,7 +165,7 @@ b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
             if(!expr.callTemplateArgs.empty())
                 m_emitter.m_typeEmitter.emitTypeArgListCpp(out, expr.callTemplateArgs);
             out.push_back('(');
-            const MStringView arenaExpr = expr.injectClassArena ? MStringView("s_ClassArena") : MStringView("__adhd_scratch");
+            const MStringView arenaExpr = expr.injectClassArena ? m_emitter.activeClassArenaExpr() : MStringView("__adhd_scratch");
             out.append(arenaExpr.data(), arenaExpr.size());
             for(usize i = 0u; i < expr.arguments.size(); ++i){
                 out.append(", ");

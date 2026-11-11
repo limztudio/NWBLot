@@ -67,7 +67,7 @@ private:
 
 
     public:
-        explicit Entry(Core::Alloc::GlobalArena& arena)noexcept : expected(arena){}
+        explicit Entry(Core::Alloc::GlobalArena& arena)noexcept : expected(arena), candidate(arena), displayed(arena){}
     };
 
     struct Event{

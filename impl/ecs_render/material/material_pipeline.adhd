@@ -172,7 +172,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
             LogCsgEvaluatorModuleResolveFailed(materialKey);
             return failMaterialPipeline();
         }
-        csgProjectEvaluatorModuleAssignment = CsgShaderVariantBuilder().buildEvaluatorAssignment(AStringView(*csgProjectEvaluatorModuleInclude));
+        csgProjectEvaluatorModuleAssignment.assign(AStringView(CsgShaderVariantBuilder().buildEvaluatorAssignment(m_arena, AStringView(*csgProjectEvaluatorModuleInclude))));
         if(!csgProjectEvaluatorModuleAssignment.empty()){
             const Expected<AStringView> existingEvaluatorModuleAssignment = CsgShaderVariantBuilder().findDefineAssignment(shaderVariant, s_CsgProjectEvaluatorModuleDefineName, Core::ShaderArchive::s_DefaultVariant);
             if(existingEvaluatorModuleAssignment && !ValidateMaterialEvaluatorModuleMatch(*existingEvaluatorModuleAssignment, AStringView(csgProjectEvaluatorModuleAssignment), materialKey))
@@ -183,30 +183,30 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
         }
     }
     if(csgClipPipeline && !avboitCsgClipPipeline){
-        auto variant = CsgShaderVariantBuilder().buildVariant(shaderVariant, Core::ShaderArchive::s_DefaultVariant, materialProjectEvaluatorModuleAssignmentToAdd);
+        auto variant = CsgShaderVariantBuilder().buildVariant(m_arena, shaderVariant, Core::ShaderArchive::s_DefaultVariant, materialProjectEvaluatorModuleAssignmentToAdd);
         if(!variant){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to build CSG shader variant for material '{}'"), ConvertString(materialKey.resolvedText()));
             return failMaterialPipeline();
         }
-        csgShaderVariant = Move(*variant);
+        csgShaderVariant.assign(AStringView(*variant));
     }
 
     if(avboitCsgClipPipeline){
-        auto variant = CsgShaderVariantBuilder().buildVariant(shaderVariant, Core::ShaderArchive::s_DefaultVariant, materialProjectEvaluatorModuleAssignmentToAdd);
+        auto variant = CsgShaderVariantBuilder().buildVariant(m_arena, shaderVariant, Core::ShaderArchive::s_DefaultVariant, materialProjectEvaluatorModuleAssignmentToAdd);
         if(!variant){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to build AVBOIT CSG mesh shader variant for material '{}'"), ConvertString(materialKey.resolvedText()));
             return failMaterialPipeline();
         }
-        csgShaderVariant = Move(*variant);
+        csgShaderVariant.assign(AStringView(*variant));
     }
 
     if(avboitCsgClipPipeline){
-        auto variant = CsgShaderVariantBuilder().buildVariant(Core::ShaderArchive::s_DefaultVariant, Core::ShaderArchive::s_DefaultVariant, avboitProjectEvaluatorModuleAssignmentToAdd);
+        auto variant = CsgShaderVariantBuilder().buildVariant(m_arena, Core::ShaderArchive::s_DefaultVariant, Core::ShaderArchive::s_DefaultVariant, avboitProjectEvaluatorModuleAssignmentToAdd);
         if(!variant){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to build AVBOIT CSG pixel shader variant for material '{}'"), ConvertString(materialKey.resolvedText()));
             return failMaterialPipeline();
         }
-        avboitCsgShaderVariant = Move(*variant);
+        avboitCsgShaderVariant.assign(AStringView(*variant));
     }
     const AStringView pixelShaderVariant = SelectMaterialPassPixelShaderVariant(csgClipPipeline, avboitCsgClipPipeline, AStringView(csgShaderVariant), shaderVariant);
     const AStringView meshShaderVariant = SelectMaterialPassMeshShaderVariant(csgClipPipeline, AStringView(csgShaderVariant), shaderVariant);

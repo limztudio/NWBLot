@@ -467,7 +467,7 @@ public:
     {}
 };
 
-[[nodiscard]] static Expected<AString<>> RunLinuxSymbolizerCommand(const Span<const AStringView> arguments, Core::Alloc::ScratchArena& arena){
+[[nodiscard]] static Expected<AString<::ArenaBase>> RunLinuxSymbolizerCommand(const Span<const AStringView> arguments, Core::Alloc::ScratchArena& arena){
     AString<Core::Alloc::ScratchArena> output{arena};
     output.reserve(ProcessExecutionDetail::s_DefaultCaptureOutputMaxBytes);
     const auto captured = CaptureProcessOutput(output, arena, arguments);
@@ -484,10 +484,10 @@ public:
         return MakeUnexpected(Failure{});
     }
 
-    return ExtractLinuxSymbolizerResult(AStringView(output.data(), output.size()));
+    return ExtractLinuxSymbolizerResult(arena, AStringView(output.data(), output.size()));
 }
 
-[[nodiscard]] static Expected<AString<>> TryRunLinuxSymbolizer(const AStringView toolName, const AStringView modulePathText, const u64 moduleOffset, Core::Alloc::ScratchArena& arena){
+[[nodiscard]] static Expected<AString<::ArenaBase>> TryRunLinuxSymbolizer(const AStringView toolName, const AStringView modulePathText, const u64 moduleOffset, Core::Alloc::ScratchArena& arena){
     AString<Core::Alloc::ScratchArena> addressArgument{arena};
     addressArgument.reserve(s_HexAddressPrefix.size() + ::s_HexU64DigitCount);
     addressArgument += s_HexAddressPrefix;
@@ -595,7 +595,7 @@ public:
         m_cache.entries.reserve(frameCount);
     }
 
-    [[nodiscard]] Expected<AString<>> resolve(const AStringView modulePathText, const u64 moduleOffset){
+    [[nodiscard]] Expected<AString<::ArenaBase>> resolve(const AStringView modulePathText, const u64 moduleOffset){
         const auto symbolPathText = FindLinuxSymbolFileText(modulePathText, m_config, m_arena, m_cache);
         if(!symbolPathText)
             return MakeUnexpected(Failure{});

@@ -97,6 +97,7 @@ f32 FrozenYaw(){
     return ReadSmokeFrozenYawCached("NWB_FLICKER_TEST_SPIN_ANGLE");
 }
 
+[arena]
 class FlickerTestSmokeProject : IProjectEntryCallbacks{
 
     public FlickerTestSmokeProject(mut ProjectRuntimeContext context){

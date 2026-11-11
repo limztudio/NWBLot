@@ -388,7 +388,7 @@ b8 CaptureStressFrameGraphSnapshot(in StringView outputPath, in u64 completedFra
                     }
                     else{
                         encodedBytes.assign(encoded.begin(), encoded.end());
-                        snapshotJson = StressFrameGraphSnapshotWriter().format(*payload, graphicsFrame, completedFrames);
+                        snapshotJson.assign(AStringView(StressFrameGraphSnapshotWriter().format(scratchArena, *payload, graphicsFrame, completedFrames)));
                         nodeCount = payload->nodes.size();
                         edgeCount = payload->edges.size();
                         packetCount = payload->packetSubmissionStatistics.size();

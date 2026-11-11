@@ -339,6 +339,7 @@ void TemplateInstantiationCollector::instantiateClassTemplate(const ClassDecl& t
 
     ClassTemplateInstantiation* inst = AllocateAstNode<ClassTemplateInstantiation>(m_arena);
     inst->templateDecl = &templateDecl;
+    inst->needsClassArena = templateDecl.needsClassArena;
     inst->isImported = m_collectingImported;
     for(const TypeArg& targ : templateArgs)
         inst->templateArgs.push_back(targ);
@@ -355,6 +356,7 @@ void TemplateInstantiationCollector::instantiateClassTemplate(const ClassDecl& t
         clonedField->originalIndex = origField->originalIndex;
         clonedField->hasCtorInit = origField->hasCtorInit;
         clonedField->usesClassArena = origField->usesClassArena;
+        clonedField->arenaFirstDefaultInit = origField->arenaFirstDefaultInit;
         clonedField->isTransient = origField->isTransient;
         clonedField->isReflect = origField->isReflect;
         for(Expr* arg : origField->ctorArgs)
@@ -362,12 +364,13 @@ void TemplateInstantiationCollector::instantiateClassTemplate(const ClassDecl& t
 
         TypeRef* resolvedType = m_symbols.substituteTypeParams(*origField->type, templateDecl.templateParams, templateArgs);
         clonedField->type = resolvedType;
-        m_optimizer.markFieldArenaUsage(*resolvedType, *clonedField, const_cast<ClassDecl&>(templateDecl));
+        m_optimizer.markFieldArenaUsage(*resolvedType, *clonedField, templateDecl, inst->needsClassArena);
         collectTemplateInstantiationsInType(*resolvedType, unit);
         inst->orderedFields.push_back(clonedField);
     }
 
-    m_optimizer.finalizeClassFieldLayouts(templateDecl.isSerialize, !templateDecl.implementedInterfaces.empty(), inst->orderedFields, inst->totalSize, inst->totalAlign);
+    const b8 hasMotherArenaPointer = !templateDecl.isSerialize && !templateDecl.isArenaOwner && templateDecl.subsystemTypeName.empty() && templateDecl.componentAssetTypeName.empty() && inst->needsClassArena;
+    m_optimizer.finalizeClassFieldLayouts(templateDecl.isSerialize, !templateDecl.implementedInterfaces.empty(), hasMotherArenaPointer, inst->orderedFields, inst->totalSize, inst->totalAlign);
     unit.templateInstantiations.push_back(inst);
 
     for(const TypeRef* implIface : templateDecl.implementedInterfaces){

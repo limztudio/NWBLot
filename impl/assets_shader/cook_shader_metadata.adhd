@@ -132,6 +132,7 @@ static const Array<SlangStageMapping, 14u> s_StageMappings = {{
     if(!argumentCapacity)
         return MakeUnexpected(Failure{});
     const auto formattedArgument = FormatCompilerDefineArgument(
+        scratchArena,
         s_SlangDefineArgument,
         define.name,
         define.value,
@@ -173,7 +174,11 @@ static Expected<ShaderCook::CookMap<ShaderCook::CookString, ShaderCook::DefineEn
             NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' values must be a list of strings"), PathToString<tchar>(nwbFilePath), ConvertString(defineName));
             return MakeUnexpected(Failure{});
         }
-        if(!ValidateShaderDefineEntrySpec(AStringView(nwbFilePathText), AStringView(defineName), defineValues))
+        ShaderCook::CookVector<AStringView> defineValueViews(arena);
+        defineValueViews.reserve(defineValues.size());
+        for(const ShaderCook::CookString& defineValue : defineValues)
+            defineValueViews.emplace_back(defineValue);
+        if(!ValidateShaderDefineEntrySpec(AStringView(nwbFilePathText), AStringView(defineName), defineValueViews))
             return MakeUnexpected(Failure{});
 
         ShaderCook::DefineEntry defineEntry(Move(defineValues));
@@ -468,7 +473,11 @@ Expected<ShaderCook::ShaderEntry> ShaderCook::parseShaderMeta(const Path& nwbFil
             NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': include_roots must be a list of strings"), PathToString<tchar>(nwbFilePath));
             return MakeUnexpected(Failure{});
         }
-        if(!ValidateShaderIncludeRoots(AStringView(nwbFilePathText), entry.includeRoots))
+        Vector<AStringView, Core::Alloc::ScratchArena> includeRootViews(scratchArena);
+        includeRootViews.reserve(entry.includeRoots.size());
+        for(const ShaderCook::CookString& includeRoot : entry.includeRoots)
+            includeRootViews.emplace_back(includeRoot);
+        if(!ValidateShaderIncludeRoots(AStringView(nwbFilePathText), includeRootViews))
             return MakeUnexpected(Failure{});
     }
 

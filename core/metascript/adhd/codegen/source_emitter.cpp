@@ -8,6 +8,7 @@
 #include "source_emitter.h"
 
 #include "reflection_emitter.h"
+#include <core/metascript/adhd/sema/type_layout_analyzer.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -350,11 +351,11 @@ MString SourceEmitter::emitSource(const TranslationUnit& unit, const MStringView
             for(const MethodDecl* method : classDecl->methods){
                 if(!method)
                     continue;
-                const b8 emittedInHeader = method->isInline || !method->templateParams.empty();
+                const b8 emittedInHeader = method->isInline || !method->templateParams.empty() || method->hasSynthesizedArenaParams;
                 if(method->isImported || !method->hasBody || emittedInHeader)
                     continue;
 
-                emitOutOfClassCallable(out, classDecl, *method, true, false);
+                emitOutOfClassCallable(out, classDecl, *method, true, false, false);
             }
         }
 
@@ -363,10 +364,10 @@ MString SourceEmitter::emitSource(const TranslationUnit& unit, const MStringView
     }
 
     for(const MethodDecl* fn : unit.freeFunctions){
-        if(!fn || fn->isImported || !fn->hasBody || fn->isInline || !fn->templateParams.empty())
+        if(!fn || fn->isImported || !fn->hasBody || fn->isInline || !fn->templateParams.empty() || fn->hasSynthesizedArenaParams)
             continue;
 
-        emitOutOfClassCallable(out, nullptr, *fn, true, false);
+        emitOutOfClassCallable(out, nullptr, *fn, true, false, false);
     }
 
     if(!namespacePath.empty()){
@@ -390,14 +391,19 @@ MString SourceEmitter::emitSource(const TranslationUnit& unit, const MStringView
     return out;
 }
 
-void SourceEmitter::emitOutOfClassCallable(MString& out, const ClassDecl* ownerClass, const MethodDecl& callable, const b8 emitBody, const b8 emitInlineKeyword)const{
+void SourceEmitter::emitOutOfClassCallable(MString& out, const ClassDecl* ownerClass, const MethodDecl& callable, const b8 emitBody, const b8 emitInlineKeyword, const b8 includeTemplateDefaults)const{
+    const ClassDecl* prevOwnerClass = m_activeOwnerClass;
+    const b8 prevOwnerNeedsArena = m_activeOwnerNeedsArena;
+    m_activeOwnerClass = ownerClass;
+    m_activeOwnerNeedsArena = ownerClass ? ownerClass->needsClassArena : false;
+
     if(ownerClass && !ownerClass->templateParams.empty())
         m_typeEmitter.emitTemplateHeaderCpp(out, ownerClass->templateParams);
-    m_typeEmitter.emitTemplateHeaderCpp(out, callable.templateParams);
+    m_typeEmitter.emitCallableTemplateHeaderCpp(out, callable, includeTemplateDefaults);
     if(emitBody && emitInlineKeyword)
         out.append("inline ");
 
-    m_typeEmitter.emitMethodSignature(out, ownerClass, callable, false);
+    m_typeEmitter.emitMethodSignature(out, ownerClass, callable, false, m_activeOwnerNeedsArena);
     if(emitBody){
         if(ownerClass && callable.isConstructor)
             emitConstructorNotNullInitializers(out, ownerClass->orderedFields, callable);
@@ -408,18 +414,93 @@ void SourceEmitter::emitOutOfClassCallable(MString& out, const ClassDecl* ownerC
     else{
         out.append(";\r\n\r\n");
     }
+
+    m_activeOwnerClass = prevOwnerClass;
+    m_activeOwnerNeedsArena = prevOwnerNeedsArena;
+}
+
+b8 SourceEmitter::instantiatedExprNeedsScratchArena(const Expr* const expr)const{
+    if(!expr || m_activeTemplateParams.empty())
+        return false;
+    if(expr->kind == ExprKind::Call && expr->lhs && expr->lhs->kind == ExprKind::Identifier && !expr->isBuiltinCall && !m_symbols.findFreeFunction(expr->lhs->text)){
+        TypeRef candidateType(m_arena);
+        candidateType.name = expr->lhs->text;
+        candidateType.templateArgs = expr->callTemplateArgs;
+        if(const TypeRef* subType = m_symbols.substituteTypeParams(candidateType, m_activeTemplateParams, m_activeTemplateArgs)){
+            const TypeLayoutAnalyzer layoutAnalyzer(m_symbols);
+            const MStringView subBase = m_symbols.resolveBaseTypeName(subType->name);
+            if(layoutAnalyzer.requiresMotherArena(*subType) || SymbolTable::IsArenaBackedContainer(subBase) || layoutAnalyzer.isNonRootMotherArenaType(*subType))
+                return true;
+        }
+    }
+    if(instantiatedExprNeedsScratchArena(expr->lhs) || instantiatedExprNeedsScratchArena(expr->rhs))
+        return true;
+    for(const Expr* arg : expr->arguments){
+        if(instantiatedExprNeedsScratchArena(arg))
+            return true;
+    }
+    return instantiatedStatementsNeedScratchArena(expr->lambdaBody);
+}
+
+b8 SourceEmitter::instantiatedStatementsNeedScratchArena(const Span<const Stmt* const> statements)const{
+    if(m_activeTemplateParams.empty())
+        return false;
+    const TypeLayoutAnalyzer layoutAnalyzer(m_symbols);
+    for(const Stmt* stmt : statements){
+        if(!stmt)
+            continue;
+        if(stmt->varType && !stmt->varType->isAuto){
+            if(const TypeRef* subVar = m_symbols.substituteTypeParams(*stmt->varType, m_activeTemplateParams, m_activeTemplateArgs)){
+                if(layoutAnalyzer.requiresMotherArena(*subVar))
+                    return true;
+            }
+        }
+        if(instantiatedExprNeedsScratchArena(stmt->expr)
+            || instantiatedExprNeedsScratchArena(stmt->condition)
+            || instantiatedExprNeedsScratchArena(stmt->stepExpr))
+            return true;
+        for(const Expr* arg : stmt->arguments){
+            if(instantiatedExprNeedsScratchArena(arg))
+                return true;
+        }
+        if(stmt->initStmt){
+            const Stmt* const initPtr = stmt->initStmt;
+            if(instantiatedStatementsNeedScratchArena(Span<const Stmt* const>(&initPtr, 1u)))
+                return true;
+        }
+        if(instantiatedStatementsNeedScratchArena(stmt->statements) || instantiatedStatementsNeedScratchArena(stmt->elseStatements))
+            return true;
+        for(const SwitchCase& sc : stmt->switchCases){
+            if(instantiatedExprNeedsScratchArena(sc.matchExpr) || instantiatedStatementsNeedScratchArena(sc.statements))
+                return true;
+        }
+    }
+    return false;
 }
 
 void SourceEmitter::emitMethodBodyBlock(MString& out, const MethodDecl& method, const u32 indent)const{
     if(statementsNeedSimdFloatingPointEnv(method.body))
         out.append("#pragma STDC FENV_ACCESS ON\r\n");
     emitUnusedParamSuppressions(out, method.params, method.body, indent);
-    if(method.usesScratchArena)
+    const b8 needsScratch = method.usesScratchArena || instantiatedStatementsNeedScratchArena(method.body);
+    if(!method.isConstructor && !method.isDestructor && method.injectsCallerArena){
+        emitIndent(out, indent);
+        if(needsScratch)
+            out.append("[[maybe_unused]] ::ArenaBase& __adhd_scratch = __adhd_caller_arena;\r\n");
+        else
+            out.append("(void)__adhd_caller_arena;\r\n");
+    }
+    else if(needsScratch){
         emitScratchArenaPrologue(out, indent, method.name);
+    }
     if(method.usesTaskScope)
         ParallelStatementEmitter(*this).emitTaskScopePrologue(out, indent);
 
+    const TypeRef* prevCallerReturnType = m_activeCallerArenaReturnType;
+    const u32 prevParallelWorkerDepth = m_parallelWorkerDepth;
     const u32 prevSwitchBreakLabel = m_activeSwitchBreakLabelLine;
+    m_activeCallerArenaReturnType = (!method.isConstructor && !method.isDestructor && method.injectsCallerArena) ? method.returnType : nullptr;
+    m_parallelWorkerDepth = 0u;
     m_activeSwitchBreakLabelLine = 0u;
     m_activeLocalVarDecls.clear();
     m_remainingBlockStatements = {};
@@ -427,6 +508,8 @@ void SourceEmitter::emitMethodBodyBlock(MString& out, const MethodDecl& method, 
     m_activeLocalVarDecls.clear();
     m_remainingBlockStatements = {};
     m_activeSwitchBreakLabelLine = prevSwitchBreakLabel;
+    m_parallelWorkerDepth = prevParallelWorkerDepth;
+    m_activeCallerArenaReturnType = prevCallerReturnType;
     m_skippedCtorAssignExprs = nullptr;
 }
 
@@ -452,6 +535,17 @@ void SourceEmitter::emitConstructorNotNullInitializers(MString& out, const Span<
 
     MVector<const Expr*>* skipped = AllocateAstNode<MVector<const Expr*>>(m_arena);
     b8 firstInit = true;
+    if(
+        m_activeOwnerClass
+        && !m_activeOwnerClass->isArenaOwner
+        && !m_activeOwnerClass->isSerialize
+        && m_activeOwnerClass->subsystemTypeName.empty()
+        && m_activeOwnerClass->componentAssetTypeName.empty()
+        && m_activeOwnerNeedsArena
+    ){
+        out.append(" : __adhd_arena(::MakeNotNull(&__adhd_mother_arena))");
+        firstInit = false;
+    }
     for(const FieldDecl* field : orderedFields){
         if(!field || !field->type || field->defaultExpr || field->hasCtorInit)
             continue;
@@ -471,7 +565,7 @@ void SourceEmitter::emitConstructorNotNullInitializers(MString& out, const Span<
             emitExpr(out, *rhs);
             out.append(")))");
         }
-        else if(!field->usesClassArena && uniqueAssign && inLeadingPrefix && !__hidden_adhd_source_emitter::ExprDisallowsMemberInitializerLift(rhs)){
+        else if(uniqueAssign && inLeadingPrefix && !__hidden_adhd_source_emitter::ExprDisallowsMemberInitializerLift(rhs)){
             const MStringView baseFieldType = m_symbols.resolveBaseTypeName(field->type->name);
             const b8 isDirectCtorCall = rhs->kind == ExprKind::Call
                 && !rhs->isBuiltinCall
@@ -481,7 +575,9 @@ void SourceEmitter::emitConstructorNotNullInitializers(MString& out, const Span<
                 && !SymbolTable::IsSimdType(baseFieldType)
                 && !SymbolTable::IsUnalignedVectorType(baseFieldType)
                 && m_symbols.findFreeFunction(baseFieldType) == nullptr;
-            const b8 requiresMemberInit = !m_symbols.isSelfDefaultedType(field->type->name);
+            const b8 requiresMemberInit = !m_symbols.isSelfDefaultedType(field->type->name, m_activeOwnerClass);
+            if(field->usesClassArena && !requiresMemberInit)
+                continue;
             if(!isDirectCtorCall && !requiresMemberInit)
                 continue;
             skipped->push_back(uniqueAssign);
@@ -489,7 +585,7 @@ void SourceEmitter::emitConstructorNotNullInitializers(MString& out, const Span<
             firstInit = false;
             out.append(field->name.data(), field->name.size());
             if(isDirectCtorCall){
-                const MStringView injectedArena = rhs->injectClassArena ? MStringView("s_ClassArena") : MStringView{};
+                const MStringView injectedArena = (field->usesClassArena || rhs->injectClassArena) ? activeClassArenaExpr() : MStringView{};
                 ConstructorArgumentEmitter(*this).emit(out, baseFieldType, rhs->arguments, injectedArena, false, true);
             }
             else{
@@ -513,9 +609,11 @@ void SourceEmitter::emitIndent(MString& out, const u32 indent)const{
 
 void SourceEmitter::emitScratchArenaPrologue(MString& out, const u32 indent, const MStringView arenaName)const{
     emitIndent(out, indent);
-    out.append("static ::NWB::Core::Alloc::GlobalArena __adhd_scratch(::Name(\"");
+    out.append("::NWB::Core::Alloc::ScratchArena __adhd_scratch_storage(::Name(\"");
     out.append(arenaName.data(), arenaName.size());
     out.append("\"));\r\n");
+    emitIndent(out, indent);
+    out.append("[[maybe_unused]] ::ArenaBase& __adhd_scratch = __adhd_scratch_storage;\r\n");
 }
 
 

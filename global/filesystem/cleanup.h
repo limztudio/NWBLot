@@ -242,9 +242,7 @@ inline constexpr usize s_ChildNameOverhead = 2u;
 // Windows uses one 32K UTF-16 stack buffer and iterative traversal; POSIX uses relative descriptors and stack frames proportional to depth.
 // Windows accepts DOS/UNC paths, including their extended spellings; other device namespaces are rejected without opening them.
 // Native failures can leave a partially removed tree; callers must own the tree and exclude concurrent renames/reparse replacement.
-template<typename ArenaT>
-[[nodiscard]] inline Expected<void, ErrorCode> RemoveAllForCleanup(const Path<ArenaT>& path)noexcept{
-    const auto text = path.native();
+[[nodiscard]] NWB_INLINE Expected<void, ErrorCode> RemoveAllForCleanupText(const BasicStringView<typename Path<::ArenaBase>::value_type> text, [[maybe_unused]] const typename Path<::ArenaBase>::value_type* const cstr)noexcept{
     if(text.empty())
         return {};
     const usize namedEnd = GlobalFilesystemCleanupDetail::NamedPathEnd(text);
@@ -252,7 +250,7 @@ template<typename ArenaT>
     if(text.find(L'\0') != decltype(text)::npos || !GlobalFilesystemCleanupDetail::HasNamedLeaf(text, namedEnd) || namedEnd <= GlobalFilesystemCleanupDetail::WindowsRootLength(text))
         return MakeUnexpected(GlobalFilesystemCleanupDetail::WindowsError(ERROR_INVALID_NAME));
     Array<wchar, GlobalFilesystemCleanupDetail::s_PathCapacity> buffer = {};
-    const DWORD absoluteSize = GetFullPathNameW(path.c_str(), static_cast<DWORD>(GlobalFilesystemCleanupDetail::s_PathCapacity), buffer.data(), nullptr);
+    const DWORD absoluteSize = GetFullPathNameW(cstr, static_cast<DWORD>(GlobalFilesystemCleanupDetail::s_PathCapacity), buffer.data(), nullptr);
     if(absoluteSize == 0u)
         return MakeUnexpected(LastSystemError());
     if(absoluteSize >= GlobalFilesystemCleanupDetail::s_PathCapacity)
@@ -326,6 +324,11 @@ template<typename ArenaT>
         return MakeUnexpected(error);
     return {};
 #endif
+}
+
+template<typename ArenaT>
+[[nodiscard]] NWB_INLINE Expected<void, ErrorCode> RemoveAllForCleanup(const Path<ArenaT>& path)noexcept{
+    return RemoveAllForCleanupText(path.native(), path.c_str());
 }
 
 

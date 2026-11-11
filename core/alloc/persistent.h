@@ -23,7 +23,7 @@ NWB_ALLOC_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class PersistentArena : public ::ArenaBaseT<PersistentArena>{
+class PersistentArena final : public ::ArenaBaseT<PersistentArena>{
 public:
     using Base = ::ArenaBaseT<PersistentArena>;
 
@@ -47,13 +47,13 @@ public:
 
 public:
     PersistentArena(const Name& allocationLog, usize maxSize);
-    ~PersistentArena()noexcept;
+    ~PersistentArena()noexcept override;
 
 
 public:
-    [[nodiscard]] void* allocate(usize align, usize size);
-    [[nodiscard]] void* reallocate(void* p, usize align, usize size);
-    void deallocate(void* p, usize align, usize size)noexcept;
+    [[nodiscard]] void* allocate(usize align, usize size)override;
+    [[nodiscard]] void* reallocate(void* p, usize align, usize size)override;
+    void deallocate(void* p, usize align, usize size)noexcept override;
 
 
 private:

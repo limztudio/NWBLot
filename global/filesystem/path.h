@@ -16,12 +16,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class ArenaBase;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename ArenaT>
 class Path{
 public:
     class Iterator;
 
     using Arena = ArenaT;
+    using uses_leading_arena_t = ArenaT;
     using value_type = tchar;
     using native_string_view = BasicStringView<value_type>;
     using string_type = BasicString<value_type, ArenaT>;
@@ -184,6 +191,9 @@ public:
     explicit Path(ArenaT& arena, const Path& source)
         : m_text(source.native(), arena)
     {}
+    explicit Path(ArenaT& arena, Path&& source)
+        : m_text(Move(source.m_text), arena)
+    {}
     template<typename OtherArenaT>
     explicit Path(ArenaT& arena, const Path<OtherArenaT>& source)
         : m_text(source.native(), arena)
@@ -204,9 +214,33 @@ public:
 
 
 public:
-    Path& operator=(const Path&) = default;
+    NWB_INLINE Path& operator=(const Path& rhs){
+        if constexpr(SameAs<ArenaT, ArenaBase>){
+            if(this != &rhs)
+                m_text.assign(rhs.m_text.data(), rhs.m_text.size());
+            return *this;
+        }
+        else{
+            m_text = rhs.m_text;
+            return *this;
+        }
+    }
 
-    Path& operator=(Path&&)noexcept = default;
+    NWB_INLINE Path& operator=(Path&& rhs)noexcept(!SameAs<ArenaT, ArenaBase>){
+        if constexpr(SameAs<ArenaT, ArenaBase>){
+            if(this != &rhs){
+                if(&arena() == &rhs.arena())
+                    m_text = Move(rhs.m_text);
+                else
+                    m_text.assign(rhs.m_text.data(), rhs.m_text.size());
+            }
+            return *this;
+        }
+        else{
+            m_text = Move(rhs.m_text);
+            return *this;
+        }
+    }
 
     template<typename OtherArenaT>
     Path& operator=(const Path<OtherArenaT>& rhs){

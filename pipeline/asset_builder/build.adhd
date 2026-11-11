@@ -256,7 +256,7 @@ b8 BuildAssets(const AssetBuildOptions& options, Assets::ScratchArena& scratchAr
     if(!Assets::ParseAssetMetadata(nwbFiles, resolvedPaths.repoRoot, resolvedPaths.cacheDirectory, arena, options.services.cpuScheduler, scratchArena, parsedMetadata))
         return false;
 
-    const AString<> effectiveConfiguration = ResolveEffectiveBuildConfiguration(options.configuration.view());
+    const AString<::ArenaBase> effectiveConfiguration = ResolveEffectiveBuildConfiguration(scratchArena, options.configuration.view());
     Assets::CookString configurationSafeName(AStringView(effectiveConfiguration), arena);
 
     u64 plannedFileCount = 0u;

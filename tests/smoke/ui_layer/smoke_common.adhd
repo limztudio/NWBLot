@@ -401,6 +401,13 @@ template<typename SceneT>
 class SmokeSceneBox : NoCopy{
 public:
     template<typename... Args>
+        requires ::LeadingArenaConstructible<SceneT>
+    explicit SmokeSceneBox(::ArenaBase& motherArena, Args&&... args)
+        : scene(motherArena, Forward<Args>(args)...)
+    {}
+
+    template<typename... Args>
+        requires (!::LeadingArenaConstructible<SceneT>)
     explicit SmokeSceneBox(Args&&... args)
         : scene(Forward<Args>(args)...)
     {}
@@ -418,6 +425,16 @@ template<typename SceneT>
 class SmokeInputSceneBox : public Core::IInputEventHandler, NoCopy{
 public:
     template<typename... Args>
+        requires ::LeadingArenaConstructible<SceneT>
+    explicit SmokeInputSceneBox(Core::InputDispatcher& input, ::ArenaBase& motherArena, Args&&... args)
+        : scene(motherArena, Forward<Args>(args)...)
+        , m_input(input)
+    {
+        m_input.addHandlerToBack(*this);
+    }
+
+    template<typename... Args>
+        requires (!::LeadingArenaConstructible<SceneT>)
     explicit SmokeInputSceneBox(Core::InputDispatcher& input, Args&&... args)
         : scene(Forward<Args>(args)...)
         , m_input(input)
@@ -448,20 +465,38 @@ private:
 
 template<typename SceneT, typename... Args>
 [[nodiscard]] SharedSmokeBox<SmokeSceneBox<SceneT>> CreateSmokeSceneBox(Core::Alloc::GlobalArena& arena, Args&&... args){
-    return SharedSmokeBox<SmokeSceneBox<SceneT>>(
-        NewArenaObject<RefCounter<SmokeSceneBox<SceneT>>>(arena, Forward<Args>(args)...),
-        ArenaRefDeleter<RefCounter<SmokeSceneBox<SceneT>>, Core::Alloc::GlobalArena>(&arena),
-        s_AdoptRef
-    );
+    if constexpr(::LeadingArenaConstructible<SceneT>){
+        return SharedSmokeBox<SmokeSceneBox<SceneT>>(
+            NewArenaObject<RefCounter<SmokeSceneBox<SceneT>>>(arena, static_cast<::ArenaBase&>(arena), Forward<Args>(args)...),
+            ArenaRefDeleter<RefCounter<SmokeSceneBox<SceneT>>, Core::Alloc::GlobalArena>(&arena),
+            s_AdoptRef
+        );
+    }
+    else{
+        return SharedSmokeBox<SmokeSceneBox<SceneT>>(
+            NewArenaObject<RefCounter<SmokeSceneBox<SceneT>>>(arena, Forward<Args>(args)...),
+            ArenaRefDeleter<RefCounter<SmokeSceneBox<SceneT>>, Core::Alloc::GlobalArena>(&arena),
+            s_AdoptRef
+        );
+    }
 }
 
 template<typename SceneT, typename... Args>
 [[nodiscard]] SharedSmokeBox<SmokeInputSceneBox<SceneT>> CreateSmokeInputSceneBox(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input, Args&&... args){
-    return SharedSmokeBox<SmokeInputSceneBox<SceneT>>(
-        NewArenaObject<RefCounter<SmokeInputSceneBox<SceneT>>>(arena, input, Forward<Args>(args)...),
-        ArenaRefDeleter<RefCounter<SmokeInputSceneBox<SceneT>>, Core::Alloc::GlobalArena>(&arena),
-        s_AdoptRef
-    );
+    if constexpr(::LeadingArenaConstructible<SceneT>){
+        return SharedSmokeBox<SmokeInputSceneBox<SceneT>>(
+            NewArenaObject<RefCounter<SmokeInputSceneBox<SceneT>>>(arena, input, static_cast<::ArenaBase&>(arena), Forward<Args>(args)...),
+            ArenaRefDeleter<RefCounter<SmokeInputSceneBox<SceneT>>, Core::Alloc::GlobalArena>(&arena),
+            s_AdoptRef
+        );
+    }
+    else{
+        return SharedSmokeBox<SmokeInputSceneBox<SceneT>>(
+            NewArenaObject<RefCounter<SmokeInputSceneBox<SceneT>>>(arena, input, Forward<Args>(args)...),
+            ArenaRefDeleter<RefCounter<SmokeInputSceneBox<SceneT>>, Core::Alloc::GlobalArena>(&arena),
+            s_AdoptRef
+        );
+    }
 }
 
 
@@ -545,7 +580,7 @@ private:
 
 
 public:
-    UiNestedPopupSmokeSource()noexcept : m_view(m_state){}
+    explicit UiNestedPopupSmokeSource(::ArenaBase& arena)noexcept : m_state(arena), m_view(m_state){}
 
 
 public:
@@ -663,7 +698,7 @@ private:
 
 
 public:
-    UiSearchComboSmokeSource()noexcept : m_view(m_state, m_label){}
+    explicit UiSearchComboSmokeSource(::ArenaBase& arena)noexcept : m_state(arena), m_view(m_state, m_label){}
 
 
 public:

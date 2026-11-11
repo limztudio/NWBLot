@@ -816,6 +816,7 @@ class ReflectionStatisticsReporter{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[arena]
 class ReflectionSmokeProjectImpl : IProjectEntryCallbacks{
     public ReflectionSmokeProjectImpl(mut ProjectRuntimeContext context){
         this.m_context = context;

@@ -103,6 +103,8 @@ struct BuiltinObjectTypeInfo{
     b8 isNwbMapKey;
     b8 requiresTCharAdaptation;
     b8 arenaFirstInCtor;
+    b8 isCopyMoveConstructible;
+    b8 isAssignable;
 };
 
 struct BuiltinEnumInfo{
@@ -140,6 +142,8 @@ struct BuiltinGenericTypeInfo{
     b8 isIndexableSequence;
     b8 isReflectedMap;
     b8 isAssetHandle;
+    b8 isCopyMoveConstructible;
+    b8 emitsFirstTypeArgOnlyInCpp;
 };
 
 struct BuiltinBinaryHashTypeInfo{
@@ -333,6 +337,8 @@ struct BuiltinGlobalConstantInfo{
 
 [[nodiscard]] b8 IsReflectedLinearContainerType(MStringView baseName)noexcept;
 [[nodiscard]] b8 IsReflectedMapContainerType(MStringView baseName)noexcept;
+[[nodiscard]] b8 IsNonCopyableBaseInterfaceName(MStringView name)noexcept;
+[[nodiscard]] b8 IsMoveOnlyTypeName(MStringView name)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

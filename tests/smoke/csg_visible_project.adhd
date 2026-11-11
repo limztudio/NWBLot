@@ -112,6 +112,7 @@ inline constexpr u64 s_TemporalFrameInterval = 8u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[arena]
 class CsgVisibleSmokeProject : IProjectEntryCallbacks{
     public CsgVisibleSmokeProject(mut ProjectRuntimeContext context){
         this.m_context = context;

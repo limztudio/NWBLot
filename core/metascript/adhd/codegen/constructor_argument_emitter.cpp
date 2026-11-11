@@ -89,7 +89,8 @@ void ConstructorArgumentEmitter::emit(MString& out, const MStringView baseTypeNa
         out.push_back(')');
     }
     else{
-        const b8 arenaFirst = !injectedArenaName.empty() && IsArenaFirstCtorType(baseTypeName);
+        const b8 arenaLast = !baseTypeName.empty() && SymbolTable::IsArenaBackedContainer(baseTypeName) && !IsArenaFirstCtorType(baseTypeName);
+        const b8 arenaFirst = !injectedArenaName.empty() && !arenaLast;
         if(arenaFirst){
             out.append(injectedArenaName.data(), injectedArenaName.size());
             if(!arguments.empty())

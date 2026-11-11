@@ -308,12 +308,12 @@ Expected<CsgShapeCookEntry> ParseCsgShapeCookMetadata(const Path& nwbFilePath, c
     entry.moduleInclude = *moduleInclude;
     if(entry.moduleInclude.empty()){
         const AString<ScratchArena> safeModuleName = BuildCanonicalSafeCacheName(scratchArena, entry.shaderModule.resolvedText());
-        auto generatedInclude = CsgShapeModuleSource().buildDefaultPath(entry.shaderModule, AStringView(safeModuleName));
+        auto generatedInclude = CsgShapeModuleSource().buildDefaultPath(scratchArena, entry.shaderModule, AStringView(safeModuleName));
         if(!generatedInclude){
             NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': failed to build generated module include for '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(entry.shaderModule.resolvedText()));
             return MakeUnexpected(Failure{});
         }
-        entry.moduleInclude = Move(*generatedInclude);
+        entry.moduleInclude.assign(AStringView(*generatedInclude));
     }
     if(!ValidateIncludePath(nwbFilePath, s_CsgEvalField, AStringView(entry.evalInclude), scratchArena))
         return MakeUnexpected(Failure{});
@@ -425,7 +425,7 @@ Expected<Path> CsgShapeModuleWriter::emit(const Path& cacheDirectory, const AStr
     return includeRoot;
 }
 
-b8 CsgShapeModuleWriter::WriteModuleInclude(const Span<const CsgShapeCookEntry> csgShapeEntries, const Name shaderModule, const AStringView moduleInclude, const Path& includeRoot, ScratchArena&, CookString& source){
+b8 CsgShapeModuleWriter::WriteModuleInclude(const Span<const CsgShapeCookEntry> csgShapeEntries, const Name shaderModule, const AStringView moduleInclude, const Path& includeRoot, ScratchArena& scratchArena, CookString& source){
     CsgShapeModuleSource().begin(source);
 
     for(const CsgShapeCookEntry& entry : csgShapeEntries){
@@ -434,11 +434,11 @@ b8 CsgShapeModuleWriter::WriteModuleInclude(const Span<const CsgShapeCookEntry> 
         CsgShapeModuleSource().appendEval(entry.shapeTypeId, AStringView(entry.evalInclude), source);
     }
 
-    return WriteCsgGeneratedIncludeFile(ResolveCsgModuleOutputPath(includeRoot, moduleInclude), AStringView(source));
+    return WriteCsgGeneratedIncludeFile(ResolveCsgModuleOutputPath(scratchArena, includeRoot, moduleInclude), AStringView(source));
 }
 
-b8 CsgShapeModuleWriter::WriteEmptyDefaultModuleInclude(const Path& includeRoot, ScratchArena&){
-    return WriteCsgGeneratedIncludeFile(ResolveDefaultCsgModuleOutputPath(includeRoot), s_CsgEmptyGeneratedModule);
+b8 CsgShapeModuleWriter::WriteEmptyDefaultModuleInclude(const Path& includeRoot, ScratchArena& scratchArena){
+    return WriteCsgGeneratedIncludeFile(ResolveDefaultCsgModuleOutputPath(scratchArena, includeRoot), s_CsgEmptyGeneratedModule);
 }
 
 

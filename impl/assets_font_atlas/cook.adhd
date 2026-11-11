@@ -49,6 +49,18 @@ public:
 [[nodiscard]] Expected<Core::Assets::AssetVector<FontAtlasGlyph>> ParseFontAtlasGlyphMetadata(const Path& nwbFilePath, const Core::Metascript::Value& asset, const FontAtlasPayload& payload);
 [[nodiscard]] Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
+
+template<typename RootArenaT, typename FileArenaT>
+    requires (!IsSame_V<RootArenaT, Core::Alloc::GlobalArena> || !IsSame_V<FileArenaT, Core::Alloc::GlobalArena>)
+[[nodiscard]] NWB_INLINE Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadata(const ::Path<RootArenaT>& assetRoot, const AStringView virtualRoot, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+    return ParseFontAtlasCookMetadata(Path(arena, assetRoot), virtualRoot, Path(arena, nwbFilePath), doc, arena, scratchArena);
+}
+
+template<typename FileArenaT>
+    requires (!IsSame_V<FileArenaT, Core::Alloc::GlobalArena>)
+[[nodiscard]] NWB_INLINE Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(const Name virtualPath, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+    return ParseFontAtlasCookMetadataValue(virtualPath, Path(arena, nwbFilePath), asset, arena, scratchArena);
+}
 [[nodiscard]] Expected<FontAtlas> BuildFontAtlasAsset(const FontAtlasCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<FontAtlas> BuildFontAtlasAsset(FontAtlasCookEntry&& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
 

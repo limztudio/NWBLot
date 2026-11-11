@@ -9,6 +9,7 @@
 #include "callable_template_deduction.h"
 
 #include "lambda_capture_analyzer.h"
+#include "type_layout_analyzer.h"
 #include "type_resolver.h"
 
 
@@ -41,6 +42,17 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
     MVector<MStringView> argTypeHints(m_arena);
     MVector<u8> argIsMutHints(m_arena);
     buildCallArgHints(ownerClass, &method, expr.arguments, scope, argTypeHints, argIsMutHints);
+    auto injectActiveArena = [&]()noexcept{
+        if(m_inClassArenaContext && ownerClass){
+            expr.injectClassArena = true;
+            ownerClass->needsClassArena = true;
+        }
+        else{
+            expr.injectScratchArena = true;
+            method.usesScratchArena = true;
+            m_activeParallelBlockUsesScratch = true;
+        }
+    };
     if(expr.lhs){
         if(expr.lhs->kind == ExprKind::Identifier){
             const MStringView baseCallee = m_symbols.resolveBaseTypeName(expr.lhs->text);
@@ -52,17 +64,8 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                 reportError(errors, expr.span, "cannot instantiate an 'interface' type directly");
                 ok = false;
             }
-            if(SymbolTable::IsArenaBackedContainer(baseCallee)){
-                if(m_inClassArenaContext && ownerClass){
-                    expr.injectClassArena = true;
-                    ownerClass->needsClassArena = true;
-                }
-                else{
-                    expr.injectScratchArena = true;
-                    method.usesScratchArena = true;
-                    m_activeParallelBlockUsesScratch = true;
-                }
-            }
+            if(SymbolTable::IsArenaBackedContainer(baseCallee))
+                injectActiveArena();
             targetCallable = m_symbols.findFreeFunction(expr.lhs->text, &callArgCount, argTypeHints, argIsMutHints);
             if(!targetCallable){
                 localCallable = FindScopedVar(scope, expr.lhs->text);
@@ -83,6 +86,11 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                         tempClsRef->templateArgs = expr.callTemplateArgs;
                         recvTypeRef = tempClsRef;
                     }
+                    TypeRef constructedRef(m_arena);
+                    constructedRef.name = expr.lhs->text;
+                    constructedRef.templateArgs = expr.callTemplateArgs;
+                    if(TypeLayoutAnalyzer(m_symbols).isNonRootMotherArenaType(constructedRef))
+                        injectActiveArena();
                 }
             }
             if(expr.lhs->text == "wait"){
@@ -94,11 +102,8 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                     expr.isBuiltinCall = true;
                     calledMemberName = expr.lhs->text;
                     recordRequiredHeader(fnInfo->requiredHeader);
-                    if(fnInfo->prependsScratchArena){
-                        expr.injectScratchArena = true;
-                        method.usesScratchArena = true;
-                        m_activeParallelBlockUsesScratch = true;
-                    }
+                    if(fnInfo->prependsScratchArena)
+                        injectActiveArena();
                     const b8 badArity = fnInfo->isVariadic
                         ? (callArgCount < fnInfo->minArity)
                         : (callArgCount < fnInfo->minArity || callArgCount > fnInfo->arity);
@@ -307,6 +312,16 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
         callReturnType = invokedFuncType->funcReturnType;
     else if(localCallable && localCallable->lambdaExpr)
         callReturnType = localCallable->lambdaExpr->lambdaReturnType;
+
+    if(targetCallable && !targetCallable->isConstructor && targetCallable->injectsCallerArena){
+        injectActiveArena();
+    }
+    else if(invokedFuncType && invokedFuncType->isFuncType && invokedFuncType->funcReturnType && m_symbols.resolveRefMode(invokedFuncType->funcReturnType) == ParamPassingMode::None && TypeLayoutAnalyzer(m_symbols).requiresMotherArena(*invokedFuncType->funcReturnType)){
+        injectActiveArena();
+    }
+    else if(localCallable && localCallable->lambdaExpr && localCallable->lambdaExpr->lambdaInjectsCallerArena){
+        injectActiveArena();
+    }
 
     const ParamPassingMode::Enum callRetRefMode = m_symbols.resolveRefMode(callReturnType);
     if(callRetRefMode != ParamPassingMode::None)

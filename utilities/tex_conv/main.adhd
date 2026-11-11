@@ -361,7 +361,8 @@ struct TextureEncodeInput{
     return prepared;
 }
 
-[[nodiscard]] static Expected<basisu::imagef> LoadImage(const ::Path<Core::Alloc::GlobalArena>& path, Core::Alloc::ScratchArena& scratchArena){
+template<typename PathArenaT>
+[[nodiscard]] static Expected<basisu::imagef> LoadImage(const ::Path<PathArenaT>& path, Core::Alloc::ScratchArena& scratchArena){
     basisu::imagef image;
     const auto pathText = PathToGenericString(scratchArena, path);
     if(!basisu::load_image_hdr(pathText.c_str(), image, false)){
@@ -399,7 +400,7 @@ struct TextureEncodeInput{
     return true;
 }
 
-[[nodiscard]] static Expected<PreparedTexture> PrepareTexture(const Span<const ::Path<Core::Alloc::GlobalArena>> inputPaths, const TextureDimension::Enum dimension, const b8 srgb, const TexConvAlphaSource& alphaSource, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] static Expected<PreparedTexture> PrepareTexture(const Span<const ::Path<::ArenaBase>> inputPaths, const TextureDimension::Enum dimension, const b8 srgb, const TexConvAlphaSource& alphaSource, Core::Alloc::ScratchArena& scratchArena){
     if(!ValidateTexConvInputImageCount(
         inputPaths.size(),
         IsValidTextureDimension(dimension),
@@ -430,7 +431,7 @@ struct TextureEncodeInput{
         alphaMask = Move(*decoded);
     }
 
-    for(const ::Path<Core::Alloc::GlobalArena>& path : inputPaths){
+    for(const ::Path<::ArenaBase>& path : inputPaths){
         auto plane = LoadImage(path, scratchArena);
         if(!plane)
             return MakeUnexpected(Failure{});
@@ -471,7 +472,7 @@ static void ReportStagedValidationFailure(const StagedFilePairPaths<Core::Alloc:
     return true;
 }
 
-[[nodiscard]] static Expected<AString<>> BuildMetadata(const PreparedTexture& payload){
+[[nodiscard]] static Expected<AString<::ArenaBase>> BuildMetadata(const PreparedTexture& payload, Core::Alloc::ScratchArena& scratchArena){
     const auto mipCount = TextureFormat::ComputeCompleteMipCount(payload.dimension, payload.width, payload.height, payload.depth);
     if(
         !IsCompleteTexConvMipCount(mipCount.has_value(), mipCount ? *mipCount : 0u, payload.mipCount)
@@ -486,6 +487,7 @@ static void ReportStagedValidationFailure(const StagedFilePairPaths<Core::Alloc:
         return MakeUnexpected(Failure{});
 
     return BuildTexConvMetadataText(
+        scratchArena,
         format,
         dimension,
         payload.width,
@@ -503,7 +505,7 @@ static void ReportStagedValidationFailure(const StagedFilePairPaths<Core::Alloc:
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: cannot write an empty prepared texture."));
         return false;
     }
-    const auto metadata = BuildMetadata(payload);
+    const auto metadata = BuildMetadata(payload, scratchArena);
     if(!metadata){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: cannot describe an invalid prepared texture."));
         return false;
@@ -608,8 +610,8 @@ static i32 Run(const i32 argc, char** argv){
 
         const AStringView outputPathText(outputArgument);
         TextureDimension::Enum dimension = TextureDimension::Texture2D;
-        ::Vector<::Path<Core::Alloc::GlobalArena>> inputPaths(utilityArena);
-        TexConvAlphaSource alphaSource;
+        ::Vector<::Path<::ArenaBase>, Core::Alloc::GlobalArena> inputPaths(utilityArena);
+        TexConvAlphaSource alphaSource(utilityArena);
 
         if(!ValidateTexConvInputModeCount(!inputArgument.empty(), !cubeArguments.empty(), !volumeArguments.empty()))
             return s_TexConvExitFailure;
@@ -637,17 +639,17 @@ static i32 Run(const i32 argc, char** argv){
             if(!TryParseTexConvAlphaOption(alphaText, alphaSource.mode, alphaSource.constant))
                 return s_TexConvExitFailure;
             if(alphaSource.mode == AlphaSourceMode::Image)
-                alphaSource.path = ::Path<Core::Alloc::GlobalArena>(utilityArena, alphaText);
+                alphaSource.path = ::Path<::ArenaBase>(utilityArena, alphaText);
         }
 
-        for(const ::Path<Core::Alloc::GlobalArena>& inputPath : inputPaths){
+        for(const auto& inputPath : inputPaths){
             if(!ValidateTexConvInputImagePath(inputPath, false))
                 return s_TexConvExitFailure;
         }
         if(alphaSource.mode == AlphaSourceMode::Image && !ValidateTexConvInputImagePath(alphaSource.path, true))
             return s_TexConvExitFailure;
 
-        const auto outputPaths = ResolveTexConvOutputPaths(inputPaths.front(), outputPathText);
+        const auto outputPaths = ResolveTexConvOutputPaths(scratchArena, inputPaths.front(), outputPathText);
         if(!outputPaths || !ValidateOutputPaths(*outputPaths, force, scratchArena))
             return s_TexConvExitFailure;
 
@@ -657,7 +659,8 @@ static i32 Run(const i32 argc, char** argv){
         if(!WriteOutputs(*outputPaths, *payload, force, scratchArena))
             return s_TexConvExitFailure;
 
-        const AString<> report = FormatTexConvCompletionReport(
+        const AString<::ArenaBase> report = FormatTexConvCompletionReport(
+            scratchArena,
             outputPaths->metadata,
             outputPaths->data,
             payload->width,

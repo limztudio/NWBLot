@@ -85,6 +85,7 @@ public:
 
 // Font-only reads retain image directory metadata, with empty pixel arrays, and validate the complete file layout.
 [[nodiscard]] Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& path, b8 includePixels, Core::Assets::AssetArena& arena);
+[[nodiscard]] Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const ::Path<::ArenaBase>& path, b8 includePixels, Core::Assets::AssetArena& arena);
 
 // Uses the source buffer's caller-owned arena for native validation allocations.
 [[nodiscard]] b8 ValidateFontSource(const Core::Assets::AssetBytes& bytes, u32 faceIndex = 0u);

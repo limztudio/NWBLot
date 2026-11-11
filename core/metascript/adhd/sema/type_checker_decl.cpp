@@ -261,6 +261,21 @@ b8 TypeChecker::hasFieldInlineOrAutoDefault(const ClassDecl& classDecl, const Fi
 b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors){
     b8 ok = checkTemplateParamBounds(classDecl.templateParams, &classDecl, nullptr, errors);
 
+    if(classDecl.isArenaOwner){
+        if(classDecl.isSerialize){
+            reportError(errors, classDecl.span, "'[arena]' class cannot be marked '[serialize]' (binary-serialized structs cannot own an arena)");
+            ok = false;
+        }
+        if(!classDecl.subsystemTypeName.empty()){
+            reportError(errors, classDecl.span, "'[arena]' cannot be combined with '[subsystem(\"...\")]' (subsystems already inherit TypedSubsystem arena)");
+            ok = false;
+        }
+        if(!classDecl.componentAssetTypeName.empty()){
+            reportError(errors, classDecl.span, "'[arena]' cannot be combined with '[component_asset(\"...\")]'; mark the underlying component class '[arena]' instead");
+            ok = false;
+        }
+    }
+
     if(!classDecl.subsystemTypeName.empty()){
         if(classDecl.isSerialize || !classDecl.assetTypeName.empty() || !classDecl.componentAssetTypeName.empty() || !classDecl.templateParams.empty() || !classDecl.implementedInterfaces.empty() || !classDecl.methods.empty()){
             reportError(errors, classDecl.span, "'[subsystem(\"...\")]' class may only declare 'public' AssetRef<T> or Vector<AssetRef<T>> fields");
@@ -294,6 +309,10 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
         }
         if(classDecl.fields.size() != 1u || !classDecl.fields[0] || classDecl.fields[0]->access != AccessSpecifier::Public || classDecl.fields[0]->name != "component" || classDecl.fields[0]->defaultExpr || classDecl.fields[0]->hasCtorInit){
             reportError(errors, classDecl.span, "'[component_asset(\"...\")]' class must declare exactly one 'public <ComponentType> component;' field");
+            ok = false;
+        }
+        else if(classDecl.fields[0]->type && TypeLayoutAnalyzer(m_symbols).isNonRootMotherArenaType(*classDecl.fields[0]->type)){
+            reportError(errors, classDecl.fields[0]->span, "'[component_asset(\"...\")]' component class uses arena-backed storage and must be marked '[arena]'");
             ok = false;
         }
     }

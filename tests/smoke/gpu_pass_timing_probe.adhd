@@ -60,6 +60,7 @@ class GpuPassTimingScopeReportLine{
     public u32 frames = 0u;
 }
 
+[arena]
 class GpuPassTimingProbe{
     public GpuPassTimingProbe(){
         this.m_label = "";

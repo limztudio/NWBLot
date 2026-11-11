@@ -291,6 +291,7 @@ b8 VerifyTextureSrgbClear(mut GraphicsRuntime graphics){
     return ok;
 }
 
+[arena]
 class TextureSmokeProject : IProjectEntryCallbacks{
     public TextureSmokeProject(mut ProjectRuntimeContext context){
         this.m_context = context;

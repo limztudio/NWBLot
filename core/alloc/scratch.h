@@ -22,7 +22,7 @@ NWB_ALLOC_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class ScratchArena : public ::ArenaBaseT<ScratchArena>{
+class ScratchArena final : public ::ArenaBaseT<ScratchArena>{
 private:
     using Base = ::ArenaBaseT<ScratchArena>;
 
@@ -163,7 +163,7 @@ public:
             bucket.size = AlignmentPowerOfTwo(static_cast<usize>(1) << i, initSize);
         }
     }
-    ~ScratchArena()noexcept{
+    ~ScratchArena()noexcept override{
         for(auto& bucket : m_bucket){
             for(auto* chunk : { bucket.active, bucket.cached }){
                 while(chunk){
@@ -178,7 +178,7 @@ public:
 
 
 public:
-    inline void* allocate(usize align, usize size){
+    [[nodiscard]] NWB_INLINE void* allocate(usize align, usize size)override{
         NWB_ASSERT_MSG(IsValidAlignment(align), NWB_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
         if(!IsValidAlignment(align))
             return nullptr;
@@ -199,7 +199,7 @@ public:
     }
 
     // LIFO only: p is the bucket's most-recent alloc. Grows in place, else moves to a fresh block.
-    inline void* reallocate(void* p, usize align, usize size){
+    [[nodiscard]] NWB_INLINE void* reallocate(void* p, usize align, usize size)override{
         NWB_ASSERT_MSG(IsValidAlignment(align), NWB_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
         if(!IsValidAlignment(align))
             return nullptr;
@@ -241,7 +241,7 @@ public:
     }
 
     // LIFO across chunks: empty chunks cache and expose the prior live alloc; out-of-order frees are no-ops reclaimed at destroy.
-    inline void deallocate(void* p, usize align, usize size){
+    NWB_INLINE void deallocate(void* p, usize align, usize size)noexcept override{
         NWB_ASSERT_MSG(IsValidAlignment(align), NWB_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
         if(!IsValidAlignment(align) || size == 0u)
             return;
@@ -252,7 +252,10 @@ public:
         if(!bucket.active)
             return;
 
-        size = AlignmentPowerOfTwo(align, size);
+        const auto alignedSize = AlignUpPowerOfTwoChecked(size, align);
+        if(!alignedSize)
+            return;
+        size = *alignedSize;
         Chunk& chunk = *bucket.active;
         if(chunk.tryPopLifo(p, size)){
             m_memoryStats.recordDeallocation(size);

@@ -493,9 +493,9 @@ Expected<Core::Assets::AssetVector<Core::Assets::AssetString>> ComputeAssetDepen
             candidate.emplace_back(PathToString(arena, files[index].filePath.lexicallyNormal()));
     }
 
-    DependencyQueueState queueState;
+    DependencyQueueState queueState(scratchArena);
     queueState.initialize(files.size(), selection->selected, selection->order);
-    DependencyPathHints knownVirtualPathTexts;
+    DependencyPathHints knownVirtualPathTexts(scratchArena);
     knownVirtualPathTexts.reserve(files.size());
 
     const auto enqueueDependency = [&](const Name& depVirtualPath, const Name& expectedAssetType) -> b8{

@@ -266,7 +266,7 @@ Expected<ShaderOptimizationLevel> TryParseShaderOptimizationLevelText(in StringV
 b8 ValidateShaderDefineEntrySpec(
     in StringView nwbFilePathText,
     in StringView authoredName,
-    in Span<String> defineValues
+    in Span<StringView> defineValues
 ){
     const ShaderDefineNameStatus nameStatus = ClassifyShaderDefineName(authoredName);
     if(nameStatus == ShaderDefineNameStatus::Reserved){
@@ -281,7 +281,7 @@ b8 ValidateShaderDefineEntrySpec(
         error("Meta '{}': define '{}' must provide at least one value", nwbFilePathText, authoredName);
         return false;
     }
-    for(in String defineValue : defineValues){
+    for(in StringView defineValue : defineValues){
         if(!IsValidShaderDefineValueText(defineValue)){
             error("Meta '{}': define '{}' values must be nonempty variant text without semicolons, line breaks, nulls, or surrounding whitespace", nwbFilePathText, authoredName);
             return false;
@@ -290,8 +290,8 @@ b8 ValidateShaderDefineEntrySpec(
     return true;
 }
 
-b8 ValidateShaderIncludeRoots(in StringView nwbFilePathText, in Span<String> includeRoots){
-    for(in String includeRoot : includeRoots){
+b8 ValidateShaderIncludeRoots(in StringView nwbFilePathText, in Span<StringView> includeRoots){
+    for(in StringView includeRoot : includeRoots){
         if(includeRoot.empty()){
             error("Shader meta '{}': include_roots entries must not be empty", nwbFilePathText);
             return false;

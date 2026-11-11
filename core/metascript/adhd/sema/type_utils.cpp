@@ -23,8 +23,8 @@ namespace __hidden_adhd_type_utils{
 
 
 inline constexpr Array s_BuiltinObjectTypes = {
-#define NWB_ADHD_EXPORT_OBJECT_TYPE(adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isStringLike, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey, requiresTCharAdaptation, arenaFirstInCtor, requiredHeader) \
-    BuiltinObjectTypeInfo{ adhdName, cppExportName, requiredHeader, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isStringLike, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey, requiresTCharAdaptation, arenaFirstInCtor },
+#define NWB_ADHD_EXPORT_OBJECT_TYPE(adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isStringLike, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey, requiresTCharAdaptation, arenaFirstInCtor, isCopyMoveConstructible, isAssignable, requiredHeader) \
+    BuiltinObjectTypeInfo{ adhdName, cppExportName, requiredHeader, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isStringLike, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey, requiresTCharAdaptation, arenaFirstInCtor, isCopyMoveConstructible, isAssignable },
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_OBJECT_TYPE
 };
@@ -44,10 +44,22 @@ inline constexpr Array s_BuiltinEnumEntries = {
 };
 
 inline constexpr Array s_BuiltinGenericTypes = {
-#define NWB_ADHD_EXPORT_GENERIC_TYPE(adhdName, cppExportName, paramKind, inlineLayoutKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, reflectedLinearKind, isReflectedMap, isAssetHandle) \
-    BuiltinGenericTypeInfo{ adhdName, cppExportName, GenericParamKind::paramKind, InlineLayoutKind::inlineLayoutKind, ReflectedLinearKind::reflectedLinearKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, isReflectedMap, isAssetHandle },
+#define NWB_ADHD_EXPORT_GENERIC_TYPE(adhdName, cppExportName, paramKind, inlineLayoutKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, reflectedLinearKind, isReflectedMap, isAssetHandle, isCopyMoveConstructible, emitsFirstTypeArgOnlyInCpp) \
+    BuiltinGenericTypeInfo{ adhdName, cppExportName, GenericParamKind::paramKind, InlineLayoutKind::inlineLayoutKind, ReflectedLinearKind::reflectedLinearKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, isReflectedMap, isAssetHandle, isCopyMoveConstructible, emitsFirstTypeArgOnlyInCpp },
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_GENERIC_TYPE
+};
+
+inline constexpr Array s_NonCopyableBaseInterfaceNames = {
+#define NWB_ADHD_EXPORT_NON_COPYABLE_BASE_INTERFACE(ifaceName) MStringView(ifaceName),
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_NON_COPYABLE_BASE_INTERFACE
+};
+
+inline constexpr Array s_MoveOnlyTypeNames = {
+#define NWB_ADHD_EXPORT_MOVE_ONLY_TYPE(typeName) MStringView(typeName),
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_MOVE_ONLY_TYPE
 };
 
 inline constexpr Array s_BuiltinBinaryHashTypes = {
@@ -533,6 +545,22 @@ b8 IsReflectedLinearContainerType(const MStringView baseName)noexcept{
 b8 IsReflectedMapContainerType(const MStringView baseName)noexcept{
     if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(baseName))
         return info->isReflectedMap;
+    return false;
+}
+
+b8 IsNonCopyableBaseInterfaceName(const MStringView name)noexcept{
+    for(const MStringView entry : __hidden_adhd_type_utils::s_NonCopyableBaseInterfaceNames){
+        if(entry == name)
+            return true;
+    }
+    return false;
+}
+
+b8 IsMoveOnlyTypeName(const MStringView name)noexcept{
+    for(const MStringView entry : __hidden_adhd_type_utils::s_MoveOnlyTypeNames){
+        if(entry == name)
+            return true;
+    }
     return false;
 }
 

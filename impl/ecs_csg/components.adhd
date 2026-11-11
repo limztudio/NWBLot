@@ -34,7 +34,7 @@ class CsgMeshReceiverComponent<const u8 Kind>{
     public b8 affectTransparentPass = true;
 }
 
-[reflect]
+[arena, reflect]
 class CsgCutterComponent{
     public Name receiverGroup = s_NameNone;
     public Name shapeType = s_NameNone;

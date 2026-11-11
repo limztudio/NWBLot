@@ -117,12 +117,37 @@ namespace __hidden_adhd_type_checker{
 [[nodiscard]] b8 ShouldAutoInlineCallable(const MethodDecl& fn)noexcept{
     if(!fn.hasBody)
         return false;
+    if(fn.hasSynthesizedArenaParams)
+        return true;
     if(fn.usesScratchArena || fn.usesTaskScope || fn.isOutOfLine)
         return false;
     if(!fn.templateParams.empty())
         return true;
     u32 stmtCount = 0u;
     return StmtListIsAutoInlineable(fn.body, stmtCount);
+}
+
+[[nodiscard]] b8 ComputeCallableInjectsCallerArena(const MethodDecl& fn, const SymbolTable& symbols)noexcept{
+    if(fn.isConstructor || fn.isDestructor || !fn.returnType)
+        return false;
+    if(symbols.resolveRefMode(fn.returnType) != ParamPassingMode::None)
+        return false;
+    return TypeLayoutAnalyzer(symbols).requiresMotherArena(*fn.returnType);
+}
+
+[[nodiscard]] b8 ComputeCallableHasSynthesizedArenaParams(const MethodDecl& fn, const SymbolTable& symbols)noexcept{
+    if(fn.isDestructor || fn.isOverride || fn.isReflect || fn.isOperator)
+        return false;
+    for(const ParamDecl& p : fn.params){
+        if(!p.type || p.type->isAuto || p.type->isFuncType)
+            continue;
+        if(symbols.resolveRefMode(p.type) != ParamPassingMode::None)
+            continue;
+        const TypeRef* unwrapped = symbols.unwrapTypeAlias(p.type);
+        if(unwrapped && unwrapped->refMode == ParamPassingMode::None && SymbolTable::IsArenaBackedContainer(unwrapped->name))
+            return true;
+    }
+    return false;
 }
 
 
@@ -236,6 +261,51 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
         }
     }
 
+    {
+        const TypeLayoutAnalyzer preLayoutAnalyzer(m_symbols);
+        const usize maxArenaPasses = unit.classes.size() + 1u;
+        for(usize pass = 0u; pass < maxArenaPasses; ++pass){
+            b8 changed = false;
+            for(ClassDecl* cls : unit.classes){
+                if(!cls || cls->isSerialize || !cls->subsystemTypeName.empty() || !cls->componentAssetTypeName.empty() || cls->needsClassArena)
+                    continue;
+                for(const FieldDecl* field : cls->fields){
+                    if(field && field->type && preLayoutAnalyzer.requiresMotherArena(*field->type)){
+                        cls->needsClassArena = true;
+                        changed = true;
+                        break;
+                    }
+                }
+            }
+            if(!changed)
+                break;
+        }
+        for(InterfaceDecl* iface : unit.interfaces){
+            if(!iface)
+                continue;
+            for(MethodDecl* m : iface->methods){
+                if(m)
+                    m->injectsCallerArena = __hidden_adhd_type_checker::ComputeCallableInjectsCallerArena(*m, m_symbols);
+            }
+        }
+        for(ClassDecl* cls : unit.classes){
+            if(!cls)
+                continue;
+            for(MethodDecl* m : cls->methods){
+                if(!m)
+                    continue;
+                m->injectsCallerArena = __hidden_adhd_type_checker::ComputeCallableInjectsCallerArena(*m, m_symbols);
+                m->hasSynthesizedArenaParams = __hidden_adhd_type_checker::ComputeCallableHasSynthesizedArenaParams(*m, m_symbols);
+            }
+        }
+        for(MethodDecl* fn : unit.freeFunctions){
+            if(!fn)
+                continue;
+            fn->injectsCallerArena = __hidden_adhd_type_checker::ComputeCallableInjectsCallerArena(*fn, m_symbols);
+            fn->hasSynthesizedArenaParams = __hidden_adhd_type_checker::ComputeCallableHasSynthesizedArenaParams(*fn, m_symbols);
+        }
+    }
+
     for(Stmt* gc : unit.globalConstants){
         if(!gc)
             continue;
@@ -272,7 +342,7 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
                 reportError(errors, gc->span, "file-level 'const' cannot declare an 'in' or 'mut' reference");
                 ok = false;
             }
-            if(SymbolTable::IsArenaBackedContainer(baseGcType) || IsAtomicGenericType(baseGcType)){
+            if(SymbolTable::IsArenaBackedContainer(baseGcType) || TypeLayoutAnalyzer(m_symbols).requiresMotherArena(*gc->varType) || IsAtomicGenericType(baseGcType)){
                 reportError(errors, gc->span, "file-level 'const' cannot have an arena-backed or 'Atomic' type; use compile-time fixed types");
                 ok = false;
             }

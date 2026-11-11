@@ -460,7 +460,7 @@ static Expected<MaterialCookVector<MaterialBindAttribute>> ParseMaterialBindAttr
             return MakeUnexpected(Failure{});
         }
 
-        MaterialBindAttribute attribute;
+        MaterialBindAttribute attribute(arena);
         const auto parsedName = ParseMaterialBindStringField(bindFilePath, attributeValue, s_MaterialBindNameKey, contextLabel);
         if(!parsedName)
             return MakeUnexpected(Failure{});
@@ -501,7 +501,7 @@ static Expected<MaterialCookVector<MaterialBindAttribute>> ParseMaterialBindAttr
 
 
 static Expected<MaterialBindField> ParseMaterialBindField(const Path& bindFilePath, const AStringView bindFilePathText, const Core::Metascript::Value& fieldValue, const MaterialBindStruct& bindStruct, MaterialCookArena& arena){
-    MaterialBindField field;
+    MaterialBindField field(arena);
     MaterialBindSchemaValidator validator{};
     if(!fieldValue.isMap()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' field entries must be maps"), PathToString<tchar>(bindFilePath), ConvertString(bindStruct.name));
@@ -521,7 +521,7 @@ static Expected<MaterialBindField> ParseMaterialBindField(const Path& bindFilePa
     auto attributes = ParseMaterialBindAttributeList(bindFilePath, fieldValue.findField(s_MaterialBindAttributesKey), field.name, arena);
     if(!attributes)
         return MakeUnexpected(Failure{});
-    field.attributes = Move(*attributes);
+    ::AdhdAssign(field.attributes, Move(*attributes));
     if(!validator.validateMaterialBindFieldAttributes(bindFilePathText, bindStruct, field))
         return MakeUnexpected(Failure{});
 
@@ -533,7 +533,7 @@ static Expected<MaterialBindField> ParseMaterialBindField(const Path& bindFilePa
 
 
 static Expected<MaterialBindStruct> ParseMaterialBindStruct(const Path& bindFilePath, const AStringView bindFilePathText, const Core::Metascript::MStringView structName, const Core::Metascript::Value& structValue, MaterialCookArena& arena){
-    MaterialBindStruct bindStruct;
+    MaterialBindStruct bindStruct(arena);
     MaterialBindSchemaValidator validator{};
     if(!structValue.isMap()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' must be a map"), PathToString<tchar>(bindFilePath), ConvertString(AStringView(structName.data(), structName.size())));
@@ -548,7 +548,7 @@ static Expected<MaterialBindStruct> ParseMaterialBindStruct(const Path& bindFile
     auto attributes = ParseMaterialBindAttributeList(bindFilePath, structValue.findField(s_MaterialBindAttributesKey), bindStruct.name, arena);
     if(!attributes)
         return MakeUnexpected(Failure{});
-    bindStruct.attributes = Move(*attributes);
+    ::AdhdAssign(bindStruct.attributes, Move(*attributes));
     if(!validator.validateMaterialBindStructAttributes(bindFilePathText, bindStruct))
         return MakeUnexpected(Failure{});
 

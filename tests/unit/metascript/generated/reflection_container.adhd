@@ -10,7 +10,7 @@ enum<u8> ReflectionKey{
 
 class ReflectionAsset{}
 
-[reflect]
+[arena, reflect]
 class ReflectionContainerFixture{
     public Vector<Name> names;
     public Array<Name, 3> fixedNames;

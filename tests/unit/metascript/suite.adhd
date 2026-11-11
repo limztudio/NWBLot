@@ -736,6 +736,30 @@ inline constexpr MStringView s_SuiteDeducedInstantiationAndSimdHashSource =
     "    return HashCombineValue(usize(wrapped.value), sum);\r\n"
     "}\r\n";
 
+inline constexpr MStringView s_SuiteMotherArenaHierarchyAndGenericSpecSource =
+    "[header]\r\n"
+    "native{\r\n"
+    "}\r\n"
+    "[arena]\r\n"
+    "class RootOwner {\r\n"
+    "    public MidChild mid = MidChild();\r\n"
+    "    public Holder<u32> podHolder = Holder<u32>();\r\n"
+    "    public Holder<String> strHolder = Holder<String>();\r\n"
+    "}\r\n"
+    "class MidChild {\r\n"
+    "    public LeafChild leaf = LeafChild();\r\n"
+    "}\r\n"
+    "class LeafChild {\r\n"
+    "    public String label = \"seed\";\r\n"
+    "}\r\n"
+    "class Holder<T> {\r\n"
+    "    public T value = T();\r\n"
+    "}\r\n"
+    "class MoveOnlyChild {\r\n"
+    "    public String label = \"owned\";\r\n"
+    "    public UniquePtr<i32> handle = UniquePtr<i32>();\r\n"
+    "}\r\n";
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1206,6 +1230,50 @@ void VerifyAdhdCompiler_ValidatesHexFloatsSnakeCaseEnumParsingNestedDeductionAnd
     EXPECT_NE(instSrc.find("::HashCombineValue(usize(wrapped.value), sum)"), usize.max);
 }
 
+void VerifyAdhdCompiler_EnforcesArenaAttributeConflictsAndPropagatesMotherArenaAcrossNestedAndGenericClasses(){
+    AdhdTestArena arena = AdhdTestArena();
+
+    CompileResult res = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile(s_SuiteMotherArenaHierarchyAndGenericSpecSource, "impl/sim/mother_arena_edge.adhd", arena.arena, res));
+    const StringView hdrView = GeneratedHeaderView(res);
+
+    const usize leafPos = hdrView.find("class LeafChild final{");
+    const usize midPos = hdrView.find("class MidChild final{");
+    const usize podSpecPos = hdrView.find("template<>\r\nclass Holder<u32> final{");
+    const usize strSpecPos = hdrView.find("template<>\r\nclass Holder<AString<::ArenaBase>> final{");
+    const usize rootPos = hdrView.find("class RootOwner final{");
+    const usize moveOnlyPos = hdrView.find("class MoveOnlyChild final{");
+    ASSERT_NE(leafPos, usize.max);
+    ASSERT_NE(midPos, usize.max);
+    ASSERT_NE(podSpecPos, usize.max);
+    ASSERT_NE(strSpecPos, usize.max);
+    ASSERT_NE(rootPos, usize.max);
+    ASSERT_NE(moveOnlyPos, usize.max);
+
+    const StringView leafSlice = hdrView.substr(leafPos, midPos - leafPos);
+    const StringView midSlice = hdrView.substr(midPos, podSpecPos - midPos);
+    const StringView podSpecSlice = hdrView.substr(podSpecPos, strSpecPos - podSpecPos);
+    const StringView strSpecSlice = hdrView.substr(strSpecPos, rootPos - strSpecPos);
+    const StringView rootSlice = hdrView.substr(rootPos, moveOnlyPos - rootPos);
+    const StringView moveOnlySlice = hdrView.substr(moveOnlyPos);
+
+    EXPECT_NE(leafSlice.find("using uses_leading_arena_t = ::ArenaBase;"), usize.max);
+    EXPECT_EQ(leafSlice.find("s_ClassArena"), usize.max);
+    EXPECT_NE(midSlice.find("using uses_leading_arena_t = ::ArenaBase;"), usize.max);
+    EXPECT_EQ(midSlice.find("s_ClassArena"), usize.max);
+    EXPECT_EQ(podSpecSlice.find("__adhd_arena"), usize.max);
+    EXPECT_NE(strSpecSlice.find("using uses_leading_arena_t = ::ArenaBase;"), usize.max);
+    EXPECT_NE(rootSlice.find("s_ClassArena"), usize.max);
+    EXPECT_EQ(rootSlice.find("uses_leading_arena_t"), usize.max);
+    EXPECT_NE(moveOnlySlice.find("MoveOnlyChild(const MoveOnlyChild&) = delete;"), usize.max);
+    EXPECT_NE(moveOnlySlice.find("MoveOnlyChild(MoveOnlyChild&&)noexcept = default;"), usize.max);
+
+    ExpectCompileFails(arena, "[arena, serialize]\r\nclass BadArenaSer {\r\n    public u32 x = 0u;\r\n}\r\n", "impl/sim/bad_arena_ser.adhd");
+    ExpectCompileFails(arena, "[asset(\"tex\")]\r\nclass TexAsset {\r\n    public u32 w = 0u;\r\n}\r\n[arena, subsystem(\"bad_sub\")]\r\nclass BadArenaSub {\r\n    public AssetRef<TexAsset> tex;\r\n}\r\n", "impl/sim/bad_arena_sub.adhd");
+    ExpectCompileFails(arena, "[arena]\r\nclass RootComp {\r\n    public String tag = \"ok\";\r\n}\r\n[arena, component_asset(\"bad_comp\")]\r\nclass BadArenaCompAsset {\r\n    public RootComp component;\r\n}\r\n", "impl/sim/bad_arena_comp_asset.adhd");
+    ExpectCompileFails(arena, "class UnrootedComp {\r\n    public String tag = \"bad\";\r\n}\r\n[component_asset(\"unrooted_comp\")]\r\nclass BadUnrootedCompAsset {\r\n    public UnrootedComp component;\r\n}\r\n", "impl/sim/bad_unrooted_comp_asset.adhd");
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1297,6 +1365,7 @@ NWB_ADHD_GTEST(AdhdCompiler, RejectsDeducedBoundViolationsWrongArityConstRefMuta
 NWB_ADHD_GTEST(AdhdCompiler, ValidatesDigitSeparatorsEnumForwardRefsFlagOpsSwitchConstEvalAndInRefRvalueBind, VerifyAdhdCompiler_ValidatesDigitSeparatorsEnumForwardRefsFlagOpsSwitchConstEvalAndInRefRvalueBind)
 NWB_ADHD_GTEST(AdhdCompiler, ValidatesHexFloatsSnakeCaseEnumParsingNestedDeductionAndStrictTypeRules, VerifyAdhdCompiler_ValidatesHexFloatsSnakeCaseEnumParsingNestedDeductionAndStrictTypeRules)
 NWB_ADHD_GTEST(AdhdCompiler, RequiresExplicitHeaderOrSourceOnTopLevelNativeBlocks, VerifyAdhdCompiler_RequiresExplicitHeaderOrSourceOnTopLevelNativeBlocks)
+NWB_ADHD_GTEST(AdhdCompiler, EnforcesArenaAttributeConflictsAndPropagatesMotherArenaAcrossNestedAndGenericClasses, VerifyAdhdCompiler_EnforcesArenaAttributeConflictsAndPropagatesMotherArenaAcrossNestedAndGenericClasses)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

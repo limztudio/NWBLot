@@ -65,9 +65,10 @@ private:
 
 class BlockingRestoreLogger final : public Core::Common::ILogger{
 public:
-    BlockingRestoreLogger(Core::Common::LogArena& arena, const NWB::Path& blockedPath, const b8 throwAfterBlock = false)noexcept
+    template<typename PathArenaT>
+    BlockingRestoreLogger(Core::Common::LogArena& arena, const ::Path<PathArenaT>& blockedPath, const b8 throwAfterBlock = false)
         : m_arena(arena)
-        , m_blockedPath(blockedPath)
+        , m_blockedPath(arena, blockedPath)
         , m_throwAfterBlock(throwAfterBlock)
     {}
 
@@ -85,7 +86,7 @@ private:
 
 private:
     Core::Common::LogArena& m_arena;
-    const NWB::Path& m_blockedPath;
+    NWB::Path m_blockedPath;
     b8 m_throwAfterBlock;
     b8 m_blocked = false;
 };
@@ -216,7 +217,7 @@ void VerifyFilesystemVolumeTest_SegmentCreatedAfterMountIsNotTruncated(mut Files
     VolumeFileSystem filesystem(self.m_arena);
     ASSERT_TRUE(filesystem.mount(self.m_desc));
 
-    const DiskPath unexpected = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 1u);
+    const auto unexpected = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 1u);
     Array<u8, 4> sentinel = Array<u8, 4>();
     sentinel[0u] = 7u;
     sentinel[1u] = 8u;
@@ -251,12 +252,12 @@ void VerifyFilesystemVolumeTest_FailedMultiSegmentGrowthKeepsTrimmedVolumeMounta
     ASSERT_TRUE(filesystem.writeFile(s_FilesystemNameProjectTestsPayload, payload));
     ASSERT_TRUE(filesystem.flush());
 
-    const DiskPath first = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
+    const auto first = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
     const Expected<u64, ErrorCode> trimmedSize = FileSize(first);
     ASSERT_TRUE(trimmedSize.has_value());
     ASSERT_LT(trimmedSize.value(), self.m_desc.segmentSize);
 
-    const DiskPath collision = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 2u);
+    const auto collision = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 2u);
     Array<u8, 2> sentinel = Array<u8, 2>();
     sentinel[0u] = 7u;
     sentinel[1u] = 8u;
@@ -296,7 +297,7 @@ void VerifyFilesystemVolumeTest_GrowthDoesNotPadOverExternallyTruncatedLiveData(
         payload[i] = cast<u8>(i + 1u);
     ASSERT_TRUE(filesystem.writeFile(s_FilesystemNameProjectTestsPayload, payload));
 
-    const DiskPath first = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
+    const auto first = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
     ASSERT_TRUE(ResizeFile(first, truncatedSize).has_value());
 
     Vector<u8> large;
@@ -324,7 +325,7 @@ void VerifyFilesystemVolumeTest_GrowthAtSegmentLimitDoesNotExpandTrimmedFile(mut
     ASSERT_TRUE(filesystem.writeFile(s_FilesystemNameProjectTestsPayload, payload));
     ASSERT_TRUE(filesystem.flush());
 
-    const DiskPath first = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
+    const auto first = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
     const Expected<u64, ErrorCode> before = FileSize(first);
     ASSERT_TRUE(before.has_value());
 
@@ -640,12 +641,12 @@ void VerifyFilesystemVolumeTest_IncompleteCompactionRollbackUnmountsTheVolume(mu
     b8 backupMatchedOriginal = false;
     native(mut self, mut filesystem, mut scratchArena, mut handleOpened, mut compactSucceeded, mut loggerBlocked, mut backupMatchedOriginal){
 #if defined(NWB_PLATFORM_WINDOWS)
-        const DiskPath first = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
-        const DiskPath second = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 1u);
+        const auto first = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
+        const auto second = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 1u);
         Vector<u8, ScratchArena> original(scratchArena);
         ASSERT_TRUE(ReadBinaryFile(first, original));
         const auto paths = FilesystemVolumeStagingDetail::BuildStagedVolumePaths(self.m_directory, self.m_desc.volumeName.view(), scratchArena);
-        const DiskPath backup = MakeVolumeSegmentPath(paths.backupDirectory, self.m_desc.volumeName.view(), 0u);
+        const auto backup = MakeVolumeSegmentPath(paths.backupDirectory, self.m_desc.volumeName.view(), 0u);
         const HANDLE held = CreateFile(second.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
         handleOpened = held != INVALID_HANDLE_VALUE;
         if(handleOpened){
@@ -845,7 +846,7 @@ void VerifyFilesystemVolumeTest_CompactionPreservesCapacityUntilRequestedTrimAnd
 
     ASSERT_TRUE(filesystem.compact(true));
     EXPECT_EQ(filesystem.segmentCount(), 1u);
-    const DiskPath firstSegment = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
+    const auto firstSegment = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
     const Expected<u64, ErrorCode> lastSegmentBytes = FileSize(firstSegment);
     ASSERT_TRUE(lastSegmentBytes.has_value());
     EXPECT_EQ(lastSegmentBytes.value(), self.m_desc.metadataSize + payload.size());
@@ -913,7 +914,7 @@ void VerifyFilesystemVolumeTest_MetadataImagePreservesCompleteHashesAndClearsRem
             VolumeIndexEntryDisk{ hashes[2u], 515u, 3u },
             VolumeIndexEntryDisk{ hashes[0u], 512u, 3u }
         };
-        const DiskPath segmentPath = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
+        const auto segmentPath = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
         const auto verifyImage = [&](const usize firstRecord){
             VolumeHeaderDisk header{};
             header.magic = FilesystemVolumeDetail::s_VolumeMagic;
@@ -1022,8 +1023,8 @@ void VerifyFilesystemVolumeTest_IncompletePublicationRollbackPreservesRecoveryFi
         paths.backupDirectory = self.m_directory / s_FilesystemBackupDirectory;
         ASSERT_TRUE(EnsureDirectories(paths.stageDirectory));
         ASSERT_TRUE(EnsureDirectories(paths.backupDirectory));
-        const DiskPath output = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
-        const DiskPath backup = MakeVolumeSegmentPath(paths.backupDirectory, self.m_desc.volumeName.view(), 0u);
+        const auto output = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
+        const auto backup = MakeVolumeSegmentPath(paths.backupDirectory, self.m_desc.volumeName.view(), 0u);
         const Array<u8, 3u> oldBytes{ 1u, 2u, 3u };
         ASSERT_TRUE(WriteBinaryFile(output, oldBytes));
         const VolumePublicationObserver observer{
@@ -1060,8 +1061,8 @@ void VerifyFilesystemVolumeTest_ThrowingDiagnosticStillRetainsIncompleteRollback
         paths.backupDirectory = self.m_directory / s_FilesystemBackupDirectory;
         ASSERT_TRUE(EnsureDirectories(paths.stageDirectory));
         ASSERT_TRUE(EnsureDirectories(paths.backupDirectory));
-        const DiskPath output = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
-        const DiskPath backup = MakeVolumeSegmentPath(paths.backupDirectory, self.m_desc.volumeName.view(), 0u);
+        const auto output = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
+        const auto backup = MakeVolumeSegmentPath(paths.backupDirectory, self.m_desc.volumeName.view(), 0u);
         const Array<u8, 3u> oldBytes{ 1u, 2u, 3u };
         ASSERT_TRUE(WriteBinaryFile(output, oldBytes));
         const VolumePublicationObserver observer{
@@ -1096,10 +1097,10 @@ void VerifyFilesystemVolumeTest_FailedLaterSegmentPromotionRestoresPublishedByte
     stagedPaths.backupDirectory = baseDirectory / s_FilesystemBackupDirectory;
     ASSERT_TRUE(EnsureDirectories(stagedPaths.stageDirectory).has_value());
 
-    const DiskPath firstOutput = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
-    const DiskPath secondOutput = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 1u);
-    const DiskPath absentOutput = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 2u);
-    const DiskPath firstStaged = MakeVolumeSegmentPath(stagedPaths.stageDirectory, self.m_desc.volumeName.view(), 0u);
+    const auto firstOutput = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
+    const auto secondOutput = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 1u);
+    const auto absentOutput = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 2u);
+    const auto firstStaged = MakeVolumeSegmentPath(stagedPaths.stageDirectory, self.m_desc.volumeName.view(), 0u);
 
     Array<u8, 3> firstOld = Array<u8, 3>();
     firstOld[0u] = 1u;
@@ -1148,9 +1149,9 @@ void VerifyFilesystemVolumeTest_ThrowingPromotionDiagnosticRestoresPublishedByte
     stagedPaths.backupDirectory = baseDirectory / s_FilesystemBackupDirectory;
     ASSERT_TRUE(EnsureDirectories(stagedPaths.stageDirectory).has_value());
 
-    const DiskPath firstOutput = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
-    const DiskPath secondOutput = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 1u);
-    const DiskPath firstStaged = MakeVolumeSegmentPath(stagedPaths.stageDirectory, self.m_desc.volumeName.view(), 0u);
+    const auto firstOutput = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
+    const auto secondOutput = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 1u);
+    const auto firstStaged = MakeVolumeSegmentPath(stagedPaths.stageDirectory, self.m_desc.volumeName.view(), 0u);
 
     Array<u8, 3> firstOld = Array<u8, 3>();
     firstOld[0u] = 1u;

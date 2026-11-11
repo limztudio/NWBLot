@@ -80,6 +80,7 @@ MatrixSingle BuildSkinnedCausticWaveJointMatrix(in MatrixSingle bindJoint, in f3
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[arena]
 class SkinnedCausticSmokeProjectImpl : IProjectEntryCallbacks{
     public SkinnedCausticSmokeProjectImpl(mut ProjectRuntimeContext context){
         this.m_context = context;

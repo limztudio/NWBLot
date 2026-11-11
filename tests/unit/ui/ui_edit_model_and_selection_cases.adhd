@@ -300,8 +300,11 @@ using ::NWB::Tests::UiCases::s_UiCaseTestsUiEditNavigation;
 [[nodiscard]] NWB_INLINE b8 UiEditIsAsciiDigit(const u8 ch)noexcept{ return ::IsAsciiDigit(static_cast<char>(ch)); }
 NWB_INLINE void UiKeepEditArenaAlive(const GlobalArena&)noexcept{}
 NWB_INLINE void UiKeepEditTestArenaAlive(const TestArena&)noexcept{}
-[[nodiscard]] NWB_INLINE Expected<::AString<>, EditTextStatusEnum> UiNormalizeSingleLineToString(TestArena& arena, const AStringView text, const usize maxBytes){
-    return ::NWB::Impl::Ui::NormalizeSingleLineText(arena.arena, text, maxBytes);
+[[nodiscard]] NWB_INLINE Expected<::AString<::ArenaBase>, EditTextStatusEnum> UiNormalizeSingleLineToString(TestArena& arena, const AStringView text, const usize maxBytes){
+    auto result = ::NWB::Impl::Ui::NormalizeSingleLineText(arena.arena, text, maxBytes);
+    if(!result)
+        return MakeUnexpected(result.error());
+    return ::AString<::ArenaBase>(AStringView(*result), static_cast<::ArenaBase&>(arena.arena));
 }
 [[nodiscard]] NWB_INLINE b8 VerifyUiSingleLineAliasedInputCopy(){
     ::NWB::Tests::TestArena<> arena;

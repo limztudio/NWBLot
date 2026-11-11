@@ -255,6 +255,7 @@ b8 PopulateSkinningBenchmarkScene(
     return true;
 }
 
+[arena]
 class SkinningCullingBenchmarkProject : IProjectEntryCallbacks{
     public SkinningCullingBenchmarkProject(mut ProjectRuntimeContext context){
         this.m_context = context;

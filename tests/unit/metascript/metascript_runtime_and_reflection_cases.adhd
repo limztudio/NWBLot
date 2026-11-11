@@ -784,10 +784,11 @@ void VerifyAdhdCompiler_TrimViewBorrowsLocalCompactString(){
 }
 
 void VerifyAdhdCompiler_StringAndCompactSubstrPreserveOwnershipAndSingleEvaluation(){
+    AdhdTestArena arena = AdhdTestArena();
     i32 recvCounter = 0;
     i32 posCounter = 0;
     i32 countCounter = 0;
-    const String result = ExtractLongStringSubstrOnce(recvCounter, posCounter, countCounter);
+    const String result = ExtractLongStringSubstrOnce(arena.arena, recvCounter, posCounter, countCounter);
     EXPECT_EQ(recvCounter, 1);
     EXPECT_EQ(posCounter, 1);
     EXPECT_EQ(countCounter, 1);
@@ -879,6 +880,10 @@ void VerifyAdhdCompiler_GlobalExportArenaFirstFormattingOverflowAndHeaderTrackin
     EXPECT_TRUE(ExerciseGlobalExportEdgeCases());
 }
 
+void VerifyAdhdCompiler_NestedMotherArenaRebindsAcrossTransientScratchDestruction(){
+    EXPECT_TRUE(ExerciseNestedMotherArenaAndScratchRebind());
+}
+
 NWB_ADHD_GTEST(Metascript, EmptyAndStructOnlyDocumentsHaveNoImplicitVariables, VerifyMetascript_EmptyAndStructOnlyDocumentsHaveNoImplicitVariables)
 NWB_ADHD_GTEST(Metascript, StructNamesAndVariablesUseSeparateNamespaces, VerifyMetascript_StructNamesAndVariablesUseSeparateNamespaces)
 NWB_ADHD_GTEST(Metascript, StructMetadataOwnsSourceAndSurvivesVariableStorageGrowth, VerifyMetascript_StructMetadataOwnsSourceAndSurvivesVariableStorageGrowth)
@@ -938,6 +943,7 @@ TEST(AdhdCompiler, StringAndCompactSubstrPreserveOwnershipAndSingleEvaluation){ 
 TEST(AdhdCompiler, HighByteFrontBackAndIndexMaintainUnsignedSemanticsAndMutation){ VerifyAdhdCompiler_HighByteFrontBackAndIndexMaintainUnsignedSemanticsAndMutation(); }
 TEST(AdhdCompiler, SimdLaneComparisonAndFiniteChecksIgnoreInactiveAndShortCircuitedSignalingNaNs){ VerifyAdhdCompiler_SimdLaneComparisonAndFiniteChecksIgnoreInactiveAndShortCircuitedSignalingNaNs(); }
 TEST(AdhdCompiler, GlobalExportArenaFirstFormattingOverflowAndHeaderTracking){ VerifyAdhdCompiler_GlobalExportArenaFirstFormattingOverflowAndHeaderTracking(); }
+TEST(AdhdCompiler, NestedMotherArenaRebindsAcrossTransientScratchDestruction){ VerifyAdhdCompiler_NestedMotherArenaRebindsAcrossTransientScratchDestruction(); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

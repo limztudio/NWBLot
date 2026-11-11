@@ -3,6 +3,7 @@
 
 
 #include "lambda_expression_checker.h"
+#include "type_layout_analyzer.h"
 
 
 NWB_ADHD_BEGIN
@@ -13,6 +14,9 @@ b8 LambdaExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
 
     if(expr.lambdaReturnType && !m_checker.checkReturnTypeRef(*expr.lambdaReturnType, ownerClass, &method, expr.span, errors))
         ok = false;
+    expr.lambdaInjectsCallerArena = expr.lambdaReturnType
+        && m_checker.m_symbols.resolveRefMode(expr.lambdaReturnType) == ParamPassingMode::None
+        && TypeLayoutAnalyzer(m_checker.m_symbols).requiresMotherArena(*expr.lambdaReturnType);
     MVector<ScopedVarInfo> lambdaScope(m_checker.m_arena);
     for(LambdaCapture& cap : expr.lambdaCaptures){
         if(!cap.name.empty() && m_checker.FindScopedVar(lambdaScope, cap.name)){

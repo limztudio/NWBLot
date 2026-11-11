@@ -7,6 +7,7 @@
 #include "binary_expression_checker.h"
 #include "borrow_lifetime_analyzer.h"
 #include "lambda_capture_analyzer.h"
+#include "type_layout_analyzer.h"
 
 
 NWB_ADHD_BEGIN
@@ -132,7 +133,7 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
     b8 rhsInClassArenaCtx = false;
     if(lhsThisField){
         const MStringView baseFieldTypeName = lhsThisField->type ? m_checker.m_symbols.resolveBaseTypeName(lhsThisField->type->name) : MStringView{};
-        if(lhsThisField->type && SymbolTable::IsArenaBackedContainer(baseFieldTypeName))
+        if(lhsThisField->type && TypeLayoutAnalyzer(m_checker.m_symbols).requiresMotherArena(*lhsThisField->type))
             rhsInClassArenaCtx = true;
         const ParamPassingMode::Enum fieldRefMode = lhsThisField->type ? m_checker.m_symbols.resolveRefMode(lhsThisField->type) : ParamPassingMode::None;
         if(fieldRefMode != ParamPassingMode::None && (method.isConstructor || m_checker.m_symbols.findInterface(baseFieldTypeName))){
@@ -231,11 +232,46 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
             }
         }
         else if(expr.op == TokenType::Equal){
-            if(const TypeRef* lhsTargetTypeRef = m_checker.inferExprTypeRef(ownerClass, &method, *expr.lhs, scope); lhsTargetTypeRef && !lhsTargetTypeRef->templateArgs.empty() && lhsTargetTypeRef->templateArgs[0].type){
-                if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(lhsType); genericInfo && (genericInfo->inlineLayoutKind == InlineLayoutKind::Expected || genericInfo->inlineLayoutKind == InlineLayoutKind::Optional)){
-                    const MStringView valBase = m_checker.m_symbols.resolveBaseTypeName(lhsTargetTypeRef->templateArgs[0].type->name);
-                    if(SymbolTable::IsSimdRegisterVectorType(valBase) && expr.rhs->resolvedSimdType == valBase)
-                        expr.rhs->wrapInSimdResult = true;
+            if(const TypeRef* lhsTargetTypeRef = m_checker.inferExprTypeRef(ownerClass, &method, *expr.lhs, scope)){
+                if(!lhsTargetTypeRef->templateArgs.empty() && lhsTargetTypeRef->templateArgs[0].type){
+                    if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(lhsType); genericInfo && (genericInfo->inlineLayoutKind == InlineLayoutKind::Expected || genericInfo->inlineLayoutKind == InlineLayoutKind::Optional)){
+                        const MStringView valBase = m_checker.m_symbols.resolveBaseTypeName(lhsTargetTypeRef->templateArgs[0].type->name);
+                        if(SymbolTable::IsSimdRegisterVectorType(valBase) && expr.rhs->resolvedSimdType == valBase)
+                            expr.rhs->wrapInSimdResult = true;
+                    }
+                }
+                if(!expr.isNotNullRebind && !expr.rhs->wrapInSimdResult && expr.lhs->resolvedSimdType.empty() && m_checker.m_symbols.resolveRefMode(lhsTargetTypeRef) == ParamPassingMode::None){
+                    const TypeLayoutAnalyzer layoutAnalyzer(m_checker.m_symbols);
+                    const TypeRef* unwrappedLhs = m_checker.m_symbols.unwrapTypeAlias(lhsTargetTypeRef);
+                    const BuiltinGenericTypeInfo* lhsGenericInfo = unwrappedLhs ? FindBuiltinGenericType(unwrappedLhs->name) : nullptr;
+                    if(lhsGenericInfo && lhsGenericInfo->inlineLayoutKind == InlineLayoutKind::Optional && !unwrappedLhs->templateArgs.empty() && unwrappedLhs->templateArgs[0].type && layoutAnalyzer.requiresMotherArena(*unwrappedLhs->templateArgs[0].type)){
+                        const Expr* rootLhs = expr.lhs;
+                        while(rootLhs && (rootLhs->kind == ExprKind::MemberAccess || rootLhs->kind == ExprKind::Index))
+                            rootLhs = rootLhs->lhs;
+                        if(rootLhs && rootLhs->kind == ExprKind::ThisMember && ownerClass){
+                            expr.useAdhdOptionalClassAssign = true;
+                            ownerClass->needsClassArena = true;
+                        }
+                        else{
+                            expr.useAdhdOptionalScratchAssign = true;
+                            method.usesScratchArena = true;
+                            m_checker.m_activeParallelBlockUsesScratch = true;
+                        }
+                    }
+                    else if(layoutAnalyzer.requiresMotherArena(*lhsTargetTypeRef)){
+                        const ClassDecl* lhsCls = unwrappedLhs ? m_checker.m_symbols.findClass(unwrappedLhs->name) : nullptr;
+                        b8 hasCustomAssign = false;
+                        if(lhsCls){
+                            for(const MethodDecl* m : lhsCls->methods){
+                                if(m && m->isOperator && OperatorSemantics::MapOperatorSymbolToTokenType(m->name) == TokenType::Equal){
+                                    hasCustomAssign = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if(!hasCustomAssign)
+                            expr.useAdhdAssign = true;
+                    }
                 }
             }
         }

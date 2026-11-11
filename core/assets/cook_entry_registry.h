@@ -407,6 +407,18 @@ public:
 
     [[nodiscard]] b8 parseDocument(const Name& assetType, const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, CookEntryParseContext& context);
     [[nodiscard]] b8 parseValue(const Name& assetType, Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, CookEntryParseContext& context);
+
+    template<typename RootArenaT, typename FileArenaT>
+        requires (!IsSame_V<RootArenaT, Alloc::GlobalArena> || !IsSame_V<FileArenaT, Alloc::GlobalArena>)
+    [[nodiscard]] NWB_INLINE b8 parseDocument(const Name& assetType, const ::Path<RootArenaT>& assetRoot, const AStringView virtualRoot, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Document& doc, CookEntryParseContext& context){
+        return parseDocument(assetType, Path(context.cookArena, assetRoot), virtualRoot, Path(context.cookArena, nwbFilePath), doc, context);
+    }
+
+    template<typename FileArenaT>
+        requires (!IsSame_V<FileArenaT, Alloc::GlobalArena>)
+    [[nodiscard]] NWB_INLINE b8 parseValue(const Name& assetType, const Name virtualPath, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Value& asset, CookEntryParseContext& context){
+        return parseValue(assetType, virtualPath, Path(context.cookArena, nwbFilePath), asset, context);
+    }
     [[nodiscard]] b8 appendCachedEntry(const Name& assetType, const CookEntrySourceLocation& location, const Name& virtualPath, Span<const u8> payloadBytes, CookEntryParseContext& context);
     [[nodiscard]] usize bucketCount()const noexcept;
     [[nodiscard]] b8 writeBucket(usize bucketIndex, CookEntryWriteContext& context);

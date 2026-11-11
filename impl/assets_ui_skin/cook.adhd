@@ -62,6 +62,18 @@ public:
 
 [[nodiscard]] Expected<UiSkinCookEntry> ParseUiSkinCookMetadata(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<UiSkinCookEntry> ParseUiSkinCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
+
+template<typename FileArenaT>
+    requires (!IsSame_V<FileArenaT, Core::Alloc::GlobalArena>)
+[[nodiscard]] NWB_INLINE Expected<UiSkinCookEntry> ParseUiSkinCookMetadata(const Name virtualPath, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+    return ParseUiSkinCookMetadata(virtualPath, Path(arena, nwbFilePath), asset, arena, scratchArena);
+}
+
+template<typename RootArenaT, typename FileArenaT>
+    requires (!IsSame_V<RootArenaT, Core::Alloc::GlobalArena> || !IsSame_V<FileArenaT, Core::Alloc::GlobalArena>)
+[[nodiscard]] NWB_INLINE Expected<UiSkinCookEntry> ParseUiSkinCookMetadata(const ::Path<RootArenaT>& assetRoot, const AStringView virtualRoot, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+    return ParseUiSkinCookMetadata(Path(arena, assetRoot), virtualRoot, Path(arena, nwbFilePath), doc, arena, scratchArena);
+}
 [[nodiscard]] Expected<UiSkin> BuildUiSkinAsset(const UiSkinCookEntry& entry, Core::Assets::AssetArena& arena);
 
 

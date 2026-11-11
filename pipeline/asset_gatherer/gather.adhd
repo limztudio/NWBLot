@@ -241,7 +241,7 @@ b8 GatherAssets(const AssetGatherOptions& options, Core::Alloc::ScratchArena& sc
         return false;
     }
     paths.outputDirectory = outputDirectory->lexicallyNormal();
-    const AString<> effectiveConfiguration = ResolveEffectiveGatherConfiguration(options.configuration.view());
+    const AString<::ArenaBase> effectiveConfiguration = ResolveEffectiveGatherConfiguration(scratchArena, options.configuration.view());
     Assets::CookString configuration(AStringView(effectiveConfiguration), arena);
 
     const auto result = Assets::AssetsVolumeCookDetail::WriteAssetVolume(paths, configuration, manifest, arena, scratchArena);

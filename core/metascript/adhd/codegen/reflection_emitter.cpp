@@ -150,11 +150,11 @@ void ReflectionEmitter::emitInterfaceReflectionDeclarations(const InterfaceDecl&
 }
 
 void ReflectionEmitter::emitClassReflectionDeclarations(MString& out, const ClassDecl& decl)const{
-    emitClassReflectionMembers(out, decl, decl.orderedFields, false);
+    emitClassReflectionMembers(out, decl, decl.orderedFields, false, decl.needsClassArena);
 }
 
-void ReflectionEmitter::emitInlineClassReflection(MString& out, const ClassDecl& decl, const Span<const FieldDecl* const> fields)const{
-    emitClassReflectionMembers(out, decl, fields, true);
+void ReflectionEmitter::emitInlineClassReflection(MString& out, const ClassDecl& decl, const Span<const FieldDecl* const> fields, const b8 classNeedsArena)const{
+    emitClassReflectionMembers(out, decl, fields, true, classNeedsArena);
 }
 
 void ReflectionEmitter::emitClassReflectionDefinitions(MString& out, const ClassDecl& decl)const{
@@ -198,7 +198,7 @@ void ReflectionEmitter::emitClassReflectionDefinitions(MString& out, const Class
     }
 }
 
-void ReflectionEmitter::emitClassReflectionMembers(MString& out, const ClassDecl& decl, const Span<const FieldDecl* const> fields, const b8 inlineBodies)const{
+void ReflectionEmitter::emitClassReflectionMembers(MString& out, const ClassDecl& decl, const Span<const FieldDecl* const> fields, const b8 inlineBodies, const b8 classNeedsArena)const{
     using namespace __hidden_adhd_reflection_emitter;
 
     out.append("public:\r\n");
@@ -261,7 +261,7 @@ void ReflectionEmitter::emitClassReflectionMembers(MString& out, const ClassDecl
     }
 
     const NwbReflectionEmitter nwbEmitter(m_symbols);
-    nwbEmitter.emitDeserializeNwbMethod(out, fields);
+    nwbEmitter.emitDeserializeNwbMethod(out, decl, fields, classNeedsArena);
     emitAssetDependencyMethods(out, fields);
     nwbEmitter.emitExtractNwbAssetDependenciesMethod(out, fields);
 }

@@ -18,7 +18,8 @@ NWB_BEGIN
 
 namespace Tests{
 
-[[nodiscard]] NWB_INLINE Expected<Core::Assets::AssetBytes, AStringView> ReadBundledFontBytes(const Path& fontPath, Core::Assets::AssetArena& arena){
+template<typename PathArenaT>
+[[nodiscard]] NWB_INLINE Expected<Core::Assets::AssetBytes, AStringView> ReadBundledFontBytes(const ::Path<PathArenaT>& fontPath, Core::Assets::AssetArena& arena){
     auto source = Impl::ReadPreparedFontSource(fontPath, false, arena);
     if(!source)
         return MakeUnexpected(source.error());

@@ -254,6 +254,7 @@ class RendererGatherBenchmarkScene{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[arena]
 class RendererGatherBenchmarkProjectImpl : IProjectEntryCallbacks{
     public RendererGatherBenchmarkProjectImpl(mut ProjectRuntimeContext context){
         this.m_context = context;

@@ -7,6 +7,8 @@
 #include "source_emitter.h"
 #include "switch_statement_emitter.h"
 
+#include <core/metascript/adhd/sema/type_layout_analyzer.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -70,10 +72,18 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
             out.append("); return ::MakeNotNull(&__adhd_ref); }());\r\n");
             break;
         }
+        const TypeRef* rawVarType = (stmt.varType && !stmt.varType->isAuto) ? stmt.varType : stmt.inferredAutoType;
+        const TypeRef* effectiveVarType = (!m_activeTemplateParams.empty() && rawVarType)
+            ? m_symbols.substituteTypeParams(*rawVarType, m_activeTemplateParams, m_activeTemplateArgs)
+            : rawVarType;
+        const b8 varUsesScratch = stmt.usesScratchArena
+            || (!m_activeTemplateParams.empty() && effectiveVarType && TypeLayoutAnalyzer(m_symbols).requiresMotherArena(*effectiveVarType));
         emitIndent(out, indent);
         if(stmt.isConst)
             out.append("const ");
-        if(stmt.varType)
+        if(stmt.varType && stmt.varType->isAuto && stmt.usesScratchArena && stmt.inferredAutoType)
+            m_typeEmitter.emitTypeCpp(out, *stmt.inferredAutoType);
+        else if(stmt.varType)
             m_typeEmitter.emitTypeCpp(out, *stmt.varType);
         else
             out.append("auto");
@@ -86,20 +96,21 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
             out.append("));\r\n");
         }
         else if(stmt.isCtorInit){
-            const MStringView baseVarType = stmt.varType ? m_symbols.resolveBaseTypeName(stmt.varType->name) : MStringView{};
+            const MStringView baseVarType = effectiveVarType ? m_symbols.resolveBaseTypeName(effectiveVarType->name) : MStringView{};
             ConstructorArgumentEmitter(*this).emit(
                 out,
                 baseVarType,
                 stmt.arguments,
-                stmt.usesScratchArena ? MStringView("__adhd_scratch") : MStringView{},
+                varUsesScratch ? MStringView("__adhd_scratch") : MStringView{},
                 false,
                 true
             );
             out.append(";\r\n");
         }
         else if(stmt.expr){
-            if(stmt.usesScratchArena && stmt.expr->kind == ExprKind::StringLiteral){
-                if(stmt.arenaFirstInit){
+            const MStringView effectiveBaseType = effectiveVarType ? m_symbols.resolveBaseTypeName(effectiveVarType->name) : MStringView{};
+            if(varUsesScratch && stmt.expr->kind == ExprKind::StringLiteral && !effectiveBaseType.empty() && SymbolTable::IsArenaBackedContainer(effectiveBaseType)){
+                if(stmt.arenaFirstInit || IsArenaFirstCtorType(effectiveBaseType)){
                     out.append("(__adhd_scratch, ");
                     emitExpr(out, *stmt.expr);
                     out.append(");\r\n");
@@ -110,14 +121,33 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
                     out.append(", __adhd_scratch);\r\n");
                 }
             }
+            else if(
+                varUsesScratch
+                && effectiveVarType
+                && !stmt.expr->wrapInSimdResult
+                && !(stmt.expr->kind == ExprKind::Call && stmt.expr->injectScratchArena)
+            ){
+                out.append(" = ::AdhdRebindConstruct<");
+                m_typeEmitter.emitTypeCpp(out, *effectiveVarType);
+                out.append(">(__adhd_scratch, ");
+                emitExpr(out, *stmt.expr);
+                out.append(");\r\n");
+            }
             else{
                 out.append(" = ");
                 emitExpr(out, *stmt.expr);
                 out.append(";\r\n");
             }
         }
-        else if(stmt.usesScratchArena){
-            out.append("(__adhd_scratch);\r\n");
+        else if(varUsesScratch){
+            if(effectiveVarType && TypeLayoutAnalyzer(m_symbols).isFixedArrayNeedingArenaDefaultInit(*effectiveVarType)){
+                out.append(" = ::AdhdDefaultConstructInArena<");
+                m_typeEmitter.emitTypeCpp(out, *effectiveVarType);
+                out.append(">(__adhd_scratch);\r\n");
+            }
+            else{
+                out.append("(__adhd_scratch);\r\n");
+            }
         }
         else{
             out.append("{};\r\n");
@@ -157,6 +187,33 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
                 out.append(" ::MakeNotNull(&(");
                 emitExpr(out, *stmt.expr);
                 out.append("))");
+            }
+            else if(m_activeCallerArenaReturnType && !(stmt.expr->kind == ExprKind::Call && stmt.expr->injectScratchArena)){
+                b8 moveLocalReturnValue = false;
+                if(stmt.expr->kind == ExprKind::Identifier && !stmt.expr->derefNotNull && !stmt.expr->moveAtLastUse){
+                    for(usize i = m_activeLocalVarDecls.size(); i > 0u; --i){
+                        const Stmt* localDecl = m_activeLocalVarDecls[i - 1u];
+                        if(localDecl && localDecl->name == stmt.expr->text){
+                            if(
+                                localDecl->kind == StmtKind::VarDecl
+                                && !localDecl->isConst
+                                && (!localDecl->varType || m_symbols.resolveRefMode(localDecl->varType) == ParamPassingMode::None)
+                            ){
+                                moveLocalReturnValue = true;
+                            }
+                            break;
+                        }
+                    }
+                }
+                out.append(" ::AdhdRebindConstruct<");
+                m_typeEmitter.emitTypeCpp(out, *m_activeCallerArenaReturnType);
+                out.append(">(__adhd_caller_arena, ");
+                if(moveLocalReturnValue)
+                    out.append("::Move(");
+                emitExpr(out, *stmt.expr);
+                if(moveLocalReturnValue)
+                    out.push_back(')');
+                out.push_back(')');
             }
             else{
                 out.push_back(' ');

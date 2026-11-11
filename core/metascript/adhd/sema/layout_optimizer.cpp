@@ -131,7 +131,7 @@ inline constexpr usize s_BareExpectedFallbackBytes = 24u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void LayoutOptimizer::SortAndPackFields(const b8 isSerialize, const b8 packSerialize, const b8 hasInterfaces, MVector<FieldDecl*>& orderedFields, usize& outTotalSize, usize& outTotalAlign)noexcept{
+void LayoutOptimizer::SortAndPackFields(const b8 isSerialize, const b8 packSerialize, const usize headerPointerCount, MVector<FieldDecl*>& orderedFields, usize& outTotalSize, usize& outTotalAlign)noexcept{
     if(!isSerialize){
         for(usize i = 1u; i < orderedFields.size(); ++i){
             FieldDecl* key = orderedFields[i];
@@ -150,8 +150,8 @@ void LayoutOptimizer::SortAndPackFields(const b8 isSerialize, const b8 packSeria
         }
     }
 
-    usize currentOffset = hasInterfaces ? 8u : 0u;
-    usize maxAlign = packSerialize ? 1u : (hasInterfaces ? 8u : 1u);
+    usize currentOffset = headerPointerCount * 8u;
+    usize maxAlign = packSerialize ? 1u : (headerPointerCount > 0u ? 8u : 1u);
     for(FieldDecl* field : orderedFields){
         const usize align = (packSerialize && !field->isTransient) ? 1u : field->resolvedAlign;
         if(align > maxAlign)
@@ -214,8 +214,14 @@ b8 LayoutOptimizer::optimizeTranslationUnit(TranslationUnit& unit, MVector<Parse
                 continue;
             const usize prevSize = inst->totalSize;
             const usize prevAlign = inst->totalAlign;
-            finalizeClassFieldLayouts(inst->templateDecl->isSerialize, !inst->templateDecl->implementedInterfaces.empty(), inst->orderedFields, inst->totalSize, inst->totalAlign);
-            if(inst->totalSize != prevSize || inst->totalAlign != prevAlign)
+            const b8 prevArena = inst->needsClassArena;
+            for(FieldDecl* clonedField : inst->orderedFields){
+                if(clonedField && clonedField->type)
+                    markFieldArenaUsage(*clonedField->type, *clonedField, *inst->templateDecl, inst->needsClassArena);
+            }
+            const b8 hasMotherArenaPointer = !inst->templateDecl->isSerialize && !inst->templateDecl->isArenaOwner && inst->templateDecl->subsystemTypeName.empty() && inst->templateDecl->componentAssetTypeName.empty() && inst->needsClassArena;
+            finalizeClassFieldLayouts(inst->templateDecl->isSerialize, !inst->templateDecl->implementedInterfaces.empty(), hasMotherArenaPointer, inst->orderedFields, inst->totalSize, inst->totalAlign);
+            if(inst->totalSize != prevSize || inst->totalAlign != prevAlign || inst->needsClassArena != prevArena)
                 changed = true;
         }
         if(recomputeClassLayouts())
@@ -347,17 +353,31 @@ void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, const u32 dep
     outAlign = 8u;
 }
 
-void LayoutOptimizer::markFieldArenaUsage(const TypeRef& fieldType, FieldDecl& field, ClassDecl& classDecl)const noexcept{
-    if(!classDecl.subsystemTypeName.empty() || !classDecl.componentAssetTypeName.empty())
+void LayoutOptimizer::markFieldArenaUsage(const TypeRef& fieldType, FieldDecl& field, const ClassDecl& classDecl, b8& inOutNeedsClassArena)const noexcept{
+    if(classDecl.isSerialize || !classDecl.subsystemTypeName.empty() || !classDecl.componentAssetTypeName.empty())
         return;
-    if(m_symbols.resolveRefMode(&fieldType) == ParamPassingMode::None && SymbolTable::IsArenaBackedContainer(m_symbols.resolveBaseTypeName(fieldType.name))){
-        const MStringView baseFieldName = m_symbols.resolveBaseTypeName(fieldType.name);
-        field.usesClassArena = true;
-        field.arenaFirstDefaultInit = IsArenaFirstCtorType(baseFieldName);
-        classDecl.needsClassArena = true;
-    }
-    else if(TypeLayoutAnalyzer(m_symbols).containsArenaBackedContainer(fieldType)){
-        classDecl.needsClassArena = true;
+    if(m_symbols.resolveRefMode(&fieldType) == ParamPassingMode::None){
+        const TypeRef* unwrapped = m_symbols.unwrapTypeAlias(&fieldType);
+        const TypeLayoutAnalyzer layoutAnalyzer(m_symbols);
+        if(unwrapped && SymbolTable::IsArenaBackedContainer(unwrapped->name)){
+            field.usesClassArena = true;
+            field.arenaFirstDefaultInit = IsArenaFirstCtorType(unwrapped->name);
+            inOutNeedsClassArena = true;
+            return;
+        }
+        if(unwrapped && layoutAnalyzer.isNonRootMotherArenaType(*unwrapped)){
+            field.usesClassArena = true;
+            field.arenaFirstDefaultInit = true;
+            inOutNeedsClassArena = true;
+            return;
+        }
+        if(unwrapped && layoutAnalyzer.isFixedArrayNeedingArenaDefaultInit(*unwrapped)){
+            field.usesClassArena = true;
+            inOutNeedsClassArena = true;
+            return;
+        }
+        if(layoutAnalyzer.requiresMotherArena(fieldType))
+            inOutNeedsClassArena = true;
     }
 }
 
@@ -379,7 +399,7 @@ b8 LayoutOptimizer::computeClassLayout(ClassDecl& classDecl, MVector<ParseError>
             return false;
         }
 
-        markFieldArenaUsage(*field->type, *field, classDecl);
+        markFieldArenaUsage(*field->type, *field, classDecl, classDecl.needsClassArena);
 
         if(classDecl.isSerialize && !field->isTransient){
             MStringView serializeErr;
@@ -392,11 +412,12 @@ b8 LayoutOptimizer::computeClassLayout(ClassDecl& classDecl, MVector<ParseError>
         classDecl.orderedFields.push_back(field);
     }
 
-    finalizeClassFieldLayouts(classDecl.isSerialize, !classDecl.implementedInterfaces.empty(), classDecl.orderedFields, classDecl.totalSize, classDecl.totalAlign);
+    const b8 hasMotherArenaPointer = !classDecl.isSerialize && !classDecl.isArenaOwner && classDecl.subsystemTypeName.empty() && classDecl.componentAssetTypeName.empty() && classDecl.needsClassArena;
+    finalizeClassFieldLayouts(classDecl.isSerialize, !classDecl.implementedInterfaces.empty(), hasMotherArenaPointer, classDecl.orderedFields, classDecl.totalSize, classDecl.totalAlign);
     return true;
 }
 
-void LayoutOptimizer::finalizeClassFieldLayouts(const b8 isSerialize, const b8 hasVtablePointer, MVector<FieldDecl*>& orderedFields, usize& outTotalSize, usize& outTotalAlign)const noexcept{
+void LayoutOptimizer::finalizeClassFieldLayouts(const b8 isSerialize, const b8 hasVtablePointer, const b8 hasMotherArenaPointer, MVector<FieldDecl*>& orderedFields, usize& outTotalSize, usize& outTotalAlign)const noexcept{
     const b8 packSerialize = isSerialize && TypeLayoutAnalyzer(m_symbols).shouldPackSerializeClass(orderedFields);
     for(FieldDecl* field : orderedFields){
         if(!field || !field->type)
@@ -407,7 +428,8 @@ void LayoutOptimizer::finalizeClassFieldLayouts(const b8 isSerialize, const b8 h
         field->resolvedSize = fieldSize;
         field->resolvedAlign = (packSerialize && !field->isTransient) ? 1u : fieldAlign;
     }
-    SortAndPackFields(isSerialize, packSerialize, hasVtablePointer, orderedFields, outTotalSize, outTotalAlign);
+    const usize headerPointerCount = (hasVtablePointer ? 1u : 0u) + (hasMotherArenaPointer ? 1u : 0u);
+    SortAndPackFields(isSerialize, packSerialize, headerPointerCount, orderedFields, outTotalSize, outTotalAlign);
 }
 
 

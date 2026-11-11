@@ -93,6 +93,7 @@ class StressM4QueueInfoSnapshot{
     public b8 graphicsSupported = false;
 }
 
+[arena]
 class StressTestSmokeProjectImpl : IProjectEntryCallbacks{
     public StressTestSmokeProjectImpl(mut ProjectRuntimeContext context){
         this.m_context = context;

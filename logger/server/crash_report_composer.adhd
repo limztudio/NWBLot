@@ -31,6 +31,17 @@ namespace LoggerCrashSymbolicateDetail{
 class CrashReportComposer final{
 public:
     [[nodiscard]] static CrashReportText BuildOrderedCrashReport(const CrashPackageSummary& summary, Core::Alloc::ScratchArena& scratchArena, CrashReportText&& detailReport);
+
+    template<typename ArenaT>
+        requires (!IsSame_V<ArenaT, LogArena>)
+    [[nodiscard]] static NWB_INLINE AString<ArenaT> BuildOrderedCrashReport(const CrashPackageSummary& summary, Core::Alloc::ScratchArena& scratchArena, AString<ArenaT>&& detailReport){
+        ArenaT& outArena = detailReport.get_allocator().arena();
+        const AString<ArenaT> sourceReport(Move(detailReport));
+        LogArena tempArena(scratchArena.allocationLog());
+        CrashReportText tempDetail(AStringView(sourceReport), tempArena);
+        const CrashReportText ordered = BuildOrderedCrashReport(summary, scratchArena, Move(tempDetail));
+        return AString<ArenaT>(AStringView(ordered), outArena);
+    }
 };
 
 
@@ -228,9 +239,11 @@ namespace LoggerCrashSymbolicateDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CrashReportText CrashReportComposer::BuildOrderedCrashReport(const CrashPackageSummary& summary, [[maybe_unused]] Core::Alloc::ScratchArena& scratchArena, CrashReportText&& detailReport){
+CrashReportText CrashReportComposer::BuildOrderedCrashReport(const CrashPackageSummary& summary, Core::Alloc::ScratchArena& scratchArena, CrashReportText&& detailReport){
+    LogArena& outArena = detailReport.get_allocator().arena();
     const CrashReportText sourceReport(Move(detailReport));
-    return BuildOrderedCrashReportText(summary.triggerExpression, summary.triggerMessage, summary.triggerFile, summary.triggerLine, sourceReport);
+    const AString<::ArenaBase> ordered = BuildOrderedCrashReportText(scratchArena, summary.triggerExpression, summary.triggerMessage, summary.triggerFile, summary.triggerLine, sourceReport);
+    return CrashReportText(AStringView(ordered), outArena);
 }
 
 

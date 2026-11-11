@@ -147,6 +147,7 @@ VectorSingle BuildCsgSkinnedCutterWorldRotation(in f32 animationTime, in VectorS
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[arena]
 class CsgSkinnedVisibleSmokeProject : IProjectEntryCallbacks{
     public CsgSkinnedVisibleSmokeProject(mut ProjectRuntimeContext context){
         this.m_context = context;

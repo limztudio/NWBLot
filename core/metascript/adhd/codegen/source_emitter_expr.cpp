@@ -3,6 +3,7 @@
 
 
 #include <core/metascript/adhd/ast/builtin_type_semantics.h>
+#include <core/metascript/adhd/sema/type_layout_analyzer.h>
 
 #include "source_emitter.h"
 #include "constructor_argument_emitter.h"
@@ -207,17 +208,28 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
             out.append("static_cast<::u8>(");
         if(expr.derefNotNull)
             out.append("(*(");
-        if(expr.lhs)
-            emitExpr(out, *expr.lhs);
-        if(expr.isMatrixRowIndex)
-            out.append((expr.lhs && SymbolTable::IsSimdRegisterMatrixType(expr.lhs->resolvedSimdType)) ? ".v[" : ".rows[");
-        else if(expr.isVectorRawIndex)
-            out.append(".raw[");
-        else
-            out.push_back('[');
-        if(expr.rhs)
-            emitExpr(out, *expr.rhs);
-        out.push_back(']');
+        if(expr.useAdhdMapIndex){
+            out.append("(::AdhdMapIndex(");
+            if(expr.lhs)
+                emitExpr(out, *expr.lhs);
+            out.append(", ");
+            if(expr.rhs)
+                emitExpr(out, *expr.rhs);
+            out.append("))");
+        }
+        else{
+            if(expr.lhs)
+                emitExpr(out, *expr.lhs);
+            if(expr.isMatrixRowIndex)
+                out.append((expr.lhs && SymbolTable::IsSimdRegisterMatrixType(expr.lhs->resolvedSimdType)) ? ".v[" : ".rows[");
+            else if(expr.isVectorRawIndex)
+                out.append(".raw[");
+            else
+                out.push_back('[');
+            if(expr.rhs)
+                emitExpr(out, *expr.rhs);
+            out.push_back(']');
+        }
         if(expr.derefNotNull)
             out.append("))");
         if(expr.isStringByteMutRef || expr.isStringByteConstRef || expr.isStringByteRead)
@@ -240,9 +252,34 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
             out.append("))");
             break;
         }
-        const MStringView baseCallee = (expr.lhs && expr.lhs->kind == ExprKind::Identifier)
+        MStringView baseCallee = (expr.lhs && expr.lhs->kind == ExprKind::Identifier)
             ? m_symbols.resolveBaseTypeName(expr.lhs->text)
             : MStringView{};
+        MStringView substitutedArena{};
+        if(!m_activeTemplateParams.empty() && expr.lhs && expr.lhs->kind == ExprKind::Identifier && !expr.isBuiltinCall && !m_symbols.findFreeFunction(expr.lhs->text)){
+            TypeRef candidateType(m_arena);
+            candidateType.name = expr.lhs->text;
+            candidateType.templateArgs = expr.callTemplateArgs;
+            if(const TypeRef* subType = m_symbols.substituteTypeParams(candidateType, m_activeTemplateParams, m_activeTemplateArgs)){
+                const TypeLayoutAnalyzer layoutAnalyzer(m_symbols);
+                if(expr.arguments.empty() && layoutAnalyzer.requiresMotherArena(*subType)){
+                    const MStringView targetArena = (m_inFieldInitializer || expr.injectClassArena)
+                        ? activeClassArenaExpr()
+                        : MStringView("__adhd_scratch");
+                    out.append("::AdhdDefaultConstructInArena<");
+                    m_typeEmitter.emitTypeCpp(out, *subType);
+                    out.append(">(");
+                    out.append(targetArena.data(), targetArena.size());
+                    out.push_back(')');
+                    break;
+                }
+                const MStringView subBase = m_symbols.resolveBaseTypeName(subType->name);
+                if(SymbolTable::IsArenaBackedContainer(subBase) || layoutAnalyzer.isNonRootMotherArenaType(*subType)){
+                    baseCallee = subBase;
+                    substitutedArena = m_inFieldInitializer ? activeClassArenaExpr() : MStringView("__adhd_scratch");
+                }
+            }
+        }
         if((SymbolTable::IsSimdStorageType(baseCallee) || SymbolTable::IsUnalignedVectorType(baseCallee)) && !expr.arguments.empty()){
             MString storeCallStr(m_arena);
             if(SimdStorageEmitter(*this).tryEmit(storeCallStr, baseCallee, expr.arguments, "__adhd_tmp")){
@@ -264,12 +301,10 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
             out.append("static_cast<::u8>(");
         if(expr.derefNotNull)
             out.append("(*");
-        emitCallTargetExpr(out, expr.lhs, expr.isBuiltinCall);
-        if(!expr.callTemplateArgs.empty())
-            m_typeEmitter.emitTypeArgListCpp(out, expr.callTemplateArgs);
+        emitCallTargetExpr(out, expr.lhs, expr.isBuiltinCall, expr.callTemplateArgs);
         const MStringView injectedArena = expr.injectClassArena
-            ? MStringView("s_ClassArena")
-            : (expr.injectScratchArena ? MStringView("__adhd_scratch") : MStringView{});
+            ? activeClassArenaExpr()
+            : (expr.injectScratchArena ? MStringView("__adhd_scratch") : substitutedArena);
         ConstructorArgumentEmitter(*this).emit(out, baseCallee, expr.arguments, injectedArena, false, false);
         if(expr.unwrapSimdResultValue)
             out.append(".value");
@@ -308,6 +343,59 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
             if(expr.rhs)
                 emitExpr(out, *expr.rhs);
             out.append(omitOuterBinaryParens ? "))" : ")))");
+            break;
+        }
+        b8 subOptionalClassAssign = false;
+        b8 subAdhdAssign = false;
+        if(
+            !m_activeTemplateParams.empty()
+            && expr.op == TokenType::Equal
+            && !expr.isNotNullRebind
+            && !expr.useAdhdOptionalClassAssign
+            && !expr.useAdhdOptionalScratchAssign
+            && !expr.useAdhdAssign
+            && expr.lhs
+            && expr.lhs->kind == ExprKind::ThisMember
+        ){
+            for(const FieldDecl* field : m_activeOrderedFields){
+                if(field && field->name == expr.lhs->text && field->usesClassArena && field->type){
+                    const TypeRef* unwrapped = m_symbols.unwrapTypeAlias(field->type);
+                    const BuiltinGenericTypeInfo* genericInfo = unwrapped ? FindBuiltinGenericType(unwrapped->name) : nullptr;
+                    if(genericInfo && genericInfo->inlineLayoutKind == InlineLayoutKind::Optional)
+                        subOptionalClassAssign = true;
+                    else
+                        subAdhdAssign = true;
+                    break;
+                }
+            }
+        }
+        if(expr.useAdhdOptionalClassAssign || expr.useAdhdOptionalScratchAssign || subOptionalClassAssign){
+            const b8 locked = (m_parallelWorkerDepth > 0u);
+            if(!omitOuterBinaryParens)
+                out.push_back('(');
+            out.append(locked ? "::AdhdAssignOptionalLocked(__adhd_parallel_arena_mutex, " : "::AdhdAssignOptional(");
+            const MStringView targetArena = (expr.useAdhdOptionalClassAssign || subOptionalClassAssign) ? activeClassArenaExpr() : MStringView("__adhd_scratch");
+            out.append(targetArena.data(), targetArena.size());
+            out.append(", ");
+            if(expr.lhs)
+                emitExpr(out, *expr.lhs);
+            out.append(", ");
+            if(expr.rhs)
+                emitExpr(out, *expr.rhs);
+            out.append(omitOuterBinaryParens ? ")" : "))");
+            break;
+        }
+        if(expr.useAdhdAssign || subAdhdAssign){
+            const b8 locked = (m_parallelWorkerDepth > 0u);
+            if(!omitOuterBinaryParens)
+                out.push_back('(');
+            out.append(locked ? "::AdhdAssignLocked(__adhd_parallel_arena_mutex, " : "::AdhdAssign(");
+            if(expr.lhs)
+                emitExpr(out, *expr.lhs);
+            out.append(", ");
+            if(expr.rhs)
+                emitExpr(out, *expr.rhs);
+            out.append(omitOuterBinaryParens ? ")" : "))");
             break;
         }
         if(expr.op == TokenType::AmpersandAmpersand || expr.op == TokenType::PipePipe){
@@ -447,7 +535,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
             }
         }
         out.push_back(']');
-        m_typeEmitter.emitParamListCpp(out, expr.lambdaParams);
+        m_typeEmitter.emitParamListCpp(out, expr.lambdaParams, expr.lambdaInjectsCallerArena);
         out.append("noexcept -> ");
         if(expr.lambdaReturnType)
             m_typeEmitter.emitTypeCpp(out, *expr.lambdaReturnType);
@@ -457,36 +545,55 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
         if(statementsNeedSimdFloatingPointEnv(expr.lambdaBody))
             out.append("#pragma STDC FENV_ACCESS ON\r\n");
         emitUnusedParamSuppressions(out, expr.lambdaParams, expr.lambdaBody, 2u);
-        if(expr.lambdaUsesScratchArena)
+        if(expr.lambdaInjectsCallerArena){
+            emitIndent(out, 2u);
+            if(expr.lambdaUsesScratchArena)
+                out.append("::ArenaBase& __adhd_scratch = __adhd_caller_arena;\r\n");
+            else
+                out.append("(void)__adhd_caller_arena;\r\n");
+        }
+        else if(expr.lambdaUsesScratchArena){
             emitScratchArenaPrologue(out, 2u, "lambda");
+        }
         if(expr.lambdaUsesTaskScope)
             ParallelStatementEmitter(*this).emitTaskScopePrologue(out, 2u);
+        const TypeRef* prevLambdaCallerRet = m_activeCallerArenaReturnType;
+        const u32 prevLambdaParallelDepth = m_parallelWorkerDepth;
         const u32 prevSwitchBreak = m_activeSwitchBreakLabelLine;
+        m_activeCallerArenaReturnType = expr.lambdaInjectsCallerArena ? expr.lambdaReturnType : nullptr;
+        m_parallelWorkerDepth = 0u;
         m_activeSwitchBreakLabelLine = 0u;
         emitStatementList(out, expr.lambdaBody, 2u);
         m_activeSwitchBreakLabelLine = prevSwitchBreak;
+        m_parallelWorkerDepth = prevLambdaParallelDepth;
+        m_activeCallerArenaReturnType = prevLambdaCallerRet;
         out.append("    }");
         break;
     }
     }
 }
 
-void SourceEmitter::emitCallTargetExpr(MString& out, const Expr* lhs, const b8 isBuiltinCall)const{
+void SourceEmitter::emitCallTargetExpr(MString& out, const Expr* lhs, const b8 isBuiltinCall, const Span<const TypeArg> callTemplateArgs)const{
     if(!lhs)
         return;
     if(lhs->kind == ExprKind::Identifier){
         const MStringView mappedMath = isBuiltinCall ? MapBuiltinMathFunction(lhs->text) : MStringView{};
         if(!mappedMath.empty()){
             out.append(mappedMath.data(), mappedMath.size());
+            if(!callTemplateArgs.empty())
+                m_typeEmitter.emitTypeArgListCpp(out, callTemplateArgs);
         }
         else{
             TypeRef maybeType(m_arena);
             maybeType.name = lhs->text;
+            maybeType.templateArgs.assign(callTemplateArgs.begin(), callTemplateArgs.end());
             m_typeEmitter.emitTypeCpp(out, maybeType);
         }
     }
     else{
         emitExpr(out, *lhs);
+        if(!callTemplateArgs.empty())
+            m_typeEmitter.emitTypeArgListCpp(out, callTemplateArgs);
     }
 }
 

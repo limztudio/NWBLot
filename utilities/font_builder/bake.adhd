@@ -491,7 +491,7 @@ b8 PackGlyphs(const BakeOptions& options, const Span<const RasterGlyph> glyphs, 
     outPayload.glyphs.reserve(glyphs.size());
     for(const RasterGlyph& glyph : glyphs)
         outPayload.glyphs.push_back(glyph.record);
-    const ::Vector<u32> order = BuildSortedDrawableGlyphOrder(outPayload.glyphs);
+    const ::Vector<u32, ::ArenaBase> order = BuildSortedDrawableGlyphOrder(scratch, outPayload.glyphs);
     Array<Shelf, s_MaxBakeShelfPages> shelves{};
     u32 lastPage = 0u;
     for(const u32 index : order){

@@ -65,6 +65,7 @@ const SmokeMeshRef s_CsgShadowPlaneMesh = "project/meshes/shadow_plane";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[arena]
 class CsgShadowSmokeProjectImpl : IProjectEntryCallbacks{
     public CsgShadowSmokeProjectImpl(mut ProjectRuntimeContext context){
         this.m_context = context;

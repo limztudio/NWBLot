@@ -73,7 +73,7 @@ class UiRadioGroupSmokeScene{
 
 
 class UiSearchComboSmokeScene{
-    private UiSearchComboSmokeSource m_source = UiSearchComboSmokeSource();
+    private UiSearchComboSmokeSource m_source;
     private SearchComboState m_state;
     private EditBoxView m_selectionView;
     private ScrollPlacement m_lastPlacement = ScrollPlacement();
@@ -879,6 +879,7 @@ void UiRadioGroupSmokeScene::paintMarkers(mut UiPaintContext context)const{
 
 
 UiSearchComboSmokeScene::UiSearchComboSmokeScene(mut GlobalArena arena){
+    this.m_source = UiSearchComboSmokeSource(arena);
     this.m_state = SearchComboState(arena);
     this.m_selectionView = EditBoxView(arena);
 }

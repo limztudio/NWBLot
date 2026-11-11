@@ -48,6 +48,18 @@ public:
 
 [[nodiscard]] Expected<FontCookEntry> ParseFontCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<FontCookEntry> ParseFontCookMetadataValue(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena);
+
+template<typename RootArenaT, typename FileArenaT>
+    requires (!IsSame_V<RootArenaT, Core::Alloc::GlobalArena> || !IsSame_V<FileArenaT, Core::Alloc::GlobalArena>)
+[[nodiscard]] NWB_INLINE Expected<FontCookEntry> ParseFontCookMetadata(const ::Path<RootArenaT>& assetRoot, const AStringView virtualRoot, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+    return ParseFontCookMetadata(Path(arena, assetRoot), virtualRoot, Path(arena, nwbFilePath), doc, arena, scratchArena);
+}
+
+template<typename FileArenaT>
+    requires (!IsSame_V<FileArenaT, Core::Alloc::GlobalArena>)
+[[nodiscard]] NWB_INLINE Expected<FontCookEntry> ParseFontCookMetadataValue(const Name virtualPath, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena){
+    return ParseFontCookMetadataValue(virtualPath, Path(arena, nwbFilePath), asset, arena);
+}
 [[nodiscard]] Expected<Font> BuildFontAsset(FontCookEntry&& entry, Core::Assets::AssetArena& arena);
 
 

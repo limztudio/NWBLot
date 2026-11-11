@@ -190,6 +190,7 @@ f32 FrozenYaw(){
     return ReadSmokeFrozenYawCached("NWB_SOFT_SHADOW_TEST_SPIN_ANGLE");
 }
 
+[arena]
 class SoftShadowTestSmokeProject : IProjectEntryCallbacks{
 
     public SoftShadowTestSmokeProject(mut ProjectRuntimeContext context){

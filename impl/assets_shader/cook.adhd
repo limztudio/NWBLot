@@ -554,7 +554,7 @@ static Expected<ScratchString> BuildCanonicalDependencyPath(const Path& dependen
     const auto capacity = TryComputeCanonicalAliasedDependencyPathCapacity(pathPrefix.size(), bestRootAlias->key.size(), relativePathText.size());
     if(!capacity)
         return MakeUnexpected(Failure{});
-    const auto formattedPath = FormatCanonicalAliasedDependencyPath(pathPrefix, bestRootAlias->key, relativePathText);
+    const auto formattedPath = FormatCanonicalAliasedDependencyPath(scratchArena, pathPrefix, bestRootAlias->key, relativePathText);
     return ScratchString(AStringView(formattedPath), scratchArena);
 }
 

@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[arena]
 class UiLayerSmokeProject : IProjectEntryCallbacks{
     private NotNullUniquePtr<World> m_world;
     private UniquePtr<FramebufferCapture> m_framebufferCapture = UniquePtr<FramebufferCapture>();

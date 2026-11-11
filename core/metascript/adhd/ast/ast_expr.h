@@ -152,6 +152,11 @@ struct Expr{
     b8 injectClassArena = false;
     b8 lambdaUsesScratchArena = false;
     b8 lambdaUsesTaskScope = false;
+    b8 lambdaInjectsCallerArena = false;
+    b8 useAdhdAssign = false;
+    b8 useAdhdOptionalClassAssign = false;
+    b8 useAdhdOptionalScratchAssign = false;
+    b8 useAdhdMapIndex = false;
     b8 hasMutLocalCapture = false;
     b8 hasMutContainerCapture = false;
     b8 isVectorRawIndex = false;

@@ -42,6 +42,7 @@ void HeaderPreambleEmitter::Emit(MString& out, const TranslationUnit& unit, cons
         out.append("#include <core/alloc/global.h>\r\n");
         out.append("#include <core/alloc/general.h>\r\n");
         out.append("#include <core/alloc/scratch.h>\r\n");
+        out.append("#include <core/alloc/adhd_arena.h>\r\n");
         out.append("#include <core/assets/ref.h>\r\n");
         out.append("#include <core/ecs/entity_id.h>\r\n");
         if(namespacePath == "NWB::Impl::Scene")
@@ -50,18 +51,37 @@ void HeaderPreambleEmitter::Emit(MString& out, const TranslationUnit& unit, cons
             out.append("#include <impl/global.adhd.h>\r\n");
     }
 
+    const auto stmtsUseDiagnostic = [](const auto& self, const Span<const Stmt* const> stmts)noexcept -> b8{
+        for(const Stmt* s : stmts){
+            if(!s)
+                continue;
+            if(s->kind == StmtKind::Diagnostic)
+                return true;
+            if(self(self, s->statements) || self(self, s->elseStatements))
+                return true;
+            for(const SwitchCase& sc : s->switchCases){
+                if(self(self, sc.statements))
+                    return true;
+            }
+        }
+        return false;
+    };
+
     b8 hasSubsystemDecl = false;
     b8 hasComponentAssetDecl = false;
     b8 hasHeaderTaskScope = false;
+    b8 hasHeaderDiagnostic = false;
     for(const ClassDecl* classDecl : unit.classes){
         if(!classDecl)
             continue;
         for(const MethodDecl* method : classDecl->methods){
-            if(!method || method->isImported || !method->hasBody || !method->usesTaskScope)
+            if(!method || method->isImported || !method->hasBody)
                 continue;
-            if(!classDecl->templateParams.empty() || !method->templateParams.empty() || method->isInline){
-                hasHeaderTaskScope = true;
-                break;
+            if(!classDecl->templateParams.empty() || !method->templateParams.empty() || method->isInline || method->hasSynthesizedArenaParams){
+                if(method->usesTaskScope)
+                    hasHeaderTaskScope = true;
+                if(!hasHeaderDiagnostic && stmtsUseDiagnostic(stmtsUseDiagnostic, method->body))
+                    hasHeaderDiagnostic = true;
             }
         }
         if(classDecl->isImported)
@@ -75,13 +95,17 @@ void HeaderPreambleEmitter::Emit(MString& out, const TranslationUnit& unit, cons
         out.append("#include <impl/assets_subsystem/asset.adhd.h>\r\n");
     if(hasComponentAssetDecl)
         out.append("#include <impl/assets_scene/components.adhd.h>\r\n");
-    if(!hasHeaderTaskScope){
-        for(const MethodDecl* fn : unit.freeFunctions){
-            if(fn && !fn->isImported && fn->hasBody && fn->usesTaskScope && (fn->isInline || !fn->templateParams.empty())){
+    for(const MethodDecl* fn : unit.freeFunctions){
+        if(fn && !fn->isImported && fn->hasBody && (fn->isInline || !fn->templateParams.empty() || fn->hasSynthesizedArenaParams)){
+            if(fn->usesTaskScope)
                 hasHeaderTaskScope = true;
-                break;
-            }
+            if(!hasHeaderDiagnostic && stmtsUseDiagnostic(stmtsUseDiagnostic, fn->body))
+                hasHeaderDiagnostic = true;
         }
+    }
+    if(hasHeaderDiagnostic){
+        out.append("#include <global/assert.h>\r\n");
+        out.append("#include <core/common/log.h>\r\n");
     }
     if(hasHeaderTaskScope)
         out.append("#include <core/task/cpu/scheduler.h>\r\n");

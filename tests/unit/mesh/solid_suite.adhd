@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_mesh/cook_solid_topology.adhd>
 #include <tests/common/capturing_logger.adhd>
 #include <tests/common/gtest_macros.adhd>
 #include <tests/unit/mesh/solid_test_types.adhd>

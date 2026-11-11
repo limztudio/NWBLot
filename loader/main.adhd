@@ -207,8 +207,7 @@ int RunProjectRuntime(NWB::Core::Alloc::ScratchArena& scratchArena, const Loader
         if(telemetryClient)
             frame.setTelemetryUploadCallback(&UploadTelemetry, telemetryClient);
         frame.graphics().setWindowTitle(projectWindowTitle);
-        (void)scratchArena;
-        auto resourceDirectoryResult = ResolveResourceMountDirectory([](const NWB::Path& directory, const AStringView volumeName) -> Expected<b8, ErrorCode>{
+        auto resourceDirectoryResult = ResolveResourceMountDirectory(scratchArena, [](const ::Path<::ArenaBase>& directory, const AStringView volumeName) -> Expected<b8, ErrorCode>{
             return NWB::Core::Filesystem::VolumeSegmentExists(directory, volumeName);
         });
         if(resourceDirectoryResult)

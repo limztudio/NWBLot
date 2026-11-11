@@ -182,47 +182,14 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_FontAssetCodecAutoRegistrar, FontAssetCodec);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Unexpected<AStringView> ReadFailure(const Path& path, const AStringView reason){
+template<typename PathArenaT>
+[[nodiscard]] static Unexpected<AStringView> ReadFailure(const ::Path<PathArenaT>& path, const AStringView reason){
     LogPreparedFontReadFailure(path, reason);
     return MakeUnexpected(reason);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ValidateFontSource(const Core::Assets::AssetBytes& bytes, const u32 faceIndex){
-    FreeTypeMemoryFace validator(bytes.get_allocator().arena());
-    return validator.openAndValidate(Span<const u8>(bytes), faceIndex);
-}
-
-b8 Font::loadBinary(const Span<const u8> binary){
-    Font candidate(m_fontBytes.get_allocator().arena(), virtualPath());
-    if(!FontBinaryCodec{}.deserialize(binary, candidate.m_fontBytes, candidate.m_faceIndex))
-        return false;
-    if(!candidate.validatePayload())
-        return false;
-    *this = Move(candidate);
-    return true;
-}
-
-Expected<Core::Assets::AssetBytes, AStringView> SerializePreparedFontSource(const BinaryByteView sfnt, const u32 faceIndex, const Span<const PreparedFontImageView> groups, Core::Assets::AssetArena& arena){
-    const Expected<u64, AStringView> expectedPayloadBytes = PreparedFontBinaryCodec{}.validateSerializeInputs(sfnt.size(), sfnt.data() != nullptr, faceIndex, groups);
-    if(!expectedPayloadBytes)
-        return MakeUnexpected(expectedPayloadBytes.error());
-    Core::Assets::AssetBytes binary(arena);
-    PreparedFontBinaryCodec{}.appendSourceBinary(Span<const u8>(sfnt.data(), sfnt.size()), faceIndex, groups, *expectedPayloadBytes, binary);
-    return binary;
-}
-
-Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& path, const b8 includePixels, Core::Assets::AssetArena& arena){
-    using namespace __hidden_font_runtime;
+template<typename PathArenaT>
+[[nodiscard]] static Expected<PreparedFontSource, AStringView> ReadPreparedFontSourceImpl(const ::Path<PathArenaT>& path, const b8 includePixels, Core::Assets::AssetArena& arena){
     InputFileStream stream(path, InputFileStream::binary);
     if(!stream.is_open())
         return ReadFailure(path, s_PreparedFontOpenFailedReason);
@@ -296,6 +263,48 @@ Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& pat
     if(!VerifyStreamAtEnd(stream))
         return ReadFailure(path, s_PreparedFontChangedDuringReadReason);
     return candidate;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ValidateFontSource(const Core::Assets::AssetBytes& bytes, const u32 faceIndex){
+    FreeTypeMemoryFace validator(bytes.get_allocator().arena());
+    return validator.openAndValidate(Span<const u8>(bytes), faceIndex);
+}
+
+b8 Font::loadBinary(const Span<const u8> binary){
+    Font candidate(m_fontBytes.get_allocator().arena(), virtualPath());
+    if(!FontBinaryCodec{}.deserialize(binary, candidate.m_fontBytes, candidate.m_faceIndex))
+        return false;
+    if(!candidate.validatePayload())
+        return false;
+    *this = Move(candidate);
+    return true;
+}
+
+Expected<Core::Assets::AssetBytes, AStringView> SerializePreparedFontSource(const BinaryByteView sfnt, const u32 faceIndex, const Span<const PreparedFontImageView> groups, Core::Assets::AssetArena& arena){
+    const Expected<u64, AStringView> expectedPayloadBytes = PreparedFontBinaryCodec{}.validateSerializeInputs(sfnt.size(), sfnt.data() != nullptr, faceIndex, groups);
+    if(!expectedPayloadBytes)
+        return MakeUnexpected(expectedPayloadBytes.error());
+    Core::Assets::AssetBytes binary(arena);
+    PreparedFontBinaryCodec{}.appendSourceBinary(Span<const u8>(sfnt.data(), sfnt.size()), faceIndex, groups, *expectedPayloadBytes, binary);
+    return binary;
+}
+
+Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& path, const b8 includePixels, Core::Assets::AssetArena& arena){
+    return __hidden_font_runtime::ReadPreparedFontSourceImpl(path, includePixels, arena);
+}
+
+Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const ::Path<::ArenaBase>& path, const b8 includePixels, Core::Assets::AssetArena& arena){
+    return __hidden_font_runtime::ReadPreparedFontSourceImpl(path, includePixels, arena);
 }
 
 

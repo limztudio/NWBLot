@@ -30,7 +30,7 @@ const StringView s_UiPopupToolsSentinelKey = "sentinel";
 
 // Every nested state is a member and remains lent through the outermost endPopup.
 class UiNestedPopupSmokeScene{
-    private UiNestedPopupSmokeSource m_source = UiNestedPopupSmokeSource();
+    private UiNestedPopupSmokeSource m_source;
     private PopupState m_parent = PopupState();
     private PopupState m_child = PopupState();
     private ListState m_beforeList = ListState();
@@ -329,6 +329,7 @@ void ObserveNestedPopupSmokeTargets(
 
 
 UiNestedPopupSmokeScene::UiNestedPopupSmokeScene(mut GlobalArena arena){
+    this.m_source = UiNestedPopupSmokeSource(arena);
     this.m_search = SearchComboState(arena);
     this.m_beforeText = EditModel(arena);
     this.m_afterText = EditModel(arena);

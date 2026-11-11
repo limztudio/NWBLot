@@ -22,13 +22,13 @@ enum<u32> SkeletonSkinningMode{
     DualQuaternion = 1u
 }
 
-[reflect]
+[arena, reflect]
 class SkeletonJointPaletteComponent{
     public Vector<SkeletonJointMatrix> joints;
     public u32 skinningMode = cast<u32>(SkeletonSkinningMode::LinearBlend);
 }
 
-[reflect]
+[arena, reflect]
 class SkeletonPoseComponent{
     public Vector<u32> parentJoints;
     public Vector<SkeletonJointMatrix> localJoints;

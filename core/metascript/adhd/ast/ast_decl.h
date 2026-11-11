@@ -116,6 +116,8 @@ struct MethodDecl{
     b8 isReflect = false;
     b8 usesScratchArena = false;
     b8 usesTaskScope = false;
+    b8 injectsCallerArena = false;
+    b8 hasSynthesizedArenaParams = false;
     b8 isImported = false;
 
 
@@ -170,6 +172,7 @@ struct ClassDecl{
     usize totalAlign = 1u;
     b8 isSerialize = false;
     b8 isReflect = false;
+    b8 isArenaOwner = false;
     b8 needsClassArena = false;
     b8 isImported = false;
 
@@ -194,6 +197,7 @@ struct ClassTemplateInstantiation{
     MVector<FieldDecl*> orderedFields;
     usize totalSize = 1u;
     usize totalAlign = 1u;
+    b8 needsClassArena = false;
     b8 isImported = false;
 
 

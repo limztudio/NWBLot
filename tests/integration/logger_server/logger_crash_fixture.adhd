@@ -209,6 +209,12 @@ template<typename ArenaT>
 
 
 [[nodiscard]] Expected<CrashTestPath, ErrorCode> WaitForTriggerPackage(GlobalArena& arena, const CrashTestPath& pendingDirectory, AStringView category, AStringView expression, AStringView message, AStringView file);
+
+template<typename DirArenaT>
+    requires (!IsSame_V<DirArenaT, GlobalArena>)
+[[nodiscard]] NWB_INLINE Expected<CrashTestPath, ErrorCode> WaitForTriggerPackage(GlobalArena& arena, const ::Path<DirArenaT>& pendingDirectory, const AStringView category, const AStringView expression, const AStringView message, const AStringView file){
+    return WaitForTriggerPackage(arena, CrashTestPath(arena, pendingDirectory), category, expression, message, file);
+}
 void PreserveObservedReport(GlobalArena& arena, AStringView report, AStringView suffix);
 
 
@@ -390,6 +396,12 @@ void AppendDecimalText(u64 value, CrashTestText& outText);
 [[nodiscard]] Expected<b8, ErrorCode> LinuxExternalSymbolizerAvailable(GlobalArena& arena);
 void LinuxSilenceExpectedCrashChildConsole();
 [[nodiscard]] b8 PendingDirectoryContainsManifestTexts(GlobalArena& arena, const CrashTestPath& pendingDirectory, AStringView firstNeedle, AStringView secondNeedle);
+
+template<typename DirArenaT>
+    requires (!IsSame_V<DirArenaT, GlobalArena>)
+[[nodiscard]] NWB_INLINE b8 PendingDirectoryContainsManifestTexts(GlobalArena& arena, const ::Path<DirArenaT>& pendingDirectory, const AStringView firstNeedle, const AStringView secondNeedle){
+    return PendingDirectoryContainsManifestTexts(arena, CrashTestPath(arena, pendingDirectory), firstNeedle, secondNeedle);
+}
 [[nodiscard]] AStringView LinuxObservableAssertCategory()noexcept;
 NWB_NOINLINE void LinuxForceAssertFalseForCrashObservation();
 #endif

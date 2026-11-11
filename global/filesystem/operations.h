@@ -489,8 +489,8 @@ template<typename ArenaT>
     return MakeUnexpected(LastSystemError());
 }
 
-template<typename ArenaT>
-[[nodiscard]] inline Expected<void, ErrorCode> RenamePath(const Path<ArenaT>& from, const Path<ArenaT>& to)noexcept{
+template<typename FromArenaT, typename ToArenaT>
+[[nodiscard]] NWB_INLINE Expected<void, ErrorCode> RenamePath(const Path<FromArenaT>& from, const Path<ToArenaT>& to)noexcept{
 #if defined(NWB_PLATFORM_WINDOWS)
     if(MoveFileEx(from.c_str(), to.c_str(), MOVEFILE_REPLACE_EXISTING))
 #else

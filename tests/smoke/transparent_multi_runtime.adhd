@@ -76,6 +76,7 @@ class FrameLaggedAsyncLightingToggleInputHandler : IInputEventHandler{
     private b8 m_toggleRequested = false;
 }
 
+[arena]
 class TransparentMultiSmokeProjectImpl : IProjectEntryCallbacks{
     public TransparentMultiSmokeProjectImpl(mut ProjectRuntimeContext context){
         this.m_context = context;

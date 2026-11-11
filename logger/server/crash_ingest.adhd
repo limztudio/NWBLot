@@ -62,6 +62,12 @@ public:
 
 [[nodiscard]] CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, const CrashIngestConfig& config);
 
+template<typename ArchiveArenaT>
+    requires (!IsSame_V<ArchiveArenaT, LogArena>)
+[[nodiscard]] NWB_INLINE CrashIngestResult ProcessCrashUpload(LogArena& arena, const ::Path<ArchiveArenaT>& archivePath, const CrashIngestConfig& config){
+    return ProcessCrashUpload(arena, Path(arena, archivePath), config);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -227,9 +233,9 @@ using CrashText = CrashReportText;
         return MakeUnexpected(MakeCrashIngestCodeFailure("missing manifest.json", read.error()));
 
     const AStringView manifestText(manifest.data(), manifest.size());
-    const auto manifestFormat = FindGeneratedCrashJsonStringValue(manifestText, Core::Crash::PackageNames::s_ManifestFormatKey);
-    const auto requireString = [manifestText](const AStringView key){
-        return FindGeneratedCrashJsonStringValue(manifestText, key);
+    const auto manifestFormat = FindGeneratedCrashJsonStringValue(scratchArena, manifestText, Core::Crash::PackageNames::s_ManifestFormatKey);
+    const auto requireString = [&scratchArena, manifestText](const AStringView key){
+        return FindGeneratedCrashJsonStringValue(scratchArena, manifestText, key);
     };
     const auto requireUnsigned = [manifestText](const AStringView key){
         return FindGeneratedCrashJsonUnsignedValue(manifestText, key);
@@ -237,17 +243,17 @@ using CrashText = CrashReportText;
     const auto requireBool = [manifestText](const AStringView key){
         return FindGeneratedCrashJsonBoolValue(manifestText, key);
     };
-    auto crashId = FindGeneratedCrashJsonStringValue(manifestText, Core::Crash::PackageNames::s_ManifestCrashIdKey);
-    auto platform = FindGeneratedCrashJsonStringValue(manifestText, Core::Crash::PackageNames::s_ManifestPlatformKey);
-    auto reasonKind = FindGeneratedCrashJsonStringValue(manifestText, Core::Crash::PackageNames::s_ManifestReasonKindKey);
+    auto crashId = FindGeneratedCrashJsonStringValue(scratchArena, manifestText, Core::Crash::PackageNames::s_ManifestCrashIdKey);
+    auto platform = FindGeneratedCrashJsonStringValue(scratchArena, manifestText, Core::Crash::PackageNames::s_ManifestPlatformKey);
+    auto reasonKind = FindGeneratedCrashJsonStringValue(scratchArena, manifestText, Core::Crash::PackageNames::s_ManifestReasonKindKey);
     auto reasonCode = FindGeneratedCrashJsonUnsignedValue(manifestText, Core::Crash::PackageNames::s_ManifestReasonCodeKey);
     auto threadId = FindGeneratedCrashJsonUnsignedValue(manifestText, Core::Crash::PackageNames::s_ManifestThreadIdKey);
-    auto event = FindGeneratedCrashJsonStringValue(manifestText, Core::Crash::PackageNames::s_ManifestEventKey);
-    auto triggerExpression = FindGeneratedCrashJsonStringValue(manifestText, Core::Crash::PackageNames::s_ManifestTriggerExpressionKey);
-    auto triggerMessage = FindGeneratedCrashJsonStringValue(manifestText, Core::Crash::PackageNames::s_ManifestTriggerMessageKey);
-    auto triggerFile = FindGeneratedCrashJsonStringValue(manifestText, Core::Crash::PackageNames::s_ManifestTriggerFileKey);
+    auto event = FindGeneratedCrashJsonStringValue(scratchArena, manifestText, Core::Crash::PackageNames::s_ManifestEventKey);
+    auto triggerExpression = FindGeneratedCrashJsonStringValue(scratchArena, manifestText, Core::Crash::PackageNames::s_ManifestTriggerExpressionKey);
+    auto triggerMessage = FindGeneratedCrashJsonStringValue(scratchArena, manifestText, Core::Crash::PackageNames::s_ManifestTriggerMessageKey);
+    auto triggerFile = FindGeneratedCrashJsonStringValue(scratchArena, manifestText, Core::Crash::PackageNames::s_ManifestTriggerFileKey);
     auto triggerLine = FindGeneratedCrashJsonUnsignedValue(manifestText, Core::Crash::PackageNames::s_ManifestTriggerLineKey);
-    auto artifactStrategy = FindGeneratedCrashJsonStringValue(manifestText, Core::Crash::PackageNames::s_ManifestArtifactStrategyKey);
+    auto artifactStrategy = FindGeneratedCrashJsonStringValue(scratchArena, manifestText, Core::Crash::PackageNames::s_ManifestArtifactStrategyKey);
     if(
         !manifestFormat
         || !crashId
@@ -278,17 +284,17 @@ using CrashText = CrashReportText;
         return MakeUnexpected(MakeCrashIngestFailure("manifest.json is missing required fields"));
     }
 
-    outSummary.crashId = Move(*crashId);
-    outSummary.platform = Move(*platform);
-    outSummary.reasonKind = Move(*reasonKind);
+    outSummary.crashId.assign(AStringView(*crashId));
+    outSummary.platform.assign(AStringView(*platform));
+    outSummary.reasonKind.assign(AStringView(*reasonKind));
     outSummary.reasonCode = *reasonCode;
     outSummary.threadId = *threadId;
-    outSummary.event = Move(*event);
-    outSummary.triggerExpression = Move(*triggerExpression);
-    outSummary.triggerMessage = Move(*triggerMessage);
-    outSummary.triggerFile = Move(*triggerFile);
+    outSummary.event.assign(AStringView(*event));
+    outSummary.triggerExpression.assign(AStringView(*triggerExpression));
+    outSummary.triggerMessage.assign(AStringView(*triggerMessage));
+    outSummary.triggerFile.assign(AStringView(*triggerFile));
     outSummary.triggerLine = *triggerLine;
-    outSummary.artifactStrategy = Move(*artifactStrategy);
+    outSummary.artifactStrategy.assign(AStringView(*artifactStrategy));
 
     if(*manifestFormat != Core::Crash::PackageNames::s_ManifestFormatValue)
         return MakeUnexpected(MakeCrashIngestFailure("manifest.json has unsupported crash package format"));

@@ -362,6 +362,8 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
         const ParamPassingMode::Enum elemRefMode = m_symbols.resolveRefMode(indexedElemType);
         if(elemRefMode != ParamPassingMode::None)
             expr.derefNotNull = true;
+        if(!customOpIdx && genericInfo && genericInfo->isReflectedMap && !recvIsConst)
+            expr.useAdhdMapIndex = true;
         if(!customOpIdx && IsStringLikeType(lhsBaseType)){
             if(isMutationTarget){
                 if(!HasMutableStringElements(lhsBaseType)){

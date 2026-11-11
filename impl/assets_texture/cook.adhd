@@ -60,6 +60,18 @@ public:
 
 [[nodiscard]] Expected<TextureCookEntry> ParseTextureCookMetadata(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<TextureCookEntry> ParseTextureCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
+
+template<typename FileArenaT>
+    requires (!IsSame_V<FileArenaT, Core::Alloc::GlobalArena>)
+[[nodiscard]] NWB_INLINE Expected<TextureCookEntry> ParseTextureCookMetadata(const Name virtualPath, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+    return ParseTextureCookMetadata(virtualPath, Path(arena, nwbFilePath), asset, arena, scratchArena);
+}
+
+template<typename RootArenaT, typename FileArenaT>
+    requires (!IsSame_V<RootArenaT, Core::Alloc::GlobalArena> || !IsSame_V<FileArenaT, Core::Alloc::GlobalArena>)
+[[nodiscard]] NWB_INLINE Expected<TextureCookEntry> ParseTextureCookMetadata(const ::Path<RootArenaT>& assetRoot, const AStringView virtualRoot, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+    return ParseTextureCookMetadata(Path(arena, assetRoot), virtualRoot, Path(arena, nwbFilePath), doc, arena, scratchArena);
+}
 [[nodiscard]] Expected<Texture> BuildTextureAsset(const TextureCookEntry& textureEntry, Core::Assets::AssetArena& arena);
 [[nodiscard]] Expected<Texture> BuildTextureAsset(TextureCookEntry&& textureEntry, Core::Assets::AssetArena& arena);
 

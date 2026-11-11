@@ -108,7 +108,7 @@ namespace __hidden_cook_shader_generation{
 using namespace MaterialCookDetail;
 
 using ShadowSurfaceBindNamespaceLookup = HashMap<Name, u32, ScratchArena, Hasher<Name>, EqualTo<Name>>;
-using ShadowSurfaceBindAliasVector = CookVector<CookString>;
+using ShadowSurfaceBindAliasVector = Vector<AString<::ArenaBase>, ::ArenaBase>;
 
 struct MaterialAvboitPassPixelShaderSpec{
     AStringView generatedDirectoryLeaf;
@@ -165,8 +165,8 @@ static b8 AppendShadowSurfaceBindAliases(
     const MaterialBindEntry& bindEntry,
     const AStringView bindNamespace,
     ShadowSurfaceBindAliasVector& outAliasSymbols,
-    CookHashSet<CookString>& inOutSeenSymbols,
-    CookString& inOutSource
+    HashSet<AString<::ArenaBase>, ::ArenaBase>& inOutSeenSymbols,
+    AString<::ArenaBase>& inOutSource
 ){
     return ShadowSurfaceSourceBuilder().appendBindAliases(AStringView(bindEntry.virtualPath), bindEntry.structs, bindEntry.instances, bindNamespace, outAliasSymbols, inOutSeenSymbols, inOutSource);
 }
@@ -423,7 +423,7 @@ Expected<Path> EmitDeferredBxdfDispatchModule(const Path& cacheDirectory, const 
         slot = source;
     }
 
-    const CookString source = BuildDeferredBxdfDispatchModuleSource(sourceById);
+    const AString<::ArenaBase> source = BuildDeferredBxdfDispatchModuleSource(scratchArena, sourceById);
 
     const ScratchPath outputPath = ScratchPath(scratchArena, includeRoot) / s_DeferredBxdfModuleSubPath;
     auto ensureDirectoriesResult = EnsureDirectories(outputPath.parentPath());
@@ -613,21 +613,21 @@ Expected<Path> ShadowSurfaceDispatchGenerator::emit(
             bindNamespaceIdById[id] = namespaceIt.value();
     }
 
+    CookArena& cookArena = cacheDirectory.arena();
     const ShadowSurfaceSourceBuilder sourceBuilder;
-    CookString source = sourceBuilder.buildDispatchHeader();
+    AString<::ArenaBase> source = sourceBuilder.buildDispatchHeader(cookArena);
 
     // Context comes from the includer's shadow_surface.slangi; emitting here would force an unresolvable virtual include.
 
     // Emit each unique `.bind` once in a private namespace with scoped aliases so multiple interfaces do not collide.
-    CookArena& cookArena = source.get_allocator().arena();
-    CookHashSet<CookString> bindAliasSeenSymbols{ 0, Hasher<CookString>(), EqualTo<CookString>(), cookArena };
+    HashSet<AString<::ArenaBase>, ::ArenaBase> bindAliasSeenSymbols{ 0, Hasher<AString<::ArenaBase>>(), EqualTo<AString<::ArenaBase>>(), cookArena };
     ShadowSurfaceBindAliasVector bindAliasSymbols(cookArena);
     for(usize id = 0u; id < surfaceById.size(); ++id){
         if(surfaceById[id].empty())
             continue;
 
         const u32 bindNamespaceId = bindNamespaceIdById[id];
-        const CookString bindNamespace = sourceBuilder.buildBindNamespace(bindNamespaceId);
+        const AString<::ArenaBase> bindNamespace = sourceBuilder.buildBindNamespace(cookArena, bindNamespaceId);
         if(bindNamespaceId == static_cast<u32>(id))
             sourceBuilder.appendNamespaceInclude(AStringView(bindNamespace), interfaceById[id], source);
         if(!AppendShadowSurfaceBindAliases(*bindEntryById[id], AStringView(bindNamespace), bindAliasSymbols, bindAliasSeenSymbols, source))

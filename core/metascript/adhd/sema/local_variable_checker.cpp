@@ -6,6 +6,7 @@
 #include "constructor_argument_checker.h"
 #include "borrow_lifetime_analyzer.h"
 #include "lambda_capture_analyzer.h"
+#include "type_layout_analyzer.h"
 
 
 NWB_ADHD_BEGIN
@@ -53,11 +54,18 @@ b8 LocalVariableChecker::check(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
             m_checker.reportError(errors, stmt.span, "uninitialized variable declaration is prohibited in adhd; every local variable must be initialized at declaration");
             ok = false;
         }
-        if(varRefMode == ParamPassingMode::None && SymbolTable::IsArenaBackedContainer(baseVarTypeName)){
-            stmt.usesScratchArena = true;
-            stmt.arenaFirstInit = IsArenaFirstCtorType(baseVarTypeName);
-            method.usesScratchArena = true;
-            m_checker.m_activeParallelBlockUsesScratch = true;
+        if(varRefMode == ParamPassingMode::None){
+            const TypeLayoutAnalyzer layoutAnalyzer(m_checker.m_symbols);
+            const b8 isArenaContainer = SymbolTable::IsArenaBackedContainer(baseVarTypeName);
+            const b8 isNonRootClass = !isArenaContainer && layoutAnalyzer.isNonRootMotherArenaType(*stmt.varType);
+            const b8 isArenaDefaultArray = !stmt.expr && !stmt.isCtorInit && layoutAnalyzer.isFixedArrayNeedingArenaDefaultInit(*stmt.varType);
+            const b8 isReboundValueInit = (stmt.expr != nullptr) && !stmt.varType->isAuto && layoutAnalyzer.requiresMotherArena(*stmt.varType);
+            if(isArenaContainer || isNonRootClass || isArenaDefaultArray || isReboundValueInit){
+                stmt.usesScratchArena = true;
+                stmt.arenaFirstInit = IsArenaFirstCtorType(baseVarTypeName) || isNonRootClass;
+                method.usesScratchArena = true;
+                m_checker.m_activeParallelBlockUsesScratch = true;
+            }
         }
         LambdaCaptureAnalyzer(scope, m_checker.m_symbols).propagateFuncCaptureBytes(stmt.varType, stmt.expr);
         if(stmt.isCtorInit){
@@ -159,6 +167,11 @@ b8 LocalVariableChecker::check(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
         else if(exprTypeRef){
             stmt.inferredAutoType = const_cast<TypeRef*>(exprTypeRef);
             info.type = stmt.inferredAutoType;
+            if(TypeLayoutAnalyzer(m_checker.m_symbols).requiresMotherArena(*stmt.inferredAutoType)){
+                stmt.usesScratchArena = true;
+                method.usesScratchArena = true;
+                m_checker.m_activeParallelBlockUsesScratch = true;
+            }
         }
     }
     info.mode = varRefMode;

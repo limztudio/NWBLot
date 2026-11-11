@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[arena]
 class DepthWarpProbeProject : IProjectEntryCallbacks{
     public DepthWarpProbeProject(mut ProjectRuntimeContext context){
         this.m_sceneSubsystems = ActiveSceneSubsystems(context.objectArena);

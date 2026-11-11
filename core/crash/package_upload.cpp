@@ -288,6 +288,7 @@ b8 FlushCrashReportsForRequest(const CrashRequest& request){
 
 template Expected<void, ErrorCode> ApplyCrashSpoolRetention(Alloc::ScratchArena& scratchArena, const ::Path<Alloc::GlobalArena>& spoolDirectory, const CrashSpoolRetentionConfig& retention, AStringView protectedPendingPackageName);
 template Expected<void, ErrorCode> ApplyCrashSpoolRetention(Alloc::ScratchArena& scratchArena, const ::Path<Alloc::ScratchArena>& spoolDirectory, const CrashSpoolRetentionConfig& retention, AStringView protectedPendingPackageName);
+template Expected<void, ErrorCode> ApplyCrashSpoolRetention(Alloc::ScratchArena& scratchArena, const ::Path<::ArenaBase>& spoolDirectory, const CrashSpoolRetentionConfig& retention, AStringView protectedPendingPackageName);
 template b8 FlushPendingCrashReportsImpl(Alloc::GlobalArena& arena, const CrashUploadSnapshot& snapshot);
 
 template Expected<void, ErrorCode> ApplyCrashSpoolRetention(Alloc::ScratchArena& scratchArena, const ::Path<Alloc::PersistentArena>& spoolDirectory, const CrashSpoolRetentionConfig& retention, AStringView protectedPendingPackageName);

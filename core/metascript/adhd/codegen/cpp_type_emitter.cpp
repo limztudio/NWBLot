@@ -20,6 +20,9 @@ NWB_ADHD_BEGIN
 namespace __hidden_adhd_cpp_type_emitter{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] b8 IsSynthesizedArenaParamCandidate(const ParamDecl& p, const SymbolTable& symbols)noexcept{
     if(!p.type || p.type->isAuto || p.type->isFuncType)
         return false;
@@ -28,6 +31,9 @@ namespace __hidden_adhd_cpp_type_emitter{
     const TypeRef* unwrapped = symbols.unwrapTypeAlias(p.type);
     return unwrapped && unwrapped->refMode == ParamPassingMode::None && SymbolTable::IsArenaBackedContainer(unwrapped->name);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };

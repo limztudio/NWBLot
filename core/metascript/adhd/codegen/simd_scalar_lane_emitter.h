@@ -14,6 +14,9 @@
 NWB_ADHD_BEGIN
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class SimdScalarLaneEmitter final{
 public:
     SimdScalarLaneEmitter(const SourceEmitter& emitter, MString& output, MStringView simdType, Span<const Expr* const> arguments, b8 isDouble, b8 isInt)noexcept
@@ -25,7 +28,10 @@ public:
         , m_isInt(isInt)
     {}
 
+
+public:
     [[nodiscard]] b8 tryEmit()const;
+
 
 private:
     const SourceEmitter& m_emitter;
@@ -35,6 +41,9 @@ private:
     b8 m_isDouble;
     b8 m_isInt;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_ADHD_END

@@ -18,7 +18,6 @@ native{
 
 
 #include <impl/ecs_ui/toolkit/paint.adhd.h>
-#include <global/text_utils.h>
 
 namespace NWB::Tests::Smoke{
 using Impl::Ui::Color;
@@ -31,7 +30,6 @@ using SnapshotDisplay = Impl::Ui::DisplayMetrics;
 using SnapshotPoint = Impl::Ui::Point;
 using UiWidgetTests::ArithmeticFixtureRowKey;
 using UiWidgetTests::FindArithmeticFixtureRowIndex;
-using ::ContainsAsciiIgnoreCase;
 };
 
 

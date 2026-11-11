@@ -2,65 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const StringView s_ShaderOptionalBoolMetaPrefix = "Meta";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-usize ComputeCompilerDefineFixedArgumentBytes(in usize prefixBytes, in b8 hasValue){
-    if(hasValue)
-        return prefixBytes + 1u;
-    return prefixBytes;
-}
-
-b8 ValidateUnexpectedCompilerDiagnosticsEmpty(
-    in StringView shaderName,
-    in StringView variantName,
-    in StringView diagnostics
-){
-    if(diagnostics.empty())
-        return true;
-
-    error("Shader compiler emitted unexpected diagnostics for '{}' (variant '{}') :\n{}", shaderName, variantName, diagnostics);
-    return false;
-}
-
-b8 ValidateCompiledShaderStageName(in StringView shaderName, in StringView variantName, in b8 validStageName){
-    if(validStageName)
-        return true;
-
-    error("Shader compile failed for '{}' (variant '{}'): shader stage contains an embedded null", shaderName, variantName);
-    return false;
-}
-
-b8 ValidateCompiledSpirvEntryPoint(in StringView shaderName, in StringView variantName, in b8 resolvedEntryPoint){
-    if(resolvedEntryPoint)
-        return true;
-
-    error("Shader compile failed for '{}' (variant '{}'): malformed SPIR-V or wrong physical stage/entry point", shaderName, variantName);
-    return false;
-}
-
-b8 ValidateDerivedShaderStageText(in StringView nwbFilePathText, in StringView stageText){
-    if(!stageText.empty())
-        return true;
-
-    error("Shader meta '{}': failed to derive shader stage", nwbFilePathText);
-    return false;
-}
-
-b8 ValidateNonEmptyShaderEntryPoint(in StringView nwbFilePathText, in StringView entryPoint){
-    if(!entryPoint.empty())
-        return true;
-
-    error("Shader meta '{}': entry_point must not be empty", nwbFilePathText);
-    return false;
-}
-
-b8 IsIncludeShaderAssetType(in StringView assetTypeText, in StringView expectedIncludeAssetType){
-    return assetTypeText == expectedIncludeAssetType;
-}
+#include <impl/assets_shader/shader_define_planner.adhd>
+#include <impl/assets_shader/slang_compiler.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -79,11 +22,8 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_shader/asset.adhd.h>
 #include <impl/assets_shader/cook.adhd.h>
-#include <impl/assets_shader/cook_internal.adhd.h>
-#include <impl/assets_shader/shader_define_planner.adhd.h>
-#include <impl/assets_shader/shader_types.adhd.h>
-#include <impl/assets_shader/slang_compiler.adhd.h>
 #include <impl/assets_shader/slang_compiler_request_validator.adhd.h>
 
 #include <core/assets/cook_metadata.h>
@@ -162,12 +102,10 @@ static const Array<SlangStageMapping, 14u> s_StageMappings = {{
 
 
 [[nodiscard]] static Expected<ScratchString> BuildCompilerDefineArgument(const ShaderBinaryPayload::ShaderMacroDefinition& define, const ShaderCook::ShaderCompilerRequest& request, const ScratchPath& overlayRoot, Core::Alloc::ScratchArena& scratchArena){
-    const b8 plannedMacroInclude = request.compilerInputsHaveBom && FindIf(request.externallyPlannedMacroIncludes.begin(), request.externallyPlannedMacroIncludes.end(), [&define](const AStringView name)noexcept{
-        return name == define.name;
-    }) != request.externallyPlannedMacroIncludes.end();
+    const b8 plannedMacroInclude = IsPlannedMacroIncludeDefine(request.compilerInputsHaveBom, request.externallyPlannedMacroIncludes, define.name);
     const AStringView includeName = plannedMacroInclude ? UnquoteDoubleQuotedView(define.value) : AStringView();
     const ScratchPath includePath(scratchArena, includeName);
-    Expected<ScratchPath> overlayIncludePath = MakeUnexpected(Failure{});
+    Expected<ScratchString> overlayIncludePathText = MakeUnexpected(Failure{});
     usize valueCapacity = define.value.size();
     if(!includeName.empty() && includePath.isAbsolute()){
         const auto absoluteIncludePath = AbsolutePath(includePath);
@@ -176,15 +114,15 @@ static const Array<SlangStageMapping, 14u> s_StageMappings = {{
             return MakeUnexpected(Failure{});
         }
         const ScratchPath normalizedIncludePath = absoluteIncludePath->lexicallyNormal();
-        overlayIncludePath = SlangCompilerWorkspace::BuildCompilerOverlayPath(overlayRoot, normalizedIncludePath, scratchArena);
+        const auto overlayIncludePath = SlangCompilerWorkspace::BuildCompilerOverlayPath(overlayRoot, normalizedIncludePath, scratchArena);
         if(!SlangCompilerWorkspace::IsCompilerDependency(request.dependencies, normalizedIncludePath) || !overlayIncludePath){
             NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: planned macro include '{}' is not a mapped compiler dependency"), ConvertString(includeName));
             return MakeUnexpected(Failure{});
         }
-        const auto capacity = SlangCompilerWorkspace::CompilerPathTextCapacity(*overlayIncludePath);
-        if(!capacity)
+        overlayIncludePathText = SlangCompilerWorkspace::BuildCompilerPathText(*overlayIncludePath, scratchArena);
+        if(!overlayIncludePathText)
             return MakeUnexpected(Failure{});
-        const auto quotedCapacity = ShaderBinaryPayload::TryComputeQuotedCompilerPathCapacity(*capacity);
+        const auto quotedCapacity = ShaderBinaryPayload::TryComputeQuotedCompilerPathCapacity(overlayIncludePathText->size());
         if(!quotedCapacity)
             return MakeUnexpected(Failure{});
         valueCapacity = *quotedCapacity;
@@ -193,22 +131,14 @@ static const Array<SlangStageMapping, 14u> s_StageMappings = {{
     const auto argumentCapacity = ShaderBinaryPayload::TryComputeCompilerDefineArgumentCapacity(fixedBytes, define.name.size(), valueCapacity);
     if(!argumentCapacity)
         return MakeUnexpected(Failure{});
-    ScratchString argument{scratchArena};
-    argument.reserve(*argumentCapacity);
-    argument += s_SlangDefineArgument;
-    argument += define.name;
-    if(!define.value.empty()){
-        argument += '=';
-        if(overlayIncludePath){
-            argument += '"';
-            auto out = BackInserter(argument);
-            WriteConvertedText<char>(out, overlayIncludePath->native());
-            argument += '"';
-        }
-        else
-            argument += define.value;
-    }
-    return argument;
+    const auto formattedArgument = FormatCompilerDefineArgument(
+        s_SlangDefineArgument,
+        define.name,
+        define.value,
+        overlayIncludePathText.has_value(),
+        overlayIncludePathText ? AStringView(*overlayIncludePathText) : AStringView()
+    );
+    return ScratchString(AStringView(formattedArgument), scratchArena);
 }
 
 static Expected<ShaderCook::CookMap<ShaderCook::CookString, ShaderCook::DefineEntry>> ParseDefines(const Path& nwbFilePath, const Core::Metascript::Value& asset, ShaderCook::CookArena& arena){

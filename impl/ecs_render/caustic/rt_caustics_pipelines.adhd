@@ -528,7 +528,13 @@ b8 CausticPipelineSet::ensureCausticRtPipeline(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 CausticEmissionTargetBuffer::ensure(Core::GraphicsRuntime& graphics, usize targetCount){
+b8 EnsureCausticEmissionTargetBufferStorage(
+    Core::GraphicsRuntime& graphics,
+    const usize targetCount,
+    Core::BufferHandle& inoutBuffer,
+    Core::GpuDescriptorHandle& inoutHeapHandle,
+    usize& inoutCapacity
+){
     // Replace the heap slot before retiring the old emission-target buffer.
     auto& device = graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
@@ -546,19 +552,19 @@ b8 CausticEmissionTargetBuffer::ensure(Core::GraphicsRuntime& graphics, usize ta
         return *handle;
     };
 
-    if(buffer && this->capacity >= targetCount){
-        if(heapHandle.valid()){
-            NWB_ASSERT(heapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer);
+    if(inoutBuffer && inoutCapacity >= targetCount){
+        if(inoutHeapHandle.valid()){
+            NWB_ASSERT(inoutHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer);
             return true;
         }
-        const auto handle = acquireHeapHandle(*buffer.get());
+        const auto handle = acquireHeapHandle(*inoutBuffer.get());
         if(!handle)
             return false;
-        heapHandle = *handle;
+        inoutHeapHandle = *handle;
         return true;
     }
 
-    const usize capacity = ::NextGrowingCapacity(this->capacity, targetCount, s_CausticEmissionTargetInitialCapacity);
+    const usize capacity = ::NextGrowingCapacity(inoutCapacity, targetCount, s_CausticEmissionTargetInitialCapacity);
 
     Core::BufferDesc targetBufferDesc;
     targetBufferDesc
@@ -580,17 +586,17 @@ b8 CausticEmissionTargetBuffer::ensure(Core::GraphicsRuntime& graphics, usize ta
         return false;
 
     Core::GpuDescriptorRetirementGuard retireUnpublished(heap, *targetHeapHandle);
-    if(heapHandle.valid())
-        heap.free(heapHandle);
-    buffer = Move(targetBuffer);
-    heapHandle = *targetHeapHandle;
-    this->capacity = capacity;
+    if(inoutHeapHandle.valid())
+        heap.free(inoutHeapHandle);
+    inoutBuffer = Move(targetBuffer);
+    inoutHeapHandle = *targetHeapHandle;
+    inoutCapacity = capacity;
     retireUnpublished.release();
     NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created caustic emission-target buffer (capacity {} targets)"), static_cast<u64>(capacity));
     return true;
 }
 
-void CausticEmissionTargetBuffer::releaseDescriptor(Core::GraphicsRuntime& graphics){
+void FreeCausticEmissionTargetDescriptor(Core::GraphicsRuntime& graphics, const Core::GpuDescriptorHandle& heapHandle){
     if(!heapHandle.valid())
         return;
 
@@ -598,7 +604,6 @@ void CausticEmissionTargetBuffer::releaseDescriptor(Core::GraphicsRuntime& graph
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(heap.isInitialized())
         heap.free(heapHandle);
-    heapHandle = Core::GpuDescriptorHandle::Invalid();
 }
 
 

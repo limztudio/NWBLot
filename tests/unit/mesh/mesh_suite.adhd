@@ -42,24 +42,6 @@ NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace MeshTestsDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] Impl::MeshSkinningGraphDispatchPlan MakePlan(u32 offset = 0u, u64 generation = 1u)noexcept;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace Tests::SkinningCases{
 
 
@@ -71,12 +53,16 @@ using ScratchArena = Core::Alloc::ScratchArena;
 using LoggerRegistrationGuard = Core::Common::LoggerRegistrationGuard;
 namespace LoggerBreakPolicy = Core::Common::LoggerBreakPolicy;
 using GpuPersistentResourceStateCache = Core::GpuPersistentResourceStateCache;
+using GpuGraphResourceId = Core::GpuGraphResourceId;
 
 using MeshSkinningGraphDispatchPlan = Impl::MeshSkinningGraphDispatchPlan;
 using MeshSkinningGraphResourceUses = Impl::MeshSkinningGraphResourceUses;
 using SkinningStateHandoff = Impl::SkinningStateHandoff;
 using SkeletonJointMatrix = Impl::SkeletonJointMatrix;
 using SkinInfluence4 = Impl::SkinInfluence4;
+using MeshSkinningInfluenceGpu = Impl::MeshSkinningInfluenceGpu;
+using MeshSkinningInfluenceGpuScratchVector = Vector<Impl::MeshSkinningInfluenceGpu, Core::Alloc::ScratchArena>;
+using ConstSkeletonJointMatrixSpan = Span<const Impl::SkeletonJointMatrix>;
 using MeshSkinningRuntimeInstance = Impl::MeshSkinningRuntimeInstance;
 using SkeletonJointPaletteComponent = Impl::SkeletonJointPaletteComponent;
 using SkeletonPoseComponent = Impl::SkeletonPoseComponent;
@@ -95,7 +81,76 @@ using Impl::MeshSkinningPayload::BuildRuntimeSkinPayload;
 using Impl::MeshSkinningPayload::BuildSkinInfluences;
 using Impl::MeshSkinningPayload::BuildSkinJointPalette;
 using Impl::MeshSkinningPayload::ResolveGpuJointPalette;
-using MeshTestsDetail::MakePlan;
+
+inline constexpr u32 s_SkinnedMeshSkinJointMask = NWB_SKINNED_MESH_SKIN_JOINT_MASK;
+inline constexpr f32 s_QuietNaNF32 = Limit<f32>::s_QuietNaN;
+
+[[nodiscard]] inline constexpr GpuGraphResourceId MakeGraphResourceId(const u64 generation, const u32 index)noexcept{
+    return GpuGraphResourceId{ .generation = generation, .index = index };
+}
+
+[[nodiscard]] NWB_INLINE Span<const MeshSkinningGraphDispatchPlan> FirstDispatchPlan(const Span<const MeshSkinningGraphDispatchPlan> plans)noexcept{
+    return Span<const MeshSkinningGraphDispatchPlan>(plans.data(), 1u);
+}
+
+template<typename ScratchT>
+[[nodiscard]] NWB_INLINE SkinningStateHandoff CreateEmptySkinningStateHandoff(GpuPersistentResourceStateCache& cache, ScratchT&& scratch){
+    return SkinningStateHandoff(cache, scratch, {});
+}
+
+[[nodiscard]] NWB_INLINE b8 PrepareNullSkinningStateHandoff(){
+    return SkinningStateHandoff::Prepare(nullptr, nullptr);
+}
+
+[[nodiscard]] NWB_INLINE b8 PrepareSkinningStateHandoffWithoutState(SkinningStateHandoff& handoff){
+    return SkinningStateHandoff::Prepare(&handoff, nullptr);
+}
+
+[[nodiscard]] NWB_INLINE b8 AcceptNullSkinningStateHandoff()noexcept{
+    return SkinningStateHandoff::Accept(nullptr, {});
+}
+
+[[nodiscard]] NWB_INLINE b8 AcceptSkinningStateHandoff(SkinningStateHandoff& handoff)noexcept{
+    return SkinningStateHandoff::Accept(&handoff, {});
+}
+
+[[nodiscard]] NWB_INLINE MeshSkinningRuntimeInstance MakeRuntimeInstance(){
+    return MeshSkinningRuntimeInstance(Tests::TestDetail::Arena());
+}
+
+[[nodiscard]] NWB_INLINE b8 BuildRuntimeSkinPayloadFromNone(const MeshSkinningRuntimeInstance& instance, RuntimeSkinPayloadScratch& payload){
+    return BuildRuntimeSkinPayload(instance, nullptr, nullptr, payload);
+}
+
+[[nodiscard]] NWB_INLINE b8 BuildRuntimeSkinPayloadFromPalette(
+    const MeshSkinningRuntimeInstance& instance,
+    const SkeletonJointPaletteComponent& palette,
+    RuntimeSkinPayloadScratch& payload
+){
+    return BuildRuntimeSkinPayload(instance, &palette, nullptr, payload);
+}
+
+[[nodiscard]] NWB_INLINE b8 BuildRuntimeSkinPayloadFromPose(
+    const MeshSkinningRuntimeInstance& instance,
+    const SkeletonJointPaletteComponent& palette,
+    const SkeletonPoseComponent& pose,
+    RuntimeSkinPayloadScratch& payload
+){
+    return BuildRuntimeSkinPayload(instance, &palette, &pose, payload);
+}
+
+[[nodiscard]] NWB_INLINE b8 SharesJointMatrixStorage(const Span<const SkeletonJointMatrix> upload, const RuntimeSkinPayloadScratch& payload)noexcept{
+    return upload.data() == payload.jointMatrices.data();
+}
+
+template<typename ScratchT, typename VertexVectorT>
+[[nodiscard]] NWB_INLINE Expected<TangentFrameRebuildResult> RebuildTangentFramesForVertices(
+    ScratchT&& scratchArena,
+    const Span<const u32> indices,
+    VertexVectorT& vertices
+){
+    return RebuildTangentFrames(scratchArena, indices, Span<TangentFrameRebuildVertex>(vertices.data(), vertices.size()));
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -119,12 +174,55 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+MeshSkinningGraphDispatchPlan MakePlan(in u32 offset, in u64 generation){
+    MeshSkinningGraphDispatchPlan plan = MeshSkinningGraphDispatchPlan();
+    plan.bindlessResourceSlotsResource = MakeGraphResourceId(generation, offset + 1u);
+    plan.restPositionResource = MakeGraphResourceId(generation, offset + 2u);
+    plan.restNormalResource = MakeGraphResourceId(generation, offset + 3u);
+    plan.restTangentResource = MakeGraphResourceId(generation, offset + 4u);
+    plan.skinnedPositionResource = MakeGraphResourceId(generation, offset + 5u);
+    plan.skinnedNormalResource = MakeGraphResourceId(generation, offset + 6u);
+    plan.skinnedTangentResource = MakeGraphResourceId(generation, offset + 7u);
+    plan.meshletDescResource = MakeGraphResourceId(generation, offset + 8u);
+    plan.meshletBoundsResource = MakeGraphResourceId(generation, offset + 9u);
+    plan.meshletPositionRefDeltaResource = MakeGraphResourceId(generation, offset + 10u);
+    plan.meshletAttributeRefDeltaResource = MakeGraphResourceId(generation, offset + 11u);
+    plan.meshletLocalVertexRefResource = MakeGraphResourceId(generation, offset + 12u);
+    plan.meshletPrimitiveIndexResource = MakeGraphResourceId(generation, offset + 13u);
+    plan.attributeSkinResource = MakeGraphResourceId(generation, offset + 14u);
+    plan.skinResource = MakeGraphResourceId(generation, offset + 15u);
+    plan.jointPaletteResource = MakeGraphResourceId(generation, offset + 16u);
+    plan.attributeResource = MakeGraphResourceId(generation, offset + 17u);
+    plan.meshletLocalBoundsResource = MakeGraphResourceId(generation, offset + 18u);
+    plan.localBoundsResource = MakeGraphResourceId(generation, offset + 19u);
+    plan.hasActiveSkin = true;
+    plan.copiedRestStreams = true;
+    plan.updatesMeshletBounds = true;
+    plan.repacksNormals = true;
+    return plan;
+}
+
+MeshSkinningGraphDispatchPlan MakePlan(in u32 offset){
+    return MakePlan(offset, cast<u64>(1u));
+}
+
+MeshSkinningGraphDispatchPlan MakePlan(){
+    return MakePlan(0u, cast<u64>(1u));
+}
+
 SkeletonJointMatrix MakeTranslationJoint(in f32 x, in f32 y, in f32 z){
     SkeletonJointMatrix joint = MatrixIdentity<f32x3x4>();
     joint._14 = x;
     joint._24 = y;
     joint._34 = z;
     return joint;
+}
+
+void ZeroJointMatrixRow0(mut SkeletonJointMatrix joint){
+    joint._11 = 0.0f;
+    joint._12 = 0.0f;
+    joint._13 = 0.0f;
+    joint._14 = 0.0f;
 }
 
 SkinInfluence4 MakeSkinInfluence(in u16 joint){
@@ -150,62 +248,78 @@ TangentFrameRebuildVertex MakeTangentVertex(in f32 x, in f32 y, in f32 z, in f32
     return vertex;
 }
 
+Expected<MeshSkinningGraphResourceUses> BuildGraphResourceUses(in Span<MeshSkinningGraphDispatchPlan> plans, mut ScratchArena scratch){
+    return BuildMeshSkinningGraphResourceUses(plans, scratch);
+}
+
+Expected<MeshSkinningInfluenceGpuScratchVector> EncodeSkinInfluences(in MeshSkinningRuntimeInstance instance, mut ScratchArena scratchArena){
+    return BuildSkinInfluences(instance, scratchArena);
+}
+
 void VerifySkinningGraphResourceUses_DeduplicatesRepeatedAndPermutedInputsWithoutChangingFirstOccurrence(){
     ScratchArena scratch(s_SkinningCaseSkinningGraphUsesRepeated);
-    native(mut scratch){
-        Array<MeshSkinningGraphDispatchPlan, 3u> plans = { MakePlan(), MakePlan(), MakePlan(100u) };
-        Swap(plans[1u].restPositionResource, plans[1u].restNormalResource);
-        plans[2u].meshletDescResource = plans[0u].meshletDescResource;
-        const Expected<MeshSkinningGraphResourceUses> uses = BuildMeshSkinningGraphResourceUses(plans, scratch);
-        ASSERT_TRUE(uses);
-        ASSERT_EQ(uses->deformation.size(), 25u);
-        ASSERT_EQ(uses->postDispatch.size(), 21u);
-        ASSERT_EQ(uses->localBounds.size(), 6u);
-        ASSERT_EQ(uses->finalizer.size(), 12u);
-        EXPECT_EQ(uses->deformation[1u].resource, plans[0u].restPositionResource);
-        EXPECT_EQ(uses->deformation[2u].resource, plans[0u].restNormalResource);
-        EXPECT_EQ(uses->deformation[13u].resource, plans[2u].bindlessResourceSlotsResource);
-        EXPECT_EQ(uses->postDispatch[11u].resource, plans[2u].bindlessResourceSlotsResource);
-        EXPECT_EQ(uses->finalizer[6u].resource, plans[2u].skinnedPositionResource);
-    }
+    Array<MeshSkinningGraphDispatchPlan, 3> plans = Array<MeshSkinningGraphDispatchPlan, 3>();
+    plans[0u] = MakePlan();
+    plans[1u] = MakePlan();
+    plans[2u] = MakePlan(100u);
+
+    const GpuGraphResourceId swappedRestPosition = plans[1u].restPositionResource;
+    plans[1u].restPositionResource = plans[1u].restNormalResource;
+    plans[1u].restNormalResource = swappedRestPosition;
+    plans[2u].meshletDescResource = plans[0u].meshletDescResource;
+
+    const Expected<MeshSkinningGraphResourceUses> uses = BuildGraphResourceUses(plans, scratch);
+    ASSERT_TRUE(uses.has_value());
+    ASSERT_EQ(uses.value().deformation.size(), 25u);
+    ASSERT_EQ(uses.value().postDispatch.size(), 21u);
+    ASSERT_EQ(uses.value().localBounds.size(), 6u);
+    ASSERT_EQ(uses.value().finalizer.size(), 12u);
+    EXPECT_EQ(uses.value().deformation[1u].resource, plans[0u].restPositionResource);
+    EXPECT_EQ(uses.value().deformation[2u].resource, plans[0u].restNormalResource);
+    EXPECT_EQ(uses.value().deformation[13u].resource, plans[2u].bindlessResourceSlotsResource);
+    EXPECT_EQ(uses.value().postDispatch[11u].resource, plans[2u].bindlessResourceSlotsResource);
+    EXPECT_EQ(uses.value().finalizer[6u].resource, plans[2u].skinnedPositionResource);
 }
 
 void VerifySkinningGraphResourceUses_PreservesFullResourceGenerationAndRebuildsChangedFlags(){
     ScratchArena scratch(s_SkinningCaseSkinningGraphUsesGeneration);
-    native(mut scratch){
-        Array<MeshSkinningGraphDispatchPlan, 2u> plans = { MakePlan(), MakePlan(0u, 1ull << 40u) };
-        Expected<MeshSkinningGraphResourceUses> uses = BuildMeshSkinningGraphResourceUses(plans, scratch);
-        ASSERT_TRUE(uses);
-        ASSERT_EQ(uses->deformation.size(), 26u);
-        ASSERT_EQ(uses->postDispatch.size(), 22u);
-        ASSERT_EQ(uses->localBounds.size(), 6u);
-        ASSERT_EQ(uses->finalizer.size(), 12u);
-        EXPECT_EQ(uses->deformation[13u].resource, plans[1u].bindlessResourceSlotsResource);
-        EXPECT_EQ(uses->finalizer[6u].resource, plans[1u].skinnedPositionResource);
+    Array<MeshSkinningGraphDispatchPlan, 2> plans = Array<MeshSkinningGraphDispatchPlan, 2>();
+    plans[0u] = MakePlan();
+    plans[1u] = MakePlan(0u, cast<u64>(1u) << 40u);
 
-        plans[0u].hasActiveSkin = false;
-        plans[0u].repacksNormals = false;
-        plans[0u].updatesMeshletBounds = false;
-        uses = BuildMeshSkinningGraphResourceUses(Span<const MeshSkinningGraphDispatchPlan>(plans.data(), 1u), scratch);
-        ASSERT_TRUE(uses);
-        EXPECT_TRUE(uses->deformation.empty());
-        EXPECT_EQ(uses->postDispatch.size(), 7u);
-        EXPECT_TRUE(uses->localBounds.empty());
-        EXPECT_EQ(uses->finalizer.size(), 3u);
-        plans[0u].copiedRestStreams = false;
-        plans[0u].updatesMeshletBounds = true;
-        uses = BuildMeshSkinningGraphResourceUses(Span<const MeshSkinningGraphDispatchPlan>(plans.data(), 1u), scratch);
-        ASSERT_TRUE(uses);
-        ASSERT_EQ(uses->localBounds.size(), 3u);
-        ASSERT_EQ(uses->finalizer.size(), 2u);
-        EXPECT_EQ(uses->finalizer[0u].resource, plans[0u].meshletBoundsResource);
-        uses = BuildMeshSkinningGraphResourceUses({}, scratch);
-        ASSERT_TRUE(uses);
-        EXPECT_TRUE(uses->deformation.empty());
-        EXPECT_TRUE(uses->postDispatch.empty());
-        EXPECT_TRUE(uses->localBounds.empty());
-        EXPECT_TRUE(uses->finalizer.empty());
-    }
+    Expected<MeshSkinningGraphResourceUses> uses = BuildGraphResourceUses(plans, scratch);
+    ASSERT_TRUE(uses.has_value());
+    ASSERT_EQ(uses.value().deformation.size(), 26u);
+    ASSERT_EQ(uses.value().postDispatch.size(), 22u);
+    ASSERT_EQ(uses.value().localBounds.size(), 6u);
+    ASSERT_EQ(uses.value().finalizer.size(), 12u);
+    EXPECT_EQ(uses.value().deformation[13u].resource, plans[1u].bindlessResourceSlotsResource);
+    EXPECT_EQ(uses.value().finalizer[6u].resource, plans[1u].skinnedPositionResource);
+
+    plans[0u].hasActiveSkin = false;
+    plans[0u].repacksNormals = false;
+    plans[0u].updatesMeshletBounds = false;
+    uses = BuildGraphResourceUses(FirstDispatchPlan(plans), scratch);
+    ASSERT_TRUE(uses.has_value());
+    EXPECT_TRUE(uses.value().deformation.empty());
+    EXPECT_EQ(uses.value().postDispatch.size(), 7u);
+    EXPECT_TRUE(uses.value().localBounds.empty());
+    EXPECT_EQ(uses.value().finalizer.size(), 3u);
+
+    plans[0u].copiedRestStreams = false;
+    plans[0u].updatesMeshletBounds = true;
+    uses = BuildGraphResourceUses(FirstDispatchPlan(plans), scratch);
+    ASSERT_TRUE(uses.has_value());
+    ASSERT_EQ(uses.value().localBounds.size(), 3u);
+    ASSERT_EQ(uses.value().finalizer.size(), 2u);
+    EXPECT_EQ(uses.value().finalizer[0u].resource, plans[0u].meshletBoundsResource);
+
+    uses = BuildGraphResourceUses(Span<MeshSkinningGraphDispatchPlan>(), scratch);
+    ASSERT_TRUE(uses.has_value());
+    EXPECT_TRUE(uses.value().deformation.empty());
+    EXPECT_TRUE(uses.value().postDispatch.empty());
+    EXPECT_TRUE(uses.value().localBounds.empty());
+    EXPECT_TRUE(uses.value().finalizer.empty());
 }
 
 void VerifySkinningGraphResourceUses_RejectsEveryPhaseConflictOrMissingResourceAndRecovers(){
@@ -213,57 +327,56 @@ void VerifySkinningGraphResourceUses_RejectsEveryPhaseConflictOrMissingResourceA
     LoggerRegistrationGuard registration(logger, LoggerBreakPolicy::BreakOnFatal);
     ScratchArena scratch(s_SkinningCaseSkinningGraphUsesRejections);
 
-    native(mut scratch){
-        for(u32 failure = 0u; failure < 10u; ++failure){
-            MeshSkinningGraphDispatchPlan plan = MakePlan();
-            switch(failure){
-            case 0u:
-                plan.restPositionResource = plan.skinnedPositionResource;
-                break;
-            case 1u:
-                plan.skinResource = {};
-                break;
-            case 2u:
-                plan.hasActiveSkin = false;
-                plan.skinnedPositionResource = plan.meshletBoundsResource;
-                break;
-            case 3u:
-                plan.meshletPrimitiveIndexResource = {};
-                break;
-            case 4u:
-                plan.hasActiveSkin = false;
-                plan.repacksNormals = false;
-                plan.skinnedNormalResource = {};
-                break;
-            case 5u:
-                plan.hasActiveSkin = false;
-                plan.copiedRestStreams = false;
-                plan.repacksNormals = false;
-                plan.updatesMeshletBounds = false;
-                break;
-            case 6u:
-                plan.meshletLocalBoundsResource = {};
-                break;
-            case 7u:
-                plan.localBoundsResource = {};
-                break;
-            case 8u:
-                plan.localBoundsResource = plan.meshletLocalBoundsResource;
-                break;
-            case 9u:
-                plan.localBoundsResource = plan.bindlessResourceSlotsResource;
-                break;
-            }
-            Expected<MeshSkinningGraphResourceUses> uses = BuildMeshSkinningGraphResourceUses(Span<const MeshSkinningGraphDispatchPlan>(&plan, 1u), scratch);
-            EXPECT_FALSE(uses);
-            plan = MakePlan();
-            uses = BuildMeshSkinningGraphResourceUses(Span<const MeshSkinningGraphDispatchPlan>(&plan, 1u), scratch);
-            ASSERT_TRUE(uses);
-            EXPECT_EQ(uses->deformation.size(), 13u);
-            EXPECT_EQ(uses->postDispatch.size(), 11u);
-            EXPECT_EQ(uses->localBounds.size(), 3u);
-            EXPECT_EQ(uses->finalizer.size(), 6u);
+    for(u32 failure = 0u; failure < 10u; ++failure){
+        Array<MeshSkinningGraphDispatchPlan, 1> singlePlan = Array<MeshSkinningGraphDispatchPlan, 1>();
+        singlePlan[0u] = MakePlan();
+        switch(failure){
+        case 0u:
+            singlePlan[0u].restPositionResource = singlePlan[0u].skinnedPositionResource;
+            break;
+        case 1u:
+            singlePlan[0u].skinResource = GpuGraphResourceId();
+            break;
+        case 2u:
+            singlePlan[0u].hasActiveSkin = false;
+            singlePlan[0u].skinnedPositionResource = singlePlan[0u].meshletBoundsResource;
+            break;
+        case 3u:
+            singlePlan[0u].meshletPrimitiveIndexResource = GpuGraphResourceId();
+            break;
+        case 4u:
+            singlePlan[0u].hasActiveSkin = false;
+            singlePlan[0u].repacksNormals = false;
+            singlePlan[0u].skinnedNormalResource = GpuGraphResourceId();
+            break;
+        case 5u:
+            singlePlan[0u].hasActiveSkin = false;
+            singlePlan[0u].copiedRestStreams = false;
+            singlePlan[0u].repacksNormals = false;
+            singlePlan[0u].updatesMeshletBounds = false;
+            break;
+        case 6u:
+            singlePlan[0u].meshletLocalBoundsResource = GpuGraphResourceId();
+            break;
+        case 7u:
+            singlePlan[0u].localBoundsResource = GpuGraphResourceId();
+            break;
+        case 8u:
+            singlePlan[0u].localBoundsResource = singlePlan[0u].meshletLocalBoundsResource;
+            break;
+        default:
+            singlePlan[0u].localBoundsResource = singlePlan[0u].bindlessResourceSlotsResource;
+            break;
         }
+        Expected<MeshSkinningGraphResourceUses> uses = BuildGraphResourceUses(singlePlan, scratch);
+        EXPECT_FALSE(uses.has_value());
+        singlePlan[0u] = MakePlan();
+        uses = BuildGraphResourceUses(singlePlan, scratch);
+        ASSERT_TRUE(uses.has_value());
+        EXPECT_EQ(uses.value().deformation.size(), 13u);
+        EXPECT_EQ(uses.value().postDispatch.size(), 11u);
+        EXPECT_EQ(uses.value().localBounds.size(), 3u);
+        EXPECT_EQ(uses.value().finalizer.size(), 6u);
     }
 
     EXPECT_EQ(logger.errorCount(), 10u);
@@ -274,30 +387,32 @@ void VerifySkinningGraphResourceUses_PromotedCollectionsRejectLaterPhaseConflict
     LoggerRegistrationGuard registration(logger, LoggerBreakPolicy::BreakOnFatal);
     ScratchArena scratch(s_SkinningCaseSkinningGraphUsesPromotedFailures);
 
-    native(mut scratch){
-        for(u32 failure = 0u; failure < 3u; ++failure){
-            Array<MeshSkinningGraphDispatchPlan, 3u> plans = { MakePlan(), MakePlan(100u), MakePlan(200u) };
-            Expected<MeshSkinningGraphResourceUses> uses = BuildMeshSkinningGraphResourceUses(plans, scratch);
-            ASSERT_TRUE(uses);
-            if(failure == 0u)
-                plans[2u].restPositionResource = plans[1u].skinnedPositionResource;
-            else if(failure == 1u)
-                plans[2u].meshletDescResource = plans[0u].meshletBoundsResource;
-            else{
-                plans[2u].hasActiveSkin = false;
-                plans[2u].repacksNormals = false;
-                plans[2u].skinnedNormalResource = {};
-            }
-            uses = BuildMeshSkinningGraphResourceUses(plans, scratch);
-            EXPECT_FALSE(uses);
-            plans[2u] = MakePlan(200u);
-            uses = BuildMeshSkinningGraphResourceUses(plans, scratch);
-            ASSERT_TRUE(uses);
-            EXPECT_EQ(uses->deformation.size(), 39u);
-            EXPECT_EQ(uses->postDispatch.size(), 33u);
-            EXPECT_EQ(uses->localBounds.size(), 9u);
-            EXPECT_EQ(uses->finalizer.size(), 18u);
+    for(u32 failure = 0u; failure < 3u; ++failure){
+        Array<MeshSkinningGraphDispatchPlan, 3> plans = Array<MeshSkinningGraphDispatchPlan, 3>();
+        plans[0u] = MakePlan();
+        plans[1u] = MakePlan(100u);
+        plans[2u] = MakePlan(200u);
+
+        Expected<MeshSkinningGraphResourceUses> uses = BuildGraphResourceUses(plans, scratch);
+        ASSERT_TRUE(uses.has_value());
+        if(failure == 0u)
+            plans[2u].restPositionResource = plans[1u].skinnedPositionResource;
+        else if(failure == 1u)
+            plans[2u].meshletDescResource = plans[0u].meshletBoundsResource;
+        else{
+            plans[2u].hasActiveSkin = false;
+            plans[2u].repacksNormals = false;
+            plans[2u].skinnedNormalResource = GpuGraphResourceId();
         }
+        uses = BuildGraphResourceUses(plans, scratch);
+        EXPECT_FALSE(uses.has_value());
+        plans[2u] = MakePlan(200u);
+        uses = BuildGraphResourceUses(plans, scratch);
+        ASSERT_TRUE(uses.has_value());
+        EXPECT_EQ(uses.value().deformation.size(), 39u);
+        EXPECT_EQ(uses.value().postDispatch.size(), 33u);
+        EXPECT_EQ(uses.value().localBounds.size(), 9u);
+        EXPECT_EQ(uses.value().finalizer.size(), 18u);
     }
 
     EXPECT_EQ(logger.errorCount(), 3u);
@@ -310,12 +425,10 @@ void VerifySkinningGraphResourceUses_RepeatedPlansUseTheSameScratchCapacityAsOne
     for(mut MeshSkinningGraphDispatchPlan plan : plans)
         plan = MakePlan();
 
-    native(in plans, mut singleScratch, mut repeatedScratch){
-        const Expected<MeshSkinningGraphResourceUses> singleUses = BuildMeshSkinningGraphResourceUses(Span<const MeshSkinningGraphDispatchPlan>(plans.data(), 1u), singleScratch);
-        ASSERT_TRUE(singleUses);
-        const Expected<MeshSkinningGraphResourceUses> repeatedUses = BuildMeshSkinningGraphResourceUses(plans, repeatedScratch);
-        ASSERT_TRUE(repeatedUses);
-    }
+    const Expected<MeshSkinningGraphResourceUses> singleUses = BuildGraphResourceUses(FirstDispatchPlan(plans), singleScratch);
+    ASSERT_TRUE(singleUses.has_value());
+    const Expected<MeshSkinningGraphResourceUses> repeatedUses = BuildGraphResourceUses(plans, repeatedScratch);
+    ASSERT_TRUE(repeatedUses.has_value());
 
     const ArenaMemoryStats single = singleScratch.memoryStats();
     const ArenaMemoryStats repeated = repeatedScratch.memoryStats();
@@ -329,18 +442,16 @@ void VerifySkinningStateHandoff_RejectsUnpreparedAcceptanceAndMissingRecordedSta
     ScratchArena scratch(s_SkinningCaseSkinningHandoffRejected);
     GpuPersistentResourceStateCache cache(arena);
 
-    native(mut cache, mut scratch){
-        SkinningStateHandoff handoff(cache, scratch, {});
-        EXPECT_FALSE(SkinningStateHandoff::Prepare(nullptr, nullptr));
-        EXPECT_FALSE(SkinningStateHandoff::Accept(nullptr, {}));
-        EXPECT_FALSE(SkinningStateHandoff::Accept(&handoff, {}));
-        EXPECT_FALSE(handoff.preparationInvoked());
-        EXPECT_FALSE(SkinningStateHandoff::Prepare(&handoff, nullptr));
-        EXPECT_TRUE(handoff.preparationInvoked());
-        EXPECT_FALSE(handoff.statePrepared());
-        EXPECT_FALSE(handoff.stateAccepted());
-        EXPECT_FALSE(SkinningStateHandoff::Accept(&handoff, {}));
-    }
+    SkinningStateHandoff handoff = CreateEmptySkinningStateHandoff(cache, scratch);
+    EXPECT_FALSE(PrepareNullSkinningStateHandoff());
+    EXPECT_FALSE(AcceptNullSkinningStateHandoff());
+    EXPECT_FALSE(AcceptSkinningStateHandoff(handoff));
+    EXPECT_FALSE(handoff.preparationInvoked());
+    EXPECT_FALSE(PrepareSkinningStateHandoffWithoutState(handoff));
+    EXPECT_TRUE(handoff.preparationInvoked());
+    EXPECT_FALSE(handoff.statePrepared());
+    EXPECT_FALSE(handoff.stateAccepted());
+    EXPECT_FALSE(AcceptSkinningStateHandoff(handoff));
 
     EXPECT_FALSE(cache.valid());
 }
@@ -360,20 +471,17 @@ void VerifySkinningPayload_EmptyPoseClearsPreviousDualQuaternionPayloadAndUsesCu
     pose.localJoints.push_back(MakeTranslationJoint(0.0f, 5.0f, 0.0f));
     pose.skinningMode = SkeletonSkinningMode::DualQuaternion;
 
-    native(in palette, mut pose, mut payload){
-        auto& arena = Tests::TestDetail::Arena();
-        MeshSkinningRuntimeInstance instance(arena);
-        instance.skin.assign(4u, MakeSkinInfluence(1u));
-        instance.skeletonJointCount = 2u;
-        instance.inverseBindMatrices.assign(2u, MakeTranslationJoint(-0.25f, 0.0f, 0.0f));
+    MeshSkinningRuntimeInstance instance = MakeRuntimeInstance();
+    instance.skin.assign(4u, MakeSkinInfluence(1u));
+    instance.skeletonJointCount = 2u;
+    instance.inverseBindMatrices.assign(2u, MakeTranslationJoint(-0.25f, 0.0f, 0.0f));
 
-        ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, &pose, payload));
-        EXPECT_EQ(payload.resolvedSkinningMode, SkeletonSkinningMode::DualQuaternion);
+    ASSERT_TRUE(BuildRuntimeSkinPayloadFromPose(instance, palette, pose, payload));
+    EXPECT_EQ(payload.resolvedSkinningMode, SkeletonSkinningMode::DualQuaternion);
 
-        pose.localJoints.clear();
-        pose.parentJoints.clear();
-        ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, &pose, payload));
-    }
+    pose.localJoints.clear();
+    pose.parentJoints.clear();
+    ASSERT_TRUE(BuildRuntimeSkinPayloadFromPose(instance, palette, pose, payload));
 
     EXPECT_EQ(payload.resolvedSkinningMode, SkeletonSkinningMode::LinearBlend);
     EXPECT_FLOAT_EQ(payload.jointMatrices[1u]._24, 4.0f);
@@ -385,31 +493,28 @@ void VerifySkinningPayload_RuntimePayloadClearsWhenSkinOrPoseIsRemoved(){
     SkeletonJointPaletteComponent palette = SkeletonJointPaletteComponent();
     palette.joints.push_back(MatrixIdentity<f32x3x4>());
 
-    native(mut palette, mut payload){
-        auto& arena = Tests::TestDetail::Arena();
-        MeshSkinningRuntimeInstance instance(arena);
-        instance.skin.assign(3u, MakeSkinInfluence(0u));
-        instance.skeletonJointCount = 1u;
+    MeshSkinningRuntimeInstance instance = MakeRuntimeInstance();
+    instance.skin.assign(3u, MakeSkinInfluence(0u));
+    instance.skeletonJointCount = 1u;
 
-        ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
-        ASSERT_TRUE(payload.hasActiveSkin());
-        ASSERT_TRUE(BuildRuntimeSkinPayload(instance, nullptr, nullptr, payload));
-        EXPECT_FALSE(payload.hasActiveSkin());
-        EXPECT_TRUE(payload.jointMatrices.empty());
+    ASSERT_TRUE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
+    ASSERT_TRUE(payload.hasActiveSkin());
+    ASSERT_TRUE(BuildRuntimeSkinPayloadFromNone(instance, payload));
+    EXPECT_FALSE(payload.hasActiveSkin());
+    EXPECT_TRUE(payload.jointMatrices.empty());
 
-        ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
-        ASSERT_TRUE(payload.hasActiveSkin());
-        instance.skin.clear();
-        ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
-        EXPECT_FALSE(payload.hasActiveSkin());
-        EXPECT_TRUE(payload.jointMatrices.empty());
+    ASSERT_TRUE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
+    ASSERT_TRUE(payload.hasActiveSkin());
+    instance.skin.clear();
+    ASSERT_TRUE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
+    EXPECT_FALSE(payload.hasActiveSkin());
+    EXPECT_TRUE(payload.jointMatrices.empty());
 
-        instance.skin.assign(7u, MakeSkinInfluence(0u));
-        ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
-        ASSERT_TRUE(payload.hasActiveSkin());
-        palette.joints.clear();
-        ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
-    }
+    instance.skin.assign(7u, MakeSkinInfluence(0u));
+    ASSERT_TRUE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
+    ASSERT_TRUE(payload.hasActiveSkin());
+    palette.joints.clear();
+    ASSERT_TRUE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
 
     EXPECT_FALSE(payload.hasActiveSkin());
     EXPECT_TRUE(payload.jointMatrices.empty());
@@ -421,34 +526,32 @@ void VerifySkinningPayload_GpuJointUploadBoundsFollowSkinWhileSourceTailStillVal
     ScratchArena scratchArena(s_OneOffNameTestsSkinningPayloadScratch);
     RuntimeSkinPayloadScratch payload(scratchArena);
 
-    native(mut payload){
-        auto& arena = Tests::TestDetail::Arena();
-        MeshSkinningRuntimeInstance instance(arena);
-        instance.skeletonJointCount = 2u;
-        instance.skin.assign(3u, MakeSkinInfluence(1u));
-        SkeletonJointPaletteComponent palette;
-        ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
-        EXPECT_FALSE(ResolveGpuJointPalette(instance, payload));
+    MeshSkinningRuntimeInstance instance = MakeRuntimeInstance();
+    instance.skeletonJointCount = 2u;
+    instance.skin.assign(3u, MakeSkinInfluence(1u));
+    SkeletonJointPaletteComponent palette = SkeletonJointPaletteComponent();
+    ASSERT_TRUE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
+    EXPECT_FALSE(ResolveGpuJointPalette(instance, payload).has_value());
 
-        palette.joints.assign(3u, MakeTranslationJoint(7.0f, 0.0f, 0.0f));
-        ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
-        const auto upload = ResolveGpuJointPalette(instance, payload);
-        ASSERT_TRUE(upload);
-        EXPECT_EQ(upload->size(), 2u);
-        EXPECT_EQ(upload->data(), payload.jointMatrices.data());
-        EXPECT_EQ(payload.jointMatrices.size(), 3u);
-        EXPECT_FLOAT_EQ((*upload)[1u].rows[0].w, 7.0f);
+    palette.joints.assign(3u, MakeTranslationJoint(7.0f, 0.0f, 0.0f));
+    ASSERT_TRUE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
+    const Expected<ConstSkeletonJointMatrixSpan> upload = ResolveGpuJointPalette(instance, payload);
+    ASSERT_TRUE(upload.has_value());
+    EXPECT_EQ(upload.value().size(), 2u);
+    EXPECT_TRUE(SharesJointMatrixStorage(upload.value(), payload));
+    EXPECT_EQ(payload.jointMatrices.size(), 3u);
+    EXPECT_FLOAT_EQ(upload.value()[1u]._14, 7.0f);
 
-        ++payload.skinInfluenceCount;
-        EXPECT_FALSE(ResolveGpuJointPalette(instance, payload));
-        --payload.skinInfluenceCount;
-        payload.jointMatrices.erase(payload.jointMatrices.begin() + 1, payload.jointMatrices.end());
-        EXPECT_FALSE(ResolveGpuJointPalette(instance, payload));
+    ++payload.skinInfluenceCount;
+    EXPECT_FALSE(ResolveGpuJointPalette(instance, payload).has_value());
+    --payload.skinInfluenceCount;
+    while(payload.jointMatrices.size() > 1u)
+        payload.jointMatrices.pop_back();
+    EXPECT_FALSE(ResolveGpuJointPalette(instance, payload).has_value());
 
-        palette.joints[2u].rows[0] = Float4(0.0f, 0.0f, 0.0f, 0.0f);
-        EXPECT_FALSE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
-        EXPECT_FALSE(ResolveGpuJointPalette(instance, payload));
-    }
+    ZeroJointMatrixRow0(palette.joints[2u]);
+    EXPECT_FALSE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
+    EXPECT_FALSE(ResolveGpuJointPalette(instance, payload).has_value());
 
     EXPECT_EQ(logger.errorCount(), 1u);
 }
@@ -457,37 +560,34 @@ void VerifySkinningPayload_RuntimePayloadFollowsReplacementMeshAndJointCounts(){
     ScratchArena scratchArena(s_OneOffNameTestsSkinningPayloadScratch);
     RuntimeSkinPayloadScratch payload(scratchArena);
 
-    native(mut payload){
-        auto& arena = Tests::TestDetail::Arena();
-        MeshSkinningRuntimeInstance instance(arena);
-        instance.handle.value = 13u;
-        instance.sourceName = s_SkinningCaseSkinningPayloadFirstSource;
-        instance.skin.assign(3u, MakeSkinInfluence(0u));
-        instance.skeletonJointCount = 1u;
-        SkeletonJointPaletteComponent palette;
-        palette.joints.push_back(MakeTranslationJoint(1.0f, 0.0f, 0.0f));
+    MeshSkinningRuntimeInstance instance = MakeRuntimeInstance();
+    instance.handle.value = 13u;
+    instance.sourceName = s_SkinningCaseSkinningPayloadFirstSource;
+    instance.skin.assign(3u, MakeSkinInfluence(0u));
+    instance.skeletonJointCount = 1u;
+    SkeletonJointPaletteComponent palette = SkeletonJointPaletteComponent();
+    palette.joints.push_back(MakeTranslationJoint(1.0f, 0.0f, 0.0f));
 
-        ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
-        ASSERT_EQ(payload.jointMatrices.size(), 1u);
+    ASSERT_TRUE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
+    ASSERT_EQ(payload.jointMatrices.size(), 1u);
 
-        instance.sourceName = s_SkinningCaseSkinningPayloadReplacementSource;
-        ++instance.editRevision;
-        instance.skin.assign(9u, MakeSkinInfluence(2u));
-        instance.skeletonJointCount = 3u;
-        instance.inverseBindMatrices.assign(3u, MakeTranslationJoint(-2.0f, 0.0f, 0.0f));
-        palette.joints.assign(3u, MakeTranslationJoint(7.0f, 0.0f, 0.0f));
-        ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
-        ASSERT_TRUE(payload.hasActiveSkin());
-        ASSERT_EQ(payload.jointMatrices.size(), 3u);
-        EXPECT_FLOAT_EQ(payload.jointMatrices[2].rows[0].w, 5.0f);
+    instance.sourceName = s_SkinningCaseSkinningPayloadReplacementSource;
+    ++instance.editRevision;
+    instance.skin.assign(9u, MakeSkinInfluence(2u));
+    instance.skeletonJointCount = 3u;
+    instance.inverseBindMatrices.assign(3u, MakeTranslationJoint(-2.0f, 0.0f, 0.0f));
+    palette.joints.assign(3u, MakeTranslationJoint(7.0f, 0.0f, 0.0f));
+    ASSERT_TRUE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
+    ASSERT_TRUE(payload.hasActiveSkin());
+    ASSERT_EQ(payload.jointMatrices.size(), 3u);
+    EXPECT_FLOAT_EQ(payload.jointMatrices[2u]._14, 5.0f);
 
-        ++instance.editRevision;
-        instance.skin.assign(2u, MakeSkinInfluence(0u));
-        instance.skeletonJointCount = 1u;
-        instance.inverseBindMatrices.clear();
-        palette.joints.assign(1u, MakeTranslationJoint(11.0f, 0.0f, 0.0f));
-        ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
-    }
+    ++instance.editRevision;
+    instance.skin.assign(2u, MakeSkinInfluence(0u));
+    instance.skeletonJointCount = 1u;
+    instance.inverseBindMatrices.clear();
+    palette.joints.assign(1u, MakeTranslationJoint(11.0f, 0.0f, 0.0f));
+    ASSERT_TRUE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
 
     ASSERT_EQ(payload.jointMatrices.size(), 1u);
     EXPECT_FLOAT_EQ(payload.jointMatrices[0u]._14, 11.0f);
@@ -495,20 +595,17 @@ void VerifySkinningPayload_RuntimePayloadFollowsReplacementMeshAndJointCounts(){
 
 void VerifySkinningPayload_EmptySkinProducesEmptyInfluencePayload(){
     ScratchArena scratchArena(s_OneOffNameTestsSkinningPayloadScratch);
-    native(mut scratchArena){
-        auto& arena = Tests::TestDetail::Arena();
-        MeshSkinningRuntimeInstance instance(arena);
-        instance.skeletonJointCount = 5u;
-        instance.skin.assign(2u, MakeSkinInfluence(0u));
-        auto influences = BuildSkinInfluences(instance, scratchArena);
-        ASSERT_TRUE(influences);
-        ASSERT_EQ(influences->size(), 2u);
+    MeshSkinningRuntimeInstance instance = MakeRuntimeInstance();
+    instance.skeletonJointCount = 5u;
+    instance.skin.assign(2u, MakeSkinInfluence(0u));
+    Expected<MeshSkinningInfluenceGpuScratchVector> influences = EncodeSkinInfluences(instance, scratchArena);
+    ASSERT_TRUE(influences.has_value());
+    ASSERT_EQ(influences.value().size(), 2u);
 
-        instance.skin.clear();
-        influences = BuildSkinInfluences(instance, scratchArena);
-        ASSERT_TRUE(influences);
-        EXPECT_TRUE(influences->empty());
-    }
+    instance.skin.clear();
+    influences = EncodeSkinInfluences(instance, scratchArena);
+    ASSERT_TRUE(influences.has_value());
+    EXPECT_TRUE(influences.value().empty());
 }
 
 void VerifySkinningPayload_GpuInfluencesPreserveUpperU16JointBitsAndFp32WeightBits(){
@@ -519,37 +616,33 @@ void VerifySkinningPayload_GpuInfluencesPreserveUpperU16JointBitsAndFp32WeightBi
     skin.joint[3u] = 0xfffeu;
     skin.weight = f32x4u(bit_cast<f32>(0x3e000001u), bit_cast<f32>(0x3ebfffffu), 0.5f, -0.0f);
 
-    native(in skin, mut scratchArena){
-        auto& arena = Tests::TestDetail::Arena();
-        MeshSkinningRuntimeInstance instance(arena);
-        instance.skeletonJointCount = static_cast<u32>(Limit<u16>::s_Max) + 1u;
-        instance.skin.push_back(skin);
+    MeshSkinningRuntimeInstance instance = MakeRuntimeInstance();
+    instance.skeletonJointCount = cast<u32>(u16.max) + 1u;
+    instance.skin.push_back(skin);
 
-        const auto influences = BuildSkinInfluences(instance, scratchArena);
-        ASSERT_TRUE(influences);
-        ASSERT_EQ(influences->size(), 1u);
-        const auto& gpuSkin = influences->front();
-        EXPECT_EQ(gpuSkin.packedJoint[0], 0xffff0000u);
-        EXPECT_EQ(gpuSkin.packedJoint[1], 0xfffe8000u);
-        for(u32 influenceIndex = 0u; influenceIndex < NWB_MESH_SKIN_MAX_INFLUENCE_COUNT; ++influenceIndex)
-            EXPECT_EQ(BitCast<u32>(gpuSkin.weight.raw[influenceIndex]), BitCast<u32>(skin.weight.raw[influenceIndex]));
-    }
+    const Expected<MeshSkinningInfluenceGpuScratchVector> influences = EncodeSkinInfluences(instance, scratchArena);
+    ASSERT_TRUE(influences.has_value());
+    ASSERT_EQ(influences.value().size(), 1u);
+    const MeshSkinningInfluenceGpu gpuSkin = influences.value().front();
+    EXPECT_EQ(gpuSkin.packedJoint[0u], 0xffff0000u);
+    EXPECT_EQ(gpuSkin.packedJoint[1u], 0xfffe8000u);
+    EXPECT_EQ(bit_cast<u32>(gpuSkin.weight.x), bit_cast<u32>(skin.weight.x));
+    EXPECT_EQ(bit_cast<u32>(gpuSkin.weight.y), bit_cast<u32>(skin.weight.y));
+    EXPECT_EQ(bit_cast<u32>(gpuSkin.weight.z), bit_cast<u32>(skin.weight.z));
+    EXPECT_EQ(bit_cast<u32>(gpuSkin.weight.w), bit_cast<u32>(skin.weight.w));
 }
 
 void VerifySkinningPayload_PaletteCanExceedSkeletonWithoutInverseBindMatrices(){
     ScratchArena scratchArena(s_OneOffNameTestsSkinningPayloadScratch);
     RuntimeSkinPayloadScratch payload(scratchArena);
 
-    native(mut payload){
-        auto& arena = Tests::TestDetail::Arena();
-        MeshSkinningRuntimeInstance instance(arena);
-        instance.skeletonJointCount = 1u;
-        instance.skin.assign(3u, MakeSkinInfluence(0u));
-        SkeletonJointPaletteComponent palette;
-        palette.joints.assign(3u, MakeTranslationJoint(5.0f, 0.0f, 0.0f));
+    MeshSkinningRuntimeInstance instance = MakeRuntimeInstance();
+    instance.skeletonJointCount = 1u;
+    instance.skin.assign(3u, MakeSkinInfluence(0u));
+    SkeletonJointPaletteComponent palette = SkeletonJointPaletteComponent();
+    palette.joints.assign(3u, MakeTranslationJoint(5.0f, 0.0f, 0.0f));
 
-        ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
-    }
+    ASSERT_TRUE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
 
     ASSERT_TRUE(payload.hasActiveSkin());
     ASSERT_EQ(payload.jointMatrices.size(), 3u);
@@ -559,28 +652,22 @@ void VerifySkinningPayload_PaletteCanExceedSkeletonWithoutInverseBindMatrices(){
 void VerifySkinningPayload_RuntimeScratchAllocationDoesNotScaleWithInfluenceCount(){
     ScratchArena scratchArena(s_OneOffNameTestsSkinningPayloadScratch);
     RuntimeSkinPayloadScratch payload(scratchArena);
-    ArenaMemoryStats initialMemory = ArenaMemoryStats();
-    ArenaMemoryStats finalMemory = ArenaMemoryStats();
-    usize expectedSkinCount = 0u;
 
-    native(mut scratchArena, mut payload, mut initialMemory, mut finalMemory, mut expectedSkinCount){
-        auto& arena = Tests::TestDetail::Arena();
-        MeshSkinningRuntimeInstance instance(arena);
-        instance.skeletonJointCount = 2u;
-        instance.skin.assign(3u, MakeSkinInfluence(1u));
-        SkeletonJointPaletteComponent palette;
-        palette.joints.assign(2u, MatrixIdentity<Float34>());
+    MeshSkinningRuntimeInstance instance = MakeRuntimeInstance();
+    instance.skeletonJointCount = 2u;
+    instance.skin.assign(3u, MakeSkinInfluence(1u));
+    SkeletonJointPaletteComponent palette = SkeletonJointPaletteComponent();
+    palette.joints.assign(2u, MatrixIdentity<f32x3x4>());
 
-        ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
-        initialMemory = scratchArena.memoryStats();
+    ASSERT_TRUE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
+    const ArenaMemoryStats initialMemory = scratchArena.memoryStats();
 
-        instance.skin.assign(65536u, MakeSkinInfluence(1u));
-        ++instance.editRevision;
-        palette.joints[1].rows[2].w = 7.0f;
-        ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
-        finalMemory = scratchArena.memoryStats();
-        expectedSkinCount = instance.skin.size();
-    }
+    instance.skin.assign(65536u, MakeSkinInfluence(1u));
+    ++instance.editRevision;
+    palette.joints[1u]._34 = 7.0f;
+    ASSERT_TRUE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
+    const ArenaMemoryStats finalMemory = scratchArena.memoryStats();
+    const usize expectedSkinCount = instance.skin.size();
 
     EXPECT_EQ(finalMemory.allocationCount, initialMemory.allocationCount);
     EXPECT_EQ(finalMemory.reallocationCount, initialMemory.reallocationCount);
@@ -591,30 +678,31 @@ void VerifySkinningPayload_RuntimeScratchAllocationDoesNotScaleWithInfluenceCoun
 
 void VerifySkinningPayload_PayloadScopeDestructionReclaimsScratchUsageAcrossMeshes(){
     ScratchArena scratchArena(s_OneOffNameTestsSkinningPayloadScratch);
-    ArenaMemoryStats initialMemory = ArenaMemoryStats();
 
-    native(mut scratchArena, mut initialMemory){
-        auto& arena = Tests::TestDetail::Arena();
-        MeshSkinningRuntimeInstance instance(arena);
-        instance.skeletonJointCount = 2u;
-        instance.skin.assign(3u, MakeSkinInfluence(1u));
-        SkeletonJointPaletteComponent palette;
-        palette.joints.assign(2u, MatrixIdentity<Float34>());
-        SkeletonPoseComponent pose;
-        pose.localJoints.assign(2u, MatrixIdentity<Float34>());
-        pose.parentJoints.assign(2u, s_SkeletonInvalidJointIndex);
+    MeshSkinningRuntimeInstance instance = MakeRuntimeInstance();
+    instance.skeletonJointCount = 2u;
+    instance.skin.assign(3u, MakeSkinInfluence(1u));
+    SkeletonJointPaletteComponent palette = SkeletonJointPaletteComponent();
+    palette.joints.assign(2u, MatrixIdentity<f32x3x4>());
+    SkeletonPoseComponent pose = SkeletonPoseComponent();
+    pose.localJoints.assign(2u, MatrixIdentity<f32x3x4>());
+    pose.parentJoints.assign(2u, s_SkeletonInvalidJointIndex);
 
-        {
-            RuntimeSkinPayloadScratch payload(scratchArena);
-            ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, &pose, payload));
-            ASSERT_TRUE(payload.hasActiveSkin());
+    if(true){
+        RuntimeSkinPayloadScratch payload(scratchArena);
+        ASSERT_TRUE(BuildRuntimeSkinPayloadFromPose(instance, palette, pose, payload));
+        ASSERT_TRUE(payload.hasActiveSkin());
+    }
+    const ArenaMemoryStats initialMemory = scratchArena.memoryStats();
+    for(u32 meshIndex = 0u; meshIndex < 64u; ++meshIndex){
+        RuntimeSkinPayloadScratch payload(scratchArena);
+        if((meshIndex % 2u) == 0u){
+            ASSERT_TRUE(BuildRuntimeSkinPayloadFromPose(instance, palette, pose, payload));
         }
-        initialMemory = scratchArena.memoryStats();
-        for(u32 meshIndex = 0u; meshIndex < 64u; ++meshIndex){
-            RuntimeSkinPayloadScratch payload(scratchArena);
-            ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, meshIndex % 2u == 0u ? &pose : nullptr, payload));
-            ASSERT_TRUE(payload.hasActiveSkin());
+        else{
+            ASSERT_TRUE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
         }
+        ASSERT_TRUE(payload.hasActiveSkin());
     }
 
     const ArenaMemoryStats finalMemory = scratchArena.memoryStats();
@@ -627,43 +715,40 @@ void VerifySkinningPayload_RuntimePayloadRejectsInvalidDynamicInputs(){
     ScratchArena scratchArena(s_OneOffNameTestsSkinningPayloadScratch);
     RuntimeSkinPayloadScratch payload(scratchArena);
 
-    native(mut payload){
-        auto& arena = Tests::TestDetail::Arena();
-        MeshSkinningRuntimeInstance instance(arena);
-        instance.skeletonJointCount = 2u;
-        instance.skin.assign(3u, MakeSkinInfluence(1u));
-        SkeletonJointPaletteComponent palette;
-        palette.joints.assign(1u, MatrixIdentity<Float34>());
+    MeshSkinningRuntimeInstance instance = MakeRuntimeInstance();
+    instance.skeletonJointCount = 2u;
+    instance.skin.assign(3u, MakeSkinInfluence(1u));
+    SkeletonJointPaletteComponent palette = SkeletonJointPaletteComponent();
+    palette.joints.assign(1u, MatrixIdentity<f32x3x4>());
 
-        EXPECT_FALSE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
-        ExpectEmptyRuntimePayload(payload);
+    EXPECT_FALSE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
+    ExpectEmptyRuntimePayload(payload);
 
-        palette.joints.assign(2u, MatrixIdentity<Float34>());
-        palette.skinningMode = Limit<u32>::s_Max;
-        EXPECT_FALSE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
-        ExpectEmptyRuntimePayload(payload);
+    palette.joints.assign(2u, MatrixIdentity<f32x3x4>());
+    palette.skinningMode = u32.max;
+    EXPECT_FALSE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
+    ExpectEmptyRuntimePayload(payload);
 
-        palette.skinningMode = SkeletonSkinningMode::LinearBlend;
-        palette.joints[1].rows[0] = Float4(0.0f, 0.0f, 0.0f, 0.0f);
-        EXPECT_FALSE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
-        ExpectEmptyRuntimePayload(payload);
+    palette.skinningMode = SkeletonSkinningMode::LinearBlend;
+    ZeroJointMatrixRow0(palette.joints[1u]);
+    EXPECT_FALSE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
+    ExpectEmptyRuntimePayload(payload);
 
-        palette.joints.assign(2u, MatrixIdentity<Float34>());
-        SkeletonPoseComponent pose;
-        pose.localJoints.assign(2u, MatrixIdentity<Float34>());
-        pose.parentJoints.assign(2u, s_SkeletonInvalidJointIndex);
-        pose.parentJoints[1] = 1u;
-        EXPECT_FALSE(BuildRuntimeSkinPayload(instance, &palette, &pose, payload));
-        ExpectEmptyRuntimePayload(payload);
+    palette.joints.assign(2u, MatrixIdentity<f32x3x4>());
+    SkeletonPoseComponent pose = SkeletonPoseComponent();
+    pose.localJoints.assign(2u, MatrixIdentity<f32x3x4>());
+    pose.parentJoints.assign(2u, s_SkeletonInvalidJointIndex);
+    pose.parentJoints[1u] = 1u;
+    EXPECT_FALSE(BuildRuntimeSkinPayloadFromPose(instance, palette, pose, payload));
+    ExpectEmptyRuntimePayload(payload);
 
-        palette.skinningMode = SkeletonSkinningMode::DualQuaternion;
-        palette.joints[0].rows[0].x = 2.0f;
-        EXPECT_FALSE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
-        ExpectEmptyRuntimePayload(payload);
+    palette.skinningMode = SkeletonSkinningMode::DualQuaternion;
+    palette.joints[0u]._11 = 2.0f;
+    EXPECT_FALSE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
+    ExpectEmptyRuntimePayload(payload);
 
-        palette.joints.assign(2u, MatrixIdentity<Float34>());
-        ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
-    }
+    palette.joints.assign(2u, MatrixIdentity<f32x3x4>());
+    ASSERT_TRUE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
 
     ASSERT_TRUE(payload.hasActiveSkin());
     ASSERT_EQ(payload.jointMatrices.size(), 2u);
@@ -676,63 +761,60 @@ void VerifySkinningPayload_InverseBindBoundsAndPartialFailuresLeaveNoActivePaylo
     ScratchArena scratchArena(s_OneOffNameTestsSkinningPayloadScratch);
     RuntimeSkinPayloadScratch payload(scratchArena);
 
-    native(mut payload){
-        auto& arena = Tests::TestDetail::Arena();
-        MeshSkinningRuntimeInstance instance(arena);
-        instance.skeletonJointCount = 2u;
-        instance.skin.assign(3u, MakeSkinInfluence(1u));
-        instance.inverseBindMatrices.assign(2u, MatrixIdentity<Float34>());
-        SkeletonJointPaletteComponent palette;
-        palette.joints.assign(2u, MatrixIdentity<Float34>());
+    MeshSkinningRuntimeInstance instance = MakeRuntimeInstance();
+    instance.skeletonJointCount = 2u;
+    instance.skin.assign(3u, MakeSkinInfluence(1u));
+    instance.inverseBindMatrices.assign(2u, MatrixIdentity<f32x3x4>());
+    SkeletonJointPaletteComponent palette = SkeletonJointPaletteComponent();
+    palette.joints.assign(2u, MatrixIdentity<f32x3x4>());
 
-        ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
-        ASSERT_TRUE(payload.hasActiveSkin());
-        palette.joints.push_back(MatrixIdentity<Float34>());
-        EXPECT_FALSE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
-        ExpectEmptyRuntimePayload(payload);
+    ASSERT_TRUE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
+    ASSERT_TRUE(payload.hasActiveSkin());
+    palette.joints.push_back(MatrixIdentity<f32x3x4>());
+    EXPECT_FALSE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
+    ExpectEmptyRuntimePayload(payload);
 
-        payload.jointMatrices.assign(1u, MatrixIdentity<Float34>());
-        EXPECT_FALSE(BuildSkinJointPalette(instance, palette.joints, palette.skinningMode, payload.jointMatrices));
-        EXPECT_TRUE(payload.jointMatrices.empty());
+    payload.jointMatrices.assign(1u, MatrixIdentity<f32x3x4>());
+    EXPECT_FALSE(BuildSkinJointPalette(instance, palette.joints, palette.skinningMode, payload.jointMatrices));
+    EXPECT_TRUE(payload.jointMatrices.empty());
 
-        palette.joints.pop_back();
-        ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
-        ASSERT_TRUE(payload.hasActiveSkin());
-        instance.inverseBindMatrices.pop_back();
-        EXPECT_FALSE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
-        ExpectEmptyRuntimePayload(payload);
+    palette.joints.pop_back();
+    ASSERT_TRUE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
+    ASSERT_TRUE(payload.hasActiveSkin());
+    instance.inverseBindMatrices.pop_back();
+    EXPECT_FALSE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
+    ExpectEmptyRuntimePayload(payload);
 
-        instance.inverseBindMatrices.assign(2u, MatrixIdentity<Float34>());
-        instance.inverseBindMatrices[1].rows[0] = Float4(0.0f, 0.0f, 0.0f, 0.0f);
-        EXPECT_FALSE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
-        ExpectEmptyRuntimePayload(payload);
+    instance.inverseBindMatrices.assign(2u, MatrixIdentity<f32x3x4>());
+    ZeroJointMatrixRow0(instance.inverseBindMatrices[1u]);
+    EXPECT_FALSE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
+    ExpectEmptyRuntimePayload(payload);
 
-        instance.inverseBindMatrices[1] = MatrixIdentity<Float34>();
-        instance.inverseBindMatrices[1].rows[0].x = 0.001f;
-        instance.inverseBindMatrices[1].rows[1].y = 0.001f;
-        instance.inverseBindMatrices[1].rows[2].z = 0.001f;
-        EXPECT_FALSE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
-        ExpectEmptyRuntimePayload(payload);
+    instance.inverseBindMatrices[1u] = MatrixIdentity<f32x3x4>();
+    instance.inverseBindMatrices[1u]._11 = 0.001f;
+    instance.inverseBindMatrices[1u]._22 = 0.001f;
+    instance.inverseBindMatrices[1u]._33 = 0.001f;
+    EXPECT_FALSE(BuildRuntimeSkinPayloadFromPalette(instance, palette, payload));
+    ExpectEmptyRuntimePayload(payload);
 
-        instance.inverseBindMatrices.assign(2u, MatrixIdentity<Float34>());
-        SkeletonPoseComponent pose;
-        pose.localJoints.assign(2u, MatrixIdentity<Float34>());
-        pose.parentJoints.assign(2u, s_SkeletonInvalidJointIndex);
-        ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, &pose, payload));
-        ASSERT_TRUE(payload.hasActiveSkin());
-        pose.parentJoints[1] = 1u;
-        EXPECT_FALSE(BuildRuntimeSkinPayload(instance, &palette, &pose, payload));
-        ExpectEmptyRuntimePayload(payload);
+    instance.inverseBindMatrices.assign(2u, MatrixIdentity<f32x3x4>());
+    SkeletonPoseComponent pose = SkeletonPoseComponent();
+    pose.localJoints.assign(2u, MatrixIdentity<f32x3x4>());
+    pose.parentJoints.assign(2u, s_SkeletonInvalidJointIndex);
+    ASSERT_TRUE(BuildRuntimeSkinPayloadFromPose(instance, palette, pose, payload));
+    ASSERT_TRUE(payload.hasActiveSkin());
+    pose.parentJoints[1u] = 1u;
+    EXPECT_FALSE(BuildRuntimeSkinPayloadFromPose(instance, palette, pose, payload));
+    ExpectEmptyRuntimePayload(payload);
 
-        pose.parentJoints[1] = 0u;
-        pose.skinningMode = SkeletonSkinningMode::DualQuaternion;
-        pose.localJoints[1].rows[0].x = 2.0f;
-        EXPECT_FALSE(BuildRuntimeSkinPayload(instance, &palette, &pose, payload));
-        ExpectEmptyRuntimePayload(payload);
+    pose.parentJoints[1u] = 0u;
+    pose.skinningMode = SkeletonSkinningMode::DualQuaternion;
+    pose.localJoints[1u]._11 = 2.0f;
+    EXPECT_FALSE(BuildRuntimeSkinPayloadFromPose(instance, palette, pose, payload));
+    ExpectEmptyRuntimePayload(payload);
 
-        pose.localJoints[1] = MakeTranslationJoint(0.0f, 6.0f, 0.0f);
-        ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, &pose, payload));
-    }
+    pose.localJoints[1u] = MakeTranslationJoint(0.0f, 6.0f, 0.0f);
+    ASSERT_TRUE(BuildRuntimeSkinPayloadFromPose(instance, palette, pose, payload));
 
     ASSERT_TRUE(payload.hasActiveSkin());
     ASSERT_EQ(payload.jointMatrices.size(), 2u);
@@ -745,49 +827,46 @@ void VerifySkinningPayload_StaticInfluenceEncodingRejectsInvalidMeshEditsAndReco
     LoggerRegistrationGuard loggerRegistration(logger);
     ScratchArena scratchArena(s_OneOffNameTestsSkinningPayloadScratch);
 
-    native(mut scratchArena){
-        auto& arena = Tests::TestDetail::Arena();
-        MeshSkinningRuntimeInstance instance(arena);
-        instance.skeletonJointCount = 2u;
-        instance.skin.assign(2u, MakeSkinInfluence(1u));
-        auto influences = BuildSkinInfluences(instance, scratchArena);
-        ASSERT_TRUE(influences);
-        ASSERT_EQ(influences->size(), 2u);
+    MeshSkinningRuntimeInstance instance = MakeRuntimeInstance();
+    instance.skeletonJointCount = 2u;
+    instance.skin.assign(2u, MakeSkinInfluence(1u));
+    Expected<MeshSkinningInfluenceGpuScratchVector> influences = EncodeSkinInfluences(instance, scratchArena);
+    ASSERT_TRUE(influences.has_value());
+    ASSERT_EQ(influences.value().size(), 2u);
 
-        ++instance.editRevision;
-        instance.skin[1].weight.x = 0.5f;
-        influences = BuildSkinInfluences(instance, scratchArena);
-        EXPECT_FALSE(influences);
+    ++instance.editRevision;
+    instance.skin[1u].weight.x = 0.5f;
+    influences = EncodeSkinInfluences(instance, scratchArena);
+    EXPECT_FALSE(influences.has_value());
 
-        instance.skin[1].weight = Float4U(-0.5f, 1.5f, 0.0f, 0.0f);
-        influences = BuildSkinInfluences(instance, scratchArena);
-        EXPECT_FALSE(influences);
+    instance.skin[1u].weight = f32x4u(-0.5f, 1.5f, 0.0f, 0.0f);
+    influences = EncodeSkinInfluences(instance, scratchArena);
+    EXPECT_FALSE(influences.has_value());
 
-        instance.skin[1].weight = Float4U(Limit<f32>::s_QuietNaN, 0.0f, 0.0f, 0.0f);
-        influences = BuildSkinInfluences(instance, scratchArena);
-        EXPECT_FALSE(influences);
+    instance.skin[1u].weight = f32x4u(s_QuietNaNF32, 0.0f, 0.0f, 0.0f);
+    influences = EncodeSkinInfluences(instance, scratchArena);
+    EXPECT_FALSE(influences.has_value());
 
-        instance.skin[1] = MakeSkinInfluence(1u);
-        instance.skin[1].joint[3] = 2u;
-        influences = BuildSkinInfluences(instance, scratchArena);
-        EXPECT_FALSE(influences);
+    instance.skin[1u] = MakeSkinInfluence(1u);
+    instance.skin[1u].joint[3u] = 2u;
+    influences = EncodeSkinInfluences(instance, scratchArena);
+    EXPECT_FALSE(influences.has_value());
 
-        instance.skin[1] = MakeSkinInfluence(1u);
-        instance.skeletonJointCount = 0u;
-        influences = BuildSkinInfluences(instance, scratchArena);
-        EXPECT_FALSE(influences);
+    instance.skin[1u] = MakeSkinInfluence(1u);
+    instance.skeletonJointCount = 0u;
+    influences = EncodeSkinInfluences(instance, scratchArena);
+    EXPECT_FALSE(influences.has_value());
 
-        instance.skeletonJointCount = static_cast<u32>(Limit<u16>::s_Max) + 2u;
-        influences = BuildSkinInfluences(instance, scratchArena);
-        EXPECT_FALSE(influences);
+    instance.skeletonJointCount = cast<u32>(u16.max) + 2u;
+    influences = EncodeSkinInfluences(instance, scratchArena);
+    EXPECT_FALSE(influences.has_value());
 
-        instance.skeletonJointCount = 2u;
-        influences = BuildSkinInfluences(instance, scratchArena);
-        ASSERT_TRUE(influences);
-        ASSERT_EQ(influences->size(), 2u);
-        EXPECT_EQ((*influences)[1].packedJoint[0] & NWB_SKINNED_MESH_SKIN_JOINT_MASK, 1u);
-        EXPECT_FLOAT_EQ((*influences)[1].weight.x, 1.0f);
-    }
+    instance.skeletonJointCount = 2u;
+    influences = EncodeSkinInfluences(instance, scratchArena);
+    ASSERT_TRUE(influences.has_value());
+    ASSERT_EQ(influences.value().size(), 2u);
+    EXPECT_EQ(influences.value()[1u].packedJoint[0u] & s_SkinnedMeshSkinJointMask, 1u);
+    EXPECT_FLOAT_EQ(influences.value()[1u].weight.x, 1.0f);
 
     EXPECT_EQ(logger.errorCount(), 6u);
 }
@@ -799,10 +878,8 @@ void VerifySkinningDeformation_MissingResourceRejectsWithoutCandidateOrArenaPubl
     MeshSkinningDeformationState state(arena);
     const ArenaMemoryStats before = arena.memoryStats();
 
-    native(mut state){
-        const auto rejected = state.stage(MeshSkinningDeformationInputs{}, {});
-        ASSERT_FALSE(rejected.has_value());
-    }
+    const Expected<u64> rejected = state.stage(MeshSkinningDeformationInputs(), Span<SkeletonJointMatrix>());
+    ASSERT_FALSE(rejected.has_value());
 
     EXPECT_FALSE(state.accept(1u));
     EXPECT_EQ(state.contentRevision(), 0u);
@@ -821,12 +898,9 @@ void VerifyMesh_DegenerateUvsUseStableTangentFallback(){
     vertices.push_back(MakeTangentVertex(1.0f, 1.0f, 0.0f, 0.0f, 0.0f));
     vertices.push_back(MakeTangentVertex(-1.0f, 1.0f, 0.0f, 0.0f, 0.0f));
 
-    TangentFrameRebuildResult stats = TangentFrameRebuildResult();
-    native(mut scratchArena, mut vertices, mut stats){
-        const auto result = RebuildTangentFrames(scratchArena, s_QuadTriangleIndices, Span<TangentFrameRebuildVertex>(vertices.data(), vertices.size()));
-        ASSERT_TRUE(result);
-        stats = *result;
-    }
+    const Expected<TangentFrameRebuildResult> result = RebuildTangentFramesForVertices(scratchArena, s_QuadTriangleIndices, vertices);
+    ASSERT_TRUE(result.has_value());
+    const TangentFrameRebuildResult stats = result.value();
 
     EXPECT_EQ(stats.rebuiltVertexCount, vertices.size());
     EXPECT_EQ(stats.degenerateUvTriangleCount, 2u);
@@ -849,83 +923,8 @@ void VerifyMesh_RejectsDegenerateTangentFrameTriangle(){
     vertices.push_back(MakeTangentVertex(0.0f, 0.0f, 0.0f, 1.0f, 0.0f));
     vertices.push_back(MakeTangentVertex(0.0f, 0.0f, 0.0f, 0.0f, 1.0f));
 
-    native(mut scratchArena, mut vertices){
-        EXPECT_FALSE(RebuildTangentFrames(scratchArena, s_TriangleIndices, Span<TangentFrameRebuildVertex>(vertices.data(), vertices.size())));
-    }
+    EXPECT_FALSE(RebuildTangentFramesForVertices(scratchArena, s_TriangleIndices, vertices).has_value());
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace MeshTestsDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Impl::MeshSkinningGraphDispatchPlan MakePlan(const u32 offset, const u64 generation)noexcept{
-    Impl::MeshSkinningGraphDispatchPlan plan;
-    plan.bindlessResourceSlotsResource = { .generation = generation, .index = static_cast<u32>(offset + 1u) };
-    plan.restPositionResource = { .generation = generation, .index = static_cast<u32>(offset + 2u) };
-    plan.restNormalResource = { .generation = generation, .index = static_cast<u32>(offset + 3u) };
-    plan.restTangentResource = { .generation = generation, .index = static_cast<u32>(offset + 4u) };
-    plan.skinnedPositionResource = { .generation = generation, .index = static_cast<u32>(offset + 5u) };
-    plan.skinnedNormalResource = { .generation = generation, .index = static_cast<u32>(offset + 6u) };
-    plan.skinnedTangentResource = { .generation = generation, .index = static_cast<u32>(offset + 7u) };
-    plan.meshletDescResource = { .generation = generation, .index = static_cast<u32>(offset + 8u) };
-    plan.meshletBoundsResource = { .generation = generation, .index = static_cast<u32>(offset + 9u) };
-    plan.meshletPositionRefDeltaResource = { .generation = generation, .index = static_cast<u32>(offset + 10u) };
-    plan.meshletAttributeRefDeltaResource = { .generation = generation, .index = static_cast<u32>(offset + 11u) };
-    plan.meshletLocalVertexRefResource = { .generation = generation, .index = static_cast<u32>(offset + 12u) };
-    plan.meshletPrimitiveIndexResource = { .generation = generation, .index = static_cast<u32>(offset + 13u) };
-    plan.attributeSkinResource = { .generation = generation, .index = static_cast<u32>(offset + 14u) };
-    plan.skinResource = { .generation = generation, .index = static_cast<u32>(offset + 15u) };
-    plan.jointPaletteResource = { .generation = generation, .index = static_cast<u32>(offset + 16u) };
-    plan.attributeResource = { .generation = generation, .index = static_cast<u32>(offset + 17u) };
-    plan.meshletLocalBoundsResource = { .generation = generation, .index = static_cast<u32>(offset + 18u) };
-    plan.localBoundsResource = { .generation = generation, .index = static_cast<u32>(offset + 19u) };
-    plan.hasActiveSkin = true;
-    plan.copiedRestStreams = true;
-    plan.updatesMeshletBounds = true;
-    plan.repacksNormals = true;
-    return plan;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 NWB_ADHD_GTEST(SkinningGraphResourceUses, DeduplicatesRepeatedAndPermutedInputsWithoutChangingFirstOccurrence, VerifySkinningGraphResourceUses_DeduplicatesRepeatedAndPermutedInputsWithoutChangingFirstOccurrence)
 NWB_ADHD_GTEST(SkinningGraphResourceUses, PreservesFullResourceGenerationAndRebuildsChangedFlags, VerifySkinningGraphResourceUses_PreservesFullResourceGenerationAndRebuildsChangedFlags)

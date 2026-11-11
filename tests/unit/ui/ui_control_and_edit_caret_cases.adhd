@@ -46,7 +46,7 @@ namespace __hidden_ui_control_input_tests{
 using namespace NWB;
 using namespace NWB::Impl::Ui;
 
-[[nodiscard]] inline HitTarget MakeHost(const u64 id = 1u, const f32 x = 0.0f)noexcept{
+[[nodiscard]] NWB_INLINE HitTarget MakeHost(const u64 id = 1u, const f32 x = 0.0f)noexcept{
     HitTarget target;
     target.id = { id };
     target.declarationGeneration = 7u;
@@ -62,7 +62,7 @@ using namespace NWB::Impl::Ui;
     return target;
 }
 
-[[nodiscard]] inline HitTarget MakePart(const HitTarget& host, const u64 id, const Rect& rectangle, const u64 value = 0u)noexcept{
+[[nodiscard]] NWB_INLINE HitTarget MakePart(const HitTarget& host, const u64 id, const Rect& rectangle, const u64 value = 0u)noexcept{
     HitTarget target;
     target.id = { id };
     target.rectangle = rectangle;
@@ -261,7 +261,7 @@ using namespace NWB;
 using namespace NWB::Impl::Ui;
 using namespace NWB::UiEditCaretTests;
 
-[[nodiscard]] inline b8 AdoptMismatchedSourcePreservingCandidate(EditCaretFixture& self){
+[[nodiscard]] NWB_INLINE b8 AdoptMismatchedSourcePreservingCandidate(EditCaretFixture& self){
     auto layoutResult = self.layout("new");
     if(!layoutResult)
         return false;
@@ -274,7 +274,7 @@ using namespace NWB::UiEditCaretTests;
     return !adopted && candidate.utf8() == "new";
 }
 
-[[nodiscard]] inline b8 AdoptBuiltCaretLayout(EditCaretFixture& self, const StringView layoutText, const StringView sourceText, const usize committedBytes, const EditTextMode::Enum mode, const TextDirection::Enum direction = TextDirection::LeftToRight){
+[[nodiscard]] NWB_INLINE b8 AdoptBuiltCaretLayout(EditCaretFixture& self, const StringView layoutText, const StringView sourceText, const usize committedBytes, const EditTextMode::Enum mode, const TextDirection::Enum direction = TextDirection::LeftToRight){
     auto built = self.layout(layoutText, direction);
     EXPECT_TRUE(built);
     if(!built)
@@ -282,7 +282,7 @@ using namespace NWB::UiEditCaretTests;
     return self.m_geometry.adoptLayout(Move(*built), sourceText, self.m_mapping, committedBytes, mode);
 }
 
-[[nodiscard]] inline b8 AdoptNonfiniteDerivedGlyphPlacement(EditCaretFixture& self){
+[[nodiscard]] NWB_INLINE b8 AdoptNonfiniteDerivedGlyphPlacement(EditCaretFixture& self){
     auto malformedResult = self.layout("ab");
     EXPECT_TRUE(malformedResult);
     if(!malformedResult)
@@ -297,7 +297,7 @@ using namespace NWB::UiEditCaretTests;
     return self.m_geometry.adoptLayout(Move(malformed), "ab", self.m_mapping, 2u, EditTextMode::SingleLine);
 }
 
-[[nodiscard]] inline b8 AdoptMutatedLineRecord(EditCaretFixture& self, const u32 mutation){
+[[nodiscard]] NWB_INLINE b8 AdoptMutatedLineRecord(EditCaretFixture& self, const u32 mutation){
     auto malformedResult = self.layout("a\nb");
     EXPECT_TRUE(malformedResult);
     if(!malformedResult)
@@ -323,7 +323,7 @@ using namespace NWB::UiEditCaretTests;
     return self.m_geometry.adoptLayout(Move(malformed), "a\nb", self.m_mapping, 3u, EditTextMode::Multiline);
 }
 
-inline void MoveCaretGeometry(EditCaretGeometry& source, EditCaretGeometry& destination)noexcept{
+NWB_INLINE void MoveCaretGeometry(EditCaretGeometry& source, EditCaretGeometry& destination)noexcept{
     destination = Move(source);
 }
 
@@ -382,34 +382,34 @@ using CoreKeyEnum = ::NWB::Core::Key::Enum;
 using ::NWB::Impl::Ui::s_InputMaxControlActions;
 using ::NWB::Tests::UiCases::s_UiCaseNameFontScratch;
 
-[[nodiscard]] inline f32 UiControlCaretInfinityF32()noexcept{ return ::Limit<f32>::s_Infinity; }
-[[nodiscard]] inline f32 UiControlCaretQuietNaNF32()noexcept{ return ::Limit<f32>::s_QuietNaN; }
-[[nodiscard]] inline f64 UiControlCaretInfinityF64()noexcept{ return ::Limit<f64>::s_Infinity; }
-[[nodiscard]] inline f64 UiControlCaretQuietNaNF64()noexcept{ return ::Limit<f64>::s_QuietNaN; }
-[[nodiscard]] inline b8 UiEditBoxSignBit(const f32 value)noexcept{ return ::SignBit(value); }
-[[nodiscard]] inline EditTextModeEnum MakeUiInvalidEditTextMode()noexcept{ return static_cast<EditTextModeEnum>(99u); }
-[[nodiscard]] inline InputEvent MakeUiControlInputPointer(const InputEventTypeEnum type, const Point position = { 15.0f, 15.0f })noexcept{
+[[nodiscard]] NWB_INLINE f32 UiControlCaretInfinityF32()noexcept{ return ::Limit<f32>::s_Infinity; }
+[[nodiscard]] NWB_INLINE f32 UiControlCaretQuietNaNF32()noexcept{ return ::Limit<f32>::s_QuietNaN; }
+[[nodiscard]] NWB_INLINE f64 UiControlCaretInfinityF64()noexcept{ return ::Limit<f64>::s_Infinity; }
+[[nodiscard]] NWB_INLINE f64 UiControlCaretQuietNaNF64()noexcept{ return ::Limit<f64>::s_QuietNaN; }
+[[nodiscard]] NWB_INLINE b8 UiEditBoxSignBit(const f32 value)noexcept{ return ::SignBit(value); }
+[[nodiscard]] NWB_INLINE EditTextModeEnum MakeUiInvalidEditTextMode()noexcept{ return static_cast<EditTextModeEnum>(99u); }
+[[nodiscard]] NWB_INLINE InputEvent MakeUiControlInputPointer(const InputEventTypeEnum type, const Point position = { 15.0f, 15.0f })noexcept{
     return ::UiTestSupport::Pointer(type, position);
 }
-[[nodiscard]] inline InputEvent MakeUiControlInputKey(const InputEventTypeEnum type, const CoreKeyEnum key, const b8 repeat = false)noexcept{
+[[nodiscard]] NWB_INLINE InputEvent MakeUiControlInputKey(const InputEventTypeEnum type, const CoreKeyEnum key, const b8 repeat = false)noexcept{
     return ::UiTestSupport::Key(type, key, repeat);
 }
-[[nodiscard]] inline b8 UiEditCaretAdoptMismatchedSource(EditCaretFixture& self){
+[[nodiscard]] NWB_INLINE b8 UiEditCaretAdoptMismatchedSource(EditCaretFixture& self){
     return __hidden_ui_edit_caret_geometry_tests::AdoptMismatchedSourcePreservingCandidate(self);
 }
-[[nodiscard]] inline b8 UiEditCaretAdoptBuiltLayout(EditCaretFixture& self, const StringView layoutText, const StringView sourceText, const usize committedBytes, const EditTextModeEnum mode, const ::NWB::Impl::Ui::TextDirection::Enum direction = ::NWB::Impl::Ui::TextDirection::LeftToRight){
+[[nodiscard]] NWB_INLINE b8 UiEditCaretAdoptBuiltLayout(EditCaretFixture& self, const StringView layoutText, const StringView sourceText, const usize committedBytes, const EditTextModeEnum mode, const ::NWB::Impl::Ui::TextDirection::Enum direction = ::NWB::Impl::Ui::TextDirection::LeftToRight){
     return __hidden_ui_edit_caret_geometry_tests::AdoptBuiltCaretLayout(self, layoutText, sourceText, committedBytes, mode, direction);
 }
-[[nodiscard]] inline b8 UiEditCaretAdoptNonfinitePlacement(EditCaretFixture& self){
+[[nodiscard]] NWB_INLINE b8 UiEditCaretAdoptNonfinitePlacement(EditCaretFixture& self){
     return __hidden_ui_edit_caret_geometry_tests::AdoptNonfiniteDerivedGlyphPlacement(self);
 }
-[[nodiscard]] inline b8 UiEditCaretAdoptMutatedLineRecord(EditCaretFixture& self, const u32 mutation){
+[[nodiscard]] NWB_INLINE b8 UiEditCaretAdoptMutatedLineRecord(EditCaretFixture& self, const u32 mutation){
     return __hidden_ui_edit_caret_geometry_tests::AdoptMutatedLineRecord(self, mutation);
 }
-inline void UiEditCaretMoveGeometry(EditCaretGeometry& source, EditCaretGeometry& destination)noexcept{
+NWB_INLINE void UiEditCaretMoveGeometry(EditCaretGeometry& source, EditCaretGeometry& destination)noexcept{
     __hidden_ui_edit_caret_geometry_tests::MoveCaretGeometry(source, destination);
 }
-inline void UiEditCaretMoveGeometry(EditCaretGeometry&& source, EditCaretGeometry& destination)noexcept{
+NWB_INLINE void UiEditCaretMoveGeometry(EditCaretGeometry&& source, EditCaretGeometry& destination)noexcept{
     destination = Move(source);
 }
 };

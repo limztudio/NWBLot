@@ -16,6 +16,8 @@ native{
 
 
 #include <impl/global.adhd.h>
+#include <impl/ecs_render/kernel/task_timing_feedback_types.adhd.h>
+#include <impl/ecs_render/kernel/task_timing_telemetry_labels.adhd.h>
 
 #include <core/graphics/gpu_timing.h>
 #include <core/graphics/runtime/runtime.h>
@@ -34,28 +36,154 @@ NWB_IMPL_BEGIN
 // Renderer owns timing lifetime; compiler consumes only an immutable history snapshot.
 class RendererTaskTimingFeedback final : NoCopy{
 private:
-    static void OnGpuTimingSampleCallback(void* context, const Core::GpuTimingSample& sample)noexcept;
+    static void OnGpuTimingSampleCallback(void* const context, const Core::GpuTimingSample& sample)noexcept{
+        auto& feedback = *MakeNotNull(static_cast<RendererTaskTimingFeedback*>(context));
+        feedback.onGpuTimingSample(sample);
+    }
 
 
 public:
-    RendererTaskTimingFeedback(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Span<const Name> feedbackCollectionScopes);
+    RendererTaskTimingFeedback(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, const Span<const Name> feedbackCollectionScopes)
+        : m_graphics(graphics)
+        , m_state(arena)
+        , m_history(arena)
+        , m_snapshot(arena)
+        , m_feedbackCollectionScopes(arena)
+    {
+        NWB_ASSERT(!feedbackCollectionScopes.empty());
+        m_feedbackCollectionScopes.reserve(feedbackCollectionScopes.size());
+        m_feedbackCollectionScopes.assign(feedbackCollectionScopes.begin(), feedbackCollectionScopes.end());
+    }
+
     ~RendererTaskTimingFeedback()noexcept{
         deactivate();
     }
 
 
 public:
-    void activate();
-    void deactivate()noexcept;
-    [[nodiscard]] Expected<Core::GpuTimingSampleAttribution> beginSample(const Name& scopeName, const Core::GpuTaskTimingKey& key, const Core::GpuPhysicalQueueId& expectedQueue, b8 recordsNonCommittingTimingSample);
-    void acceptSubmission(Core::GpuTimingSampleAttribution attribution, const Core::QueueSubmissionToken& token)noexcept;
-    void discardRecording(Core::GpuTimingSampleAttribution attribution)noexcept;
-    void configureCompileOptions(Core::GpuTaskGraphCompileOptions& options, u64 frameIndex);
-    void reset()noexcept;
+    NWB_INLINE void activate(){
+        ScopedLock lifecycleLock(m_lifecycleMutex);
+
+        b8 feedbackCollectionEnabled = false;
+        {
+            ScopedLock lock(m_mutex);
+            if(m_active)
+                return;
+            feedbackCollectionEnabled = m_policy.enabled;
+        }
+
+        Core::GpuTimingRecorder& timing = m_graphics.gpuTiming();
+        const auto subscriptionResult = timing.subscribeSampleListener(Core::GpuTimingSampleListener{ .context = this, .invoke = &OnGpuTimingSampleCallback, });
+        if(!subscriptionResult){
+            LogRendererTaskTimingFeedbackSubscriptionFailure();
+            return;
+        }
+        const Core::GpuTimingSampleSubscription subscription = *subscriptionResult;
+        ScopeExit discardSubscription([&]()noexcept{ timing.unsubscribeSampleListener(subscription); });
+
+        if(feedbackCollectionEnabled){
+            if(!timing.setFeedbackCollectionScopes(subscription, m_feedbackCollectionScopes)){
+                LogRendererTaskTimingFeedbackScopeCollectionFailure();
+                return;
+            }
+        }
+
+        ScopedLock lock(m_mutex);
+        m_subscription = subscription;
+        m_active = true;
+        discardSubscription.release();
+    }
+
+    NWB_INLINE void deactivate()noexcept{
+        ScopedLock lifecycleLock(m_lifecycleMutex);
+
+        Core::GpuTimingSampleSubscription subscription;
+        {
+            ScopedLock lock(m_mutex);
+            if(!m_active)
+                return;
+            m_active = false;
+            subscription = m_subscription;
+            m_subscription = {};
+        }
+
+        // Unsubscription removes this bridge's demand and waits for retaining callbacks.
+        m_graphics.gpuTiming().unsubscribeSampleListener(subscription);
+        reset();
+    }
+
+    [[nodiscard]] NWB_INLINE Expected<Core::GpuTimingSampleAttribution> beginSample(const Name& scopeName, const Core::GpuTaskTimingKey& key, const Core::GpuPhysicalQueueId& expectedQueue, const b8 recordsNonCommittingTimingSample){
+        if(!CanBeginRendererTaskTimingFeedbackSample(scopeName, m_feedbackCollectionScopes, key.valid(), expectedQueue.valid()))
+            return Core::s_NoGpuTimingSampleAttribution;
+
+        ScopedLock lock(m_mutex);
+        if(!CanPublishRendererTaskTimingFeedbackSnapshot(m_active, m_subscription.valid(), m_policy.enabled))
+            return Core::s_NoGpuTimingSampleAttribution;
+
+        const auto attribution = m_graphics.gpuTiming().allocateSampleAttribution();
+        if(!attribution)
+            return MakeUnexpected(attribution.error());
+
+        if(!m_state.trackSample(*attribution, scopeName, key, expectedQueue, m_graphics.getFrameIndex(), recordsNonCommittingTimingSample))
+            return MakeUnexpected(Failure{});
+        return *attribution;
+    }
+
+    NWB_INLINE void acceptSubmission(const Core::GpuTimingSampleAttribution attribution, const Core::QueueSubmissionToken& token)noexcept{
+        if(attribution == Core::s_NoGpuTimingSampleAttribution)
+            return;
+
+        ScopedLock lock(m_mutex);
+        m_state.acceptSubmission(attribution, token, m_active);
+    }
+
+    NWB_INLINE void discardRecording(const Core::GpuTimingSampleAttribution attribution)noexcept{
+        if(attribution == Core::s_NoGpuTimingSampleAttribution)
+            return;
+
+        ScopedLock lock(m_mutex);
+        m_state.discardRecording(attribution);
+    }
+
+    NWB_INLINE void configureCompileOptions(Core::GpuTaskGraphCompileOptions& options, const u64 frameIndex){
+        options.queueAssignmentOptions.timingHistory = nullptr;
+        options.queueAssignmentOptions.timingFeedbackPolicy = {};
+        options.queueAssignmentOptions.timingFrameIndex = 0u;
+
+        RendererTaskTimingFeedbackDrainResult drainResult;
+        {
+            ScopedLock lock(m_mutex);
+            const u16 deviceGeneration = m_graphics.getDevice().getDeviceGeneration();
+            m_history.resetForDeviceGeneration(deviceGeneration);
+            drainResult = m_state.drain(m_history, deviceGeneration);
+
+            if(CanPublishRendererTaskTimingFeedbackSnapshot(m_active, m_subscription.valid(), m_policy.enabled)){
+                m_history.snapshot(m_snapshot);
+                if(m_snapshot.valid()){
+                    options.queueAssignmentOptions.timingHistory = &m_snapshot;
+                    options.queueAssignmentOptions.timingFeedbackPolicy = m_policy;
+                    options.queueAssignmentOptions.timingFrameIndex = frameIndex;
+                }
+            }
+        }
+        LogRendererTaskTimingFeedbackRejections(drainResult.rejectedAssignmentCount, drainResult.rejectedSampleCount);
+    }
+
+    NWB_INLINE void reset()noexcept{
+        ScopedLock lock(m_mutex);
+        m_state.reset();
+        m_history.reset(m_snapshot);
+    }
 
 
 private:
-    void onGpuTimingSample(const Core::GpuTimingSample& sample)noexcept;
+    NWB_INLINE void onGpuTimingSample(const Core::GpuTimingSample& sample)noexcept{
+        if(sample.attribution == Core::s_NoGpuTimingSampleAttribution)
+            return;
+
+        ScopedLock lock(m_mutex);
+        m_state.completeSample(sample, m_active);
+    }
 
 
 private:
@@ -75,195 +203,7 @@ namespace ECSRenderDetail{
 
 
 // Callers own the recording scope and clear attribution when dispatch records nothing.
-[[nodiscard]] Expected<Core::GpuTimingSampleAttribution> BeginTaskTimingSample(RendererTaskTimingFeedback* timingFeedback, const Core::GpuTimingScopeDefinition* timingScope, const Core::GpuTaskRecordContext& context);
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/common/log.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void RendererTaskTimingFeedback::OnGpuTimingSampleCallback(void* const context, const Core::GpuTimingSample& sample)noexcept{
-    auto& feedback = *MakeNotNull(static_cast<RendererTaskTimingFeedback*>(context));
-    feedback.onGpuTimingSample(sample);
-}
-
-
-RendererTaskTimingFeedback::RendererTaskTimingFeedback(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, const Span<const Name> feedbackCollectionScopes)
-    : m_graphics(graphics)
-    , m_state(arena)
-    , m_history(arena)
-    , m_snapshot(arena)
-    , m_feedbackCollectionScopes(arena)
-{
-    NWB_ASSERT(!feedbackCollectionScopes.empty());
-    m_feedbackCollectionScopes.reserve(feedbackCollectionScopes.size());
-    m_feedbackCollectionScopes.assign(feedbackCollectionScopes.begin(), feedbackCollectionScopes.end());
-}
-
-
-void RendererTaskTimingFeedback::activate(){
-    ScopedLock lifecycleLock(m_lifecycleMutex);
-
-    b8 feedbackCollectionEnabled = false;
-    {
-        ScopedLock lock(m_mutex);
-        if(m_active)
-            return;
-        feedbackCollectionEnabled = m_policy.enabled;
-    }
-
-    Core::GpuTimingRecorder& timing = m_graphics.gpuTiming();
-    const auto subscriptionResult = timing.subscribeSampleListener(Core::GpuTimingSampleListener{ .context = this, .invoke = &OnGpuTimingSampleCallback, });
-    if(!subscriptionResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("Renderer task timing feedback failed to subscribe to GPU timing samples."));
-        return;
-    }
-    const Core::GpuTimingSampleSubscription subscription = *subscriptionResult;
-    ScopeExit discardSubscription([&]()noexcept{ timing.unsubscribeSampleListener(subscription); });
-
-    if(feedbackCollectionEnabled){
-        if(!timing.setFeedbackCollectionScopes(subscription, m_feedbackCollectionScopes)){
-            NWB_LOGGER_WARNING(NWB_TEXT("Renderer task timing feedback failed to enable GPU sample collection."));
-            return;
-        }
-    }
-
-    ScopedLock lock(m_mutex);
-    m_subscription = subscription;
-    m_active = true;
-    discardSubscription.release();
-}
-
-void RendererTaskTimingFeedback::deactivate()noexcept{
-    ScopedLock lifecycleLock(m_lifecycleMutex);
-
-    Core::GpuTimingSampleSubscription subscription;
-    {
-        ScopedLock lock(m_mutex);
-        if(!m_active)
-            return;
-        m_active = false;
-        subscription = m_subscription;
-        m_subscription = {};
-    }
-
-    // Unsubscription removes this bridge's demand and waits for retaining callbacks.
-    m_graphics.gpuTiming().unsubscribeSampleListener(subscription);
-    reset();
-}
-
-Expected<Core::GpuTimingSampleAttribution> RendererTaskTimingFeedback::beginSample(const Name& scopeName, const Core::GpuTaskTimingKey& key, const Core::GpuPhysicalQueueId& expectedQueue, const b8 recordsNonCommittingTimingSample){
-    if(!scopeName || !ContainsRendererTaskTimingFeedbackScope(m_feedbackCollectionScopes, scopeName) || !key.valid() || !expectedQueue.valid())
-        return Core::s_NoGpuTimingSampleAttribution;
-
-    ScopedLock lock(m_mutex);
-    if(!m_active || !m_policy.enabled || !m_subscription.valid())
-        return Core::s_NoGpuTimingSampleAttribution;
-
-    const auto attribution = m_graphics.gpuTiming().allocateSampleAttribution();
-    if(!attribution)
-        return MakeUnexpected(attribution.error());
-
-    if(!m_state.trackSample(*attribution, scopeName, key, expectedQueue, m_graphics.getFrameIndex(), recordsNonCommittingTimingSample))
-        return MakeUnexpected(Failure{});
-    return *attribution;
-}
-
-void RendererTaskTimingFeedback::acceptSubmission(const Core::GpuTimingSampleAttribution attribution, const Core::QueueSubmissionToken& token)noexcept{
-    if(attribution == Core::s_NoGpuTimingSampleAttribution)
-        return;
-
-    ScopedLock lock(m_mutex);
-    m_state.acceptSubmission(attribution, token, m_active);
-}
-
-void RendererTaskTimingFeedback::discardRecording(const Core::GpuTimingSampleAttribution attribution)noexcept{
-    if(attribution == Core::s_NoGpuTimingSampleAttribution)
-        return;
-
-    ScopedLock lock(m_mutex);
-    m_state.discardRecording(attribution);
-}
-
-void RendererTaskTimingFeedback::configureCompileOptions(Core::GpuTaskGraphCompileOptions& options, const u64 frameIndex){
-    options.queueAssignmentOptions.timingHistory = nullptr;
-    options.queueAssignmentOptions.timingFeedbackPolicy = {};
-    options.queueAssignmentOptions.timingFrameIndex = 0u;
-
-    RendererTaskTimingFeedbackDrainResult drainResult;
-    {
-        ScopedLock lock(m_mutex);
-        const u16 deviceGeneration = m_graphics.getDevice().getDeviceGeneration();
-        m_history.resetForDeviceGeneration(deviceGeneration);
-        drainResult = m_state.drain(m_history, deviceGeneration);
-
-        if(m_active && m_subscription.valid() && m_policy.enabled){
-            m_history.snapshot(m_snapshot);
-            if(m_snapshot.valid()){
-                options.queueAssignmentOptions.timingHistory = &m_snapshot;
-                options.queueAssignmentOptions.timingFeedbackPolicy = m_policy;
-                options.queueAssignmentOptions.timingFrameIndex = frameIndex;
-            }
-        }
-    }
-    if(drainResult.rejectedAssignmentCount != 0u || drainResult.rejectedSampleCount != 0u)
-        NWB_LOGGER_WARNING(NWB_TEXT("Renderer task timing feedback rejected {} assignment(s) and {} terminal sample(s)."), drainResult.rejectedAssignmentCount, drainResult.rejectedSampleCount);
-}
-
-void RendererTaskTimingFeedback::reset()noexcept{
-    ScopedLock lock(m_mutex);
-    m_state.reset();
-    m_history.reset(m_snapshot);
-}
-
-void RendererTaskTimingFeedback::onGpuTimingSample(const Core::GpuTimingSample& sample)noexcept{
-    if(sample.attribution == Core::s_NoGpuTimingSampleAttribution)
-        return;
-
-    ScopedLock lock(m_mutex);
-    m_state.completeSample(sample, m_active);
-}
-
-namespace ECSRenderDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] Expected<Core::GpuTimingSampleAttribution> BeginTaskTimingSample(RendererTaskTimingFeedback* timingFeedback, const Core::GpuTimingScopeDefinition* timingScope, const Core::GpuTaskRecordContext& context){
+[[nodiscard]] NWB_INLINE Expected<Core::GpuTimingSampleAttribution> BeginTaskTimingSample(RendererTaskTimingFeedback* const timingFeedback, const Core::GpuTimingScopeDefinition* const timingScope, const Core::GpuTaskRecordContext& context){
     if(!timingFeedback || !timingScope)
         return Core::s_NoGpuTimingSampleAttribution;
     const Core::GpuPhysicalQueueInfo* const queueInfo = context.compiledPlan.queueInfo(context.queue);
@@ -278,9 +218,6 @@ namespace ECSRenderDetail{
         compiledTask.plan->recordsNonCommittingTimingSample
     );
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };

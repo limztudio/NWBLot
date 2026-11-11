@@ -9,395 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_mesh/cook_meshlet_refs.adhd.h>
-#include <impl/assets_mesh/meshlet_ref_decoding.adhd.h>
-#include <impl/assets_model/cook.adhd.h>
-
-#include <core/assets/asset_file_discovery.h>
-#include <core/assets/cook_dependency_registry.h>
-#include <core/assets/cook_metadata.h>
-#include <core/assets/cook_metadata_internal.h>
-#include <core/common/name_symbols.h>
-
-#include <global/arena_memory.h>
-#include <global/not_null.h>
-#include <global/scope_exit.h>
-#include <global/text_utils.h>
-#include <global/thread.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::AssetsGraphicsFixture{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using MeshletView = Span<Impl::MeshletDesc>;
-using PositionRefView = Span<const Impl::MeshletPositionStreamRef>;
-using AttributeRefView = Span<const Impl::MeshletAttributeStreamRef>;
-
-// These declarations check throw paths without calling them.
-struct NoThrowMeshletBytes{
-    [[nodiscard]] usize size()const noexcept;
-    [[nodiscard]] const u8* data()const noexcept;
-    void clear()noexcept;
-    void reserve(usize)noexcept;
-    void push_back(u8)noexcept;
-};
-
-struct ThrowingMeshletAppendResult{
-    ~ThrowingMeshletAppendResult()noexcept(false);
-};
-
-struct ThrowingMeshletAppend : NoThrowMeshletBytes{
-    ThrowingMeshletAppendResult push_back(u8)noexcept;
-};
-
-struct NoThrowMeshletFailure{
-    [[nodiscard]] b8 operator()(usize, TStringView)const noexcept;
-};
-
-struct ThrowingMeshletFailureBool{
-    operator b8()const;
-};
-
-struct ThrowingMeshletFailureConversion{
-    [[nodiscard]] ThrowingMeshletFailureBool operator()(usize, TStringView)const noexcept;
-};
-
-static_assert(noexcept(Impl::AppendMeshletRefDelta(0u, Impl::MeshletRefDeltaWidth::U8, DeclVal<NoThrowMeshletBytes&>())));
-static_assert(!noexcept(Impl::AppendMeshletRefDelta(0u, Impl::MeshletRefDeltaWidth::U8, DeclVal<ThrowingMeshletAppend&>())));
-static_assert(noexcept(Impl::EncodeMeshletRefDeltas(DeclVal<const PositionRefView&>(), DeclVal<const AttributeRefView&>(), false, DeclVal<NoThrowMeshletFailure>(), DeclVal<MeshletView&>(), DeclVal<NoThrowMeshletBytes&>(), DeclVal<NoThrowMeshletBytes&>())));
-static_assert(!noexcept(Impl::EncodeMeshletRefDeltas(
-    DeclVal<const PositionRefView&>(),
-    DeclVal<const AttributeRefView&>(),
-    false,
-    DeclVal<NoThrowMeshletFailure>(),
-    DeclVal<MeshletView&>(),
-    DeclVal<ThrowingMeshletAppend&>(),
-    DeclVal<NoThrowMeshletBytes&>()
-)));
-static_assert(!noexcept(Impl::EncodeMeshletRefDeltas(
-    DeclVal<const PositionRefView&>(),
-    DeclVal<const AttributeRefView&>(),
-    false,
-    DeclVal<ThrowingMeshletFailureConversion>(),
-    DeclVal<MeshletView&>(),
-    DeclVal<NoThrowMeshletBytes&>(),
-    DeclVal<NoThrowMeshletBytes&>()
-)));
-
-static constexpr u32 s_Oct16ChannelMask = 255u;
-static constexpr u32 s_Oct16YShift = 8u;
-static constexpr f32 s_Oct16UnormScale = 1.0f / 255.0f;
-static constexpr f32 s_Oct16SignedScale = 2.0f;
-
-[[nodiscard]] static SIMDVectorSingle ScalarOct16Reference(const u32 packed)noexcept{
-    const f32 unormX = static_cast<f32>(packed & s_Oct16ChannelMask) * s_Oct16UnormScale;
-    const f32 unormY = static_cast<f32>((packed >> s_Oct16YShift) & s_Oct16ChannelMask) * s_Oct16UnormScale;
-    f32 x = unormX * s_Oct16SignedScale - 1.0f;
-    f32 y = unormY * s_Oct16SignedScale - 1.0f;
-    const f32 z = 1.0f - (Abs(x) + Abs(y));
-    if(z < 0.0f){
-        const f32 foldedX = (1.0f - Abs(y)) * (x >= 0.0f ? 1.0f : -1.0f);
-        y = (1.0f - Abs(x)) * (y >= 0.0f ? 1.0f : -1.0f);
-        x = foldedX;
-    }
-    return Vector3NormalizeOr(VectorSet(x, y, z, 0.0f), VectorSet(0.0f, 0.0f, 1.0f, 0.0f), NWB::Impl::s_MeshletConeAxisLengthSquaredEpsilon);
-}
-
-using MeshletDesc = Impl::MeshletDesc;
-using MeshletPositionStreamRef = Impl::MeshletPositionStreamRef;
-using MeshletAttributeStreamRef = Impl::MeshletAttributeStreamRef;
-namespace MeshletDeltaWidth = Impl::MeshletRefDeltaWidth;
-using Impl::MeshletRefDeltaByteWidth;
-using Impl::PackMeshletConeOct16;
-using Impl::PackMeshletCounts;
-using Impl::PackMeshletRefEncoding;
-using Impl::TryDecodeMeshletAttributeRef;
-using Impl::TryDecodeMeshletPositionRef;
-using Impl::s_MeshletConeAxisFallback;
-using Core::Assets::IsLikelyNonStandaloneFirstToken;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr AStringView s_FirstMetadataName = "tests/metadata_extension/first";
-inline constexpr AStringView s_MovedSlotMetadataName = "tests/metadata_extension/moved_slot";
-inline constexpr AStringView s_ConstructorUnwindMetadataName = "tests/metadata_extension/constructor_unwind";
-inline constexpr AStringView s_CallerUnwindMetadataName = "tests/metadata_extension/caller_unwind";
-inline constexpr AStringView s_ReentrantMetadataName = "tests/metadata_extension/reentrant";
-inline constexpr AStringView s_RegistryLifetimeMetadataName = "tests/metadata_extension/registry_lifetime";
-
-using ExtensionState = MetadataExtensionState;
-
-struct ExtensionConstructionFailure{};
-struct ExtensionInsertionFailure{};
-struct ExtensionCallerFailure{};
-
-struct ExtensionMember{
-    ExtensionState& state;
-    Core::Assets::AssetVector<u8> bytes;
-
-
-public:
-    ExtensionMember(Core::Assets::AssetArena& arena, ExtensionState& inState)
-        : state(inState)
-        , bytes(arena)
-    {
-        bytes.resize(513u, 0x5au);
-    }
-    ~ExtensionMember()noexcept{
-        ++state.memberDestructions;
-    }
-};
-
-struct alignas(128u) AlignedExtension{
-    ExtensionMember member;
-    ExtensionState& state;
-    usize identity;
-
-
-public:
-    AlignedExtension(Core::Assets::AssetArena& arena, ExtensionState& inState, const b8 fail = false)
-        : member(arena, inState)
-        , state(inState)
-        , identity(++state.constructions)
-    {
-        if(fail)
-            throw ExtensionConstructionFailure{};
-    }
-    ~AlignedExtension()noexcept{
-        ++state.destructions;
-    }
-};
-
-struct TextExtension{
-    ExtensionState& state;
-    Core::Assets::AssetVector<Core::Assets::AssetString> strings;
-
-
-public:
-    TextExtension(Core::Assets::AssetArena& arena, ExtensionState& inState)
-        : state(inState)
-        , strings(arena)
-    {
-        ++state.constructions;
-        strings.emplace_back("first separately allocated extension payload", arena);
-        strings.emplace_back("second separately allocated extension payload", arena);
-    }
-    ~TextExtension()noexcept{
-        ++state.destructions;
-    }
-};
-
-struct ReentrantExtension{
-    ExtensionState& state;
-    usize identity;
-    ReentrantExtension* nested = nullptr;
-
-
-public:
-    ReentrantExtension(Core::Assets::ParsedAssetMetadata& metadata, const Name& name, ExtensionState& inState, const b8 recurse)
-        : state(inState)
-        , identity(++state.constructions)
-    {
-        if(recurse)
-            nested = &Core::Assets::RequireParsedMetadataExtension<ReentrantExtension>(name, metadata, metadata, name, state, false);
-    }
-    ~ReentrantExtension()noexcept{
-        ++state.destructions;
-    }
-};
-
-struct ThrowingExtensionHasher{
-    NotNull<b8*> fail;
-
-
-public:
-    [[nodiscard]] usize operator()(const Name& key)const{
-        if(*fail)
-            throw ExtensionInsertionFailure{};
-        return Hasher<Name>{}(key);
-    }
-};
-
-struct RegistryBorrowingExtension{
-    const Core::Assets::CookEntryRegistry& registry;
-    usize& observedBucketCount;
-
-
-public:
-    ~RegistryBorrowingExtension()noexcept{
-        observedBucketCount = registry.bucketCount();
-    }
-};
-
-static_assert(!IsConstructible_V<Core::Assets::ParsedMetadataExtension, const Core::Assets::ParsedMetadataExtension&>);
-static_assert(IsNothrowMoveConstructible_V<Core::Assets::ParsedMetadataExtension>);
-static_assert(IsNothrowDestructible_V<Core::Assets::ParsedMetadataExtension>);
-
-
-class NullAllocatedBucket final : public Core::Assets::ICookEntryBucket{
-public:
-    static void* operator new(usize)noexcept{ return nullptr; }
-
-    static void operator delete(void* pointer)noexcept{ ::operator delete(pointer); }
-
-
-public:
-    explicit NullAllocatedBucket(Core::Assets::CookArena&)noexcept{}
-
-
-public:
-    [[nodiscard]] virtual usize size()const noexcept override{ return 0u; }
-
-    virtual b8 parseDocument(const NWB::Path&, AStringView, const NWB::Path&, const Core::Metascript::Document&, Core::Assets::CookEntryParseContext&)noexcept override{ return false; }
-
-    virtual b8 parseValue(Name, const NWB::Path&, const Core::Metascript::Value&, Core::Assets::CookEntryParseContext&)noexcept override{ return false; }
-
-    virtual b8 appendCachedEntry(const Core::Assets::CookEntrySourceLocation&, const Name&, Span<const u8>, Core::Assets::CookEntryParseContext&)noexcept override{ return false; }
-
-    virtual b8 writeCookedAssets(Core::Assets::CookEntryWriteContext&)noexcept override{ return false; }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr AStringView s_ModelMetaMeshObjectField = "mesh_0";
-inline constexpr AStringView s_SharedModelPath = "tests/model_cook_metadata/shared";
-inline constexpr AStringView s_UnknownModelPath = "tests/model_cook_metadata/unknown";
-inline constexpr AStringView s_StaticMeshesField = "static_meshes";
-inline constexpr AStringView s_PropObjectField = "prop";
-inline constexpr AStringView s_ModelMetaMeshField = "mesh";
-inline constexpr AStringView s_ModelMetaSkeletonField = "skeleton";
-inline constexpr AStringView s_ModelMetaSkinnedMeshesField = "skinned_meshes";
-inline constexpr AStringView s_ModelMetaMeshVirtualPath = "tests/model_cook_metadata/mesh";
-inline constexpr TStringView s_TargetsAMissingSkeletonObject = NWB_TEXT("targets a missing skeleton object");
-inline constexpr AStringView s_ModelMetaRigA = "rig_a";
-inline constexpr AStringView s_ModelMetaRigB = "rig_b";
-inline constexpr AStringView s_ModelPayloadProp = "prop";
-inline constexpr AStringView s_ModelPayloadReplacementRig = "replacement_rig";
-inline constexpr AStringView s_TestsModelPayloadMesh = "tests/model_payload/mesh";
-
-struct ModelMetadata{
-    Core::Metascript::MetaArena metadataArena{ Name(s_AssetCaseTestsModelCookMetadataMetadata) };
-    Core::Assets::AssetArena outputArena{ Name(s_AssetCaseTestsModelCookMetadataOutput) };
-    Core::Alloc::ScratchArena scratchArena{ Name(s_AssetCaseTestsModelCookMetadataScratch) };
-    Core::Metascript::Value asset{ metadataArena };
-    Impl::ModelCookEntry entry{ outputArena };
-    HashMap<Name, Name, Core::Metascript::MetaArena> expectedSkeletons{ metadataArena };
-    const NWB::Path path{ outputArena, "tests/model_cook_metadata/model.nwb" };
-
-
-public:
-    ModelMetadata(){
-        asset.makeMap();
-    }
-
-
-public:
-    void addSkeleton(const AStringView objectName, const AStringView skeletonAsset){
-        Core::Metascript::Value& object = asset.field("skeletons").field(objectName);
-        object.field(s_ModelMetaSkeletonField).setString(skeletonAsset);
-    }
-
-    void addSkinnedMesh(const AStringView objectName, const AStringView skeleton, const AStringView expectedObject){
-        Core::Metascript::Value& object = asset.field(s_ModelMetaSkinnedMeshesField).field(objectName);
-        object.field("skin").setString("tests/model_cook_metadata/skin");
-        object.field(s_ModelMetaSkeletonField).setString(skeleton);
-        const auto objectIdentity = Name::FromText(objectName);
-        ASSERT_TRUE(objectIdentity);
-        const auto expectedIdentity = Name::FromText(expectedObject);
-        ASSERT_TRUE(expectedIdentity);
-        expectedSkeletons.insert_or_assign(*objectIdentity, *expectedIdentity);
-    }
-
-    [[nodiscard]] b8 parse(){
-        auto result = Impl::ParseModelCookMetadata(Name(s_AssetCaseTestsModelCookMetadataModel), path, asset, outputArena, scratchArena);
-        if(!result)
-            return false;
-        entry = Move(*result);
-        return true;
-    }
-
-    void verifyObjectReferences()const{
-        ASSERT_EQ(entry.skinnedMeshObjects.size(), expectedSkeletons.size());
-        for(const Impl::ModelSkinnedMeshObject& object : entry.skinnedMeshObjects){
-            const auto expected = expectedSkeletons.find(object.name);
-            ASSERT_NE(expected, expectedSkeletons.end());
-            EXPECT_EQ(object.skeletonObject, expected->second);
-            EXPECT_EQ(object.skin.name(), Name("tests/model_cook_metadata/skin"));
-        }
-    }
-};
-
-static void AddIndexedModelObjects(const usize skeletonCount, const usize meshCount, ModelMetadata& metadata){
-    for(usize index = 0u; index < skeletonCount; ++index){
-        const auto objectName = StringFormat(metadata.metadataArena, "rig_{}", index);
-        const auto assetName = StringFormat(metadata.metadataArena, "tests/model_cook_metadata/skeleton_{}", index);
-        metadata.addSkeleton(objectName, assetName);
-    }
-    for(usize index = 0u; index < meshCount; ++index){
-        const usize skeletonIndex = (index * 73u) % skeletonCount;
-        const auto meshName = StringFormat(metadata.metadataArena, "mesh_{}", index);
-        const auto objectName = StringFormat(metadata.metadataArena, "rig_{}", skeletonIndex);
-        metadata.addSkinnedMesh(meshName, objectName, objectName);
-    }
-}
-
-struct ModelInputs{
-    Core::Assets::AssetArena arena{ Name(s_AssetCaseTestsModelPayloadInputs) };
-    Core::Alloc::ScratchArena scratchArena{ Name(s_AssetCaseTestsModelPayloadValidationScratch) };
-    Impl::Model model{ arena, Name(s_AssetCaseTestsModelPayloadModel) };
-    Impl::Model::SkeletonObjectVector skeletonObjects{ arena };
-    Impl::Model::StaticMeshObjectVector staticMeshObjects{ arena };
-    Impl::Model::SkinnedMeshObjectVector skinnedMeshObjects{ arena };
-
-
-public:
-    ModelInputs(){
-        skeletonObjects.push_back(Impl::ModelSkeletonObject{ .name = Name(s_ModelRigSegment), .skeleton = Core::Assets::AssetRef<Impl::Skeleton>("tests/model_payload/skeleton") });
-        staticMeshObjects.push_back(Impl::ModelStaticMeshObject{ .name = Name(s_ModelPayloadProp), .mesh = Core::Assets::AssetRef<Impl::Mesh>(s_TestsModelPayloadMesh.data()), .material = {}, .parentObject = Name(s_ModelRigSegment), .parentJoint = Name(s_AssetCaseHand) });
-        skinnedMeshObjects.push_back(Impl::ModelSkinnedMeshObject{ .name = Name(s_ModelBodySegment), .skin = Core::Assets::AssetRef<Impl::Skin>("tests/model_payload/skin"), .material = {}, .skeletonObject = Name(s_ModelRigSegment) });
-        publish();
-    }
-
-
-public:
-    void publish(){
-        model.setObjects(Impl::Model::SkeletonObjectVector(skeletonObjects), Impl::Model::StaticMeshObjectVector(staticMeshObjects), Impl::Model::SkinnedMeshObjectVector(skinnedMeshObjects));
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class OctEncodingBoundary{
     public f32x3u m_axis;
     public u32 m_packed;
@@ -408,60 +19,49 @@ class OctEncodingBoundary{
     }
 }
 
-b8 IsMetadataDiscoveryWindowsHost(){
-    b8 isWindows = false;
-    native(mut isWindows){
-#if defined(NWB_PLATFORM_WINDOWS)
-        isWindows = true;
-#endif
-    }
-    return isWindows;
-}
-
 void VerifyAssetsGraphics_MeshletRefEncodingCrossesIndexWidthBoundaries(){
     TestArena testArena = TestArena();
-    native(mut testArena){
-        auto meshlets = MakeAssetVector<NWB::Impl::MeshletDesc>(testArena);
-        meshlets.push_back(NWB::Impl::MeshletDesc{ 0u, 0u, 0u, 0u, NWB::Impl::PackMeshletCounts(3u, 1u, 3u, 3u), });
 
-        auto positionRefs = MakeAssetVector<NWB::Impl::MeshletPositionStreamRef>(testArena);
-        positionRefs.push_back(NWB::Impl::MeshletPositionStreamRef{ 0u, 1000u });
-        positionRefs.push_back(NWB::Impl::MeshletPositionStreamRef{ 256u, 1001u });
-        positionRefs.push_back(NWB::Impl::MeshletPositionStreamRef{ 65536u, 1002u });
+    MeshletDescVector meshlets(testArena.arena);
+    AppendMeshletDesc(0u, 0u, 0u, 0u, PackMeshletCounts(3u, 1u, 3u, 3u), meshlets);
 
-        auto attributeRefs = MakeAssetVector<NWB::Impl::MeshletAttributeStreamRef>(testArena);
-        attributeRefs.push_back(NWB::Impl::MeshletAttributeStreamRef{ 5u, 1000u, 0u, 20u });
-        attributeRefs.push_back(NWB::Impl::MeshletAttributeStreamRef{ 6u, 1256u, 65536u, 21u });
-        attributeRefs.push_back(NWB::Impl::MeshletAttributeStreamRef{ 7u, 1257u, 65537u, 22u });
+    MeshletPositionRefVector positionRefs(testArena.arena);
+    AppendMeshletPositionRef(0u, 1000u, positionRefs);
+    AppendMeshletPositionRef(256u, 1001u, positionRefs);
+    AppendMeshletPositionRef(65536u, 1002u, positionRefs);
 
-        auto positionRefDeltas = MakeAssetVector<u8>(testArena);
-        auto attributeRefDeltas = MakeAssetVector<u8>(testArena);
-        const b8 encoded = EncodeTestMeshletRefs(positionRefs, attributeRefs, true, meshlets, positionRefDeltas, attributeRefDeltas);
-        EXPECT_TRUE(encoded);
-        if(!encoded)
-            return;
+    MeshletAttributeRefVector attributeRefs(testArena.arena);
+    AppendMeshletAttributeRef(5u, 1000u, 0u, 20u, attributeRefs);
+    AppendMeshletAttributeRef(6u, 1256u, 65536u, 21u, attributeRefs);
+    AppendMeshletAttributeRef(7u, 1257u, 65537u, 22u, attributeRefs);
 
-        const NWB::Impl::MeshletDesc& meshlet = meshlets[0u];
-        EXPECT_EQ(NWB::Impl::MeshletRefEncodingWidth(meshlet.encoding, NWB::Impl::s_MeshletRefEncodingPositionShift), NWB::Impl::MeshletRefDeltaWidth::U32);
-        EXPECT_EQ(NWB::Impl::MeshletRefEncodingWidth(meshlet.encoding, NWB::Impl::s_MeshletRefEncodingSkinShift), NWB::Impl::MeshletRefDeltaWidth::U8);
-        EXPECT_EQ(NWB::Impl::MeshletRefEncodingWidth(meshlet.encoding, NWB::Impl::s_MeshletRefEncodingTangentShift), NWB::Impl::MeshletRefDeltaWidth::U16);
-        EXPECT_EQ(NWB::Impl::MeshletRefEncodingWidth(meshlet.encoding, NWB::Impl::s_MeshletRefEncodingUv0Shift), NWB::Impl::MeshletRefDeltaWidth::U32);
+    AssetBytes positionRefDeltas = MakeAssetBytes(testArena);
+    AssetBytes attributeRefDeltas = MakeAssetBytes(testArena);
+    const b8 encoded = EncodeTestMeshletRefVectors(positionRefs, attributeRefs, true, meshlets, positionRefDeltas, attributeRefDeltas);
+    EXPECT_TRUE(encoded);
+    if(!encoded)
+        return;
 
-        for(u32 localPositionIndex = 0u; localPositionIndex < NWB::Impl::MeshletPositionCount(meshlet); ++localPositionIndex){
-            const Expected<NWB::Impl::MeshletPositionStreamRef> decodedRef = NWB::Impl::TryDecodeMeshletPositionRef(positionRefDeltas, meshlet, localPositionIndex, true);
-            ASSERT_TRUE(decodedRef);
-            EXPECT_EQ(decodedRef->position, positionRefs[localPositionIndex].position);
-            EXPECT_EQ(decodedRef->skin, positionRefs[localPositionIndex].skin);
-        }
+    const MeshletDesc meshlet = meshlets[0u];
+    EXPECT_EQ(MeshletRefEncodingWidth(meshlet.encoding, s_MeshletRefEncodingPositionShift), MeshletDeltaWidth::U32);
+    EXPECT_EQ(MeshletRefEncodingWidth(meshlet.encoding, s_MeshletRefEncodingSkinShift), MeshletDeltaWidth::U8);
+    EXPECT_EQ(MeshletRefEncodingWidth(meshlet.encoding, s_MeshletRefEncodingTangentShift), MeshletDeltaWidth::U16);
+    EXPECT_EQ(MeshletRefEncodingWidth(meshlet.encoding, s_MeshletRefEncodingUv0Shift), MeshletDeltaWidth::U32);
 
-        for(u32 localAttributeIndex = 0u; localAttributeIndex < NWB::Impl::MeshletAttributeCount(meshlet); ++localAttributeIndex){
-            const Expected<NWB::Impl::MeshletAttributeStreamRef> decodedRef = NWB::Impl::TryDecodeMeshletAttributeRef(attributeRefDeltas, meshlet, localAttributeIndex);
-            ASSERT_TRUE(decodedRef);
-            EXPECT_EQ(decodedRef->normal, attributeRefs[localAttributeIndex].normal);
-            EXPECT_EQ(decodedRef->tangent, attributeRefs[localAttributeIndex].tangent);
-            EXPECT_EQ(decodedRef->uv0, attributeRefs[localAttributeIndex].uv0);
-            EXPECT_EQ(decodedRef->color, attributeRefs[localAttributeIndex].color);
-        }
+    for(u32 localPositionIndex = 0u; localPositionIndex < MeshletPositionCount(meshlet); ++localPositionIndex){
+        const Expected<MeshletPositionStreamRef> decodedRef = DecodeMeshletPositionRefFromBytes(positionRefDeltas, meshlet, localPositionIndex, true);
+        ASSERT_TRUE(decodedRef.has_value());
+        EXPECT_EQ(decodedRef.value().position, positionRefs[localPositionIndex].position);
+        EXPECT_EQ(decodedRef.value().skin, positionRefs[localPositionIndex].skin);
+    }
+
+    for(u32 localAttributeIndex = 0u; localAttributeIndex < MeshletAttributeCount(meshlet); ++localAttributeIndex){
+        const Expected<MeshletAttributeStreamRef> decodedRef = DecodeMeshletAttributeRefFromBytes(attributeRefDeltas, meshlet, localAttributeIndex);
+        ASSERT_TRUE(decodedRef.has_value());
+        EXPECT_EQ(decodedRef.value().normal, attributeRefs[localAttributeIndex].normal);
+        EXPECT_EQ(decodedRef.value().tangent, attributeRefs[localAttributeIndex].tangent);
+        EXPECT_EQ(decodedRef.value().uv0, attributeRefs[localAttributeIndex].uv0);
+        EXPECT_EQ(decodedRef.value().color, attributeRefs[localAttributeIndex].color);
     }
 }
 
@@ -469,13 +69,7 @@ void VerifyAssetsGraphics_MeshletOct16DecodePreservesQuantizationAndFoldBits(){
     // Scalar octahedral decode fixes UNORM endpoint and fold rounding.
     for(u32 packed = 0u; packed < 65536u; ++packed){
         const ScopedTestTrace trace(packed);
-        b8 matches = false;
-        native(in packed, mut matches){
-            const SIMDVectorSingle reference = ScalarOct16Reference(packed);
-            const SIMDVectorSingle decoded = NWB::Impl::UnpackMeshletConeOct16Axis(packed);
-            matches = Vector4EqualInt(decoded, reference);
-        }
-        ASSERT_TRUE(matches);
+        ASSERT_TRUE(MatchesScalarOct16Reference(packed));
     }
 }
 
@@ -593,28 +187,28 @@ void VerifyAssetsGraphics_MeshletAttributeDeltasRejectU32WraparoundInEveryChanne
 void VerifyMetadataDiscoveryAdmission_DuplicateRootsKeepFirstOwnerAndPaths(){
     AssetArena arena(s_AssetCaseTestsMetadataDiscoveryDuplicateRoots);
     ScratchArena scratchArena(s_AssetCaseTestsMetadataDiscoveryDuplicateRootsScratch);
-    native(mut arena, mut scratchArena){
-        using namespace NWB::Core::Assets;
-        const NWB::Path root = Tests::RepoRootOf(arena, __FILE__) / "tests" / "smoke" / "assets" / "textures";
-        CookVector<ResolvedAssetRoot> roots(arena);
-        roots.emplace_back(NWB::Path(arena, root), s_ProjectVirtualRoot);
-        const auto single = AssetFileDiscovery::Discover(roots, s_NwbExtension, arena, scratchArena);
-        ASSERT_TRUE(single);
-        ASSERT_FALSE(single->empty());
-        roots.emplace_back(NWB::Path(arena, root), s_EngineVirtualRoot);
-        const auto duplicate = AssetFileDiscovery::Discover(roots, s_NwbExtension, arena, scratchArena);
-        ASSERT_TRUE(duplicate);
-        ASSERT_EQ(duplicate->size(), single->size());
-        for(usize i = 0u; i < single->size(); ++i){
-            EXPECT_EQ((*duplicate)[i].filePath, (*single)[i].filePath);
-            EXPECT_EQ((*duplicate)[i].normalizedPathText, (*single)[i].normalizedPathText);
-            EXPECT_EQ((*duplicate)[i].virtualRoot.view(), s_ProjectVirtualRoot);
-        }
+
+    const GraphicsTestPath smokeAssets = JoinGraphicsPath3(GetAssetArenaRepoRoot(arena), "tests", "smoke", "assets");
+    const GraphicsTestPath root = JoinGraphicsPath(smokeAssets, "textures");
+    ResolvedAssetRootVector roots(arena);
+    AppendResolvedAssetRoot(arena, root, s_ProjectVirtualRoot, roots);
+    const Expected<DiscoveredNwbFileVector> single = DiscoverTestAssetFiles(roots, s_NwbExtension, arena, scratchArena);
+    ASSERT_TRUE(single.has_value());
+    ASSERT_FALSE(single.value().empty());
+
+    AppendResolvedAssetRoot(arena, root, s_EngineVirtualRoot, roots);
+    const Expected<DiscoveredNwbFileVector> duplicate = DiscoverTestAssetFiles(roots, s_NwbExtension, arena, scratchArena);
+    ASSERT_TRUE(duplicate.has_value());
+    ASSERT_EQ(duplicate.value().size(), single.value().size());
+    for(usize i = 0u; i < single.value().size(); ++i){
+        EXPECT_EQ(duplicate.value()[i].filePath, single.value()[i].filePath);
+        EXPECT_EQ(duplicate.value()[i].normalizedPathText, single.value()[i].normalizedPathText);
+        EXPECT_EQ(duplicate.value()[i].virtualRoot.view(), s_ProjectVirtualRoot);
     }
 }
 
 void VerifyMetadataDiscoveryAdmission_CaseDistinctNativeFilesBothReachMetadataAdmission(){
-    if(IsMetadataDiscoveryWindowsHost()){
+    if(IsWindowsPlatformHost()){
         native{
             GTEST_SKIP() << "The current Windows host identity folds physical path case";
         }
@@ -623,43 +217,31 @@ void VerifyMetadataDiscoveryAdmission_CaseDistinctNativeFilesBothReachMetadataAd
 
     AssetArena arena(s_AssetCaseTestsMetadataDiscoveryCaseIdentity);
     ScratchArena scratchArena(s_AssetCaseTestsMetadataDiscoveryCaseIdentityScratch);
+    const GraphicsTestPath root = JoinGraphicsPath2(GetAssetArenaRepoRoot(arena), s_BuildDirectory, "metadata_discovery_case_identity");
+    ASSERT_TRUE(EnsureTestEmptyDirectory(root));
+
+    const GraphicsTestPath upperPath = JoinGraphicsPath(root, "Case.nwb");
+    const GraphicsTestPath lowerPath = JoinGraphicsPath(root, "case.nwb");
+    ASSERT_TRUE(WriteTextFile(upperPath, "upper native input"));
+    ASSERT_TRUE(WriteTextFile(lowerPath, "lower native input"));
+
     b8 casePreserved = false;
-    b8 differentPaths = false;
-    b8 sameNormalized = false;
-    usize discoveredCount = 0u;
-    native(mut arena, mut scratchArena, mut casePreserved, mut differentPaths, mut sameNormalized, mut discoveredCount){
-        using namespace NWB::Core::Assets;
-        const NWB::Path root = Tests::RepoRootOf(arena, __FILE__) / s_BuildDirectory / "metadata_discovery_case_identity";
-        ASSERT_TRUE(EnsureEmptyDirectory(root));
-        const NWB::Path upperPath = root / "Case.nwb";
-        const NWB::Path lowerPath = root / "case.nwb";
-        ASSERT_TRUE(::WriteTextFile(upperPath, "upper native input"));
-        ASSERT_TRUE(::WriteTextFile(lowerPath, "lower native input"));
-        ScratchString upperContents(scratchArena);
-        ASSERT_TRUE(::ReadTextFile(upperPath, upperContents));
-        casePreserved = upperContents == "upper native input";
-        if(casePreserved){
-            CookVector<ResolvedAssetRoot> roots(arena);
-            roots.emplace_back(NWB::Path(arena, root), s_ProjectVirtualRoot);
-            roots.emplace_back(NWB::Path(arena, root), s_ProjectVirtualRoot);
-            const auto files = AssetFileDiscovery::Discover(roots, s_NwbExtension, arena, scratchArena);
-            ASSERT_TRUE(files);
-            discoveredCount = files->size();
-            if(discoveredCount == 2u){
-                differentPaths = (*files)[0].filePath != (*files)[1].filePath;
-                sameNormalized = (*files)[0].normalizedPathText == (*files)[1].normalizedPathText;
-            }
-        }
-    }
+    ASSERT_TRUE(ReadTextFileMatches(upperPath, "upper native input", scratchArena, casePreserved));
     if(!casePreserved){
         native{
             GTEST_SKIP() << "The test filesystem does not preserve distinct native path case";
         }
         return;
     }
-    ASSERT_EQ(discoveredCount, 2u);
-    EXPECT_TRUE(differentPaths);
-    EXPECT_TRUE(sameNormalized);
+
+    ResolvedAssetRootVector roots(arena);
+    AppendResolvedAssetRoot(arena, root, s_ProjectVirtualRoot, roots);
+    AppendResolvedAssetRoot(arena, root, s_ProjectVirtualRoot, roots);
+    const Expected<DiscoveredNwbFileVector> files = DiscoverTestAssetFiles(roots, s_NwbExtension, arena, scratchArena);
+    ASSERT_TRUE(files.has_value());
+    ASSERT_EQ(files.value().size(), 2u);
+    EXPECT_NE(files.value()[0u].filePath, files.value()[1u].filePath);
+    EXPECT_EQ(files.value()[0u].normalizedPathText, files.value()[1u].normalizedPathText);
 }
 
 void VerifyMetadataDiscoveryAdmission_VirtualPathDoesNotSkipAnUninspectableEarlierRoot(){
@@ -667,57 +249,36 @@ void VerifyMetadataDiscoveryAdmission_VirtualPathDoesNotSkipAnUninspectableEarli
     ScratchArena scratchArena(s_AssetCaseTestsMetadataDiscoveryRootInspectionScratch);
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
-    native(mut arena, mut scratchArena){
-        using namespace NWB::Core::Assets;
-        const NWB::Path repo = Tests::RepoRootOf(arena, __FILE__);
-#if defined(NWB_PLATFORM_WINDOWS)
-        const NWB::Path invalidRoot = repo / "invalid|root";
-#else
-        TString<AssetArena> longName(arena);
-        longName.resize(40000u, static_cast<tchar>('a'));
-        const NWB::Path invalidRoot = repo / longName;
-#endif
-        ASSERT_FALSE(FileExists(invalidRoot / "CMakeLists.txt"));
-        const auto validFile = FileExists(repo / "CMakeLists.txt");
-        ASSERT_TRUE(validFile);
-        ASSERT_TRUE(*validFile);
-        CookVector<ResolvedAssetRoot> roots(arena);
-        roots.emplace_back(NWB::Path(arena, invalidRoot), s_ProjectVirtualRoot);
-        roots.emplace_back(NWB::Path(arena, repo), s_ProjectVirtualRoot);
-        EXPECT_FALSE(ResolveVirtualAssetPath(roots, "project/CMakeLists.txt", arena, scratchArena));
-        roots[0u].path = repo / "__nwb_missing_virtual_path_root_31c68263";
-        const auto missing = FileExists(roots[0u].path);
-        ASSERT_TRUE(missing);
-        ASSERT_FALSE(*missing);
-        EXPECT_TRUE(ResolveVirtualAssetPath(roots, "project/CMakeLists.txt", arena, scratchArena));
-    }
+
+    const GraphicsTestPath repo = GetAssetArenaRepoRoot(arena);
+    const GraphicsTestPath invalidRoot = BuildUninspectableTestRoot(arena, repo);
+    ASSERT_FALSE(FileExists(JoinGraphicsPath(invalidRoot, "CMakeLists.txt")).has_value());
+    const Expected<b8, ErrorCode> validFile = FileExists(JoinGraphicsPath(repo, "CMakeLists.txt"));
+    ASSERT_TRUE(validFile.has_value());
+    ASSERT_TRUE(validFile.value());
+
+    ResolvedAssetRootVector roots(arena);
+    AppendResolvedAssetRoot(arena, invalidRoot, s_ProjectVirtualRoot, roots);
+    AppendResolvedAssetRoot(arena, repo, s_ProjectVirtualRoot, roots);
+    EXPECT_FALSE(CanResolveVirtualAssetPath(roots, "project/CMakeLists.txt", arena, scratchArena));
+
+    roots[0u].path = JoinGraphicsPath(repo, "__nwb_missing_virtual_path_root_31c68263");
+    const Expected<b8, ErrorCode> missing = FileExists(roots[0u].path);
+    ASSERT_TRUE(missing.has_value());
+    ASSERT_FALSE(missing.value());
+    EXPECT_TRUE(CanResolveVirtualAssetPath(roots, "project/CMakeLists.txt", arena, scratchArena));
 }
 
 void VerifyMetadataDiscoveryAdmission_PathsInSameHashBucketKeepDistinctOwnedPaths(){
     ScratchArena scratchArena(s_AssetCaseTestsMetadataDiscoveryCollidingPaths);
-    native(mut scratchArena){
-        using namespace NWB::Core::Assets;
-        CookMetadataDetail::DiscoveredPathSet seen(0, Hasher<AStringView>(), EqualTo<>(), scratchArena);
-        seen.reserve(2u);
-        ScratchString first("a/first.asset.nwb", scratchArena);
-        ScratchString second(scratchArena);
-        const usize bucket = Hasher<AStringView>{}(AStringView(first)) % seen.bucket_count();
-        for(u32 i = 0u; i < 1024u; ++i){
-            ScratchString candidate = StringFormat(scratchArena, "b/second_{}.asset.nwb", i);
-            if(Hasher<AStringView>{}(AStringView(candidate)) % seen.bucket_count() == bucket){
-                second = Move(candidate);
-                break;
-            }
-        }
-        ASSERT_FALSE(second.empty());
-        EXPECT_TRUE(seen.insert(first).second);
-        EXPECT_TRUE(seen.insert(second).second);
-        first.assign("overwritten");
-        ScratchString original("a/first.asset.nwb", scratchArena);
-        EXPECT_FALSE(seen.insert(original).second);
-        EXPECT_FALSE(seen.insert(second).second);
-        EXPECT_EQ(seen.size(), 2u);
-    }
+    DiscoveredPathCollisionProbe probe = MakeDiscoveredPathCollisionProbe(scratchArena);
+    ASSERT_TRUE(probe.hasSecond());
+    EXPECT_TRUE(probe.insertFirst());
+    EXPECT_TRUE(probe.insertSecond());
+    probe.overwriteFirst();
+    EXPECT_FALSE(probe.insertLiteral("a/first.asset.nwb"));
+    EXPECT_FALSE(probe.insertSecond());
+    EXPECT_EQ(probe.size(), 2u);
 }
 
 void VerifyMetadataExtensionOwnership_RequireRetainsAlignedTypedPayloadAndReturnsTheStoredObject(){
@@ -956,29 +517,19 @@ void VerifyMetadataExtensionOwnership_GraphicsParserFailureReleasesItsActualExte
     ScratchArena scratchArena(s_AssetCaseTestsMetadataExtensionGraphicsScratch);
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    native(in logger, mut fixtureArena, mut ownerArena, mut scratchArena){
-        using namespace NWB::Core;
-        using namespace NWB::Core::Assets;
-        Metascript::Document document(fixtureArena);
-        ASSERT_TRUE(document.parse("compute_shader asset;"));
-        const NWB::Path root(fixtureArena, "tests/metadata_extension/assets");
-        const NWB::Path path = root / "invalid_shader.nwb";
-        const DiscoveredNwbFile file(fixtureArena, root, path, "tests/metadata_extension/assets/invalid_shader.nwb", s_ProjectVirtualRoot);
-        for(usize iteration = 0u; iteration < 4u; ++iteration){
-            {
-                ParsedAssetMetadata metadata(ownerArena);
-                AssetDocumentMetadataParseContext context{ ownerArena, file, Impl::ComputeShader::AssetTypeName(), document, metadata, scratchArena };
-                EXPECT_EQ(TryAutoCollectedDocumentMetadataParsers(context), AssetMetadataParseResult::Error);
-                EXPECT_EQ(metadata.extensions.size(), 1u);
-                EXPECT_GT(ownerArena.memoryStats().usedBytes, 0u);
-            }
-            EXPECT_EQ(ownerArena.memoryStats().usedBytes, 0u);
-        }
-        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("asset is not a map")));
-        const Metascript::Value* const asset = document.findVariable("asset");
-        ASSERT_NE(asset, nullptr);
-        EXPECT_TRUE(asset->isNull());
+
+    MetaDocument document(fixtureArena);
+    ASSERT_TRUE(document.parse("compute_shader asset;"));
+    const GraphicsTestPath root(fixtureArena, "tests/metadata_extension/assets");
+    const GraphicsTestPath path = JoinGraphicsPath(root, "invalid_shader.nwb");
+    const DiscoveredNwbFile file(fixtureArena, root, path, "tests/metadata_extension/assets/invalid_shader.nwb", s_ProjectVirtualRoot);
+    for(usize iteration = 0u; iteration < 4u; ++iteration){
+        EXPECT_TRUE(RunGraphicsParserFailureIteration(ownerArena, file, document, scratchArena));
+        EXPECT_EQ(ownerArena.memoryStats().usedBytes, 0u);
     }
+    EXPECT_TRUE(SawCapturedError(logger, "asset is not a map"));
+    ASSERT_TRUE(HasMetaVariable(document, "asset"));
+    EXPECT_TRUE(GetMetaVariable(document, "asset").isNull());
 }
 
 void VerifyMetadataRegistryStorage_TypedGrowthPreservesInputOrderAndDoesNotReserveUnusedBuckets(){
@@ -986,68 +537,29 @@ void VerifyMetadataRegistryStorage_TypedGrowthPreservesInputOrderAndDoesNotReser
     AssetArena parseArena(s_AssetCaseTestsMetadataRegistryOutput);
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    native(in logger, mut fixtureArena, mut parseArena){
-        using namespace NWB::Core;
-        using namespace NWB::Core::Assets;
-        CpuTaskScheduler cpuScheduler(0u);
-        const NWB::Path root = Tests::RepoRootOf(fixtureArena, __FILE__) / s_BuildDirectory / "metadata_registry_storage";
-        ASSERT_TRUE(EnsureDirectories(root));
-        DiscoveredNwbFileVector files(fixtureArena);
-        constexpr usize s_SamplerCount = s_MetadataRegistrySamplerCount;
-        files.reserve(s_SamplerCount + 1u);
-        constexpr AStringView s_SamplerFields =
-            "sampler asset;\r\n"
-            "asset.min_filter = \"linear\";\r\n"
-            "asset.mag_filter = \"linear\";\r\n"
-            "asset.mip_filter = \"linear\";\r\n"
-            "asset.address_u = \"wrap\";\r\n"
-            "asset.address_v = \"wrap\";\r\n"
-            "asset.address_w = \"wrap\";\r\n"
-            "asset.reduction = \"standard\";\r\n"
-            "asset.max_anisotropy = 1.0;\r\n";
-        for(usize index = 0u; index < s_SamplerCount; ++index){
-            const usize identity = (index * 37u) % s_SamplerCount;
-            const AssetString filename = StringFormat(fixtureArena, "sampler_{:03}.nwb", identity);
-            const NWB::Path path = root / filename;
-            AssetString source(s_SamplerFields, fixtureArena);
-            source += StringFormat(fixtureArena, "asset.mip_bias = {};\r\n", identity);
-            ASSERT_TRUE(::WriteTextFile(path, source));
-            const AssetString normalized = PathToString(fixtureArena, path.lexicallyNormal());
-            files.emplace_back(fixtureArena, root, path, normalized, s_ProjectVirtualRoot);
-        }
-        for(const b8 rejectDuplicate : { false, true }){
-            if(rejectDuplicate)
-                files.push_back(files.front());
-            {
-                Alloc::ScratchArena scratchArena{Name(s_AssetCaseTestsMetadataRegistryScratch)};
-                ParsedAssetMetadata metadata(parseArena);
-                ASSERT_TRUE(RegisterAutoCollectedCookEntryTypes(metadata.entryRegistry, scratchArena));
-                auto& samplers = metadata.entryRegistry.entries<Impl::SamplerCookEntry>(Impl::Sampler::AssetTypeName());
-                auto& models = metadata.entryRegistry.entries<Impl::ModelCookEntry>(Impl::Model::AssetTypeName());
-                EXPECT_EQ(ParseAssetMetadata(files, root, NWB::Path(fixtureArena), parseArena, cpuScheduler, scratchArena, metadata), !rejectDuplicate);
-                ASSERT_EQ(samplers.size(), s_SamplerCount);
-                EXPECT_GE(samplers.capacity(), s_SamplerCount);
-                EXPECT_TRUE(models.empty());
-                EXPECT_EQ(models.capacity(), 0u);
-                EXPECT_TRUE(metadata.extensions.empty());
-                EXPECT_EQ(metadata.entryRegistry.entryCount(), s_SamplerCount);
-                for(usize index = 0u; index < s_SamplerCount; ++index){
-                    const usize identity = (index * 37u) % s_SamplerCount;
-                    const AssetString virtualPath = StringFormat(fixtureArena, "project/sampler_{:03}", identity);
-                    const auto expectedPath = ToName(virtualPath);
-                    ASSERT_TRUE(expectedPath);
-                    ASSERT_TRUE(*expectedPath);
-                    EXPECT_EQ(samplers[index].virtualPath, **expectedPath);
-                    EXPECT_EQ(&samplers.get_allocator().arena(), &parseArena);
-                    EXPECT_FLOAT_EQ(samplers[index].description.mipBias, static_cast<f32>(identity));
-                }
-            }
-            EXPECT_EQ(parseArena.memoryStats().usedBytes, 0u);
-            if(rejectDuplicate)
-                EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("duplicate property asset virtual path")));
-            else
-                EXPECT_EQ(logger.errorCount(), 0u);
-        }
+
+    CpuTaskScheduler cpuScheduler(0u);
+    const GraphicsTestPath root = JoinGraphicsPath2(GetAssetArenaRepoRoot(fixtureArena), s_BuildDirectory, "metadata_registry_storage");
+    ASSERT_TRUE(EnsureDirectories(root).has_value());
+
+    DiscoveredNwbFileVector files(fixtureArena);
+    files.reserve(s_MetadataRegistrySamplerCount + 1u);
+    const StringView samplerFields = "sampler asset;\r\nasset.min_filter = \"linear\";\r\nasset.mag_filter = \"linear\";\r\nasset.mip_filter = \"linear\";\r\nasset.address_u = \"wrap\";\r\nasset.address_v = \"wrap\";\r\nasset.address_w = \"wrap\";\r\nasset.reduction = \"standard\";\r\nasset.max_anisotropy = 1.0;\r\n";
+    for(usize index = 0u; index < s_MetadataRegistrySamplerCount; ++index){
+        const usize identity = (index * 37u) % s_MetadataRegistrySamplerCount;
+        AppendMetadataRegistrySamplerFile(fixtureArena, root, samplerFields, identity, files);
+    }
+
+    for(u32 passIndex = 0u; passIndex < 2u; ++passIndex){
+        const b8 rejectDuplicate = passIndex == 1u;
+        if(rejectDuplicate)
+            files.push_back(files[0u]);
+        VerifyMetadataRegistryStoragePass(fixtureArena, parseArena, root, files, cpuScheduler, s_MetadataRegistrySamplerCount, rejectDuplicate);
+        EXPECT_EQ(parseArena.memoryStats().usedBytes, 0u);
+        if(rejectDuplicate)
+            EXPECT_TRUE(SawCapturedError(logger, "duplicate property asset virtual path"));
+        else
+            EXPECT_EQ(logger.errorCount(), 0u);
     }
 }
 
@@ -1055,59 +567,53 @@ void VerifyMetadataRegistryPublication_NullClassAllocationDoesNotPublishBucket()
     AssetArena arena(s_AssetCaseTestsMetadataRegistryNullAllocation);
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
-    native(in logger, mut arena){
-        using namespace NWB::Core::Assets;
-        CookEntryRegistry registry(arena);
-        const Name type = s_MetadataRegistryNullBucket;
-        EXPECT_FALSE(registry.registerCustomType<NullAllocatedBucket>(type));
-        EXPECT_EQ(registry.bucketCount(), 0u);
-        EXPECT_EQ(registry.find(type), nullptr);
-        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("bucket allocation returned null")));
-    }
+
+    CookEntryRegistry registry(arena);
+    const Name type = s_MetadataRegistryNullBucket;
+    EXPECT_FALSE(TryRegisterNullAllocatedBucket(registry, type));
+    EXPECT_EQ(registry.bucketCount(), 0u);
+    EXPECT_FALSE(HasCookEntryRegistryBucket(registry, type));
+    EXPECT_TRUE(SawCapturedError(logger, "bucket allocation returned null"));
 }
 
 void VerifyMetadataRegistryPublication_DefaultDependencyEntryOwnsItsPathText(){
     AssetArena arena(s_AssetCaseTestsMetadataRegistryDependencyPath);
     ScratchArena scratchArena(s_AssetCaseTestsMetadataRegistryDependencyPathScratch);
-    native(mut arena, mut scratchArena){
-        using namespace NWB::Core::Assets;
-        CookDependencyRegistry registry(arena);
-        ScratchString text("project/example", scratchArena);
-        ASSERT_TRUE(registry.registerDefaultEntryAsset(Name(s_AssetInputNameProjectExample), Name(s_AssetInputNameExample), AStringView(text)));
-        text.assign("project/changed");
-        EXPECT_EQ(registry.defaultEntryAsset().virtualPathText, "project/example");
-        const AStringView stored = registry.defaultEntryAsset().virtualPathText;
-        ASSERT_TRUE(registry.registerDefaultEntryAsset(Name(s_AssetInputNameProjectExample), Name(s_AssetInputNameExample), stored));
-        EXPECT_EQ(registry.defaultEntryAsset().virtualPathText, "project/example");
-        CookDependencyRegistry moved(Move(registry));
-        EXPECT_EQ(moved.defaultEntryAsset().virtualPathText, "project/example");
-        EXPECT_FALSE(registry.defaultEntryAsset().virtualPath);
-    }
+
+    CookDependencyRegistry registry(arena);
+    ScratchString text = MakeScratchString("project/example", scratchArena);
+    ASSERT_TRUE(registry.registerDefaultEntryAsset(Name(s_AssetInputNameProjectExample), Name(s_AssetInputNameExample), ViewScratchString(text)));
+    text.assign("project/changed");
+    EXPECT_EQ(registry.defaultEntryAsset().virtualPathText, "project/example");
+
+    const StringView stored = registry.defaultEntryAsset().virtualPathText;
+    ASSERT_TRUE(registry.registerDefaultEntryAsset(Name(s_AssetInputNameProjectExample), Name(s_AssetInputNameExample), stored));
+    EXPECT_EQ(registry.defaultEntryAsset().virtualPathText, "project/example");
+
+    CookDependencyRegistry moved = MoveCookDependencyRegistry(registry);
+    EXPECT_EQ(moved.defaultEntryAsset().virtualPathText, "project/example");
+    EXPECT_FALSE(IsValidAssetName(registry.defaultEntryAsset().virtualPath));
 }
 
 void VerifyMetadataRegistryPublication_MetadataRegistrationKeepsCallerTextAlive(){
     ScratchArena scratchArena(s_AssetCaseTestsMetadataRegistryOwnedTokens);
-    native(mut scratchArena){
+    ScratchString token = MakeScratchString("nwb_owned_token_71a7", scratchArena);
+    ScratchString suffix = MakeScratchString("_nwb_owned_suffix_71a7", scratchArena);
+    ScratchString extension = MakeScratchString(".nwb_owned_sidecar_71a7", scratchArena);
+    RegisterMetadataNonStandaloneAssetType(Name(s_AssetCaseTestsOwnedType71a7), ViewScratchString(token));
+    RegisterMetadataNonStandaloneFirstTokenSuffix(ViewScratchString(suffix));
+    RegisterMetadataPairedSidecarExtension(ViewScratchString(extension));
+    token.assign("overwritten");
+    suffix.assign("overwritten");
+    extension.assign("overwritten");
+
+    EXPECT_TRUE(IsLikelyNonStandaloneFirstToken("nwb_owned_token_71a7"));
+    EXPECT_TRUE(IsLikelyNonStandaloneFirstToken("value_nwb_owned_suffix_71a7"));
+    EXPECT_TRUE(HasRegisteredPairedSidecarExtension(scratchArena, ".nwb_owned_sidecar_71a7"));
+
+    native{
         using namespace NWB::Core;
         using namespace NWB::Core::Assets;
-        ScratchString token("nwb_owned_token_71a7", scratchArena);
-        ScratchString suffix("_nwb_owned_suffix_71a7", scratchArena);
-        ScratchString extension(".nwb_owned_sidecar_71a7", scratchArena);
-        RegisterNonStandaloneAssetType(Name(s_AssetCaseTestsOwnedType71a7), AStringView(token));
-        RegisterNonStandaloneFirstTokenSuffix(AStringView(suffix));
-        RegisterAssetPairedSidecarRule(AssetPairedSidecarRule{ AStringView(extension) });
-        token.assign("overwritten");
-        suffix.assign("overwritten");
-        extension.assign("overwritten");
-
-        EXPECT_TRUE(IsLikelyNonStandaloneFirstToken("nwb_owned_token_71a7"));
-        EXPECT_TRUE(IsLikelyNonStandaloneFirstToken("value_nwb_owned_suffix_71a7"));
-        Vector<AssetPairedSidecarRule, ScratchArena> rules(scratchArena);
-        CookMetadataDetail::CopyPairedSidecarRules(rules);
-        b8 found = false;
-        for(const AssetPairedSidecarRule& rule : rules)
-            found = found || rule.sidecarExtension == ".nwb_owned_sidecar_71a7";
-        EXPECT_TRUE(found);
 #if defined(NWB_DEBUG)
         Name fallback = s_NwbOwnedFallback71a7;
         RegisterNonStandaloneAssetType(fallback);
@@ -1144,7 +650,7 @@ void VerifyMetadataRegistryPublication_ConcurrentMetadataRegistrationsKeepDistin
         Array<Thread, 4u> threads;
         for(usize i = 0u; i < threads.size(); ++i){
             threads[i] = Thread([&, i](){
-                ScratchArena scratchArena{Name(s_AssetCaseTestsMetadataRegistryConcurrentTokens)};
+                ScratchArena scratchArena{ Name(s_AssetCaseTestsMetadataRegistryConcurrentTokens) };
                 ScratchString text(tokens[i], scratchArena);
                 RegisterNonStandaloneAssetType(s_NameNone, AStringView(text.data(), text.size()));
                 text.assign("overwritten");
@@ -1161,113 +667,112 @@ void VerifyMetadataRegistryPublication_ConcurrentMetadataRegistrationsKeepDistin
 void VerifyModelCookMetadata_UniqueAssetPathReferencesFailAndLocalObjectReferencesRecover(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard registration(logger, s_BreakOnFatal);
-    native(in logger){
-        for(const usize skeletonCount : { 1u, 33u }){
-            ModelMetadata metadata;
-            AddIndexedModelObjects(skeletonCount, 257u, metadata);
-            ASSERT_TRUE(metadata.parse());
-            metadata.verifyObjectReferences();
-            const AStringView assetPath = "tests/model_cook_metadata/skeleton_0";
-            metadata.asset.field(s_ModelMetaSkinnedMeshesField).field(s_ModelMetaMeshObjectField).field(s_ModelMetaSkeletonField).setString(assetPath);
-            EXPECT_FALSE(metadata.parse());
-            metadata.verifyObjectReferences();
-            EXPECT_EQ(metadata.asset.field(s_ModelMetaSkinnedMeshesField).field(s_ModelMetaMeshObjectField).field(s_ModelMetaSkeletonField).asString(), assetPath);
-            metadata.asset.field(s_ModelMetaSkinnedMeshesField).field(s_ModelMetaMeshObjectField).field(s_ModelMetaSkeletonField).setString("rig_0");
-            ASSERT_TRUE(metadata.parse());
-            metadata.verifyObjectReferences();
-        }
-        EXPECT_EQ(logger.errorCount(), 2u);
-        EXPECT_TRUE(logger.sawErrorContaining(s_TargetsAMissingSkeletonObject));
+
+    for(u32 countIndex = 0u; countIndex < 2u; ++countIndex){
+        usize skeletonCount = 1u;
+        if(countIndex == 1u)
+            skeletonCount = 33u;
+        ModelMetadata metadata = ModelMetadata();
+        PopulateIndexedModelObjects(skeletonCount, 257u, metadata);
+        ASSERT_TRUE(metadata.parse());
+        metadata.verifyObjectReferences();
+
+        const StringView assetPath = "tests/model_cook_metadata/skeleton_0";
+        metadata.setNestedFieldString(s_ModelMetaSkinnedMeshesField, s_ModelMetaMeshObjectField, s_ModelMetaSkeletonField, assetPath);
+        EXPECT_FALSE(metadata.parse());
+        metadata.verifyObjectReferences();
+        EXPECT_EQ(metadata.nestedFieldString(s_ModelMetaSkinnedMeshesField, s_ModelMetaMeshObjectField, s_ModelMetaSkeletonField), assetPath);
+
+        metadata.setNestedFieldString(s_ModelMetaSkinnedMeshesField, s_ModelMetaMeshObjectField, s_ModelMetaSkeletonField, "rig_0");
+        ASSERT_TRUE(metadata.parse());
+        metadata.verifyObjectReferences();
     }
+    EXPECT_EQ(logger.errorCount(), 2u);
+    EXPECT_TRUE(SawCapturedError(logger, "targets a missing skeleton object"));
 }
 
 void VerifyModelCookMetadata_SharedAssetPathCannotSelectAmongLocalSkeletonObjects(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard registration(logger, s_BreakOnFatal);
     ModelMetadata metadata = ModelMetadata();
-    native(in logger, mut metadata){
-        metadata.addSkeleton(s_ModelMetaRigA, s_SharedModelPath);
-        metadata.addSkeleton(s_ModelMetaRigB, "TESTS/MODEL_COOK_METADATA/SHARED");
-        metadata.addSkinnedMesh(s_ModelBodySegment, s_SharedModelPath, s_SharedModelPath);
-        EXPECT_FALSE(metadata.parse());
-        EXPECT_TRUE(metadata.entry.skinnedMeshObjects.empty());
-        EXPECT_TRUE(logger.sawErrorContaining(s_TargetsAMissingSkeletonObject));
-        metadata.asset.field(s_ModelMetaSkinnedMeshesField).field(s_ModelBodySegment).field(s_ModelMetaSkeletonField).setString(s_ModelMetaRigA);
-        metadata.expectedSkeletons.at(Name(s_ModelBodySegment)) = Name(s_ModelMetaRigA);
-        ASSERT_TRUE(metadata.parse());
-        metadata.verifyObjectReferences();
-        EXPECT_EQ(logger.errorCount(), 1u);
-    }
+
+    metadata.addSkeleton(s_ModelMetaRigA, s_SharedModelPath);
+    metadata.addSkeleton(s_ModelMetaRigB, "TESTS/MODEL_COOK_METADATA/SHARED");
+    metadata.addSkinnedMesh(s_ModelBodySegment, s_SharedModelPath, s_SharedModelPath);
+    EXPECT_FALSE(metadata.parse());
+    EXPECT_TRUE(metadata.entry.skinnedMeshObjects.empty());
+    EXPECT_TRUE(SawCapturedError(logger, "targets a missing skeleton object"));
+
+    metadata.setNestedFieldString(s_ModelMetaSkinnedMeshesField, s_ModelBodySegment, s_ModelMetaSkeletonField, s_ModelMetaRigA);
+    metadata.setExpectedSkeleton(s_ModelBodySegment, s_ModelMetaRigA);
+    ASSERT_TRUE(metadata.parse());
+    metadata.verifyObjectReferences();
+    EXPECT_EQ(logger.errorCount(), 1u);
 }
 
 void VerifyModelCookMetadata_UnknownObjectReferencesRemainValidatorErrors(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard registration(logger, s_BreakOnFatal);
     ModelMetadata metadata = ModelMetadata();
-    native(in logger, mut metadata){
-        metadata.addSkeleton(s_ModelRigSegment, "tests/model_cook_metadata/known");
-        metadata.addSkinnedMesh(s_ModelBodySegment, s_UnknownModelPath, s_UnknownModelPath);
-        EXPECT_FALSE(metadata.parse());
-        EXPECT_TRUE(metadata.entry.skinnedMeshObjects.empty());
-        EXPECT_EQ(logger.errorCount(), 1u);
-        EXPECT_TRUE(logger.sawErrorContaining(s_TargetsAMissingSkeletonObject));
-    }
+
+    metadata.addSkeleton(s_ModelRigSegment, "tests/model_cook_metadata/known");
+    metadata.addSkinnedMesh(s_ModelBodySegment, s_UnknownModelPath, s_UnknownModelPath);
+    EXPECT_FALSE(metadata.parse());
+    EXPECT_TRUE(metadata.entry.skinnedMeshObjects.empty());
+    EXPECT_EQ(logger.errorCount(), 1u);
+    EXPECT_TRUE(SawCapturedError(logger, "targets a missing skeleton object"));
 }
 
 void VerifyModelCookMetadata_CanonicalDuplicateObjectNamesRemainValidatorErrors(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard registration(logger, s_BreakOnFatal);
     ModelMetadata metadata = ModelMetadata();
-    native(in logger, mut metadata){
-        metadata.addSkeleton(s_ModelRigSegment, "tests/model_cook_metadata/first");
-        metadata.addSkeleton("RIG", "tests/model_cook_metadata/second");
-        metadata.addSkinnedMesh(s_ModelBodySegment, "RiG", s_ModelRigSegment);
-        EXPECT_FALSE(metadata.parse());
-        EXPECT_TRUE(metadata.entry.skinnedMeshObjects.empty());
-        EXPECT_EQ(logger.errorCount(), 1u);
-        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("name is duplicated in the model")));
-    }
+
+    metadata.addSkeleton(s_ModelRigSegment, "tests/model_cook_metadata/first");
+    metadata.addSkeleton("RIG", "tests/model_cook_metadata/second");
+    metadata.addSkinnedMesh(s_ModelBodySegment, "RiG", s_ModelRigSegment);
+    EXPECT_FALSE(metadata.parse());
+    EXPECT_TRUE(metadata.entry.skinnedMeshObjects.empty());
+    EXPECT_EQ(logger.errorCount(), 1u);
+    EXPECT_TRUE(SawCapturedError(logger, "name is duplicated in the model"));
 }
 
 void VerifyModelCookMetadata_HandlesStaticOnlyAndMissingSkeletonCollections(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard registration(logger, s_BreakOnFatal);
     ModelMetadata metadata = ModelMetadata();
-    native(in logger, mut metadata){
-        metadata.asset.field(s_StaticMeshesField).field(s_PropObjectField).field(s_ModelMetaMeshField).setString(s_ModelMetaMeshVirtualPath);
-        ASSERT_TRUE(metadata.parse());
-        EXPECT_TRUE(metadata.entry.skeletonObjects.empty());
-        EXPECT_TRUE(metadata.entry.skinnedMeshObjects.empty());
-        metadata.addSkinnedMesh(s_ModelBodySegment, "missing", "missing");
-        EXPECT_FALSE(metadata.parse());
-        EXPECT_TRUE(metadata.entry.skinnedMeshObjects.empty());
-        EXPECT_EQ(logger.errorCount(), 1u);
-        EXPECT_TRUE(logger.sawErrorContaining(s_TargetsAMissingSkeletonObject));
-    }
+
+    metadata.setNestedFieldString(s_StaticMeshesField, s_PropObjectField, s_ModelMetaMeshField, s_ModelMetaMeshVirtualPath);
+    ASSERT_TRUE(metadata.parse());
+    EXPECT_TRUE(metadata.entry.skeletonObjects.empty());
+    EXPECT_TRUE(metadata.entry.skinnedMeshObjects.empty());
+
+    metadata.addSkinnedMesh(s_ModelBodySegment, "missing", "missing");
+    EXPECT_FALSE(metadata.parse());
+    EXPECT_TRUE(metadata.entry.skinnedMeshObjects.empty());
+    EXPECT_EQ(logger.errorCount(), 1u);
+    EXPECT_TRUE(SawCapturedError(logger, "targets a missing skeleton object"));
 }
 
 void VerifyModelCookMetadata_RedundantSkinnedMeshReferenceIsRejectedAndSkinOnlyReferenceRecovers(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard registration(logger, s_BreakOnFatal);
     ModelMetadata metadata = ModelMetadata();
-    native(in logger, mut metadata){
-        using Core::Metascript::Value;
-        metadata.addSkeleton(s_ModelRigSegment, "tests/model_cook_metadata/skeleton");
-        metadata.addSkinnedMesh(s_ModelBodySegment, s_ModelRigSegment, s_ModelRigSegment);
-        ASSERT_TRUE(metadata.parse());
-        metadata.verifyObjectReferences();
 
-        Value& object = metadata.asset.field(s_ModelMetaSkinnedMeshesField).field(s_ModelBodySegment);
-        object.field(s_ModelMetaMeshField).setString(s_ModelMetaMeshVirtualPath);
-        EXPECT_FALSE(metadata.parse());
-        metadata.verifyObjectReferences();
-        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field 'mesh'")));
+    metadata.addSkeleton(s_ModelRigSegment, "tests/model_cook_metadata/skeleton");
+    metadata.addSkinnedMesh(s_ModelBodySegment, s_ModelRigSegment, s_ModelRigSegment);
+    ASSERT_TRUE(metadata.parse());
+    metadata.verifyObjectReferences();
 
-        ASSERT_EQ(object.asMap().erase(s_ModelMetaMeshField), 1u);
-        ASSERT_TRUE(metadata.parse());
-        metadata.verifyObjectReferences();
-        EXPECT_EQ(logger.errorCount(), 1u);
-    }
+    metadata.setNestedFieldString(s_ModelMetaSkinnedMeshesField, s_ModelBodySegment, s_ModelMetaMeshField, s_ModelMetaMeshVirtualPath);
+    EXPECT_FALSE(metadata.parse());
+    metadata.verifyObjectReferences();
+    EXPECT_TRUE(SawCapturedError(logger, "unsupported asset field 'mesh'"));
+
+    ASSERT_EQ(metadata.eraseNestedField(s_ModelMetaSkinnedMeshesField, s_ModelBodySegment, s_ModelMetaMeshField), 1u);
+    ASSERT_TRUE(metadata.parse());
+    metadata.verifyObjectReferences();
+    EXPECT_EQ(logger.errorCount(), 1u);
 }
 
 // Metadata construction and result checks stay outside the timed public cook-metadata parsing operation.
@@ -1275,172 +780,161 @@ void VerifyModelCookMetadata_FourRowTransformFailsWithoutReplacingPreviousValueA
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard registration(logger, s_BreakOnFatal);
     ModelMetadata metadata = ModelMetadata();
-    native(in logger, mut metadata){
-        using Core::Metascript::Value;
-        Value& object = metadata.asset.field(s_StaticMeshesField).field(s_PropObjectField);
-        object.field(s_ModelMetaMeshField).setString(s_ModelMetaMeshVirtualPath);
-        Value& transform = object.field("transform");
-        transform.makeList();
-        for(usize rowIndex = 0u; rowIndex < 3u; ++rowIndex){
-            Value row(metadata.metadataArena);
-            row.makeList();
-            for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex)
-                row.append(Value(static_cast<i64>(rowIndex == columnIndex ? 1 : 0), metadata.metadataArena));
-            transform.append(Move(row));
-        }
-        transform.asList()[0u].asList()[3u].setDouble(0.5);
-        ASSERT_TRUE(metadata.parse());
-        ASSERT_EQ(metadata.entry.staticMeshObjects.size(), 1u);
-        EXPECT_EQ(metadata.entry.staticMeshObjects[0u].transform._14, 0.5f);
 
-        Value homogeneousRow(metadata.metadataArena);
-        homogeneousRow.makeList();
-        for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex)
-            homogeneousRow.append(Value(static_cast<i64>(columnIndex == 3u ? 1 : 0), metadata.metadataArena));
-        transform.append(Move(homogeneousRow));
-        EXPECT_FALSE(metadata.parse());
-        ASSERT_EQ(metadata.entry.staticMeshObjects.size(), 1u);
-        EXPECT_EQ(metadata.entry.staticMeshObjects[0u].transform._14, 0.5f);
-        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("must be a 3x4 affine matrix")));
+    metadata.initThreeRowStaticTransform(s_PropObjectField, s_ModelMetaMeshVirtualPath, 0.5);
+    ASSERT_TRUE(metadata.parse());
+    ASSERT_EQ(metadata.entry.staticMeshObjects.size(), 1u);
+    EXPECT_EQ(metadata.firstStaticTransform14(), 0.5f);
 
-        transform.asList().pop_back();
-        ASSERT_TRUE(metadata.parse());
-        ASSERT_EQ(metadata.entry.staticMeshObjects.size(), 1u);
-        EXPECT_EQ(metadata.entry.staticMeshObjects[0u].transform._14, 0.5f);
-        EXPECT_EQ(logger.errorCount(), 1u);
-    }
+    metadata.appendHomogeneousStaticTransformRow(s_PropObjectField);
+    EXPECT_FALSE(metadata.parse());
+    ASSERT_EQ(metadata.entry.staticMeshObjects.size(), 1u);
+    EXPECT_EQ(metadata.firstStaticTransform14(), 0.5f);
+    EXPECT_TRUE(SawCapturedError(logger, "must be a 3x4 affine matrix"));
+
+    metadata.popStaticTransformRow(s_PropObjectField);
+    ASSERT_TRUE(metadata.parse());
+    ASSERT_EQ(metadata.entry.staticMeshObjects.size(), 1u);
+    EXPECT_EQ(metadata.firstStaticTransform14(), 0.5f);
+    EXPECT_EQ(logger.errorCount(), 1u);
 }
 
 void VerifyModelPayload_RejectsDuplicateNamesWithinAndAcrossObjectKinds(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistration(logger, s_BreakOnFatal);
-    native(in logger){
-        for(u32 duplicateCase = 0u; duplicateCase < 7u; ++duplicateCase){
-            ModelInputs inputs;
-            switch(duplicateCase){
-            case 0u: inputs.skeletonObjects.push_back(inputs.skeletonObjects.front()); break;
-            case 1u: inputs.staticMeshObjects.push_back(inputs.staticMeshObjects.front()); break;
-            case 2u: inputs.skinnedMeshObjects.push_back(inputs.skinnedMeshObjects.front()); break;
-            case 3u: inputs.staticMeshObjects.front().name = inputs.skeletonObjects.front().name; break;
-            case 4u: inputs.skinnedMeshObjects.front().name = inputs.skeletonObjects.front().name; break;
-            case 5u: inputs.skinnedMeshObjects.front().name = inputs.staticMeshObjects.front().name; break;
-            case 6u: inputs.staticMeshObjects.front().name = Name("RIG"); break;
-            }
-            inputs.publish();
-            EXPECT_FALSE(inputs.model.validatePayload(inputs.scratchArena)) << duplicateCase;
+    for(u32 duplicateCase = 0u; duplicateCase < 7u; ++duplicateCase){
+        const ScopedTestTrace trace(duplicateCase);
+        ModelInputs inputs = ModelInputs();
+        switch(duplicateCase){
+        case 0u: inputs.skeletonObjects.push_back(inputs.skeletonObjects[0u]); break;
+        case 1u: inputs.staticMeshObjects.push_back(inputs.staticMeshObjects[0u]); break;
+        case 2u: inputs.skinnedMeshObjects.push_back(inputs.skinnedMeshObjects[0u]); break;
+        case 3u: inputs.staticMeshObjects[0u].name = inputs.skeletonObjects[0u].name; break;
+        case 4u: inputs.skinnedMeshObjects[0u].name = inputs.skeletonObjects[0u].name; break;
+        case 5u: inputs.skinnedMeshObjects[0u].name = inputs.staticMeshObjects[0u].name; break;
+        case 6u: inputs.staticMeshObjects[0u].name = Name("RIG"); break;
+        default: break;
         }
-        EXPECT_EQ(logger.errorCount(), 7u);
+        inputs.publish();
+        EXPECT_FALSE(inputs.validate());
     }
+    EXPECT_EQ(logger.errorCount(), 7u);
 }
 
 void VerifyModelPayload_RejectsMissingNamesRequiredReferencesAndEmptyModels(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistration(logger, s_BreakOnFatal);
-    native{
-        for(u32 invalidCase = 0u; invalidCase < 7u; ++invalidCase){
-            ModelInputs inputs;
-            switch(invalidCase){
-            case 0u: inputs.skeletonObjects.front().name = s_NameNone; break;
-            case 1u: inputs.skeletonObjects.front().skeleton.reset(); break;
-            case 2u: inputs.staticMeshObjects.front().name = s_NameNone; break;
-            case 3u: inputs.staticMeshObjects.front().mesh.reset(); break;
-            case 4u: inputs.skinnedMeshObjects.front().name = s_NameNone; break;
-            case 5u: inputs.skinnedMeshObjects.front().skin.reset(); break;
-            case 6u: inputs.skinnedMeshObjects.front().skeletonObject = s_NameNone; break;
-            }
-            inputs.publish();
-            EXPECT_FALSE(inputs.model.validatePayload(inputs.scratchArena)) << invalidCase;
+    for(u32 invalidCase = 0u; invalidCase < 7u; ++invalidCase){
+        const ScopedTestTrace trace(invalidCase);
+        ModelInputs inputs = ModelInputs();
+        switch(invalidCase){
+        case 0u: inputs.skeletonObjects[0u].name = s_NameNone; break;
+        case 1u: inputs.skeletonObjects[0u].skeleton.reset(); break;
+        case 2u: inputs.staticMeshObjects[0u].name = s_NameNone; break;
+        case 3u: inputs.staticMeshObjects[0u].mesh.reset(); break;
+        case 4u: inputs.skinnedMeshObjects[0u].name = s_NameNone; break;
+        case 5u: inputs.skinnedMeshObjects[0u].skin.reset(); break;
+        case 6u: inputs.skinnedMeshObjects[0u].skeletonObject = s_NameNone; break;
+        default: break;
         }
-        ModelInputs inputs;
-        inputs.skeletonObjects.clear();
-        inputs.staticMeshObjects.clear();
-        inputs.skinnedMeshObjects.clear();
         inputs.publish();
-        EXPECT_FALSE(inputs.model.validatePayload(inputs.scratchArena));
-        Impl::Model unnamed(inputs.arena);
-        EXPECT_FALSE(unnamed.validatePayload(inputs.scratchArena));
+        EXPECT_FALSE(inputs.validate());
     }
+
+    ModelInputs inputs = ModelInputs();
+    inputs.skeletonObjects.clear();
+    inputs.staticMeshObjects.clear();
+    inputs.skinnedMeshObjects.clear();
+    inputs.publish();
+    EXPECT_FALSE(inputs.validate());
+    EXPECT_FALSE(inputs.validateUnnamedModel());
 }
 
 void VerifyModelPayload_RejectsMissingOrWrongKindParents(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistration(logger, s_BreakOnFatal);
-    native(in logger){
-        for(u32 invalidCase = 0u; invalidCase < 7u; ++invalidCase){
-            ModelInputs inputs;
-            switch(invalidCase){
-            case 0u: inputs.staticMeshObjects.front().parentObject = Name(s_AssetCaseMissing); break;
-            case 1u: inputs.staticMeshObjects.front().parentObject = Name(s_ModelPayloadProp); break;
-            case 2u: inputs.staticMeshObjects.front().parentObject = Name(s_ModelBodySegment); break;
-            case 3u: inputs.staticMeshObjects.front().parentObject = s_NameNone; break;
-            case 4u: inputs.skinnedMeshObjects.front().skeletonObject = Name(s_AssetCaseMissing); break;
-            case 5u: inputs.skinnedMeshObjects.front().skeletonObject = Name(s_ModelPayloadProp); break;
-            case 6u: inputs.skinnedMeshObjects.front().skeletonObject = Name(s_ModelBodySegment); break;
-            }
-            inputs.publish();
-            EXPECT_FALSE(inputs.model.validatePayload(inputs.scratchArena)) << invalidCase;
+    for(u32 invalidCase = 0u; invalidCase < 7u; ++invalidCase){
+        const ScopedTestTrace trace(invalidCase);
+        ModelInputs inputs = ModelInputs();
+        switch(invalidCase){
+        case 0u: inputs.staticMeshObjects[0u].parentObject = Name(s_AssetCaseMissing); break;
+        case 1u: inputs.staticMeshObjects[0u].parentObject = Name(s_ModelPayloadProp); break;
+        case 2u: inputs.staticMeshObjects[0u].parentObject = Name(s_ModelBodySegment); break;
+        case 3u: inputs.staticMeshObjects[0u].parentObject = s_NameNone; break;
+        case 4u: inputs.skinnedMeshObjects[0u].skeletonObject = Name(s_AssetCaseMissing); break;
+        case 5u: inputs.skinnedMeshObjects[0u].skeletonObject = Name(s_ModelPayloadProp); break;
+        case 6u: inputs.skinnedMeshObjects[0u].skeletonObject = Name(s_ModelBodySegment); break;
+        default: break;
         }
-        EXPECT_EQ(logger.errorCount(), 7u);
+        inputs.publish();
+        EXPECT_FALSE(inputs.validate());
     }
+    EXPECT_EQ(logger.errorCount(), 7u);
 }
 
 void VerifyModelPayload_RevalidatesReplacedObjectsAndRecoversAfterRejection(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistration(logger, s_BreakOnFatal);
     ModelInputs inputs = ModelInputs();
-    native(mut inputs){
-        ASSERT_TRUE(inputs.model.validatePayload(inputs.scratchArena));
-        inputs.skeletonObjects.front().name = Name(s_ModelPayloadReplacementRig);
-        inputs.publish();
-        EXPECT_FALSE(inputs.model.validatePayload(inputs.scratchArena));
-        inputs.staticMeshObjects.front().parentObject = Name(s_ModelPayloadReplacementRig);
-        inputs.skinnedMeshObjects.front().skeletonObject = Name(s_ModelPayloadReplacementRig);
-        inputs.publish();
-        EXPECT_TRUE(inputs.model.validatePayload(inputs.scratchArena));
-        inputs.skinnedMeshObjects.front().name = Name(s_ModelPayloadProp);
-        inputs.publish();
-        EXPECT_FALSE(inputs.model.validatePayload(inputs.scratchArena));
-        inputs.skinnedMeshObjects.clear();
-        inputs.publish();
-        EXPECT_TRUE(inputs.model.validatePayload(inputs.scratchArena));
-    }
+
+    ASSERT_TRUE(inputs.validate());
+    inputs.skeletonObjects[0u].name = Name(s_ModelPayloadReplacementRig);
+    inputs.publish();
+    EXPECT_FALSE(inputs.validate());
+
+    inputs.staticMeshObjects[0u].parentObject = Name(s_ModelPayloadReplacementRig);
+    inputs.skinnedMeshObjects[0u].skeletonObject = Name(s_ModelPayloadReplacementRig);
+    inputs.publish();
+    EXPECT_TRUE(inputs.validate());
+
+    inputs.skinnedMeshObjects[0u].name = Name(s_ModelPayloadProp);
+    inputs.publish();
+    EXPECT_FALSE(inputs.validate());
+
+    inputs.skinnedMeshObjects.clear();
+    inputs.publish();
+    EXPECT_TRUE(inputs.validate());
 }
 
 void VerifyModelPayload_SingleObjectValidationDoesNotAllocateOrResolveItselfAsASkeleton(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistration(logger, s_BreakOnFatal);
     ModelInputs inputs = ModelInputs();
-    native(mut inputs){
-        inputs.skeletonObjects.clear();
-        inputs.skinnedMeshObjects.clear();
-        inputs.publish();
-        EXPECT_FALSE(inputs.model.validatePayload(inputs.scratchArena));
-        inputs.staticMeshObjects.front().parentObject = inputs.staticMeshObjects.front().name;
-        inputs.publish();
-        EXPECT_FALSE(inputs.model.validatePayload(inputs.scratchArena));
-        inputs.staticMeshObjects.front().parentObject = s_NameNone;
-        inputs.staticMeshObjects.front().parentJoint = s_NameNone;
-        inputs.publish();
-        EXPECT_TRUE(inputs.model.validatePayload(inputs.scratchArena));
-        EXPECT_EQ(inputs.scratchArena.memoryStats().allocationCount, 0u);
-    }
+
+    inputs.skeletonObjects.clear();
+    inputs.skinnedMeshObjects.clear();
+    inputs.publish();
+    EXPECT_FALSE(inputs.validate());
+
+    inputs.staticMeshObjects[0u].parentObject = inputs.staticMeshObjects[0u].name;
+    inputs.publish();
+    EXPECT_FALSE(inputs.validate());
+
+    inputs.staticMeshObjects[0u].parentObject = s_NameNone;
+    inputs.staticMeshObjects[0u].parentJoint = s_NameNone;
+    inputs.publish();
+    EXPECT_TRUE(inputs.validate());
+    EXPECT_EQ(inputs.scratchStats().allocationCount, 0u);
 }
 
 void VerifyModelPayload_RepeatedValidationReclaimsCallerScratchAfterSuccessAndRejection(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistration(logger, s_BreakOnFatal);
     ModelInputs inputs = ModelInputs();
-    native(mut inputs){
-        ASSERT_TRUE(inputs.model.validatePayload(inputs.scratchArena));
-        const ArenaMemoryStats warm = inputs.scratchArena.memoryStats();
-        for(usize iteration = 0u; iteration < 16u; ++iteration){
-            inputs.skinnedMeshObjects.front().name = iteration % 2u == 0u ? Name(s_ModelBodySegment) : Name(s_ModelPayloadProp);
-            inputs.publish();
-            EXPECT_EQ(inputs.model.validatePayload(inputs.scratchArena), iteration % 2u == 0u);
-            const ArenaMemoryStats current = inputs.scratchArena.memoryStats();
-            EXPECT_EQ(current.usedBytes, warm.usedBytes);
-            EXPECT_EQ(current.reservedBytes, warm.reservedBytes);
-        }
+
+    ASSERT_TRUE(inputs.validate());
+    const ArenaMemoryStats warm = inputs.scratchStats();
+    for(usize iteration = 0u; iteration < 16u; ++iteration){
+        const b8 valid = iteration % 2u == 0u;
+        if(valid)
+            inputs.skinnedMeshObjects[0u].name = Name(s_ModelBodySegment);
+        else
+            inputs.skinnedMeshObjects[0u].name = Name(s_ModelPayloadProp);
+        inputs.publish();
+        EXPECT_EQ(inputs.validate(), valid);
+        const ArenaMemoryStats current = inputs.scratchStats();
+        EXPECT_EQ(current.usedBytes, warm.usedBytes);
+        EXPECT_EQ(current.reservedBytes, warm.reservedBytes);
     }
 }
 
@@ -1448,72 +942,61 @@ void VerifyModelPayload_CodecRejectsDuplicateNamesAndWrongParentsAndReloadsValid
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistration(logger, s_BreakOnFatal);
     ModelInputs inputs = ModelInputs();
-    native(mut inputs){
-        using namespace NWB::Impl;
-        ModelAssetCodec codec;
-        Core::Assets::AssetBytes binary(inputs.arena);
-        ASSERT_TRUE(codec.serialize(inputs.model, binary));
-        Model loaded(inputs.arena, inputs.model.virtualPath());
-        ASSERT_TRUE(loaded.loadBinary(binary));
-        const usize staticOffset = sizeof(ModelHeaderBinary) + sizeof(ModelSkeletonObjectBinary);
-        const usize skinnedOffset = staticOffset + sizeof(ModelStaticMeshObjectBinary);
-        Core::Assets::AssetBytes malformed(binary);
-        ModelSkinnedMeshObjectBinary skinnedObject;
-        NWB_MEMCPY(&skinnedObject, sizeof(skinnedObject), malformed.data() + skinnedOffset, sizeof(skinnedObject));
-        skinnedObject.nameHash = Name(s_ModelPayloadProp).hash();
-        NWB_MEMCPY(malformed.data() + skinnedOffset, malformed.size() - skinnedOffset, &skinnedObject, sizeof(skinnedObject));
-        EXPECT_FALSE(loaded.loadBinary(malformed));
-        EXPECT_TRUE(loaded.loadBinary(binary));
 
-        malformed = binary;
-        ModelStaticMeshObjectBinary staticObject;
-        NWB_MEMCPY(&staticObject, sizeof(staticObject), malformed.data() + staticOffset, sizeof(staticObject));
-        staticObject.parentObjectNameHash = Name(s_ModelBodySegment).hash();
-        NWB_MEMCPY(malformed.data() + staticOffset, malformed.size() - staticOffset, &staticObject, sizeof(staticObject));
-        EXPECT_FALSE(loaded.loadBinary(malformed));
-        EXPECT_TRUE(loaded.loadBinary(binary));
+    ModelAssetCodec codec = ModelAssetCodec();
+    AssetBytes binary = MakeModelInputsBytes(inputs);
+    ASSERT_TRUE(SerializeModelAsset(codec, inputs.model, binary));
+    ModelAsset loaded = MakeLoadedModelFromInputs(inputs);
+    ASSERT_TRUE(LoadModelAssetBinary(loaded, binary));
 
-        inputs.skinnedMeshObjects.front().name = Name(s_ModelRigSegment);
-        inputs.publish();
-        EXPECT_FALSE(codec.serialize(inputs.model, malformed));
-        EXPECT_TRUE(loaded.validatePayload(inputs.scratchArena));
-    }
+    AssetBytes malformed = MakeModelInputsBytes(inputs);
+    CopyAssetBytes(binary, malformed);
+    CorruptModelBinarySkinnedName(Name(s_ModelPayloadProp), malformed);
+    EXPECT_FALSE(LoadModelAssetBinary(loaded, malformed));
+    EXPECT_TRUE(LoadModelAssetBinary(loaded, binary));
+
+    CopyAssetBytes(binary, malformed);
+    CorruptModelBinaryStaticParent(Name(s_ModelBodySegment), malformed);
+    EXPECT_FALSE(LoadModelAssetBinary(loaded, malformed));
+    EXPECT_TRUE(LoadModelAssetBinary(loaded, binary));
+
+    inputs.skinnedMeshObjects[0u].name = Name(s_ModelRigSegment);
+    inputs.publish();
+    EXPECT_FALSE(SerializeModelAsset(codec, inputs.model, malformed));
+    EXPECT_TRUE(loaded.validatePayload(inputs.scratchArena));
 }
 
 void VerifyModelPayload_CodecRejectsPreviousSchemaAndTruncatedSkinnedRecordAndReloadsCurrentPayload(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard registration(logger, s_BreakOnFatal);
     ModelInputs inputs = ModelInputs();
-    native(in logger, mut inputs){
-        using namespace NWB::Impl;
-        ModelAssetCodec codec;
-        Core::Assets::AssetBytes binary(inputs.arena);
-        ASSERT_TRUE(codec.serialize(inputs.model, binary));
-        const usize expectedBytes = sizeof(ModelHeaderBinary) + sizeof(ModelSkeletonObjectBinary) + sizeof(ModelStaticMeshObjectBinary) + sizeof(ModelSkinnedMeshObjectBinary);
-        ASSERT_EQ(binary.size(), expectedBytes);
-        Model loaded(inputs.arena, inputs.model.virtualPath());
-        ASSERT_TRUE(loaded.loadBinary(binary));
 
-        Core::Assets::AssetBytes malformed(binary);
-        constexpr u32 s_PreviousModelMagic = 0x4D444C31u;
-        NWB_MEMCPY(malformed.data(), malformed.size(), &s_PreviousModelMagic, sizeof(s_PreviousModelMagic));
-        EXPECT_FALSE(loaded.loadBinary(malformed));
-        Core::Assets::AssetBytes retained(inputs.arena);
-        ASSERT_TRUE(codec.serialize(loaded, retained));
-        EXPECT_EQ(retained, binary);
-        ASSERT_TRUE(loaded.loadBinary(binary));
+    ModelAssetCodec codec = ModelAssetCodec();
+    AssetBytes binary = MakeModelInputsBytes(inputs);
+    ASSERT_TRUE(SerializeModelAsset(codec, inputs.model, binary));
+    ASSERT_EQ(binary.size(), ExpectedSingleTripleModelBinaryBytes());
+    ModelAsset loaded = MakeLoadedModelFromInputs(inputs);
+    ASSERT_TRUE(LoadModelAssetBinary(loaded, binary));
 
-        malformed = binary;
-        malformed.pop_back();
-        EXPECT_FALSE(loaded.loadBinary(malformed));
-        ASSERT_TRUE(codec.serialize(loaded, retained));
-        EXPECT_EQ(retained, binary);
-        ASSERT_TRUE(loaded.loadBinary(binary));
-        ASSERT_EQ(loaded.skinnedMeshObjects().size(), 1u);
-        EXPECT_EQ(loaded.skinnedMeshObjects().front().skin.name(), inputs.skinnedMeshObjects.front().skin.name());
-        EXPECT_EQ(loaded.skinnedMeshObjects().front().skeletonObject, Name(s_ModelRigSegment));
-        EXPECT_EQ(logger.errorCount(), 2u);
-    }
+    AssetBytes malformed = MakeModelInputsBytes(inputs);
+    CopyAssetBytes(binary, malformed);
+    ASSERT_TRUE(OverwriteU32InAssetBytes(0u, 0x4D444C31u, malformed));
+    EXPECT_FALSE(LoadModelAssetBinary(loaded, malformed));
+    AssetBytes retained = MakeModelInputsBytes(inputs);
+    ASSERT_TRUE(SerializeModelAsset(codec, loaded, retained));
+    EXPECT_EQ(retained, binary);
+    ASSERT_TRUE(LoadModelAssetBinary(loaded, binary));
+
+    CopyAssetBytes(binary, malformed);
+    malformed.pop_back();
+    EXPECT_FALSE(LoadModelAssetBinary(loaded, malformed));
+    ASSERT_TRUE(SerializeModelAsset(codec, loaded, retained));
+    EXPECT_EQ(retained, binary);
+    ASSERT_TRUE(LoadModelAssetBinary(loaded, binary));
+    ASSERT_EQ(loaded.skinnedMeshObjects().size(), 1u);
+    EXPECT_EQ(loaded.skinnedMeshObjects()[0u].skin.name(), inputs.skinnedMeshObjects[0u].skin.name());
+    EXPECT_EQ(loaded.skinnedMeshObjects()[0u].skeletonObject, Name(s_ModelRigSegment));
+    EXPECT_EQ(logger.errorCount(), 2u);
 }
 
 

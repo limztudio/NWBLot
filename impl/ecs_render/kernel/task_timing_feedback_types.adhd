@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/kernel/task_timing_telemetry_labels.adhd>
 #include <impl/ecs_render/kernel/timing_policy.adhd>
 #include <impl/ecs_render/shared/frame_types.adhd>
 
@@ -17,6 +18,7 @@ native{
 
 
 #include <impl/global.adhd.h>
+#include <impl/ecs_render/kernel/task_timing_telemetry_labels.adhd.h>
 #include <impl/ecs_render/kernel/timing_policy.adhd.h>
 #include <impl/ecs_render/shared/frame_types.adhd.h>
 
@@ -39,23 +41,6 @@ static_assert(static_cast<u32>(RendererTaskTimingFeedbackCollectionAction::None)
 
 // Drainable ledger for submission resolution and sample completion; callbacks stay allocation-free.
 class RendererTaskTimingFeedbackState final : NoCopy{
-private:
-    struct PendingSample{
-        Core::GpuTimingSampleAttribution attribution = Core::s_NoGpuTimingSampleAttribution;
-        Name scopeName = s_NameNone;
-        Core::GpuTaskTimingKey key;
-        Core::GpuPhysicalQueueId expectedQueue;
-        u64 sourceFrameIndex = 0u;
-        f64 durationSeconds = 0.0;
-        b8 recordsNonCommittingTimingSample = false;
-        b8 submissionResolved = false;
-        b8 accepted = false;
-        b8 assignmentRecorded = false;
-        b8 sampleResolved = false;
-        b8 hasUsableSample = false;
-    };
-
-
 public:
     explicit RendererTaskTimingFeedbackState(Core::Alloc::GlobalArena& arena)noexcept
         : m_pendingSamples(arena)
@@ -63,21 +48,38 @@ public:
 
 
 public:
-    [[nodiscard]] b8 trackSample(Core::GpuTimingSampleAttribution attribution, const Name& scopeName, const Core::GpuTaskTimingKey& key, const Core::GpuPhysicalQueueId& expectedQueue, u64 sourceFrameIndex, b8 recordsNonCommittingTimingSample);
-    void acceptSubmission(Core::GpuTimingSampleAttribution attribution, const Core::QueueSubmissionToken& token, b8 feedbackActive)noexcept;
-    void discardRecording(Core::GpuTimingSampleAttribution attribution)noexcept;
-    void completeSample(const Core::GpuTimingSample& sample, b8 feedbackActive)noexcept;
-    [[nodiscard]] RendererTaskTimingFeedbackDrainResult drain(Core::GpuTaskTimingHistoryStore& history, u16 deviceGeneration);
-    void reset()noexcept{ m_pendingSamples.clear(); }
+    [[nodiscard]] NWB_INLINE b8 trackSample(
+        const Core::GpuTimingSampleAttribution attribution,
+        const Name& scopeName,
+        const Core::GpuTaskTimingKey& key,
+        const Core::GpuPhysicalQueueId& expectedQueue,
+        const u64 sourceFrameIndex,
+        const b8 recordsNonCommittingTimingSample
+    ){
+        return TrackRendererTaskTimingSample(attribution, scopeName, key, expectedQueue, sourceFrameIndex, recordsNonCommittingTimingSample, m_pendingSamples);
+    }
+
+    NWB_INLINE void acceptSubmission(const Core::GpuTimingSampleAttribution attribution, const Core::QueueSubmissionToken& token, const b8 feedbackActive)noexcept{
+        AcceptRendererTaskTimingSubmission(attribution, token, feedbackActive, true, m_pendingSamples);
+    }
+
+    NWB_INLINE void discardRecording(const Core::GpuTimingSampleAttribution attribution)noexcept{
+        DiscardRendererTaskTimingRecording(attribution, m_pendingSamples);
+    }
+
+    NWB_INLINE void completeSample(const Core::GpuTimingSample& sample, const b8 feedbackActive)noexcept{
+        CompleteRendererTaskTimingSample(sample, feedbackActive, m_pendingSamples);
+    }
+
+    [[nodiscard]] NWB_INLINE RendererTaskTimingFeedbackDrainResult drain(Core::GpuTaskTimingHistoryStore& history, const u16 deviceGeneration){
+        return DrainRendererTaskTimingPendingSamples(history, deviceGeneration, m_pendingSamples);
+    }
+
+    NWB_INLINE void reset()noexcept{ m_pendingSamples.clear(); }
 
 
 private:
-    [[nodiscard]] usize findPendingSample(Core::GpuTimingSampleAttribution attribution)const noexcept;
-    void retirePendingSample(usize pendingIndex)noexcept;
-
-
-private:
-    Vector<PendingSample, Core::Alloc::GlobalArena> m_pendingSamples;
+    Vector<RendererTaskTimingPendingSample, Core::Alloc::GlobalArena> m_pendingSamples;
 };
 
 
@@ -125,166 +127,6 @@ b8 IsAcceptedRendererTaskTimingSubmission(
     in b8 physicalQueueMatches
 ){
     return feedbackActive && tokenValid && hasPhysicalQueueIdentity && queueClassMatches && physicalQueueMatches;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 RendererTaskTimingFeedbackState::trackSample(
-    const Core::GpuTimingSampleAttribution attribution,
-    const Name& scopeName,
-    const Core::GpuTaskTimingKey& key,
-    const Core::GpuPhysicalQueueId& expectedQueue,
-    const u64 sourceFrameIndex,
-    const b8 recordsNonCommittingTimingSample
-){
-    if(!attribution.valid() || !scopeName || !key.valid() || !expectedQueue.valid())
-        return false;
-    if(findPendingSample(attribution) != m_pendingSamples.size())
-        return false;
-
-    m_pendingSamples.push_back(PendingSample{ .attribution = attribution, .scopeName = scopeName, .key = key, .expectedQueue = expectedQueue, .sourceFrameIndex = sourceFrameIndex, .recordsNonCommittingTimingSample = recordsNonCommittingTimingSample, });
-    return true;
-}
-
-void RendererTaskTimingFeedbackState::acceptSubmission(const Core::GpuTimingSampleAttribution attribution, const Core::QueueSubmissionToken& token, const b8 feedbackActive)noexcept{
-    const usize pendingIndex = findPendingSample(attribution);
-    if(pendingIndex == m_pendingSamples.size())
-        return;
-
-    PendingSample& pending = m_pendingSamples[pendingIndex];
-    if(pending.submissionResolved)
-        return;
-
-    const Core::GpuPhysicalQueueId acceptedQueue{ .index = token.physicalQueueIndex, .deviceGeneration = token.deviceGeneration, };
-    pending.submissionResolved = true;
-    pending.accepted = IsAcceptedRendererTaskTimingSubmission(feedbackActive, token.valid(), token.hasPhysicalQueueIdentity(), token.queue == pending.key.queue, acceptedQueue == pending.expectedQueue);
-}
-
-void RendererTaskTimingFeedbackState::discardRecording(const Core::GpuTimingSampleAttribution attribution)noexcept{
-    const usize pendingIndex = findPendingSample(attribution);
-    if(pendingIndex == m_pendingSamples.size())
-        return;
-
-    PendingSample& pending = m_pendingSamples[pendingIndex];
-    if(pending.submissionResolved)
-        return;
-
-    pending.submissionResolved = true;
-    pending.accepted = false;
-}
-
-void RendererTaskTimingFeedbackState::completeSample(const Core::GpuTimingSample& sample, const b8 feedbackActive)noexcept{
-    const usize pendingIndex = findPendingSample(sample.attribution);
-    if(pendingIndex == m_pendingSamples.size())
-        return;
-
-    PendingSample& pending = m_pendingSamples[pendingIndex];
-    if(pending.sampleResolved)
-        return;
-
-    // Every matching notification is terminal; only complete positive durations enter history.
-    pending.sampleResolved = true;
-    if(!IsValidCompletedRendererTaskTimingSample(
-        feedbackActive,
-        sample.published,
-        sample.scopeName,
-        pending.scopeName,
-        sample.sourceFrameIndex,
-        pending.sourceFrameIndex,
-        sample.physicalQueue == pending.expectedQueue,
-        sample.durationSeconds
-    ))
-        return;
-
-    pending.durationSeconds = sample.durationSeconds;
-    pending.hasUsableSample = true;
-}
-
-RendererTaskTimingFeedbackDrainResult RendererTaskTimingFeedbackState::drain(Core::GpuTaskTimingHistoryStore& history, const u16 deviceGeneration){
-    RendererTaskTimingFeedbackDrainResult result;
-    usize pendingIndex = 0u;
-    while(pendingIndex < m_pendingSamples.size()){
-        PendingSample& pending = m_pendingSamples[pendingIndex];
-        if(pending.expectedQueue.deviceGeneration != deviceGeneration){
-            retirePendingSample(pendingIndex);
-            ++result.retiredSampleCount;
-            continue;
-        }
-        if(!pending.submissionResolved){
-            ++pendingIndex;
-            continue;
-        }
-        if(!pending.accepted){
-            retirePendingSample(pendingIndex);
-            ++result.retiredSampleCount;
-            continue;
-        }
-
-        if(!pending.recordsNonCommittingTimingSample && !pending.assignmentRecorded){
-            if(!history.noteAcceptedAssignment(pending.key, pending.expectedQueue, pending.sourceFrameIndex)){
-                retirePendingSample(pendingIndex);
-                ++result.retiredSampleCount;
-                ++result.rejectedAssignmentCount;
-                continue;
-            }
-            pending.assignmentRecorded = true;
-            ++result.acceptedAssignmentCount;
-        }
-
-        if(!pending.sampleResolved){
-            ++pendingIndex;
-            continue;
-        }
-        if(pending.hasUsableSample){
-            if(history.recordNonCommittingSample(pending.key, pending.expectedQueue, pending.durationSeconds))
-                ++result.recordedSampleCount;
-            else
-                ++result.rejectedSampleCount;
-        }
-        retirePendingSample(pendingIndex);
-        ++result.retiredSampleCount;
-    }
-    return result;
-}
-
-usize RendererTaskTimingFeedbackState::findPendingSample(const Core::GpuTimingSampleAttribution attribution)const noexcept{
-    for(usize pendingIndex = 0u; pendingIndex < m_pendingSamples.size(); ++pendingIndex){
-        if(m_pendingSamples[pendingIndex].attribution == attribution)
-            return pendingIndex;
-    }
-    return m_pendingSamples.size();
-}
-
-void RendererTaskTimingFeedbackState::retirePendingSample(const usize pendingIndex)noexcept{
-    NWB_ASSERT(pendingIndex < m_pendingSamples.size());
-    m_pendingSamples.erase(m_pendingSamples.begin() + static_cast<isize>(pendingIndex));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

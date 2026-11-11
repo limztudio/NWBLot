@@ -8,76 +8,49 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+void AppendModelAssetBodyText(
+    in StringView variableName,
+    in StringView meshName,
+    in b8 hasSkeletonAndSkin,
+    in StringView skinName,
+    in StringView skeletonName,
+    in StringView skinnedMeshSkeletonName,
+    in b8 quoteAssetReferences,
+    in b8 quoteSkinnedMeshSkeletonReference,
+    mut String out
+){
+    if(hasSkeletonAndSkin){
+        out.append(variableName);
+        out.append(".skeletons = {\n");
+        out.append("    \"skeleton\": {\n");
+        out.append(s_SkeletonPropertyText);
+        AppendAssetReferenceText(skeletonName, quoteAssetReferences, out);
+        out.append(s_EntrySuffixText);
+        out.append(s_TableEntryCloseText);
+        out.append(s_TableCloseSectionText);
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_FBX_TO_NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class ModelAssetTextWriter final{
-public:
-    template<typename Stream>
-    static void WriteBody(
-        const AStringView variableName,
-        const AStringView meshName,
-        const Optional<AStringView> skinName,
-        const Optional<AStringView> skeletonName,
-        const AStringView skinnedMeshSkeletonName,
-        const b8 quoteAssetReferences,
-        const b8 quoteSkinnedMeshSkeletonReference,
-        Core::Alloc::ScratchArena& scratchArena,
-        Stream& file
-    ){
-        if(skeletonName){
-            file << variableName << ".skeletons = {\n";
-            file << "    \"skeleton\": {\n";
-            file << s_SkeletonPropertyText;
-            AssetReferenceTextWriter::Write(*skeletonName, quoteAssetReferences, scratchArena, file);
-            file << s_EntrySuffixText;
-            file << s_TableEntryCloseText;
-            file << s_TableCloseSectionText;
-
-            file << variableName << ".skinned_meshes = {\n";
-            file << "    \"mesh\": {\n";
-            file << "        \"skin\": ";
-            AssetReferenceTextWriter::Write(*skinName, quoteAssetReferences, scratchArena, file);
-            file << s_EntrySuffixText;
-            file << s_SkeletonPropertyText;
-            AssetReferenceTextWriter::Write(skinnedMeshSkeletonName, quoteSkinnedMeshSkeletonReference, scratchArena, file);
-            file << s_EntrySuffixText;
-            file << s_TableEntryCloseText;
-            file << s_TableCloseText;
-        }
-        else{
-            file << variableName << ".static_meshes = {\n";
-            file << "    \"base\": {\n";
-            file << "        \"mesh\": ";
-            AssetReferenceTextWriter::Write(meshName, quoteAssetReferences, scratchArena, file);
-            file << s_EntrySuffixText;
-            file << s_TableEntryCloseText;
-            file << s_TableCloseText;
-        }
+        out.append(variableName);
+        out.append(".skinned_meshes = {\n");
+        out.append("    \"mesh\": {\n");
+        out.append("        \"skin\": ");
+        AppendAssetReferenceText(skinName, quoteAssetReferences, out);
+        out.append(s_EntrySuffixText);
+        out.append(s_SkeletonPropertyText);
+        AppendAssetReferenceText(skinnedMeshSkeletonName, quoteSkinnedMeshSkeletonReference, out);
+        out.append(s_EntrySuffixText);
+        out.append(s_TableEntryCloseText);
+        out.append(s_TableCloseText);
     }
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_FBX_TO_NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    else{
+        out.append(variableName);
+        out.append(".static_meshes = {\n");
+        out.append("    \"base\": {\n");
+        out.append("        \"mesh\": ");
+        AppendAssetReferenceText(meshName, quoteAssetReferences, out);
+        out.append(s_EntrySuffixText);
+        out.append(s_TableEntryCloseText);
+        out.append(s_TableCloseText);
+    }
 }
 
 

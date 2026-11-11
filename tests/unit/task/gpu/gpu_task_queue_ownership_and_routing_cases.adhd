@@ -16,12 +16,6 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/graphics/rhi/queue_sharing.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_BEGIN
 
 
@@ -40,30 +34,14 @@ namespace TaskGraphTestUtils{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ::NWB::Tests::ScopedTestTrace;
-using GpuCompiledGraphReadView = Core::GpuCompiledGraph::ReadView;
-using ResourceQueueSharingMask = Core::ResourceQueueSharing::Mask;
-using CommandQueueEnum = Core::CommandQueue::Enum;
-using GpuTaskCostHintEnum = Core::GpuTaskCostHint::Enum;
-using GpuQueueCapabilityMask = Core::GpuQueueCapability::Mask;
-using Core::GpuTaskGraphCompilerDetail::GpuTaskSchedulingReachability;
-using Core::GpuTaskGraphCompilerDetail::GpuTaskQueueScoringData;
-using Core::GpuTaskGraphCompilerDetail::GpuTaskQueuePlacementGroup;
-using Core::GpuTaskGraphCompilerDetail::GpuTaskQueueScoreExclusions;
-using Core::GpuTaskGraphCompilerDetail::BuildGpuTaskSchedulingReachability;
-using Core::GpuTaskGraphCompilerDetail::BuildQueuePlacementGroups;
-using Core::GpuTaskGraphCompilerDetail::BuildQueueAssignmentScore;
-using Core::GpuTaskGraphCompilerDetail::BuildQueuePlacementGroupScore;
-using Core::GpuTaskGraphCompilerDetail::QueueCostWeight;
-using Core::GpuTaskGraphCompilerDetail::IsValidQueueTopology;
-using Core::GpuTaskGraphCompilerDetail::ResourceUsesConcurrentQueueSharing;
+using ScratchPlacementGroups = Vector<Core::GpuTaskGraphCompilerDetail::GpuTaskQueuePlacementGroup, Core::Alloc::ScratchArena>;
 
-[[nodiscard]] inline Core::GpuPhysicalQueueTopology MakeGpuRoutingTopology(const Span<const Core::GpuPhysicalQueueInfo> queues)noexcept{
-    return Core::GpuPhysicalQueueTopology{ .queues = queues.data(), .queueCount = queues.size() };
-}
+inline constexpr usize s_DenseReachabilityTaskMetadataBytes = sizeof(u32) + 2u * sizeof(usize);
 
-[[nodiscard]] inline b8 GpuRoutingSharingIncludesQueueClass(const Core::ResourceQueueSharing::Mask sharing, const Core::CommandQueue::Enum queueClass)noexcept{
-    return Core::ResourceQueueSharing::IncludesQueueClass(sharing, queueClass);
+[[nodiscard]] NWB_INLINE usize ScratchEmptyVectorBookkeepingBytes()noexcept{
+    Core::Alloc::ScratchArena bookkeepingScratch(s_TaskGraphScratchArena);
+    const Vector<u64, Core::Alloc::ScratchArena> emptyVector(bookkeepingScratch);
+    return bookkeepingScratch.memoryStats().usedBytes;
 }
 
 
@@ -211,12 +189,87 @@ b8 GpuRoutingExpectedPartialDagReach(in GpuRoutingPartialDagShape shape, in usiz
     }
 }
 
+i32 GpuRoutingReferenceOverlap<const usize TaskCount>(
+    in GpuTaskGraphDeclarationReadView view,
+    in Span<GpuTaskQueueAssignment> assignments,
+    in Span<Array<b8, TaskCount>> reachable,
+    in GpuTaskQueuePlacementGroup group,
+    in GpuPhysicalQueueId queue
+){
+    u64 overlap = 0u;
+    for(usize row = 0u; row < assignments.size(); ++row){
+        if(row >= group.assignmentOffset && row - group.assignmentOffset < group.assignmentCount)
+            continue;
+        const GpuTaskQueueAssignment other = assignments[row];
+        if(other.queue == queue)
+            continue;
+        b8 independent = true;
+        for(usize offset = 0u; offset < group.assignmentCount; ++offset){
+            const usize member = assignments[group.assignmentOffset + offset].task.index;
+            independent = independent && !reachable[member][other.task.index] && !reachable[other.task.index][member];
+        }
+        if(independent)
+            overlap += QueueCostWeight(view.taskAt(other.task.index).scheduling.cost);
+    }
+    return cast<i32>(overlap);
+}
+
+void GpuRoutingExpectIndexedScores<const usize TaskCount>(
+    in GpuTaskGraphDeclarationReadView view,
+    in GpuTaskGraphAnalysis analysis,
+    in Span<GpuTaskQueueAssignment> assignments,
+    in Span<u32> indices,
+    in GpuPhysicalQueueTopology topology,
+    in GpuTaskSchedulingReachability reachability,
+    in GpuTaskQueueScoringData scoringData,
+    in Span<GpuPhysicalQueueInfo> queues,
+    in Span<GpuTaskQueuePlacementGroup> groups,
+    in Span<Array<b8, TaskCount>> reachable
+){
+    for(in GpuPhysicalQueueInfo candidate : queues){
+        for(usize row = 0u; row < assignments.size(); ++row){
+            const GpuTaskId task = assignments[row].task;
+            const GpuQueueAssignmentScore score = BuildQueueAssignmentScore(
+                view,
+                analysis,
+                assignments,
+                indices,
+                topology,
+                reachability,
+                scoringData,
+                view.taskAt(task.index),
+                candidate,
+                GpuTaskQueueScoreExclusions()
+            );
+            GpuTaskQueuePlacementGroup singleton = GpuTaskQueuePlacementGroup();
+            singleton.assignmentOffset = row;
+            singleton.assignmentCount = 1u;
+            EXPECT_EQ(score.overlap, GpuRoutingReferenceOverlap<TaskCount>(view, assignments, reachable, singleton, candidate.id));
+        }
+        for(in GpuTaskQueuePlacementGroup group : groups){
+            const GpuQueueAssignmentScore score = BuildQueuePlacementGroupScore(
+                view,
+                analysis,
+                assignments,
+                indices,
+                topology,
+                reachability,
+                scoringData,
+                group,
+                candidate
+            );
+            EXPECT_EQ(score.overlap, GpuRoutingReferenceOverlap<TaskCount>(view, assignments, reachable, group, candidate.id));
+        }
+    }
+}
+
 void GpuRoutingCheckIndexedScores<const usize TaskCount>(in GpuRoutingPartialDagShape shape){
     const ScopedTestTrace shapeTrace = ScopedTestTrace(cast<u32>(shape));
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
     ScratchArena declarationScratch = ScratchArena(s_TaskGraphScratchArena);
-    ASSERT_NO_FATAL_FAILURE(GpuRoutingDeclarePartialDag(graph, TaskCount, shape));
+    GpuRoutingDeclarePartialDag(graph, TaskCount, shape);
+    ASSERT_FALSE(TestHasFatalFailure());
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, declarationScratch, analysis));
     GpuPhysicalQueueInfo auxiliary = GraphicsQueue(311u);
@@ -225,95 +278,73 @@ void GpuRoutingCheckIndexedScores<const usize TaskCount>(in GpuRoutingPartialDag
     queues[0u] = GraphicsQueue(17u);
     queues[1u] = DedicatedComputeQueue(29u);
     queues[2u] = auxiliary;
-    const GpuPhysicalQueueTopology topology = MakeGpuRoutingTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     const GpuTaskGraphDeclarationReadView view = GpuTaskGraphDeclarationReadView(graph);
     ASSERT_EQ(view.taskCount(), TaskCount);
 
-    native(in testArena, in view, in analysis, mut queues, in topology){
-        Core::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
-        GpuTaskSchedulingReachability reachability(scratch);
-        ASSERT_TRUE(BuildGpuTaskSchedulingReachability(view, analysis, reachability));
-        GpuTaskQueueScoringData scoringData(view, analysis, reachability, {}, scratch);
-        Core::GraphicsVector<Core::GpuTaskQueueAssignment> assignments(testArena.arena);
-        Core::GraphicsVector<u32> indices(TaskCount, Limit<u32>::s_Max, testArena.arena);
-        for(const Core::GpuTaskId task : analysis.topologicalOrder()){
-            indices[task.index] = static_cast<u32>(assignments.size());
-            const auto queue = queues[task.index % LengthOf(queues)].id;
-            assignments.push_back({ .task = task, .initialQueue = queue, .queue = queue, .score = {} });
-        }
-        scoringData.rebuildAssignmentLoads(assignments, topology);
-        Vector<GpuTaskQueuePlacementGroup, Core::Alloc::ScratchArena> groups(scratch);
-        ASSERT_TRUE(BuildQueuePlacementGroups(view, analysis, topology, scratch, groups));
-
-        // Scalar Floyd-Warshall is independent of packed rows, word bounds, and queue-cost membership.
-        Vector<Array<b8, TaskCount>, Core::Alloc::ScratchArena> reachable(TaskCount, scratch);
-        for(const auto& edge : analysis.schedulingEdges())
-            reachable[edge.producer.index][edge.consumer.index] = true;
-        for(usize intermediate = 0u; intermediate < TaskCount; ++intermediate)
-            for(usize source = 0u; source < TaskCount; ++source)
-                for(usize destination = 0u; destination < TaskCount; ++destination)
-                    reachable[source][destination] = reachable[source][destination] || (reachable[source][intermediate] && reachable[intermediate][destination]);
-        for(usize source = 0u; source < TaskCount; ++source){
-            for(usize destination = 0u; destination < TaskCount; ++destination){
-                EXPECT_EQ(reachability.reaches(view.taskAt(source).id, view.taskAt(destination).id), reachable[source][destination]);
-                EXPECT_EQ(
-                    reachability.transitivelyIndependent(view.taskAt(source).id, view.taskAt(destination).id),
-                    source != destination && !reachable[source][destination] && !reachable[destination][source]
-                );
-            }
-        }
-        const auto referenceOverlap = [&](const GpuTaskQueuePlacementGroup& group, const Core::GpuPhysicalQueueId queue)noexcept{
-            u64 overlap = 0u;
-            for(usize row = 0u; row < assignments.size(); ++row){
-                if(row >= group.assignmentOffset && row - group.assignmentOffset < group.assignmentCount)
-                    continue;
-                const auto& other = assignments[row];
-                if(other.queue == queue)
-                    continue;
-                b8 independent = true;
-                for(usize offset = 0u; offset < group.assignmentCount; ++offset){
-                    const usize member = assignments[group.assignmentOffset + offset].task.index;
-                    independent = independent && !reachable[member][other.task.index] && !reachable[other.task.index][member];
-                }
-                if(independent)
-                    overlap += QueueCostWeight(view.taskAt(other.task.index).scheduling.cost);
-            }
-            return static_cast<i32>(overlap);
-        };
-        const auto expectScores = [&](){
-            for(const auto& candidate : queues){
-                for(usize row = 0u; row < assignments.size(); ++row){
-                    const auto& task = assignments[row].task;
-                    const Core::GpuQueueAssignmentScore score = BuildQueueAssignmentScore(view, analysis, assignments, indices, topology, reachability, scoringData, view.taskAt(task.index), candidate);
-                    GpuTaskQueuePlacementGroup singleton;
-                    singleton.assignmentOffset = row;
-                    singleton.assignmentCount = 1u;
-                    EXPECT_EQ(score.overlap, referenceOverlap(singleton, candidate.id));
-                }
-                for(const auto& group : groups){
-                    const Core::GpuQueueAssignmentScore score = BuildQueuePlacementGroupScore(view, analysis, assignments, indices, topology, reachability, scoringData, group, candidate);
-                    EXPECT_EQ(score.overlap, referenceOverlap(group, candidate.id));
-                }
-            }
-        };
-        expectScores();
-        // Change all three queue masks incrementally, including tasks across bitset words.
-        for(usize row = 0u; row < assignments.size(); row += 5u){
-            auto& assignment = assignments[row];
-            const auto destination = queues[(row + 1u) % LengthOf(queues)].id;
-            scoringData.updateAssignmentLoads(assignment.task, assignment.queue, destination);
-            assignment.queue = destination;
-        }
-        expectScores();
-        Swap(queues[0u], queues[2u]);
-        scoringData.rebuildAssignmentLoads(assignments, topology);
-        expectScores();
-        Core::GraphicsVector<Core::GpuTaskQueueAssignment> empty(testArena.arena);
-        scoringData.rebuildAssignmentLoads(empty, topology);
-        EXPECT_EQ(scoringData.totalAssignedCost, 0u);
-        scoringData.rebuildAssignmentLoads(assignments, topology);
-        expectScores();
+    ScratchArena scratch = ScratchArena(s_TaskGraphScratchArena);
+    GpuTaskSchedulingReachability reachability = GpuTaskSchedulingReachability(scratch);
+    ASSERT_TRUE(BuildGpuTaskSchedulingReachability(view, analysis, reachability));
+    GpuTaskQueueScoringData scoringData = GpuTaskQueueScoringData(
+        view,
+        analysis,
+        reachability,
+        GpuTaskGraphQueueAssignmentOptions(),
+        scratch
+    );
+    AssignmentGraphicsVector assignments = AssignmentGraphicsVector(testArena.arena);
+    U32GraphicsVector indices = U32GraphicsVector(TaskCount, u32.max, testArena.arena);
+    for(in GpuTaskId task : analysis.topologicalOrder()){
+        indices[task.index] = cast<u32>(assignments.size());
+        const GpuPhysicalQueueId queue = queues[task.index % queues.size()].id;
+        GpuTaskQueueAssignment assignment = GpuTaskQueueAssignment();
+        assignment.task = task;
+        assignment.initialQueue = queue;
+        assignment.queue = queue;
+        assignments.push_back(assignment);
     }
+    scoringData.rebuildAssignmentLoads(assignments, topology);
+    ScratchPlacementGroups groups = ScratchPlacementGroups(scratch);
+    ASSERT_TRUE(BuildQueuePlacementGroups(view, analysis, topology, scratch, groups).has_value());
+
+    // Scalar Floyd-Warshall is independent of packed rows, word bounds, and queue-cost membership.
+    Vector<Array<b8, TaskCount>> reachable = Vector<Array<b8, TaskCount>>();
+    reachable.resize(TaskCount);
+    for(in GpuTaskDependencyEdge edge : analysis.schedulingEdges())
+        reachable[edge.producer.index][edge.consumer.index] = true;
+    for(usize intermediate = 0u; intermediate < TaskCount; ++intermediate)
+        for(usize source = 0u; source < TaskCount; ++source)
+            for(usize destination = 0u; destination < TaskCount; ++destination)
+                reachable[source][destination] = reachable[source][destination] || (reachable[source][intermediate] && reachable[intermediate][destination]);
+    for(usize source = 0u; source < TaskCount; ++source){
+        for(usize destination = 0u; destination < TaskCount; ++destination){
+            EXPECT_EQ(reachability.reaches(view.taskAt(source).id, view.taskAt(destination).id), reachable[source][destination]);
+            EXPECT_EQ(
+                reachability.transitivelyIndependent(view.taskAt(source).id, view.taskAt(destination).id),
+                source != destination && !reachable[source][destination] && !reachable[destination][source]
+            );
+        }
+    }
+    GpuRoutingExpectIndexedScores<TaskCount>(view, analysis, assignments, indices, topology, reachability, scoringData, queues, groups, reachable);
+    // Change all three queue masks incrementally, including tasks across bitset words.
+    for(usize row = 0u; row < assignments.size(); row += 5u){
+        const GpuPhysicalQueueId destination = queues[(row + 1u) % queues.size()].id;
+        scoringData.updateAssignmentLoads(assignments[row].task, assignments[row].queue, destination);
+        assignments[row].queue = destination;
+    }
+    GpuRoutingExpectIndexedScores<TaskCount>(view, analysis, assignments, indices, topology, reachability, scoringData, queues, groups, reachable);
+    const GpuPhysicalQueueInfo swappedQueue = queues[0u];
+    queues[0u] = queues[2u];
+    queues[2u] = swappedQueue;
+    scoringData.rebuildAssignmentLoads(assignments, topology);
+    GpuRoutingExpectIndexedScores<TaskCount>(view, analysis, assignments, indices, topology, reachability, scoringData, queues, groups, reachable);
+    AssignmentGraphicsVector empty = AssignmentGraphicsVector(testArena.arena);
+    scoringData.rebuildAssignmentLoads(empty, topology);
+    EXPECT_EQ(scoringData.totalAssignedCost, 0u);
+    scoringData.rebuildAssignmentLoads(assignments, topology);
+    GpuRoutingExpectIndexedScores<TaskCount>(view, analysis, assignments, indices, topology, reachability, scoringData, queues, groups, reachable);
+    EXPECT_GT(scratch.memoryStats().reservedBytes, 0u);
+    EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
 }
 
 void GpuRoutingRunCrossFamilySameClassCase(
@@ -378,51 +409,65 @@ void GpuRoutingRunCrossFamilySameClassCase(
     Array<GpuPhysicalQueueInfo, 2> queues = Array<GpuPhysicalQueueInfo, 2>();
     queues[0u] = primaryQueue;
     queues[1u] = auxiliaryQueue;
-    const GpuPhysicalQueueTopology topology = MakeGpuRoutingTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
 
-    native(in assignments, in compiledPlan, in producer, in consumer, in primaryQueue, in auxiliaryQueue, in buffer){
-        const Core::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
-        const Core::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(consumer);
-        const Core::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(producer).plan;
-        const Core::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(consumer).plan;
-        ASSERT_NE(producerAssignment, nullptr);
-        ASSERT_NE(consumerAssignment, nullptr);
-        ASSERT_NE(compiledProducer, nullptr);
-        ASSERT_NE(compiledConsumer, nullptr);
-        EXPECT_EQ(producerAssignment->queue, primaryQueue.id);
-        EXPECT_EQ(consumerAssignment->queue, auxiliaryQueue.id);
-        const Core::GpuSubmissionPacketId producerPacket = compiledPlan.packetForTask(producer);
-        const Core::GpuSubmissionPacketId consumerPacket = compiledPlan.packetForTask(consumer);
-        ASSERT_TRUE(producerPacket.valid());
-        ASSERT_TRUE(consumerPacket.valid());
-        EXPECT_NE(compiledPlan.packet(producerPacket).plan->queue, compiledPlan.packet(consumerPacket).plan->queue);
-        ASSERT_EQ(compiledPlan.packet(consumerPacket).plan->dependencyCount, 1u);
-        EXPECT_EQ(compiledPlan.packet(consumerPacket).dependencies[0u].producer, producerPacket);
-        EXPECT_EQ(compiledProducer->queue, primaryQueue.id);
-        EXPECT_EQ(compiledConsumer->queue, auxiliaryQueue.id);
-        ASSERT_EQ(compiledProducer->epilogueBarrierCount, 1u);
-        ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
-        ASSERT_EQ(compiledConsumer->prologueBarrierCount, 2u);
+    const Optional<GpuTaskQueueAssignment> producerAssignmentOpt = FindQueueAssignment(assignments, producer);
+    const Optional<GpuTaskQueueAssignment> consumerAssignmentOpt = FindQueueAssignment(assignments, consumer);
+    const GpuCompiledTaskView compiledProducerView = compiledPlan.findTask(producer);
+    const GpuCompiledTaskView compiledConsumerView = compiledPlan.findTask(consumer);
+    const Optional<GpuCompiledTask> compiledProducerOpt = TaskPlan(compiledProducerView);
+    const Optional<GpuCompiledTask> compiledConsumerOpt = TaskPlan(compiledConsumerView);
+    ASSERT_TRUE(producerAssignmentOpt.has_value());
+    ASSERT_TRUE(consumerAssignmentOpt.has_value());
+    ASSERT_TRUE(compiledProducerOpt.has_value());
+    ASSERT_TRUE(compiledConsumerOpt.has_value());
+    const GpuTaskQueueAssignment producerAssignment = producerAssignmentOpt.value();
+    const GpuTaskQueueAssignment consumerAssignment = consumerAssignmentOpt.value();
+    const GpuCompiledTask compiledProducer = compiledProducerOpt.value();
+    const GpuCompiledTask compiledConsumer = compiledConsumerOpt.value();
+    EXPECT_EQ(producerAssignment.queue, primaryQueue.id);
+    EXPECT_EQ(consumerAssignment.queue, auxiliaryQueue.id);
+    const GpuSubmissionPacketId producerPacket = compiledPlan.packetForTask(producer);
+    const GpuSubmissionPacketId consumerPacket = compiledPlan.packetForTask(consumer);
+    ASSERT_TRUE(producerPacket.valid());
+    ASSERT_TRUE(consumerPacket.valid());
+    const GpuCompiledPacketView producerPacketView = compiledPlan.packet(producerPacket);
+    const GpuCompiledPacketView consumerPacketView = compiledPlan.packet(consumerPacket);
+    const Optional<GpuSubmissionPacket> producerPacketPlanOpt = PacketPlan(producerPacketView);
+    const Optional<GpuSubmissionPacket> consumerPacketPlanOpt = PacketPlan(consumerPacketView);
+    ASSERT_TRUE(producerPacketPlanOpt.has_value());
+    ASSERT_TRUE(consumerPacketPlanOpt.has_value());
+    EXPECT_NE(producerPacketPlanOpt.value().queue, consumerPacketPlanOpt.value().queue);
+    ASSERT_EQ(consumerPacketPlanOpt.value().dependencyCount, 1u);
+    const Span<GpuPacketDependency> consumerPacketDeps = PacketDependencies(consumerPacketView);
+    ASSERT_EQ(consumerPacketDeps.size(), 1u);
+    EXPECT_EQ(consumerPacketDeps[0u].producer, producerPacket);
+    EXPECT_EQ(compiledProducer.queue, primaryQueue.id);
+    EXPECT_EQ(compiledConsumer.queue, auxiliaryQueue.id);
+    ASSERT_EQ(compiledProducer.epilogueBarrierCount, 1u);
+    ASSERT_EQ(compiledConsumer.prologueStateSeedCount, 1u);
+    ASSERT_EQ(compiledConsumer.prologueBarrierCount, 2u);
 
-        const Core::GpuCompiledBarrier* const release = compiledPlan.findTask(producer).epilogueBarriers;
-        const Core::GpuCompiledBarrier* const acquireAndTransition = compiledPlan.findTask(consumer).prologueBarriers;
-        ASSERT_NE(release, nullptr);
-        ASSERT_NE(acquireAndTransition, nullptr);
-        EXPECT_EQ(release[0u].type, Core::GpuCompiledBarrierType::BufferOwnershipRelease);
-        EXPECT_EQ(release[0u].resource, buffer);
-        EXPECT_EQ(release[0u].sourceQueue, primaryQueue.id);
-        EXPECT_EQ(release[0u].destinationQueue, auxiliaryQueue.id);
-        EXPECT_EQ(acquireAndTransition[0u].type, Core::GpuCompiledBarrierType::BufferOwnershipAcquire);
-        EXPECT_EQ(acquireAndTransition[0u].resource, buffer);
-        EXPECT_EQ(acquireAndTransition[0u].sourceQueue, primaryQueue.id);
-        EXPECT_EQ(acquireAndTransition[0u].destinationQueue, auxiliaryQueue.id);
-        EXPECT_EQ(acquireAndTransition[1u].type, Core::GpuCompiledBarrierType::BufferTransition);
-    }
+    ASSERT_TRUE(HasEpilogueBarriersPtr(compiledProducerView));
+    ASSERT_TRUE(HasPrologueBarriersPtr(compiledConsumerView));
+    const Span<GpuCompiledBarrier> release = EpilogueBarriers(compiledProducerView);
+    const Span<GpuCompiledBarrier> acquireAndTransition = PrologueBarriers(compiledConsumerView);
+    ASSERT_EQ(release.size(), 1u);
+    ASSERT_EQ(acquireAndTransition.size(), 2u);
+    EXPECT_EQ(release[0u].type, GpuCompiledBarrierType::BufferOwnershipRelease);
+    EXPECT_EQ(release[0u].resource, buffer);
+    EXPECT_EQ(release[0u].sourceQueue, primaryQueue.id);
+    EXPECT_EQ(release[0u].destinationQueue, auxiliaryQueue.id);
+    EXPECT_EQ(acquireAndTransition[0u].type, GpuCompiledBarrierType::BufferOwnershipAcquire);
+    EXPECT_EQ(acquireAndTransition[0u].resource, buffer);
+    EXPECT_EQ(acquireAndTransition[0u].sourceQueue, primaryQueue.id);
+    EXPECT_EQ(acquireAndTransition[0u].destinationQueue, auxiliaryQueue.id);
+    EXPECT_EQ(acquireAndTransition[1u].type, GpuCompiledBarrierType::BufferTransition);
 }
 
 void VerifyGpuRouting_PlansExclusiveOwnershipHandoffToDedicatedTransfer(){
@@ -440,103 +485,111 @@ void VerifyGpuRouting_PlansExclusiveOwnershipHandoffToDedicatedTransfer(){
     Array<GpuPhysicalQueueInfo, 2> queues = Array<GpuPhysicalQueueInfo, 2>();
     queues[0u] = GraphicsQueue();
     queues[1u] = DedicatedTransferQueue();
-    const GpuPhysicalQueueTopology topology = MakeGpuRoutingTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
     ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
     {
         const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
-        native(in compiledPlan, in pair, in queues){
-            const Core::GpuCompiledTaskView compiledProducerView = compiledPlan.findTask(pair.producer);
-            const Core::GpuCompiledTaskView compiledConsumerView = compiledPlan.findTask(pair.consumer);
-            const Core::GpuCompiledTask* const compiledProducer = compiledProducerView.plan;
-            const Core::GpuCompiledTask* const compiledConsumer = compiledConsumerView.plan;
-            ASSERT_NE(compiledProducer, nullptr);
-            ASSERT_NE(compiledConsumer, nullptr);
-            const Core::GpuPhysicalQueueInfo* const consumerQueue = compiledPlan.queueInfo(compiledConsumer->queue);
-            ASSERT_NE(consumerQueue, nullptr);
-            EXPECT_EQ(consumerQueue->queueClass, Core::CommandQueue::Transfer);
-            ASSERT_EQ(compiledProducer->epilogueBarrierCount, 1u);
-            ASSERT_EQ(compiledConsumer->prologueBarrierCount, 2u);
-            ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
+        const GpuCompiledTaskView compiledProducerView = compiledPlan.findTask(pair.producer);
+        const GpuCompiledTaskView compiledConsumerView = compiledPlan.findTask(pair.consumer);
+        const Optional<GpuCompiledTask> compiledProducerOpt = TaskPlan(compiledProducerView);
+        const Optional<GpuCompiledTask> compiledConsumerOpt = TaskPlan(compiledConsumerView);
+        ASSERT_TRUE(compiledProducerOpt.has_value());
+        ASSERT_TRUE(compiledConsumerOpt.has_value());
+        const GpuCompiledTask compiledProducer = compiledProducerOpt.value();
+        const GpuCompiledTask compiledConsumer = compiledConsumerOpt.value();
+        const Optional<GpuPhysicalQueueInfo> consumerQueueOpt = QueueInfoValue(compiledPlan, compiledConsumer.queue);
+        ASSERT_TRUE(consumerQueueOpt.has_value());
+        EXPECT_EQ(consumerQueueOpt.value().queueClass, CommandQueue::Transfer);
+        ASSERT_EQ(compiledProducer.epilogueBarrierCount, 1u);
+        ASSERT_EQ(compiledConsumer.prologueBarrierCount, 2u);
+        ASSERT_EQ(compiledConsumer.prologueStateSeedCount, 1u);
 
-            const Core::GpuCompiledBarrier* const release = compiledProducerView.epilogueBarriers;
-            const Core::GpuCompiledBarrier* const acquire = compiledConsumerView.prologueBarriers;
-            const Core::GpuPacketStateSeed* const stateSeed = compiledConsumerView.prologueStateSeeds;
-            ASSERT_NE(release, nullptr);
-            ASSERT_NE(acquire, nullptr);
-            ASSERT_NE(stateSeed, nullptr);
-            EXPECT_EQ(release[0u].type, Core::GpuCompiledBarrierType::TextureOwnershipRelease);
-            EXPECT_EQ(release[0u].resource, pair.texture);
-            EXPECT_EQ(release[0u].before, Core::ResourceStates::CopySource);
-            EXPECT_EQ(release[0u].after, Core::ResourceStates::CopySource);
-            EXPECT_EQ(release[0u].sourceQueue, compiledProducer->queue);
-            EXPECT_EQ(release[0u].destinationQueue, compiledConsumer->queue);
-            EXPECT_FALSE(release[0u].forceMemoryDependency);
-            EXPECT_EQ(acquire[0u].type, Core::GpuCompiledBarrierType::TextureOwnershipAcquire);
-            EXPECT_EQ(acquire[0u].resource, pair.texture);
-            EXPECT_EQ(acquire[0u].sourceQueue, compiledProducer->queue);
-            EXPECT_EQ(acquire[0u].destinationQueue, compiledConsumer->queue);
-            EXPECT_FALSE(acquire[0u].isInitialOwnerHandoff);
-            EXPECT_FALSE(acquire[0u].forceMemoryDependency);
-            EXPECT_EQ(acquire[1u].type, Core::GpuCompiledBarrierType::TextureTransition);
-            EXPECT_EQ(acquire[1u].resource, pair.texture);
-            EXPECT_EQ(acquire[1u].before, Core::ResourceStates::CopySource);
-            EXPECT_EQ(acquire[1u].after, Core::ResourceStates::CopySource);
-            EXPECT_EQ(acquire[1u].sourceQueue, compiledProducer->queue);
-            EXPECT_EQ(acquire[1u].destinationQueue, compiledConsumer->queue);
-            EXPECT_FALSE(acquire[1u].isGraphInitialState);
-            EXPECT_FALSE(acquire[1u].isInitialOwnerHandoff);
-            EXPECT_TRUE(acquire[1u].forceMemoryDependency);
-            EXPECT_EQ(stateSeed[0u].resource, pair.texture);
-            EXPECT_EQ(stateSeed[0u].sourcePacket, compiledProducer->packet);
+        ASSERT_TRUE(HasEpilogueBarriersPtr(compiledProducerView));
+        ASSERT_TRUE(HasPrologueBarriersPtr(compiledConsumerView));
+        ASSERT_TRUE(HasPrologueStateSeedsPtr(compiledConsumerView));
+        const Span<GpuCompiledBarrier> release = EpilogueBarriers(compiledProducerView);
+        const Span<GpuCompiledBarrier> acquire = PrologueBarriers(compiledConsumerView);
+        const Span<GpuPacketStateSeed> stateSeed = PrologueStateSeeds(compiledConsumerView);
+        ASSERT_EQ(release.size(), 1u);
+        ASSERT_EQ(acquire.size(), 2u);
+        ASSERT_EQ(stateSeed.size(), 1u);
+        EXPECT_EQ(release[0u].type, GpuCompiledBarrierType::TextureOwnershipRelease);
+        EXPECT_EQ(release[0u].resource, pair.texture);
+        EXPECT_EQ(release[0u].before, ResourceStates::CopySource);
+        EXPECT_EQ(release[0u].after, ResourceStates::CopySource);
+        EXPECT_EQ(release[0u].sourceQueue, compiledProducer.queue);
+        EXPECT_EQ(release[0u].destinationQueue, compiledConsumer.queue);
+        EXPECT_FALSE(release[0u].forceMemoryDependency);
+        EXPECT_EQ(acquire[0u].type, GpuCompiledBarrierType::TextureOwnershipAcquire);
+        EXPECT_EQ(acquire[0u].resource, pair.texture);
+        EXPECT_EQ(acquire[0u].sourceQueue, compiledProducer.queue);
+        EXPECT_EQ(acquire[0u].destinationQueue, compiledConsumer.queue);
+        EXPECT_FALSE(acquire[0u].isInitialOwnerHandoff);
+        EXPECT_FALSE(acquire[0u].forceMemoryDependency);
+        EXPECT_EQ(acquire[1u].type, GpuCompiledBarrierType::TextureTransition);
+        EXPECT_EQ(acquire[1u].resource, pair.texture);
+        EXPECT_EQ(acquire[1u].before, ResourceStates::CopySource);
+        EXPECT_EQ(acquire[1u].after, ResourceStates::CopySource);
+        EXPECT_EQ(acquire[1u].sourceQueue, compiledProducer.queue);
+        EXPECT_EQ(acquire[1u].destinationQueue, compiledConsumer.queue);
+        EXPECT_FALSE(acquire[1u].isGraphInitialState);
+        EXPECT_FALSE(acquire[1u].isInitialOwnerHandoff);
+        EXPECT_TRUE(acquire[1u].forceMemoryDependency);
+        EXPECT_EQ(stateSeed[0u].resource, pair.texture);
+        EXPECT_EQ(stateSeed[0u].sourcePacket, compiledProducer.packet);
 
-            const Core::GpuTaskGraphPhysicalQueueCompileStatistics producerQueueCompileStatistics = compiledPlan.physicalQueueCompileStatistics(compiledProducer->queue);
-            const Core::GpuTaskGraphPhysicalQueueCompileStatistics consumerQueueCompileStatistics = compiledPlan.physicalQueueCompileStatistics(compiledConsumer->queue);
-            ASSERT_TRUE(producerQueueCompileStatistics.valid());
-            ASSERT_TRUE(consumerQueueCompileStatistics.valid());
-            EXPECT_EQ(producerQueueCompileStatistics.ownershipReleaseBarrierCount, 1u);
-            EXPECT_EQ(producerQueueCompileStatistics.ownershipAcquireBarrierCount, 0u);
-            EXPECT_EQ(consumerQueueCompileStatistics.ownershipReleaseBarrierCount, 0u);
-            EXPECT_EQ(consumerQueueCompileStatistics.ownershipAcquireBarrierCount, 1u);
+        const GpuTaskGraphPhysicalQueueCompileStatistics producerQueueCompileStatistics = compiledPlan.physicalQueueCompileStatistics(compiledProducer.queue);
+        const GpuTaskGraphPhysicalQueueCompileStatistics consumerQueueCompileStatistics = compiledPlan.physicalQueueCompileStatistics(compiledConsumer.queue);
+        ASSERT_TRUE(producerQueueCompileStatistics.valid());
+        ASSERT_TRUE(consumerQueueCompileStatistics.valid());
+        EXPECT_EQ(producerQueueCompileStatistics.ownershipReleaseBarrierCount, 1u);
+        EXPECT_EQ(producerQueueCompileStatistics.ownershipAcquireBarrierCount, 0u);
+        EXPECT_EQ(consumerQueueCompileStatistics.ownershipReleaseBarrierCount, 0u);
+        EXPECT_EQ(consumerQueueCompileStatistics.ownershipAcquireBarrierCount, 1u);
 
-            ASSERT_EQ(compiledPlan.logicalOwnershipTransferCount(), 1u);
-            const Core::GpuCompiledOwnershipTransfer* const ownershipTransfers = compiledPlan.logicalOwnershipTransfers();
-            ASSERT_NE(ownershipTransfers, nullptr);
-            EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(0u), ownershipTransfers);
-            EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(1u), nullptr);
-            const Core::GpuCompiledOwnershipTransfer& ownershipTransfer = ownershipTransfers[0u];
-            EXPECT_TRUE(ownershipTransfer.valid());
-            EXPECT_EQ(ownershipTransfer.resource, pair.texture);
-            EXPECT_EQ(ownershipTransfer.resourceIdentity, Name("tests/task_graph/transfer_ownership_texture"));
-            EXPECT_EQ(ownershipTransfer.range.textureSubresources, Core::s_AllSubresources);
-            EXPECT_EQ(ownershipTransfer.sourceTask, pair.producer);
-            EXPECT_EQ(ownershipTransfer.destinationTask, pair.consumer);
-            EXPECT_EQ(ownershipTransfer.sourcePacket, compiledProducer->packet);
-            EXPECT_EQ(ownershipTransfer.destinationPacket, compiledConsumer->packet);
-            EXPECT_EQ(ownershipTransfer.sourceQueue, compiledProducer->queue);
-            EXPECT_EQ(ownershipTransfer.destinationQueue, compiledConsumer->queue);
-            EXPECT_EQ(ownershipTransfer.sourceQueueFamilyIndex, queues[0u].familyIndex);
-            EXPECT_EQ(ownershipTransfer.destinationQueueFamilyIndex, queues[1u].familyIndex);
-            EXPECT_EQ(ownershipTransfer.declaredQueueSharing, Core::ResourceQueueSharing::Exclusive);
-            EXPECT_EQ(ownershipTransfer.resourceType, Core::GpuGraphResourceType::Texture);
-            EXPECT_EQ(ownershipTransfer.route, Core::GpuOwnershipTransferRoute::Internal);
-            EXPECT_TRUE(ownershipTransfer.concurrentSharingCouldAvoid);
-            const Core::GpuTaskGraphCompileStatistics ownershipStatistics = compiledPlan.compileStatistics();
-            ASSERT_TRUE(ownershipStatistics.valid());
-            EXPECT_EQ(ownershipStatistics.logicalOwnershipTransferCount, 1u);
-            EXPECT_EQ(ownershipStatistics.logicalOwnershipTransferSignatureCount, 1u);
-            EXPECT_EQ(ownershipStatistics.repeatedOwnershipTransferSignatureCount, 0u);
-            EXPECT_EQ(ownershipStatistics.concurrentSharingCouldAvoidTransferCount, 1u);
-            EXPECT_EQ(ownershipStatistics.concurrentSharingAdviceResourceCount, 0u);
-            EXPECT_EQ(ownershipStatistics.logicalOwnershipTransferCountByRoute[Core::GpuOwnershipTransferRoute::Internal], 1u);
+        ASSERT_EQ(compiledPlan.logicalOwnershipTransferCount(), 1u);
+        ASSERT_TRUE(HasLogicalOwnershipTransfersPtr(compiledPlan));
+        const Span<GpuCompiledOwnershipTransfer> ownershipTransfers = LogicalOwnershipTransfers(compiledPlan);
+        ASSERT_EQ(ownershipTransfers.size(), 1u);
+        EXPECT_TRUE(LogicalOwnershipTransferAtValue(compiledPlan, 0u).has_value());
+        EXPECT_FALSE(LogicalOwnershipTransferAtValue(compiledPlan, 1u).has_value());
+        const GpuCompiledOwnershipTransfer ownershipTransfer = ownershipTransfers[0u];
+        EXPECT_TRUE(ownershipTransfer.valid());
+        EXPECT_EQ(ownershipTransfer.resource, pair.texture);
+        EXPECT_EQ(ownershipTransfer.resourceIdentity, Name("tests/task_graph/transfer_ownership_texture"));
+        EXPECT_EQ(ownershipTransfer.range.textureSubresources, s_GpuAllSubresources);
+        EXPECT_EQ(ownershipTransfer.sourceTask, pair.producer);
+        EXPECT_EQ(ownershipTransfer.destinationTask, pair.consumer);
+        EXPECT_EQ(ownershipTransfer.sourcePacket, compiledProducer.packet);
+        EXPECT_EQ(ownershipTransfer.destinationPacket, compiledConsumer.packet);
+        EXPECT_EQ(ownershipTransfer.sourceQueue, compiledProducer.queue);
+        EXPECT_EQ(ownershipTransfer.destinationQueue, compiledConsumer.queue);
+        EXPECT_EQ(ownershipTransfer.sourceQueueFamilyIndex, queues[0u].familyIndex);
+        EXPECT_EQ(ownershipTransfer.destinationQueueFamilyIndex, queues[1u].familyIndex);
+        EXPECT_EQ(ownershipTransfer.declaredQueueSharing, ResourceQueueSharing::Exclusive);
+        EXPECT_EQ(ownershipTransfer.resourceType, GpuGraphResourceType::Texture);
+        EXPECT_EQ(ownershipTransfer.route, GpuOwnershipTransferRoute::Internal);
+        EXPECT_TRUE(ownershipTransfer.concurrentSharingCouldAvoid);
+        const GpuTaskGraphCompileStatistics ownershipStatistics = compiledPlan.compileStatistics();
+        ASSERT_TRUE(ownershipStatistics.valid());
+        EXPECT_EQ(ownershipStatistics.logicalOwnershipTransferCount, 1u);
+        EXPECT_EQ(ownershipStatistics.logicalOwnershipTransferSignatureCount, 1u);
+        EXPECT_EQ(ownershipStatistics.repeatedOwnershipTransferSignatureCount, 0u);
+        EXPECT_EQ(ownershipStatistics.concurrentSharingCouldAvoidTransferCount, 1u);
+        EXPECT_EQ(ownershipStatistics.concurrentSharingAdviceResourceCount, 0u);
+        EXPECT_EQ(ownershipStatistics.logicalOwnershipTransferCountByRoute[cast<usize>(GpuOwnershipTransferRoute::Internal)], 1u);
 
-            const Core::GpuCompiledPacketView consumerPacketView = compiledPlan.packet(compiledConsumer->packet);
-            ASSERT_TRUE(consumerPacketView.valid());
-            ASSERT_EQ(consumerPacketView.plan->dependencyCount, 1u);
-            EXPECT_EQ(consumerPacketView.dependencies[0u].producer, compiledProducer->packet);
-        }
+        const GpuCompiledPacketView consumerPacketView = compiledPlan.packet(compiledConsumer.packet);
+        ASSERT_TRUE(consumerPacketView.valid());
+        const Optional<GpuSubmissionPacket> consumerPacketPlanOpt = PacketPlan(consumerPacketView);
+        ASSERT_TRUE(consumerPacketPlanOpt.has_value());
+        ASSERT_EQ(consumerPacketPlanOpt.value().dependencyCount, 1u);
+        const Span<GpuPacketDependency> consumerPacketDeps = PacketDependencies(consumerPacketView);
+        ASSERT_EQ(consumerPacketDeps.size(), 1u);
+        EXPECT_EQ(consumerPacketDeps[0u].producer, compiledProducer.packet);
     }
 
     compiledGraph.reset();
@@ -544,10 +597,8 @@ void VerifyGpuRouting_PlansExclusiveOwnershipHandoffToDedicatedTransfer(){
         const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
 
         EXPECT_EQ(compiledPlan.logicalOwnershipTransferCount(), 0u);
-        native(in compiledPlan){
-            EXPECT_EQ(compiledPlan.logicalOwnershipTransfers(), nullptr);
-            EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(0u), nullptr);
-        }
+        EXPECT_FALSE(HasLogicalOwnershipTransfersPtr(compiledPlan));
+        EXPECT_FALSE(LogicalOwnershipTransferAtValue(compiledPlan, 0u).has_value());
     }
 
     ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
@@ -562,10 +613,8 @@ void VerifyGpuRouting_PlansExclusiveOwnershipHandoffToDedicatedTransfer(){
 
     EXPECT_FALSE(compiledPlan.valid());
     EXPECT_EQ(compiledPlan.logicalOwnershipTransferCount(), 0u);
-    native(in compiledPlan){
-        EXPECT_EQ(compiledPlan.logicalOwnershipTransfers(), nullptr);
-        EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(0u), nullptr);
-    }
+    EXPECT_FALSE(HasLogicalOwnershipTransfersPtr(compiledPlan));
+    EXPECT_FALSE(LogicalOwnershipTransferAtValue(compiledPlan, 0u).has_value());
 }
 
 void VerifyGpuRouting_ReportsOwnershipRangesWithoutReleaseAcquireDuplicates(){
@@ -632,7 +681,7 @@ void VerifyGpuRouting_ReportsOwnershipRangesWithoutReleaseAcquireDuplicates(){
     Array<GpuPhysicalQueueInfo, 2> queues = Array<GpuPhysicalQueueInfo, 2>();
     queues[0u] = GraphicsQueue();
     queues[1u] = DedicatedComputeQueue();
-    const GpuPhysicalQueueTopology topology = MakeGpuRoutingTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
@@ -669,46 +718,47 @@ void VerifyGpuRouting_ReportsOwnershipRangesWithoutReleaseAcquireDuplicates(){
     EXPECT_EQ(consumerStatistics.concurrentSharingAdviceResourceCount, 0u);
 
     ASSERT_EQ(compiledPlan.logicalOwnershipTransferCount(), 2u);
-    native(in compiledPlan, in producer, in consumer, in queues, in texture, in firstRange, in secondRange){
-        const Core::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(producer).plan;
-        const Core::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(consumer).plan;
-        ASSERT_NE(compiledProducer, nullptr);
-        ASSERT_NE(compiledConsumer, nullptr);
-        EXPECT_EQ(compiledProducer->queue, queues[0u].id);
-        EXPECT_EQ(compiledConsumer->queue, queues[1u].id);
+    const Optional<GpuCompiledTask> compiledProducerOpt = TaskPlan(compiledPlan.findTask(producer));
+    const Optional<GpuCompiledTask> compiledConsumerOpt = TaskPlan(compiledPlan.findTask(consumer));
+    ASSERT_TRUE(compiledProducerOpt.has_value());
+    ASSERT_TRUE(compiledConsumerOpt.has_value());
+    const GpuCompiledTask compiledProducer = compiledProducerOpt.value();
+    const GpuCompiledTask compiledConsumer = compiledConsumerOpt.value();
+    EXPECT_EQ(compiledProducer.queue, queues[0u].id);
+    EXPECT_EQ(compiledConsumer.queue, queues[1u].id);
 
-        const Core::GpuCompiledOwnershipTransfer* const ownershipTransfers = compiledPlan.logicalOwnershipTransfers();
-        ASSERT_NE(ownershipTransfers, nullptr);
-        EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(0u), ownershipTransfers);
-        EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(1u), ownershipTransfers + 1u);
-        EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(2u), nullptr);
-        usize firstRangeCount = 0u;
-        usize secondRangeCount = 0u;
-        for(usize transferIndex = 0u; transferIndex < compiledPlan.logicalOwnershipTransferCount(); ++transferIndex){
-            const Core::GpuCompiledOwnershipTransfer& transfer = ownershipTransfers[transferIndex];
-            EXPECT_TRUE(transfer.valid());
-            EXPECT_EQ(transfer.resource, texture);
-            EXPECT_EQ(transfer.resourceIdentity, Name("tests/task_graph/multi_range_ownership_texture"));
-            EXPECT_EQ(transfer.sourceTask, producer);
-            EXPECT_EQ(transfer.destinationTask, consumer);
-            EXPECT_EQ(transfer.sourcePacket, compiledProducer->packet);
-            EXPECT_EQ(transfer.destinationPacket, compiledConsumer->packet);
-            EXPECT_EQ(transfer.sourceQueue, queues[0u].id);
-            EXPECT_EQ(transfer.destinationQueue, queues[1u].id);
-            EXPECT_EQ(transfer.sourceQueueFamilyIndex, queues[0u].familyIndex);
-            EXPECT_EQ(transfer.destinationQueueFamilyIndex, queues[1u].familyIndex);
-            EXPECT_EQ(transfer.declaredQueueSharing, Core::ResourceQueueSharing::Exclusive);
-            EXPECT_EQ(transfer.resourceType, Core::GpuGraphResourceType::Texture);
-            EXPECT_EQ(transfer.route, Core::GpuOwnershipTransferRoute::Internal);
-            EXPECT_TRUE(transfer.concurrentSharingCouldAvoid);
-            if(transfer.range.textureSubresources == firstRange.textureSubresources)
-                ++firstRangeCount;
-            if(transfer.range.textureSubresources == secondRange.textureSubresources)
-                ++secondRangeCount;
-        }
-        EXPECT_EQ(firstRangeCount, 1u);
-        EXPECT_EQ(secondRangeCount, 1u);
+    ASSERT_TRUE(HasLogicalOwnershipTransfersPtr(compiledPlan));
+    const Span<GpuCompiledOwnershipTransfer> ownershipTransfers = LogicalOwnershipTransfers(compiledPlan);
+    ASSERT_EQ(ownershipTransfers.size(), 2u);
+    EXPECT_TRUE(LogicalOwnershipTransferAtValue(compiledPlan, 0u).has_value());
+    EXPECT_TRUE(LogicalOwnershipTransferAtValue(compiledPlan, 1u).has_value());
+    EXPECT_FALSE(LogicalOwnershipTransferAtValue(compiledPlan, 2u).has_value());
+    usize firstRangeCount = 0u;
+    usize secondRangeCount = 0u;
+    for(usize transferIndex = 0u; transferIndex < compiledPlan.logicalOwnershipTransferCount(); ++transferIndex){
+        const GpuCompiledOwnershipTransfer transfer = ownershipTransfers[transferIndex];
+        EXPECT_TRUE(transfer.valid());
+        EXPECT_EQ(transfer.resource, texture);
+        EXPECT_EQ(transfer.resourceIdentity, Name("tests/task_graph/multi_range_ownership_texture"));
+        EXPECT_EQ(transfer.sourceTask, producer);
+        EXPECT_EQ(transfer.destinationTask, consumer);
+        EXPECT_EQ(transfer.sourcePacket, compiledProducer.packet);
+        EXPECT_EQ(transfer.destinationPacket, compiledConsumer.packet);
+        EXPECT_EQ(transfer.sourceQueue, queues[0u].id);
+        EXPECT_EQ(transfer.destinationQueue, queues[1u].id);
+        EXPECT_EQ(transfer.sourceQueueFamilyIndex, queues[0u].familyIndex);
+        EXPECT_EQ(transfer.destinationQueueFamilyIndex, queues[1u].familyIndex);
+        EXPECT_EQ(transfer.declaredQueueSharing, ResourceQueueSharing::Exclusive);
+        EXPECT_EQ(transfer.resourceType, GpuGraphResourceType::Texture);
+        EXPECT_EQ(transfer.route, GpuOwnershipTransferRoute::Internal);
+        EXPECT_TRUE(transfer.concurrentSharingCouldAvoid);
+        if(transfer.range.textureSubresources == firstRange.textureSubresources)
+            ++firstRangeCount;
+        if(transfer.range.textureSubresources == secondRange.textureSubresources)
+            ++secondRangeCount;
     }
+    EXPECT_EQ(firstRangeCount, 1u);
+    EXPECT_EQ(secondRangeCount, 1u);
 }
 
 void VerifyGpuRouting_UsesDeclaredTripleQueueSharingForDedicatedTransfer(){
@@ -721,41 +771,46 @@ void VerifyGpuRouting_UsesDeclaredTripleQueueSharingForDedicatedTransfer(){
     ASSERT_TRUE(pair.producer.valid());
     ASSERT_TRUE(pair.consumer.valid());
 
-    native(mut testArena, in graph, in pair){
-        ThreeQueueCompile threeQueueCompile(testArena);
-        ASSERT_TRUE(threeQueueCompile.compile(graph));
-        const Core::GpuCompiledGraph::ReadView compiledPlan(threeQueueCompile.compiledGraph);
+    ThreeQueueCompile threeQueueCompile = ThreeQueueCompile(testArena);
+    ASSERT_TRUE(threeQueueCompile.compile(graph));
+    const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(threeQueueCompile.compiledGraph);
 
-        const Core::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(pair.producer).plan;
-        const Core::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(pair.consumer).plan;
-        ASSERT_NE(compiledProducer, nullptr);
-        ASSERT_NE(compiledConsumer, nullptr);
-        EXPECT_EQ(compiledProducer->epilogueBarrierCount, 0u);
-        ASSERT_EQ(compiledConsumer->prologueBarrierCount, 1u);
-        ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
-        const Core::GpuCompiledBarrier* const dependency = compiledPlan.findTask(pair.consumer).prologueBarriers;
-        const Core::GpuPacketStateSeed* const stateSeed = compiledPlan.findTask(pair.consumer).prologueStateSeeds;
-        ASSERT_NE(dependency, nullptr);
-        ASSERT_NE(stateSeed, nullptr);
-        EXPECT_EQ(dependency[0u].type, Core::GpuCompiledBarrierType::TextureTransition);
-        EXPECT_EQ(dependency[0u].resource, pair.texture);
-        EXPECT_EQ(dependency[0u].before, Core::ResourceStates::CopySource);
-        EXPECT_EQ(dependency[0u].after, Core::ResourceStates::CopySource);
-        EXPECT_TRUE(dependency[0u].forceMemoryDependency);
-        EXPECT_EQ(stateSeed[0u].resource, pair.texture);
-        EXPECT_EQ(stateSeed[0u].sourcePacket, compiledProducer->packet);
-        EXPECT_EQ(compiledPlan.logicalOwnershipTransferCount(), 0u);
-        EXPECT_EQ(compiledPlan.logicalOwnershipTransfers(), nullptr);
-        EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(0u), nullptr);
-        const Core::GpuTaskGraphCompileStatistics& statistics = compiledPlan.compileStatistics();
-        ASSERT_TRUE(statistics.valid());
-        EXPECT_EQ(statistics.ownershipReleaseBarrierCount, 0u);
-        EXPECT_EQ(statistics.ownershipAcquireBarrierCount, 0u);
-        EXPECT_EQ(statistics.logicalOwnershipTransferCount, 0u);
-        EXPECT_EQ(statistics.logicalOwnershipTransferSignatureCount, 0u);
-        EXPECT_EQ(statistics.concurrentSharingCouldAvoidTransferCount, 0u);
-        EXPECT_EQ(statistics.concurrentSharingAdviceResourceCount, 0u);
-    }
+    const GpuCompiledTaskView compiledProducerView = compiledPlan.findTask(pair.producer);
+    const GpuCompiledTaskView compiledConsumerView = compiledPlan.findTask(pair.consumer);
+    const Optional<GpuCompiledTask> compiledProducerOpt = TaskPlan(compiledProducerView);
+    const Optional<GpuCompiledTask> compiledConsumerOpt = TaskPlan(compiledConsumerView);
+    ASSERT_TRUE(compiledProducerOpt.has_value());
+    ASSERT_TRUE(compiledConsumerOpt.has_value());
+    const GpuCompiledTask compiledProducer = compiledProducerOpt.value();
+    const GpuCompiledTask compiledConsumer = compiledConsumerOpt.value();
+    EXPECT_EQ(compiledProducer.epilogueBarrierCount, 0u);
+    ASSERT_EQ(compiledConsumer.prologueBarrierCount, 1u);
+    ASSERT_EQ(compiledConsumer.prologueStateSeedCount, 1u);
+    ASSERT_TRUE(HasPrologueBarriersPtr(compiledConsumerView));
+    ASSERT_TRUE(HasPrologueStateSeedsPtr(compiledConsumerView));
+    const Span<GpuCompiledBarrier> dependency = PrologueBarriers(compiledConsumerView);
+    const Span<GpuPacketStateSeed> stateSeed = PrologueStateSeeds(compiledConsumerView);
+    ASSERT_EQ(dependency.size(), 1u);
+    ASSERT_EQ(stateSeed.size(), 1u);
+    EXPECT_EQ(dependency[0u].type, GpuCompiledBarrierType::TextureTransition);
+    EXPECT_EQ(dependency[0u].resource, pair.texture);
+    EXPECT_EQ(dependency[0u].before, ResourceStates::CopySource);
+    EXPECT_EQ(dependency[0u].after, ResourceStates::CopySource);
+    EXPECT_TRUE(dependency[0u].forceMemoryDependency);
+    EXPECT_EQ(stateSeed[0u].resource, pair.texture);
+    EXPECT_EQ(stateSeed[0u].sourcePacket, compiledProducer.packet);
+    EXPECT_EQ(compiledPlan.logicalOwnershipTransferCount(), 0u);
+    EXPECT_FALSE(HasLogicalOwnershipTransfersPtr(compiledPlan));
+    EXPECT_FALSE(LogicalOwnershipTransferAtValue(compiledPlan, 0u).has_value());
+    const GpuTaskGraphCompileStatistics statistics = compiledPlan.compileStatistics();
+    ASSERT_TRUE(statistics.valid());
+    EXPECT_EQ(statistics.ownershipReleaseBarrierCount, 0u);
+    EXPECT_EQ(statistics.ownershipAcquireBarrierCount, 0u);
+    EXPECT_EQ(statistics.logicalOwnershipTransferCount, 0u);
+    EXPECT_EQ(statistics.logicalOwnershipTransferSignatureCount, 0u);
+    EXPECT_EQ(statistics.concurrentSharingCouldAvoidTransferCount, 0u);
+    EXPECT_EQ(statistics.concurrentSharingAdviceResourceCount, 0u);
+    EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
 }
 
 void VerifyGpuRouting_OmitsOwnershipTelemetryForSameFamilyAndSamePhysicalRoutes(){
@@ -773,22 +828,20 @@ void VerifyGpuRouting_OmitsOwnershipTelemetryForSameFamilyAndSamePhysicalRoutes(
     {
         Array<GpuPhysicalQueueInfo, 1> singleQueues = Array<GpuPhysicalQueueInfo, 1>();
         singleQueues[0u] = GraphicsQueue();
-        const GpuPhysicalQueueTopology topology = MakeGpuRoutingTopology(singleQueues);
+        const GpuPhysicalQueueTopology topology = MakeTopology(singleQueues);
         GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
         GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
         GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
         ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
         const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
-        native(in compiledPlan, in pair, in singleQueues){
-            const Core::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(pair.producer).plan;
-            const Core::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(pair.consumer).plan;
-            ASSERT_NE(compiledProducer, nullptr);
-            ASSERT_NE(compiledConsumer, nullptr);
-            EXPECT_EQ(compiledProducer->queue, singleQueues[0u].id);
-            EXPECT_EQ(compiledConsumer->queue, singleQueues[0u].id);
-            EXPECT_EQ(compiledPlan.logicalOwnershipTransfers(), nullptr);
-            EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(0u), nullptr);
-        }
+        const Optional<GpuCompiledTask> compiledProducerOpt = TaskPlan(compiledPlan.findTask(pair.producer));
+        const Optional<GpuCompiledTask> compiledConsumerOpt = TaskPlan(compiledPlan.findTask(pair.consumer));
+        ASSERT_TRUE(compiledProducerOpt.has_value());
+        ASSERT_TRUE(compiledConsumerOpt.has_value());
+        EXPECT_EQ(compiledProducerOpt.value().queue, singleQueues[0u].id);
+        EXPECT_EQ(compiledConsumerOpt.value().queue, singleQueues[0u].id);
+        EXPECT_FALSE(HasLogicalOwnershipTransfersPtr(compiledPlan));
+        EXPECT_FALSE(LogicalOwnershipTransferAtValue(compiledPlan, 0u).has_value());
         EXPECT_EQ(compiledPlan.logicalOwnershipTransferCount(), 0u);
         EXPECT_EQ(compiledPlan.compileStatistics().ownershipReleaseBarrierCount, 0u);
         EXPECT_EQ(compiledPlan.compileStatistics().ownershipAcquireBarrierCount, 0u);
@@ -801,23 +854,21 @@ void VerifyGpuRouting_OmitsOwnershipTelemetryForSameFamilyAndSamePhysicalRoutes(
         Array<GpuPhysicalQueueInfo, 2> queues = Array<GpuPhysicalQueueInfo, 2>();
         queues[0u] = GraphicsQueue();
         queues[1u] = sameFamilyTransferQueue;
-        const GpuPhysicalQueueTopology topology = MakeGpuRoutingTopology(queues);
+        const GpuPhysicalQueueTopology topology = MakeTopology(queues);
         GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
         GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
         GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
         ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
         const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
-        native(in compiledPlan, in pair, in queues){
-            const Core::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(pair.producer).plan;
-            const Core::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(pair.consumer).plan;
-            ASSERT_NE(compiledProducer, nullptr);
-            ASSERT_NE(compiledConsumer, nullptr);
-            EXPECT_EQ(compiledProducer->queue, queues[0u].id);
-            EXPECT_EQ(compiledConsumer->queue, queues[1u].id);
-            EXPECT_NE(compiledProducer->queue, compiledConsumer->queue);
-            EXPECT_EQ(compiledPlan.logicalOwnershipTransfers(), nullptr);
-            EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(0u), nullptr);
-        }
+        const Optional<GpuCompiledTask> compiledProducerOpt = TaskPlan(compiledPlan.findTask(pair.producer));
+        const Optional<GpuCompiledTask> compiledConsumerOpt = TaskPlan(compiledPlan.findTask(pair.consumer));
+        ASSERT_TRUE(compiledProducerOpt.has_value());
+        ASSERT_TRUE(compiledConsumerOpt.has_value());
+        EXPECT_EQ(compiledProducerOpt.value().queue, queues[0u].id);
+        EXPECT_EQ(compiledConsumerOpt.value().queue, queues[1u].id);
+        EXPECT_NE(compiledProducerOpt.value().queue, compiledConsumerOpt.value().queue);
+        EXPECT_FALSE(HasLogicalOwnershipTransfersPtr(compiledPlan));
+        EXPECT_FALSE(LogicalOwnershipTransferAtValue(compiledPlan, 0u).has_value());
         EXPECT_EQ(queues[0u].familyIndex, queues[1u].familyIndex);
         EXPECT_EQ(compiledPlan.logicalOwnershipTransferCount(), 0u);
         EXPECT_EQ(compiledPlan.compileStatistics().ownershipReleaseBarrierCount, 0u);
@@ -873,12 +924,12 @@ void VerifyGpuRouting_LogicalSharingRequiresTwoSelectedFamiliesAcrossEveryMaskAn
                     else
                         orderedQueues[queueIndex] = queues[queueIndex];
                 }
-                const GpuPhysicalQueueTopology topology = MakeGpuRoutingTopology(orderedQueues);
+                const GpuPhysicalQueueTopology topology = MakeTopology(orderedQueues);
                 ASSERT_TRUE(IsValidQueueTopology(topology));
                 GpuTaskGraphResourceView resource = GpuTaskGraphResourceView();
                 resource.type = GpuGraphResourceType::Buffer;
                 resource.queueSharing = sharing;
-                const b8 expectedConcurrent = GpuRoutingSharingIncludesQueueClass(sharing, splitClass);
+                const b8 expectedConcurrent = ResourceQueueSharing::IncludesQueueClass(sharing, splitClass);
                 EXPECT_EQ(ResourceUsesConcurrentQueueSharing(resource, topology), expectedConcurrent);
             }
         }
@@ -904,31 +955,32 @@ void VerifyGpuRouting_AcceptsDedicatedTransferClassOnAConcurrentlySharedComputeF
     queues[0u] = GraphicsQueue();
     queues[1u] = DedicatedComputeQueue();
     queues[2u] = transferOnComputeFamily;
-    const GpuPhysicalQueueTopology topology = MakeGpuRoutingTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
     ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
 
-    native(in assignments, in compiledPlan, in pair, in transferOnComputeFamily){
-        const Core::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(pair.consumer);
-        const Core::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(pair.producer).plan;
-        const Core::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(pair.consumer).plan;
-        ASSERT_NE(consumerAssignment, nullptr);
-        ASSERT_NE(compiledProducer, nullptr);
-        ASSERT_NE(compiledConsumer, nullptr);
-        EXPECT_EQ(consumerAssignment->queue, transferOnComputeFamily.id);
-        EXPECT_EQ(compiledProducer->epilogueBarrierCount, 0u);
-        ASSERT_EQ(compiledConsumer->prologueBarrierCount, 1u);
-        const Core::GpuCompiledBarrier* const dependency = compiledPlan.findTask(pair.consumer).prologueBarriers;
-        ASSERT_NE(dependency, nullptr);
-        EXPECT_EQ(dependency[0u].type, Core::GpuCompiledBarrierType::TextureTransition);
-        EXPECT_EQ(dependency[0u].resource, pair.texture);
-        EXPECT_EQ(dependency[0u].before, Core::ResourceStates::CopySource);
-        EXPECT_EQ(dependency[0u].after, Core::ResourceStates::CopySource);
-        EXPECT_TRUE(dependency[0u].forceMemoryDependency);
-    }
+    const Optional<GpuTaskQueueAssignment> consumerAssignmentOpt = FindQueueAssignment(assignments, pair.consumer);
+    const GpuCompiledTaskView compiledProducerView = compiledPlan.findTask(pair.producer);
+    const GpuCompiledTaskView compiledConsumerView = compiledPlan.findTask(pair.consumer);
+    const Optional<GpuCompiledTask> compiledProducerOpt = TaskPlan(compiledProducerView);
+    const Optional<GpuCompiledTask> compiledConsumerOpt = TaskPlan(compiledConsumerView);
+    ASSERT_TRUE(consumerAssignmentOpt.has_value());
+    ASSERT_TRUE(compiledProducerOpt.has_value());
+    ASSERT_TRUE(compiledConsumerOpt.has_value());
+    EXPECT_EQ(consumerAssignmentOpt.value().queue, transferOnComputeFamily.id);
+    EXPECT_EQ(compiledProducerOpt.value().epilogueBarrierCount, 0u);
+    ASSERT_EQ(compiledConsumerOpt.value().prologueBarrierCount, 1u);
+    ASSERT_TRUE(HasPrologueBarriersPtr(compiledConsumerView));
+    const Span<GpuCompiledBarrier> dependency = PrologueBarriers(compiledConsumerView);
+    ASSERT_EQ(dependency.size(), 1u);
+    EXPECT_EQ(dependency[0u].type, GpuCompiledBarrierType::TextureTransition);
+    EXPECT_EQ(dependency[0u].resource, pair.texture);
+    EXPECT_EQ(dependency[0u].before, ResourceStates::CopySource);
+    EXPECT_EQ(dependency[0u].after, ResourceStates::CopySource);
+    EXPECT_TRUE(dependency[0u].forceMemoryDependency);
 }
 
 void VerifyGpuRouting_RejectsDedicatedTransferUseOutsideConcurrentSharingContract(){
@@ -947,7 +999,7 @@ void VerifyGpuRouting_RejectsDedicatedTransferUseOutsideConcurrentSharingContrac
     queues[0u] = GraphicsQueue();
     queues[1u] = DedicatedComputeQueue();
     queues[2u] = DedicatedTransferQueue();
-    const GpuPhysicalQueueTopology topology = MakeGpuRoutingTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
@@ -967,9 +1019,8 @@ void VerifyGpuRouting_PartialDagMultiwordScoresPreserveIndependentCostsAfterMove
     shapes[3u] = GpuRoutingPartialDagShape::DenseLayers;
     shapes[4u] = GpuRoutingPartialDagShape::MergedPairs;
     for(in GpuRoutingPartialDagShape shape : shapes){
-        native(in shape){
-            ASSERT_NO_FATAL_FAILURE(GpuRoutingCheckIndexedScores<130u>(shape));
-        }
+        GpuRoutingCheckIndexedScores<130u>(shape);
+        ASSERT_FALSE(TestHasFatalFailure());
     }
 }
 
@@ -981,9 +1032,8 @@ void VerifyGpuRouting_CompactedPartialDagScoresPreserveMixedCostsAcrossMovesAndR
     shapes[3u] = GpuRoutingPartialDagShape::DenseLayers;
     shapes[4u] = GpuRoutingPartialDagShape::MergedPairs;
     for(in GpuRoutingPartialDagShape shape : shapes){
-        native(in shape){
-            ASSERT_NO_FATAL_FAILURE(GpuRoutingCheckIndexedScores<513u>(shape));
-        }
+        GpuRoutingCheckIndexedScores<513u>(shape);
+        ASSERT_FALSE(TestHasFatalFailure());
     }
 }
 
@@ -1006,21 +1056,15 @@ void VerifyGpuRouting_SparsePartialRowsAndDenseThresholdsBoundPeakScratch(){
     const usize bitsPerWord = 64u;
     const usize boundsBudgetDivisor = 32u;
     const usize reachabilityVectorCount = 4u;
-    usize emptyVectorBookkeepingBytes = 0u;
-    native(mut emptyVectorBookkeepingBytes){
-        Core::Alloc::ScratchArena bookkeepingScratch(s_TaskGraphScratchArena);
-        const Vector<u64, Core::Alloc::ScratchArena> emptyVector(bookkeepingScratch);
-        emptyVectorBookkeepingBytes = bookkeepingScratch.memoryStats().usedBytes;
-    }
+    const usize emptyVectorBookkeepingBytes = ScratchEmptyVectorBookkeepingBytes();
     const usize reachabilityBookkeepingBytes = reachabilityVectorCount * emptyVectorBookkeepingBytes;
     for(in GpuRoutingStorageCase testCase : cases){
         const ScopedTestTrace traceTaskCount = ScopedTestTrace(testCase.taskCount);
         const ScopedTestTrace traceShape = ScopedTestTrace(cast<u32>(testCase.shape));
         TestArena testArena = TestArena();
         GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-        native(mut graph, in testCase){
-            ASSERT_NO_FATAL_FAILURE(GpuRoutingDeclarePartialDag(graph, testCase.taskCount, testCase.shape));
-        }
+        GpuRoutingDeclarePartialDag(graph, testCase.taskCount, testCase.shape);
+        ASSERT_FALSE(TestHasFatalFailure());
         GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
         ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
         const GpuTaskGraphDeclarationReadView view = GpuTaskGraphDeclarationReadView(graph);
@@ -1030,10 +1074,7 @@ void VerifyGpuRouting_SparsePartialRowsAndDenseThresholdsBoundPeakScratch(){
         ASSERT_TRUE(BuildGpuTaskSchedulingReachability(view, analysis, reachability));
         const usize wordsPerRow = (testCase.taskCount + bitsPerWord - 1u) / bitsPerWord;
         const usize matrixBytes = testCase.taskCount * wordsPerRow * 8u;
-        usize denseBytes = 0u;
-        native(in matrixBytes, in testCase, mut denseBytes){
-            denseBytes = matrixBytes + testCase.taskCount * (sizeof(u32) + 2u * sizeof(usize));
-        }
+        const usize denseBytes = matrixBytes + testCase.taskCount * s_DenseReachabilityTaskMetadataBytes;
         if(testCase.shape == GpuRoutingPartialDagShape::ReversedPairs){
             // A partial last tile and backward cross-word edges must not allocate the full square matrix.
             EXPECT_LT(scratch.memoryStats().peakUsedBytes, matrixBytes);
@@ -1071,9 +1112,8 @@ void VerifyGpuRouting_RebuildingRelationsClearsCompactedDenseOrderedAndFailedSta
     for(in GpuRoutingPartialDagShape shape : shapes){
         const ScopedTestTrace traceShape = ScopedTestTrace(cast<u32>(shape));
         GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-        native(mut graph, in taskCount, in shape){
-            ASSERT_NO_FATAL_FAILURE(GpuRoutingDeclarePartialDag(graph, taskCount, shape));
-        }
+        GpuRoutingDeclarePartialDag(graph, taskCount, shape);
+        ASSERT_FALSE(TestHasFatalFailure());
         GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
         ASSERT_TRUE(Analyze(graph, scratch, analysis));
         const GpuTaskGraphDeclarationReadView view = GpuTaskGraphDeclarationReadView(graph);
@@ -1093,9 +1133,8 @@ void VerifyGpuRouting_RebuildingRelationsClearsCompactedDenseOrderedAndFailedSta
         previousTask = view.taskAt(0u).id;
     }
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    native(mut graph, in taskCount){
-        ASSERT_NO_FATAL_FAILURE(GpuRoutingDeclarePartialDag(graph, taskCount, GpuRoutingPartialDagShape::ReversedPairs));
-    }
+    GpuRoutingDeclarePartialDag(graph, taskCount, GpuRoutingPartialDagShape::ReversedPairs);
+    ASSERT_FALSE(TestHasFatalFailure());
     const GpuTaskGraphDeclarationReadView view = GpuTaskGraphDeclarationReadView(graph);
     GpuTaskGraphAnalysis invalidAnalysis = GpuTaskGraphAnalysis(testArena.arena);
     EXPECT_FALSE(BuildGpuTaskSchedulingReachability(view, invalidAnalysis, reachability));
@@ -1107,35 +1146,132 @@ void VerifyGpuRouting_PartialAssignmentsExcludeRelatedTasksWithoutRequiringOwnAs
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
     ScratchArena declarationScratch = ScratchArena(s_TaskGraphScratchArena);
-    native(mut graph){
-        ASSERT_NO_FATAL_FAILURE(GpuRoutingDeclarePartialDag(graph, 4u, GpuRoutingPartialDagShape::OneEdge));
-    }
+    GpuRoutingDeclarePartialDag(graph, 4u, GpuRoutingPartialDagShape::OneEdge);
+    ASSERT_FALSE(TestHasFatalFailure());
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, declarationScratch, analysis));
     const GpuTaskGraphDeclarationReadView view = GpuTaskGraphDeclarationReadView(graph);
     Array<GpuPhysicalQueueInfo, 2> queues = Array<GpuPhysicalQueueInfo, 2>();
     queues[0u] = GraphicsQueue();
     queues[1u] = DedicatedComputeQueue();
-    const GpuPhysicalQueueTopology topology = MakeGpuRoutingTopology(queues);
-    native(in testArena, in view, in analysis, in queues, in topology){
-        Core::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
-        GpuTaskSchedulingReachability reachability(scratch);
-        ASSERT_TRUE(BuildGpuTaskSchedulingReachability(view, analysis, reachability));
-        GpuTaskQueueScoringData scoringData(view, analysis, reachability, {}, scratch);
-        Core::GraphicsVector<Core::GpuTaskQueueAssignment> assignments(testArena.arena);
-        Core::GraphicsVector<u32> indices(4u, Limit<u32>::s_Max, testArena.arena);
-        constexpr Array<usize, 2u> s_AssignedTasks = { 0u, 3u };
-        for(const usize taskIndex : s_AssignedTasks){
-            indices[taskIndex] = static_cast<u32>(assignments.size());
-            assignments.push_back({ .task = view.taskAt(taskIndex).id, .initialQueue = queues[1u].id, .queue = queues[1u].id, .score = {} });
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
+    ScratchArena scratch = ScratchArena(s_TaskGraphScratchArena);
+    GpuTaskSchedulingReachability reachability = GpuTaskSchedulingReachability(scratch);
+    ASSERT_TRUE(BuildGpuTaskSchedulingReachability(view, analysis, reachability));
+    GpuTaskQueueScoringData scoringData = GpuTaskQueueScoringData(
+        view,
+        analysis,
+        reachability,
+        GpuTaskGraphQueueAssignmentOptions(),
+        scratch
+    );
+    AssignmentGraphicsVector assignments = AssignmentGraphicsVector(testArena.arena);
+    U32GraphicsVector indices = U32GraphicsVector(4u, u32.max, testArena.arena);
+    Array<usize, 2> assignedTasks = Array<usize, 2>();
+    assignedTasks[0u] = 0u;
+    assignedTasks[1u] = 3u;
+    for(in usize taskIndex : assignedTasks){
+        indices[taskIndex] = cast<u32>(assignments.size());
+        GpuTaskQueueAssignment assignment = GpuTaskQueueAssignment();
+        assignment.task = view.taskAt(taskIndex).id;
+        assignment.initialQueue = queues[1u].id;
+        assignment.queue = queues[1u].id;
+        assignments.push_back(assignment);
+    }
+    scoringData.rebuildAssignmentLoads(assignments, topology);
+    const GpuQueueAssignmentScore firstScore = BuildQueueAssignmentScore(
+        view,
+        analysis,
+        assignments,
+        indices,
+        topology,
+        reachability,
+        scoringData,
+        view.taskAt(1u),
+        queues[0u],
+        GpuTaskQueueScoreExclusions()
+    );
+    const GpuQueueAssignmentScore secondScore = BuildQueueAssignmentScore(
+        view,
+        analysis,
+        assignments,
+        indices,
+        topology,
+        reachability,
+        scoringData,
+        view.taskAt(2u),
+        queues[0u],
+        GpuTaskQueueScoreExclusions()
+    );
+    GpuTaskQueueScoreExclusions exclusions = GpuTaskQueueScoreExclusions();
+    exclusions.assignmentOffset = 1u;
+    exclusions.assignmentCount = 1u;
+    exclusions.totalCost = 8u;
+    const GpuQueueAssignmentScore excludedScore = BuildQueueAssignmentScore(
+        view,
+        analysis,
+        assignments,
+        indices,
+        topology,
+        reachability,
+        scoringData,
+        view.taskAt(2u),
+        queues[0u],
+        exclusions
+    );
+    EXPECT_EQ(firstScore.overlap, 8);
+    EXPECT_EQ(secondScore.overlap, 9);
+    EXPECT_EQ(excludedScore.overlap, 1);
+    EXPECT_GT(scratch.memoryStats().reservedBytes, 0u);
+    EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
+}
+
+void GpuRoutingExpectScoresWithoutMasks(
+    in GpuTaskGraphDeclarationReadView view,
+    in GpuTaskGraphAnalysis analysis,
+    in Span<GpuTaskQueueAssignment> assignments,
+    in Span<u32> indices,
+    in GpuPhysicalQueueTopology topology,
+    in GpuTaskSchedulingReachability reachability,
+    in GpuTaskQueueScoringData scoringData,
+    in Span<GpuPhysicalQueueInfo> queues,
+    in usize taskCount
+){
+    // Zero capacity proves neither optional index allocated storage, rather than merely clearing its contents.
+    EXPECT_EQ(scoringData.taskCostGroups.capacity(), 0u);
+    EXPECT_EQ(scoringData.assignedCostWords.capacity(), 0u);
+    for(usize candidateIndex = 0u; candidateIndex < topology.queueCount; ++candidateIndex){
+        const GpuPhysicalQueueInfo candidate = queues[candidateIndex];
+        for(usize index = 0u; index < taskCount; ++index){
+            i32 expectedLoad = 0;
+            for(usize other = 0u; other < taskCount; ++other){
+                if(other != index && assignments[other].queue == candidate.id)
+                    expectedLoad += 8;
+            }
+            const GpuQueueAssignmentScore score = BuildQueueAssignmentScore(
+                view,
+                analysis,
+                assignments,
+                indices,
+                topology,
+                reachability,
+                scoringData,
+                view.taskAt(index),
+                candidate,
+                GpuTaskQueueScoreExclusions()
+            );
+            EXPECT_EQ(score.queueLoad, expectedLoad);
+            EXPECT_EQ(score.overlap, 0);
+            i32 expectedIncoming = 0;
+            if(index != 0u && assignments[index - 1u].queue != candidate.id)
+                expectedIncoming = 1;
+            i32 expectedOutgoing = 0;
+            if(index + 1u < taskCount && assignments[index + 1u].queue != candidate.id)
+                expectedOutgoing = 1;
+            EXPECT_EQ(score.incomingCrossings, expectedIncoming);
+            EXPECT_EQ(score.outgoingCrossings, expectedOutgoing);
+            EXPECT_EQ(score.ownershipTransfers, 0);
         }
-        scoringData.rebuildAssignmentLoads(assignments, topology);
-        const auto score = [&](const usize taskIndex, const GpuTaskQueueScoreExclusions exclusions = {})noexcept{
-            return BuildQueueAssignmentScore(view, analysis, assignments, indices, topology, reachability, scoringData, view.taskAt(taskIndex), queues[0u], exclusions);
-        };
-        EXPECT_EQ(score(1u).overlap, 8);
-        EXPECT_EQ(score(2u).overlap, 9);
-        EXPECT_EQ(score(2u, { .assignmentOffset = 1u, .assignmentCount = 1u, .totalCost = 8u }).overlap, 1);
     }
 }
 
@@ -1186,49 +1322,42 @@ void VerifyGpuRouting_OrderedAndUnusedReachabilityAvoidMaskAllocationsAcrossQueu
         Array<GpuPhysicalQueueInfo, 2> queues = Array<GpuPhysicalQueueInfo, 2>();
         queues[0u] = GraphicsQueue();
         queues[1u] = DedicatedComputeQueue(77u);
-        native(in testArena, in view, in analysis, mut reachability, mut scratch, in queues, in buildReachability, in taskCount){
-            const Core::GpuPhysicalQueueTopology topology{ .queues = queues.data(), .queueCount = buildReachability ? 2u : 1u };
-            GpuTaskQueueScoringData scoringData(view, analysis, reachability, {}, scratch);
-            Core::GraphicsVector<Core::GpuTaskQueueAssignment> assignments(testArena.arena);
-            Core::GraphicsVector<u32> indices(testArena.arena);
-            assignments.reserve(taskCount);
-            indices.reserve(taskCount);
-            for(usize index = 0u; index < taskCount; ++index){
-                const auto queue = queues[index % topology.queueCount].id;
-                assignments.push_back({ .task = view.taskAt(index).id, .initialQueue = queue, .queue = queue, .score = {} });
-                indices.push_back(static_cast<u32>(index));
-            }
-            const auto expectScoresWithoutMasks = [&](){
-                // Zero capacity proves neither optional index allocated storage, rather than merely clearing its contents.
-                EXPECT_EQ(scoringData.taskCostGroups.capacity(), 0u);
-                EXPECT_EQ(scoringData.assignedCostWords.capacity(), 0u);
-                for(usize candidateIndex = 0u; candidateIndex < topology.queueCount; ++candidateIndex){
-                    const auto& candidate = queues[candidateIndex];
-                    for(usize index = 0u; index < taskCount; ++index){
-                        i32 expectedLoad = 0;
-                        for(usize other = 0u; other < taskCount; ++other){
-                            if(other != index && assignments[other].queue == candidate.id)
-                                expectedLoad += 8;
-                        }
-                        const auto score = BuildQueueAssignmentScore(view, analysis, assignments, indices, topology, reachability, scoringData, view.taskAt(index), candidate);
-                        EXPECT_EQ(score.queueLoad, expectedLoad);
-                        EXPECT_EQ(score.overlap, 0);
-                        EXPECT_EQ(score.incomingCrossings, index != 0u && assignments[index - 1u].queue != candidate.id ? 1 : 0);
-                        EXPECT_EQ(score.outgoingCrossings, index + 1u < taskCount && assignments[index + 1u].queue != candidate.id ? 1 : 0);
-                        EXPECT_EQ(score.ownershipTransfers, 0);
-                    }
-                }
-            };
-            scoringData.rebuildAssignmentLoads(assignments, topology);
-            expectScoresWithoutMasks();
-            auto& moved = assignments[taskCount / 2u];
-            const auto destination = queues[topology.queueCount - 1u].id;
-            scoringData.updateAssignmentLoads(moved.task, moved.queue, destination);
-            moved.queue = destination;
-            expectScoresWithoutMasks();
-            scoringData.rebuildAssignmentLoads(assignments, topology);
-            expectScoresWithoutMasks();
+        usize activeQueueCount = 1u;
+        if(buildReachability)
+            activeQueueCount = 2u;
+        const Span<GpuPhysicalQueueInfo> queueSpan = queues;
+        const GpuPhysicalQueueTopology topology = MakeTopologyPrefix(queueSpan, activeQueueCount);
+        GpuTaskQueueScoringData scoringData = GpuTaskQueueScoringData(
+            view,
+            analysis,
+            reachability,
+            GpuTaskGraphQueueAssignmentOptions(),
+            scratch
+        );
+        AssignmentGraphicsVector assignments = AssignmentGraphicsVector(testArena.arena);
+        U32GraphicsVector indices = U32GraphicsVector(testArena.arena);
+        assignments.reserve(taskCount);
+        indices.reserve(taskCount);
+        for(usize index = 0u; index < taskCount; ++index){
+            const GpuPhysicalQueueId queue = queues[index % topology.queueCount].id;
+            GpuTaskQueueAssignment assignment = GpuTaskQueueAssignment();
+            assignment.task = view.taskAt(index).id;
+            assignment.initialQueue = queue;
+            assignment.queue = queue;
+            assignments.push_back(assignment);
+            indices.push_back(cast<u32>(index));
         }
+        scoringData.rebuildAssignmentLoads(assignments, topology);
+        GpuRoutingExpectScoresWithoutMasks(view, analysis, assignments, indices, topology, reachability, scoringData, queues, taskCount);
+        const usize movedIndex = taskCount / 2u;
+        const GpuPhysicalQueueId destination = queues[topology.queueCount - 1u].id;
+        scoringData.updateAssignmentLoads(assignments[movedIndex].task, assignments[movedIndex].queue, destination);
+        assignments[movedIndex].queue = destination;
+        GpuRoutingExpectScoresWithoutMasks(view, analysis, assignments, indices, topology, reachability, scoringData, queues, taskCount);
+        scoringData.rebuildAssignmentLoads(assignments, topology);
+        GpuRoutingExpectScoresWithoutMasks(view, analysis, assignments, indices, topology, reachability, scoringData, queues, taskCount);
+        EXPECT_GT(scratch.memoryStats().reservedBytes, 0u);
+        EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
     }
 }
 
@@ -1287,37 +1416,47 @@ void VerifyGpuRouting_RoutesOptedInWorkAcrossSameClassPhysicalQueues(){
     Array<GpuPhysicalQueueInfo, 2> queues = Array<GpuPhysicalQueueInfo, 2>();
     queues[0u] = GraphicsQueue();
     queues[1u] = secondaryGraphicsQueue;
-    const GpuPhysicalQueueTopology topology = MakeGpuRoutingTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
 
-    native(in assignments, in compiledPlan, in producer, in consumer, in queues){
-        const Core::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
-        const Core::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(consumer);
-        ASSERT_NE(producerAssignment, nullptr);
-        ASSERT_NE(consumerAssignment, nullptr);
-        EXPECT_EQ(producerAssignment->queue, queues[0u].id);
-        EXPECT_EQ(consumerAssignment->queue, queues[1u].id);
+    const Optional<GpuTaskQueueAssignment> producerAssignmentOpt = FindQueueAssignment(assignments, producer);
+    const Optional<GpuTaskQueueAssignment> consumerAssignmentOpt = FindQueueAssignment(assignments, consumer);
+    ASSERT_TRUE(producerAssignmentOpt.has_value());
+    ASSERT_TRUE(consumerAssignmentOpt.has_value());
+    EXPECT_EQ(producerAssignmentOpt.value().queue, queues[0u].id);
+    EXPECT_EQ(consumerAssignmentOpt.value().queue, queues[1u].id);
 
-        const Core::GpuSubmissionPacketId producerPacket = compiledPlan.packetForTask(producer);
-        const Core::GpuSubmissionPacketId consumerPacket = compiledPlan.packetForTask(consumer);
-        const Core::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(producer).plan;
-        const Core::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(consumer).plan;
-        ASSERT_TRUE(producerPacket.valid());
-        ASSERT_TRUE(consumerPacket.valid());
-        ASSERT_NE(compiledProducer, nullptr);
-        ASSERT_NE(compiledConsumer, nullptr);
-        EXPECT_NE(compiledPlan.packet(producerPacket).plan->queue, compiledPlan.packet(consumerPacket).plan->queue);
-        ASSERT_EQ(compiledPlan.packet(consumerPacket).plan->dependencyCount, 1u);
-        EXPECT_EQ(compiledPlan.packet(consumerPacket).dependencies[0u].producer, producerPacket);
-        ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
-        EXPECT_EQ(compiledProducer->epilogueBarrierCount, 0u);
-        ASSERT_EQ(compiledConsumer->prologueBarrierCount, 1u);
-        EXPECT_EQ(compiledPlan.findTask(consumer).prologueBarriers[0u].type, Core::GpuCompiledBarrierType::BufferTransition);
-    }
+    const GpuSubmissionPacketId producerPacket = compiledPlan.packetForTask(producer);
+    const GpuSubmissionPacketId consumerPacket = compiledPlan.packetForTask(consumer);
+    const GpuCompiledTaskView compiledProducerView = compiledPlan.findTask(producer);
+    const GpuCompiledTaskView compiledConsumerView = compiledPlan.findTask(consumer);
+    const Optional<GpuCompiledTask> compiledProducerOpt = TaskPlan(compiledProducerView);
+    const Optional<GpuCompiledTask> compiledConsumerOpt = TaskPlan(compiledConsumerView);
+    ASSERT_TRUE(producerPacket.valid());
+    ASSERT_TRUE(consumerPacket.valid());
+    ASSERT_TRUE(compiledProducerOpt.has_value());
+    ASSERT_TRUE(compiledConsumerOpt.has_value());
+    const GpuCompiledPacketView producerPacketView = compiledPlan.packet(producerPacket);
+    const GpuCompiledPacketView consumerPacketView = compiledPlan.packet(consumerPacket);
+    const Optional<GpuSubmissionPacket> producerPacketPlanOpt = PacketPlan(producerPacketView);
+    const Optional<GpuSubmissionPacket> consumerPacketPlanOpt = PacketPlan(consumerPacketView);
+    ASSERT_TRUE(producerPacketPlanOpt.has_value());
+    ASSERT_TRUE(consumerPacketPlanOpt.has_value());
+    EXPECT_NE(producerPacketPlanOpt.value().queue, consumerPacketPlanOpt.value().queue);
+    ASSERT_EQ(consumerPacketPlanOpt.value().dependencyCount, 1u);
+    const Span<GpuPacketDependency> consumerPacketDeps = PacketDependencies(consumerPacketView);
+    ASSERT_EQ(consumerPacketDeps.size(), 1u);
+    EXPECT_EQ(consumerPacketDeps[0u].producer, producerPacket);
+    ASSERT_EQ(compiledConsumerOpt.value().prologueStateSeedCount, 1u);
+    EXPECT_EQ(compiledProducerOpt.value().epilogueBarrierCount, 0u);
+    ASSERT_EQ(compiledConsumerOpt.value().prologueBarrierCount, 1u);
+    const Span<GpuCompiledBarrier> consumerPrologue = PrologueBarriers(compiledConsumerView);
+    ASSERT_EQ(consumerPrologue.size(), 1u);
+    EXPECT_EQ(consumerPrologue[0u].type, GpuCompiledBarrierType::BufferTransition);
 }
 
 void VerifyGpuRouting_PreservesLatestDirectDependencyRouteAcrossIncomingAdjacencyOrder(){
@@ -1382,7 +1521,7 @@ void VerifyGpuRouting_PreservesLatestDirectDependencyRouteAcrossIncomingAdjacenc
     Array<GpuPhysicalQueueInfo, 2> queues = Array<GpuPhysicalQueueInfo, 2>();
     queues[0u] = GraphicsQueue();
     queues[1u] = auxiliaryGraphicsQueue;
-    const GpuPhysicalQueueTopology topology = MakeGpuRoutingTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
     ASSERT_EQ(analysis.topologicalOrder().size(), 3u);
@@ -1396,18 +1535,16 @@ void VerifyGpuRouting_PreservesLatestDirectDependencyRouteAcrossIncomingAdjacenc
 
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology));
-    native(in assignments, in first, in second, in consumer, in queues, in auxiliaryGraphicsQueue){
-        const Core::GpuTaskQueueAssignment* const firstAssignment = assignments.find(first);
-        const Core::GpuTaskQueueAssignment* const secondAssignment = assignments.find(second);
-        const Core::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(consumer);
-        ASSERT_NE(firstAssignment, nullptr);
-        ASSERT_NE(secondAssignment, nullptr);
-        ASSERT_NE(consumerAssignment, nullptr);
-        EXPECT_EQ(firstAssignment->queue, queues[0u].id);
-        EXPECT_EQ(secondAssignment->queue, auxiliaryGraphicsQueue.id);
-        EXPECT_EQ(consumerAssignment->queue, auxiliaryGraphicsQueue.id);
-        EXPECT_TRUE(consumerAssignment->modifiers & Core::GpuTaskQueueAssignmentModifier::DirectDependencyAffinity);
-    }
+    const Optional<GpuTaskQueueAssignment> firstAssignmentOpt = FindQueueAssignment(assignments, first);
+    const Optional<GpuTaskQueueAssignment> secondAssignmentOpt = FindQueueAssignment(assignments, second);
+    const Optional<GpuTaskQueueAssignment> consumerAssignmentOpt = FindQueueAssignment(assignments, consumer);
+    ASSERT_TRUE(firstAssignmentOpt.has_value());
+    ASSERT_TRUE(secondAssignmentOpt.has_value());
+    ASSERT_TRUE(consumerAssignmentOpt.has_value());
+    EXPECT_EQ(firstAssignmentOpt.value().queue, queues[0u].id);
+    EXPECT_EQ(secondAssignmentOpt.value().queue, auxiliaryGraphicsQueue.id);
+    EXPECT_EQ(consumerAssignmentOpt.value().queue, auxiliaryGraphicsQueue.id);
+    EXPECT_NE(cast<u8>(consumerAssignmentOpt.value().modifiers & GpuTaskQueueAssignmentModifier::DirectDependencyAffinity), 0u);
 }
 
 void VerifyGpuRouting_RetainsSameFamilyRoutingWithoutCrossFamilyOptIn(){
@@ -1455,20 +1592,18 @@ void VerifyGpuRouting_RetainsSameFamilyRoutingWithoutCrossFamilyOptIn(){
     Array<GpuPhysicalQueueInfo, 2> queues = Array<GpuPhysicalQueueInfo, 2>();
     queues[0u] = GraphicsQueue();
     queues[1u] = secondaryGraphicsQueue;
-    const GpuPhysicalQueueTopology topology = MakeGpuRoutingTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
     ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology));
 
-    native(in assignments, in first, in second, in queues){
-        const Core::GpuTaskQueueAssignment* const firstAssignment = assignments.find(first);
-        const Core::GpuTaskQueueAssignment* const secondAssignment = assignments.find(second);
-        ASSERT_NE(firstAssignment, nullptr);
-        ASSERT_NE(secondAssignment, nullptr);
-        EXPECT_EQ(firstAssignment->queue, queues[0u].id);
-        EXPECT_EQ(secondAssignment->queue, queues[0u].id);
-    }
+    const Optional<GpuTaskQueueAssignment> firstAssignmentOpt = FindQueueAssignment(assignments, first);
+    const Optional<GpuTaskQueueAssignment> secondAssignmentOpt = FindQueueAssignment(assignments, second);
+    ASSERT_TRUE(firstAssignmentOpt.has_value());
+    ASSERT_TRUE(secondAssignmentOpt.has_value());
+    EXPECT_EQ(firstAssignmentOpt.value().queue, queues[0u].id);
+    EXPECT_EQ(secondAssignmentOpt.value().queue, queues[0u].id);
 }
 
 void VerifyGpuRouting_RoutesCrossFamilySameClassConcurrentGraphicsResourceWithoutOwnershipHandoff(){
@@ -1534,29 +1669,31 @@ void VerifyGpuRouting_RoutesCrossFamilySameClassConcurrentGraphicsResourceWithou
     Array<GpuPhysicalQueueInfo, 2> queues = Array<GpuPhysicalQueueInfo, 2>();
     queues[0u] = GraphicsQueue();
     queues[1u] = auxiliaryGraphicsQueue;
-    const GpuPhysicalQueueTopology topology = MakeGpuRoutingTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
     const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
 
-    native(in assignments, in compiledPlan, in producer, in consumer, in queues, in auxiliaryGraphicsQueue){
-        const Core::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
-        const Core::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(consumer);
-        const Core::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(producer).plan;
-        const Core::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(consumer).plan;
-        ASSERT_NE(producerAssignment, nullptr);
-        ASSERT_NE(consumerAssignment, nullptr);
-        ASSERT_NE(compiledProducer, nullptr);
-        ASSERT_NE(compiledConsumer, nullptr);
-        EXPECT_EQ(producerAssignment->queue, queues[0u].id);
-        EXPECT_EQ(consumerAssignment->queue, auxiliaryGraphicsQueue.id);
-        EXPECT_EQ(compiledProducer->epilogueBarrierCount, 0u);
-        ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
-        ASSERT_EQ(compiledConsumer->prologueBarrierCount, 1u);
-        EXPECT_EQ(compiledPlan.findTask(consumer).prologueBarriers[0u].type, Core::GpuCompiledBarrierType::BufferTransition);
-    }
+    const Optional<GpuTaskQueueAssignment> producerAssignmentOpt = FindQueueAssignment(assignments, producer);
+    const Optional<GpuTaskQueueAssignment> consumerAssignmentOpt = FindQueueAssignment(assignments, consumer);
+    const GpuCompiledTaskView compiledProducerView = compiledPlan.findTask(producer);
+    const GpuCompiledTaskView compiledConsumerView = compiledPlan.findTask(consumer);
+    const Optional<GpuCompiledTask> compiledProducerOpt = TaskPlan(compiledProducerView);
+    const Optional<GpuCompiledTask> compiledConsumerOpt = TaskPlan(compiledConsumerView);
+    ASSERT_TRUE(producerAssignmentOpt.has_value());
+    ASSERT_TRUE(consumerAssignmentOpt.has_value());
+    ASSERT_TRUE(compiledProducerOpt.has_value());
+    ASSERT_TRUE(compiledConsumerOpt.has_value());
+    EXPECT_EQ(producerAssignmentOpt.value().queue, queues[0u].id);
+    EXPECT_EQ(consumerAssignmentOpt.value().queue, auxiliaryGraphicsQueue.id);
+    EXPECT_EQ(compiledProducerOpt.value().epilogueBarrierCount, 0u);
+    ASSERT_EQ(compiledConsumerOpt.value().prologueStateSeedCount, 1u);
+    ASSERT_EQ(compiledConsumerOpt.value().prologueBarrierCount, 1u);
+    const Span<GpuCompiledBarrier> consumerPrologue = PrologueBarriers(compiledConsumerView);
+    ASSERT_EQ(consumerPrologue.size(), 1u);
+    EXPECT_EQ(consumerPrologue[0u].type, GpuCompiledBarrierType::BufferTransition);
 }
 
 void VerifyGpuRouting_RoutesCrossFamilySameClassComputeAndTransferWorkWithOwnershipHandoffs(){
@@ -1762,7 +1899,7 @@ void VerifyGpuRouting_SameClassBalancingCountsMergedAndUnroutedPrefixCosts(){
     queues[0u] = secondAuxiliary;
     queues[1u] = GraphicsQueue();
     queues[2u] = firstAuxiliary;
-    const GpuPhysicalQueueTopology topology = MakeGpuRoutingTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
@@ -1791,17 +1928,14 @@ void VerifyGpuRouting_SameClassBalancingCountsMergedAndUnroutedPrefixCosts(){
         const GpuTaskId taskId = tasks[taskIndex];
         const u16 expectedQueueIndex = expectedQueueIndices[taskIndex];
         const i32 expectedQueueLoad = expectedQueueLoads[taskIndex];
-        native(in assignments, in taskId, in expectedQueueIndex, in expectedQueueLoad){
-            const Core::GpuTaskQueueAssignment* const assignment = assignments.find(taskId);
-            ASSERT_NE(assignment, nullptr);
-            EXPECT_EQ(assignment->queue.index, expectedQueueIndex);
-            EXPECT_EQ(assignment->score.queueLoad, expectedQueueLoad);
-        }
+        const Optional<GpuTaskQueueAssignment> assignmentOpt = FindQueueAssignment(assignments, taskId);
+        ASSERT_TRUE(assignmentOpt.has_value());
+        EXPECT_EQ(assignmentOpt.value().queue.index, expectedQueueIndex);
+        EXPECT_EQ(assignmentOpt.value().score.queueLoad, expectedQueueLoad);
     }
-    const GpuTaskId sixthTask = tasks[6u];
-    native(in assignments, in sixthTask){
-        EXPECT_TRUE(assignments.find(sixthTask)->modifiers & Core::GpuTaskQueueAssignmentModifier::DirectDependencyAffinity);
-    }
+    const Optional<GpuTaskQueueAssignment> sixthAssignmentOpt = FindQueueAssignment(assignments, tasks[6u]);
+    ASSERT_TRUE(sixthAssignmentOpt.has_value());
+    EXPECT_NE(cast<u8>(sixthAssignmentOpt.value().modifiers & GpuTaskQueueAssignmentModifier::DirectDependencyAffinity), 0u);
 }
 
 

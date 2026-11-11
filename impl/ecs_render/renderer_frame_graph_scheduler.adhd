@@ -70,7 +70,7 @@ b8 RendererFramePipeline::prepareDeferredGraphPacketEnvelopeMetrics(const Core::
         if(hasQueueOutput)
             continue;
 
-        const auto internalIdleScopeName = RendererGpuTimingScope::DeferredGraphQueueInternalIdle(packetView.plan->queue, scratchArena);
+        const auto internalIdleScopeName = ResolveDeferredGraphQueueInternalIdleScope(packetView.plan->queue.valid(), static_cast<u32>(packetView.plan->queue.index));
         if(!internalIdleScopeName || !*internalIdleScopeName)
             return false;
         queueOutputs.push_back(Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = packetView.plan->queue, .internalIdleScopeName = **internalIdleScopeName, });

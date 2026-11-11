@@ -2,44 +2,54 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/kernel/task_timing_telemetry_labels.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/kernel/frame_graph_runtime_statistics.adhd.h>
+class RendererGraphRuntimeLabel{
+    public b8 append(
+        in KernelGpuTaskGraphRuntimeStatistics deferredRuntimeStatistics,
+        in KernelGpuPhysicalQueueTopology runtimeQueueTopology,
+        in KernelFrameGraphPhysicalQueueRuntimeStatisticsSpan physicalQueueRuntimeStatistics,
+        in KernelGpuCompiledGraphReadView deferredCompiledPlan,
+        in KernelGpuRecordedGraph recordedGraph,
+        mut KernelDevice device,
+        mut String label
+    )const{
+        if(deferredRuntimeStatistics.valid()){
+            AppendGraphSummaryTelemetry(
+                deferredRuntimeStatistics.compile,
+                deferredRuntimeStatistics.recording,
+                deferredRuntimeStatistics.submission,
+                label
+            );
 
-#include <core/graphics/rhi/device.h>
+            // Borrows plan topology + packet slots under the serialization contract; never the registry (recompile can move the plan).
+            for(usize queueIndex = 0u; queueIndex < physicalQueueRuntimeStatistics.size(); ++queueIndex){
+                if(!AppendPhysicalQueueRuntimeTelemetryEntry(
+                    KernelTopologyQueueAt(runtimeQueueTopology, queueIndex),
+                    physicalQueueRuntimeStatistics[queueIndex],
+                    physicalQueueRuntimeStatistics[queueIndex].submission,
+                    physicalQueueRuntimeStatistics[queueIndex].compile,
+                    physicalQueueRuntimeStatistics[queueIndex].recording,
+                    deferredCompiledPlan,
+                    recordedGraph,
+                    device,
+                    label
+                ))
+                    return false;
+            }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-class RendererGraphRuntimeLabel final{
-public:
-    [[nodiscard]] static b8 Append(
-        const Core::GpuTaskGraphRuntimeStatistics& deferredRuntimeStatistics,
-        const Core::GpuPhysicalQueueTopology& runtimeQueueTopology,
-        Span<const Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics> physicalQueueRuntimeStatistics,
-        const Core::GpuCompiledGraph::ReadView& deferredCompiledPlan,
-        const Core::GpuRecordedGraph& recordedGraph,
-        Core::Device& device,
-        AString<Core::Alloc::GlobalArena>& label
-    );
-};
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+            const usize logicalOwnershipTransferCount = KernelLogicalOwnershipTransferCount(deferredCompiledPlan);
+            for(usize transferIndex = 0u; transferIndex < logicalOwnershipTransferCount; ++transferIndex)
+                AppendLogicalOwnershipTransferTelemetryEntry(transferIndex, KernelLogicalOwnershipTransferAt(deferredCompiledPlan, transferIndex), label);
+        }
+        else
+            label += s_RendererFrameTitle;
+        return true;
+    }
 }
 
 

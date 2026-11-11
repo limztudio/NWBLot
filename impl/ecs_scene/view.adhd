@@ -2,6 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_scene/components.adhd>
+#include <impl/ecs_scene/view_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -9,8 +16,7 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_scene/components.adhd.h>
-#include <impl/ecs_scene/view_types.adhd.h>
+#include <impl/ecs_scene/global.adhd.h>
 
 #include <core/ecs/world.h>
 
@@ -23,6 +29,8 @@ NWB_IMPL_SCENE_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+using World = Core::ECS::World;
 
 static_assert(IsStandardLayout_V<TransformComponent>, "TransformComponent must stay layout-stable for ECS storage");
 static_assert(IsTriviallyCopyable_V<TransformComponent>, "TransformComponent must stay cheap to move in dense ECS storage");
@@ -37,7 +45,7 @@ static_assert((offsetof(TransformComponent, scale) % alignof(Float4)) == 0u, "Tr
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE SIMDMatrix LoadEntityTransformMatrix(Core::ECS::World& world, const Core::ECS::EntityID entity)noexcept{
+[[nodiscard]] NWB_INLINE SIMDMatrix LoadEntityTransformMatrix(const Core::ECS::World& world, const Core::ECS::EntityID entity)noexcept{
     const TransformComponent* transform = world.tryGetComponent<TransformComponent>(entity);
     return transform ? LoadTransformMatrix(*transform) : MatrixIdentity();
 }

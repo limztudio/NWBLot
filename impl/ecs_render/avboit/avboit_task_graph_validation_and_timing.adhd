@@ -49,126 +49,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 AvboitComputeEmulationValidator::optionalTaskPrecedesInSharedPacket(const Core::GpuTaskId optionalTask, const Core::GpuTaskId consumerTask)const noexcept{
-    return !optionalTask.valid() || !m_compiledGraph.tasksSharePacket(optionalTask, consumerTask) || m_compiledGraph.taskPrecedesInSamePacket(optionalTask, consumerTask);
-}
-
-b8 AvboitComputeEmulationValidator::taskIsCompiled(const Core::GpuTaskId task)const noexcept{
-    return m_compiledGraph.findTask(task).valid();
-}
-
-b8 AvboitComputeEmulationValidator::taskBoundaryIsOrdered(const Core::GpuTaskId producerTask, const Core::GpuTaskId consumerTask)const noexcept{
-    if(!producerTask.valid() || !consumerTask.valid())
-        return false;
-    if(m_compiledGraph.tasksSharePacket(producerTask, consumerTask))
-        return m_compiledGraph.taskPrecedesInSamePacket(producerTask, consumerTask);
-    return m_compiledGraph.taskPrecedesOrSharesPacket(producerTask, consumerTask);
-}
-
-b8 AvboitComputeEmulationValidator::reusedGeometryIsOrdered(const Core::GpuTaskId source, const Core::GpuTaskId consumer, const Core::GpuTaskId localProducer, const usize sharedPhaseCount)const noexcept{
-    return !source.valid() || (CanOrderReusedAvboitGeometry(localProducer.valid(), sharedPhaseCount, source == consumer) && taskIsCompiled(source) && taskBoundaryIsOrdered(source, consumer));
-}
-
-b8 AvboitComputeEmulationValidator::computeEmulationMerged(const Core::GpuTaskId computeEmulationTask, const Core::GpuTaskId rasterTask, const Core::GpuTaskId streamTask, const Core::GpuPhysicalQueueInfo* const computeEmulationQueue, const Core::GpuPhysicalQueueInfo* const rasterQueue)const noexcept{
-    if(!computeEmulationTask.valid())
-        return true;
-    if(
-        !streamTask.valid()
-        || !computeEmulationQueue
-        || !rasterQueue
-        || computeEmulationQueue->queueClass != Core::CommandQueue::Graphics
-        || rasterQueue->queueClass != Core::CommandQueue::Graphics
-        || !m_compiledGraph.tasksSharePacket(computeEmulationTask, rasterTask)
-        || !m_compiledGraph.taskPrecedesOrSharesPacket(streamTask, computeEmulationTask)
-    )
-        return false;
-    const Array<Core::GpuTaskId, 2> producerRasterSequence = { computeEmulationTask, rasterTask, };
-    return m_compiledGraph.tasksFormContiguousPacketSequence(producerRasterSequence) && optionalTaskPrecedesInSharedPacket(streamTask, computeEmulationTask);
-}
-
-b8 AvboitComputeEmulationValidator::sharedComputeEmulationChainValid(const Span<const Core::GpuTaskId> sharedTasks, const usize phaseCount, const Core::GpuTaskId regularComputeEmulationTask, const Core::GpuTaskId rasterTask, const Core::GpuTaskId streamTask, const Core::GpuPhysicalQueueInfo* const sharedQueue, const Core::GpuPhysicalQueueInfo* const rasterQueue)const noexcept{
-    if(phaseCount == 0u){
-        for(const Core::GpuTaskId& task : sharedTasks){
-            if(task.valid())
-                return false;
-        }
-        return true;
-    }
-    if(
-        !HasValidAvboitSharedPhaseBounds(phaseCount, sharedTasks.size(), regularComputeEmulationTask.valid(), streamTask.valid())
-        || !sharedQueue
-        || !rasterQueue
-        || sharedQueue->queueClass != Core::CommandQueue::Graphics
-        || rasterQueue->queueClass != Core::CommandQueue::Graphics
-        || rasterTask != sharedTasks[phaseCount - 1u]
-        || !m_compiledGraph.taskPrecedesOrSharesPacket(streamTask, sharedTasks[0u])
-    )
-        return false;
-    for(usize phaseIndex = 0u; phaseIndex < phaseCount; ++phaseIndex){
-        const Core::GpuTaskId task = sharedTasks[phaseIndex];
-        if(!task.valid())
-            return false;
-        const Core::GpuPhysicalQueueInfo* const queue = m_compiledGraph.queueInfoForTask(task);
-        if(!queue || queue->queueClass != Core::CommandQueue::Graphics || !m_compiledGraph.tasksSharePacket(sharedTasks[0u], task))
-            return false;
-    }
-    for(usize phaseIndex = phaseCount; phaseIndex < sharedTasks.size(); ++phaseIndex){
-        if(sharedTasks[phaseIndex].valid())
-            return false;
-    }
-    return m_compiledGraph.tasksFormContiguousPacketSequence(sharedTasks.subspan(0u, phaseCount));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void RendererAvboitTaskGraphStageState::reset()noexcept{
-    m_clearFirstTask = {};
-    m_clearTask = {};
-    m_transparentCsgIntervalClearFirstTask = {};
-    m_transparentCsgIntervalClearTask = {};
-    m_preTask = {};
-    m_csgReceiverSpanTask = {};
-    m_csgIntervalCombineTask = {};
-    m_occupancyStreamTask = {};
-    m_occupancyComputeEmulationTask = {};
-    m_occupancyReusedGeometryProducer = {};
-    for(Core::GpuTaskId& task : m_occupancySharedComputeEmulationTasks)
-        task = {};
-    m_occupancySharedComputeEmulationTaskCount = 0u;
-    m_occupancyTask = {};
-    m_depthWarpTask = {};
-    m_extinctionStreamTask = {};
-    m_extinctionComputeEmulationTask = {};
-    m_extinctionReusedGeometryProducer = {};
-    for(Core::GpuTaskId& task : m_extinctionSharedComputeEmulationTasks)
-        task = {};
-    m_extinctionSharedComputeEmulationTaskCount = 0u;
-    m_extinctionTask = {};
-    m_integrationTask = {};
-    m_accumulationStreamTask = {};
-    m_accumulationComputeEmulationTask = {};
-    m_accumulationReusedGeometryProducer = {};
-    for(Core::GpuTaskId& task : m_accumulationSharedComputeEmulationTasks)
-        task = {};
-    m_accumulationSharedComputeEmulationTaskCount = 0u;
-    m_accumulationTask = {};
-    m_accumulationFinalizeTask = {};
-}
-
-RendererTaskGraphTransparencyStage RendererAvboitTaskGraphStageState::transparencyStage()const noexcept{
-    return RendererTaskGraphTransparencyStage(
-        m_preTask,
-        AvboitTaskGraphStageTopologyPolicy().selectTransparencyCompletionTask(m_accumulationFinalizeTask, m_occupancyTask),
-        m_depthWarpTask.valid()
-    );
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(const Core::GpuCompiledGraph::ReadView& compiledGraph, const b8 clearTargets, const b8 hasTransparentRenderers)const noexcept{
     const RendererAvboitTaskGraphStageState& taskGraphStage = m_taskGraphStage;
     const AvboitComputeEmulationValidator computeValidator(compiledGraph);
@@ -365,10 +245,9 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(c
     }();
     const b8 avboitAccumulationAllComputeEmulationMerged = avboitAccumulationComputeEmulationMerged && avboitAccumulationSharedComputeEmulationMerged;
     const RendererTaskGraphTransparencyStage stage = taskGraphStage.transparencyStage();
-    return {
-        .m_stage = stage,
-        .m_valid =
-            compiledGraph.valid()
+    return RendererAvboitTaskGraphValidation(
+        stage,
+        compiledGraph.valid()
             && stage.valid()
             && taskGraphStage.m_preTask.valid()
             && taskGraphStage.m_occupancyTask.valid()
@@ -400,8 +279,8 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(c
             && avboitPreQueue->queueClass == Core::CommandQueue::Graphics
             && avboitOccupancyQueue
             && avboitOccupancyQueue->queueClass == Core::CommandQueue::Graphics
-            && compiledGraph.taskPrecedesOrSharesPacket(stage.firstTask, stage.completionTask),
-    };
+            && compiledGraph.taskPrecedesOrSharesPacket(stage.firstTask, stage.completionTask)
+    );
 }
 
 
@@ -423,11 +302,18 @@ b8 RendererAvboitSystem::appendTaskGraphTimingTickets(
         bindingCount,
         bindings.size()
     );
-    if(!requiredBindingCount)
+    if(
+        !requiredBindingCount
+        || !timingTickets.m_pre
+        || !timingTickets.m_depthWarp
+        || !timingTickets.m_extinction
+        || !timingTickets.m_integration
+        || !timingTickets.m_accumulation
+    )
         return false;
 
-    const auto appendTimingTicket = [bindings, &bindingCount](const Core::GpuTaskId task, Core::GpuTimingSubmissionTicket& timingTicket)noexcept{
-        bindings[bindingCount++] = Core::GpuTaskGraphTaskTimingTicket{ .task = task, .timingTicket = &timingTicket, };
+    const auto appendTimingTicket = [bindings, &bindingCount](const Core::GpuTaskId task, Core::GpuTimingSubmissionTicket* const timingTicket)noexcept{
+        bindings[bindingCount++] = Core::GpuTaskGraphTaskTimingTicket{ .task = task, .timingTicket = timingTicket, };
     };
 
     appendTimingTicket(m_taskGraphStage.m_preTask, timingTickets.m_pre);
@@ -446,10 +332,10 @@ b8 RendererAvboitSystem::appendTaskGraphTimingTickets(
         appendTimingTicket(m_taskGraphStage.m_accumulationTask, timingTickets.m_accumulation);
     }
     else{
-        timingTickets.m_depthWarp.discard();
-        timingTickets.m_extinction.discard();
-        timingTickets.m_integration.discard();
-        timingTickets.m_accumulation.discard();
+        timingTickets.m_depthWarp->discard();
+        timingTickets.m_extinction->discard();
+        timingTickets.m_integration->discard();
+        timingTickets.m_accumulation->discard();
     }
     return true;
 }

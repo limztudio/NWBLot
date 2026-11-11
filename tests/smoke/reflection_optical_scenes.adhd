@@ -2,6 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_csg/shape_id.adhd>
+#include <impl/ecs_model/components.adhd>
+#include <impl/ecs_render/components.adhd>
 #include "scene_types.adhd"
 #include "presentation_types.adhd"
 #include "framebuffer_capture.adhd"
@@ -25,33 +28,17 @@ native{
 
 
 #include <impl/assets/graphics/reflection/frame_constants.h>
-#include <impl/ecs_csg/components.adhd.h>
-#include <impl/ecs_csg/shape_registry.adhd.h>
-#include <impl/ecs_render/module.adhd.h>
-#include <impl/ecs_render/reflection/statistics_types.adhd.h>
 #include <impl/ecs_render/reflection/task_graph_reflection.adhd.h>
-#include <impl/ecs_render/reflection/types.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/graphics/backend_selection/backend.h>
 #include <core/telemetry/frame_graph_contributor.h>
 
-#include <global/simd/constant.h>
-#include <global/simd/convert.h>
-#include <global/simd/frame.h>
-#include <global/simd/vector.h>
-
 namespace NWB::Tests::Smoke{
 using Core::ECS::EntityID;
 using Core::ECS::s_InvalidEntityId;
-using OpticalBoundaryModeEnum = Impl::OpticalBoundaryMode::Enum;
-using Impl::ReflectionStatistics;
-inline constexpr OpticalBoundaryModeEnum s_OpticalBoundaryClosedNested = Impl::OpticalBoundaryMode::ClosedNested;
-inline constexpr OpticalBoundaryModeEnum s_OpticalBoundaryClosedPriority = Impl::OpticalBoundaryMode::ClosedPriority;
-inline constexpr OpticalBoundaryModeEnum s_OpticalBoundaryUnspecified = Impl::OpticalBoundaryMode::Unspecified;
+using Impl::RendererTaskGraphDetail::ReflectionCsgHardwareSliceIdentity;
 inline constexpr u32 s_ReflectionTraceSliceRays = NWB_REFLECTION_TRACE_SLICE_RAYS;
-inline constexpr f32 s_ReflectionHalfPi = s_PIDIV2;
-inline constexpr f32 s_ReflectionPi = s_PI;
 };
 
 
@@ -63,6 +50,9 @@ inline constexpr f32 s_ReflectionPi = s_PI;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+const f32 s_ReflectionHalfPi = s_PIDIV2;
+const f32 s_ReflectionPi = s_PI;
 
 enum<u8> ReflectionFeedbackCase{
     Boundary,
@@ -133,6 +123,8 @@ const StringView s_OpticalMirroredCase = "optical_mirrored";
 const StringView s_OpticalUnspecifiedCase = "optical_unspecified";
 const StringView s_ReflectionOpticalInterface = "project/shaders/reflection_optical";
 
+const Name s_ReflectionSurfaceInterfaceName = "project/shaders/smoke_surface";
+const Name s_ReflectionOpticalInterfaceName = "project/shaders/reflection_optical";
 const Name s_ReflectionNameCsgGroupGapSubUlp = "smoke/reflection/csg_group_gap_sub_ulp";
 const Name s_ReflectionNameCsgGroupGap = "smoke/reflection/csg_group_gap";
 const Name s_ReflectionNameCsgSubUlp = "smoke/reflection/csg_sub_ulp";
@@ -173,20 +165,7 @@ class ReflectionOpticalCsgBuilder{
         in VectorSingle normalDistance
     ){
         AddStaticCsgMeshReceiver(receiver, group, affectOpaque, affectTransparent, this.m_world);
-        const f32x4 storedNormalDistance = f32x4(normalDistance);
-        EntityID cutterId = s_InvalidEntityId;
-        native(in group, in storedNormalDistance, mut world = this.m_world, mut cutterId){
-            auto cutterEntity = world.createEntity();
-            auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>();
-            cutter.receiverGroup = group;
-            cutter.shapeType = Name(Impl::s_CsgPlaneShapeName);
-            Impl::CsgPlaneShapeParameters parameters;
-            parameters.normalDistance = storedNormalDistance;
-            AssignCsgCutterParameters(parameters, cutter);
-            AssignCsgCutterTransform(VectorZero(), QuaternionIdentity(), cutter);
-            cutterId = cutterEntity.id();
-        }
-        return cutterId;
+        return CreateSmokeCsgPlaneCutter(group, s_CsgPlaneShapeName, true, f32x4(normalDistance), this.m_world);
     }
 
     public void addBox(
@@ -196,45 +175,22 @@ class ReflectionOpticalCsgBuilder{
         in VectorSingle center
     ){
         AddStaticCsgMeshReceiver(receiver, group, false, true, this.m_world);
-        const f32x4 storedHalfExtents = f32x4(halfExtents);
-        native(in group, in storedHalfExtents, in center, mut world = this.m_world){
-            auto cutterEntity = world.createEntity();
-            auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>();
-            cutter.receiverGroup = group;
-            cutter.shapeType = Name(Impl::s_CsgBoxShapeName);
-            Impl::CsgBoxShapeParameters parameters;
-            parameters.halfExtents = storedHalfExtents;
-            AssignCsgCutterParameters(parameters, cutter);
-            AssignCsgCutterTransform(center, QuaternionIdentity(), cutter);
-        }
+        CreateSmokeCsgBoxCutter(group, s_CsgBoxShapeName, true, f32x4(halfExtents), center, QuaternionIdentity(), this.m_world);
     }
 
     private mut World m_world;
 }
 
 b8 ApplyReflectionSurfaceParameters(in EntityID entity, in f32 f0, in f32 roughness, mut World world){
-    b8 applied = false;
-    native(in entity, in f0, in roughness, mut world, mut applied){
-        const Name surfaceInterface(s_SmokeSurfaceMaterialInterface);
-        const Half4U packedF0 = MakeHalf4U(f0, f0, f0, 0.0f);
-        const Half packedRoughness = ConvertFloatToHalf(roughness);
-        applied = Impl::SetMaterialMutableParameter(
-            world,
-            entity,
-            surfaceInterface,
-            s_ReflectionSpecularParameterPath,
-            Impl::MaterialLayoutFieldType::f16x3,
-            Impl::PackMaterialInstanceBytes(Span<const Half>(packedF0.raw, 3u))
-        ) && Impl::SetMaterialMutableParameter(
-            world,
-            entity,
-            surfaceInterface,
-            s_ReflectionRoughnessParameterPath,
-            Impl::MaterialLayoutFieldType::f16,
-            Impl::PackMaterialInstanceValue(packedRoughness)
-        );
-    }
-    return applied;
+    return SetSmokeSurfaceRoughnessF0(
+        entity,
+        s_ReflectionSurfaceInterfaceName,
+        s_ReflectionSpecularParameterPath,
+        s_ReflectionRoughnessParameterPath,
+        f0,
+        roughness,
+        world
+    );
 }
 
 EntityID CreateReflectionOpticalPanel(
@@ -256,9 +212,8 @@ EntityID CreateReflectionOpticalPanel(
     if(!entity.valid())
         return entity;
     const f32x4 verticalRot = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_ReflectionHalfPi, 0.0f, 0.0f, 0.0f)));
-    native(in entity, in verticalRot, mut world){
-        world.entity(entity).getComponent<Impl::Scene::TransformComponent>().rotation = verticalRot;
-    }
+    if(!SetSmokeEntityRotation(entity, verticalRot, world))
+        return s_InvalidEntityId;
     if(!ApplyReflectionSurfaceParameters(entity, f0, 0.0f, world))
         return s_InvalidEntityId;
     return entity;
@@ -280,7 +235,7 @@ EntityID CreateReflectionOpticalBoundary(
     in f32 ior,
     in VectorSingle transmission,
     mut World world,
-    in OpticalBoundaryModeEnum mode,
+    in OpticalBoundaryMode mode,
     in i32 priority,
     in f32 coverage,
     in b8 pane
@@ -299,32 +254,9 @@ EntityID CreateReflectionOpticalBoundary(
     );
     if(!entity.valid())
         return entity;
-    const f32x4 storedTransmission = f32x4(transmission);
-    b8 configured = false;
-    native(in entity, in mode, in priority, in ior, in storedTransmission, mut world, mut configured){
-        auto& renderer = world.entity(entity).getComponent<Impl::RendererComponent>();
-        renderer.opticalBoundaryMode = mode;
-        renderer.opticalMediumPriority = priority;
-        const Name opticalInterface(s_ReflectionOpticalInterface);
-        const Half packedIor = ConvertFloatToHalf(ior);
-        const Half4U packedTransmission = MakeHalf4U(storedTransmission.x, storedTransmission.y, storedTransmission.z, 0.0f);
-        configured = Impl::SetMaterialMutableParameter(
-            world,
-            entity,
-            opticalInterface,
-            "runtime.ior",
-            Impl::MaterialLayoutFieldType::f16,
-            Impl::PackMaterialInstanceValue(packedIor)
-        ) && Impl::SetMaterialMutableParameter(
-            world,
-            entity,
-            opticalInterface,
-            "runtime.unit_transmission",
-            Impl::MaterialLayoutFieldType::f16x3,
-            Impl::PackMaterialInstanceBytes(Span<const Half>(packedTransmission.raw, 3u))
-        );
-    }
-    if(!configured)
+    if(!ConfigureSmokeOpticalBoundary(entity, mode, priority, world))
+        return s_InvalidEntityId;
+    if(!SetSmokeOpticalMaterialParameters(entity, s_ReflectionOpticalInterfaceName, ior, f32x4(transmission), world))
         return s_InvalidEntityId;
     return entity;
 }
@@ -336,7 +268,7 @@ EntityID CreateReflectionOpticalBoundary(
     in f32 ior,
     in VectorSingle transmission,
     mut World world,
-    in OpticalBoundaryModeEnum mode
+    in OpticalBoundaryMode mode
 ){
     return CreateReflectionOpticalBoundary(mesh, position, scale, ior, transmission, world, mode, 0, 0.0f, false);
 }
@@ -349,7 +281,7 @@ EntityID CreateReflectionOpticalBoundary(
     in VectorSingle transmission,
     mut World world
 ){
-    return CreateReflectionOpticalBoundary(mesh, position, scale, ior, transmission, world, s_OpticalBoundaryClosedNested, 0, 0.0f, false);
+    return CreateReflectionOpticalBoundary(mesh, position, scale, ior, transmission, world, OpticalBoundaryMode::ClosedNested, 0, 0.0f, false);
 }
 
 EntityID CreateReflectionOpticalBox(
@@ -358,7 +290,7 @@ EntityID CreateReflectionOpticalBox(
     in f32 ior,
     in VectorSingle transmission,
     mut World world,
-    in OpticalBoundaryModeEnum mode,
+    in OpticalBoundaryMode mode,
     in i32 priority,
     in f32 xyScale
 ){
@@ -382,7 +314,7 @@ EntityID CreateReflectionOpticalBox(
     in f32 ior,
     in VectorSingle transmission,
     mut World world,
-    in OpticalBoundaryModeEnum mode,
+    in OpticalBoundaryMode mode,
     in i32 priority
 ){
     return CreateReflectionOpticalBox(centerZ, thickness, ior, transmission, world, mode, priority, 1.0f);
@@ -394,7 +326,7 @@ EntityID CreateReflectionOpticalBox(
     in f32 ior,
     in VectorSingle transmission,
     mut World world,
-    in OpticalBoundaryModeEnum mode
+    in OpticalBoundaryMode mode
 ){
     return CreateReflectionOpticalBox(centerZ, thickness, ior, transmission, world, mode, 0, 1.0f);
 }
@@ -406,7 +338,7 @@ EntityID CreateReflectionOpticalBox(
     in VectorSingle transmission,
     mut World world
 ){
-    return CreateReflectionOpticalBox(centerZ, thickness, ior, transmission, world, s_OpticalBoundaryClosedNested, 0, 1.0f);
+    return CreateReflectionOpticalBox(centerZ, thickness, ior, transmission, world, OpticalBoundaryMode::ClosedNested, 0, 1.0f);
 }
 
 Expected<OpticalReceiverEntities> CreateReflectionDenseReceiver(in b8 csg, mut World world){
@@ -440,7 +372,7 @@ Expected<OpticalReceiverEntities> CreateReflectionCsgBoundaryReceiver(
     in b8 cavity,
     in f32 ior,
     in VectorSingle transmission,
-    in OpticalBoundaryModeEnum mode,
+    in OpticalBoundaryMode mode,
     mut World world
 ){
     // The cavity case starts the reflected ray inside the removed receiver volume.
@@ -479,7 +411,7 @@ b8 CreateReflectionOpticalObjects(in StringView caseName, mut World world){
     if(caseName == "optical_csg_reference")
         return CreateReflectionOpticalBox(-9.5f, 1.0f, 1.5f, tintedTrans, world).valid();
     if(caseName == "optical_unspecified_reference")
-        return CreateReflectionOpticalBox(-9.5f, 1.0f, 1.0f, clearTrans, world, s_OpticalBoundaryUnspecified).valid();
+        return CreateReflectionOpticalBox(-9.5f, 1.0f, 1.0f, clearTrans, world, OpticalBoundaryMode::Unspecified).valid();
 
     if(caseName == s_OpticalGroupEntryCase || caseName == "optical_csg_group_entry"){
         // The cutter replaces the final grouped entry with a cap while the preceding positive thin solid remains retained.
@@ -556,11 +488,11 @@ b8 CreateReflectionOpticalObjects(in StringView caseName, mut World world){
             mesh = s_ReflectionOpticalCsgOpenTailMesh;
         f32 ior = 1.5f;
         VectorSingle transmission = tintedTrans;
-        OpticalBoundaryModeEnum mode = s_OpticalBoundaryClosedNested;
+        OpticalBoundaryMode mode = OpticalBoundaryMode::ClosedNested;
         if(unspecifiedCap){
             ior = 1.0f;
             transmission = clearTrans;
-            mode = s_OpticalBoundaryUnspecified;
+            mode = OpticalBoundaryMode::Unspecified;
         }
         return CreateReflectionCsgBoundaryReceiver(mesh, caseName == s_OpticalCsgCavityCase, ior, transmission, mode, world).has_value();
     }
@@ -580,7 +512,7 @@ b8 CreateReflectionOpticalObjects(in StringView caseName, mut World world){
             return false;
         if(caseName == s_OpticalInsideCase)
             return true;
-        return CreateReflectionOpticalBox(-3.0f, 10.0f, 1.33f, clearTrans, world, s_OpticalBoundaryClosedNested, 0, 0.7f).valid();
+        return CreateReflectionOpticalBox(-3.0f, 10.0f, 1.33f, clearTrans, world, OpticalBoundaryMode::ClosedNested, 0, 0.7f).valid();
     }
 
     if(caseName == "optical_same_mesh")
@@ -619,10 +551,7 @@ b8 CreateReflectionOpticalObjects(in StringView caseName, mut World world){
         if(!entity.valid())
             return false;
         const f32x4 torusRot = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_ReflectionHalfPi, 0.0f, 0.0f, 0.0f)));
-        native(in entity, in torusRot, mut world){
-            world.entity(entity).getComponent<Impl::Scene::TransformComponent>().rotation = torusRot;
-        }
-        return true;
+        return SetSmokeEntityRotation(entity, torusRot, world);
     }
 
     if(caseName == "optical_priority_tie_a" || caseName == s_OpticalPriorityTieBCase){
@@ -639,7 +568,7 @@ b8 CreateReflectionOpticalObjects(in StringView caseName, mut World world){
                 ior = 1.5f;
                 transmission = tintedTrans;
             }
-            if(!CreateReflectionOpticalBox(centerZ, 2.0f, ior, transmission, world, s_OpticalBoundaryClosedPriority, 10).valid())
+            if(!CreateReflectionOpticalBox(centerZ, 2.0f, ior, transmission, world, OpticalBoundaryMode::ClosedPriority, 10).valid())
                 return false;
         }
         return true;
@@ -653,10 +582,10 @@ b8 CreateReflectionOpticalObjects(in StringView caseName, mut World world){
             firstPriority = 20;
             secondPriority = 10;
         }
-        OpticalBoundaryModeEnum secondMode = s_OpticalBoundaryClosedPriority;
+        OpticalBoundaryMode secondMode = OpticalBoundaryMode::ClosedPriority;
         if(caseName == s_OpticalMixedCase)
-            secondMode = s_OpticalBoundaryClosedNested;
-        return CreateReflectionOpticalBox(-8.5f, 2.0f, 1.5f, tintedTrans, world, s_OpticalBoundaryClosedPriority, firstPriority).valid()
+            secondMode = OpticalBoundaryMode::ClosedNested;
+        return CreateReflectionOpticalBox(-8.5f, 2.0f, 1.5f, tintedTrans, world, OpticalBoundaryMode::ClosedPriority, firstPriority).valid()
             && CreateReflectionOpticalBox(-9.5f, 2.0f, 1.33f, VectorSingle(1.0f, 0.7f, 0.45f, 0.0f), world, secondMode, secondPriority).valid();
     }
 
@@ -680,7 +609,7 @@ b8 CreateReflectionOpticalObjects(in StringView caseName, mut World world){
             VectorSingle transmission = VectorSingle(1.0f, 0.7f, 0.45f, 0.0f);
             if(index == 0u)
                 transmission = tintedTrans;
-            if(!CreateReflectionOpticalBox(-9.0f, thickness, ior, transmission, world, s_OpticalBoundaryClosedNested, 0, opacity).valid())
+            if(!CreateReflectionOpticalBox(-9.0f, thickness, ior, transmission, world, OpticalBoundaryMode::ClosedNested, 0, opacity).valid())
                 return false;
         }
         return true;
@@ -709,16 +638,15 @@ b8 CreateReflectionOpticalObjects(in StringView caseName, mut World world){
                 1.0f,
                 clearTrans,
                 world,
-                s_OpticalBoundaryUnspecified,
+                OpticalBoundaryMode::Unspecified,
                 0,
                 cast<f32>(index) * 0.5f,
                 true
             );
             if(!entity.valid())
                 return false;
-            native(in entity, in paneRot, mut world){
-                world.entity(entity).getComponent<Impl::Scene::TransformComponent>().rotation = paneRot;
-            }
+            if(!SetSmokeEntityRotation(entity, paneRot, world))
+                return false;
         }
         return true;
     }
@@ -742,9 +670,9 @@ b8 CreateReflectionOpticalObjects(in StringView caseName, mut World world){
     const b8 mirrored = caseName == s_OpticalMirroredCase;
     const b8 tilted = caseName == s_OpticalTiltedCase;
     const f32x4 tiltedRot = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, 0.2f, 0.0f, 0.0f)));
-    OpticalBoundaryModeEnum boxMode = s_OpticalBoundaryClosedNested;
+    OpticalBoundaryMode boxMode = OpticalBoundaryMode::ClosedNested;
     if(caseName == s_OpticalUnspecifiedCase)
-        boxMode = s_OpticalBoundaryUnspecified;
+        boxMode = OpticalBoundaryMode::Unspecified;
 
     for(u32 index = 0u; index < count; ++index){
         const b8 sameInputs = caseName == s_OpticalDuplicateIdenticalCase;
@@ -760,18 +688,19 @@ b8 CreateReflectionOpticalObjects(in StringView caseName, mut World world){
         const EntityID entity = CreateReflectionOpticalBox(-9.0f, 2.0f, 1.5f, transmission, world, boxMode);
         if(!entity.valid())
             return false;
-        native(in entity, in mirrored, in tilted, in tiltedRot, in duplicate, in sameInputs, in selected, mut world){
-            auto& transform = world.entity(entity).getComponent<Impl::Scene::TransformComponent>();
-            if(mirrored)
-                transform.scale.x = -24.0f;
-            if(tilted)
-                transform.rotation = tiltedRot;
-            if(duplicate){
-                auto& renderer = world.entity(entity).getComponent<Impl::RendererComponent>();
-                renderer.opticalVolumeCoincidence = sameInputs ? Impl::OpticalVolumeCoincidence::IdenticalMaterial : Impl::OpticalVolumeCoincidence::SharedGroup;
-                renderer.opticalVolumeGroup = s_SmokeNameSmokeReflectionOpticalDuplicate;
-                renderer.opticalVolumePriority = selected ? 20 : 10;
-            }
+        if(mirrored && !SetSmokeEntityScaleX(entity, -24.0f, world))
+            return false;
+        if(tilted && !SetSmokeEntityRotation(entity, tiltedRot, world))
+            return false;
+        if(duplicate){
+            OpticalVolumeCoincidence coincidence = OpticalVolumeCoincidence::SharedGroup;
+            if(sameInputs)
+                coincidence = OpticalVolumeCoincidence::IdenticalMaterial;
+            i32 priority = 10;
+            if(selected)
+                priority = 20;
+            if(!ConfigureSmokeOpticalVolume(entity, s_SmokeNameSmokeReflectionOpticalDuplicate, priority, coincidence, world))
+                return false;
         }
     }
     return true;
@@ -785,7 +714,7 @@ Expected<ReflectionCsgContextEntities> CreateReflectionCsgContextScene(mut World
         false,
         1.5f,
         VectorSingle(s_ReflectionOpticalTintedTransmission),
-        s_OpticalBoundaryClosedNested,
+        OpticalBoundaryMode::ClosedNested,
         world
     );
     if(!small.has_value())
@@ -844,6 +773,22 @@ void ReportReflectionSlicePackets(
     if(csg)
         expectedSlices = (rayCapacity + s_ReflectionTraceSliceRays - 1u) / s_ReflectionTraceSliceRays;
 
+    Vector<Name> sliceIdentities;
+    sliceIdentities.reserve(expectedSlices);
+    for(u32 slice = 0u; slice < expectedSlices; ++slice){
+        if(!csg){
+            sliceIdentities.push_back(s_SmokeTimingNameRenderReflectionHardware);
+            continue;
+        }
+        const Expected<Name, ErrorCode> sliceIdentity = ReflectionCsgHardwareSliceIdentity(slice);
+        if(!sliceIdentity.has_value()){
+            const String sliceIdentityError = StringFormat("{}", sliceIdentity.error().message());
+            error("Reflection CSG context probe: failed to format hardware slice identity: {}", StringView(sliceIdentityError));
+            return;
+        }
+        sliceIdentities.push_back(sliceIdentity.value());
+    }
+
     u64 planGeneration = 0u;
     u64 deviceGeneration = 0u;
     u32 graphicsQueueIndex = 0u;
@@ -855,13 +800,11 @@ void ReportReflectionSlicePackets(
     u32 acceptedPackets = 0u;
     u32 singleTaskPackets = 0u;
     u32 graphicsPackets = 0u;
-    b8 sliceIdentityFailed = false;
-    String sliceIdentityError;
 
     native(
         in sourceFrame,
-        in csg,
         in expectedSlices,
+        in sliceIdentities,
         mut context,
         mut renderer,
         mut planGeneration,
@@ -874,9 +817,7 @@ void ReportReflectionSlicePackets(
         mut uniquePacketCount,
         mut acceptedPackets,
         mut singleTaskPackets,
-        mut graphicsPackets,
-        mut sliceIdentityFailed,
-        mut sliceIdentityError
+        mut graphicsPackets
     ){
         Core::Telemetry::FrameGraphNodeDescs nodes(context.objectArena);
         Core::Telemetry::FrameGraphEdgeDescs edges(context.objectArena);
@@ -902,73 +843,49 @@ void ReportReflectionSlicePackets(
 
         Vector<u32, Core::Alloc::ScratchArena> uniquePackets(scratchArena);
         uniquePackets.reserve(expectedSlices);
-        Vector<Name, Core::Alloc::ScratchArena> sliceIdentities(scratchArena);
-        sliceIdentities.reserve(expectedSlices);
-        for(u32 slice = 0u; slice < expectedSlices; ++slice){
-            if(!csg){
-                sliceIdentities.push_back(s_SmokeTimingNameRenderReflectionHardware);
+        Vector<u8, Core::Alloc::ScratchArena> observedSlices(scratchArena);
+        observedSlices.resize(expectedSlices, 0u);
+        for(const auto& node : nodes){
+            if(node.label != "Reflection Hardware Resolve")
                 continue;
-            }
-            const auto sliceIdentity = Impl::RendererTaskGraphDetail::ReflectionCsgHardwareSliceIdentity(slice);
-            if(!sliceIdentity){
-                sliceIdentityFailed = true;
-                const auto msg = sliceIdentity.error().message();
-                sliceIdentityError.assign(msg.data(), msg.size());
-                break;
-            }
-            sliceIdentities.push_back(*sliceIdentity);
-        }
-
-        if(!sliceIdentityFailed){
-            Vector<u8, Core::Alloc::ScratchArena> observedSlices(scratchArena);
-            observedSlices.resize(expectedSlices, 0u);
-            for(const auto& node : nodes){
-                if(node.label != "Reflection Hardware Resolve")
-                    continue;
-                ++hardwareNodes;
-                u32 sliceIndex = expectedSlices;
-                for(u32 index = 0u; index < expectedSlices; ++index){
-                    if(node.name == sliceIdentities[index]){
-                        sliceIndex = index;
-                        break;
-                    }
-                }
-                if(sliceIndex == expectedSlices || observedSlices[sliceIndex] != 0u)
-                    continue;
-                observedSlices[sliceIndex] = 1u;
-                ++indexedSlices;
-                if(!runtimePresent || !node.compiledTask.present || node.compiledTask.planGeneration != planGeneration)
-                    continue;
-                ++compiledNodes;
-                b8 unique = true;
-                for(const u32 packetIndex : uniquePackets){
-                    if(packetIndex == node.compiledTask.packetIndex){
-                        unique = false;
-                        break;
-                    }
-                }
-                if(unique)
-                    uniquePackets.push_back(node.compiledTask.packetIndex);
-                if(!node.queueAssignment.present || !node.queueAssignment.acceptedQueue.valid() || node.queueAssignment.acceptance == Core::Telemetry::FrameGraphQueueAssignmentAcceptance::NotAccepted)
-                    continue;
-                for(const auto& packet : packetStatistics){
-                    if(packet.packetIndex != node.compiledTask.packetIndex || packet.packetGeneration != planGeneration || packet.queue != node.queueAssignment.acceptedQueue || packet.commandListCount == 0u || packet.recoverySubmission)
-                        continue;
-                    ++acceptedPackets;
-                    if(packet.taskCount == 1u)
-                        ++singleTaskPackets;
-                    if(packet.queue.index == primaryGraphics.index && packet.queue.deviceGeneration == primaryGraphics.deviceGeneration)
-                        ++graphicsPackets;
+            ++hardwareNodes;
+            u32 sliceIndex = expectedSlices;
+            for(u32 index = 0u; index < expectedSlices; ++index){
+                if(node.name == sliceIdentities[index]){
+                    sliceIndex = index;
                     break;
                 }
             }
-            uniquePacketCount = uniquePackets.size();
+            if(sliceIndex == expectedSlices || observedSlices[sliceIndex] != 0u)
+                continue;
+            observedSlices[sliceIndex] = 1u;
+            ++indexedSlices;
+            if(!runtimePresent || !node.compiledTask.present || node.compiledTask.planGeneration != planGeneration)
+                continue;
+            ++compiledNodes;
+            b8 unique = true;
+            for(const u32 packetIndex : uniquePackets){
+                if(packetIndex == node.compiledTask.packetIndex){
+                    unique = false;
+                    break;
+                }
+            }
+            if(unique)
+                uniquePackets.push_back(node.compiledTask.packetIndex);
+            if(!node.queueAssignment.present || !node.queueAssignment.acceptedQueue.valid() || node.queueAssignment.acceptance == Core::Telemetry::FrameGraphQueueAssignmentAcceptance::NotAccepted)
+                continue;
+            for(const auto& packet : packetStatistics){
+                if(packet.packetIndex != node.compiledTask.packetIndex || packet.packetGeneration != planGeneration || packet.queue != node.queueAssignment.acceptedQueue || packet.commandListCount == 0u || packet.recoverySubmission)
+                    continue;
+                ++acceptedPackets;
+                if(packet.taskCount == 1u)
+                    ++singleTaskPackets;
+                if(packet.queue.index == primaryGraphics.index && packet.queue.deviceGeneration == primaryGraphics.deviceGeneration)
+                    ++graphicsPackets;
+                break;
+            }
         }
-    }
-
-    if(sliceIdentityFailed){
-        error("Reflection CSG context probe: failed to format hardware slice identity: {}", StringView(sliceIdentityError));
-        return;
+        uniquePacketCount = uniquePackets.size();
     }
 
     [essential] info(
@@ -992,59 +909,42 @@ void ReportReflectionSlicePackets(
 
 // Synchronized probe for reflection CSG captures and packet receipts.
 class ReflectionCsgContextProbe{
-    public ReflectionCsgContextProbe(
-        in u32 rayCapacity,
-        mut ProjectRuntimeContext context,
-        mut World world,
-        mut RendererSystem renderer
-    ){
+    public ReflectionCsgContextProbe(mut ProjectRuntimeContext context){
         this.m_context = context;
-        this.m_world = world;
-        this.m_renderer = renderer;
-        this.m_rayCapacity = rayCapacity;
+    }
+
+    public void stop(){
+        StopAndResetSmokeFramebufferCapture(this.m_capture);
     }
 
     public b8 shouldCapture(in u64 sourceFrame)const{
         return sourceFrame == this.m_targetSource;
     }
 
-    public b8 create(){
+    public b8 shouldCaptureFrame(in u64 sourceFrame)const{
+        return this.shouldCapture(sourceFrame);
+    }
+
+    public b8 create(in u32 rayCapacity, mut World world){
+        this.m_rayCapacity = rayCapacity;
         const Expected<String> output = ReadSmokeEnvironmentString("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
         if(!output.has_value()){
             error("ReflectionCsgContext: application framebuffer capture is required");
             return false;
         }
-        const Expected<ReflectionCsgContextEntities> scene = CreateReflectionCsgContextScene(this.m_world);
+        const Expected<ReflectionCsgContextEntities> scene = CreateReflectionCsgContextScene(world);
         if(!scene.has_value())
             return false;
 
-        FramebufferCaptureOptions options = FramebufferCaptureOptions();
-        native(mut options){
-            options.shouldCapture = +[](void* const owner, const u64 sourceFrame)noexcept -> b8{
-                return MakeNotNull(static_cast<ReflectionCsgContextProbe*>(owner))->shouldCapture(sourceFrame);
-            };
-            options.predicateContext = this;
-            options.requiredWidth = 960u;
-            options.requiredHeight = 720u;
-            options.quitWhenReady = false;
-        }
+        const FramebufferCaptureOptions options = MakeSmokeCaptureOptions(this, 960u, 720u, false);
         SmokeCaptureFactory captureFactory = SmokeCaptureFactory(this.m_context);
-        Expected<SmokeCaptureSeries> series = captureFactory.prepareSeries(StringView(output.value()), 5u, options);
-        if(!series.has_value())
+        if(!captureFactory.prepareSeriesInto(StringView(output.value()), 5u, options, this.m_capturePaths, this.m_capture))
             return false;
-        native(mut dstPaths = this.m_capturePaths, mut dstCapture = this.m_capture, mut series){
-            dstPaths = Move(series->paths);
-            dstCapture = Move(series->capture);
-        }
         this.m_entities = scene.value();
-        return this.beginPhase();
+        return this.beginPhase(world);
     }
 
-    public b8 create(mut ScratchArena scratchArena){
-        return this.create();
-    }
-
-    public b8 sampleSynchronizedFrame(in ReflectionStatistics statistics){
+    public b8 sampleSynchronizedFrame(in ReflectionStatistics statistics, mut World world, mut RendererSystem renderer){
         // Wait before advancing the world so latest-only diagnostic rows are not skipped.
         if(!this.m_context.graphics.waitForIdle()){
             error("ReflectionCsgContext: diagnostic frame synchronization failed");
@@ -1056,29 +956,19 @@ class ReflectionCsgContextProbe{
         const u64 frame = this.m_context.graphics.getFrameIndex();
         if(frame > 0u && frame - 1u != this.m_packetSource){
             this.m_packetSource = frame - 1u;
-            ReportReflectionSlicePackets(this.m_rayCapacity, this.m_packetSource, this.m_phase != 2u, this.m_context, this.m_renderer);
+            ReportReflectionSlicePackets(this.m_rayCapacity, this.m_packetSource, this.m_phase != 2u, this.m_context, renderer);
         }
 
-        b8 tokenValid = false;
-        native(in statistics, mut tokenValid){
-            tokenValid = statistics.acceptedToken.valid();
-        }
         if(statistics.sequence != this.m_lastSequence || statistics.generation != this.m_lastGeneration){
             this.m_lastSequence = statistics.sequence;
             this.m_lastGeneration = statistics.generation;
-            if(statistics.frameIndex >= 3u && statistics.graphicsFrameIndex >= this.m_phaseSource && tokenValid)
+            if(statistics.frameIndex >= 3u && statistics.graphicsFrameIndex >= this.m_phaseSource && statistics.acceptedToken.valid())
                 ++this.m_completed;
         }
 
-        b8 captureReady = false;
-        u64 capturedSource = 0u;
-        native(mut capture = this.m_capture, mut captureReady, mut capturedSource){
-            capture->update();
-            captureReady = capture->captureReady();
-            if(captureReady)
-                capturedSource = capture->capturedGraphicsFrameIndex();
-        }
-        if(captureReady){
+        UpdateSmokeFramebufferCapture(this.m_capture);
+        if(SmokeFramebufferCaptureReady(this.m_capture)){
+            const u64 capturedSource = SmokeFramebufferCapturedFrameIndex(this.m_capture);
             if(capturedSource != this.m_targetSource || capturedSource < this.m_phaseSource || this.m_completed < 16u){
                 error("ReflectionCsgContext: capture missed the qualified phase source frame");
                 return false;
@@ -1104,20 +994,14 @@ class ReflectionCsgContextProbe{
             if(this.m_phase == 4u){
                 this.m_done = true;
                 [essential] info("ReflectionCsgContext: complete captures=5");
-                native(mut capture = this.m_capture){
-                    capture->finish();
-                }
+                FinishSmokeFramebufferCapture(this.m_capture);
                 return true;
             }
             ++this.m_phase;
             const StringView nextPath = StringView(this.m_capturePaths[this.m_phase]);
-            b8 rearmed = false;
-            native(in nextPath, mut capture = this.m_capture, mut rearmed){
-                rearmed = capture->rearm(nextPath);
-            }
-            if(!rearmed)
+            if(!RearmSmokeFramebufferCapture(this.m_capture, nextPath))
                 return false;
-            return this.beginPhase();
+            return this.beginPhase(world);
         }
 
         if(this.m_targetSource == ~cast<u64>(0u) && this.m_completed >= 16u)
@@ -1125,26 +1009,20 @@ class ReflectionCsgContextProbe{
         return true;
     }
 
-    private b8 beginPhase(){
+    private b8 beginPhase(mut World world){
         const b8 small = this.m_phase == 0u || this.m_phase == 3u;
         const b8 csg = this.m_phase != 2u;
         f32 denseX = 0.0f;
         if(small)
             denseX = 40.0f;
         const b8 denseCutterActive = !small && csg;
-        native(
-            in entities = this.m_entities,
-            in small,
-            in denseX,
-            in denseCutterActive,
-            mut world = this.m_world
-        ){
-            world.entity(entities.smallReceiver).getComponent<Impl::RendererComponent>().visible = small;
-            // Keep the inactive dense receiver in the current scene during small phases, away from all reflected probe rays.
-            world.entity(entities.denseReceiver).getComponent<Impl::Scene::TransformComponent>().position.x = denseX;
-            world.entity(entities.smallCutter).getComponent<Impl::CsgCutterComponent>().active = small;
-            world.entity(entities.denseCutter).getComponent<Impl::CsgCutterComponent>().active = denseCutterActive;
-        }
+        if(!SetSmokeEntityVisible(this.m_entities.smallReceiver, small, world))
+            return false;
+        // Keep the inactive dense receiver in the current scene during small phases, away from all reflected probe rays.
+        if(!SetSmokeEntityPositionX(this.m_entities.denseReceiver, denseX, world))
+            return false;
+        SetSmokeCsgCutterActive(this.m_entities.smallCutter, small, world);
+        SetSmokeCsgCutterActive(this.m_entities.denseCutter, denseCutterActive, world);
         this.m_phaseSource = this.m_context.graphics.getFrameIndex();
         this.m_completed = 0u;
         this.m_targetSource = ~cast<u64>(0u);
@@ -1170,14 +1048,12 @@ class ReflectionCsgContextProbe{
     private ReflectionCsgContextEntities m_entities = ReflectionCsgContextEntities();
     private UniquePtr<FramebufferCapture> m_capture = UniquePtr<FramebufferCapture>();
     private mut ProjectRuntimeContext m_context;
-    private mut World m_world;
-    private mut RendererSystem m_renderer;
     private u64 m_phaseSource = 0u;
     private u64 m_targetSource = ~cast<u64>(0u);
     private u64 m_packetSource = ~cast<u64>(0u);
     private u64 m_lastSequence = 0u;
     private u64 m_lastGeneration = 0u;
-    private u32 m_rayCapacity;
+    private u32 m_rayCapacity = 0u;
     private u32 m_phase = 0u;
     private u32 m_completed = 0u;
     private b8 m_done = false;

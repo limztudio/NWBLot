@@ -65,6 +65,18 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
         return;
     }
 
+    if(expr.wrapInFuncType && expr.kind == ExprKind::Lambda){
+        TypeRef valueFuncType = *expr.wrapInFuncType;
+        valueFuncType.refMode = ParamPassingMode::None;
+        m_typeEmitter.emitTypeCpp(out, valueFuncType);
+        out.push_back('(');
+        Expr unwrapped = expr;
+        unwrapped.wrapInFuncType = nullptr;
+        emitExpr(out, unwrapped);
+        out.push_back(')');
+        return;
+    }
+
     if(expr.adaptToTChar && expr.kind != ExprKind::StringLiteral){
         out.append("::ConvertString(");
         Expr unwrapped = expr;

@@ -22,20 +22,16 @@ native{
 #include <loader/project_entry.adhd.h>
 #include <impl/ecs_render/module.adhd.h>
 #include <impl/ecs_mesh/skinning/system.adhd.h>
-#include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
-#include <global/simd/constant.h>
 #include <global/simd/convert.h>
 #include <global/simd/frame.h>
 #include <global/simd/vector.h>
 
 namespace NWB::Tests::Smoke{
-[[nodiscard]] inline TStringView GatherBenchmarkProjectName()noexcept{
-    return NWB_TEXT("RendererGatherBenchmark");
+[[nodiscard]] NWB_INLINE AStringView GatherBenchmarkProjectName()noexcept{
+    return "RendererGatherBenchmark";
 }
-
-inline constexpr f32 s_GatherBenchmarkHalfPi = s_PIDIV2;
 
 class GatherBenchmarkTimingPass final : public Core::IRenderPass{
 private:
@@ -104,10 +100,8 @@ class RendererGatherBenchmarkScene{
         const EntityID cameraEntity = CreateSmokeCamera(2.6f, 9.0f, 0.0f, world);
         if(!cameraEntity.valid())
             return false;
-        native(mut world){
-            const auto light = Impl::Scene::CreateDirectionalLightEntity(world, 0.9f, 0.65f, 0.0f, Float4(1.0f, 0.96f, 0.88f), 2.0f);
-            world.entity(light).getComponent<Impl::Scene::LightComponent>().enableCaustics = false;
-        }
+        if(!CreateSmokeDirectionalLight(0.9f, 0.65f, 0.0f, f32x4(1.0f, 0.96f, 0.88f, 1.0f), 2.0f, false, world).valid())
+            return false;
         if(!this.createBackdrop(world))
             return false;
 
@@ -126,27 +120,21 @@ class RendererGatherBenchmarkScene{
             if(opaque)
                 material = s_GatherBenchmarkOpaqueMaterial;
             if(workload == s_GatherBenchmarkUniqueWorkload){
-                b8 refsOk = false;
-                native(in index, mut mesh, mut material, mut refsOk){
-                    Core::Alloc::ScratchArena scratchArena(s_SmokeEnvironmentArena);
-                    const auto meshPath = StringFormat(scratchArena, "project/smoke/gather_benchmark/meshes/mesh_{:02}", index);
-                    const auto materialPath = StringFormat(scratchArena, "project/smoke/gather_benchmark/materials/glass_{:02}", index);
-                    const auto meshReference = SmokeMeshRef::FromText(AStringView(meshPath));
-                    const auto materialReference = SmokeMaterialRef::FromText(AStringView(materialPath));
-                    if(meshReference && materialReference){
-                        mesh = *meshReference;
-                        material = *materialReference;
-                        refsOk = true;
-                    }
-                }
-                if(!refsOk)
+                const String meshPath = StringFormat("project/smoke/gather_benchmark/meshes/mesh_{:02}", index);
+                const String materialPath = StringFormat("project/smoke/gather_benchmark/materials/glass_{:02}", index);
+                const Expected<SmokeMeshRef, NameTextErrorEnum> meshReference = SmokeMeshRefFromText(StringView(meshPath));
+                const Expected<SmokeMaterialRef, NameTextErrorEnum> materialReference = SmokeMaterialRefFromText(StringView(materialPath));
+                if(!meshReference.has_value() || !materialReference.has_value())
                     return false;
+                mesh = meshReference.value();
+                material = materialReference.value();
             }
 
             const f32x4 storedPosition = f32x4(position);
             const b8 applyOverride = workload == s_GatherBenchmarkOverridesWorkload;
+            const f32x4 overrideTint = f32x4(0.55f + cast<f32>(index) / 256.0f, 0.85f, 1.0f, 1.0f);
             b8 entityOk = true;
-            native(in storedPosition, in mesh, in material, in opaque, in applyOverride, in index, mut world, mut entityOk){
+            native(in storedPosition, in mesh, in material, in opaque, in applyOverride, in overrideTint, mut world, mut entityOk){
                 auto entity = world.createEntity();
                 auto& transform = entity.addComponent<Impl::Scene::TransformComponent>();
                 transform.position = storedPosition;
@@ -158,8 +146,7 @@ class RendererGatherBenchmarkScene{
                     component.opticalBoundaryMode = Impl::OpticalBoundaryMode::ClosedNested;
                 if(applyOverride){
                     entity.addComponent<Impl::MaterialInstanceComponent>(Name(s_SmokeSurfaceMaterialInterface));
-                    const Float4 tint(0.55f + static_cast<f32>(index) / 256.0f, 0.85f, 1.0f, 1.0f);
-                    if(!Impl::SetMaterialMutableHalf4(world, entity.id(), Name(s_SmokeSurfaceMaterialInterface), "runtime.color_tint", tint))
+                    if(!Impl::SetMaterialMutableHalf4(world, entity.id(), Name(s_SmokeSurfaceMaterialInterface), "runtime.color_tint", overrideTint))
                         entityOk = false;
                 }
             }
@@ -195,11 +182,11 @@ class RendererGatherBenchmarkScene{
         );
         if(!backdrop.valid())
             return false;
-        const f32x4 rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_GatherBenchmarkHalfPi, 0.0f, 0.0f, 0.0f)));
+        const f32x4 rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_PIDIV2, 0.0f, 0.0f, 0.0f)));
+        if(!SetSmokeEntityRotation(backdrop, rotation, world))
+            return false;
         b8 paramsOk = false;
-        native(in backdrop, in rotation, mut world, mut paramsOk){
-            auto& transform = world.entity(backdrop).getComponent<Impl::Scene::TransformComponent>();
-            transform.rotation = rotation;
+        native(in backdrop, mut world, mut paramsOk){
             const Half4U f0 = MakeHalf4U(0.35f, 0.35f, 0.35f, 0.0f);
             const Half roughness = ConvertFloatToHalf(0.0f);
             paramsOk = Impl::SetMaterialMutableParameter(
@@ -238,19 +225,19 @@ class RendererGatherBenchmarkScene{
         if(!owner.valid() || !modelResult.tintApplied)
             return false;
         SyncSmokeModelRuntimes(world);
-        EntityID skeleton = s_InvalidEntityId;
-        b8 posedOk = false;
+        const EntityID skeleton = FindSpawnedModelObject(owner, s_SmokeNameSkeleton, ModelObjectKind::Skeleton, world);
+        if(!skeleton.valid())
+            return false;
         f32 yaw = -0.08f;
         if((index & 8u) != 0u)
             yaw = 0.08f;
-        native(in owner, in yaw, mut world, mut skeleton, mut posedOk){
-            skeleton = FindSpawnedModelObject(owner, Name(s_SmokeNameSkeleton), Impl::ModelObjectKind::Skeleton, world);
-            if(skeleton.valid()){
-                auto& pose = world.entity(skeleton).getComponent<Impl::SkeletonPoseComponent>();
-                if(pose.localJoints.size() >= 2u){
-                    StoreFloat(MatrixMultiply(LoadFloat(pose.localJoints[1u]), MatrixRotationRollPitchYaw(0.0f, yaw, 0.0f)), pose.localJoints[1u]);
-                    posedOk = true;
-                }
+        const MatrixSingle yawRotation = MatrixRotationRollPitchYawFromVector(VectorSingle(0.0f, yaw, 0.0f, 0.0f));
+        b8 posedOk = false;
+        native(in skeleton, in yawRotation, mut world, mut posedOk){
+            auto& pose = world.entity(skeleton).getComponent<Impl::SkeletonPoseComponent>();
+            if(pose.localJoints.size() >= 2u){
+                StoreFloat(MatrixMultiply(LoadFloat(pose.localJoints[1u]), yawRotation), pose.localJoints[1u]);
+                posedOk = true;
             }
         }
         if(!posedOk)
@@ -310,77 +297,55 @@ class RendererGatherBenchmarkProjectImpl : IProjectEntryCallbacks{
         this.m_memoryEnabled = modeView == s_GatherBenchmarkMemoryMode;
         this.m_runtime = workload == s_GatherBenchmarkRuntimeWorkload;
 
-        b8 hasRayQuery = false;
-        native(in ctx = this.m_context, mut hasRayQuery){
-            hasRayQuery = ctx.graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
-                && ctx.graphics.queryFeatureSupport(Core::Feature::RayQuery);
-        }
+        const b8 hasRayQuery = this.m_context.graphics.queryFeatureSupport(Feature::RayTracingAccelStruct)
+            && this.m_context.graphics.queryFeatureSupport(Feature::RayQuery);
         if(!hasRayQuery){
             error("RendererGatherBenchmark: hardware ray queries are required");
             return false;
         }
 
-        b8 rendererConfigured = false;
-        native(in runtime = this.m_runtime, mut world = this.m_world, mut ctx = this.m_context, mut worldReady = this.m_worldReady, mut rendererConfigured){
-            if(runtime)
-                AddSmokeSkinnedRenderSystems(*world, ctx);
-            else
-                AddSmokeRenderSystems(*world, ctx);
-            Impl::RendererSystem& renderer = *MakeNotNull(world->getSystem<Impl::RendererSystem>());
-            worldReady = true;
-            Impl::ReflectionSettings settings;
-            settings.traceMode = Impl::ReflectionTraceMode::Hardware;
-            settings.maxHardwareRaysPerFrame = 4096u;
-            settings.maxOpticalQueries = 16u;
-            settings.temporalEnabled = false;
-            settings.spatialFilterEnabled = false;
-            settings.screenFeedbackEnabled = false;
-            settings.diagnosticsEnabled = false;
-            settings.samplingSeed = 0u;
-            if(renderer.setReflectionSettings(settings)){
-                renderer.setRefractionEnabled(true);
-                renderer.setRefractionHardwareTracingEnabled(true);
-                rendererConfigured = true;
-            }
-        }
-        if(!rendererConfigured)
-            return false;
+        if(this.m_runtime)
+            AddSmokeSkinnedRenderSystems(SmokeWorldRef(this.m_world), this.m_context);
+        else
+            AddSmokeRenderSystems(SmokeWorldRef(this.m_world), this.m_context);
+        this.m_worldReady = true;
 
-        b8 sceneBuilt = false;
-        native(in workload, in runtime = this.m_runtime, mut scene = this.m_scene, mut world = this.m_world, mut sceneBuilt){
-            sceneBuilt = scene.build(workload, runtime, *world);
-        }
-        if(!sceneBuilt)
+        ReflectionSettings settings = ReflectionSettings();
+        settings.traceMode = ReflectionTraceMode::Hardware;
+        settings.maxHardwareRaysPerFrame = 4096u;
+        settings.maxOpticalQueries = 16u;
+        settings.temporalEnabled = false;
+        settings.spatialFilterEnabled = false;
+        settings.screenFeedbackEnabled = false;
+        settings.diagnosticsEnabled = false;
+        settings.samplingSeed = 0u;
+        if(!SmokeRendererSystemRef(SmokeWorldRef(this.m_world)).setReflectionSettings(settings))
+            return false;
+        SmokeRendererSystemRef(SmokeWorldRef(this.m_world)).setRefractionEnabled(true);
+        SmokeRendererSystemRef(SmokeWorldRef(this.m_world)).setRefractionHardwareTracingEnabled(true);
+
+        if(!this.m_scene.build(workload, this.m_runtime, SmokeWorldRef(this.m_world)))
             return false;
         if(!this.m_timingPass.prepareQueries())
             return false;
-        native(mut ctx = this.m_context, mut timingPass = this.m_timingPass){
-            ctx.graphics.addRenderPassToBack(timingPass);
-        }
+        this.m_context.graphics.addRenderPassToBack(this.m_timingPass);
         this.m_timingRegistered = true;
 
         const Expected<String> compilerOutput = ReadSmokeEnvironmentString("NWB_GATHER_COMPILER_STATISTICS_FILE");
         if(compilerOutput.has_value()){
-            const StringView compilerOutputView = StringView(compilerOutput.value());
-            b8 compilerStarted = false;
-            native(in compilerOutputView, mut compilerProbe = this.m_compilerProbe, mut world = this.m_world, mut compilerStarted){
-                Impl::RendererSystem& renderer = *MakeNotNull(world->getSystem<Impl::RendererSystem>());
-                compilerStarted = compilerProbe.start(compilerOutputView, renderer);
-            }
-            if(!compilerStarted)
+            if(!this.m_compilerProbe.start(StringView(compilerOutput.value()), SmokeRendererSystemRef(SmokeWorldRef(this.m_world))))
                 return false;
         }
 
+        PerfCaptureOptions capture = PerfCaptureOptions();
+        capture.enabled = true;
+        capture.cpuTiming = true;
+        capture.gpuTiming = true;
+        capture.memory = this.m_memoryEnabled;
+        this.m_context.setPerfCapture(capture);
         u32 vsyncEnabled = 0u;
-        native(in memoryEnabled = this.m_memoryEnabled, mut ctx = this.m_context, mut vsyncEnabled){
-            Core::Perf::CaptureOptions capture;
-            capture.enabled = true;
-            capture.cpuTiming = true;
-            capture.gpuTiming = true;
-            capture.memory = memoryEnabled;
-            ctx.setPerfCapture(capture);
-            vsyncEnabled = ctx.graphics.isVSyncEnabled() ? 1u : 0u;
-        }
+        if(this.m_context.graphics.isVSyncEnabled())
+            vsyncEnabled = 1u;
         [essential] info("RendererGatherBenchmark: workload {} mode {} fixed objects 64", workload, modeView);
         [essential] info("RendererGatherBenchmark: hardware reflection 4096 queries 16 refraction 1 diagnostics 0 temporal 0 spatial 0 feedback 0");
         [essential] info("RendererGatherBenchmark: fixed delta 0.016666667 extent 960x720 async compute requested 1");
@@ -409,18 +374,12 @@ class RendererGatherBenchmarkProjectImpl : IProjectEntryCallbacks{
     }
 
     public b8 onUpdate(in f32 delta)override{
-        b8 polled = false;
-        native(in memoryEnabled = this.m_memoryEnabled, mut probe = this.m_probe, in ctx = this.m_context, mut polled){
-            polled = probe.poll(ctx.perfSession.report(), memoryEnabled);
-        }
-        if(!polled){
+        if(!this.m_probe.poll(this.m_context.perfSession.report(), this.m_memoryEnabled)){
             error("RendererGatherBenchmark: incomplete or mismatched successful CPU frame");
             return false;
         }
         if(this.m_probe.finished()){
-            native(mut ctx = this.m_context){
-                ctx.requestQuit();
-            }
+            RequestSmokeQuit(this.m_context);
             return true;
         }
         if(this.m_probe.successfulFrames() == 64u && !this.m_actualCountsRead){
@@ -428,11 +387,7 @@ class RendererGatherBenchmarkProjectImpl : IProjectEntryCallbacks{
                 return false;
             this.m_actualCountsRead = true;
         }
-        b8 ticked = false;
-        native(mut world = this.m_world, mut ticked){
-            ticked = TickSmokeWorld(s_GatherBenchmarkFixedDelta, *world);
-        }
-        return ticked;
+        return TickSmokeWorld(s_GatherBenchmarkFixedDelta, SmokeWorldRef(this.m_world));
     }
 
     private b8 readActualCounts(){
@@ -475,9 +430,7 @@ class RendererGatherBenchmarkProjectImpl : IProjectEntryCallbacks{
     private void destroyWorld(){
         this.m_compilerProbe.stop();
         if(this.m_timingRegistered){
-            native(mut ctx = this.m_context, mut timingPass = this.m_timingPass){
-                ctx.graphics.removeRenderPass(timingPass);
-            }
+            this.m_context.graphics.removeRenderPass(this.m_timingPass);
             this.m_timingRegistered = false;
         }
         if(!this.m_worldReady)

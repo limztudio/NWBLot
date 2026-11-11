@@ -40,6 +40,24 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace NWB::Tests::GlobalCases{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using VoidErrorResult = Expected<void, ErrorCode>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -88,45 +106,24 @@ void VerifyGlobalFilesystemCleanup_UnwindRetiresPopulatedTreeAndRepeatedMissingC
 }
 
 void VerifyGlobalFilesystemCleanup_DotAndDotDotLeavesAreRejectedWithoutRemovingTheirContents(){
-    b8 dotSucceeded = true;
-    b8 dotDotSucceeded = true;
-    i32 dotErrorValue = 0;
-    i32 dotDotErrorValue = 0;
-    b8 readRetainedOk = false;
+    const Path root = Path("global_test_artifacts/cleanup_dot_rejection");
+    const Path child = root / "child";
+    const Path retained = root / "retained";
+    ASSERT_TRUE(EnsureEmptyDirectory(root).has_value());
+    ASSERT_TRUE(EnsureDirectories(child).has_value());
+    ASSERT_TRUE(WriteTextFile(retained, "retained"));
+
+    const VoidErrorResult dot = RemoveAllForCleanup(child / ".");
+    const VoidErrorResult dotDot = RemoveAllForCleanup(child / "..");
+    ASSERT_FALSE(dot.has_value());
+    ASSERT_FALSE(dotDot.has_value());
+    EXPECT_NE(dot.error().value(), 0);
+    EXPECT_NE(dotDot.error().value(), 0);
+
     String retainedText = "";
-    b8 removedRoot = false;
-
-    native(mut dotSucceeded, mut dotDotSucceeded, mut dotErrorValue, mut dotDotErrorValue, mut readRetainedOk, mut retainedText, mut removedRoot){
-        using TestPath = ::Path<NWB::Core::Alloc::GlobalArena>;
-        using TestString = NWB::Tests::TestAString;
-        NWB::Tests::TestArena<> arena;
-        const TestPath root(arena.arena, "global_test_artifacts/cleanup_dot_rejection");
-        const TestPath child = root / "child";
-        const TestPath retained = root / "retained";
-        ASSERT_TRUE(EnsureEmptyDirectory(root));
-        ASSERT_TRUE(EnsureDirectories(child));
-        ASSERT_TRUE(WriteTextFile(retained, "retained"));
-        const auto dot = RemoveAllForCleanup(child / ".");
-        const auto dotDot = RemoveAllForCleanup(child / "..");
-        dotSucceeded = dot.has_value();
-        dotDotSucceeded = dotDot.has_value();
-        if(!dot)
-            dotErrorValue = dot.error().value();
-        if(!dotDot)
-            dotDotErrorValue = dotDot.error().value();
-        TestString text(arena.arena);
-        readRetainedOk = ReadTextFile(retained, text).has_value();
-        retainedText.assign(AStringView(text));
-        removedRoot = RemoveAllForCleanup(root).has_value();
-    }
-
-    ASSERT_FALSE(dotSucceeded);
-    ASSERT_FALSE(dotDotSucceeded);
-    EXPECT_NE(dotErrorValue, 0);
-    EXPECT_NE(dotDotErrorValue, 0);
-    ASSERT_TRUE(readRetainedOk);
+    ASSERT_TRUE(ReadTextFile(retained, retainedText).has_value());
     EXPECT_EQ(StringView(retainedText), StringView("retained"));
-    EXPECT_TRUE(removedRoot);
+    EXPECT_TRUE(RemoveAllForCleanup(root).has_value());
 }
 
 void VerifyGlobalFilesystemCleanup_DirectoryAndRootLinksWithTrailingSeparatorsDoNotRemoveTheirTarget(){
@@ -415,64 +412,34 @@ void VerifyGlobal_FilesystemStreamAndStageHelpersRejectInvalidAndTruncatedInputs
     mismatched[2u] = 0x30u;
     mismatched[3u] = 0x41u;
 
-    usize emptyDepth = 1u;
+    const Path emptyPath = Path();
+    EXPECT_EQ(PathDepth(emptyPath), 0u);
+
+    const Path stageDir = Path("global_test_artifacts/stage_edge_test");
+    ASSERT_TRUE(EnsureEmptyDirectory(stageDir).has_value());
+    const Path stagedFile = stageDir / "payload.bin";
+
     b8 firstCreateOk = false;
     b8 firstCreatedFlag = false;
-    b8 initialBytesVerified = false;
-    b8 mismatchedVerified = true;
-    b8 shortVerified = true;
     b8 secondCreateOk = true;
     b8 secondCreatedFlag = true;
-    b8 retainedOriginalBytes = false;
-    b8 resizedToTwo = false;
-    b8 resizedBytesVerified = false;
-    b8 cleanedUp = false;
-
-    native(
-        in payload,
-        in mismatched,
-        mut emptyDepth,
-        mut firstCreateOk,
-        mut firstCreatedFlag,
-        mut initialBytesVerified,
-        mut mismatchedVerified,
-        mut shortVerified,
-        mut secondCreateOk,
-        mut secondCreatedFlag,
-        mut retainedOriginalBytes,
-        mut resizedToTwo,
-        mut resizedBytesVerified,
-        mut cleanedUp
-    ){
-        NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
-        const ::Path<NWB::Core::Alloc::ScratchArena> emptyPath(scratchArena);
-        emptyDepth = PathDepth(emptyPath);
-        const ::Path<NWB::Core::Alloc::ScratchArena> stageDir(scratchArena, "global_test_artifacts/stage_edge_test");
-        ASSERT_TRUE(EnsureEmptyDirectory(stageDir));
-        const auto stagedFile = stageDir / "payload.bin";
+    native(in stagedFile, in payload, in mismatched, mut firstCreateOk, mut firstCreatedFlag, mut secondCreateOk, mut secondCreatedFlag){
         firstCreateOk = StagedFileWriter(stagedFile).create(payload.data(), payload.size(), firstCreatedFlag).has_value();
-        initialBytesVerified = VerifyBinaryFileBytes(stagedFile, payload.data(), payload.size());
-        mismatchedVerified = VerifyBinaryFileBytes(stagedFile, mismatched.data(), mismatched.size());
-        shortVerified = VerifyBinaryFileBytes(stagedFile, payload.data(), payload.size() - 1u);
         secondCreateOk = StagedFileWriter(stagedFile).create(mismatched.data(), mismatched.size(), secondCreatedFlag).has_value();
-        retainedOriginalBytes = VerifyBinaryFileBytes(stagedFile, payload.data(), payload.size());
-        resizedToTwo = ResizeFile(stagedFile, 2u).has_value();
-        resizedBytesVerified = VerifyBinaryFileBytes(stagedFile, payload.data(), 2u);
-        cleanedUp = RemoveAllIfExists(stageDir).has_value();
     }
 
-    EXPECT_EQ(emptyDepth, 0u);
     ASSERT_TRUE(firstCreateOk);
     EXPECT_TRUE(firstCreatedFlag);
-    EXPECT_TRUE(initialBytesVerified);
-    EXPECT_FALSE(mismatchedVerified);
-    EXPECT_FALSE(shortVerified);
     EXPECT_FALSE(secondCreateOk);
     EXPECT_FALSE(secondCreatedFlag);
-    EXPECT_TRUE(retainedOriginalBytes);
-    ASSERT_TRUE(resizedToTwo);
-    EXPECT_TRUE(resizedBytesVerified);
-    ASSERT_TRUE(cleanedUp);
+
+    const Span<u8> payloadSpan = payload;
+    EXPECT_TRUE(VerifyBinaryFileBytes(stagedFile, payloadSpan));
+    EXPECT_FALSE(VerifyBinaryFileBytes(stagedFile, Span<u8>(mismatched)));
+    EXPECT_FALSE(VerifyBinaryFileBytes(stagedFile, payloadSpan.subspan(0u, payload.size() - 1u)));
+    ASSERT_TRUE(ResizeFile(stagedFile, 2u).has_value());
+    EXPECT_TRUE(VerifyBinaryFileBytes(stagedFile, payloadSpan.subspan(0u, 2u)));
+    ASSERT_TRUE(RemoveAllIfExists(stageDir).has_value());
 }
 
 void VerifyGlobal_UniquePublicationPreservesWinnersAcrossRaces(){

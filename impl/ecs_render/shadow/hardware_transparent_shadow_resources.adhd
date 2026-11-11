@@ -44,7 +44,7 @@ NWB_IMPL_BEGIN
 
 class RendererShaderSystem;
 struct DeferredFrameTargets;
-struct HardwareTransparentShadowState;
+class HardwareTransparentShadowState;
 
 
 class HardwareTransparentShadowResources final : NoCopy{

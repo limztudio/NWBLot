@@ -165,6 +165,7 @@ struct Expr{
     b8 wrapInSimdResult = false;
     b8 unwrapSimdResultValue = false;
     u8 formatArgWrapKind = 0u;
+    const TypeRef* wrapInFuncType = nullptr;
 
 
 public:

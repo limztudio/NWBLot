@@ -15,43 +15,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_material/asset.adhd.h>
-#include <impl/ecs_csg/module.adhd.h>
-#include <impl/ecs_scene/module.adhd.h>
-
-#include <core/alloc/scratch.h>
-#include <core/assets/ref.h>
-#include <core/ecs/world.h>
-
-#include <global/simd/constant.h>
-#include <global/simd/frame.h>
-#include <global/simd/quaternion.h>
-#include <global/simdmath.h>
-#include <global/timer.h>
-
-namespace NWB::Tests::Smoke{
-[[nodiscard]] inline TStringView GiTestProjectName()noexcept{
-    return NWB_TEXT("GiTestSmokeProjectImpl");
-}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const f64 s_GiCsgLiveWarmupSeconds = 30.0;
 const f32 s_GiBoxHalfExtent = 2.0f;
 const f32 s_GiBoxHeight = 2.0f;
@@ -88,7 +51,7 @@ const f32x4 s_GiWhiteTint = f32x4(1.0f, 1.0f, 1.0f, 1.0f);
 const StringView s_GiCsgReferenceArm = "reference";
 const StringView s_GiCsgCutArm = "cut";
 const StringView s_GiCsgUncutArm = "uncut";
-const StringView s_GiCsgBoxShapePath = "engine/csg/box";
+const Name s_GiCsgBoxShapeName = "engine/csg/box";
 const u32 s_GiCsgDefaultCaptureFrameCount = 360u;
 const u64 s_GiCsgMaxCaptureFrameCount = 4294967295u;
 const u32 s_GiComplexMaxPlacementAttempts = 4096u;
@@ -196,24 +159,17 @@ b8 ComplexSceneBoxesOverlap(in ComplexSceneBox a, in ComplexSceneBox b){
     if(a.position.y + aHalfY <= b.position.y - bHalfY || b.position.y + bHalfY <= a.position.y - aHalfY)
         return false;
 
-    b8 xzOverlap = false;
-    native(in a, in b, mut xzOverlap){
-        const SIMDVectorSingle angles = VectorScale(VectorSet(a.yawDegrees, b.yawDegrees, 0.0f, 0.0f), s_PI / 180.0f);
-        SIMDVectorSingle sine;
-        SIMDVectorSingle cosine;
-        VectorSinCos(sine, cosine, angles);
-        const SIMDVectorSingle absoluteSine = VectorAbs(sine);
-        const SIMDVectorSingle absoluteCosine = VectorAbs(cosine);
-        const SIMDVectorSingle cosineSine = VectorMergeX(absoluteCosine, absoluteSine, VectorSplatY(absoluteCosine), VectorSplatY(absoluteSine));
-        const SIMDVectorSingle halfExtents = VectorScale(
-            VectorMultiplyAddExpression(cosineSine, VectorSet(a.scale.x, a.scale.x, b.scale.x, b.scale.x), VectorMultiply(VectorSwizzle<1, 0, 3, 2>(cosineSine), VectorSet(a.scale.z, a.scale.z, b.scale.z, b.scale.z))),
-            0.5f
-        );
-        const SIMDVectorSingle combinedHalfExtents = VectorAdd(VectorAdd(halfExtents, VectorSwizzle<2, 3, 0, 1>(halfExtents)), VectorReplicate(0.06f));
-        const SIMDVectorSingle separation = VectorAbs(VectorSubtract(VectorSet(a.position.x, a.position.z, 0.0f, 0.0f), VectorSet(b.position.x, b.position.z, 0.0f, 0.0f)));
-        xzOverlap = (VectorMoveMask(VectorLess(separation, combinedHalfExtents)) & VectorComponentMask::s_XY) == VectorComponentMask::s_XY;
-    }
-    return xzOverlap;
+    const VectorSingle angles = VectorSingle(a.yawDegrees, b.yawDegrees, 0.0f, 0.0f) * (s_PI / 180.0f);
+    const VectorSingle absoluteSine = Abs(Sin(angles));
+    const VectorSingle absoluteCosine = Abs(Cos(angles));
+    const VectorSingle cosineSine = VectorSingle(absoluteCosine.x, absoluteSine.x, absoluteCosine.y, absoluteSine.y);
+    const VectorSingle halfExtents = (
+        cosineSine * VectorSingle(a.scale.x, a.scale.x, b.scale.x, b.scale.x)
+        + cosineSine.yxwz * VectorSingle(a.scale.z, a.scale.z, b.scale.z, b.scale.z)
+    ) * 0.5f;
+    const VectorSingle combinedHalfExtents = halfExtents + halfExtents.zwxy + VectorSingle(0.06f);
+    const VectorSingle separation = Abs(VectorSingle(a.position.x, a.position.z, 0.0f, 0.0f) - VectorSingle(b.position.x, b.position.z, 0.0f, 0.0f));
+    return separation.x < combinedHalfExtents.x && separation.y < combinedHalfExtents.y;
 }
 
 b8 CreateComplexGiBoxEntity(in ComplexSceneBox box, mut World world){
@@ -232,14 +188,8 @@ b8 CreateComplexGiBoxEntity(in ComplexSceneBox box, mut World world){
     if(!entity.valid())
         return false;
     if(box.yawDegrees != 0.0f){
-        b8 rotated = false;
-        native(in entity, in yawDeg = box.yawDegrees, mut world, mut rotated){
-            if(auto* transform = world.tryGetComponent<Impl::Scene::TransformComponent>(entity)){
-                StoreFloat(QuaternionRotationRollPitchYawFromVector(VectorScale(VectorSet(0.0f, yawDeg, 0.0f, 0.0f), s_PI / 180.0f)), transform->rotation);
-                rotated = true;
-            }
-        }
-        if(!rotated)
+        const VectorSingle rotation = QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, box.yawDegrees, 0.0f, 0.0f) * (s_PI / 180.0f));
+        if(!SetSmokeEntityRotation(entity, f32x4(rotation), world))
             return false;
     }
     return true;
@@ -278,21 +228,13 @@ b8 CreateComplexGiScene(mut World world, in b8 coverageViewEnabled){
         const f32 shadeRandom = NextComplexGiRandom24(randomState);
         const f32 yawRandom = NextComplexGiRandom24(randomState);
 
-        f32 x = 0.0f;
-        f32 z = 0.0f;
-        f32 width = 0.0f;
-        f32 depth = 0.0f;
-        native(in xRandom, in zRandom, in widthRandom, in depthRandom, mut x, mut z, mut width, mut depth){
-            const SIMDVectorSingle footprint = VectorMultiplyAddExpression(
-                VectorSet(3.40f, 4.45f, 0.26f, 0.36f),
-                VectorScale(VectorSet(xRandom, zRandom, widthRandom, depthRandom), 1.0f / 16777216.0f),
-                VectorSet(-1.70f, -2.70f, 0.18f, 0.18f)
-            );
-            x = VectorGetX(footprint);
-            z = VectorGetY(footprint);
-            width = VectorGetZ(footprint);
-            depth = VectorGetW(footprint);
-        }
+        const VectorSingle footprint = VectorSingle(3.40f, 4.45f, 0.26f, 0.36f)
+            * (VectorSingle(xRandom, zRandom, widthRandom, depthRandom) * (1.0f / 16777216.0f))
+            + VectorSingle(-1.70f, -2.70f, 0.18f, 0.18f);
+        const f32 x = footprint.x;
+        const f32 z = footprint.y;
+        const f32 width = footprint.z;
+        const f32 depth = footprint.w;
 
         const b8 frontRow = z < -1.8f;
         f32 heightBase = 0.30f;
@@ -334,12 +276,12 @@ b8 CreateComplexGiScene(mut World world, in b8 coverageViewEnabled){
         ++placedBodyCount;
     }
     if(placedBodyCount != s_ComplexGiRandomBodyCount){
-        error("GiTestSmokeProjectImpl: could place only {} of {} seeded bodies", placedBodyCount, s_ComplexGiRandomBodyCount);
+        error("GiTestSmokeProject: could place only {} of {} seeded bodies", placedBodyCount, s_ComplexGiRandomBodyCount);
         return false;
     }
 
     [essential] info(
-        "GiTestSmokeProjectImpl: complex scene {} maze solids, {} colored floor patches, {} closed-front shell solids, and {} seeded bodies (seed={}) created"
+        "GiTestSmokeProject: complex scene {} maze solids, {} colored floor patches, {} closed-front shell solids, and {} seeded bodies (seed={}) created"
         , sceneBoxes.size()
         , bouncePatches.size()
         , frontEnclosure.size()
@@ -358,7 +300,7 @@ b8 CreateComplexGiScene(mut World world, in b8 coverageViewEnabled){
         );
         if(!probe.valid())
             return false;
-        [essential] info("GiTestSmokeProjectImpl: coverage probe with perpendicular same-cell faces created");
+        [essential] info("GiTestSmokeProject: coverage probe with perpendicular same-cell faces created");
     }
     return true;
 }
@@ -426,17 +368,7 @@ b8 CreateGiCsgSubtraction(in SmokeBoxBounds box, in SmokeBoxBounds cutter, in u3
         const VectorSingle maximum = VectorSingle(cut.maximum, 0.0f);
         const f32x4 halfExtents = f32x4((maximum - minimum) * 0.5f);
         const VectorSingle center = (minimum + maximum) * 0.5f;
-        native(in groupName, in active, in halfExtents, in center, in identityRot, mut world){
-            auto entity = world.createEntity();
-            auto& component = entity.addComponent<Impl::CsgCutterComponent>();
-            component.receiverGroup = groupName;
-            component.shapeType = Name(s_GiCsgBoxShapePath);
-            component.active = active;
-            Impl::CsgBoxShapeParameters parameters;
-            parameters.halfExtents = halfExtents;
-            AssignCsgCutterParameters(parameters, component);
-            AssignCsgCutterTransform(center, identityRot, component);
-        }
+        CreateSmokeCsgBoxCutter(groupName, s_GiCsgBoxShapeName, active, halfExtents, center, identityRot, world);
     }
     return true;
 }
@@ -480,17 +412,15 @@ b8 CreateGiCsgMixedSubtraction(in StringView arm, mut World world){
     const Name groupName = GiCsgGroupName(2u);
     AddStaticCsgMeshReceiver(receiver, groupName, true, false, world);
     const b8 active = arm == s_GiCsgCutArm;
-    native(in groupName, in active, mut world){
-        auto entity = world.createEntity();
-        auto& component = entity.addComponent<Impl::CsgCutterComponent>();
-        component.receiverGroup = groupName;
-        component.shapeType = Name(s_GiCsgBoxShapePath);
-        component.active = active;
-        Impl::CsgBoxShapeParameters parameters;
-        parameters.halfExtents = Float4(0.25f, 0.6f, 1.1f, 0.0f);
-        AssignCsgCutterParameters(parameters, component);
-        AssignCsgCutterTransform(VectorSet(0.0f, -0.4f, -0.1f, 0.0f), QuaternionIdentity(), component);
-    }
+    CreateSmokeCsgBoxCutter(
+        groupName,
+        s_GiCsgBoxShapeName,
+        active,
+        f32x4(0.25f, 0.6f, 1.1f, 0.0f),
+        VectorSingle(0.0f, -0.4f, -0.1f, 0.0f),
+        VectorSingle(0.0f, 0.0f, 0.0f, 1.0f),
+        world
+    );
     return true;
 }
 
@@ -503,48 +433,49 @@ class CsgGiScene{
         return this.m_liveWarmupComplete && this.m_context.graphics.getSuccessfulPresentationCount() >= this.m_requiredPresentations;
     }
 
+    public b8 shouldCaptureFrame(in u64 frame)const{
+        return this.shouldCapture();
+    }
+
     public Expected<b8> start(mut World world){
         const Expected<String> configuredArm = ReadSmokeEnvironmentString("NWB_GI_CSG_ARM");
         if(!configuredArm.has_value())
             return false;
         const StringView arm = StringView(configuredArm.value());
         if(arm != s_GiCsgReferenceArm && arm != s_GiCsgCutArm && arm != s_GiCsgUncutArm){
-            error("GiTestSmokeProjectImpl: invalid NWB_GI_CSG_ARM");
+            error("GiTestSmokeProject: invalid NWB_GI_CSG_ARM");
             return MakeUnexpected(Failure());
         }
         const Expected<String> frameCountValue = ReadSmokeEnvironmentString("NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT");
         if(frameCountValue.has_value()){
             const Expected<u64> count = ParseU64(StringView(frameCountValue.value()));
             if(!count.has_value() || count.value() < s_GiCsgDefaultCaptureFrameCount || count.value() > s_GiCsgMaxCaptureFrameCount){
-                error("GiTestSmokeProjectImpl: CSG GI warmup requires at least 360 successful presentations");
+                error("GiTestSmokeProject: CSG GI warmup requires at least 360 successful presentations");
                 return MakeUnexpected(Failure());
             }
             this.m_requiredPresentations = count.value();
         }
 
-        const b8 laggedLighting = ReadSmokeEnvironmentFlag("NWB_GI_CSG_LAGGED_LIGHTING");
-        b8 rendererSetupOk = false;
-        native(in laggedLighting, mut world, mut rendererSetupOk){
-            Impl::RendererSystem& renderer = *MakeNotNull(world.getSystem<Impl::RendererSystem>());
-            if(laggedLighting)
-                renderer.setFrameLaggedAsyncLightingEnabled(true);
-            Impl::ReflectionSettings reflection;
-            reflection.traceMode = Impl::ReflectionTraceMode::Disabled;
-            Impl::PresentationSettings presentation;
-            presentation.toneMap = Impl::PresentationToneMap::LinearClamp;
-            if(renderer.setReflectionSettings(reflection) && renderer.setPresentationSettings(presentation)){
-                renderer.setRefractionEnabled(false);
-                const auto camera = CreateSmokeCamera(1.3f, 5.5f, 0.0f, world);
-                const auto light = Impl::Scene::CreatePointLightEntity(world, Float4(0.0f, 1.3f, -3.0f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 1.0f), 20.0f, 15.0f);
-                auto* lightComponent = world.tryGetComponent<Impl::Scene::LightComponent>(light);
-                if(camera.valid() && lightComponent){
-                    lightComponent->sourceRadius = 0.0f;
-                    lightComponent->enableCaustics = false;
-                    rendererSetupOk = true;
-                }
-            }
-        }
-        if(!rendererSetupOk)
+        if(ReadSmokeEnvironmentFlag("NWB_GI_CSG_LAGGED_LIGHTING"))
+            SmokeRendererSystemRef(world).setFrameLaggedAsyncLightingEnabled(true);
+        ReflectionSettings reflection = ReflectionSettings();
+        reflection.traceMode = ReflectionTraceMode::Disabled;
+        PresentationSettings presentation = PresentationSettings();
+        presentation.toneMap = PresentationToneMap::LinearClamp;
+        if(!SmokeRendererSystemRef(world).setReflectionSettings(reflection) || !SmokeRendererSystemRef(world).setPresentationSettings(presentation))
+            return MakeUnexpected(Failure());
+        SmokeRendererSystemRef(world).setRefractionEnabled(false);
+        const EntityID camera = CreateSmokeCamera(1.3f, 5.5f, 0.0f, world);
+        const EntityID light = CreateSmokePointLight(
+            f32x4(0.0f, 1.3f, -3.0f, 0.0f),
+            f32x4(1.0f, 1.0f, 1.0f, 1.0f),
+            20.0f,
+            15.0f,
+            0.0f,
+            false,
+            world
+        );
+        if(!camera.valid() || !light.valid())
             return MakeUnexpected(Failure());
 
         if(!CreateGiCsgBox(SmokeBoxBounds(f32x3u(-5.0f, -1.0f, -6.6f), f32x3u(5.0f, 5.0f, -6.5f)), s_GiDiffuseMaterial, VectorSingle(0.02f, 0.02f, 1.0f, 1.0f), world).valid())
@@ -575,59 +506,34 @@ class CsgGiScene{
         if(!mixedPassage.valid() || !mixedFloor.valid())
             return MakeUnexpected(Failure());
 
-        FramebufferCaptureOptions options = FramebufferCaptureOptions();
-        native(mut options){
-            options.shouldCapture = +[](void* const ctx, const u64)noexcept -> b8{
-                return MakeNotNull(static_cast<CsgGiScene*>(ctx))->shouldCapture();
-            };
-            options.predicateContext = this;
-            options.requiredWidth = 1280u;
-            options.requiredHeight = 900u;
-        }
-        SmokeCaptureFactory captureFactory = SmokeCaptureFactory(this.m_context);
-        Expected<UniquePtr<FramebufferCapture>> capture = captureFactory.configure(GiTestProjectName(), s_GiCsgDefaultCaptureFrameCount, options);
-        if(!capture.has_value())
+        const FramebufferCaptureOptions options = MakeSmokeCaptureOptions(this, 1280u, 900u, true);
+        if(!ConfigureSmokeFramebufferCapture(this.m_context, "GiTestSmokeProject", s_GiCsgDefaultCaptureFrameCount, options, this.m_capture))
             return MakeUnexpected(Failure());
-        native(mut dstCapture = this.m_capture, mut capture){
-            dstCapture = Move(*capture);
-        }
         this.m_active = true;
-        [essential] info("GiTestSmokeProjectImpl: CSG GI arm={} overlapping_box_cutters=2 accepted_presentations={}", arm, this.m_requiredPresentations);
-        [essential] info("GiTestSmokeProjectImpl: mixed CSG receiver has 12 closed and 2 open triangles");
+        [essential] info("GiTestSmokeProject: CSG GI arm={} overlapping_box_cutters=2 accepted_presentations={}", arm, this.m_requiredPresentations);
+        [essential] info("GiTestSmokeProject: mixed CSG receiver has 12 closed and 2 open triangles");
         return true;
     }
 
     public void stop(){
-        native(mut capture = this.m_capture){
-            if(capture){
-                capture->stop();
-                capture.reset();
-            }
-        }
+        StopAndResetSmokeFramebufferCapture(this.m_capture);
         this.m_active = false;
     }
 
     public void update(){
-        b8 hasCapture = false;
-        native(in capture = this.m_capture, mut hasCapture){
-            hasCapture = static_cast<b8>(capture);
-        }
-        if(!hasCapture)
+        if(!SmokeFramebufferCaptureValid(this.m_capture))
             return;
 
         const u64 presentations = this.m_context.graphics.getSuccessfulPresentationCount();
         if(presentations >= this.m_requiredPresentations && !this.m_liveWarmupComplete){
-            Timer now = Timer();
-            native(mut now){
-                now = TimerNow();
-            }
+            const Timer now = TimerNow();
             const u64 frameIndex = this.m_context.graphics.getFrameIndex();
             if(!this.m_liveWarmupStarted){
                 this.m_liveWarmupStartTime = now;
                 this.m_liveWarmupStartPresentations = presentations;
                 this.m_liveWarmupStarted = true;
                 [essential] info(
-                    "GiTestSmokeProjectImpl: CSG GI live warmup start source_frame={} presentations={} required_presentations={} required_seconds={}"
+                    "GiTestSmokeProject: CSG GI live warmup start source_frame={} presentations={} required_presentations={} required_seconds={}"
                     , frameIndex
                     , presentations
                     , this.m_requiredPresentations
@@ -635,29 +541,18 @@ class CsgGiScene{
                 );
             }
             else{
-                f64 elapsedSeconds = 0.0;
-                native(in now, in warmupStart = this.m_liveWarmupStartTime, mut elapsedSeconds){
-                    elapsedSeconds = DurationInSeconds<f64>(now, warmupStart);
-                }
+                const f64 elapsedSeconds = DurationInSeconds<f64>(now, this.m_liveWarmupStartTime);
                 if(elapsedSeconds >= s_GiCsgLiveWarmupSeconds && presentations > this.m_liveWarmupStartPresentations){
                     this.m_liveWarmupComplete = true;
-                    [essential] info("GiTestSmokeProjectImpl: CSG GI live warmup end source_frame={} presentations={} elapsed_seconds={:.6f}", frameIndex, presentations, elapsedSeconds);
+                    [essential] info("GiTestSmokeProject: CSG GI live warmup end source_frame={} presentations={} elapsed_seconds={:.6f}", frameIndex, presentations, elapsedSeconds);
                 }
             }
         }
 
-        b8 readyNow = false;
-        u64 capturedFrame = 0u;
-        native(mut capture = this.m_capture, mut readyNow, mut capturedFrame){
-            capture->update();
-            if(capture->captureReady()){
-                readyNow = true;
-                capturedFrame = capture->capturedGraphicsFrameIndex();
-            }
-        }
-        if(readyNow && !this.m_captureReceiptLogged){
+        UpdateSmokeFramebufferCapture(this.m_capture);
+        if(SmokeFramebufferCaptureReady(this.m_capture) && !this.m_captureReceiptLogged){
             this.m_captureReceiptLogged = true;
-            [essential] info("GiTestSmokeProjectImpl: CSG GI capture source_frame={}", capturedFrame);
+            [essential] info("GiTestSmokeProject: CSG GI capture source_frame={}", SmokeFramebufferCapturedFrameIndex(this.m_capture));
         }
     }
 

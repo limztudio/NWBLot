@@ -17,21 +17,11 @@ native{
 
 #include <loader/project_entry.adhd.h>
 
-#include <impl/assets_material/asset.adhd.h>
-#include <impl/ecs_scene/module.adhd.h>
-#include <impl/ecs_mesh/system.adhd.h>
-#include <impl/ecs_render/module.adhd.h>
-#include <impl/ecs_render/material/material_instance.adhd.h>
-
-#include <core/alloc/scratch.h>
-#include <core/common/log.h>
-#include <core/ecs/module.h>
-#include <core/graphics/runtime/runtime.h>
-
-#include <global/simd/constant.h>
-#include <global/simd/frame.h>
-#include <global/simd/quaternion.h>
-#include <global/simdmath.h>
+namespace NWB::Tests::Smoke{
+[[nodiscard]] NWB_INLINE AStringView GiTestProjectName()noexcept{
+    return "GiTestSmokeProject";
+}
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -66,11 +56,12 @@ class GiTestSmokeProjectImpl : IProjectEntryCallbacks{
         return this.m_complexLiveWarmupComplete;
     }
 
+    public b8 shouldCaptureFrame(in u64 frame)const{
+        return this.shouldCaptureComplex();
+    }
+
     public b8 onStartup()override{
-        Expected<b8> csgGi = false;
-        native(mut csgScene = this.m_csgGiScene, mut world = this.m_world, mut csgGi){
-            csgGi = csgScene.start(*world);
-        }
+        const Expected<b8> csgGi = this.m_csgGiScene.start(SmokeWorldRef(this.m_world));
         if(!csgGi.has_value())
             return false;
         if(csgGi.value())
@@ -85,18 +76,15 @@ class GiTestSmokeProjectImpl : IProjectEntryCallbacks{
             if(settleValue.has_value()){
                 const Expected<f32> requestedSettleSeconds = ParseF32(StringView(settleValue.value()));
                 if(!requestedSettleSeconds.has_value() || !IsFinite(requestedSettleSeconds.value()) || requestedSettleSeconds.value() < s_GiComplexMinLiveWarmupSeconds){
-                    error("GiTestSmokeProjectImpl: NWB_GI_SMOKE_MIN_SETTLE_SECONDS requires at least 30 live seconds after the presentation warmup");
+                    error("GiTestSmokeProject: NWB_GI_SMOKE_MIN_SETTLE_SECONDS requires at least 30 live seconds after the presentation warmup");
                     return false;
                 }
                 this.m_complexMinLiveWarmupSeconds = requestedSettleSeconds.value();
             }
         }
         if(this.m_resolveSwitchEnabled){
-            native(mut world = this.m_world){
-                Impl::RendererSystem& renderer = *MakeNotNull(world->getSystem<Impl::RendererSystem>());
-                renderer.setFrameLaggedAsyncLightingEnabled(true);
-            }
-            [essential] info("GiTestSmokeProjectImpl: surfel GI resolve switch probe enabled (lagged_lighting=1)");
+            SmokeRendererSystemRef(SmokeWorldRef(this.m_world)).setFrameLaggedAsyncLightingEnabled(true);
+            [essential] info("GiTestSmokeProject: surfel GI resolve switch probe enabled (lagged_lighting=1)");
         }
 
         f32 camHeight = s_GiCameraHeight;
@@ -126,99 +114,59 @@ class GiTestSmokeProjectImpl : IProjectEntryCallbacks{
             whiteWallTint = VectorSingle(s_GiBlackEnclosureTint);
         }
 
-        EntityID activeCamera = s_InvalidEntityId;
-        EntityID directionalLight = s_InvalidEntityId;
-        native(
-            in camHeight,
-            in camDistance,
-            in camPitch,
-            in lightPitch,
-            in lightYaw,
-            in enclosureMaterial,
-            in floorTint,
-            in enclosureScale,
-            mut ctx = this.m_context,
-            mut world = this.m_world,
-            mut floorEntity = this.m_floorEntity,
-            mut activeCamera,
-            mut directionalLight
-        ){
-            ctx.setPerfCapture(Core::Perf::CaptureOptions::GpuTimingOnly());
-            activeCamera = CreateSmokeCamera(camHeight, camDistance, camPitch, *world);
-            directionalLight = Impl::Scene::CreateDirectionalLightEntity(
-                *world,
-                lightPitch,
-                lightYaw,
-                0.0f,
-                Float4(1.00f, 0.96f, 0.88f, 1.0f),
-                s_GiDirectionalLightIntensity
-            );
-            floorEntity = CreateTintedStaticMeshEntity(
-                s_GiGroundMesh,
-                enclosureMaterial,
-                NameTextAscii(s_SmokeSurfaceMaterialInterface),
-                floorTint,
-                VectorZero(),
-                VectorSet(enclosureScale, 1.0f, enclosureScale, 0.0f),
-                *world
-            );
-        }
+        this.m_context.setPerfCapture(SmokePerfGpuTimingOnly());
+        const EntityID activeCamera = CreateSmokeCamera(camHeight, camDistance, camPitch, SmokeWorldRef(this.m_world));
+        const EntityID directionalLight = CreateSmokeDirectionalLight(
+            lightPitch,
+            lightYaw,
+            0.0f,
+            f32x4(1.00f, 0.96f, 0.88f, 1.0f),
+            s_GiDirectionalLightIntensity,
+            SmokeWorldRef(this.m_world)
+        );
+        this.m_floorEntity = CreateTintedStaticMeshEntity(
+            s_GiGroundMesh,
+            enclosureMaterial,
+            NameTextAscii(s_SmokeSurfaceMaterialInterface),
+            floorTint,
+            VectorSingle(0.0f, 0.0f, 0.0f, 0.0f),
+            VectorSingle(enclosureScale, 1.0f, enclosureScale, 0.0f),
+            SmokeWorldRef(this.m_world)
+        );
 
         this.m_redWallEntity = this.createWall(VectorSingle(s_GiBoxHalfExtent, s_GiBoxHeight * 0.5f, 0.0f, 0.0f), redWallTint, -90.0f, enclosureScale, wallHeightScale);
         this.m_blueWallNegX = this.createWall(VectorSingle(-s_GiBoxHalfExtent, s_GiBoxHeight * 0.5f, 0.0f, 0.0f), blueWallTint, 90.0f, enclosureScale, wallHeightScale);
         this.m_whiteWallPosZ = this.createWall(VectorSingle(0.0f, s_GiBoxHeight * 0.5f, s_GiBoxHalfExtent, 0.0f), whiteWallTint, 180.0f, enclosureScale, wallHeightScale);
 
-        if(this.m_complexSceneEnabled){
-            b8 complexOk = false;
-            native(in covView = this.m_coverageViewEnabled, mut world = this.m_world, mut complexOk){
-                complexOk = CreateComplexGiScene(*world, covView);
-            }
-            if(!complexOk)
-                return false;
-        }
+        if(this.m_complexSceneEnabled && !CreateComplexGiScene(SmokeWorldRef(this.m_world), this.m_coverageViewEnabled))
+            return false;
 
         [essential] assert(
             activeCamera.valid() && directionalLight.valid() && this.m_floorEntity.valid() && this.m_redWallEntity.valid() && this.m_blueWallNegX.valid() && this.m_whiteWallPosZ.valid(),
-            "GiTestSmokeProjectImpl failed to create all scene entities"
+            "GiTestSmokeProject failed to create all scene entities"
         );
 
         if(this.m_complexSceneEnabled)
-            [essential] info("GiTestSmokeProjectImpl: closed black enclosure around camera and maze, small skylight, one vertical sun, red/blue bounce patches");
+            [essential] info("GiTestSmokeProject: closed black enclosure around camera and maze, small skylight, one vertical sun, red/blue bounce patches");
         else
-            [essential] info("GiTestSmokeProjectImpl: open-top box + red/blue opposite walls, directional light -> indirect red+blue bleed on shadowed floor");
+            [essential] info("GiTestSmokeProject: open-top box + red/blue opposite walls, directional light -> indirect red+blue bleed on shadowed floor");
 
         u32 complexFlag = 0u;
         if(this.m_complexSceneEnabled)
             complexFlag = 1u;
-        [essential] info("GiTestSmokeProjectImpl: complex_scene={}", complexFlag);
+        [essential] info("GiTestSmokeProject: complex_scene={}", complexFlag);
 
         if(this.m_complexSceneEnabled){
-            [essential] info("GiTestSmokeProjectImpl: min_post_presentation_live_warmup_seconds={}", this.m_complexMinLiveWarmupSeconds);
+            [essential] info("GiTestSmokeProject: min_post_presentation_live_warmup_seconds={}", this.m_complexMinLiveWarmupSeconds);
             const u32 captureFreezeFrame = RendererBaselineCaptureFreezeFrame();
             if(captureFreezeFrame != 0u){
-                FramebufferCaptureOptions options = FramebufferCaptureOptions();
-                native(mut options){
-                    options.shouldCapture = +[](void* const ctx, const u64)noexcept -> b8{
-                        return MakeNotNull(static_cast<GiTestSmokeProjectImpl*>(ctx))->shouldCaptureComplex();
-                    };
-                    options.predicateContext = this;
-                    options.requiredWidth = 1280u;
-                    options.requiredHeight = 900u;
-                }
-                SmokeCaptureFactory captureFactory = SmokeCaptureFactory(this.m_context);
-                Expected<UniquePtr<FramebufferCapture>> capture = captureFactory.configure(GiTestProjectName(), captureFreezeFrame, options);
-                b8 validCapture = false;
-                if(capture.has_value()){
-                    native(in cap = capture.value(), mut validCapture){
-                        validCapture = static_cast<b8>(cap);
-                    }
-                }
-                if(!validCapture){
-                    error("GiTestSmokeProjectImpl: complex GI baseline requires application framebuffer capture");
+                const FramebufferCaptureOptions options = MakeSmokeCaptureOptions(this, 1280u, 900u, true);
+                if(
+                    !ConfigureSmokeFramebufferCapture(this.m_context, "GiTestSmokeProject", captureFreezeFrame, options, this.m_complexCapture)
+                    || !SmokeFramebufferCaptureValid(this.m_complexCapture)
+                ){
+                    error("GiTestSmokeProject: complex GI baseline requires application framebuffer capture");
                     return false;
-                }
-                native(mut dstCapture = this.m_complexCapture, mut capture){
-                    dstCapture = Move(*capture);
                 }
             }
         }
@@ -228,17 +176,13 @@ class GiTestSmokeProjectImpl : IProjectEntryCallbacks{
     public void onShutdown()override{
         this.m_context.graphics.setFrameSubmissionSuspended(false);
         this.destroyWorld();
-        [essential] info("GiTestSmokeProjectImpl: shutdown");
+        [essential] info("GiTestSmokeProject: shutdown");
     }
 
     public b8 onUpdate(in f32 delta)override{
         if(this.m_csgGiScene.active()){
             this.m_csgGiScene.update();
-            b8 tickedCsg = false;
-            native(mut world = this.m_world, mut tickedCsg){
-                tickedCsg = TickSmokeWorld(1.0f / 60.0f, *world);
-            }
-            return tickedCsg;
+            return TickSmokeWorld(1.0f / 60.0f, SmokeWorldRef(this.m_world));
         }
         const u32 captureFreezeFrame = RendererBaselineCaptureFreezeFrame();
         const u64 successfulPresentations = this.m_context.graphics.getSuccessfulPresentationCount();
@@ -251,16 +195,13 @@ class GiTestSmokeProjectImpl : IProjectEntryCallbacks{
         f64 elapsedLiveSeconds = 0.0;
         b8 liveWarmupComplete = !this.m_complexSceneEnabled;
         if(this.m_complexSceneEnabled && !this.m_complexLiveWarmupComplete && captureFreezeFrame != 0u && successfulPresentations >= captureWarmup){
-            Timer now = Timer();
-            native(mut now){
-                now = TimerNow();
-            }
+            const Timer now = TimerNow();
             if(!this.m_complexLiveWarmupStarted){
                 this.m_complexLiveWarmupStartTime = now;
                 this.m_complexLiveWarmupStartPresentations = successfulPresentations;
                 this.m_complexLiveWarmupStarted = true;
                 [essential] info(
-                    "GiTestSmokeProjectImpl: complex GI live warmup start graphics_frame={} presentations={} required_presentations={} required_seconds={}"
+                    "GiTestSmokeProject: complex GI live warmup start graphics_frame={} presentations={} required_presentations={} required_seconds={}"
                     , this.m_context.graphics.getFrameIndex()
                     , successfulPresentations
                     , captureWarmup
@@ -268,43 +209,31 @@ class GiTestSmokeProjectImpl : IProjectEntryCallbacks{
                 );
             }
             else{
-                native(in now, in startTime = this.m_complexLiveWarmupStartTime, mut elapsedLiveSeconds){
-                    elapsedLiveSeconds = DurationInSeconds<f64>(now, startTime);
-                }
+                elapsedLiveSeconds = DurationInSeconds<f64>(now, this.m_complexLiveWarmupStartTime);
                 liveWarmupComplete = elapsedLiveSeconds >= cast<f64>(this.m_complexMinLiveWarmupSeconds) && successfulPresentations > this.m_complexLiveWarmupStartPresentations;
             }
         }
         if(this.m_complexSceneEnabled && liveWarmupComplete && !this.m_complexLiveWarmupComplete){
             this.m_complexLiveWarmupComplete = true;
             [essential] info(
-                "GiTestSmokeProjectImpl: complex GI live warmup end graphics_frame={} presentations={} elapsed_seconds={}"
+                "GiTestSmokeProject: complex GI live warmup end graphics_frame={} presentations={} elapsed_seconds={}"
                 , this.m_context.graphics.getFrameIndex()
                 , successfulPresentations
                 , elapsedLiveSeconds
             );
         }
 
-        b8 complexReady = false;
-        u64 complexFrame = 0u;
-        native(mut cap = this.m_complexCapture, mut complexReady, mut complexFrame){
-            if(cap){
-                cap->update();
-                if(cap->captureReady()){
-                    complexReady = true;
-                    complexFrame = cap->capturedGraphicsFrameIndex();
-                }
-            }
-        }
-        if(complexReady && !this.m_complexCaptureReceiptLogged){
+        UpdateSmokeFramebufferCapture(this.m_complexCapture);
+        if(SmokeFramebufferCaptureReady(this.m_complexCapture) && !this.m_complexCaptureReceiptLogged){
             this.m_complexCaptureReceiptLogged = true;
-            [essential] info("GiTestSmokeProjectImpl: complex GI capture source_frame={}", complexFrame);
+            [essential] info("GiTestSmokeProject: complex GI capture source_frame={}", SmokeFramebufferCapturedFrameIndex(this.m_complexCapture));
         }
 
         if(!this.m_complexSceneEnabled && captureFreezeFrame != 0u && captureProgress >= cast<u64>(captureFreezeFrame)){
             if(!this.m_rendererBaselineCapturePaused){
                 this.m_context.graphics.setFrameSubmissionSuspended(true);
                 this.m_rendererBaselineCapturePaused = true;
-                [essential] info("GiTestSmokeProjectImpl: renderer baseline capture ready after {} rendered frames; render submission suspended", this.m_rendererBaselineRenderedFrameCount);
+                [essential] info("GiTestSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended", this.m_rendererBaselineRenderedFrameCount);
             }
             return true;
         }
@@ -313,33 +242,23 @@ class GiTestSmokeProjectImpl : IProjectEntryCallbacks{
             return false;
 
         if(this.m_resolveSwitchEnabled && (this.m_rendererBaselineRenderedFrameCount == 30u || this.m_rendererBaselineRenderedFrameCount == 90u)){
-            b8 switchedGi = false;
-            u32 factor = 0u;
-            native(in frameCount = this.m_rendererBaselineRenderedFrameCount, mut world = this.m_world, mut switchedGi, mut factor){
-                Impl::RendererSystem& renderer = *MakeNotNull(world->getSystem<Impl::RendererSystem>());
-                Impl::SurfelGiQualitySettings settings;
-                settings.resolveResolution = frameCount == 30u ? Impl::SurfelGiResolveResolution::Quarter : Impl::SurfelGiResolveResolution::Half;
-                switchedGi = renderer.setSurfelGiQualitySettings(settings);
-                factor = static_cast<u32>(settings.resolveResolution);
-            }
-            if(!switchedGi)
+            SurfelGiQualitySettings settings = SurfelGiQualitySettings();
+            settings.resolveResolution = SurfelGiResolveResolution::Half;
+            if(this.m_rendererBaselineRenderedFrameCount == 30u)
+                settings.resolveResolution = SurfelGiResolveResolution::Quarter;
+            if(!SmokeRendererSystemRef(SmokeWorldRef(this.m_world)).setSurfelGiQualitySettings(settings))
                 return false;
-            [essential] info("GiTestSmokeProjectImpl: requested surfel GI resolve switch factor={}", factor);
+            [essential] info("GiTestSmokeProject: requested surfel GI resolve switch factor={}", cast<u32>(settings.resolveResolution));
         }
 
         if(this.m_resolveSwitchEnabled && (this.m_rendererBaselineRenderedFrameCount == 150u || this.m_rendererBaselineRenderedFrameCount == 210u)){
-            b8 switchedShadow = false;
-            u32 factor = 0u;
-            native(in frameCount = this.m_rendererBaselineRenderedFrameCount, mut world = this.m_world, mut switchedShadow, mut factor){
-                Impl::RendererSystem& renderer = *MakeNotNull(world->getSystem<Impl::RendererSystem>());
-                Impl::ShadowQualitySettings settings;
-                settings.receiverResolution = frameCount == 150u ? Impl::ShadowReceiverResolution::Quarter : Impl::ShadowReceiverResolution::Half;
-                switchedShadow = renderer.setShadowQualitySettings(settings);
-                factor = static_cast<u32>(settings.receiverResolution);
-            }
-            if(!switchedShadow)
+            ShadowQualitySettings settings = ShadowQualitySettings();
+            settings.receiverResolution = ShadowReceiverResolution::Half;
+            if(this.m_rendererBaselineRenderedFrameCount == 150u)
+                settings.receiverResolution = ShadowReceiverResolution::Quarter;
+            if(!SmokeRendererSystemRef(SmokeWorldRef(this.m_world)).setShadowQualitySettings(settings))
                 return false;
-            [essential] info("GiTestSmokeProjectImpl: requested shadow receiver switch factor={}", factor);
+            [essential] info("GiTestSmokeProject: requested shadow receiver switch factor={}", cast<u32>(settings.receiverResolution));
         }
 
         const f32 fixedDelta = RendererBaselineFixedDelta();
@@ -349,36 +268,23 @@ class GiTestSmokeProjectImpl : IProjectEntryCallbacks{
         else if(IsFinite(delta))
             safeDelta = Max(delta, 0.0f);
         this.m_gpuPassTimingProbe.recordFrame(safeDelta, this.m_context.gpuTimingView());
-        b8 ticked = false;
-        native(in safeDelta, mut world = this.m_world, mut ticked){
-            ticked = TickSmokeWorld(safeDelta, *world);
-        }
-        if(!ticked)
+        if(!TickSmokeWorld(safeDelta, SmokeWorldRef(this.m_world)))
             return false;
         ++this.m_rendererBaselineRenderedFrameCount;
         return true;
     }
 
     private void destroyWorld(){
-        native(mut cap = this.m_complexCapture){
-            if(cap){
-                cap->stop();
-                cap.reset();
-            }
-        }
+        StopAndResetSmokeFramebufferCapture(this.m_complexCapture);
         this.m_csgGiScene.stop();
         DestroySmokeRenderWorld(this.m_context, this.m_world);
     }
 
     private b8 samplePresentationFps(){
         const u64 successfulPresentations = this.m_context.graphics.getSuccessfulPresentationCount();
-        Timer now = Timer();
-        native(mut now){
-            now = TimerNow();
-        }
-        const PresentationFpsStatus status = this.m_presentationFpsProbe.observe(successfulPresentations, now);
+        const PresentationFpsStatus status = this.m_presentationFpsProbe.observe(successfulPresentations, TimerNow());
         if(status == PresentationFpsStatus::Invalid){
-            error("GiTestSmokeProjectImpl: presentation measurement invalid counter or clock");
+            error("GiTestSmokeProject: presentation measurement invalid counter or clock");
             return false;
         }
         if(status == PresentationFpsStatus::Waiting)
@@ -386,7 +292,7 @@ class GiTestSmokeProjectImpl : IProjectEntryCallbacks{
 
         const PresentationFpsSample interval = this.m_presentationFpsProbe.interval();
         [essential] info(
-            "GiTestSmokeProjectImpl: presentation fps avg={} presentations={} seconds={} first={} last={}"
+            "GiTestSmokeProject: presentation fps avg={} presentations={} seconds={} first={} last={}"
             , interval.averageFps()
             , interval.presentations()
             , interval.wallSeconds
@@ -400,26 +306,20 @@ class GiTestSmokeProjectImpl : IProjectEntryCallbacks{
         SmokeMaterialRef material = s_GiGroundOpaqueMaterial;
         if(this.m_complexSceneEnabled)
             material = s_GiDiffuseMaterial;
-        EntityID entity = s_InvalidEntityId;
-        native(in position, in colorTint, in yawDeg, in width, in height, in material, mut world = this.m_world, mut entity){
-            const SIMDVectorSingle pitchQuat = QuaternionRotationRollPitchYaw(s_PIDIV2, 0.0f, 0.0f);
-            const SIMDVectorSingle yawQuat = QuaternionRotationRollPitchYawFromVector(VectorScale(VectorSet(0.0f, yawDeg, 0.0f, 0.0f), s_PI / 180.0f));
-            const SIMDVectorSingle wallRotation = QuaternionMultiply(pitchQuat, yawQuat);
-
-            entity = CreateTintedStaticMeshEntity(
-                s_GiGroundMesh,
-                material,
-                NameTextAscii(s_SmokeSurfaceMaterialInterface),
-                colorTint,
-                position,
-                VectorSet(width, 1.0f, height, 0.0f),
-                *world
-            );
-            if(entity.valid()){
-                if(auto* transform = world->tryGetComponent<Impl::Scene::TransformComponent>(entity))
-                    StoreFloat(wallRotation, transform->rotation);
-            }
-        }
+        const VectorSingle pitchQuat = QuaternionRotationRollPitchYawFromVector(VectorSingle(s_PIDIV2, 0.0f, 0.0f, 0.0f));
+        const VectorSingle yawQuat = QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, yawDeg, 0.0f, 0.0f) * (s_PI / 180.0f));
+        const VectorSingle wallRotation = QuaternionMultiply(pitchQuat, yawQuat);
+        const EntityID entity = CreateTintedStaticMeshEntity(
+            s_GiGroundMesh,
+            material,
+            NameTextAscii(s_SmokeSurfaceMaterialInterface),
+            colorTint,
+            position,
+            VectorSingle(width, 1.0f, height, 0.0f),
+            SmokeWorldRef(this.m_world)
+        );
+        if(entity.valid() && !SetSmokeEntityRotation(entity, f32x4(wallRotation), SmokeWorldRef(this.m_world)))
+            return s_InvalidEntityId;
         return entity;
     }
 

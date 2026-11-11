@@ -16,8 +16,33 @@ native{
 
 
 #include <core/graphics/rhi/command.h>
+#include <core/graphics/rhi/pipeline.h>
+#include <core/graphics/rhi/resource.h>
+#include <core/task/gpu/timing_feedback.h>
+#include <core/task/gpu/types.h>
+#include <impl/ecs_render/shared/frame_push_constants.adhd.h>
 namespace NWB::Impl{
+struct MaterialPassDrawItemsView;
 using ReadbackQueueToken = Core::QueueSubmissionToken;
+using AvboitGeometryDrawSets = Span<const MaterialPassDrawItemsView>;
+using AvboitGeometryResourceSetId = Core::GpuGraphResourceSetId;
+using AvboitGraphResourceId = Core::GpuGraphResourceId;
+using AvboitGraphTaskId = Core::GpuTaskId;
+using MutableSceneLightGpuDataSpan = Span<SceneLightGpuData>;
+using CausticGraphTaskId = Core::GpuTaskId;
+using CausticGraphResourceId = Core::GpuGraphResourceId;
+using CausticLabelView = AStringView;
+using CausticWarnView = TStringView;
+using CausticStageShaderHandle = Core::ShaderHandle;
+using CausticStagePipelineHandle = Core::ComputePipelineHandle;
+using CsgGraphTaskId = Core::GpuTaskId;
+using CsgGraphResourceSetId = Core::GpuGraphResourceSetId;
+using DeferredTailGpuTaskId = Core::GpuTaskId;
+using DeferredGraphResourceId = Core::GpuGraphResourceId;
+using DeferredGraphTextureRange = Core::TextureSubresourceSet;
+using SurfelGiGpuTaskId = Core::GpuTaskId;
+using SurfelGiQueueSubmissionToken = Core::QueueSubmissionToken;
+using RendererTimingPolicy = Core::GpuTaskTimingFeedbackPolicy;
 };
 
 

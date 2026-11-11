@@ -8,25 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <global/unicode/grapheme.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 Expected<MultilineTextStep> TryBuildMultilineTextStep(in StringView source, in usize offset, in u32 scalar, in usize decodedBytes){
     MultilineTextStep outStep;
     outStep.sourceBytes = decodedBytes;
@@ -204,28 +185,21 @@ b8 TryBuildGraphemeBoundariesInto(in StringView text, in b8 singleLine, mut Vect
         return false;
     outBoundaries.clear();
     outBoundaries.reserve(text.size() + 1u);
+    GraphemeBoundaryState state;
     usize offset = 0u;
-    b8 valid = true;
-    native(in text, mut offset, mut outBoundaries, mut valid){
-        ::GraphemeBoundaryState state;
-        while(offset < text.size()){
-            const auto decoded = ::DecodeUtf8Scalar(text.substr(offset, ::s_Utf8MaxSequenceBytes));
-            if(!decoded){
-                valid = false;
-                break;
-            }
-            const u32 scalar = decoded->codePoint;
-            const ::GraphemeBreak::Enum current = ::LookupGraphemeBreak(scalar);
-            const ::IndicConjunct::Enum indic = ::LookupIndicConjunct(scalar);
-            const b8 pictograph = ::IsExtendedPictographic(scalar);
-            if(state.breaksBefore(current, indic, pictograph))
-                outBoundaries.push_back(offset);
-            state.advance(current, indic, pictograph);
-            offset += static_cast<usize>(decoded->byteCount);
-        }
+    while(offset < text.size()){
+        u32 scalar = 0u;
+        usize byteCount = 0u;
+        if(!TryDecodeUtf8Scalar(text.substr(offset, s_Utf8MaxSequenceBytes), scalar, byteCount))
+            return false;
+        const GraphemeBreak current = LookupGraphemeBreak(scalar);
+        const IndicConjunct indic = LookupIndicConjunct(scalar);
+        const b8 pictograph = IsExtendedPictographic(scalar);
+        if(state.breaksBefore(current, indic, pictograph))
+            outBoundaries.push_back(offset);
+        state.advance(current, indic, pictograph);
+        offset += byteCount;
     }
-    if(!valid)
-        return false;
     outBoundaries.push_back(text.size());
     return true;
 }

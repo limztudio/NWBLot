@@ -78,6 +78,27 @@ ReflectionCompositeInputs MakeReflectionCompositeInputs(in u32 opaqueRadianceSlo
     return inputs;
 }
 
+Expected<Name, ErrorCode> BuildReflectionCsgHardwareSliceIdentity(in u32 slice){
+    const Expected<NameHash> derivedHash = BeginDerivedNameHash(s_ReflectionCsgHardwareSliceFamily);
+    if(!derivedHash.has_value())
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
+    NameHash hash = derivedHash.value();
+    if(!UpdateDerivedNameHashDecimal(hash, slice))
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
+    const Expected<Name> identity = FinishDerivedNameHash(hash);
+    if(!identity.has_value())
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
+    return identity.value();
+}
+
+void LogReflectionConfirmTimingBeginFailed(){
+    warning("Reflection: failed to confirm accepted hardware timing begin");
+}
+
+void LogReflectionConfirmTimingEndFailed(){
+    warning("Reflection: failed to confirm accepted hardware timing end");
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -118,7 +139,6 @@ native{
 
 #include <global/algorithm.h>
 #include <global/basic_string.h>
-#include <global/numeric_text.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -300,11 +320,11 @@ public:
         // An accepted prefix already reads the frozen context even when a later packet fails.
         payload.raytracingSystem.confirmRayTraceContextReadSubmission(token);
         if(payload.slice == 0u && !payload.dispatch->timing->confirmBeginSubmission(token)){
-            NWB_LOGGER_WARNING(NWB_TEXT("Reflection: failed to confirm accepted hardware timing begin"));
+            LogReflectionConfirmTimingBeginFailed();
             payload.dispatch->timing->discard();
         }
         if(IsFinalReflectionCsgHardwareSlice(payload.slice, payload.sliceCount) && !payload.dispatch->timing->confirmEndSubmission(token, true)){
-            NWB_LOGGER_WARNING(NWB_TEXT("Reflection: failed to confirm accepted hardware timing end"));
+            LogReflectionConfirmTimingEndFailed();
             payload.dispatch->timing->discard();
         }
         if(payload.hardwareDispatchLogged)
@@ -328,14 +348,7 @@ public:
 
 
 Expected<Name, ErrorCode> ReflectionCsgHardwareSliceIdentity(const u32 slice){
-    Array<char, s_ReflectionSliceIndexTextBufferSize> suffix{};
-    const auto index = FormatI64(static_cast<i64>(slice), suffix);
-    if(!index)
-        return MakeUnexpected(index.error());
-    const auto identity = DeriveName(s_ReflectionCsgHardwareSliceFamily, *index);
-    if(!identity)
-        return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
-    return *identity;
+    return BuildReflectionCsgHardwareSliceIdentity(slice);
 }
 
 Expected<ReflectionGraphResult> DeclareReflectionTasks(

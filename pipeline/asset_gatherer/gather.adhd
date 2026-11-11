@@ -3,6 +3,7 @@
 
 
 #include "constants.adhd"
+#include "gather_input_discovery.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -52,8 +53,7 @@ public:
     {}
 };
 
-
-[[nodiscard]] b8 GatherAssets(const AssetGatherOptions& options, Core::Alloc::ScratchArena& scratchArena);
+b8 GatherAssets(const AssetGatherOptions& options, Core::Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -100,8 +100,7 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <pipeline/asset_gatherer/gather_input_discovery.adhd.h>
-
+#include <core/assets/input_list.h>
 #include <core/assets/volume/asset_volume_writer.h>
 #include <core/assets/volume/built_asset.h>
 #include <core/common/log.h>
@@ -124,12 +123,81 @@ namespace Assets = Core::Assets;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_asset_gatherer_gather{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static Expected<Assets::AssetVector<Assets::AssetString>> CollectGatherInputFiles(const AssetGatherOptions& options, Core::Alloc::ScratchArena& scratchArena){
+    Assets::AssetArena& arena = options.inputs.get_allocator().arena();
+    Assets::AssetVector<Assets::AssetString> files(arena);
+    files.reserve(options.inputs.size());
+    for(const Assets::AssetString& input : options.inputs){
+        const auto absolutePath = AbsolutePath(Path(arena, input));
+        if(!absolutePath){
+            LogGatherInputResolveFailure(input);
+            return MakeUnexpected(Failure{});
+        }
+        const Path path = absolutePath->lexicallyNormal();
+        const auto directory = IsDirectory(path);
+        if(!directory){
+            LogGatherInputInspectFailure(input);
+            return MakeUnexpected(Failure{});
+        }
+        if(!*directory){
+            files.emplace_back(PathToString(arena, path));
+            continue;
+        }
+
+        const Path manifest = path / Assets::BuiltAssetDetail::s_ManifestFilename;
+        const auto manifestExists = FileExists(manifest);
+        if(!manifestExists){
+            LogGatherBuildManifestInspectFailure(PathToString<char>(scratchArena, manifest));
+            return MakeUnexpected(Failure{});
+        }
+        if(*manifestExists){
+            if(!Assets::ReadAssetInputList(manifest, scratchArena, files, true))
+                return MakeUnexpected(Failure{});
+            continue;
+        }
+        const auto entries = RecursiveDirectoryIterator<Assets::AssetArena>::Create(path);
+        if(!entries){
+            LogGatherInputScanFailure(input);
+            return MakeUnexpected(Failure{});
+        }
+        for(const auto& entry : *entries){
+            const auto regular = entry.isRegularFile();
+            if(!regular){
+                LogGatherInputEntryInspectFailure(PathToString<char>(scratchArena, entry.path()));
+                return MakeUnexpected(Failure{});
+            }
+            const Assets::ScratchString extText = PathToString(scratchArena, entry.path().extensionView());
+            if(IsBuiltAssetEntryExtension(*regular, extText, Assets::BuiltAssetDetail::s_Extension))
+                files.emplace_back(PathToString(arena, entry.path()));
+        }
+    }
+    Sort(files.begin(), files.end());
+    files.erase(Unique(files.begin(), files.end()), files.end());
+    return files;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 GatherAssets(const AssetGatherOptions& options, Core::Alloc::ScratchArena& scratchArena){
     Assets::AssetArena& arena = options.inputs.get_allocator().arena();
     if(!ValidateAssetGathererOutputDirectory(!options.outputDirectory.empty()))
         return false;
 
-    const auto filesResult = AssetGatherInputDiscovery::Collect(options, scratchArena);
+    const auto filesResult = __hidden_asset_gatherer_gather::CollectGatherInputFiles(options, scratchArena);
     if(!filesResult)
         return false;
     const auto& files = *filesResult;
@@ -157,7 +225,7 @@ b8 GatherAssets(const AssetGatherOptions& options, Core::Alloc::ScratchArena& sc
                     return false;
                 }
                 existing.identity.payloadSize = existing.payloadBytes.size();
-                existing.identity.payloadHash = ComputeFnv64Bytes(existing.payloadBytes.data(), existing.payloadBytes.size());
+                existing.identity.payloadHash = ComputeGatheredPayloadHash(existing.payloadBytes);
             }
             --manifest.plannedFileCount;
             continue;
@@ -173,9 +241,8 @@ b8 GatherAssets(const AssetGatherOptions& options, Core::Alloc::ScratchArena& sc
         return false;
     }
     paths.outputDirectory = outputDirectory->lexicallyNormal();
-    Assets::CookString configuration = BuildCanonicalSafeCacheName(arena, options.configuration.view());
-    if(configuration.empty())
-        configuration = SelectEffectiveGatherConfiguration(configuration);
+    const AString<> effectiveConfiguration = ResolveEffectiveGatherConfiguration(options.configuration.view());
+    Assets::CookString configuration(AStringView(effectiveConfiguration), arena);
 
     const auto result = Assets::AssetsVolumeCookDetail::WriteAssetVolume(paths, configuration, manifest, arena, scratchArena);
     if(!result)

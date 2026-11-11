@@ -90,23 +90,23 @@ struct WaylandStateContext{
     {}
 };
 
-[[nodiscard]] inline TextInputSessionToken MakeSessionToken(const u64 service, const u64 generation)noexcept{
+[[nodiscard]] NWB_INLINE TextInputSessionToken MakeSessionToken(const u64 service, const u64 generation)noexcept{
     return TextInputSessionToken{ service, generation };
 }
 
-[[nodiscard]] inline WaylandTextInputProvenance MakeWaylandProvenance(const TextInputSessionToken token, const u64 revision, const b8 revisionKnown)noexcept{
+[[nodiscard]] NWB_INLINE WaylandTextInputProvenance MakeWaylandProvenance(const TextInputSessionToken token, const u64 revision, const b8 revisionKnown)noexcept{
     return WaylandTextInputProvenance{ token, revision, revisionKnown };
 }
 
-inline void AppendGlobalString(GlobalString& target, const AStringView text){
+NWB_INLINE void AppendGlobalString(GlobalString& target, const AStringView text){
     target.append(text.data(), text.size());
 }
 
-inline void ReplaceGlobalString(GlobalString& target, const usize pos, const usize count, const AStringView text){
+NWB_INLINE void ReplaceGlobalString(GlobalString& target, const usize pos, const usize count, const AStringView text){
     target.replace(pos, count, text.data(), text.size());
 }
 
-inline void ClearAndShrinkGlobalString(GlobalString& target){
+NWB_INLINE void ClearAndShrinkGlobalString(GlobalString& target){
     target.clear();
     target.shrink_to_fit();
 }

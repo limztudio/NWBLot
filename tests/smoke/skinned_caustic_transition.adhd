@@ -15,35 +15,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_csg/module.adhd.h>
-#include <impl/ecs_model/system.adhd.h>
-#include <impl/ecs_render/module.adhd.h>
-#include <core/alloc/scratch.h>
-#include <core/common/log.h>
-#include <core/graphics/backend_selection/backend.h>
-#include <core/telemetry/frame_graph_contributor.h>
-#include <global/simd/constant.h>
-#include <global/timer.h>
-
-namespace NWB::Tests::Smoke{
-inline constexpr f64 s_SkinnedCausticTwoPi = static_cast<f64>(s_PI * 2.0f);
-inline constexpr ModelObjectKindEnum s_SkinnedCausticObjectKindMesh = Impl::ModelObjectKind::SkinnedMesh;
-inline constexpr ModelObjectKindEnum s_SkinnedCausticObjectKindSkeleton = Impl::ModelObjectKind::Skeleton;
-inline constexpr u32 s_SkinnedCausticUnsetPhase = Limit<u32>::s_Max;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+const f64 s_SkinnedCausticTwoPi = cast<f64>(s_2PI);
+const Name s_SkinnedCausticPlaneShapeName = "engine/csg/plane";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -69,18 +42,7 @@ class SkinnedCausticTransition{
         if(!output.has_value())
             return false;
 
-        FramebufferCaptureOptions captureOptions = FramebufferCaptureOptions();
-        native(mut captureOptions){
-            captureOptions.requiredWidth = 1280u;
-            captureOptions.requiredHeight = 900u;
-            captureOptions.quitWhenReady = false;
-            captureOptions.predicateContext = this;
-            captureOptions.shouldCapture = +[](void* const owner, const u64 frame)noexcept -> b8{
-                const auto& transition = *MakeNotNull(static_cast<SkinnedCausticTransition*>(owner));
-                return transition.shouldCaptureFrame(frame);
-            };
-        }
-
+        const FramebufferCaptureOptions captureOptions = MakeSmokeCaptureOptions(this, 1280u, 900u, false);
         SmokeCaptureFactory captureFactory = SmokeCaptureFactory(this.m_context);
         Expected<SmokeCaptureSeries> captureSeries = captureFactory.prepareSeries(
             StringView(output.value()),
@@ -90,17 +52,15 @@ class SkinnedCausticTransition{
         if(!captureSeries.has_value())
             return false;
 
-        native(mut dstPaths = this.m_capturePaths, mut dstCapture = this.m_capture, mut captureSeries){
-            dstPaths = Move(captureSeries->paths);
-            dstCapture = Move(captureSeries->capture);
-        }
+        this.m_capturePaths = captureSeries.value().paths;
+        MoveSmokeFramebufferCapture(captureSeries.value().capture, this.m_capture);
 
         u32 laggedFlag = 0u;
-        if(ReadSmokeEnvironmentFlag(s_SkinnedCausticCsgLaggedEnvironment))
+        if(this.m_transitionLagged)
             laggedFlag = 1u;
-        u32 causticsFlag = 1u;
-        if(ReadSmokeEnvironmentFlag(s_SkinnedCausticCsgNoPhotonsEnvironment))
-            causticsFlag = 0u;
+        u32 causticsFlag = 0u;
+        if(this.m_transitionPhotonsEnabled)
+            causticsFlag = 1u;
         [essential] info(
             "SkinnedCausticTransition: setup lagged={} caustics={} minimum_frame=360 warmup_seconds=30 phase_frames=64 samples=8 model=closed_prism"
             , laggedFlag
@@ -110,23 +70,17 @@ class SkinnedCausticTransition{
     }
 
     public b8 installTransitionCutter(in EntityID character, mut World world){
-        const EntityID meshEntity = FindSpawnedModelObject(character, s_SmokeNameMesh, s_SkinnedCausticObjectKindMesh, world);
+        const EntityID meshEntity = FindSpawnedModelObject(character, s_SmokeNameMesh, ModelObjectKind::SkinnedMesh, world);
         if(!meshEntity.valid())
             return false;
         AddSkinnedCsgMeshReceiver(meshEntity, s_SmokeNameProjectSmokeSkinnedCausticTransitionReceiver, false, true, world);
-        EntityID cutterId = s_InvalidEntityId;
-        native(mut world, mut cutterId){
-            auto entity = world.createEntity();
-            auto& cutter = entity.addComponent<Impl::CsgCutterComponent>();
-            cutter.receiverGroup = s_SmokeNameProjectSmokeSkinnedCausticTransitionReceiver;
-            cutter.shapeType = Name(s_ShadowSmokePlaneShapePath);
-            cutter.active = false;
-            Impl::CsgPlaneShapeParameters parameters{};
-            parameters.normalDistance = Float4(1.0f, 0.0f, 0.0f, 0.0f);
-            AssignCsgCutterParameters(parameters, cutter);
-            cutterId = entity.id();
-        }
-        this.m_cutterEntity = cutterId;
+        this.m_cutterEntity = CreateSmokeCsgPlaneCutter(
+            s_SmokeNameProjectSmokeSkinnedCausticTransitionReceiver,
+            s_SkinnedCausticPlaneShapeName,
+            false,
+            f32x4(1.0f, 0.0f, 0.0f, 0.0f),
+            world
+        );
         return true;
     }
 
@@ -135,27 +89,18 @@ class SkinnedCausticTransition{
         if(!this.m_transitionWarmupStarted){
             if(frame < s_SkinnedCausticTransitionMinimumFrame)
                 return;
-            Timer now = Timer();
-            native(mut now){
-                now = TimerNow();
-            }
-            this.m_transitionWarmupStart = now;
+            this.m_transitionWarmupStart = TimerNow();
             this.m_transitionWarmupStarted = true;
             [essential] info("SkinnedCausticTransition: warmup started graphics frame {}", frame);
         }
         if(!this.m_transitionStarted){
-            f64 elapsed = 0.0;
-            native(in warmupStart = this.m_transitionWarmupStart, mut elapsed){
-                elapsed = DurationInSeconds<f64>(TimerNow(), warmupStart);
-            }
+            const f64 elapsed = DurationInSeconds<f64>(TimerNow(), this.m_transitionWarmupStart);
             if(elapsed < s_SkinnedCausticTransitionWarmupSeconds)
                 return;
             this.m_transitionFirstFrame = frame;
             this.m_nextCaptureFrame = frame + s_SkinnedCausticTransitionCaptureInterval - 1u;
             this.m_transitionStarted = true;
-            native(in elapsed, in frame){
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedCausticTransition: warmup complete elapsed_seconds={:.6f} first_frame={}"), elapsed, frame);
-            }
+            [essential] info("SkinnedCausticTransition: warmup complete elapsed_seconds={:.6f} first_frame={}", elapsed, frame);
         }
 
         const u64 relativeFrame = frame - this.m_transitionFirstFrame;
@@ -164,10 +109,7 @@ class SkinnedCausticTransition{
         animationTime = phaseAngle / (cast<f64>(s_SkinnedCausticTransitionPhaseFrames) * cast<f64>(s_SkinnedCausticPoseAnimationSpeed));
         if(phase != this.m_transitionPhase){
             const b8 cutterActive = (phase & 1u) != 0u;
-            native(in cutterEntity = this.m_cutterEntity, in cutterActive, mut world){
-                auto& cutter = *MakeNotNull(world.tryGetComponent<Impl::CsgCutterComponent>(cutterEntity));
-                cutter.active = cutterActive;
-            }
+            SetSmokeCsgCutterActive(this.m_cutterEntity, cutterActive, world);
             this.m_transitionPhase = phase;
             u32 activeFlag = 0u;
             if(cutterActive)
@@ -182,26 +124,15 @@ class SkinnedCausticTransition{
     public void updateTransitionCapture(){
         if(!this.m_transitionStarted || this.m_transitionSample == s_SkinnedCausticTransitionSampleCount)
             return;
-        b8 hasCapture = false;
-        b8 captureReady = false;
-        u64 sourceFrame = 0u;
-        native(mut capture = this.m_capture, mut hasCapture, mut captureReady, mut sourceFrame){
-            if(capture){
-                hasCapture = true;
-                capture->update();
-                if(capture->captureReady()){
-                    captureReady = true;
-                    sourceFrame = capture->capturedGraphicsFrameIndex();
-                }
-            }
-        }
-        if(!hasCapture || !captureReady)
+        if(!SmokeFramebufferCaptureValid(this.m_capture))
             return;
+        UpdateSmokeFramebufferCapture(this.m_capture);
+        if(!SmokeFramebufferCaptureReady(this.m_capture))
+            return;
+        const u64 sourceFrame = SmokeFramebufferCapturedFrameIndex(this.m_capture);
         if(sourceFrame != this.m_nextCaptureFrame){
             error("SkinnedCausticTransition: missed source frame {} (captured {})", this.m_nextCaptureFrame, sourceFrame);
-            native(mut ctx = this.m_context){
-                ctx.requestQuit();
-            }
+            RequestSmokeQuit(this.m_context);
             return;
         }
         [essential] info(
@@ -222,32 +153,19 @@ class SkinnedCausticTransition{
                 );
             }
             [essential] info("SkinnedCausticTransition: complete samples=8");
-            native(mut capture = this.m_capture){
-                capture->finish();
-            }
+            FinishSmokeFramebufferCapture(this.m_capture);
             return;
         }
         this.m_nextCaptureFrame += s_SkinnedCausticTransitionCaptureInterval;
         const StringView nextPath = StringView(this.m_capturePaths[this.m_transitionSample]);
-        b8 rearmed = false;
-        native(in nextPath, mut capture = this.m_capture, mut rearmed){
-            rearmed = capture->rearm(nextPath);
-        }
-        if(!rearmed){
+        if(!RearmSmokeFramebufferCapture(this.m_capture, nextPath)){
             error("SkinnedCausticTransition: failed to advance framebuffer capture");
-            native(mut ctx = this.m_context){
-                ctx.requestQuit();
-            }
+            RequestSmokeQuit(this.m_context);
         }
     }
 
     public void stop(){
-        native(mut capture = this.m_capture){
-            if(capture){
-                capture->stop();
-                capture.reset();
-            }
-        }
+        StopAndResetSmokeFramebufferCapture(this.m_capture);
     }
 
     public b8 enabled()const{
@@ -259,17 +177,14 @@ class SkinnedCausticTransition{
         mut u64 lastPublication,
         mut Array<u64, s_SkinnedCausticTransitionPhaseCount> phaseSamples
     ){
-        const u64 firstFrame = this.m_transitionFirstFrame;
-        native(in ctx = this.m_context, in scope, in firstFrame, mut lastPublication, mut phaseSamples){
-            const auto& stats = ctx.gpuTimingView().stats(scope);
-            if(stats.valid() && stats.publishFrameIndex != lastPublication){
-                lastPublication = stats.publishFrameIndex;
-                if(stats.firstSampleFrameIndex >= firstFrame){
-                    const u64 firstPhase = (stats.firstSampleFrameIndex - firstFrame) / s_SkinnedCausticTransitionPhaseFrames;
-                    const u64 lastPhase = (stats.lastSampleFrameIndex - firstFrame) / s_SkinnedCausticTransitionPhaseFrames;
-                    if(firstPhase == lastPhase && firstPhase < s_SkinnedCausticTransitionPhaseCount)
-                        phaseSamples[firstPhase] += stats.sampleCount;
-                }
+        const TimingStats stats = this.m_context.gpuTimingView().stats(scope);
+        if(stats.valid() && stats.publishFrameIndex != lastPublication){
+            lastPublication = stats.publishFrameIndex;
+            if(stats.firstSampleFrameIndex >= this.m_transitionFirstFrame){
+                const u64 firstPhase = (stats.firstSampleFrameIndex - this.m_transitionFirstFrame) / s_SkinnedCausticTransitionPhaseFrames;
+                const u64 lastPhase = (stats.lastSampleFrameIndex - this.m_transitionFirstFrame) / s_SkinnedCausticTransitionPhaseFrames;
+                if(firstPhase == lastPhase && firstPhase < cast<u64>(s_SkinnedCausticTransitionPhaseCount))
+                    phaseSamples[firstPhase] += stats.sampleCount;
             }
         }
     }
@@ -351,9 +266,7 @@ class SkinnedCausticTransition{
         }
         if(appendFailed){
             error("SkinnedCausticTransition: could not capture public accepted-queue telemetry");
-            native(mut ctx = this.m_context){
-                ctx.requestQuit();
-            }
+            RequestSmokeQuit(this.m_context);
             return;
         }
         if(!matchedPacket)
@@ -374,9 +287,7 @@ class SkinnedCausticTransition{
         this.m_phaseRouteRecorded[phase] = true;
         if(this.m_transitionLagged && !offGraphics){
             [essential] info("SkinnedCausticTransition: photon reader remains on primary Graphics; asynchronous hazard route unavailable");
-            native(mut ctx = this.m_context){
-                ctx.requestQuit();
-            }
+            RequestSmokeQuit(this.m_context);
         }
     }
 
@@ -391,7 +302,7 @@ class SkinnedCausticTransition{
     private Array<u64, s_SkinnedCausticTransitionPhaseCount> m_phasePhotonSamples;
     private Array<u64, s_SkinnedCausticTransitionPhaseCount> m_phaseSkinningSamples;
     private EntityID m_cutterEntity = s_InvalidEntityId;
-    private u32 m_transitionPhase = s_SkinnedCausticUnsetPhase;
+    private u32 m_transitionPhase = u32.max;
     private u32 m_transitionSample = 0u;
     private Array<b8, s_SkinnedCausticTransitionPhaseCount> m_phaseRouteRecorded;
     private b8 m_transitionEnabled = false;

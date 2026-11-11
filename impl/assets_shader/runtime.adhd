@@ -2,21 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ValidateResolvedSpirvEntryPoint(
-    in b8 resolved,
-    in StringView entryPoint,
-    in Name assetType
-){
-    if(resolved)
-        return true;
-
-    error(
-        "IShader::loadBinaryForStage failed: entry point '{}' does not match asset type '{}' or SPIR-V is malformed"
-        , entryPoint
-        , assetType.resolvedText()
-    );
-    return false;
-}
+#include <impl/assets_shader/shader_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -30,7 +16,6 @@ native{
 
 
 #include <impl/assets_shader/asset.adhd.h>
-#include <impl/assets_shader/shader_types.adhd.h>
 
 #include <core/common/log.h>
 #include <core/graphics/spirv_entry_point.h>
@@ -64,6 +49,9 @@ NWB_SHADER_ASSET_TYPE_ENTRIES(NWB_REGISTER_SHADER_ASSET_CODEC)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ValidateResolvedSpirvEntryPoint(b8 resolved, AStringView entryPoint, Name assetType)noexcept;
 
 
 IShader::~IShader()noexcept = default;
@@ -124,6 +112,26 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ValidateResolvedSpirvEntryPoint(
+    in b8 resolved,
+    in StringView entryPoint,
+    in Name assetType
+){
+    if(resolved)
+        return true;
+
+    error(
+        "IShader::loadBinaryForStage failed: entry point '{}' does not match asset type '{}' or SPIR-V is malformed",
+        entryPoint,
+        assetType.resolvedText()
+    );
+    return false;
 }
 
 

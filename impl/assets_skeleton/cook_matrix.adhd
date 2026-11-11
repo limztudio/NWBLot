@@ -2,63 +2,69 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/assets_skeleton/joint_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_COOK)
+b8 HasSkeletonJointMatrixRowCount(in usize rowCount){
+    return rowCount == cast<usize>(s_SkeletonJointMatrixRowCount);
+}
 
+b8 HasSkeletonJointMatrixColumnCount(in usize columnCount){
+    return columnCount == cast<usize>(s_SkeletonJointMatrixColumnCount);
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+SkeletonJointMatrix BuildSkeletonJointMatrixFromRows(
+    in Array<f32, 4> row0,
+    in Array<f32, 4> row1,
+    in Array<f32, 4> row2
+){
+    return SkeletonJointMatrix(
+        row0[0u], row0[1u], row0[2u], row0[3u],
+        row1[0u], row1[1u], row1[2u], row1[3u],
+        row2[0u], row2[1u], row2[2u], row2[3u]
+    );
+}
 
+b8 ValidateSkeletonJointMatrixRowList(in b8 isList, in usize rowCount, in Path nwbFilePath, in StringView metaKind, in StringView label){
+    if(isList && HasSkeletonJointMatrixRowCount(rowCount))
+        return true;
 
-#include <impl/assets_skeleton/joint_types.adhd.h>
+    error("{} meta '{}': '{}' must be a 3x4 affine matrix", metaKind, PathToString(nwbFilePath), label);
+    return false;
+}
 
-#include <core/metascript/parser.h>
+b8 ValidateSkeletonJointMatrixColumnList(
+    in b8 isList,
+    in usize columnCount,
+    in Path nwbFilePath,
+    in StringView metaKind,
+    in StringView label,
+    in usize rowIndex
+){
+    if(isList && HasSkeletonJointMatrixColumnCount(columnCount))
+        return true;
 
+    error("{} meta '{}': '{}' row {} must have 4 numeric values", metaKind, PathToString(nwbFilePath), label, rowIndex);
+    return false;
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void LogSkeletonJointMatrixElementFailure(
+    in b8 isNumeric,
+    in Path nwbFilePath,
+    in StringView metaKind,
+    in StringView label,
+    in usize rowIndex,
+    in usize columnIndex
+){
+    if(!isNumeric){
+        error("{} meta '{}': '{}' row {} column {} must be numeric", metaKind, PathToString(nwbFilePath), label, rowIndex, columnIndex);
+        return;
+    }
 
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace AssetsSkeletonCookDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] Expected<SkeletonJointMatrix> ParseSkeletonJointMatrixValue(const Path& nwbFilePath, const Core::Metascript::Value& value, AStringView metaKind, AStringView label);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    error("{} meta '{}': '{}' row {} column {} is non-finite or outside f32 range", metaKind, PathToString(nwbFilePath), label, rowIndex, columnIndex);
 }
 
 

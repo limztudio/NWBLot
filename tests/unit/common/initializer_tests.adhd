@@ -75,11 +75,7 @@ void ResetInitializerState(in b8 failNext, in b8 throwNext){
 }
 
 InitializerState SnapshotInitializerState(){
-    InitializerState snapshot = InitializerState();
-    native(mut snapshot){
-        snapshot = s_State;
-    }
-    return snapshot;
+    return s_State;
 }
 
 void VerifyCommonInitializerLifetime_FailedInitializationRollsBackOnlyTheSuccessfulPrefixAndAllowsReacquire(){
@@ -203,6 +199,15 @@ void VerifyCommonInitializerLifetime_GuardUnwindFinalizesAllItemsBeforeTheTermin
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+NWB_ADHD_GTEST(CommonInitializerLifetime, FailedInitializationRollsBackOnlyTheSuccessfulPrefixAndAllowsReacquire, VerifyCommonInitializerLifetime_FailedInitializationRollsBackOnlyTheSuccessfulPrefixAndAllowsReacquire)
+NWB_ADHD_GTEST(CommonInitializerLifetime, ThrowingInitializationRollsBackOnlyTheSuccessfulPrefixAndAllowsReacquire, VerifyCommonInitializerLifetime_ThrowingInitializationRollsBackOnlyTheSuccessfulPrefixAndAllowsReacquire)
+NWB_ADHD_GTEST(CommonInitializerLifetime, NestedGuardsFinalizeOnlyTheLastOwnerAndAllowReacquire, VerifyCommonInitializerLifetime_NestedGuardsFinalizeOnlyTheLastOwnerAndAllowReacquire)
+NWB_ADHD_GTEST(CommonInitializerLifetime, GuardUnwindFinalizesAllItemsBeforeTheTerminalEntryHandlesTheOriginalFailure, VerifyCommonInitializerLifetime_GuardUnwindFinalizesAllItemsBeforeTheTerminalEntryHandlesTheOriginalFailure)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [source]
 native{
 
@@ -246,28 +251,6 @@ void InitializerProbe::finalize()noexcept{
 
 
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ADHD_GTEST(CommonInitializerLifetime, FailedInitializationRollsBackOnlyTheSuccessfulPrefixAndAllowsReacquire, VerifyCommonInitializerLifetime_FailedInitializationRollsBackOnlyTheSuccessfulPrefixAndAllowsReacquire)
-NWB_ADHD_GTEST(CommonInitializerLifetime, ThrowingInitializationRollsBackOnlyTheSuccessfulPrefixAndAllowsReacquire, VerifyCommonInitializerLifetime_ThrowingInitializationRollsBackOnlyTheSuccessfulPrefixAndAllowsReacquire)
-NWB_ADHD_GTEST(CommonInitializerLifetime, NestedGuardsFinalizeOnlyTheLastOwnerAndAllowReacquire, VerifyCommonInitializerLifetime_NestedGuardsFinalizeOnlyTheLastOwnerAndAllowReacquire)
-NWB_ADHD_GTEST(CommonInitializerLifetime, GuardUnwindFinalizesAllItemsBeforeTheTerminalEntryHandlesTheOriginalFailure, VerifyCommonInitializerLifetime_GuardUnwindFinalizesAllItemsBeforeTheTerminalEntryHandlesTheOriginalFailure)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

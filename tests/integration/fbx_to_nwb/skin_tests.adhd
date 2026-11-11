@@ -62,16 +62,11 @@ using Impl::s_MeshletTriangleIndexCount;
 inline constexpr auto s_ReportOnly = Core::Common::LoggerBreakPolicy::ReportOnly;
 inline constexpr auto s_OutputAssetSkeleton = FbxToNwb::OutputAssetType::Skeleton;
 inline constexpr auto s_OutputAssetMesh = FbxToNwb::OutputAssetType::Mesh;
+inline constexpr b8 s_OccurWarning = NWB_OCCUR_WARNING != 0;
 inline constexpr f64 s_QuietNaNF64 = Limit<f64>::s_QuietNaN;
 inline constexpr f64 s_InfinityF64 = Limit<f64>::s_Infinity;
 inline constexpr f64 s_UnitPlusUlpF64 = 1.0 + 0x1p-52;
 inline constexpr f64 s_MinNormalF64 = 0x1p-1022;
-inline constexpr TStringView s_ErrMissingPositions = NWB_TEXT("mesh is missing positions");
-inline constexpr TStringView s_ErrImportedNormalMode = NWB_TEXT("imported normal mode");
-inline constexpr TStringView s_ErrSeparateAssetsOnlyValid = NWB_TEXT("--separate-assets is only valid");
-inline constexpr TStringView s_ErrSplitSkeletonSkinPayload = NWB_TEXT("mesh output cannot write split skeleton/skin payload");
-inline constexpr TStringView s_ErrRequiresSkinnedSourceMesh = NWB_TEXT("requires a skinned source mesh");
-inline constexpr TStringView s_WarnMixedSkinning = NWB_TEXT("mixed static and skinned source meshes");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -88,6 +83,13 @@ inline constexpr TStringView s_WarnMixedSkinning = NWB_TEXT("mixed static and sk
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+const StringView s_ErrMissingPositions = "mesh is missing positions";
+const StringView s_ErrImportedNormalMode = "imported normal mode";
+const StringView s_ErrSeparateAssetsOnlyValid = "--separate-assets is only valid";
+const StringView s_ErrSplitSkeletonSkinPayload = "mesh output cannot write split skeleton/skin payload";
+const StringView s_ErrRequiresSkinnedSourceMesh = "requires a skinned source mesh";
+const StringView s_WarnMixedSkinning = "mixed static and skinned source meshes";
 
 void VerifyFbxMesh_RejectsNonFiniteAndThresholdTriangleAreas(){
     EXPECT_FALSE(HasUsableSourceTriangleArea(s_QuietNaNF64, 1.0));
@@ -143,10 +145,10 @@ void VerifyFbxMesh_MissingAttributesAndDeformerCountsPreserveFailureOrder(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
     EXPECT_FALSE(ValidateFbxMeshAttributes(false, true, false));
-    EXPECT_TRUE(logger.sawErrorContaining(s_ErrMissingPositions));
-    EXPECT_FALSE(logger.sawErrorContaining(s_ErrImportedNormalMode));
+    EXPECT_TRUE(SawCapturedError(logger, s_ErrMissingPositions));
+    EXPECT_FALSE(SawCapturedError(logger, s_ErrImportedNormalMode));
     EXPECT_FALSE(ValidateFbxMeshAttributes(true, true, false));
-    EXPECT_TRUE(logger.sawErrorContaining(s_ErrImportedNormalMode));
+    EXPECT_TRUE(SawCapturedError(logger, s_ErrImportedNormalMode));
     EXPECT_TRUE(ValidateFbxMeshAttributes(true, false, false));
     EXPECT_FALSE(ValidateFbxSkinDeformerCount(0u));
     EXPECT_FALSE(ValidateFbxSkinDeformerCount(2u));
@@ -157,12 +159,12 @@ void VerifyFbxMesh_OutputModeValidationPreservesFailureOrder(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
     EXPECT_FALSE(ValidateFbxOutputMode(s_OutputAssetSkeleton, true, false, false, false, false));
-    EXPECT_TRUE(logger.sawErrorContaining(s_ErrSeparateAssetsOnlyValid));
-    EXPECT_FALSE(logger.sawErrorContaining(s_ErrRequiresSkinnedSourceMesh));
+    EXPECT_TRUE(SawCapturedError(logger, s_ErrSeparateAssetsOnlyValid));
+    EXPECT_FALSE(SawCapturedError(logger, s_ErrRequiresSkinnedSourceMesh));
     EXPECT_FALSE(ValidateFbxOutputMode(s_OutputAssetMesh, false, false, false, true, false));
-    EXPECT_TRUE(logger.sawErrorContaining(s_ErrSplitSkeletonSkinPayload));
+    EXPECT_TRUE(SawCapturedError(logger, s_ErrSplitSkeletonSkinPayload));
     EXPECT_FALSE(ValidateFbxOutputMode(s_OutputAssetSkeleton, false, false, false, false, false));
-    EXPECT_TRUE(logger.sawErrorContaining(s_ErrRequiresSkinnedSourceMesh));
+    EXPECT_TRUE(SawCapturedError(logger, s_ErrRequiresSkinnedSourceMesh));
     EXPECT_EQ(logger.errorCount(), 3u);
 }
 
@@ -212,11 +214,8 @@ void VerifyFbxOptions_MixedSkinningSelectionIsRejected(){
     EXPECT_FALSE(staticOnly.value());
     summary.observe(true);
     EXPECT_FALSE(summary.resolve().has_value());
-    native(in logger){
-#if NWB_OCCUR_WARNING
-        EXPECT_TRUE(logger.sawMessageContaining(s_WarnMixedSkinning));
-#endif
-    }
+    if(s_OccurWarning)
+        EXPECT_TRUE(SawCapturedMessage(logger, s_WarnMixedSkinning));
     EXPECT_EQ(logger.errorCount(), 0u);
 }
 
@@ -272,21 +271,24 @@ void VerifyFbxSkin_RejectsMismatchedOrNonFiniteSkeletonMatrices(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
     ScratchArena scratchArena(Name(s_FbxSkinFixtureNameTestsFbxSkeleton));
-    native(mut scratchArena){
+    Array<b8, 4u> accepted = Array<b8, 4u>();
+    native(mut scratchArena, mut accepted){
         ufbx_node root{};
         ufbx_node* joints[] = { &root };
         NWB::FbxToNwb::JointMatrix bind = MatrixIdentity<NWB::FbxToNwb::JointMatrix>();
         NWB::FbxToNwb::JointMatrix inverse = bind;
         using NWB::FbxToNwb::AssetWriterSkeletonDetail::BuildSkeletonOutputData;
 
-        EXPECT_FALSE(BuildSkeletonOutputData(joints, {}, { &inverse, 1u }, scratchArena));
-        EXPECT_FALSE(BuildSkeletonOutputData(joints, { &bind, 1u }, {}, scratchArena));
+        accepted[0u] = BuildSkeletonOutputData(joints, {}, { &inverse, 1u }, scratchArena).has_value();
+        accepted[1u] = BuildSkeletonOutputData(joints, { &bind, 1u }, {}, scratchArena).has_value();
         bind._11 = Limit<f32>::s_Infinity;
-        EXPECT_FALSE(BuildSkeletonOutputData(joints, { &bind, 1u }, { &inverse, 1u }, scratchArena));
+        accepted[2u] = BuildSkeletonOutputData(joints, { &bind, 1u }, { &inverse, 1u }, scratchArena).has_value();
         bind = MatrixIdentity<NWB::FbxToNwb::JointMatrix>();
         inverse._11 = Limit<f32>::s_QuietNaN;
-        EXPECT_FALSE(BuildSkeletonOutputData(joints, { &bind, 1u }, { &inverse, 1u }, scratchArena));
+        accepted[3u] = BuildSkeletonOutputData(joints, { &bind, 1u }, { &inverse, 1u }, scratchArena).has_value();
     }
+    for(usize index = 0u; index < accepted.size(); ++index)
+        EXPECT_FALSE(accepted[index]);
     EXPECT_GE(logger.errorCount(), 4u);
 }
 

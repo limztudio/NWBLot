@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_shader/shader_define_planner.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -251,6 +257,106 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class ShaderDefinePlanner final : NoCopy{
+public:
+    explicit ShaderDefinePlanner(ShaderCook::CookArena& memoryArena)noexcept : m_memoryArena(memoryArena){}
+    void mergeInheritedDefines(Span<const Path> dependencies, const ShaderCook::CookMap<ShaderCook::CookString, ShaderCook::IncludeEntry>& includeMetadata, Core::Alloc::ScratchArena& scratchArena, ShaderCook::ShaderEntry& inOutEntry);
+    [[nodiscard]] b8 expandDefineCombinations(const ShaderCook::CookMap<ShaderCook::CookString, ShaderCook::DefineEntry>& defineValues, Core::Alloc::ScratchArena& scratchArena, ShaderCook::CookVector<ShaderCook::DefineCombo>& outCombinations);
+
+
+private:
+    ShaderCook::CookArena& m_memoryArena;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace SlangShaderCompiler{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] Expected<u64> ComputeCompilerFingerprint(const Path& temporaryRoot, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] b8 CompileVariant(const ShaderCook::ShaderCompilerRequest& request, Core::Alloc::ScratchArena& scratchArena, ShaderCook::CookVector<u8>& outBytecode);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// One isolated temporary directory per compiler invocation, plus the BOM-stripped source overlay the compiler reads when inputs carry a UTF-8 BOM.
+namespace SlangCompilerWorkspace{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using ScratchPath = ::Path<Core::Alloc::ScratchArena>;
+using ScratchString = Core::Assets::ScratchString;
+template<typename T>
+using ScratchVector = Core::Assets::ScratchVector<T>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The common path allocates the source path last, so it is declared last to be released first from scratch.
+struct CompilerInputs final{
+    ScratchVector<ScratchPath> includeDirectories;
+    ScratchPath sourcePath;
+};
+
+// Removes the work directory when the invocation ends; a cleanup failure is reported, not returned.
+class ScopedDirectoryCleanupGuard final : NoCopy{
+public:
+    explicit ScopedDirectoryCleanupGuard(const ScratchPath& path)noexcept
+        : m_path(path)
+    {}
+    ~ScopedDirectoryCleanupGuard()noexcept;
+
+
+private:
+    const ScratchPath& m_path;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] Expected<ScratchPath> CreateCompilerWorkDirectory(const ScratchPath& parentDirectory, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<usize> CompilerPathTextCapacity(const ScratchPath& path);
+[[nodiscard]] Expected<ScratchString> BuildCompilerPathText(const ScratchPath& path, Core::Alloc::ScratchArena& scratchArena);
+// Each absolute root gets its own encoded overlay directory so nested relative includes keep resolving within that root.
+[[nodiscard]] Expected<ScratchPath> BuildCompilerOverlayPath(const ScratchPath& overlayRoot, const ScratchPath& absolutePath, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] b8 IsCompilerDependency(Span<const Path> dependencies, const ScratchPath& absolutePath)noexcept;
+[[nodiscard]] Expected<CompilerInputs> PrepareBomStrippedCompilerInputs(const ShaderCook::ShaderCompilerRequest& request, const ScratchPath& overlayRoot, Core::Alloc::ScratchArena& scratchArena);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SlangCompilerFingerprint{
+public:
+    [[nodiscard]] static Expected<u64> Compute(const Path& temporaryRoot, Core::Alloc::ScratchArena& scratchArena, Span<const AStringView> commonArguments, Span<const AStringView> baselineCapabilities, Span<const ShaderBinaryPayload::SlangStageMapping> stageMappings);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_IMPL_END
 
 
@@ -316,8 +422,14 @@ b8 ValidateCanonicalDependencyRootAliasKey(in StringView canonicalKey){
     return false;
 }
 
-b8 ShouldReserveMergedShaderDefines(in b8 canReserve, in usize reserveCount, in usize existingCount){
-    return canReserve && reserveCount > existingCount;
+String FormatCanonicalAliasedDependencyPath(
+    in StringView pathPrefix,
+    in StringView aliasKey,
+    in StringView relativePathText
+){
+    if(relativePathText.empty())
+        return StringFormat("{}{}", pathPrefix, aliasKey);
+    return StringFormat("{}{}/{}", pathPrefix, aliasKey, relativePathText);
 }
 
 
@@ -337,13 +449,10 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_shader/asset.adhd.h>
 #include <impl/assets_shader/cook.adhd.h>
-#include <impl/assets_shader/cook_internal.adhd.h>
-#include <impl/assets_shader/shader_define_planner.adhd.h>
-#include <impl/assets_shader/slang_compiler.adhd.h>
 #include <impl/assets_shader/shader_source_fingerprint.adhd.h>
 #include <impl/assets_shader/source_dependencies.adhd.h>
-#include <impl/assets_shader/shader_types.adhd.h>
 #include <impl/assets_shader/slang_compiler_request_validator.adhd.h>
 
 #include <core/assets/cook_metadata.h>
@@ -445,15 +554,8 @@ static Expected<ScratchString> BuildCanonicalDependencyPath(const Path& dependen
     const auto capacity = TryComputeCanonicalAliasedDependencyPathCapacity(pathPrefix.size(), bestRootAlias->key.size(), relativePathText.size());
     if(!capacity)
         return MakeUnexpected(Failure{});
-    ScratchString canonicalPath(scratchArena);
-    canonicalPath.reserve(*capacity);
-    canonicalPath += pathPrefix;
-    canonicalPath += bestRootAlias->key;
-    if(!relativePathText.empty()){
-        canonicalPath += '/';
-        canonicalPath += relativePathText;
-    }
-    return canonicalPath;
+    const auto formattedPath = FormatCanonicalAliasedDependencyPath(pathPrefix, bestRootAlias->key, relativePathText);
+    return ScratchString(AStringView(formattedPath), scratchArena);
 }
 
 

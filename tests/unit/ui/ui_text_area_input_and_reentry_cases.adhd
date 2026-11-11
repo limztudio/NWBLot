@@ -88,12 +88,7 @@ constexpr AStringView s_PopupKey = "popup";
 
 class UiTextAreaInputScrollTests : public TextAreaFixture{
 public:
-    [[nodiscard]] static TextAreaOptions ScrollOptions()noexcept{
-        TextAreaOptions options;
-        options.width = { LayoutSizePolicy::Fixed, 180.0f };
-        options.height = { LayoutSizePolicy::Fixed, 96.0f };
-        return options;
-    }
+    [[nodiscard]] static TextAreaOptions ScrollOptions()noexcept;
 
 
 public:
@@ -114,36 +109,12 @@ public:
         return AStringView(m_document.data(), m_document.size());
     }
 
-    [[nodiscard]] b8 prepareDocument(const Point scroll = {}){
-        return m_model.setText(m_document) && m_model.setSelection(1u, 1u) && m_model.replaceSelection("b") && m_model.setSelection(0u, 0u) && m_state.scrollTo(scroll);
-    }
-
-    [[nodiscard]] b8 prepareScroll(const TextAreaOptions& options = ScrollOptions(), const Point scroll = {}){
-        return prepareDocument(scroll) && frameArea(1u, options);
-    }
-
-    [[nodiscard]] b8 wheel(const f64 x, const f64 y, const Point position){
-        InputEvent event;
-        event.type = InputEventType::PointerWheel;
-        event.position = position;
-        event.scrollX = x;
-        event.scrollY = y;
-        return send(event).pointerConsumed;
-    }
-
-    [[nodiscard]] b8 wheel(const f64 x, const f64 y){ return wheel(x, y, Center(m_state.placement().content)); }
-
-    [[nodiscard]] WidgetId part(const AStringView key)const{ return UiTestSupport::RequireWidgetId(id(s_TextAreaKey, s_TextAreaPanelKey), key); }
-
-    [[nodiscard]] b8 framePopup(const u64 generation, PopupState& popup){
-        PopupOptions options;
-        options.anchor = { 20.0f, 20.0f, 40.0f, 20.0f };
-        options.size = { 300.0f, 180.0f };
-        if(!begin(generation) || !m_builder.beginPopup(s_PopupKey, popup, options))
-            return false;
-        m_result = m_builder.textArea(s_TextAreaKey, m_model, m_state, ScrollOptions());
-        return m_result.valid && m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame() && m_context.commitFrame(generation);
-    }
+    [[nodiscard]] b8 prepareDocument(const Point scroll = {});
+    [[nodiscard]] b8 prepareScroll(const TextAreaOptions& options = ScrollOptions(), const Point scroll = {});
+    [[nodiscard]] b8 wheel(f64 x, f64 y, Point position);
+    [[nodiscard]] b8 wheel(f64 x, f64 y);
+    [[nodiscard]] WidgetId part(AStringView key)const;
+    [[nodiscard]] b8 framePopup(u64 generation, PopupState& popup);
 
 
 public:
@@ -213,6 +184,7 @@ public:
     }
 
     void resetAllCounters()const noexcept{ resetCounters(); metadataCalls = 0u; }
+    void armParentMetadata(AreaMutationSource& source)noexcept{ armMetadataSource = &source; }
 
 
 public:
@@ -389,32 +361,64 @@ using InputEventTypeEnum = ::NWB::Impl::Ui::InputEventType::Enum;
 namespace UiTextAreaKey = ::NWB::Core::Key;
 using ::PackFourCharTag;
 
-[[nodiscard]] inline TextAreaOptions UiTextAreaScrollOptions()noexcept{
+[[nodiscard]] NWB_INLINE TextAreaOptions UiTextAreaScrollOptions()noexcept{
     return ::__hidden_ui_text_area_input_scroll_tests::UiTextAreaInputScrollTests::ScrollOptions();
 }
 
-[[nodiscard]] inline TextAreaOptions UiTextAreaLoanOptions()noexcept{
+[[nodiscard]] NWB_INLINE TextAreaOptions UiTextAreaLoanOptions()noexcept{
     return ::NWB::UiTextAreaTests::TextAreaLoanFixture::AreaOptions();
 }
 
-[[nodiscard]] inline PopupOptions UiTextAreaLargeLoanChildOptions()noexcept{
+[[nodiscard]] NWB_INLINE PopupOptions UiTextAreaLargeLoanChildOptions()noexcept{
     return ::NWB::UiWidgetTests::LargeLoanChildOptions();
 }
 
-[[nodiscard]] inline ListOptions UiTextAreaLargeLoanListOptions()noexcept{
+[[nodiscard]] NWB_INLINE ListOptions UiTextAreaLargeLoanListOptions()noexcept{
     return ::NWB::UiWidgetTests::LargeLoanListOptions();
 }
 
-[[nodiscard]] inline AStringView UiTextAreaPublicationText(const ::NWB::UiTextAreaTests::AreaPublication& item)noexcept{
+[[nodiscard]] NWB_INLINE AStringView UiTextAreaPublicationText(const ::NWB::UiTextAreaTests::AreaPublication& item)noexcept{
     return AStringView(item.text.data(), item.text.size());
 }
 
-[[nodiscard]] inline AStringView UiTextAreaActionText(const AString<::NWB::Core::Alloc::GlobalArena>& text)noexcept{
+[[nodiscard]] NWB_INLINE AStringView UiTextAreaActionText(const AString<::NWB::Core::Alloc::GlobalArena>& text)noexcept{
     return AStringView(text.data(), text.size());
 }
 
-[[nodiscard]] inline AStringView UiTextAreaResolutionText(const ::NWB::UiTextAreaTests::AreaResolution& item)noexcept{
+[[nodiscard]] NWB_INLINE AStringView UiTextAreaResolutionText(const ::NWB::UiTextAreaTests::AreaResolution& item)noexcept{
     return AStringView(item.text.data(), item.text.size());
+}
+
+TextAreaOptions MakeUiTextAreaScrollOptions()noexcept;
+b8 PrepareUiTextAreaScrollDocument(UiTextAreaInputScrollTests& self, const Point& scroll)noexcept;
+b8 PrepareUiTextAreaScroll(UiTextAreaInputScrollTests& self, const TextAreaOptions& options, const Point& scroll)noexcept;
+b8 SendUiTextAreaWheelAt(UiTextAreaInputScrollTests& self, f64 x, f64 y, const Point& position)noexcept;
+b8 SendUiTextAreaWheel(UiTextAreaInputScrollTests& self, f64 x, f64 y)noexcept;
+WidgetId GetUiTextAreaInputPart(const UiTextAreaInputScrollTests& self, StringView key)noexcept;
+b8 FrameUiTextAreaPopup(UiTextAreaInputScrollTests& self, u64 generation, PopupState& popup)noexcept;
+};
+
+namespace __hidden_ui_text_area_input_scroll_tests{
+NWB_INLINE TextAreaOptions UiTextAreaInputScrollTests::ScrollOptions()noexcept{
+    return ::__hidden_ui_glyph_sdf_tests::MakeUiTextAreaScrollOptions();
+}
+NWB_INLINE b8 UiTextAreaInputScrollTests::prepareDocument(const Point scroll){
+    return ::__hidden_ui_glyph_sdf_tests::PrepareUiTextAreaScrollDocument(*this, scroll);
+}
+NWB_INLINE b8 UiTextAreaInputScrollTests::prepareScroll(const TextAreaOptions& options, const Point scroll){
+    return ::__hidden_ui_glyph_sdf_tests::PrepareUiTextAreaScroll(*this, options, scroll);
+}
+NWB_INLINE b8 UiTextAreaInputScrollTests::wheel(const f64 x, const f64 y, const Point position){
+    return ::__hidden_ui_glyph_sdf_tests::SendUiTextAreaWheelAt(*this, x, y, position);
+}
+NWB_INLINE b8 UiTextAreaInputScrollTests::wheel(const f64 x, const f64 y){
+    return ::__hidden_ui_glyph_sdf_tests::SendUiTextAreaWheel(*this, x, y);
+}
+NWB_INLINE WidgetId UiTextAreaInputScrollTests::part(const AStringView key)const{
+    return ::__hidden_ui_glyph_sdf_tests::GetUiTextAreaInputPart(*this, key);
+}
+NWB_INLINE b8 UiTextAreaInputScrollTests::framePopup(const u64 generation, PopupState& popup){
+    return ::__hidden_ui_glyph_sdf_tests::FrameUiTextAreaPopup(*this, generation, popup);
 }
 };
 
@@ -427,6 +431,62 @@ using ::PackFourCharTag;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+TextAreaOptions MakeUiTextAreaScrollOptions(){
+    TextAreaOptions options = TextAreaOptions();
+    options.width.policy = LayoutSizePolicy::Fixed;
+    options.width.value = 180.0f;
+    options.height.policy = LayoutSizePolicy::Fixed;
+    options.height.value = 96.0f;
+    return options;
+}
+
+b8 PrepareUiTextAreaScrollDocument(mut UiTextAreaInputScrollTests self, in Point scroll){
+    return self.m_model.setText(self.documentView())
+        && self.m_model.setSelection(1u, 1u)
+        && self.m_model.replaceSelection("b")
+        && self.m_model.setSelection(0u, 0u)
+        && self.m_state.scrollTo(scroll);
+}
+
+b8 PrepareUiTextAreaScroll(mut UiTextAreaInputScrollTests self, in TextAreaOptions options, in Point scroll){
+    return PrepareUiTextAreaScrollDocument(self, scroll) && self.frameArea(1u, options);
+}
+
+b8 SendUiTextAreaWheelAt(mut UiTextAreaInputScrollTests self, in f64 x, in f64 y, in Point position){
+    InputEvent event = InputEvent();
+    event.type = InputEventType::PointerWheel;
+    event.position = position;
+    event.scrollX = x;
+    event.scrollY = y;
+    return self.send(event).pointerConsumed;
+}
+
+b8 SendUiTextAreaWheel(mut UiTextAreaInputScrollTests self, in f64 x, in f64 y){
+    return SendUiTextAreaWheelAt(self, x, y, CenterUiRect(self.m_state.placement().content));
+}
+
+WidgetId GetUiTextAreaInputPart(in UiTextAreaInputScrollTests self, in StringView key){
+    return RequireUiWidgetId(self.id(s_UiTextAreaWidgetKey, s_UiTextAreaPanelKey), key);
+}
+
+b8 FrameUiTextAreaPopup(mut UiTextAreaInputScrollTests self, in u64 generation, mut PopupState popup){
+    PopupOptions options = PopupOptions();
+    options.anchor.x = 20.0f;
+    options.anchor.y = 20.0f;
+    options.anchor.width = 40.0f;
+    options.anchor.height = 20.0f;
+    options.size.x = 300.0f;
+    options.size.y = 180.0f;
+    if(!self.begin(generation) || !self.m_builder.beginPopup("popup", popup, options))
+        return false;
+    self.m_result = self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, MakeUiTextAreaScrollOptions());
+    return self.m_result.valid
+        && self.m_builder.endPopup()
+        && self.m_context.endRoot()
+        && self.m_context.finishFrame()
+        && self.m_context.commitFrame(generation);
+}
 
 const u32 s_UiTextAreaQuietNaNF32Bits = 0x7fc00000u;
 const u32 s_UiTextAreaPosInfF32Bits = 0x7f800000u;
@@ -518,9 +578,7 @@ void VerifyUiTextAreaBuilderTests_SingleLineIsRejectedBeforeBorrowingOrChangingV
 
 void VerifyUiTextAreaBuilderTests_UnsupportedNavigatedHostCannotFallBackToOrdinaryEdit(mut UiTextAreaBuilderTests self){
     UiTextAreaOrdinaryHost host = UiTextAreaOrdinaryHost();
-    native(mut self, mut host){
-        self.m_builder.setEditHost(&host);
-    }
+    self.setEditHost(host);
     ASSERT_TRUE(self.beginArea(1u));
     const EditBoxResult result = self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state);
     EXPECT_FALSE(result.valid);
@@ -547,12 +605,9 @@ void VerifyUiTextAreaBuilderTests_ReadOnlyNavigatedHostRejectsQueuedText(mut UiT
 void VerifyUiTextAreaBuilderTests_RawPointerCapturePersistsOutsideWithoutGestureRecords(mut UiTextAreaBuilderTests self){
     ASSERT_TRUE(self.frameArea(1u));
     const WidgetId widget = self.id(s_UiTextAreaWidgetKey, s_UiTextAreaPanelKey);
-    HitTarget area = HitTarget();
-    native(in self, in widget, mut area){
-        const auto* found = self.target(widget);
-        ASSERT_NE(found, nullptr);
-        area = *found;
-    }
+    const auto foundArea = self.tryTarget(widget);
+    ASSERT_TRUE(foundArea.has_value());
+    const HitTarget area = foundArea.value();
     const VectorSingle originValue = VectorSingle(area.rectangle.x, area.rectangle.y, 0.0f, 0.0f) + VectorSingle(10.0f, 10.0f, 10.0f, 10.0f);
     const Point origin = Point(originValue.x, originValue.y);
     EXPECT_TRUE(self.send(MakeUiTextAreaPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed);
@@ -572,12 +627,9 @@ void VerifyUiTextAreaBuilderTests_DisabledAreaRetainsAPointerBarrierAndDiscardsH
     options.enabled = false;
     ASSERT_TRUE(self.frameArea(1u, options));
     const WidgetId widget = self.id(s_UiTextAreaWidgetKey, s_UiTextAreaPanelKey);
-    HitTarget area = HitTarget();
-    native(in self, in widget, mut area){
-        const auto* found = self.target(widget);
-        ASSERT_NE(found, nullptr);
-        area = *found;
-    }
+    const auto foundArea = self.tryTarget(widget);
+    ASSERT_TRUE(foundArea.has_value());
+    const HitTarget area = foundArea.value();
     EXPECT_FALSE(area.enabled || area.focusable || area.textEditable || area.pointerGesture);
     const VectorSingle pointValue = VectorSingle(area.rectangle.x, area.rectangle.y, 0.0f, 0.0f) + VectorSingle(5.0f, 5.0f, 5.0f, 5.0f);
     const Point point = Point(pointValue.x, pointValue.y);
@@ -708,12 +760,9 @@ void VerifyUiTextAreaInputScrollTests_InvalidWheelLinesRejectTheCandidateBeforeB
         const usize loans = self.m_host.loans;
         const usize publishes = self.m_host.publishes;
         const usize targets = self.m_context.input().targets().size();
-        HitTarget accepted = HitTarget();
-        native(in self, mut accepted){
-            const auto* displayed = self.target(self.id("area", "panel"));
-            ASSERT_NE(displayed, nullptr);
-            accepted = *displayed;
-        }
+        const auto displayedAccepted = self.tryTarget(self.id("area", "panel"));
+        ASSERT_TRUE(displayedAccepted.has_value());
+        const HitTarget accepted = displayedAccepted.value();
         TextAreaOptions options = UiTextAreaScrollOptions();
         options.wheelLines = wheelLines;
         ASSERT_TRUE(self.beginArea(generation));
@@ -725,12 +774,9 @@ void VerifyUiTextAreaInputScrollTests_InvalidWheelLinesRejectTheCandidateBeforeB
         EXPECT_FALSE(self.m_context.commitFrame(generation));
         EXPECT_EQ(self.m_context.input().layoutGeneration(), generation - 1u);
         EXPECT_EQ(self.m_context.input().targets().size(), targets);
-        HitTarget current = HitTarget();
-        native(in self, mut current){
-            const auto* displayed = self.target(self.id("area", "panel"));
-            ASSERT_NE(displayed, nullptr);
-            current = *displayed;
-        }
+        const auto displayedCurrent = self.tryTarget(self.id("area", "panel"));
+        ASSERT_TRUE(displayedCurrent.has_value());
+        const HitTarget current = displayedCurrent.value();
         EXPECT_EQ(current.control, accepted.control);
         ExpectUiRect(current.rectangle, accepted.rectangle);
         ExpectUiRect(self.m_state.placement().bounds, placement.bounds);
@@ -753,12 +799,9 @@ void VerifyUiTextAreaInputScrollTests_CopiedVerticalWheelAppliesOnlyAtFinalPaint
     const UiTextAreaScrollModelRecord model = UiTextAreaScrollModelRecord(self.m_model);
     const u64 revision = self.m_state.revision();
     const EditNavigationSnapshot navigation = self.m_state.navigation().snapshot();
-    f64 step = 0.0;
-    native(in self, mut step){
-        const auto* host = self.target(self.id("area", "panel"));
-        ASSERT_NE(host, nullptr);
-        step = host->scrollStep;
-    }
+    const auto hostTarget = self.tryTarget(self.id("area", "panel"));
+    ASSERT_TRUE(hostTarget.has_value());
+    const f64 step = hostTarget.value().scrollStep;
     ASSERT_GT(step, 0.0);
     ASSERT_TRUE(self.wheel(0.0, -1.0));
     ASSERT_EQ(self.m_context.input().controlActions().size(), 1u);
@@ -804,12 +847,9 @@ void VerifyUiTextAreaInputScrollTests_ReadOnlyWheelAndThumbScrollingLeaveUndoAnd
     ASSERT_TRUE(self.frameArea(2u, options));
     EXPECT_GT(self.m_state.scroll().x, 0.0f);
     EXPECT_GT(self.m_state.scroll().y, 0.0f);
-    HitTarget thumb = HitTarget();
-    native(in self, mut thumb){
-        const auto* found = self.target(self.part("scroll.y.thumb"));
-        ASSERT_NE(found, nullptr);
-        thumb = *found;
-    }
+    const auto foundThumb = self.tryTarget(self.part("scroll.y.thumb"));
+    ASSERT_TRUE(foundThumb.has_value());
+    const HitTarget thumb = foundThumb.value();
     const Point origin = CenterUiRect(thumb.rectangle);
     const Point destination = Point(origin.x, thumb.gestureReference.y + thumb.gestureReference.height + 50.0f);
     self.drag(origin, destination);
@@ -827,12 +867,9 @@ void VerifyUiTextAreaInputScrollTests_DisabledEditorUsesTheContainingPanelBarrie
     options.enabled = false;
     ASSERT_TRUE(self.prepareScroll(options));
     const UiTextAreaScrollModelRecord model = UiTextAreaScrollModelRecord(self.m_model);
-    HitTarget host = HitTarget();
-    native(in self, mut host){
-        const auto* found = self.target(self.id("area", "panel"));
-        ASSERT_NE(found, nullptr);
-        host = *found;
-    }
+    const auto foundHost = self.tryTarget(self.id("area", "panel"));
+    ASSERT_TRUE(foundHost.has_value());
+    const HitTarget host = foundHost.value();
     EXPECT_FALSE(host.enabled || host.focusable || host.textEditable || host.scrollable);
     const Point point = CenterUiRect(self.m_state.placement().content);
     EXPECT_EQ(self.m_context.input().hitTest(point), RequireUiWidgetId(RequireUiRootId(self.m_root), s_UiTextAreaPanelKey));
@@ -873,12 +910,9 @@ void VerifyUiTextAreaInputScrollTests_WheelViewportPersistsUntilAnAcceptedIdenti
 void VerifyUiTextAreaInputScrollTests_UnfocusedThumbPressPreservesGrabOffsetAndTheBaselineAcrossRepaints(mut UiTextAreaInputScrollTests self){
     ASSERT_TRUE(self.prepareScroll(UiTextAreaScrollOptions(), Point(30.0f, 50.0f)));
     const UiTextAreaScrollModelRecord model = UiTextAreaScrollModelRecord(self.m_model);
-    HitTarget thumb = HitTarget();
-    native(in self, mut thumb){
-        const auto* found = self.target(self.part("scroll.y.thumb"));
-        ASSERT_NE(found, nullptr);
-        thumb = *found;
-    }
+    const auto foundThumb = self.tryTarget(self.part("scroll.y.thumb"));
+    ASSERT_TRUE(foundThumb.has_value());
+    const HitTarget thumb = foundThumb.value();
     const f32 travelValue = thumb.gestureReference.height - thumb.rectangle.height;
     ASSERT_GT(travelValue, 0.0f);
     const VectorSingle travel = VectorSingle(travelValue, travelValue, travelValue, travelValue);
@@ -891,12 +925,9 @@ void VerifyUiTextAreaInputScrollTests_UnfocusedThumbPressPreservesGrabOffsetAndT
     ASSERT_TRUE(self.frameArea(2u, UiTextAreaScrollOptions()));
     EXPECT_NEAR(cast<f64>(self.m_state.scroll().y), 50.0, 0.001);
     EXPECT_NEAR(cast<f64>(self.m_state.scroll().x), 30.0, 0.001);
-    HitTarget afterPress = HitTarget();
-    native(in self, mut afterPress){
-        const auto* found = self.target(self.part("scroll.y.thumb"));
-        ASSERT_NE(found, nullptr);
-        afterPress = *found;
-    }
+    const auto foundAfterPress = self.tryTarget(self.part("scroll.y.thumb"));
+    ASSERT_TRUE(foundAfterPress.has_value());
+    const HitTarget afterPress = foundAfterPress.value();
     EXPECT_EQ(afterPress.control, thumb.control);
     // Lanes are the quarter and half drag steps.
     const VectorSingle dragY = travel * VectorSingle(0.25f, 0.5f, 0.0f, 0.0f) + VectorSingle(originValue.y, originValue.y, originValue.y, originValue.y);
@@ -905,12 +936,9 @@ void VerifyUiTextAreaInputScrollTests_UnfocusedThumbPressPreservesGrabOffsetAndT
     ASSERT_TRUE(self.send(MakeUiTextAreaPointerEvent(quarter, InputEventType::PointerMove)).pointerConsumed);
     ASSERT_TRUE(self.frameArea(3u, UiTextAreaScrollOptions()));
     EXPECT_NEAR(cast<f64>(self.m_state.scroll().y), expectedScroll.x, 0.001);
-    HitTarget afterMove = HitTarget();
-    native(in self, mut afterMove){
-        const auto* found = self.target(self.part("scroll.y.thumb"));
-        ASSERT_NE(found, nullptr);
-        afterMove = *found;
-    }
+    const auto foundAfterMove = self.tryTarget(self.part("scroll.y.thumb"));
+    ASSERT_TRUE(foundAfterMove.has_value());
+    const HitTarget afterMove = foundAfterMove.value();
     EXPECT_EQ(afterMove.control, thumb.control);
     EXPECT_GT(afterMove.rectangle.y, thumb.rectangle.y);
     const Point half = Point(origin.x, dragY.y);
@@ -926,12 +954,9 @@ void VerifyUiTextAreaInputScrollTests_UnfocusedThumbPressPreservesGrabOffsetAndT
 void VerifyUiTextAreaInputScrollTests_CompletedHorizontalThumbDragKeepsOutsideReleaseAndClampsItsEndpoint(mut UiTextAreaInputScrollTests self){
     ASSERT_TRUE(self.prepareScroll());
     const UiTextAreaScrollModelRecord model = UiTextAreaScrollModelRecord(self.m_model);
-    HitTarget thumb = HitTarget();
-    native(in self, mut thumb){
-        const auto* found = self.target(self.part("scroll.x.thumb"));
-        ASSERT_NE(found, nullptr);
-        thumb = *found;
-    }
+    const auto foundThumb = self.tryTarget(self.part("scroll.x.thumb"));
+    ASSERT_TRUE(foundThumb.has_value());
+    const HitTarget thumb = foundThumb.value();
     const VectorSingle originValue = VectorSingle(thumb.rectangle.width, thumb.rectangle.height, 0.0f, 0.0f) * VectorSingle(0.25f, 0.5f, 0.0f, 0.0f) + VectorSingle(thumb.rectangle.x, thumb.rectangle.y, 0.0f, 0.0f);
     const Point origin = Point(originValue.x, originValue.y);
     const Point outside = Point(900.0f, origin.y);
@@ -951,12 +976,9 @@ void VerifyUiTextAreaInputScrollTests_TrackPagesOnlyOnReleaseByTheAcceptedViewpo
     ASSERT_TRUE(self.prepareScroll(UiTextAreaScrollOptions(), Point(0.0f, 100.0f)));
     const UiTextAreaScrollModelRecord model = UiTextAreaScrollModelRecord(self.m_model);
     const f64 page = self.m_state.scrollbars().vertical.viewportExtent;
-    HitTarget after = HitTarget();
-    native(in self, mut after){
-        const auto* found = self.target(self.part("scroll.y.after"));
-        ASSERT_NE(found, nullptr);
-        after = *found;
-    }
+    const auto foundAfter = self.tryTarget(self.part("scroll.y.after"));
+    ASSERT_TRUE(foundAfter.has_value());
+    const HitTarget after = foundAfter.value();
     const Point point = CenterUiRect(after.rectangle);
     ASSERT_TRUE(self.send(MakeUiTextAreaPointerEvent(point, InputEventType::PrimaryDown)).pointerConsumed);
     ASSERT_TRUE(self.frameArea(2u, UiTextAreaScrollOptions()));
@@ -971,12 +993,9 @@ void VerifyUiTextAreaInputScrollTests_TrackPagesOnlyOnReleaseByTheAcceptedViewpo
 void VerifyUiTextAreaInputScrollTests_LaterCoalescedThumbUpdateRunsAfterAnInterveningWheelAction(mut UiTextAreaInputScrollTests self){
     ASSERT_TRUE(self.prepareScroll());
     const UiTextAreaScrollModelRecord model = UiTextAreaScrollModelRecord(self.m_model);
-    HitTarget thumb = HitTarget();
-    native(in self, mut thumb){
-        const auto* found = self.target(self.part("scroll.y.thumb"));
-        ASSERT_NE(found, nullptr);
-        thumb = *found;
-    }
+    const auto foundThumb = self.tryTarget(self.part("scroll.y.thumb"));
+    ASSERT_TRUE(foundThumb.has_value());
+    const HitTarget thumb = foundThumb.value();
     const Point origin = CenterUiRect(thumb.rectangle);
     const f32 travel = thumb.gestureReference.height - thumb.rectangle.height;
     ASSERT_GT(travel, 0.0f);
@@ -999,12 +1018,9 @@ void VerifyUiTextAreaInputScrollTests_PopupWheelUsesTheAcceptedPopupScopeAndDefe
     popup.open();
     ASSERT_TRUE(self.framePopup(1u, popup));
     const WidgetId popupArea = self.id(s_UiTextAreaWidgetKey, s_UiTextAreaPopupKey);
-    HitTarget host = HitTarget();
-    native(in self, in popupArea, mut host){
-        const auto* found = self.target(popupArea);
-        ASSERT_NE(found, nullptr);
-        host = *found;
-    }
+    const auto foundHost = self.tryTarget(popupArea);
+    ASSERT_TRUE(foundHost.has_value());
+    const HitTarget host = foundHost.value();
     const PopupToken token = host.popup;
     ASSERT_TRUE(token.valid());
     const f64 step = host.scrollStep;
@@ -1081,12 +1097,11 @@ void VerifyUiTextAreaLoanTests_IdenticalScrollIntentDuringHostLoanRejectsBeforeP
     const u64 revision = self.m_state.revision();
     const Point scroll = self.m_state.scroll();
     usize attempts = 0u;
-    native(mut self, in scroll, mut attempts){
-        self.m_host.loanHook = [&]() -> void{
-            ++attempts;
-            EXPECT_TRUE(self.m_state.scrollTo(scroll));
-        };
-    }
+    const auto loanHook = lambda[mut self, in scroll, mut attempts]() -> void{
+        ++attempts;
+        EXPECT_TRUE(self.m_state.scrollTo(scroll));
+    };
+    self.m_host.loanHook = loanHook;
     ASSERT_TRUE(self.beginArea(2u));
     EXPECT_FALSE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, UiTextAreaLoanOptions()).valid);
     EXPECT_EQ(attempts, 1u);
@@ -1112,14 +1127,13 @@ void VerifyUiTextAreaLoanTests_FirstPublicationScrollIntentRejectsBeforeTheSecon
     Point scroll = Point();
     u64 revision = 0u;
     EditNavigationSnapshot navigation = EditNavigationSnapshot();
-    native(mut self, mut scroll, mut revision, mut navigation){
-        self.m_host.publishHook = [&]() -> void{
-            scroll = self.m_state.scroll();
-            revision = self.m_state.revision();
-            navigation = self.m_state.navigation().snapshot();
-            EXPECT_TRUE(self.m_state.scrollTo(scroll));
-        };
-    }
+    const auto publishHook = lambda[mut self, mut scroll, mut revision, mut navigation]() -> void{
+        scroll = self.m_state.scroll();
+        revision = self.m_state.revision();
+        navigation = self.m_state.navigation().snapshot();
+        EXPECT_TRUE(self.m_state.scrollTo(scroll));
+    };
+    self.m_host.publishHook = publishHook;
     EXPECT_FALSE(self.m_builder.endPanel());
     EXPECT_EQ(self.m_host.publishes, 1u);
     ASSERT_EQ(self.m_host.publications.size(), 1u);
@@ -1197,9 +1211,9 @@ void VerifyUiTextAreaLoanTests_ChildSourceSameTextReplacementRejectsTheAlreadyPa
     ASSERT_TRUE(self.m_builder.beginPopup(s_UiTextAreaChildPopupKey, self.m_child, UiTextAreaLargeLoanChildOptions()));
     ASSERT_TRUE(self.m_builder.virtualList("list", source, list, UiTextAreaLargeLoanListOptions()).valid);
     ASSERT_TRUE(self.m_builder.endPopup());
-    native(mut self, mut source){
-        source.rowHook = [&]() -> void{ EXPECT_TRUE(self.m_model.setText("alpha\nbeta")); };
-    }
+    source.rowHook = lambda[mut self]() -> void{
+        EXPECT_TRUE(self.m_model.setText("alpha\nbeta"));
+    };
     EXPECT_FALSE(self.m_builder.endPopup());
     EXPECT_EQ(source.rowMutations, 1u);
     EXPECT_GT(source.textCalls, 0u);
@@ -1222,9 +1236,9 @@ void VerifyUiTextAreaLoanTests_ParentSourceStateIntentRejectsTheEndedChildBefore
     ASSERT_TRUE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, UiTextAreaLoanOptions()).valid);
     ASSERT_TRUE(self.m_builder.endPopup());
     const u64 revision = self.m_state.revision();
-    native(mut self, mut source){
-        source.rowHook = [&]() -> void{ EXPECT_TRUE(self.m_state.scrollTo(self.m_state.scroll())); };
-    }
+    source.rowHook = lambda[mut self]() -> void{
+        EXPECT_TRUE(self.m_state.scrollTo(self.m_state.scroll()));
+    };
     EXPECT_FALSE(self.m_builder.endPopup());
     EXPECT_EQ(source.rowMutations, 1u);
     EXPECT_GT(self.m_state.revision(), revision);
@@ -1251,16 +1265,14 @@ void VerifyUiTextAreaLoanTests_LaterSiblingStateScrollABARetiresAnAlreadyPainted
     Point scroll = Point();
     u64 revision = 0u;
     EditNavigationSnapshot navigation = EditNavigationSnapshot();
-    native(mut self, mut source, mut scroll, mut revision, mut navigation){
-        source.rowHook = [&]() -> void{
-            scroll = self.m_state.scroll();
-            revision = self.m_state.revision();
-            navigation = self.m_state.navigation().snapshot();
-            const SIMDVectorSingle moved = VectorAdd(VectorSet(scroll.x, scroll.y, 0.0f, 0.0f), VectorSet(13.0f, 17.0f, 0.0f, 0.0f));
-            EXPECT_TRUE(self.m_state.scrollTo({ VectorGetX(moved), VectorGetY(moved) }));
-            EXPECT_TRUE(self.m_state.scrollTo(scroll));
-        };
-    }
+    source.rowHook = lambda[mut self, mut scroll, mut revision, mut navigation]() -> void{
+        scroll = self.m_state.scroll();
+        revision = self.m_state.revision();
+        navigation = self.m_state.navigation().snapshot();
+        const VectorSingle moved = VectorSingle(scroll.x, scroll.y, 0.0f, 0.0f) + VectorSingle(13.0f, 17.0f, 0.0f, 0.0f);
+        EXPECT_TRUE(self.m_state.scrollTo(Point(moved.x, moved.y)));
+        EXPECT_TRUE(self.m_state.scrollTo(scroll));
+    };
     EXPECT_FALSE(self.m_builder.endPopup());
     EXPECT_EQ(source.rowMutations, 1u);
     EXPECT_EQ(self.m_host.publishes, 1u);
@@ -1288,14 +1300,12 @@ void VerifyUiTextAreaLoanTests_FinalMetadataScrollIntentRejectsAfterParentAndChi
     ASSERT_TRUE(self.m_builder.endPopup());
     usize publicationsAtMutation = 0u;
     u64 revision = 0u;
-    native(mut self, mut parentSource, mut childSource, mut publicationsAtMutation, mut revision){
-        childSource.armMetadataSource = &parentSource;
-        childSource.metadataToArm = [&]() -> void{
-            publicationsAtMutation = self.m_host.publishes;
-            revision = self.m_state.revision();
-            EXPECT_TRUE(self.m_state.scrollTo(self.m_state.scroll()));
-        };
-    }
+    childSource.armParentMetadata(parentSource);
+    childSource.metadataToArm = lambda[mut self, mut publicationsAtMutation, mut revision]() -> void{
+        publicationsAtMutation = self.m_host.publishes;
+        revision = self.m_state.revision();
+        EXPECT_TRUE(self.m_state.scrollTo(self.m_state.scroll()));
+    };
     EXPECT_FALSE(self.m_builder.endPopup());
     EXPECT_EQ(childSource.arms, 1u);
     EXPECT_EQ(parentSource.metadataMutations, 1u);
@@ -1318,9 +1328,9 @@ void VerifyUiTextAreaLoanTests_ReopenedAncestorSuppressesItsOldAreaAndSourceCall
     ASSERT_TRUE(self.m_builder.virtualList("list", source, list, UiTextAreaLargeLoanListOptions()).valid);
     ASSERT_TRUE(self.m_builder.endPopup());
     source.resetAllCounters();
-    native(mut source){
-        source.rowHook = [&]() -> void{ ADD_FAILURE() << "retired source callback"; };
-    }
+    source.rowHook = lambda[]() -> void{
+        EXPECT_TRUE(false);
+    };
     const usize loans = self.m_host.loans;
     self.m_parent.close();
     self.m_parent.open();
@@ -1705,14 +1715,13 @@ void VerifyUiTextAreaReentryTests_HostLoanResetRejectsWithoutClearingTheLentMode
     const UiTextAreaAcceptedInput16 before = self.accepted();
     usize attempts = 0u;
     b8 failedAtAttempt = false;
-    native(mut self, mut attempts, mut failedAtAttempt){
-        self.m_host.loanHook = [&]() -> void{
-            ++attempts;
-            EXPECT_TRUE(self.m_model.setText("owned\nmutation"));
-            self.m_builder.reset();
-            failedAtAttempt = self.m_builder.failed();
-        };
-    }
+    const auto loanHook = lambda[mut self, mut attempts, mut failedAtAttempt]() -> void{
+        ++attempts;
+        EXPECT_TRUE(self.m_model.setText("owned\nmutation"));
+        self.m_builder.reset();
+        failedAtAttempt = self.m_builder.failed();
+    };
+    self.m_host.loanHook = loanHook;
     ASSERT_TRUE(self.beginArea(2u));
     EXPECT_FALSE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, UiTextAreaLoanOptions()).valid);
     EXPECT_EQ(attempts, 1u);
@@ -1733,12 +1742,11 @@ void VerifyUiTextAreaReentryTests_HostLoanNestedDeclarationRejectsBeforeASecondL
     ASSERT_TRUE(otherModel.setText("other\narea"));
     usize attempts = 0u;
     EditBoxResult nested = EditBoxResult();
-    native(mut self, mut otherModel, mut otherState, mut attempts, mut nested){
-        self.m_host.loanHook = [&]()noexcept -> void{
-            ++attempts;
-            nested = self.m_builder.textArea("reentered", otherModel, otherState, ::NWB::UiTextAreaTests::TextAreaLoanFixture::AreaOptions());
-        };
-    }
+    const auto loanHook = lambda[mut self, mut otherModel, mut otherState, mut attempts, mut nested]() -> void{
+        ++attempts;
+        nested = self.m_builder.textArea("reentered", otherModel, otherState, UiTextAreaLoanOptions());
+    };
+    self.m_host.loanHook = loanHook;
     ASSERT_TRUE(self.beginArea(2u));
     EXPECT_FALSE(self.m_builder.textArea(s_UiTextAreaWidgetKey, self.m_model, self.m_state, UiTextAreaLoanOptions()).valid);
     EXPECT_EQ(attempts, 1u);
@@ -1761,14 +1769,13 @@ void VerifyUiTextAreaReentryTests_PublicationResetRejectsBeforeLaterAreaPublicat
     ASSERT_TRUE(self.m_builder.textArea("other", otherModel, otherState, UiTextAreaLoanOptions()).valid);
     usize attempts = 0u;
     b8 failedAtAttempt = false;
-    native(mut self, mut otherModel, mut attempts, mut failedAtAttempt){
-        self.m_host.publishHook = [&]() -> void{
-            ++attempts;
-            EXPECT_TRUE(otherModel.setText("application\nmutation"));
-            self.m_builder.reset();
-            failedAtAttempt = self.m_builder.failed();
-        };
-    }
+    const auto publishHook = lambda[mut self, mut otherModel, mut attempts, mut failedAtAttempt]() -> void{
+        ++attempts;
+        EXPECT_TRUE(otherModel.setText("application\nmutation"));
+        self.m_builder.reset();
+        failedAtAttempt = self.m_builder.failed();
+    };
+    self.m_host.publishHook = publishHook;
     EXPECT_FALSE(self.m_builder.endPanel());
     EXPECT_EQ(attempts, 1u);
     EXPECT_TRUE(failedAtAttempt);
@@ -1803,13 +1810,16 @@ void VerifyUiTextAreaReentryTests_ChildRowScopeReentryRejectsBeforeSiblingAreaPu
     b8 beginAccepted = true;
     b8 endAccepted = true;
     b8 failedAtAttempt = false;
-    native(mut self, mut source, mut beginAccepted, mut endAccepted, mut failedAtAttempt){
-        source.rowHook = [&]()noexcept -> void{
-            beginAccepted = self.m_builder.beginPanel("reentered", { 0.0f, 0.0f, 100.0f, 80.0f });
-            endAccepted = self.m_builder.endPanel();
-            failedAtAttempt = self.m_builder.failed();
-        };
-    }
+    source.rowHook = lambda[mut self, mut beginAccepted, mut endAccepted, mut failedAtAttempt]() -> void{
+        Rect bounds = Rect();
+        bounds.x = 0.0f;
+        bounds.y = 0.0f;
+        bounds.width = 100.0f;
+        bounds.height = 80.0f;
+        beginAccepted = self.m_builder.beginPanel("reentered", bounds);
+        endAccepted = self.m_builder.endPanel();
+        failedAtAttempt = self.m_builder.failed();
+    };
     EXPECT_FALSE(self.m_builder.endPopup());
     EXPECT_EQ(source.attempts, 1u);
     EXPECT_EQ(source.callbacksAfterAttempt, 0u);

@@ -23,52 +23,28 @@ namespace UiTestSupport{
 using namespace NWB;
 using namespace NWB::Impl::Ui;
 namespace InputEventType = NWB::Impl::Ui::InputEventType;
+using InputEventTypeEnum = NWB::Impl::Ui::InputEventType::Enum;
+using PointerPhaseEnum = NWB::Impl::Ui::PointerPhase::Enum;
+namespace PointerIntent = NWB::Impl::Ui::PointerIntent;
+using PointerIntentEnum = NWB::Impl::Ui::PointerIntent::Enum;
+using KeyEnum = NWB::Core::Key::Enum;
 
 [[nodiscard]] InputEvent NativeInput(const InputEvent& event)noexcept;
+[[nodiscard]] InputEvent Pointer(const InputEventTypeEnum& type, const Point& position = { 15.0f, 15.0f })noexcept;
+[[nodiscard]] PointerInput Pointer(const PointerPhaseEnum& phase, const InputSource& source, const Point& position = { 20.0f, 20.0f }, b8 hoverCapable = false, const PointerIntentEnum& intent = PointerIntent::Activate)noexcept;
+[[nodiscard]] InputEvent Key(const InputEventTypeEnum& type, const KeyEnum& key, b8 repeat = false, b8 shift = false)noexcept;
+[[nodiscard]] InputEvent Key(const KeyEnum& key, b8 shift = false, b8 control = false, b8 alt = false, b8 repeat = false)noexcept;
+InputRoutingResult SendUiNativeInput(InputRouter& router, const InputEvent& event)noexcept;
+InputRoutingResult SendUiPointerInput(InputRouter& router, const PointerInput& input)noexcept;
+void ClickUiInputRouter(InputRouter& router, const Point& position)noexcept;
+void SendUiKeyTap(InputRouter& router, const KeyEnum& value, b8 shift)noexcept;
 
-[[nodiscard]] inline const HitTarget* FindHitTarget(const Span<const HitTarget> targets, const WidgetId widget)noexcept{
+[[nodiscard]] NWB_INLINE const HitTarget* FindHitTarget(const Span<const HitTarget> targets, const WidgetId widget)noexcept{
     for(const auto& target : targets){
         if(target.id == widget)
             return &target;
     }
     return nullptr;
-}
-
-[[nodiscard]] inline InputEvent Pointer(const InputEventType::Enum type, const Point& position = { 15.0f, 15.0f })noexcept{
-    InputEvent event;
-    event.type = type;
-    event.position = position;
-    return event;
-}
-
-[[nodiscard]] inline PointerInput Pointer(const PointerPhase::Enum phase, const InputSource& source, const Point& position = { 20.0f, 20.0f }, const b8 hoverCapable = false, const PointerIntent::Enum intent = PointerIntent::Activate)noexcept{
-    PointerInput input;
-    input.source = source;
-    input.phase = phase;
-    input.intent = intent;
-    input.position = position;
-    input.hoverCapable = hoverCapable;
-    return input;
-}
-
-[[nodiscard]] inline InputEvent Key(const InputEventType::Enum type, const Core::Key::Enum key, const b8 repeat = false, const b8 shift = false)noexcept{
-    InputEvent event;
-    event.type = type;
-    event.key = key;
-    event.shift = shift;
-    event.repeat = repeat;
-    return event;
-}
-
-[[nodiscard]] inline InputEvent Key(const Core::Key::Enum key, const b8 shift = false, const b8 control = false, const b8 alt = false, const b8 repeat = false)noexcept{
-    InputEvent event;
-    event.type = InputEventType::KeyDown;
-    event.key = key;
-    event.shift = shift;
-    event.control = control;
-    event.alt = alt;
-    event.repeat = repeat;
-    return event;
 }
 
 class InputTestFixtureBase : public testing::Test{
@@ -80,22 +56,10 @@ public:
 
 public:
     [[nodiscard]] virtual InputRouter& inputRouter()noexcept = 0;
-    InputRoutingResult send(const InputEvent& event){
-        EXPECT_TRUE(inputRouter().queue(NativeInput(event)));
-        return inputRouter().process();
-    }
-    InputRoutingResult send(const PointerInput& input){
-        EXPECT_TRUE(inputRouter().queuePointer(input));
-        return inputRouter().process();
-    }
-    void click(const Point& position = { 15.0f, 15.0f }){
-        EXPECT_TRUE(send(Pointer(InputEventType::PrimaryDown, position)).pointerConsumed);
-        EXPECT_TRUE(send(Pointer(InputEventType::PrimaryUp, position)).pointerConsumed);
-    }
-    void key(const Core::Key::Enum value, const b8 shift = false){
-        EXPECT_TRUE(send(Key(InputEventType::KeyDown, value, false, shift)).commandConsumed);
-        EXPECT_TRUE(send(Key(InputEventType::KeyUp, value, false, shift)).commandConsumed);
-    }
+    InputRoutingResult send(const InputEvent& event){ return SendUiNativeInput(inputRouter(), event); }
+    InputRoutingResult send(const PointerInput& input){ return SendUiPointerInput(inputRouter(), input); }
+    void click(const Point& position = { 15.0f, 15.0f }){ ClickUiInputRouter(inputRouter(), position); }
+    void key(const Core::Key::Enum value, const b8 shift = false){ SendUiKeyTap(inputRouter(), value, shift); }
 
 
 public:
@@ -166,6 +130,63 @@ InputEvent NativeInput(in InputEvent event){
         break;
     }
     return resolved;
+}
+
+InputEvent Pointer(in InputEventTypeEnum type, in Point position){
+    InputEvent event = InputEvent();
+    event.type = type;
+    event.position = position;
+    return event;
+}
+
+PointerInput Pointer(in PointerPhaseEnum phase, in InputSource source, in Point position, in b8 hoverCapable, in PointerIntentEnum intent){
+    PointerInput input = PointerInput();
+    input.source = source;
+    input.phase = phase;
+    input.intent = intent;
+    input.position = position;
+    input.hoverCapable = hoverCapable;
+    return input;
+}
+
+InputEvent Key(in InputEventTypeEnum type, in KeyEnum key, in b8 repeat, in b8 shift){
+    InputEvent event = InputEvent();
+    event.type = type;
+    event.key = key;
+    event.shift = shift;
+    event.repeat = repeat;
+    return event;
+}
+
+InputEvent Key(in KeyEnum key, in b8 shift, in b8 control, in b8 alt, in b8 repeat){
+    InputEvent event = InputEvent();
+    event.type = InputEventType::KeyDown;
+    event.key = key;
+    event.shift = shift;
+    event.control = control;
+    event.alt = alt;
+    event.repeat = repeat;
+    return event;
+}
+
+InputRoutingResult SendUiNativeInput(mut InputRouter router, in InputEvent event){
+    EXPECT_TRUE(router.queue(NativeInput(event)).has_value());
+    return router.process();
+}
+
+InputRoutingResult SendUiPointerInput(mut InputRouter router, in PointerInput input){
+    EXPECT_TRUE(router.queuePointer(input).has_value());
+    return router.process();
+}
+
+void ClickUiInputRouter(mut InputRouter router, in Point position){
+    EXPECT_TRUE(SendUiNativeInput(router, Pointer(InputEventType::PrimaryDown, position)).pointerConsumed);
+    EXPECT_TRUE(SendUiNativeInput(router, Pointer(InputEventType::PrimaryUp, position)).pointerConsumed);
+}
+
+void SendUiKeyTap(mut InputRouter router, in KeyEnum value, in b8 shift){
+    EXPECT_TRUE(SendUiNativeInput(router, Key(InputEventType::KeyDown, value, false, shift)).commandConsumed);
+    EXPECT_TRUE(SendUiNativeInput(router, Key(InputEventType::KeyUp, value, false, shift)).commandConsumed);
 }
 
 

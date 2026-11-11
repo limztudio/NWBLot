@@ -22,25 +22,6 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <loader/project_entry.adhd.h>
-#if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
-#include <impl/assets_csg/shape_id.adhd.h>
-#include <impl/ecs_csg/module.adhd.h>
-#endif
-#include <impl/ecs_scene/module.adhd.h>
-#include <impl/ecs_mesh/system.adhd.h>
-#include <impl/ecs_render/module.adhd.h>
-#include <core/alloc/scratch.h>
-#include <core/common/log.h>
-#include <core/ecs/entity_id.h>
-#include <core/ecs/world.h>
-#include <core/global.h>
-#include <core/graphics/runtime/runtime.h>
-#include <global/assert.h>
-#include <global/simd/constant.h>
-#include <global/simd/frame.h>
-#include <global/simdmath.h>
-
 namespace NWB::Tests::Smoke{
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
 inline constexpr b8 s_TransparentMultiEnableCsg = true;
@@ -57,8 +38,6 @@ inline constexpr b8 s_TransparentMultiFrameLaggedAsyncLighting = true;
 #else
 inline constexpr b8 s_TransparentMultiFrameLaggedAsyncLighting = false;
 #endif
-inline constexpr f32 s_TransparentMultiHalfPi = s_PIDIV2;
-inline constexpr f32 s_TransparentMultiTwoPi = s_2PI;
 };
 
 
@@ -71,6 +50,8 @@ inline constexpr f32 s_TransparentMultiTwoPi = s_2PI;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const f32 s_TransparentMultiHalfPi = s_PIDIV2;
+const f32 s_TransparentMultiTwoPi = s_2PI;
 const f32 s_TransparentCameraStartDepth = 2.2f;
 const f32 s_TransparentMaxAnimationDelta = 1.0f / 30.0f;
 const f32 s_TransparentManualYawSpeed = 0.6f;
@@ -94,26 +75,6 @@ const SmokeMaterialRef s_TransparentCausticBackdropMaterial = "project/smoke/ref
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-void ApplyTransparentEntityTransform(
-    in EntityID entity,
-    in VectorSingle basePosition,
-    in VectorSingle sceneRotation,
-    in VectorSingle localRotation,
-    mut World world
-){
-    VectorSingle position = VectorSingle(0.0f);
-    VectorSingle rotation = VectorSingle(0.0f);
-    ComputeTransparentSceneTransform(basePosition, sceneRotation, localRotation, position, rotation);
-    const f32x4 storedPosition = f32x4(position);
-    const f32x4 storedRotation = f32x4(rotation);
-    native(in entity, in storedPosition, in storedRotation, mut world){
-        if(auto* transform = world.tryGetComponent<Impl::Scene::TransformComponent>(entity)){
-            transform->position = storedPosition;
-            transform->rotation = storedRotation;
-        }
-    }
-}
 
 class TransparentMultiSceneTransforms{
     public EntityID leftShape = s_InvalidEntityId;
@@ -139,30 +100,9 @@ class TransparentMultiSceneTransforms{
                 receiverPosition,
                 receiverRotation
             );
-            const f32x4 storedPos = f32x4(receiverPosition);
-            const f32x4 storedRot = f32x4(receiverRotation);
-            native(
-                in receiverEntity = this.csgReceiver,
-                in cutterEntity = this.csgCutter,
-                in receiverPosition,
-                in receiverRotation,
-                in storedPos,
-                in storedRot,
-                mut world
-            ){
-                if(auto* transform = world.tryGetComponent<Impl::Scene::TransformComponent>(receiverEntity)){
-                    transform->position = storedPos;
-                    transform->rotation = storedRot;
-                }
-#if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
-                if(auto* cutter = world.tryGetComponent<Impl::CsgCutterComponent>(cutterEntity))
-                    AssignCsgCutterTransform(receiverPosition, receiverRotation, *cutter);
-#else
-                (void)cutterEntity;
-                (void)receiverPosition;
-                (void)receiverRotation;
-#endif
-            }
+            SetOptionalSmokeEntityTransform(this.csgReceiver, receiverPosition, receiverRotation, world);
+            if(this.csgCutter.valid())
+                SetSmokeCsgCutterTransform(this.csgCutter, receiverPosition, receiverRotation, world);
         }
         else{
             ApplyTransparentEntityTransform(this.centerShape, VectorSingle(s_TransparentCenterShapeBasePosition), sceneRotation, identityRot, world);
@@ -176,6 +116,24 @@ class TransparentMultiSceneTransforms{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+void SetOptionalSmokeEntityTransform(in EntityID entity, in VectorSingle position, in VectorSingle rotation, mut World world){
+    if(!entity.valid() || !SetSmokeEntityTransform(entity, f32x4(position), f32x4(rotation), world))
+        return;
+}
+
+void ApplyTransparentEntityTransform(
+    in EntityID entity,
+    in VectorSingle basePosition,
+    in VectorSingle sceneRotation,
+    in VectorSingle localRotation,
+    mut World world
+){
+    VectorSingle position = VectorSingle(0.0f);
+    VectorSingle rotation = VectorSingle(0.0f);
+    ComputeTransparentSceneTransform(basePosition, sceneRotation, localRotation, position, rotation);
+    SetOptionalSmokeEntityTransform(entity, position, rotation, world);
+}
 
 b8 CreateCausticRefractionBackdrop(mut World world){
     const f32x4 rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_TransparentMultiHalfPi, 0.0f, 0.0f, 0.0f)));
@@ -193,13 +151,9 @@ b8 CreateCausticRefractionBackdrop(mut World world){
             VectorSingle(0.1f, 1.0f, 1.3f, 0.0f),
             world
         );
-        if(!entity.valid()){
+        if(!entity.valid() || !SetSmokeEntityRotation(entity, rotation, world)){
             error("CausticSphereSmokeProject: failed to create screen refraction backdrop");
             return false;
-        }
-        native(in entity, in rotation, mut world){
-            auto& transform = world.entity(entity).getComponent<Impl::Scene::TransformComponent>();
-            transform.rotation = rotation;
         }
     }
     [essential] info("CausticSphereSmokeProject: screen refraction striped backdrop created (24 opaque strips)");
@@ -226,18 +180,8 @@ EntityID CreateTransparentStaticMeshEntity(
     );
     if(!entity.valid())
         return s_InvalidEntityId;
-    if(s_TransparentMultiEnableCsg){
-        native(in entity, in csgReceiverGroup, mut world){
-#if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
-            if(csgReceiverGroup)
-                AddStaticCsgMeshReceiver(entity, csgReceiverGroup, false, true, world);
-#else
-            (void)entity;
-            (void)csgReceiverGroup;
-            (void)world;
-#endif
-        }
-    }
+    if(s_TransparentMultiEnableCsg && csgReceiverGroup != s_NameNone)
+        AddStaticCsgMeshReceiver(entity, csgReceiverGroup, false, true, world);
     return entity;
 }
 
@@ -259,18 +203,15 @@ b8 PopulateTransparentMultiScene(
         [essential] info("CausticSphereSmokeProject: caustics {}", causticsLabel);
     }
 
-    EntityID lightEntity = s_InvalidEntityId;
-    native(in causticsEnabled, mut world, mut lightEntity){
-        lightEntity = Impl::Scene::CreateDirectionalLightEntity(
-            world,
-            s_TransparentMultiDefaultDirectionalLightPitch,
-            s_TransparentMultiDefaultDirectionalLightYaw,
-            0.0f,
-            Float4(1.0f, 0.96f, 0.88f),
-            s_TransparentMultiDefaultDirectionalLightIntensity
-        );
-        world.entity(lightEntity).getComponent<Impl::Scene::LightComponent>().enableCaustics = causticsEnabled;
-    }
+    const EntityID lightEntity = CreateSmokeDirectionalLight(
+        s_TransparentMultiDefaultDirectionalLightPitch,
+        s_TransparentMultiDefaultDirectionalLightYaw,
+        0.0f,
+        f32x4(1.0f, 0.96f, 0.88f, 0.0f),
+        s_TransparentMultiDefaultDirectionalLightIntensity,
+        causticsEnabled,
+        world
+    );
 
     b8 shapesValid = false;
     if(s_TransparentMultiCausticSphere){
@@ -284,12 +225,7 @@ b8 PopulateTransparentMultiScene(
             world
         );
         transforms.centerShape = centerShapeEntity;
-        shapesValid = centerShapeEntity.valid();
-        if(shapesValid){
-            native(in centerShapeEntity, mut world){
-                world.entity(centerShapeEntity).getComponent<Impl::RendererComponent>().opticalBoundaryMode = Impl::OpticalBoundaryMode::ClosedNested;
-            }
-        }
+        shapesValid = centerShapeEntity.valid() && SetSmokeOpticalBoundaryMode(centerShapeEntity, OpticalBoundaryMode::ClosedNested, world);
     }
     else{
         const EntityID leftEntity = CreateTransparentStaticMeshEntity(
@@ -375,24 +311,15 @@ b8 PopulateTransparentMultiScene(
     b8 csgEntitiesValid = true;
     if(s_TransparentMultiEnableCsg){
         const b8 cutterActive = !ReadSmokeEnvironmentFlag("NWB_TRANSPARENT_CSG_DISABLE_CUTTER");
-        EntityID cutterEntity = s_InvalidEntityId;
-        native(in cutterActive, mut world, mut cutterEntity){
-#if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
-            auto createdCutter = world.createEntity();
-            auto& cutter = createdCutter.addComponent<Impl::CsgCutterComponent>();
-            cutter.receiverGroup = s_SmokeNameProjectSmokeTransparentMultiCenterReceiver;
-            cutter.shapeType = Name(Impl::s_CsgPlaneShapeName);
-            cutter.active = cutterActive;
-            Impl::CsgPlaneShapeParameters parameters{};
-            parameters.normalDistance = Float4(0.0f, -1.0f, 0.0f, 0.0f);
-            AssignCsgCutterParameters(parameters, cutter);
-            AssignCsgCutterTransform(VectorSet(0.0f, s_TransparentMultiCameraTargetY, 0.0f, 0.0f), QuaternionIdentity(), cutter);
-            cutterEntity = createdCutter.id();
-#else
-            (void)cutterActive;
-            (void)world;
-#endif
-        }
+        const EntityID cutterEntity = CreateSmokeCsgPlaneCutter(
+            s_SmokeNameProjectSmokeTransparentMultiCenterReceiver,
+            s_CsgPlaneShapeName,
+            cutterActive,
+            f32x4(0.0f, -1.0f, 0.0f, 0.0f),
+            VectorSingle(0.0f, s_TransparentMultiCameraTargetY, 0.0f, 0.0f),
+            QuaternionIdentity(),
+            world
+        );
         [essential] info("TransparentCsgSmokeProject: cutter active {}", cutterActive);
         csgEntitiesValid = cutterEntity.valid();
         transforms.csgReceiver = transforms.centerShape;
@@ -402,38 +329,34 @@ b8 PopulateTransparentMultiScene(
     transforms.update(yaw, world);
     [essential] assert(
         activeCamera.valid() && lightEntity.valid() && shapesValid && shadowPlaneEntity.valid() && csgEntitiesValid,
-        "TransparentMultiSmokeProjectImpl failed to create all scene entities"
+        "TransparentMultiSmokeProject failed to create all scene entities"
     );
 
     if(s_TransparentMultiCausticSphere && causticTiming){
         f32 verticalFov = 0.0f;
-        native(in activeCamera, mut world, mut verticalFov){
-            const auto& camera = world.entity(activeCamera).getComponent<Impl::Scene::CameraComponent>();
-            verticalFov = camera.verticalFovRadians();
-        }
+        f32 nearPlane = 0.0f;
+        f32 farPlane = 0.0f;
+        f32 aspectRatio = 0.0f;
+        if(!TryReadSmokeCameraProjection(activeCamera, world, verticalFov, nearPlane, farPlane, aspectRatio))
+            return false;
         [essential] info("CausticTimingProbe: vertical FOV radians {}", verticalFov);
         [essential] info("CausticTimingProbe: scene single-static-sphere-ground-v1");
     }
-    [essential] info("TransparentMultiSmokeProjectImpl: shared transparent material with three mutable instance overrides created");
+    [essential] info("TransparentMultiSmokeProject: shared transparent material with three mutable instance overrides created");
     return true;
 }
 
 void ConfigureTransparentMultiRenderer(mut World world, mut ProjectRuntimeContext context){
-    b8 rayQueryHardwareAvailable = false;
-    native(in ctx = context, mut rayQueryHardwareAvailable){
-        rayQueryHardwareAvailable = ctx.graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
-            && ctx.graphics.queryFeatureSupport(Core::Feature::RayQuery);
-    }
+    const b8 rayQueryHardwareAvailable = context.graphics.queryFeatureSupport(Feature::RayTracingAccelStruct)
+        && context.graphics.queryFeatureSupport(Feature::RayQuery);
     if(rayQueryHardwareAvailable)
-        [essential] info("TransparentMultiSmokeProjectImpl: natural hardware shadow route selected on RayQuery-capable hardware");
+        [essential] info("TransparentMultiSmokeProject: natural hardware shadow route selected on RayQuery-capable hardware");
     else
-        [essential] info("TransparentMultiSmokeProjectImpl: natural software-only shadow route selected because RayQuery-capable hardware is unavailable");
+        [essential] info("TransparentMultiSmokeProject: natural software-only shadow route selected because RayQuery-capable hardware is unavailable");
 
     if(s_TransparentMultiFrameLaggedAsyncLighting){
-        native(mut world, mut context){
-            auto& rendererSystem = AddSmokeRenderSystems(world, context);
-            rendererSystem.setFrameLaggedAsyncLightingEnabled(true);
-        }
+        SetupSmokeRenderSystems(world, context);
+        SmokeRendererSystemRef(world).setFrameLaggedAsyncLightingEnabled(true);
         [essential] info("FrameLaggedAsyncLightingSmoke: requested frame-lagged async lighting; F1 toggles the current-frame path");
         return;
     }
@@ -444,84 +367,52 @@ void ConfigureTransparentMultiRenderer(mut World world, mut ProjectRuntimeContex
         const Expected<f32> hardwareSetting = ReadSmokeEnvironmentF32("NWB_REFRACTION_SMOKE_HARDWARE");
         const b8 hardwareEnabled = !hardwareSetting.has_value() || hardwareSetting.value() != 0.0f;
         const Expected<String> reflectionModeText = ReadSmokeEnvironmentString("NWB_REFLECTION_SMOKE_MODE");
-        const b8 hasReflectionMode = reflectionModeText.has_value();
-        StringView modeView = "";
-        if(hasReflectionMode)
-            modeView = StringView(reflectionModeText.value());
         const b8 reflectionComparison = ReadSmokeEnvironmentFlag("NWB_CAUSTIC_SMOKE_REFLECTION_COMPARISON");
         const b8 causticTiming = ReadSmokeEnvironmentFlag(s_TransparentMultiCausticTimingEnvironment);
 
+        SetupSmokeRenderSystems(world, context);
+        SmokeRendererSystemRef(world).setRefractionEnabled(refractionEnabled);
+        SmokeRendererSystemRef(world).setRefractionHardwareTracingEnabled(hardwareEnabled);
+
+        ReflectionSettings reflectionSettings = ReflectionSettings();
         b8 validMode = true;
-        b8 appliedSettings = false;
-        u32 traceModeValue = 0u;
-        b8 diagEnabled = false;
-        b8 temporalEnabled = false;
-        b8 spatialEnabled = false;
-        b8 feedbackEnabled = false;
-        native(
-            in refractionEnabled,
-            in hardwareEnabled,
-            in hasReflectionMode,
-            in modeView,
-            in reflectionComparison,
-            in causticTiming,
-            mut world,
-            mut context,
-            mut validMode,
-            mut appliedSettings,
-            mut traceModeValue,
-            mut diagEnabled,
-            mut temporalEnabled,
-            mut spatialEnabled,
-            mut feedbackEnabled
-        ){
-            auto& rendererSystem = AddSmokeRenderSystems(world, context);
-            rendererSystem.setRefractionEnabled(refractionEnabled);
-            rendererSystem.setRefractionHardwareTracingEnabled(hardwareEnabled);
-            Impl::ReflectionSettings reflectionSettings;
-            if(hasReflectionMode){
-                if(modeView == "disabled")
-                    reflectionSettings.traceMode = Impl::ReflectionTraceMode::Disabled;
-                else if(modeView == "hardware")
-                    reflectionSettings.traceMode = Impl::ReflectionTraceMode::Hardware;
-                else if(modeView == "screen")
-                    reflectionSettings.traceMode = Impl::ReflectionTraceMode::ScreenSpace;
-                else if(modeView != "hybrid")
-                    validMode = false;
-            }
-            if(reflectionComparison){
-                reflectionSettings.environmentTop = Float3U(0.6f, 0.7f, 1.0f);
-                reflectionSettings.environmentBottom = reflectionSettings.environmentTop;
-                reflectionSettings.maxHardwareRaysPerFrame = 2u * 1280u * 900u;
-                reflectionSettings.temporalEnabled = false;
-                reflectionSettings.spatialFilterEnabled = false;
-            }
-            if(causticTiming){
-                reflectionSettings.diagnosticsEnabled = false;
-                reflectionSettings.temporalEnabled = false;
-                reflectionSettings.spatialFilterEnabled = false;
-                reflectionSettings.screenFeedbackEnabled = false;
-                diagEnabled = reflectionSettings.diagnosticsEnabled;
-                temporalEnabled = reflectionSettings.temporalEnabled;
-                spatialEnabled = reflectionSettings.spatialFilterEnabled;
-                feedbackEnabled = reflectionSettings.screenFeedbackEnabled;
-            }
-            traceModeValue = static_cast<u32>(reflectionSettings.traceMode);
-            if(validMode)
-                appliedSettings = rendererSystem.setReflectionSettings(reflectionSettings);
+        if(reflectionModeText.has_value()){
+            const StringView modeView = StringView(reflectionModeText.value());
+            if(modeView == "disabled")
+                reflectionSettings.traceMode = ReflectionTraceMode::Disabled;
+            else if(modeView == "hardware")
+                reflectionSettings.traceMode = ReflectionTraceMode::Hardware;
+            else if(modeView == "screen")
+                reflectionSettings.traceMode = ReflectionTraceMode::ScreenSpace;
+            else if(modeView != "hybrid")
+                validMode = false;
+        }
+        if(reflectionComparison){
+            reflectionSettings.environmentTop = f32x3u(0.6f, 0.7f, 1.0f);
+            reflectionSettings.environmentBottom = reflectionSettings.environmentTop;
+            reflectionSettings.maxHardwareRaysPerFrame = 2u * 1280u * 900u;
+            reflectionSettings.temporalEnabled = false;
+            reflectionSettings.spatialFilterEnabled = false;
+        }
+        if(causticTiming){
+            reflectionSettings.diagnosticsEnabled = false;
+            reflectionSettings.temporalEnabled = false;
+            reflectionSettings.spatialFilterEnabled = false;
+            reflectionSettings.screenFeedbackEnabled = false;
         }
         [essential] assert(validMode, "CausticSphereSmokeProject: invalid reflection mode");
         if(causticTiming){
             [essential] info(
                 "CausticTimingProbe: reflection diagnostics {} temporal {} spatial {} feedback {}"
-                , diagEnabled
-                , temporalEnabled
-                , spatialEnabled
-                , feedbackEnabled
+                , reflectionSettings.diagnosticsEnabled
+                , reflectionSettings.temporalEnabled
+                , reflectionSettings.spatialFilterEnabled
+                , reflectionSettings.screenFeedbackEnabled
             );
         }
+        const b8 appliedSettings = SmokeRendererSystemRef(world).setReflectionSettings(reflectionSettings);
         [essential] assert(appliedSettings, "CausticSphereSmokeProject: invalid reflection settings");
-        [essential] info("CausticSphereSmokeProject: reflection mode {}", traceModeValue);
+        [essential] info("CausticSphereSmokeProject: reflection mode {}", cast<u32>(reflectionSettings.traceMode));
         StringView refractionLabel = "disabled";
         if(refractionEnabled)
             refractionLabel = "enabled";
@@ -530,14 +421,11 @@ void ConfigureTransparentMultiRenderer(mut World world, mut ProjectRuntimeContex
     }
 
     if(s_TransparentMultiEnableCsg){
-        b8 appliedCsgSettings = false;
-        native(mut world, mut context, mut appliedCsgSettings){
-            auto& rendererSystem = AddSmokeRenderSystems(world, context);
-            rendererSystem.setRefractionEnabled(false);
-            Impl::ReflectionSettings reflectionSettings;
-            reflectionSettings.traceMode = Impl::ReflectionTraceMode::Disabled;
-            appliedCsgSettings = rendererSystem.setReflectionSettings(reflectionSettings);
-        }
+        SetupSmokeRenderSystems(world, context);
+        SmokeRendererSystemRef(world).setRefractionEnabled(false);
+        ReflectionSettings reflectionSettings = ReflectionSettings();
+        reflectionSettings.traceMode = ReflectionTraceMode::Disabled;
+        const b8 appliedCsgSettings = SmokeRendererSystemRef(world).setReflectionSettings(reflectionSettings);
         [essential] assert(appliedCsgSettings, "TransparentCsgSmokeProject: invalid reflection settings");
         return;
     }

@@ -44,16 +44,16 @@ using ShaderFloat4 = ::__hidden_ui_glyph_sdf_tests::ShaderFloat4;
 using float4 = ShaderFloat4;
 using uint = u32;
 
-[[nodiscard]] inline ShaderFloat4 operator*(const ShaderFloat4 value, const f32 scale)noexcept{
+[[nodiscard]] NWB_INLINE ShaderFloat4 operator*(const ShaderFloat4 value, const f32 scale)noexcept{
     const SIMDVectorSingle scaled = VectorScale(VectorSet(value.x, value.y, value.z, value.w), scale);
     return { .x = VectorGetX(scaled), .y = VectorGetY(scaled), .z = VectorGetZ(scaled), .w = VectorGetW(scaled) };
 }
 
-[[nodiscard]] inline f32 saturate(const f32 value)noexcept{
+[[nodiscard]] NWB_INLINE f32 saturate(const f32 value)noexcept{
     return value > 0.0f ? Min(1.0f, value) : 0.0f;
 }
 
-[[nodiscard]] inline f32 max(const f32 first, const f32 second)noexcept{
+[[nodiscard]] NWB_INLINE f32 max(const f32 first, const f32 second)noexcept{
     return Max(first, second);
 }
 
@@ -75,6 +75,11 @@ using uint = u32;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_ui_glyph_sdf_tests{
+::NWB::Impl::Ui::HitTarget MakeUiWheelHost()noexcept;
+::NWB::Impl::Ui::HitTarget MakeUiWheelPart(const ::NWB::Impl::Ui::HitTarget& host)noexcept;
+};
+
 namespace __hidden_ui_wheel_input_tests{
 
 
@@ -84,41 +89,6 @@ namespace __hidden_ui_wheel_input_tests{
 using namespace NWB;
 using namespace NWB::Impl::Ui;
 
-inline HitTarget WheelHost()noexcept{
-    HitTarget target;
-    target.id = { 1u };
-    target.declarationGeneration = 7u;
-    target.rectangle = { 0.0f, 0.0f, 100.0f, 100.0f };
-    target.clip = { 0.0f, 0.0f, 300.0f, 200.0f };
-    target.focusable = true;
-    target.scrollable = true;
-    target.control = { 11u, 21u, 31u };
-    target.scrollStep = 48.0;
-    target.gestureMaximum = 360.0;
-    target.scrollStepX = 32.0;
-    target.gestureMaximumX = 180.0;
-    return target;
-}
-
-inline HitTarget WheelPart(const HitTarget& host)noexcept{
-    HitTarget part;
-    part.id = { 2u };
-    part.declarationGeneration = host.declarationGeneration;
-    part.rectangle = { 90.0f, 20.0f, 10.0f, 20.0f };
-    part.clip = host.clip;
-    part.paintOrder = 1u;
-    part.owner = host.id;
-    part.ownerDeclarationGeneration = host.declarationGeneration;
-    part.control = host.control;
-    part.pointerGesture = true;
-    part.gestureReference = { 90.0f, 0.0f, 10.0f, 100.0f };
-    part.gestureMaximum = host.gestureMaximum;
-    return part;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 class UiWheelInputTests : public testing::Test{
 public:
@@ -126,28 +96,14 @@ public:
         : m_arena(Name(NWB::Tests::UiCases::s_UiCaseTestsUiWheelInput))
         , m_router(m_arena)
     {
-        m_targets[0u] = WheelHost();
-        m_targets[1u] = WheelPart(m_targets[0u]);
+        m_targets[0u] = ::__hidden_ui_glyph_sdf_tests::MakeUiWheelHost();
+        m_targets[1u] = ::__hidden_ui_glyph_sdf_tests::MakeUiWheelPart(m_targets[0u]);
     }
 
 
 public:
-    [[nodiscard]] InputRoutingResult wheel(const f64 deltaX, const f64 deltaY, const Point position = { 10.0f, 10.0f }){
-        InputEvent event;
-        event.type = InputEventType::PointerWheel;
-        event.position = position;
-        event.scrollX = deltaX;
-        event.scrollY = deltaY;
-        EXPECT_TRUE(m_router.queue(UiTestSupport::NativeInput(event)));
-        return m_router.process();
-    }
-
-    [[nodiscard]] b8 queuePointer(const Point& position, const InputEventType::Enum type){
-        InputEvent event;
-        event.position = position;
-        event.type = type;
-        return m_router.queue(UiTestSupport::NativeInput(event)).has_value();
-    }
+    [[nodiscard]] InputRoutingResult wheel(f64 deltaX, f64 deltaY, Point position = { 10.0f, 10.0f });
+    [[nodiscard]] b8 queuePointer(const Point& position, InputEventType::Enum type);
 
 
 public:
@@ -177,7 +133,43 @@ using namespace NWB::Impl;
 using namespace NWB::Impl::Ui;
 using namespace NWB::UiWidgetTests;
 
-class UiWindowSkinTests : public WidgetFixture{};
+class UiWindowSkinTests : public WidgetFixture{
+public:
+    void configureAlternateTheme(){
+        UiSkin::RegionVector regions(m_arena);
+        regions.assign(m_skin.regions().begin(), m_skin.regions().end());
+        for(UiSkinRegion& region : regions){
+            region.rectangle.x += 128u;
+            region.rectangle.y = 8u;
+            if(region.name == Name(NWB::Tests::UiCases::s_UiInputNameWindowNormal)){
+                region.padding = { 11.0f, 12.0f, 13.0f, 14.0f };
+                region.minimumWidth = 280.0f;
+                region.minimumHeight = 200.0f;
+            }
+            else if(region.name == Name(NWB::Tests::UiCases::s_UiInputNameWindowTitle)){
+                region.padding = { 7.0f, 9.0f, 11.0f, 13.0f };
+                region.minimumHeight = 44.0f;
+            }
+            else if(region.name == Name(NWB::Tests::UiCases::s_UiInputNameWindowCollapse)){
+                region.minimumWidth = 26.0f;
+                region.minimumHeight = 28.0f;
+            }
+            else if(region.name == Name(NWB::Tests::UiCases::s_UiInputNameButtonNormal)
+                || region.name == Name(NWB::Tests::UiCases::s_UiInputNameButtonHover)
+                || region.name == Name(NWB::Tests::UiCases::s_UiInputNameButtonPressed)
+                || region.name == Name(NWB::Tests::UiCases::s_UiInputNameButtonDisabled)){
+                region.padding = { 13.0f, 14.0f, 15.0f, 16.0f };
+                region.minimumWidth = 120.0f;
+                region.minimumHeight = 60.0f;
+            }
+        }
+        regions.push_back({ Name(NWB::Tests::UiCases::s_UiInputNameWindowResize), { 224u, 8u, 8u, 8u }, {}, {}, 18.0f, 22.0f, UiSkinDrawMode::Sprite });
+        const Core::Assets::AssetRef<Texture> replacementTexture("tests/ui/alternate_texture");
+        m_skin.setAtlas(replacementTexture, 256u, 32u, 2.0f, Move(regions));
+        ASSERT_TRUE(m_skin.validatePayload());
+        m_skinGeneration = 2u;
+    }
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -234,12 +226,24 @@ using ::NWB::Impl::Ui::TryInitializeWindow;
 using ::NWB::Impl::Ui::TryApplyWindowMove;
 using ::NWB::Impl::Ui::TryApplyWindowResize;
 
-[[nodiscard]] inline f32 UiGlyphSdfDistance(const f32 encoded, const u32 spreadPixels)noexcept{
+[[nodiscard]] NWB_INLINE f32 UiGlyphSdfDistance(const f32 encoded, const u32 spreadPixels)noexcept{
     return ::__hidden_ui_glyph_sdf_slang_tests::nwbUiSdfDistance(encoded, spreadPixels);
 }
 
-[[nodiscard]] inline f32 UiGlyphSdfCoverage(const f32 distance, const f32 pixelWidth)noexcept{
+[[nodiscard]] NWB_INLINE f32 UiGlyphSdfCoverage(const f32 distance, const f32 pixelWidth)noexcept{
     return ::__hidden_ui_glyph_sdf_slang_tests::nwbUiSdfCoverage(distance, pixelWidth);
+}
+
+::NWB::Impl::Ui::InputRoutingResult SendUiWheelInput(UiWheelInputTests& self, f64 deltaX, f64 deltaY, const ::NWB::Impl::Ui::Point& position)noexcept;
+b8 QueueUiWheelPointer(UiWheelInputTests& self, const ::NWB::Impl::Ui::Point& position, const ::NWB::Impl::Ui::InputEventType::Enum& eventType)noexcept;
+};
+
+namespace __hidden_ui_wheel_input_tests{
+NWB_INLINE InputRoutingResult UiWheelInputTests::wheel(const f64 deltaX, const f64 deltaY, const Point position){
+    return ::__hidden_ui_glyph_sdf_tests::SendUiWheelInput(*this, deltaX, deltaY, position);
+}
+NWB_INLINE b8 UiWheelInputTests::queuePointer(const Point& position, const InputEventType::Enum type){
+    return ::__hidden_ui_glyph_sdf_tests::QueueUiWheelPointer(*this, position, type);
 }
 };
 
@@ -273,6 +277,57 @@ InputEvent MakeUiWindowKeyEvent(in UiWindowKeyEnum key, in InputEventTypeEnum ev
     event.type = eventType;
     event.repeat = repeat;
     return event;
+}
+
+HitTarget MakeUiWheelHost(){
+    HitTarget target = HitTarget();
+    target.id.value = 1u;
+    target.declarationGeneration = 7u;
+    target.rectangle = Rect(0.0f, 0.0f, 100.0f, 100.0f);
+    target.clip = Rect(0.0f, 0.0f, 300.0f, 200.0f);
+    target.focusable = true;
+    target.scrollable = true;
+    target.control.instanceGeneration = 11u;
+    target.control.contentGeneration = 21u;
+    target.control.contentRevision = 31u;
+    target.scrollStep = 48.0;
+    target.gestureMaximum = 360.0;
+    target.scrollStepX = 32.0;
+    target.gestureMaximumX = 180.0;
+    return target;
+}
+
+HitTarget MakeUiWheelPart(in HitTarget host){
+    HitTarget part = HitTarget();
+    part.id.value = 2u;
+    part.declarationGeneration = host.declarationGeneration;
+    part.rectangle = Rect(90.0f, 20.0f, 10.0f, 20.0f);
+    part.clip = host.clip;
+    part.paintOrder = 1u;
+    part.owner = host.id;
+    part.ownerDeclarationGeneration = host.declarationGeneration;
+    part.control = host.control;
+    part.pointerGesture = true;
+    part.gestureReference = Rect(90.0f, 0.0f, 10.0f, 100.0f);
+    part.gestureMaximum = host.gestureMaximum;
+    return part;
+}
+
+InputRoutingResult SendUiWheelInput(mut UiWheelInputTests self, in f64 deltaX, in f64 deltaY, in Point position){
+    InputEvent event = InputEvent();
+    event.type = InputEventType::PointerWheel;
+    event.position = position;
+    event.scrollX = deltaX;
+    event.scrollY = deltaY;
+    EXPECT_TRUE(self.m_router.queue(NativeInput(event)).has_value());
+    return self.m_router.process();
+}
+
+b8 QueueUiWheelPointer(mut UiWheelInputTests self, in Point position, in InputEventTypeEnum eventType){
+    InputEvent event = InputEvent();
+    event.position = position;
+    event.type = eventType;
+    return self.m_router.queue(NativeInput(event)).has_value();
 }
 
 
@@ -438,9 +493,10 @@ void VerifyUiWindowBehaviorTests_OverflowingMoveRejectsBoundsAndGestureBaselineA
     state.bounds = Rect(20.0f, 30.0f, 200.0f, 140.0f);
     state.initialized = true;
     PointerGesture gesture = PointerGesture();
-    native(mut gesture){
-        gesture.id = { { 1u }, 1u, 1u, 1u };
-    }
+    gesture.id.target.value = 1u;
+    gesture.id.declarationGeneration = 1u;
+    gesture.id.layoutGeneration = 1u;
+    gesture.id.sequence = 1u;
     gesture.referenceRectangle = Rect(largeCoordinate, 30.0f, 200.0f, 140.0f);
     gesture.position.x = largeCoordinate;
     EXPECT_FALSE(TryApplyWindowMove(gesture, state));
@@ -455,9 +511,10 @@ void VerifyUiWindowBehaviorTests_OverflowingResizeRejectsBoundsAndGestureBaselin
     state.bounds = Rect(20.0f, 30.0f, 200.0f, 140.0f);
     state.initialized = true;
     PointerGesture gesture = PointerGesture();
-    native(mut gesture){
-        gesture.id = { { 1u }, 1u, 1u, 1u };
-    }
+    gesture.id.target.value = 1u;
+    gesture.id.declarationGeneration = 1u;
+    gesture.id.layoutGeneration = 1u;
+    gesture.id.sequence = 1u;
     gesture.referenceRectangle = Rect(0.0f, 30.0f, largeCoordinate, 140.0f);
     gesture.position.x = largeCoordinate;
     EXPECT_FALSE(TryApplyWindowResize(gesture, Point(160.0f, 80.0f), state));
@@ -480,50 +537,14 @@ void VerifyUiWindowSkinTests_ReplacingAtlasChangesMetricsAndBindingsWithoutChang
     ASSERT_TRUE(self.finishWindow());
     const DrawSnapshot first = self.m_paint.freeze();
     ASSERT_TRUE(self.m_context.commitFrame(1u));
-    HitTarget oldTarget = HitTarget();
-    native(in self, mut oldTarget){
-        const HitTarget* original = self.target(self.id(s_UiWindowSkinApplyKey));
-        ASSERT_NE(original, nullptr);
-        oldTarget = *original;
-    }
+    const auto originalTarget = self.tryTarget(self.id(s_UiWindowSkinApplyKey));
+    ASSERT_TRUE(originalTarget.has_value());
+    const HitTarget oldTarget = originalTarget.value();
     EXPECT_FLOAT_EQ(oldTarget.rectangle.x, 33.0f);
     EXPECT_FLOAT_EQ(oldTarget.rectangle.y, 78.0f);
     EXPECT_EQ(self.m_context.input().hitTest(Point(40.0f, 86.0f)), oldTarget.id);
 
-    native(mut self){
-        NWB::Impl::UiSkin::RegionVector regions(self.m_arena);
-        regions.assign(self.m_skin.regions().begin(), self.m_skin.regions().end());
-        for(NWB::Impl::UiSkinRegion& region : regions){
-            region.rectangle.x += 128u;
-            region.rectangle.y = 8u;
-            if(region.name == Name(NWB::Tests::UiCases::s_UiInputNameWindowNormal)){
-                region.padding = { 11.0f, 12.0f, 13.0f, 14.0f };
-                region.minimumWidth = 280.0f;
-                region.minimumHeight = 200.0f;
-            }
-            else if(region.name == Name(NWB::Tests::UiCases::s_UiInputNameWindowTitle)){
-                region.padding = { 7.0f, 9.0f, 11.0f, 13.0f };
-                region.minimumHeight = 44.0f;
-            }
-            else if(region.name == Name(NWB::Tests::UiCases::s_UiInputNameWindowCollapse)){
-                region.minimumWidth = 26.0f;
-                region.minimumHeight = 28.0f;
-            }
-            else if(region.name == Name(NWB::Tests::UiCases::s_UiInputNameButtonNormal)
-                || region.name == Name(NWB::Tests::UiCases::s_UiInputNameButtonHover)
-                || region.name == Name(NWB::Tests::UiCases::s_UiInputNameButtonPressed)
-                || region.name == Name(NWB::Tests::UiCases::s_UiInputNameButtonDisabled)){
-                region.padding = { 13.0f, 14.0f, 15.0f, 16.0f };
-                region.minimumWidth = 120.0f;
-                region.minimumHeight = 60.0f;
-            }
-        }
-        regions.push_back({ Name(NWB::Tests::UiCases::s_UiInputNameWindowResize), { 224u, 8u, 8u, 8u }, {}, {}, 18.0f, 22.0f, NWB::Impl::UiSkinDrawMode::Sprite });
-        const NWB::Core::Assets::AssetRef<NWB::Impl::Texture> replacementTexture("tests/ui/alternate_texture");
-        self.m_skin.setAtlas(replacementTexture, 256u, 32u, 2.0f, Move(regions));
-        ASSERT_TRUE(self.m_skin.validatePayload());
-        self.m_skinGeneration = 2u;
-    }
+    ASSERT_NO_FATAL_FAILURE(self.configureAlternateTheme());
     ASSERT_TRUE(self.begin(2u));
     ASSERT_TRUE(self.m_builder.beginWindow("window", "Theme", state, options));
     EXPECT_FALSE(self.m_builder.button(s_UiWindowSkinApplyKey, "Apply"));
@@ -532,12 +553,9 @@ void VerifyUiWindowSkinTests_ReplacingAtlasChangesMetricsAndBindingsWithoutChang
     EXPECT_EQ(self.m_context.input().layoutGeneration(), 1u);
     EXPECT_EQ(self.m_context.input().hitTest(Point(40.0f, 86.0f)), oldTarget.id);
     ASSERT_TRUE(self.m_context.commitFrame(2u));
-    HitTarget updated = HitTarget();
-    native(in self, mut updated){
-        const HitTarget* found = self.target(self.id(s_UiWindowSkinApplyKey));
-        ASSERT_NE(found, nullptr);
-        updated = *found;
-    }
+    const auto foundUpdated = self.tryTarget(self.id(s_UiWindowSkinApplyKey));
+    ASSERT_TRUE(foundUpdated.has_value());
+    const HitTarget updated = foundUpdated.value();
     EXPECT_EQ(updated.id, oldTarget.id);
     EXPECT_EQ(updated.declarationGeneration, oldTarget.declarationGeneration);
     EXPECT_FLOAT_EQ(updated.rectangle.x, 41.0f);
@@ -548,15 +566,13 @@ void VerifyUiWindowSkinTests_ReplacingAtlasChangesMetricsAndBindingsWithoutChang
     EXPECT_EQ(self.m_context.input().hitTest(Point(55.0f, 115.0f)), updated.id);
     EXPECT_FLOAT_EQ(state.bounds.width, 280.0f);
     EXPECT_FLOAT_EQ(state.bounds.height, 200.0f);
-    native(in first, in second){
-        EXPECT_EQ(first.skinBinding().texture, NWB::Core::Assets::AssetRef<NWB::Impl::Texture>("tests/ui/texture"));
-        EXPECT_EQ(first.skinBinding().generation, 1u);
-        EXPECT_EQ(first.skinBinding().atlasWidth, 128u);
-        EXPECT_EQ(second.skinBinding().texture, NWB::Core::Assets::AssetRef<NWB::Impl::Texture>("tests/ui/alternate_texture"));
-        EXPECT_EQ(second.skinBinding().generation, 2u);
-        EXPECT_EQ(second.skinBinding().atlasWidth, 256u);
-        EXPECT_FLOAT_EQ(second.skinBinding().referenceDensity, 2.0f);
-    }
+    EXPECT_EQ(first.skinBinding().texture, MakeUiTextureAssetRef("tests/ui/texture"));
+    EXPECT_EQ(first.skinBinding().generation, 1u);
+    EXPECT_EQ(first.skinBinding().atlasWidth, 128u);
+    EXPECT_EQ(second.skinBinding().texture, MakeUiTextureAssetRef("tests/ui/alternate_texture"));
+    EXPECT_EQ(second.skinBinding().generation, 2u);
+    EXPECT_EQ(second.skinBinding().atlasWidth, 256u);
+    EXPECT_FLOAT_EQ(second.skinBinding().referenceDensity, 2.0f);
     ASSERT_FALSE(first.commands().empty());
     ASSERT_FALSE(second.commands().empty());
     const Vertex firstWindow = first.vertices()[first.indices()[first.commands()[0u].firstIndex]];
@@ -583,12 +599,9 @@ void VerifyUiWindowTests_ContentHeightFitsOnlyFirstUseAndPreservesLaterHostGeome
     EXPECT_FALSE(self.m_builder.button("apply", "Apply"));
     ASSERT_TRUE(self.finishWindow());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
-    HitTarget apply = HitTarget();
-    native(in self, mut apply){
-        const HitTarget* found = self.target(self.id("apply"));
-        ASSERT_NE(found, nullptr);
-        apply = *found;
-    }
+    const auto foundApply = self.tryTarget(self.id("apply"));
+    ASSERT_TRUE(foundApply.has_value());
+    const HitTarget apply = foundApply.value();
     EXPECT_FLOAT_EQ(state.bounds.height, apply.rectangle.y + apply.rectangle.height + 6.0f - state.bounds.y);
     EXPECT_LT(state.bounds.height, 400.0f);
     const f32 firstHeight = state.bounds.height;
@@ -744,10 +757,8 @@ void VerifyUiWindowTests_CollapseKeepsHostSizeAndRequiresBalancedEnd(mut UiWindo
     EXPECT_TRUE(self.m_builder.balanced());
     const DrawSnapshot collapsed = self.m_paint.freeze();
     ASSERT_TRUE(self.m_context.commitFrame(2u));
-    native(in self){
-        EXPECT_EQ(self.target(self.id("apply")), nullptr);
-        EXPECT_EQ(self.target(self.id("@window.resize")), nullptr);
-    }
+    EXPECT_FALSE(self.hasTarget(self.id("apply")));
+    EXPECT_FALSE(self.hasTarget(self.id("@window.resize")));
     const auto skin = self.skinQuad(collapsed, 0u);
     ASSERT_TRUE(skin.has_value());
     EXPECT_FLOAT_EQ(skin.value().height, 34.0f);
@@ -807,14 +818,11 @@ void VerifyUiWindowTests_DisablingChromeCancelsPendingGesturesAndRestoresContent
     EXPECT_FLOAT_EQ(state.bounds.y, 20.0f);
     ASSERT_TRUE(self.finishWindow());
     ASSERT_TRUE(self.m_context.commitFrame(2u));
-    HitTarget title = HitTarget();
-    native(in self, mut title){
-        EXPECT_EQ(self.target(self.id("@window.collapse")), nullptr);
-        EXPECT_EQ(self.target(self.id("@window.resize")), nullptr);
-        const HitTarget* found = self.target(self.id("@window.title"));
-        ASSERT_NE(found, nullptr);
-        title = *found;
-    }
+    EXPECT_FALSE(self.hasTarget(self.id("@window.collapse")));
+    EXPECT_FALSE(self.hasTarget(self.id("@window.resize")));
+    const auto foundTitle = self.tryTarget(self.id("@window.title"));
+    ASSERT_TRUE(foundTitle.has_value());
+    const HitTarget title = foundTitle.value();
     EXPECT_FALSE(title.pointerGesture);
 }
 
@@ -849,12 +857,9 @@ void VerifyUiWindowTests_ClientResizeKeepsTitleReachableAndClipsOversizedWindow(
     EXPECT_FLOAT_EQ(state.bounds.y, 0.0f);
     ASSERT_TRUE(self.finishWindow());
     ASSERT_TRUE(self.m_context.commitFrame(2u));
-    HitTarget title = HitTarget();
-    native(in self, mut title){
-        const HitTarget* found = self.target(self.id("@window.title"));
-        ASSERT_NE(found, nullptr);
-        title = *found;
-    }
+    const auto foundTitle = self.tryTarget(self.id("@window.title"));
+    ASSERT_TRUE(foundTitle.has_value());
+    const HitTarget title = foundTitle.value();
     EXPECT_FLOAT_EQ(title.clip.width, 100.0f);
     EXPECT_LE(title.clip.height, 80.0f);
     EXPECT_FALSE(self.m_context.input().hitTest(Point(150.0f, 15.0f)).valid());
@@ -950,9 +955,7 @@ void VerifyUiWindowTests_MissingRequiredSkinKeepsPreviousAcceptedTargets(mut UiW
     EXPECT_FALSE(self.m_context.finishFrame());
     EXPECT_FALSE(self.m_context.commitFrame(2u));
     EXPECT_EQ(self.m_context.input().layoutGeneration(), 1u);
-    native(in self){
-        EXPECT_NE(self.target(self.id("@window.title")), nullptr);
-    }
+    EXPECT_TRUE(self.hasTarget(self.id("@window.title")));
 }
 
 void VerifyUiWindowTests_InvalidOptionsAndWrongEndRejectCandidatePublication(mut UiWindowTests self){

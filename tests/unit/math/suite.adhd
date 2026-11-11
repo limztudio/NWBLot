@@ -50,6 +50,7 @@ namespace NWB::Tests::MathCases{
 
 using AabbTransformBounds = decltype(::AabbTests::Transform(::MatrixIdentity(), ::VectorZero(), ::VectorZero()))::value_type;
 using MathSuiteDetail::EvaluateSingleBoxNormal;
+using ::BuildTriangleAreaNormal64;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -68,225 +69,215 @@ using MathSuiteDetail::EvaluateSingleBoxNormal;
 
 
 MatrixSingle MakeIdentitySingle(){
-    MatrixSingle result = MatrixSingle(f32x4x4());
-    native(mut result){
-        result = MatrixIdentity();
-    }
-    return result;
+    return MatrixIdentity();
 }
 
 MatrixSingle MakeScalingSingle(in f32 sx, in f32 sy, in f32 sz){
-    MatrixSingle result = MatrixSingle(f32x4x4());
-    native(in sx, in sy, in sz, mut result){
-        result = MatrixScaling(sx, sy, sz);
-    }
-    return result;
+    return MatrixScaling(sx, sy, sz);
 }
 
 MatrixDouble MakeScalingDouble(in f64 sx, in f64 sy, in f64 sz){
-    MatrixDouble result = MatrixDouble(f64x4x4());
-    native(in sx, in sy, in sz, mut result){
-        result = MatrixDoubleScaling(sx, sy, sz);
-    }
-    return result;
+    return MatrixDoubleScaling(sx, sy, sz);
 }
 
 MatrixSingle MakeTranslationSingle(in f32 tx, in f32 ty, in f32 tz){
-    MatrixSingle result = MatrixSingle(f32x4x4());
-    native(in tx, in ty, in tz, mut result){
-        result = MatrixTranslation(tx, ty, tz);
-    }
-    return result;
+    return MatrixTranslation(tx, ty, tz);
 }
 
 MatrixDouble MakeTranslationDouble(in f64 tx, in f64 ty, in f64 tz){
-    MatrixDouble result = MatrixDouble(f64x4x4());
-    native(in tx, in ty, in tz, mut result){
-        result = MatrixDoubleTranslation(tx, ty, tz);
-    }
-    return result;
+    return MatrixDoubleTranslation(tx, ty, tz);
 }
 
 MatrixSingle MakeRowsSingle(in VectorSingle r0, in VectorSingle r1, in VectorSingle r2, in VectorSingle r3){
-    MatrixSingle result = MatrixSingle(f32x4x4());
-    native(in r0, in r1, in r2, in r3, mut result){
-        result.v[0] = r0;
-        result.v[1] = r1;
-        result.v[2] = r2;
-        result.v[3] = r3;
-    }
-    return result;
+    return MatrixSet(r0.x, r0.y, r0.z, r0.w, r1.x, r1.y, r1.z, r1.w, r2.x, r2.y, r2.z, r2.w, r3.x, r3.y, r3.z, r3.w);
 }
 
 MatrixDouble MakeRowsDouble(in VectorDouble r0, in VectorDouble r1, in VectorDouble r2, in VectorDouble r3){
-    MatrixDouble result = MatrixDouble(f64x4x4());
-    native(in r0, in r1, in r2, in r3, mut result){
-        result.v[0] = r0;
-        result.v[1] = r1;
-        result.v[2] = r2;
-        result.v[3] = r3;
-    }
-    return result;
+    return MatrixDoubleSet(r0.x, r0.y, r0.z, r0.w, r1.x, r1.y, r1.z, r1.w, r2.x, r2.y, r2.z, r2.w, r3.x, r3.y, r3.z, r3.w);
 }
 
 MatrixSingle MakeRotationQuatSingle(in VectorSingle quat){
-    MatrixSingle result = MatrixSingle(f32x4x4());
-    native(in quat, mut result){
-        result = MatrixRotationQuaternion(quat);
-    }
-    return result;
+    return MatrixRotationQuaternion(quat);
 }
 
 MatrixDouble MakeRotationQuatDouble(in VectorDouble quat){
-    MatrixDouble result = MatrixDouble(f64x4x4());
-    native(in quat, mut result){
-        result = MatrixDoubleRotationQuaternion(quat);
-    }
-    return result;
+    return MatrixDoubleRotationQuaternion(quat);
 }
 
 VectorSingle MakeQuatRotationNormalSingle(in VectorSingle axis, in f32 angle){
-    VectorSingle result = VectorSingle(0.0f, 0.0f, 0.0f, 1.0f);
-    native(in axis, in angle, mut result){
-        result = QuaternionRotationNormal(axis, angle);
-    }
-    return result;
+    return QuaternionRotationNormal(axis, angle);
 }
 
 VectorDouble MakeQuatRotationNormalDouble(in VectorDouble axis, in f64 angle){
-    VectorDouble result = VectorDouble(0.0, 0.0, 0.0, 1.0);
-    native(in axis, in angle, mut result){
-        result = QuaternionDoubleRotationNormal(axis, angle);
-    }
-    return result;
+    return QuaternionDoubleRotationNormal(axis, angle);
 }
 
 VectorDouble RotateVector3Double(in VectorDouble vec, in VectorDouble quat){
-    VectorDouble result = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    native(in vec, in quat, mut result){
-        result = VectorDouble3Rotate(vec, quat);
-    }
-    return result;
+    return VectorDouble3Rotate(vec, quat);
 }
 
 VectorSingle TransformVector3Single(in VectorSingle vec, in MatrixSingle mat){
-    VectorSingle result = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-    native(in vec, in mat, mut result){
-        result = Vector3Transform(vec, mat);
-    }
-    return result;
+    return Vector3Transform(vec, mat);
 }
 
 VectorSingle TransformNormal3Single(in VectorSingle vec, in MatrixSingle mat){
-    VectorSingle result = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-    native(in vec, in mat, mut result){
-        result = Vector3TransformNormal(vec, mat);
-    }
-    return result;
+    return Vector3TransformNormal(vec, mat);
 }
 
 VectorDouble TransformVector3Double(in VectorDouble vec, in MatrixDouble mat){
-    VectorDouble result = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    native(in vec, in mat, mut result){
-        result = VectorDouble3Transform(vec, mat);
-    }
-    return result;
+    return VectorDouble3Transform(vec, mat);
 }
 
 VectorSingle EvalBoxNormalSingle(in VectorSingle pos, in VectorSingle extents, in VectorSingle fallback, in f32 threshold){
-    VectorSingle result = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-    native(in pos, in extents, in fallback, in threshold, mut result){
-        result = SdfTests::BoxNormal(pos, extents, fallback, threshold);
-    }
-    return result;
+    return SdfTests::BoxNormal(pos, extents, fallback, threshold);
 }
 
 VectorSingle EvalPlaneFromPointNormal(in VectorSingle normal, in VectorSingle point, in VectorSingle fallback){
-    VectorSingle result = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-    native(in normal, in point, in fallback, mut result){
-        result = PlaneTests::FromPointNormal(normal, point, fallback);
-    }
-    return result;
+    return PlaneTests::FromPointNormal(normal, point, fallback);
 }
 
 VectorSingle EvalInsetRectOrdinary(in VectorSingle rect, in VectorSingle inset){
-    VectorSingle result = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-    native(in rect, in inset, mut result){
-        result = InsetRectValue(rect, inset);
-    }
-    return result;
+    return InsetRectValue(rect, inset);
 }
 
 VectorSingle EvalIntersectRectOrdinary(in VectorSingle lhs, in VectorSingle rhs){
-    VectorSingle result = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-    native(in lhs, in rhs, mut result){
-        result = IntersectRectValue(lhs, rhs);
-    }
-    return result;
+    return IntersectRectValue(lhs, rhs);
 }
 
 MatrixSingle MakeOrthoOffCenterLH(in f32 leftVal, in f32 rightVal, in f32 bottomVal, in f32 topVal, in f32 nearVal, in f32 farVal){
-    MatrixSingle result = MatrixSingle(f32x4x4());
-    native(in leftVal, in rightVal, in bottomVal, in topVal, in nearVal, in farVal, mut result){
-        result = MatrixOrthographicOffCenterLH(leftVal, rightVal, bottomVal, topVal, nearVal, farVal);
-    }
-    return result;
+    return MatrixOrthographicOffCenterLH(leftVal, rightVal, bottomVal, topVal, nearVal, farVal);
 }
 
 VectorSingle EvalVectorTanH(in VectorSingle vec){
-    VectorSingle result = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-    native(in vec, mut result){
-        result = VectorTanH(vec);
-    }
-    return result;
+    return VectorTanH(vec);
 }
 
 VectorSingle EvalVector2Refract(in VectorSingle incident, in VectorSingle normal, in f32 refractionIndex){
-    VectorSingle result = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-    native(in incident, in normal, in refractionIndex, mut result){
-        result = Vector2Refract(incident, normal, refractionIndex);
-    }
-    return result;
+    return Vector2Refract(incident, normal, refractionIndex);
 }
 
 VectorSingle EvalVector3Refract(in VectorSingle incident, in VectorSingle normal, in f32 refractionIndex){
-    VectorSingle result = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-    native(in incident, in normal, in refractionIndex, mut result){
-        result = Vector3Refract(incident, normal, refractionIndex);
-    }
-    return result;
+    return Vector3Refract(incident, normal, refractionIndex);
 }
 
 VectorSingle EvalVector4Refract(in VectorSingle incident, in VectorSingle normal, in f32 refractionIndex){
-    VectorSingle result = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-    native(in incident, in normal, in refractionIndex, mut result){
-        result = Vector4Refract(incident, normal, refractionIndex);
-    }
-    return result;
+    return Vector4Refract(incident, normal, refractionIndex);
 }
 
 VectorSingle EvalVector3NormalizeOr(in VectorSingle vec, in VectorSingle fallback, in f32 epsilon){
-    VectorSingle result = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-    native(in vec, in fallback, in epsilon, mut result){
-        result = Vector3NormalizeOr(vec, fallback, epsilon);
-    }
-    return result;
+    return Vector3NormalizeOr(vec, fallback, epsilon);
 }
 
 VectorSingle EvalVector4NormalizeOr(in VectorSingle vec, in VectorSingle fallback, in f32 epsilon){
-    VectorSingle result = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-    native(in vec, in fallback, in epsilon, mut result){
-        result = Vector4NormalizeOr(vec, fallback, epsilon);
-    }
-    return result;
+    return Vector4NormalizeOr(vec, fallback, epsilon);
 }
 
 VectorDouble EvalTriangleAreaNormal64(in VectorSingle a, in VectorSingle b, in VectorSingle c){
-    VectorDouble result = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    native(in a, in b, in c, mut result){
-        result = ::BuildTriangleAreaNormal64(a, b, c);
-    }
-    return result;
+    return BuildTriangleAreaNormal64(a, b, c);
+}
+
+VectorSingle EvalSuiteSingleBoxNormal(in VectorSingle position, in VectorSingle extents, in VectorSingle fallback, in f32 threshold){
+    return EvaluateSingleBoxNormal(position, extents, fallback, threshold);
+}
+
+VectorSingle EvalSignedFlipYSingle(in i32 sign){
+    return VectorXorInt(VectorReplicate(cast<f32>(sign)), s_SIMDFlipY);
+}
+
+VectorDouble EvalSignedFlipYDouble(in i32 sign){
+    return VectorDoubleXorInt(VectorDoubleReplicate(cast<f64>(sign)), VectorDoubleAndInt(s_DoubleSIMDNegativeZero, s_DoubleSIMDMaskY));
+}
+
+VectorDouble EvalVectorDouble3TransformCoord(in VectorDouble point, in MatrixDouble matrix){
+    return VectorDouble3TransformCoord(point, matrix);
+}
+
+VectorDouble EvalVectorDouble3TransformNormal(in VectorDouble direction, in MatrixDouble matrix){
+    return VectorDouble3TransformNormal(direction, matrix);
+}
+
+MatrixDouble MakeRotationXDouble(in f64 angle){
+    return MatrixDoubleRotationX(angle);
+}
+
+MatrixDouble MakeRotationYDouble(in f64 angle){
+    return MatrixDoubleRotationY(angle);
+}
+
+MatrixDouble MakeRotationZDouble(in f64 angle){
+    return MatrixDoubleRotationZ(angle);
+}
+
+MatrixDouble MakeTranslationVecDouble(in VectorDouble translation){
+    return MatrixDoubleTranslationFromVector(translation);
+}
+
+MatrixDouble EvalDecomposedAffineDouble(in MatrixDoubleDecomposition decomp){
+    return MatrixDoubleAffineTransformation(decomp.scale, VectorDouble(0.0, 0.0, 0.0, 0.0), decomp.rotation, decomp.translation);
+}
+
+VectorDouble EvalQuaternionDoubleSlerp(in VectorDouble q0, in VectorDouble q1, in f64 t){
+    return QuaternionDoubleSlerp(q0, q1, t);
+}
+
+VectorDouble EvalQuaternionDoubleInverse(in VectorDouble q){
+    return QuaternionDoubleInverse(q);
+}
+
+VectorDouble EvalDualQuatTranslationTermDouble(in RigidDualQuaternionDouble dq){
+    return QuaternionDoubleMultiply(dq.dual, QuaternionDoubleConjugate(dq.real));
+}
+
+VectorSingle GetDecompScaleSingle(in MatrixDecomposition decomp){
+    return decomp.scale;
+}
+
+VectorSingle GetDecompRotationSingle(in MatrixDecomposition decomp){
+    return decomp.rotation;
+}
+
+VectorSingle GetDecompTranslationSingle(in MatrixDecomposition decomp){
+    return decomp.translation;
+}
+
+VectorDouble EvalVectorDoubleMod(in VectorDouble lhs, in VectorDouble rhs){
+    return VectorDoubleMod(lhs, rhs);
+}
+
+VectorDouble EvalVectorDoubleModAngles(in VectorDouble angles){
+    return VectorDoubleModAngles(angles);
+}
+
+VectorDouble EvalVectorDouble3NormalizeOr(in VectorDouble vec, in VectorDouble fallback, in f64 epsilon){
+    return VectorDouble3NormalizeOr(vec, fallback, epsilon);
+}
+
+VectorDouble EvalVectorDouble3Refract(in VectorDouble incident, in VectorDouble normal, in f64 refractionIndex){
+    return VectorDouble3Refract(incident, normal, refractionIndex);
+}
+
+VectorSingle EvalSuiteVectorAddInt(in VectorSingle lhs, in VectorSingle rhs){
+    return VectorAddInt(lhs, rhs);
+}
+
+VectorSingle UnwrapSimdSingleResult(in SIMDVectorSingleResult res){
+    return res.value;
+}
+
+VectorSingle GetDualQuatRealSingle(in RigidDualQuaternion dq){
+    return dq.real;
+}
+
+VectorSingle GetDualQuatDualSingle(in RigidDualQuaternion dq){
+    return dq.dual;
+}
+
+VectorDouble EvalQuaternionDoubleRotationMatrix(in MatrixDouble matrix){
+    return QuaternionDoubleRotationMatrix(matrix);
+}
+
+VectorDouble EvalSuiteVectorDoubleTruncate(in VectorDouble input){
+    return VectorDoubleTruncate(input);
 }
 
 void VerifyMathBoxNormal_FiniteSquaredLengthDoesNotOverflowInUnusedReductionLanes(){
@@ -307,10 +298,7 @@ void VerifyMathBoxNormal_FiniteSquaredLengthDoesNotOverflowInUnusedReductionLane
     for(in i32 roundingMode : s_FloatingPointRoundingModes){
         ASSERT_TRUE(SetFloatingPointRoundingMode(roundingMode).has_value());
         ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
-        VectorSingle normal = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-        native(in position, in extents, in fallback, in threshold, mut normal){
-            normal = EvaluateSingleBoxNormal(position, extents, fallback, threshold);
-        }
+        const VectorSingle normal = EvalSuiteSingleBoxNormal(position, extents, fallback, threshold);
         const i32 flags = TestFloatingPointExceptions(s_FeAllExcept);
         EXPECT_EQ(flags & s_FeOverflow, 0);
         EXPECT_TRUE(IsFinite(normal.xyz));
@@ -323,21 +311,17 @@ void VerifyCurrentMathContractBoundaries_OppositelyOrientedThinBoxesDoNotInventA
     const BoundingDoubleOrientedBox doubleLhs = BoundingDoubleOrientedBox(f64x3u(0.0, 0.0, 0.0), f64x3u(1.0, 1.0, 0.1), f64x4(0.0, 0.0, 0.0, 1.0));
     for(i32 sign = -1; sign <= 1; sign += 2){
         ScopedTestTrace trace(sign);
-        native(in sign, in lhs, in doubleLhs){
-            const SIMDVectorSingle signedTerms = VectorMultiply(VectorXorInt(VectorReplicate(static_cast<f32>(sign)), s_SIMDFlipY), VectorSet(s_PIDIV4, 1.1f, 0.0f, 0.0f));
-            Float4 orientation;
-            StoreFloat(QuaternionRotationNormal(VectorSet(0.0f, 0.0f, 1.0f, 0.0f), VectorGetX(signedTerms)), orientation);
-            const BoundingOrientedBox rhs(Float3U(1.1f, VectorGetY(signedTerms), 0.0f), Float3U(2.0f, 0.1f, 0.1f), orientation);
-            EXPECT_FALSE(lhs.intersects(rhs));
-            EXPECT_FALSE(rhs.intersects(lhs));
+        const VectorSingle signedTerms = EvalSignedFlipYSingle(sign) * VectorSingle(s_PIDIV4, 1.1f, 0.0f, 0.0f);
+        const f32x4 orientation = f32x4(MakeQuatRotationNormalSingle(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), signedTerms.x));
+        const BoundingOrientedBox rhs = BoundingOrientedBox(f32x3u(1.1f, signedTerms.y, 0.0f), f32x3u(2.0f, 0.1f, 0.1f), orientation);
+        EXPECT_FALSE(lhs.intersects(rhs));
+        EXPECT_FALSE(rhs.intersects(lhs));
 
-            const SIMDVectorDouble doubleSignedTerms = VectorDoubleMultiply(VectorDoubleXorInt(VectorDoubleReplicate(static_cast<f64>(sign)), VectorDoubleAndInt(s_DoubleSIMDNegativeZero, s_DoubleSIMDMaskY)), VectorDoubleSet(s_DoublePIDIV4, 1.1, 0.0, 0.0));
-            Double4 doubleOrientation;
-            StoreDouble(QuaternionDoubleRotationNormal(SIMDVectorDouble{ 0.0, 0.0, 1.0, 0.0 }, VectorDoubleGetX(doubleSignedTerms)), doubleOrientation);
-            const BoundingDoubleOrientedBox doubleRhs(Double3U(1.1, VectorDoubleGetY(doubleSignedTerms), 0.0), Double3U(2.0, 0.1, 0.1), doubleOrientation);
-            EXPECT_FALSE(doubleLhs.intersects(doubleRhs));
-            EXPECT_FALSE(doubleRhs.intersects(doubleLhs));
-        }
+        const VectorDouble doubleSignedTerms = EvalSignedFlipYDouble(sign) * VectorDouble(s_DoublePIDIV4, 1.1, 0.0, 0.0);
+        const f64x4 doubleOrientation = f64x4(MakeQuatRotationNormalDouble(VectorDouble(0.0, 0.0, 1.0, 0.0), doubleSignedTerms.x));
+        const BoundingDoubleOrientedBox doubleRhs = BoundingDoubleOrientedBox(f64x3u(1.1, doubleSignedTerms.y, 0.0), f64x3u(2.0, 0.1, 0.1), doubleOrientation);
+        EXPECT_FALSE(doubleLhs.intersects(doubleRhs));
+        EXPECT_FALSE(doubleRhs.intersects(doubleLhs));
     }
 }
 
@@ -766,17 +750,10 @@ void VerifyMath_TransformedBoundsRejectInvalidAndOverflowingInputs(){
     const VectorSingle zero = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
     const Expected<AabbTransformBounds> point = AabbTests::Transform(identity, zero, zero);
     ASSERT_TRUE(point.has_value());
-    f32x4 minStorage = f32x4();
-    f32x4 maxStorage = f32x4();
-    b8 pointValid = false;
-    native(in point, mut minStorage, mut maxStorage, mut pointValid){
-        pointValid = AabbTests::Valid(point->minBounds, point->maxBounds);
-        StoreFloat(point->minBounds, minStorage);
-        StoreFloat(point->maxBounds, maxStorage);
-    }
-    EXPECT_TRUE(pointValid);
-    EXPECT_TRUE(NearlyEqual3(VectorSingle(minStorage), 0.0f, 0.0f, 0.0f));
-    EXPECT_TRUE(NearlyEqual3(VectorSingle(maxStorage), 0.0f, 0.0f, 0.0f));
+    const AabbTransformBounds pointBounds = point.value();
+    EXPECT_TRUE(AabbTests::Valid(pointBounds.minBounds, pointBounds.maxBounds));
+    EXPECT_TRUE(NearlyEqual3(pointBounds.minBounds, 0.0f, 0.0f, 0.0f));
+    EXPECT_TRUE(NearlyEqual3(pointBounds.maxBounds, 0.0f, 0.0f, 0.0f));
 }
 
 void VerifyMath_BoxNormalHandlesCornerAndEqualDistanceTie(){
@@ -821,10 +798,7 @@ void VerifyMath_DoubleMatrixTransformsAndInversePreserveSubunitOffsetsAtLargeTra
     const MatrixDouble matrix = Mul(MakeTranslationDouble(base + 0.25, -base + 0.5, 3.0 + powNeg40), MakeScalingDouble(2.0, 4.0, 0.5));
     const VectorDouble point = VectorDouble(0.25, -0.125, powNeg39, 1.0);
 
-    VectorDouble transformed = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    native(in point, in matrix, mut transformed){
-        transformed = VectorDouble3TransformCoord(point, matrix);
-    }
+    const VectorDouble transformed = EvalVectorDouble3TransformCoord(point, matrix);
     EXPECT_EQ(transformed.x, base + 0.75);
     EXPECT_EQ(transformed.y, -base);
     EXPECT_EQ(transformed.z, 3.0 + powNeg39);
@@ -836,11 +810,10 @@ void VerifyMath_DoubleMatrixTransformsAndInversePreserveSubunitOffsetsAtLargeTra
     EXPECT_EQ(packed._34, 3.0 + powNeg40);
 
     const MatrixDouble loadedPacked = MatrixDouble(packed);
-    VectorDouble fromPacked = VectorDouble(0.0, 0.0, 0.0, 0.0);
+    const VectorDouble fromPacked = EvalVectorDouble3TransformCoord(point, loadedPacked);
     VectorDouble determinant = VectorDouble(0.0, 0.0, 0.0, 0.0);
     VectorDouble restored = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    native(in point, in loadedPacked, in matrix, in transformed, mut fromPacked, mut determinant, mut restored){
-        fromPacked = VectorDouble3TransformCoord(point, loadedPacked);
+    native(in matrix, in transformed, mut determinant, mut restored){
         const SIMDMatrixDouble inverse = MatrixDoubleInverse(&determinant, matrix);
         restored = VectorDouble3TransformCoord(transformed, inverse);
     }
@@ -857,37 +830,32 @@ void VerifyMath_DoubleDecompositionReconstructsNoncommutingRotationsWithNegative
     const f64 base = 1099511627776.0;
     const f64 powNeg40 = bit_cast<f64>(cast<u64>(0x3d70000000000000u));
 
-    MatrixDouble matrix = MatrixDouble(f64x4x4());
-    MatrixDouble reconstructed = MatrixDouble(f64x4x4());
-    b8 hasDecomp = false;
-    b8 quatIsNaN = true;
-    native(in base, in powNeg40, mut matrix, mut reconstructed, mut hasDecomp, mut quatIsNaN){
-        const SIMDMatrixDouble rotation = MatrixDoubleMultiply(MatrixDoubleRotationX(0.5), MatrixDoubleMultiply(MatrixDoubleRotationY(-0.75), MatrixDoubleRotationZ(1.25)));
-        matrix = MatrixDoubleMultiply(MatrixDoubleTranslation(base + 0.25, -7.0 + powNeg40, 11.0 + powNeg40), MatrixDoubleMultiply(rotation, MatrixDoubleScaling(-2.0, 3.0, 0.5)));
-        const auto decomposition = MatrixDoubleDecompose(matrix);
-        hasDecomp = decomposition.has_value();
-        if(decomposition){
-            quatIsNaN = QuaternionDoubleIsNaN(decomposition->rotation);
-            reconstructed = MatrixDoubleAffineTransformation(decomposition->scale, VectorDoubleZero(), decomposition->rotation, decomposition->translation);
-        }
-    }
-    ASSERT_TRUE(hasDecomp);
-    EXPECT_FALSE(quatIsNaN);
+    const MatrixDouble rotation = Mul(MakeRotationXDouble(0.5), Mul(MakeRotationYDouble(-0.75), MakeRotationZDouble(1.25)));
+    const MatrixDouble matrix = Mul(MakeTranslationDouble(base + 0.25, -7.0 + powNeg40, 11.0 + powNeg40), Mul(rotation, MakeScalingDouble(-2.0, 3.0, 0.5)));
+    const Expected<MatrixDoubleDecomposition> decomposition = MatrixDoubleDecompose(matrix);
+    ASSERT_TRUE(decomposition.has_value());
+    const MatrixDoubleDecomposition decomp = decomposition.value();
+    EXPECT_FALSE(QuaternionDoubleIsNaN(decomp.rotation));
+    const MatrixDouble reconstructed = EvalDecomposedAffineDouble(decomp);
 
-    Array<f64x4, 4> actualRows = Array<f64x4, 4>();
-    Array<f64x4, 4> expectedRows = Array<f64x4, 4>();
-    native(in reconstructed, in matrix, mut actualRows, mut expectedRows){
-        for(usize row = 0u; row < 4u; ++row){
-            StoreDouble(reconstructed.v[row], actualRows[row]);
-            StoreDouble(matrix.v[row], expectedRows[row]);
-        }
-    }
-    for(usize row = 0u; row < 4u; ++row){
-        EXPECT_NEAR(actualRows[row].x, expectedRows[row].x, 4.0e-15);
-        EXPECT_NEAR(actualRows[row].y, expectedRows[row].y, 4.0e-15);
-        EXPECT_NEAR(actualRows[row].z, expectedRows[row].z, 4.0e-15);
-        EXPECT_EQ(actualRows[row].w, expectedRows[row].w);
-    }
+    const f64x4x4 actualMat = f64x4x4(reconstructed);
+    const f64x4x4 expectedMat = f64x4x4(matrix);
+    EXPECT_NEAR(actualMat._11, expectedMat._11, 4.0e-15);
+    EXPECT_NEAR(actualMat._12, expectedMat._12, 4.0e-15);
+    EXPECT_NEAR(actualMat._13, expectedMat._13, 4.0e-15);
+    EXPECT_EQ(actualMat._14, expectedMat._14);
+    EXPECT_NEAR(actualMat._21, expectedMat._21, 4.0e-15);
+    EXPECT_NEAR(actualMat._22, expectedMat._22, 4.0e-15);
+    EXPECT_NEAR(actualMat._23, expectedMat._23, 4.0e-15);
+    EXPECT_EQ(actualMat._24, expectedMat._24);
+    EXPECT_NEAR(actualMat._31, expectedMat._31, 4.0e-15);
+    EXPECT_NEAR(actualMat._32, expectedMat._32, 4.0e-15);
+    EXPECT_NEAR(actualMat._33, expectedMat._33, 4.0e-15);
+    EXPECT_EQ(actualMat._34, expectedMat._34);
+    EXPECT_NEAR(actualMat._41, expectedMat._41, 4.0e-15);
+    EXPECT_NEAR(actualMat._42, expectedMat._42, 4.0e-15);
+    EXPECT_NEAR(actualMat._43, expectedMat._43, 4.0e-15);
+    EXPECT_EQ(actualMat._44, expectedMat._44);
 
     const MatrixDouble shear = MakeRowsDouble(
         VectorDouble(1.0, 0.5, 0.0, 0.0),
@@ -927,18 +895,10 @@ void VerifyMath_DoubleQuaternionAntipodalInterpolationPreservesSmallDeviationFro
     const f64 negPowNeg41 = -bit_cast<f64>(cast<u64>(0x3d60000000000000u));
     const VectorDouble rotation = MakeQuatRotationNormalDouble(VectorDouble(0.0, 0.0, 1.0, 0.0), angle);
 
-    VectorDouble interpolated = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    b8 isNaN = true;
-    b8 isInf = true;
-    VectorDouble degenerateInverse = VectorDouble(1.0, 1.0, 1.0, 1.0);
-    native(in rotation, mut interpolated, mut isNaN, mut isInf, mut degenerateInverse){
-        interpolated = QuaternionDoubleSlerp(rotation, VectorDoubleNegate(rotation), 0.5);
-        isNaN = QuaternionDoubleIsNaN(interpolated);
-        isInf = QuaternionDoubleIsInfinite(interpolated);
-        degenerateInverse = QuaternionDoubleInverse(VectorDoubleZero());
-    }
-    EXPECT_FALSE(isNaN);
-    EXPECT_FALSE(isInf);
+    const VectorDouble interpolated = EvalQuaternionDoubleSlerp(rotation, -rotation, 0.5);
+    EXPECT_FALSE(QuaternionDoubleIsNaN(interpolated));
+    EXPECT_FALSE(QuaternionDoubleIsInfinite(interpolated));
+    const VectorDouble degenerateInverse = EvalQuaternionDoubleInverse(VectorDouble(0.0, 0.0, 0.0, 0.0));
 
     const VectorDouble rotated = RotateVector3Double(VectorDouble(1.0, 0.0, 0.0, 0.0), interpolated);
     EXPECT_NEAR(rotated.x, Cos(angle), 4.0e-16);
@@ -954,39 +914,22 @@ void VerifyMath_DoubleRigidQuaternionExtractionKeepsRowMatrixRotationAndDualTran
     const VectorDouble translation = VectorDouble(7.0 + powNeg40, -11.0 + powNeg40, 5.0 + powNeg40, 0.0);
     const VectorDouble direction = VectorDouble(2.0, -3.0, 4.0, 0.0);
 
-    MatrixDouble matrix = MatrixDouble(f64x4x4());
-    VectorDouble fromMatrix = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    f64x4 quatStorage = f64x4();
-    b8 hasQuat = false;
-    f64x4 realStorage = f64x4();
-    f64x4 dualStorage = f64x4();
-    VectorDouble extractedTranslation = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    b8 hasDual = false;
-    native(in translation, in direction, mut matrix, mut fromMatrix, mut quatStorage, mut hasQuat, mut realStorage, mut dualStorage, mut extractedTranslation, mut hasDual){
-        matrix = MatrixDoubleMultiply(MatrixDoubleTranslationFromVector(translation), MatrixDoubleRotationZ(0.75));
-        fromMatrix = VectorDouble3TransformNormal(direction, matrix);
-        const auto quaternion = MatrixDoubleTryBuildRigidRotationQuaternion(matrix, 0.0, 1.0e-12);
-        hasQuat = quaternion.has_value();
-        if(quaternion)
-            StoreDouble(quaternion->value, quatStorage);
-        const auto dualQuaternion = MatrixDoubleTryBuildRigidDualQuaternion(matrix, 0.0, 1.0e-12);
-        hasDual = dualQuaternion.has_value();
-        if(dualQuaternion){
-            StoreDouble(dualQuaternion->real, realStorage);
-            StoreDouble(dualQuaternion->dual, dualStorage);
-            extractedTranslation = VectorDoubleScale(QuaternionDoubleMultiply(dualQuaternion->dual, QuaternionDoubleConjugate(dualQuaternion->real)), 2.0);
-        }
-    }
-    ASSERT_TRUE(hasQuat);
-    const VectorDouble fromQuaternion = RotateVector3Double(direction, VectorDouble(quatStorage));
+    const MatrixDouble matrix = Mul(MakeTranslationVecDouble(translation), MakeRotationZDouble(0.75));
+    const VectorDouble fromMatrix = EvalVectorDouble3TransformNormal(direction, matrix);
+    const Expected<SIMDVectorDoubleResult> quaternion = MatrixDoubleTryBuildRigidRotationQuaternion(matrix, 0.0, 1.0e-12);
+    ASSERT_TRUE(quaternion.has_value());
+    const VectorDouble fromQuaternion = RotateVector3Double(direction, quaternion.value().value);
     for(usize lane = 0u; lane < 3u; ++lane)
         EXPECT_NEAR(GetDoubleLaneFloat(fromQuaternion, lane), GetDoubleLaneFloat(fromMatrix, lane), 2.0e-15);
 
-    ASSERT_TRUE(hasDual);
+    const Expected<RigidDualQuaternionDouble> dualQuaternion = MatrixDoubleTryBuildRigidDualQuaternion(matrix, 0.0, 1.0e-12);
+    ASSERT_TRUE(dualQuaternion.has_value());
+    const RigidDualQuaternionDouble dq = dualQuaternion.value();
+    const VectorDouble extractedTranslation = EvalDualQuatTranslationTermDouble(dq) * VectorDouble(2.0, 2.0, 2.0, 2.0);
     for(usize lane = 0u; lane < 3u; ++lane)
         EXPECT_NEAR(GetDoubleLaneFloat(extractedTranslation, lane), GetDoubleLaneFloat(translation, lane), 4.0e-15);
 
-    const VectorDouble transformed = RotateVector3Double(direction, VectorDouble(realStorage)) + extractedTranslation;
+    const VectorDouble transformed = RotateVector3Double(direction, dq.real) + extractedTranslation;
     const VectorDouble expected = TransformVector3Double(direction, matrix);
     for(usize lane = 0u; lane < 3u; ++lane)
         EXPECT_NEAR(GetDoubleLaneFloat(transformed, lane), GetDoubleLaneFloat(expected, lane), 4.0e-15);
@@ -1006,16 +949,19 @@ void VerifyMath_MatrixDecompositionReconstructsCollapsedAxesWithNegativeBasisTie
     matrices.push_back(f32x4x4(MakeRowsSingle(VectorSingle(0.0f, 0.0f, 0.0f, 3.0f), VectorSingle(0.0f, 0.0f, 0.0f, -2.0f), VectorSingle(0.0f, 0.0f, 0.0f, 7.0f), VectorSingle(0.0f, 0.0f, 0.0f, 1.0f))));
     for(usize index = 0u; index < matrices.size(); ++index){
         ScopedTestTrace trace(index);
-        const MatrixSingle mat = MatrixSingle(matrices[index]);
-        native(in mat){
-            const auto decomposition = MatrixDecompose(mat);
-            ASSERT_TRUE(decomposition);
-            EXPECT_FALSE(Vector4IsNaN(decomposition->rotation));
-            EXPECT_FALSE(Vector4IsInfinite(decomposition->rotation));
-            const SIMDMatrix reconstructed = MatrixAffineTransformation(decomposition->scale, VectorZero(), decomposition->rotation, decomposition->translation);
-            for(usize row = 0u; row < 4u; ++row)
-                EXPECT_TRUE(Vector4LessOrEqual(VectorAbs(VectorSubtract(reconstructed.v[row], mat.v[row])), VectorReplicate(NWB::Tests::s_DefaultNearlyEqualEpsilon))) << row;
-        }
+        const f32x4x4 expectedMat = matrices[index];
+        const MatrixSingle mat = MatrixSingle(expectedMat);
+        const Expected<MatrixDecomposition> decomposition = MatrixDecompose(mat);
+        ASSERT_TRUE(decomposition.has_value());
+        const MatrixDecomposition decomp = decomposition.value();
+        const VectorSingle decompRotation = GetDecompRotationSingle(decomp);
+        EXPECT_FALSE(Vector4IsNaN(decompRotation));
+        EXPECT_FALSE(Vector4IsInfinite(decompRotation));
+        const f32x4x4 actualMat = f32x4x4(MatrixAffineTransformation(GetDecompScaleSingle(decomp), VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), decompRotation, GetDecompTranslationSingle(decomp)));
+        EXPECT_TRUE(NearlyEqual4(VectorSingle(actualMat._11, actualMat._12, actualMat._13, actualMat._14), expectedMat._11, expectedMat._12, expectedMat._13, expectedMat._14));
+        EXPECT_TRUE(NearlyEqual4(VectorSingle(actualMat._21, actualMat._22, actualMat._23, actualMat._24), expectedMat._21, expectedMat._22, expectedMat._23, expectedMat._24));
+        EXPECT_TRUE(NearlyEqual4(VectorSingle(actualMat._31, actualMat._32, actualMat._33, actualMat._34), expectedMat._31, expectedMat._32, expectedMat._33, expectedMat._34));
+        EXPECT_TRUE(NearlyEqual4(VectorSingle(actualMat._41, actualMat._42, actualMat._43, actualMat._44), expectedMat._41, expectedMat._42, expectedMat._43, expectedMat._44));
     }
 
     const MatrixSingle shear = MakeRowsSingle(VectorSingle(1.0f, 1.0f, 0.0f, 3.0f), VectorSingle(0.0f, 1.0f, 0.0f, -2.0f), VectorSingle(0.0f, 0.0f, 1.0f, 7.0f), VectorSingle(0.0f, 0.0f, 0.0f, 1.0f));
@@ -1107,12 +1053,8 @@ void VerifyMath_PartialHalfFloatBuffersPreserveSubnormalsAndNonfiniteInput(){
 void VerifyMath_HalfFloat4PreservesSignedZeroSubnormalNaNAndInfinity(){
     const f32 negInf = bit_cast<f32>(s_F32NegInfinityBits);
     const f32 qnan = bit_cast<f32>(s_F32QuietNanBits);
-    f16x4u specialPacked = f16x4u();
-    f32x4u specialUnpacked = f32x4u();
-    native(in qnan, in negInf, mut specialPacked, mut specialUnpacked){
-        specialPacked = MakeHalf4U(-0.0f, 5.9604644775390625e-8f, qnan, negInf);
-        specialUnpacked = LoadHalf4U(specialPacked);
-    }
+    const f16x4u specialPacked = MakeHalf4U(-0.0f, 5.9604644775390625e-8f, qnan, negInf);
+    const f32x4u specialUnpacked = LoadHalf4U(specialPacked);
     EXPECT_EQ(specialPacked.x, cast<u16>(0x8000u));
     EXPECT_EQ(specialPacked.y, cast<u16>(0x0001u));
     EXPECT_EQ(specialPacked.z & cast<u16>(0x7c00u), cast<u16>(0x7c00u));
@@ -1153,14 +1095,9 @@ void VerifyMath_DoubleModAvoidsQuotientOverflowAndUnderflowWhileKeepingDivisorSi
     const VectorDouble exLhs = VectorDouble(posInf, qnan, 1.0, maxVal);
     const VectorDouble exRhs = VectorDouble(1.0, 1.0, 0.0, posInf);
 
-    VectorDouble overflow = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    VectorDouble underflow = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    VectorDouble exceptional = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    native(in ovLhs, in ovRhs, in unLhs, in unRhs, in exLhs, in exRhs, mut overflow, mut underflow, mut exceptional){
-        overflow = VectorDoubleMod(ovLhs, ovRhs);
-        underflow = VectorDoubleMod(unLhs, unRhs);
-        exceptional = VectorDoubleMod(exLhs, exRhs);
-    }
+    const VectorDouble overflow = EvalVectorDoubleMod(ovLhs, ovRhs);
+    const VectorDouble underflow = EvalVectorDoubleMod(unLhs, unRhs);
+    const VectorDouble exceptional = EvalVectorDoubleMod(exLhs, exRhs);
 
     const Array<u64, 4> overflowBits = MakeU64Array4(0u, 0u, 0x8000000000000000u, 0x8000000000000000u);
     for(usize lane = 0u; lane < 4u; ++lane)
@@ -1186,17 +1123,12 @@ void VerifyMath_DoubleModAnglesKeepsLargeFiniteArgumentsAndTiesEvenAtPiBoundarie
     const VectorDouble tiesIn = VectorDouble(s_DoublePI, -s_DoublePI, 3.0 * s_DoublePI, -3.0 * s_DoublePI);
     const VectorDouble exIn = VectorDouble(posInf, negInf, qnan, -0.0);
 
-    VectorDouble reduced = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    VectorDouble ties = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    VectorDouble exceptional = VectorDouble(0.0, 0.0, 0.0, 0.0);
+    const VectorDouble reduced = EvalVectorDoubleModAngles(huge);
+    const VectorDouble ties = EvalVectorDoubleModAngles(tiesIn);
+    const VectorDouble exceptional = EvalVectorDoubleModAngles(exIn);
     Array<u64, 4> expectedHugeBits = Array<u64, 4>();
-    native(in huge, in tiesIn, in exIn, mut reduced, mut ties, mut exceptional, mut expectedHugeBits){
-        reduced = VectorDoubleModAngles(huge);
-        ties = VectorDoubleModAngles(tiesIn);
-        exceptional = VectorDoubleModAngles(exIn);
-        for(usize lane = 0u; lane < 4u; ++lane)
-            expectedHugeBits[lane] = BitCast<u64>(Remainder(huge[lane], s_Double2PI));
-    }
+    for(usize lane = 0u; lane < 4u; ++lane)
+        expectedHugeBits[lane] = bit_cast<u64>(Remainder(huge[lane], s_Double2PI));
 
     for(usize lane = 0u; lane < 4u; ++lane){
         const f64 laneVal = GetDoubleLaneFloat(reduced, lane);
@@ -1234,10 +1166,7 @@ void VerifyMath_DoubleNormalizationRejectsDegenerateNonfiniteAndUnderflowedLengt
     for(in f64x4 item : invalid){
         const VectorDouble input = VectorDouble(item);
         EXPECT_FALSE(VectorDouble3TryNormalize(input).has_value());
-        VectorDouble normalized = VectorDouble(0.0, 0.0, 0.0, 0.0);
-        native(in input, in fallback, mut normalized){
-            normalized = VectorDouble3NormalizeOr(input, fallback, 0.0);
-        }
+        const VectorDouble normalized = EvalVectorDouble3NormalizeOr(input, fallback, 0.0);
         EXPECT_EQ(normalized.x, 0.0);
         EXPECT_EQ(normalized.y, 1.0);
         EXPECT_EQ(normalized.z, 0.0);
@@ -1246,12 +1175,8 @@ void VerifyMath_DoubleNormalizationRejectsDegenerateNonfiniteAndUnderflowedLengt
 
     const VectorDouble belowIn = VectorDouble(pNeg41, 0.0, 0.0, 0.0);
     const VectorDouble aboveIn = VectorDouble(pNeg39, 0.0, 0.0, 0.0);
-    VectorDouble belowThreshold = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    VectorDouble aboveThreshold = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    native(in belowIn, in aboveIn, in fallback, in pNeg80, mut belowThreshold, mut aboveThreshold){
-        belowThreshold = VectorDouble3NormalizeOr(belowIn, fallback, pNeg80);
-        aboveThreshold = VectorDouble3NormalizeOr(aboveIn, fallback, pNeg80);
-    }
+    const VectorDouble belowThreshold = EvalVectorDouble3NormalizeOr(belowIn, fallback, pNeg80);
+    const VectorDouble aboveThreshold = EvalVectorDouble3NormalizeOr(aboveIn, fallback, pNeg80);
     EXPECT_EQ(belowThreshold.y, 1.0);
     EXPECT_EQ(aboveThreshold.x, 1.0);
     EXPECT_EQ(aboveThreshold.y, 0.0);
@@ -1264,14 +1189,9 @@ void VerifyMath_DoubleRefractionDistinguishesCriticalAngleOnEitherSideOfBinary64
     const f64 belowIndex = 1.0 - powNeg40;
     const f64 aboveIndex = 1.0 + powNeg40;
 
-    VectorDouble critical = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    VectorDouble below = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    VectorDouble above = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    native(in incident, in normal, in belowIndex, in aboveIndex, mut critical, mut below, mut above){
-        critical = VectorDouble3Refract(incident, normal, 1.0);
-        below = VectorDouble3Refract(incident, normal, belowIndex);
-        above = VectorDouble3Refract(incident, normal, aboveIndex);
-    }
+    const VectorDouble critical = EvalVectorDouble3Refract(incident, normal, 1.0);
+    const VectorDouble below = EvalVectorDouble3Refract(incident, normal, belowIndex);
+    const VectorDouble above = EvalVectorDouble3Refract(incident, normal, aboveIndex);
 
     EXPECT_EQ(critical.x, 1.0);
     EXPECT_EQ(critical.y, 0.0);
@@ -1285,10 +1205,7 @@ void VerifyMath_DoubleRefractionDistinguishesCriticalAngleOnEitherSideOfBinary64
 void VerifyMath_VectorIntegerAddWrapsAtUnsignedLaneLimits(){
     const VectorSingle lhs = MakeVolatileSingleBits(u32.max, 4u, 0xFFFFFFFEu, 19u);
     const VectorSingle rhs = MakeVolatileSingleBits(1u, 7u, 3u, u32.max);
-    VectorSingle sum = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-    native(in lhs, in rhs, mut sum){
-        sum = VectorAddInt(lhs, rhs);
-    }
+    const VectorSingle sum = EvalSuiteVectorAddInt(lhs, rhs);
     EXPECT_EQ(GetSingleLaneBits(sum, 0u), 0u);
     EXPECT_EQ(GetSingleLaneBits(sum, 2u), 1u);
     EXPECT_EQ(GetSingleLaneBits(sum, 3u), 18u);
@@ -1297,29 +1214,14 @@ void VerifyMath_VectorIntegerAddWrapsAtUnsignedLaneLimits(){
 void VerifyCurrentMathContractBoundaries_SingleRigidExtractionPreservesNonzeroRotationAndDualTranslationDirection(){
     const MatrixSingle matrix = MakeRowsSingle(VectorSingle(0.0f, -1.0f, 0.0f, 7.0f), VectorSingle(1.0f, 0.0f, 0.0f, -11.0f), VectorSingle(0.0f, 0.0f, 1.0f, 5.0f), VectorSingle(0.0f, 0.0f, 0.0f, 1.0f));
     const VectorSingle direction = VectorSingle(2.0f, -3.0f, 4.0f, 0.0f);
-    f32x4 quatStorage = f32x4();
-    b8 hasQuat = false;
-    f32x4 dualRealStorage = f32x4();
-    f32x4 dualPartStorage = f32x4();
-    b8 hasDual = false;
-    native(in matrix, mut quatStorage, mut hasQuat, mut dualRealStorage, mut dualPartStorage, mut hasDual){
-        const auto q = MatrixTryBuildRigidRotationQuaternion(matrix, 0.0f, 0.0f);
-        hasQuat = q.has_value();
-        if(q)
-            StoreFloat(q->value, quatStorage);
-        const auto dq = MatrixTryBuildRigidDualQuaternion(matrix, 0.0f, 0.0f);
-        hasDual = dq.has_value();
-        if(dq){
-            StoreFloat(dq->real, dualRealStorage);
-            StoreFloat(dq->dual, dualPartStorage);
-        }
-    }
-    ASSERT_TRUE(hasQuat);
-    ExpectSingleDirectionNear(Vector3Rotate(direction, VectorSingle(quatStorage)), TransformNormal3Single(direction, matrix));
+    const Expected<SIMDVectorSingleResult> q = MatrixTryBuildRigidRotationQuaternion(matrix, 0.0f, 0.0f);
+    ASSERT_TRUE(q.has_value());
+    ExpectSingleDirectionNear(Vector3Rotate(direction, UnwrapSimdSingleResult(q.value())), TransformNormal3Single(direction, matrix));
 
-    ASSERT_TRUE(hasDual);
-    const VectorSingle realPart = VectorSingle(dualRealStorage);
-    const VectorSingle dualPart = VectorSingle(dualPartStorage);
+    const Expected<RigidDualQuaternion> dq = MatrixTryBuildRigidDualQuaternion(matrix, 0.0f, 0.0f);
+    ASSERT_TRUE(dq.has_value());
+    const VectorSingle realPart = GetDualQuatRealSingle(dq.value());
+    const VectorSingle dualPart = GetDualQuatDualSingle(dq.value());
     const VectorSingle conjugateReal = VectorSingle(-realPart.x, -realPart.y, -realPart.z, realPart.w);
     const VectorSingle translation = QuaternionMultiply(dualPart, conjugateReal) * VectorSingle(2.0f, 2.0f, 2.0f, 2.0f);
     ExpectSingleDirectionNear(translation, VectorSingle(7.0f, -11.0f, 5.0f, 0.0f));
@@ -1360,10 +1262,7 @@ void VerifyCurrentMathContractBoundaries_DoubleQuaternionExtractionKeepsBranchTi
         }
 
         ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
-        VectorDouble actual = VectorDouble(0.0, 0.0, 0.0, 0.0);
-        native(in matrix, mut actual){
-            actual = QuaternionDoubleRotationMatrix(matrix);
-        }
+        const VectorDouble actual = EvalQuaternionDoubleRotationMatrix(matrix);
         const i32 exceptions = TestFloatingPointExceptions(s_FeInvalid | s_FeDivByZero | s_FeOverflow);
         EXPECT_EQ(exceptions, 0);
         for(usize lane = 0u; lane < 4u; ++lane)
@@ -1391,10 +1290,7 @@ void VerifyMath_DoubleVectorFloorAndCeilingPreserveBinary64BoundaryValues(){
         const VectorDouble input = VectorDouble(row);
         const VectorDouble floorVal = Floor(input);
         const VectorDouble ceilingVal = Ceil(input);
-        VectorDouble truncateVal = VectorDouble(0.0, 0.0, 0.0, 0.0);
-        native(in input, mut truncateVal){
-            truncateVal = VectorDoubleTruncate(input);
-        }
+        const VectorDouble truncateVal = EvalSuiteVectorDoubleTruncate(input);
         for(usize lane = 0u; lane < 4u; ++lane){
             ScopedTestTrace trace(lane);
             const f64 inScalar = GetDoubleLaneFloat(input, lane);
@@ -1407,10 +1303,7 @@ void VerifyMath_DoubleVectorFloorAndCeilingPreserveBinary64BoundaryValues(){
                 EXPECT_TRUE(IsNaN(truncScalar));
                 continue;
             }
-            f64 expectedTrunc = 0.0;
-            native(in inScalar, mut expectedTrunc){
-                expectedTrunc = Truncate(inScalar);
-            }
+            const f64 expectedTrunc = Truncate(inScalar);
             EXPECT_EQ(bit_cast<u64>(floorScalar), bit_cast<u64>(Floor(inScalar)));
             EXPECT_EQ(bit_cast<u64>(ceilScalar), bit_cast<u64>(Ceil(inScalar)));
             EXPECT_EQ(bit_cast<u64>(truncScalar), bit_cast<u64>(expectedTrunc));

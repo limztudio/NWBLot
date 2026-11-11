@@ -20,31 +20,28 @@ native{
 #include <core/perf/cpu_task_profile.h>
 #include <core/task/cpu/scheduler.h>
 
-#include <global/not_null.h>
 #include <global/scope_exit.h>
-#include <global/simd/vector.h>
 #include <global/thread.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace TelemetryCaptureCasesDetail{
+NWB_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using namespace NWB;
-using namespace TelemetryTestDetail;
+namespace Tests::TelemetryCases{
 
-inline constexpr AStringView s_ScopeDiagnosticCategory = "scope_diagnostic";
-inline constexpr AStringView s_TelemetryGuardCategory = "telemetry_guard";
-inline constexpr AStringView s_ErrorEvent = "error";
 
-inline u32 g_ExistingDiagnosticCallbackCount = 0u;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-inline void ExistingDiagnosticCallback(const DiagnosticEventRecord&)noexcept{
+
+NWB_INLINE u32 g_ExistingDiagnosticCallbackCount = 0u;
+
+NWB_INLINE void ExistingDiagnosticCallback(const DiagnosticEventRecord&)noexcept{
     ++g_ExistingDiagnosticCallbackCount;
 }
 
@@ -98,172 +95,18 @@ private:
     usize m_injectionBudget = 64u;
 };
 
-using EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation = void(*)(Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics&);
-
-inline constexpr Array<NotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>, 22> s_EncodedPhysicalQueueMutations = {
-    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
-        statistics.reserved[6u] = 1u;
-    }),
-    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
-        statistics.ownerNodeIndex = 1u;
-    }),
-    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
-        statistics.queue.deviceGeneration = 18u;
-    }),
-    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
-        statistics.queueClass = Telemetry::FrameGraphQueueClass::Unknown;
-    }),
-    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
-        statistics.recording.recordingSeconds = -1.0;
-    }),
-    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
-        statistics.submission.submissionSeconds = Limit<f64>::s_QuietNaN;
-    }),
-    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
-        statistics.submission.inheritedTimelineWaitElisionCount = Limit<u64>::s_Max;
-    }),
-    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
-        --statistics.submission.timelineWaitCount;
-        ++statistics.submission.inheritedTimelineWaitElisionCount;
-    }),
-    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
-        statistics.submission = {};
-        statistics.submission.plannedWaitTokenCount = 1u;
-        statistics.submission.inheritedTimelineWaitElisionCount = 1u;
-    }),
-    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
-        statistics.submission.recoverySubmissionCount = statistics.submission.acceptedFrontierSubmissionCount + 1u;
-    }),
-    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
-        statistics.compile.taskCount = 79u;
-        statistics.compile.packetCount = 78u;
-        statistics.compile.mergedTaskCount = 1u;
-    }),
-    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
-        statistics.compile.taskCount = 51u;
-        statistics.compile.packetCount = 50u;
-        statistics.compile.mergedTaskCount = 1u;
-    }),
-    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
-        statistics.compile.prologueBarrierCount = 0u;
-    }),
-    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
-        statistics.recording.barrierCount = 24u;
-    }),
-    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
-        statistics.recording.taskCount = 22u;
-    }),
-    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
-        statistics.submission.rejectedPacketCount = 23u;
-        statistics.submission.rejectedTaskCount = 24u;
-        statistics.submission.rejectedSubmissionCount = 23u;
-    }),
-    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
-        statistics.compile.incomingLogicalOwnershipTransferSignatureCount = 0u;
-        statistics.compile.outgoingLogicalOwnershipTransferSignatureCount = 0u;
-        statistics.compile.incomingRepeatedOwnershipTransferSignatureCount = 0u;
-        statistics.compile.outgoingRepeatedOwnershipTransferSignatureCount = 0u;
-    }),
-    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
-        statistics.recording = {};
-        statistics.recording.commandListCount = 1u;
-        statistics.submission = {};
-    }),
-    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
-        statistics.submission.nativeSubmissionCount = 0u;
-        statistics.submission.nativeCommandListCount = 0u;
-        statistics.submission.plannedWaitTokenCount = 1u;
-        statistics.submission.sameQueueWaitElisionCount = 0u;
-        statistics.submission.timelineWaitCount = 1u;
-        statistics.submission.mergedTimelineWaitCount = 0u;
-        statistics.submission.acceptedFrontierSubmissionCount = 0u;
-        statistics.submission.recoverySubmissionCount = 0u;
-        statistics.submission.submissionSeconds = 0.0;
-    }),
-    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
-        statistics.submission.acceptedPacketCount = 0u;
-        statistics.submission.acceptedTaskCount = 1u;
-        statistics.submission.nativeSubmissionCount = 0u;
-        statistics.submission.nativeCommandListCount = 0u;
-        statistics.submission.plannedWaitTokenCount = 0u;
-        statistics.submission.sameQueueWaitElisionCount = 0u;
-        statistics.submission.timelineWaitCount = 0u;
-        statistics.submission.mergedTimelineWaitCount = 0u;
-        statistics.submission.acceptedFrontierSubmissionCount = 0u;
-        statistics.submission.recoverySubmissionCount = 0u;
-        statistics.submission.submissionSeconds = 0.0;
-    }),
-    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
-        statistics.submission.rejectedPacketCount = 0u;
-        statistics.submission.rejectedTaskCount = 1u;
-        statistics.submission.rejectedSubmissionCount = 0u;
-    }),
-    MakeNotNull<EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation>([](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
-        statistics.compile.taskCount = 0u;
-        statistics.compile.packetCount = 0u;
-        statistics.compile.mergedTaskCount = 0u;
-        statistics.compile.prologueBarrierCount = 1u;
-        statistics.compile.epilogueBarrierCount = 0u;
-        statistics.compile.ownershipReleaseBarrierCount = 0u;
-        statistics.compile.ownershipAcquireBarrierCount = 0u;
-        statistics.recording = {};
-        statistics.submission = {};
-    }),
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests::TelemetryCases{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 struct CpuTaskProfileIntegrationArenaTag{};
 using CpuTaskProfileTestArena = Tests::TestArena<CpuTaskProfileIntegrationArenaTag>;
-using CapturingLogger = Tests::CapturingLogger;
-using LoggerRegistrationGuard = Core::Common::LoggerRegistrationGuard;
-namespace LoggerBreakPolicy = Core::Common::LoggerBreakPolicy;
-namespace LogType = Core::Common::LogType;
-using CaptureSessionCaptureScope = Core::Telemetry::CaptureSessionCaptureScope;
-using DiagnosticCaptureGuard = Core::Telemetry::DiagnosticCaptureGuard;
-using TextLogCaptureLogger = Core::Telemetry::TextLogCaptureLogger;
-using FrameGraphNodeDescs = Core::Telemetry::FrameGraphNodeDescs;
-using FrameGraphEdgeDescs = Core::Telemetry::FrameGraphEdgeDescs;
-using FrameGraphPhysicalQueueRuntimeStatisticsRecords = Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords;
-using FrameGraphPacketSubmissionStatisticsRecords = Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecords;
-using FrameGraphPacketSubmissionStatisticsRecord = Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord;
-using FrameGraphPayload = Core::Telemetry::FrameGraphPayload;
-namespace FrameGraphNodeKind = Core::Telemetry::FrameGraphNodeKind;
-namespace FrameGraphQueueClass = Core::Telemetry::FrameGraphQueueClass;
-namespace FrameGraphTaskPacketizationDecision = Core::Telemetry::FrameGraphTaskPacketizationDecision;
+using TimingSink = Core::Perf::TimingSink;
 using CpuTaskScheduler = Core::CpuTaskScheduler;
 using CpuTaskSchedulerConfig = Core::CpuTaskSchedulerConfig;
 using CpuTaskScope = Core::CpuTaskScope;
 using CpuTaskProfileLabel = Core::CpuTaskProfileLabel;
 using CpuTaskHandle = Core::CpuTaskHandle;
-using OwnerThreadTimingSink = TelemetryCaptureCasesDetail::OwnerThreadTimingSink;
 
-using Core::Telemetry::BuildFrameGraphPayload;
-using Core::Telemetry::s_DiagnosticCaptureEventCapacity;
-using Core::Telemetry::IsValidFrameGraphPacketSubmissionStatistics;
-using Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics;
-using Core::Telemetry::IsValidFrameGraphRuntimeStatistics;
 using Core::Perf::CollectCpuTaskProfile;
+
+static_assert(noexcept(DeclVal<DiagnosticCaptureGuard&>().capture(DeclVal<const DiagnosticEventRecord&>())));
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -287,34 +130,170 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const StringView s_ScopeDiagnosticCategory = "scope_diagnostic";
+const StringView s_TelemetryGuardCategory = "telemetry_guard";
+const StringView s_ErrorEvent = "error";
+const usize s_EncodedPhysicalQueueMutationCount = 22u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+OwnerThreadTimingSink MakeOwnerThreadTimingSink(mut CpuTaskScheduler scheduler, mut TimingRecorder recorder, in b8 injectTasks){
+    return OwnerThreadTimingSink(scheduler, recorder, injectTasks);
+}
+
+OwnerThreadTimingSink MakeOwnerThreadTimingSink(mut CpuTaskScheduler scheduler, mut TimingRecorder recorder){
+    return OwnerThreadTimingSink(scheduler, recorder, false);
+}
+
+void CollectTestCpuTaskProfile(mut CpuTaskScheduler scheduler, mut TimingSink sink){
+    CollectCpuTaskProfile(scheduler, sink);
+}
+
+void ApplyEncodedPhysicalQueueMutation(in usize mutationIndex, mut EncodedFrameGraphPhysicalQueueRuntimeStatistics statistics){
+    switch(mutationIndex){
+    case 0u:
+        statistics.reserved[6u] = 1u;
+        break;
+    case 1u:
+        statistics.ownerNodeIndex = 1u;
+        break;
+    case 2u:
+        statistics.queue.deviceGeneration = 18u;
+        break;
+    case 3u:
+        statistics.queueClass = FrameGraphQueueClass::Unknown;
+        break;
+    case 4u:
+        statistics.recording.recordingSeconds = -1.0;
+        break;
+    case 5u:
+        statistics.submission.submissionSeconds = bit_cast<f64>(0x7FF8000000000000uLL);
+        break;
+    case 6u:
+        statistics.submission.inheritedTimelineWaitElisionCount = u64.max;
+        break;
+    case 7u:
+        --statistics.submission.timelineWaitCount;
+        ++statistics.submission.inheritedTimelineWaitElisionCount;
+        break;
+    case 8u:
+        statistics.submission = EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics();
+        statistics.submission.plannedWaitTokenCount = 1u;
+        statistics.submission.inheritedTimelineWaitElisionCount = 1u;
+        break;
+    case 9u:
+        statistics.submission.recoverySubmissionCount = statistics.submission.acceptedFrontierSubmissionCount + 1u;
+        break;
+    case 10u:
+        statistics.compile.taskCount = 79u;
+        statistics.compile.packetCount = 78u;
+        statistics.compile.mergedTaskCount = 1u;
+        break;
+    case 11u:
+        statistics.compile.taskCount = 51u;
+        statistics.compile.packetCount = 50u;
+        statistics.compile.mergedTaskCount = 1u;
+        break;
+    case 12u:
+        statistics.compile.prologueBarrierCount = 0u;
+        break;
+    case 13u:
+        statistics.recording.barrierCount = 24u;
+        break;
+    case 14u:
+        statistics.recording.taskCount = 22u;
+        break;
+    case 15u:
+        statistics.submission.rejectedPacketCount = 23u;
+        statistics.submission.rejectedTaskCount = 24u;
+        statistics.submission.rejectedSubmissionCount = 23u;
+        break;
+    case 16u:
+        statistics.compile.incomingLogicalOwnershipTransferSignatureCount = 0u;
+        statistics.compile.outgoingLogicalOwnershipTransferSignatureCount = 0u;
+        statistics.compile.incomingRepeatedOwnershipTransferSignatureCount = 0u;
+        statistics.compile.outgoingRepeatedOwnershipTransferSignatureCount = 0u;
+        break;
+    case 17u:
+        statistics.recording = EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics();
+        statistics.recording.commandListCount = 1u;
+        statistics.submission = EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics();
+        break;
+    case 18u:
+        statistics.submission.nativeSubmissionCount = 0u;
+        statistics.submission.nativeCommandListCount = 0u;
+        statistics.submission.plannedWaitTokenCount = 1u;
+        statistics.submission.sameQueueWaitElisionCount = 0u;
+        statistics.submission.timelineWaitCount = 1u;
+        statistics.submission.mergedTimelineWaitCount = 0u;
+        statistics.submission.acceptedFrontierSubmissionCount = 0u;
+        statistics.submission.recoverySubmissionCount = 0u;
+        statistics.submission.submissionSeconds = 0.0;
+        break;
+    case 19u:
+        statistics.submission.acceptedPacketCount = 0u;
+        statistics.submission.acceptedTaskCount = 1u;
+        statistics.submission.nativeSubmissionCount = 0u;
+        statistics.submission.nativeCommandListCount = 0u;
+        statistics.submission.plannedWaitTokenCount = 0u;
+        statistics.submission.sameQueueWaitElisionCount = 0u;
+        statistics.submission.timelineWaitCount = 0u;
+        statistics.submission.mergedTimelineWaitCount = 0u;
+        statistics.submission.acceptedFrontierSubmissionCount = 0u;
+        statistics.submission.recoverySubmissionCount = 0u;
+        statistics.submission.submissionSeconds = 0.0;
+        break;
+    case 20u:
+        statistics.submission.rejectedPacketCount = 0u;
+        statistics.submission.rejectedTaskCount = 1u;
+        statistics.submission.rejectedSubmissionCount = 0u;
+        break;
+    case 21u:
+        statistics.compile.taskCount = 0u;
+        statistics.compile.packetCount = 0u;
+        statistics.compile.mergedTaskCount = 0u;
+        statistics.compile.prologueBarrierCount = 1u;
+        statistics.compile.epilogueBarrierCount = 0u;
+        statistics.compile.ownershipReleaseBarrierCount = 0u;
+        statistics.compile.ownershipAcquireBarrierCount = 0u;
+        statistics.recording = EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics();
+        statistics.submission = EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics();
+        break;
+    default:
+        break;
+    }
+}
+
 void VerifyTelemetry_CaptureScopeRestoresLoggerAndStopsDiagnosticsAfterDestruction(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryCaptureSession session = TelemetryCaptureSession(testArena.arena);
     session.setCaptureOptions(CaptureAll());
 
     CapturingLogger previousLogger = CapturingLogger();
-    native(mut session, mut previousLogger){
+    {
+        LoggerRegistrationGuard previousRegistration = LoggerRegistrationGuard(previousLogger);
         {
-            LoggerRegistrationGuard previousRegistration(previousLogger);
-            {
-                CaptureSessionCaptureScope captureScope(session);
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("scope text"));
-                CaptureDiagnosticEvent(DiagnosticEventRecord{
-                    .event = DiagnosticEventName::s_Error,
-                    .category = TelemetryCaptureCasesDetail::s_ScopeDiagnosticCategory,
-                    .message = "scope diagnostic",
-                    .file = "scope.cpp",
-                    .line = 67u,
-                });
-            }
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("after scope"));
+            CaptureSessionCaptureScope captureScope = CaptureSessionCaptureScope(session);
+            [essential] info("scope text");
+            CaptureDiagnosticEvent(MakeDiagnosticEvent(
+                DiagnosticEventName::s_Error,
+                s_ScopeDiagnosticCategory,
+                "scope diagnostic",
+                "scope.cpp",
+                67u
+            ));
         }
-        CaptureDiagnosticEvent(DiagnosticEventRecord{
-            .event = DiagnosticEventName::s_Error,
-            .category = TelemetryCaptureCasesDetail::s_ScopeDiagnosticCategory,
-            .message = "ignored after scope",
-        });
+        [essential] info("after scope");
     }
+    CaptureDiagnosticEvent(MakeDiagnosticEvent(
+        DiagnosticEventName::s_Error,
+        s_ScopeDiagnosticCategory,
+        "ignored after scope",
+        "",
+        0u
+    ));
 
     EXPECT_EQ(previousLogger.messageCount(), 2u);
     EXPECT_TRUE(SawCapturedMessage(previousLogger, "scope text"));
@@ -326,10 +305,10 @@ void VerifyTelemetry_TextCaptureCountsRejectedPayloadsWithoutCountingFilteredEve
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
     CapturingLogger forwardLogger = CapturingLogger();
-    native(mut testArena, mut recorder, mut forwardLogger){
+    const LogTypeEnum invalidType = cast<LogTypeEnum>(0xffu);
+    native(mut testArena, mut recorder, mut forwardLogger, in invalidType){
         TextLogCaptureLogger capture(recorder, &forwardLogger);
         Core::Common::LogString message(NWB_TEXT("capture admission"), testArena.arena);
-        const auto invalidType = static_cast<LogType::Enum>(0xffu);
         capture.enqueue(message, invalidType);
         EXPECT_EQ(capture.droppedTextLogCount(), 0u);
         EXPECT_EQ(recorder.eventCount(), 0u);
@@ -354,66 +333,63 @@ void VerifyTelemetry_TextCaptureCountsRejectedPayloadsWithoutCountingFilteredEve
 void VerifyTelemetry_DiagnosticPayloadPreservesBoundedTextAndRejectsCorruptedHeader(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
-    native(mut testArena, mut payload){
-        constexpr Array<char, 3> s_Message = { 'd', 0, 'm' };
-        const DiagnosticEventRecord source{
-            .event = AStringView("error.trailing").substr(0u, 5u),
-            .category = "unit_category",
-            .expression = "value != nullptr",
-            .message = AStringView(s_Message.data(), s_Message.size()),
-            .file = "diagnostic_test.cpp",
-            .instructionPointer = 0x1234u,
-            .line = 77u,
-            .terminatesProcess = true,
-        };
-        ASSERT_TRUE(Core::Telemetry::BuildDiagnosticPayload(source, testArena.arena, payload));
-        auto parsed = Core::Telemetry::ParseDiagnosticPayload(payload.data(), payload.size());
-        ASSERT_TRUE(parsed.has_value());
-        EXPECT_EQ(AStringView(parsed.value().event), source.event);
-        EXPECT_EQ(AStringView(parsed.value().message), source.message);
+    DiagnosticEventRecord source = DiagnosticEventRecord();
+    source.event = StringView("error.trailing").substr(0u, 5u);
+    source.category = "unit_category";
+    source.expression = "value != nullptr";
+    source.file = "diagnostic_test.cpp";
+    source.instructionPointer = 0x1234u;
+    source.line = 77u;
+    source.terminatesProcess = true;
+    String embeddedMessage = String("d");
+    embeddedMessage.resize(2u);
+    embeddedMessage.append("m");
+    source.message = StringView(embeddedMessage);
+    ASSERT_TRUE(BuildTestDiagnosticPayload(source, testArena.arena, payload));
+    const Expected<DiagnosticPayload> parsed = ParseDiagnosticBytes(payload);
+    ASSERT_TRUE(parsed.has_value());
+    EXPECT_EQ(parsed.value().event, source.event);
+    EXPECT_EQ(parsed.value().message, source.message);
 
-        payload[0u] = 0u;
-        EXPECT_FALSE(Core::Telemetry::ParseDiagnosticPayload(payload.data(), payload.size()).has_value());
-    }
+    payload[0u] = 0u;
+    EXPECT_FALSE(ParseDiagnosticBytes(payload).has_value());
 }
 
 void VerifyTelemetry_DiagnosticPayloadPreservesAliasedTextFields(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
-    native(mut testArena, mut payload){
+    DiagnosticEventRecord record = DiagnosticEventRecord();
+    native(mut payload, mut record){
         constexpr AStringView s_Text = "event category expression message file";
         payload.reserve(512u);
         payload.resize(s_Text.size());
         NWB_MEMCPY(payload.data(), payload.size(), s_Text.data(), s_Text.size());
         const AStringView text(reinterpret_cast<const char*>(payload.data()), payload.size());
-        const DiagnosticEventRecord record{
-            .event = text.substr(0u, 5u),
-            .category = text.substr(6u, 8u),
-            .expression = text.substr(15u, 10u),
-            .message = text.substr(26u, 7u),
-            .file = text.substr(34u, 4u),
-        };
-        ASSERT_TRUE(Core::Telemetry::BuildDiagnosticPayload(record, testArena.arena, payload));
-        const auto parsed = Core::Telemetry::ParseDiagnosticPayload(payload.data(), payload.size());
-        ASSERT_TRUE(parsed.has_value());
-        EXPECT_EQ(parsed.value().event, "event");
-        EXPECT_EQ(parsed.value().category, "category");
-        EXPECT_EQ(parsed.value().expression, "expression");
-        EXPECT_EQ(parsed.value().message, "message");
-        EXPECT_EQ(parsed.value().file, "file");
-        const DiagnosticEventRecord roundtrip{
-            .event = parsed.value().event,
-            .category = parsed.value().category,
-            .expression = parsed.value().expression,
-            .message = parsed.value().message,
-            .file = parsed.value().file,
-        };
-        ASSERT_TRUE(Core::Telemetry::BuildDiagnosticPayload(roundtrip, testArena.arena, payload));
-        const auto rebuilt = Core::Telemetry::ParseDiagnosticPayload(payload.data(), payload.size());
-        ASSERT_TRUE(rebuilt.has_value());
-        EXPECT_EQ(rebuilt.value().message, "message");
-        EXPECT_EQ(rebuilt.value().file, "file");
+        record.event = text.substr(0u, 5u);
+        record.category = text.substr(6u, 8u);
+        record.expression = text.substr(15u, 10u);
+        record.message = text.substr(26u, 7u);
+        record.file = text.substr(34u, 4u);
     }
+    ASSERT_TRUE(BuildTestDiagnosticPayload(record, testArena.arena, payload));
+    const Expected<DiagnosticPayload> parsed = ParseDiagnosticBytes(payload);
+    ASSERT_TRUE(parsed.has_value());
+    EXPECT_EQ(parsed.value().event, "event");
+    EXPECT_EQ(parsed.value().category, "category");
+    EXPECT_EQ(parsed.value().expression, "expression");
+    EXPECT_EQ(parsed.value().message, "message");
+    EXPECT_EQ(parsed.value().file, "file");
+    DiagnosticEventRecord roundtrip = DiagnosticEventRecord();
+    roundtrip.event = parsed.value().event;
+    roundtrip.category = parsed.value().category;
+    roundtrip.expression = parsed.value().expression;
+    roundtrip.message = parsed.value().message;
+    roundtrip.file = parsed.value().file;
+    ASSERT_TRUE(BuildTestDiagnosticPayload(roundtrip, testArena.arena, payload));
+    const Expected<DiagnosticPayload> rebuilt = ParseDiagnosticBytes(payload);
+    ASSERT_TRUE(rebuilt.has_value());
+    EXPECT_EQ(rebuilt.value().message, "message");
+    EXPECT_EQ(rebuilt.value().file, "file");
 }
 
 void VerifyTelemetry_DiagnosticCaptureGuardDoesNotReplaceExistingCallback(){
@@ -422,8 +398,8 @@ void VerifyTelemetry_DiagnosticCaptureGuardDoesNotReplaceExistingCallback(){
     recorder.setCaptureOptions(CaptureAll());
     u32 callbackCount = 0u;
     native(mut recorder, mut callbackCount){
-        TelemetryCaptureCasesDetail::g_ExistingDiagnosticCallbackCount = 0u;
-        SetDiagnosticEventCallback(TelemetryCaptureCasesDetail::ExistingDiagnosticCallback);
+        g_ExistingDiagnosticCallbackCount = 0u;
+        SetDiagnosticEventCallback(ExistingDiagnosticCallback);
         {
             DiagnosticCaptureGuard guard(recorder);
             EXPECT_FALSE(guard.installed());
@@ -432,8 +408,8 @@ void VerifyTelemetry_DiagnosticCaptureGuardDoesNotReplaceExistingCallback(){
                 .message = "existing callback should keep ownership",
             });
         }
-        ClearDiagnosticEventCallback(TelemetryCaptureCasesDetail::ExistingDiagnosticCallback);
-        callbackCount = TelemetryCaptureCasesDetail::g_ExistingDiagnosticCallbackCount;
+        ClearDiagnosticEventCallback(ExistingDiagnosticCallback);
+        callbackCount = g_ExistingDiagnosticCallbackCount;
     }
     EXPECT_EQ(callbackCount, 1u);
     EXPECT_EQ(recorder.eventCount(), 0u);
@@ -444,26 +420,25 @@ void VerifyTelemetry_DiagnosticObserverReusesPreparedStorageAndCountsPoolOverflo
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
     recorder.setCaptureOptions(CaptureAll());
     const ArenaMemoryStats prepared = testArena.arena.memoryStats();
-    native(mut recorder){
-        const DiagnosticEventRecord source{ .event = TelemetryCaptureCasesDetail::s_ErrorEvent, .message = "bounded observer", };
-        for(u32 iteration = 0u; iteration < 3u; ++iteration){
-            recorder.setCaptureOptions(CaptureAll());
-            DiagnosticCaptureGuard guard(recorder);
-            ASSERT_TRUE(guard.installed());
-            static_assert(noexcept(guard.capture(source)));
-            guard.setFrameIndex(iteration);
-            guard.setStreamId(9u);
-            for(usize eventIndex = 0u; eventIndex < Core::Telemetry::s_DiagnosticCaptureEventCapacity; ++eventIndex)
-                guard.capture(source);
+    DiagnosticEventRecord source = DiagnosticEventRecord();
+    source.event = s_ErrorEvent;
+    source.message = "bounded observer";
+    for(u32 iteration = 0u; iteration < 3u; ++iteration){
+        recorder.setCaptureOptions(CaptureAll());
+        DiagnosticCaptureGuard guard = DiagnosticCaptureGuard(recorder);
+        ASSERT_TRUE(guard.installed());
+        guard.setFrameIndex(iteration);
+        guard.setStreamId(9u);
+        for(usize eventIndex = 0u; eventIndex < s_DiagnosticCaptureEventCapacity; ++eventIndex)
             guard.capture(source);
-            EXPECT_EQ(recorder.eventCount(), Core::Telemetry::s_DiagnosticCaptureEventCapacity);
-            EXPECT_EQ(recorder.droppedDiagnosticCount(), iteration + 1u);
-            const auto* const first = recorder.view().eventAt(0u);
-            ASSERT_NE(first, nullptr);
-            EXPECT_EQ(first->header.frameIndex, iteration);
-            EXPECT_EQ(first->header.streamId, 9u);
-            recorder.clear();
-        }
+        guard.capture(source);
+        EXPECT_EQ(recorder.eventCount(), s_DiagnosticCaptureEventCapacity);
+        EXPECT_EQ(recorder.droppedDiagnosticCount(), iteration + 1u);
+        const Expected<EventHeader> firstHeader = ReadEventHeaderAt(recorder.view(), 0u);
+        ASSERT_TRUE(firstHeader.has_value());
+        EXPECT_EQ(firstHeader.value().frameIndex, iteration);
+        EXPECT_EQ(firstHeader.value().streamId, 9u);
+        recorder.clear();
     }
     const ArenaMemoryStats reused = testArena.arena.memoryStats();
     EXPECT_EQ(reused.allocationCount, prepared.allocationCount);
@@ -477,34 +452,36 @@ void VerifyTelemetry_DiagnosticObserverRejectsOversizeWithoutTruncatingDirectDia
     recorder.setCaptureOptions(CaptureAll());
     DiagnosticCaptureGuard guard = DiagnosticCaptureGuard(recorder);
     ASSERT_TRUE(guard.installed());
-    native(mut testArena, mut recorder, mut guard){
-        AString<Core::Telemetry::TelemetryArena> message(testArena.arena);
-        constexpr usize s_MessageCapacity = Core::Telemetry::s_DiagnosticCapturePayloadCapacity - sizeof(Core::Telemetry::EncodedDiagnosticPayloadHeader) - 5u;
-        message.resize(s_MessageCapacity + 1u, 'x');
-        DiagnosticEventRecord source{ .event = TelemetryCaptureCasesDetail::s_ErrorEvent, .message = AStringView(message.data(), s_MessageCapacity), };
-        const auto prepared = testArena.arena.memoryStats();
-        guard.capture(source);
-        ASSERT_EQ(recorder.eventCount(), 1u);
-        const auto* const boundedEvent = recorder.view().eventAt(0u);
-        ASSERT_NE(boundedEvent, nullptr);
-        EXPECT_EQ(boundedEvent->payload.size(), Core::Telemetry::s_DiagnosticCapturePayloadCapacity);
-        source.message = AStringView(message);
-        guard.capture(source);
-        EXPECT_EQ(recorder.droppedDiagnosticCount(), 1u);
-        EXPECT_EQ(recorder.eventCount(), 1u);
-        const auto captured = testArena.arena.memoryStats();
-        EXPECT_EQ(captured.allocationCount, prepared.allocationCount);
-        EXPECT_EQ(captured.reallocationCount, prepared.reallocationCount);
+    const usize s_MessageCapacity = s_DiagnosticCapturePayloadCapacity - s_EncodedDiagnosticPayloadHeaderByteSize - 5u;
+    String message = String();
+    message.reserve(s_MessageCapacity + 1u);
+    for(usize index = 0u; index <= s_MessageCapacity; ++index)
+        message.append("x");
+    DiagnosticEventRecord source = DiagnosticEventRecord();
+    source.event = s_ErrorEvent;
+    source.message = StringView(message).substr(0u, s_MessageCapacity);
+    const ArenaMemoryStats prepared = testArena.arena.memoryStats();
+    guard.capture(source);
+    ASSERT_EQ(recorder.eventCount(), 1u);
+    const Expected<usize> boundedPayloadSize = EventPayloadSizeAt(recorder.view(), 0u);
+    ASSERT_TRUE(boundedPayloadSize.has_value());
+    EXPECT_EQ(boundedPayloadSize.value(), s_DiagnosticCapturePayloadCapacity);
+    source.message = StringView(message);
+    guard.capture(source);
+    EXPECT_EQ(recorder.droppedDiagnosticCount(), 1u);
+    EXPECT_EQ(recorder.eventCount(), 1u);
+    const ArenaMemoryStats captured = testArena.arena.memoryStats();
+    EXPECT_EQ(captured.allocationCount, prepared.allocationCount);
+    EXPECT_EQ(captured.reallocationCount, prepared.reallocationCount);
 
-        ASSERT_TRUE(RecordDiagnostic(recorder, source));
-        const auto* const directEvent = recorder.view().eventAt(1u);
-        ASSERT_NE(directEvent, nullptr);
-        const auto parsed = Core::Telemetry::ParseDiagnosticPayload(directEvent->payload.data(), directEvent->payload.size());
-        ASSERT_TRUE(parsed.has_value());
-        EXPECT_EQ(AStringView(parsed.value().message), AStringView(message));
-        EXPECT_EQ(boundedEvent->payload.size(), Core::Telemetry::s_DiagnosticCapturePayloadCapacity);
-        EXPECT_EQ(recorder.droppedDiagnosticCount(), 1u);
-    }
+    ASSERT_TRUE(RecordTestDiagnostic(recorder, source));
+    const Expected<DiagnosticPayload> parsed = ParseDiagnosticEventAt(recorder.view(), 1u);
+    ASSERT_TRUE(parsed.has_value());
+    EXPECT_EQ(parsed.value().message, StringView(message));
+    const Expected<usize> retainedBoundedSize = EventPayloadSizeAt(recorder.view(), 0u);
+    ASSERT_TRUE(retainedBoundedSize.has_value());
+    EXPECT_EQ(retainedBoundedSize.value(), s_DiagnosticCapturePayloadCapacity);
+    EXPECT_EQ(recorder.droppedDiagnosticCount(), 1u);
 }
 
 void VerifyTelemetry_DiagnosticObserverCapturesDuringUnwindWithoutAllocating(){
@@ -533,13 +510,9 @@ void VerifyTelemetry_DiagnosticObserverCapturesDuringUnwindWithoutAllocating(){
     EXPECT_EQ(recorder.droppedDiagnosticCount(), 0u);
     EXPECT_EQ(captured.allocationCount, prepared.allocationCount);
     EXPECT_EQ(captured.reallocationCount, prepared.reallocationCount);
-    native(in recorder){
-        const auto* const event = recorder.view().eventAt(0u);
-        ASSERT_NE(event, nullptr);
-        const auto parsed = Core::Telemetry::ParseDiagnosticPayload(event->payload.data(), event->payload.size());
-        ASSERT_TRUE(parsed.has_value());
-        EXPECT_EQ(parsed.value().category, "unwind");
-    }
+    const Expected<DiagnosticPayload> parsed = ParseDiagnosticEventAt(recorder.view(), 0u);
+    ASSERT_TRUE(parsed.has_value());
+    EXPECT_EQ(parsed.value().category, "unwind");
 }
 
 void VerifyTelemetry_DiagnosticObserverPreservesPublishedRecordsAcrossFlagTogglesAndFiltersDisabledCapture(){
@@ -548,35 +521,35 @@ void VerifyTelemetry_DiagnosticObserverPreservesPublishedRecordsAcrossFlagToggle
     recorder.setCaptureOptions(CaptureAll());
     DiagnosticCaptureGuard guard = DiagnosticCaptureGuard(recorder);
     ASSERT_TRUE(guard.installed());
-    native(mut testArena, mut recorder, mut guard){
-        const DiagnosticEventRecord source{ .event = TelemetryCaptureCasesDetail::s_ErrorEvent, .message = "retained", };
+    DiagnosticEventRecord source = DiagnosticEventRecord();
+    source.event = s_ErrorEvent;
+    source.message = "retained";
+    guard.capture(source);
+    ASSERT_EQ(recorder.eventCount(), 1u);
+    const usize retainedAddress = EventRecordAddressAt(recorder.view(), 0u);
+    ASSERT_NE(retainedAddress, 0u);
+    const ArenaMemoryStats prepared = testArena.arena.memoryStats();
+    for(u32 iteration = 0u; iteration < 3u; ++iteration){
+        recorder.setCaptureOptions(CapturePerfOnly());
         guard.capture(source);
-        ASSERT_EQ(recorder.eventCount(), 1u);
-        const auto* const retained = recorder.view().eventAt(0u);
-        ASSERT_NE(retained, nullptr);
-        const auto prepared = testArena.arena.memoryStats();
-        for(u32 iteration = 0u; iteration < 3u; ++iteration){
-            recorder.setCaptureOptions(CapturePerfOnly());
-            guard.capture(source);
-            EXPECT_EQ(recorder.droppedDiagnosticCount(), 0u);
-            EXPECT_EQ(recorder.view().eventAt(0u), retained);
-            recorder.setCaptureOptions(CaptureAll());
-            guard.capture(source);
-            EXPECT_EQ(recorder.eventCount(), iteration + 2u);
-        }
-        const auto toggled = testArena.arena.memoryStats();
-        EXPECT_EQ(toggled.allocationCount, prepared.allocationCount);
-        EXPECT_EQ(toggled.reallocationCount, prepared.reallocationCount);
-        EXPECT_EQ(toggled.deallocationCount, prepared.deallocationCount);
-        recorder.setCaptureOptions(CaptureDisabled());
-        guard.capture(source);
-        EXPECT_EQ(recorder.eventCount(), 0u);
         EXPECT_EQ(recorder.droppedDiagnosticCount(), 0u);
-        EXPECT_LT(testArena.arena.memoryStats().usedBytes, prepared.usedBytes);
+        EXPECT_EQ(EventRecordAddressAt(recorder.view(), 0u), retainedAddress);
         recorder.setCaptureOptions(CaptureAll());
         guard.capture(source);
-        EXPECT_EQ(recorder.eventCount(), 1u);
+        EXPECT_EQ(recorder.eventCount(), iteration + 2u);
     }
+    const ArenaMemoryStats toggled = testArena.arena.memoryStats();
+    EXPECT_EQ(toggled.allocationCount, prepared.allocationCount);
+    EXPECT_EQ(toggled.reallocationCount, prepared.reallocationCount);
+    EXPECT_EQ(toggled.deallocationCount, prepared.deallocationCount);
+    recorder.setCaptureOptions(CaptureDisabled());
+    guard.capture(source);
+    EXPECT_EQ(recorder.eventCount(), 0u);
+    EXPECT_EQ(recorder.droppedDiagnosticCount(), 0u);
+    EXPECT_LT(testArena.arena.memoryStats().usedBytes, prepared.usedBytes);
+    recorder.setCaptureOptions(CaptureAll());
+    guard.capture(source);
+    EXPECT_EQ(recorder.eventCount(), 1u);
 }
 
 void VerifyTelemetry_DiagnosticObserverDoesNotGrowPublicationStorageWhenOrdinaryEventsFillIt(){
@@ -585,19 +558,19 @@ void VerifyTelemetry_DiagnosticObserverDoesNotGrowPublicationStorageWhenOrdinary
     recorder.setCaptureOptions(CaptureAll());
     DiagnosticCaptureGuard guard = DiagnosticCaptureGuard(recorder);
     ASSERT_TRUE(guard.installed());
-    native(mut testArena, mut recorder, mut guard){
-        for(usize eventIndex = 0u; eventIndex < Core::Telemetry::s_DiagnosticCaptureEventCapacity; ++eventIndex)
-            ASSERT_TRUE(recorder.recordBinary(EventKind::PerfFrame, 0u, nullptr, 0u));
-        const auto filled = testArena.arena.memoryStats();
-        const DiagnosticEventRecord source{ .event = TelemetryCaptureCasesDetail::s_ErrorEvent, .message = "publication full", };
-        guard.capture(source);
-        EXPECT_EQ(recorder.droppedDiagnosticCount(), 1u);
-        EXPECT_EQ(testArena.arena.memoryStats().allocationCount, filled.allocationCount);
-        EXPECT_EQ(testArena.arena.memoryStats().reallocationCount, filled.reallocationCount);
-        recorder.clear();
-        guard.capture(source);
-        EXPECT_EQ(recorder.eventCount(), 1u);
-    }
+    for(usize eventIndex = 0u; eventIndex < s_DiagnosticCaptureEventCapacity; ++eventIndex)
+        ASSERT_TRUE(RecordFilledPayload(recorder, EventKind::PerfFrame, 0u, 0u, 0u, 0u));
+    const ArenaMemoryStats filled = testArena.arena.memoryStats();
+    DiagnosticEventRecord source = DiagnosticEventRecord();
+    source.event = s_ErrorEvent;
+    source.message = "publication full";
+    guard.capture(source);
+    EXPECT_EQ(recorder.droppedDiagnosticCount(), 1u);
+    EXPECT_EQ(testArena.arena.memoryStats().allocationCount, filled.allocationCount);
+    EXPECT_EQ(testArena.arena.memoryStats().reallocationCount, filled.reallocationCount);
+    recorder.clear();
+    guard.capture(source);
+    EXPECT_EQ(recorder.eventCount(), 1u);
 }
 
 void VerifyTelemetry_DiagnosticObserverPreservesOrderingAndPayloadLifetimeDuringBuilderReentry(){
@@ -606,29 +579,38 @@ void VerifyTelemetry_DiagnosticObserverPreservesOrderingAndPayloadLifetimeDuring
     recorder.setCaptureOptions(CaptureAll());
     DiagnosticCaptureGuard guard = DiagnosticCaptureGuard(recorder);
     ASSERT_TRUE(guard.installed());
-    native(mut testArena, mut recorder){
-        b8 captureDidNotAllocate = false;
-        ASSERT_TRUE(recorder.recordBuiltPayload(EventKind::PerfFrame, 7u, 3u, [&](Core::Telemetry::TelemetryArena&, TelemetryBytes& payload){
+    b8 captureDidNotAllocate = false;
+    b8 builtRecorded = false;
+    native(mut testArena, mut recorder, mut captureDidNotAllocate, mut builtRecorded){
+        builtRecorded = recorder.recordBuiltPayload(EventKind::PerfFrame, 7u, 3u, [&](TelemetryArena&, TelemetryBytes& payload){
             const auto before = testArena.arena.memoryStats();
-            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = TelemetryCaptureCasesDetail::s_ErrorEvent, .message = "builder callback", });
+            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_ErrorEvent, .message = "builder callback", });
             const auto after = testArena.arena.memoryStats();
             captureDidNotAllocate = before.allocationCount == after.allocationCount && before.reallocationCount == after.reallocationCount;
             payload.push_back(17u);
             return recorder.recordBinary(EventKind::MemoryFrame, 8u, nullptr, 0u);
-        }));
-        ASSERT_TRUE(captureDidNotAllocate);
-        ASSERT_EQ(recorder.eventCount(), 3u);
-        const auto events = recorder.view();
-        EXPECT_EQ(events.eventAt(0u)->header.kind, EventKind::Diagnostic);
-        EXPECT_EQ(events.eventAt(1u)->header.kind, EventKind::MemoryFrame);
-        EXPECT_EQ(events.eventAt(2u)->header.kind, EventKind::PerfFrame);
-        const auto* const diagnostic = events.eventAt(0u);
-        ASSERT_TRUE(recorder.recordBinary(EventKind::PerfFrame, 9u, nullptr, 0u));
-        EXPECT_EQ(events.eventAt(0u), diagnostic);
-        const auto parsed = Core::Telemetry::ParseDiagnosticPayload(diagnostic->payload.data(), diagnostic->payload.size());
-        ASSERT_TRUE(parsed.has_value());
-        EXPECT_EQ(parsed.value().message, "builder callback");
+        });
     }
+    ASSERT_TRUE(builtRecorded);
+    ASSERT_TRUE(captureDidNotAllocate);
+    ASSERT_EQ(recorder.eventCount(), 3u);
+    const EventView events = recorder.view();
+    const Expected<EventHeader> headerZero = ReadEventHeaderAt(events, 0u);
+    const Expected<EventHeader> headerOne = ReadEventHeaderAt(events, 1u);
+    const Expected<EventHeader> headerTwo = ReadEventHeaderAt(events, 2u);
+    ASSERT_TRUE(headerZero.has_value());
+    ASSERT_TRUE(headerOne.has_value());
+    ASSERT_TRUE(headerTwo.has_value());
+    EXPECT_EQ(headerZero.value().kind, EventKind::Diagnostic);
+    EXPECT_EQ(headerOne.value().kind, EventKind::MemoryFrame);
+    EXPECT_EQ(headerTwo.value().kind, EventKind::PerfFrame);
+    const usize diagnosticAddress = EventRecordAddressAt(events, 0u);
+    ASSERT_NE(diagnosticAddress, 0u);
+    ASSERT_TRUE(RecordFilledPayload(recorder, EventKind::PerfFrame, 9u, 0u, 0u, 0u));
+    EXPECT_EQ(EventRecordAddressAt(events, 0u), diagnosticAddress);
+    const Expected<DiagnosticPayload> parsed = ParseDiagnosticEventAt(events, 0u);
+    ASSERT_TRUE(parsed.has_value());
+    EXPECT_EQ(parsed.value().message, "builder callback");
 }
 
 void VerifyTelemetry_ConcurrentDiagnosticObserversAccountForEveryAdmittedAttempt(){
@@ -639,8 +621,10 @@ void VerifyTelemetry_ConcurrentDiagnosticObserversAccountForEveryAdmittedAttempt
     ASSERT_TRUE(guard.installed());
     const usize s_AttemptsPerThread = 256u;
     const ArenaMemoryStats prepared = testArena.arena.memoryStats();
-    native(in s_AttemptsPerThread, mut guard){
-        const DiagnosticEventRecord source{ .event = TelemetryCaptureCasesDetail::s_ErrorEvent, .message = "concurrent bounded observer", };
+    DiagnosticEventRecord source = DiagnosticEventRecord();
+    source.event = s_ErrorEvent;
+    source.message = "concurrent bounded observer";
+    native(in s_AttemptsPerThread, in source, mut guard){
         AtomicFlag start;
         const auto capture = [&]()noexcept{
             while(!start.test(MemoryOrder::acquire))
@@ -663,10 +647,7 @@ void VerifyTelemetry_ConcurrentDiagnosticObserversAccountForEveryAdmittedAttempt
     EXPECT_EQ(captured.reallocationCount, prepared.reallocationCount);
     const u64 dropped = recorder.droppedDiagnosticCount();
     recorder.setCaptureOptions(CaptureDisabled());
-    native(mut guard){
-        const DiagnosticEventRecord source{ .event = TelemetryCaptureCasesDetail::s_ErrorEvent, .message = "concurrent bounded observer", };
-        guard.capture(source);
-    }
+    guard.capture(source);
     EXPECT_EQ(recorder.droppedDiagnosticCount(), dropped);
     EXPECT_EQ(recorder.eventCount(), 0u);
 }
@@ -675,7 +656,12 @@ void VerifyTelemetry_DiagnosticCaptureGuardConcurrentLifetimeStress(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
     recorder.setCaptureOptions(CaptureAll());
-    native(mut recorder){
+    const u32 s_IterationCount = 64u;
+    b8 allGuardsInstalled = true;
+    b8 allIterationsCaptured = true;
+    b8 dropsMonotonic = true;
+    usize observedEventCount = 0u;
+    native(in s_IterationCount, mut recorder, mut allGuardsInstalled, mut allIterationsCaptured, mut dropsMonotonic, mut observedEventCount){
         AtomicFlag captureThreadStarted;
         AtomicFlag stopCaptureThread;
         Thread captureThread([&captureThreadStarted, &stopCaptureThread]()noexcept{
@@ -684,7 +670,7 @@ void VerifyTelemetry_DiagnosticCaptureGuardConcurrentLifetimeStress(){
             while(!stopCaptureThread.test(MemoryOrder::acquire)){
                 CaptureDiagnosticEvent(DiagnosticEventRecord{
                     .event = DiagnosticEventName::s_Error,
-                    .category = TelemetryCaptureCasesDetail::s_TelemetryGuardCategory,
+                    .category = s_TelemetryGuardCategory,
                     .message = "capture during destruction",
                 });
                 YieldThread();
@@ -694,11 +680,6 @@ void VerifyTelemetry_DiagnosticCaptureGuardConcurrentLifetimeStress(){
         while(!captureThreadStarted.test(MemoryOrder::acquire))
             captureThreadStarted.wait(false, MemoryOrder::acquire);
 
-        constexpr u32 s_IterationCount = 64u;
-        b8 allGuardsInstalled = true;
-        b8 allIterationsCaptured = true;
-        b8 dropsMonotonic = true;
-        usize observedEventCount = 0u;
         u64 previousDroppedCount = 0u;
         for(u32 iteration = 0u; iteration < s_IterationCount; ++iteration){
             recorder.clear();
@@ -726,34 +707,34 @@ void VerifyTelemetry_DiagnosticCaptureGuardConcurrentLifetimeStress(){
 
         stopCaptureThread.testAndSet(MemoryOrder::release);
         captureThread.join();
-        EXPECT_TRUE(allGuardsInstalled);
-        EXPECT_TRUE(allIterationsCaptured);
-        EXPECT_TRUE(dropsMonotonic);
-        EXPECT_GE(observedEventCount, s_IterationCount);
+    }
+    EXPECT_TRUE(allGuardsInstalled);
+    EXPECT_TRUE(allIterationsCaptured);
+    EXPECT_TRUE(dropsMonotonic);
+    EXPECT_GE(observedEventCount, s_IterationCount);
 
-        {
-            DiagnosticCaptureGuard finalGuard(recorder);
-            EXPECT_TRUE(finalGuard.installed());
-        }
+    {
+        DiagnosticCaptureGuard finalGuard = DiagnosticCaptureGuard(recorder);
+        EXPECT_TRUE(finalGuard.installed());
+    }
 
-        const usize eventCountAfterFinalDestruction = recorder.eventCount();
-        CaptureDiagnosticEvent(DiagnosticEventRecord{
-            .event = DiagnosticEventName::s_Error,
-            .category = TelemetryCaptureCasesDetail::s_TelemetryGuardCategory,
-            .message = "ignored after destruction",
-        });
-        EXPECT_EQ(recorder.eventCount(), eventCountAfterFinalDestruction);
+    const usize eventCountAfterFinalDestruction = recorder.eventCount();
+    CaptureDiagnosticEvent(MakeDiagnosticEvent(
+        DiagnosticEventName::s_Error,
+        s_TelemetryGuardCategory,
+        "ignored after destruction",
+        "",
+        0u
+    ));
+    EXPECT_EQ(recorder.eventCount(), eventCountAfterFinalDestruction);
 
-        const EventView events = recorder.view();
-        for(usize eventIndex = 0u; eventIndex < events.eventCount(); ++eventIndex){
-            const EventRecord* const event = events.eventAt(eventIndex);
-            ASSERT_NE(event, nullptr);
-            const auto parsed = Core::Telemetry::ParseDiagnosticPayload(event->payload.data(), event->payload.size());
-            ASSERT_TRUE(parsed.has_value());
-            EXPECT_EQ(parsed.value().event, DiagnosticEventName::s_Error);
-            EXPECT_EQ(parsed.value().category, "telemetry_guard");
-            EXPECT_EQ(parsed.value().message, "capture during destruction");
-        }
+    const EventView events = recorder.view();
+    for(usize eventIndex = 0u; eventIndex < events.eventCount(); ++eventIndex){
+        const Expected<DiagnosticPayload> parsed = ParseDiagnosticEventAt(events, eventIndex);
+        ASSERT_TRUE(parsed.has_value());
+        EXPECT_EQ(parsed.value().event, DiagnosticEventName::s_Error);
+        EXPECT_EQ(parsed.value().category, "telemetry_guard");
+        EXPECT_EQ(parsed.value().message, "capture during destruction");
     }
 }
 
@@ -811,31 +792,30 @@ void VerifyTelemetry_CaptureScopePreservesForwardedLogsAndMetadataUnderConcurren
     EXPECT_EQ(forwardLogger.messageCount(), s_ExpectedForwardCount);
     EXPECT_GT(session.eventCount(), 0u);
 
-    native(in session, in nextFrameIndex, in s_BaseStreamId){
-        const EventView events = session.view();
-        for(usize eventIndex = 0u; eventIndex < events.eventCount(); ++eventIndex){
-            const EventRecord* const event = events.eventAt(eventIndex);
-            ASSERT_NE(event, nullptr);
-            EXPECT_EQ(event->header.kind, EventKind::TextLog);
-            EXPECT_GE(event->header.frameIndex, 1u);
-            EXPECT_LE(event->header.frameIndex, nextFrameIndex);
-            EXPECT_GE(event->header.streamId, s_BaseStreamId);
-            EXPECT_LE(event->header.streamId, s_BaseStreamId + 7u);
+    const EventView events = session.view();
+    for(usize eventIndex = 0u; eventIndex < events.eventCount(); ++eventIndex){
+        const Expected<EventHeader> header = ReadEventHeaderAt(events, eventIndex);
+        ASSERT_TRUE(header.has_value());
+        EXPECT_EQ(header.value().kind, EventKind::TextLog);
+        EXPECT_GE(header.value().frameIndex, 1u);
+        EXPECT_LE(header.value().frameIndex, nextFrameIndex);
+        EXPECT_GE(header.value().streamId, s_BaseStreamId);
+        EXPECT_LE(header.value().streamId, s_BaseStreamId + 7u);
 
-            const auto parsed = Core::Telemetry::ParseTextLogPayload(event->payload.data(), event->payload.size());
-            ASSERT_TRUE(parsed.has_value());
-            EXPECT_EQ(parsed.value().type, LogType::EssentialInfo);
-            EXPECT_NE(parsed.value().messageUtf8.find("concurrent capture scope text"), AStringView::npos);
-        }
+        const Expected<TextLogPayload> parsed = ParseTextLogEventAt(events, eventIndex);
+        ASSERT_TRUE(parsed.has_value());
+        EXPECT_EQ(parsed.value().type, LogType::EssentialInfo);
+        EXPECT_NE(parsed.value().messageUtf8.find("concurrent capture scope text"), usize.max);
     }
 }
 
 void VerifyCpuTaskProfileIntegration_DelayedTaskTimingPreservesExecutionFrameAtLaterPublication(){
     CpuTaskProfileTestArena arena = CpuTaskProfileTestArena();
     PerfSession perf = PerfSession(arena.arena);
-    native(mut perf){
-        perf.setCaptureOptions(PerfCaptureOptions{ .enabled = true, .cpuTiming = true });
-    }
+    PerfCaptureOptions perfOptions = PerfCaptureOptions();
+    perfOptions.enabled = true;
+    perfOptions.cpuTiming = true;
+    perf.setCaptureOptions(perfOptions);
     perf.beginFrame(42u);
     CpuTaskScheduler scheduler = CpuTaskScheduler(0u);
     const Name taskName = s_CpuTaskTestsExplicit;
@@ -856,7 +836,7 @@ void VerifyCpuTaskProfileIntegration_DelayedTaskTimingPreservesExecutionFrameAtL
     }
     scope.wait();
     ASSERT_GT(scheduler.statistics().profilePendingEvents, 0u);
-    CollectCpuTaskProfile(scheduler, perf.cpuTimingSink());
+    CollectTestCpuTaskProfile(scheduler, perf.cpuTimingSink());
     EXPECT_EQ(scheduler.statistics().profilePendingEvents, 0u);
     perf.publishFrame();
 
@@ -870,18 +850,14 @@ void VerifyCpuTaskProfileIntegration_DelayedTaskTimingPreservesExecutionFrameAtL
     const PerfSessionRecordResult result = telemetry.recordPerfReport(perf.report());
     ASSERT_TRUE(result.ok());
     b8 foundNamedTask = false;
-    native(in telemetry, in taskName, mut foundNamedTask){
-        const EventView events = telemetry.view();
-        for(usize index = 0u; index < events.eventCount(); ++index){
-            const EventRecord* event = events.eventAt(index);
-            ASSERT_NE(event, nullptr);
-            const auto payload = Core::Telemetry::ParsePerfTimingPayload(event->payload.data(), event->payload.size());
-            ASSERT_TRUE(payload.has_value());
-            if(payload.value().scopeName == taskName){
-                foundNamedTask = true;
-                EXPECT_EQ(payload.value().stats.firstSampleFrameIndex, 41u);
-                EXPECT_EQ(payload.value().stats.publishFrameIndex, 42u);
-            }
+    const EventView events = telemetry.view();
+    for(usize index = 0u; index < events.eventCount(); ++index){
+        const Expected<PerfTimingPayload> payload = ParsePerfTimingEventAt(events, index);
+        ASSERT_TRUE(payload.has_value());
+        if(payload.value().scopeName == taskName){
+            foundNamedTask = true;
+            EXPECT_EQ(payload.value().stats.firstSampleFrameIndex, 41u);
+            EXPECT_EQ(payload.value().stats.publishFrameIndex, 42u);
         }
     }
     EXPECT_TRUE(foundNamedTask);
@@ -899,13 +875,11 @@ void VerifyCpuTaskProfileIntegration_DisabledTimingSinkDiscardsBufferedSamples()
     }
     scheduler.wait();
     ASSERT_GT(scheduler.statistics().profilePendingEvents, 0u);
-    CollectCpuTaskProfile(scheduler, timing);
+    CollectTestCpuTaskProfile(scheduler, timing);
     EXPECT_EQ(scheduler.statistics().profilePendingEvents, 0u);
     EXPECT_EQ(timing.scopeCount(), 0u);
     timing.setEnabled(true);
-    native(mut scheduler, mut timing){
-        CollectCpuTaskProfile(scheduler, timing);
-    }
+    CollectTestCpuTaskProfile(scheduler, timing);
     timing.publishFrame(8u);
     EXPECT_EQ(timing.scopeCount(), 0u);
 }
@@ -916,17 +890,17 @@ void VerifyCpuTaskProfileIntegration_CollectorConsumesOnlyItsInitialPendingSnaps
     timing.setEnabled(true);
     CpuTaskScheduler scheduler = CpuTaskScheduler(0u);
     scheduler.setProfiling(true, 11u);
-    native(mut scheduler, mut timing){
+    native(mut scheduler){
         const auto cpuTaskAdmission = scheduler.submit([]()noexcept{});
         ASSERT_TRUE(cpuTaskAdmission.has_value());
         ASSERT_TRUE(cpuTaskAdmission.value().valid());
-        scheduler.wait();
-        const usize pendingBefore = scheduler.statistics().profilePendingEvents;
-        ASSERT_GT(pendingBefore, 0u);
-        OwnerThreadTimingSink sink(scheduler, timing, true);
-        CollectCpuTaskProfile(scheduler, sink);
-        EXPECT_EQ(sink.recordedSamples, pendingBefore);
     }
+    scheduler.wait();
+    const usize pendingBefore = scheduler.statistics().profilePendingEvents;
+    ASSERT_GT(pendingBefore, 0u);
+    OwnerThreadTimingSink sink = MakeOwnerThreadTimingSink(scheduler, timing, true);
+    CollectTestCpuTaskProfile(scheduler, sink);
+    EXPECT_EQ(sink.recordedSamples, pendingBefore);
     EXPECT_GT(scheduler.statistics().profilePendingEvents, 0u);
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
@@ -936,27 +910,27 @@ void VerifyCpuTaskProfileIntegration_NativeWorkerSamplesAreRecordedOnTheCollecto
     TimingRecorder timing = TimingRecorder(arena.arena);
     timing.setEnabled(true);
     const Name taskName = s_CpuTaskTestsWorker;
-    native(in taskName, mut timing){
+    CpuTaskSchedulerConfig config = CpuTaskSchedulerConfig();
+    config.workerCount = 1u;
+    config.heterogeneous = false;
+    CpuTaskScheduler scheduler = CpuTaskScheduler(config);
+    const CpuTaskProfileLabel label = scheduler.registerProfileLabel(taskName);
+    ASSERT_TRUE(label.valid());
+    scheduler.setProfiling(true, 19u);
+    native(in label, mut scheduler){
         const ThreadId owner = QueryCurrentThreadId();
         ThreadId executionThread;
-        CpuTaskSchedulerConfig config;
-        config.workerCount = 1u;
-        config.heterogeneous = false;
-        CpuTaskScheduler scheduler(config);
-        const CpuTaskProfileLabel label = scheduler.registerProfileLabel(taskName);
-        ASSERT_TRUE(label.valid());
-        scheduler.setProfiling(true, 19u);
         const auto taskAdmission = scheduler.submit([&]()noexcept{ executionThread = QueryCurrentThreadId(); }, { .profileLabel = label });
         ASSERT_TRUE(taskAdmission.has_value());
         const CpuTaskHandle task = taskAdmission.value();
         ASSERT_TRUE(task.valid());
         scheduler.wait(task);
         EXPECT_NE(executionThread, owner);
-        OwnerThreadTimingSink sink(scheduler, timing);
-        CollectCpuTaskProfile(scheduler, sink);
-        timing.publishFrame(20u);
-        EXPECT_GT(sink.recordedSamples, 0u);
     }
+    OwnerThreadTimingSink sink = MakeOwnerThreadTimingSink(scheduler, timing);
+    CollectTestCpuTaskProfile(scheduler, sink);
+    timing.publishFrame(20u);
+    EXPECT_GT(sink.recordedSamples, 0u);
     EXPECT_EQ(timing.stats(taskName).sampleCount, 1u);
     EXPECT_EQ(timing.stats(taskName).firstSampleFrameIndex, 19u);
     EXPECT_EQ(timing.stats(taskName).publishFrameIndex, 20u);
@@ -968,23 +942,21 @@ void VerifyTelemetry_FrameGraphPayloadPreservesBorrowedLabelsWhenRebuiltInPlace(
     FrameGraphEdgeDescs edges = FrameGraphEdgeDescs(testArena.arena);
     BuildTestFrameGraph(testArena.arena, nodes, edges);
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
-    ASSERT_TRUE(BuildFrameGraphPayload(905u, nodes, edges, testArena.scratchArena, payload));
-    native(mut testArena, mut nodes, mut edges, mut payload){
-        const auto first = Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size());
-        ASSERT_TRUE(first.has_value());
-        nodes[0u].label = first.value().nodes[0u].label;
-        nodes[1u].label = first.value().nodes[1u].label;
-        ASSERT_TRUE(BuildFrameGraphPayload(906u, nodes, edges, testArena.scratchArena, payload));
-        const auto rebuilt = Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size());
-        ASSERT_TRUE(rebuilt.has_value());
-        EXPECT_EQ(rebuilt.value().frameIndex, 906u);
-        EXPECT_EQ(rebuilt.value().nodes[0u].label, "GBuffer Pass");
-        EXPECT_EQ(rebuilt.value().nodes[1u].label, "Albedo Texture");
-        nodes[0u].label = rebuilt.value().nodes[0u].label;
-        nodes[1u].label = rebuilt.value().nodes[1u].label;
-        nodes[0u].kind = FrameGraphNodeKind::Unknown;
-        EXPECT_FALSE(BuildFrameGraphPayload(907u, nodes, edges, testArena.scratchArena, payload));
-    }
+    ASSERT_TRUE(BuildTestFrameGraphPayload(905u, nodes, edges, testArena.scratchArena, payload));
+    const Expected<FrameGraphPayload> first = ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload);
+    ASSERT_TRUE(first.has_value());
+    nodes[0u].label = first.value().nodes[0u].label;
+    nodes[1u].label = first.value().nodes[1u].label;
+    ASSERT_TRUE(BuildTestFrameGraphPayload(906u, nodes, edges, testArena.scratchArena, payload));
+    const Expected<FrameGraphPayload> rebuilt = ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload);
+    ASSERT_TRUE(rebuilt.has_value());
+    EXPECT_EQ(rebuilt.value().frameIndex, 906u);
+    EXPECT_EQ(rebuilt.value().nodes[0u].label, "GBuffer Pass");
+    EXPECT_EQ(rebuilt.value().nodes[1u].label, "Albedo Texture");
+    nodes[0u].label = rebuilt.value().nodes[0u].label;
+    nodes[1u].label = rebuilt.value().nodes[1u].label;
+    nodes[0u].kind = FrameGraphNodeKind::Unknown;
+    EXPECT_FALSE(BuildTestFrameGraphPayload(907u, nodes, edges, testArena.scratchArena, payload));
     EXPECT_TRUE(payload.empty());
 }
 
@@ -995,12 +967,10 @@ void VerifyTelemetry_FrameGraphPayloadRejectsCorruptedHeaderAfterValidParse(){
     BuildTestFrameGraph(testArena.arena, nodes, edges);
 
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
-    ASSERT_TRUE(BuildFrameGraphPayload(905u, nodes, edges, testArena.scratchArena, payload));
-    native(mut testArena, mut payload){
-        ASSERT_TRUE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
-        payload[0u] = 0u;
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
-    }
+    ASSERT_TRUE(BuildTestFrameGraphPayload(905u, nodes, edges, testArena.scratchArena, payload));
+    ASSERT_TRUE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
+    payload[0u] = 0u;
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 }
 
 void VerifyTelemetry_FrameGraphPayloadRejectsNonCurrentVersions(){
@@ -1012,31 +982,33 @@ void VerifyTelemetry_FrameGraphPayloadRejectsNonCurrentVersions(){
     BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
 
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
-    ASSERT_TRUE(BuildFrameGraphPayload(907u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
-    native(mut testArena, mut payload){
-        Core::Telemetry::EncodedFrameGraphPayloadHeader header;
-        NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
-        ASSERT_EQ(header.version, Core::Telemetry::s_FrameGraphPayloadVersion);
-        ASSERT_GT(header.nodeCount, 0u);
-        ASSERT_GT(header.runtimeStatisticsCount, 0u);
-        ASSERT_GT(header.physicalQueueRuntimeStatisticsCount, 0u);
-        ASSERT_GT(header.packetSubmissionStatisticsCount, 0u);
+    ASSERT_TRUE(BuildTestFrameGraphPayload(907u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
+    EncodedFrameGraphPayloadHeader header = EncodedFrameGraphPayloadHeader();
+    ReadTelemetryPod(payload, 0u, header);
+    ASSERT_EQ(header.version, s_FrameGraphPayloadVersion);
+    ASSERT_GT(header.nodeCount, 0u);
+    ASSERT_GT(header.runtimeStatisticsCount, 0u);
+    ASSERT_GT(header.physicalQueueRuntimeStatisticsCount, 0u);
+    ASSERT_GT(header.packetSubmissionStatisticsCount, 0u);
 
-        const Array<u16, 12> unsupportedVersions = { 0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, static_cast<u16>(Core::Telemetry::s_FrameGraphPayloadVersion + 1u), Limit<u16>::s_Max, };
-        for(const u16 version : unsupportedVersions){
-            ScopedTestTrace trace(version);
-            header.version = Core::Telemetry::s_FrameGraphPayloadVersion;
-            NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
-            const auto parsed = Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size());
-            ASSERT_TRUE(parsed.has_value());
-            ASSERT_FALSE(parsed.value().nodes.empty());
-            ASSERT_FALSE(parsed.value().physicalQueueRuntimeStatistics.empty());
-            ASSERT_FALSE(parsed.value().packetSubmissionStatistics.empty());
+    Array<u16, 12> unsupportedVersions = Array<u16, 12>();
+    for(usize idx = 0u; idx < 10u; ++idx)
+        unsupportedVersions[idx] = cast<u16>(idx);
+    unsupportedVersions[10u] = cast<u16>(s_FrameGraphPayloadVersion + 1u);
+    unsupportedVersions[11u] = u16.max;
+    for(in u16 version : unsupportedVersions){
+        ScopedTestTrace trace = ScopedTestTrace(version);
+        header.version = s_FrameGraphPayloadVersion;
+        WriteTelemetryPod(payload, 0u, header);
+        const Expected<FrameGraphPayload> parsed = ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload);
+        ASSERT_TRUE(parsed.has_value());
+        ASSERT_FALSE(parsed.value().nodes.empty());
+        ASSERT_FALSE(parsed.value().physicalQueueRuntimeStatistics.empty());
+        ASSERT_FALSE(parsed.value().packetSubmissionStatistics.empty());
 
-            header.version = version;
-            NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
-            EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
-        }
+        header.version = version;
+        WriteTelemetryPod(payload, 0u, header);
+        EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
     }
 }
 
@@ -1045,22 +1017,29 @@ void VerifyTelemetry_FrameGraphPayloadRejectsHistoricalEmptyPayloads(){
     FrameGraphNodeDescs nodes = FrameGraphNodeDescs(testArena.arena);
     FrameGraphEdgeDescs edges = FrameGraphEdgeDescs(testArena.arena);
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
-    ASSERT_TRUE(BuildFrameGraphPayload(907u, nodes, edges, testArena.scratchArena, payload));
-    native(mut testArena, mut payload){
-        ASSERT_EQ(payload.size(), sizeof(Core::Telemetry::EncodedFrameGraphPayloadHeader));
-        Core::Telemetry::EncodedFrameGraphPayloadHeader header;
-        NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
-        const auto parsed = Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size());
-        ASSERT_TRUE(parsed.has_value());
-        EXPECT_EQ(parsed.value().frameIndex, 907u);
+    ASSERT_TRUE(BuildTestFrameGraphPayload(907u, nodes, edges, testArena.scratchArena, payload));
+    ASSERT_EQ(payload.size(), s_EncodedFrameGraphPayloadHeaderByteSize);
+    EncodedFrameGraphPayloadHeader header = EncodedFrameGraphPayloadHeader();
+    ReadTelemetryPod(payload, 0u, header);
+    const Expected<FrameGraphPayload> parsed = ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload);
+    ASSERT_TRUE(parsed.has_value());
+    EXPECT_EQ(parsed.value().frameIndex, 907u);
 
-        const Array<usize, 9> historicalHeaderBytes = { 28u, 32u, 36u, 40u, 44u, 44u, 48u, 52u, 52u };
-        for(usize versionIndex = 0u; versionIndex < LengthOf(historicalHeaderBytes); ++versionIndex){
-            header.version = static_cast<u16>(versionIndex + 1u);
-            ScopedTestTrace trace(header.version);
-            NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
-            EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), historicalHeaderBytes[versionIndex]).has_value());
-        }
+    Array<usize, 9> historicalHeaderBytes = Array<usize, 9>();
+    historicalHeaderBytes[0u] = 28u;
+    historicalHeaderBytes[1u] = 32u;
+    historicalHeaderBytes[2u] = 36u;
+    historicalHeaderBytes[3u] = 40u;
+    historicalHeaderBytes[4u] = 44u;
+    historicalHeaderBytes[5u] = 44u;
+    historicalHeaderBytes[6u] = 48u;
+    historicalHeaderBytes[7u] = 52u;
+    historicalHeaderBytes[8u] = 52u;
+    for(usize versionIndex = 0u; versionIndex < historicalHeaderBytes.size(); ++versionIndex){
+        header.version = cast<u16>(versionIndex + 1u);
+        ScopedTestTrace trace = ScopedTestTrace(header.version);
+        WriteTelemetryPod(payload, 0u, header);
+        EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload, historicalHeaderBytes[versionIndex]).has_value());
     }
 }
 
@@ -1071,59 +1050,58 @@ void VerifyTelemetry_FrameGraphQueueAssignmentPayloadRejectsMalformedRecords(){
     BuildTestAssignedFrameGraph(testArena.arena, nodes, edges);
 
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
-    ASSERT_TRUE(BuildFrameGraphPayload(908u, nodes, edges, testArena.scratchArena, payload));
-    native(mut testArena, in nodes, in edges, mut payload){
-        const usize assignmentOffset = sizeof(Core::Telemetry::EncodedFrameGraphPayloadHeader)
-            + sizeof(Core::Telemetry::EncodedFrameGraphNode) * nodes.size()
-            + sizeof(Core::Telemetry::EncodedFrameGraphEdge) * edges.size();
-        Core::Telemetry::EncodedFrameGraphQueueAssignment first;
-        Core::Telemetry::EncodedFrameGraphQueueAssignment second;
-        NWB_MEMCPY(&first, sizeof(first), payload.data() + assignmentOffset, sizeof(first));
-        NWB_MEMCPY(&second, sizeof(second), payload.data() + assignmentOffset + sizeof(first), sizeof(second));
+    ASSERT_TRUE(BuildTestFrameGraphPayload(908u, nodes, edges, testArena.scratchArena, payload));
+    const usize assignmentOffset = s_EncodedFrameGraphPayloadHeaderByteSize
+        + s_EncodedFrameGraphNodeByteSize * nodes.size()
+        + s_EncodedFrameGraphEdgeByteSize * edges.size();
+    const usize secondAssignmentOffset = assignmentOffset + s_EncodedFrameGraphQueueAssignmentByteSize;
+    EncodedFrameGraphQueueAssignment first = EncodedFrameGraphQueueAssignment();
+    EncodedFrameGraphQueueAssignment second = EncodedFrameGraphQueueAssignment();
+    ReadTelemetryPod(payload, assignmentOffset, first);
+    ReadTelemetryPod(payload, secondAssignmentOffset, second);
 
-        second.nodeIndex = first.nodeIndex;
-        NWB_MEMCPY(payload.data() + assignmentOffset + sizeof(first), payload.size() - assignmentOffset - sizeof(first), &second, sizeof(second));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
+    second.nodeIndex = first.nodeIndex;
+    WriteTelemetryPod(payload, secondAssignmentOffset, second);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-        ASSERT_TRUE(BuildFrameGraphPayload(908u, nodes, edges, testArena.scratchArena, payload));
-        NWB_MEMCPY(&first, sizeof(first), payload.data() + assignmentOffset, sizeof(first));
-        NWB_MEMCPY(&second, sizeof(second), payload.data() + assignmentOffset + sizeof(first), sizeof(second));
-        first.nodeIndex = 2u;
-        second.nodeIndex = 0u;
-        NWB_MEMCPY(payload.data() + assignmentOffset, payload.size() - assignmentOffset, &first, sizeof(first));
-        NWB_MEMCPY(payload.data() + assignmentOffset + sizeof(first), payload.size() - assignmentOffset - sizeof(first), &second, sizeof(second));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
+    ASSERT_TRUE(BuildTestFrameGraphPayload(908u, nodes, edges, testArena.scratchArena, payload));
+    ReadTelemetryPod(payload, assignmentOffset, first);
+    ReadTelemetryPod(payload, secondAssignmentOffset, second);
+    first.nodeIndex = 2u;
+    second.nodeIndex = 0u;
+    WriteTelemetryPod(payload, assignmentOffset, first);
+    WriteTelemetryPod(payload, secondAssignmentOffset, second);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-        ASSERT_TRUE(BuildFrameGraphPayload(908u, nodes, edges, testArena.scratchArena, payload));
-        NWB_MEMCPY(&first, sizeof(first), payload.data() + assignmentOffset, sizeof(first));
-        first.nodeIndex = 1u;
-        NWB_MEMCPY(payload.data() + assignmentOffset, payload.size() - assignmentOffset, &first, sizeof(first));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
+    ASSERT_TRUE(BuildTestFrameGraphPayload(908u, nodes, edges, testArena.scratchArena, payload));
+    ReadTelemetryPod(payload, assignmentOffset, first);
+    first.nodeIndex = 1u;
+    WriteTelemetryPod(payload, assignmentOffset, first);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-        ASSERT_TRUE(BuildFrameGraphPayload(908u, nodes, edges, testArena.scratchArena, payload));
-        NWB_MEMCPY(&first, sizeof(first), payload.data() + assignmentOffset, sizeof(first));
-        first.modifiers = static_cast<u8>(1u << 7u);
-        NWB_MEMCPY(payload.data() + assignmentOffset, payload.size() - assignmentOffset, &first, sizeof(first));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
+    ASSERT_TRUE(BuildTestFrameGraphPayload(908u, nodes, edges, testArena.scratchArena, payload));
+    ReadTelemetryPod(payload, assignmentOffset, first);
+    first.modifiers = cast<u8>(1u << 7u);
+    WriteTelemetryPod(payload, assignmentOffset, first);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-        ASSERT_TRUE(BuildFrameGraphPayload(908u, nodes, edges, testArena.scratchArena, payload));
-        NWB_MEMCPY(&first, sizeof(first), payload.data() + assignmentOffset, sizeof(first));
-        ++first.scoreTotal;
-        NWB_MEMCPY(payload.data() + assignmentOffset, payload.size() - assignmentOffset, &first, sizeof(first));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
+    ASSERT_TRUE(BuildTestFrameGraphPayload(908u, nodes, edges, testArena.scratchArena, payload));
+    ReadTelemetryPod(payload, assignmentOffset, first);
+    ++first.scoreTotal;
+    WriteTelemetryPod(payload, assignmentOffset, first);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-        ASSERT_TRUE(BuildFrameGraphPayload(908u, nodes, edges, testArena.scratchArena, payload));
-        NWB_MEMCPY(&first, sizeof(first), payload.data() + assignmentOffset, sizeof(first));
-        first.acceptedQueue.deviceGeneration = 0u;
-        NWB_MEMCPY(payload.data() + assignmentOffset, payload.size() - assignmentOffset, &first, sizeof(first));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
+    ASSERT_TRUE(BuildTestFrameGraphPayload(908u, nodes, edges, testArena.scratchArena, payload));
+    ReadTelemetryPod(payload, assignmentOffset, first);
+    first.acceptedQueue.deviceGeneration = 0u;
+    WriteTelemetryPod(payload, assignmentOffset, first);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-        ASSERT_TRUE(BuildFrameGraphPayload(908u, nodes, edges, testArena.scratchArena, payload));
-        NWB_MEMCPY(&first, sizeof(first), payload.data() + assignmentOffset, sizeof(first));
-        first.previousAcceptedQueue.index = Limit<u16>::s_Max;
-        NWB_MEMCPY(payload.data() + assignmentOffset, payload.size() - assignmentOffset, &first, sizeof(first));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
-    }
+    ASSERT_TRUE(BuildTestFrameGraphPayload(908u, nodes, edges, testArena.scratchArena, payload));
+    ReadTelemetryPod(payload, assignmentOffset, first);
+    first.previousAcceptedQueue.index = u16.max;
+    WriteTelemetryPod(payload, assignmentOffset, first);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 }
 
 void VerifyTelemetry_FrameGraphCompiledTaskPayloadRejectsMalformedRecords(){
@@ -1133,57 +1111,56 @@ void VerifyTelemetry_FrameGraphCompiledTaskPayloadRejectsMalformedRecords(){
     BuildTestCompiledFrameGraph(testArena.arena, nodes, edges);
 
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
-    ASSERT_TRUE(BuildFrameGraphPayload(909u, nodes, edges, testArena.scratchArena, payload));
-    native(mut testArena, in nodes, in edges, mut payload){
-        const usize compiledTaskOffset = sizeof(Core::Telemetry::EncodedFrameGraphPayloadHeader)
-            + sizeof(Core::Telemetry::EncodedFrameGraphNode) * nodes.size()
-            + sizeof(Core::Telemetry::EncodedFrameGraphEdge) * edges.size()
-            + sizeof(Core::Telemetry::EncodedFrameGraphQueueAssignment) * 2u;
-        Core::Telemetry::EncodedFrameGraphCompiledTask first;
-        Core::Telemetry::EncodedFrameGraphCompiledTask second;
-        NWB_MEMCPY(&first, sizeof(first), payload.data() + compiledTaskOffset, sizeof(first));
-        NWB_MEMCPY(&second, sizeof(second), payload.data() + compiledTaskOffset + sizeof(first), sizeof(second));
+    ASSERT_TRUE(BuildTestFrameGraphPayload(909u, nodes, edges, testArena.scratchArena, payload));
+    const usize compiledTaskOffset = s_EncodedFrameGraphPayloadHeaderByteSize
+        + s_EncodedFrameGraphNodeByteSize * nodes.size()
+        + s_EncodedFrameGraphEdgeByteSize * edges.size()
+        + s_EncodedFrameGraphQueueAssignmentByteSize * 2u;
+    const usize secondCompiledTaskOffset = compiledTaskOffset + s_EncodedFrameGraphCompiledTaskByteSize;
+    EncodedFrameGraphCompiledTask first = EncodedFrameGraphCompiledTask();
+    EncodedFrameGraphCompiledTask second = EncodedFrameGraphCompiledTask();
+    ReadTelemetryPod(payload, compiledTaskOffset, first);
+    ReadTelemetryPod(payload, secondCompiledTaskOffset, second);
 
-        second.nodeIndex = first.nodeIndex;
-        NWB_MEMCPY(payload.data() + compiledTaskOffset + sizeof(first), payload.size() - compiledTaskOffset - sizeof(first), &second, sizeof(second));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
+    second.nodeIndex = first.nodeIndex;
+    WriteTelemetryPod(payload, secondCompiledTaskOffset, second);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-        ASSERT_TRUE(BuildFrameGraphPayload(909u, nodes, edges, testArena.scratchArena, payload));
-        NWB_MEMCPY(&first, sizeof(first), payload.data() + compiledTaskOffset, sizeof(first));
-        first.nodeIndex = 1u;
-        NWB_MEMCPY(payload.data() + compiledTaskOffset, payload.size() - compiledTaskOffset, &first, sizeof(first));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
+    ASSERT_TRUE(BuildTestFrameGraphPayload(909u, nodes, edges, testArena.scratchArena, payload));
+    ReadTelemetryPod(payload, compiledTaskOffset, first);
+    first.nodeIndex = 1u;
+    WriteTelemetryPod(payload, compiledTaskOffset, first);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-        ASSERT_TRUE(BuildFrameGraphPayload(909u, nodes, edges, testArena.scratchArena, payload));
-        NWB_MEMCPY(&first, sizeof(first), payload.data() + compiledTaskOffset, sizeof(first));
-        first.planGeneration = 0u;
-        NWB_MEMCPY(payload.data() + compiledTaskOffset, payload.size() - compiledTaskOffset, &first, sizeof(first));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
+    ASSERT_TRUE(BuildTestFrameGraphPayload(909u, nodes, edges, testArena.scratchArena, payload));
+    ReadTelemetryPod(payload, compiledTaskOffset, first);
+    first.planGeneration = 0u;
+    WriteTelemetryPod(payload, compiledTaskOffset, first);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-        ASSERT_TRUE(BuildFrameGraphPayload(909u, nodes, edges, testArena.scratchArena, payload));
-        NWB_MEMCPY(&first, sizeof(first), payload.data() + compiledTaskOffset, sizeof(first));
-        first.packetIndex = Limit<u32>::s_Max;
-        NWB_MEMCPY(payload.data() + compiledTaskOffset, payload.size() - compiledTaskOffset, &first, sizeof(first));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
+    ASSERT_TRUE(BuildTestFrameGraphPayload(909u, nodes, edges, testArena.scratchArena, payload));
+    ReadTelemetryPod(payload, compiledTaskOffset, first);
+    first.packetIndex = u32.max;
+    WriteTelemetryPod(payload, compiledTaskOffset, first);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-        ASSERT_TRUE(BuildFrameGraphPayload(909u, nodes, edges, testArena.scratchArena, payload));
-        NWB_MEMCPY(&first, sizeof(first), payload.data() + compiledTaskOffset, sizeof(first));
-        first.packetizationDecision = FrameGraphTaskPacketizationDecision::Unknown;
-        NWB_MEMCPY(payload.data() + compiledTaskOffset, payload.size() - compiledTaskOffset, &first, sizeof(first));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
+    ASSERT_TRUE(BuildTestFrameGraphPayload(909u, nodes, edges, testArena.scratchArena, payload));
+    ReadTelemetryPod(payload, compiledTaskOffset, first);
+    first.packetizationDecision = FrameGraphTaskPacketizationDecision::Unknown;
+    WriteTelemetryPod(payload, compiledTaskOffset, first);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-        ASSERT_TRUE(BuildFrameGraphPayload(909u, nodes, edges, testArena.scratchArena, payload));
-        NWB_MEMCPY(&first, sizeof(first), payload.data() + compiledTaskOffset, sizeof(first));
-        first.packetizationDecision = FrameGraphTaskPacketizationDecision::Count;
-        NWB_MEMCPY(payload.data() + compiledTaskOffset, payload.size() - compiledTaskOffset, &first, sizeof(first));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
+    ASSERT_TRUE(BuildTestFrameGraphPayload(909u, nodes, edges, testArena.scratchArena, payload));
+    ReadTelemetryPod(payload, compiledTaskOffset, first);
+    first.packetizationDecision = FrameGraphTaskPacketizationDecision::Count;
+    WriteTelemetryPod(payload, compiledTaskOffset, first);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-        ASSERT_TRUE(BuildFrameGraphPayload(909u, nodes, edges, testArena.scratchArena, payload));
-        NWB_MEMCPY(&first, sizeof(first), payload.data() + compiledTaskOffset, sizeof(first));
-        first.reserved[0u] = 1u;
-        NWB_MEMCPY(payload.data() + compiledTaskOffset, payload.size() - compiledTaskOffset, &first, sizeof(first));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
-    }
+    ASSERT_TRUE(BuildTestFrameGraphPayload(909u, nodes, edges, testArena.scratchArena, payload));
+    ReadTelemetryPod(payload, compiledTaskOffset, first);
+    first.reserved[0u] = 1u;
+    WriteTelemetryPod(payload, compiledTaskOffset, first);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 }
 
 void VerifyTelemetry_PacketSubmissionStatisticsRejectInconsistentCountsAndNonfiniteTime(){
@@ -1239,30 +1216,28 @@ void VerifyTelemetry_InheritedWaitStatisticsRejectMalformedCountsAndMismatchedTo
     ++packetSubmissionStatistics[2u].inheritedTimelineWaitElisionCount;
 
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
-    ASSERT_TRUE(BuildFrameGraphPayload(921u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
-    native(mut testArena, mut payload){
-        const auto parsed = Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size());
-        ASSERT_TRUE(parsed.has_value());
-        EXPECT_EQ(parsed.value().nodes[0u].runtimeStatistics.submission.inheritedTimelineWaitElisionCount, 1u);
-        EXPECT_EQ(parsed.value().physicalQueueRuntimeStatistics[1u].statistics.submission.inheritedTimelineWaitElisionCount, 1u);
-        EXPECT_EQ(parsed.value().packetSubmissionStatistics[1u].inheritedTimelineWaitElisionCount, 1u);
+    ASSERT_TRUE(BuildTestFrameGraphPayload(921u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
+    const Expected<FrameGraphPayload> parsed = ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload);
+    ASSERT_TRUE(parsed.has_value());
+    EXPECT_EQ(parsed.value().nodes[0u].runtimeStatistics.submission.inheritedTimelineWaitElisionCount, 1u);
+    EXPECT_EQ(parsed.value().physicalQueueRuntimeStatistics[1u].statistics.submission.inheritedTimelineWaitElisionCount, 1u);
+    EXPECT_EQ(parsed.value().packetSubmissionStatistics[1u].inheritedTimelineWaitElisionCount, 1u);
 
-        const usize computePacketOffset = sizeof(Core::Telemetry::EncodedFrameGraphPayloadHeader)
-            + sizeof(Core::Telemetry::EncodedFrameGraphNode)
-            + sizeof(Core::Telemetry::EncodedFrameGraphRuntimeStatistics)
-            + sizeof(Core::Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics) * 2u
-            + sizeof(Core::Telemetry::EncodedFrameGraphPacketSubmissionStatistics);
-        Core::Telemetry::EncodedFrameGraphPacketSubmissionStatistics encoded;
-        NWB_MEMCPY(&encoded, sizeof(encoded), payload.data() + computePacketOffset, sizeof(encoded));
-        encoded.inheritedTimelineWaitElisionCount = Limit<u64>::s_Max;
-        NWB_MEMCPY(payload.data() + computePacketOffset, payload.size() - computePacketOffset, &encoded, sizeof(encoded));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
-    }
+    const usize computePacketOffset = s_EncodedFrameGraphPayloadHeaderByteSize
+        + s_EncodedFrameGraphNodeByteSize
+        + s_EncodedFrameGraphRuntimeStatisticsByteSize
+        + s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsByteSize * 2u
+        + s_EncodedFrameGraphPacketSubmissionStatisticsByteSize;
+    EncodedFrameGraphPacketSubmissionStatistics encoded = EncodedFrameGraphPacketSubmissionStatistics();
+    ReadTelemetryPod(payload, computePacketOffset, encoded);
+    encoded.inheritedTimelineWaitElisionCount = u64.max;
+    WriteTelemetryPod(payload, computePacketOffset, encoded);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
     nodes[0u].runtimeStatistics.submission.inheritedTimelineWaitElisionCount = 0u;
     ++nodes[0u].runtimeStatistics.submission.timelineWaitCount;
     ASSERT_TRUE(IsValidFrameGraphRuntimeStatistics(nodes[0u].runtimeStatistics));
-    EXPECT_FALSE(BuildFrameGraphPayload(921u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(921u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
     EXPECT_TRUE(payload.empty());
 
     nodes[0u].runtimeStatistics.submission.inheritedTimelineWaitElisionCount = 1u;
@@ -1270,16 +1245,14 @@ void VerifyTelemetry_InheritedWaitStatisticsRejectMalformedCountsAndMismatchedTo
     physicalQueueRuntimeStatistics[0u].statistics.submission.inheritedTimelineWaitElisionCount = 0u;
     ++physicalQueueRuntimeStatistics[0u].statistics.submission.timelineWaitCount;
     ASSERT_TRUE(IsValidFrameGraphPhysicalQueueRuntimeStatistics(physicalQueueRuntimeStatistics[0u].statistics));
-    EXPECT_FALSE(BuildFrameGraphPayload(921u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(921u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
     EXPECT_TRUE(payload.empty());
 
     physicalQueueRuntimeStatistics.clear();
     packetSubmissionStatistics[2u].inheritedTimelineWaitElisionCount = 0u;
     ++packetSubmissionStatistics[2u].timelineWaitCount;
     ASSERT_TRUE(IsValidFrameGraphPacketSubmissionStatistics(packetSubmissionStatistics[2u]));
-    native(mut testArena, in nodes, in edges, in physicalQueueRuntimeStatistics, in packetSubmissionStatistics, mut payload){
-        EXPECT_FALSE(BuildFrameGraphPayload(921u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
-    }
+    EXPECT_FALSE(BuildTestFrameGraphPayload(921u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
     EXPECT_TRUE(payload.empty());
 }
 
@@ -1292,8 +1265,8 @@ void VerifyTelemetry_PacketSubmissionEncodingIsIndependentOfInputOrder(){
     BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
 
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
-    ASSERT_TRUE(BuildFrameGraphPayload(918u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
-    const auto firstPhysicalQueue = physicalQueueRuntimeStatistics[0u];
+    ASSERT_TRUE(BuildTestFrameGraphPayload(918u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
+    const FrameGraphPhysicalQueueRuntimeStatisticsRecord firstPhysicalQueue = physicalQueueRuntimeStatistics[0u];
     physicalQueueRuntimeStatistics[0u] = physicalQueueRuntimeStatistics[1u];
     physicalQueueRuntimeStatistics[1u] = firstPhysicalQueue;
     const FrameGraphPacketSubmissionStatisticsRecord packetZero = packetSubmissionStatistics[1u];
@@ -1304,7 +1277,7 @@ void VerifyTelemetry_PacketSubmissionEncodingIsIndependentOfInputOrder(){
     packetSubmissionStatistics[2u] = packetTwo;
 
     TelemetryBytes reorderedPayload = TelemetryBytes(testArena.arena);
-    ASSERT_TRUE(BuildFrameGraphPayload(918u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, reorderedPayload));
+    ASSERT_TRUE(BuildTestFrameGraphPayload(918u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, reorderedPayload));
     ASSERT_EQ(payload.size(), reorderedPayload.size());
     EXPECT_EQ(payload, reorderedPayload);
 }
@@ -1319,73 +1292,71 @@ void VerifyTelemetry_FrameGraphPacketSubmissionStatisticsPayloadRejectsMalformed
     BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
 
     packetSubmissionStatistics[0u].joinsAcceptedQueueFrontier = false;
-    EXPECT_FALSE(BuildFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
     BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
     packetSubmissionStatistics[1u].packetGeneration = 99u;
-    EXPECT_FALSE(BuildFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
     BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
     packetSubmissionStatistics[1u].packetIndex = packetSubmissionStatistics[2u].packetIndex;
-    EXPECT_FALSE(BuildFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
     BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
     packetSubmissionStatistics[2u].commandListCount = 1u;
-    EXPECT_FALSE(BuildFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
     BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
     packetSubmissionStatistics[1u].submissionSeconds += 0.01;
-    EXPECT_FALSE(BuildFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
     BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
     packetSubmissionStatistics[1u].queue.index = 3u;
     packetSubmissionStatistics[1u].queue.deviceGeneration = 17u;
     packetSubmissionStatistics[1u].queueClass = FrameGraphQueueClass::Compute;
-    EXPECT_FALSE(BuildFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
 
     BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
-    native(mut testArena, in nodes, in edges, in physicalQueueRuntimeStatistics, in packetSubmissionStatistics, mut payload){
-        ASSERT_TRUE(BuildFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
-        const usize packetSubmissionStatisticsOffset = sizeof(Core::Telemetry::EncodedFrameGraphPayloadHeader)
-            + sizeof(Core::Telemetry::EncodedFrameGraphNode)
-            + sizeof(Core::Telemetry::EncodedFrameGraphRuntimeStatistics)
-            + sizeof(Core::Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics) * 2u;
-        Core::Telemetry::EncodedFrameGraphPacketSubmissionStatistics encodedStatistics;
-        NWB_MEMCPY(&encodedStatistics, sizeof(encodedStatistics), payload.data() + packetSubmissionStatisticsOffset, sizeof(encodedStatistics));
-        encodedStatistics.reserved = 1u;
-        NWB_MEMCPY(payload.data() + packetSubmissionStatisticsOffset, payload.size() - packetSubmissionStatisticsOffset, &encodedStatistics, sizeof(encodedStatistics));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
+    ASSERT_TRUE(BuildTestFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
+    const usize packetSubmissionStatisticsOffset = s_EncodedFrameGraphPayloadHeaderByteSize
+        + s_EncodedFrameGraphNodeByteSize
+        + s_EncodedFrameGraphRuntimeStatisticsByteSize
+        + s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsByteSize * 2u;
+    EncodedFrameGraphPacketSubmissionStatistics encodedStatistics = EncodedFrameGraphPacketSubmissionStatistics();
+    ReadTelemetryPod(payload, packetSubmissionStatisticsOffset, encodedStatistics);
+    encodedStatistics.reserved = 1u;
+    WriteTelemetryPod(payload, packetSubmissionStatisticsOffset, encodedStatistics);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-        ASSERT_TRUE(BuildFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
-        NWB_MEMCPY(&encodedStatistics, sizeof(encodedStatistics), payload.data() + packetSubmissionStatisticsOffset, sizeof(encodedStatistics));
-        encodedStatistics.submissionSeconds += 0.01;
-        NWB_MEMCPY(payload.data() + packetSubmissionStatisticsOffset, payload.size() - packetSubmissionStatisticsOffset, &encodedStatistics, sizeof(encodedStatistics));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
+    ASSERT_TRUE(BuildTestFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
+    ReadTelemetryPod(payload, packetSubmissionStatisticsOffset, encodedStatistics);
+    encodedStatistics.submissionSeconds += 0.01;
+    WriteTelemetryPod(payload, packetSubmissionStatisticsOffset, encodedStatistics);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-        ASSERT_TRUE(BuildFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
-        const usize secondPacketSubmissionStatisticsOffset = packetSubmissionStatisticsOffset + sizeof(Core::Telemetry::EncodedFrameGraphPacketSubmissionStatistics);
-        NWB_MEMCPY(&encodedStatistics, sizeof(encodedStatistics), payload.data() + secondPacketSubmissionStatisticsOffset, sizeof(encodedStatistics));
-        encodedStatistics.packetIndex = 0u;
-        NWB_MEMCPY(payload.data() + secondPacketSubmissionStatisticsOffset, payload.size() - secondPacketSubmissionStatisticsOffset, &encodedStatistics, sizeof(encodedStatistics));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
+    ASSERT_TRUE(BuildTestFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
+    const usize secondPacketSubmissionStatisticsOffset = packetSubmissionStatisticsOffset + s_EncodedFrameGraphPacketSubmissionStatisticsByteSize;
+    ReadTelemetryPod(payload, secondPacketSubmissionStatisticsOffset, encodedStatistics);
+    encodedStatistics.packetIndex = 0u;
+    WriteTelemetryPod(payload, secondPacketSubmissionStatisticsOffset, encodedStatistics);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-        ASSERT_TRUE(BuildFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
-        Core::Telemetry::EncodedFrameGraphPayloadHeader header;
-        NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
-        ++header.packetSubmissionStatisticsCount;
-        NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
+    ASSERT_TRUE(BuildTestFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
+    EncodedFrameGraphPayloadHeader header = EncodedFrameGraphPayloadHeader();
+    ReadTelemetryPod(payload, 0u, header);
+    ++header.packetSubmissionStatisticsCount;
+    WriteTelemetryPod(payload, 0u, header);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-        ASSERT_TRUE(BuildFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
-        NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
-        header.packetSubmissionStatisticsPresent = 0u;
-        NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
+    ASSERT_TRUE(BuildTestFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
+    ReadTelemetryPod(payload, 0u, header);
+    header.packetSubmissionStatisticsPresent = 0u;
+    WriteTelemetryPod(payload, 0u, header);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-        ASSERT_TRUE(BuildFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
-        NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
-        header.reservedTail[1u] = 1u;
-        NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
+    ASSERT_TRUE(BuildTestFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
+    ReadTelemetryPod(payload, 0u, header);
+    header.reservedTail[1u] = 1u;
+    WriteTelemetryPod(payload, 0u, header);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-        ASSERT_TRUE(BuildFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size() - 1u).has_value());
-    }
+    ASSERT_TRUE(BuildTestFrameGraphPayload(920u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, testArena.scratchArena, payload));
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload, payload.size() - 1u).has_value());
 }
 
 void VerifyTelemetry_PhysicalQueueDecodeShrinkingInputClearsPreviousRecords(){
@@ -1396,19 +1367,18 @@ void VerifyTelemetry_PhysicalQueueDecodeShrinkingInputClearsPreviousRecords(){
     FrameGraphPhysicalQueueRuntimeStatisticsRecords records = FrameGraphPhysicalQueueRuntimeStatisticsRecords(testArena.arena);
     BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
-    native(mut testArena, in nodes, in edges, mut records, mut payload){
-        ASSERT_TRUE(BuildFrameGraphPayload(916u, nodes, edges, records, testArena.scratchArena, payload));
-        auto parsed = Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size());
-        ASSERT_TRUE(parsed.has_value());
-        ASSERT_EQ(parsed.value().physicalQueueRuntimeStatistics.size(), 2u);
 
-        records.resize(1u);
-        ASSERT_TRUE(BuildFrameGraphPayload(916u, nodes, edges, records, testArena.scratchArena, payload));
-        parsed = Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size());
-        ASSERT_TRUE(parsed.has_value());
-        ASSERT_EQ(parsed.value().physicalQueueRuntimeStatistics.size(), 1u);
-        EXPECT_EQ(parsed.value().physicalQueueRuntimeStatistics[0u].statistics.queue.index, 3u);
-    }
+    ASSERT_TRUE(BuildTestFrameGraphPayload(916u, nodes, edges, records, testArena.scratchArena, payload));
+    Expected<FrameGraphPayload> parsed = ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload);
+    ASSERT_TRUE(parsed.has_value());
+    ASSERT_EQ(parsed.value().physicalQueueRuntimeStatistics.size(), 2u);
+
+    records.resize(1u);
+    ASSERT_TRUE(BuildTestFrameGraphPayload(916u, nodes, edges, records, testArena.scratchArena, payload));
+    parsed = ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload);
+    ASSERT_TRUE(parsed.has_value());
+    ASSERT_EQ(parsed.value().physicalQueueRuntimeStatistics.size(), 1u);
+    EXPECT_EQ(parsed.value().physicalQueueRuntimeStatistics[0u].statistics.queue.index, 3u);
 }
 
 void VerifyTelemetry_FrameGraphPhysicalQueueRuntimeStatisticsPayloadRejectsMalformedRecords(){
@@ -1421,114 +1391,116 @@ void VerifyTelemetry_FrameGraphPhysicalQueueRuntimeStatisticsPayloadRejectsMalfo
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
 
     records[0u].statistics.graphGeneration = 99u;
-    EXPECT_FALSE(BuildFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
     BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
     records[0u].ownerNodeIndex = 1u;
-    EXPECT_FALSE(BuildFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
     BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
     records[0u].statistics.queue.deviceGeneration = 18u;
-    EXPECT_FALSE(BuildFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
     BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
     records[0u].statistics.queueClass = FrameGraphQueueClass::Unknown;
-    EXPECT_FALSE(BuildFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
     BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
     records[0u].statistics.recording.recordingSeconds = -1.0;
-    EXPECT_FALSE(BuildFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
     BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
     records[0u].statistics.submission.submissionSeconds = bit_cast<f64>(0x7FF8000000000000uLL);
-    EXPECT_FALSE(BuildFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
     BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
     records[0u].statistics.submission.recoverySubmissionCount = records[0u].statistics.submission.acceptedFrontierSubmissionCount + 1u;
-    EXPECT_FALSE(BuildFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
     BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
     ++records[0u].statistics.submission.recoverySubmissionCount;
     EXPECT_TRUE(IsValidFrameGraphPhysicalQueueRuntimeStatistics(records[0u].statistics));
-    EXPECT_FALSE(BuildFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
     BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
     ++records[0u].statistics.compile.mergedTaskCount;
-    EXPECT_FALSE(BuildFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
     BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
     ++records[0u].statistics.submission.timelineWaitCount;
-    EXPECT_FALSE(BuildFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
     BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
     records[0u].statistics.compile.taskCount = 79u;
     records[0u].statistics.compile.packetCount = 78u;
     records[0u].statistics.compile.mergedTaskCount = 1u;
-    EXPECT_FALSE(BuildFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
     BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
     records[0u].statistics.recording.recordingSeconds = 0.017;
-    EXPECT_FALSE(BuildFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
     BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
     records[0u].statistics.compile.taskCount = 29u;
     records[0u].statistics.compile.mergedTaskCount = 2u;
-    EXPECT_FALSE(BuildFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
     BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
     ++records[0u].statistics.submission.plannedWaitTokenCount;
     ++records[0u].statistics.submission.timelineWaitCount;
-    EXPECT_FALSE(BuildFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
     BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
     records[0u].statistics.compile.epilogueBarrierCount = 4u;
-    EXPECT_FALSE(BuildFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
     BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
     records[0u].statistics.recording.barrierCount = 12u;
-    EXPECT_FALSE(BuildFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
     BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
     records[0u].statistics.recording.taskCount = 13u;
-    EXPECT_FALSE(BuildFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
     BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
     records[0u].statistics.submission.acceptedTaskCount = 13u;
     records[0u].statistics.submission.rejectedPacketCount = 14u;
     records[0u].statistics.submission.rejectedTaskCount = 15u;
     records[0u].statistics.submission.rejectedSubmissionCount = 14u;
-    EXPECT_FALSE(BuildFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
     BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
     records[0u].statistics.compile.incomingLogicalOwnershipTransferSignatureCount = 0u;
     records[0u].statistics.compile.outgoingLogicalOwnershipTransferSignatureCount = 0u;
     records[0u].statistics.compile.incomingRepeatedOwnershipTransferSignatureCount = 0u;
     records[0u].statistics.compile.outgoingRepeatedOwnershipTransferSignatureCount = 0u;
-    EXPECT_FALSE(BuildFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
     BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
     records.push_back(records[0u]);
-    EXPECT_FALSE(BuildFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
 
     BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
-    native(mut testArena, in nodes, in edges, in records, mut payload){
-        ASSERT_TRUE(BuildFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
-        const usize statisticsOffset = sizeof(Core::Telemetry::EncodedFrameGraphPayloadHeader)
-            + sizeof(Core::Telemetry::EncodedFrameGraphNode) * nodes.size()
-            + sizeof(Core::Telemetry::EncodedFrameGraphEdge) * edges.size()
-            + sizeof(Core::Telemetry::EncodedFrameGraphQueueAssignment) * 2u
-            + sizeof(Core::Telemetry::EncodedFrameGraphCompiledTask) * 2u
-            + sizeof(Core::Telemetry::EncodedFrameGraphRuntimeStatistics) * 2u;
-        for(usize mutationIndex = 0u; mutationIndex < LengthOf(TelemetryCaptureCasesDetail::s_EncodedPhysicalQueueMutations); ++mutationIndex){
-            ScopedTestTrace trace(mutationIndex);
-            ASSERT_TRUE(BuildFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
-            Core::Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics encodedStatistics;
-            NWB_MEMCPY(&encodedStatistics, sizeof(encodedStatistics), payload.data() + statisticsOffset, sizeof(encodedStatistics));
-            TelemetryCaptureCasesDetail::s_EncodedPhysicalQueueMutations[mutationIndex].get()(encodedStatistics);
-            NWB_MEMCPY(payload.data() + statisticsOffset, payload.size() - statisticsOffset, &encodedStatistics, sizeof(encodedStatistics));
-            EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
-        }
-
-        ASSERT_TRUE(BuildFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
-        const usize secondStatisticsOffset = statisticsOffset + sizeof(Core::Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics);
-        Core::Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics encodedStatistics;
-        NWB_MEMCPY(&encodedStatistics, sizeof(encodedStatistics), payload.data() + secondStatisticsOffset, sizeof(encodedStatistics));
-        encodedStatistics.queue.index = 1u;
-        NWB_MEMCPY(payload.data() + secondStatisticsOffset, payload.size() - secondStatisticsOffset, &encodedStatistics, sizeof(encodedStatistics));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
-
-        ASSERT_TRUE(BuildFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
-        Core::Telemetry::EncodedFrameGraphPayloadHeader header;
-        NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
-        ++header.physicalQueueRuntimeStatisticsCount;
-        NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
-
-        ASSERT_TRUE(BuildFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size() - 1u).has_value());
+    ASSERT_TRUE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
+    const usize statisticsOffset = s_EncodedFrameGraphPayloadHeaderByteSize
+        + s_EncodedFrameGraphNodeByteSize * nodes.size()
+        + s_EncodedFrameGraphEdgeByteSize * edges.size()
+        + s_EncodedFrameGraphQueueAssignmentByteSize * 2u
+        + s_EncodedFrameGraphCompiledTaskByteSize * 2u
+        + s_EncodedFrameGraphRuntimeStatisticsByteSize * 2u;
+    for(usize mutationIndex = 0u; mutationIndex < s_EncodedPhysicalQueueMutationCount; ++mutationIndex){
+        ScopedTestTrace trace = ScopedTestTrace(mutationIndex);
+        ASSERT_TRUE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
+        EncodedFrameGraphPhysicalQueueRuntimeStatistics encodedStatistics = EncodedFrameGraphPhysicalQueueRuntimeStatistics();
+        ReadTelemetryPod(payload, statisticsOffset, encodedStatistics);
+        ApplyEncodedPhysicalQueueMutation(mutationIndex, encodedStatistics);
+        WriteTelemetryPod(payload, statisticsOffset, encodedStatistics);
+        EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
     }
+
+    ASSERT_TRUE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
+    const usize secondStatisticsOffset = statisticsOffset + s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsByteSize;
+    EncodedFrameGraphPhysicalQueueRuntimeStatistics encodedStatistics = EncodedFrameGraphPhysicalQueueRuntimeStatistics();
+    ReadTelemetryPod(payload, secondStatisticsOffset, encodedStatistics);
+    encodedStatistics.queue.index = 1u;
+    WriteTelemetryPod(payload, secondStatisticsOffset, encodedStatistics);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
+
+    ASSERT_TRUE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
+    EncodedFrameGraphPayloadHeader header = EncodedFrameGraphPayloadHeader();
+    ReadTelemetryPod(payload, 0u, header);
+    ++header.physicalQueueRuntimeStatisticsCount;
+    WriteTelemetryPod(payload, 0u, header);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
+
+    ASSERT_TRUE(BuildTestFrameGraphPayload(917u, nodes, edges, records, testArena.scratchArena, payload));
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload, payload.size() - 1u).has_value());
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_ADHD_GTEST(Telemetry, CaptureScopeRestoresLoggerAndStopsDiagnosticsAfterDestruction, VerifyTelemetry_CaptureScopeRestoresLoggerAndStopsDiagnosticsAfterDestruction)
 NWB_ADHD_GTEST(Telemetry, TextCaptureCountsRejectedPayloadsWithoutCountingFilteredEventsAndStillForwards, VerifyTelemetry_TextCaptureCountsRejectedPayloadsWithoutCountingFilteredEventsAndStillForwards)

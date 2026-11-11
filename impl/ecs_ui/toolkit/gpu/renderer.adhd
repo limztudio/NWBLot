@@ -182,7 +182,7 @@ public:
     }
 };
 
-[[nodiscard]] inline Expected<Core::GpuTaskId> DeclareTargetInitialization(void* const rawTarget, Core::GpuTaskGraph& graph){
+[[nodiscard]] NWB_INLINE Expected<Core::GpuTaskId> DeclareTargetInitialization(void* const rawTarget, Core::GpuTaskGraph& graph){
     const auto& target = *MakeNotNull(static_cast<GpuVersion<GpuTargetVersion>*>(rawTarget));
     const auto colorResult = graph.importTexture(
         target->m_color,
@@ -279,7 +279,7 @@ namespace __hidden_ui_gpu_shared{
 
 inline constexpr Core::GpuTimingScopeDefinition s_FrameTimingScope("render.frame");
 
-[[nodiscard]] inline Core::RenderState PaintRenderState()noexcept{
+[[nodiscard]] NWB_INLINE Core::RenderState PaintRenderState()noexcept{
     Core::RenderState state;
     state.depthStencilState.disableDepthTest().disableDepthWrite();
     state.rasterState.enableDepthClip().setCullNone();
@@ -296,7 +296,7 @@ inline constexpr Core::GpuTimingScopeDefinition s_FrameTimingScope("render.frame
 }
 
 template<typename TShader>
-[[nodiscard]] inline b8 LoadShader(
+[[nodiscard]] NWB_INLINE b8 LoadShader(
     const Core::Assets::AssetRef<TShader> UiSubsystem::* const member,
     const Name& identity,
     GpuRendererState& state,

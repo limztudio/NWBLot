@@ -24,7 +24,7 @@ NWB_BEGIN
 
 
 template<const Name& ArenaName>
-[[nodiscard]] inline Core::Alloc::GlobalArena& QueryUtilityGlobalArena(){
+[[nodiscard]] NWB_INLINE Core::Alloc::GlobalArena& QueryUtilityGlobalArena(){
     static Core::Alloc::GlobalArena s_Arena(ArenaName);
     return s_Arena;
 }

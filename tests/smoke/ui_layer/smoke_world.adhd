@@ -28,11 +28,15 @@ public:
     }
 };
 
-[[nodiscard]] inline NotNullUniquePtr<Core::ECS::World> TakeUiLayerSmokeWorld(NotNullUniquePtr<Core::ECS::World>& world)noexcept{
+[[nodiscard]] NWB_INLINE NotNullUniquePtr<Core::ECS::World> TakeUiLayerSmokeWorld(NotNullUniquePtr<Core::ECS::World>& world)noexcept{
     return Move(world);
 }
 
-[[nodiscard]] inline Expected<NotNullUniquePtr<Core::ECS::World>> FinalizeUiLayerSmokeWorld(UniquePtr<Core::ECS::World> world)noexcept{
+[[nodiscard]] NWB_INLINE NotNullUniquePtr<Core::ECS::World> TakeUiLayerSmokeWorld(NotNullUniquePtr<Core::ECS::World>&& world)noexcept{
+    return Move(world);
+}
+
+[[nodiscard]] NWB_INLINE Expected<NotNullUniquePtr<Core::ECS::World>> FinalizeUiLayerSmokeWorld(UniquePtr<Core::ECS::World> world)noexcept{
     if(!world)
         return MakeUnexpected(Failure{});
     return MakeNotNullUnique(Move(world));
@@ -215,22 +219,30 @@ b8 CheckUiLayerSmokePersistentState(mut ProjectRuntimeContext context){
 b8 ConfigureSmokeLayerInputProfile(mut GlobalArena arena, mut UiLayerSystem layer){
     if(!ReadSmokeEnvironmentFlag("NWB_UI_LAYER_INPUT_BINDINGS_SMOKE"))
         return true;
-    b8 accepted = false;
-    native(mut arena, mut layer, mut accepted){
-        Impl::Ui::InputBindings defaults(arena);
-        Impl::Ui::InputBindings::BindingVector bindings(arena);
-        bindings.reserve(defaults.bindings().size() + 4u);
-        for(const auto& binding : defaults.bindings()){
-            if(binding.key != Core::Key::Tab)
-                bindings.push_back(binding);
-        }
-        bindings.push_back({ .key = Core::Key::Q, .command = Impl::Ui::InputCommand::Activate });
-        bindings.push_back({ .key = Core::Key::W, .command = Impl::Ui::InputCommand::Left });
-        bindings.push_back({ .key = Core::Key::R, .command = Impl::Ui::InputCommand::FocusNext });
-        bindings.push_back({ .key = Core::Key::T, .command = Impl::Ui::InputCommand::FocusPrevious });
-        accepted = layer.setInputBindings(bindings);
+    const InputBindings defaults(arena);
+    Vector<InputKeyBinding> bindings = Vector<InputKeyBinding>();
+    bindings.reserve(defaults.bindings().size() + 4u);
+    for(in InputKeyBinding binding : defaults.bindings()){
+        if(binding.key != s_SmokeKeyTab)
+            bindings.push_back(binding);
     }
-    if(!accepted){
+    InputKeyBinding activateBinding();
+    activateBinding.key = s_SmokeKeyQ;
+    activateBinding.command = InputCommand::Activate;
+    bindings.push_back(activateBinding);
+    InputKeyBinding leftBinding();
+    leftBinding.key = s_SmokeKeyW;
+    leftBinding.command = InputCommand::Left;
+    bindings.push_back(leftBinding);
+    InputKeyBinding focusNextBinding();
+    focusNextBinding.key = s_SmokeKeyR;
+    focusNextBinding.command = InputCommand::FocusNext;
+    bindings.push_back(focusNextBinding);
+    InputKeyBinding focusPrevBinding();
+    focusPrevBinding.key = s_SmokeKeyT;
+    focusPrevBinding.command = InputCommand::FocusPrevious;
+    bindings.push_back(focusPrevBinding);
+    if(!layer.setInputBindings(bindings)){
         error("UiLayerSmokeProject: configured input profile was rejected");
         return false;
     }
@@ -398,14 +410,14 @@ void AttachUiLayerSmokeScene(mut ProjectRuntimeContext context, mut World world,
     }
 }
 
-b8 InitUiLayerSmokeSystem(mut ProjectRuntimeContext context, mut UniquePtr<World> world, in b8 alternateSkin){
+b8 InitUiLayerSmokeSystem(mut ProjectRuntimeContext context, mut World world, in b8 alternateSkin){
     b8 ok = false;
     native(mut context, mut world, in alternateSkin, mut ok){
         const Core::Assets::AssetRef<Impl::UiSkin> skin = alternateSkin
             ? Core::Assets::AssetRef<Impl::UiSkin>("alternate_skin")
             : Core::Assets::AssetRef<Impl::UiSkin>{};
-        auto& layer = world->addSystem<Impl::UiLayerSystem>(
-            *world,
+        auto& layer = world.addSystem<Impl::UiLayerSystem>(
+            world,
             context.graphics,
             context.input,
             context.clipboard,
@@ -424,36 +436,40 @@ b8 InitUiLayerSmokeSystem(mut ProjectRuntimeContext context, mut UniquePtr<World
 }
 
 Expected<NotNullUniquePtr<World>> CreateUiLayerSmokeWorld(mut ProjectRuntimeContext context){
-    b8 hasShaderResolver = false;
-    native(in context, mut hasShaderResolver){
-        hasShaderResolver = static_cast<b8>(context.shaderPathResolver);
+    i32 initError = 0;
+    UniquePtr<World> allocatedWorld = UniquePtr<World>();
+    native(mut context, mut allocatedWorld, mut initError){
+        if(!context.shaderPathResolver){
+            initError = 1;
+        }
+        else{
+            allocatedWorld = MakeUnique<Core::ECS::World>(context.objectArena, context.cpuTasks);
+            if(!allocatedWorld)
+                initError = 2;
+        }
     }
-    if(!hasShaderResolver){
+    if(initError == 1){
         error("UiLayerSmokeProject: shader path resolver is unavailable");
         return MakeUnexpected(Failure());
     }
-
-    UniquePtr<World> world = UniquePtr<World>();
-    b8 worldAllocated = false;
-    native(mut context, mut world, mut worldAllocated){
-        world = MakeUnique<Core::ECS::World>(context.objectArena, context.cpuTasks);
-        worldAllocated = static_cast<b8>(world);
-    }
-    if(!worldAllocated){
+    if(initError == 2){
         error("UiLayerSmokeProject: ECS world allocation failed");
         return MakeUnexpected(Failure());
     }
 
+    Expected<NotNullUniquePtr<World>> finalized = FinalizeUiLayerSmokeWorld(allocatedWorld);
+    if(!finalized.has_value())
+        return MakeUnexpected(Failure());
+    NotNullUniquePtr<World> world = TakeUiLayerSmokeWorld(finalized.value());
+
     const UiLayerSmokeModeFlags modes = ResolveUiLayerSmokeModes();
     LogActiveUiLayerSmokeSkins(modes);
-    if(!InitUiLayerSmokeSystem(context, world, modes.alternateSkin))
+    if(!InitUiLayerSmokeSystem(context, SmokeWorldRef(world), modes.alternateSkin))
         return MakeUnexpected(Failure());
 
-    native(mut context, mut world, in modes){
-        SpawnManySmokeRootsIfEnabled(*world);
-        AttachUiLayerSmokeScene(context, *world, modes);
-    }
-    return FinalizeUiLayerSmokeWorld(world);
+    SpawnManySmokeRootsIfEnabled(SmokeWorldRef(world));
+    AttachUiLayerSmokeScene(context, SmokeWorldRef(world), modes);
+    return world;
 }
 
 void ClearUiLayerSmokeWorld(mut ProjectRuntimeContext context, mut World world){
@@ -494,23 +510,11 @@ b8 ConfigureUiLayerSmokeStartup(
         captureOptions.requiredWidth = 800u;
         captureOptions.requiredHeight = 600u;
     }
-    b8 configured = false;
-    native(mut context, in captureOptions, mut outFramebufferCapture, mut configured){
-        auto capture = SmokeCaptureFactory(context).configure(NWB_TEXT("UiLayerSmokeProject"), s_DefaultCaptureFrameCount, captureOptions);
-        if(capture){
-            outFramebufferCapture = Move(*capture);
-            configured = true;
-        }
-    }
-    return configured;
+    return ConfigureSmokeFramebufferCapture(context, "UiLayerSmokeProject", s_DefaultCaptureFrameCount, captureOptions, outFramebufferCapture);
 }
 
 b8 TickUiLayerSmokeWorld(in f32 delta, mut NotNullUniquePtr<World> world, mut UniquePtr<FramebufferCapture> framebufferCapture){
-    b8 keepRunning = false;
-    native(in delta, mut world, mut framebufferCapture, mut keepRunning){
-        keepRunning = TickSmokeWorldWithCapture(delta, *world, framebufferCapture);
-    }
-    return keepRunning;
+    return TickSmokeWorldWithCapture(delta, SmokeWorldRef(world), framebufferCapture);
 }
 
 void StopUiLayerSmokeCaptureAndClearWorld(
@@ -518,13 +522,8 @@ void StopUiLayerSmokeCaptureAndClearWorld(
     mut NotNullUniquePtr<World> world,
     mut UniquePtr<FramebufferCapture> framebufferCapture
 ){
-    native(mut context, mut world, mut framebufferCapture){
-        if(framebufferCapture){
-            framebufferCapture->stop();
-            framebufferCapture.reset();
-        }
-        ClearUiLayerSmokeWorld(context, *world);
-    }
+    StopAndResetSmokeFramebufferCapture(framebufferCapture);
+    ClearUiLayerSmokeWorld(context, SmokeWorldRef(world));
 }
 
 

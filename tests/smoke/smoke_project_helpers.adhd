@@ -33,29 +33,69 @@ native{
 #include <global/simplemath.h>
 
 namespace NWB::Tests::Smoke{
-using Core::ECS::EntityID;
 using Core::ECS::World;
 using Core::IInputEventHandler;
 using Core::KeyboardInputResult;
 namespace InputAction = Core::InputAction;
 namespace Key = Core::Key;
 
-[[nodiscard]] inline NotNullUniquePtr<Core::ECS::World> CreateSmokeWorldOrDie(const TStringView projectName, ProjectRuntimeContext& context){
+[[nodiscard]] NWB_INLINE NotNullUniquePtr<Core::ECS::World> CreateSmokeWorldOrDie(const AStringView projectName, ProjectRuntimeContext& context){
     auto world = MakeUnique<Core::ECS::World>(context.objectArena, context.cpuTasks);
     if(!world){
-        NWB_LOGGER_FATAL(NWB_TEXT("{}: ECS world allocation failed"), projectName);
+        NWB_LOGGER_FATAL(NWB_TEXT("{}: ECS world allocation failed"), ConvertString(projectName));
         throw RuntimeException("Smoke project initialization failed");
     }
     if(!context.shaderPathResolver){
-        NWB_LOGGER_FATAL(NWB_TEXT("{} initialization failed: shader path resolver callback is null"), projectName);
+        NWB_LOGGER_FATAL(NWB_TEXT("{} initialization failed: shader path resolver callback is null"), ConvertString(projectName));
         throw RuntimeException("Smoke project initialization failed");
     }
 
     return MakeNotNullUnique(Move(world));
 }
 
-[[nodiscard]] inline NotNullUniquePtr<Core::ECS::World> TakeSmokeWorld(NotNullUniquePtr<Core::ECS::World>& world)noexcept{
+using ::s_PI;
+using ::s_2PI;
+using ::s_PIDIV2;
+using PerfCaptureOptions = Core::Perf::CaptureOptions;
+using TelemetryCaptureOptions = Core::Telemetry::CaptureOptions;
+
+[[nodiscard]] NWB_INLINE Core::Perf::CaptureOptions SmokePerfGpuTimingOnly()noexcept{
+    return Core::Perf::CaptureOptions::GpuTimingOnly();
+}
+
+[[nodiscard]] NWB_INLINE Core::Telemetry::CaptureOptions SmokeTelemetryPerfOnly()noexcept{
+    return Core::Telemetry::CaptureOptions::PerfOnly();
+}
+
+using NWB::ProjectFrameClientSize;
+
+[[nodiscard]] NWB_INLINE ProjectFrameClientSize QuerySmokeFrameClientSize(){
+    return NWB::QueryProjectFrameClientSize();
+}
+
+[[nodiscard]] NWB_INLINE b8 SmokeContextHasQuitCallback(const ProjectRuntimeContext& context)noexcept{
+    return static_cast<b8>(context.requestQuit);
+}
+
+NWB_INLINE void RequestSmokeQuit(ProjectRuntimeContext& context){
+    if(context.requestQuit)
+        context.requestQuit();
+}
+
+[[nodiscard]] NWB_INLINE NotNullUniquePtr<Core::ECS::World> TakeSmokeWorld(NotNullUniquePtr<Core::ECS::World>& world)noexcept{
     return Move(world);
+}
+
+[[nodiscard]] NWB_INLINE NotNullUniquePtr<Core::ECS::World> TakeSmokeWorld(NotNullUniquePtr<Core::ECS::World>&& world)noexcept{
+    return Move(world);
+}
+
+[[nodiscard]] NWB_INLINE Core::ECS::World& SmokeWorldRef(NotNullUniquePtr<Core::ECS::World>& world)noexcept{
+    return *world;
+}
+
+[[nodiscard]] NWB_INLINE const Core::ECS::World& SmokeWorldRef(const NotNullUniquePtr<Core::ECS::World>& world)noexcept{
+    return *world;
 }
 };
 
@@ -184,10 +224,7 @@ f32 RendererBaselineFixedDelta(){
 
 VectorSingle CalculateSmokeYawDisplay(in VectorSingle yaw, in VectorSingle turn){
     const f32 turnScalar = turn.x;
-    f32 wrapped = yaw.x;
-    native(in yawX = yaw.x, in turnScalar, mut wrapped){
-        wrapped = VectorGetX(VectorMod(VectorReplicate(yawX), VectorReplicate(turnScalar)));
-    }
+    f32 wrapped = FMod(yaw.x, turnScalar);
     if(wrapped < 0.0f)
         wrapped += turnScalar;
     const f32 degrees = wrapped * (s_DegreesPerTurn / turnScalar);
@@ -218,7 +255,7 @@ void SetSmokeYawWindowTitle(in f32 yaw, in b8 manualControl, in f32 twoPi, mut P
 EntityID CreateSmokeCamera(in f32 cameraHeight, in f32 cameraDistance, in f32 cameraPitch, mut World world){
     const VectorSingle pitchRotation = QuaternionRotationRollPitchYawFromVector(VectorSingle(cameraPitch, 0.0f, 0.0f, 0.0f));
     const f32x4 cameraRotation = f32x4(pitchRotation);
-    EntityID cameraEntity = EntityID();
+    EntityID cameraEntity = s_InvalidEntityId;
     native(in cameraHeight, in cameraDistance, in cameraRotation, mut world, mut cameraEntity){
         auto activeCameraEntity = world.createEntity();
         auto& activeCamera = activeCameraEntity.addComponent<Impl::Scene::ActiveCameraComponent>();

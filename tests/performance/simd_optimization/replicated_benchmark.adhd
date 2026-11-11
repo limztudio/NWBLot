@@ -301,6 +301,62 @@ NWB_NOINLINE SIMDVectorDouble RunWorkload(const DatasetT& data, const usize data
 }
 
 }
+
+namespace ReplicatedKernels{
+
+template<b8 Candidate, u32 Index = 0u>
+[[nodiscard]] NWB_INLINE SIMDVectorDouble DispatchEvaluate(const u32 kindIndex, const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+    if(kindIndex == Index)
+        return Evaluate<Index, Candidate>(lhs, rhs);
+    if constexpr(Index + 1u < 21u)
+        return DispatchEvaluate<Candidate, Index + 1u>(kindIndex, lhs, rhs);
+    else
+        return VectorDoubleZero();
+}
+
+template<b8 Estimate, u32 Index = 0u>
+[[nodiscard]] NWB_INLINE SIMDVectorDouble DispatchProduction(const u32 kindIndex, const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+    if(kindIndex == Index)
+        return Production<Index, Estimate>(lhs, rhs);
+    if constexpr(Index + 1u < 21u)
+        return DispatchProduction<Estimate, Index + 1u>(kindIndex, lhs, rhs);
+    else
+        return VectorDoubleZero();
+}
+
+template<b8 Candidate, typename DatasetT, u32 Index = 0u>
+[[nodiscard]] NWB_INLINE SIMDVectorDouble DispatchWorkload(const u32 kindIndex, const DatasetT& data, const usize dataCount, const usize iterations)noexcept{
+    if(kindIndex == Index)
+        return RunWorkload<Index, Candidate>(data, dataCount, iterations);
+    if constexpr(Index + 1u < 21u)
+        return DispatchWorkload<Candidate, DatasetT, Index + 1u>(kindIndex, data, dataCount, iterations);
+    else
+        return VectorDoubleZero();
+}
+
+}
+
+NWB_INLINE void EvaluateReplicatedKernel(const u32 kindIndex, const b8 candidate, const SIMDVectorDouble lhs, const SIMDVectorDouble rhs, UInt64x4& outBits)noexcept{
+    const SIMDVectorDouble result = candidate
+        ? ReplicatedKernels::DispatchEvaluate<true>(kindIndex, lhs, rhs)
+        : ReplicatedKernels::DispatchEvaluate<false>(kindIndex, lhs, rhs);
+    StoreDoubleInt(result, outBits);
+}
+
+NWB_INLINE void EvaluateReplicatedProductionKernel(const u32 kindIndex, const b8 estimate, const SIMDVectorDouble lhs, const SIMDVectorDouble rhs, UInt64x4& outBits)noexcept{
+    const SIMDVectorDouble result = estimate
+        ? ReplicatedKernels::DispatchProduction<true>(kindIndex, lhs, rhs)
+        : ReplicatedKernels::DispatchProduction<false>(kindIndex, lhs, rhs);
+    StoreDoubleInt(result, outBits);
+}
+
+template<typename DatasetT>
+NWB_INLINE void RunReplicatedWorkloadKernel(const u32 kindIndex, const b8 candidate, const DatasetT& data, const usize dataCount, const usize iterations, UInt64x4& outBits)noexcept{
+    const SIMDVectorDouble result = candidate
+        ? ReplicatedKernels::DispatchWorkload<true>(kindIndex, data, dataCount, iterations)
+        : ReplicatedKernels::DispatchWorkload<false>(kindIndex, data, dataCount, iterations);
+    StoreDoubleInt(result, outBits);
+}
 };
 
 
@@ -380,21 +436,17 @@ b8 IsReplicatedProductionCandidate(in u32 kindIndex){
 
 class ReplicatedEvaluator<const u32 KindIndex, const b8 Candidate> : IDoubleBinaryEvaluator{
     public VectorDouble evaluate(in VectorDouble lhs, in VectorDouble rhs)const override{
-        VectorDouble result = VectorDouble(0.0, 0.0, 0.0, 0.0);
-        native(in lhs, in rhs, mut result){
-            result = ReplicatedKernels::Evaluate<KindIndex, Candidate>(lhs, rhs);
-        }
-        return result;
+        u64x4 bits = u64x4(0u, 0u, 0u, 0u);
+        EvaluateReplicatedKernel(KindIndex, Candidate, lhs, rhs, bits);
+        return VectorDouble(bits);
     }
 }
 
 class ReplicatedProductionEvaluator<const u32 KindIndex, const b8 Estimate> : IDoubleBinaryEvaluator{
     public VectorDouble evaluate(in VectorDouble lhs, in VectorDouble rhs)const override{
-        VectorDouble result = VectorDouble(0.0, 0.0, 0.0, 0.0);
-        native(in lhs, in rhs, mut result){
-            result = ReplicatedKernels::Production<KindIndex, Estimate>(lhs, rhs);
-        }
-        return result;
+        u64x4 bits = u64x4(0u, 0u, 0u, 0u);
+        EvaluateReplicatedProductionKernel(KindIndex, Estimate, lhs, rhs, bits);
+        return VectorDouble(bits);
     }
 }
 
@@ -419,12 +471,8 @@ class ReplicatedAdditionalCheck<const u32 KindIndex> : IAdditionalReductionCheck
 
         if(!matches){
             ++failures;
-            if(failures <= 3u){
-                const StringView opName = ReplicatedOperationName(KindIndex);
-                native(in opName, in index){
-                    NWB_COUT << "production mismatch operation=" << opName << " case=" << index << '\n';
-                }
-            }
+            if(failures <= 3u)
+                WriteBenchmarkStdout(StringFormat("production mismatch operation={} case={}\n", ReplicatedOperationName(KindIndex), index));
         }
 
         if(KindIndex >= 2u && KindIndex <= 4u){
@@ -453,13 +501,9 @@ class ReplicatedWorkloadRunner<const u32 KindIndex, const b8 Candidate> : IDoubl
     }
 
     public VectorDouble run()const override{
-        VectorDouble result = VectorDouble(0.0, 0.0, 0.0, 0.0);
-        in Dataset data = this.m_data;
-        const usize iterations = this.m_iterations;
-        native(in data, in iterations, mut result){
-            result = ReplicatedKernels::RunWorkload<KindIndex, Candidate>(data, s_DataCount, iterations);
-        }
-        return result;
+        u64x4 bits = u64x4(0u, 0u, 0u, 0u);
+        RunReplicatedWorkloadKernel(KindIndex, Candidate, this.m_data, s_DataCount, this.m_iterations, bits);
+        return VectorDouble(bits);
     }
 }
 
@@ -506,33 +550,25 @@ u32 VerifyReplicatedBenchmark(){
     if(!verification.environmentAvailable)
         return verification.failures;
     const u32 failures = verification.failures;
-    native(in failures){
-        NWB_COUT << "verification failures=" << failures << " vector_cases=1376256\n";
-    }
+    WriteBenchmarkStdout(StringFormat("verification failures={} vector_cases=1376256\n", failures));
     return failures;
 }
 
 void NormalizeReplicatedDataset(in StringView opName, mut Dataset data){
     for(usize index = 0u; index < s_DataCount; ++index){
-        mut f64x4 leftSlot = data.left[index];
-        mut f64x4 rightSlot = data.right[index];
+        const VectorDouble leftValue = VectorDouble(data.left[index]);
+        const VectorDouble rightValue = VectorDouble(data.right[index]);
         if(opName == "normals2"){
-            native(mut leftSlot, mut rightSlot){
-                StoreDouble(VectorDouble2Normalize(LoadDouble(leftSlot)), leftSlot);
-                StoreDouble(VectorDouble2Normalize(LoadDouble(rightSlot)), rightSlot);
-            }
+            data.left[index] = f64x4(Normalize(leftValue.xy));
+            data.right[index] = f64x4(Normalize(rightValue.xy));
         }
         else if(opName == "normals3"){
-            native(mut leftSlot, mut rightSlot){
-                StoreDouble(VectorDouble3Normalize(LoadDouble(leftSlot)), leftSlot);
-                StoreDouble(VectorDouble3Normalize(LoadDouble(rightSlot)), rightSlot);
-            }
+            data.left[index] = f64x4(Normalize(leftValue.xyz));
+            data.right[index] = f64x4(Normalize(rightValue.xyz));
         }
         else if(opName == "normals4" || opName == "ln" || opName == "slerp"){
-            native(mut leftSlot, mut rightSlot){
-                StoreDouble(VectorDouble4Normalize(LoadDouble(leftSlot)), leftSlot);
-                StoreDouble(VectorDouble4Normalize(LoadDouble(rightSlot)), rightSlot);
-            }
+            data.left[index] = f64x4(Normalize(leftValue));
+            data.right[index] = f64x4(Normalize(rightValue));
         }
     }
 }
@@ -550,18 +586,13 @@ void RunReplicatedVariant<const u32 KindIndex>(in Dataset data, in b8 candidate,
 }
 
 i32 RunReplicatedBenchmarkCli(in Span<StringView> args){
-    native(){
-        NWB_COUT.precision(17);
-    }
     if(args.size() == 2u && args[1] == "--verify"){
         if(VerifyReplicatedBenchmark() == 0u)
             return 0;
         return 1;
     }
     if(args.size() != 6u || args[1] != "--measure"){
-        native(){
-            NWB_CERR << "usage: replicated_benchmark --verify | --measure operation baseline|candidate iterations throughput\n";
-        }
+        WriteBenchmarkStderr("usage: replicated_benchmark --verify | --measure operation baseline|candidate iterations throughput\n");
         return 2;
     }
     const Expected<MeasureOptions> options = ParseMeasureOptions(args[3], args[4], args[5], usize.max / 4u, false);

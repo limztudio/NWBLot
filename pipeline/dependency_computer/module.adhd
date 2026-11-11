@@ -8,6 +8,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 WriteDependencyListOutput(in StringView outputPathText, in StringView encodedListText){
+    const Expected<Path, ErrorCode> output = AbsolutePath(Path(outputPathText));
+    if(!output.has_value())
+        return false;
+    if(!EnsureDirectories(output.value().parentPath()).has_value())
+        return false;
+    return WriteTextFileAtomic(output.value(), encodedListText);
+}
+
 void LogUnrepresentableDependencyList(){
     error("DependencyComputer: input paths cannot be represented in the dependency list");
 }
@@ -18,72 +27,6 @@ void LogDependencyOutputWriteFailure(in StringView outputPath){
 
 void LogReturnedDependencyInputCount(in usize count){
     [essential] info("DependencyComputer: returned {} inputs", count);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <pipeline/dependency_computer/provider_catalog.adhd.h>
-#include <pipeline/command_line.h>
-
-#include <core/assets/input_list.h>
-#include <core/common/log.h>
-
-#include <global/filesystem/staged_file_writer.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_PIPELINE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-int RunPipelineTool(const int argc, char** argv){
-    Core::Assets::AssetArena arena(DependencyComputer::s_DependencyComputerArena);
-    Core::Alloc::ScratchArena scratchArena(DependencyComputer::s_DependencyComputerArena);
-    PipelineCommandLine commandLine(PipelineTool::DependencyComputer);
-    return commandLine.run(argc, argv, [&](PipelineOptions& parsed){
-        const auto resolvedInputs = DependencyComputer::ComputeAssetDependencies(parsed, arena, scratchArena);
-        if(!resolvedInputs)
-            return s_PipelineExitFailure;
-        const auto& inputs = *resolvedInputs;
-
-        const auto text = Core::Assets::EncodeAssetInputList(inputs, scratchArena);
-        if(!text){
-            DependencyComputer::LogUnrepresentableDependencyList();
-            return s_PipelineExitFailure;
-        }
-        const auto output = AbsolutePath(Path(arena, parsed.outputPath));
-        if(!output || !EnsureDirectories(output->parentPath()) || !StagedFileWriter(*output).writeTextAtomic(AStringView(*text))){
-            DependencyComputer::LogDependencyOutputWriteFailure(parsed.outputPath);
-            return s_PipelineExitFailure;
-        }
-        DependencyComputer::LogReturnedDependencyInputCount(inputs.size());
-        return s_PipelineExitSuccess;
-    }, arena, scratchArena);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_PIPELINE_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

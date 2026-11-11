@@ -31,11 +31,11 @@ native{
 #include <global/simdmath.h>
 
 namespace NWB::Tests::Smoke{
-[[nodiscard]] inline TStringView CsgShadowProjectName()noexcept{
-    return NWB_TEXT("CsgShadowSmokeProjectImpl");
+[[nodiscard]] NWB_INLINE AStringView CsgShadowProjectName()noexcept{
+    return "CsgShadowSmokeProject";
 }
 
-[[nodiscard]] inline NotNullUniquePtr<World> CreateCsgShadowWorldOrDie(ProjectRuntimeContext& context){
+[[nodiscard]] NWB_INLINE NotNullUniquePtr<World> CreateCsgShadowWorldOrDie(ProjectRuntimeContext& context){
     auto world = CreateSmokeWorldOrDie(CsgShadowProjectName(), context);
     auto& renderer = AddSmokeRenderSystems(*world, context);
     Impl::ReflectionSettings reflection;
@@ -69,6 +69,7 @@ class CsgShadowSmokeProjectImpl : IProjectEntryCallbacks{
     public CsgShadowSmokeProjectImpl(mut ProjectRuntimeContext context){
         this.m_context = context;
         this.m_world = CreateCsgShadowWorldOrDie(context);
+        this.m_timing = CsgCausticTimingProbe(context);
     }
 
     public ~CsgShadowSmokeProjectImpl(){
@@ -114,7 +115,7 @@ class CsgShadowSmokeProjectImpl : IProjectEntryCallbacks{
             mut hardware
         ){
             const auto camera = CreateSmokeCamera(0.0f, -s_ShadowSmokeCameraDepth, 0.0f, *world);
-            NWB_FATAL_ASSERT_MSG(camera.valid(), NWB_TEXT("CsgShadowSmokeProjectImpl: camera creation failed"));
+            NWB_FATAL_ASSERT_MSG(camera.valid(), NWB_TEXT("CsgShadowSmokeProject: camera creation failed"));
             auto& cameraTransform = *MakeNotNull(world->tryGetComponent<Impl::Scene::TransformComponent>(camera));
             cameraTransform.position.x = cameraX;
 
@@ -127,14 +128,14 @@ class CsgShadowSmokeProjectImpl : IProjectEntryCallbacks{
                 VectorSet(4.0f, 1.0f, 3.0f, 0.0f),
                 *world
             );
-            NWB_FATAL_ASSERT_MSG(receiver.valid(), NWB_TEXT("CsgShadowSmokeProjectImpl: camera/receiver creation failed"));
+            NWB_FATAL_ASSERT_MSG(receiver.valid(), NWB_TEXT("CsgShadowSmokeProject: camera/receiver creation failed"));
             auto& receiverTransform = *MakeNotNull(world->tryGetComponent<Impl::Scene::TransformComponent>(receiver));
             StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), receiverTransform.rotation);
 
             const auto light = pointLight
                 ? Impl::Scene::CreatePointLightEntity(*world, Float4(0.0f, 0.0f, -12.0f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f, 30.0f)
                 : Impl::Scene::CreateDirectionalLightEntity(*world, 0.0f, 0.0f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f);
-            NWB_FATAL_ASSERT_MSG(light.valid(), NWB_TEXT("CsgShadowSmokeProjectImpl: light creation failed"));
+            NWB_FATAL_ASSERT_MSG(light.valid(), NWB_TEXT("CsgShadowSmokeProject: light creation failed"));
             auto& lightComponent = *MakeNotNull(world->tryGetComponent<Impl::Scene::LightComponent>(light));
             lightComponent.angularRadius = angularRadius;
             lightComponent.sourceRadius = sourceRadius;
@@ -142,7 +143,7 @@ class CsgShadowSmokeProjectImpl : IProjectEntryCallbacks{
 
             const AStringView sourceLabel = mode.finiteLightSource ? s_ShadowSmokeFinite : s_ShadowSmokeHard;
             NWB_LOGGER_ESSENTIAL_INFO(
-                NWB_TEXT("CsgShadowSmokeProjectImpl: light_source={} angular_radius={:.3f} source_radius={:.3f}"),
+                NWB_TEXT("CsgShadowSmokeProject: light_source={} angular_radius={:.3f} source_radius={:.3f}"),
                 ConvertString(sourceLabel),
                 static_cast<f64>(angularRadius),
                 static_cast<f64>(sourceRadius)
@@ -160,20 +161,15 @@ class CsgShadowSmokeProjectImpl : IProjectEntryCallbacks{
         if(hardware)
             hwVal = 1u;
         [essential] info(
-            "CsgShadowSmokeProjectImpl: atlas arm={} light={} hardware={} camera_x={} caster_z_max=-5 receiver_z=0"
+            "CsgShadowSmokeProject: atlas arm={} light={} hardware={} camera_x={} caster_z_max=-5 receiver_z=0"
             , cast<u32>(this.m_mode.arm)
             , lightLabel
             , hwVal
             , cast<f64>(cameraX)
         );
 
-        SmokeCaptureFactory captureFactory = SmokeCaptureFactory(this.m_context);
-        Expected<UniquePtr<FramebufferCapture>> capture = captureFactory.configure(CsgShadowProjectName(), s_ShadowSmokeDefaultCaptureFrameCount);
-        if(!capture.has_value())
+        if(!ConfigureSmokeFramebufferCapture(this.m_context, "CsgShadowSmokeProject", s_ShadowSmokeDefaultCaptureFrameCount, this.m_capture))
             return false;
-        native(mut dstCapture = this.m_capture, mut capture){
-            dstCapture = Move(*capture);
-        }
 
         if(s_CsgCausticSmokeEnabled && !this.configureTiming())
             return false;
@@ -181,47 +177,27 @@ class CsgShadowSmokeProjectImpl : IProjectEntryCallbacks{
     }
 
     public void onShutdown()override{
-        if(s_CsgCausticSmokeEnabled){
-            native(mut timing = this.m_timing){
-                if(timing)
-                    timing->finish();
-            }
-        }
+        if(s_CsgCausticSmokeEnabled && this.m_timingActive)
+            this.m_timing.finish();
         this.destroyWorld();
-        [essential] info("CsgShadowSmokeProjectImpl: shutdown");
+        [essential] info("CsgShadowSmokeProject: shutdown");
     }
 
     public b8 onUpdate(in f32 delta)override{
-        native(mut capture = this.m_capture){
-            if(capture)
-                capture->update();
-        }
+        UpdateSmokeFramebufferCapture(this.m_capture);
         ++this.m_update;
         if(this.m_mode.arm == CsgShadowArm::Moved && this.m_update == s_ShadowSmokeMoveUpdate){
-            native(mut atlas = this.m_atlas, mut world = this.m_world){
-                atlas.moveCutters(*world);
-            }
-            [essential] info("CsgShadowSmokeProjectImpl: cutters moved at update40");
+            this.m_atlas.moveCutters(SmokeWorldRef(this.m_world));
+            [essential] info("CsgShadowSmokeProject: cutters moved at update40");
         }
         const f32 fixedDelta = RendererBaselineFixedDelta();
         f32 tickDelta = delta;
         if(fixedDelta > 0.0f)
             tickDelta = fixedDelta;
-        b8 ticked = false;
-        native(in tickDelta, mut world = this.m_world, mut ticked){
-            ticked = TickSmokeWorld(tickDelta, *world);
-        }
-        if(!ticked)
+        if(!TickSmokeWorld(tickDelta, SmokeWorldRef(this.m_world)))
             return false;
-        if(s_CsgCausticSmokeEnabled){
-            b8 timingOk = true;
-            native(mut timing = this.m_timing, mut timingOk){
-                if(timing && !timing->update())
-                    timingOk = false;
-            }
-            if(!timingOk)
-                return false;
-        }
+        if(s_CsgCausticSmokeEnabled && this.m_timingActive && !this.m_timing.update())
+            return false;
         return true;
     }
 
@@ -329,39 +305,17 @@ class CsgShadowSmokeProjectImpl : IProjectEntryCallbacks{
         const b8 diagnostic = modeView == "diagnostic";
         const b8 hasCsg = receivers != 0u;
 
-        b8 initialized = false;
-        native(
-            in diagnostic,
-            in hasCsg,
-            in hardware,
-            in outputView,
-            in cpuOutputView,
-            in startView,
-            mut ctx = this.m_context,
-            mut timing = this.m_timing,
-            mut initialized
-        ){
-            timing = MakeUnique<CsgCausticTimingProbe>(ctx);
-            if(timing && timing->initialize(diagnostic, hasCsg, hardware, outputView, cpuOutputView, startView)){
-                timing->registerPass();
-                initialized = true;
-            }
-        }
-        return initialized;
+        if(!this.m_timing.initialize(diagnostic, hasCsg, hardware, outputView, cpuOutputView, startView))
+            return false;
+        this.m_timing.registerPass();
+        this.m_timingActive = true;
+        return true;
     }
 
     private void destroyWorld(){
-        native(mut timing = this.m_timing, mut capture = this.m_capture){
-            if(timing){
-                timing->unregisterPass();
-                timing.reset();
-            }
-            if(capture){
-                capture->stop();
-                capture.reset();
-            }
-        }
-        DestroySmokeRenderWorld(this.m_context, this.m_world);
+        this.m_timing.unregisterPass();
+        this.m_timingActive = false;
+        DestroyCapturedSmokeRenderWorld(this.m_context, this.m_world, this.m_capture);
     }
 
     private mut ProjectRuntimeContext m_context;
@@ -369,8 +323,9 @@ class CsgShadowSmokeProjectImpl : IProjectEntryCallbacks{
     private CsgShadowMode m_mode = CsgShadowMode();
     private CsgShadowAtlas m_atlas = CsgShadowAtlas();
     private UniquePtr<FramebufferCapture> m_capture = UniquePtr<FramebufferCapture>();
-    private UniquePtr<CsgCausticTimingProbe> m_timing = UniquePtr<CsgCausticTimingProbe>();
+    private CsgCausticTimingProbe m_timing;
     private u32 m_update = 0u;
+    private b8 m_timingActive = false;
 }
 
 

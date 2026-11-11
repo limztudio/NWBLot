@@ -41,59 +41,21 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace TelemetryTestDetail{
+NWB_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using namespace NWB;
+namespace Tests::TelemetryCases{
 
-inline constexpr Name s_TelemetryTestScratch = NWB::Tests::TelemetryCases::s_TelemetryScratch;
 
-struct TestArena : NWB::Tests::TestArena<struct TelemetryTestsTag>{
-    NWB::Core::Alloc::ScratchArena scratchArena{ s_TelemetryTestScratch };
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct TestArena : Tests::TestArena<struct TelemetryTestsTag>{
+    Core::Alloc::ScratchArena scratchArena{ s_TelemetryScratch };
 };
-namespace Telemetry = NWB::Core::Telemetry;
-namespace Log = NWB::Log;
-
-NWB::Core::Perf::TimingStats MakeTestTimingStats()noexcept;
-
-NWB::Core::Perf::MemorySnapshot MakeTestMemorySnapshot(const Name& scopeName)noexcept;
-
-NWB::Core::Perf::MemoryDelta MakeTestMemoryDelta(const i64 deallocationCount = 0)noexcept;
-
-Telemetry::EncodedFrameGraphRuntimeStatistics EncodeTestFrameGraphRuntimeStatistics(const Telemetry::FrameGraphRuntimeStatistics& statistics, const u32 nodeIndex, const u16 reserved)noexcept;
-
-void BuildTestFrameGraph(Telemetry::TelemetryArena& arena, Telemetry::FrameGraphNodeDescs& nodes, Telemetry::FrameGraphEdgeDescs& edges);
-
-Telemetry::FrameGraphQueueAssignment MakeChangedFrameGraphQueueAssignment()noexcept;
-
-Telemetry::FrameGraphQueueAssignment MakeNotAcceptedFrameGraphQueueAssignment()noexcept;
-
-Telemetry::FrameGraphCompiledTask MakeFrameGraphCompiledTask(const u64 planGeneration, const u32 packetIndex, const Telemetry::FrameGraphTaskPacketizationDecision::Enum packetizationDecision)noexcept;
-
-Telemetry::FrameGraphRuntimeStatistics MakeFrameGraphRuntimeStatistics()noexcept;
-
-[[nodiscard]] Telemetry::FrameGraphRuntimeStatistics OwnerStatistics(const u32 packetCount)noexcept;
-
-Telemetry::FrameGraphPhysicalQueueRuntimeStatistics MakeFrameGraphPhysicalQueueRuntimeStatistics(const u16 queueIndex)noexcept;
-
-void BuildTestPhysicalQueueRuntimeStatistics(Telemetry::TelemetryArena& arena, Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords& records);
-
-void BuildTestAssignedFrameGraph(Telemetry::TelemetryArena& arena, Telemetry::FrameGraphNodeDescs& nodes, Telemetry::FrameGraphEdgeDescs& edges);
-
-void BuildTestCompiledFrameGraph(Telemetry::TelemetryArena& arena, Telemetry::FrameGraphNodeDescs& nodes, Telemetry::FrameGraphEdgeDescs& edges);
-
-void BuildTestRuntimeFrameGraph(Telemetry::TelemetryArena& arena, Telemetry::FrameGraphNodeDescs& nodes, Telemetry::FrameGraphEdgeDescs& edges);
-
-void BuildTestPacketSubmissionFrameGraph(
-    Telemetry::TelemetryArena& arena,
-    Telemetry::FrameGraphNodeDescs& nodes,
-    Telemetry::FrameGraphEdgeDescs& edges,
-    Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
-    Telemetry::FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics
-);
 
 struct OwnedAllocation{
     Core::Alloc::GlobalArena* arena = nullptr;
@@ -157,38 +119,11 @@ public:
     }
 };
 
-[[nodiscard]] u64 NextAllocationOwnerSequence()noexcept;
-
-[[nodiscard]] const Telemetry::EventRecord* FindOwnerEvent(const Telemetry::EventView& events, const Name& owner, Core::Perf::MemorySource::Enum source)noexcept;
-
-[[nodiscard]] AStringView FindOwnerJsonRecord(AStringView json, const Name& owner, AStringView sourceField);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests::TelemetryCases{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using TelemetryTestArena = TelemetryTestDetail::TestArena;
-using OwnedAllocation = TelemetryTestDetail::OwnedAllocation;
+using TelemetryTestArena = TestArena;
 using GlobalArena = Core::Alloc::GlobalArena;
 using ScratchArena = Core::Alloc::ScratchArena;
+using ScratchTString = TString<Core::Alloc::ScratchArena>;
+using TelemetryArena = Core::Telemetry::TelemetryArena;
 using MemorySnapshot = Core::Perf::MemorySnapshot;
 using MemoryDelta = Core::Perf::MemoryDelta;
 using MemoryRecorder = Core::Perf::MemoryRecorder;
@@ -197,6 +132,7 @@ using MemoryScopeId = Core::Perf::MemoryScopeId;
 using MemorySourceEnum = Core::Perf::MemorySource::Enum;
 namespace MemorySource = Core::Perf::MemorySource;
 using PerfSession = Core::Perf::Session;
+using PerfSessionReport = Core::Perf::SessionReport;
 using PerfCaptureOptions = Core::Perf::CaptureOptions;
 using TimingStats = Core::Perf::TimingStats;
 using TimingRecorder = Core::Perf::TimingRecorder;
@@ -205,129 +141,262 @@ using TimingScopeId = Core::Perf::TimingScopeId;
 using TelemetryBytes = Core::Telemetry::TelemetryBytes;
 using TelemetryRecorder = Core::Telemetry::Recorder;
 using TelemetryCaptureSession = Core::Telemetry::CaptureSession;
+using CaptureSessionCaptureScope = Core::Telemetry::CaptureSessionCaptureScope;
 using TelemetryCaptureOptions = Core::Telemetry::CaptureOptions;
 using PerfSessionRecordResult = Core::Telemetry::PerfSessionRecordResult;
+using PerfTimingPayload = Core::Telemetry::PerfTimingPayload;
+using PerfMemoryPayload = Core::Telemetry::PerfMemoryPayload;
+using EncodedPerfTimingPayloadHeader = Core::Telemetry::EncodedPerfTimingPayloadHeader;
+using EncodedPerfMemoryPayloadHeader = Core::Telemetry::EncodedPerfMemoryPayloadHeader;
+using DiagnosticPayload = Core::Telemetry::DiagnosticPayload;
+using EncodedDiagnosticPayloadHeader = Core::Telemetry::EncodedDiagnosticPayloadHeader;
+using DiagnosticCaptureGuard = Core::Telemetry::DiagnosticCaptureGuard;
+namespace DiagnosticPayloadFlag = Core::Telemetry::DiagnosticPayloadFlag;
+namespace DiagnosticEventName = ::DiagnosticEventName;
+namespace DiagnosticEventCategory = ::DiagnosticEventCategory;
+namespace LogType = Core::Common::LogType;
+using LogTypeEnum = Core::Common::LogType::Enum;
+namespace LoggerBreakPolicy = Core::Common::LoggerBreakPolicy;
+using LoggerRegistrationGuard = Core::Common::LoggerRegistrationGuard;
+using TextLogPayload = Core::Telemetry::TextLogPayload;
+using EncodedTextLogPayloadHeader = Core::Telemetry::EncodedTextLogPayloadHeader;
+using TextLogCaptureLogger = Core::Telemetry::TextLogCaptureLogger;
 using EventView = Core::Telemetry::EventView;
 using EventRecord = Core::Telemetry::EventRecord;
 using EventHeader = Core::Telemetry::EventHeader;
+using EventKindEnum = Core::Telemetry::EventKind::Enum;
+using CaptureFlagMask = Core::Telemetry::CaptureFlag::Mask;
+using EncodedStreamHeader = Core::Telemetry::EncodedStreamHeader;
+using EncodedEventHeader = Core::Telemetry::EncodedEventHeader;
+using DecodeResult = Core::Telemetry::DecodeResult;
+using DecodedEvent = Core::Telemetry::DecodedEvent;
 namespace EventKind = Core::Telemetry::EventKind;
+namespace CaptureFlag = Core::Telemetry::CaptureFlag;
 namespace DecodeStatus = Core::Telemetry::DecodeStatus;
 namespace PerfTimingSource = Core::Telemetry::PerfTimingSource;
 using PerfTimingSourceEnum = Core::Telemetry::PerfTimingSource::Enum;
+namespace FrameGraphNodeKind = Core::Telemetry::FrameGraphNodeKind;
+namespace FrameGraphEdgeKind = Core::Telemetry::FrameGraphEdgeKind;
+namespace FrameGraphQueueClass = Core::Telemetry::FrameGraphQueueClass;
+namespace FrameGraphQueueAssignmentReason = Core::Telemetry::FrameGraphQueueAssignmentReason;
+namespace FrameGraphQueueAssignmentModifier = Core::Telemetry::FrameGraphQueueAssignmentModifier;
+namespace FrameGraphQueueAssignmentAcceptance = Core::Telemetry::FrameGraphQueueAssignmentAcceptance;
+namespace FrameGraphTaskPacketizationDecision = Core::Telemetry::FrameGraphTaskPacketizationDecision;
+using FrameGraphNodeKindEnum = Core::Telemetry::FrameGraphNodeKind::Enum;
+using FrameGraphEdgeKindEnum = Core::Telemetry::FrameGraphEdgeKind::Enum;
+using FrameGraphQueueClassEnum = Core::Telemetry::FrameGraphQueueClass::Enum;
+using FrameGraphQueueAssignmentReasonEnum = Core::Telemetry::FrameGraphQueueAssignmentReason::Enum;
+using FrameGraphQueueAssignmentModifierMask = Core::Telemetry::FrameGraphQueueAssignmentModifier::Mask;
+using FrameGraphQueueAssignmentAcceptanceEnum = Core::Telemetry::FrameGraphQueueAssignmentAcceptance::Enum;
+using FrameGraphTaskPacketizationDecisionEnum = Core::Telemetry::FrameGraphTaskPacketizationDecision::Enum;
+using FrameGraphPhysicalQueueId = Core::Telemetry::FrameGraphPhysicalQueueId;
+using FrameGraphQueueAssignmentScore = Core::Telemetry::FrameGraphQueueAssignmentScore;
+using FrameGraphQueueAssignment = Core::Telemetry::FrameGraphQueueAssignment;
+using FrameGraphCompiledTask = Core::Telemetry::FrameGraphCompiledTask;
+using FrameGraphSubmissionRuntimeStatistics = Core::Telemetry::FrameGraphSubmissionRuntimeStatistics;
+using FrameGraphRuntimeStatistics = Core::Telemetry::FrameGraphRuntimeStatistics;
+using FrameGraphPhysicalQueueRuntimeStatistics = Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics;
+using FrameGraphPhysicalQueueRuntimeStatisticsRecord = Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord;
+using FrameGraphPacketSubmissionStatisticsRecord = Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord;
+using FrameGraphNodeDesc = Core::Telemetry::FrameGraphNodeDesc;
+using FrameGraphEdgeDesc = Core::Telemetry::FrameGraphEdgeDesc;
+using FrameGraphNodeDescs = Core::Telemetry::FrameGraphNodeDescs;
+using FrameGraphEdgeDescs = Core::Telemetry::FrameGraphEdgeDescs;
+using FrameGraphPhysicalQueueRuntimeStatisticsRecords = Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords;
+using FrameGraphPacketSubmissionStatisticsRecords = Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecords;
+using FrameGraphPayload = Core::Telemetry::FrameGraphPayload;
+using FrameGraphNodePayload = Core::Telemetry::FrameGraphNodePayload;
+using FrameGraphEdgePayload = Core::Telemetry::FrameGraphEdgePayload;
+using EncodedFrameGraphPayloadHeader = Core::Telemetry::EncodedFrameGraphPayloadHeader;
+using EncodedFrameGraphNode = Core::Telemetry::EncodedFrameGraphNode;
+using EncodedFrameGraphEdge = Core::Telemetry::EncodedFrameGraphEdge;
+using EncodedFrameGraphPhysicalQueueId = Core::Telemetry::EncodedFrameGraphPhysicalQueueId;
+using EncodedFrameGraphQueueAssignment = Core::Telemetry::EncodedFrameGraphQueueAssignment;
+using EncodedFrameGraphCompiledTask = Core::Telemetry::EncodedFrameGraphCompiledTask;
+using EncodedFrameGraphCompileRuntimeStatistics = Core::Telemetry::EncodedFrameGraphCompileRuntimeStatistics;
+using EncodedFrameGraphRecordingRuntimeStatistics = Core::Telemetry::EncodedFrameGraphRecordingRuntimeStatistics;
+using EncodedFrameGraphSubmissionRuntimeStatistics = Core::Telemetry::EncodedFrameGraphSubmissionRuntimeStatistics;
+using EncodedFrameGraphRuntimeStatistics = Core::Telemetry::EncodedFrameGraphRuntimeStatistics;
+using EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics = Core::Telemetry::EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics;
+using EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics = Core::Telemetry::EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics;
+using EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics = Core::Telemetry::EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics;
+using EncodedFrameGraphPhysicalQueueRuntimeStatistics = Core::Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics;
+using EncodedFrameGraphPacketSubmissionStatistics = Core::Telemetry::EncodedFrameGraphPacketSubmissionStatistics;
 using TelemetryReport = Log::TelemetryReport;
 using TelemetryMemorySummary = Log::TelemetryMemorySummary;
 using ScopedTestTrace = Tests::ScopedTestTrace;
+
+using Core::Telemetry::s_TelemetryFormatVersion;
+using Core::Telemetry::s_EventMagic;
+using Core::Telemetry::s_StreamMagic;
+using Core::Telemetry::s_EncodedStreamHeaderByteSize;
+using Core::Telemetry::s_EncodedEventHeaderByteSize;
+using Core::Telemetry::s_DiagnosticPayloadVersion;
+using Core::Telemetry::s_DiagnosticPayloadMagic;
+using Core::Telemetry::s_EncodedDiagnosticPayloadHeaderByteSize;
+using Core::Telemetry::s_DiagnosticCaptureEventCapacity;
+using Core::Telemetry::s_DiagnosticCapturePayloadCapacity;
+using Core::Telemetry::s_TextLogPayloadVersion;
+using Core::Telemetry::s_TextLogPayloadMagic;
+using Core::Telemetry::s_EncodedTextLogPayloadHeaderByteSize;
+using Core::Telemetry::s_PerfTimingPayloadVersion;
+using Core::Telemetry::s_PerfTimingPayloadMagic;
+using Core::Telemetry::s_PerfMemoryPayloadVersion;
+using Core::Telemetry::s_PerfMemoryPayloadMagic;
+using Core::Telemetry::s_EncodedPerfTimingPayloadHeaderByteSize;
+using Core::Telemetry::s_EncodedPerfMemoryPayloadHeaderByteSize;
+using Core::Telemetry::s_FrameGraphPayloadVersion;
+using Core::Telemetry::s_FrameGraphPayloadMagic;
+using Core::Telemetry::s_EncodedFrameGraphPayloadHeaderByteSize;
+using Core::Telemetry::s_EncodedFrameGraphNodeByteSize;
+using Core::Telemetry::s_EncodedFrameGraphEdgeByteSize;
+using Core::Telemetry::s_EncodedFrameGraphQueueAssignmentByteSize;
+using Core::Telemetry::s_EncodedFrameGraphCompiledTaskByteSize;
+using Core::Telemetry::s_EncodedFrameGraphCompileRuntimeStatisticsByteSize;
+using Core::Telemetry::s_EncodedFrameGraphRecordingRuntimeStatisticsByteSize;
+using Core::Telemetry::s_EncodedFrameGraphSubmissionRuntimeStatisticsByteSize;
+using Core::Telemetry::s_EncodedFrameGraphRuntimeStatisticsByteSize;
+using Core::Telemetry::s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsByteSize;
+using Core::Telemetry::s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsByteSize;
+using Core::Telemetry::s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsByteSize;
+using Core::Telemetry::s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsByteSize;
+using Core::Telemetry::s_EncodedFrameGraphPacketSubmissionStatisticsByteSize;
+
+using ::CaptureDiagnosticEvent;
+using ::ConvertString;
 using Tests::CountText;
-
-using TelemetryTestDetail::MakeTestTimingStats;
-using TelemetryTestDetail::MakeTestMemorySnapshot;
-using TelemetryTestDetail::MakeTestMemoryDelta;
-using TelemetryTestDetail::EncodeTestFrameGraphRuntimeStatistics;
-using TelemetryTestDetail::BuildTestFrameGraph;
-using TelemetryTestDetail::MakeChangedFrameGraphQueueAssignment;
-using TelemetryTestDetail::MakeNotAcceptedFrameGraphQueueAssignment;
-using TelemetryTestDetail::MakeFrameGraphCompiledTask;
-using TelemetryTestDetail::MakeFrameGraphRuntimeStatistics;
-using TelemetryTestDetail::OwnerStatistics;
-using TelemetryTestDetail::MakeFrameGraphPhysicalQueueRuntimeStatistics;
-using TelemetryTestDetail::BuildTestPhysicalQueueRuntimeStatistics;
-using TelemetryTestDetail::BuildTestAssignedFrameGraph;
-using TelemetryTestDetail::BuildTestCompiledFrameGraph;
-using TelemetryTestDetail::BuildTestRuntimeFrameGraph;
-using TelemetryTestDetail::BuildTestPacketSubmissionFrameGraph;
-using TelemetryTestDetail::NextAllocationOwnerSequence;
-using TelemetryTestDetail::FindOwnerEvent;
-using TelemetryTestDetail::FindOwnerJsonRecord;
-
 using Core::Perf::Difference;
-using Core::Telemetry::BuildPerfMemoryPayload;
-using Core::Telemetry::RecordPerfMemory;
-using Core::Telemetry::RecordPerfTiming;
-using Core::Telemetry::RecordFrameGraph;
+using Core::Telemetry::EncodeEvent;
+using Core::Telemetry::EncodeEventStream;
+using Core::Telemetry::DecodeEvent;
+using Core::Telemetry::DecodeEventStream;
+using Core::Telemetry::BuildDiagnosticPayload;
+using Core::Telemetry::ParseDiagnosticPayload;
 using Core::Telemetry::RecordDiagnostic;
+using Core::Telemetry::BuildTextLogPayload;
+using Core::Telemetry::ParseTextLogPayload;
 using Core::Telemetry::RecordTextLog;
+using Core::Telemetry::BuildPerfTimingPayload;
+using Core::Telemetry::ParsePerfTimingPayload;
+using Core::Telemetry::RecordPerfTiming;
+using Core::Telemetry::BuildPerfMemoryPayload;
+using Core::Telemetry::ParsePerfMemoryPayload;
+using Core::Telemetry::RecordPerfMemory;
+using Core::Telemetry::RecordPerfSessionReport;
+using Core::Telemetry::BuildFrameGraphPayload;
+using Core::Telemetry::ParseFrameGraphPayload;
+using Core::Telemetry::RecordFrameGraph;
+using Core::Telemetry::IsValidFrameGraphQueueAssignment;
+using Core::Telemetry::IsValidFrameGraphCompiledTask;
+using Core::Telemetry::IsValidFrameGraphRuntimeStatistics;
+using Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics;
+using Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner;
+using Core::Telemetry::IsValidFrameGraphPacketSubmissionStatistics;
 using Log::BuildTelemetryReport;
+using Core::Common::NameSymbols::InstallRuntimeRegistry;
+using Core::Common::NameSymbols::ClearRuntimeSymbols;
+using Core::Common::NameSymbols::LoadFromMemory;
+using Core::Common::NameSymbols::s_FileHeader;
 
-inline constexpr AStringView s_SuiteArenaSourceRecord = "\"source\": \"arena\"";
-inline constexpr AStringView s_SuiteHeapBackingSourceRecord = "\"source\": \"heapBacking\"";
-inline constexpr AStringView s_SuiteReservedBytesField = "reservedBytes";
-inline constexpr AStringView s_SuiteUsedBytesField = "usedBytes";
-inline constexpr AStringView s_SuitePeakUsedBytesField = "peakUsedBytes";
-inline constexpr AStringView s_SuiteAllocationCountField = "allocationCount";
-inline constexpr AStringView s_SuiteReallocationCountField = "reallocationCount";
-inline constexpr AStringView s_SuiteDeallocationCountField = "deallocationCount";
-
-inline constexpr Array<MemorySourceEnum, 3> s_SuiteAllMemorySources = {
-    MemorySource::ExplicitScope,
-    MemorySource::Arena,
-    MemorySource::HeapBacking,
-};
-
-[[nodiscard]] inline TelemetryCaptureOptions CapturePerfOnly()noexcept{
-    return TelemetryCaptureOptions::PerfOnly();
+template<typename PodT>
+NWB_INLINE void ReadTelemetryPod(const TelemetryBytes& payload, const usize byteOffset, PodT& outValue)noexcept{
+    NWB_MEMCPY(&outValue, sizeof(outValue), payload.data() + byteOffset, sizeof(outValue));
 }
 
-[[nodiscard]] inline TelemetryCaptureOptions CaptureDisabled()noexcept{
-    return TelemetryCaptureOptions::Disabled();
+template<typename PodT>
+NWB_INLINE void WriteTelemetryPod(TelemetryBytes& payload, const usize byteOffset, const PodT& value)noexcept{
+    NWB_MEMCPY(payload.data() + byteOffset, payload.size() - byteOffset, &value, sizeof(value));
 }
 
-[[nodiscard]] inline TelemetryCaptureOptions CaptureAll()noexcept{
-    return TelemetryCaptureOptions::All();
+[[nodiscard]] NWB_INLINE b8 RecordBinarySpan(
+    TelemetryRecorder& recorder,
+    const EventKindEnum kind,
+    const u64 frameIndex,
+    const Span<const u8> payload,
+    const usize byteCount,
+    const u32 streamId
+){
+    return recorder.recordBinary(kind, frameIndex, payload.data(), byteCount, streamId);
 }
 
-[[nodiscard]] inline TelemetryCaptureOptions CaptureFrameGraphOnly()noexcept{
-    return TelemetryCaptureOptions::FrameGraphOnly();
+[[nodiscard]] NWB_INLINE b8 RecordMovedPayloadImpl(
+    TelemetryRecorder& recorder,
+    const EventKindEnum kind,
+    const u64 frameIndex,
+    TelemetryBytes& payload,
+    const u32 streamId
+){
+    return recorder.recordPayload(kind, frameIndex, Move(payload), streamId);
 }
 
-[[nodiscard]] inline PerfCaptureOptions MakePerfMemoryCaptureOptions()noexcept{
-    return PerfCaptureOptions{ .enabled = true, .memory = true };
+[[nodiscard]] NWB_INLINE Optional<EventHeader> EventHeaderAtOpt(const EventView& events, const usize eventIndex)noexcept{
+    if(const EventRecord* const event = events.eventAt(eventIndex))
+        return event->header;
+    return {};
 }
 
-[[nodiscard]] inline Expected<Name> DeriveSequenceName(const Name& prefix, const u64 seq){
-    Array<char, 32u> sequenceText = {};
-    return DeriveName(prefix, FormatDecimal(seq, sequenceText));
+[[nodiscard]] NWB_INLINE usize EventRecordAddressAtValue(const EventView& events, const usize eventIndex)noexcept{
+    if(const EventRecord* const event = events.eventAt(eventIndex))
+        return reinterpret_cast<usize>(event);
+    return 0u;
 }
 
-[[nodiscard]] inline ArenaMemoryStats SampleTemporaryScratchStats(const Name& scratchName, b8& outAllocated){
-    ScratchArena temporary(scratchName);
-    outAllocated = temporary.allocate(1u, 97u) != nullptr;
-    return temporary.memoryStats();
+[[nodiscard]] NWB_INLINE Optional<usize> EventPayloadCapacityAtOpt(const EventView& events, const usize eventIndex)noexcept{
+    if(const EventRecord* const event = events.eventAt(eventIndex))
+        return event->payload.capacity();
+    return {};
 }
 
-[[nodiscard]] inline b8 HasOwnerMemoryEvent(const EventView& events, const Name& owner, const MemorySourceEnum source)noexcept{
-    return FindOwnerEvent(events, owner, source) != nullptr;
+[[nodiscard]] NWB_INLINE Optional<Span<const u8>> EventPayloadSpanAtOpt(const EventView& events, const usize eventIndex)noexcept{
+    if(const EventRecord* const event = events.eventAt(eventIndex))
+        return Span<const u8>(event->payload.data(), event->payload.size());
+    return {};
 }
 
-[[nodiscard]] inline u64 OwnerMemoryEventFrameIndex(const EventView& events, const Name& owner, const MemorySourceEnum source)noexcept{
-    return FindOwnerEvent(events, owner, source)->header.frameIndex;
+[[nodiscard]] NWB_INLINE Expected<PerfMemoryPayload> ParsePerfMemorySpan(const Span<const u8> payload, const usize byteCount){
+    return ParsePerfMemoryPayload(payload.data(), byteCount);
 }
 
-[[nodiscard]] inline Expected<Core::Telemetry::PerfMemoryPayload> ParseOwnerMemoryEvent(const EventView& events, const Name& owner, const MemorySourceEnum source){
-    const EventRecord* const ev = FindOwnerEvent(events, owner, source);
-    return Core::Telemetry::ParsePerfMemoryPayload(ev->payload.data(), ev->payload.size());
+[[nodiscard]] NWB_INLINE Expected<PerfTimingPayload> ParsePerfTimingSpan(const Span<const u8> payload, const usize byteCount){
+    return ParsePerfTimingPayload(payload.data(), byteCount);
 }
 
-[[nodiscard]] inline AStringView ReportJsonView(const TelemetryReport& report)noexcept{
-    return AStringView(report.json.data(), report.json.size());
+[[nodiscard]] NWB_INLINE Expected<DiagnosticPayload> ParseDiagnosticSpan(const Span<const u8> payload, const usize byteCount){
+    return ParseDiagnosticPayload(payload.data(), byteCount);
 }
 
-[[nodiscard]] inline AStringView ReportGraphView(const TelemetryReport& report)noexcept{
-    return AStringView(report.graph.data(), report.graph.size());
+[[nodiscard]] NWB_INLINE Expected<TextLogPayload> ParseTextLogSpan(const Span<const u8> payload, const usize byteCount){
+    return ParseTextLogPayload(payload.data(), byteCount);
 }
 
-[[nodiscard]] inline AStringView ReportPerfCsvView(const TelemetryReport& report)noexcept{
-    return AStringView(report.perfCsv.data(), report.perfCsv.size());
+[[nodiscard]] NWB_INLINE Expected<FrameGraphPayload> ParseFrameGraphSpan(
+    TelemetryArena& arena,
+    ScratchArena& scratchArena,
+    const Span<const u8> payload,
+    const usize byteCount
+){
+    return ParseFrameGraphPayload(arena, scratchArena, payload.data(), byteCount);
 }
 
-template<typename Number>
-inline void ExpectJsonNumberField(ScratchArena& scratchArena, const AStringView record, const AStringView field, const Number value){
-    AString<ScratchArena> expected(scratchArena);
-    expected.reserve(field.size() + 32u);
-    StringAppendFormat(expected, "\"{}\": {}", field, value);
-    const usize position = record.find(AStringView(expected.data(), expected.size()));
-    ASSERT_NE(position, AStringView::npos);
-    const usize end = position + expected.size();
-    EXPECT_TRUE(end == record.size() || record[end] == ',' || record[end] == '}' || record[end] == ' ');
+[[nodiscard]] NWB_INLINE Expected<DecodedEvent, DecodeResult> DecodeEventSpan(
+    TelemetryArena& arena,
+    const Span<const u8> bytes,
+    const usize byteCount
+){
+    return DecodeEvent(arena, bytes.data(), byteCount);
+}
+
+[[nodiscard]] NWB_INLINE Expected<usize, DecodeResult> DecodeEventStreamSpan(
+    const Span<const u8> bytes,
+    const usize byteCount,
+    TelemetryArena& arena,
+    TelemetryRecorder& recorder
+){
+    return DecodeEventStream(bytes.data(), byteCount, arena, recorder);
+}
+
+[[nodiscard]] NWB_INLINE b8 ScratchAllocateNonNull(ScratchArena& arena, const usize alignment, const usize bytes){
+    return arena.allocate(alignment, bytes) != nullptr;
 }
 
 
@@ -352,6 +421,1084 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const StringView s_SuiteArenaSourceRecord = "\"source\": \"arena\"";
+const StringView s_SuiteHeapBackingSourceRecord = "\"source\": \"heapBacking\"";
+const StringView s_SuiteReservedBytesField = "reservedBytes";
+const StringView s_SuiteUsedBytesField = "usedBytes";
+const StringView s_SuitePeakUsedBytesField = "peakUsedBytes";
+const StringView s_SuiteAllocationCountField = "allocationCount";
+const StringView s_SuiteReallocationCountField = "reallocationCount";
+const StringView s_SuiteDeallocationCountField = "deallocationCount";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Array<MemorySourceEnum, 3> Suite_MakeAllMemorySources(){
+    Array<MemorySourceEnum, 3> sources = Array<MemorySourceEnum, 3>();
+    sources[0u] = MemorySource::ExplicitScope;
+    sources[1u] = MemorySource::Arena;
+    sources[2u] = MemorySource::HeapBacking;
+    return sources;
+}
+
+TelemetryCaptureOptions CapturePerfOnly(){
+    TelemetryCaptureOptions options = TelemetryCaptureOptions();
+    options.flags = CaptureFlag::Perf;
+    return options;
+}
+
+TelemetryCaptureOptions CaptureDisabled(){
+    return TelemetryCaptureOptions();
+}
+
+TelemetryCaptureOptions CaptureAll(){
+    TelemetryCaptureOptions options = TelemetryCaptureOptions();
+    options.flags = CaptureFlag::All;
+    return options;
+}
+
+TelemetryCaptureOptions CaptureFrameGraphOnly(){
+    TelemetryCaptureOptions options = TelemetryCaptureOptions();
+    options.flags = CaptureFlag::FrameGraph;
+    return options;
+}
+
+TelemetryCaptureOptions MakeCaptureOptions(in CaptureFlagMask flags){
+    TelemetryCaptureOptions options = TelemetryCaptureOptions();
+    options.flags = flags;
+    return options;
+}
+
+PerfCaptureOptions MakePerfMemoryCaptureOptions(){
+    PerfCaptureOptions options = PerfCaptureOptions();
+    options.enabled = true;
+    options.memory = true;
+    return options;
+}
+
+Expected<Name> DeriveSequenceName(in Name prefix, in u64 seq){
+    String sequenceText = String();
+    AppendUnsignedU64Text(sequenceText, seq);
+    return DeriveName(prefix, StringView(sequenceText));
+}
+
+String FormatNameHashText(in NameHash hash){
+    String text = String();
+    for(u32 lane = 0u; lane < s_NameHashLaneCount; ++lane){
+        if(lane > 0u)
+            text.append("_");
+        const String laneHex = FormatHex64A(hash.qwords[lane]);
+        text.append(laneHex);
+    }
+    return text;
+}
+
+StringView FindOwnerJsonRecord(in StringView json, in Name owner, in StringView sourceField){
+    const String identityText = FormatNameHashText(owner.hash());
+    usize cursor = json.find("\"memoryRecords\": [");
+    while(cursor != usize.max && cursor < json.size()){
+        const usize nextLine = json.find("\n", cursor);
+        usize lineLength = json.size() - cursor;
+        if(nextLine != usize.max)
+            lineLength = nextLine - cursor;
+        const StringView line = json.substr(cursor, lineLength);
+        if(line.find(StringView(identityText)) != usize.max && line.find(sourceField) != usize.max)
+            return line;
+        if(line.find("    ]") != usize.max || nextLine == usize.max)
+            break;
+        cursor = nextLine + 1u;
+    }
+    return "";
+}
+
+DiagnosticEventRecord MakeDiagnosticEvent(in StringView event, in StringView category, in StringView message, in StringView file, in u32 line){
+    DiagnosticEventRecord record = DiagnosticEventRecord();
+    record.event = event;
+    record.category = category;
+    record.message = message;
+    record.file = file;
+    record.line = line;
+    return record;
+}
+
+Expected<TelemetryReport> BuildTestTelemetryReport(in EventView events, mut TelemetryArena arena, mut ScratchArena scratchArena){
+    return BuildTelemetryReport(events, arena, scratchArena);
+}
+
+ScratchTString ConvertTestScratchString(mut ScratchArena scratchArena, in StringView message){
+    return ConvertString(scratchArena, message);
+}
+
+b8 BuildTestTextLogPayload(in LogTypeEnum type, in StringView message, mut ScratchArena scratchArena, mut TelemetryBytes outPayload){
+    const ScratchTString converted = ConvertTestScratchString(scratchArena, message);
+    return BuildTextLogPayload(type, TStringView(converted), scratchArena, outPayload);
+}
+
+b8 RecordTestTextLog(mut TelemetryRecorder recorder, in LogTypeEnum type, in StringView message, in u64 frameIndex, in u32 streamId){
+    ScratchArena scratchArena = ScratchArena(s_TelemetryScratch);
+    const ScratchTString converted = ConvertTestScratchString(scratchArena, message);
+    return RecordTextLog(recorder, type, TStringView(converted), frameIndex, streamId);
+}
+
+b8 RecordTestTextLog(mut TelemetryRecorder recorder, in LogTypeEnum type, in StringView message, in u64 frameIndex){
+    return RecordTestTextLog(recorder, type, message, frameIndex, 0u);
+}
+
+b8 RecordTestTextLog(mut TelemetryRecorder recorder, in LogTypeEnum type, in StringView message){
+    return RecordTestTextLog(recorder, type, message, 0u, 0u);
+}
+
+b8 BuildTestDiagnosticPayload(in DiagnosticEventRecord record, mut TelemetryArena arena, mut TelemetryBytes outPayload){
+    return BuildDiagnosticPayload(record, arena, outPayload);
+}
+
+b8 RecordTestDiagnostic(mut TelemetryRecorder recorder, in DiagnosticEventRecord record, in u64 frameIndex, in u32 streamId){
+    return RecordDiagnostic(recorder, record, frameIndex, streamId);
+}
+
+b8 RecordTestDiagnostic(mut TelemetryRecorder recorder, in DiagnosticEventRecord record, in u64 frameIndex){
+    return RecordDiagnostic(recorder, record, frameIndex, 0u);
+}
+
+b8 RecordTestDiagnostic(mut TelemetryRecorder recorder, in DiagnosticEventRecord record){
+    return RecordDiagnostic(recorder, record, 0u, 0u);
+}
+
+b8 BuildTestPerfTimingPayload(in PerfTimingSourceEnum source, in Name scopeName, in StringView scopeText, in TimingStats stats, mut TelemetryBytes outPayload){
+    return BuildPerfTimingPayload(source, scopeName, scopeText, stats, outPayload);
+}
+
+b8 RecordTestPerfTiming(mut TelemetryRecorder recorder, in PerfTimingSourceEnum source, in Name scopeName, in StringView scopeText, in TimingStats stats, in u32 streamId){
+    return RecordPerfTiming(recorder, source, scopeName, scopeText, stats, streamId);
+}
+
+b8 RecordTestPerfTiming(mut TelemetryRecorder recorder, in PerfTimingSourceEnum source, in Name scopeName, in StringView scopeText, in TimingStats stats){
+    return RecordPerfTiming(recorder, source, scopeName, scopeText, stats, 0u);
+}
+
+b8 BuildTestPerfMemoryPayload(in Name scopeName, in StringView scopeText, in MemorySnapshot snapshot, in MemoryDelta delta, mut TelemetryBytes outPayload){
+    return BuildPerfMemoryPayload(scopeName, scopeText, snapshot, delta, outPayload);
+}
+
+b8 RecordTestPerfMemory(mut TelemetryRecorder recorder, in Name scopeName, in StringView scopeText, in MemorySnapshot snapshot, in MemoryDelta delta, in u32 streamId){
+    return RecordPerfMemory(recorder, scopeName, scopeText, snapshot, delta, streamId);
+}
+
+b8 RecordTestPerfMemory(mut TelemetryRecorder recorder, in Name scopeName, in StringView scopeText, in MemorySnapshot snapshot, in MemoryDelta delta){
+    return RecordPerfMemory(recorder, scopeName, scopeText, snapshot, delta, 0u);
+}
+
+PerfSessionRecordResult RecordTestPerfSessionReport(mut TelemetryRecorder recorder, in PerfSessionReport report, in u32 streamId){
+    return RecordPerfSessionReport(recorder, report, streamId);
+}
+
+PerfSessionRecordResult RecordTestPerfSessionReport(mut TelemetryRecorder recorder, in PerfSessionReport report){
+    return RecordPerfSessionReport(recorder, report, 0u);
+}
+
+b8 BuildTestFrameGraphPayload(in u64 frameIndex, in FrameGraphNodeDescs nodes, in FrameGraphEdgeDescs edges, mut ScratchArena scratchArena, mut TelemetryBytes outPayload){
+    return BuildFrameGraphPayload(frameIndex, nodes, edges, scratchArena, outPayload);
+}
+
+b8 BuildTestFrameGraphPayload(
+    in u64 frameIndex,
+    in FrameGraphNodeDescs nodes,
+    in FrameGraphEdgeDescs edges,
+    in FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics,
+    mut ScratchArena scratchArena,
+    mut TelemetryBytes outPayload
+){
+    return BuildFrameGraphPayload(frameIndex, nodes, edges, physicalQueueRuntimeStatistics, scratchArena, outPayload);
+}
+
+b8 BuildTestFrameGraphPayload(
+    in u64 frameIndex,
+    in FrameGraphNodeDescs nodes,
+    in FrameGraphEdgeDescs edges,
+    in FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics,
+    in FrameGraphPacketSubmissionStatisticsRecords packetSubmissionStatistics,
+    mut ScratchArena scratchArena,
+    mut TelemetryBytes outPayload
+){
+    return BuildFrameGraphPayload(frameIndex, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, scratchArena, outPayload);
+}
+
+b8 RecordTestFrameGraph(mut TelemetryRecorder recorder, mut ScratchArena scratchArena, in u64 frameIndex, in FrameGraphNodeDescs nodes, in FrameGraphEdgeDescs edges, in u32 streamId){
+    return RecordFrameGraph(recorder, scratchArena, frameIndex, nodes, edges, streamId);
+}
+
+b8 RecordTestFrameGraph(mut TelemetryRecorder recorder, mut ScratchArena scratchArena, in u64 frameIndex, in FrameGraphNodeDescs nodes, in FrameGraphEdgeDescs edges){
+    return RecordFrameGraph(recorder, scratchArena, frameIndex, nodes, edges, 0u);
+}
+
+b8 RecordTestFrameGraph(
+    mut TelemetryRecorder recorder,
+    mut ScratchArena scratchArena,
+    in u64 frameIndex,
+    in FrameGraphNodeDescs nodes,
+    in FrameGraphEdgeDescs edges,
+    in FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics,
+    in FrameGraphPacketSubmissionStatisticsRecords packetSubmissionStatistics,
+    in u32 streamId
+){
+    return RecordFrameGraph(recorder, scratchArena, frameIndex, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, streamId);
+}
+
+b8 RecordTestFrameGraph(
+    mut TelemetryRecorder recorder,
+    mut ScratchArena scratchArena,
+    in u64 frameIndex,
+    in FrameGraphNodeDescs nodes,
+    in FrameGraphEdgeDescs edges,
+    in FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics,
+    in FrameGraphPacketSubmissionStatisticsRecords packetSubmissionStatistics
+){
+    return RecordFrameGraph(recorder, scratchArena, frameIndex, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, 0u);
+}
+
+b8 RecordSessionFrameGraph(
+    mut TelemetryCaptureSession session,
+    mut ScratchArena scratchArena,
+    in FrameGraphNodeDescs nodes,
+    in FrameGraphEdgeDescs edges,
+    in FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics,
+    in FrameGraphPacketSubmissionStatisticsRecords packetSubmissionStatistics
+){
+    return session.recordFrameGraph(scratchArena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
+}
+
+b8 EncodeTestEvent(in EventRecord event, mut TelemetryBytes outBytes){
+    return EncodeEvent(event, outBytes);
+}
+
+b8 EncodeTestEventStream(in EventView events, mut TelemetryBytes outBytes){
+    return EncodeEventStream(events, outBytes);
+}
+
+void CopyTelemetryBytes(in TelemetryBytes src, mut TelemetryBytes dst){
+    dst.resize(src.size(), 0u);
+    for(usize i = 0u; i < src.size(); ++i)
+        dst[i] = src[i];
+}
+
+b8 RecordBinaryBytes(mut TelemetryRecorder recorder, in EventKindEnum kind, in u64 frameIndex, in TelemetryBytes payload, in usize byteCount, in u32 streamId){
+    return RecordBinarySpan(recorder, kind, frameIndex, payload, byteCount, streamId);
+}
+
+b8 RecordBinaryBytes(mut TelemetryRecorder recorder, in EventKindEnum kind, in u64 frameIndex, in TelemetryBytes payload, in u32 streamId){
+    return RecordBinaryBytes(recorder, kind, frameIndex, payload, payload.size(), streamId);
+}
+
+b8 RecordBinaryBytes(mut TelemetryRecorder recorder, in EventKindEnum kind, in u64 frameIndex, in TelemetryBytes payload){
+    return RecordBinaryBytes(recorder, kind, frameIndex, payload, payload.size(), 0u);
+}
+
+b8 RecordFilledPayload(mut TelemetryRecorder recorder, in EventKindEnum kind, in u64 frameIndex, in usize byteCount, in u8 fillValue, in u32 streamId){
+    TelemetryBytes payload = TelemetryBytes(recorder.arena());
+    payload.resize(byteCount, fillValue);
+    return RecordBinaryBytes(recorder, kind, frameIndex, payload, byteCount, streamId);
+}
+
+b8 RecordMovedPayload(mut TelemetryRecorder recorder, in EventKindEnum kind, in u64 frameIndex, mut TelemetryBytes payload, in u32 streamId){
+    return RecordMovedPayloadImpl(recorder, kind, frameIndex, payload, streamId);
+}
+
+b8 RecordMovedPayload(mut TelemetryRecorder recorder, in EventKindEnum kind, in u64 frameIndex, mut TelemetryBytes payload){
+    return RecordMovedPayload(recorder, kind, frameIndex, payload, 0u);
+}
+
+Expected<EventHeader> ReadEventHeaderAt(in EventView events, in usize eventIndex){
+    const Optional<EventHeader> header = EventHeaderAtOpt(events, eventIndex);
+    if(!header.has_value())
+        return MakeUnexpected(Failure());
+    return header.value();
+}
+
+usize EventRecordAddressAt(in EventView events, in usize eventIndex){
+    return EventRecordAddressAtValue(events, eventIndex);
+}
+
+Expected<usize> EventPayloadSizeAt(in EventView events, in usize eventIndex){
+    const Optional<Span<u8>> payload = EventPayloadSpanAtOpt(events, eventIndex);
+    if(!payload.has_value())
+        return MakeUnexpected(Failure());
+    return payload.value().size();
+}
+
+Expected<usize> EventPayloadCapacityAt(in EventView events, in usize eventIndex){
+    const Optional<usize> cap = EventPayloadCapacityAtOpt(events, eventIndex);
+    if(!cap.has_value())
+        return MakeUnexpected(Failure());
+    return cap.value();
+}
+
+Expected<u8> EventPayloadFrontAt(in EventView events, in usize eventIndex){
+    const Optional<Span<u8>> payload = EventPayloadSpanAtOpt(events, eventIndex);
+    if(!payload.has_value() || payload.value().empty())
+        return MakeUnexpected(Failure());
+    return payload.value()[0u];
+}
+
+Expected<u8> EventPayloadBackAt(in EventView events, in usize eventIndex){
+    const Optional<Span<u8>> payload = EventPayloadSpanAtOpt(events, eventIndex);
+    if(!payload.has_value() || payload.value().empty())
+        return MakeUnexpected(Failure());
+    const Span<u8> bytes = payload.value();
+    return bytes[bytes.size() - 1u];
+}
+
+Expected<PerfMemoryPayload> ParsePerfMemoryBytes(in TelemetryBytes payload, in usize byteCount){
+    return ParsePerfMemorySpan(payload, byteCount);
+}
+
+Expected<PerfMemoryPayload> ParsePerfMemoryBytes(in TelemetryBytes payload){
+    return ParsePerfMemoryBytes(payload, payload.size());
+}
+
+Expected<PerfTimingPayload> ParsePerfTimingBytes(in TelemetryBytes payload, in usize byteCount){
+    return ParsePerfTimingSpan(payload, byteCount);
+}
+
+Expected<PerfTimingPayload> ParsePerfTimingBytes(in TelemetryBytes payload){
+    return ParsePerfTimingBytes(payload, payload.size());
+}
+
+Expected<PerfTimingPayload> ParsePerfTimingEventAt(in EventView events, in usize eventIndex){
+    const Optional<Span<u8>> payload = EventPayloadSpanAtOpt(events, eventIndex);
+    if(!payload.has_value())
+        return MakeUnexpected(Failure());
+    return ParsePerfTimingSpan(payload.value(), payload.value().size());
+}
+
+Expected<DiagnosticPayload> ParseDiagnosticBytes(in TelemetryBytes payload, in usize byteCount){
+    return ParseDiagnosticSpan(payload, byteCount);
+}
+
+Expected<DiagnosticPayload> ParseDiagnosticBytes(in TelemetryBytes payload){
+    return ParseDiagnosticBytes(payload, payload.size());
+}
+
+Expected<DiagnosticPayload> ParseDiagnosticEventAt(in EventView events, in usize eventIndex){
+    const Optional<Span<u8>> payload = EventPayloadSpanAtOpt(events, eventIndex);
+    if(!payload.has_value())
+        return MakeUnexpected(Failure());
+    return ParseDiagnosticSpan(payload.value(), payload.value().size());
+}
+
+Expected<TextLogPayload> ParseTextLogBytes(in TelemetryBytes payload, in usize byteCount){
+    return ParseTextLogSpan(payload, byteCount);
+}
+
+Expected<TextLogPayload> ParseTextLogBytes(in TelemetryBytes payload){
+    return ParseTextLogBytes(payload, payload.size());
+}
+
+Expected<TextLogPayload> ParseTextLogEventAt(in EventView events, in usize eventIndex){
+    const Optional<Span<u8>> payload = EventPayloadSpanAtOpt(events, eventIndex);
+    if(!payload.has_value())
+        return MakeUnexpected(Failure());
+    return ParseTextLogSpan(payload.value(), payload.value().size());
+}
+
+Expected<FrameGraphPayload> ParseTestFrameGraphPayload(mut TelemetryArena arena, mut ScratchArena scratchArena, in TelemetryBytes payload, in usize byteCount){
+    return ParseFrameGraphSpan(arena, scratchArena, payload, byteCount);
+}
+
+Expected<FrameGraphPayload> ParseTestFrameGraphPayload(mut TelemetryArena arena, mut ScratchArena scratchArena, in TelemetryBytes payload){
+    return ParseTestFrameGraphPayload(arena, scratchArena, payload, payload.size());
+}
+
+Expected<FrameGraphPayload> ParseFrameGraphEventAt(mut TelemetryArena arena, mut ScratchArena scratchArena, in EventView events, in usize eventIndex){
+    const Optional<Span<u8>> payload = EventPayloadSpanAtOpt(events, eventIndex);
+    if(!payload.has_value())
+        return MakeUnexpected(Failure());
+    return ParseFrameGraphSpan(arena, scratchArena, payload.value(), payload.value().size());
+}
+
+Expected<DecodedEvent, DecodeResult> DecodeTestEventBytes(mut TelemetryArena arena, in TelemetryBytes bytes, in usize byteCount){
+    return DecodeEventSpan(arena, bytes, byteCount);
+}
+
+Expected<DecodedEvent, DecodeResult> DecodeTestEventBytes(mut TelemetryArena arena, in TelemetryBytes bytes){
+    return DecodeTestEventBytes(arena, bytes, bytes.size());
+}
+
+Expected<usize, DecodeResult> DecodeTestEventStreamBytes(in TelemetryBytes bytes, in usize byteCount, mut TelemetryArena arena, mut TelemetryRecorder recorder){
+    return DecodeEventStreamSpan(bytes, byteCount, arena, recorder);
+}
+
+Expected<usize, DecodeResult> DecodeTestEventStreamBytes(in TelemetryBytes bytes, mut TelemetryArena arena, mut TelemetryRecorder recorder){
+    return DecodeTestEventStreamBytes(bytes, bytes.size(), arena, recorder);
+}
+
+StringView ReportJsonView(in TelemetryReport report){
+    return StringView(report.json);
+}
+
+StringView ReportGraphView(in TelemetryReport report){
+    return StringView(report.graph);
+}
+
+StringView ReportPerfCsvView(in TelemetryReport report){
+    return StringView(report.perfCsv);
+}
+
+TimingStats MakeTestTimingStats(){
+    TimingStats stats = TimingStats();
+    stats.seconds = 0.125;
+    stats.sampleCount = 3u;
+    stats.publishFrameIndex = 77u;
+    stats.firstSampleFrameIndex = 70u;
+    stats.lastSampleFrameIndex = 76u;
+    return stats;
+}
+
+MemorySnapshot MakeTestMemorySnapshot(in Name scopeName){
+    MemorySnapshot snapshot = MemorySnapshot();
+    snapshot.scopeName = scopeName;
+    snapshot.frameIndex = 88u;
+    snapshot.reservedBytes = 4096u;
+    snapshot.usedBytes = 1536u;
+    snapshot.peakUsedBytes = 2048u;
+    snapshot.allocationCount = 7u;
+    snapshot.reallocationCount = 2u;
+    snapshot.deallocationCount = 1u;
+    return snapshot;
+}
+
+MemoryDelta MakeTestMemoryDelta(in i64 deallocationCount){
+    MemoryDelta delta = MemoryDelta();
+    delta.previousFrameIndex = 87u;
+    delta.currentFrameIndex = 88u;
+    delta.reservedBytes = 512;
+    delta.usedBytes = -128;
+    delta.peakUsedBytes = 256;
+    delta.allocationCount = 2;
+    delta.reallocationCount = 1;
+    delta.deallocationCount = deallocationCount;
+    delta.hasSamples = true;
+    return delta;
+}
+
+MemoryDelta MakeTestMemoryDelta(){
+    return MakeTestMemoryDelta(0);
+}
+
+EncodedFrameGraphRuntimeStatistics EncodeTestFrameGraphRuntimeStatistics(in FrameGraphRuntimeStatistics statistics, in u32 nodeIndex, in u16 reserved){
+    EncodedFrameGraphRuntimeStatistics encoded = EncodedFrameGraphRuntimeStatistics();
+    encoded.nodeIndex = nodeIndex;
+    encoded.deviceGeneration = statistics.deviceGeneration;
+    encoded.reserved = reserved;
+    encoded.graphGeneration = statistics.graphGeneration;
+    encoded.planGeneration = statistics.planGeneration;
+    encoded.recordingAttemptGeneration = statistics.recordingAttemptGeneration;
+    encoded.compile.taskCount = statistics.compile.taskCount;
+    encoded.compile.resourceCount = statistics.compile.resourceCount;
+    encoded.compile.resourceUseCount = statistics.compile.resourceUseCount;
+    encoded.compile.explicitDependencyCount = statistics.compile.explicitDependencyCount;
+    encoded.compile.inferredDependencyCount = statistics.compile.inferredDependencyCount;
+    encoded.compile.packetCount = statistics.compile.packetCount;
+    encoded.compile.packetDependencyCount = statistics.compile.packetDependencyCount;
+    encoded.compile.mergedTaskCount = statistics.compile.mergedTaskCount;
+    encoded.compile.transitionBarrierCount = statistics.compile.transitionBarrierCount;
+    encoded.compile.uavBarrierCount = statistics.compile.uavBarrierCount;
+    encoded.compile.ownershipReleaseBarrierCount = statistics.compile.ownershipReleaseBarrierCount;
+    encoded.compile.ownershipAcquireBarrierCount = statistics.compile.ownershipAcquireBarrierCount;
+    encoded.compile.stateExportBarrierCount = statistics.compile.stateExportBarrierCount;
+    encoded.compile.logicalOwnershipTransferCount = statistics.compile.logicalOwnershipTransferCount;
+    encoded.compile.logicalOwnershipTransferSignatureCount = statistics.compile.logicalOwnershipTransferSignatureCount;
+    encoded.compile.repeatedOwnershipTransferSignatureCount = statistics.compile.repeatedOwnershipTransferSignatureCount;
+    encoded.compile.concurrentSharingCouldAvoidTransferCount = statistics.compile.concurrentSharingCouldAvoidTransferCount;
+    encoded.compile.concurrentSharingAdviceResourceCount = statistics.compile.concurrentSharingAdviceResourceCount;
+    encoded.compile.logicalOwnershipTransferInternalCount = statistics.compile.logicalOwnershipTransferInternalCount;
+    encoded.compile.logicalOwnershipTransferExternalImportCount = statistics.compile.logicalOwnershipTransferExternalImportCount;
+    encoded.compile.logicalOwnershipTransferExternalExportCount = statistics.compile.logicalOwnershipTransferExternalExportCount;
+    encoded.compile.resourceSetCount = statistics.compile.resourceSetCount;
+    encoded.compile.resourceSetMemberCount = statistics.compile.resourceSetMemberCount;
+    encoded.compile.directResourceUseCount = statistics.compile.directResourceUseCount;
+    encoded.compile.declaredResourceSetUseCount = statistics.compile.declaredResourceSetUseCount;
+    encoded.compile.expandedResourceSetMemberUseCount = statistics.compile.expandedResourceSetMemberUseCount;
+    encoded.compile.payloadObjectCount = statistics.compile.payloadObjectCount;
+    encoded.compile.payloadObjectBytes = statistics.compile.payloadObjectBytes;
+    encoded.compile.uploadBlobCount = statistics.compile.uploadBlobCount;
+    encoded.compile.uploadBlobBytes = statistics.compile.uploadBlobBytes;
+    encoded.compile.declarationSeconds = statistics.compile.declarationSeconds;
+    encoded.compile.analysisSeconds = statistics.compile.analysisSeconds;
+    encoded.compile.validationSeconds = statistics.compile.validationSeconds;
+    encoded.compile.dependencyAnalysisSeconds = statistics.compile.dependencyAnalysisSeconds;
+    encoded.compile.hazardAnalysisSeconds = statistics.compile.hazardAnalysisSeconds;
+    encoded.compile.topologicalOrderSeconds = statistics.compile.topologicalOrderSeconds;
+    encoded.compile.queueAssignmentSeconds = statistics.compile.queueAssignmentSeconds;
+    encoded.compile.planningSeconds = statistics.compile.planningSeconds;
+    encoded.compile.packetizationSeconds = statistics.compile.packetizationSeconds;
+    encoded.compile.resourceStatePlanningSeconds = statistics.compile.resourceStatePlanningSeconds;
+    encoded.compile.packetDependencyPlanningSeconds = statistics.compile.packetDependencyPlanningSeconds;
+    encoded.compile.totalSeconds = statistics.compile.totalSeconds;
+    encoded.compile.resourceVersionCount = statistics.compile.resourceVersionCount;
+    encoded.compile.resourceVersionEdgeCount = statistics.compile.resourceVersionEdgeCount;
+    encoded.recording.packetCount = statistics.recording.packetCount;
+    encoded.recording.taskCount = statistics.recording.taskCount;
+    encoded.recording.commandListCount = statistics.recording.commandListCount;
+    encoded.recording.barrierCount = statistics.recording.barrierCount;
+    encoded.recording.workerRoutedPacketCount = statistics.recording.workerRoutedPacketCount;
+    encoded.recording.parallelPacketCount = statistics.recording.parallelPacketCount;
+    encoded.recording.commandListAcquisitionSeconds = statistics.recording.commandListAcquisitionSeconds;
+    encoded.recording.graphBarrierRecordingSeconds = statistics.recording.graphBarrierRecordingSeconds;
+    encoded.recording.taskRecordSeconds = statistics.recording.taskRecordSeconds;
+    encoded.recording.recordingSeconds = statistics.recording.recordingSeconds;
+    encoded.recording.recordingElapsedSeconds = statistics.recording.recordingElapsedSeconds;
+    encoded.recording.readyFrontierElapsedSeconds = statistics.recording.readyFrontierElapsedSeconds;
+    encoded.recording.readyFrontierWorkerBusySeconds = statistics.recording.readyFrontierWorkerBusySeconds;
+    encoded.recording.readyFrontierWorkerCapacitySeconds = statistics.recording.readyFrontierWorkerCapacitySeconds;
+    encoded.submission.acceptedPacketCount = statistics.submission.acceptedPacketCount;
+    encoded.submission.acceptedTaskCount = statistics.submission.acceptedTaskCount;
+    encoded.submission.rejectedPacketCount = statistics.submission.rejectedPacketCount;
+    encoded.submission.rejectedTaskCount = statistics.submission.rejectedTaskCount;
+    encoded.submission.nativeSubmissionCount = statistics.submission.nativeSubmissionCount;
+    encoded.submission.rejectedSubmissionCount = statistics.submission.rejectedSubmissionCount;
+    encoded.submission.nativeCommandListCount = statistics.submission.nativeCommandListCount;
+    encoded.submission.plannedWaitTokenCount = statistics.submission.plannedWaitTokenCount;
+    encoded.submission.sameQueueWaitElisionCount = statistics.submission.sameQueueWaitElisionCount;
+    encoded.submission.timelineWaitCount = statistics.submission.timelineWaitCount;
+    encoded.submission.mergedTimelineWaitCount = statistics.submission.mergedTimelineWaitCount;
+    encoded.submission.inheritedTimelineWaitElisionCount = statistics.submission.inheritedTimelineWaitElisionCount;
+    encoded.submission.acceptedFrontierSubmissionCount = statistics.submission.acceptedFrontierSubmissionCount;
+    encoded.submission.submissionSeconds = statistics.submission.submissionSeconds;
+    encoded.submission.recoverySubmissionCount = statistics.submission.recoverySubmissionCount;
+    return encoded;
+}
+
+void BuildTestFrameGraph(mut TelemetryArena arena, mut FrameGraphNodeDescs nodes, mut FrameGraphEdgeDescs edges){
+    nodes = FrameGraphNodeDescs(arena);
+    edges = FrameGraphEdgeDescs(arena);
+
+    FrameGraphNodeDesc gbufferNode = FrameGraphNodeDesc();
+    gbufferNode.name = s_Gbuffer;
+    gbufferNode.label = "GBuffer Pass";
+    gbufferNode.kind = FrameGraphNodeKind::Pass;
+    gbufferNode.flags = 1u;
+    nodes.push_back(gbufferNode);
+
+    FrameGraphNodeDesc albedoNode = FrameGraphNodeDesc();
+    albedoNode.name = s_Albedo;
+    albedoNode.label = "Albedo Texture";
+    albedoNode.kind = FrameGraphNodeKind::Resource;
+    albedoNode.flags = 0u;
+    nodes.push_back(albedoNode);
+
+    FrameGraphNodeDesc lightingNode = FrameGraphNodeDesc();
+    lightingNode.name = s_Lighting;
+    lightingNode.label = "Lighting Pass";
+    lightingNode.kind = FrameGraphNodeKind::Pass;
+    lightingNode.flags = 0u;
+    nodes.push_back(lightingNode);
+
+    FrameGraphEdgeDesc writeEdge = FrameGraphEdgeDesc();
+    writeEdge.fromNodeIndex = 0u;
+    writeEdge.toNodeIndex = 1u;
+    writeEdge.kind = FrameGraphEdgeKind::Writes;
+    edges.push_back(writeEdge);
+
+    FrameGraphEdgeDesc readEdge = FrameGraphEdgeDesc();
+    readEdge.fromNodeIndex = 1u;
+    readEdge.toNodeIndex = 2u;
+    readEdge.kind = FrameGraphEdgeKind::Reads;
+    readEdge.flags = 2u;
+    edges.push_back(readEdge);
+}
+
+FrameGraphQueueAssignment MakeChangedFrameGraphQueueAssignment(){
+    FrameGraphQueueAssignment assignment = FrameGraphQueueAssignment();
+    assignment.initialQueue.index = 1u;
+    assignment.initialQueue.deviceGeneration = 17u;
+    assignment.plannedQueue.index = 3u;
+    assignment.plannedQueue.deviceGeneration = 17u;
+    assignment.acceptedQueue = assignment.plannedQueue;
+    assignment.previousAcceptedQueue.index = 2u;
+    assignment.previousAcceptedQueue.deviceGeneration = 17u;
+    assignment.score.overlap = 7;
+    assignment.score.queueLoad = 3;
+    assignment.score.incomingCrossings = 2;
+    assignment.score.outgoingCrossings = 1;
+    assignment.score.ownershipTransfers = 4;
+    assignment.score.total = -3;
+    assignment.queueClass = FrameGraphQueueClass::Compute;
+    assignment.reason = FrameGraphQueueAssignmentReason::Scored;
+    assignment.modifiers = FrameGraphQueueAssignmentModifier::All;
+    assignment.acceptance = FrameGraphQueueAssignmentAcceptance::Changed;
+    assignment.dedicated = true;
+    assignment.present = true;
+    return assignment;
+}
+
+FrameGraphQueueAssignment MakeNotAcceptedFrameGraphQueueAssignment(){
+    FrameGraphQueueAssignment assignment = FrameGraphQueueAssignment();
+    assignment.initialQueue.index = 4u;
+    assignment.initialQueue.deviceGeneration = 17u;
+    assignment.plannedQueue.index = 5u;
+    assignment.plannedQueue.deviceGeneration = 17u;
+    assignment.previousAcceptedQueue.index = 2u;
+    assignment.previousAcceptedQueue.deviceGeneration = 17u;
+    assignment.score.overlap = 6;
+    assignment.score.queueLoad = 1;
+    assignment.score.incomingCrossings = 2;
+    assignment.score.outgoingCrossings = 3;
+    assignment.score.ownershipTransfers = 4;
+    assignment.score.total = -4;
+    assignment.queueClass = FrameGraphQueueClass::Transfer;
+    assignment.reason = FrameGraphQueueAssignmentReason::Scored;
+    assignment.modifiers = FrameGraphQueueAssignmentModifier::TimingFeedback;
+    assignment.acceptance = FrameGraphQueueAssignmentAcceptance::NotAccepted;
+    assignment.present = true;
+    return assignment;
+}
+
+FrameGraphCompiledTask MakeFrameGraphCompiledTask(in u64 planGeneration, in u32 packetIndex, in FrameGraphTaskPacketizationDecisionEnum packetizationDecision){
+    FrameGraphCompiledTask compiledTask = FrameGraphCompiledTask();
+    compiledTask.planGeneration = planGeneration;
+    compiledTask.packetIndex = packetIndex;
+    compiledTask.packetizationDecision = packetizationDecision;
+    compiledTask.present = true;
+    return compiledTask;
+}
+
+FrameGraphRuntimeStatistics MakeFrameGraphRuntimeStatistics(){
+    FrameGraphRuntimeStatistics statistics = FrameGraphRuntimeStatistics();
+    statistics.graphGeneration = 51u;
+    statistics.planGeneration = 52u;
+    statistics.recordingAttemptGeneration = 53u;
+    statistics.compile.taskCount = 78u;
+    statistics.compile.resourceCount = 2u;
+    statistics.compile.resourceVersionCount = 3u;
+    statistics.compile.resourceVersionEdgeCount = 6u;
+    statistics.compile.resourceUseCount = 50u;
+    statistics.compile.explicitDependencyCount = 4u;
+    statistics.compile.inferredDependencyCount = 5u;
+    statistics.compile.packetCount = 76u;
+    statistics.compile.packetDependencyCount = 7u;
+    statistics.compile.mergedTaskCount = 2u;
+    statistics.compile.transitionBarrierCount = 9u;
+    statistics.compile.uavBarrierCount = 10u;
+    statistics.compile.ownershipReleaseBarrierCount = 11u;
+    statistics.compile.ownershipAcquireBarrierCount = 12u;
+    statistics.compile.stateExportBarrierCount = 13u;
+    statistics.compile.logicalOwnershipTransferCount = 60u;
+    statistics.compile.logicalOwnershipTransferSignatureCount = 15u;
+    statistics.compile.repeatedOwnershipTransferSignatureCount = 14u;
+    statistics.compile.concurrentSharingCouldAvoidTransferCount = 17u;
+    statistics.compile.concurrentSharingAdviceResourceCount = 2u;
+    statistics.compile.logicalOwnershipTransferInternalCount = 19u;
+    statistics.compile.logicalOwnershipTransferExternalImportCount = 20u;
+    statistics.compile.logicalOwnershipTransferExternalExportCount = 21u;
+    statistics.compile.resourceSetCount = 22u;
+    statistics.compile.resourceSetMemberCount = 23u;
+    statistics.compile.directResourceUseCount = 24u;
+    statistics.compile.declaredResourceSetUseCount = 25u;
+    statistics.compile.expandedResourceSetMemberUseCount = 26u;
+    statistics.compile.payloadObjectCount = 27u;
+    statistics.compile.payloadObjectBytes = 28u;
+    statistics.compile.uploadBlobCount = 29u;
+    statistics.compile.uploadBlobBytes = 30u;
+    statistics.compile.declarationSeconds = 0.001;
+    statistics.compile.analysisSeconds = 0.002;
+    statistics.compile.validationSeconds = 0.003;
+    statistics.compile.dependencyAnalysisSeconds = 0.004;
+    statistics.compile.hazardAnalysisSeconds = 0.005;
+    statistics.compile.topologicalOrderSeconds = 0.006;
+    statistics.compile.queueAssignmentSeconds = 0.007;
+    statistics.compile.planningSeconds = 0.008;
+    statistics.compile.packetizationSeconds = 0.009;
+    statistics.compile.resourceStatePlanningSeconds = 0.010;
+    statistics.compile.packetDependencyPlanningSeconds = 0.011;
+    statistics.compile.totalSeconds = 0.012;
+    statistics.recording.packetCount = 31u;
+    statistics.recording.taskCount = 32u;
+    statistics.recording.commandListCount = 33u;
+    statistics.recording.barrierCount = 34u;
+    statistics.recording.workerRoutedPacketCount = 30u;
+    statistics.recording.parallelPacketCount = 29u;
+    statistics.recording.commandListAcquisitionSeconds = 0.013;
+    statistics.recording.graphBarrierRecordingSeconds = 0.014;
+    statistics.recording.taskRecordSeconds = 0.015;
+    statistics.recording.recordingSeconds = 0.016;
+    statistics.recording.recordingElapsedSeconds = 0.017;
+    statistics.recording.readyFrontierElapsedSeconds = 0.018;
+    statistics.recording.readyFrontierWorkerBusySeconds = 0.019;
+    statistics.recording.readyFrontierWorkerCapacitySeconds = 0.020;
+    statistics.submission.acceptedPacketCount = 37u;
+    statistics.submission.acceptedTaskCount = 38u;
+    statistics.submission.rejectedPacketCount = 39u;
+    statistics.submission.rejectedTaskCount = 40u;
+    statistics.submission.nativeSubmissionCount = 30u;
+    statistics.submission.rejectedSubmissionCount = 38u;
+    statistics.submission.nativeCommandListCount = 32u;
+    statistics.submission.plannedWaitTokenCount = 44u;
+    statistics.submission.sameQueueWaitElisionCount = 12u;
+    statistics.submission.timelineWaitCount = 14u;
+    statistics.submission.mergedTimelineWaitCount = 18u;
+    statistics.submission.acceptedFrontierSubmissionCount = 28u;
+    statistics.submission.recoverySubmissionCount = 8u;
+    statistics.submission.submissionSeconds = 0.021;
+    statistics.deviceGeneration = 17u;
+    statistics.present = true;
+    return statistics;
+}
+
+FrameGraphRuntimeStatistics OwnerStatistics(in u32 packetCount){
+    FrameGraphRuntimeStatistics statistics = FrameGraphRuntimeStatistics();
+    statistics.graphGeneration = 71u;
+    statistics.planGeneration = 72u;
+    statistics.recordingAttemptGeneration = 73u;
+    statistics.deviceGeneration = 17u;
+    statistics.compile.taskCount = packetCount;
+    statistics.compile.packetCount = packetCount;
+    statistics.recording.packetCount = packetCount;
+    statistics.recording.taskCount = packetCount;
+    statistics.recording.commandListCount = packetCount;
+    statistics.submission.acceptedPacketCount = packetCount;
+    statistics.submission.acceptedTaskCount = packetCount;
+    statistics.submission.nativeSubmissionCount = packetCount;
+    statistics.submission.nativeCommandListCount = packetCount;
+    statistics.present = true;
+    return statistics;
+}
+
+FrameGraphPhysicalQueueRuntimeStatistics MakeFrameGraphPhysicalQueueRuntimeStatistics(in u16 queueIndex){
+    FrameGraphPhysicalQueueRuntimeStatistics statistics = FrameGraphPhysicalQueueRuntimeStatistics();
+    statistics.graphGeneration = 51u;
+    statistics.planGeneration = 52u;
+    statistics.recordingAttemptGeneration = 53u;
+    statistics.deviceGeneration = 17u;
+    if(queueIndex == 1u){
+        statistics.queue.index = 1u;
+        statistics.queue.deviceGeneration = 17u;
+        statistics.queueClass = FrameGraphQueueClass::Graphics;
+        statistics.compile.taskCount = 50u;
+        statistics.compile.packetCount = 49u;
+        statistics.compile.mergedTaskCount = 1u;
+        statistics.compile.prologueBarrierCount = 11u;
+        statistics.compile.epilogueBarrierCount = 12u;
+        statistics.compile.ownershipReleaseBarrierCount = 6u;
+        statistics.compile.ownershipAcquireBarrierCount = 7u;
+        statistics.compile.incomingLogicalOwnershipTransferCount = 30u;
+        statistics.compile.outgoingLogicalOwnershipTransferCount = 31u;
+        statistics.compile.incomingLogicalOwnershipTransferSignatureCount = 8u;
+        statistics.compile.outgoingLogicalOwnershipTransferSignatureCount = 9u;
+        statistics.compile.incomingRepeatedOwnershipTransferSignatureCount = 7u;
+        statistics.compile.outgoingRepeatedOwnershipTransferSignatureCount = 8u;
+        statistics.compile.concurrentSharingAdviceResourceCount = 1u;
+        statistics.recording.packetCount = 20u;
+        statistics.recording.taskCount = 21u;
+        statistics.recording.commandListCount = 21u;
+        statistics.recording.barrierCount = 23u;
+        statistics.recording.workerRoutedPacketCount = 19u;
+        statistics.recording.parallelPacketCount = 18u;
+        statistics.recording.commandListAcquisitionSeconds = 0.005;
+        statistics.recording.graphBarrierRecordingSeconds = 0.006;
+        statistics.recording.taskRecordSeconds = 0.007;
+        statistics.recording.recordingSeconds = 0.008;
+        statistics.submission.acceptedPacketCount = 25u;
+        statistics.submission.acceptedTaskCount = 26u;
+        statistics.submission.rejectedPacketCount = 24u;
+        statistics.submission.rejectedTaskCount = 24u;
+        statistics.submission.nativeSubmissionCount = 19u;
+        statistics.submission.rejectedSubmissionCount = 23u;
+        statistics.submission.nativeCommandListCount = 20u;
+        statistics.submission.plannedWaitTokenCount = 20u;
+        statistics.submission.sameQueueWaitElisionCount = 5u;
+        statistics.submission.timelineWaitCount = 8u;
+        statistics.submission.mergedTimelineWaitCount = 7u;
+        statistics.submission.acceptedFrontierSubmissionCount = 18u;
+        statistics.submission.recoverySubmissionCount = 5u;
+        statistics.submission.submissionSeconds = 0.011;
+        return statistics;
+    }
+
+    statistics.queue.index = 3u;
+    statistics.queue.deviceGeneration = 17u;
+    statistics.queueClass = FrameGraphQueueClass::Compute;
+    statistics.compile.taskCount = 28u;
+    statistics.compile.packetCount = 27u;
+    statistics.compile.mergedTaskCount = 1u;
+    statistics.compile.prologueBarrierCount = 5u;
+    statistics.compile.epilogueBarrierCount = 6u;
+    statistics.compile.ownershipReleaseBarrierCount = 5u;
+    statistics.compile.ownershipAcquireBarrierCount = 5u;
+    statistics.compile.incomingLogicalOwnershipTransferCount = 30u;
+    statistics.compile.outgoingLogicalOwnershipTransferCount = 29u;
+    statistics.compile.incomingLogicalOwnershipTransferSignatureCount = 7u;
+    statistics.compile.outgoingLogicalOwnershipTransferSignatureCount = 6u;
+    statistics.compile.incomingRepeatedOwnershipTransferSignatureCount = 7u;
+    statistics.compile.outgoingRepeatedOwnershipTransferSignatureCount = 6u;
+    statistics.compile.concurrentSharingAdviceResourceCount = 1u;
+    statistics.recording.packetCount = 11u;
+    statistics.recording.taskCount = 11u;
+    statistics.recording.commandListCount = 12u;
+    statistics.recording.barrierCount = 11u;
+    statistics.recording.workerRoutedPacketCount = 11u;
+    statistics.recording.parallelPacketCount = 11u;
+    statistics.recording.commandListAcquisitionSeconds = 0.008;
+    statistics.recording.graphBarrierRecordingSeconds = 0.008;
+    statistics.recording.taskRecordSeconds = 0.008;
+    statistics.recording.recordingSeconds = 0.008;
+    statistics.submission.acceptedPacketCount = 12u;
+    statistics.submission.acceptedTaskCount = 12u;
+    statistics.submission.rejectedPacketCount = 15u;
+    statistics.submission.rejectedTaskCount = 16u;
+    statistics.submission.nativeSubmissionCount = 11u;
+    statistics.submission.rejectedSubmissionCount = 15u;
+    statistics.submission.nativeCommandListCount = 12u;
+    statistics.submission.plannedWaitTokenCount = 24u;
+    statistics.submission.sameQueueWaitElisionCount = 7u;
+    statistics.submission.timelineWaitCount = 6u;
+    statistics.submission.mergedTimelineWaitCount = 11u;
+    statistics.submission.acceptedFrontierSubmissionCount = 10u;
+    statistics.submission.recoverySubmissionCount = 3u;
+    statistics.submission.submissionSeconds = 0.010;
+    return statistics;
+}
+
+void BuildTestPhysicalQueueRuntimeStatistics(mut TelemetryArena arena, mut FrameGraphPhysicalQueueRuntimeStatisticsRecords records){
+    records = FrameGraphPhysicalQueueRuntimeStatisticsRecords(arena);
+
+    FrameGraphPhysicalQueueRuntimeStatisticsRecord computeRecord = FrameGraphPhysicalQueueRuntimeStatisticsRecord();
+    computeRecord.ownerNodeIndex = 0u;
+    computeRecord.statistics = MakeFrameGraphPhysicalQueueRuntimeStatistics(3u);
+    records.push_back(computeRecord);
+
+    FrameGraphPhysicalQueueRuntimeStatisticsRecord graphicsRecord = FrameGraphPhysicalQueueRuntimeStatisticsRecord();
+    graphicsRecord.ownerNodeIndex = 0u;
+    graphicsRecord.statistics = MakeFrameGraphPhysicalQueueRuntimeStatistics(1u);
+    records.push_back(graphicsRecord);
+}
+
+void BuildTestAssignedFrameGraph(mut TelemetryArena arena, mut FrameGraphNodeDescs nodes, mut FrameGraphEdgeDescs edges){
+    BuildTestFrameGraph(arena, nodes, edges);
+    nodes[0u].queueAssignment = MakeChangedFrameGraphQueueAssignment();
+    nodes[2u].queueAssignment = MakeNotAcceptedFrameGraphQueueAssignment();
+}
+
+void BuildTestCompiledFrameGraph(mut TelemetryArena arena, mut FrameGraphNodeDescs nodes, mut FrameGraphEdgeDescs edges){
+    BuildTestAssignedFrameGraph(arena, nodes, edges);
+    nodes[0u].compiledTask = MakeFrameGraphCompiledTask(41u, 7u, FrameGraphTaskPacketizationDecision::FirstTask);
+    nodes[2u].compiledTask = MakeFrameGraphCompiledTask(41u, 7u, FrameGraphTaskPacketizationDecision::MergedExplicit);
+}
+
+void BuildTestRuntimeFrameGraph(mut TelemetryArena arena, mut FrameGraphNodeDescs nodes, mut FrameGraphEdgeDescs edges){
+    BuildTestCompiledFrameGraph(arena, nodes, edges);
+    nodes[0u].runtimeStatistics = MakeFrameGraphRuntimeStatistics();
+    nodes[2u].runtimeStatistics = MakeFrameGraphRuntimeStatistics();
+    nodes[2u].runtimeStatistics.graphGeneration = 61u;
+    nodes[2u].runtimeStatistics.planGeneration = 62u;
+    nodes[2u].runtimeStatistics.recordingAttemptGeneration = 63u;
+}
+
+void BuildTestPacketSubmissionFrameGraph(
+    mut TelemetryArena arena,
+    mut FrameGraphNodeDescs nodes,
+    mut FrameGraphEdgeDescs edges,
+    mut FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics,
+    mut FrameGraphPacketSubmissionStatisticsRecords packetSubmissionStatistics
+){
+    nodes = FrameGraphNodeDescs(arena);
+    edges = FrameGraphEdgeDescs(arena);
+    physicalQueueRuntimeStatistics = FrameGraphPhysicalQueueRuntimeStatisticsRecords(arena);
+    packetSubmissionStatistics = FrameGraphPacketSubmissionStatisticsRecords(arena);
+
+    FrameGraphRuntimeStatistics runtimeStatistics = FrameGraphRuntimeStatistics();
+    runtimeStatistics.graphGeneration = 71u;
+    runtimeStatistics.planGeneration = 72u;
+    runtimeStatistics.recordingAttemptGeneration = 73u;
+    runtimeStatistics.deviceGeneration = 17u;
+    runtimeStatistics.compile.taskCount = 5u;
+    runtimeStatistics.compile.packetCount = 3u;
+    runtimeStatistics.compile.mergedTaskCount = 2u;
+    runtimeStatistics.recording.packetCount = 3u;
+    runtimeStatistics.recording.taskCount = 5u;
+    runtimeStatistics.recording.commandListCount = 4u;
+    runtimeStatistics.submission.acceptedPacketCount = 3u;
+    runtimeStatistics.submission.acceptedTaskCount = 5u;
+    runtimeStatistics.submission.nativeSubmissionCount = 3u;
+    runtimeStatistics.submission.nativeCommandListCount = 4u;
+    runtimeStatistics.submission.plannedWaitTokenCount = 6u;
+    runtimeStatistics.submission.sameQueueWaitElisionCount = 2u;
+    runtimeStatistics.submission.timelineWaitCount = 2u;
+    runtimeStatistics.submission.mergedTimelineWaitCount = 2u;
+    runtimeStatistics.submission.acceptedFrontierSubmissionCount = 2u;
+    runtimeStatistics.submission.recoverySubmissionCount = 1u;
+    runtimeStatistics.submission.submissionSeconds = 0.75;
+    runtimeStatistics.present = true;
+
+    FrameGraphNodeDesc owner = FrameGraphNodeDesc();
+    owner.name = s_TelemetryCasePacketSubmissionPass;
+    owner.label = "Packet Submission Pass";
+    owner.kind = FrameGraphNodeKind::Pass;
+    owner.runtimeStatistics = runtimeStatistics;
+    nodes.push_back(owner);
+
+    FrameGraphPhysicalQueueRuntimeStatistics graphicsStatistics = FrameGraphPhysicalQueueRuntimeStatistics();
+    graphicsStatistics.graphGeneration = 71u;
+    graphicsStatistics.planGeneration = 72u;
+    graphicsStatistics.recordingAttemptGeneration = 73u;
+    graphicsStatistics.deviceGeneration = 17u;
+    graphicsStatistics.queue.index = 1u;
+    graphicsStatistics.queue.deviceGeneration = 17u;
+    graphicsStatistics.queueClass = FrameGraphQueueClass::Graphics;
+    graphicsStatistics.compile.taskCount = 4u;
+    graphicsStatistics.compile.packetCount = 2u;
+    graphicsStatistics.compile.mergedTaskCount = 2u;
+    graphicsStatistics.recording.packetCount = 2u;
+    graphicsStatistics.recording.taskCount = 4u;
+    graphicsStatistics.recording.commandListCount = 2u;
+    graphicsStatistics.submission.acceptedPacketCount = 2u;
+    graphicsStatistics.submission.acceptedTaskCount = 4u;
+    graphicsStatistics.submission.nativeSubmissionCount = 2u;
+    graphicsStatistics.submission.nativeCommandListCount = 2u;
+    graphicsStatistics.submission.plannedWaitTokenCount = 3u;
+    graphicsStatistics.submission.sameQueueWaitElisionCount = 2u;
+    graphicsStatistics.submission.timelineWaitCount = 1u;
+    graphicsStatistics.submission.acceptedFrontierSubmissionCount = 1u;
+    graphicsStatistics.submission.recoverySubmissionCount = 1u;
+    graphicsStatistics.submission.submissionSeconds = 0.5;
+
+    FrameGraphPhysicalQueueRuntimeStatistics computeStatistics = FrameGraphPhysicalQueueRuntimeStatistics();
+    computeStatistics.graphGeneration = 71u;
+    computeStatistics.planGeneration = 72u;
+    computeStatistics.recordingAttemptGeneration = 73u;
+    computeStatistics.deviceGeneration = 17u;
+    computeStatistics.queue.index = 3u;
+    computeStatistics.queue.deviceGeneration = 17u;
+    computeStatistics.queueClass = FrameGraphQueueClass::Compute;
+    computeStatistics.compile.taskCount = 1u;
+    computeStatistics.compile.packetCount = 1u;
+    computeStatistics.recording.packetCount = 1u;
+    computeStatistics.recording.taskCount = 1u;
+    computeStatistics.recording.commandListCount = 2u;
+    computeStatistics.submission.acceptedPacketCount = 1u;
+    computeStatistics.submission.acceptedTaskCount = 1u;
+    computeStatistics.submission.nativeSubmissionCount = 1u;
+    computeStatistics.submission.nativeCommandListCount = 2u;
+    computeStatistics.submission.plannedWaitTokenCount = 3u;
+    computeStatistics.submission.timelineWaitCount = 1u;
+    computeStatistics.submission.mergedTimelineWaitCount = 2u;
+    computeStatistics.submission.acceptedFrontierSubmissionCount = 1u;
+    computeStatistics.submission.submissionSeconds = 0.25;
+
+    FrameGraphPhysicalQueueRuntimeStatisticsRecord computeRecord = FrameGraphPhysicalQueueRuntimeStatisticsRecord();
+    computeRecord.ownerNodeIndex = 0u;
+    computeRecord.statistics = computeStatistics;
+    physicalQueueRuntimeStatistics.push_back(computeRecord);
+
+    FrameGraphPhysicalQueueRuntimeStatisticsRecord graphicsRecord = FrameGraphPhysicalQueueRuntimeStatisticsRecord();
+    graphicsRecord.ownerNodeIndex = 0u;
+    graphicsRecord.statistics = graphicsStatistics;
+    physicalQueueRuntimeStatistics.push_back(graphicsRecord);
+
+    FrameGraphPacketSubmissionStatisticsRecord packetTwo = FrameGraphPacketSubmissionStatisticsRecord();
+    packetTwo.packetGeneration = 72u;
+    packetTwo.taskCount = 2u;
+    packetTwo.commandListCount = 1u;
+    packetTwo.plannedWaitTokenCount = 1u;
+    packetTwo.sameQueueWaitElisionCount = 1u;
+    packetTwo.timelineWaitCount = 0u;
+    packetTwo.mergedTimelineWaitCount = 0u;
+    packetTwo.inheritedTimelineWaitElisionCount = 0u;
+    packetTwo.submissionSeconds = 0.375;
+    packetTwo.queue.index = 1u;
+    packetTwo.queue.deviceGeneration = 17u;
+    packetTwo.ownerNodeIndex = 0u;
+    packetTwo.packetIndex = 2u;
+    packetTwo.queueClass = FrameGraphQueueClass::Graphics;
+    packetTwo.joinsAcceptedQueueFrontier = true;
+    packetTwo.recoverySubmission = true;
+    packetSubmissionStatistics.push_back(packetTwo);
+
+    FrameGraphPacketSubmissionStatisticsRecord packetZero = FrameGraphPacketSubmissionStatisticsRecord();
+    packetZero.packetGeneration = 72u;
+    packetZero.taskCount = 2u;
+    packetZero.commandListCount = 1u;
+    packetZero.plannedWaitTokenCount = 2u;
+    packetZero.sameQueueWaitElisionCount = 1u;
+    packetZero.timelineWaitCount = 1u;
+    packetZero.mergedTimelineWaitCount = 0u;
+    packetZero.inheritedTimelineWaitElisionCount = 0u;
+    packetZero.submissionSeconds = 0.125;
+    packetZero.queue.index = 1u;
+    packetZero.queue.deviceGeneration = 17u;
+    packetZero.ownerNodeIndex = 0u;
+    packetZero.packetIndex = 0u;
+    packetZero.queueClass = FrameGraphQueueClass::Graphics;
+    packetSubmissionStatistics.push_back(packetZero);
+
+    FrameGraphPacketSubmissionStatisticsRecord packetOne = FrameGraphPacketSubmissionStatisticsRecord();
+    packetOne.packetGeneration = 72u;
+    packetOne.taskCount = 1u;
+    packetOne.commandListCount = 2u;
+    packetOne.plannedWaitTokenCount = 3u;
+    packetOne.sameQueueWaitElisionCount = 0u;
+    packetOne.timelineWaitCount = 1u;
+    packetOne.mergedTimelineWaitCount = 2u;
+    packetOne.inheritedTimelineWaitElisionCount = 0u;
+    packetOne.submissionSeconds = 0.25;
+    packetOne.queue.index = 3u;
+    packetOne.queue.deviceGeneration = 17u;
+    packetOne.ownerNodeIndex = 0u;
+    packetOne.packetIndex = 1u;
+    packetOne.queueClass = FrameGraphQueueClass::Compute;
+    packetOne.joinsAcceptedQueueFrontier = true;
+    packetSubmissionStatistics.push_back(packetOne);
+}
+
+Expected<ArenaMemoryStats> SampleTemporaryScratchStats(in Name scratchName){
+    ScratchArena temporary = ScratchArena(scratchName);
+    if(!ScratchAllocateNonNull(temporary, 1u, 97u))
+        return MakeUnexpected(Failure());
+    return temporary.memoryStats();
+}
+
+Expected<PerfMemoryPayload> TryParseMemoryEventAt(in EventView events, in usize eventIndex, mut EventHeader outHeader){
+    const Optional<EventHeader> header = EventHeaderAtOpt(events, eventIndex);
+    const Optional<Span<u8>> payload = EventPayloadSpanAtOpt(events, eventIndex);
+    if(!header.has_value() || !payload.has_value() || header.value().kind != EventKind::MemoryFrame)
+        return MakeUnexpected(Failure());
+    outHeader = header.value();
+    return ParsePerfMemorySpan(payload.value(), payload.value().size());
+}
+
+Expected<usize> FindOwnerMemoryEventIndex(in EventView events, in Name owner, in MemorySourceEnum source){
+    for(usize eventIndex = 0u; eventIndex < events.eventCount(); ++eventIndex){
+        EventHeader header = EventHeader();
+        const Expected<PerfMemoryPayload> parsed = TryParseMemoryEventAt(events, eventIndex, header);
+        if(parsed.has_value() && parsed.value().scopeName == owner && parsed.value().snapshot.source == source)
+            return eventIndex;
+    }
+    return MakeUnexpected(Failure());
+}
+
+b8 HasOwnerMemoryEvent(in EventView events, in Name owner, in MemorySourceEnum source){
+    return FindOwnerMemoryEventIndex(events, owner, source).has_value();
+}
+
+u64 OwnerMemoryEventFrameIndex(in EventView events, in Name owner, in MemorySourceEnum source){
+    const Expected<usize> foundIndex = FindOwnerMemoryEventIndex(events, owner, source);
+    if(!foundIndex.has_value())
+        return 0u;
+    EventHeader header = EventHeader();
+    const Expected<PerfMemoryPayload> parsed = TryParseMemoryEventAt(events, foundIndex.value(), header);
+    if(!parsed.has_value())
+        return 0u;
+    return header.frameIndex;
+}
+
+Expected<PerfMemoryPayload> ParseOwnerMemoryEvent(in EventView events, in Name owner, in MemorySourceEnum source){
+    const Expected<usize> foundIndex = FindOwnerMemoryEventIndex(events, owner, source);
+    if(!foundIndex.has_value())
+        return MakeUnexpected(Failure());
+    EventHeader header = EventHeader();
+    return TryParseMemoryEventAt(events, foundIndex.value(), header);
+}
+
 MemorySnapshot Suite_MakeOwnerSnapshot(in Name name, in MemorySourceEnum source){
     MemorySnapshot snapshot = MemorySnapshot();
     snapshot.scopeName = name;
@@ -367,17 +1514,24 @@ MemorySnapshot Suite_MakeOwnerSnapshot(in Name name, in MemorySourceEnum source)
 }
 
 OwnedAllocation Suite_MakeOwnedAllocation(mut GlobalArena owner, in usize size){
-    OwnedAllocation result = OwnedAllocation();
-    native(mut owner, in size, mut result){
-        result = OwnedAllocation(owner, size);
-    }
-    return result;
+    return OwnedAllocation(owner, size);
 }
 
-void Suite_ExpectJsonNumber<Number>(mut ScratchArena scratchArena, in StringView record, in StringView field, in Number value){
-    native(mut scratchArena, in record, in field, in value){
-        ExpectJsonNumberField(scratchArena, record, field, value);
+b8 Suite_LoadNameSymbolsFromMemory(in StringView text, mut ScratchArena scratchArena){
+    return LoadFromMemory(text, scratchArena);
+}
+
+void Suite_ExpectJsonNumber<Number>(in StringView record, in StringView field, in Number value){
+    const String expected = StringFormat("\"{}\": {}", field, value);
+    const usize position = record.find(StringView(expected));
+    ASSERT_NE(position, usize.max);
+    const usize end = position + expected.size();
+    b8 validTerminator = end == record.size();
+    if(!validTerminator){
+        const StringView suffix = record.substr(end, 1u);
+        validTerminator = suffix == "," || suffix == "}" || suffix == " ";
     }
+    EXPECT_TRUE(validTerminator);
 }
 
 void Suite_ExpectMemorySnapshot(in MemorySnapshot actual, in MemorySnapshot expected){
@@ -404,56 +1558,93 @@ void Suite_ExpectMemoryDelta(in MemoryDelta actual, in MemoryDelta expected){
     EXPECT_EQ(actual.deallocationCount, expected.deallocationCount);
 }
 
+void Suite_ApplyInvalidPerfMemoryHeaderCase(in u32 invalidCase, mut EncodedPerfMemoryPayloadHeader malformed){
+    switch(invalidCase){
+    case 0u:
+        malformed.version = 0u;
+        break;
+    case 1u:
+        malformed.version = 2u;
+        break;
+    case 2u:
+        malformed.version = u16.max;
+        break;
+    case 3u:
+        malformed.source = 3u;
+        break;
+    case 4u:
+        malformed.source = u32.max;
+        break;
+    case 5u:
+        malformed.flags = 0x8000u;
+        break;
+    case 6u:
+        malformed.magic = 0u;
+        break;
+    case 7u:
+        for(u32 lane = 0u; lane < s_NameHashLaneCount; ++lane)
+            malformed.scopeHash.qwords[lane] = 0u;
+        break;
+    case 8u:
+        ++malformed.scopeNameBytes;
+        break;
+    default:
+        break;
+    }
+}
+
+b8 Suite_ReparsePerfMemoryCandidate(
+    in TelemetryBytes validBytes,
+    mut TelemetryBytes scratchBytes,
+    in u32 invalidCase,
+    in usize candidateByteCount,
+    mut Expected<PerfMemoryPayload> outPriorParsed
+){
+    CopyTelemetryBytes(validBytes, scratchBytes);
+    outPriorParsed = ParsePerfMemoryBytes(scratchBytes);
+    EncodedPerfMemoryPayloadHeader header = EncodedPerfMemoryPayloadHeader();
+    ReadTelemetryPod(validBytes, 0u, header);
+    if(invalidCase < 9u)
+        Suite_ApplyInvalidPerfMemoryHeaderCase(invalidCase, header);
+    WriteTelemetryPod(scratchBytes, 0u, header);
+    return ParsePerfMemoryBytes(scratchBytes, candidateByteCount).has_value();
+}
+
 void VerifyAllocationOwnerTelemetry_RejectsMalformedMemoryPayloadsWithoutInvalidatingPriorValue(){
     TelemetryTestArena testArena = TelemetryTestArena();
     const Name owner = s_TelemetryPayloadValidationOwner;
     const MemorySnapshot snapshot = Suite_MakeOwnerSnapshot(owner, MemorySource::Arena);
     const MemoryDelta delta = MakeTestMemoryDelta(-1);
-    TelemetryBytes bytes = TelemetryBytes(testArena.arena);
-    ASSERT_TRUE(BuildPerfMemoryPayload(owner, "Payload Validation Owner", snapshot, delta, bytes));
+    TelemetryBytes validBytes = TelemetryBytes(testArena.arena);
+    ASSERT_TRUE(BuildTestPerfMemoryPayload(owner, "Payload Validation Owner", snapshot, delta, validBytes));
+    TelemetryBytes scratchBytes = TelemetryBytes(testArena.arena);
+    ASSERT_TRUE(BuildTestPerfMemoryPayload(owner, "Payload Validation Owner", snapshot, delta, scratchBytes));
 
-    native(in owner, in snapshot, mut bytes){
-        Core::Telemetry::EncodedPerfMemoryPayloadHeader validHeader;
-        NWB_MEMCPY(&validHeader, sizeof(validHeader), bytes.data(), sizeof(validHeader));
-        auto parsed = Core::Telemetry::ParsePerfMemoryPayload(bytes.data(), bytes.size());
-        ASSERT_TRUE(parsed.has_value());
-        for(u32 invalidCase = 0u; invalidCase < 9u; ++invalidCase){
-            NWB_MEMCPY(bytes.data(), bytes.size(), &validHeader, sizeof(validHeader));
-            parsed = Core::Telemetry::ParsePerfMemoryPayload(bytes.data(), bytes.size());
-            ASSERT_TRUE(parsed.has_value());
-            Core::Telemetry::EncodedPerfMemoryPayloadHeader malformed = validHeader;
-            switch(invalidCase){
-            case 0u: malformed.version = 0u; break;
-            case 1u: malformed.version = 2u; break;
-            case 2u: malformed.version = Limit<u16>::s_Max; break;
-            case 3u: malformed.source = 3u; break;
-            case 4u: malformed.source = Limit<u32>::s_Max; break;
-            case 5u: malformed.flags = 0x8000u; break;
-            case 6u: malformed.magic = 0u; break;
-            case 7u: malformed.scopeHash = {}; break;
-            case 8u: ++malformed.scopeNameBytes; break;
-            }
-            NWB_MEMCPY(bytes.data(), bytes.size(), &malformed, sizeof(malformed));
-            EXPECT_FALSE(Core::Telemetry::ParsePerfMemoryPayload(bytes.data(), bytes.size()).has_value());
-            Suite_ExpectMemorySnapshot(parsed.value().snapshot, snapshot);
-            EXPECT_EQ(parsed.value().scopeName, owner);
-        }
-        for(const usize truncatedSize : { sizeof(validHeader) - 1u, bytes.size() - 1u }){
-            NWB_MEMCPY(bytes.data(), bytes.size(), &validHeader, sizeof(validHeader));
-            parsed = Core::Telemetry::ParsePerfMemoryPayload(bytes.data(), bytes.size());
-            ASSERT_TRUE(parsed.has_value());
-            EXPECT_FALSE(Core::Telemetry::ParsePerfMemoryPayload(bytes.data(), truncatedSize).has_value());
-            Suite_ExpectMemorySnapshot(parsed.value().snapshot, snapshot);
-            EXPECT_EQ(parsed.value().scopeName, owner);
-        }
+    for(u32 invalidCase = 0u; invalidCase < 9u; ++invalidCase){
+        Expected<PerfMemoryPayload> priorParsed = MakeUnexpected(Failure());
+        const b8 candidateParsed = Suite_ReparsePerfMemoryCandidate(validBytes, scratchBytes, invalidCase, scratchBytes.size(), priorParsed);
+        ASSERT_TRUE(priorParsed.has_value());
+        EXPECT_FALSE(candidateParsed);
+        Suite_ExpectMemorySnapshot(priorParsed.value().snapshot, snapshot);
+        EXPECT_EQ(priorParsed.value().scopeName, owner);
+    }
+
+    Array<usize, 2> truncatedSizes = Array<usize, 2>();
+    truncatedSizes[0u] = s_EncodedPerfMemoryPayloadHeaderByteSize - 1u;
+    truncatedSizes[1u] = scratchBytes.size() - 1u;
+    for(in usize truncatedSize : truncatedSizes){
+        Expected<PerfMemoryPayload> priorParsed = MakeUnexpected(Failure());
+        const b8 candidateParsed = Suite_ReparsePerfMemoryCandidate(validBytes, scratchBytes, 9u, truncatedSize, priorParsed);
+        ASSERT_TRUE(priorParsed.has_value());
+        EXPECT_FALSE(candidateParsed);
+        Suite_ExpectMemorySnapshot(priorParsed.value().snapshot, snapshot);
+        EXPECT_EQ(priorParsed.value().scopeName, owner);
     }
 
     MemorySnapshot invalidSnapshot = snapshot;
-    native(mut invalidSnapshot){
-        invalidSnapshot.source = static_cast<MemorySourceEnum>(255u);
-    }
-    EXPECT_FALSE(BuildPerfMemoryPayload(owner, "Invalid Source", invalidSnapshot, delta, bytes));
-    EXPECT_TRUE(bytes.empty());
+    invalidSnapshot.source = cast<MemorySourceEnum>(255u);
+    EXPECT_FALSE(BuildTestPerfMemoryPayload(owner, "Invalid Source", invalidSnapshot, delta, scratchBytes));
+    EXPECT_TRUE(scratchBytes.empty());
 }
 
 void VerifyAllocationOwnerTelemetry_SeparatesRecorderSourcesAndKeepsPreviousFrameDuringReplacement(){
@@ -462,10 +1653,11 @@ void VerifyAllocationOwnerTelemetry_SeparatesRecorderSourcesAndKeepsPreviousFram
     recorder.setEnabled(true);
     const MemoryView view = MemoryView(recorder);
     const Name owner = s_TelemetryRecorderSourceCollision;
+    const Array<MemorySourceEnum, 3> allSources = Suite_MakeAllMemorySources();
     Array<MemoryScopeId, 3> scopes = Array<MemoryScopeId, 3>();
     Array<MemorySnapshot, 3> previous = Array<MemorySnapshot, 3>();
-    for(usize sourceIndex = 0u; sourceIndex < s_SuiteAllMemorySources.size(); ++sourceIndex){
-        const MemorySourceEnum source = s_SuiteAllMemorySources[sourceIndex];
+    for(usize sourceIndex = 0u; sourceIndex < allSources.size(); ++sourceIndex){
+        const MemorySourceEnum source = allSources[sourceIndex];
         const Expected<MemoryScopeId> scopeResult = recorder.registerScope(owner, source);
         ASSERT_TRUE(scopeResult.has_value());
         scopes[sourceIndex] = scopeResult.value();
@@ -500,8 +1692,8 @@ void VerifyAllocationOwnerTelemetry_SeparatesRecorderSourcesAndKeepsPreviousFram
         EXPECT_EQ(expectedDelta.currentFrameIndex, 11u);
         EXPECT_EQ(expectedDelta.usedBytes, 100);
     }
-    for(usize sourceIndex = 0u; sourceIndex < s_SuiteAllMemorySources.size(); ++sourceIndex){
-        const MemorySourceEnum source = s_SuiteAllMemorySources[sourceIndex];
+    for(usize sourceIndex = 0u; sourceIndex < allSources.size(); ++sourceIndex){
+        const MemorySourceEnum source = allSources[sourceIndex];
         const MemorySnapshot snapshot = view.snapshot(owner, source);
         EXPECT_EQ(snapshot.source, source);
         EXPECT_EQ(snapshot.usedBytes, previous[sourceIndex].usedBytes + 100u);
@@ -512,7 +1704,7 @@ void VerifyAllocationOwnerTelemetry_SeparatesRecorderSourcesAndKeepsPreviousFram
 
 void VerifyAllocationOwnerTelemetry_CapturesAutomaticAllocationOwnersAcrossEnableReallocationAndDestruction(){
     TelemetryTestArena testArena = TelemetryTestArena();
-    const u64 seq = NextAllocationOwnerSequence();
+    const u64 seq = AllocateServiceIdentity();
     const Expected<Name> ownerNameResult = DeriveSequenceName(s_TelemetryCaseAutomaticOwner, seq);
     ASSERT_TRUE(ownerNameResult.has_value());
     const Name ownerName = ownerNameResult.value();
@@ -526,9 +1718,9 @@ void VerifyAllocationOwnerTelemetry_CapturesAutomaticAllocationOwnersAcrossEnabl
     const u64 firstBytes = allocation.usableBytes();
     EXPECT_GE(firstBytes, allocation.requestedBytes);
 
-    b8 scratchAllocated = false;
-    const ArenaMemoryStats scratchLiveStats = SampleTemporaryScratchStats(scratchName, scratchAllocated);
-    ASSERT_TRUE(scratchAllocated);
+    const Expected<ArenaMemoryStats> scratchLiveStatsResult = SampleTemporaryScratchStats(scratchName);
+    ASSERT_TRUE(scratchLiveStatsResult.has_value());
+    const ArenaMemoryStats scratchLiveStats = scratchLiveStatsResult.value();
     EXPECT_GT(scratchLiveStats.usedBytes, 0u);
 
     PerfSession perfSession = PerfSession(testArena.arena);
@@ -583,7 +1775,7 @@ void VerifyAllocationOwnerTelemetry_CapturesAutomaticAllocationOwnersAcrossEnabl
     ASSERT_TRUE(HasOwnerMemoryEvent(capture.view(), ownerName, MemorySource::Arena));
     EXPECT_TRUE(HasOwnerMemoryEvent(capture.view(), ownerName, MemorySource::ExplicitScope));
     EXPECT_EQ(OwnerMemoryEventFrameIndex(capture.view(), ownerName, MemorySource::Arena), 41u);
-    const auto parsedFirst = ParseOwnerMemoryEvent(capture.view(), ownerName, MemorySource::Arena);
+    const Expected<PerfMemoryPayload> parsedFirst = ParseOwnerMemoryEvent(capture.view(), ownerName, MemorySource::Arena);
     ASSERT_TRUE(parsedFirst.has_value());
     Suite_ExpectMemorySnapshot(parsedFirst.value().snapshot, first);
     EXPECT_FALSE(parsedFirst.value().delta.hasSamples);
@@ -618,7 +1810,7 @@ void VerifyAllocationOwnerTelemetry_CapturesAutomaticAllocationOwnersAcrossEnabl
     const PerfSessionRecordResult retiredRecorded = capture.recordPerfReport(perfSession.report(), 23u);
     ASSERT_TRUE(retiredRecorded.ok());
     ASSERT_TRUE(HasOwnerMemoryEvent(capture.view(), ownerName, MemorySource::Arena));
-    const auto parsedRetired = ParseOwnerMemoryEvent(capture.view(), ownerName, MemorySource::Arena);
+    const Expected<PerfMemoryPayload> parsedRetired = ParseOwnerMemoryEvent(capture.view(), ownerName, MemorySource::Arena);
     ASSERT_TRUE(parsedRetired.has_value());
     Suite_ExpectMemorySnapshot(parsedRetired.value().snapshot, retired);
     Suite_ExpectMemoryDelta(parsedRetired.value().delta, retiredDelta);
@@ -627,7 +1819,7 @@ void VerifyAllocationOwnerTelemetry_CapturesAutomaticAllocationOwnersAcrossEnabl
     EXPECT_TRUE(HasOwnerMemoryEvent(capture.view(), heapName, MemorySource::HeapBacking));
 
     ScratchArena scratchArena = ScratchArena(s_TelemetryCaseJsonChecks);
-    auto reportResult = BuildTelemetryReport(capture.view(), testArena.arena, scratchArena);
+    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(capture.view(), testArena.arena, scratchArena);
     ASSERT_TRUE(reportResult.has_value());
     const TelemetryReport report = reportResult.value();
     EXPECT_EQ(report.summary.parseFailureCount, 0u);
@@ -639,27 +1831,27 @@ void VerifyAllocationOwnerTelemetry_CapturesAutomaticAllocationOwnersAcrossEnabl
     ASSERT_NE(deltaBegin, usize.max);
     const StringView ownerFields = ownerRecord.substr(0u, deltaBegin);
     const StringView deltaFields = ownerRecord.substr(deltaBegin);
-    Suite_ExpectJsonNumber(scratchArena, ownerFields, "frameIndex", 43u);
-    Suite_ExpectJsonNumber(scratchArena, ownerFields, s_SuiteReservedBytesField, retired.reservedBytes);
-    Suite_ExpectJsonNumber(scratchArena, ownerFields, s_SuiteUsedBytesField, retired.usedBytes);
-    Suite_ExpectJsonNumber(scratchArena, ownerFields, s_SuitePeakUsedBytesField, retired.peakUsedBytes);
-    Suite_ExpectJsonNumber(scratchArena, ownerFields, s_SuiteAllocationCountField, retired.allocationCount);
-    Suite_ExpectJsonNumber(scratchArena, ownerFields, s_SuiteReallocationCountField, retired.reallocationCount);
-    Suite_ExpectJsonNumber(scratchArena, ownerFields, s_SuiteDeallocationCountField, retired.deallocationCount);
-    Suite_ExpectJsonNumber(scratchArena, deltaFields, "previousFrameIndex", 42u);
-    Suite_ExpectJsonNumber(scratchArena, deltaFields, s_SuiteReservedBytesField, retiredDelta.reservedBytes);
-    Suite_ExpectJsonNumber(scratchArena, deltaFields, s_SuiteUsedBytesField, retiredDelta.usedBytes);
-    Suite_ExpectJsonNumber(scratchArena, deltaFields, s_SuitePeakUsedBytesField, retiredDelta.peakUsedBytes);
-    Suite_ExpectJsonNumber(scratchArena, deltaFields, s_SuiteAllocationCountField, retiredDelta.allocationCount);
-    Suite_ExpectJsonNumber(scratchArena, deltaFields, s_SuiteReallocationCountField, retiredDelta.reallocationCount);
-    Suite_ExpectJsonNumber(scratchArena, deltaFields, s_SuiteDeallocationCountField, retiredDelta.deallocationCount);
+    Suite_ExpectJsonNumber(ownerFields, "frameIndex", 43u);
+    Suite_ExpectJsonNumber(ownerFields, s_SuiteReservedBytesField, retired.reservedBytes);
+    Suite_ExpectJsonNumber(ownerFields, s_SuiteUsedBytesField, retired.usedBytes);
+    Suite_ExpectJsonNumber(ownerFields, s_SuitePeakUsedBytesField, retired.peakUsedBytes);
+    Suite_ExpectJsonNumber(ownerFields, s_SuiteAllocationCountField, retired.allocationCount);
+    Suite_ExpectJsonNumber(ownerFields, s_SuiteReallocationCountField, retired.reallocationCount);
+    Suite_ExpectJsonNumber(ownerFields, s_SuiteDeallocationCountField, retired.deallocationCount);
+    Suite_ExpectJsonNumber(deltaFields, "previousFrameIndex", 42u);
+    Suite_ExpectJsonNumber(deltaFields, s_SuiteReservedBytesField, retiredDelta.reservedBytes);
+    Suite_ExpectJsonNumber(deltaFields, s_SuiteUsedBytesField, retiredDelta.usedBytes);
+    Suite_ExpectJsonNumber(deltaFields, s_SuitePeakUsedBytesField, retiredDelta.peakUsedBytes);
+    Suite_ExpectJsonNumber(deltaFields, s_SuiteAllocationCountField, retiredDelta.allocationCount);
+    Suite_ExpectJsonNumber(deltaFields, s_SuiteReallocationCountField, retiredDelta.reallocationCount);
+    Suite_ExpectJsonNumber(deltaFields, s_SuiteDeallocationCountField, retiredDelta.deallocationCount);
     EXPECT_FALSE(FindOwnerJsonRecord(json, scratchName, "\"source\": \"arena\"").empty());
     EXPECT_FALSE(FindOwnerJsonRecord(json, heapName, "\"source\": \"heapBacking\"").empty());
 }
 
 void VerifyAllocationOwnerTelemetry_SharedNameSumsLiveUsageAndPreservesLargestIndividualArenaPeak(){
     TelemetryTestArena testArena = TelemetryTestArena();
-    const Expected<Name> ownerNameResult = DeriveSequenceName(s_TelemetryCaseTestsTelemetrySharedArenaPeak, NextAllocationOwnerSequence());
+    const Expected<Name> ownerNameResult = DeriveSequenceName(s_TelemetryCaseTestsTelemetrySharedArenaPeak, AllocateServiceIdentity());
     ASSERT_TRUE(ownerNameResult.has_value());
     const Name ownerName = ownerNameResult.value();
 
@@ -706,7 +1898,7 @@ void VerifyAllocationOwnerTelemetry_SharedNameSumsLiveUsageAndPreservesLargestIn
     const PerfSessionRecordResult recorded = capture.recordPerfReport(perfSession.report(), 17u);
     ASSERT_TRUE(recorded.ok());
     ScratchArena scratchArena = ScratchArena(s_TelemetryCaseTestsTelemetrySharedArenaPeakJsonChecks);
-    auto reportResult = BuildTelemetryReport(capture.view(), testArena.arena, scratchArena);
+    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(capture.view(), testArena.arena, scratchArena);
     ASSERT_TRUE(reportResult.has_value());
     const TelemetryReport report = reportResult.value();
     EXPECT_EQ(report.summary.parseFailureCount, 0u);
@@ -714,8 +1906,8 @@ void VerifyAllocationOwnerTelemetry_SharedNameSumsLiveUsageAndPreservesLargestIn
     const StringView record = FindOwnerJsonRecord(json, ownerName, s_SuiteArenaSourceRecord);
     ASSERT_FALSE(record.empty());
     EXPECT_NE(record.find("\"peakBasis\": \"largestArena\""), usize.max);
-    Suite_ExpectJsonNumber(scratchArena, record, s_SuiteUsedBytesField, firstBytes);
-    Suite_ExpectJsonNumber(scratchArena, record, s_SuitePeakUsedBytesField, Max(firstBytes, secondBytes));
+    Suite_ExpectJsonNumber(record, s_SuiteUsedBytesField, firstBytes);
+    Suite_ExpectJsonNumber(record, s_SuitePeakUsedBytesField, Max(firstBytes, secondBytes));
 }
 
 void VerifyAllocationOwnerTelemetry_KeepsHeapBackingRecordsWithoutCountingTheirUsageAgain(){
@@ -723,8 +1915,9 @@ void VerifyAllocationOwnerTelemetry_KeepsHeapBackingRecordsWithoutCountingTheirU
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
     recorder.setCaptureOptions(CapturePerfOnly());
     const Name owner = s_TelemetrySharedSourceIdentity;
-    for(usize sourceIndex = 0u; sourceIndex < s_SuiteAllMemorySources.size(); ++sourceIndex){
-        const MemorySourceEnum source = s_SuiteAllMemorySources[sourceIndex];
+    const Array<MemorySourceEnum, 3> allSources = Suite_MakeAllMemorySources();
+    for(usize sourceIndex = 0u; sourceIndex < allSources.size(); ++sourceIndex){
+        const MemorySourceEnum source = allSources[sourceIndex];
         MemorySnapshot snapshot = Suite_MakeOwnerSnapshot(owner, source);
         // Keep explicit scope counters separate from the aliased arena summary.
         if(source == MemorySource::HeapBacking){
@@ -740,15 +1933,15 @@ void VerifyAllocationOwnerTelemetry_KeepsHeapBackingRecordsWithoutCountingTheirU
             delta.usedBytes = 30;
         else
             delta.usedBytes = 10;
-        ASSERT_TRUE(RecordPerfMemory(recorder, owner, "Shared Owner", snapshot, delta, 7u));
+        ASSERT_TRUE(RecordTestPerfMemory(recorder, owner, "Shared Owner", snapshot, delta, 7u));
     }
     ScratchArena scratchArena = ScratchArena(s_TelemetryCaseHeapJsonChecks);
-    auto reportResult = BuildTelemetryReport(recorder.view(), testArena.arena, scratchArena);
+    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, scratchArena);
     ASSERT_TRUE(reportResult.has_value());
     const TelemetryReport report = reportResult.value();
     EXPECT_EQ(report.summary.parseFailureCount, 0u);
     EXPECT_EQ(report.summary.memoryEventCount, 3u);
-    for(in MemorySourceEnum source : s_SuiteAllMemorySources){
+    for(in MemorySourceEnum source : allSources){
         const TelemetryMemorySummary summary = report.summary.memorySources[source];
         EXPECT_EQ(summary.eventCount, 1u);
         u64 expectedUsed = 100u;
@@ -772,698 +1965,70 @@ void VerifyAllocationOwnerTelemetry_KeepsHeapBackingRecordsWithoutCountingTheirU
     EXPECT_FALSE(FindOwnerJsonRecord(json, owner, "\"source\": \"arena\"").empty());
     const StringView heapRecord = FindOwnerJsonRecord(json, owner, s_SuiteHeapBackingSourceRecord);
     ASSERT_FALSE(heapRecord.empty());
-    Suite_ExpectJsonNumber(scratchArena, heapRecord, s_SuiteUsedBytesField, 300u);
-    Suite_ExpectJsonNumber(scratchArena, heapRecord, s_SuitePeakUsedBytesField, 3000u);
+    Suite_ExpectJsonNumber(heapRecord, s_SuiteUsedBytesField, 300u);
+    Suite_ExpectJsonNumber(heapRecord, s_SuitePeakUsedBytesField, 3000u);
 }
 
 void VerifyAllocationOwnerTelemetry_ResolvesLoadedOwnerSymbolsByFullIdentityAndPreservesExplicitText(){
     TelemetryTestArena testArena = TelemetryTestArena();
-    native(mut testArena){
-        namespace NameSymbols = Core::Common::NameSymbols;
-        NameSymbols::InstallRuntimeRegistry();
-        NameSymbols::ClearRuntimeSymbols();
-        NameHash firstHash{};
-        for(u32 lane = 0u; lane < s_NameHashLaneCount; ++lane)
-            firstHash.qwords[lane] = 0xBD876543210ACDEFuLL + lane;
-        NameHash secondHash = firstHash;
-        ++secondHash.qwords[s_NameHashLaneCount - 1u];
-        NameHash unknownHash = secondHash;
-        ++unknownHash.qwords[s_NameHashLaneCount - 1u];
-        const Name firstOwner(firstHash);
-        const Name secondOwner(secondHash);
-        const Name unknownOwner(unknownHash);
-        Array<char, NameHashTextCodec::s_TextLength + 1u> firstHashText = {};
-        Array<char, NameHashTextCodec::s_TextLength + 1u> secondHashText = {};
-        Array<char, NameHashTextCodec::s_TextLength + 1u> unknownHashText = {};
-        NameHashTextCodec::Format(firstHashText.data(), sizeof(firstHashText), firstHash);
-        NameHashTextCodec::Format(secondHashText.data(), sizeof(secondHashText), secondHash);
-        NameHashTextCodec::Format(unknownHashText.data(), sizeof(unknownHashText), unknownHash);
+    InstallRuntimeRegistry();
+    ClearRuntimeSymbols();
+    NameHash firstHash = NameHash();
+    for(u32 lane = 0u; lane < s_NameHashLaneCount; ++lane)
+        firstHash.qwords[lane] = 0xBD876543210ACDEFu + lane;
+    NameHash secondHash = firstHash;
+    ++secondHash.qwords[s_NameHashLaneCount - 1u];
+    NameHash unknownHash = secondHash;
+    ++unknownHash.qwords[s_NameHashLaneCount - 1u];
+    const Name firstOwner = Name(firstHash);
+    const Name secondOwner = Name(secondHash);
+    const Name unknownOwner = Name(unknownHash);
+    const String firstHashText = FormatNameHashText(firstHash);
+    const String secondHashText = FormatNameHashText(secondHash);
+    const String unknownHashText = FormatNameHashText(unknownHash);
 
-        TelemetryRecorder recorder(testArena.arena);
-        recorder.setCaptureOptions(CapturePerfOnly());
-        // Exact hash fallback text reproduces an opt/fin producer that has no local symbol sidecar loaded.
-        ASSERT_TRUE(RecordPerfMemory(recorder, firstOwner, firstHashText.data(), Suite_MakeOwnerSnapshot(firstOwner, MemorySource::Arena), MakeTestMemoryDelta(-1), 91u));
-        ASSERT_TRUE(RecordPerfMemory(recorder, secondOwner, secondHashText.data(), Suite_MakeOwnerSnapshot(secondOwner, MemorySource::Arena), MakeTestMemoryDelta(-1), 92u));
-        ASSERT_TRUE(RecordPerfMemory(recorder, firstOwner, "Producer Display Name", Suite_MakeOwnerSnapshot(firstOwner, MemorySource::ExplicitScope), MakeTestMemoryDelta(-1), 93u));
-        ASSERT_TRUE(RecordPerfMemory(recorder, unknownOwner, unknownHashText.data(), Suite_MakeOwnerSnapshot(unknownOwner, MemorySource::HeapBacking), MakeTestMemoryDelta(-1), 94u));
-        ScratchArena scratchArena(s_TelemetryCaseTestsTelemetryReportWork);
-        auto reportResult4 = BuildTelemetryReport(recorder.view(), testArena.arena, scratchArena);
-        ASSERT_TRUE(reportResult4.has_value());
-        TelemetryReport report = Move(reportResult4.value());
-        const AStringView beforeJson = ReportJsonView(report);
-        const AStringView beforeRecord = FindOwnerJsonRecord(beforeJson, firstOwner, s_SuiteArenaSourceRecord);
-        ASSERT_FALSE(beforeRecord.empty());
-        EXPECT_EQ(CountText(beforeRecord, firstHashText.data()), 2u);
+    TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
+    recorder.setCaptureOptions(CapturePerfOnly());
+    // Exact hash fallback text reproduces an opt/fin producer that has no local symbol sidecar loaded.
+    ASSERT_TRUE(RecordTestPerfMemory(recorder, firstOwner, StringView(firstHashText), Suite_MakeOwnerSnapshot(firstOwner, MemorySource::Arena), MakeTestMemoryDelta(-1), 91u));
+    ASSERT_TRUE(RecordTestPerfMemory(recorder, secondOwner, StringView(secondHashText), Suite_MakeOwnerSnapshot(secondOwner, MemorySource::Arena), MakeTestMemoryDelta(-1), 92u));
+    ASSERT_TRUE(RecordTestPerfMemory(recorder, firstOwner, "Producer Display Name", Suite_MakeOwnerSnapshot(firstOwner, MemorySource::ExplicitScope), MakeTestMemoryDelta(-1), 93u));
+    ASSERT_TRUE(RecordTestPerfMemory(recorder, unknownOwner, StringView(unknownHashText), Suite_MakeOwnerSnapshot(unknownOwner, MemorySource::HeapBacking), MakeTestMemoryDelta(-1), 94u));
+    ScratchArena scratchArena = ScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
+    const Expected<TelemetryReport> beforeReportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, scratchArena);
+    ASSERT_TRUE(beforeReportResult.has_value());
+    const TelemetryReport beforeReport = beforeReportResult.value();
+    const StringView beforeJson = ReportJsonView(beforeReport);
+    const StringView beforeRecord = FindOwnerJsonRecord(beforeJson, firstOwner, s_SuiteArenaSourceRecord);
+    ASSERT_FALSE(beforeRecord.empty());
+    EXPECT_EQ(CountText(beforeRecord, StringView(firstHashText)), 2u);
 
-        AString<GlobalArena> namesymText(testArena.arena);
-        StringAppendFormat(namesymText, "{}\tproducer=runtime\n{}\truntime\tOwners/Loaded First\n{}\truntime\tOwners/Loaded Second\n", NameSymbols::s_FileHeader, firstHashText.data(), secondHashText.data());
-        ASSERT_TRUE(NameSymbols::LoadFromMemory(AStringView(namesymText.data(), namesymText.size()), scratchArena));
-        auto reportResult5 = BuildTelemetryReport(recorder.view(), testArena.arena, scratchArena);
-        ASSERT_TRUE(reportResult5.has_value());
-        report = Move(reportResult5.value());
-        EXPECT_EQ(report.summary.parseFailureCount, 0u);
-        const AStringView json = ReportJsonView(report);
-        const AStringView firstRecord = FindOwnerJsonRecord(json, firstOwner, s_SuiteArenaSourceRecord);
-        const AStringView secondRecord = FindOwnerJsonRecord(json, secondOwner, s_SuiteArenaSourceRecord);
-        const AStringView explicitRecord = FindOwnerJsonRecord(json, firstOwner, "\"source\": \"explicitScope\"");
-        const AStringView unknownRecord = FindOwnerJsonRecord(json, unknownOwner, s_SuiteHeapBackingSourceRecord);
-        ASSERT_FALSE(firstRecord.empty());
-        ASSERT_FALSE(secondRecord.empty());
-        ASSERT_FALSE(explicitRecord.empty());
-        ASSERT_FALSE(unknownRecord.empty());
-        EXPECT_NE(firstRecord.find("\"scope\": \"owners/loaded first\""), AStringView::npos);
-        EXPECT_NE(secondRecord.find("\"scope\": \"owners/loaded second\""), AStringView::npos);
-        EXPECT_EQ(CountText(firstRecord, firstHashText.data()), 1u);
-        EXPECT_EQ(CountText(secondRecord, secondHashText.data()), 1u);
-        EXPECT_NE(explicitRecord.find("\"scope\": \"Producer Display Name\""), AStringView::npos);
-        EXPECT_EQ(CountText(unknownRecord, unknownHashText.data()), 2u);
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace TelemetryTestDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace TestCases = NWB::Tests::TelemetryCases;
-
-namespace __hidden_telemetry_suite_owner_sequence{
-Atomic<u64> g_AllocationOwnerSequence{ 0u };
-};
-
-u64 NextAllocationOwnerSequence()noexcept{
-    return __hidden_telemetry_suite_owner_sequence::g_AllocationOwnerSequence.fetch_add(1u, MemoryOrder::relaxed);
-}
-
-const Telemetry::EventRecord* FindOwnerEvent(const Telemetry::EventView& events, const Name& owner, const Core::Perf::MemorySource::Enum source)noexcept{
-    for(usize eventIndex = 0u; eventIndex < events.eventCount(); ++eventIndex){
-        const Telemetry::EventRecord* const event = events.eventAt(eventIndex);
-        if(!event || event->header.kind != Telemetry::EventKind::MemoryFrame)
-            continue;
-        const auto parsed = Telemetry::ParsePerfMemoryPayload(event->payload.data(), event->payload.size());
-        if(parsed && parsed->scopeName == owner && parsed->snapshot.source == source)
-            return event;
-    }
-    return nullptr;
-}
-
-AStringView FindOwnerJsonRecord(const AStringView json, const Name& owner, const AStringView sourceField){
-    Array<char, NameHashTextCodec::s_TextLength + 1u> identityText = {};
-    NameHashTextCodec::Format(identityText.data(), sizeof(identityText), owner.hash());
-    usize cursor = json.find("\"memoryRecords\": [");
-    while(cursor != AStringView::npos && cursor < json.size()){
-        const usize nextLine = json.find('\n', cursor);
-        const AStringView line = json.substr(cursor, nextLine == AStringView::npos ? json.size() - cursor : nextLine - cursor);
-        if(line.find(identityText.data()) != AStringView::npos && line.find(sourceField) != AStringView::npos)
-            return line;
-        if(line.find("    ]") != AStringView::npos || nextLine == AStringView::npos)
-            break;
-        cursor = nextLine + 1u;
-    }
-    return {};
-}
-
-void BuildTestFrameGraph(Telemetry::TelemetryArena& arena, Telemetry::FrameGraphNodeDescs& nodes, Telemetry::FrameGraphEdgeDescs& edges){
-    nodes = Telemetry::FrameGraphNodeDescs(arena);
-    edges = Telemetry::FrameGraphEdgeDescs(arena);
-
-    nodes.push_back(Telemetry::FrameGraphNodeDesc{ .name = Name(TestCases::s_Gbuffer), .label = AStringView("GBuffer Pass"), .kind = Telemetry::FrameGraphNodeKind::Pass, .flags = 1u, .queueAssignment = {}, .compiledTask = {}, .runtimeStatistics = {}, });
-    nodes.push_back(Telemetry::FrameGraphNodeDesc{ .name = Name(TestCases::s_Albedo), .label = AStringView("Albedo Texture"), .kind = Telemetry::FrameGraphNodeKind::Resource, .flags = 0u, .queueAssignment = {}, .compiledTask = {}, .runtimeStatistics = {}, });
-    nodes.push_back(Telemetry::FrameGraphNodeDesc{ .name = Name(TestCases::s_Lighting), .label = AStringView("Lighting Pass"), .kind = Telemetry::FrameGraphNodeKind::Pass, .flags = 0u, .queueAssignment = {}, .compiledTask = {}, .runtimeStatistics = {}, });
-
-    edges.push_back(Telemetry::FrameGraphEdgeDesc{ .fromNodeIndex = 0u, .toNodeIndex = 1u, .kind = Telemetry::FrameGraphEdgeKind::Writes, });
-    edges.push_back(Telemetry::FrameGraphEdgeDesc{ .fromNodeIndex = 1u, .toNodeIndex = 2u, .kind = Telemetry::FrameGraphEdgeKind::Reads, .flags = 2u, });
-}
-
-Telemetry::FrameGraphQueueAssignment MakeChangedFrameGraphQueueAssignment()noexcept{
-    Telemetry::FrameGraphQueueAssignment assignment;
-    assignment.initialQueue = { .index = 1u, .deviceGeneration = 17u };
-    assignment.plannedQueue = { .index = 3u, .deviceGeneration = 17u };
-    assignment.acceptedQueue = assignment.plannedQueue;
-    assignment.previousAcceptedQueue = { .index = 2u, .deviceGeneration = 17u };
-    assignment.score = { .overlap = 7, .queueLoad = 3, .incomingCrossings = 2, .outgoingCrossings = 1, .ownershipTransfers = 4, .total = -3, };
-    assignment.queueClass = Telemetry::FrameGraphQueueClass::Compute;
-    assignment.reason = Telemetry::FrameGraphQueueAssignmentReason::Scored;
-    assignment.modifiers = Telemetry::FrameGraphQueueAssignmentModifier::All;
-    assignment.acceptance = Telemetry::FrameGraphQueueAssignmentAcceptance::Changed;
-    assignment.dedicated = true;
-    assignment.present = true;
-    return assignment;
-}
-
-Telemetry::FrameGraphQueueAssignment MakeNotAcceptedFrameGraphQueueAssignment()noexcept{
-    Telemetry::FrameGraphQueueAssignment assignment;
-    assignment.initialQueue = { .index = 4u, .deviceGeneration = 17u };
-    assignment.plannedQueue = { .index = 5u, .deviceGeneration = 17u };
-    assignment.previousAcceptedQueue = { .index = 2u, .deviceGeneration = 17u };
-    assignment.score = { .overlap = 6, .queueLoad = 1, .incomingCrossings = 2, .outgoingCrossings = 3, .ownershipTransfers = 4, .total = -4, };
-    assignment.queueClass = Telemetry::FrameGraphQueueClass::Transfer;
-    assignment.reason = Telemetry::FrameGraphQueueAssignmentReason::Scored;
-    assignment.modifiers = Telemetry::FrameGraphQueueAssignmentModifier::TimingFeedback;
-    assignment.acceptance = Telemetry::FrameGraphQueueAssignmentAcceptance::NotAccepted;
-    assignment.present = true;
-    return assignment;
-}
-
-Telemetry::FrameGraphCompiledTask MakeFrameGraphCompiledTask(const u64 planGeneration, const u32 packetIndex, const Telemetry::FrameGraphTaskPacketizationDecision::Enum packetizationDecision)noexcept{
-    return Telemetry::FrameGraphCompiledTask{ .planGeneration = planGeneration, .packetIndex = packetIndex, .packetizationDecision = packetizationDecision, .present = true, };
-}
-
-Telemetry::FrameGraphRuntimeStatistics MakeFrameGraphRuntimeStatistics()noexcept{
-    return Telemetry::FrameGraphRuntimeStatistics{
-        .graphGeneration = 51u,
-        .planGeneration = 52u,
-        .recordingAttemptGeneration = 53u,
-        .compile = {
-            .taskCount = 78u,
-            .resourceCount = 2u,
-            .resourceVersionCount = 3u,
-            .resourceVersionEdgeCount = 6u,
-            .resourceUseCount = 50u,
-            .explicitDependencyCount = 4u,
-            .inferredDependencyCount = 5u,
-            .packetCount = 76u,
-            .packetDependencyCount = 7u,
-            .mergedTaskCount = 2u,
-            .transitionBarrierCount = 9u,
-            .uavBarrierCount = 10u,
-            .ownershipReleaseBarrierCount = 11u,
-            .ownershipAcquireBarrierCount = 12u,
-            .stateExportBarrierCount = 13u,
-            .logicalOwnershipTransferCount = 60u,
-            .logicalOwnershipTransferSignatureCount = 15u,
-            .repeatedOwnershipTransferSignatureCount = 14u,
-            .concurrentSharingCouldAvoidTransferCount = 17u,
-            .concurrentSharingAdviceResourceCount = 2u,
-            .logicalOwnershipTransferInternalCount = 19u,
-            .logicalOwnershipTransferExternalImportCount = 20u,
-            .logicalOwnershipTransferExternalExportCount = 21u,
-            .resourceSetCount = 22u,
-            .resourceSetMemberCount = 23u,
-            .directResourceUseCount = 24u,
-            .declaredResourceSetUseCount = 25u,
-            .expandedResourceSetMemberUseCount = 26u,
-            .payloadObjectCount = 27u,
-            .payloadObjectBytes = 28u,
-            .uploadBlobCount = 29u,
-            .uploadBlobBytes = 30u,
-            .declarationSeconds = 0.001,
-            .analysisSeconds = 0.002,
-            .validationSeconds = 0.003,
-            .dependencyAnalysisSeconds = 0.004,
-            .hazardAnalysisSeconds = 0.005,
-            .topologicalOrderSeconds = 0.006,
-            .queueAssignmentSeconds = 0.007,
-            .planningSeconds = 0.008,
-            .packetizationSeconds = 0.009,
-            .resourceStatePlanningSeconds = 0.010,
-            .packetDependencyPlanningSeconds = 0.011,
-            .totalSeconds = 0.012,
-        },
-        .recording = {
-            .packetCount = 31u,
-            .taskCount = 32u,
-            .commandListCount = 33u,
-            .barrierCount = 34u,
-            .workerRoutedPacketCount = 30u,
-            .parallelPacketCount = 29u,
-            .commandListAcquisitionSeconds = 0.013,
-            .graphBarrierRecordingSeconds = 0.014,
-            .taskRecordSeconds = 0.015,
-            .recordingSeconds = 0.016,
-            .recordingElapsedSeconds = 0.017,
-            .readyFrontierElapsedSeconds = 0.018,
-            .readyFrontierWorkerBusySeconds = 0.019,
-            .readyFrontierWorkerCapacitySeconds = 0.020,
-        },
-        .submission = {
-            .acceptedPacketCount = 37u,
-            .acceptedTaskCount = 38u,
-            .rejectedPacketCount = 39u,
-            .rejectedTaskCount = 40u,
-            .nativeSubmissionCount = 30u,
-            .rejectedSubmissionCount = 38u,
-            .nativeCommandListCount = 32u,
-            .plannedWaitTokenCount = 44u,
-            .sameQueueWaitElisionCount = 12u,
-            .timelineWaitCount = 14u,
-            .mergedTimelineWaitCount = 18u,
-            .acceptedFrontierSubmissionCount = 28u,
-            .recoverySubmissionCount = 8u,
-            .submissionSeconds = 0.021,
-        },
-        .deviceGeneration = 17u,
-        .present = true,
-    };
-}
-
-Telemetry::FrameGraphRuntimeStatistics OwnerStatistics(const u32 packetCount)noexcept{
-    Telemetry::FrameGraphRuntimeStatistics statistics;
-    statistics.graphGeneration = 71u;
-    statistics.planGeneration = 72u;
-    statistics.recordingAttemptGeneration = 73u;
-    statistics.deviceGeneration = 17u;
-    statistics.compile.taskCount = packetCount;
-    statistics.compile.packetCount = packetCount;
-    statistics.recording.packetCount = packetCount;
-    statistics.recording.taskCount = packetCount;
-    statistics.recording.commandListCount = packetCount;
-    statistics.submission.acceptedPacketCount = packetCount;
-    statistics.submission.acceptedTaskCount = packetCount;
-    statistics.submission.nativeSubmissionCount = packetCount;
-    statistics.submission.nativeCommandListCount = packetCount;
-    statistics.present = true;
-    return statistics;
-}
-
-Telemetry::FrameGraphPhysicalQueueRuntimeStatistics MakeFrameGraphPhysicalQueueRuntimeStatistics(const u16 queueIndex)noexcept{
-    if(queueIndex == 1u){
-        return Telemetry::FrameGraphPhysicalQueueRuntimeStatistics{
-            .graphGeneration = 51u,
-            .planGeneration = 52u,
-            .recordingAttemptGeneration = 53u,
-            .queue = { .index = 1u, .deviceGeneration = 17u },
-            .deviceGeneration = 17u,
-            .queueClass = Telemetry::FrameGraphQueueClass::Graphics,
-            .compile = {
-                .taskCount = 50u,
-                .packetCount = 49u,
-                .mergedTaskCount = 1u,
-                .prologueBarrierCount = 11u,
-                .epilogueBarrierCount = 12u,
-                .ownershipReleaseBarrierCount = 6u,
-                .ownershipAcquireBarrierCount = 7u,
-                .incomingLogicalOwnershipTransferCount = 30u,
-                .outgoingLogicalOwnershipTransferCount = 31u,
-                .incomingLogicalOwnershipTransferSignatureCount = 8u,
-                .outgoingLogicalOwnershipTransferSignatureCount = 9u,
-                .incomingRepeatedOwnershipTransferSignatureCount = 7u,
-                .outgoingRepeatedOwnershipTransferSignatureCount = 8u,
-                .concurrentSharingAdviceResourceCount = 1u,
-            },
-            .recording = {
-                .packetCount = 20u,
-                .taskCount = 21u,
-                .commandListCount = 21u,
-                .barrierCount = 23u,
-                .workerRoutedPacketCount = 19u,
-                .parallelPacketCount = 18u,
-                .commandListAcquisitionSeconds = 0.005,
-                .graphBarrierRecordingSeconds = 0.006,
-                .taskRecordSeconds = 0.007,
-                .recordingSeconds = 0.008,
-            },
-            .submission = {
-                .acceptedPacketCount = 25u,
-                .acceptedTaskCount = 26u,
-                .rejectedPacketCount = 24u,
-                .rejectedTaskCount = 24u,
-                .nativeSubmissionCount = 19u,
-                .rejectedSubmissionCount = 23u,
-                .nativeCommandListCount = 20u,
-                .plannedWaitTokenCount = 20u,
-                .sameQueueWaitElisionCount = 5u,
-                .timelineWaitCount = 8u,
-                .mergedTimelineWaitCount = 7u,
-                .acceptedFrontierSubmissionCount = 18u,
-                .recoverySubmissionCount = 5u,
-                .submissionSeconds = 0.011,
-            },
-        };
-    }
-
-    return Telemetry::FrameGraphPhysicalQueueRuntimeStatistics{
-        .graphGeneration = 51u,
-        .planGeneration = 52u,
-        .recordingAttemptGeneration = 53u,
-        .queue = { .index = 3u, .deviceGeneration = 17u },
-        .deviceGeneration = 17u,
-        .queueClass = Telemetry::FrameGraphQueueClass::Compute,
-        .compile = {
-            .taskCount = 28u,
-            .packetCount = 27u,
-            .mergedTaskCount = 1u,
-            .prologueBarrierCount = 5u,
-            .epilogueBarrierCount = 6u,
-            .ownershipReleaseBarrierCount = 5u,
-            .ownershipAcquireBarrierCount = 5u,
-            .incomingLogicalOwnershipTransferCount = 30u,
-            .outgoingLogicalOwnershipTransferCount = 29u,
-            .incomingLogicalOwnershipTransferSignatureCount = 7u,
-            .outgoingLogicalOwnershipTransferSignatureCount = 6u,
-            .incomingRepeatedOwnershipTransferSignatureCount = 7u,
-            .outgoingRepeatedOwnershipTransferSignatureCount = 6u,
-            .concurrentSharingAdviceResourceCount = 1u,
-        },
-        .recording = {
-            .packetCount = 11u,
-            .taskCount = 11u,
-            .commandListCount = 12u,
-            .barrierCount = 11u,
-            .workerRoutedPacketCount = 11u,
-            .parallelPacketCount = 11u,
-            .commandListAcquisitionSeconds = 0.008,
-            .graphBarrierRecordingSeconds = 0.008,
-            .taskRecordSeconds = 0.008,
-            .recordingSeconds = 0.008,
-        },
-        .submission = {
-            .acceptedPacketCount = 12u,
-            .acceptedTaskCount = 12u,
-            .rejectedPacketCount = 15u,
-            .rejectedTaskCount = 16u,
-            .nativeSubmissionCount = 11u,
-            .rejectedSubmissionCount = 15u,
-            .nativeCommandListCount = 12u,
-            .plannedWaitTokenCount = 24u,
-            .sameQueueWaitElisionCount = 7u,
-            .timelineWaitCount = 6u,
-            .mergedTimelineWaitCount = 11u,
-            .acceptedFrontierSubmissionCount = 10u,
-            .recoverySubmissionCount = 3u,
-            .submissionSeconds = 0.010,
-        },
-    };
-}
-
-void BuildTestPhysicalQueueRuntimeStatistics(Telemetry::TelemetryArena& arena, Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords& records){
-    records = Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords(arena);
-    records.push_back(Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord{ .ownerNodeIndex = 0u, .statistics = MakeFrameGraphPhysicalQueueRuntimeStatistics(3u), });
-    records.push_back(Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord{ .ownerNodeIndex = 0u, .statistics = MakeFrameGraphPhysicalQueueRuntimeStatistics(1u), });
-}
-
-void BuildTestAssignedFrameGraph(Telemetry::TelemetryArena& arena, Telemetry::FrameGraphNodeDescs& nodes, Telemetry::FrameGraphEdgeDescs& edges){
-    BuildTestFrameGraph(arena, nodes, edges);
-    nodes[0u].queueAssignment = MakeChangedFrameGraphQueueAssignment();
-    nodes[2u].queueAssignment = MakeNotAcceptedFrameGraphQueueAssignment();
-}
-
-void BuildTestCompiledFrameGraph(Telemetry::TelemetryArena& arena, Telemetry::FrameGraphNodeDescs& nodes, Telemetry::FrameGraphEdgeDescs& edges){
-    BuildTestAssignedFrameGraph(arena, nodes, edges);
-    nodes[0u].compiledTask = MakeFrameGraphCompiledTask(41u, 7u, Telemetry::FrameGraphTaskPacketizationDecision::FirstTask);
-    nodes[2u].compiledTask = MakeFrameGraphCompiledTask(41u, 7u, Telemetry::FrameGraphTaskPacketizationDecision::MergedExplicit);
-}
-
-void BuildTestRuntimeFrameGraph(Telemetry::TelemetryArena& arena, Telemetry::FrameGraphNodeDescs& nodes, Telemetry::FrameGraphEdgeDescs& edges){
-    BuildTestCompiledFrameGraph(arena, nodes, edges);
-    nodes[0u].runtimeStatistics = MakeFrameGraphRuntimeStatistics();
-    nodes[2u].runtimeStatistics = MakeFrameGraphRuntimeStatistics();
-    nodes[2u].runtimeStatistics.graphGeneration = 61u;
-    nodes[2u].runtimeStatistics.planGeneration = 62u;
-    nodes[2u].runtimeStatistics.recordingAttemptGeneration = 63u;
-}
-
-void BuildTestPacketSubmissionFrameGraph(
-    Telemetry::TelemetryArena& arena,
-    Telemetry::FrameGraphNodeDescs& nodes,
-    Telemetry::FrameGraphEdgeDescs& edges,
-    Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
-    Telemetry::FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics
-){
-    nodes = Telemetry::FrameGraphNodeDescs(arena);
-    edges = Telemetry::FrameGraphEdgeDescs(arena);
-    physicalQueueRuntimeStatistics = Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords(arena);
-    packetSubmissionStatistics = Telemetry::FrameGraphPacketSubmissionStatisticsRecords(arena);
-
-    Telemetry::FrameGraphRuntimeStatistics runtimeStatistics;
-    runtimeStatistics.graphGeneration = 71u;
-    runtimeStatistics.planGeneration = 72u;
-    runtimeStatistics.recordingAttemptGeneration = 73u;
-    runtimeStatistics.deviceGeneration = 17u;
-    runtimeStatistics.compile.taskCount = 5u;
-    runtimeStatistics.compile.packetCount = 3u;
-    runtimeStatistics.compile.mergedTaskCount = 2u;
-    runtimeStatistics.recording.packetCount = 3u;
-    runtimeStatistics.recording.taskCount = 5u;
-    runtimeStatistics.recording.commandListCount = 4u;
-    runtimeStatistics.submission.acceptedPacketCount = 3u;
-    runtimeStatistics.submission.acceptedTaskCount = 5u;
-    runtimeStatistics.submission.nativeSubmissionCount = 3u;
-    runtimeStatistics.submission.nativeCommandListCount = 4u;
-    runtimeStatistics.submission.plannedWaitTokenCount = 6u;
-    runtimeStatistics.submission.sameQueueWaitElisionCount = 2u;
-    runtimeStatistics.submission.timelineWaitCount = 2u;
-    runtimeStatistics.submission.mergedTimelineWaitCount = 2u;
-    runtimeStatistics.submission.acceptedFrontierSubmissionCount = 2u;
-    runtimeStatistics.submission.recoverySubmissionCount = 1u;
-    runtimeStatistics.submission.submissionSeconds = 0.75;
-    runtimeStatistics.present = true;
-
-    Telemetry::FrameGraphNodeDesc owner;
-    owner.name = Name(TestCases::s_TelemetryCasePacketSubmissionPass);
-    owner.label = "Packet Submission Pass";
-    owner.kind = Telemetry::FrameGraphNodeKind::Pass;
-    owner.runtimeStatistics = runtimeStatistics;
-    nodes.push_back(owner);
-
-    Telemetry::FrameGraphPhysicalQueueRuntimeStatistics graphicsStatistics;
-    graphicsStatistics.graphGeneration = 71u;
-    graphicsStatistics.planGeneration = 72u;
-    graphicsStatistics.recordingAttemptGeneration = 73u;
-    graphicsStatistics.deviceGeneration = 17u;
-    graphicsStatistics.queue = { .index = 1u, .deviceGeneration = 17u };
-    graphicsStatistics.queueClass = Telemetry::FrameGraphQueueClass::Graphics;
-    graphicsStatistics.compile.taskCount = 4u;
-    graphicsStatistics.compile.packetCount = 2u;
-    graphicsStatistics.compile.mergedTaskCount = 2u;
-    graphicsStatistics.recording.packetCount = 2u;
-    graphicsStatistics.recording.taskCount = 4u;
-    graphicsStatistics.recording.commandListCount = 2u;
-    graphicsStatistics.submission.acceptedPacketCount = 2u;
-    graphicsStatistics.submission.acceptedTaskCount = 4u;
-    graphicsStatistics.submission.nativeSubmissionCount = 2u;
-    graphicsStatistics.submission.nativeCommandListCount = 2u;
-    graphicsStatistics.submission.plannedWaitTokenCount = 3u;
-    graphicsStatistics.submission.sameQueueWaitElisionCount = 2u;
-    graphicsStatistics.submission.timelineWaitCount = 1u;
-    graphicsStatistics.submission.acceptedFrontierSubmissionCount = 1u;
-    graphicsStatistics.submission.recoverySubmissionCount = 1u;
-    graphicsStatistics.submission.submissionSeconds = 0.5;
-
-    Telemetry::FrameGraphPhysicalQueueRuntimeStatistics computeStatistics;
-    computeStatistics.graphGeneration = 71u;
-    computeStatistics.planGeneration = 72u;
-    computeStatistics.recordingAttemptGeneration = 73u;
-    computeStatistics.deviceGeneration = 17u;
-    computeStatistics.queue = { .index = 3u, .deviceGeneration = 17u };
-    computeStatistics.queueClass = Telemetry::FrameGraphQueueClass::Compute;
-    computeStatistics.compile.taskCount = 1u;
-    computeStatistics.compile.packetCount = 1u;
-    computeStatistics.recording.packetCount = 1u;
-    computeStatistics.recording.taskCount = 1u;
-    computeStatistics.recording.commandListCount = 2u;
-    computeStatistics.submission.acceptedPacketCount = 1u;
-    computeStatistics.submission.acceptedTaskCount = 1u;
-    computeStatistics.submission.nativeSubmissionCount = 1u;
-    computeStatistics.submission.nativeCommandListCount = 2u;
-    computeStatistics.submission.plannedWaitTokenCount = 3u;
-    computeStatistics.submission.timelineWaitCount = 1u;
-    computeStatistics.submission.mergedTimelineWaitCount = 2u;
-    computeStatistics.submission.acceptedFrontierSubmissionCount = 1u;
-    computeStatistics.submission.submissionSeconds = 0.25;
-
-    physicalQueueRuntimeStatistics.push_back(Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord{ .ownerNodeIndex = 0u, .statistics = computeStatistics, });
-    physicalQueueRuntimeStatistics.push_back(Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord{ .ownerNodeIndex = 0u, .statistics = graphicsStatistics, });
-
-    packetSubmissionStatistics.push_back(Telemetry::FrameGraphPacketSubmissionStatisticsRecord{
-        .packetGeneration = 72u,
-        .taskCount = 2u,
-        .commandListCount = 1u,
-        .plannedWaitTokenCount = 1u,
-        .sameQueueWaitElisionCount = 1u,
-        .timelineWaitCount = 0u,
-        .mergedTimelineWaitCount = 0u,
-        .inheritedTimelineWaitElisionCount = 0u,
-        .submissionSeconds = 0.375,
-        .queue = { .index = 1u, .deviceGeneration = 17u },
-        .ownerNodeIndex = 0u,
-        .packetIndex = 2u,
-        .queueClass = Telemetry::FrameGraphQueueClass::Graphics,
-        .joinsAcceptedQueueFrontier = true,
-        .recoverySubmission = true,
-    });
-    packetSubmissionStatistics.push_back(Telemetry::FrameGraphPacketSubmissionStatisticsRecord{
-        .packetGeneration = 72u,
-        .taskCount = 2u,
-        .commandListCount = 1u,
-        .plannedWaitTokenCount = 2u,
-        .sameQueueWaitElisionCount = 1u,
-        .timelineWaitCount = 1u,
-        .mergedTimelineWaitCount = 0u,
-        .inheritedTimelineWaitElisionCount = 0u,
-        .submissionSeconds = 0.125,
-        .queue = { .index = 1u, .deviceGeneration = 17u },
-        .ownerNodeIndex = 0u,
-        .packetIndex = 0u,
-        .queueClass = Telemetry::FrameGraphQueueClass::Graphics,
-    });
-    packetSubmissionStatistics.push_back(Telemetry::FrameGraphPacketSubmissionStatisticsRecord{
-        .packetGeneration = 72u,
-        .taskCount = 1u,
-        .commandListCount = 2u,
-        .plannedWaitTokenCount = 3u,
-        .sameQueueWaitElisionCount = 0u,
-        .timelineWaitCount = 1u,
-        .mergedTimelineWaitCount = 2u,
-        .inheritedTimelineWaitElisionCount = 0u,
-        .submissionSeconds = 0.25,
-        .queue = { .index = 3u, .deviceGeneration = 17u },
-        .ownerNodeIndex = 0u,
-        .packetIndex = 1u,
-        .queueClass = Telemetry::FrameGraphQueueClass::Compute,
-        .joinsAcceptedQueueFrontier = true,
-    });
-}
-
-NWB::Core::Perf::TimingStats MakeTestTimingStats()noexcept{
-    NWB::Core::Perf::TimingStats stats;
-    stats.seconds = 0.125;
-    stats.sampleCount = 3u;
-    stats.publishFrameIndex = 77u;
-    stats.firstSampleFrameIndex = 70u;
-    stats.lastSampleFrameIndex = 76u;
-    return stats;
-}
-
-NWB::Core::Perf::MemorySnapshot MakeTestMemorySnapshot(const Name& scopeName)noexcept{
-    NWB::Core::Perf::MemorySnapshot snapshot;
-    snapshot.scopeName = scopeName;
-    snapshot.frameIndex = 88u;
-    snapshot.reservedBytes = 4096u;
-    snapshot.usedBytes = 1536u;
-    snapshot.peakUsedBytes = 2048u;
-    snapshot.allocationCount = 7u;
-    snapshot.reallocationCount = 2u;
-    snapshot.deallocationCount = 1u;
-    return snapshot;
-}
-
-NWB::Core::Perf::MemoryDelta MakeTestMemoryDelta(const i64 deallocationCount)noexcept{
-    NWB::Core::Perf::MemoryDelta delta;
-    delta.previousFrameIndex = 87u;
-    delta.currentFrameIndex = 88u;
-    delta.reservedBytes = 512;
-    delta.usedBytes = -128;
-    delta.peakUsedBytes = 256;
-    delta.allocationCount = 2;
-    delta.reallocationCount = 1;
-    delta.deallocationCount = deallocationCount;
-    delta.hasSamples = true;
-    return delta;
-}
-
-Telemetry::EncodedFrameGraphRuntimeStatistics EncodeTestFrameGraphRuntimeStatistics(const Telemetry::FrameGraphRuntimeStatistics& statistics, const u32 nodeIndex, const u16 reserved)noexcept{
-    return Telemetry::EncodedFrameGraphRuntimeStatistics{
-        .nodeIndex = nodeIndex,
-        .deviceGeneration = statistics.deviceGeneration,
-        .reserved = reserved,
-        .graphGeneration = statistics.graphGeneration,
-        .planGeneration = statistics.planGeneration,
-        .recordingAttemptGeneration = statistics.recordingAttemptGeneration,
-        .compile = {
-            .taskCount = statistics.compile.taskCount,
-            .resourceCount = statistics.compile.resourceCount,
-            .resourceUseCount = statistics.compile.resourceUseCount,
-            .explicitDependencyCount = statistics.compile.explicitDependencyCount,
-            .inferredDependencyCount = statistics.compile.inferredDependencyCount,
-            .packetCount = statistics.compile.packetCount,
-            .packetDependencyCount = statistics.compile.packetDependencyCount,
-            .mergedTaskCount = statistics.compile.mergedTaskCount,
-            .transitionBarrierCount = statistics.compile.transitionBarrierCount,
-            .uavBarrierCount = statistics.compile.uavBarrierCount,
-            .ownershipReleaseBarrierCount = statistics.compile.ownershipReleaseBarrierCount,
-            .ownershipAcquireBarrierCount = statistics.compile.ownershipAcquireBarrierCount,
-            .stateExportBarrierCount = statistics.compile.stateExportBarrierCount,
-            .logicalOwnershipTransferCount = statistics.compile.logicalOwnershipTransferCount,
-            .logicalOwnershipTransferSignatureCount = statistics.compile.logicalOwnershipTransferSignatureCount,
-            .repeatedOwnershipTransferSignatureCount = statistics.compile.repeatedOwnershipTransferSignatureCount,
-            .concurrentSharingCouldAvoidTransferCount = statistics.compile.concurrentSharingCouldAvoidTransferCount,
-            .concurrentSharingAdviceResourceCount = statistics.compile.concurrentSharingAdviceResourceCount,
-            .logicalOwnershipTransferInternalCount = statistics.compile.logicalOwnershipTransferInternalCount,
-            .logicalOwnershipTransferExternalImportCount = statistics.compile.logicalOwnershipTransferExternalImportCount,
-            .logicalOwnershipTransferExternalExportCount = statistics.compile.logicalOwnershipTransferExternalExportCount,
-            .resourceSetCount = statistics.compile.resourceSetCount,
-            .resourceSetMemberCount = statistics.compile.resourceSetMemberCount,
-            .directResourceUseCount = statistics.compile.directResourceUseCount,
-            .declaredResourceSetUseCount = statistics.compile.declaredResourceSetUseCount,
-            .expandedResourceSetMemberUseCount = statistics.compile.expandedResourceSetMemberUseCount,
-            .payloadObjectCount = statistics.compile.payloadObjectCount,
-            .payloadObjectBytes = statistics.compile.payloadObjectBytes,
-            .uploadBlobCount = statistics.compile.uploadBlobCount,
-            .uploadBlobBytes = statistics.compile.uploadBlobBytes,
-            .declarationSeconds = statistics.compile.declarationSeconds,
-            .analysisSeconds = statistics.compile.analysisSeconds,
-            .validationSeconds = statistics.compile.validationSeconds,
-            .dependencyAnalysisSeconds = statistics.compile.dependencyAnalysisSeconds,
-            .hazardAnalysisSeconds = statistics.compile.hazardAnalysisSeconds,
-            .topologicalOrderSeconds = statistics.compile.topologicalOrderSeconds,
-            .queueAssignmentSeconds = statistics.compile.queueAssignmentSeconds,
-            .planningSeconds = statistics.compile.planningSeconds,
-            .packetizationSeconds = statistics.compile.packetizationSeconds,
-            .resourceStatePlanningSeconds = statistics.compile.resourceStatePlanningSeconds,
-            .packetDependencyPlanningSeconds = statistics.compile.packetDependencyPlanningSeconds,
-            .totalSeconds = statistics.compile.totalSeconds,
-            .resourceVersionCount = statistics.compile.resourceVersionCount,
-            .resourceVersionEdgeCount = statistics.compile.resourceVersionEdgeCount,
-        },
-        .recording = {
-            .packetCount = statistics.recording.packetCount,
-            .taskCount = statistics.recording.taskCount,
-            .commandListCount = statistics.recording.commandListCount,
-            .barrierCount = statistics.recording.barrierCount,
-            .workerRoutedPacketCount = statistics.recording.workerRoutedPacketCount,
-            .parallelPacketCount = statistics.recording.parallelPacketCount,
-            .commandListAcquisitionSeconds = statistics.recording.commandListAcquisitionSeconds,
-            .graphBarrierRecordingSeconds = statistics.recording.graphBarrierRecordingSeconds,
-            .taskRecordSeconds = statistics.recording.taskRecordSeconds,
-            .recordingSeconds = statistics.recording.recordingSeconds,
-            .recordingElapsedSeconds = statistics.recording.recordingElapsedSeconds,
-            .readyFrontierElapsedSeconds = statistics.recording.readyFrontierElapsedSeconds,
-            .readyFrontierWorkerBusySeconds = statistics.recording.readyFrontierWorkerBusySeconds,
-            .readyFrontierWorkerCapacitySeconds = statistics.recording.readyFrontierWorkerCapacitySeconds,
-        },
-        .submission = {
-            .acceptedPacketCount = statistics.submission.acceptedPacketCount,
-            .acceptedTaskCount = statistics.submission.acceptedTaskCount,
-            .rejectedPacketCount = statistics.submission.rejectedPacketCount,
-            .rejectedTaskCount = statistics.submission.rejectedTaskCount,
-            .nativeSubmissionCount = statistics.submission.nativeSubmissionCount,
-            .rejectedSubmissionCount = statistics.submission.rejectedSubmissionCount,
-            .nativeCommandListCount = statistics.submission.nativeCommandListCount,
-            .plannedWaitTokenCount = statistics.submission.plannedWaitTokenCount,
-            .sameQueueWaitElisionCount = statistics.submission.sameQueueWaitElisionCount,
-            .timelineWaitCount = statistics.submission.timelineWaitCount,
-            .mergedTimelineWaitCount = statistics.submission.mergedTimelineWaitCount,
-            .inheritedTimelineWaitElisionCount = statistics.submission.inheritedTimelineWaitElisionCount,
-            .acceptedFrontierSubmissionCount = statistics.submission.acceptedFrontierSubmissionCount,
-            .submissionSeconds = statistics.submission.submissionSeconds,
-            .recoverySubmissionCount = statistics.submission.recoverySubmissionCount,
-        },
-    };
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    const String namesymText = StringFormat(
+        "{}\tproducer=runtime\n{}\truntime\tOwners/Loaded First\n{}\truntime\tOwners/Loaded Second\n",
+        s_FileHeader,
+        firstHashText,
+        secondHashText
+    );
+    ASSERT_TRUE(Suite_LoadNameSymbolsFromMemory(StringView(namesymText), scratchArena));
+    const Expected<TelemetryReport> afterReportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, scratchArena);
+    ASSERT_TRUE(afterReportResult.has_value());
+    const TelemetryReport afterReport = afterReportResult.value();
+    EXPECT_EQ(afterReport.summary.parseFailureCount, 0u);
+    const StringView json = ReportJsonView(afterReport);
+    const StringView firstRecord = FindOwnerJsonRecord(json, firstOwner, s_SuiteArenaSourceRecord);
+    const StringView secondRecord = FindOwnerJsonRecord(json, secondOwner, s_SuiteArenaSourceRecord);
+    const StringView explicitRecord = FindOwnerJsonRecord(json, firstOwner, "\"source\": \"explicitScope\"");
+    const StringView unknownRecord = FindOwnerJsonRecord(json, unknownOwner, s_SuiteHeapBackingSourceRecord);
+    ASSERT_FALSE(firstRecord.empty());
+    ASSERT_FALSE(secondRecord.empty());
+    ASSERT_FALSE(explicitRecord.empty());
+    ASSERT_FALSE(unknownRecord.empty());
+    EXPECT_NE(firstRecord.find("\"scope\": \"owners/loaded first\""), usize.max);
+    EXPECT_NE(secondRecord.find("\"scope\": \"owners/loaded second\""), usize.max);
+    EXPECT_EQ(CountText(firstRecord, StringView(firstHashText)), 1u);
+    EXPECT_EQ(CountText(secondRecord, StringView(secondHashText)), 1u);
+    EXPECT_NE(explicitRecord.find("\"scope\": \"Producer Display Name\""), usize.max);
+    EXPECT_EQ(CountText(unknownRecord, StringView(unknownHashText)), 2u);
 }
 
 

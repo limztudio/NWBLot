@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/kernel/renderer_format_private.adhd>
 #include <impl/ecs_render/shared/frame_types.adhd>
 #include <impl/ecs_render/avboit/graph_types.adhd>
 #include <impl/ecs_render/avboit/types.adhd>
@@ -10,96 +11,143 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/graphics/gpu_timing.h>
-#include <core/task/gpu/compiler.h>
-#include <core/task/gpu/packet_runtime.h>
-#include <core/task/gpu/task_graph.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
+AvboitGraphTaskId SelectAvboitTransparencyCompletionTask(in AvboitGraphTaskId accumulationFinalizeTask, in AvboitGraphTaskId occupancyTask){
+    if(accumulationFinalizeTask.valid())
+        return accumulationFinalizeTask;
+    return occupancyTask;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // AVBOIT owns its stage identifiers; the host observes the typed boundary and owns execution.
-struct RendererAvboitTaskGraphStageState{
-    Core::GpuTaskId m_clearFirstTask;
-    Core::GpuTaskId m_clearTask;
-    Core::GpuTaskId m_transparentCsgIntervalClearFirstTask;
-    Core::GpuTaskId m_transparentCsgIntervalClearTask;
-    Core::GpuTaskId m_preTask;
-    Core::GpuTaskId m_csgReceiverSpanTask;
-    Core::GpuTaskId m_csgIntervalCombineTask;
-    Core::GpuTaskId m_occupancyStreamTask;
-    Core::GpuTaskId m_occupancyComputeEmulationTask;
-    Core::GpuTaskId m_occupancyReusedGeometryProducer;
-    Array<Core::GpuTaskId, s_SharedComputeEmulationMaximumPhaseCount> m_occupancySharedComputeEmulationTasks = {};
-    usize m_occupancySharedComputeEmulationTaskCount = 0u;
-    Core::GpuTaskId m_occupancyTask;
-    Core::GpuTaskId m_depthWarpTask;
-    Core::GpuTaskId m_extinctionStreamTask;
-    Core::GpuTaskId m_extinctionComputeEmulationTask;
-    Core::GpuTaskId m_extinctionReusedGeometryProducer;
-    Array<Core::GpuTaskId, s_SharedComputeEmulationMaximumPhaseCount> m_extinctionSharedComputeEmulationTasks = {};
-    usize m_extinctionSharedComputeEmulationTaskCount = 0u;
-    Core::GpuTaskId m_extinctionTask;
-    Core::GpuTaskId m_integrationTask;
-    Core::GpuTaskId m_accumulationStreamTask;
-    Core::GpuTaskId m_accumulationComputeEmulationTask;
-    Core::GpuTaskId m_accumulationReusedGeometryProducer;
-    Array<Core::GpuTaskId, s_SharedComputeEmulationMaximumPhaseCount> m_accumulationSharedComputeEmulationTasks = {};
-    usize m_accumulationSharedComputeEmulationTaskCount = 0u;
-    Core::GpuTaskId m_accumulationTask;
-    Core::GpuTaskId m_accumulationFinalizeTask;
+class RendererAvboitTaskGraphStageState{
+    public AvboitGraphTaskId m_clearFirstTask = AvboitGraphTaskId();
+    public AvboitGraphTaskId m_clearTask = AvboitGraphTaskId();
+    public AvboitGraphTaskId m_transparentCsgIntervalClearFirstTask = AvboitGraphTaskId();
+    public AvboitGraphTaskId m_transparentCsgIntervalClearTask = AvboitGraphTaskId();
+    public AvboitGraphTaskId m_preTask = AvboitGraphTaskId();
+    public AvboitGraphTaskId m_csgReceiverSpanTask = AvboitGraphTaskId();
+    public AvboitGraphTaskId m_csgIntervalCombineTask = AvboitGraphTaskId();
+    public AvboitGraphTaskId m_occupancyStreamTask = AvboitGraphTaskId();
+    public AvboitGraphTaskId m_occupancyComputeEmulationTask = AvboitGraphTaskId();
+    public AvboitGraphTaskId m_occupancyReusedGeometryProducer = AvboitGraphTaskId();
+    public Array<AvboitGraphTaskId, s_SharedComputeEmulationMaximumPhaseCount> m_occupancySharedComputeEmulationTasks;
+    public usize m_occupancySharedComputeEmulationTaskCount = 0u;
+    public AvboitGraphTaskId m_occupancyTask = AvboitGraphTaskId();
+    public AvboitGraphTaskId m_depthWarpTask = AvboitGraphTaskId();
+    public AvboitGraphTaskId m_extinctionStreamTask = AvboitGraphTaskId();
+    public AvboitGraphTaskId m_extinctionComputeEmulationTask = AvboitGraphTaskId();
+    public AvboitGraphTaskId m_extinctionReusedGeometryProducer = AvboitGraphTaskId();
+    public Array<AvboitGraphTaskId, s_SharedComputeEmulationMaximumPhaseCount> m_extinctionSharedComputeEmulationTasks;
+    public usize m_extinctionSharedComputeEmulationTaskCount = 0u;
+    public AvboitGraphTaskId m_extinctionTask = AvboitGraphTaskId();
+    public AvboitGraphTaskId m_integrationTask = AvboitGraphTaskId();
+    public AvboitGraphTaskId m_accumulationStreamTask = AvboitGraphTaskId();
+    public AvboitGraphTaskId m_accumulationComputeEmulationTask = AvboitGraphTaskId();
+    public AvboitGraphTaskId m_accumulationReusedGeometryProducer = AvboitGraphTaskId();
+    public Array<AvboitGraphTaskId, s_SharedComputeEmulationMaximumPhaseCount> m_accumulationSharedComputeEmulationTasks;
+    public usize m_accumulationSharedComputeEmulationTaskCount = 0u;
+    public AvboitGraphTaskId m_accumulationTask = AvboitGraphTaskId();
+    public AvboitGraphTaskId m_accumulationFinalizeTask = AvboitGraphTaskId();
 
+    public void reset(){
+        this.m_clearFirstTask = AvboitGraphTaskId();
+        this.m_clearTask = AvboitGraphTaskId();
+        this.m_transparentCsgIntervalClearFirstTask = AvboitGraphTaskId();
+        this.m_transparentCsgIntervalClearTask = AvboitGraphTaskId();
+        this.m_preTask = AvboitGraphTaskId();
+        this.m_csgReceiverSpanTask = AvboitGraphTaskId();
+        this.m_csgIntervalCombineTask = AvboitGraphTaskId();
+        this.m_occupancyStreamTask = AvboitGraphTaskId();
+        this.m_occupancyComputeEmulationTask = AvboitGraphTaskId();
+        this.m_occupancyReusedGeometryProducer = AvboitGraphTaskId();
+        for(usize i = 0u; i < s_SharedComputeEmulationMaximumPhaseCount; ++i)
+            this.m_occupancySharedComputeEmulationTasks[i] = AvboitGraphTaskId();
+        this.m_occupancySharedComputeEmulationTaskCount = 0u;
+        this.m_occupancyTask = AvboitGraphTaskId();
+        this.m_depthWarpTask = AvboitGraphTaskId();
+        this.m_extinctionStreamTask = AvboitGraphTaskId();
+        this.m_extinctionComputeEmulationTask = AvboitGraphTaskId();
+        this.m_extinctionReusedGeometryProducer = AvboitGraphTaskId();
+        for(usize i = 0u; i < s_SharedComputeEmulationMaximumPhaseCount; ++i)
+            this.m_extinctionSharedComputeEmulationTasks[i] = AvboitGraphTaskId();
+        this.m_extinctionSharedComputeEmulationTaskCount = 0u;
+        this.m_extinctionTask = AvboitGraphTaskId();
+        this.m_integrationTask = AvboitGraphTaskId();
+        this.m_accumulationStreamTask = AvboitGraphTaskId();
+        this.m_accumulationComputeEmulationTask = AvboitGraphTaskId();
+        this.m_accumulationReusedGeometryProducer = AvboitGraphTaskId();
+        for(usize i = 0u; i < s_SharedComputeEmulationMaximumPhaseCount; ++i)
+            this.m_accumulationSharedComputeEmulationTasks[i] = AvboitGraphTaskId();
+        this.m_accumulationSharedComputeEmulationTaskCount = 0u;
+        this.m_accumulationTask = AvboitGraphTaskId();
+        this.m_accumulationFinalizeTask = AvboitGraphTaskId();
+    }
 
-public:
-    void reset()noexcept;
-    [[nodiscard]] RendererTaskGraphTransparencyStage transparencyStage()const noexcept;
-};
+    public RendererTaskGraphTransparencyStage transparencyStage()const{
+        return RendererTaskGraphTransparencyStage(
+            this.m_preTask,
+            SelectAvboitTransparencyCompletionTask(this.m_accumulationFinalizeTask, this.m_occupancyTask),
+            this.m_depthWarpTask.valid()
+        );
+    }
+}
 
 // Host sees only this immutable result; task topology and queue/packet rules stay inside AVBOIT.
-struct RendererAvboitTaskGraphValidation{
-    RendererTaskGraphTransparencyStage m_stage;
-    b8 m_valid = false;
+class RendererAvboitTaskGraphValidation{
+    public RendererTaskGraphTransparencyStage m_stage;
+    public b8 m_valid;
 
+    public RendererAvboitTaskGraphValidation(){
+        this.m_stage = RendererTaskGraphTransparencyStage();
+        this.m_valid = false;
+    }
 
-public:
-    [[nodiscard]] b8 valid()const noexcept{ return m_valid; }
+    public RendererAvboitTaskGraphValidation(in RendererTaskGraphTransparencyStage stage, in b8 valid){
+        this.m_stage = stage;
+        this.m_valid = valid;
+    }
 
-    [[nodiscard]] const RendererTaskGraphTransparencyStage& stage()const noexcept{ return m_stage; }
-};
+    public b8 valid()const{
+        return this.m_valid;
+    }
+
+    public RendererTaskGraphTransparencyStage stage()const{
+        return this.m_stage;
+    }
+}
 
 // AVBOIT contributes timing bindings; domain stays free of recording ownership.
-struct RendererAvboitTaskGraphTimingTickets{
-    Core::GpuTimingSubmissionTicket& m_pre;
-    Core::GpuTimingSubmissionTicket& m_depthWarp;
-    Core::GpuTimingSubmissionTicket& m_extinction;
-    Core::GpuTimingSubmissionTicket& m_integration;
-    Core::GpuTimingSubmissionTicket& m_accumulation;
-};
+class RendererAvboitTaskGraphTimingTickets{
+    public KernelGpuTimingSubmissionTicketPtr m_pre;
+    public KernelGpuTimingSubmissionTicketPtr m_depthWarp;
+    public KernelGpuTimingSubmissionTicketPtr m_extinction;
+    public KernelGpuTimingSubmissionTicketPtr m_integration;
+    public KernelGpuTimingSubmissionTicketPtr m_accumulation;
 
+    public RendererAvboitTaskGraphTimingTickets(){
+        this.m_pre = NullKernelGpuTimingSubmissionTicketPtr();
+        this.m_depthWarp = NullKernelGpuTimingSubmissionTicketPtr();
+        this.m_extinction = NullKernelGpuTimingSubmissionTicketPtr();
+        this.m_integration = NullKernelGpuTimingSubmissionTicketPtr();
+        this.m_accumulation = NullKernelGpuTimingSubmissionTicketPtr();
+    }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public RendererAvboitTaskGraphTimingTickets(
+        mut KernelGpuTimingSubmissionTicket pre,
+        mut KernelGpuTimingSubmissionTicket depthWarp,
+        mut KernelGpuTimingSubmissionTicket extinction,
+        mut KernelGpuTimingSubmissionTicket integration,
+        mut KernelGpuTimingSubmissionTicket accumulation
+    ){
+        this.m_pre = AddressOfKernelGpuTimingSubmissionTicket(pre);
+        this.m_depthWarp = AddressOfKernelGpuTimingSubmissionTicket(depthWarp);
+        this.m_extinction = AddressOfKernelGpuTimingSubmissionTicket(extinction);
+        this.m_integration = AddressOfKernelGpuTimingSubmissionTicket(integration);
+        this.m_accumulation = AddressOfKernelGpuTimingSubmissionTicket(accumulation);
+    }
 }
 
 

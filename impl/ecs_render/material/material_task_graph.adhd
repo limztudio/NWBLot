@@ -56,6 +56,14 @@ u64 ComputeObjectGeometryInstanceByteOffset(in u32 instanceIndex, in usize insta
     return cast<u64>(instanceIndex) * cast<u64>(instanceByteStride);
 }
 
+Expected<Name> FormatObjectGeometryDecodeIdentity(in usize entryIndex){
+    return ParseName(StringFormat("render.object_geometry.decode_{}", entryIndex));
+}
+
+Expected<Name> FormatObjectGeometryReadyIdentity(in usize phaseIndex){
+    return ParseName(StringFormat("render.object_geometry.ready_{}", phaseIndex));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -462,10 +470,10 @@ b8 ObjectGeometryCacheGraph::prepare(
                 uses.push_back(ReadBufferUse(instances, Core::BufferRange(ComputeObjectGeometryInstanceByteOffset(draw.instanceIndex, sizeof(InstanceGpuData)), sizeof(InstanceGpuData))));
                 uses.push_back(WriteUse(entry.resource, Core::ResourceStates::UnorderedAccess));
                 uses.push_back(ReadUse(entry.resource, ECSRenderDetail::s_ObjectGeometryRasterState));
-                const auto identity = ToName(StringFormat(scratchArena, "render.object_geometry.decode_{}", m_entries.size()));
-                if(!identity || !*identity)
+                const Expected<Name> identity = FormatObjectGeometryDecodeIdentity(m_entries.size());
+                if(!identity)
                     return false;
-                Core::GpuTaskDesc desc = TaskDesc(**identity, s_ObjectGeometryDecodeMarkerLabel);
+                Core::GpuTaskDesc desc = TaskDesc(*identity, s_ObjectGeometryDecodeMarkerLabel);
                 desc.setDependencies({ &dependency, 1u }).setResourceUses(uses);
                 const auto entryProducerResult = m_graph.addTask<DecodeTask>(desc, DecodeTask::Payload{ m_materialSystem, m_meshSystem, draw, frameBindings, timingTicket, rebindableTimingTicket, });
                 if(!entryProducerResult){
@@ -500,12 +508,12 @@ b8 ObjectGeometryCacheGraph::prepare(
         containsDependency = containsDependency || producer == dependency;
     if(!containsDependency)
         producers.push_back(dependency);
-    const auto readyIdentity = ToName(StringFormat(scratchArena, "render.object_geometry.ready_{}", m_phaseCount++));
-    if(!readyIdentity || !*readyIdentity){
+    const Expected<Name> readyIdentity = FormatObjectGeometryReadyIdentity(m_phaseCount++);
+    if(!readyIdentity){
         dependency = {};
         return false;
     }
-    Core::GpuTaskDesc ready = TaskDesc(**readyIdentity, s_ObjectGeometryReadyMarkerLabel);
+    Core::GpuTaskDesc ready = TaskDesc(*readyIdentity, s_ObjectGeometryReadyMarkerLabel);
     ready.setDependencies(producers).setResourceUses(cacheReads);
     const auto dependencyResult = m_graph.addTask<ReadyTask>(ready, ReadyTask::Payload{});
     if(!dependencyResult){

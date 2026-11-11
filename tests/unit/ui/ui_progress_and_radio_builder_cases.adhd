@@ -132,37 +132,6 @@ NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_progress_layout_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace Impl;
-using namespace Impl::Ui;
-
-[[nodiscard]] inline UiSkinRegion MakeUiProgressNineSliceRegion()noexcept{
-    UiSkinRegion region;
-    region.name = Name(NWB::Tests::UiCases::s_UiCaseProgressTest);
-    region.rectangle = { 0u, 0u, 24u, 24u };
-    region.sliceInsets = { 6u, 6u, 6u, 6u };
-    region.padding = { 8.0f, 8.0f, 8.0f, 8.0f };
-    region.minimumWidth = 12.0f;
-    region.minimumHeight = 12.0f;
-    region.drawMode = UiSkinDrawMode::NineSlice;
-    return region;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace __hidden_ui_radio_group_behavior_tests{
 
 
@@ -365,15 +334,15 @@ public:
     mutable b8 nestedSucceeded = true;
 };
 
-[[nodiscard]] inline Expected<RadioGroupChoices> ReconcileUiRadioGroupChoices(const IListDataSource& source, RadioGroupState& state, RadioGroupResult& result){
+[[nodiscard]] NWB_INLINE Expected<RadioGroupChoices> ReconcileUiRadioGroupChoices(const IListDataSource& source, RadioGroupState& state, RadioGroupResult& result){
     return RadioGroupBehavior::Reconcile(source, nullptr, state, result);
 }
 
-[[nodiscard]] inline Expected<RadioGroupChoices> ReconcileUiRadioGroupChoicesGuarded(const IListDataSource& source, const IRadioGroupReconcileGuard& guard, RadioGroupState& state, RadioGroupResult& result){
+[[nodiscard]] NWB_INLINE Expected<RadioGroupChoices> ReconcileUiRadioGroupChoicesGuarded(const IListDataSource& source, const IRadioGroupReconcileGuard& guard, RadioGroupState& state, RadioGroupResult& result){
     return RadioGroupBehavior::Reconcile(source, &guard, state, result);
 }
 
-[[nodiscard]] inline b8 ApplyUiRadioGroupAction(const RadioGroupChoices& choices, const RadioGroupOptions& options, const ControlAction& action, RadioGroupState& state, RadioGroupResult& result){
+[[nodiscard]] NWB_INLINE b8 ApplyUiRadioGroupAction(const RadioGroupChoices& choices, const RadioGroupOptions& options, const ControlAction& action, RadioGroupState& state, RadioGroupResult& result){
     return RadioGroupBehavior::Apply(choices, options, action, state, result);
 }
 
@@ -485,7 +454,7 @@ namespace UiRadioCallbackMutation = ::NWB::__hidden_ui_radio_group_behavior_test
 using UiRadioCallbackMutationEnum = ::NWB::__hidden_ui_radio_group_behavior_tests::CallbackMutation::Enum;
 using UiRadioReconcileGate = ::NWB::__hidden_ui_radio_group_behavior_tests::ReconcileGate;
 using UiRadioChoiceSource = ::NWB::__hidden_ui_radio_group_behavior_tests::ChoiceSource;
-using ::NWB::__hidden_ui_progress_layout_tests::MakeUiProgressNineSliceRegion;
+using ::NWB::Tests::UiCases::s_UiCaseProgressTest;
 using ::NWB::__hidden_ui_radio_group_behavior_tests::ReconcileUiRadioGroupChoices;
 using ::NWB::__hidden_ui_radio_group_behavior_tests::ReconcileUiRadioGroupChoicesGuarded;
 using ::NWB::__hidden_ui_radio_group_behavior_tests::ApplyUiRadioGroupAction;
@@ -568,6 +537,27 @@ Color MakeUiProgressColor(in f32 r, in f32 g, in f32 b, in f32 a){
     color.b = b;
     color.a = a;
     return color;
+}
+
+UiSkinRegion MakeUiProgressNineSliceRegion(){
+    UiSkinRegion region = UiSkinRegion();
+    region.name = Name(s_UiCaseProgressTest);
+    region.rectangle.x = 0u;
+    region.rectangle.y = 0u;
+    region.rectangle.width = 24u;
+    region.rectangle.height = 24u;
+    region.sliceInsets.left = 6u;
+    region.sliceInsets.top = 6u;
+    region.sliceInsets.right = 6u;
+    region.sliceInsets.bottom = 6u;
+    region.padding.left = 8.0f;
+    region.padding.top = 8.0f;
+    region.padding.right = 8.0f;
+    region.padding.bottom = 8.0f;
+    region.minimumWidth = 12.0f;
+    region.minimumHeight = 12.0f;
+    region.drawMode = UiSkinDrawMode::NineSlice;
+    return region;
 }
 
 ProgressOptions MakeUiProgressDefaultOptions(){
@@ -981,9 +971,7 @@ void VerifyUiProgressLayoutTests_InvalidOptionsPaddingAndTintsRejectMetrics(){
         ProgressStyle style = ProgressStyle();
         switch(field){
         case 0u:
-            native(mut options){
-                options.width.policy = static_cast<LayoutSizePolicy::Enum>(3u);
-            }
+            options.width.policy = cast<LayoutSizePolicyEnum>(3u);
             break;
         case 1u:
             options.width.value = 0.0f;
@@ -1073,9 +1061,7 @@ void VerifyUiProgressLayoutTests_InvalidRegionMetricsSlicesModesAndDensityReject
             fill.sliceInsets.bottom = 25u;
             break;
         case 12u:
-            native(mut track){
-                track.drawMode = static_cast<UiSkinDrawMode::Enum>(2u);
-            }
+            track.drawMode = cast<UiSkinDrawModeEnum>(2u);
             break;
         case 13u:
             fill.drawMode = UiSkinDrawMode::Sprite;

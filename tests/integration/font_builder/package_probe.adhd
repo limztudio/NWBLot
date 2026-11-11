@@ -15,15 +15,10 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <logger/client/module.h>
-
 #include <impl/assets_font/cook.adhd.h>
 #include <impl/assets_font_atlas/cook.adhd.h>
 
 #include <core/assets/bunch/cook.h>
-#include <core/common/application_entry.h>
-
-#include <global/filesystem.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,12 +36,11 @@ using ScratchArena = Core::Alloc::ScratchArena;
 using Impl::Font;
 using Impl::FontAtlas;
 using Impl::FontAtlasPayload;
+using Impl::SerializeFontAtlasPayload;
 using Impl::ValidateFontAtlasSourceMatch;
 using Impl::s_FontAtlasKernTag;
 using Impl::s_FontAtlasGposTag;
 using Impl::s_FontAtlasGdefTag;
-inline constexpr TStringView s_LoggerAppName = NWB_TEXT("font_builder_package_probe");
-inline constexpr TStringView s_LoggerInitFailureText = NWB_TEXT("[font_builder_package_probe] logger.init() failed");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -77,50 +71,35 @@ StringView TableTag(in u32 tag){
     return "";
 }
 
-b8 WriteAtlasHeaderBinary(in Path directory, in FontAtlasPayload payload, mut ScratchArena scratch){
-    b8 ok = false;
-    native(in directory, in payload, mut scratch, mut ok){
-        const ::Path<NWB::Core::Alloc::ScratchArena> outputDirectory(scratch, directory);
-        if(!EnsureDirectories(outputDirectory))
-            return false;
-        const auto binary = NWB::Impl::SerializeFontAtlasPayload(payload, payload.glyphs.get_allocator().arena(), scratch);
-        ok = binary && WriteBinaryFile(outputDirectory / "atlas.bin", *binary);
-    }
-    return ok;
+b8 WriteAtlasHeaderBinary(in Path directory, in FontAtlasPayload payload, mut AssetArena arena, mut ScratchArena scratch){
+    if(!EnsureDirectories(directory).has_value())
+        return false;
+    const Expected<AssetBytes> binary = SerializeFontAtlasPayload(payload, arena, scratch);
+    return binary.has_value() && WriteBinaryFile(directory / "atlas.bin", binary.value());
 }
 
-b8 WriteGroupPixelsFile(in Path directory, in usize index, in AssetBytes pixels, mut ScratchArena scratch){
-    b8 ok = false;
-    native(in directory, in index, in pixels, mut scratch, mut ok){
-        const ::Path<NWB::Core::Alloc::ScratchArena> outputDirectory(scratch, directory);
-        const auto name = StringFormat(scratch, "group_{}.pixels", index);
-        ok = WriteBinaryFile(outputDirectory / name, pixels);
-    }
-    return ok;
+b8 WriteGroupPixelsFile(in Path directory, in usize index, in AssetBytes pixels){
+    const String name = StringFormat("group_{}.pixels", index);
+    return WriteBinaryFile(directory / name, pixels);
 }
 
-b8 WritePositioningTableFile(in Path directory, in StringView tag, in AssetBytes bytes, mut ScratchArena scratch){
-    b8 ok = false;
-    native(in directory, in tag, in bytes, mut scratch, mut ok){
-        const ::Path<NWB::Core::Alloc::ScratchArena> outputDirectory(scratch, directory);
-        const auto name = StringFormat(scratch, "table_{}.bin", tag);
-        ok = WriteBinaryFile(outputDirectory / name, bytes);
-    }
-    return ok;
+b8 WritePositioningTableFile(in Path directory, in StringView tag, in AssetBytes bytes){
+    const String name = StringFormat("table_{}.bin", tag);
+    return WriteBinaryFile(directory / name, bytes);
 }
 
-b8 ExportPayload(in Path directory, in FontAtlasPayload payload, mut ScratchArena scratch){
-    if(!WriteAtlasHeaderBinary(directory, payload, scratch))
+b8 ExportPayload(in Path directory, in FontAtlasPayload payload, mut AssetArena arena, mut ScratchArena scratch){
+    if(!WriteAtlasHeaderBinary(directory, payload, arena, scratch))
         return false;
     for(usize index = 0u; index < payload.groups.size(); ++index){
-        if(!WriteGroupPixelsFile(directory, index, payload.groups[index].pixels, scratch))
+        if(!WriteGroupPixelsFile(directory, index, payload.groups[index].pixels))
             return false;
     }
     for(usize index = 0u; index < payload.positioningTables.size(); ++index){
         const StringView tag = TableTag(payload.positioningTables[index].tag);
         if(tag.empty())
             return false;
-        if(!WritePositioningTableFile(directory, tag, payload.positioningTables[index].bytes, scratch))
+        if(!WritePositioningTableFile(directory, tag, payload.positioningTables[index].bytes))
             return false;
     }
     return true;
@@ -128,21 +107,22 @@ b8 ExportPayload(in Path directory, in FontAtlasPayload payload, mut ScratchAren
 
 b8 DecodePackage(in StringView source, in StringView destination){
     AssetArena arena(s_PackageArena);
-    Path sourcePath(source);
-    Path destinationPath(destination);
+    const Path sourcePath = Path(source);
+    const Path destinationPath = Path(destination);
     ScratchArena scratch(Name(s_FontPackageNameTestsIntegrationFontBuilderScratch));
+    String metadata = "";
+    if(!ReadTextFile(sourcePath, metadata).has_value())
+        return false;
+
     Font font(arena);
     FontAtlas atlas(arena);
     b8 foundFont = false;
     b8 foundAtlas = false;
 
-    native(in sourcePath, mut arena, mut scratch, mut font, mut atlas, mut foundFont, mut foundAtlas){
-        NWB::Core::Metascript::MetaArena metadataArena{Name(s_FontPackageNameTestsIntegrationFontBuilderMetadata)};
-        NWB::Core::Metascript::MString metadata(metadataArena);
-        NWB::Core::Metascript::Document document(metadataArena);
-        if(!ReadTextFile(sourcePath, metadata))
-            return false;
+    native(in sourcePath, mut metadata, mut arena, mut scratch, mut font, mut atlas, mut foundFont, mut foundAtlas){
         StripUtf8Bom(metadata);
+        NWB::Core::Metascript::MetaArena metadataArena{Name(s_FontPackageNameTestsIntegrationFontBuilderMetadata)};
+        NWB::Core::Metascript::Document document(metadataArena);
         if(!document.parse(metadata))
             return false;
         auto expanded = NWB::Core::Assets::AssetsBunchCook::ExpandAssetBunch(sourcePath.parentPath(), "probe", sourcePath, document, scratch);
@@ -183,14 +163,9 @@ b8 DecodePackage(in StringView source, in StringView destination){
         return false;
     if(!ValidateFontAtlasSourceMatch(atlas.payload(), font))
         return false;
-    if(!ExportPayload(destinationPath, atlas.payload(), scratch))
+    if(!ExportPayload(destinationPath, atlas.payload(), arena, scratch))
         return false;
-
-    b8 wroteSfnt = false;
-    native(in destinationPath, in font, mut wroteSfnt){
-        wroteSfnt = WriteBinaryFile(destinationPath / "source.sfnt", font.fontBytes());
-    }
-    return wroteSfnt;
+    return WriteBinaryFile(destinationPath / "source.sfnt", font.fontBytes());
 }
 
 
@@ -204,12 +179,20 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <logger/client/module.h>
+
+#include <core/common/application_entry.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_font_builder_package_probe{
 int Run(const int argc, char** argv){
     using namespace NWB::Tests::FontPackageCases;
     NWB::Log::ClientStandalone logger;
-    if(!logger.init(s_LoggerAppName)){
-        NWB_TCERR << s_LoggerInitFailureText << NWB_TEXT("\n");
+    if(!logger.init(NWB_TEXT("font_builder_package_probe"))){
+        NWB_TCERR << NWB_TEXT("[font_builder_package_probe] logger.init() failed\n");
         return s_EntryFailure;
     }
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);

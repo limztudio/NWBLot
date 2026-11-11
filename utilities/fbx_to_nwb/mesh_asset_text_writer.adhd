@@ -2,118 +2,133 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <utilities/fbx_to_nwb/module.adhd>
+#include <utilities/fbx_to_nwb/types.adhd>
 #include <utilities/fbx_to_nwb/text_write.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+void AppendSourceVertexRefText(in SourceVertexRef ref, mut String out){
+    out.append("[");
+    AppendUnsignedU64Text(out, cast<u64>(ref.position));
+    out.append(", ");
+    AppendUnsignedU64Text(out, cast<u64>(ref.normal));
+    out.append(", ");
+    AppendUnsignedU64Text(out, cast<u64>(ref.tangent));
+    out.append(", ");
+    AppendUnsignedU64Text(out, cast<u64>(ref.uv0));
+    out.append(", ");
+    AppendUnsignedU64Text(out, cast<u64>(ref.color));
+    out.append("]");
+}
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_FBX_TO_NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class MeshAssetTextWriter final{
-private:
-    template<typename Stream>
-    static void WriteVertexRef(const SourceVertexRef& ref, Stream& out)noexcept(noexcept(out << "[" << ref.position << ", " << ref.normal << ", " << ref.tangent << ", " << ref.uv0 << ", " << ref.color << "]")){
-        out << "[" << ref.position << ", " << ref.normal << ", " << ref.tangent << ", " << ref.uv0 << ", " << ref.color << "]";
+void AppendMeshAssetBodyText(
+    in Span<Vec3> positions,
+    in Span<Vec3> normals,
+    in Span<Vec4> tangents,
+    in Span<Vec2> uv0,
+    in Span<Vec4> colors,
+    in Span<SourceVertexRef> vertexRefs,
+    in Span<u32> indices,
+    in StringView variableName,
+    in StringView indent,
+    mut String out
+){
+    out.append(variableName);
+    out.append(s_FieldAccessText);
+    out.append(s_MeshPositionsFieldNameView);
+    out.append(s_ListAssignOpenText);
+    for(in Vec3 position : positions){
+        out.append(indent);
+        out.append("    ");
+        AppendVec3Text(position, out);
+        out.append(s_EntrySuffixText);
     }
+    out.append(indent);
+    out.append(s_ListCloseSectionText);
 
-public:
-    template<typename Stream>
-    static void WriteBody(const SourceMeshStreams& mesh, const AStringView variableName, const AStringView indent, Stream& file)noexcept(
-        noexcept(file << variableName << s_FieldAccessText << Impl::s_MeshPositionsFieldNameView << s_ListAssignOpenText)
-        && noexcept(file << indent << "    ")
-        && noexcept(TextWrite::WriteVec3(DeclVal<const Vec3&>(), file))
-        && noexcept(file << s_EntrySuffixText)
-        && noexcept(file << indent << s_ListCloseSectionText)
-        && noexcept(file << variableName << s_FieldAccessText << Impl::s_MeshNormalsFieldNameView << s_ListAssignOpenText)
-        && noexcept(file << variableName << s_FieldAccessText << Impl::s_MeshTangentsFieldNameView << s_ListAssignOpenText)
-        && noexcept(TextWrite::WriteVec4(DeclVal<const Vec4&>(), file))
-        && noexcept(file << variableName << s_FieldAccessText << Impl::s_MeshUv0FieldNameView << s_ListAssignOpenText)
-        && noexcept(TextWrite::WriteVec2(DeclVal<const Vec2&>(), file))
-        && noexcept(file << variableName << s_FieldAccessText << Impl::s_MeshColorsFieldNameView << s_ListAssignOpenText)
-        && noexcept(file << variableName << s_FieldAccessText << Impl::s_MeshVertexRefsFieldNameView << s_ListAssignOpenText)
-        && noexcept(WriteVertexRef(DeclVal<const SourceVertexRef&>(), file))
-        && noexcept(file << variableName << s_FieldAccessText << Impl::s_MeshIndicesFieldNameView << s_ListAssignOpenText)
-        && noexcept(file << indent << "    [" << mesh.indices[DeclVal<usize>() + 0u] << ", " << mesh.indices[DeclVal<usize>() + 1u] << ", " << mesh.indices[DeclVal<usize>() + 2u] << s_RowSuffixText)
-        && noexcept(file << indent << s_FormatListCloseText)
-    ){
-        file << variableName << s_FieldAccessText << Impl::s_MeshPositionsFieldNameView << s_ListAssignOpenText;
-        for(const Vec3& position : mesh.positions){
-            file << indent << "    ";
-            TextWrite::WriteVec3(position, file);
-            file << s_EntrySuffixText;
-        }
-        file << indent << s_ListCloseSectionText;
-
-        file << variableName << s_FieldAccessText << Impl::s_MeshNormalsFieldNameView << s_ListAssignOpenText;
-        for(const Vec3& normal : mesh.normals){
-            file << indent << "    ";
-            TextWrite::WriteVec3(normal, file);
-            file << s_EntrySuffixText;
-        }
-        file << indent << s_ListCloseSectionText;
-
-        file << variableName << s_FieldAccessText << Impl::s_MeshTangentsFieldNameView << s_ListAssignOpenText;
-        for(const Vec4& tangent : mesh.tangents){
-            file << indent << "    ";
-            TextWrite::WriteVec4(tangent, file);
-            file << s_EntrySuffixText;
-        }
-        file << indent << s_ListCloseSectionText;
-
-        file << variableName << s_FieldAccessText << Impl::s_MeshUv0FieldNameView << s_ListAssignOpenText;
-        for(const Vec2& uv0 : mesh.uv0){
-            file << indent << "    ";
-            TextWrite::WriteVec2(uv0, file);
-            file << s_EntrySuffixText;
-        }
-        file << indent << s_ListCloseSectionText;
-
-        file << variableName << s_FieldAccessText << Impl::s_MeshColorsFieldNameView << s_ListAssignOpenText;
-        for(const Vec4& color : mesh.colors){
-            file << indent << "    ";
-            TextWrite::WriteVec4(color, file);
-            file << s_EntrySuffixText;
-        }
-        file << indent << s_ListCloseSectionText;
-
-        file << variableName << s_FieldAccessText << Impl::s_MeshVertexRefsFieldNameView << s_ListAssignOpenText;
-        for(const SourceVertexRef& ref : mesh.vertexRefs){
-            file << indent << "    ";
-            WriteVertexRef(ref, file);
-            file << s_EntrySuffixText;
-        }
-        file << indent << s_ListCloseSectionText;
-
-        file << variableName << s_FieldAccessText << Impl::s_MeshIndicesFieldNameView << s_ListAssignOpenText;
-        for(usize i = 0u; i < mesh.indices.size(); i += Impl::s_MeshletTriangleIndexCount)
-            file << indent << "    [" << mesh.indices[i + 0u] << ", " << mesh.indices[i + 1u] << ", " << mesh.indices[i + 2u] << s_RowSuffixText;
-        file << indent << s_FormatListCloseText;
+    out.append(variableName);
+    out.append(s_FieldAccessText);
+    out.append(s_MeshNormalsFieldNameView);
+    out.append(s_ListAssignOpenText);
+    for(in Vec3 normal : normals){
+        out.append(indent);
+        out.append("    ");
+        AppendVec3Text(normal, out);
+        out.append(s_EntrySuffixText);
     }
-};
+    out.append(indent);
+    out.append(s_ListCloseSectionText);
 
+    out.append(variableName);
+    out.append(s_FieldAccessText);
+    out.append(s_MeshTangentsFieldNameView);
+    out.append(s_ListAssignOpenText);
+    for(in Vec4 tangent : tangents){
+        out.append(indent);
+        out.append("    ");
+        AppendVec4Text(tangent, out);
+        out.append(s_EntrySuffixText);
+    }
+    out.append(indent);
+    out.append(s_ListCloseSectionText);
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    out.append(variableName);
+    out.append(s_FieldAccessText);
+    out.append(s_MeshUv0FieldNameView);
+    out.append(s_ListAssignOpenText);
+    for(in Vec2 uv : uv0){
+        out.append(indent);
+        out.append("    ");
+        AppendVec2Text(uv, out);
+        out.append(s_EntrySuffixText);
+    }
+    out.append(indent);
+    out.append(s_ListCloseSectionText);
 
+    out.append(variableName);
+    out.append(s_FieldAccessText);
+    out.append(s_MeshColorsFieldNameView);
+    out.append(s_ListAssignOpenText);
+    for(in Vec4 color : colors){
+        out.append(indent);
+        out.append("    ");
+        AppendVec4Text(color, out);
+        out.append(s_EntrySuffixText);
+    }
+    out.append(indent);
+    out.append(s_ListCloseSectionText);
 
-NWB_FBX_TO_NWB_END
+    out.append(variableName);
+    out.append(s_FieldAccessText);
+    out.append(s_MeshVertexRefsFieldNameView);
+    out.append(s_ListAssignOpenText);
+    for(in SourceVertexRef ref : vertexRefs){
+        out.append(indent);
+        out.append("    ");
+        AppendSourceVertexRefText(ref, out);
+        out.append(s_EntrySuffixText);
+    }
+    out.append(indent);
+    out.append(s_ListCloseSectionText);
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    out.append(variableName);
+    out.append(s_FieldAccessText);
+    out.append(s_MeshIndicesFieldNameView);
+    out.append(s_ListAssignOpenText);
+    for(usize i = 0u; i < indices.size(); i += cast<usize>(s_MeshletTriangleIndexCount)){
+        out.append(indent);
+        out.append("    [");
+        AppendUnsignedU64Text(out, cast<u64>(indices[i + 0u]));
+        out.append(", ");
+        AppendUnsignedU64Text(out, cast<u64>(indices[i + 1u]));
+        out.append(", ");
+        AppendUnsignedU64Text(out, cast<u64>(indices[i + 2u]));
+        out.append(s_RowSuffixText);
+    }
+    out.append(indent);
+    out.append(s_FormatListCloseText);
 }
 
 

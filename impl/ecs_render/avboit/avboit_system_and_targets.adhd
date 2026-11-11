@@ -253,19 +253,6 @@ Expected<Core::BufferHandle> AvboitTargetFactory::CreateU32Buffer(Core::Graphics
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererAvboitState::invalidateResources()noexcept{
-    m_linearSampler.reset();
-    m_depthWarpComputeShader.reset();
-    m_integrateComputeShader.reset();
-    m_depthWarpPipeline.reset();
-    m_integratePipeline.reset();
-    m_targetsNeedClear = true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 AvboitFrameTargets::valid()const noexcept{
 #if defined(NWB_DEBUG)
     return

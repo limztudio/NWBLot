@@ -491,6 +491,79 @@ private:
 
 using Core::ECS::World;
 using Core::Alloc::ScratchArena;
+
+[[nodiscard]] NWB_INLINE b8 StartNewSmokeFramebufferCapture(
+    const AStringView outputPath,
+    const u32 captureFrameCount,
+    ProjectRuntimeContext& context,
+    const FramebufferCaptureOptions& options,
+    UniquePtr<FramebufferCapture>& outCapture
+){
+    auto capture = MakeUnique<FramebufferCapture>(outputPath, captureFrameCount, context, options);
+    if(!capture || !capture->start())
+        return false;
+    outCapture = Move(capture);
+    return true;
+}
+
+NWB_INLINE void UpdateSmokeFramebufferCapture(UniquePtr<FramebufferCapture>& capture){
+    if(capture)
+        capture->update();
+}
+
+NWB_INLINE void StopAndResetSmokeFramebufferCapture(UniquePtr<FramebufferCapture>& capture){
+    if(capture){
+        capture->stop();
+        capture.reset();
+    }
+}
+
+[[nodiscard]] NWB_INLINE b8 SmokeFramebufferCaptureValid(const UniquePtr<FramebufferCapture>& capture)noexcept{
+    return static_cast<b8>(capture);
+}
+
+[[nodiscard]] NWB_INLINE b8 SmokeFramebufferCaptureReady(const UniquePtr<FramebufferCapture>& capture)noexcept{
+    return capture && capture->captureReady();
+}
+
+[[nodiscard]] NWB_INLINE u64 SmokeFramebufferCapturedFrameIndex(const UniquePtr<FramebufferCapture>& capture)noexcept{
+    return capture ? capture->capturedGraphicsFrameIndex() : Limit<u64>::s_Max;
+}
+
+NWB_INLINE void FinishSmokeFramebufferCapture(UniquePtr<FramebufferCapture>& capture){
+    if(capture)
+        capture->finish();
+}
+
+[[nodiscard]] NWB_INLINE b8 RearmSmokeFramebufferCapture(UniquePtr<FramebufferCapture>& capture, const AStringView outputPath)noexcept{
+    return capture && capture->rearm(outputPath);
+}
+
+NWB_INLINE void MoveSmokeFramebufferCapture(UniquePtr<FramebufferCapture>& src, UniquePtr<FramebufferCapture>& dst)noexcept{
+    dst = Move(src);
+}
+
+NWB_INLINE void MoveSmokeFramebufferCapture(UniquePtr<FramebufferCapture>&& src, UniquePtr<FramebufferCapture>& dst)noexcept{
+    dst = Move(src);
+}
+
+template<typename OwnerT>
+[[nodiscard]] NWB_INLINE FramebufferCaptureOptions MakeSmokeCaptureOptions(
+    OwnerT& owner,
+    const u32 requiredWidth,
+    const u32 requiredHeight,
+    const b8 quitWhenReady = true
+)noexcept{
+    FramebufferCaptureOptions options{};
+    options.requiredWidth = requiredWidth;
+    options.requiredHeight = requiredHeight;
+    options.quitWhenReady = quitWhenReady;
+    options.predicateContext = &owner;
+    options.shouldCapture = +[](void* const ctx, const u64 frame)noexcept -> b8{
+        return MakeNotNull(static_cast<OwnerT*>(ctx))->shouldCaptureFrame(frame);
+    };
+    return options;
+}
 };
 
 NWB_END
@@ -521,7 +594,7 @@ class SmokeCaptureFactory{
         this.m_context = context;
     }
 
-    public Expected<UniquePtr<FramebufferCapture>> configure(in TStringView projectName, in u32 defaultFrameCount, in FramebufferCaptureOptions options){
+    public Expected<UniquePtr<FramebufferCapture>> configure(in StringView projectName, in u32 defaultFrameCount, in FramebufferCaptureOptions options){
         const Expected<String> outputPath = ReadSmokeEnvironmentString("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
         if(!outputPath.has_value())
             return UniquePtr<FramebufferCapture>();
@@ -539,22 +612,17 @@ class SmokeCaptureFactory{
 
         const StringView pathView = StringView(outputPath.value());
         UniquePtr<FramebufferCapture> capture = UniquePtr<FramebufferCapture>();
-        b8 started = false;
-        native(in pathView, in captureFrameCount, in options, mut ctx = this.m_context, mut capture, mut started){
-            capture = MakeUnique<FramebufferCapture>(pathView, captureFrameCount, ctx, options);
-            started = capture && capture->start();
-        }
-        if(!started)
+        if(!StartNewSmokeFramebufferCapture(pathView, captureFrameCount, this.m_context, options, capture))
             return MakeUnexpected(Failure());
         return capture;
     }
 
-    public Expected<UniquePtr<FramebufferCapture>> configure(in TStringView projectName, in u32 defaultFrameCount){
+    public Expected<UniquePtr<FramebufferCapture>> configure(in StringView projectName, in u32 defaultFrameCount){
         return this.configure(projectName, defaultFrameCount, FramebufferCaptureOptions());
     }
 
     public Expected<UniquePtr<FramebufferCapture>> configure(
-        in TStringView projectName,
+        in StringView projectName,
         in u32 defaultFrameCount,
         in FramebufferCaptureOptions options,
         mut ScratchArena scratchArena
@@ -569,32 +637,80 @@ class SmokeCaptureFactory{
         SmokeCaptureSeries result = SmokeCaptureSeries();
         result.paths.reserve(sampleCount);
         for(u32 sample = 0u; sample < sampleCount; ++sample){
-            String samplePath;
-            if(sample + 1u == sampleCount){
+            String samplePath = String();
+            if(sample + 1u == sampleCount)
                 samplePath = String(outputPath);
-            }
-            else{
-                native(in outputPath, in sample, mut samplePath){
-                    Core::Alloc::ScratchArena scratchArena(s_SmokeEnvironmentArena);
-                    const auto formatted = StringFormat(scratchArena, "{}.{}.bmp", outputPath, sample);
-                    samplePath.assign(formatted.data(), formatted.size());
-                }
-            }
+            else
+                samplePath = StringFormat("{}.{}.bmp", outputPath, sample);
             result.paths.push_back(samplePath);
         }
 
         const StringView firstPath = StringView(result.paths[0u]);
-        b8 started = false;
-        native(in firstPath, in options, mut ctx = this.m_context, mut capture = result.capture, mut started){
-            capture = MakeUnique<FramebufferCapture>(firstPath, 1u, ctx, options);
-            started = capture && capture->start();
-        }
-        if(!started)
+        if(!StartNewSmokeFramebufferCapture(firstPath, 1u, this.m_context, options, result.capture))
             return MakeUnexpected(Failure());
         return result;
     }
 
+    public b8 prepareSeriesInto(
+        in StringView outputPath,
+        in u32 sampleCount,
+        in FramebufferCaptureOptions options,
+        mut Vector<String> outPaths,
+        mut UniquePtr<FramebufferCapture> outCapture
+    ){
+        if(sampleCount == 0u)
+            return false;
+
+        outPaths.clear();
+        outPaths.reserve(sampleCount);
+        for(u32 sample = 0u; sample < sampleCount; ++sample){
+            String samplePath = String();
+            if(sample + 1u == sampleCount)
+                samplePath = String(outputPath);
+            else
+                samplePath = StringFormat("{}.{}.bmp", outputPath, sample);
+            outPaths.push_back(samplePath);
+        }
+
+        const StringView firstPath = StringView(outPaths[0u]);
+        return StartNewSmokeFramebufferCapture(firstPath, 1u, this.m_context, options, outCapture);
+    }
+
     private mut ProjectRuntimeContext m_context;
+}
+
+b8 ConfigureSmokeFramebufferCapture(
+    mut ProjectRuntimeContext context,
+    in StringView projectName,
+    in u32 defaultFrameCount,
+    in FramebufferCaptureOptions options,
+    mut UniquePtr<FramebufferCapture> outCapture
+){
+    const Expected<String> outputPath = ReadSmokeEnvironmentString("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
+    if(!outputPath.has_value())
+        return true;
+
+    u32 captureFrameCount = defaultFrameCount;
+    const Expected<String> frameCountText = ReadSmokeEnvironmentString("NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT");
+    if(frameCountText.has_value()){
+        const Expected<u64> parsedFrameCount = ParseU64(StringView(frameCountText.value()));
+        if(!parsedFrameCount.has_value() || parsedFrameCount.value() == 0u || parsedFrameCount.value() > s_FramebufferCaptureMaxFrameCount){
+            error("{}: capture frame count must be a positive u32", projectName);
+            return false;
+        }
+        captureFrameCount = cast<u32>(parsedFrameCount.value());
+    }
+
+    return StartNewSmokeFramebufferCapture(StringView(outputPath.value()), captureFrameCount, context, options, outCapture);
+}
+
+b8 ConfigureSmokeFramebufferCapture(
+    mut ProjectRuntimeContext context,
+    in StringView projectName,
+    in u32 defaultFrameCount,
+    mut UniquePtr<FramebufferCapture> outCapture
+){
+    return ConfigureSmokeFramebufferCapture(context, projectName, defaultFrameCount, FramebufferCaptureOptions(), outCapture);
 }
 
 b8 TickSmokeWorld(in f32 delta, mut World world){
@@ -615,10 +731,7 @@ b8 TickSmokeWorld(in f32 delta, mut World world){
 }
 
 b8 TickSmokeWorldWithCapture(in f32 delta, mut World world, mut UniquePtr<FramebufferCapture> capture){
-    native(mut capture){
-        if(capture)
-            capture->update();
-    }
+    UpdateSmokeFramebufferCapture(capture);
     return TickSmokeWorld(delta, world);
 }
 

@@ -9,77 +9,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests::AssetsGraphicsFixture{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class MaterialBindFixture final{
-public:
-    static b8 CookMinimalMeshWithMaterialBind(AStringView bindText, const CookCase& cookCase, TestArena& testArena);
-    [[nodiscard]] static Expected<NWB::Impl::MaterialBindEntry> ParseMaterialBindFromText(AStringView bindText, const Path& root, TestArena& testArena, NWB::Core::Alloc::ScratchArena& scratchArena);
-#if defined(NWB_FINAL)
-    [[nodiscard]] static Expected<Path> EmitDuplicateGeneratedMaterialBindIncludePath(TestArena& testArena, const CookCase& cookCase);
-#endif
-    static b8 WriteMaterialBindShaderProbeSource(TestArena& testArena, const Path& assetRoot, AStringView shaderAssetType, AStringView metaFilename, AStringView sourceFilename, AStringView sourceText);
-    static b8 WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(TestArena& testArena, const Path& assetRoot, AStringView bindText, AStringView materialText, AStringView pixelSourceText);
-    static b8 CookMaterialBindMaterialIntegrationWithPixelSource(AStringView bindText, AStringView materialText, AStringView pixelSourceText, const CookCase& cookCase, TestArena& testArena);
-    static b8 CookMaterialBindMaterialIntegration(AStringView bindText, AStringView materialText, const CookCase& cookCase, TestArena& testArena){
-        return CookMaterialBindMaterialIntegrationWithPixelSource(bindText, materialText, s_MaterialBindShaderProbeSource, cookCase, testArena);
-    }
-};
-
-class ShaderArchiveFixture final{
-public:
-    [[nodiscard]] static Expected<NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>> LoadCookedShaderArchiveRecords(TestArena& testArena, const Path& outputDirectory);
-    [[nodiscard]] static Expected<u64> FindShaderArchiveSourceChecksum(Span<const NWB::Core::ShaderArchive::Record> records, Name shaderName, Name stageName)noexcept;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 CookSingleGraphicsMeta(in StringView metaText, in StringView assetDirectory, in StringView assetFilename, in CookCase cookCase, mut TestArena testArena){
-    b8 ok = false;
-    native(in metaText, in assetDirectory, in assetFilename, in cookCase, mut testArena, mut ok){
-        const Path assetRoot = cookCase.root / s_AssetsDirectory;
-        const Path metaPath = assetRoot / assetDirectory / assetFilename;
-        if(WriteTextFile(metaPath, metaText))
-            ok = CookPreparedGraphicsAssetRoots(testArena, cookCase.root, cookCase.outputDirectory, { assetRoot });
-    }
-    return ok;
+    const GraphicsTestPath assetRoot = JoinGraphicsPath(cookCase.root, s_AssetsDirectory);
+    const GraphicsTestPath metaPath = JoinGraphicsPath2(assetRoot, assetDirectory, assetFilename);
+    if(!WriteTextFile(metaPath, metaText))
+        return false;
+    return CookSingleAssetRoot(testArena, cookCase.root, cookCase.outputDirectory, assetRoot);
 }
 
 b8 CookSingleMeshMeta(in StringView metaText, in CookCase cookCase, mut TestArena testArena){
@@ -87,13 +22,10 @@ b8 CookSingleMeshMeta(in StringView metaText, in CookCase cookCase, mut TestAren
 }
 
 b8 CookSmokeAssetMeta(in StringView assetDirectory, in StringView assetFilename, in CookCase cookCase, mut TestArena testArena){
-    b8 ok = false;
-    native(in assetDirectory, in assetFilename, in cookCase, mut testArena, mut ok){
-        const auto metaText = ReadSmokeAssetMeta(testArena, assetDirectory, assetFilename);
-        if(metaText)
-            ok = CookSingleGraphicsMeta(AStringView(metaText->data(), metaText->size()), assetDirectory, assetFilename, cookCase, testArena);
-    }
-    return ok;
+    const Expected<TestAString> metaText = ReadSmokeMeta(testArena, assetDirectory, assetFilename);
+    if(!metaText.has_value())
+        return false;
+    return CookSingleGraphicsMeta(ViewTestString(metaText.value()), assetDirectory, assetFilename, cookCase, testArena);
 }
 
 
@@ -158,7 +90,6 @@ Expected<NWB::Impl::MaterialBindEntry> MaterialBindFixture::ParseMaterialBindFro
     return NWB::Impl::ParseMaterialBindSource(bindPath, testArena.arena, scratchArena);
 }
 
-#if defined(NWB_FINAL)
 Expected<Path> MaterialBindFixture::EmitDuplicateGeneratedMaterialBindIncludePath(TestArena& testArena, const CookCase& cookCase){
     const Path firstAssetRoot = cookCase.root / "first" / s_AssetsDirectory;
     const Path secondAssetRoot = cookCase.root / "second" / s_AssetsDirectory;
@@ -181,7 +112,6 @@ Expected<Path> MaterialBindFixture::EmitDuplicateGeneratedMaterialBindIncludePat
 
     return NWB::Impl::EmitMaterialBindIncludes(cookCase.root / s_CacheDirectory, s_TestsConfiguration, bindEntries, testArena.arena, scratchArena);
 }
-#endif
 
 b8 MaterialBindFixture::WriteMaterialBindShaderProbeSource(
     TestArena& testArena,

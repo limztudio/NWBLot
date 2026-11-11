@@ -17,7 +17,12 @@ native{
 
 #include <impl/assets_font/asset.adhd.h>
 #include <impl/assets_font_atlas/asset.adhd.h>
+#include <impl/assets_texture/asset.adhd.h>
 #include <impl/ecs_ui/toolkit/builder.adhd.h>
+#include <impl/ecs_ui/toolkit/images/image_source.adhd.h>
+#include <impl/ecs_ui/toolkit/text/atlas.adhd.h>
+#include <impl/ecs_ui/toolkit/text/baked_atlas.adhd.h>
+#include <impl/ecs_ui/toolkit/text/service.adhd.h>
 #include <impl/ecs_ui/toolkit/edit/numeric_types.adhd.h>
 #include <impl/ecs_ui/toolkit/id.adhd.h>
 #include <impl/ecs_ui/toolkit/paint.adhd.h>
@@ -59,9 +64,67 @@ using PlacedGlyph = ::NWB::Impl::Ui::PlacedGlyph;
 using NumericEditResult = ::NWB::Impl::Ui::NumericEditResult;
 using ControlAction = ::NWB::Impl::Ui::ControlAction;
 using ControlActionKindEnum = ::NWB::Impl::Ui::ControlActionKind::Enum;
+using UiSkin = ::NWB::Impl::UiSkin;
+using UiSkinAssetRef = ::NWB::Core::Assets::AssetRef<::NWB::Impl::UiSkin>;
 using UiSkinRegion = ::NWB::Impl::UiSkinRegion;
+using Font = ::NWB::Impl::Font;
+using UiFontAssetRef = ::NWB::Core::Assets::AssetRef<::NWB::Impl::Font>;
+using FontAtlas = ::NWB::Impl::FontAtlas;
+using FontAtlasPayload = ::NWB::Impl::FontAtlasPayload;
+using FontAtlasGlyph = ::NWB::Impl::FontAtlasGlyph;
+using FontAtlasGroup = ::NWB::Impl::FontAtlasGroup;
+using Texture = ::NWB::Impl::Texture;
+using UiTextureAssetRef = ::NWB::Core::Assets::AssetRef<::NWB::Impl::Texture>;
+using TextureMipLevel = ::NWB::Impl::TextureMipLevel;
+using DisplayMetrics = ::NWB::Impl::Ui::DisplayMetrics;
+using PaintBuilder = ::NWB::Impl::Ui::PaintBuilder;
+using TextService = ::NWB::Impl::Ui::TextService;
+using TextLayout = ::NWB::Impl::Ui::TextLayout;
+using FontSource = ::NWB::Impl::Ui::FontSource;
+using FontMetrics = ::NWB::Impl::Ui::FontMetrics;
+using ShapeRequest = ::NWB::Impl::Ui::ShapeRequest;
+using ShapedGlyph = ::NWB::Impl::Ui::ShapedGlyph;
+using ShapedRun = ::NWB::Impl::Ui::ShapedRun;
+using SharedFontFace = ::NWB::Impl::Ui::SharedFontFace;
+using SharedGlyphPage = ::NWB::Impl::Ui::SharedGlyphPage;
+using SharedSdfAtlasPage = ::NWB::Impl::Ui::SharedSdfAtlasPage;
+using SharedImageSource = ::NWB::Impl::Ui::SharedImageSource;
+using SharedBakedFontAtlas = ::NWB::Impl::Ui::SharedBakedFontAtlas;
+using GlyphPageBinding = ::NWB::Impl::Ui::GlyphPageBinding;
+using SdfAtlasPageBinding = ::NWB::Impl::Ui::SdfAtlasPageBinding;
+using AtlasGlyph = ::NWB::Impl::Ui::AtlasGlyph;
+using GlyphAtlas = ::NWB::Impl::Ui::GlyphAtlas;
+using GlyphBitmap = ::NWB::Impl::Ui::GlyphBitmap;
+using InputEvent = ::NWB::Impl::Ui::InputEvent;
+using InputRoutingResult = ::NWB::Impl::Ui::InputRoutingResult;
+using InputRouter = ::NWB::Impl::Ui::InputRouter;
+using Context = ::NWB::Impl::Ui::Context;
+using Builder = ::NWB::Impl::Ui::Builder;
+using WidgetState = ::NWB::Impl::Ui::WidgetState;
+using PopupToken = ::NWB::Impl::Ui::PopupToken;
+using PopupState = ::NWB::Impl::Ui::PopupState;
+using ListState = ::NWB::Impl::Ui::ListState;
+using ComboState = ::NWB::Impl::Ui::ComboState;
+using ComboResult = ::NWB::Impl::Ui::ComboResult;
+using EditModel = ::NWB::Impl::Ui::EditModel;
+using EditBoxOptions = ::NWB::Impl::Ui::EditBoxOptions;
+using EditBoxResult = ::NWB::Impl::Ui::EditBoxResult;
+using EditBoxView = ::NWB::Impl::Ui::EditBoxView;
+using EditBoxStyle = ::NWB::Impl::Ui::EditBoxStyle;
+using EditBoxPaintFlags = ::NWB::Impl::Ui::EditBoxPaintFlags;
+using IListDataSource = ::NWB::Impl::Ui::IListDataSource;
+using IEditBoxHost = ::NWB::Impl::Ui::IEditBoxHost;
+using KeyEnum = ::NWB::Core::Key::Enum;
+namespace Key = ::NWB::Core::Key;
+namespace InputEventType = ::NWB::Impl::Ui::InputEventType;
+namespace TextDirection = ::NWB::Impl::Ui::TextDirection;
 namespace LayoutSizePolicy = ::NWB::Impl::Ui::LayoutSizePolicy;
+using LayoutSizePolicyEnum = ::NWB::Impl::Ui::LayoutSizePolicy::Enum;
 namespace PaintMaterial = ::NWB::Impl::Ui::PaintMaterial;
+namespace UiSkinDrawMode = ::NWB::Impl::UiSkinDrawMode;
+using UiSkinDrawModeEnum = ::NWB::Impl::UiSkinDrawMode::Enum;
+namespace PopupPlacementSide = ::NWB::Impl::Ui::PopupPlacementSide;
+using PopupPlacementSideEnum = ::NWB::Impl::Ui::PopupPlacementSide::Enum;
 using ::NWB::Impl::Ui::TryMakeRootId;
 using ::NWB::Impl::Ui::TryMakeWidgetId;
 using ::NWB::Impl::Ui::TryMakeWidgetPartId;
@@ -253,6 +316,9 @@ WidgetId RequireUiWidgetPartId(in WidgetId parent, in u64 partKey){
     return WidgetId();
 }
 
+const AStringView s_UiFixtureParentPopupKey = "parent";
+const AStringView s_UiFixtureChildPopupKey = "child";
+
 PopupOptions MakeNestedParentPopupOptions(){
     PopupOptions options = PopupOptions();
     options.anchor.x = 20.0f;
@@ -376,6 +442,27 @@ Expected<UiFixtureSkinPaintSample> SampleUiSkinRegionPaint(in UiSkinRegion regio
     candidate.bounds.height = size.y;
     candidate.maximumU = corner.z;
     return candidate;
+}
+
+UiSkinAssetRef MakeUiSkinAssetRef(in StringView path){
+    const Expected<Name> parsed = ParseName(path);
+    if(parsed.has_value())
+        return UiSkinAssetRef(parsed.value());
+    return UiSkinAssetRef();
+}
+
+UiTextureAssetRef MakeUiTextureAssetRef(in StringView path){
+    const Expected<Name> parsed = ParseName(path);
+    if(parsed.has_value())
+        return UiTextureAssetRef(parsed.value());
+    return UiTextureAssetRef();
+}
+
+UiFontAssetRef MakeUiFontAssetRef(in StringView path){
+    const Expected<Name> parsed = ParseName(path);
+    if(parsed.has_value())
+        return UiFontAssetRef(parsed.value());
+    return UiFontAssetRef();
 }
 
 usize CountUiSkinRegionQuads(in UiSkinRegion region, in u32 atlasWidthPx, in DrawSnapshot snapshot){

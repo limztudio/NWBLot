@@ -5,6 +5,7 @@
 #include <tests/common/capturing_logger.adhd>
 #include <tests/common/ecs_test_world.adhd>
 #include <tests/common/gtest_macros.adhd>
+#include <CoolStuff/Testbed/fly_camera_motion.adhd>
 #include <tests/unit/scene/name_cases.adhd>
 
 
@@ -17,8 +18,6 @@ native{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-#include <CoolStuff/Testbed/fly_camera_motion.adhd.h>
 
 #include <impl/assets_graphics/components.adhd.h>
 #include <impl/assets_graphics/renderer_subsystem.adhd.h>
@@ -57,12 +56,23 @@ namespace Tests::SceneAssetTestHelpers{
 using namespace Core::Assets;
 using namespace Impl;
 
-[[nodiscard]] AssetBytes MakeProjectBinary(const Name& startScene, AssetArena& arena);
-[[nodiscard]] AssetBytes MakeSceneBinary(Span<const SceneAsset::SubsystemRef> subsystems, const SceneAsset::AssetMap& assets, Span<const SceneAsset::EntityRef> entities, AssetArena& arena);
-[[nodiscard]] AssetBytes MakeEntityBinary(Span<const EntityAsset::ComponentRef> components, AssetArena& arena);
+template<typename CodecT>
+[[nodiscard]] NWB_INLINE b8 RegisterTestCodec(AssetRegistry& registry){
+    return registry.registerCodec(MakeUnique<CodecT>());
+}
+
+template<typename SubsystemT>
+[[nodiscard]] NWB_INLINE b8 HasActiveSubsystem(const ActiveSceneSubsystems& active)noexcept{
+    return active.findSubsystem<SubsystemT>() != nullptr;
+}
+
+template<typename SubsystemT>
+[[nodiscard]] NWB_INLINE const SubsystemT& RequireActiveSubsystem(const ActiveSceneSubsystems& active)noexcept{
+    return *MakeNotNull(active.findSubsystem<SubsystemT>());
+}
 
 template<typename ComponentT, typename PayloadT>
-[[nodiscard]] inline AssetBytes MakeComponentBinary(const PayloadT& payload, AssetArena& arena){
+[[nodiscard]] NWB_INLINE AssetBytes MakeComponentBinary(const PayloadT& payload, AssetArena& arena){
     ComponentHeaderBinary header;
     header.componentTypeHash = ComponentT::AssetTypeName().hash();
     header.payloadByteCount = sizeof(PayloadT);
@@ -75,7 +85,7 @@ template<typename ComponentT, typename PayloadT>
 }
 
 template<typename SubsystemT>
-inline void PopulateRequiredSubsystemFields(SubsystemT& subsystem){
+NWB_INLINE void PopulateRequiredSubsystemFields(SubsystemT& subsystem){
     const usize count = subsystem.fieldCount();
     for(usize i = 0u; i < count; ++i){
         const SubsystemFieldValueDescriptor descriptor = subsystem.fieldDescriptor(i);
@@ -89,7 +99,7 @@ inline void PopulateRequiredSubsystemFields(SubsystemT& subsystem){
 }
 
 template<typename SubsystemT>
-[[nodiscard]] inline AssetBytes MakeSubsystemBinary(const SubsystemT& subsystem, AssetArena& arena){
+[[nodiscard]] NWB_INLINE AssetBytes MakeSubsystemBinary(const SubsystemT& subsystem, AssetArena& arena){
     const usize subsystemCount = subsystem.subsystems.size();
     const usize fieldCount = subsystem.fieldCount();
     u64 totalAssetCount = 0u;
@@ -142,8 +152,28 @@ public:
 
 
 public:
-    void setBinary(const Name& virtualPath, Span<const u8> binary);
-    virtual b8 readAssetBinary(const Name& virtualPath, AssetBytes& outBinary)const override;
+    void setBinary(const Name& virtualPath, const Span<const u8> binary){
+        for(Entry& entry : m_entries){
+            if(entry.path == virtualPath){
+                entry.binary.assign(binary.begin(), binary.end());
+                return;
+            }
+        }
+        AssetBytes copy(m_arena);
+        copy.assign(binary.begin(), binary.end());
+        m_entries.emplace_back(virtualPath, Move(copy));
+    }
+
+    virtual b8 readAssetBinary(const Name& virtualPath, AssetBytes& outBinary)const override{
+        outBinary.clear();
+        for(const Entry& entry : m_entries){
+            if(entry.path == virtualPath){
+                outBinary.assign(entry.binary.begin(), entry.binary.end());
+                return true;
+            }
+        }
+        return false;
+    }
 
 
 public:
@@ -172,6 +202,7 @@ using AssetArena = Core::Assets::AssetArena;
 using AssetBytes = Core::Assets::AssetBytes;
 using AssetRegistry = Core::Assets::AssetRegistry;
 using AssetManager = Core::Assets::AssetManager;
+using IAsset = Core::Assets::IAsset;
 using LoggerRegistrationGuard = Core::Common::LoggerRegistrationGuard;
 namespace LoggerBreakPolicy = Core::Common::LoggerBreakPolicy;
 namespace Key = Core::Key;
@@ -187,10 +218,27 @@ using FlyCameraMotion = ::Testbed::FlyCameraMotion;
 using FlyCameraInput = ::Testbed::FlyCameraInput;
 using FlyCameraPointerDelta = ::Testbed::FlyCameraPointerDelta;
 
+using IComponent = Impl::IComponent;
+using ISubsystem = Impl::ISubsystem;
+using EntityAsset = Impl::EntityAsset;
+using SceneAsset = Impl::SceneAsset;
+using ComponentAssetRef = Core::Assets::AssetRef<Impl::IComponent>;
+using SubsystemAssetRef = Core::Assets::AssetRef<Impl::ISubsystem>;
+using GenericAssetRef = Core::Assets::AssetRef<Core::Assets::IAsset>;
+using EntityAssetRef = Core::Assets::AssetRef<Impl::EntityAsset>;
+using SceneAssetRef = Core::Assets::AssetRef<Impl::SceneAsset>;
 using ComponentAssetCodec = Impl::ComponentAssetCodec;
 using LightComponentAsset = Impl::LightComponentAsset;
 using LightComponentPayloadBinary = Impl::LightComponentPayloadBinary;
+using RendererComponentAsset = Impl::RendererComponentAsset;
+using RendererComponentPayloadBinary = Impl::RendererComponentPayloadBinary;
+using TransformComponentAsset = Impl::TransformComponentAsset;
+using TransformComponentPayloadBinary = Impl::TransformComponentPayloadBinary;
+namespace OpticalVolumeCoincidence = Impl::OpticalVolumeCoincidence;
+namespace OpticalBoundaryMode = Impl::OpticalBoundaryMode;
 using SubsystemAssetCodec = Impl::SubsystemAssetCodec;
+template<typename SubsystemT>
+using TypedSubsystemAssetCodec = Impl::TypedSubsystemAssetCodec<SubsystemT>;
 using EntityAssetCodec = Impl::EntityAssetCodec;
 using ProjectAssetCodec = Impl::ProjectAssetCodec;
 using SceneAssetCodec = Impl::SceneAssetCodec;
@@ -203,21 +251,12 @@ using ProjectHeaderBinary = Impl::ProjectHeaderBinary;
 using SceneHeaderBinary = Impl::SceneHeaderBinary;
 using SceneAssetEntryBinary = Impl::SceneAssetEntryBinary;
 using EntityHeaderBinary = Impl::EntityHeaderBinary;
-using SceneSubsystemRef = Impl::SceneAsset::SubsystemRef;
-using SceneSubsystemRefSpan = Span<const Impl::SceneAsset::SubsystemRef>;
-using SceneAssetMap = Impl::SceneAsset::AssetMap;
-using SceneEntityRef = Impl::SceneAsset::EntityRef;
-using SceneEntityRefSpan = Span<const Impl::SceneAsset::EntityRef>;
-using EntityComponentRef = Impl::EntityAsset::ComponentRef;
-using EntityComponentRefSpan = Span<const Impl::EntityAsset::ComponentRef>;
-using ConstByteSpan = Span<const u8>;
 using Impl::s_DefaultProjectVirtualPath;
 
 using MapAssetBinarySource = Tests::SceneAssetTestHelpers::MapAssetBinarySource;
-using MapAssetBinaryEntry = Tests::SceneAssetTestHelpers::MapAssetBinarySource::Entry;
-using Tests::SceneAssetTestHelpers::MakeProjectBinary;
-using Tests::SceneAssetTestHelpers::MakeSceneBinary;
-using Tests::SceneAssetTestHelpers::MakeEntityBinary;
+using Tests::SceneAssetTestHelpers::RegisterTestCodec;
+using Tests::SceneAssetTestHelpers::HasActiveSubsystem;
+using Tests::SceneAssetTestHelpers::RequireActiveSubsystem;
 using Tests::SceneAssetTestHelpers::MakeComponentBinary;
 using Tests::SceneAssetTestHelpers::MakeSubsystemBinary;
 using Tests::SceneAssetTestHelpers::PopulateRequiredSubsystemFields;
@@ -243,6 +282,55 @@ NWB_END
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+AssetBytes BuildTestProjectBinary(in Name startScene, mut AssetArena arena){
+    ProjectHeaderBinary header = ProjectHeaderBinary();
+    header.startSceneHash = startScene.hash();
+
+    AssetBytes binary(arena);
+    binary.reserve(sizeof(header));
+    AppendPOD(binary, header);
+    return binary;
+}
+
+AssetBytes BuildTestSceneBinary(
+    in Span<SubsystemAssetRef> subsystems,
+    in HashMap<Name, GenericAssetRef> assets,
+    in Span<EntityAssetRef> entities,
+    mut AssetArena arena
+){
+    SceneHeaderBinary header = SceneHeaderBinary();
+    header.subsystemCount = cast<u64>(subsystems.size());
+    header.entityCount = cast<u64>(entities.size());
+    header.assetCount = cast<u64>(assets.size());
+
+    AssetBytes binary(arena);
+    binary.reserve(sizeof(header) + subsystems.size() * sizeof(NameHash) + entities.size() * sizeof(NameHash) + assets.size() * sizeof(SceneAssetEntryBinary));
+    AppendPOD(binary, header);
+    for(in auto ref : subsystems)
+        AppendPOD(binary, ref.virtualPath.hash());
+    for(in auto ref : entities)
+        AppendPOD(binary, ref.virtualPath.hash());
+    for(in auto assetEntry : assets){
+        SceneAssetEntryBinary entry = SceneAssetEntryBinary();
+        entry.nicknameHash = assetEntry.first.hash();
+        entry.assetHash = assetEntry.second.virtualPath.hash();
+        AppendPOD(binary, entry);
+    }
+    return binary;
+}
+
+AssetBytes BuildTestEntityBinary(in Span<ComponentAssetRef> components, mut AssetArena arena){
+    EntityHeaderBinary header = EntityHeaderBinary();
+    header.componentCount = cast<u64>(components.size());
+
+    AssetBytes binary(arena);
+    binary.reserve(sizeof(header) + components.size() * sizeof(NameHash));
+    AppendPOD(binary, header);
+    for(in auto ref : components)
+        AppendPOD(binary, ref.virtualPath.hash());
+    return binary;
+}
 
 void VerifySceneCameraSelection_ActiveGenerationAndMissingComponentsRecover(){
     EcsTestWorld testWorld = EcsTestWorld();
@@ -341,45 +429,43 @@ void VerifySceneSubsystemAssets_RejectsMissingSharedOpticalGroupAndDuplicateEnti
     PopulateRequiredSubsystemFields(rendererSubsystem);
     source.setBinary(s_SceneAssetNameEngineSubsystemsRenderer, MakeSubsystemBinary(rendererSubsystem, arena));
 
-    native(mut arena, mut registry, mut source){
-        ASSERT_TRUE(registry.registerCodec(MakeUnique<SubsystemAssetCodec>()));
-        ASSERT_TRUE(registry.registerCodec(MakeUnique<ComponentAssetCodec>()));
-        ASSERT_TRUE(registry.registerCodec(MakeUnique<EntityAssetCodec>()));
-        ASSERT_TRUE(registry.registerCodec(MakeUnique<ProjectAssetCodec>()));
-        ASSERT_TRUE(registry.registerCodec(MakeUnique<SceneAssetCodec>()));
+    ASSERT_TRUE(RegisterTestCodec<SubsystemAssetCodec>(registry));
+    ASSERT_TRUE(RegisterTestCodec<ComponentAssetCodec>(registry));
+    ASSERT_TRUE(RegisterTestCodec<EntityAssetCodec>(registry));
+    ASSERT_TRUE(RegisterTestCodec<ProjectAssetCodec>(registry));
+    ASSERT_TRUE(RegisterTestCodec<SceneAssetCodec>(registry));
 
-        Impl::RendererComponentPayloadBinary invalidRendererPayload;
-        invalidRendererPayload.materialHash = s_SceneCaseProjectMaterialsMatSkinnedUv.hash();
-        invalidRendererPayload.opticalVolumeGroupHash = {};
-        invalidRendererPayload.opticalVolumeCoincidence = static_cast<u8>(Impl::OpticalVolumeCoincidence::SharedGroup);
-        invalidRendererPayload.opticalBoundaryMode = static_cast<u8>(Impl::OpticalBoundaryMode::ClosedPriority);
-        ComponentAssetCodec componentCodec;
-        EXPECT_FALSE(componentCodec.deserialize(s_SceneFixtureNameProjectEntitiesHeroInvalidRenderer, MakeComponentBinary<Impl::RendererComponentAsset>(invalidRendererPayload, arena), arena).has_value());
+    RendererComponentPayloadBinary invalidRendererPayload = RendererComponentPayloadBinary();
+    invalidRendererPayload.materialHash = s_SceneCaseProjectMaterialsMatSkinnedUv.hash();
+    invalidRendererPayload.opticalVolumeGroupHash = NameHash();
+    invalidRendererPayload.opticalVolumeCoincidence = cast<u8>(OpticalVolumeCoincidence::SharedGroup);
+    invalidRendererPayload.opticalBoundaryMode = cast<u8>(OpticalBoundaryMode::ClosedPriority);
+    ComponentAssetCodec componentCodec = ComponentAssetCodec();
+    EXPECT_FALSE(componentCodec.deserialize(s_SceneFixtureNameProjectEntitiesHeroInvalidRenderer, MakeComponentBinary<RendererComponentAsset>(invalidRendererPayload, arena), arena).has_value());
 
-        Impl::TransformComponentPayloadBinary transformPayload;
-        transformPayload.position = Float4(1.0f, 2.0f, 3.0f, 0.0f);
-        transformPayload.rotation = Float4(0.0f, 0.0f, 0.0f, 1.0f);
-        transformPayload.scale = Float4(2.0f, 2.0f, 2.0f, 0.0f);
-        source.setBinary(s_SceneCaseProjectEntitiesHeroTransform, MakeComponentBinary<Impl::TransformComponentAsset>(transformPayload, arena));
-        source.setBinary(s_SceneCaseProjectEntitiesHeroTransformDuplicate, MakeComponentBinary<Impl::TransformComponentAsset>(transformPayload, arena));
+    TransformComponentPayloadBinary transformPayload = TransformComponentPayloadBinary();
+    transformPayload.position = f32x4(1.0f, 2.0f, 3.0f, 0.0f);
+    transformPayload.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+    transformPayload.scale = f32x4(2.0f, 2.0f, 2.0f, 0.0f);
+    source.setBinary(s_SceneCaseProjectEntitiesHeroTransform, MakeComponentBinary<TransformComponentAsset>(transformPayload, arena));
+    source.setBinary(s_SceneCaseProjectEntitiesHeroTransformDuplicate, MakeComponentBinary<TransformComponentAsset>(transformPayload, arena));
 
-        Impl::EntityAsset::ComponentRefVector duplicateComponents(arena);
-        duplicateComponents.push_back(Impl::EntityAsset::ComponentRef("project/entities/hero/transform"));
-        duplicateComponents.push_back(Impl::EntityAsset::ComponentRef("project/entities/hero/transform_duplicate"));
-        source.setBinary(s_SceneCaseProjectEntitiesDuplicateCompEntity, MakeEntityBinary(duplicateComponents, arena));
+    Vector<ComponentAssetRef> duplicateComponents = Vector<ComponentAssetRef>();
+    duplicateComponents.push_back(ComponentAssetRef(Name("project/entities/hero/transform")));
+    duplicateComponents.push_back(ComponentAssetRef(Name("project/entities/hero/transform_duplicate")));
+    source.setBinary(s_SceneCaseProjectEntitiesDuplicateCompEntity, BuildTestEntityBinary(duplicateComponents, arena));
 
-        Impl::SceneAsset::SubsystemRefVector sceneSubsystems(arena);
-        sceneSubsystems.push_back(Impl::SceneAsset::SubsystemRef(s_SceneAssetNameEngineSubsystemsRenderer));
-        Impl::SceneAsset::AssetMap sceneAssets(0, Hasher<Name>(), EqualTo<Name>(), arena);
-        Impl::SceneAsset::EntityRefVector duplicateSceneEntities(arena);
-        duplicateSceneEntities.push_back(Impl::SceneAsset::EntityRef("project/entities/duplicate_comp_entity"));
-        source.setBinary(s_SceneCaseProjectScenesDuplicateCompScene, MakeSceneBinary(sceneSubsystems, sceneAssets, duplicateSceneEntities, arena));
-    }
+    Vector<SubsystemAssetRef> sceneSubsystems = Vector<SubsystemAssetRef>();
+    sceneSubsystems.push_back(SubsystemAssetRef(s_SceneAssetNameEngineSubsystemsRenderer));
+    HashMap<Name, GenericAssetRef> sceneAssets = HashMap<Name, GenericAssetRef>();
+    Vector<EntityAssetRef> duplicateSceneEntities = Vector<EntityAssetRef>();
+    duplicateSceneEntities.push_back(EntityAssetRef(Name("project/entities/duplicate_comp_entity")));
+    source.setBinary(s_SceneCaseProjectScenesDuplicateCompScene, BuildTestSceneBinary(sceneSubsystems, sceneAssets, duplicateSceneEntities, arena));
 
     EXPECT_TRUE(SawCapturedError(logger, "shared_group optical volume requires optical_volume_group"));
 
     ActiveSceneSubsystems active(globalArena);
-    EXPECT_FALSE(active.loadScene(AssetRef<Impl::SceneAsset>(s_SceneCaseProjectScenesDuplicateCompScene), assets));
+    EXPECT_FALSE(active.loadScene(SceneAssetRef(s_SceneCaseProjectScenesDuplicateCompScene), assets));
     EXPECT_TRUE(SawCapturedError(logger, "duplicate component type"));
 }
 
@@ -408,13 +494,9 @@ void VerifyFlyCameraMotion_PointerCaptureAndNonfiniteInputResetTheAnchor(){
 
 void VerifyFlyCameraMotion_CapturedKeyboardAndNonfiniteDeltaDoNotMove(){
     const FlyCameraMotion motion = FlyCameraMotion();
-    f32x4 axesOut = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-    f32x4 resultOut = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-    native(in motion, mut axesOut, mut resultOut){
-        StoreFloat(motion.buildMoveAxes(true, true, false, true, false), axesOut);
-        const SIMDVectorSingle position = VectorSet(1.0f, 2.0f, 3.0f, 0.0f);
-        StoreFloat(motion.resolvePosition(position, VectorSet(1.0f, 1.0f, 0.0f, 0.0f), VectorSet(0.0f, 0.0f, 0.0f, 1.0f), BitCast<f32>(0x7f800000u), true), resultOut);
-    }
+    const VectorSingle axesOut = motion.buildMoveAxes(true, true, false, true, false);
+    const VectorSingle position = VectorSingle(1.0f, 2.0f, 3.0f, 0.0f);
+    const VectorSingle resultOut = motion.resolvePosition(position, VectorSingle(1.0f, 1.0f, 0.0f, 0.0f), VectorSingle(0.0f, 0.0f, 0.0f, 1.0f), BitCast<f32>(0x7f800000u), true);
     EXPECT_FLOAT_EQ(axesOut.x, 0.0f);
     EXPECT_FLOAT_EQ(axesOut.y, 0.0f);
     EXPECT_FLOAT_EQ(resultOut.x, 1.0f);
@@ -471,10 +553,8 @@ void VerifySceneSubsystemAssets_RejectsMismatchedSubsystemTypeTrailingBytesAndCo
     const AssetBytes skinningBinary = MakeSubsystemBinary(skinningSubsystem, arena);
     SubsystemAssetCodec codec = SubsystemAssetCodec();
 
-    native(in skinningBinary, mut arena){
-        Impl::TypedSubsystemAssetCodec<RendererSubsystem> rendererCodec;
-        EXPECT_FALSE(rendererCodec.deserialize(s_SceneAssetNameEngineSubsystemsSkinning, skinningBinary, arena).has_value());
-    }
+    TypedSubsystemAssetCodec<RendererSubsystem> rendererCodec = TypedSubsystemAssetCodec<RendererSubsystem>();
+    EXPECT_FALSE(rendererCodec.deserialize(s_SceneAssetNameEngineSubsystemsSkinning, skinningBinary, arena).has_value());
     EXPECT_TRUE(SawCapturedError(logger, "subsystem binary type does not match"));
 
     AssetBytes trailing = skinningBinary;
@@ -495,17 +575,16 @@ void VerifySceneSubsystemAssets_RejectsEmptyProjectStartSceneAndEmptySceneSubsys
     AssetArena arena(s_SceneCaseTestsSceneProjectSceneRoundTrip);
     ProjectAssetCodec projectCodec = ProjectAssetCodec();
 
-    const AssetBytes invalidProjectBinary = MakeProjectBinary(s_NameNone, arena);
+    const AssetBytes invalidProjectBinary = BuildTestProjectBinary(s_NameNone, arena);
     EXPECT_FALSE(projectCodec.deserialize(s_DefaultProjectVirtualPath, invalidProjectBinary, arena).has_value());
     EXPECT_TRUE(SawCapturedError(logger, "start_scene must not be empty"));
 
-    native(mut arena){
-        SceneAssetCodec sceneCodec;
-        Impl::SceneAsset::SubsystemRefVector emptySubsystems(arena);
-        Impl::SceneAsset::AssetMap sceneAssets(0, Hasher<Name>(), EqualTo<Name>(), arena);
-        const AssetBytes emptySceneBinary = MakeSceneBinary(emptySubsystems, sceneAssets, {}, arena);
-        EXPECT_FALSE(sceneCodec.deserialize(s_SceneFixtureNameProjectScenesEmpty, emptySceneBinary, arena).has_value());
-    }
+    SceneAssetCodec sceneCodec = SceneAssetCodec();
+    Vector<SubsystemAssetRef> emptySubsystems = Vector<SubsystemAssetRef>();
+    HashMap<Name, GenericAssetRef> sceneAssets = HashMap<Name, GenericAssetRef>();
+    Vector<EntityAssetRef> emptyEntities = Vector<EntityAssetRef>();
+    const AssetBytes emptySceneBinary = BuildTestSceneBinary(emptySubsystems, sceneAssets, emptyEntities, arena);
+    EXPECT_FALSE(sceneCodec.deserialize(s_SceneFixtureNameProjectScenesEmpty, emptySceneBinary, arena).has_value());
     EXPECT_TRUE(SawCapturedError(logger, "scene must declare at least one subsystem"));
 }
 
@@ -527,198 +606,61 @@ void VerifySceneSubsystemAssets_DeduplicatesSubsystemRefsAndPreservesPreviousSce
     PopulateRequiredSubsystemFields(skinningSubsystem);
 
     TransparentSubsystem transparentSubsystem(arena, s_SceneAssetNameEngineSubsystemsTransparent);
-    transparentSubsystem.subsystems.push_back(AssetRef<Impl::ISubsystem>(s_SceneAssetNameEngineSubsystemsRenderer));
-    transparentSubsystem.subsystems.push_back(AssetRef<Impl::ISubsystem>(s_SceneAssetNameEngineSubsystemsSkinning));
+    transparentSubsystem.subsystems.push_back(SubsystemAssetRef(s_SceneAssetNameEngineSubsystemsRenderer));
+    transparentSubsystem.subsystems.push_back(SubsystemAssetRef(s_SceneAssetNameEngineSubsystemsSkinning));
     PopulateRequiredSubsystemFields(transparentSubsystem);
 
     UiSubsystem uiSubsystem(arena, s_SceneAssetNameEngineSubsystemsUi);
-    uiSubsystem.subsystems.push_back(AssetRef<Impl::ISubsystem>(s_SceneAssetNameEngineSubsystemsRenderer));
-    uiSubsystem.subsystems.push_back(AssetRef<Impl::ISubsystem>(s_SceneAssetNameEngineSubsystemsRenderer));
+    uiSubsystem.subsystems.push_back(SubsystemAssetRef(s_SceneAssetNameEngineSubsystemsRenderer));
+    uiSubsystem.subsystems.push_back(SubsystemAssetRef(s_SceneAssetNameEngineSubsystemsRenderer));
     PopulateRequiredSubsystemFields(uiSubsystem);
 
     source.setBinary(s_SceneAssetNameEngineSubsystemsRenderer, MakeSubsystemBinary(rendererSubsystem, arena));
     source.setBinary(s_SceneAssetNameEngineSubsystemsSkinning, MakeSubsystemBinary(skinningSubsystem, arena));
     source.setBinary(s_SceneAssetNameEngineSubsystemsTransparent, MakeSubsystemBinary(transparentSubsystem, arena));
     source.setBinary(s_SceneAssetNameEngineSubsystemsUi, MakeSubsystemBinary(uiSubsystem, arena));
-    source.setBinary(s_DefaultProjectVirtualPath, MakeProjectBinary(s_SceneCaseProjectScenesMain, arena));
+    source.setBinary(s_DefaultProjectVirtualPath, BuildTestProjectBinary(s_SceneCaseProjectScenesMain, arena));
 
-    native(mut arena, mut registry, mut source, mut assets, mut active){
-        ASSERT_TRUE(registry.registerCodec(MakeUnique<SubsystemAssetCodec>()));
-        ASSERT_TRUE(registry.registerCodec(MakeUnique<ProjectAssetCodec>()));
-        ASSERT_TRUE(registry.registerCodec(MakeUnique<SceneAssetCodec>()));
+    ASSERT_TRUE(RegisterTestCodec<SubsystemAssetCodec>(registry));
+    ASSERT_TRUE(RegisterTestCodec<ProjectAssetCodec>(registry));
+    ASSERT_TRUE(RegisterTestCodec<SceneAssetCodec>(registry));
 
-        Impl::SceneAsset::SubsystemRefVector sceneSubsystems(arena);
-        sceneSubsystems.push_back(Impl::SceneAsset::SubsystemRef(s_SceneAssetNameEngineSubsystemsRenderer));
-        sceneSubsystems.push_back(Impl::SceneAsset::SubsystemRef(s_SceneAssetNameEngineSubsystemsRenderer));
-        sceneSubsystems.push_back(Impl::SceneAsset::SubsystemRef(s_SceneAssetNameEngineSubsystemsUi));
-        sceneSubsystems.push_back(Impl::SceneAsset::SubsystemRef(s_SceneAssetNameEngineSubsystemsTransparent));
-        Impl::SceneAsset::AssetMap sceneAssets(0, Hasher<Name>(), EqualTo<Name>(), arena);
-        sceneAssets.emplace(s_SceneCaseCesiumManModel, Impl::SceneAsset::AssetRef("project/characters/cesium_man/model"));
-        source.setBinary(s_SceneCaseProjectScenesMain, MakeSceneBinary(sceneSubsystems, sceneAssets, {}, arena));
+    Vector<SubsystemAssetRef> sceneSubsystems = Vector<SubsystemAssetRef>();
+    sceneSubsystems.push_back(SubsystemAssetRef(s_SceneAssetNameEngineSubsystemsRenderer));
+    sceneSubsystems.push_back(SubsystemAssetRef(s_SceneAssetNameEngineSubsystemsRenderer));
+    sceneSubsystems.push_back(SubsystemAssetRef(s_SceneAssetNameEngineSubsystemsUi));
+    sceneSubsystems.push_back(SubsystemAssetRef(s_SceneAssetNameEngineSubsystemsTransparent));
+    HashMap<Name, GenericAssetRef> sceneAssets = HashMap<Name, GenericAssetRef>();
+    sceneAssets.try_emplace(s_SceneCaseCesiumManModel, GenericAssetRef(Name("project/characters/cesium_man/model")));
+    Vector<EntityAssetRef> emptyEntities = Vector<EntityAssetRef>();
+    source.setBinary(s_SceneCaseProjectScenesMain, BuildTestSceneBinary(sceneSubsystems, sceneAssets, emptyEntities, arena));
 
-        ASSERT_TRUE(active.loadProjectStartScene(assets));
-        EXPECT_EQ(active.subsystemCount(), 4u);
-        EXPECT_FALSE(active.findSceneAsset(s_SceneFixtureNameNonexistentNickname).valid());
+    ASSERT_TRUE(active.loadProjectStartScene(assets));
+    EXPECT_EQ(active.subsystemCount(), 4u);
+    EXPECT_FALSE(active.findSceneAsset(s_SceneFixtureNameNonexistentNickname).valid());
 
-        const UiSubsystem* const activeUi = active.findSubsystem<UiSubsystem>();
-        ASSERT_NE(activeUi, nullptr);
-        ASSERT_EQ(activeUi->subsystems.size(), 1u);
-        EXPECT_EQ(activeUi->subsystems[0].name(), s_SceneAssetNameEngineSubsystemsRenderer);
+    ASSERT_TRUE(HasActiveSubsystem<UiSubsystem>(active));
+    ASSERT_EQ(RequireActiveSubsystem<UiSubsystem>(active).subsystems.size(), 1u);
+    EXPECT_EQ(RequireActiveSubsystem<UiSubsystem>(active).subsystems[0u].name(), s_SceneAssetNameEngineSubsystemsRenderer);
 
-        RendererSubsystem duplicateRendererSubsystem(arena, s_SceneCaseProjectSubsystemsRendererOverride);
-        PopulateRequiredSubsystemFields(duplicateRendererSubsystem);
-        source.setBinary(s_SceneCaseProjectSubsystemsRendererOverride, MakeSubsystemBinary(duplicateRendererSubsystem, arena));
-        Impl::SceneAsset::SubsystemRefVector duplicateTypeSceneSubsystems(arena);
-        duplicateTypeSceneSubsystems.push_back(Impl::SceneAsset::SubsystemRef(s_SceneAssetNameEngineSubsystemsRenderer));
-        duplicateTypeSceneSubsystems.push_back(Impl::SceneAsset::SubsystemRef("project/subsystems/renderer_override"));
-        source.setBinary(s_SceneCaseProjectScenesDuplicateType, MakeSceneBinary(duplicateTypeSceneSubsystems, sceneAssets, {}, arena));
-        EXPECT_FALSE(active.loadScene(ActiveSceneSubsystems::SceneRef("project/scenes/duplicate_type"), assets));
+    RendererSubsystem duplicateRendererSubsystem(arena, s_SceneCaseProjectSubsystemsRendererOverride);
+    PopulateRequiredSubsystemFields(duplicateRendererSubsystem);
+    source.setBinary(s_SceneCaseProjectSubsystemsRendererOverride, MakeSubsystemBinary(duplicateRendererSubsystem, arena));
+    Vector<SubsystemAssetRef> duplicateTypeSceneSubsystems = Vector<SubsystemAssetRef>();
+    duplicateTypeSceneSubsystems.push_back(SubsystemAssetRef(s_SceneAssetNameEngineSubsystemsRenderer));
+    duplicateTypeSceneSubsystems.push_back(SubsystemAssetRef(Name("project/subsystems/renderer_override")));
+    source.setBinary(s_SceneCaseProjectScenesDuplicateType, BuildTestSceneBinary(duplicateTypeSceneSubsystems, sceneAssets, emptyEntities, arena));
+    EXPECT_FALSE(active.loadScene(SceneAssetRef(Name("project/scenes/duplicate_type")), assets));
 
-        Impl::SceneAsset::SubsystemRefVector brokenSceneSubsystems(arena);
-        brokenSceneSubsystems.push_back(Impl::SceneAsset::SubsystemRef("project/subsystems/missing_subsystem"));
-        source.setBinary(s_SceneCaseProjectScenesBroken, MakeSceneBinary(brokenSceneSubsystems, sceneAssets, {}, arena));
-    }
+    Vector<SubsystemAssetRef> brokenSceneSubsystems = Vector<SubsystemAssetRef>();
+    brokenSceneSubsystems.push_back(SubsystemAssetRef(Name("project/subsystems/missing_subsystem")));
+    source.setBinary(s_SceneCaseProjectScenesBroken, BuildTestSceneBinary(brokenSceneSubsystems, sceneAssets, emptyEntities, arena));
 
     EXPECT_TRUE(SawCapturedError(logger, "duplicate subsystem type"));
-    EXPECT_FALSE(active.loadScene(AssetRef<Impl::SceneAsset>(s_SceneCaseProjectScenesBroken), assets));
+    EXPECT_FALSE(active.loadScene(SceneAssetRef(s_SceneCaseProjectScenesBroken), assets));
     EXPECT_EQ(active.scene().name(), s_SceneCaseProjectScenesMain);
     EXPECT_EQ(active.subsystemCount(), 4u);
     EXPECT_EQ(active.findSceneAsset(s_SceneFixtureNameCesiumManModel).name(), Name("project/characters/cesium_man/model"));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-AssetBytes BuildTestProjectBinary(in Name startScene, mut AssetArena arena){
-    ProjectHeaderBinary header = ProjectHeaderBinary();
-    header.startSceneHash = startScene.hash();
-
-    AssetBytes binary(arena);
-    binary.reserve(sizeof(header));
-    AppendPOD(binary, header);
-    return binary;
-}
-
-AssetBytes BuildTestSceneBinary(in SceneSubsystemRefSpan subsystems, in SceneAssetMap assets, in SceneEntityRefSpan entities, mut AssetArena arena){
-    SceneHeaderBinary header = SceneHeaderBinary();
-    header.subsystemCount = cast<u64>(subsystems.size());
-    header.entityCount = cast<u64>(entities.size());
-    header.assetCount = cast<u64>(assets.size());
-
-    AssetBytes binary(arena);
-    binary.reserve(sizeof(header) + subsystems.size() * sizeof(NameHash) + entities.size() * sizeof(NameHash) + assets.size() * sizeof(SceneAssetEntryBinary));
-    AppendPOD(binary, header);
-    for(in SceneSubsystemRef ref : subsystems){
-        AppendPOD(binary, ref.name().hash());
-    }
-    for(in SceneEntityRef ref : entities){
-        AppendPOD(binary, ref.name().hash());
-    }
-    for(in auto assetEntry : assets){
-        SceneAssetEntryBinary entry = SceneAssetEntryBinary();
-        entry.nicknameHash = assetEntry.first.hash();
-        entry.assetHash = assetEntry.second.name().hash();
-        AppendPOD(binary, entry);
-    }
-    return binary;
-}
-
-AssetBytes BuildTestEntityBinary(in EntityComponentRefSpan components, mut AssetArena arena){
-    EntityHeaderBinary header = EntityHeaderBinary();
-    header.componentCount = cast<u64>(components.size());
-
-    AssetBytes binary(arena);
-    binary.reserve(sizeof(header) + components.size() * sizeof(NameHash));
-    AppendPOD(binary, header);
-    for(in EntityComponentRef ref : components){
-        AppendPOD(binary, ref.name().hash());
-    }
-    return binary;
-}
-
-void SetMapAssetBinary(in Name virtualPath, in ConstByteSpan binary, mut MapAssetBinarySource source){
-    for(mut MapAssetBinaryEntry entry : source.m_entries){
-        if(entry.path == virtualPath){
-            entry.binary.assign(binary.begin(), binary.end());
-            return;
-        }
-    }
-    AssetBytes copy(source.m_arena);
-    copy.assign(binary.begin(), binary.end());
-    source.m_entries.emplace_back(virtualPath, copy);
-}
-
-b8 ReadMapAssetBinary(in Name virtualPath, in MapAssetBinarySource source, mut AssetBytes outBinary){
-    outBinary.clear();
-    for(in MapAssetBinaryEntry entry : source.m_entries){
-        if(entry.path == virtualPath){
-            outBinary.assign(entry.binary.begin(), entry.binary.end());
-            return true;
-        }
-    }
-    return false;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests::SceneAssetTestHelpers{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-AssetBytes MakeProjectBinary(const Name& startScene, AssetArena& arena){
-    return Tests::SceneAssetCases::BuildTestProjectBinary(startScene, arena);
-}
-
-AssetBytes MakeSceneBinary(const Span<const SceneAsset::SubsystemRef> subsystems, const SceneAsset::AssetMap& assets, const Span<const SceneAsset::EntityRef> entities, AssetArena& arena){
-    return Tests::SceneAssetCases::BuildTestSceneBinary(subsystems, assets, entities, arena);
-}
-
-AssetBytes MakeEntityBinary(const Span<const EntityAsset::ComponentRef> components, AssetArena& arena){
-    return Tests::SceneAssetCases::BuildTestEntityBinary(components, arena);
-}
-
-void MapAssetBinarySource::setBinary(const Name& virtualPath, const Span<const u8> binary){
-    Tests::SceneAssetCases::SetMapAssetBinary(virtualPath, binary, *this);
-}
-
-b8 MapAssetBinarySource::readAssetBinary(const Name& virtualPath, AssetBytes& outBinary)const{
-    return Tests::SceneAssetCases::ReadMapAssetBinary(virtualPath, *this, outBinary);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

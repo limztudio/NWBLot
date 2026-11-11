@@ -9,58 +9,30 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+b8 IsSupportedTexConvInputPath(in Path path){
+    Array<StringView, 8u> extensions;
+    extensions[0u] = s_PngExtension;
+    extensions[1u] = s_JpgExtension;
+    extensions[2u] = s_JpegExtension;
+    extensions[3u] = s_JfifExtension;
+    extensions[4u] = s_TgaExtension;
+    extensions[5u] = s_QoiExtension;
+    extensions[6u] = s_ExrExtension;
+    extensions[7u] = s_HdrExtension;
+    return PathHasListedExtension(path, extensions);
+}
 
+b8 IsHdrTexConvInputPath(in Path path){
+    Array<StringView, 2u> extensions;
+    extensions[0u] = s_ExrExtension;
+    extensions[1u] = s_HdrExtension;
+    return PathHasListedExtension(path, extensions);
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <engine_namespace.h>
-
-#include <core/alloc/module.h>
-
-#include <global/compile.h>
-#include <global/containers.h>
-#include <global/filesystem.h>
-#include <global/limit.h>
-#include <global/span.h>
-#include <global/text_utils.h>
-#include <global/type.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#define NWB_TEX_CONV_BEGIN NWB_BEGIN namespace TexConv{
-#define NWB_TEX_CONV_END }; NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_TEX_CONV_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename T>
-using UtilityVector = DefaultVector<T, Core::Alloc::GlobalArena, QueryUtilityGlobalArena<s_UtilityArena>>;
-using ScratchPath = ::Path<Core::Alloc::ScratchArena>;
-using ScratchString = ::AString<Core::Alloc::ScratchArena>;
-using ScratchStringStream = ::AStringStream<Core::Alloc::ScratchArena>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_TEX_CONV_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+b8 IsNwbTexConvOutputPath(in Path path){
+    Array<StringView, 1u> extensions;
+    extensions[0u] = s_NwbOutputExtension;
+    return PathHasListedExtension(path, extensions);
 }
 
 

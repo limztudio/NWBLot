@@ -5,6 +5,7 @@
 #include <tests/common/gtest_macros.adhd>
 #include <tests/common/test_context.adhd>
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -366,39 +367,39 @@ struct EncodedCodePointBuffer{
     }
 };
 
-[[nodiscard]] inline TextInputSessionDesc MakeEmptySessionDesc()noexcept{
+[[nodiscard]] NWB_INLINE TextInputSessionDesc MakeEmptySessionDesc()noexcept{
     return TextInputSessionDesc{};
 }
 
-[[nodiscard]] inline TextInputSessionDesc MakeSessionDesc(const AStringView surrounding, const usize anchorByte, const usize caretByte)noexcept{
+[[nodiscard]] NWB_INLINE TextInputSessionDesc MakeSessionDesc(const AStringView surrounding, const usize anchorByte, const usize caretByte)noexcept{
     return TextInputSessionDesc{ {}, surrounding, anchorByte, caretByte };
 }
 
-[[nodiscard]] inline TextInputRect MakeTextInputRect(const i32 x, const i32 y, const i32 width, const i32 height)noexcept{
+[[nodiscard]] NWB_INLINE TextInputRect MakeTextInputRect(const i32 x, const i32 y, const i32 width, const i32 height)noexcept{
     return TextInputRect{ x, y, width, height };
 }
 
-[[nodiscard]] inline TextInputDeletionBasis::Enum MakeInvalidDeletionBasis()noexcept{
+[[nodiscard]] NWB_INLINE TextInputDeletionBasis::Enum MakeInvalidDeletionBasis()noexcept{
     return static_cast<TextInputDeletionBasis::Enum>(255u);
 }
 
-[[nodiscard]] inline TextInputChangeCause::Enum MakeInvalidChangeCause()noexcept{
+[[nodiscard]] NWB_INLINE TextInputChangeCause::Enum MakeInvalidChangeCause()noexcept{
     return static_cast<TextInputChangeCause::Enum>(255u);
 }
 
-inline void FillGlobalString(GlobalString& target, const usize count, const u8 byteValue){
+NWB_INLINE void FillGlobalString(GlobalString& target, const usize count, const u8 byteValue){
     target.assign(count, static_cast<char>(byteValue));
 }
 
-inline void AssignGlobalString(GlobalString& target, const AStringView value){
+NWB_INLINE void AssignGlobalString(GlobalString& target, const AStringView value){
     target.assign(value.data(), value.size());
 }
 
-inline void AppendByteGlobalString(GlobalString& target, const u8 byteValue){
+NWB_INLINE void AppendByteGlobalString(GlobalString& target, const u8 byteValue){
     target.push_back(static_cast<char>(byteValue));
 }
 
-[[nodiscard]] inline AStringView ViewGlobalString(const GlobalString& source)noexcept{
+[[nodiscard]] NWB_INLINE AStringView ViewGlobalString(const GlobalString& source)noexcept{
     return AStringView(source);
 }
 
@@ -575,7 +576,9 @@ void VerifyTextInputSelection_DeletionPreservesThePreeditCommitOrderingBarrier()
     EXPECT_EQ(ctx.service.poll(token, ctx.event), TextInputPollResult::Pending);
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void VerifyClipboard_RequestsCopyTextAndPublishOnlyWhenPumped(){
     FakeClipboardContext ctx = FakeClipboardContext();
@@ -782,7 +785,9 @@ void VerifyClipboard_ConsumedCompletionOutlivesServiceAndItsArena(){
     EXPECT_EQ(out.completion.text, "owned result");
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void VerifyClipboardAsync_PendingNativeRequestPreservesFifoAndCopiedWriteInput(){
     DelayedClipboardContext ctx = DelayedClipboardContext();
@@ -939,7 +944,9 @@ void VerifyClipboardAsync_DelayedRepliesValidateUtf8AndOwnTheirCompletionBytes()
     EXPECT_FALSE(ctx.service.deliver(valid, ClipboardStatus::Success, "duplicate reply"));
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void VerifyClipboardText_Utf8RejectsMalformedUnicodeAndEmbeddedNull(){
     EXPECT_EQ(ValidateClipboardUtf8Text(StringView()), ClipboardStatus::Success);
@@ -1032,7 +1039,9 @@ void VerifyClipboardText_Latin1ExpansionCannotExceedUtf8ByteLimit(){
     EXPECT_TRUE(ctx.second.empty());
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void VerifyTextInput_BeginRequiresFocusCapabilityAndOnlyOneActiveSession(){
     FakeTextInputContext ctx = FakeTextInputContext();
@@ -1390,7 +1399,9 @@ void VerifyTextInput_UnknownSurroundingChangeCausePreservesTextRevisionAndNative
     EXPECT_EQ(ctx.service.m_nativeCause, TextInputChangeCause::Other);
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void VerifyTextInputText_ValidatesStrictUtf8AndEmbeddedNul(){
     EXPECT_EQ(ValidateTextInputUtf8(StringView(), 100u), TextInputAdmission::Accepted);
@@ -1452,7 +1463,9 @@ void VerifyTextInputText_RejectsInvalidScalarsWithoutPublishingAnEncodedLength()
     EXPECT_EQ(invalid110000.error(), TextInputAdmission::InvalidText);
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_ADHD_GTEST(TextInputSelection, ReverseSelectionHasTheSameOuterByteLimits, VerifyTextInputSelection_ReverseSelectionHasTheSameOuterByteLimits)
 NWB_ADHD_GTEST(TextInputSelection, UnknownBasisAndMissingOrStaleRevisionDoNotQueueAnyEvent, VerifyTextInputSelection_UnknownBasisAndMissingOrStaleRevisionDoNotQueueAnyEvent)

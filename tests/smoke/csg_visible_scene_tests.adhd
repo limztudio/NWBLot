@@ -21,7 +21,7 @@ native{
 #include <impl/ecs_scene/module.adhd.h>
 
 namespace NWB::Tests::Smoke{
-    using EcsTestWorld = NWB::Tests::EcsTestWorld;
+using EcsTestWorld = NWB::Tests::EcsTestWorld;
 };
 
 
@@ -43,9 +43,9 @@ const SmokeMaterialRef s_CsgVisibleTestMaterial = "project/smoke/csg_visible/mat
 void VerifyCsgVisibleSceneMissingReceiverPoseUpdates(){
     EcsTestWorld testWorld = EcsTestWorld();
     CsgVisibleScene scene = CsgVisibleScene();
-    EntityID missingReceiver = EntityID();
-    EntityID remainingReceiver = EntityID();
-    EntityID remainingCutter = EntityID();
+    EntityID missingReceiver = s_InvalidEntityId;
+    EntityID remainingReceiver = s_InvalidEntityId;
+    EntityID remainingCutter = s_InvalidEntityId;
     native(mut testWorld, mut scene, mut missingReceiver, mut remainingReceiver, mut remainingCutter){
         auto& world = testWorld.world;
         const EntityID camera = world.createEntity().id();
@@ -85,8 +85,8 @@ void VerifyCsgVisibleSceneMissingReceiverPoseUpdates(){
 
     b8 hadAfterComponents = false;
     f32x4 newRotation = f32x4();
-    b8 cutterChanged = false;
-    native(mut testWorld, mut scene, in remainingReceiver, in remainingCutter, in oldCutterTransform, mut hadAfterComponents, mut newRotation, mut cutterChanged){
+    f32x3x4 newCutterTransform = f32x3x4();
+    native(mut testWorld, mut scene, in remainingReceiver, in remainingCutter, mut hadAfterComponents, mut newRotation, mut newCutterTransform){
         auto& world = testWorld.world;
         scene.update(1.0f, world);
         const auto* transform = world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(remainingReceiver);
@@ -94,13 +94,15 @@ void VerifyCsgVisibleSceneMissingReceiverPoseUpdates(){
         if(transform && cutter){
             hadAfterComponents = true;
             newRotation = transform->rotation;
-            for(usize index = 0u; index < 12u; ++index)
-                cutterChanged = cutterChanged || cutter->shapeToWorld.raw[index] != oldCutterTransform.raw[index];
+            newCutterTransform = cutter->shapeToWorld;
         }
     }
     ASSERT_TRUE(hadAfterComponents);
     EXPECT_NE(newRotation.y, oldRotation.y);
-    EXPECT_TRUE(cutterChanged);
+    const b8 cutterUnchanged = EqualF32x4Bits(LoadFloat(newCutterTransform.rows[0u]), LoadFloat(oldCutterTransform.rows[0u]))
+        && EqualF32x4Bits(LoadFloat(newCutterTransform.rows[1u]), LoadFloat(oldCutterTransform.rows[1u]))
+        && EqualF32x4Bits(LoadFloat(newCutterTransform.rows[2u]), LoadFloat(oldCutterTransform.rows[2u]));
+    EXPECT_FALSE(cutterUnchanged);
 }
 
 NWB_ADHD_GTEST(CsgVisibleScene, MissingReceiverDoesNotStopOtherPoseUpdates, VerifyCsgVisibleSceneMissingReceiverPoseUpdates)

@@ -2,52 +2,24 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/shadow/types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/shadow/types.adhd.h>
-
-#include <core/graphics/rhi/device.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct SoftShadowResolveState{
-    Core::BindingLayoutHandle m_bindingLayout;
-    SoftShadowResolveChannelState m_scalar;
-    SoftShadowResolveChannelState m_rgb;
-    SoftShadowResolveStageState m_combinedUpsample;
-    Core::BindingLayoutHandle m_combinedWaveletBindingLayout;
-    SoftShadowResolveStageState m_combinedWavelet;
-    Core::BindingLayoutHandle m_combinedTemporalBindingLayout;
-    SoftShadowResolveStageState m_combinedTemporal;
-    b8 m_combinedUpsampleFailed = false;
-    b8 m_combinedWaveletFailed = false;
-    b8 m_combinedTemporalFailed = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+class SoftShadowResolveState{
+    public ShadowBindingLayoutHandle m_bindingLayout = ShadowBindingLayoutHandle();
+    public SoftShadowResolveChannelState m_scalar = SoftShadowResolveChannelState();
+    public SoftShadowResolveChannelState m_rgb = SoftShadowResolveChannelState();
+    public SoftShadowResolveStageState m_combinedUpsample = SoftShadowResolveStageState();
+    public ShadowBindingLayoutHandle m_combinedWaveletBindingLayout = ShadowBindingLayoutHandle();
+    public SoftShadowResolveStageState m_combinedWavelet = SoftShadowResolveStageState();
+    public ShadowBindingLayoutHandle m_combinedTemporalBindingLayout = ShadowBindingLayoutHandle();
+    public SoftShadowResolveStageState m_combinedTemporal = SoftShadowResolveStageState();
+    public b8 m_combinedUpsampleFailed = false;
+    public b8 m_combinedWaveletFailed = false;
+    public b8 m_combinedTemporalFailed = false;
 }
 
 

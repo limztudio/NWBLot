@@ -89,7 +89,7 @@ void ParallelStatementEmitter::emitParallelStmt(MString& out, const Stmt& stmt, 
     switch(stmt.kind){
     case StmtKind::ParallelForRange:{
         m_emitter.emitIndent(out, indent);
-        out.append("__adhd_task_scope.parallelFor(0u, (");
+        out.append("(void)__adhd_task_scope.parallelFor(0u, (");
         if(stmt.expr)
             m_emitter.emitExpr(out, *stmt.expr);
         out.append(").size(), 1u, [&](const usize __adhd_idx)noexcept{\r\n");
@@ -125,7 +125,7 @@ void ParallelStatementEmitter::emitParallelStmt(MString& out, const Stmt& stmt, 
     }
     case StmtKind::ParallelForIndex:{
         m_emitter.emitIndent(out, indent);
-        out.append("__adhd_task_scope.parallelFor(static_cast<usize>(");
+        out.append("(void)__adhd_task_scope.parallelFor(static_cast<usize>(");
         if(stmt.initStmt && stmt.initStmt->expr)
             m_emitter.emitExpr(out, *stmt.initStmt->expr);
         else if(stmt.initStmt && stmt.initStmt->isCtorInit && !stmt.initStmt->arguments.empty() && stmt.initStmt->arguments[0])
@@ -229,6 +229,9 @@ void ParallelStatementEmitter::emitParallelStmt(MString& out, const Stmt& stmt, 
             appendBlockSuffix();
             out.append(" = ");
         }
+        else{
+            out.append("(void)");
+        }
         out.append("__adhd_task_scope.submit([&]()noexcept{\r\n");
         if(m_emitter.statementsNeedSimdFloatingPointEnv(stmt.statements))
             out.append("#pragma STDC FENV_ACCESS ON\r\n");
@@ -279,7 +282,7 @@ void ParallelStatementEmitter::emitParallelStmt(MString& out, const Stmt& stmt, 
                 out.append(");\r\n");
             }
             m_emitter.emitIndent(out, indent + 1u);
-            out.append("__adhd_task_scope.submit([&");
+            out.append("(void)__adhd_task_scope.submit([&");
             for(usize i = 0u; i < stmt.expr->arguments.size(); ++i){
                 const Expr* arg = stmt.expr->arguments[i];
                 if(!arg || !arg->isMutArg){
@@ -337,7 +340,7 @@ void ParallelStatementEmitter::emitParallelStmt(MString& out, const Stmt& stmt, 
         }
         else{
             m_emitter.emitIndent(out, indent);
-            out.append("__adhd_task_scope.submit([&]()noexcept{ ");
+            out.append("(void)__adhd_task_scope.submit([&]()noexcept{ ");
             if(stmt.usesScratchArena){
                 out.append("\r\n");
                 m_emitter.emitScratchArenaPrologue(out, indent + 1u, "parallel");

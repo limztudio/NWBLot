@@ -238,28 +238,15 @@ void VerifyGlobalContractBoundaries_WideHashCombinationRetainsHighBitsAndWraparo
 }
 
 void VerifyGlobalContractBoundaries_Utf8OffsetRejectsMalformedPrefixesWithoutReadingTheSuffix(){
-    Expected<usize> boundary = MakeUnexpected(Failure());
-    Expected<usize> emptyBoundary = MakeUnexpected(Failure());
-    b8 validWithoutNul = true;
-    b8 offsetThreeOk = true;
-    b8 truncatedLeadOk = true;
-    b8 emptyOneOk = true;
-    native(mut boundary, mut emptyBoundary, mut validWithoutNul, mut offsetThreeOk, mut truncatedLeadOk, mut emptyOneOk){
-        const Array<char, 5u> bytes = { 'a', static_cast<char>(0xc3u), static_cast<char>(0xa9u), '\0', static_cast<char>(0xffu) };
-        const AStringView text(bytes.data(), bytes.size());
-        boundary = Utf8ByteOffset(text, 2u);
-        validWithoutNul = IsValidUtf8TextWithoutNul(text);
-        offsetThreeOk = Utf8ByteOffset(text, 3u).has_value();
-        truncatedLeadOk = Utf8ByteOffset(AStringView(bytes.data() + 1u, 1u), 1u).has_value();
-        emptyOneOk = Utf8ByteOffset(AStringView{}, 1u).has_value();
-        emptyBoundary = Utf8ByteOffset(AStringView{}, 0u);
-    }
+    const StringView text = StringView("a\xc3\xa9\0\xff", 5u);
+    const Expected<usize> boundary = Utf8ByteOffset(text, 2u);
     ASSERT_TRUE(boundary.has_value());
     EXPECT_EQ(boundary.value(), 3u);
-    EXPECT_FALSE(validWithoutNul);
-    EXPECT_FALSE(offsetThreeOk);
-    EXPECT_FALSE(truncatedLeadOk);
-    EXPECT_FALSE(emptyOneOk);
+    EXPECT_FALSE(IsValidUtf8TextWithoutNul(text));
+    EXPECT_FALSE(Utf8ByteOffset(text, 3u).has_value());
+    EXPECT_FALSE(Utf8ByteOffset(text.substr(1u, 1u), 1u).has_value());
+    EXPECT_FALSE(Utf8ByteOffset(StringView(), 1u).has_value());
+    const Expected<usize> emptyBoundary = Utf8ByteOffset(StringView(), 0u);
     ASSERT_TRUE(emptyBoundary.has_value());
     EXPECT_EQ(emptyBoundary.value(), 0u);
 }
@@ -321,25 +308,18 @@ void VerifyGlobalContractBoundaries_FixedIndexMapCollisionWrapAndCapacityFailure
 
 void VerifyGlobalContractBoundaries_RedirectedProcessPreservesCombinedOutputAndExitStatusWithClosedStandardDescriptors(){
     b8 supported = false;
-    b8 prepared = false;
-    String outputText = "";
-    native(mut supported, mut prepared, mut outputText){
+    native(mut supported){
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
         supported = true;
-        NWB::Tests::TestArena<> testArena;
-        const ::Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/contract_redirected_closed_stdio");
-        prepared = EnsureEmptyDirectory(root).has_value();
-        if(prepared){
-            const auto outputPath = root / "combined.txt";
-            const auto renderedPath = PathToString<char>(testArena.arena, outputPath);
-            outputText.assign(AStringView(renderedPath));
-        }
 #endif
     }
     if(!supported)
         return;
 
-    ASSERT_TRUE(prepared);
+    const Path root = Path("global_test_artifacts/contract_redirected_closed_stdio");
+    ASSERT_TRUE(EnsureEmptyDirectory(root).has_value());
+    const Path outputPath = root / "combined.txt";
+    const String outputText = PathToString(outputPath);
     const StringView outputPathView = outputText;
     EXPECT_FALSE(outputPathView.empty());
     for(u32 mask = 1u; mask < 8u; ++mask){
@@ -354,15 +334,7 @@ void VerifyGlobalContractBoundaries_RedirectedProcessPreservesCombinedOutputAndE
         }
     }
 
-    b8 removed = false;
-    native(mut removed){
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-        NWB::Tests::TestArena<> testArena;
-        const ::Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/contract_redirected_closed_stdio");
-        removed = RemoveAllIfExists(root).has_value();
-#endif
-    }
-    ASSERT_TRUE(removed);
+    ASSERT_TRUE(RemoveAllIfExists(root).has_value());
 }
 
 void VerifyGlobalContractBoundaries_CapturedProcessPreservesStdoutAndFailureStatusWithClosedStandardDescriptors(){
@@ -506,33 +478,6 @@ void VerifyCapturedOutputWithClosedDescriptors(const u32 mask){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ADHD_GTEST(GlobalContractBoundaries, SignedAdditionClampsNegativeOverflowToTheLowerBound, VerifyGlobalContractBoundaries_SignedAdditionClampsNegativeOverflowToTheLowerBound)
-NWB_ADHD_GTEST(GlobalContractBoundaries, AlignmentOverflowKeepsTheLastRepresentableAlignedSize, VerifyGlobalContractBoundaries_AlignmentOverflowKeepsTheLastRepresentableAlignedSize)
-NWB_ADHD_GTEST(GlobalContractBoundaries, CommonAlignmentRejectsZeroAndChecksOverflowAfterReducingSharedFactors, VerifyGlobalContractBoundaries_CommonAlignmentRejectsZeroAndChecksOverflowAfterReducingSharedFactors)
-NWB_ADHD_GTEST(GlobalContractBoundaries, DecimalPrefixStopsAtMalformedSuffixAndPreservesUnsignedWrap, VerifyGlobalContractBoundaries_DecimalPrefixStopsAtMalformedSuffixAndPreservesUnsignedWrap)
-NWB_ADHD_GTEST(GlobalContractBoundaries, WideHashCombinationRetainsHighBitsAndWraparound, VerifyGlobalContractBoundaries_WideHashCombinationRetainsHighBitsAndWraparound)
-NWB_ADHD_GTEST(GlobalContractBoundaries, Utf8OffsetRejectsMalformedPrefixesWithoutReadingTheSuffix, VerifyGlobalContractBoundaries_Utf8OffsetRejectsMalformedPrefixesWithoutReadingTheSuffix)
-NWB_ADHD_GTEST(GlobalContractBoundaries, FixedIndexMapCollisionWrapAndCapacityFailurePreserveExistingEntries, VerifyGlobalContractBoundaries_FixedIndexMapCollisionWrapAndCapacityFailurePreserveExistingEntries)
-NWB_ADHD_GTEST(GlobalContractBoundaries, ThrowingNotNullConversionPropagatesAndPreservesThePriorPointer, VerifyGlobalContractBoundaries_ThrowingNotNullConversionPropagatesAndPreservesThePriorPointer)
-NWB_ADHD_GTEST(GlobalContractBoundaries, ConvertingCopyFromAConstReferenceOwnerRetainsItsValueDeleterAndLifetime, VerifyGlobalContractBoundaries_ConvertingCopyFromAConstReferenceOwnerRetainsItsValueDeleterAndLifetime)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 
 
@@ -558,6 +503,20 @@ TEST(GlobalContractBoundaries, CapturedProcessPreservesStdoutAndFailureStatusWit
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_GTEST(GlobalContractBoundaries, SignedAdditionClampsNegativeOverflowToTheLowerBound, VerifyGlobalContractBoundaries_SignedAdditionClampsNegativeOverflowToTheLowerBound)
+NWB_ADHD_GTEST(GlobalContractBoundaries, AlignmentOverflowKeepsTheLastRepresentableAlignedSize, VerifyGlobalContractBoundaries_AlignmentOverflowKeepsTheLastRepresentableAlignedSize)
+NWB_ADHD_GTEST(GlobalContractBoundaries, CommonAlignmentRejectsZeroAndChecksOverflowAfterReducingSharedFactors, VerifyGlobalContractBoundaries_CommonAlignmentRejectsZeroAndChecksOverflowAfterReducingSharedFactors)
+NWB_ADHD_GTEST(GlobalContractBoundaries, DecimalPrefixStopsAtMalformedSuffixAndPreservesUnsignedWrap, VerifyGlobalContractBoundaries_DecimalPrefixStopsAtMalformedSuffixAndPreservesUnsignedWrap)
+NWB_ADHD_GTEST(GlobalContractBoundaries, WideHashCombinationRetainsHighBitsAndWraparound, VerifyGlobalContractBoundaries_WideHashCombinationRetainsHighBitsAndWraparound)
+NWB_ADHD_GTEST(GlobalContractBoundaries, Utf8OffsetRejectsMalformedPrefixesWithoutReadingTheSuffix, VerifyGlobalContractBoundaries_Utf8OffsetRejectsMalformedPrefixesWithoutReadingTheSuffix)
+NWB_ADHD_GTEST(GlobalContractBoundaries, FixedIndexMapCollisionWrapAndCapacityFailurePreserveExistingEntries, VerifyGlobalContractBoundaries_FixedIndexMapCollisionWrapAndCapacityFailurePreserveExistingEntries)
+NWB_ADHD_GTEST(GlobalContractBoundaries, ThrowingNotNullConversionPropagatesAndPreservesThePriorPointer, VerifyGlobalContractBoundaries_ThrowingNotNullConversionPropagatesAndPreservesThePriorPointer)
+NWB_ADHD_GTEST(GlobalContractBoundaries, ConvertingCopyFromAConstReferenceOwnerRetainsItsValueDeleterAndLifetime, VerifyGlobalContractBoundaries_ConvertingCopyFromAConstReferenceOwnerRetainsItsValueDeleterAndLifetime)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

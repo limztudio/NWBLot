@@ -208,61 +208,74 @@ StringView UiTextureImageSmokeRectName(in usize index){
 }
 
 void CancelSmokeClipboardTokenOnExit(in SmokeClipboardRef clipRef, in ClipboardRequestToken token){
-    native(in clipRef, in token){
-        if(token.valid() && (clipRef.ptr == nullptr || !clipRef.ptr->cancel(token)))
-            TerminateInvariant();
-    }
+    if(token.valid() && !clipRef.cancel(token))
+        TerminateInvariant();
 }
 
 b8 RequestSmokeClipboardSeed(in SmokeClipboardRef clipRef, mut ClipboardRequestToken token){
-    b8 ok = false;
-    native(in clipRef, mut token, mut ok){
-        if(clipRef.ptr == nullptr){
-            ok = false;
-        }
-        else if(token.valid() && !clipRef.ptr->cancel(token)){
-            ok = false;
-        }
-        else{
-            token = {};
-            const auto request = clipRef.ptr->requestWriteText(Core::ClipboardChannel::Clipboard, "ab\r\ncdef\r\nxy");
-            if(request && request->valid()){
-                token = *request;
-                ok = true;
-            }
-        }
-    }
-    return ok;
+    if(!clipRef.valid())
+        return false;
+    if(token.valid() && !clipRef.cancel(token))
+        return false;
+    token = ClipboardRequestToken();
+    const Expected<ClipboardRequestToken, ClipboardAdmissionEnum> request = clipRef.requestWriteText(ClipboardChannel::Clipboard, "ab\r\ncdef\r\nxy");
+    if(!request.has_value() || !request.value().valid())
+        return false;
+    token = request.value();
+    return true;
 }
 
 b8 PollSmokeClipboardSeed(in SmokeClipboardRef clipRef, mut ClipboardRequestToken token, mut ClipboardCompletion completion, mut b8 outSeeded){
     outSeeded = false;
     if(!token.valid())
         return true;
-    b8 ok = false;
-    native(in clipRef, mut token, mut completion, mut outSeeded, mut ok){
-        if(clipRef.ptr == nullptr){
-            ok = false;
-        }
-        else{
-            const auto status = clipRef.ptr->poll(token, completion);
-            if(status == Core::ClipboardPollResult::Pending){
-                ok = true;
-            }
-            else if(
-                status == Core::ClipboardPollResult::Completed
-                && completion.token == token
-                && completion.operation == Core::ClipboardOperation::WriteText
-                && completion.channel == Core::ClipboardChannel::Clipboard
-                && completion.status == Core::ClipboardStatus::Success
-            ){
-                token = {};
-                outSeeded = true;
-                ok = true;
-            }
-        }
+    if(!clipRef.valid())
+        return false;
+    const ClipboardPollResultEnum status = clipRef.poll(token, completion);
+    if(status == ClipboardPollResult::Pending)
+        return true;
+    if(
+        status == ClipboardPollResult::Completed
+        && completion.token == token
+        && completion.operation == ClipboardOperation::WriteText
+        && completion.channel == ClipboardChannel::Clipboard
+        && completion.status == ClipboardStatus::Success
+    ){
+        token = ClipboardRequestToken();
+        outSeeded = true;
+        return true;
     }
-    return ok;
+    return false;
+}
+
+b8 ExtractTextAreaSmokeCaretGeometry(
+    in EditCaretGeometry geometry,
+    in usize displayCaret,
+    in EditBoxRange selectionRange,
+    in EditBoxPlacement placement,
+    mut UiTextAreaSnapshot current,
+    mut Rect outLocalCaret,
+    mut u64 outLineCount
+){
+    const Expected<Rect> localCaret = geometry.caretRect(displayCaret);
+    const usize lineCount = geometry.lines().size();
+    if(!localCaret.has_value() || lineCount > 32u)
+        return false;
+    outLocalCaret = localCaret.value();
+    outLineCount = cast<u64>(lineCount);
+    for(usize index = 0u; index < lineCount; ++index){
+        const Expected<Rect> rectangle = geometry.rangeOnLine(selectionRange, cast<u32>(index), placement.caret.width);
+        if(!rectangle.has_value())
+            return false;
+        Rect selected = rectangle.value();
+        if(selected.width == 0.0f)
+            continue;
+        selected.x += placement.textOrigin.x;
+        selected.y += placement.textOrigin.y;
+        current.selections[current.selectionCount] = selected;
+        ++current.selectionCount;
+    }
+    return true;
 }
 
 b8 ShapeAndExtractTextAreaSmokeGeometry(
@@ -277,31 +290,37 @@ b8 ShapeAndExtractTextAreaSmokeGeometry(
 ){
     if(!observed.snapshot(model))
         return false;
-    b8 ok = false;
-    native(mut observed, mut text, in display, in placement, mut current, mut outLocalCaret, mut outLineCount, mut ok){
-        if(observed.shape(text, { .fontSize = 16.0f }) == Impl::Ui::TextLayoutStatus::Success && observed.measure(text, display)){
-            const auto& geometry = observed.caretGeometry();
-            const auto localCaret = geometry.caretRect(observed.displayCaret());
-            if(localCaret.has_value() && geometry.lines().size() <= 32u){
-                outLocalCaret = *localCaret;
-                outLineCount = geometry.lines().size();
-                ok = true;
-                for(u32 index = 0u; index < geometry.lines().size(); ++index){
-                    auto rectangle = geometry.rangeOnLine(observed.selectionRange(), index, placement.caret.width);
-                    if(!rectangle.has_value()){
-                        ok = false;
-                        break;
-                    }
-                    if(rectangle->width == 0.0f)
-                        continue;
-                    rectangle->x += placement.textOrigin.x;
-                    rectangle->y += placement.textOrigin.y;
-                    current.selections[current.selectionCount++] = *rectangle;
-                }
-            }
-        }
-    }
-    return ok;
+    ShapeRequest request();
+    request.fontSize = 16.0f;
+    if(observed.shape(text, request) != TextLayoutStatus::Success || !observed.measure(text, display))
+        return false;
+    return ExtractTextAreaSmokeCaretGeometry(
+        observed.caretGeometry(),
+        observed.displayCaret(),
+        observed.selectionRange(),
+        placement,
+        current,
+        outLocalCaret,
+        outLineCount
+    );
+}
+
+u8 SmokeStepRampUnorm8(in u32 x){
+    if(x < 4u)
+        return 0u;
+    if(x < 8u)
+        return 128u;
+    return 255u;
+}
+
+u8 SmokeChannelUnorm8(in u32 channel, in u32 x){
+    if(channel == 3u)
+        return SmokeStepRampUnorm8(x);
+    if(channel == 0u)
+        return 0u;
+    if(channel == 1u)
+        return 128u;
+    return 255u;
 }
 
 b8 InitUiTextSmokeSamples(
@@ -312,66 +331,43 @@ b8 InitUiTextSmokeSamples(
     mut SharedGlyphPage coverage,
     mut Array<SharedSdfAtlasPage, 4u> sdf
 ){
-    b8 ok = false;
-    native(mut arena, mut latin, mut korean, mut clipped, mut coverage, mut sdf, mut ok){
-        constexpr AStringView s_LatinFontPath = "tests/smoke/ui_layer/coverage_font";
-        constexpr StringView s_Korean = "\xED\x95\x9C\xEA\xB8\x80 \xEC\xA1\xB0\xED\x95\xA9";
-        constexpr u64 s_CoverageAtlasIdentity = 0x5549534D4F4B45u;
-
-        const Impl::Ui::GlyphPageBinding coverageBinding{
-            .font = Core::Assets::AssetRef<Impl::Font>(s_LatinFontPath),
-            .fontGeneration = 1u,
-            .atlasIdentity = s_CoverageAtlasIdentity,
-            .generation = 1u,
-            .index = static_cast<u32>(Impl::Ui::s_GlyphAtlasMaxPages - 1u),
-            .width = 12u,
-            .height = 4u
-        };
-        Impl::Ui::GlyphPage::Pixels coveragePixels(arena);
-        coveragePixels.resize(48u);
-        for(u32 y = 0u; y < coverageBinding.height; ++y){
-            for(u32 x = 0u; x < coverageBinding.width; ++x)
-                coveragePixels[y * coverageBinding.width + x] = x < 4u ? 0u : (x < 8u ? 128u : 255u);
-        }
-        auto coverageResult = Impl::Ui::CreateGlyphPage(arena, coverageBinding, Move(coveragePixels));
-        if(coverageResult)
-            coverage = Move(*coverageResult);
-
-        b8 allSdfValid = true;
-        for(u32 channels = 1u; channels <= 4u; ++channels){
-            const Impl::Ui::SdfAtlasPageBinding sdfBinding{
-                .font = Core::Assets::AssetRef<Impl::Font>(s_LatinFontPath),
-                .fontGeneration = 1u,
-                .atlasIdentity = s_CoverageAtlasIdentity,
-                .generation = 1u,
-                .index = channels - 1u,
-                .width = 12u,
-                .height = 4u,
-                .channelCount = channels,
-                .spreadPixels = 8u
-            };
-            Impl::Ui::SdfAtlasPage::Pixels sdfPixels(arena);
-            sdfPixels.resize(12u * 4u * channels);
-            for(u32 y = 0u; y < sdfBinding.height; ++y){
-                for(u32 x = 0u; x < sdfBinding.width; ++x){
-                    const usize offset = (y * sdfBinding.width + x) * channels;
-                    for(u32 channel = 0u; channel < channels; ++channel)
-                        sdfPixels[offset + channel] = channel == 3u ? (x < 4u ? 0u : (x < 8u ? 128u : 255u)) : (channel == 0u ? 0u : (channel == 1u ? 128u : 255u));
-                }
-            }
-            auto pageResult = Impl::Ui::CreateSdfAtlasPage(arena, sdfBinding, Move(sdfPixels));
-            if(pageResult)
-                sdf[channels - 1u] = Move(*pageResult);
-            if(!sdf[channels - 1u])
-                allSdfValid = false;
-        }
-
-        const b8 configured = latin.setText({ .text = "office ffi e\xCC\x81 gqyp", .fontSize = 22.0f }) == Impl::Ui::TextLayoutStatus::Success
-            && clipped.setText({ .text = "Clipped coverage label", .fontSize = 22.0f }) == Impl::Ui::TextLayoutStatus::Success
-            && korean.setText({ .text = s_Korean, .language = "ko", .fontSize = 22.0f, .scriptTag = ::PackFourCharTag('H', 'a', 'n', 'g') }) == Impl::Ui::TextLayoutStatus::Success;
-        ok = configured && static_cast<b8>(coverage) && allSdfValid;
+    Array<u8, 48u> coveragePixels;
+    for(u32 y = 0u; y < 4u; ++y){
+        for(u32 x = 0u; x < 12u; ++x)
+            coveragePixels[y * 12u + x] = SmokeStepRampUnorm8(x);
     }
-    return ok;
+
+    Array<Array<u8, 192u>, 4u> sdfPixels;
+    for(u32 channels = 1u; channels <= 4u; ++channels){
+        for(u32 y = 0u; y < 4u; ++y){
+            for(u32 x = 0u; x < 12u; ++x){
+                const usize offset = cast<usize>((y * 12u + x) * channels);
+                for(u32 channel = 0u; channel < channels; ++channel)
+                    sdfPixels[channels - 1u][offset + cast<usize>(channel)] = SmokeChannelUnorm8(channel, x);
+            }
+        }
+    }
+
+    const b8 atlasesCreated = CreateSmokeTextAtlasPages(arena, coveragePixels, sdfPixels, coverage, sdf);
+
+    ShapeRequest latinRequest();
+    latinRequest.text = "office ffi e\xCC\x81 gqyp";
+    latinRequest.fontSize = 22.0f;
+
+    ShapeRequest clippedRequest();
+    clippedRequest.text = "Clipped coverage label";
+    clippedRequest.fontSize = 22.0f;
+
+    ShapeRequest koreanRequest();
+    koreanRequest.text = "\xED\x95\x9C\xEA\xB8\x80 \xEC\xA1\xB0\xED\x95\xA9";
+    koreanRequest.language = "ko";
+    koreanRequest.fontSize = 22.0f;
+    koreanRequest.scriptTag = PackFourCharTag('H', 'a', 'n', 'g');
+
+    const b8 configured = latin.setText(latinRequest) == TextLayoutStatus::Success
+        && clipped.setText(clippedRequest) == TextLayoutStatus::Success
+        && korean.setText(koreanRequest) == TextLayoutStatus::Success;
+    return configured && atlasesCreated;
 }
 
 Rect TextureSmokeUv(in f32 x, in f32 y, in f32 width){
@@ -391,35 +387,15 @@ void InitUiTextureImageSmokeSources(
     mut SharedImageSource replacementSource,
     mut b8 sourcesValid
 ){
-    native(mut arena, mut assets, mut defaultSource, mut alternateSource, mut replacementSource, mut sourcesValid){
-        auto loadSkinSource = [&](const Core::Assets::AssetRef<Impl::UiSkin>& skinRef) -> Expected<Impl::Ui::SharedImageSource>{
-            if(!skinRef.valid())
-                return MakeUnexpected(Failure{});
-            const auto skin = assets.loadTypedSync<Impl::UiSkin>(skinRef.name(), NWB_TEXT("UiTextureImageSmokeScene"));
-            if(!skin || !*skin || !(*skin)->texture().valid())
-                return MakeUnexpected(Failure{});
-            return Impl::Ui::LoadImageSource(arena, assets, (*skin)->texture());
-        };
-
-        Impl::ActiveSceneSubsystems sceneSubsystems(arena);
-        if(sceneSubsystems.loadProjectStartScene(assets)){
-            if(const Impl::UiSubsystem* const uiSubsystem = sceneSubsystems.findSubsystem<Impl::UiSubsystem>()){
-                auto loadedDefault = loadSkinSource(uiSubsystem->basicSkin);
-                if(loadedDefault)
-                    defaultSource = Move(*loadedDefault);
-            }
-            auto loadedAlternate = loadSkinSource(sceneSubsystems.findSceneAsset<Impl::UiSkin>(s_SmokeNameAlternateSkin));
-            if(loadedAlternate)
-                alternateSource = Move(*loadedAlternate);
-        }
-        replacementSource = defaultSource;
-        sourcesValid = defaultSource && alternateSource
-            && defaultSource->texture().width() == 256u
-            && defaultSource->texture().height() == 256u
-            && alternateSource->texture().width() == 256u
-            && alternateSource->texture().height() == 256u
-            && defaultSource->generation() != alternateSource->generation();
-    }
+    LoadSmokeSkinImageSources(arena, assets, s_SmokeNameAlternateSkin, defaultSource, alternateSource);
+    replacementSource = defaultSource;
+    sourcesValid = SmokeImageSourceValid(defaultSource)
+        && SmokeImageSourceValid(alternateSource)
+        && SmokeImageSourceWidth(defaultSource) == 256u
+        && SmokeImageSourceHeight(defaultSource) == 256u
+        && SmokeImageSourceWidth(alternateSource) == 256u
+        && SmokeImageSourceHeight(alternateSource) == 256u
+        && SmokeImageSourceGeneration(defaultSource) != SmokeImageSourceGeneration(alternateSource);
 }
 
 b8 ReplaceUiTextureImageSmokeSource(
@@ -429,53 +405,31 @@ b8 ReplaceUiTextureImageSmokeSource(
     in SharedImageSource alternateSource,
     mut SharedImageSource replacementSource
 ){
-    b8 ok = false;
-    native(in arenaRef, in replacementAlternate, in defaultSource, in alternateSource, mut replacementSource, mut ok){
-        if(arenaRef.ptr != nullptr && defaultSource && alternateSource && replacementSource){
-            Core::Alloc::GlobalArena& arena = *arenaRef.ptr;
-            const Impl::Texture& payload = replacementAlternate ? defaultSource->texture() : alternateSource->texture();
-            Impl::Texture replacement(arena, defaultSource->identity().name());
-            Impl::Texture::MipLevelVector mipLevels(arena);
-            mipLevels.assign(payload.mipLevels().begin(), payload.mipLevels().end());
-            Core::Assets::AssetBytes bytes(arena);
-            bytes.assign(payload.payloadBytes().begin(), payload.payloadBytes().end());
-            replacement.setPayload(
-                payload.width(),
-                payload.height(),
-                Move(mipLevels),
-                Move(bytes),
-                payload.dimension(),
-                payload.depth(),
-                payload.payloadFormat(),
-                payload.alphaMode(),
-                payload.alphaConstantUnorm8()
-            );
-            auto nextSource = Impl::Ui::MakeImageSource(arena, replacement);
-            if(nextSource){
-                Impl::Ui::SharedImageSource next = Move(*nextSource);
-                if(
-                    next
-                    && next->generation() != replacementSource->generation()
-                    && next->generation() != defaultSource->generation()
-                    && next->generation() != alternateSource->generation()
-                    && next->identity().name() == defaultSource->identity().name()
-                ){
-                    replacementSource = Move(next);
-                    ok = true;
-                }
-            }
-        }
-    }
-    return ok;
+    if(!SmokeImageSourceValid(defaultSource) || !SmokeImageSourceValid(alternateSource) || !SmokeImageSourceValid(replacementSource))
+        return false;
+    SharedImageSource payloadSource = alternateSource;
+    if(replacementAlternate)
+        payloadSource = defaultSource;
+    const SharedImageSource next = CloneSmokeImageSourcePayload(arenaRef, defaultSource, payloadSource);
+    if(!SmokeImageSourceValid(next))
+        return false;
+    const u64 nextGeneration = SmokeImageSourceGeneration(next);
+    if(
+        nextGeneration == SmokeImageSourceGeneration(replacementSource)
+        || nextGeneration == SmokeImageSourceGeneration(defaultSource)
+        || nextGeneration == SmokeImageSourceGeneration(alternateSource)
+        || SmokeImageSourceIdentityName(next) != SmokeImageSourceIdentityName(defaultSource)
+    )
+        return false;
+    replacementSource = next;
+    return true;
 }
 
 u64 ResetAndCheckNullSmokeImageSource(mut SharedImageSource source){
-    u64 isNull = 0u;
-    native(mut source, mut isNull){
-        source.reset();
-        isNull = static_cast<u64>(!source);
-    }
-    return isNull;
+    ResetSmokeImageSource(source);
+    if(!SmokeImageSourceValid(source))
+        return 1u;
+    return 0u;
 }
 
 void ReadSmokeTextureGenerations(
@@ -485,12 +439,12 @@ void ReadSmokeTextureGenerations(
     mut Array<u64, 3u> generations,
     mut u32 outSameIdentity
 ){
-    native(in defaultSource, in alternateSource, in replacementSource, mut generations, mut outSameIdentity){
-        generations[0u] = defaultSource->generation();
-        generations[1u] = alternateSource->generation();
-        generations[2u] = replacementSource->generation();
-        outSameIdentity = static_cast<u32>(replacementSource->identity().name() == defaultSource->identity().name());
-    }
+    generations[0u] = SmokeImageSourceGeneration(defaultSource);
+    generations[1u] = SmokeImageSourceGeneration(alternateSource);
+    generations[2u] = SmokeImageSourceGeneration(replacementSource);
+    outSameIdentity = 0u;
+    if(SmokeImageSourceIdentityName(replacementSource) == SmokeImageSourceIdentityName(defaultSource))
+        outSameIdentity = 1u;
 }
 
 Rect ResolveSmokeWindowButtonRect(in WindowState state, in WindowMetrics metrics){

@@ -288,22 +288,22 @@ using ::NWB::Impl::Ui::TranslateEditCommand;
 using ::NWB::Impl::Ui::TryTranslateEditNavigation;
 using ::NWB::Tests::UiCases::s_UiCaseTestsUiEditNavigation;
 
-[[nodiscard]] inline i32 MakeUiEditOutOfBoundsKeyCode()noexcept{ return static_cast<i32>(::NWB::Core::Key::Menu) + 1; }
-[[nodiscard]] inline InputCommandEnum MakeUiEditInvalidInputCommand()noexcept{ return static_cast<InputCommandEnum>(255u); }
-[[nodiscard]] inline EditCommandEnum MakeUiEditInvalidEditCommand()noexcept{ return static_cast<EditCommandEnum>(255u); }
-[[nodiscard]] inline EditTextModeEnum MakeUiEditInvalidTextMode()noexcept{ return static_cast<EditTextModeEnum>(255u); }
-[[nodiscard]] inline AStringView MakeUiEditSingleNullView()noexcept{ return AStringView("\0", 1u); }
-[[nodiscard]] inline AStringView MakeUiEditEmbeddedNullView()noexcept{ return AStringView("a\0b", 3u); }
-[[nodiscard]] inline b8 UiEditValidateGraphemes(const AStringView text, const b8 singleLine = false)noexcept{
+[[nodiscard]] NWB_INLINE i32 MakeUiEditOutOfBoundsKeyCode()noexcept{ return static_cast<i32>(::NWB::Core::Key::Menu) + 1; }
+[[nodiscard]] NWB_INLINE InputCommandEnum MakeUiEditInvalidInputCommand()noexcept{ return static_cast<InputCommandEnum>(255u); }
+[[nodiscard]] NWB_INLINE EditCommandEnum MakeUiEditInvalidEditCommand()noexcept{ return static_cast<EditCommandEnum>(255u); }
+[[nodiscard]] NWB_INLINE EditTextModeEnum MakeUiEditInvalidTextMode()noexcept{ return static_cast<EditTextModeEnum>(255u); }
+[[nodiscard]] NWB_INLINE AStringView MakeUiEditSingleNullView()noexcept{ return AStringView("\0", 1u); }
+[[nodiscard]] NWB_INLINE AStringView MakeUiEditEmbeddedNullView()noexcept{ return AStringView("a\0b", 3u); }
+[[nodiscard]] NWB_INLINE b8 UiEditValidateGraphemes(const AStringView text, const b8 singleLine = false)noexcept{
     return ::NWB::Impl::Ui::GraphemeSegmentation::Validate(text, singleLine);
 }
-[[nodiscard]] inline b8 UiEditIsAsciiDigit(const u8 ch)noexcept{ return ::IsAsciiDigit(static_cast<char>(ch)); }
-inline void UiKeepEditArenaAlive(const GlobalArena&)noexcept{}
-inline void UiKeepEditTestArenaAlive(const TestArena&)noexcept{}
-[[nodiscard]] inline Expected<::AString<>, EditTextStatusEnum> UiNormalizeSingleLineToString(TestArena& arena, const AStringView text, const usize maxBytes){
+[[nodiscard]] NWB_INLINE b8 UiEditIsAsciiDigit(const u8 ch)noexcept{ return ::IsAsciiDigit(static_cast<char>(ch)); }
+NWB_INLINE void UiKeepEditArenaAlive(const GlobalArena&)noexcept{}
+NWB_INLINE void UiKeepEditTestArenaAlive(const TestArena&)noexcept{}
+[[nodiscard]] NWB_INLINE Expected<::AString<>, EditTextStatusEnum> UiNormalizeSingleLineToString(TestArena& arena, const AStringView text, const usize maxBytes){
     return ::NWB::Impl::Ui::NormalizeSingleLineText(arena.arena, text, maxBytes);
 }
-[[nodiscard]] inline b8 VerifyUiSingleLineAliasedInputCopy(){
+[[nodiscard]] NWB_INLINE b8 VerifyUiSingleLineAliasedInputCopy(){
     ::NWB::Tests::TestArena<> arena;
     ::AString<::NWB::Core::Alloc::GlobalArena> output("prefix a\r\nb", arena.arena);
     const ::AStringView source(output.data() + 7u, output.size() - 7u);
@@ -313,8 +313,8 @@ inline void UiKeepEditTestArenaAlive(const TestArena&)noexcept{}
     output = Move(*normalized);
     return output == "a b";
 }
-[[nodiscard]] inline f64 UiFloatModelInfinity()noexcept{ return ::Limit<f64>::s_Infinity; }
-[[nodiscard]] inline f64 UiFloatModelQuietNaN()noexcept{ return ::Limit<f64>::s_QuietNaN; }
+[[nodiscard]] NWB_INLINE f64 UiFloatModelInfinity()noexcept{ return ::Limit<f64>::s_Infinity; }
+[[nodiscard]] NWB_INLINE f64 UiFloatModelQuietNaN()noexcept{ return ::Limit<f64>::s_QuietNaN; }
 };
 
 

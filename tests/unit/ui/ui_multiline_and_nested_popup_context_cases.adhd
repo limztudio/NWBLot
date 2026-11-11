@@ -62,11 +62,11 @@ struct C1Sandwich{
     }
 };
 
-[[nodiscard]] inline AsciiSandwich MakeAsciiSandwich(const u32 scalar)noexcept{
+[[nodiscard]] NWB_INLINE AsciiSandwich MakeAsciiSandwich(const u32 scalar)noexcept{
     return { { 'a', static_cast<char>(scalar), 'b' } };
 }
 
-[[nodiscard]] inline C1Sandwich MakeC1Sandwich(const u32 leadByte, const u32 scalar)noexcept{
+[[nodiscard]] NWB_INLINE C1Sandwich MakeC1Sandwich(const u32 leadByte, const u32 scalar)noexcept{
     return { { 'a', static_cast<char>(leadByte), static_cast<char>(scalar), 'b' } };
 }
 
@@ -149,12 +149,7 @@ inline constexpr AStringView s_AfterKey = "after";
 
 class UiNestedPopupBuilderTests : public WidgetFixture{
 public:
-    [[nodiscard]] static WidgetOptions Control(const f32 width = 120.0f)noexcept{
-        WidgetOptions options;
-        options.width = { LayoutSizePolicy::Fixed, width };
-        options.height = { LayoutSizePolicy::Fixed, 30.0f };
-        return options;
-    }
+    [[nodiscard]] static WidgetOptions Control(f32 width = 120.0f)noexcept;
 
 
 public:
@@ -178,28 +173,9 @@ public:
         return target(widget) != nullptr;
     }
 
-    [[nodiscard]] b8 beginParent(const u64 generation){
-        return begin(generation) && m_builder.beginPopup(s_ParentPopupKey, m_parent, NestedParentOptions());
-    }
-
-    [[nodiscard]] b8 prepareButtons(const u64 generation){
-        if(!beginParent(generation))
-            return false;
-        m_beforeActivated = m_builder.button(s_BeforeKey, "Before", Control());
-        if(m_builder.beginPopup(s_ChildPopupKey, m_child, NestedChildOptions())){
-            m_childActivated = m_builder.button(s_ApplyKey, "Child", Control());
-            if(!m_builder.endPopup())
-                return false;
-        }
-        else if(m_context.failed())
-            return false;
-        m_afterActivated = m_builder.button(s_AfterKey, "After", Control());
-        return m_builder.endPopup() && finishRoot();
-    }
-
-    [[nodiscard]] b8 acceptButtons(const u64 generation){
-        return prepareButtons(generation) && m_context.commitFrame(generation);
-    }
+    [[nodiscard]] b8 beginParent(u64 generation);
+    [[nodiscard]] b8 prepareButtons(u64 generation);
+    [[nodiscard]] b8 acceptButtons(u64 generation);
 
 
 public:
@@ -292,20 +268,7 @@ public:
         return result;
     }
 
-    [[nodiscard]] b8 publish(const PopupDeclaration& popup){
-        HitTarget barrier;
-        barrier.rectangle = popup.scope.bounds;
-        barrier.clip = popup.scope.viewport;
-        if(!m_context.addTarget(popup.owner, barrier))
-            return false;
-        HitTarget action;
-        const SIMDVectorSingle origin = VectorAdd(VectorSet(popup.scope.bounds.x, popup.scope.bounds.y, 0.0f, 0.0f), VectorReplicate(4.0f));
-        action.rectangle = { VectorGetX(origin), VectorGetY(origin), 24.0f, 18.0f };
-        action.clip = popup.scope.bounds;
-        action.focusable = true;
-        action.activatable = true;
-        return m_context.addTarget(popup.action, action);
-    }
+    [[nodiscard]] b8 publish(const PopupDeclaration& popup);
 
     [[nodiscard]] b8 finish(){
         return m_context.endRoot() && m_context.finishFrame();
@@ -369,92 +332,17 @@ public:
 
     [[nodiscard]] WidgetId menuRows()const{ return UiTestSupport::RequireWidgetId(UiTestSupport::RequireWidgetId(parentId(), s_MenuKey), s_MenuRowsKey); }
 
-    [[nodiscard]] b8 beginParent(const u64 generation){
-        if(!begin(generation) || !m_builder.beginPopup(s_ParentPopupKey, m_parent, UiWidgetTests::NestedParentOptions()))
-            return false;
-        const b8 activated = m_builder.button(s_BeforeKey, "Before");
-        return !activated;
-    }
-
-    [[nodiscard]] b8 finishParent(const u64 generation){
-        const b8 activated = m_builder.button(s_AfterKey, "After");
-        return !activated && m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame() && m_context.commitFrame(generation);
-    }
-
-    [[nodiscard]] b8 acceptPlain(const u64 generation){
-        if(!beginParent(generation))
-            return false;
-        m_childVisible = m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions());
-        if(m_childVisible){
-            const b8 activated = m_builder.button("apply", "Child");
-            if(activated || !m_builder.endPopup())
-                return false;
-        }
-        else if(m_context.failed())
-            return false;
-        return finishParent(generation);
-    }
-
-    [[nodiscard]] b8 acceptCombo(const u64 generation){
-        if(!beginParent(generation))
-            return false;
-        m_result = m_builder.comboBox(s_ComboKey, m_source, m_state, NWB::UiComboTests::Options());
-        return m_result.valid && finishParent(generation);
-    }
-
-    [[nodiscard]] b8 acceptSearch(const u64 generation){
-        if(!beginParent(generation))
-            return false;
-        m_searchResult = m_builder.searchComboBox(s_ComboKey, m_searchSource, m_search, Options());
-        return m_searchResult.combo.valid && finishParent(generation);
-    }
-
-    [[nodiscard]] b8 acceptMenu(const u64 generation){
-        if(!beginParent(generation))
-            return false;
-        const b8 activated = m_builder.button(s_AnchorKey, "Commands");
-        if(activated)
-            return false;
-        m_menuResult = m_builder.contextMenu(s_MenuKey, s_AnchorKey, m_menuSource, m_menu);
-        return m_menuResult.valid && finishParent(generation);
-    }
-
-    [[nodiscard]] b8 declareReserved(const u64 generation, const b8 overflow){
-        if(!beginParent(generation) || !m_builder.comboBox(s_ComboKey, m_source, m_state, NWB::UiComboTests::Options()).valid)
-            return false;
-        const b8 activated = m_builder.button(s_AnchorKey, "Commands");
-        if(activated || !m_builder.contextMenu(s_MenuKey, s_AnchorKey, m_menuSource, m_menu).valid)
-            return false;
-        if(!m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions()) || !m_builder.comboBox(s_ComboKey, m_source, m_childCombo, NWB::UiComboTests::Options()).valid)
-            return false;
-        for(usize index = 0u; index < 3u; ++index){
-            if(!m_builder.beginPopup(s_DeepPopupKey, m_deeper[index], UiWidgetTests::NestedChildOptions()))
-                return false;
-        }
-        if(overflow)
-            return m_builder.beginPopup(s_DeepPopupKey, m_deeper[3u], UiWidgetTests::NestedChildOptions());
-        const b8 leafActivated = m_builder.button(s_LeafKey, "Deepest");
-        if(leafActivated)
-            return false;
-        for(usize index = 0u; index < 4u; ++index){
-            if(!m_builder.endPopup())
-                return false;
-        }
-        const b8 afterActivated = m_builder.button(s_AfterKey, "Parent after");
-        return !afterActivated && m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame();
-    }
+    [[nodiscard]] b8 beginParent(u64 generation);
+    [[nodiscard]] b8 finishParent(u64 generation);
+    [[nodiscard]] b8 acceptPlain(u64 generation);
+    [[nodiscard]] b8 acceptCombo(u64 generation);
+    [[nodiscard]] b8 acceptSearch(u64 generation);
+    [[nodiscard]] b8 acceptMenu(u64 generation);
+    [[nodiscard]] b8 declareReserved(u64 generation, b8 overflow);
 
     void reopenParent()noexcept{ m_parent.close(); m_parent.open(); }
 
-    void expectParentControls()const{
-        const HitTarget* before = target(UiTestSupport::RequireWidgetId(parentId(), s_BeforeKey));
-        const HitTarget* after = target(UiTestSupport::RequireWidgetId(parentId(), s_AfterKey));
-        ASSERT_NE(before, nullptr);
-        ASSERT_NE(after, nullptr);
-        EXPECT_EQ(before->popup, after->popup);
-        EXPECT_EQ(before->popup.openGeneration, m_parent.openGeneration());
-        EXPECT_TRUE(m_parent.isOpen());
-    }
+    void expectParentControls()const;
 
 
 public:
@@ -524,36 +412,98 @@ inline constexpr AStringView s_UiMultilineTextEmbeddedNulBorrowed = __hidden_ui_
 inline constexpr AStringView s_UiMultilineTextEmbeddedNulShort = __hidden_ui_multiline_text_tests::s_EmbeddedNulShort;
 inline constexpr AStringView s_UiMultilineTextEmbeddedNulTail = __hidden_ui_multiline_text_tests::s_EmbeddedNulTail;
 
-[[nodiscard]] inline UiMultilineTextAsciiSandwich MakeUiMultilineTextAsciiSandwich(const u32 scalar)noexcept{
+[[nodiscard]] NWB_INLINE UiMultilineTextAsciiSandwich MakeUiMultilineTextAsciiSandwich(const u32 scalar)noexcept{
     return __hidden_ui_multiline_text_tests::MakeAsciiSandwich(scalar);
 }
-[[nodiscard]] inline UiMultilineTextC1Sandwich MakeUiMultilineTextC1Sandwich(const u32 leadByte, const u32 scalar)noexcept{
+[[nodiscard]] NWB_INLINE UiMultilineTextC1Sandwich MakeUiMultilineTextC1Sandwich(const u32 leadByte, const u32 scalar)noexcept{
     return __hidden_ui_multiline_text_tests::MakeC1Sandwich(leadByte, scalar);
 }
-[[nodiscard]] inline usize UiMultilineTextStorageAddress(const UiMultilineTextGlobalString& text)noexcept{
+[[nodiscard]] NWB_INLINE usize UiMultilineTextStorageAddress(const UiMultilineTextGlobalString& text)noexcept{
     return reinterpret_cast<usize>(text.data());
 }
-inline void UiMultilineTextTakeNormalized(
+NWB_INLINE void UiMultilineTextTakeNormalized(
     UiMultilineTextGlobalString& dst,
     ::Expected<UiMultilineTextGlobalString, EditTextStatusEnum>& src
 )noexcept{
     dst = ::Move(*src);
 }
-inline void UiMultilineTextTakeNormalized(
+NWB_INLINE void UiMultilineTextTakeNormalized(
     UiMultilineTextGlobalString& dst,
     ::Expected<UiMultilineTextGlobalString, EditTextStatusEnum>&& src
 )noexcept{
     dst = ::Move(*src);
 }
 
-[[nodiscard]] inline f32 UiMultilineViewQuietNaN()noexcept{
+[[nodiscard]] NWB_INLINE f32 UiMultilineViewQuietNaN()noexcept{
     return ::Limit<f32>::s_QuietNaN;
 }
-inline void ExpectUiMultilineViewPlacement(const EditBoxPlacement& actual, const EditBoxPlacement& expected){
+NWB_INLINE void ExpectUiMultilineViewPlacement(const EditBoxPlacement& actual, const EditBoxPlacement& expected){
     ::NWB::UiMultilineViewTests::ExpectPlacement(actual, expected);
 }
-inline void CollectUiMultilineViewSolidRects(const DrawSnapshot& snapshot, const Color& color, UiMultilineViewRectVector& output){
+NWB_INLINE void CollectUiMultilineViewSolidRects(const DrawSnapshot& snapshot, const Color& color, UiMultilineViewRectVector& output){
     ::NWB::UiMultilineViewTests::CollectSolidRects(snapshot, color, output);
+}
+
+WidgetOptions MakeUiNestedPopupControlOptions(f32 width)noexcept;
+b8 BeginUiNestedPopupBuilderParent(UiNestedPopupBuilderTests& self, u64 generation)noexcept;
+b8 PrepareUiNestedPopupBuilderButtons(UiNestedPopupBuilderTests& self, u64 generation)noexcept;
+b8 AcceptUiNestedPopupBuilderButtons(UiNestedPopupBuilderTests& self, u64 generation)noexcept;
+b8 PublishUiNestedPopupDeclaration(UiNestedPopupContextTests& self, const UiNestedPopupContextPopupDeclaration& popup)noexcept;
+b8 BeginUiNestedPopupLifetimeParent(UiNestedPopupLifetimeTests& self, u64 generation)noexcept;
+b8 FinishUiNestedPopupLifetimeParent(UiNestedPopupLifetimeTests& self, u64 generation)noexcept;
+b8 AcceptUiNestedPopupLifetimePlain(UiNestedPopupLifetimeTests& self, u64 generation)noexcept;
+b8 AcceptUiNestedPopupLifetimeCombo(UiNestedPopupLifetimeTests& self, u64 generation)noexcept;
+b8 AcceptUiNestedPopupLifetimeSearch(UiNestedPopupLifetimeTests& self, u64 generation)noexcept;
+b8 AcceptUiNestedPopupLifetimeMenu(UiNestedPopupLifetimeTests& self, u64 generation)noexcept;
+b8 DeclareUiNestedPopupLifetimeReserved(UiNestedPopupLifetimeTests& self, u64 generation, b8 overflow)noexcept;
+void ExpectUiNestedPopupLifetimeParentControls(const UiNestedPopupLifetimeTests& self)noexcept;
+};
+
+namespace __hidden_ui_nested_popup_builder_tests{
+NWB_INLINE WidgetOptions UiNestedPopupBuilderTests::Control(const f32 width)noexcept{
+    return ::__hidden_ui_glyph_sdf_tests::MakeUiNestedPopupControlOptions(width);
+}
+NWB_INLINE b8 UiNestedPopupBuilderTests::beginParent(const u64 generation){
+    return ::__hidden_ui_glyph_sdf_tests::BeginUiNestedPopupBuilderParent(*this, generation);
+}
+NWB_INLINE b8 UiNestedPopupBuilderTests::prepareButtons(const u64 generation){
+    return ::__hidden_ui_glyph_sdf_tests::PrepareUiNestedPopupBuilderButtons(*this, generation);
+}
+NWB_INLINE b8 UiNestedPopupBuilderTests::acceptButtons(const u64 generation){
+    return ::__hidden_ui_glyph_sdf_tests::AcceptUiNestedPopupBuilderButtons(*this, generation);
+}
+};
+
+namespace __hidden_ui_nested_popup_context_tests{
+NWB_INLINE b8 UiNestedPopupContextTests::publish(const PopupDeclaration& popup){
+    return ::__hidden_ui_glyph_sdf_tests::PublishUiNestedPopupDeclaration(*this, popup);
+}
+};
+
+namespace __hidden_ui_nested_popup_lifetime_tests{
+NWB_INLINE b8 UiNestedPopupLifetimeTests::beginParent(const u64 generation){
+    return ::__hidden_ui_glyph_sdf_tests::BeginUiNestedPopupLifetimeParent(*this, generation);
+}
+NWB_INLINE b8 UiNestedPopupLifetimeTests::finishParent(const u64 generation){
+    return ::__hidden_ui_glyph_sdf_tests::FinishUiNestedPopupLifetimeParent(*this, generation);
+}
+NWB_INLINE b8 UiNestedPopupLifetimeTests::acceptPlain(const u64 generation){
+    return ::__hidden_ui_glyph_sdf_tests::AcceptUiNestedPopupLifetimePlain(*this, generation);
+}
+NWB_INLINE b8 UiNestedPopupLifetimeTests::acceptCombo(const u64 generation){
+    return ::__hidden_ui_glyph_sdf_tests::AcceptUiNestedPopupLifetimeCombo(*this, generation);
+}
+NWB_INLINE b8 UiNestedPopupLifetimeTests::acceptSearch(const u64 generation){
+    return ::__hidden_ui_glyph_sdf_tests::AcceptUiNestedPopupLifetimeSearch(*this, generation);
+}
+NWB_INLINE b8 UiNestedPopupLifetimeTests::acceptMenu(const u64 generation){
+    return ::__hidden_ui_glyph_sdf_tests::AcceptUiNestedPopupLifetimeMenu(*this, generation);
+}
+NWB_INLINE b8 UiNestedPopupLifetimeTests::declareReserved(const u64 generation, const b8 overflow){
+    return ::__hidden_ui_glyph_sdf_tests::DeclareUiNestedPopupLifetimeReserved(*this, generation, overflow);
+}
+NWB_INLINE void UiNestedPopupLifetimeTests::expectParentControls()const{
+    ::__hidden_ui_glyph_sdf_tests::ExpectUiNestedPopupLifetimeParentControls(*this);
 }
 };
 
@@ -594,6 +544,141 @@ const StringView s_UiNestedPopupContextChildKey = "child";
 
 const StringView s_UiNestedPopupLifetimeComboKey = "combo";
 const StringView s_UiNestedPopupLifetimeComboRowsKey = "rows";
+
+
+WidgetOptions MakeUiNestedPopupControlOptions(in f32 width){
+    WidgetOptions options = WidgetOptions();
+    options.width.policy = LayoutSizePolicy::Fixed;
+    options.width.value = width;
+    options.height.policy = LayoutSizePolicy::Fixed;
+    options.height.value = 30.0f;
+    return options;
+}
+
+b8 BeginUiNestedPopupBuilderParent(mut UiNestedPopupBuilderTests self, in u64 generation){
+    return self.begin(generation) && self.m_builder.beginPopup(s_UiFixtureParentPopupKey, self.m_parent, MakeNestedParentPopupOptions());
+}
+
+b8 PrepareUiNestedPopupBuilderButtons(mut UiNestedPopupBuilderTests self, in u64 generation){
+    if(!BeginUiNestedPopupBuilderParent(self, generation))
+        return false;
+    self.m_beforeActivated = self.m_builder.button("before", "Before", MakeUiNestedPopupControlOptions(120.0f));
+    if(self.m_builder.beginPopup(s_UiFixtureChildPopupKey, self.m_child, MakeNestedChildPopupOptions())){
+        self.m_childActivated = self.m_builder.button("apply", "Child", MakeUiNestedPopupControlOptions(120.0f));
+        if(!self.m_builder.endPopup())
+            return false;
+    }
+    else if(self.m_context.failed())
+        return false;
+    self.m_afterActivated = self.m_builder.button("after", "After", MakeUiNestedPopupControlOptions(120.0f));
+    return self.m_builder.endPopup() && self.finishRoot();
+}
+
+b8 AcceptUiNestedPopupBuilderButtons(mut UiNestedPopupBuilderTests self, in u64 generation){
+    return PrepareUiNestedPopupBuilderButtons(self, generation) && self.m_context.commitFrame(generation);
+}
+
+b8 PublishUiNestedPopupDeclaration(mut UiNestedPopupContextTests self, in UiNestedPopupContextPopupDeclaration popup){
+    HitTarget barrier = HitTarget();
+    barrier.rectangle = popup.scope.bounds;
+    barrier.clip = popup.scope.viewport;
+    if(!self.m_context.addTarget(popup.owner, barrier))
+        return false;
+    HitTarget action = HitTarget();
+    action.rectangle.x = popup.scope.bounds.x + 4.0f;
+    action.rectangle.y = popup.scope.bounds.y + 4.0f;
+    action.rectangle.width = 24.0f;
+    action.rectangle.height = 18.0f;
+    action.clip = popup.scope.bounds;
+    action.focusable = true;
+    action.activatable = true;
+    return self.m_context.addTarget(popup.action, action);
+}
+
+b8 BeginUiNestedPopupLifetimeParent(mut UiNestedPopupLifetimeTests self, in u64 generation){
+    if(!self.begin(generation) || !self.m_builder.beginPopup(s_UiFixtureParentPopupKey, self.m_parent, MakeNestedParentPopupOptions()))
+        return false;
+    const b8 activated = self.m_builder.button("before", "Before");
+    return !activated;
+}
+
+b8 FinishUiNestedPopupLifetimeParent(mut UiNestedPopupLifetimeTests self, in u64 generation){
+    const b8 activated = self.m_builder.button("after", "After");
+    return !activated && self.m_builder.endPopup() && self.m_context.endRoot() && self.m_context.finishFrame() && self.m_context.commitFrame(generation);
+}
+
+b8 AcceptUiNestedPopupLifetimePlain(mut UiNestedPopupLifetimeTests self, in u64 generation){
+    if(!BeginUiNestedPopupLifetimeParent(self, generation))
+        return false;
+    self.m_childVisible = self.m_builder.beginPopup(s_UiFixtureChildPopupKey, self.m_child, MakeNestedChildPopupOptions());
+    if(self.m_childVisible){
+        const b8 activated = self.m_builder.button("apply", "Child");
+        if(activated || !self.m_builder.endPopup())
+            return false;
+    }
+    else if(self.m_context.failed())
+        return false;
+    return FinishUiNestedPopupLifetimeParent(self, generation);
+}
+
+b8 AcceptUiNestedPopupLifetimeCombo(mut UiNestedPopupLifetimeTests self, in u64 generation){
+    if(!BeginUiNestedPopupLifetimeParent(self, generation))
+        return false;
+    self.m_result = self.m_builder.comboBox(s_ComboKey, self.m_source, self.m_state, MakeComboFixtureOptions());
+    return self.m_result.valid && FinishUiNestedPopupLifetimeParent(self, generation);
+}
+
+b8 AcceptUiNestedPopupLifetimeSearch(mut UiNestedPopupLifetimeTests self, in u64 generation){
+    if(!BeginUiNestedPopupLifetimeParent(self, generation))
+        return false;
+    self.m_searchResult = self.m_builder.searchComboBox(s_ComboKey, self.m_searchSource, self.m_search, MakeSearchComboFixtureOptions());
+    return self.m_searchResult.combo.valid && FinishUiNestedPopupLifetimeParent(self, generation);
+}
+
+b8 AcceptUiNestedPopupLifetimeMenu(mut UiNestedPopupLifetimeTests self, in u64 generation){
+    if(!BeginUiNestedPopupLifetimeParent(self, generation))
+        return false;
+    const b8 activated = self.m_builder.button(s_AnchorKey, "Commands");
+    if(activated)
+        return false;
+    self.m_menuResult = self.m_builder.contextMenu(s_MenuKey, s_AnchorKey, self.m_menuSource, self.m_menu);
+    return self.m_menuResult.valid && FinishUiNestedPopupLifetimeParent(self, generation);
+}
+
+b8 DeclareUiNestedPopupLifetimeReserved(mut UiNestedPopupLifetimeTests self, in u64 generation, in b8 overflow){
+    if(!BeginUiNestedPopupLifetimeParent(self, generation) || !self.m_builder.comboBox(s_ComboKey, self.m_source, self.m_state, MakeComboFixtureOptions()).valid)
+        return false;
+    const b8 activated = self.m_builder.button(s_AnchorKey, "Commands");
+    if(activated || !self.m_builder.contextMenu(s_MenuKey, s_AnchorKey, self.m_menuSource, self.m_menu).valid)
+        return false;
+    if(!self.m_builder.beginPopup(s_UiFixtureChildPopupKey, self.m_child, MakeNestedChildPopupOptions()) || !self.m_builder.comboBox(s_ComboKey, self.m_source, self.m_childCombo, MakeComboFixtureOptions()).valid)
+        return false;
+    for(usize index = 0u; index < 3u; ++index){
+        if(!self.m_builder.beginPopup("deep", self.m_deeper[index], MakeNestedChildPopupOptions()))
+            return false;
+    }
+    if(overflow)
+        return self.m_builder.beginPopup("deep", self.m_deeper[3u], MakeNestedChildPopupOptions());
+    const b8 leafActivated = self.m_builder.button("leaf", "Deepest");
+    if(leafActivated)
+        return false;
+    for(usize index = 0u; index < 4u; ++index){
+        if(!self.m_builder.endPopup())
+            return false;
+    }
+    const b8 afterActivated = self.m_builder.button("after", "Parent after");
+    return !afterActivated && self.m_builder.endPopup() && self.m_context.endRoot() && self.m_context.finishFrame();
+}
+
+void ExpectUiNestedPopupLifetimeParentControls(in UiNestedPopupLifetimeTests self){
+    const auto before = self.tryTarget(RequireUiWidgetId(self.parentId(), "before"));
+    const auto after = self.tryTarget(RequireUiWidgetId(self.parentId(), "after"));
+    ASSERT_TRUE(before.has_value());
+    ASSERT_TRUE(after.has_value());
+    EXPECT_EQ(before.value().popup, after.value().popup);
+    EXPECT_EQ(before.value().popup.openGeneration, self.m_parent.openGeneration());
+    EXPECT_TRUE(self.m_parent.isOpen());
+}
 const StringView s_UiNestedPopupLifetimeAnchorKey = "anchor";
 const StringView s_UiNestedPopupLifetimeSecondHalfQuery = "Second";
 const StringView s_UiNestedPopupLifetimeDeepKey = "deep";

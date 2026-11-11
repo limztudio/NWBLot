@@ -9,56 +9,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::CrashCases{
-extern Array<u8, 256u * 1024u> g_ForeignSignalStack;
-void OriginalSignalOwner(int)noexcept;
-void ForeignSignalOwner(int)noexcept;
-[[noreturn]] void OriginalTerminateOwner()noexcept;
-[[noreturn]] void ForeignTerminateOwner()noexcept;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void VerifyCrash_SpoolAdmissionPreservesFilesystemCategoryAndCodeAfterUnlock(){
     if(!IsDesktopCrashPlatform())
         return;
 
-    CrashTestArena testArena = CrashTestArena();
     const StringView group = "crash_failed_spool_admission";
-    RemoveTestArtifacts(testArena.arena, group);
-    const CrashTestPath caseDirectory = TestCaseDirectory(testArena.arena, group);
-    ASSERT_TRUE(EnsureDirectories(caseDirectory));
-    const CrashTestPath blocked = caseDirectory / "blocked";
+    RemoveTestArtifacts(group);
+    const Path caseDirectory = TestCaseDirectory(group);
+    ASSERT_TRUE(EnsureDirectories(caseDirectory).has_value());
+    const Path blocked = caseDirectory / "blocked";
     ASSERT_TRUE(WriteTextFile(blocked, "This file cannot be a parent directory.\n"));
-    const CrashTestPath spoolDirectory = blocked / s_SpoolDirectory;
-    const CrashTestPath pendingDirectory = spoolDirectory / s_PendingBucket;
+    const Path spoolDirectory = blocked / s_SpoolDirectory;
+    const Path pendingDirectory = spoolDirectory / s_PendingBucket;
     UninstallCrashHandler();
 
     b8 installAccepted = true;
@@ -112,7 +74,7 @@ void VerifyCrash_SpoolAdmissionPreservesFilesystemCategoryAndCodeAfterUnlock(){
     EXPECT_TRUE(matchedCategory);
     EXPECT_TRUE(matchedCode);
     UninstallCrashHandler();
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 }
 
 void VerifyCrash_FailedExecutableAdmissionReleasesResourcesAndObservesFailureAfterUnlock(){
@@ -121,12 +83,12 @@ void VerifyCrash_FailedExecutableAdmissionReleasesResourcesAndObservesFailureAft
 
     CrashTestArena testArena = CrashTestArena();
     const StringView group = "crash_bad_executable_admission";
-    RemoveTestArtifacts(testArena.arena, group);
-    const CrashTestPath caseDirectory = TestCaseDirectory(testArena.arena, group);
-    ASSERT_TRUE(EnsureDirectories(caseDirectory));
-    const CrashTestPath invalidExecutable = caseDirectory / "invalid_handler";
+    RemoveTestArtifacts(group);
+    const Path caseDirectory = TestCaseDirectory(group);
+    ASSERT_TRUE(EnsureDirectories(caseDirectory).has_value());
+    const Path invalidExecutable = caseDirectory / "invalid_handler";
     ASSERT_TRUE(WriteTextFile(invalidExecutable, "This is not an executable image.\n"));
-    const CrashTestPath spoolDirectory = SpoolDirectory(testArena.arena, group);
+    const Path spoolDirectory = SpoolDirectory(group);
     UninstallCrashHandler();
 
     usize beforeCount = 0u;
@@ -186,18 +148,17 @@ void VerifyCrash_FailedExecutableAdmissionReleasesResourcesAndObservesFailureAft
     EXPECT_EQ(unlockedDiagnostics, nativeDiagnostics);
     EXPECT_TRUE(diagnosticHasCode);
     UninstallCrashHandler();
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 }
 
 void VerifyCrash_UninstallRestoresDisabledAlternateStackAndPriorSignalAndTerminateOwners(){
     if(!IsDesktopLinuxCrashPlatform())
         return;
 
-    CrashTestArena testArena = CrashTestArena();
     const StringView group = "crash_restore_native_hooks";
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
     UninstallCrashHandler();
-    const CrashTestPath spoolDirectory = SpoolDirectory(testArena.arena, group);
+    const Path spoolDirectory = SpoolDirectory(group);
 
     b8 stackDisabledRestored = false;
     b8 signalOwnerRestored = false;
@@ -244,18 +205,17 @@ void VerifyCrash_UninstallRestoresDisabledAlternateStackAndPriorSignalAndTermina
     EXPECT_TRUE(signalOwnerRestored);
     EXPECT_TRUE(terminateOwnerRestored);
     EXPECT_FALSE(restorePending);
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 }
 
 void VerifyCrash_UninstallPreservesNewerForeignNativeHookOwners(){
     if(!IsDesktopLinuxCrashPlatform())
         return;
 
-    CrashTestArena testArena = CrashTestArena();
     const StringView group = "crash_preserve_foreign_hooks";
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
     UninstallCrashHandler();
-    const CrashTestPath spoolDirectory = SpoolDirectory(testArena.arena, group);
+    const Path spoolDirectory = SpoolDirectory(group);
 
     b8 foreignStackRetained = false;
     b8 foreignSignalRetained = false;
@@ -303,7 +263,7 @@ void VerifyCrash_UninstallPreservesNewerForeignNativeHookOwners(){
     EXPECT_TRUE(foreignSignalRetained);
     EXPECT_TRUE(foreignTerminateRetained);
     EXPECT_FALSE(restorePending);
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 }
 
 void VerifyCrash_MetadataRejectsTruncationAndEmbeddedNullWithoutChangingPublishedValue(){
@@ -421,172 +381,123 @@ void VerifyCrash_ConcurrentPublicWritersPublishCompleteMetadataAndBreadcrumbReco
 }
 
 void VerifyCrash_WriteCrashPackageFailsWhenSpoolPathIsFile(){
-    CrashTestArena testArena = CrashTestArena();
     const StringView group = "crash_package_bad_spool_test";
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 
-    const CrashTestPath caseDirectory = TestCaseDirectory(testArena.arena, group);
-    const CrashTestPath spoolPath = SpoolDirectory(testArena.arena, group);
-    native(in caseDirectory, in spoolPath){
-        EXPECT_TRUE(EnsureDirectories(caseDirectory));
-        EXPECT_TRUE(WriteTextFile(spoolPath, AStringView("not a directory")));
-    }
+    const Path caseDirectory = TestCaseDirectory(group);
+    const Path spoolPath = SpoolDirectory(group);
+    EXPECT_TRUE(EnsureDirectories(caseDirectory).has_value());
+    EXPECT_TRUE(WriteTextFile(spoolPath, "not a directory"));
 
     CrashRequest request = CrashRequest();
-    FillPackageRequest(spoolPath, "crash-package-bad-spool", testArena.arena, request);
+    FillPackageRequest(spoolPath, "crash-package-bad-spool", request);
     EXPECT_FALSE(WriteCrashPackage(request));
 
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 }
 
 void VerifyCrash_CrashSpoolRetentionPrunesOldestPackages(){
     CrashTestArena testArena = CrashTestArena();
     const StringView group = "crash_spool_retention_test";
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 
-    EXPECT_TRUE(CreatePackageDirectory(testArena.arena, group, s_PendingBucket, s_Crash001));
-    EXPECT_TRUE(CreatePackageDirectory(testArena.arena, group, s_PendingBucket, s_Crash002));
-    EXPECT_TRUE(CreatePackageDirectory(testArena.arena, group, s_PendingBucket, s_Crash003));
-    EXPECT_TRUE(CreatePackageDirectory(testArena.arena, group, s_PendingBucket, "bad package name"));
-    EXPECT_TRUE(CreatePackageDirectory(testArena.arena, group, s_UploadedBucket, s_Crash001));
-    EXPECT_TRUE(CreatePackageDirectory(testArena.arena, group, s_UploadedBucket, s_Crash002));
-    EXPECT_TRUE(CreatePackageDirectory(testArena.arena, group, s_FailedBucket, s_Crash001));
-    EXPECT_TRUE(CreatePackageDirectory(testArena.arena, group, s_FailedBucket, s_Crash002));
-    EXPECT_TRUE(CreatePackageDirectory(testArena.arena, group, s_UploadingBucket, s_Crash001));
-    EXPECT_TRUE(CreatePackageDirectory(testArena.arena, group, s_UploadingBucket, s_Crash002));
+    EXPECT_TRUE(CreatePackageDirectory(group, s_PendingBucket, s_Crash001));
+    EXPECT_TRUE(CreatePackageDirectory(group, s_PendingBucket, s_Crash002));
+    EXPECT_TRUE(CreatePackageDirectory(group, s_PendingBucket, s_Crash003));
+    EXPECT_TRUE(CreatePackageDirectory(group, s_PendingBucket, "bad package name"));
+    EXPECT_TRUE(CreatePackageDirectory(group, s_UploadedBucket, s_Crash001));
+    EXPECT_TRUE(CreatePackageDirectory(group, s_UploadedBucket, s_Crash002));
+    EXPECT_TRUE(CreatePackageDirectory(group, s_FailedBucket, s_Crash001));
+    EXPECT_TRUE(CreatePackageDirectory(group, s_FailedBucket, s_Crash002));
+    EXPECT_TRUE(CreatePackageDirectory(group, s_UploadingBucket, s_Crash001));
+    EXPECT_TRUE(CreatePackageDirectory(group, s_UploadingBucket, s_Crash002));
 
     CrashSpoolRetentionConfig retention = CrashSpoolRetentionConfig();
     retention.maxPendingPackages = 2u;
     retention.maxUploadedPackages = 1u;
     retention.maxFailedPackages = 1u;
     retention.maxUploadingPackages = 1u;
-    ScratchArena scratchArena(s_OperationScratch);
-    EXPECT_TRUE(ApplyCrashSpoolRetention(scratchArena, SpoolDirectory(testArena.arena, group), retention));
+    EXPECT_TRUE(ApplyCrashSpoolRetention(testArena.scratchArena, SpoolDirectory(group), retention).has_value());
 
-    ExpectPathExists(PackageDirectory(testArena.arena, group, s_PendingBucket, s_Crash001), false);
-    ExpectIsDirectory(PackageDirectory(testArena.arena, group, s_PendingBucket, s_Crash002), true);
-    ExpectIsDirectory(PackageDirectory(testArena.arena, group, s_PendingBucket, s_Crash003), true);
-    ExpectIsDirectory(PackageDirectory(testArena.arena, group, s_PendingBucket, "bad package name"), true);
-    ExpectPathExists(PackageDirectory(testArena.arena, group, s_UploadedBucket, s_Crash001), false);
-    ExpectIsDirectory(PackageDirectory(testArena.arena, group, s_UploadedBucket, s_Crash002), true);
-    ExpectPathExists(PackageDirectory(testArena.arena, group, s_FailedBucket, s_Crash001), false);
-    ExpectIsDirectory(PackageDirectory(testArena.arena, group, s_FailedBucket, s_Crash002), true);
-    ExpectPathExists(PackageDirectory(testArena.arena, group, s_UploadingBucket, s_Crash001), false);
-    ExpectIsDirectory(PackageDirectory(testArena.arena, group, s_UploadingBucket, s_Crash002), true);
+    ExpectPathExists(PackageDirectory(group, s_PendingBucket, s_Crash001), false);
+    ExpectIsDirectory(PackageDirectory(group, s_PendingBucket, s_Crash002), true);
+    ExpectIsDirectory(PackageDirectory(group, s_PendingBucket, s_Crash003), true);
+    ExpectIsDirectory(PackageDirectory(group, s_PendingBucket, "bad package name"), true);
+    ExpectPathExists(PackageDirectory(group, s_UploadedBucket, s_Crash001), false);
+    ExpectIsDirectory(PackageDirectory(group, s_UploadedBucket, s_Crash002), true);
+    ExpectPathExists(PackageDirectory(group, s_FailedBucket, s_Crash001), false);
+    ExpectIsDirectory(PackageDirectory(group, s_FailedBucket, s_Crash002), true);
+    ExpectPathExists(PackageDirectory(group, s_UploadingBucket, s_Crash001), false);
+    ExpectIsDirectory(PackageDirectory(group, s_UploadingBucket, s_Crash002), true);
 
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 }
 
 void VerifyCrash_CrashSpoolRetentionZeroDisablesPruning(){
     CrashTestArena testArena = CrashTestArena();
     const StringView group = "crash_spool_retention_zero_test";
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 
-    EXPECT_TRUE(CreatePackageDirectory(testArena.arena, group, s_PendingBucket, s_Crash001));
-    EXPECT_TRUE(CreatePackageDirectory(testArena.arena, group, s_PendingBucket, s_Crash002));
+    EXPECT_TRUE(CreatePackageDirectory(group, s_PendingBucket, s_Crash001));
+    EXPECT_TRUE(CreatePackageDirectory(group, s_PendingBucket, s_Crash002));
 
     CrashSpoolRetentionConfig retention = CrashSpoolRetentionConfig();
     retention.maxPendingPackages = 0u;
     retention.maxUploadedPackages = 0u;
     retention.maxFailedPackages = 0u;
     retention.maxUploadingPackages = 0u;
-    ScratchArena scratchArena(s_OperationScratch);
-    EXPECT_TRUE(ApplyCrashSpoolRetention(scratchArena, SpoolDirectory(testArena.arena, group), retention));
+    EXPECT_TRUE(ApplyCrashSpoolRetention(testArena.scratchArena, SpoolDirectory(group), retention).has_value());
 
-    ExpectIsDirectory(PackageDirectory(testArena.arena, group, s_PendingBucket, s_Crash001), true);
-    ExpectIsDirectory(PackageDirectory(testArena.arena, group, s_PendingBucket, s_Crash002), true);
+    ExpectIsDirectory(PackageDirectory(group, s_PendingBucket, s_Crash001), true);
+    ExpectIsDirectory(PackageDirectory(group, s_PendingBucket, s_Crash002), true);
 
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 }
 
 void VerifyCrash_CrashSpoolRetentionProtectsActivePendingPackage(){
     CrashTestArena testArena = CrashTestArena();
     const StringView group = "crash_spool_retention_protect_test";
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 
-    EXPECT_TRUE(CreatePackageDirectory(testArena.arena, group, s_PendingBucket, s_Crash001));
-    EXPECT_TRUE(CreatePackageDirectory(testArena.arena, group, s_PendingBucket, s_Crash002));
-    EXPECT_TRUE(CreatePackageDirectory(testArena.arena, group, s_PendingBucket, s_Crash003));
+    EXPECT_TRUE(CreatePackageDirectory(group, s_PendingBucket, s_Crash001));
+    EXPECT_TRUE(CreatePackageDirectory(group, s_PendingBucket, s_Crash002));
+    EXPECT_TRUE(CreatePackageDirectory(group, s_PendingBucket, s_Crash003));
 
     CrashSpoolRetentionConfig retention = CrashSpoolRetentionConfig();
     retention.maxPendingPackages = 1u;
     retention.maxUploadedPackages = 0u;
     retention.maxFailedPackages = 0u;
     retention.maxUploadingPackages = 0u;
-    ScratchArena scratchArena(s_OperationScratch);
-    EXPECT_TRUE(ApplyCrashSpoolRetention(scratchArena, SpoolDirectory(testArena.arena, group), retention, "crash-001"));
+    EXPECT_TRUE(ApplyCrashSpoolRetention(testArena.scratchArena, SpoolDirectory(group), retention, "crash-001").has_value());
 
-    ExpectIsDirectory(PackageDirectory(testArena.arena, group, s_PendingBucket, s_Crash001), true);
-    ExpectPathExists(PackageDirectory(testArena.arena, group, s_PendingBucket, s_Crash002), false);
-    ExpectIsDirectory(PackageDirectory(testArena.arena, group, s_PendingBucket, s_Crash003), true);
+    ExpectIsDirectory(PackageDirectory(group, s_PendingBucket, s_Crash001), true);
+    ExpectPathExists(PackageDirectory(group, s_PendingBucket, s_Crash002), false);
+    ExpectIsDirectory(PackageDirectory(group, s_PendingBucket, s_Crash003), true);
 
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 }
 
 void VerifyCrash_FlushReportsFailsWhenUploadingRecoveryIsBlocked(){
     CrashTestArena testArena = CrashTestArena();
     const StringView group = "crash_uploading_recovery_blocked_test";
     const StringView crashId = "crash-recovery-blocked";
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 
-    EXPECT_TRUE(CreatePackageDirectory(testArena.arena, group, s_UploadingBucket, crashId));
-    const CrashTestPath blockedBucket = BucketDirectory(testArena.arena, group, s_PendingBucket);
-    const CrashTestPath spoolPath = SpoolDirectory(testArena.arena, group);
+    EXPECT_TRUE(CreatePackageDirectory(group, s_UploadingBucket, crashId));
+    const Path blockedBucket = BucketDirectory(group, s_PendingBucket);
+    const Path spoolPath = SpoolDirectory(group);
+    EXPECT_TRUE(WriteTextFile(blockedBucket, "blocked"));
     CrashUploadSnapshot snapshot = CrashUploadSnapshot();
-    native(in blockedBucket, in spoolPath, mut testArena, mut snapshot){
-        EXPECT_TRUE(WriteTextFile(blockedBucket, AStringView("blocked")));
-        CopyPathText(spoolPath, testArena.arena, snapshot.spoolDirectory);
-        CopyFixedBuffer(snapshot.logServerUrl, AStringView("http://127.0.0.1:1"));
-    }
+    CopyFixedBuffer(snapshot.spoolDirectory, PathToString(spoolPath));
+    CopyFixedBuffer(snapshot.logServerUrl, "http://127.0.0.1:1");
 
     EXPECT_FALSE(FlushPendingCrashReportsImpl(testArena.arena, snapshot));
-    ExpectIsDirectory(PackageDirectory(testArena.arena, group, s_UploadingBucket, crashId), true);
+    ExpectIsDirectory(PackageDirectory(group, s_UploadingBucket, crashId), true);
     ExpectIsRegularFile(blockedBucket, true);
-    EXPECT_TRUE(TextFileContains(PackageDirectory(testArena.arena, group, s_UploadingBucket, crashId) / s_UploadAttemptFileName, s_RetryInterruptedState));
+    EXPECT_TRUE(TextFileContains(PackageDirectory(group, s_UploadingBucket, crashId) / s_UploadAttemptFileName, s_RetryInterruptedState));
 
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::CrashCases{
-alignas(MaxAlign) Array<u8, 256u * 1024u> g_ForeignSignalStack = {};
-void OriginalSignalOwner(const int)noexcept{}
-void ForeignSignalOwner(const int)noexcept{}
-[[noreturn]] void OriginalTerminateOwner()noexcept{ _exit(123); }
-[[noreturn]] void ForeignTerminateOwner()noexcept{ _exit(124); }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 NWB_ADHD_GTEST(Crash, MetadataRejectsTruncationAndEmbeddedNullWithoutChangingPublishedValue, VerifyCrash_MetadataRejectsTruncationAndEmbeddedNullWithoutChangingPublishedValue)
 NWB_ADHD_GTEST(Crash, SnapshotKeepsPublishedMetadataDuringInterruptedWriter, VerifyCrash_SnapshotKeepsPublishedMetadataDuringInterruptedWriter)
@@ -608,14 +519,24 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+namespace NWB::Tests::CrashCases{
+alignas(MaxAlign) Array<u8, 256u * 1024u> g_ForeignSignalStack = {};
+void OriginalSignalOwner(const int)noexcept{}
+void ForeignSignalOwner(const int)noexcept{}
+[[noreturn]] void OriginalTerminateOwner()noexcept{ _exit(123); }
+[[noreturn]] void ForeignTerminateOwner()noexcept{ _exit(124); }
+};
+#endif
+
 #if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
-TEST(Crash, SpoolAdmissionPreservesFilesystemCategoryAndCodeAfterUnlock){ VerifyCrash_SpoolAdmissionPreservesFilesystemCategoryAndCodeAfterUnlock(); }
-TEST(Crash, FailedExecutableAdmissionReleasesResourcesAndObservesFailureAfterUnlock){ VerifyCrash_FailedExecutableAdmissionReleasesResourcesAndObservesFailureAfterUnlock(); }
+TEST(Crash, SpoolAdmissionPreservesFilesystemCategoryAndCodeAfterUnlock){ NWB::Tests::CrashCases::VerifyCrash_SpoolAdmissionPreservesFilesystemCategoryAndCodeAfterUnlock(); }
+TEST(Crash, FailedExecutableAdmissionReleasesResourcesAndObservesFailureAfterUnlock){ NWB::Tests::CrashCases::VerifyCrash_FailedExecutableAdmissionReleasesResourcesAndObservesFailureAfterUnlock(); }
 #endif
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-TEST(Crash, UninstallRestoresDisabledAlternateStackAndPriorSignalAndTerminateOwners){ VerifyCrash_UninstallRestoresDisabledAlternateStackAndPriorSignalAndTerminateOwners(); }
-TEST(Crash, UninstallPreservesNewerForeignNativeHookOwners){ VerifyCrash_UninstallPreservesNewerForeignNativeHookOwners(); }
+TEST(Crash, UninstallRestoresDisabledAlternateStackAndPriorSignalAndTerminateOwners){ NWB::Tests::CrashCases::VerifyCrash_UninstallRestoresDisabledAlternateStackAndPriorSignalAndTerminateOwners(); }
+TEST(Crash, UninstallPreservesNewerForeignNativeHookOwners){ NWB::Tests::CrashCases::VerifyCrash_UninstallPreservesNewerForeignNativeHookOwners(); }
 #endif
 
 

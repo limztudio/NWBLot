@@ -4,6 +4,8 @@
 
 #include "constants.adhd"
 #include "dependency_path_hints.adhd"
+#include "dependencies.adhd"
+#include "module.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -16,11 +18,23 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <engine_namespace.h>
+
 #include <pipeline/command_line.h>
 
+#include <core/global.h>
+#include <core/assets/global.h>
 #include <core/assets/bunch/cook.h>
 #include <core/assets/cook_dependency_registry.h>
 #include <core/assets/cook_metadata.h>
+#include <core/metascript/parser.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#define NWB_DEPENDENCY_COMPUTER_BEGIN NWB_BEGIN namespace Pipeline{ namespace DependencyComputer{
+#define NWB_DEPENDENCY_COMPUTER_END }; }; NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -165,6 +179,8 @@ native{
 #include <core/assets/cook_input_selection.h>
 #include <core/assets/bunch/cook.h>
 #include <core/assets/cook_paths.h>
+#include <core/assets/input_list.h>
+#include <core/assets/paths.h>
 #include <core/common/log.h>
 
 
@@ -424,11 +440,207 @@ Expected<Optional<Core::Assets::ExpandedAssetMetadataVector>> TryExpandBunchOrCo
     return Optional<Assets::ExpandedAssetMetadataVector>(Move(*expanded));
 }
 
+static void CollectValuePathHints(const Core::Metascript::Value& value, DependencyPathHints& hints){
+    if(value.isString()){
+        hints.record(value.asString());
+        return;
+    }
+    if(value.isList()){
+        for(const Core::Metascript::Value& item : value.asList())
+            CollectValuePathHints(item, hints);
+        return;
+    }
+    if(!value.isMap())
+        return;
+    for(const auto& [key, fieldValue] : value.asMap()){
+        hints.record(AStringView(key.data(), key.size()));
+        CollectValuePathHints(fieldValue, hints);
+    }
+}
+
+static void CollectDocumentPathHints(const Core::Metascript::Document& doc, DependencyPathHints& hints){
+    for(const Core::Metascript::Document::Declaration& declaration : doc.declarations()){
+        const Core::Metascript::MStringView varView(declaration.variable.data(), declaration.variable.size());
+        if(const Core::Metascript::Value* value = doc.findVariable(varView))
+            CollectValuePathHints(*value, hints);
+    }
+}
+
+Expected<Core::Assets::AssetVector<Core::Assets::AssetString>> ComputeAssetDependencies(const PipelineOptions& options, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+    namespace Assets = Core::Assets;
+
+    Assets::CookDependencyRegistry dependencyRegistry(arena);
+    if(!Assets::RegisterAutoCollectedCookDependencyTypes(dependencyRegistry, scratchArena))
+        return MakeUnexpected(Failure{});
+
+    DependencyProviderCatalog catalog(arena);
+    if(!catalog.discover(options, scratchArena))
+        return MakeUnexpected(Failure{});
+    auto selection = catalog.selectInputs(options, dependencyRegistry, scratchArena);
+    if(!selection)
+        return MakeUnexpected(Failure{});
+
+    const auto& files = catalog.files();
+    Assets::AssetVector<Assets::AssetString> candidate(arena);
+    if(!options.inputs.empty()){
+        candidate.reserve(options.inputs.size());
+        for(const auto& input : options.inputs)
+            candidate.emplace_back(input, arena);
+    }
+    else{
+        candidate.reserve(selection->order.size());
+        for(const usize index : selection->order)
+            candidate.emplace_back(PathToString(arena, files[index].filePath.lexicallyNormal()));
+    }
+
+    DependencyQueueState queueState;
+    queueState.initialize(files.size(), selection->selected, selection->order);
+    DependencyPathHints knownVirtualPathTexts;
+    knownVirtualPathTexts.reserve(files.size());
+
+    const auto enqueueDependency = [&](const Name& depVirtualPath, const Name& expectedAssetType) -> b8{
+        if(!depVirtualPath)
+            return false;
+        const AStringView hint = knownVirtualPathTexts.lookup(depVirtualPath);
+        const auto provider = catalog.resolve(depVirtualPath, expectedAssetType, hint, &dependencyRegistry, scratchArena);
+        if(!provider)
+            return false;
+        if(queueState.claimIncluded(*provider))
+            candidate.emplace_back(PathToString(arena, files[*provider].filePath.lexicallyNormal()));
+        queueState.enqueueIfUnprocessed(*provider);
+        return true;
+    };
+
+    class DependencyCollector final : public Assets::ICookDependencyCollector{
+    public:
+        explicit DependencyCollector(const Function<b8(const Name&, const Name&)>& enqueue)noexcept
+            : m_enqueue(enqueue)
+        {}
+
+
+    public:
+        [[nodiscard]] virtual b8 addAssetDependency(const Name& virtualPath, const Name& expectedAssetType = s_NameNone)override{
+            return m_enqueue(virtualPath, expectedAssetType);
+        }
+
+
+    private:
+        const Function<b8(const Name&, const Name&)>& m_enqueue;
+    };
+
+    const Function<b8(const Name&, const Name&)> enqueueCallback(enqueueDependency);
+    DependencyCollector collector(enqueueCallback);
+
+    const auto processAssetItem = [&](
+        const usize fileIndex,
+        const Name& assetType,
+        const Name& virtualPath,
+        const Core::Metascript::Value& assetValue,
+        const Core::Metascript::Document* documentOrNull
+    ) -> b8{
+        const auto& file = files[fileIndex];
+        const Assets::CookDependencyItemContext itemContext{
+            .assetRoot = file.assetRoot,
+            .virtualRoot = file.virtualRoot,
+            .nwbFilePath = file.filePath,
+            .assetType = assetType,
+            .virtualPath = virtualPath,
+            .asset = assetValue,
+            .document = documentOrNull,
+            .arena = arena,
+            .scratchArena = scratchArena,
+        };
+        return dependencyRegistry.extractDependencies(itemContext, collector);
+    };
+
+    for(usize queueCursor = 0u; queueCursor < queueState.fileQueue.size(); ++queueCursor){
+        const usize fileIndex = queueState.fileQueue[queueCursor];
+        if(!queueState.claimProcessed(fileIndex))
+            continue;
+
+        const auto document = catalog.read(fileIndex, scratchArena);
+        if(!document)
+            return MakeUnexpected(Failure{});
+        CollectDocumentPathHints(*document, knownVirtualPathTexts);
+
+        const auto expandedAssets = TryExpandBunchOrCompositeDocument(files[fileIndex], *document, scratchArena);
+        if(!expandedAssets)
+            return MakeUnexpected(Failure{});
+        if(*expandedAssets){
+            for(const Assets::ExpandedAssetMetadata& expanded : **expandedAssets)
+                CollectValuePathHints(expanded.value, knownVirtualPathTexts);
+            for(const Assets::ExpandedAssetMetadata& expanded : **expandedAssets){
+                if(!processAssetItem(fileIndex, expanded.assetType, expanded.virtualPath, expanded.value, nullptr))
+                    return MakeUnexpected(Failure{});
+            }
+            continue;
+        }
+
+        if(!ValidateSingleProviderAssetDeclaration(document->declarations().size(), PathToString<char>(scratchArena, files[fileIndex].filePath)))
+            return MakeUnexpected(Failure{});
+        const auto* assetDeclaration = document->findDeclaration(Assets::s_MetadataAssetVariable);
+        if(!assetDeclaration){
+            LogMissingMetadataAssetDeclaration(PathToString<char>(scratchArena, files[fileIndex].filePath));
+            return MakeUnexpected(Failure{});
+        }
+        const auto documentAssetType = Name::FromText(AStringView(assetDeclaration->type.data(), assetDeclaration->type.size()));
+        if(!documentAssetType)
+            return MakeUnexpected(Failure{});
+        const auto assetValue = Assets::FindMetadataAssetValue<Core::Metascript::Document, Core::Metascript::Value>(files[fileIndex].filePath, *document, s_DiagnosticPrefix);
+        if(!assetValue)
+            return MakeUnexpected(Failure{});
+        if(!processAssetItem(fileIndex, *documentAssetType, catalog.virtualPaths()[fileIndex], **assetValue, &*document))
+            return MakeUnexpected(Failure{});
+    }
+
+    return candidate;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_DEPENDENCY_COMPUTER_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_PIPELINE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+int RunPipelineTool(const int argc, char** argv){
+    Core::Assets::AssetArena arena(DependencyComputer::s_DependencyComputerArena);
+    Core::Alloc::ScratchArena scratchArena(DependencyComputer::s_DependencyComputerArena);
+    PipelineCommandLine commandLine(PipelineTool::DependencyComputer);
+    return commandLine.run(argc, argv, [&](PipelineOptions& parsed){
+        const auto resolvedInputs = DependencyComputer::ComputeAssetDependencies(parsed, arena, scratchArena);
+        if(!resolvedInputs)
+            return s_PipelineExitFailure;
+        const auto& inputs = *resolvedInputs;
+
+        const auto text = Core::Assets::EncodeAssetInputList(inputs, scratchArena);
+        if(!text){
+            DependencyComputer::LogUnrepresentableDependencyList();
+            return s_PipelineExitFailure;
+        }
+        if(!DependencyComputer::WriteDependencyListOutput(parsed.outputPath, AStringView(*text))){
+            DependencyComputer::LogDependencyOutputWriteFailure(parsed.outputPath);
+            return s_PipelineExitFailure;
+        }
+        DependencyComputer::LogReturnedDependencyInputCount(inputs.size());
+        return s_PipelineExitSuccess;
+    }, arena, scratchArena);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_PIPELINE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -3,6 +3,7 @@
 
 
 #include "reflection_suite_scenes.adhd"
+#include "avboit_timing_render_pass.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -15,124 +16,19 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <loader/project_entry.adhd.h>
-
 #include <impl/assets/graphics/reflection/depth_constants.h>
 #include <impl/ecs_render/kernel/timing_names.adhd.h>
-#include <impl/ecs_render/module.adhd.h>
-#include <impl/ecs_render/reflection/settings.adhd.h>
-#include <impl/ecs_render/reflection/statistics_types.adhd.h>
-#include <impl/ecs_render/reflection/task_graph_reflection.adhd.h>
-#include <impl/ecs_scene/module.adhd.h>
-
-#include <core/alloc/scratch.h>
-#include <core/common/log.h>
-#include <core/ecs/entity.h>
-#include <core/graphics/backend_selection/backend.h>
-#include <core/graphics/runtime/render_pass.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/perf/timing.h>
-#include <core/telemetry/frame_graph_contributor.h>
-
-#include <global/simd/constant.h>
-#include <global/simd/convert.h>
-#include <global/simd/frame.h>
-#include <global/simplemath.h>
 
 namespace NWB::Tests::Smoke{
-using Core::GraphicsRuntime;
-using Impl::PresentationSettings;
+namespace ReflectionGpuTimingScope = Impl::ReflectionGpuTimingScope;
+inline constexpr u32 s_ReflectionMaxDepthMipsCap = NWB_REFLECTION_MAX_DEPTH_MIPS;
 
-class ReflectionTimingRenderPass final : public Core::IRenderPass{
-private:
-    static constexpr u32 s_InFlightRanges = s_ReflectionTimingInFlightRanges;
-
-
-public:
-    explicit ReflectionTimingRenderPass(Core::GraphicsRuntime& graphics)noexcept
-        : IRenderPass(graphics){}
-
-
-public:
-    [[nodiscard]] b8 prepareQueries(const u32 width, const u32 height){
-        u32 mipCount = 0u;
-        for(u32 extent = Max(width, height); extent > 0u; extent >>= 1u)
-            ++mipCount;
-        if(width == 0u || height == 0u || mipCount > NWB_REFLECTION_MAX_DEPTH_MIPS){
-            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProjectImpl: invalid extent for depth timing capacity"));
-            return false;
-        }
-        const Array<Name, 17> singleRangeScopes = {
-            Impl::RendererGpuTimingScope::s_Frame.identity,
-            Impl::RendererGpuTimingScope::s_OpaqueRegular.identity,
-            Impl::RendererGpuTimingScope::s_ShadowVisibility.identity,
-            Impl::RendererGpuTimingScope::s_DeferredLighting.identity,
-            Impl::RendererGpuTimingScope::s_DeferredComposite.identity,
-            Impl::RendererGpuTimingScope::s_DeferredPresent.identity,
-            Impl::RendererGpuTimingScope::s_AvboitClear.identity,
-            Impl::RendererGpuTimingScope::s_AvboitOccupancy.identity,
-            Impl::RendererGpuTimingScope::s_AvboitDepthWarp.identity,
-            Impl::RendererGpuTimingScope::s_AvboitExtinction.identity,
-            Impl::RendererGpuTimingScope::s_AvboitIntegration.identity,
-            Impl::RendererGpuTimingScope::s_AvboitAccumulate.identity,
-            Impl::ReflectionGpuTimingScope::s_Classify.identity,
-            Impl::ReflectionGpuTimingScope::s_BuildArgs.identity,
-            Impl::ReflectionGpuTimingScope::s_Hardware.identity,
-            Impl::ReflectionGpuTimingScope::s_Temporal.identity,
-            Impl::ReflectionGpuTimingScope::s_Spatial.identity,
-        };
-        auto& graphics = getGraphics();
-        auto& timing = graphics.gpuTiming();
-        auto& device = graphics.getDevice();
-        // Reserve enough timer queries to cover all in-flight passes and depth mips.
-        for(const Name& scope : singleRangeScopes){
-            if(!timing.prepareScopeQueries(scope, device, s_InFlightRanges)){
-                NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProjectImpl: failed to prepare timing scope '{}'"), ConvertString(scope.resolvedText()));
-                return false;
-            }
-        }
-        if(!timing.prepareScopeQueries(Impl::ReflectionGpuTimingScope::s_DepthPyramid.identity, device, s_InFlightRanges * mipCount)){
-            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProjectImpl: failed to prepare depth timing capacity"));
-            return false;
-        }
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProjectImpl: timing in-flight ranges {}"), s_InFlightRanges);
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProjectImpl: timing depth mip count {}"), mipCount);
-        return true;
-    }
-
-    virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
-};
-
-[[nodiscard]] inline TStringView ReflectionSmokeProjectName()noexcept{
-    return NWB_TEXT("ReflectionSmokeProjectImpl");
+[[nodiscard]] NWB_INLINE AStringView ReflectionSmokeProjectName()noexcept{
+    return "ReflectionSmokeProject";
 }
 
-[[nodiscard]] inline TStringView ReflectionCpuTimingOwnerLabel()noexcept{
-    return NWB_TEXT("reflection");
-}
-
-[[nodiscard]] inline Name ReflectionFrameGpuTimingScope()noexcept{
-    return Impl::RendererGpuTimingScope::s_Frame.identity;
-}
-
-[[nodiscard]] inline Name ReflectionHardwareGpuTimingScope()noexcept{
-    return Impl::ReflectionGpuTimingScope::s_Hardware.identity;
-}
-
-[[nodiscard]] inline Name ReflectionSpatialGpuTimingScope()noexcept{
-    return Impl::ReflectionGpuTimingScope::s_Spatial.identity;
-}
-
-[[nodiscard]] inline NotNullUniquePtr<Core::ECS::World> CreateReflectionSmokeWorldOrDie(ProjectRuntimeContext& context){
-    auto world = CreateSmokeWorldOrDie(ReflectionSmokeProjectName(), context);
-    Core::Alloc::ScratchArena scratchArena(s_SmokeEnvironmentArena);
-    const auto caseText = ReadSmokeEnvironmentText(scratchArena, "NWB_REFLECTION_SMOKE_CASE");
-    const AStringView caseName = caseText ? AStringView(caseText->data(), caseText->size()) : AStringView{};
-    if(caseName == "temporal_deform" || caseName == "rough_deform")
-        AddSmokeSkinnedRenderSystems(*world, context);
-    else
-        SetupSmokeRenderSystems(*world, context);
-    return world;
+[[nodiscard]] NWB_INLINE AStringView ReflectionCpuTimingOwnerLabel()noexcept{
+    return "reflection";
 }
 };
 
@@ -165,6 +61,109 @@ const StringView s_ReflectionOpaqueGlassCase = "opaque_glass";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class ReflectionTimingRenderPass{
+    public ReflectionTimingRenderPass(mut GraphicsRuntime graphics){
+        this.m_graphics = graphics;
+        this.m_pass = TimingProbeUnfocusedPass(graphics);
+    }
+
+    public ~ReflectionTimingRenderPass(){
+        this.stop();
+    }
+
+    public b8 start(in u32 width, in u32 height){
+        if(this.m_registered)
+            return true;
+        u32 mipCount = 0u;
+        for(u32 extent = Max(width, height); extent > 0u; extent >>= 1u)
+            ++mipCount;
+        if(width == 0u || height == 0u || mipCount > s_ReflectionMaxDepthMipsCap){
+            error("ReflectionSmokeProject: invalid extent for depth timing capacity");
+            return false;
+        }
+        Array<Name, 17u> singleRangeScopes;
+        singleRangeScopes[0u] = RendererGpuTimingScope::s_Frame.identity;
+        singleRangeScopes[1u] = RendererGpuTimingScope::s_OpaqueRegular.identity;
+        singleRangeScopes[2u] = RendererGpuTimingScope::s_ShadowVisibility.identity;
+        singleRangeScopes[3u] = RendererGpuTimingScope::s_DeferredLighting.identity;
+        singleRangeScopes[4u] = RendererGpuTimingScope::s_DeferredComposite.identity;
+        singleRangeScopes[5u] = RendererGpuTimingScope::s_DeferredPresent.identity;
+        singleRangeScopes[6u] = RendererGpuTimingScope::s_AvboitClear.identity;
+        singleRangeScopes[7u] = RendererGpuTimingScope::s_AvboitOccupancy.identity;
+        singleRangeScopes[8u] = RendererGpuTimingScope::s_AvboitDepthWarp.identity;
+        singleRangeScopes[9u] = RendererGpuTimingScope::s_AvboitExtinction.identity;
+        singleRangeScopes[10u] = RendererGpuTimingScope::s_AvboitIntegration.identity;
+        singleRangeScopes[11u] = RendererGpuTimingScope::s_AvboitAccumulate.identity;
+        singleRangeScopes[12u] = ReflectionGpuTimingScope::s_Classify.identity;
+        singleRangeScopes[13u] = ReflectionGpuTimingScope::s_BuildArgs.identity;
+        singleRangeScopes[14u] = ReflectionGpuTimingScope::s_Hardware.identity;
+        singleRangeScopes[15u] = ReflectionGpuTimingScope::s_Temporal.identity;
+        singleRangeScopes[16u] = ReflectionGpuTimingScope::s_Spatial.identity;
+        // Reserve enough timer queries to cover all in-flight passes and depth mips.
+        for(usize i = 0u; i < singleRangeScopes.size(); ++i){
+            const Name scope = singleRangeScopes[i];
+            if(!this.m_graphics.gpuTiming().prepareScopeQueries(scope, this.m_graphics.getDevice(), s_ReflectionTimingInFlightRanges)){
+                error("ReflectionSmokeProject: failed to prepare timing scope '{}'", scope.resolvedText());
+                return false;
+            }
+        }
+        if(!this.m_graphics.gpuTiming().prepareScopeQueries(
+            ReflectionGpuTimingScope::s_DepthPyramid.identity,
+            this.m_graphics.getDevice(),
+            s_ReflectionTimingInFlightRanges * mipCount
+        )){
+            error("ReflectionSmokeProject: failed to prepare depth timing capacity");
+            return false;
+        }
+        [essential] info("ReflectionSmokeProject: timing in-flight ranges {}", s_ReflectionTimingInFlightRanges);
+        [essential] info("ReflectionSmokeProject: timing depth mip count {}", mipCount);
+        this.m_graphics.addRenderPassToBack(this.m_pass);
+        this.m_registered = true;
+        return true;
+    }
+
+    public void stop(){
+        if(!this.m_registered)
+            return;
+        this.m_graphics.removeRenderPass(this.m_pass);
+        this.m_registered = false;
+    }
+
+    private mut GraphicsRuntime m_graphics;
+    private TimingProbeUnfocusedPass m_pass;
+    private b8 m_registered = false;
+}
+
+NotNullUniquePtr<World> CreateReflectionSmokeWorldOrDie(mut ProjectRuntimeContext context){
+    NotNullUniquePtr<World> world = CreateSmokeWorldOrDie(ReflectionSmokeProjectName(), context);
+    const Expected<String> caseText = ReadSmokeEnvironmentString(s_ReflectionSmokeCaseEnv);
+    StringView caseName = "";
+    if(caseText.has_value())
+        caseName = StringView(caseText.value());
+    if(caseName == "temporal_deform" || caseName == "rough_deform")
+        AddSmokeSkinnedRenderSystems(SmokeWorldRef(world), context);
+    else
+        SetupSmokeRenderSystems(SmokeWorldRef(world), context);
+    return TakeSmokeWorld(world);
+}
+
+ProjectFrameClientSize QueryReflectionSmokeFrameClientSize(){
+    const Expected<String> extent = ReadSmokeEnvironmentString("NWB_REFLECTION_SMOKE_EXTENT");
+    ProjectFrameClientSize result = ProjectFrameClientSize();
+    result.width = 960u;
+    result.height = 720u;
+    if(!extent.has_value() || StringView(extent.value()) == "native")
+        return result;
+    [essential] assert(StringView(extent.value()) == "npot", "ReflectionSmokeProject: extent must be native or npot");
+    result.width = 953u;
+    result.height = 713u;
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class ReflectionCpuTimingProbe{
     public ReflectionCpuTimingProbe(mut ProjectRuntimeContext context){
         this.m_context = context;
@@ -172,10 +171,7 @@ class ReflectionCpuTimingProbe{
     }
 
     public b8 initialize(in StringView caseName){
-        b8 hasQuitCallback = false;
-        native(in ctx = this.m_context, mut hasQuitCallback){
-            hasQuitCallback = static_cast<b8>(ctx.requestQuit);
-        }
+        const b8 hasQuitCallback = SmokeContextHasQuitCallback(this.m_context);
         if((caseName != "optical_csg_cap" && caseName != "optical_csg_reference") || !hasQuitCallback){
             error("ReflectionCpuTiming: requires the cap or matched slab fixture and a quit callback");
             return false;
@@ -202,10 +198,7 @@ class ReflectionCpuTimingProbe{
             return true;
         const u64 presentations = this.m_context.graphics.getSuccessfulPresentationCount();
         const u64 sourceFrame = this.m_context.perfSession.frameIndex();
-        Timer now = Timer();
-        native(mut now){
-            now = TimerNow();
-        }
+        const Timer now = TimerNow();
         if(!this.m_prepared){
             if(presentations < s_ReflectionCpuTimingPrepPresentations)
                 return true;
@@ -222,10 +215,7 @@ class ReflectionCpuTimingProbe{
         if(this.m_presentation.measurementStarted() && !this.m_measuring){
             this.m_measuring = true;
             this.m_intervalSourceFrame = sourceFrame;
-            f64 warmupSeconds = 0.0;
-            native(in now, in prepBegin = this.m_preparationBegin, mut warmupSeconds){
-                warmupSeconds = DurationInSeconds<f64>(now, prepBegin);
-            }
+            const f64 warmupSeconds = DurationInSeconds<f64>(now, this.m_preparationBegin);
             [essential] info(
                 "ReflectionCpuTiming: measurement begin presentations={} source_frame={} warmup_seconds={}"
                 , presentations
@@ -258,8 +248,8 @@ class ReflectionCpuTimingProbe{
             total.wallSeconds < s_SmokeProbeMinimumMeasurementSeconds
             || total.presentations() < s_SmokeProbeMinimumPresentations
             || this.m_positiveIntervals < s_ReflectionCpuTimingMinPositiveIntervals
-            || !this.m_publications.hasCompletedGpuSamples(ReflectionFrameGpuTimingScope(), s_SmokeProbeMinimumPresentations)
-            || !this.m_publications.hasCompletedGpuSamples(ReflectionHardwareGpuTimingScope(), s_SmokeProbeMinimumPresentations)
+            || !this.m_publications.hasCompletedGpuSamples(RendererGpuTimingScope::s_Frame.identity, s_SmokeProbeMinimumPresentations)
+            || !this.m_publications.hasCompletedGpuSamples(ReflectionGpuTimingScope::s_Hardware.identity, s_SmokeProbeMinimumPresentations)
         )
             return true;
 
@@ -305,7 +295,7 @@ b8 ReadReflectionSmokeFlag(in StringView name, mut b8 value){
     else if(view == "1")
         value = true;
     else{
-        error("ReflectionSmokeProjectImpl: {} must be 0 or 1", name);
+        error("ReflectionSmokeProject: {} must be 0 or 1", name);
         return false;
     }
     return true;
@@ -317,7 +307,7 @@ b8 ReadReflectionSmokeU32(in StringView name, in u32 minimum, in u32 maximum, mu
         return true;
     const Expected<u64> parsed = ParseU64(StringView(text.value()));
     if(!parsed.has_value() || parsed.value() < cast<u64>(minimum) || parsed.value() > cast<u64>(maximum)){
-        error("ReflectionSmokeProjectImpl: {} must be in [{}, {}]", name, minimum, maximum);
+        error("ReflectionSmokeProject: {} must be in [{}, {}]", name, minimum, maximum);
         return false;
     }
     value = cast<u32>(parsed.value());
@@ -340,9 +330,7 @@ class ReflectionSmokeConfiguration{
         this.settingsData.diagnosticsEnabled = true;
         this.settingsData.temporalEnabled = extendedCase && !opticalCase && !feedbackCase;
         this.settingsData.spatialFilterEnabled = false;
-        native(mut settings = this.settingsData){
-            settings.traceMode = Impl::ReflectionTraceMode::Hardware;
-        }
+        this.settingsData.traceMode = ReflectionTraceMode::Hardware;
         this.m_targetSamples = 16u;
         if(extendedCase && !opticalCase)
             this.m_targetSamples = 64u;
@@ -384,7 +372,7 @@ class ReflectionSmokeConfiguration{
             this.m_authoredRoughness = 0.4f;
             const Expected<String> roughnessText = ReadSmokeEnvironmentString("NWB_REFLECTION_SMOKE_ROUGHNESS");
             if(roughnessText.has_value()){
-                const Expected<f32> roughness = ParseF32FromChars(StringView(roughnessText.value()));
+                const Expected<f32> roughness = ParseF32(StringView(roughnessText.value()));
                 if(!roughness.has_value() || !IsFinite(roughness.value()) || roughness.value() < 0.0f || roughness.value() > 1.0f)
                     return false;
                 this.m_authoredRoughness = roughness.value();
@@ -405,7 +393,7 @@ class ReflectionSmokeConfiguration{
         if(budgetText.has_value()){
             const Expected<u64> parsed = ParseU64(StringView(budgetText.value()));
             if(!parsed.has_value() || parsed.value() > s_ReflectionMaxU32Value){
-                error("ReflectionSmokeProjectImpl: ray budget must be a nonnegative u32");
+                error("ReflectionSmokeProject: ray budget must be a nonnegative u32");
                 return false;
             }
             this.settingsData.maxHardwareRaysPerFrame = cast<u32>(parsed.value());
@@ -415,36 +403,26 @@ class ReflectionSmokeConfiguration{
         StringView route = s_ReflectionSmokeHardwareRoute;
         if(routeText.has_value())
             route = StringView(routeText.value());
-        b8 validRoute = true;
-        native(in route, mut settings = this.settingsData, mut validRoute){
-            if(route == "disabled")
-                settings.traceMode = Impl::ReflectionTraceMode::Disabled;
-            else if(route == "screen")
-                settings.traceMode = Impl::ReflectionTraceMode::ScreenSpace;
-            else if(route == "hybrid")
-                settings.traceMode = Impl::ReflectionTraceMode::Hybrid;
-            else if(route != s_ReflectionSmokeHardwareRoute)
-                validRoute = false;
-        }
-        if(!validRoute){
-            error("ReflectionSmokeProjectImpl: unknown reflection mode '{}'", route);
+        if(route == "disabled")
+            this.settingsData.traceMode = ReflectionTraceMode::Disabled;
+        else if(route == "screen")
+            this.settingsData.traceMode = ReflectionTraceMode::ScreenSpace;
+        else if(route == "hybrid")
+            this.settingsData.traceMode = ReflectionTraceMode::Hybrid;
+        else if(route != s_ReflectionSmokeHardwareRoute){
+            error("ReflectionSmokeProject: unknown reflection mode '{}'", route);
             return false;
         }
 
         const Expected<String> debugText = ReadSmokeEnvironmentString("NWB_REFLECTION_SMOKE_DEBUG");
         if(debugText.has_value()){
             const StringView debugView = StringView(debugText.value());
-            b8 validDebug = true;
-            native(in debugView, mut settings = this.settingsData, mut validDebug){
-                if(debugView == "source")
-                    settings.debugView = Impl::ReflectionDebugView::TraceSource;
-                else if(debugView == "confidence")
-                    settings.debugView = Impl::ReflectionDebugView::Confidence;
-                else if(debugView != "none")
-                    validDebug = false;
-            }
-            if(!validDebug){
-                error("ReflectionSmokeProjectImpl: unknown debug view '{}'", debugView);
+            if(debugView == "source")
+                this.settingsData.debugView = ReflectionDebugView::TraceSource;
+            else if(debugView == "confidence")
+                this.settingsData.debugView = ReflectionDebugView::Confidence;
+            else if(debugView != "none"){
+                error("ReflectionSmokeProject: unknown debug view '{}'", debugView);
                 return false;
             }
         }
@@ -455,24 +433,21 @@ class ReflectionSmokeConfiguration{
         u32 feedbackVal = 0u;
         if(this.settingsData.screenFeedbackEnabled)
             feedbackVal = 1u;
-        [essential] info("ReflectionSmokeProjectImpl: screen feedback {}", feedbackVal);
-        [essential] info("ReflectionSmokeProjectImpl: screen steps {}", this.settingsData.screenMaxSteps);
+        [essential] info("ReflectionSmokeProject: screen feedback {}", feedbackVal);
+        [essential] info("ReflectionSmokeProject: screen steps {}", this.settingsData.screenMaxSteps);
         renderer.setRefractionEnabled(true);
         renderer.setRefractionHardwareTracingEnabled(true);
 
-        b8 hardwareAvailable = false;
-        native(in graphics, mut hardwareAvailable){
-            hardwareAvailable = graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
-                && graphics.queryFeatureSupport(Core::Feature::RayQuery);
-        }
+        const b8 hardwareAvailable = graphics.queryFeatureSupport(Feature::RayTracingAccelStruct)
+            && graphics.queryFeatureSupport(Feature::RayQuery);
         StringView hwStatus = "unavailable";
         if(hardwareAvailable)
             hwStatus = "available";
-        [essential] info("ReflectionSmokeProjectImpl: hardware {}", hwStatus);
-        [essential] info("ReflectionSmokeProjectImpl: reflection mode {}", route);
-        [essential] info("ReflectionSmokeProjectImpl: hardware ray budget {}", this.settingsData.maxHardwareRaysPerFrame);
+        [essential] info("ReflectionSmokeProject: hardware {}", hwStatus);
+        [essential] info("ReflectionSmokeProject: reflection mode {}", route);
+        [essential] info("ReflectionSmokeProject: hardware ray budget {}", this.settingsData.maxHardwareRaysPerFrame);
         if(opticalCase)
-            [essential] info("ReflectionSmokeProjectImpl: optical query limit {}", this.settingsData.maxOpticalQueries);
+            [essential] info("ReflectionSmokeProject: optical query limit {}", this.settingsData.maxOpticalQueries);
         return true;
     }
 
@@ -495,9 +470,8 @@ class ReflectionSmokeConfiguration{
 
 // Observes completed reflection history and timing without owning renderer resources.
 class ReflectionSpatialOwnerProbe{
-    public ReflectionSpatialOwnerProbe(mut ProjectRuntimeContext context, mut RendererSystem renderer){
+    public ReflectionSpatialOwnerProbe(mut ProjectRuntimeContext context){
         this.m_context = context;
-        this.m_renderer = renderer;
         this.m_radii[0u] = 1u;
         this.m_radii[1u] = 3u;
         this.m_radii[2u] = 2u;
@@ -522,12 +496,8 @@ class ReflectionSpatialOwnerProbe{
             return false;
         }
 
-        b8 isHardwareMode = false;
-        native(in settings, mut isHardwareMode){
-            isHardwareMode = settings.traceMode == Impl::ReflectionTraceMode::Hardware;
-        }
         if(
-            !isHardwareMode
+            settings.traceMode != ReflectionTraceMode::Hardware
             || !settings.diagnosticsEnabled
             || !settings.temporalEnabled
             || settings.temporalMaxSamples != 1u
@@ -549,7 +519,7 @@ class ReflectionSpatialOwnerProbe{
         return true;
     }
 
-    public b8 update(in ReflectionStatistics statistics, in TimingView timing, mut ReflectionSettings settings){
+    public b8 update(in ReflectionStatistics statistics, in TimingView timing, mut ReflectionSettings settings, mut RendererSystem renderer){
         if(!this.observeTiming(timing))
             return false;
         if(this.m_finalReset || statistics.sequence == 0u || !statistics.hardwareReady || !statistics.historyEligible)
@@ -557,7 +527,7 @@ class ReflectionSpatialOwnerProbe{
         if(!this.m_started){
             if(statistics.frameIndex < 3u)
                 return true;
-            return this.beginPhase(settings);
+            return this.beginPhase(settings, renderer);
         }
 
         const u32 phaseSeed = 101u + this.m_phase;
@@ -588,11 +558,11 @@ class ReflectionSpatialOwnerProbe{
         );
         if(this.m_phase < this.m_lastPhase){
             ++this.m_phase;
-            return this.beginPhase(settings);
+            return this.beginPhase(settings, renderer);
         }
 
         settings.samplingSeed = 0u;
-        if(!this.m_renderer.setReflectionSettings(settings)){
+        if(!renderer.setReflectionSettings(settings)){
             error("ReflectionSpatialOwner: final seed reset rejected");
             return false;
         }
@@ -618,7 +588,7 @@ class ReflectionSpatialOwnerProbe{
     }
 
     private b8 observeTiming(in TimingView timing){
-        const TimingStats work = timing.stats(ReflectionSpatialGpuTimingScope());
+        const TimingStats work = timing.stats(ReflectionGpuTimingScope::s_Spatial.identity);
         if(!work.valid() || (this.m_hasPublication && work.publishFrameIndex == this.m_lastPublish))
             return true;
         if(
@@ -653,10 +623,10 @@ class ReflectionSpatialOwnerProbe{
         return true;
     }
 
-    private b8 beginPhase(mut ReflectionSettings settings){
+    private b8 beginPhase(mut ReflectionSettings settings, mut RendererSystem renderer){
         settings.spatialRadius = this.m_radii[this.m_phase];
         settings.samplingSeed = 101u + this.m_phase;
-        if(!this.m_renderer.setReflectionSettings(settings)){
+        if(!renderer.setReflectionSettings(settings)){
             error("ReflectionSpatialOwner: radius transition rejected");
             return false;
         }
@@ -677,7 +647,6 @@ class ReflectionSpatialOwnerProbe{
     private TimingStats m_captureWork = TimingStats();
     private Array<u32, 4u> m_radii;
     private mut ProjectRuntimeContext m_context;
-    private mut RendererSystem m_renderer;
     private u64 m_phaseSource = ~cast<u64>(0u);
     private u64 m_finalSource = ~cast<u64>(0u);
     private u64 m_lastPublish = 0u;
@@ -701,31 +670,13 @@ class ReflectionStatisticsReporter{
         this.m_latestStatistics = statistics;
         this.m_feedbackObservedBypass = this.m_feedbackObservedBypass || statistics.feedbackBypassedPixels > 0u;
 
-        u32 traceModeVal = 0u;
-        u32 tokenQueueVal = 0u;
-        u64 tokenValue = 0u;
-        u32 physicalQueueIndex = 0u;
-        u64 deviceGeneration = 0u;
-        u32 historyResetReasonVal = 0u;
-        u32 feedbackResetReasonVal = 0u;
-        native(
-            in statistics,
-            mut traceModeVal,
-            mut tokenQueueVal,
-            mut tokenValue,
-            mut physicalQueueIndex,
-            mut deviceGeneration,
-            mut historyResetReasonVal,
-            mut feedbackResetReasonVal
-        ){
-            traceModeVal = static_cast<u32>(statistics.traceMode);
-            tokenQueueVal = static_cast<u32>(statistics.acceptedToken.queue);
-            tokenValue = statistics.acceptedToken.value;
-            physicalQueueIndex = statistics.acceptedToken.physicalQueueIndex;
-            deviceGeneration = statistics.acceptedToken.deviceGeneration;
-            historyResetReasonVal = static_cast<u32>(statistics.historyResetReason);
-            feedbackResetReasonVal = static_cast<u32>(statistics.feedbackResetReason);
-        }
+        const u32 traceModeVal = cast<u32>(statistics.traceMode);
+        const u32 tokenQueueVal = cast<u32>(statistics.acceptedToken.queue);
+        const u64 tokenValue = statistics.acceptedToken.value;
+        const u32 physicalQueueIndex = statistics.acceptedToken.physicalQueueIndex;
+        const u64 deviceGeneration = statistics.acceptedToken.deviceGeneration;
+        const u32 historyResetReasonVal = cast<u32>(statistics.historyResetReason);
+        const u32 feedbackResetReasonVal = cast<u32>(statistics.feedbackResetReason);
 
         u32 hwReqVal = 0u;
         if(statistics.hardwareRequested)
@@ -872,6 +823,10 @@ class ReflectionSmokeProjectImpl : IProjectEntryCallbacks{
         this.m_timingRenderPass = ReflectionTimingRenderPass(context.graphics);
         this.m_fpsProbe = FpsProbe(ReflectionSmokeProjectName());
         this.m_gpuPassTimingProbe = GpuPassTimingProbe(ReflectionSmokeProjectName());
+        this.m_roughnessScene = ReflectionRoughnessScene(context);
+        this.m_spatialOwnerProbe = ReflectionSpatialOwnerProbe(context);
+        this.m_csgContextProbe = ReflectionCsgContextProbe(context);
+        this.m_cpuTimingProbe = ReflectionCpuTimingProbe(context);
     }
 
     public ~ReflectionSmokeProjectImpl(){
@@ -895,22 +850,15 @@ class ReflectionSmokeProjectImpl : IProjectEntryCallbacks{
         this.m_furnace = caseName == "rough_furnace";
         this.m_glassRoughnessCase = caseName == "rough_glass";
 
-        b8 configured = false;
-        native(
-            in ext = this.m_extendedCase,
-            in fb = this.m_feedbackCase,
-            in opt = this.m_opticalCase,
-            in furn = this.m_furnace,
-            in tir = this.m_opticalTir,
-            mut cfg = this.m_configuration,
-            mut world = this.m_world,
-            mut ctx = this.m_context,
-            mut configured
-        ){
-            auto& renderer = *MakeNotNull(world->getSystem<Impl::RendererSystem>());
-            configured = cfg.configure(renderer, ctx.graphics, ext, fb, opt, furn, tir);
-        }
-        if(!configured)
+        if(!this.m_configuration.configure(
+            SmokeRendererSystemRef(SmokeWorldRef(this.m_world)),
+            this.m_context.graphics,
+            this.m_extendedCase,
+            this.m_feedbackCase,
+            this.m_opticalCase,
+            this.m_furnace,
+            this.m_opticalTir
+        ))
             return false;
 
         b8 cpuDiagnostics = false;
@@ -923,28 +871,20 @@ class ReflectionSmokeProjectImpl : IProjectEntryCallbacks{
         }
         if(cpuDiagnostics){
             const ReflectionSettings curSettings = this.m_configuration.settings();
-            b8 isHardwareMode = false;
-            native(in curSettings, mut isHardwareMode){
-                isHardwareMode = curSettings.traceMode == Impl::ReflectionTraceMode::Hardware;
-            }
             if(
                 curSettings.diagnosticsEnabled
                 || curSettings.temporalEnabled
                 || curSettings.spatialFilterEnabled
                 || curSettings.screenFeedbackEnabled
-                || !isHardwareMode
+                || curSettings.traceMode != ReflectionTraceMode::Hardware
                 || ReadSmokeEnvironmentString(s_ReflectionCapturePathEnv).has_value()
             ){
                 error("ReflectionCpuTiming: requires raw hardware reflection without capture or path diagnostics");
                 return false;
             }
-            b8 cpuInitOk = false;
-            native(in caseName, mut ctx = this.m_context, mut probe = this.m_cpuTimingProbe, mut cpuInitOk){
-                probe = MakeUnique<ReflectionCpuTimingProbe>(ctx);
-                cpuInitOk = probe && probe->initialize(caseName);
-            }
-            if(!cpuInitOk)
+            if(!this.m_cpuTimingProbe.initialize(caseName))
                 return false;
+            this.m_hasCpuTimingProbe = true;
         }
 
         const Expected<String> spatialOwnerSelection = ReadSmokeEnvironmentString("NWB_REFLECTION_SMOKE_SPATIAL_OWNER");
@@ -954,21 +894,12 @@ class ReflectionSmokeProjectImpl : IProjectEntryCallbacks{
                 return false;
             }
             const StringView selectionView = StringView(spatialOwnerSelection.value());
-            b8 spatialOk = false;
-            native(
-                in selectionView,
-                mut ctx = this.m_context,
-                mut world = this.m_world,
-                mut cfg = this.m_configuration,
-                mut probe = this.m_spatialOwnerProbe,
-                mut spatialOk
-            ){
-                auto& renderer = *MakeNotNull(world->getSystem<Impl::RendererSystem>());
-                probe = MakeUnique<ReflectionSpatialOwnerProbe>(ctx, renderer);
-                spatialOk = probe && probe->configure(selectionView, cfg.settingsData) && renderer.setReflectionSettings(cfg.settingsData);
-            }
-            if(!spatialOk)
+            if(
+                !this.m_spatialOwnerProbe.configure(selectionView, this.m_configuration.settingsData)
+                || !SmokeRendererSystemRef(SmokeWorldRef(this.m_world)).setReflectionSettings(this.m_configuration.settingsData)
+            )
                 return false;
+            this.m_hasSpatialOwnerProbe = true;
         }
 
         const b8 screenCase = caseName == "onscreen"
@@ -982,101 +913,46 @@ class ReflectionSmokeProjectImpl : IProjectEntryCallbacks{
             && !screenCase
             && !this.m_extendedCase
         ){
-            error("ReflectionSmokeProjectImpl: unknown case '{}'", caseName);
+            error("ReflectionSmokeProject: unknown case '{}'", caseName);
             return false;
         }
 
-        u32 extentWidth = 960u;
-        u32 extentHeight = 720u;
-        EntityID cameraId = s_InvalidEntityId;
+        const ProjectFrameClientSize extent = QuerySmokeFrameClientSize();
+        const u32 extentWidth = extent.width;
+        const u32 extentHeight = extent.height;
+        const EntityID cameraId = CreateSmokeCamera(1.4f, 6.0f, 0.0f, SmokeWorldRef(this.m_world));
+        const f32 aspectRatio = cast<f32>(extentWidth) / cast<f32>(extentHeight);
+        const b8 projectionConfigured = SetSmokeCameraProjection(cameraId, s_ReflectionPi / 3.0f, aspectRatio, SmokeWorldRef(this.m_world));
         EntityID lightId = s_InvalidEntityId;
-        native(
-            in optCase = this.m_opticalCase,
-            mut world = this.m_world,
-            mut extentWidth,
-            mut extentHeight,
-            mut cameraId,
-            mut lightId
-        ){
-            cameraId = CreateSmokeCamera(1.4f, 6.0f, 0.0f, *world);
-            auto& camera = world->entity(cameraId).getComponent<Impl::Scene::CameraComponent>();
-            camera.setVerticalFovRadians(s_ReflectionPi / 3.0f);
-            const auto extent = QueryProjectFrameClientSize();
-            extentWidth = extent.width;
-            extentHeight = extent.height;
-            camera.setAspectRatio(static_cast<f32>(extent.width) / static_cast<f32>(extent.height));
-            lightId = Impl::Scene::CreateDirectionalLightEntity(*world, 0.6f, 0.4f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f);
-            NWB_FATAL_ASSERT_MSG(cameraId.valid() && lightId.valid(), NWB_TEXT("ReflectionSmokeProject: camera/light creation failed"));
-            if(optCase)
-                world->entity(lightId).getComponent<Impl::Scene::LightComponent>().enableCaustics = false;
-        }
+        if(this.m_opticalCase)
+            lightId = CreateSmokeDirectionalLight(0.6f, 0.4f, 0.0f, f32x4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f, false, SmokeWorldRef(this.m_world));
+        else
+            lightId = CreateSmokeDirectionalLight(0.6f, 0.4f, 0.0f, f32x4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f, SmokeWorldRef(this.m_world));
+        [essential] assert(cameraId.valid() && projectionConfigured && lightId.valid(), "ReflectionSmokeProject: camera/light creation failed");
         this.m_csgSliceRayCapacity = Min(this.m_configuration.settings().maxHardwareRaysPerFrame, 2u * extentWidth * extentHeight);
 
         if(this.m_feedbackCase){
-            b8 fbCreated = false;
-            const b8 freshFinal = this.m_configuration.freshFinalState();
-            native(in caseName, in freshFinal, mut world = this.m_world, mut fbScene = this.m_feedbackScene, mut fbCreated){
-                fbScene = MakeUnique<ReflectionFeedbackScene>(*world);
-                fbCreated = fbScene && fbScene->create(caseName, freshFinal);
-            }
-            if(!fbCreated)
+            if(!this.m_feedbackScene.create(caseName, this.m_configuration.freshFinalState(), SmokeWorldRef(this.m_world)))
                 return false;
+            this.m_hasFeedbackScene = true;
         }
         else if(caseName == "optical_csg_context_transition"){
-            b8 csgProbeCreated = false;
-            native(
-                in rayCap = this.m_csgSliceRayCapacity,
-                mut ctx = this.m_context,
-                mut world = this.m_world,
-                mut csgProbe = this.m_csgContextProbe,
-                mut csgProbeCreated
-            ){
-                auto& renderer = *MakeNotNull(world->getSystem<Impl::RendererSystem>());
-                csgProbe = MakeUnique<ReflectionCsgContextProbe>(rayCap, ctx, *world, renderer);
-                csgProbeCreated = csgProbe && csgProbe->create();
-            }
-            if(!csgProbeCreated)
+            if(!this.m_csgContextProbe.create(this.m_csgSliceRayCapacity, SmokeWorldRef(this.m_world)))
                 return false;
+            this.m_hasCsgContextProbe = true;
         }
         else if(this.m_opticalCase){
-            b8 optCreated = false;
-            native(in caseName, mut world = this.m_world, mut optCreated){
-                optCreated = CreateReflectionOpticalScene(caseName, *world);
-            }
-            if(!optCreated)
+            if(!CreateReflectionOpticalScene(caseName, SmokeWorldRef(this.m_world)))
                 return false;
         }
         else if(this.m_extendedCase && !this.m_glassRoughnessCase){
-            const f32 authoredRough = this.m_configuration.authoredRoughness();
-            const b8 freshFinal = this.m_configuration.freshFinalState();
-            b8 roughCreated = false;
-            b8 roughMutation = false;
-            b8 roughDeforming = false;
-            native(
-                in cameraId,
-                in lightId,
-                in authoredRough,
-                in caseName,
-                in freshFinal,
-                mut ctx = this.m_context,
-                mut world = this.m_world,
-                mut roughScene = this.m_roughnessScene,
-                mut roughCreated,
-                mut roughMutation,
-                mut roughDeforming
-            ){
-                roughScene = MakeUnique<ReflectionRoughnessScene>(cameraId, lightId, authoredRough, ctx, *world);
-                roughCreated = roughScene && roughScene->create(caseName, freshFinal);
-                if(roughCreated){
-                    roughMutation = roughScene->mutationCase();
-                    roughDeforming = roughScene->deforming();
-                }
-            }
-            if(!roughCreated)
+            this.m_roughnessScene.configure(cameraId, lightId, this.m_configuration.authoredRoughness());
+            if(!this.m_roughnessScene.create(caseName, this.m_configuration.freshFinalState(), SmokeWorldRef(this.m_world)))
                 return false;
+            this.m_hasRoughnessScene = true;
             if(
-                roughMutation
-                && !roughDeforming
+                this.m_roughnessScene.mutationCase()
+                && !this.m_roughnessScene.deforming()
                 && this.m_configuration.settings().temporalEnabled
                 && (this.m_configuration.targetSamples() < 32u || this.m_configuration.postResetSamples() > this.m_configuration.targetSamples())
             ){
@@ -1090,73 +966,35 @@ class ReflectionSmokeProjectImpl : IProjectEntryCallbacks{
             const b8 onscreenMoved = caseName == s_ReflectionOnscreenMovedCase;
             const b8 boundary = caseName == s_ReflectionBoundaryCase;
             const b8 moved = caseName == s_ReflectionMovedCase;
-            const f32 authoredRough = this.m_configuration.authoredRoughness();
-            native(
-                in glassRough = this.m_glassRoughnessCase,
-                in authoredRough,
-                in opaqueGlass,
-                in floorCase,
-                in screenCase,
-                in onscreenMoved,
-                in boundary,
-                in moved,
-                mut world = this.m_world
-            ){
-                ReflectionReferenceScene referenceScene(*world, glassRough, authoredRough);
-                if(opaqueGlass)
-                    referenceScene.createOpaqueGlassScene();
-                else if(floorCase)
-                    referenceScene.createFloorMirrorScene();
-                else if(screenCase)
-                    referenceScene.createOnscreenMirrorScene(onscreenMoved, boundary);
-                else
-                    referenceScene.createMirrorScene(moved);
-            }
+            ReflectionReferenceScene referenceScene = ReflectionReferenceScene(
+                SmokeWorldRef(this.m_world),
+                this.m_glassRoughnessCase,
+                this.m_configuration.authoredRoughness()
+            );
+            if(opaqueGlass)
+                referenceScene.createOpaqueGlassScene();
+            else if(floorCase)
+                referenceScene.createFloorMirrorScene();
+            else if(screenCase)
+                referenceScene.createOnscreenMirrorScene(onscreenMoved, boundary);
+            else
+                referenceScene.createMirrorScene(moved);
         }
 
         if(!this.configureFramebufferCapture())
             return false;
 
-        b8 hasSpatialProbe = false;
-        b8 hasCapture = false;
-        b8 hasCpuProbe = false;
-        native(
-            in spatialProbe = this.m_spatialOwnerProbe,
-            in capture = this.m_framebufferCapture,
-            in cpuProbe = this.m_cpuTimingProbe,
-            mut hasSpatialProbe,
-            mut hasCapture,
-            mut hasCpuProbe
-        ){
-            hasSpatialProbe = static_cast<b8>(spatialProbe);
-            hasCapture = static_cast<b8>(capture);
-            hasCpuProbe = static_cast<b8>(cpuProbe);
-        }
-        if(hasSpatialProbe && !hasCapture){
+        if(this.m_hasSpatialOwnerProbe && !SmokeFramebufferCaptureValid(this.m_framebufferCapture)){
             error("ReflectionSpatialOwner: application framebuffer capture is required");
             return false;
         }
 
-        if(ReadSmokeEnvironmentFlag("NWB_REFLECTION_SMOKE_TIMING") || hasSpatialProbe || hasCpuProbe){
-            b8 queriesPrepared = false;
-            native(
-                in hasCpuProbe,
-                in extentWidth,
-                in extentHeight,
-                mut ctx = this.m_context,
-                mut pass = this.m_timingRenderPass,
-                mut queriesPrepared
-            ){
-                auto captureOptions = Core::Perf::CaptureOptions::GpuTimingOnly();
-                captureOptions.cpuTiming = hasCpuProbe;
-                ctx.setPerfCapture(captureOptions);
-                queriesPrepared = pass.prepareQueries(extentWidth, extentHeight);
-                if(queriesPrepared)
-                    ctx.graphics.addRenderPassToBack(pass);
-            }
-            if(!queriesPrepared)
+        if(ReadSmokeEnvironmentFlag("NWB_REFLECTION_SMOKE_TIMING") || this.m_hasSpatialOwnerProbe || this.m_hasCpuTimingProbe){
+            PerfCaptureOptions captureOptions = SmokePerfGpuTimingOnly();
+            captureOptions.cpuTiming = this.m_hasCpuTimingProbe;
+            this.m_context.setPerfCapture(captureOptions);
+            if(!this.m_timingRenderPass.start(extentWidth, extentHeight))
                 return false;
-            this.m_timingRenderPassRegistered = true;
             [essential] info("ReflectionSmokeProject: timing render unfocused 1");
         }
 
@@ -1165,48 +1003,41 @@ class ReflectionSmokeProjectImpl : IProjectEntryCallbacks{
     }
 
     public void onShutdown()override{
-        native(mut cpuProbe = this.m_cpuTimingProbe){
-            if(cpuProbe)
-                cpuProbe->finish();
-        }
+        if(this.m_hasCpuTimingProbe)
+            this.m_cpuTimingProbe.finish();
         this.destroyWorld();
         [essential] info("ReflectionSmokeProject: shutdown");
     }
 
     public b8 onUpdate(in f32 delta)override{
-        b8 hasCpuProbe = false;
-        b8 probesOk = true;
         const ReflectionStatistics latestBefore = this.m_statisticsReporter.latest();
-        native(
-            in latestBefore,
-            mut ctx = this.m_context,
-            mut cfg = this.m_configuration,
-            mut cpuProbe = this.m_cpuTimingProbe,
-            mut csgProbe = this.m_csgContextProbe,
-            mut capture = this.m_framebufferCapture,
-            mut spatialProbe = this.m_spatialOwnerProbe,
-            mut hasCpuProbe,
-            mut probesOk
-        ){
-            hasCpuProbe = static_cast<b8>(cpuProbe);
-            if(cpuProbe && !cpuProbe->update())
-                probesOk = false;
-            else if(csgProbe && !csgProbe->sampleSynchronizedFrame(latestBefore))
-                probesOk = false;
-            else{
-                if(capture)
-                    capture->update();
-                if(spatialProbe && !spatialProbe->update(latestBefore, ctx.gpuTimingView(), cfg.settingsData))
-                    probesOk = false;
-            }
+        if(this.m_hasCpuTimingProbe){
+            if(!this.m_cpuTimingProbe.update())
+                return false;
         }
-        if(!probesOk)
-            return false;
+        else if(this.m_hasCsgContextProbe){
+            if(!this.m_csgContextProbe.sampleSynchronizedFrame(
+                latestBefore,
+                SmokeWorldRef(this.m_world),
+                SmokeRendererSystemRef(SmokeWorldRef(this.m_world))
+            ))
+                return false;
+        }
+        else{
+            UpdateSmokeFramebufferCapture(this.m_framebufferCapture);
+            if(this.m_hasSpatialOwnerProbe && !this.m_spatialOwnerProbe.update(
+                latestBefore,
+                this.m_context.gpuTimingView(),
+                this.m_configuration.settingsData,
+                SmokeRendererSystemRef(SmokeWorldRef(this.m_world))
+            ))
+                return false;
+        }
 
         this.reportCsgSlicePackets();
         this.updateRoughnessScene();
         this.updateFeedbackScene();
-        if(!hasCpuProbe){
+        if(!this.m_hasCpuTimingProbe){
             this.m_fpsProbe.recordFrame(delta);
             this.m_gpuPassTimingProbe.recordFrame(delta, this.m_context.gpuTimingView());
         }
@@ -1215,53 +1046,21 @@ class ReflectionSmokeProjectImpl : IProjectEntryCallbacks{
         f32 tickDelta = delta;
         if(fixedDelta > 0.0f)
             tickDelta = fixedDelta;
-        b8 ticked = false;
-        native(in tickDelta, mut world = this.m_world, mut ticked){
-            ticked = TickSmokeWorld(tickDelta, *world);
-        }
-        if(!ticked)
+        if(!TickSmokeWorld(tickDelta, SmokeWorldRef(this.m_world)))
             return false;
         this.reportReflectionStatistics();
         return true;
     }
 
     public b8 shouldCapture(in u64 graphicsFrame)const{
-        b8 hasSpatial = false;
-        b8 spatialShould = false;
-        b8 fbMutCase = false;
-        b8 roughMutCase = false;
-        b8 roughDeforming = false;
-        native(
-            in graphicsFrame,
-            in spatialProbe = this.m_spatialOwnerProbe,
-            in fbScene = this.m_feedbackScene,
-            in roughScene = this.m_roughnessScene,
-            mut hasSpatial,
-            mut spatialShould,
-            mut fbMutCase,
-            mut roughMutCase,
-            mut roughDeforming
-        ){
-            if(spatialProbe){
-                hasSpatial = true;
-                spatialShould = spatialProbe->shouldCapture(graphicsFrame);
-            }
-            if(fbScene)
-                fbMutCase = fbScene->mutationCase();
-            if(roughScene){
-                roughMutCase = roughScene->mutationCase();
-                roughDeforming = roughScene->deforming();
-            }
-        }
-
-        if(hasSpatial)
-            return spatialShould;
-        if(fbMutCase)
+        if(this.m_hasSpatialOwnerProbe)
+            return this.m_spatialOwnerProbe.shouldCapture(graphicsFrame);
+        if(this.m_hasFeedbackScene && this.m_feedbackScene.mutationCase())
             return this.m_mutationApplied && graphicsFrame == this.m_mutationGraphicsFrame;
         const ReflectionStatistics latest = this.m_statisticsReporter.latest();
         if(this.m_configuration.feedbackCapture())
             return latest.feedbackSequence >= this.m_configuration.targetSamples();
-        if(roughMutCase){
+        if(this.m_hasRoughnessScene && this.m_roughnessScene.mutationCase()){
             if(!this.m_mutationApplied)
                 return false;
             if(this.m_configuration.postResetSamples() == 1u)
@@ -1269,29 +1068,25 @@ class ReflectionSmokeProjectImpl : IProjectEntryCallbacks{
             return latest.historyStartGraphicsFrame == this.m_mutationGraphicsFrame
                 && latest.historySampleCount >= this.m_configuration.postResetSamples();
         }
+        const b8 roughDeforming = this.m_hasRoughnessScene && this.m_roughnessScene.deforming();
         if(this.m_configuration.settings().temporalEnabled && !roughDeforming)
             return latest.historySampleCount >= this.m_configuration.targetSamples();
         return latest.frameIndex >= Max(this.m_configuration.targetSamples(), 3u);
+    }
+
+    public b8 shouldCaptureFrame(in u64 graphicsFrame)const{
+        return this.shouldCapture(graphicsFrame);
     }
 
     private void updateRoughnessScene(){
         const ReflectionStatistics latest = this.m_statisticsReporter.latest();
         if(this.m_mutationApplied || latest.sequence == 0u)
             return;
-
-        b8 activeMutCase = false;
-        b8 deforming = false;
-        native(in roughScene = this.m_roughnessScene, mut activeMutCase, mut deforming){
-            if(roughScene && roughScene->mutationCase()){
-                activeMutCase = true;
-                deforming = roughScene->deforming();
-            }
-        }
-        if(!activeMutCase)
+        if(!this.m_hasRoughnessScene || !this.m_roughnessScene.mutationCase())
             return;
 
         b8 warmed = latest.historySampleCount >= 32u;
-        if(deforming || !this.m_configuration.settings().temporalEnabled)
+        if(this.m_roughnessScene.deforming() || !this.m_configuration.settings().temporalEnabled)
             warmed = latest.frameIndex >= 32u;
         if(!warmed)
             return;
@@ -1299,18 +1094,11 @@ class ReflectionSmokeProjectImpl : IProjectEntryCallbacks{
         this.m_mutationGraphicsFrame = this.m_context.graphics.getFrameIndex();
         if(this.m_configuration.freshFinalState()){
             this.m_configuration.settingsData.samplingSeed = this.m_configuration.requestedSeed();
-            b8 resetOk = false;
-            native(in settings = this.m_configuration.settingsData, mut world = this.m_world, mut resetOk){
-                auto& renderer = *MakeNotNull(world->getSystem<Impl::RendererSystem>());
-                resetOk = renderer.setReflectionSettings(settings);
-            }
+            const b8 resetOk = SmokeRendererSystemRef(SmokeWorldRef(this.m_world)).setReflectionSettings(this.m_configuration.settingsData);
             [essential] assert(resetOk, "ReflectionSmokeProject: fresh seed reset failed");
         }
         else{
-            b8 mutOk = false;
-            native(mut roughScene = this.m_roughnessScene, mut mutOk){
-                mutOk = roughScene->applyMutation();
-            }
+            const b8 mutOk = this.m_roughnessScene.applyMutation(SmokeWorldRef(this.m_world));
             [essential] assert(mutOk, "ReflectionSmokeProject: scene mutation failed");
         }
         this.m_mutationApplied = true;
@@ -1328,11 +1116,7 @@ class ReflectionSmokeProjectImpl : IProjectEntryCallbacks{
     private void updateFeedbackScene(){
         if(this.m_mutationApplied)
             return;
-        b8 activeMutCase = false;
-        native(in fbScene = this.m_feedbackScene, mut activeMutCase){
-            activeMutCase = fbScene && fbScene->mutationCase();
-        }
-        if(!activeMutCase)
+        if(!this.m_hasFeedbackScene || !this.m_feedbackScene.mutationCase())
             return;
 
         const ReflectionStatistics latest = this.m_statisticsReporter.latest();
@@ -1345,18 +1129,11 @@ class ReflectionSmokeProjectImpl : IProjectEntryCallbacks{
         this.m_mutationGraphicsFrame = this.m_context.graphics.getFrameIndex();
         if(this.m_configuration.freshFinalState()){
             this.m_configuration.settingsData.samplingSeed = this.m_configuration.requestedSeed();
-            b8 resetOk = false;
-            native(in settings = this.m_configuration.settingsData, mut world = this.m_world, mut resetOk){
-                auto& renderer = *MakeNotNull(world->getSystem<Impl::RendererSystem>());
-                resetOk = renderer.setReflectionSettings(settings);
-            }
+            const b8 resetOk = SmokeRendererSystemRef(SmokeWorldRef(this.m_world)).setReflectionSettings(this.m_configuration.settingsData);
             [essential] assert(resetOk, "ReflectionSmokeProject: fresh feedback reset failed");
         }
         else{
-            b8 mutOk = false;
-            native(mut fbScene = this.m_feedbackScene, mut mutOk){
-                mutOk = fbScene->applyMutation();
-            }
+            const b8 mutOk = this.m_feedbackScene.applyMutation(SmokeWorldRef(this.m_world));
             [essential] assert(mutOk, "ReflectionSmokeProject: feedback mutation failed");
         }
         this.m_mutationApplied = true;
@@ -1367,62 +1144,40 @@ class ReflectionSmokeProjectImpl : IProjectEntryCallbacks{
     }
 
     private void reportCsgSlicePackets(){
-        if(!this.m_csgOpticalCase || !this.m_configuration.settings().diagnosticsEnabled)
-            return;
-        b8 hasCsgProbe = false;
-        native(in csgProbe = this.m_csgContextProbe, mut hasCsgProbe){
-            hasCsgProbe = static_cast<b8>(csgProbe);
-        }
-        if(hasCsgProbe)
+        if(!this.m_csgOpticalCase || !this.m_configuration.settings().diagnosticsEnabled || this.m_hasCsgContextProbe)
             return;
         const u64 frame = this.m_context.graphics.getFrameIndex();
         if(frame < 3u || frame - 1u == this.m_slicePacketSourceFrame)
             return;
         this.m_slicePacketSourceFrame = frame - 1u;
-        native(
-            in rayCap = this.m_csgSliceRayCapacity,
-            in srcFrame = this.m_slicePacketSourceFrame,
-            mut ctx = this.m_context,
-            mut world = this.m_world
-        ){
-            auto& renderer = *MakeNotNull(world->getSystem<Impl::RendererSystem>());
-            ReportReflectionSlicePackets(rayCap, srcFrame, true, ctx, renderer);
-        }
+        ReportReflectionSlicePackets(
+            this.m_csgSliceRayCapacity,
+            this.m_slicePacketSourceFrame,
+            true,
+            this.m_context,
+            SmokeRendererSystemRef(SmokeWorldRef(this.m_world))
+        );
     }
 
     private void reportReflectionStatistics(){
-        b8 polled = false;
-        native(mut reporter = this.m_statisticsReporter, mut world = this.m_world, mut polled){
-            auto& renderer = *MakeNotNull(world->getSystem<Impl::RendererSystem>());
-            polled = reporter.poll(renderer);
-        }
-        if(!polled)
+        if(!this.m_statisticsReporter.poll(SmokeRendererSystemRef(SmokeWorldRef(this.m_world))))
             return;
         if(!this.m_extendedCase && !this.m_configuration.feedbackCapture())
             return;
 
         const ReflectionStatistics statistics = this.m_statisticsReporter.latest();
-        native(
-            in statistics,
-            in spatialProbe = this.m_spatialOwnerProbe,
-            mut capture = this.m_framebufferCapture
-        ){
-            if(
-                capture
-                && capture->captureReady()
-                && statistics.graphicsFrameIndex >= capture->capturedGraphicsFrameIndex()
-                && (!spatialProbe || spatialProbe->canFinish(statistics, capture->capturedGraphicsFrameIndex()))
-            )
-                capture->finish();
-        }
+        if(!SmokeFramebufferCaptureReady(this.m_framebufferCapture))
+            return;
+        const u64 capturedFrame = SmokeFramebufferCapturedFrameIndex(this.m_framebufferCapture);
+        if(statistics.graphicsFrameIndex < capturedFrame)
+            return;
+        if(this.m_hasSpatialOwnerProbe && !this.m_spatialOwnerProbe.canFinish(statistics, capturedFrame))
+            return;
+        FinishSmokeFramebufferCapture(this.m_framebufferCapture);
     }
 
     private b8 configureFramebufferCapture(){
-        b8 hasCsgProbe = false;
-        native(in csgProbe = this.m_csgContextProbe, mut hasCsgProbe){
-            hasCsgProbe = static_cast<b8>(csgProbe);
-        }
-        if(hasCsgProbe)
+        if(this.m_hasCsgContextProbe)
             return true;
 
         FramebufferCaptureOptions options = FramebufferCaptureOptions();
@@ -1434,13 +1189,7 @@ class ReflectionSmokeProjectImpl : IProjectEntryCallbacks{
                     return false;
                 }
             }
-            native(mut options){
-                options.quitWhenReady = false;
-                options.predicateContext = this;
-                options.shouldCapture = +[](void* const owner, const u64 graphicsFrame)noexcept -> b8{
-                    return MakeNotNull(static_cast<ReflectionSmokeProjectImpl*>(owner))->shouldCapture(graphicsFrame);
-                };
-            }
+            options = MakeSmokeCaptureOptions(this, 0u, 0u, false);
         }
         SmokeCaptureFactory captureFactory = SmokeCaptureFactory(this.m_context);
         Expected<UniquePtr<FramebufferCapture>> capture = captureFactory.configure(
@@ -1450,36 +1199,20 @@ class ReflectionSmokeProjectImpl : IProjectEntryCallbacks{
         );
         if(!capture.has_value())
             return false;
-        native(mut dstCapture = this.m_framebufferCapture, mut capture){
-            dstCapture = Move(*capture);
-        }
+        MoveSmokeFramebufferCapture(capture.value(), this.m_framebufferCapture);
         return true;
     }
 
     private void destroyWorld(){
-        native(mut csgProbe = this.m_csgContextProbe){
-            csgProbe.reset();
-        }
-        if(this.m_timingRenderPassRegistered){
-            this.m_context.graphics.removeRenderPass(this.m_timingRenderPass);
-            this.m_timingRenderPassRegistered = false;
-        }
-        b8 skinnedWorld = false;
-        native(in world = this.m_world, mut skinnedWorld){
-            skinnedWorld = world.owner() && world->getSystem<Impl::MeshSkinningSystem>() != nullptr;
-        }
-        if(skinnedWorld)
+        this.m_csgContextProbe.stop();
+        this.m_hasCsgContextProbe = false;
+        this.m_timingRenderPass.stop();
+        if(this.m_world.owner() && HasSmokeMeshSkinningSystem(SmokeWorldRef(this.m_world)))
             DestroySmokeSkinnedRenderWorld(this.m_context, this.m_world);
         else
             DestroySmokeRenderWorld(this.m_context, this.m_world);
-
-        native(mut capture = this.m_framebufferCapture, mut spatialProbe = this.m_spatialOwnerProbe){
-            if(capture){
-                capture->stop();
-                capture.reset();
-            }
-            spatialProbe.reset();
-        }
+        StopAndResetSmokeFramebufferCapture(this.m_framebufferCapture);
+        this.m_hasSpatialOwnerProbe = false;
     }
 
     private mut ProjectRuntimeContext m_context;
@@ -1490,11 +1223,11 @@ class ReflectionSmokeProjectImpl : IProjectEntryCallbacks{
     private GpuPassTimingProbe m_gpuPassTimingProbe;
     private ReflectionStatisticsReporter m_statisticsReporter = ReflectionStatisticsReporter();
     private ReflectionSmokeConfiguration m_configuration = ReflectionSmokeConfiguration();
-    private UniquePtr<ReflectionRoughnessScene> m_roughnessScene = UniquePtr<ReflectionRoughnessScene>();
-    private UniquePtr<ReflectionFeedbackScene> m_feedbackScene = UniquePtr<ReflectionFeedbackScene>();
-    private UniquePtr<ReflectionSpatialOwnerProbe> m_spatialOwnerProbe = UniquePtr<ReflectionSpatialOwnerProbe>();
-    private UniquePtr<ReflectionCsgContextProbe> m_csgContextProbe = UniquePtr<ReflectionCsgContextProbe>();
-    private UniquePtr<ReflectionCpuTimingProbe> m_cpuTimingProbe = UniquePtr<ReflectionCpuTimingProbe>();
+    private ReflectionRoughnessScene m_roughnessScene;
+    private ReflectionFeedbackScene m_feedbackScene = ReflectionFeedbackScene();
+    private ReflectionSpatialOwnerProbe m_spatialOwnerProbe;
+    private ReflectionCsgContextProbe m_csgContextProbe;
+    private ReflectionCpuTimingProbe m_cpuTimingProbe;
     private u64 m_slicePacketSourceFrame = ~cast<u64>(0u);
     private u64 m_mutationGraphicsFrame = ~cast<u64>(0u);
     private u32 m_csgSliceRayCapacity = 0u;
@@ -1506,7 +1239,11 @@ class ReflectionSmokeProjectImpl : IProjectEntryCallbacks{
     private b8 m_furnace = false;
     private b8 m_glassRoughnessCase = false;
     private b8 m_mutationApplied = false;
-    private b8 m_timingRenderPassRegistered = false;
+    private b8 m_hasRoughnessScene = false;
+    private b8 m_hasFeedbackScene = false;
+    private b8 m_hasSpatialOwnerProbe = false;
+    private b8 m_hasCsgContextProbe = false;
+    private b8 m_hasCpuTimingProbe = false;
 }
 
 
@@ -1521,12 +1258,7 @@ native{
 
 
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
-    NWB::Core::Alloc::ScratchArena arena(Tests::Smoke::s_SmokeEnvironmentArena);
-    const auto extent = Tests::Smoke::ReadSmokeEnvironmentText(arena, "NWB_REFLECTION_SMOKE_EXTENT");
-    if(!extent || *extent == "native")
-        return { 960, 720 };
-    NWB_FATAL_ASSERT_MSG(*extent == "npot", NWB_TEXT("ReflectionSmokeProject: extent must be native or npot"));
-    return { 953, 713 };
+    return NWB::Tests::Smoke::QueryReflectionSmokeFrameClientSize();
 }
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{

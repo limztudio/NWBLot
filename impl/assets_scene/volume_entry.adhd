@@ -16,7 +16,6 @@ native{
 
 
 #include <impl/assets_scene/cook.adhd.h>
-#include <impl/assets_scene/cook_component_metadata.adhd.h>
 
 #include <impl/assets_scene/component_assets.adhd.h>
 

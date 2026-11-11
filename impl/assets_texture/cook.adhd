@@ -114,6 +114,58 @@ b8 IsValidCubeTextureResolution(in b8 isCubeDimension, in u32 width, in u32 heig
     return !isCubeDimension || width == height;
 }
 
+Expected<u32> ValidateTextureUnsignedField(
+    in Path nwbFilePath,
+    in StringView fieldName,
+    in b8 present,
+    in b8 isInteger,
+    in i64 rawValue,
+    in u32 minimum,
+    in u32 maximum
+){
+    if(!present){
+        error("{} '{}': field '{}' is required", s_TextureDiagnosticPrefix, PathToString(nwbFilePath), fieldName);
+        return MakeUnexpected(Failure());
+    }
+    if(!isInteger || !IsValidTextureUnsignedFieldValue(rawValue, minimum, maximum)){
+        error("{} '{}': field '{}' must be an integer in [{}, {}]", s_TextureDiagnosticPrefix, PathToString(nwbFilePath), fieldName, minimum, maximum);
+        return MakeUnexpected(Failure());
+    }
+    return cast<u32>(rawValue);
+}
+
+b8 ValidateTextureResolutionListCount(in Path nwbFilePath, in b8 isList, in usize listSize, in usize expectedCount){
+    if(isList && listSize == expectedCount)
+        return true;
+
+    error("{} '{}': resolution must contain exactly {} positive integer dimensions", s_TextureDiagnosticPrefix, PathToString(nwbFilePath), expectedCount);
+    return false;
+}
+
+Expected<u32> ValidateTextureResolutionComponent(in Path nwbFilePath, in usize component, in b8 isInteger, in i64 rawValue){
+    if(isInteger && IsPositiveTextureResolutionDimension(rawValue))
+        return cast<u32>(rawValue);
+
+    error("{} '{}': resolution component {} must be a positive u32 integer", s_TextureDiagnosticPrefix, PathToString(nwbFilePath), component);
+    return MakeUnexpected(Failure());
+}
+
+b8 ValidateCubeTextureSquareResolution(in Path nwbFilePath, in b8 isCubeDimension, in u32 width, in u32 height){
+    if(IsValidCubeTextureResolution(isCubeDimension, width, height))
+        return true;
+
+    error("{} '{}': cube resolution must be square", s_TextureDiagnosticPrefix, PathToString(nwbFilePath));
+    return false;
+}
+
+b8 ValidateTextureCompleteMipChain(in Path nwbFilePath, in b8 hasCompleteMipCount){
+    if(hasCompleteMipCount)
+        return true;
+
+    error("{} '{}': resolution cannot describe a complete mip chain", s_TextureDiagnosticPrefix, PathToString(nwbFilePath));
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -168,37 +220,30 @@ static Core::Assets::AssetPairedSidecarRuleAutoRegistrar s_TexturePairedSidecarR
 
 [[nodiscard]] static Expected<u32> ReadUnsignedField(const Path& nwbFilePath, const Value& asset, const AStringView fieldName, const u32 minimum, const u32 maximum){
     const Value* const field = asset.findField(fieldName);
-    if(!field){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required"), ConvertString(s_TextureDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
-        return MakeUnexpected(Failure{});
-    }
-    if(!field->isInteger() || !IsValidTextureUnsignedFieldValue(field->asInteger(), minimum, maximum)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be an integer in [{}, {}]"), ConvertString(s_TextureDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName), minimum, maximum);
-        return MakeUnexpected(Failure{});
-    }
-    return static_cast<u32>(field->asInteger());
+    const b8 present = field != nullptr;
+    const b8 isInteger = present && field->isInteger();
+    const i64 rawValue = isInteger ? field->asInteger() : 0;
+    return ValidateTextureUnsignedField(nwbFilePath, fieldName, present, isInteger, rawValue, minimum, maximum);
 }
 
 [[nodiscard]] static Expected<TextureResolution> ReadResolution(const Path& nwbFilePath, const Value& asset, const TextureDimension::Enum dimension){
     const Value* const field = asset.findField(s_TextureResolutionField);
     const usize componentCount = ExpectedTextureResolutionComponentCount(dimension == TextureDimension::Texture3D);
-    if(!field || !field->isList() || field->asList().size() != componentCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': resolution must contain exactly {} positive integer dimensions"), ConvertString(s_TextureDiagnosticPrefix), PathToString<tchar>(nwbFilePath), componentCount);
+    const b8 isList = field != nullptr && field->isList();
+    const usize listSize = isList ? field->asList().size() : 0u;
+    if(!ValidateTextureResolutionListCount(nwbFilePath, isList, listSize, componentCount))
         return MakeUnexpected(Failure{});
-    }
     Array<u32, s_VolumeResolutionComponentCount> dimensions{ 0u, 0u, 1u };
     for(usize component = 0u; component < componentCount; ++component){
         const Value& value = field->asList()[component];
-        if(!value.isInteger() || !IsPositiveTextureResolutionDimension(value.asInteger())){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': resolution component {} must be a positive u32 integer"), ConvertString(s_TextureDiagnosticPrefix), PathToString<tchar>(nwbFilePath), component);
+        const b8 isInteger = value.isInteger();
+        const Expected<u32> parsed = ValidateTextureResolutionComponent(nwbFilePath, component, isInteger, isInteger ? value.asInteger() : 0);
+        if(!parsed)
             return MakeUnexpected(Failure{});
-        }
-        dimensions[component] = static_cast<u32>(value.asInteger());
+        dimensions[component] = *parsed;
     }
-    if(!IsValidCubeTextureResolution(dimension == TextureDimension::TextureCube, dimensions[0u], dimensions[1u])){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': cube resolution must be square"), ConvertString(s_TextureDiagnosticPrefix), PathToString<tchar>(nwbFilePath));
+    if(!ValidateCubeTextureSquareResolution(nwbFilePath, dimension == TextureDimension::TextureCube, dimensions[0u], dimensions[1u]))
         return MakeUnexpected(Failure{});
-    }
     return TextureResolution(dimensions[0u], dimensions[1u], dimensions[2u]);
 }
 
@@ -309,10 +354,8 @@ Expected<TextureCookEntry> ParseTextureCookMetadata(const Name virtualPath, cons
     if(!resolution)
         return MakeUnexpected(Failure{});
     const auto completeMipCount = TextureFormat::ComputeCompleteMipCount(*dimension, resolution->width, resolution->height, resolution->depth);
-    if(!completeMipCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': resolution cannot describe a complete mip chain"), ConvertString(s_TextureDiagnosticPrefix), PathToString<tchar>(nwbFilePath));
+    if(!ValidateTextureCompleteMipChain(nwbFilePath, completeMipCount.has_value()))
         return MakeUnexpected(Failure{});
-    }
 
     TextureCookEntry entry(arena);
     if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_TextureDiagnosticPrefix, entry))

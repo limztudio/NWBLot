@@ -2,6 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_mesh/cook_types.adhd>
+#include <impl/assets_mesh/stream_validation.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -136,22 +143,9 @@ Expected<NotNull<const Core::Metascript::Value*>> MeshCookMetadata::FindRequired
 
 template<typename PathArenaT>
 void MeshCookMetadata::LogMetadataFiniteF32ValueFailure(const ::Path<PathArenaT>& nwbFilePath, const TStringView metaKind, const AStringView label, const MetadataF32ValueFailure::Enum failure){
-    switch(failure){
-    case MetadataF32ValueFailure::NotNumeric:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only numeric values"), metaKind, PathToString<tchar>(nwbFilePath), ConvertString(label));
-        return;
-
-    case MetadataF32ValueFailure::NonFinite:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only finite numeric values"), metaKind, PathToString<tchar>(nwbFilePath), ConvertString(label));
-        return;
-
-    case MetadataF32ValueFailure::OutOfRange:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a value outside the f32 range"), metaKind, PathToString<tchar>(nwbFilePath), ConvertString(label));
-        return;
-
-    default:
-        return;
-    }
+    const AStringView reason = ResolveMetadataF32ValueFailureReason(failure);
+    if(!reason.empty())
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' {}"), metaKind, PathToString<tchar>(nwbFilePath), ConvertString(label), ConvertString(reason));
 }
 
 template<usize ComponentCount, typename PathArenaT>
@@ -224,22 +218,9 @@ b8 MeshCookMetadata::FillMetadataFloatListField(
 
 template<typename PathArenaT>
 void MeshCookMetadata::LogMetadataU32ValueFailure(const ::Path<PathArenaT>& nwbFilePath, const TStringView metaKind, const AStringView label, const MetadataU32ValueFailure::Enum failure){
-    switch(failure){
-    case MetadataU32ValueFailure::NotNumeric:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only integer values"), metaKind, PathToString<tchar>(nwbFilePath), ConvertString(label));
-        return;
-
-    case MetadataU32ValueFailure::NonIntegerOrNegative:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a non-integer or negative value"), metaKind, PathToString<tchar>(nwbFilePath), ConvertString(label));
-        return;
-
-    case MetadataU32ValueFailure::OutOfRange:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a value that exceeds u32"), metaKind, PathToString<tchar>(nwbFilePath), ConvertString(label));
-        return;
-
-    default:
-        return;
-    }
+    const AStringView reason = ResolveMetadataU32ValueFailureReason(failure);
+    if(!reason.empty())
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' {}"), metaKind, PathToString<tchar>(nwbFilePath), ConvertString(label), ConvertString(reason));
 }
 
 
@@ -421,8 +402,9 @@ public:
             SkinInfluence4 influence{};
             Float4U parsedWeights{};
             for(usize componentIndex = 0u; componentIndex < s_SkinInfluenceJointCount; ++componentIndex){
-                const auto parsedJoint = MeshCookMetadata::ValidateMetadataU32Value(joints->asList()[componentIndex]);
-                if(!parsedJoint || *parsedJoint > static_cast<u32>(Limit<u16>::s_Max)){
+                const Core::Metascript::Value& jointValue = joints->asList()[componentIndex];
+                const auto parsedJoint = TryValidateSkinInfluenceJointIndex(jointValue.isNumeric(), jointValue.isNumeric() ? jointValue.toDouble() : 0.0);
+                if(!parsedJoint){
                     NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}[{}]' must be a u16 integer"), metaKind, PathToString<tchar>(nwbFilePath), ConvertString(s_SkinJointsField), componentIndex);
                     return false;
                 }
@@ -431,17 +413,16 @@ public:
                     NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}[{}]' is non-finite or outside f32 range"), metaKind, PathToString<tchar>(nwbFilePath), ConvertString(s_SkinWeightsField), componentIndex);
                     return false;
                 }
-                influence.joint[componentIndex] = static_cast<u16>(*parsedJoint);
+                influence.joint[componentIndex] = *parsedJoint;
                 parsedWeights.raw[componentIndex] = *parsedWeight;
             }
 
             if(normalizeWeights){
                 const auto normalizedWeights = TryNormalizeSkinInfluenceWeights(parsedWeights);
                 if(!normalizedWeights){
-                    if(normalizedWeights.error() == SkinInfluenceWeightFailure::NegativeWeight)
-                        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': influences[{}].weights must be finite and non-negative"), metaKind, PathToString<tchar>(nwbFilePath), influenceIndex);
-                    else if(normalizedWeights.error() == SkinInfluenceWeightFailure::ZeroTotalWeight)
-                        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': influences[{}].weights must contain a positive total"), metaKind, PathToString<tchar>(nwbFilePath), influenceIndex);
+                    const AStringView reason = ResolveSkinInfluenceWeightFailureReason(normalizedWeights.error());
+                    if(!reason.empty())
+                        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': influences[{}].weights {}"), metaKind, PathToString<tchar>(nwbFilePath), influenceIndex, ConvertString(reason));
                     return false;
                 }
                 influence.weight = *normalizedWeights;
@@ -575,7 +556,7 @@ b8 MeshCookSourceStreams::ParseSourceVertexRefsInto(
     const ::Path<PathArenaT>& nwbFilePath,
     const Core::Metascript::Value& asset,
     const TStringView metaKind,
-    Core::Alloc::ScratchArena& scratchArena,
+    Core::Alloc::ScratchArena&,
     VertexRefVectorT& outVertexRefs
 ){
     outVertexRefs.clear();
@@ -613,13 +594,8 @@ b8 MeshCookSourceStreams::ParseSourceVertexRefsInto(
         for(usize componentIndex = 0u; componentIndex < expectedComponentCount; ++componentIndex){
             const auto component = MeshCookMetadata::ValidateMetadataU32Value(components[componentIndex]);
             if(!component){
-                const ScratchString label = MeshCookMetadata::MakeIndexedLabel(s_MeshVertexRefsFieldNameView, vertexRefIndex, scratchArena);
-                ScratchString componentLabel{scratchArena};
-                componentLabel.reserve(label.size() + componentNames[componentIndex].size() + s_ComponentLabelExtraCharCount);
-                componentLabel.append(label.data(), label.size());
-                componentLabel += '.';
-                componentLabel.append(componentNames[componentIndex].data(), componentNames[componentIndex].size());
-                MeshCookMetadata::LogMetadataU32ValueFailure(nwbFilePath, metaKind, componentLabel, component.error());
+                const auto componentLabel = FormatMeshVertexRefComponentLabel(vertexRefIndex, componentNames[componentIndex]);
+                MeshCookMetadata::LogMetadataU32ValueFailure(nwbFilePath, metaKind, AStringView(componentLabel), component.error());
                 return false;
             }
             *componentValues[componentIndex] = *component;
@@ -645,17 +621,11 @@ b8 MeshCookSourceStreams::ValidateSourceStreamIndex(const ::Path<PathArenaT>& nw
 
 template<typename PathArenaT>
 b8 MeshCookSourceStreams::ValidateSourceIndexStream(const ::Path<PathArenaT>& nwbFilePath, const TStringView metaKind, const Span<const u32> indices, const usize vertexRefCount){
-    switch(ValidateSourceIndexStreamValues(indices, vertexRefCount)){
-    case SourceIndexStreamFailure::EmptyOrNotMultipleOfThree:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' must contain whole triangles"), metaKind, PathToString<tchar>(nwbFilePath));
-        return false;
-    case SourceIndexStreamFailure::IndexOutOfRange:
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' references an out-of-range vertex_ref"), metaKind, PathToString<tchar>(nwbFilePath));
-        return false;
-    case SourceIndexStreamFailure::None:
-    default:
+    const AStringView reason = ResolveSourceIndexStreamFailureReason(ValidateSourceIndexStreamValues(indices, vertexRefCount));
+    if(reason.empty())
         return true;
-    }
+    NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': {}"), metaKind, PathToString<tchar>(nwbFilePath), ConvertString(reason));
+    return false;
 }
 
 template<typename VertexRefT, typename PathArenaT>
@@ -670,16 +640,22 @@ b8 MeshCookSourceStreams::ValidateSourceVertexRefStreams(
     const usize colorCount
 ){
     for(const VertexRefT& ref : vertexRefs){
-        if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, s_VertexRefPositionName, ref.position, positionCount))
+        const AStringView failedStream = FindOutOfRangeVertexRefStreamName(
+            ref.position,
+            ref.normal,
+            ref.tangent,
+            ref.uv0,
+            ref.color,
+            positionCount,
+            normalCount,
+            tangentCount,
+            uv0Count,
+            colorCount
+        );
+        if(!failedStream.empty()){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': vertex_ref {} index is out of range"), metaKind, PathToString<tchar>(nwbFilePath), ConvertString(failedStream));
             return false;
-        if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, s_VertexRefNormalName, ref.normal, normalCount))
-            return false;
-        if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, s_VertexRefTangentName, ref.tangent, tangentCount))
-            return false;
-        if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, s_VertexRefUvName, ref.uv0, uv0Count))
-            return false;
-        if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, s_VertexRefColorName, ref.color, colorCount))
-            return false;
+        }
     }
     return true;
 }

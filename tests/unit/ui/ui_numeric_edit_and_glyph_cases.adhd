@@ -196,13 +196,13 @@ struct FormattedNumericBuffer{
     }
 };
 
-[[nodiscard]] inline FormattedNumericBuffer FormatIntegerBuffer(const i64 value)noexcept{
+[[nodiscard]] NWB_INLINE FormattedNumericBuffer FormatIntegerBuffer(const i64 value)noexcept{
     FormattedNumericBuffer out;
     out.result = FormatI64(value, out.storage);
     return out;
 }
 
-[[nodiscard]] inline FormattedNumericBuffer FormatFloatBuffer(const f64 value)noexcept{
+[[nodiscard]] NWB_INLINE FormattedNumericBuffer FormatFloatBuffer(const f64 value)noexcept{
     FormattedNumericBuffer out;
     out.result = FormatF64(value, out.storage);
     return out;
@@ -340,18 +340,7 @@ public:
 
 
 private:
-    [[nodiscard]] b8 mutate(EditModel& draft)const{
-        const usize anchor = draft.anchor();
-        const usize caret = draft.caret();
-        if(mutation == EpochMutation::SelectionRoundTrip)
-            return draft.setSelection(0u, 0u) && draft.setSelection(anchor, caret);
-        if(mutation == EpochMutation::SameSelection)
-            return draft.setSelection(anchor, caret);
-        if(!draft.beginComposition() || !draft.updateComposition("IME", 0u, 3u))
-            return false;
-        draft.cancelComposition();
-        return true;
-    }
+    [[nodiscard]] b8 mutate(EditModel& draft)const;
 
 
 public:
@@ -417,6 +406,7 @@ using FloatLifetimeTests = __hidden_ui_numeric_model_lifetime_tests::FloatLifeti
 using UiNumericLifetimeGlobalArena = ::NWB::Core::Alloc::GlobalArena;
 using UiNumericLifetimeDraftSnapshot = ::NWB::UiNumericTests::DraftSnapshot;
 namespace UiNumericSelectionEpochMutation = __hidden_ui_numeric_selection_epoch_tests::EpochMutation;
+using UiNumericSelectionEpochMutationEnum = __hidden_ui_numeric_selection_epoch_tests::EpochMutation::Enum;
 using UiNumericSelectionEpochSource = __hidden_ui_numeric_selection_epoch_tests::SelectionEpochSource;
 using UiNumericSelectionEpochTests = __hidden_ui_numeric_selection_epoch_tests::UiNumericSelectionEpochTests;
 using UiPaintGlyphTests = __hidden_ui_paint_glyph_tests::UiPaintGlyphTests;
@@ -451,42 +441,50 @@ using ::NWB::Tests::UiCases::s_UiInputNameSprite;
 
 inline constexpr AStringView s_UiNumericParseEmbeddedNulDigits = __hidden_ui_numeric_parse_tests::s_EmbeddedNulDigits;
 
-[[nodiscard]] inline UiNumericFormatBuffer FormatUiNumericI64(const i64 value)noexcept{
+[[nodiscard]] NWB_INLINE UiNumericFormatBuffer FormatUiNumericI64(const i64 value)noexcept{
     return __hidden_ui_numeric_format_tests::FormatIntegerBuffer(value);
 }
-[[nodiscard]] inline UiNumericFormatBuffer FormatUiNumericF64(const f64 value)noexcept{
+[[nodiscard]] NWB_INLINE UiNumericFormatBuffer FormatUiNumericF64(const f64 value)noexcept{
     return __hidden_ui_numeric_format_tests::FormatFloatBuffer(value);
 }
-[[nodiscard]] inline ::ErrorCode MakeUiNumericValueTooLargeError()noexcept{
+[[nodiscard]] NWB_INLINE ::ErrorCode MakeUiNumericValueTooLargeError()noexcept{
     return ::MakeErrorCode(::ErrorCondition::value_too_large);
 }
-[[nodiscard]] inline ::ErrorCode MakeUiNumericInvalidArgumentError()noexcept{
+[[nodiscard]] NWB_INLINE ::ErrorCode MakeUiNumericInvalidArgumentError()noexcept{
     return ::MakeErrorCode(::ErrorCondition::invalid_argument);
 }
-[[nodiscard]] inline f64 UiNumericInfinityF64()noexcept{
+[[nodiscard]] NWB_INLINE f64 UiNumericInfinityF64()noexcept{
     return ::Limit<f64>::s_Infinity;
 }
-[[nodiscard]] inline f64 UiNumericQuietNaNF64()noexcept{
+[[nodiscard]] NWB_INLINE f64 UiNumericQuietNaNF64()noexcept{
     return ::Limit<f64>::s_QuietNaN;
 }
 
-[[nodiscard]] inline b8 UiPaintGlyphHasPage(const SharedGlyphPage& page)noexcept{
+[[nodiscard]] NWB_INLINE b8 UiPaintGlyphHasPage(const SharedGlyphPage& page)noexcept{
     return static_cast<b8>(page != nullptr);
 }
-[[nodiscard]] inline usize UiPaintGlyphPageAddress(const SharedGlyphPage& page)noexcept{
+[[nodiscard]] NWB_INLINE usize UiPaintGlyphPageAddress(const SharedGlyphPage& page)noexcept{
     return reinterpret_cast<usize>(page.get());
 }
-[[nodiscard]] inline u64 UiPaintGlyphPageGeneration(const SharedGlyphPage& page)noexcept{
+[[nodiscard]] NWB_INLINE u64 UiPaintGlyphPageGeneration(const SharedGlyphPage& page)noexcept{
     return page->binding().generation;
 }
-[[nodiscard]] inline u8 UiPaintGlyphPagePixel(const SharedGlyphPage& page, const usize index)noexcept{
+[[nodiscard]] NWB_INLINE u8 UiPaintGlyphPagePixel(const SharedGlyphPage& page, const usize index)noexcept{
     return page->pixels()[index];
 }
-inline void TakeUiPaintGlyphPage(SharedGlyphPage& dst, ::Expected<SharedGlyphPage>& src)noexcept{
+NWB_INLINE void TakeUiPaintGlyphPage(SharedGlyphPage& dst, ::Expected<SharedGlyphPage>& src)noexcept{
     dst = ::Move(*src);
 }
-inline void TakeUiPaintGlyphPage(SharedGlyphPage& dst, ::Expected<SharedGlyphPage>&& src)noexcept{
+NWB_INLINE void TakeUiPaintGlyphPage(SharedGlyphPage& dst, ::Expected<SharedGlyphPage>&& src)noexcept{
     dst = ::Move(*src);
+}
+
+b8 MutateUiNumericSelectionEpochDraft(const UiNumericSelectionEpochMutationEnum& mutation, EditModel& draft)noexcept;
+};
+
+namespace __hidden_ui_numeric_selection_epoch_tests{
+NWB_INLINE b8 SelectionEpochSource::mutate(EditModel& draft)const{
+    return ::__hidden_ui_glyph_sdf_tests::MutateUiNumericSelectionEpochDraft(mutation, draft);
 }
 };
 
@@ -499,6 +497,19 @@ inline void TakeUiPaintGlyphPage(SharedGlyphPage& dst, ::Expected<SharedGlyphPag
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+b8 MutateUiNumericSelectionEpochDraft(in UiNumericSelectionEpochMutationEnum mutation, mut EditModel draft){
+    const usize anchor = draft.anchor();
+    const usize caret = draft.caret();
+    if(mutation == UiNumericSelectionEpochMutation::SelectionRoundTrip)
+        return draft.setSelection(0u, 0u) && draft.setSelection(anchor, caret);
+    if(mutation == UiNumericSelectionEpochMutation::SameSelection)
+        return draft.setSelection(anchor, caret);
+    if(!draft.beginComposition() || !draft.updateComposition("IME", 0u, 3u))
+        return false;
+    draft.cancelComposition();
+    return true;
+}
 
 const StringView s_UiNumericEditPanelKey = "panel";
 const StringView s_UiNumericEditIntegerKey = "integer";
@@ -870,7 +881,7 @@ void VerifyUiNumericEditBuilderTests_SharedTypedModelIsRejectedBeforeTheSecondHo
     ASSERT_TRUE(self.m_builder.integerEdit(s_UiNumericEditIntegerKey, self.m_integer, self.m_integerState).edit.valid);
     const auto duplicate = self.m_builder.integerEdit("duplicate", self.m_integer, another);
     EXPECT_FALSE(duplicate.edit.valid || duplicate.numeric.valid);
-    native(in another){ (void)another; }
+    EXPECT_EQ(another.modelGeneration, 0u);
     EXPECT_EQ(self.m_host.loans, 1u);
     EXPECT_TRUE(self.m_context.failed());
 }

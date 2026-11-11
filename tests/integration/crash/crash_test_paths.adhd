@@ -8,78 +8,32 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/alloc/general.h>
-#include <core/crash/package_names.h>
-#include <core/global.h>
-
-#include <global/filesystem/executable_paths.h>
-#include <global/filesystem/operations.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::CrashTestPaths{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using GlobalArena = Core::Alloc::GlobalArena;
-using CrashTestPath = ::Path<Core::Alloc::GlobalArena>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+const StringView s_DefaultRootDirectoryName = "crashes";
 const StringView s_TestStorageDirectoryName = "test_storage";
 const StringView s_SpoolDirectoryName = "spool";
 
-CrashTestPath CrashRootDirectory(mut GlobalArena arena){
-    CrashTestPath result = CrashTestPath(arena);
-    native(mut arena, mut result){
-        const auto executableDirectory = ExecutablePaths(arena).directory();
-        if(executableDirectory)
-            result = *executableDirectory / Core::Crash::PackageNames::s_DefaultRootDirectoryName;
-        else
-            result = CrashTestPath(arena, Core::Crash::PackageNames::s_DefaultRootDirectoryName);
-    }
-    return result;
+Path CrashRootDirectory(){
+    const ExecutablePaths executablePaths = ExecutablePaths();
+    const Expected<Path, ErrorCode> executableDirectory = executablePaths.directory();
+    if(executableDirectory.has_value())
+        return executableDirectory.value() / s_DefaultRootDirectoryName;
+    return Path(s_DefaultRootDirectoryName);
 }
 
-CrashTestPath TestRootDirectory(mut GlobalArena arena){
-    return CrashRootDirectory(arena) / s_TestStorageDirectoryName;
+Path TestRootDirectory(){
+    return CrashRootDirectory() / s_TestStorageDirectoryName;
 }
 
-CrashTestPath TestCaseDirectory(mut GlobalArena arena, in StringView testGroup){
-    return TestRootDirectory(arena) / testGroup;
+Path TestCaseDirectory(in StringView testGroup){
+    return TestRootDirectory() / testGroup;
 }
 
-CrashTestPath SpoolDirectory(mut GlobalArena arena, in StringView testGroup){
-    return TestCaseDirectory(arena, testGroup) / s_SpoolDirectoryName;
+Path SpoolDirectory(in StringView testGroup){
+    return TestCaseDirectory(testGroup) / s_SpoolDirectoryName;
 }
 
-void RemoveTestArtifacts(mut GlobalArena arena, in StringView testGroup){
-    EXPECT_TRUE(RemoveAllIfExists(TestCaseDirectory(arena, testGroup)));
+void RemoveTestArtifacts(in StringView testGroup){
+    EXPECT_TRUE(RemoveAllIfExists(TestCaseDirectory(testGroup)).has_value());
 }
 
 

@@ -66,7 +66,7 @@ using ReaderArena = Tests::TestArena<MetaRuntimeReaderArenaTag>;
 using Document = Core::Metascript::Document;
 using Value = Core::Metascript::Value;
 using ScopedTestTrace = Tests::ScopedTestTrace;
-[[nodiscard]] inline b8 TryDecodeCharLiteral(const MStringView text, i64& outValue)noexcept{
+[[nodiscard]] NWB_INLINE b8 TryDecodeCharLiteral(const MStringView text, i64& outValue)noexcept{
     return Core::Metascript::LiteralDecoder::TryDecodeCharLiteral(text, outValue);
 }
 
@@ -132,51 +132,51 @@ struct LerpMoveOnlyOperand{
     LerpMoveOnlyOperand operator+(LerpMoveOnlyOperand&& rhs)&&{ return LerpMoveOnlyOperand(value + rhs.value + 100); }
 };
 
-[[nodiscard]] inline b8 HasVariable(const Document& doc, const MStringView name)noexcept{
+[[nodiscard]] NWB_INLINE b8 HasVariable(const Document& doc, const MStringView name)noexcept{
     return doc.findVariable(name) != nullptr;
 }
 
-[[nodiscard]] inline const Value& RequireVariable(const Document& doc, const MStringView name)noexcept{
+[[nodiscard]] NWB_INLINE const Value& RequireVariable(const Document& doc, const MStringView name)noexcept{
     return *doc.findVariable(name);
 }
 
-[[nodiscard]] inline b8 HasDeclaration(const Document& doc, const MStringView name)noexcept{
+[[nodiscard]] NWB_INLINE b8 HasDeclaration(const Document& doc, const MStringView name)noexcept{
     return doc.findDeclaration(name) != nullptr;
 }
 
-[[nodiscard]] inline MStringView DeclarationType(const Document& doc, const MStringView name)noexcept{
+[[nodiscard]] NWB_INLINE MStringView DeclarationType(const Document& doc, const MStringView name)noexcept{
     return doc.findDeclaration(name)->type;
 }
 
-[[nodiscard]] inline MStringView DeclarationVariable(const Document& doc, const MStringView name)noexcept{
+[[nodiscard]] NWB_INLINE MStringView DeclarationVariable(const Document& doc, const MStringView name)noexcept{
     return doc.findDeclaration(name)->variable;
 }
 
-[[nodiscard]] inline b8 HasStruct(const Document& doc, const MStringView name)noexcept{
+[[nodiscard]] NWB_INLINE b8 HasStruct(const Document& doc, const MStringView name)noexcept{
     return doc.structs().find(name) != doc.structs().end();
 }
 
-[[nodiscard]] inline const Value& StructMetadata(const Document& doc, const MStringView name)noexcept{
+[[nodiscard]] NWB_INLINE const Value& StructMetadata(const Document& doc, const MStringView name)noexcept{
     return doc.structs().find(name).value();
 }
 
-[[nodiscard]] inline b8 HasValueField(const Value& value, const MStringView name)noexcept{
+[[nodiscard]] NWB_INLINE b8 HasValueField(const Value& value, const MStringView name)noexcept{
     return value.findField(name) != nullptr;
 }
 
-[[nodiscard]] inline const Value& RequireValueField(const Value& value, const MStringView name)noexcept{
+[[nodiscard]] NWB_INLINE const Value& RequireValueField(const Value& value, const MStringView name)noexcept{
     return *value.findField(name);
 }
 
-[[nodiscard]] inline MStringView DocumentErrorMessage(const Document& doc, const usize index)noexcept{
+[[nodiscard]] NWB_INLINE MStringView DocumentErrorMessage(const Document& doc, const usize index)noexcept{
     return MStringView(doc.errors()[index].message);
 }
 
-[[nodiscard]] inline Tests::TestAString MakeRepeatedCharString(const usize count, const char ch){
+[[nodiscard]] NWB_INLINE Tests::TestAString MakeRepeatedCharString(const usize count, const char ch){
     return Tests::TestAString(count, ch);
 }
 
-[[nodiscard]] inline Tests::TestAString BuildStructGrowthDocumentSource(){
+[[nodiscard]] NWB_INLINE Tests::TestAString BuildStructGrowthDocumentSource(){
     Tests::TestAString source("struct Description{ float value; }; Description runtime;\n");
     for(usize index = 0u; index < 128u; ++index){
         Array<char, s_DecimalTextBufferBytes> indexText = {};
@@ -236,11 +236,11 @@ inline constexpr Array<i32, 4u> s_FloatingPointRoundingModes = { FE_TONEAREST, F
 inline constexpr i32 s_FeAllExcept = FE_ALL_EXCEPT;
 inline constexpr i32 s_FeInvalid = FE_INVALID;
 
-[[nodiscard]] inline i32 RunGeneratedLerpMoveOnly(LerpMoveOnlyOperand& operand){
+[[nodiscard]] NWB_INLINE i32 RunGeneratedLerpMoveOnly(LerpMoveOnlyOperand& operand){
     return Tests::LerpMoveOnly(operand).value;
 }
 
-[[nodiscard]] inline i32 RunGeneratedLerpTemporary(){
+[[nodiscard]] NWB_INLINE i32 RunGeneratedLerpTemporary(){
     return Tests::LerpTemporary<LerpMoveOnlyOperand>().value;
 }
 
@@ -430,9 +430,7 @@ void VerifyMetascript_CrossArenaCopyAssignmentCopiesNestedValuesIntoDestinationA
     MetaRuntime_MakeSingleStringList(list, sourceArena.arena, text);
 
     Value destination = Value(destinationArena.arena);
-    native(mut destination, in source){
-        destination = source;
-    }
+    destination = source;
 
     EXPECT_TRUE(source.isMap());
     ASSERT_TRUE(HasValueField(destination, s_MetaRuntimeItemsField));
@@ -650,14 +648,7 @@ void VerifyMetascript_OversizedReaderResultIsRejectedBeforeUsingItsBuffer(){
 
 void VerifyAdhdReflection_RejectsInvalidContainerEntriesWithoutPublishingEmptyNames(){
     AdhdTestArena arena = AdhdTestArena();
-    Array<u8, 3u> invalidBytes = Array<u8, 3u>();
-    invalidBytes[0u] = cast<u8>('b');
-    invalidBytes[1u] = 0u;
-    invalidBytes[2u] = cast<u8>('d');
-    StringView invalid = "";
-    native(in invalidBytes, mut invalid){
-        invalid = AStringView(reinterpret_cast<const char*>(invalidBytes.data()), invalidBytes.size());
-    }
+    const StringView invalid = StringView("b\0d", 3u);
 
     Value input = Value(arena.arena);
     mut Value names = input.field("names");
@@ -707,12 +698,9 @@ void VerifyAdhdReflection_RejectsInvalidContainerEntriesWithoutPublishingEmptyNa
     ASSERT_EQ(value.enumAssets.size(), 1u);
 
     Vector<Name> dependencies = Vector<Name>();
-    b8 extracted = false;
-    native(in input, mut dependencies, mut extracted){
-        extracted = ReflectionContainerFixture::extractNwbAssetDependencies(input, [&](const Name& name){
-            dependencies.push_back(name);
-        });
-    }
+    const b8 extracted = value.extractNwbAssetDependencies(input, lambda[mut dependencies](in Name name) -> void{
+        dependencies.push_back(name);
+    });
     ASSERT_TRUE(extracted);
     ASSERT_EQ(dependencies.size(), 2u);
     b8 hasProjectAsset = false;
@@ -812,17 +800,8 @@ void VerifyAdhdCompiler_StringAndCompactSubstrPreserveOwnershipAndSingleEvaluati
 }
 
 void VerifyAdhdCompiler_HighByteFrontBackAndIndexMaintainUnsignedSemanticsAndMutation(){
-    Array<u8, 3u> viewBytes = Array<u8, 3u>();
-    viewBytes[0u] = 0x80u;
-    viewBytes[1u] = 0x7fu;
-    viewBytes[2u] = 0xffu;
-    StringView viewValue = "";
-    CompactString compactValue = CompactString("");
-    native(in viewBytes, mut viewValue, mut compactValue){
-        static constexpr char s_CompactBytes[] = { static_cast<char>(0x80u), static_cast<char>(0xfeu), '\0' };
-        viewValue = AStringView(reinterpret_cast<const char*>(viewBytes.data()), viewBytes.size());
-        compactValue = ACompactString(s_CompactBytes);
-    }
+    const StringView viewValue = StringView("\x80\x7F\xFF", 3u);
+    CompactString compactValue = CompactString("\x80\xFE");
     const u32 expected = (0x80u + 0xffu + 0x80u + 0xfeu)
         + cast<u32>(1000 + 0x80)
         + cast<u32>(2000 + 0xfe)
@@ -939,39 +918,26 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ADHD_GTEST(AdhdReflection, RejectsInvalidContainerEntriesWithoutPublishingEmptyNames, VerifyAdhdReflection_RejectsInvalidContainerEntriesWithoutPublishingEmptyNames)
-NWB_ADHD_GTEST(AdhdCompactString, SearchAndBoundariesUseCanonicalStoredText, VerifyAdhdCompactString_SearchAndBoundariesUseCanonicalStoredText)
-NWB_ADHD_GTEST(AdhdCompiler, ScalarLerpEvaluatesSideEffectOnce, VerifyAdhdCompiler_ScalarLerpEvaluatesSideEffectOnce)
-NWB_ADHD_GTEST(AdhdCompiler, ScalarLerpPreservesMoveOnlyOperandCategories, VerifyAdhdCompiler_ScalarLerpPreservesMoveOnlyOperandCategories)
-NWB_ADHD_GTEST(AdhdCompiler, UserCallableShadowsBuiltinInGeneratedCode, VerifyAdhdCompiler_UserCallableShadowsBuiltinInGeneratedCode)
-NWB_ADHD_GTEST(AdhdCompiler, UserCallableShadowsBuiltinForSimd, VerifyAdhdCompiler_UserCallableShadowsBuiltinForSimd)
-NWB_ADHD_GTEST(AdhdCompiler, ResolvedBuiltinStillUsesSimdImplementation, VerifyAdhdCompiler_ResolvedBuiltinStillUsesSimdImplementation)
-NWB_ADHD_GTEST(AdhdCompiler, LocalCallableShadowsBuiltin, VerifyAdhdCompiler_LocalCallableShadowsBuiltin)
-NWB_ADHD_GTEST(AdhdCompiler, NestedSimdCallKeepsUserCallableIdentity, VerifyAdhdCompiler_NestedSimdCallKeepsUserCallableIdentity)
-NWB_ADHD_GTEST(AdhdCompiler, TransposeDoesNotFuseUserDefinedMultiply, VerifyAdhdCompiler_TransposeDoesNotFuseUserDefinedMultiply)
-NWB_ADHD_GTEST(AdhdCompiler, LocalCallableShadowsSimdReduction, VerifyAdhdCompiler_LocalCallableShadowsSimdReduction)
-NWB_ADHD_GTEST(AdhdCompiler, LocalParameterShadowsBuiltinConstant, VerifyAdhdCompiler_LocalParameterShadowsBuiltinConstant)
-NWB_ADHD_GTEST(AdhdCompiler, UnshadowedBuiltinConstantStillResolves, VerifyAdhdCompiler_UnshadowedBuiltinConstantStillResolves)
-NWB_ADHD_GTEST(AdhdCompiler, GlobalConstantShadowsBuiltinInTypeInference, VerifyAdhdCompiler_GlobalConstantShadowsBuiltinInTypeInference)
-NWB_ADHD_GTEST(AdhdCompiler, ScalarLerpKeepsFirstTemporaryCategory, VerifyAdhdCompiler_ScalarLerpKeepsFirstTemporaryCategory)
-NWB_ADHD_GTEST(AdhdCompiler, TrimViewBorrowsLocalCompactString, VerifyAdhdCompiler_TrimViewBorrowsLocalCompactString)
-NWB_ADHD_GTEST(AdhdCompiler, StringAndCompactSubstrPreserveOwnershipAndSingleEvaluation, VerifyAdhdCompiler_StringAndCompactSubstrPreserveOwnershipAndSingleEvaluation)
-NWB_ADHD_GTEST(AdhdCompiler, HighByteFrontBackAndIndexMaintainUnsignedSemanticsAndMutation, VerifyAdhdCompiler_HighByteFrontBackAndIndexMaintainUnsignedSemanticsAndMutation)
-NWB_ADHD_GTEST(AdhdCompiler, SimdLaneComparisonAndFiniteChecksIgnoreInactiveAndShortCircuitedSignalingNaNs, VerifyAdhdCompiler_SimdLaneComparisonAndFiniteChecksIgnoreInactiveAndShortCircuitedSignalingNaNs)
-NWB_ADHD_GTEST(AdhdCompiler, GlobalExportArenaFirstFormattingOverflowAndHeaderTracking, VerifyAdhdCompiler_GlobalExportArenaFirstFormattingOverflowAndHeaderTracking)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
+TEST(AdhdReflection, RejectsInvalidContainerEntriesWithoutPublishingEmptyNames){ VerifyAdhdReflection_RejectsInvalidContainerEntriesWithoutPublishingEmptyNames(); }
+TEST(AdhdCompactString, SearchAndBoundariesUseCanonicalStoredText){ VerifyAdhdCompactString_SearchAndBoundariesUseCanonicalStoredText(); }
+TEST(AdhdCompiler, ScalarLerpEvaluatesSideEffectOnce){ VerifyAdhdCompiler_ScalarLerpEvaluatesSideEffectOnce(); }
+TEST(AdhdCompiler, ScalarLerpPreservesMoveOnlyOperandCategories){ VerifyAdhdCompiler_ScalarLerpPreservesMoveOnlyOperandCategories(); }
+TEST(AdhdCompiler, UserCallableShadowsBuiltinInGeneratedCode){ VerifyAdhdCompiler_UserCallableShadowsBuiltinInGeneratedCode(); }
+TEST(AdhdCompiler, UserCallableShadowsBuiltinForSimd){ VerifyAdhdCompiler_UserCallableShadowsBuiltinForSimd(); }
+TEST(AdhdCompiler, ResolvedBuiltinStillUsesSimdImplementation){ VerifyAdhdCompiler_ResolvedBuiltinStillUsesSimdImplementation(); }
+TEST(AdhdCompiler, LocalCallableShadowsBuiltin){ VerifyAdhdCompiler_LocalCallableShadowsBuiltin(); }
+TEST(AdhdCompiler, NestedSimdCallKeepsUserCallableIdentity){ VerifyAdhdCompiler_NestedSimdCallKeepsUserCallableIdentity(); }
+TEST(AdhdCompiler, TransposeDoesNotFuseUserDefinedMultiply){ VerifyAdhdCompiler_TransposeDoesNotFuseUserDefinedMultiply(); }
+TEST(AdhdCompiler, LocalCallableShadowsSimdReduction){ VerifyAdhdCompiler_LocalCallableShadowsSimdReduction(); }
+TEST(AdhdCompiler, LocalParameterShadowsBuiltinConstant){ VerifyAdhdCompiler_LocalParameterShadowsBuiltinConstant(); }
+TEST(AdhdCompiler, UnshadowedBuiltinConstantStillResolves){ VerifyAdhdCompiler_UnshadowedBuiltinConstantStillResolves(); }
+TEST(AdhdCompiler, GlobalConstantShadowsBuiltinInTypeInference){ VerifyAdhdCompiler_GlobalConstantShadowsBuiltinInTypeInference(); }
+TEST(AdhdCompiler, ScalarLerpKeepsFirstTemporaryCategory){ VerifyAdhdCompiler_ScalarLerpKeepsFirstTemporaryCategory(); }
+TEST(AdhdCompiler, TrimViewBorrowsLocalCompactString){ VerifyAdhdCompiler_TrimViewBorrowsLocalCompactString(); }
+TEST(AdhdCompiler, StringAndCompactSubstrPreserveOwnershipAndSingleEvaluation){ VerifyAdhdCompiler_StringAndCompactSubstrPreserveOwnershipAndSingleEvaluation(); }
+TEST(AdhdCompiler, HighByteFrontBackAndIndexMaintainUnsignedSemanticsAndMutation){ VerifyAdhdCompiler_HighByteFrontBackAndIndexMaintainUnsignedSemanticsAndMutation(); }
+TEST(AdhdCompiler, SimdLaneComparisonAndFiniteChecksIgnoreInactiveAndShortCircuitedSignalingNaNs){ VerifyAdhdCompiler_SimdLaneComparisonAndFiniteChecksIgnoreInactiveAndShortCircuitedSignalingNaNs(); }
+TEST(AdhdCompiler, GlobalExportArenaFirstFormattingOverflowAndHeaderTracking){ VerifyAdhdCompiler_GlobalExportArenaFirstFormattingOverflowAndHeaderTracking(); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

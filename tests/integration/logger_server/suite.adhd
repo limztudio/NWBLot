@@ -9,147 +9,117 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::LoggerCrashCases{
-NWB_NOINLINE void LinuxForceAssertFalseForCrashObservation();
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void VerifyCrashReportComposerTests_TombstoneStackMovesBeforeDetailsWithoutBorrowingClearedText(){
     LoggerTestArena testArena = LoggerTestArena();
-    ScratchArena scratch(s_LoggerCrashReportComposerScratch);
-    native(mut testArena, mut scratch){
-        Log::CrashPackageSummary summary(testArena.arena);
-        summary.triggerMessage = "fault";
-        Log::CrashReportText details(testArena.arena);
-        details += "package=one\n[tombstone_callstack]\nframe-one\n[metadata]\nkey=value\n";
+    ComposerScratchHolder scratchHolder = ComposerScratchHolder();
+    CrashPackageSummary summary = CrashPackageSummary(testArena.arena);
+    summary.triggerMessage = "fault";
+    String details = "package=one\n[tombstone_callstack]\nframe-one\n[metadata]\nkey=value\n";
 
-        const auto report = Log::LoggerCrashSymbolicateDetail::CrashReportComposer::BuildOrderedCrashReport(summary, scratch, Move(details));
-        EXPECT_EQ(AStringView(report.data(), report.size()), AStringView("fault\n\ncallstack:\nframe-one\n\ndetails:\npackage=one\n[metadata]\nkey=value\n"));
-    }
+    const String report = CrashReportComposer::BuildOrderedCrashReport(summary, scratchHolder.scratch, details);
+    EXPECT_EQ(StringView(report), "fault\n\ncallstack:\nframe-one\n\ndetails:\npackage=one\n[metadata]\nkey=value\n");
 }
 
 void VerifyCrashReportComposerTests_EmptyPrimaryStackTakesPrecedenceOverTombstone(){
     LoggerTestArena testArena = LoggerTestArena();
-    ScratchArena scratch(s_LoggerCrashReportComposerScratch);
-    native(mut testArena, mut scratch){
-        Log::CrashPackageSummary summary(testArena.arena);
-        Log::CrashReportText details(testArena.arena);
-        details += "[callstack]\n\n[tombstone_callstack]\nfallback\n";
+    ComposerScratchHolder scratchHolder = ComposerScratchHolder();
+    CrashPackageSummary summary = CrashPackageSummary(testArena.arena);
+    String details = "[callstack]\n\n[tombstone_callstack]\nfallback\n";
 
-        const auto report = Log::LoggerCrashSymbolicateDetail::CrashReportComposer::BuildOrderedCrashReport(summary, scratch, Move(details));
-        EXPECT_EQ(AStringView(report.data(), report.size()), AStringView("callstack:\n<unavailable>\n\ndetails:\n[tombstone_callstack]\nfallback\n"));
-    }
+    const String report = CrashReportComposer::BuildOrderedCrashReport(summary, scratchHolder.scratch, details);
+    EXPECT_EQ(StringView(report), "callstack:\n<unavailable>\n\ndetails:\n[tombstone_callstack]\nfallback\n");
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void ExerciseMessageProgressesWhileTelemetryBacklogRemains(mut ShutdownCaptureServer server, in u16 port){
+    LogClientHolder holder = LogClientHolder();
+    ServerFirstRequestReleaseGuard releaseGate = ServerFirstRequestReleaseGuard(server);
+    const String url = StringFormat("http://127.0.0.1:{}", port);
+    ASSERT_TRUE(holder.client.init(StringView(url)));
+    Array<u8, 1> telemetry = Array<u8, 1>();
+    telemetry[0] = 1u;
+    ASSERT_TRUE(EnqueueClientTelemetry(holder.client, Span<u8>(telemetry)));
+    for(u32 attempt = 0u; attempt < 500u && !server.processingFirstRequest(); ++attempt)
+        SleepMS(1u);
+    ASSERT_TRUE(server.processingFirstRequest());
+    for(u32 index = 0u; index < 3u; ++index)
+        ASSERT_TRUE(EnqueueClientTelemetry(holder.client, Span<u8>(telemetry)));
+    EnqueueClientAscii(holder.client, "queued message");
+    server.releaseFirstRequest();
+    releaseGate.release();
+    for(u32 attempt = 0u; attempt < 500u && server.requestCount() < 2u; ++attempt)
+        SleepMS(10u);
+    ASSERT_GE(server.requestCount(), 2u);
+    EXPECT_TRUE(server.requestWasTelemetry(0u));
+    EXPECT_FALSE(server.requestWasTelemetry(1u));
+}
+
 void VerifyLogClientShutdown_MessageProgressesWhileTelemetryBacklogRemains(){
-    ShutdownCaptureServer server(s_HttpOk, false, true);
+    ShutdownCaptureServer server = ShutdownCaptureServer(s_HttpOk, false, true);
     u16 port = 0u;
     ASSERT_TRUE(server.start(port));
-    native(mut server, in port){
-        LogClient client;
-        ScopeExit releaseGate([&server]()noexcept{ server.releaseFirstRequest(); });
-        const AString<Log::LogArena> url = StringFormat(client.arena(), "http://127.0.0.1:{}", port);
-        ASSERT_TRUE(client.init(AStringView(url.data(), url.size())));
-        constexpr Array<u8, 1u> s_Telemetry = { 1u };
-        ASSERT_TRUE(client.enqueueTelemetry(s_Telemetry.data(), s_Telemetry.size()));
-        for(u32 attempt = 0u; attempt < 500u && !server.processingFirstRequest(); ++attempt)
-            SleepMS(1u);
-        ASSERT_TRUE(server.processingFirstRequest());
-        for(u32 index = 0u; index < 3u; ++index)
-            ASSERT_TRUE(client.enqueueTelemetry(s_Telemetry.data(), s_Telemetry.size()));
-        client.enqueue(TStringView(NWB_TEXT("queued message")));
-        server.releaseFirstRequest();
-        releaseGate.release();
-        for(u32 attempt = 0u; attempt < 500u && server.requestCount() < 2u; ++attempt)
-            SleepMS(10u);
-        ASSERT_GE(server.requestCount(), 2u);
-        EXPECT_TRUE(server.requestWasTelemetry(0u));
-        EXPECT_FALSE(server.requestWasTelemetry(1u));
-    }
+    ExerciseMessageProgressesWhileTelemetryBacklogRemains(server, port);
+}
+
+void ExerciseTelemetryProgressesWhileMessageBacklogRemains(mut ShutdownCaptureServer server, in u16 port){
+    LogClientHolder holder = LogClientHolder();
+    ServerFirstRequestReleaseGuard releaseGate = ServerFirstRequestReleaseGuard(server);
+    const String url = StringFormat("http://127.0.0.1:{}", port);
+    ASSERT_TRUE(holder.client.init(StringView(url)));
+    EnqueueClientAscii(holder.client, "first message");
+    for(u32 attempt = 0u; attempt < 500u && !server.processingFirstRequest(); ++attempt)
+        SleepMS(1u);
+    ASSERT_TRUE(server.processingFirstRequest());
+    for(u32 index = 0u; index < 3u; ++index)
+        EnqueueClientAscii(holder.client, "queued message");
+    Array<u8, 1> telemetry = Array<u8, 1>();
+    telemetry[0] = 1u;
+    ASSERT_TRUE(EnqueueClientTelemetry(holder.client, Span<u8>(telemetry)));
+    server.releaseFirstRequest();
+    releaseGate.release();
+    for(u32 attempt = 0u; attempt < 500u && server.requestCount() < 2u; ++attempt)
+        SleepMS(10u);
+    ASSERT_GE(server.requestCount(), 2u);
+    EXPECT_FALSE(server.requestWasTelemetry(0u));
+    EXPECT_TRUE(server.requestWasTelemetry(1u));
 }
 
 void VerifyLogClientShutdown_TelemetryProgressesWhileMessageBacklogRemains(){
-    ShutdownCaptureServer server(s_HttpOk, false, true);
+    ShutdownCaptureServer server = ShutdownCaptureServer(s_HttpOk, false, true);
     u16 port = 0u;
     ASSERT_TRUE(server.start(port));
-    native(mut server, in port){
-        LogClient client;
-        ScopeExit releaseGate([&server]()noexcept{ server.releaseFirstRequest(); });
-        const AString<Log::LogArena> url = StringFormat(client.arena(), "http://127.0.0.1:{}", port);
-        ASSERT_TRUE(client.init(AStringView(url.data(), url.size())));
-        client.enqueue(TStringView(NWB_TEXT("first message")));
-        for(u32 attempt = 0u; attempt < 500u && !server.processingFirstRequest(); ++attempt)
-            SleepMS(1u);
-        ASSERT_TRUE(server.processingFirstRequest());
-        for(u32 index = 0u; index < 3u; ++index)
-            client.enqueue(TStringView(NWB_TEXT("queued message")));
-        constexpr Array<u8, 1u> s_Telemetry = { 1u };
-        ASSERT_TRUE(client.enqueueTelemetry(s_Telemetry.data(), s_Telemetry.size()));
-        server.releaseFirstRequest();
-        releaseGate.release();
-        for(u32 attempt = 0u; attempt < 500u && server.requestCount() < 2u; ++attempt)
-            SleepMS(10u);
-        ASSERT_GE(server.requestCount(), 2u);
-        EXPECT_FALSE(server.requestWasTelemetry(0u));
-        EXPECT_TRUE(server.requestWasTelemetry(1u));
-    }
+    ExerciseTelemetryProgressesWhileMessageBacklogRemains(server, port);
+}
+
+void ExerciseRetriesRejectedPayloadClient(mut ShutdownCaptureServer server, in u16 port){
+    LogClientHolder holder = LogClientHolder();
+    const String url = StringFormat("http://127.0.0.1:{}", port);
+    ASSERT_TRUE(holder.client.init(StringView(url)));
+    EnqueueClientAscii(holder.client, "first payload");
+    EnqueueClientAscii(holder.client, "second payload");
+    for(u32 attempt = 0u; attempt < 500u && server.requestCount() < 3u; ++attempt)
+        SleepMS(10u);
+    EXPECT_EQ(server.requestCount(), 3u);
 }
 
 void VerifyLogClientShutdown_RetriesRejectedPayloadBeforeSendingNextMessage(){
-    ShutdownCaptureServer server(s_HttpServiceUnavailable);
+    ShutdownCaptureServer server = ShutdownCaptureServer(s_HttpServiceUnavailable);
     u16 port = 0u;
     ASSERT_TRUE(server.start(port));
-    native(mut server, in port){
-        LogClient client;
-        const AString<Log::LogArena> url = StringFormat(client.arena(), "http://127.0.0.1:{}", port);
-        ASSERT_TRUE(client.init(AStringView(url.data(), url.size())));
-        client.enqueue(TStringView(NWB_TEXT("first payload")));
-        client.enqueue(TStringView(NWB_TEXT("second payload")));
-        for(u32 attempt = 0u; attempt < 500u && server.requestCount() < 3u; ++attempt)
-            SleepMS(10u);
-        EXPECT_EQ(server.requestCount(), 3u);
-    }
+    ExerciseRetriesRejectedPayloadClient(server, port);
     EXPECT_TRUE(server.firstPayloadRetried());
 }
 
 void VerifyLogClientShutdown_ShutdownInterruptsBackoffAfterRepeatedTemporaryFailures(){
-    ShutdownCaptureServer server(s_HttpServiceUnavailable, true);
+    ShutdownCaptureServer server = ShutdownCaptureServer(s_HttpServiceUnavailable, true);
     u16 port = 0u;
     ASSERT_TRUE(server.start(port));
-    native(mut server, in port){
-        Timer stopStarted;
+    String stderrText = "";
+    Timer stopStarted = TimerNow();
+    native(mut server, in port, mut stderrText, mut stopStarted){
         testing::internal::CaptureStderr();
         {
             LogClient client;
@@ -157,7 +127,7 @@ void VerifyLogClientShutdown_ShutdownInterruptsBackoffAfterRepeatedTemporaryFail
             const b8 initialized = client.init(AStringView(url.data(), url.size()));
             EXPECT_TRUE(initialized);
             if(initialized){
-                client.enqueue(TStringView(NWB_TEXT("retry payload")));
+                EnqueueClientAscii(client, "retry payload");
                 for(u32 attempt = 0u; attempt < 1200u && server.requestCount() < 7u; ++attempt)
                     SleepMS(10u);
                 EXPECT_GE(server.requestCount(), 7u);
@@ -165,25 +135,25 @@ void VerifyLogClientShutdown_ShutdownInterruptsBackoffAfterRepeatedTemporaryFail
             }
             stopStarted = TimerNow();
         }
-        const auto stderrText = testing::internal::GetCapturedStderr();
-        EXPECT_NE(stderrText.find("stopped with an unsent payload"), stderrText.npos);
-        EXPECT_LT(TimerNow(), TimerAddMS(stopStarted, 3000));
+        const auto captured = testing::internal::GetCapturedStderr();
+        stderrText.assign(captured.data(), captured.size());
     }
+    EXPECT_TRUE(Contains(StringView(stderrText), "stopped with an unsent payload"));
+    EXPECT_LT(TimerNow(), TimerAddMS(stopStarted, 3000));
 }
 
 void VerifyLogClientShutdown_TransportFailureIsVisibleWithoutDiagnosticCallback(){
-    LoggerTestArena testArena = LoggerTestArena();
     const StringView invalidUrl = "http://[invalid";
     const u32 waitMilliseconds = 500u;
     b8 initialized = false;
-    CrashTestText stderrText = CrashTestText(testArena.arena);
+    String stderrText = "";
     native(in invalidUrl, in waitMilliseconds, mut initialized, mut stderrText){
         testing::internal::CaptureStderr();
         {
             LogClient client;
             initialized = client.init(invalidUrl);
             if(initialized){
-                client.enqueue(TStringView(NWB_TEXT("unsent payload")));
+                EnqueueClientAscii(client, "unsent payload");
                 SleepMS(waitMilliseconds);
             }
         }
@@ -191,72 +161,82 @@ void VerifyLogClientShutdown_TransportFailureIsVisibleWithoutDiagnosticCallback(
         stderrText.assign(captured.data(), captured.size());
     }
     EXPECT_TRUE(initialized);
-    EXPECT_TRUE(Contains(stderrText, "[ERROR] Log client: sending payload failed"));
-    EXPECT_TRUE(Contains(stderrText, "stopped with an unsent payload"));
+    EXPECT_TRUE(Contains(StringView(stderrText), "[ERROR] Log client: sending payload failed"));
+    EXPECT_TRUE(Contains(StringView(stderrText), "stopped with an unsent payload"));
+}
+
+void ExercisePermanentBadRequestClient(mut ShutdownCaptureServer server, in u16 port){
+    LogClientHolder holder = LogClientHolder();
+    const String url = StringFormat("http://127.0.0.1:{}", port);
+    ASSERT_TRUE(holder.client.init(StringView(url)));
+    EnqueueClientAscii(holder.client, "rejected payload");
+    EnqueueClientAscii(holder.client, "later payload");
+    for(u32 attempt = 0u; attempt < 500u && server.requestCount() < 2u; ++attempt)
+        SleepMS(10u);
+    EXPECT_EQ(server.requestCount(), 2u);
+    EXPECT_EQ(holder.client.rejectedPayloadCount(), 1u);
 }
 
 void VerifyLogClientShutdown_PermanentBadRequestDoesNotBlockLaterMessages(){
-    ShutdownCaptureServer server(s_HttpBadRequest);
+    ShutdownCaptureServer server = ShutdownCaptureServer(s_HttpBadRequest);
     u16 port = 0u;
     ASSERT_TRUE(server.start(port));
-    native(mut server, in port){
-        LogClient client;
-        const AString<Log::LogArena> url = StringFormat(client.arena(), "http://127.0.0.1:{}", port);
-        ASSERT_TRUE(client.init(AStringView(url.data(), url.size())));
-        client.enqueue(TStringView(NWB_TEXT("rejected payload")));
-        client.enqueue(TStringView(NWB_TEXT("later payload")));
-        for(u32 attempt = 0u; attempt < 500u && server.requestCount() < 2u; ++attempt)
-            SleepMS(10u);
-        EXPECT_EQ(server.requestCount(), 2u);
-        EXPECT_EQ(client.rejectedPayloadCount(), 1u);
-    }
+    ExercisePermanentBadRequestClient(server, port);
     EXPECT_EQ(server.requestCount(), 2u);
     EXPECT_FALSE(server.firstPayloadRetried());
+}
+
+void ExerciseOversizedMessageClient(mut ShutdownCaptureServer server, in u16 port){
+    LogClientHolder holder = LogClientHolder();
+    const String url = StringFormat("http://127.0.0.1:{}", port);
+    ASSERT_TRUE(holder.client.init(StringView(url)));
+    native(mut holder){
+        Log::LogString message(holder.client.arena());
+        message.resize(Log::s_MaxLogMessageUploadBytes / sizeof(tchar) + 1u, static_cast<tchar>('x'));
+        holder.client.enqueue(TStringView(message.data(), message.size()));
+    }
+    EnqueueClientAscii(holder.client, "later payload");
+    for(u32 attempt = 0u; attempt < 500u && server.requestCount() < 2u; ++attempt)
+        SleepMS(10u);
+    EXPECT_EQ(server.requestCount(), 2u);
+    EXPECT_EQ(holder.client.rejectedPayloadCount(), 1u);
 }
 
 void VerifyLogClientShutdown_OversizedMessageDoesNotBlockLaterMessages(){
     ShutdownCaptureServer server = ShutdownCaptureServer();
     u16 port = 0u;
     ASSERT_TRUE(server.start(port));
-    native(mut server, in port){
-        LogClient client;
-        const AString<Log::LogArena> url = StringFormat(client.arena(), "http://127.0.0.1:{}", port);
-        ASSERT_TRUE(client.init(AStringView(url.data(), url.size())));
-        Log::LogString message(client.arena());
-        message.resize(Log::s_MaxLogMessageUploadBytes / sizeof(tchar) + 1u, static_cast<tchar>('x'));
-        client.enqueue(TStringView(message.data(), message.size()));
-        client.enqueue(TStringView(NWB_TEXT("later payload")));
-        for(u32 attempt = 0u; attempt < 500u && server.requestCount() < 2u; ++attempt)
-            SleepMS(10u);
-        EXPECT_EQ(server.requestCount(), 2u);
-        EXPECT_EQ(client.rejectedPayloadCount(), 1u);
-    }
+    ExerciseOversizedMessageClient(server, port);
     EXPECT_GT(server.firstPayloadSize(), 0u);
     EXPECT_LT(server.firstPayloadSize(), 1024u);
     EXPECT_FALSE(server.firstPayloadRetried());
 }
 
 void VerifyLogClientShutdown_OversizedTelemetryIsRejectedBeforeReadingItsBuffer(){
-    LogClient client = LogClient();
-    native(mut client){
+    LogClientHolder holder = LogClientHolder();
+    native(mut holder){
         const u8 byte = 0u;
-        EXPECT_FALSE(client.enqueueTelemetry(&byte, Log::s_MaxTelemetryUploadBytes + 1u));
+        EXPECT_FALSE(holder.client.enqueueTelemetry(&byte, Log::s_MaxTelemetryUploadBytes + 1u));
     }
-    EXPECT_EQ(client.rejectedPayloadCount(), 1u);
+    EXPECT_EQ(holder.client.rejectedPayloadCount(), 1u);
+}
+
+void EnqueueShutdownMessages(in u16 port){
+    LogClientHolder holder = LogClientHolder();
+    const String url = StringFormat("http://127.0.0.1:{}", port);
+    ASSERT_TRUE(holder.client.init(StringView(url)));
+
+    for(u32 messageIndex = 0u; messageIndex < s_ShutdownMessageCount; ++messageIndex){
+        const String payload = StringFormat("Log client shutdown payload {}", messageIndex);
+        EnqueueClientAscii(holder.client, StringView(payload));
+    }
 }
 
 void VerifyLogClientShutdown_DrainsEveryQueuedMessageAfterStopBegins(){
     ShutdownCaptureServer server = ShutdownCaptureServer();
     u16 port = 0u;
     ASSERT_TRUE(server.start(port));
-    native(in port){
-        LogClient client;
-        const AString<Log::LogArena> url = StringFormat(client.arena(), "http://127.0.0.1:{}", port);
-        ASSERT_TRUE(client.init(AStringView(url.data(), url.size())));
-
-        for(u32 messageIndex = 0u; messageIndex < s_ShutdownMessageCount; ++messageIndex)
-            client.enqueue(StringFormat(client.arena(), NWB_TEXT("Log client shutdown payload {}"), messageIndex));
-    }
+    EnqueueShutdownMessages(port);
     EXPECT_EQ(server.requestCount(), s_ShutdownMessageCount);
 }
 
@@ -271,12 +251,12 @@ void VerifyLoggerServerCrash_LinuxAssertCrashProducesObservableLoggerReport(mut 
     LoggerTestArena testArena = LoggerTestArena();
     const StringView group = "logger_server_linux_assert_observe_test";
     const StringView stem = "linux_assert_observe_001";
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 
-    const CrashTestPath spoolDirectory = SpoolDirectory(testArena.arena, group);
-    const CrashTestPath pendingDirectory = spoolDirectory / s_PendingDirectoryName;
-    const CrashTestPath archiveInputDirectory = ArchiveInputDirectory(testArena.arena, group);
-    const CrashTestPath archivePath = ArchivePath(testArena.arena, group, stem);
+    const Path spoolDirectory = SpoolDirectory(group);
+    const Path pendingDirectory = spoolDirectory / s_PendingDirectoryName;
+    const Path archiveInputDirectory = ArchiveInputDirectory(group);
+    const Path archivePath = ArchivePath(group, stem);
     b8 externalSymbolizerAvailable = false;
     native(in spoolDirectory, in pendingDirectory, in archiveInputDirectory, in archivePath, mut testArena, mut externalSymbolizerAvailable){
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
@@ -341,21 +321,21 @@ void VerifyLoggerServerCrash_LinuxAssertCrashProducesObservableLoggerReport(mut 
     EXPECT_TRUE(result.accepted);
     EXPECT_EQ(result.type, s_LogTypeAssert);
 
-    CrashTestText report = CrashTestText(testArena.arena);
-    ASSERT_TRUE(ReadServerSymbolicationText(testArena.arena, group, stem, report));
-    EXPECT_TRUE(Contains(report, s_PlatformLinux));
-    EXPECT_TRUE(Contains(report, "reason=manual_dump"));
-    EXPECT_TRUE(Contains(report, s_Event));
-    EXPECT_TRUE(Contains(report, "event=assert"));
-    EXPECT_TRUE(Contains(report, s_StatusCallstackCaptured));
-    EXPECT_TRUE(Contains(report, s_Callstack));
+    String report = "";
+    ASSERT_TRUE(ReadServerSymbolicationText(group, stem, report));
+    EXPECT_TRUE(Contains(StringView(report), s_PlatformLinux));
+    EXPECT_TRUE(Contains(StringView(report), "reason=manual_dump"));
+    EXPECT_TRUE(Contains(StringView(report), s_Event));
+    EXPECT_TRUE(Contains(StringView(report), "event=assert"));
+    EXPECT_TRUE(Contains(StringView(report), s_StatusCallstackCaptured));
+    EXPECT_TRUE(Contains(StringView(report), s_Callstack));
     EXPECT_EQ(report.find("false\nat "), 0u);
-    EXPECT_TRUE(Contains(report, s_TestSourceFilename));
+    EXPECT_TRUE(Contains(StringView(report), s_TestSourceFilename));
     if(externalSymbolizerAvailable)
-        EXPECT_TRUE(Contains(report, "LinuxForceAssertFalseForCrashObservation"));
+        EXPECT_TRUE(Contains(StringView(report), "LinuxForceAssertFalseForCrashObservation"));
 
-    PreserveObservedReport(testArena.arena, StringView(report.data(), report.size()), "linux_assert");
-    RemoveTestArtifacts(testArena.arena, group);
+    PreserveObservedReport(testArena.arena, StringView(report), "linux_assert");
+    RemoveTestArtifacts(group);
 }
 
 void VerifyLoggerServerCrash_RecoverableErrorDiagnosticProducesObservableLoggerReport(mut LoggerServerCrash self){
@@ -366,12 +346,12 @@ void VerifyLoggerServerCrash_RecoverableErrorDiagnosticProducesObservableLoggerR
     const StringView group = "logger_server_recoverable_error_observe_test";
     const StringView stem = "recoverable_error_observe_001";
     const StringView errorMessage = "recoverable logger error observation";
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 
-    const CrashTestPath spoolDirectory = SpoolDirectory(testArena.arena, group);
-    const CrashTestPath pendingDirectory = spoolDirectory / s_PendingDirectoryName;
-    const CrashTestPath archiveInputDirectory = ArchiveInputDirectory(testArena.arena, group);
-    const CrashTestPath archivePath = ArchivePath(testArena.arena, group, stem);
+    const Path spoolDirectory = SpoolDirectory(group);
+    const Path pendingDirectory = spoolDirectory / s_PendingDirectoryName;
+    const Path archiveInputDirectory = ArchiveInputDirectory(group);
+    const Path archivePath = ArchivePath(group, stem);
     b8 externalSymbolizerAvailable = false;
     native(in spoolDirectory, in pendingDirectory, in archiveInputDirectory, in archivePath, in errorMessage, mut testArena, mut externalSymbolizerAvailable){
 #if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
@@ -415,238 +395,225 @@ void VerifyLoggerServerCrash_RecoverableErrorDiagnosticProducesObservableLoggerR
     EXPECT_TRUE(result.accepted);
     EXPECT_EQ(result.type, s_LogTypeError);
 
-    CrashTestText report = CrashTestText(testArena.arena);
-    ASSERT_TRUE(ReadServerSymbolicationText(testArena.arena, group, stem, report));
-    EXPECT_TRUE(Contains(report, s_Event));
-    EXPECT_TRUE(Contains(report, "event=error"));
-    EXPECT_TRUE(Contains(report, errorMessage));
-    EXPECT_TRUE(Contains(report, s_TestSourceFilename));
+    String report = "";
+    ASSERT_TRUE(ReadServerSymbolicationText(group, stem, report));
+    EXPECT_TRUE(Contains(StringView(report), s_Event));
+    EXPECT_TRUE(Contains(StringView(report), "event=error"));
+    EXPECT_TRUE(Contains(StringView(report), errorMessage));
+    EXPECT_TRUE(Contains(StringView(report), s_TestSourceFilename));
     if(IsDesktopLinuxLoggerCrashPlatform()){
-        EXPECT_TRUE(Contains(report, s_PlatformLinux));
-        EXPECT_TRUE(Contains(report, s_StatusCallstackCaptured));
-        EXPECT_TRUE(Contains(report, s_Callstack));
+        EXPECT_TRUE(Contains(StringView(report), s_PlatformLinux));
+        EXPECT_TRUE(Contains(StringView(report), s_StatusCallstackCaptured));
+        EXPECT_TRUE(Contains(StringView(report), s_Callstack));
         if(externalSymbolizerAvailable)
-            EXPECT_TRUE(Contains(report, "CaptureRecoverableErrorForCrashObservation"));
+            EXPECT_TRUE(Contains(StringView(report), "CaptureRecoverableErrorForCrashObservation"));
     }
     else if(IsWindowsLoggerCrashPlatform()){
-        EXPECT_TRUE(Contains(report, "platform=windows"));
-        EXPECT_TRUE(Contains(report, "resolver=windows_pdb_minidump"));
+        EXPECT_TRUE(Contains(StringView(report), "platform=windows"));
+        EXPECT_TRUE(Contains(StringView(report), "resolver=windows_pdb_minidump"));
     }
 
-    PreserveObservedReport(testArena.arena, StringView(report.data(), report.size()), "recoverable_error");
-    RemoveTestArtifacts(testArena.arena, group);
+    PreserveObservedReport(testArena.arena, StringView(report), "recoverable_error");
+    RemoveTestArtifacts(group);
 }
 
 void VerifyLoggerServerCrash_LinuxCrashPackageReportsMissingProcMaps(mut LoggerServerCrash self){
     LoggerTestArena testArena = LoggerTestArena();
     const StringView group = "logger_server_linux_missing_maps_test";
     const StringView stem = "linux_missing_maps_001";
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 
-    CrashTestText archive = CrashTestText(testArena.arena);
-    BeginArchiveWithManifest("linux-missing-maps-test", s_Linux, s_Crash, s_Signal, 11u, s_IncludeEventField, ManifestTriggerFields(), testArena.arena, archive);
+    String archive = "";
+    BeginArchiveWithManifest("linux-missing-maps-test", s_Linux, s_Crash, s_Signal, 11u, s_IncludeEventField, ManifestTriggerFields(), archive);
     AppendArchiveFile(s_CpuContextFileName, "instruction_pointer=4198964\n", archive);
 
-    const CrashIngestResult result = ProcessCrashArchive(testArena.arena, group, stem, archive);
+    const CrashIngestResult result = ProcessCrashArchive(testArena.arena, group, stem, StringView(archive));
     EXPECT_TRUE(result.accepted);
 
-    CrashTestText report = CrashTestText(testArena.arena);
-    ASSERT_TRUE(ReadServerSymbolicationText(testArena.arena, group, stem, report));
-    EXPECT_TRUE(Contains(report, s_PlatformLinux));
-    EXPECT_TRUE(Contains(report, "proc_maps=missing"));
-    EXPECT_TRUE(Contains(report, "proc maps missing for module lookup"));
+    String report = "";
+    ASSERT_TRUE(ReadServerSymbolicationText(group, stem, report));
+    EXPECT_TRUE(Contains(StringView(report), s_PlatformLinux));
+    EXPECT_TRUE(Contains(StringView(report), "proc_maps=missing"));
+    EXPECT_TRUE(Contains(StringView(report), "proc maps missing for module lookup"));
 
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 }
 
 void VerifyLoggerServerCrash_LinuxCrashPackageReportsUnmappedInstructionPointer(mut LoggerServerCrash self){
     LoggerTestArena testArena = LoggerTestArena();
     const StringView group = "logger_server_linux_unmapped_ip_test";
     const StringView stem = "linux_unmapped_ip_001";
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 
-    CrashTestText archive = CrashTestText(testArena.arena);
-    BeginArchiveWithManifest("linux-unmapped-ip-test", s_Linux, s_Crash, s_Signal, 11u, s_IncludeEventField, ManifestTriggerFields(), testArena.arena, archive);
+    String archive = "";
+    BeginArchiveWithManifest("linux-unmapped-ip-test", s_Linux, s_Crash, s_Signal, 11u, s_IncludeEventField, ManifestTriggerFields(), archive);
     AppendArchiveFile(s_CpuContextFileName, "instruction_pointer=7340032\n", archive);
     AppendArchiveFile(s_ProcMapsFileName, "00400000-00452000 r-xp 00000000 08:01 123 /tmp/nwb_loader\n", archive);
 
-    const CrashIngestResult result = ProcessCrashArchive(testArena.arena, group, stem, archive);
+    const CrashIngestResult result = ProcessCrashArchive(testArena.arena, group, stem, StringView(archive));
     EXPECT_TRUE(result.accepted);
 
-    CrashTestText report = CrashTestText(testArena.arena);
-    ASSERT_TRUE(ReadServerSymbolicationText(testArena.arena, group, stem, report));
-    EXPECT_TRUE(Contains(report, s_PlatformLinux));
-    EXPECT_TRUE(Contains(report, "proc_maps=present"));
-    EXPECT_TRUE(Contains(report, "instruction pointer was not found in proc maps"));
+    String report = "";
+    ASSERT_TRUE(ReadServerSymbolicationText(group, stem, report));
+    EXPECT_TRUE(Contains(StringView(report), s_PlatformLinux));
+    EXPECT_TRUE(Contains(StringView(report), "proc_maps=present"));
+    EXPECT_TRUE(Contains(StringView(report), "instruction pointer was not found in proc maps"));
 
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 }
 
 void VerifyLoggerServerCrash_LinuxCrashPackageDoesNotWrapSymbolOffset(mut LoggerServerCrash self){
     LoggerTestArena testArena = LoggerTestArena();
     const StringView group = "logger_server_linux_offset_overflow_test";
     const StringView stem = "linux_offset_overflow_001";
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 
-    CrashTestText archive = CrashTestText(testArena.arena);
-    BeginArchiveWithManifest("linux-offset-overflow-test", s_Linux, s_Crash, s_Signal, 11u, s_IncludeEventField, ManifestTriggerFields(), testArena.arena, archive);
+    String archive = "";
+    BeginArchiveWithManifest("linux-offset-overflow-test", s_Linux, s_Crash, s_Signal, 11u, s_IncludeEventField, ManifestTriggerFields(), archive);
     AppendArchiveFile(s_CpuContextFileName, "instruction_pointer=4097\n", archive);
     AppendArchiveFile(s_ProcMapsFileName, "1000-2000 r-xp ffffffffffffffff 00:00 0 /tmp/overflow\n", archive);
-    const CrashIngestResult result = ProcessCrashArchive(testArena.arena, group, stem, archive);
+    const CrashIngestResult result = ProcessCrashArchive(testArena.arena, group, stem, StringView(archive));
     ASSERT_TRUE(result.accepted);
 
-    CrashTestText report = CrashTestText(testArena.arena);
-    ASSERT_TRUE(ReadServerSymbolicationText(testArena.arena, group, stem, report));
-    EXPECT_TRUE(Contains(report, "instruction_pointer_module=/tmp/overflow"));
-    EXPECT_TRUE(Contains(report, "symbolication_relative_ip=unavailable"));
-    RemoveTestArtifacts(testArena.arena, group);
+    String report = "";
+    ASSERT_TRUE(ReadServerSymbolicationText(group, stem, report));
+    EXPECT_TRUE(Contains(StringView(report), "instruction_pointer_module=/tmp/overflow"));
+    EXPECT_TRUE(Contains(StringView(report), "symbolication_relative_ip=unavailable"));
+    RemoveTestArtifacts(group);
 }
 
 void VerifyLoggerServerCrash_AndroidCrashPackageReportsTombstoneWithoutFrames(mut LoggerServerCrash self){
     LoggerTestArena testArena = LoggerTestArena();
     const StringView group = "logger_server_android_no_frames_test";
     const StringView stem = "android_no_frames_001";
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 
-    CrashTestText archive = CrashTestText(testArena.arena);
-    BeginArchiveWithManifest("android-no-frames-test", "android", s_Crash, s_ManualDump, 0u, s_IncludeEventField, ManifestTriggerFields(), testArena.arena, archive);
+    String archive = "";
+    BeginArchiveWithManifest("android-no-frames-test", "android", s_Crash, s_ManualDump, 0u, s_IncludeEventField, ManifestTriggerFields(), archive);
     AppendArchiveFile(s_AndroidTombstoneFileName, "pid: 7, tid: 7, name: nwb\nbacktrace:\n", archive);
 
-    const CrashIngestResult result = ProcessCrashArchive(testArena.arena, group, stem, archive);
+    const CrashIngestResult result = ProcessCrashArchive(testArena.arena, group, stem, StringView(archive));
     EXPECT_TRUE(result.accepted);
 
-    CrashTestText report = CrashTestText(testArena.arena);
-    ASSERT_TRUE(ReadServerSymbolicationText(testArena.arena, group, stem, report));
-    EXPECT_TRUE(Contains(report, "platform=android"));
-    EXPECT_TRUE(Contains(report, "status=not_decoded"));
-    EXPECT_TRUE(Contains(report, "android_tombstone=present"));
-    EXPECT_TRUE(Contains(report, "no native frame lines were recognized"));
+    String report = "";
+    ASSERT_TRUE(ReadServerSymbolicationText(group, stem, report));
+    EXPECT_TRUE(Contains(StringView(report), "platform=android"));
+    EXPECT_TRUE(Contains(StringView(report), "status=not_decoded"));
+    EXPECT_TRUE(Contains(StringView(report), "android_tombstone=present"));
+    EXPECT_TRUE(Contains(StringView(report), "no native frame lines were recognized"));
 
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 }
 
 void VerifyLoggerServerCrash_WindowsCrashPackageReportsMissingMinidump(mut LoggerServerCrash self){
     LoggerTestArena testArena = LoggerTestArena();
     const StringView group = "logger_server_windows_missing_dump_test";
     const StringView stem = "windows_missing_dump_001";
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 
-    CrashTestText archive = CrashTestText(testArena.arena);
-    BeginArchiveWithManifest("windows-missing-dump-test", s_Windows, s_Crash, s_WindowsExceptionCategory, 0xC0000005u, s_IncludeEventField, ManifestTriggerFields(), testArena.arena, archive);
+    String archive = "";
+    BeginArchiveWithManifest("windows-missing-dump-test", s_Windows, s_Crash, s_WindowsExceptionCategory, 0xC0000005u, s_IncludeEventField, ManifestTriggerFields(), archive);
 
-    const CrashIngestResult result = ProcessCrashArchive(testArena.arena, group, stem, archive);
+    const CrashIngestResult result = ProcessCrashArchive(testArena.arena, group, stem, StringView(archive));
     EXPECT_TRUE(result.accepted);
 
-    CrashTestText report = CrashTestText(testArena.arena);
-    ASSERT_TRUE(ReadServerSymbolicationText(testArena.arena, group, stem, report));
-    EXPECT_TRUE(Contains(report, "platform=windows"));
-    EXPECT_TRUE(Contains(report, s_Event));
-    EXPECT_TRUE(Contains(report, "event=crash"));
-    EXPECT_TRUE(Contains(report, "exception=access_violation 0x00000000c0000005"));
-    EXPECT_TRUE(Contains(report, "resolver=windows_pdb_minidump"));
-    native(mut testArena, in report){
-#if defined(NWB_PLATFORM_WINDOWS)
-        CrashTestText missingDumpMessage(testArena.arena);
-        missingDumpMessage += CrashNames::s_ProcessDumpFileName;
-        missingDumpMessage += " is missing or unreadable";
-        EXPECT_TRUE(Contains(report, AStringView(missingDumpMessage.data(), missingDumpMessage.size())));
-#else
-        (void)testArena;
-        EXPECT_TRUE(Contains(report, "only available on Windows logserver builds"));
-#endif
+    String report = "";
+    ASSERT_TRUE(ReadServerSymbolicationText(group, stem, report));
+    EXPECT_TRUE(Contains(StringView(report), "platform=windows"));
+    EXPECT_TRUE(Contains(StringView(report), s_Event));
+    EXPECT_TRUE(Contains(StringView(report), "event=crash"));
+    EXPECT_TRUE(Contains(StringView(report), "exception=access_violation 0x00000000c0000005"));
+    EXPECT_TRUE(Contains(StringView(report), "resolver=windows_pdb_minidump"));
+    if(IsWindowsLoggerCrashPlatform()){
+        const String missingDumpMessage = StringFormat("{} is missing or unreadable", s_ProcessDumpFileName);
+        EXPECT_TRUE(Contains(StringView(report), StringView(missingDumpMessage)));
     }
+    else
+        EXPECT_TRUE(Contains(StringView(report), "only available on Windows logserver builds"));
 
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 }
 
 void VerifyLoggerServerCrash_WindowsCrashPackageDecodesGpuDetectiveCaptureInProcess(mut LoggerServerCrash self){
     LoggerTestArena testArena = LoggerTestArena();
     const StringView group = "logger_server_gpu_detective_test";
     const StringView stem = "gpu_detective_001";
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 
-    CrashTestText archive = CrashTestText(testArena.arena);
-    BeginArchiveWithManifest("gpu-detective-test", s_Windows, s_Crash, s_WindowsExceptionCategory, 0xC0000005u, s_IncludeEventField, ManifestTriggerFields(), testArena.arena, archive);
+    String archive = "";
+    BeginArchiveWithManifest("gpu-detective-test", s_Windows, s_Crash, s_WindowsExceptionCategory, 0xC0000005u, s_IncludeEventField, ManifestTriggerFields(), archive);
     // Malformed RGD input must report decode failure without aborting crash ingest.
     AppendArchiveFile(s_GpuDetectiveCaptureFileName, "not a valid radeon gpu detective capture\n", archive);
 
-    const CrashIngestResult result = ProcessCrashArchive(testArena.arena, group, stem, archive);
+    const CrashIngestResult result = ProcessCrashArchive(testArena.arena, group, stem, StringView(archive));
     EXPECT_TRUE(result.accepted);
 
-    CrashTestText report = CrashTestText(testArena.arena);
-    ASSERT_TRUE(ReadServerSymbolicationText(testArena.arena, group, stem, report));
+    String report = "";
+    ASSERT_TRUE(ReadServerSymbolicationText(group, stem, report));
     // The decoder always emits the section header before reporting invalid input.
-    EXPECT_TRUE(Contains(report, "[gpu_detective]"));
-    EXPECT_TRUE(Contains(report, "status=decode_failed"));
+    EXPECT_TRUE(Contains(StringView(report), "[gpu_detective]"));
+    EXPECT_TRUE(Contains(StringView(report), "status=decode_failed"));
 
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 }
 
 void VerifyLoggerServerCrash_InvalidCrashPackageIsRejected(mut LoggerServerCrash self){
     LoggerTestArena testArena = LoggerTestArena();
     const StringView group = "logger_server_invalid_crash_test";
     const StringView stem = "invalid_001";
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 
-    CrashTestText archive = CrashTestText(testArena.arena);
-    archive += s_InvalidArchiveHeader;
-    const CrashIngestResult result = ProcessCrashArchive(testArena.arena, group, stem, archive);
+    String archive = "";
+    archive.append(s_InvalidArchiveHeader);
+    const CrashIngestResult result = ProcessCrashArchive(testArena.arena, group, stem, StringView(archive));
 
     EXPECT_FALSE(result.accepted);
     EXPECT_EQ(result.type, s_LogTypeError);
-    native(in result){
-        EXPECT_TRUE(Contains(result.message, NWB_TEXT("Crash upload rejected")));
-        EXPECT_TRUE(Contains(result.message, NWB_TEXT("invalid crash archive header")));
-    }
+    EXPECT_TRUE(CrashIngestMessageContains(result, "Crash upload rejected"));
+    EXPECT_TRUE(CrashIngestMessageContains(result, "invalid crash archive header"));
 
-    ExpectIsRegularFile(InvalidArchivePath(testArena.arena, group, stem), true);
-    RemoveTestArtifacts(testArena.arena, group);
+    ExpectIsRegularFile(InvalidArchivePath(group, stem), true);
+    RemoveTestArtifacts(group);
 }
 
 void VerifyLoggerServerCrash_UnsafeArchiveEntryCannotEscapePackageDirectory(mut LoggerServerCrash self){
     LoggerTestArena testArena = LoggerTestArena();
     const StringView group = "logger_server_unsafe_archive_20261107";
     const StringView stem = "unsafe_001";
-    const CrashTestPath testDirectory = TestCaseDirectory(testArena.arena, group);
-    native(in testDirectory){
-        const auto existed = FileExistsNoFollow(testDirectory);
-        ASSERT_TRUE(existed);
-        ASSERT_FALSE(*existed);
-    }
+    const Path testDirectory = TestCaseDirectory(group);
+    const Expected<b8, ErrorCode> existed = FileExistsNoFollow(testDirectory);
+    ASSERT_TRUE(existed.has_value());
+    ASSERT_FALSE(existed.value());
 
-    CrashTestText archive = CrashTestText(testArena.arena);
-    archive += s_ArchiveHeaderText;
+    String archive = "";
+    archive.append(s_ArchiveHeaderText);
     AppendArchiveFile("../escape", "payload", archive);
-    const CrashIngestResult result = ProcessCrashArchive(testArena.arena, group, stem, archive);
+    const CrashIngestResult result = ProcessCrashArchive(testArena.arena, group, stem, StringView(archive));
     EXPECT_FALSE(result.accepted);
-    const CrashTestPath escapePath = StorageDirectory(testArena.arena, group) / "packages" / "escape";
-    native(in result, in escapePath){
-        EXPECT_TRUE(Contains(result.message, NWB_TEXT("malformed crash archive file header")));
-        const auto escaped = FileExistsNoFollow(escapePath);
-        ASSERT_TRUE(escaped);
-        EXPECT_FALSE(*escaped);
-    }
-    RemoveTestArtifacts(testArena.arena, group);
+    EXPECT_TRUE(CrashIngestMessageContains(result, "malformed crash archive file header"));
+    const Path escapePath = StorageDirectory(group) / "packages" / "escape";
+    const Expected<b8, ErrorCode> escaped = FileExistsNoFollow(escapePath);
+    ASSERT_TRUE(escaped.has_value());
+    EXPECT_FALSE(escaped.value());
+    RemoveTestArtifacts(group);
 }
 
 void VerifyLoggerServerCrash_CrashManifestWithoutEventIsRejected(mut LoggerServerCrash self){
     LoggerTestArena testArena = LoggerTestArena();
     const StringView group = "logger_server_missing_event_manifest_crash_test";
     const StringView stem = "missing_event_manifest_001";
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 
-    CrashTestText archive = CrashTestText(testArena.arena);
-    BeginArchiveWithManifest("missing-event-manifest-test", s_Linux, s_Crash, s_Signal, 11u, s_OmitEventField, ManifestTriggerFields(), testArena.arena, archive);
-    const CrashIngestResult result = ProcessCrashArchive(testArena.arena, group, stem, archive);
+    String archive = "";
+    BeginArchiveWithManifest("missing-event-manifest-test", s_Linux, s_Crash, s_Signal, 11u, s_OmitEventField, ManifestTriggerFields(), archive);
+    const CrashIngestResult result = ProcessCrashArchive(testArena.arena, group, stem, StringView(archive));
 
     EXPECT_FALSE(result.accepted);
     EXPECT_EQ(result.type, s_LogTypeError);
-    native(in result){
-        EXPECT_TRUE(Contains(result.message, NWB_TEXT("manifest.json is missing required fields")));
-    }
-    ExpectIsRegularFile(InvalidArchivePath(testArena.arena, group, stem), true);
+    EXPECT_TRUE(CrashIngestMessageContains(result, "manifest.json is missing required fields"));
+    ExpectIsRegularFile(InvalidArchivePath(group, stem), true);
 
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 }
 
 void VerifyLoggerServerCrash_InvalidManifestBooleanIsRejectedWhileFalseAndZeroRemainValid(mut LoggerServerCrash self){
@@ -654,31 +621,29 @@ void VerifyLoggerServerCrash_InvalidManifestBooleanIsRejectedWhileFalseAndZeroRe
     const StringView group = "logger_server_boolean_manifest_test";
     const StringView validStem = "valid_false_001";
     const StringView invalidStem = "invalid_boolean_001";
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 
-    CrashTestText validArchive = CrashTestText(testArena.arena);
-    BeginArchiveWithManifest(validStem, s_Linux, s_Crash, s_Signal, 0u, s_IncludeEventField, ManifestTriggerFields(), testArena.arena, validArchive);
-    const CrashIngestResult validResult = ProcessCrashArchive(testArena.arena, group, validStem, validArchive);
+    String validArchive = "";
+    BeginArchiveWithManifest(validStem, s_Linux, s_Crash, s_Signal, 0u, s_IncludeEventField, ManifestTriggerFields(), validArchive);
+    const CrashIngestResult validResult = ProcessCrashArchive(testArena.arena, group, validStem, StringView(validArchive));
     ASSERT_TRUE(validResult.accepted);
 
-    CrashTestText manifest = BuildManifest(invalidStem, s_Linux, s_Crash, s_Signal, 0u, s_IncludeEventField, ManifestTriggerFields(), testArena.arena);
+    String manifest = BuildManifest(invalidStem, s_Linux, s_Crash, s_Signal, 0u, s_IncludeEventField, ManifestTriggerFields());
     const StringView booleanPrefix = "\"has_exception_context\": ";
-    const usize fieldOffset = StringView(manifest.data(), manifest.size()).find(booleanPrefix);
+    const usize fieldOffset = StringView(manifest).find(booleanPrefix);
     ASSERT_LT(fieldOffset, manifest.size());
     manifest.replace(fieldOffset + booleanPrefix.size(), 5u, "null");
 
-    CrashTestText invalidArchive = CrashTestText(testArena.arena);
-    invalidArchive += s_ArchiveHeaderText;
-    AppendArchiveFile(s_ManifestFileName, StringView(manifest.data(), manifest.size()), invalidArchive);
-    const CrashIngestResult invalidResult = ProcessCrashArchive(testArena.arena, group, invalidStem, invalidArchive);
+    String invalidArchive = "";
+    invalidArchive.append(s_ArchiveHeaderText);
+    AppendArchiveFile(s_ManifestFileName, StringView(manifest), invalidArchive);
+    const CrashIngestResult invalidResult = ProcessCrashArchive(testArena.arena, group, invalidStem, StringView(invalidArchive));
     EXPECT_FALSE(invalidResult.accepted);
-    native(in invalidResult){
-        EXPECT_TRUE(Contains(invalidResult.message, NWB_TEXT("manifest.json is missing required fields")));
-    }
-    ExpectIsRegularFile(InvalidArchivePath(testArena.arena, group, invalidStem), true);
-    ExpectIsDirectory(ExtractedPackageDirectory(testArena.arena, group, validStem), true);
+    EXPECT_TRUE(CrashIngestMessageContains(invalidResult, "manifest.json is missing required fields"));
+    ExpectIsRegularFile(InvalidArchivePath(group, invalidStem), true);
+    ExpectIsDirectory(ExtractedPackageDirectory(group, validStem), true);
 
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 }
 
 void VerifyLoggerServerCrash_CrashRetentionPrunesOldestAcceptedUploads(mut LoggerServerCrash self){
@@ -687,63 +652,59 @@ void VerifyLoggerServerCrash_CrashRetentionPrunesOldestAcceptedUploads(mut Logge
     const StringView stem0 = "retention_001";
     const StringView stem1 = "retention_002";
     const StringView stem2 = "retention_003";
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 
     CrashIngestConfig config = MakeIngestConfig(testArena.arena, group);
     config.retention.maxExtractedPackages = 2u;
     config.retention.maxRawArchives = 2u;
     config.retention.maxInvalidArchives = 0u;
 
-    CrashTestText archive0 = CrashTestText(testArena.arena);
-    BuildLinuxCrashArchive(stem0, testArena.arena, archive0);
-    EXPECT_TRUE(ProcessCrashArchive(testArena.arena, group, stem0, archive0, config).accepted);
+    String archive0 = "";
+    BuildLinuxCrashArchive(stem0, archive0);
+    EXPECT_TRUE(ProcessCrashArchive(testArena.arena, group, stem0, StringView(archive0), config).accepted);
 
-    CrashTestText archive1 = CrashTestText(testArena.arena);
-    BuildLinuxCrashArchive(stem1, testArena.arena, archive1);
-    EXPECT_TRUE(ProcessCrashArchive(testArena.arena, group, stem1, archive1, config).accepted);
+    String archive1 = "";
+    BuildLinuxCrashArchive(stem1, archive1);
+    EXPECT_TRUE(ProcessCrashArchive(testArena.arena, group, stem1, StringView(archive1), config).accepted);
 
-    CrashTestText archive2 = CrashTestText(testArena.arena);
-    BuildLinuxCrashArchive(stem2, testArena.arena, archive2);
-    EXPECT_TRUE(ProcessCrashArchive(testArena.arena, group, stem2, archive2, config).accepted);
+    String archive2 = "";
+    BuildLinuxCrashArchive(stem2, archive2);
+    EXPECT_TRUE(ProcessCrashArchive(testArena.arena, group, stem2, StringView(archive2), config).accepted);
 
-    ExpectPathExists(ExtractedPackageDirectory(testArena.arena, group, stem0), false);
-    ExpectPathExists(RawArchivePath(testArena.arena, group, stem0), false);
-    ExpectIsDirectory(ExtractedPackageDirectory(testArena.arena, group, stem1), true);
-    ExpectIsRegularFile(RawArchivePath(testArena.arena, group, stem1), true);
-    ExpectIsDirectory(ExtractedPackageDirectory(testArena.arena, group, stem2), true);
-    ExpectIsRegularFile(RawArchivePath(testArena.arena, group, stem2), true);
+    ExpectPathExists(ExtractedPackageDirectory(group, stem0), false);
+    ExpectPathExists(RawArchivePath(group, stem0), false);
+    ExpectIsDirectory(ExtractedPackageDirectory(group, stem1), true);
+    ExpectIsRegularFile(RawArchivePath(group, stem1), true);
+    ExpectIsDirectory(ExtractedPackageDirectory(group, stem2), true);
+    ExpectIsRegularFile(RawArchivePath(group, stem2), true);
 
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 }
 
 void VerifyLoggerServerCrash_AcceptedCrashWarnsWhenRawArchiveCannotBeRetained(mut LoggerServerCrash self){
     LoggerTestArena testArena = LoggerTestArena();
     const StringView group = "logger_server_raw_archive_failed_test";
     const StringView stem = "raw_blocked_001";
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 
-    CrashTestText archive = CrashTestText(testArena.arena);
-    BuildLinuxCrashArchive(stem, testArena.arena, archive);
+    String archive = "";
+    BuildLinuxCrashArchive(stem, archive);
 
-    const CrashTestPath storageDir = StorageDirectory(testArena.arena, group);
-    const CrashTestPath rawDirFile = storageDir / s_CrashRawDirectoryName;
-    native(in storageDir, in rawDirFile){
-        EXPECT_TRUE(EnsureDirectories(storageDir));
-        EXPECT_TRUE(WriteTextFile(rawDirFile, AStringView("blocked")));
-    }
+    const Path storageDir = StorageDirectory(group);
+    const Path rawDirFile = storageDir / s_CrashRawDirectoryName;
+    EXPECT_TRUE(EnsureDirectories(storageDir).has_value());
+    EXPECT_TRUE(WriteTextFile(rawDirFile, "blocked"));
 
     const CrashIngestConfig config = MakeIngestConfig(testArena.arena, group);
-    const CrashIngestResult result = ProcessCrashArchive(testArena.arena, group, stem, archive, config);
+    const CrashIngestResult result = ProcessCrashArchive(testArena.arena, group, stem, StringView(archive), config);
 
     EXPECT_TRUE(result.accepted);
     EXPECT_EQ(result.type, s_LogTypeWarning);
-    native(in result){
-        EXPECT_TRUE(Contains(result.message, NWB_TEXT("raw upload archive could not be retained")));
-    }
-    ExpectIsDirectory(ExtractedPackageDirectory(testArena.arena, group, stem), true);
-    ExpectPathExists(ArchivePath(testArena.arena, group, stem), false);
+    EXPECT_TRUE(CrashIngestMessageContains(result, "raw upload archive could not be retained"));
+    ExpectIsDirectory(ExtractedPackageDirectory(group, stem), true);
+    ExpectPathExists(ArchivePath(group, stem), false);
 
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 }
 
 void VerifyLoggerServerCrash_CrashRetentionPrunesOldestInvalidUploads(mut LoggerServerCrash self){
@@ -751,57 +712,25 @@ void VerifyLoggerServerCrash_CrashRetentionPrunesOldestInvalidUploads(mut Logger
     const StringView group = "logger_server_retention_invalid_test";
     const StringView stem0 = "invalid_retention_001";
     const StringView stem1 = "invalid_retention_002";
-    RemoveTestArtifacts(testArena.arena, group);
+    RemoveTestArtifacts(group);
 
     CrashIngestConfig config = MakeIngestConfig(testArena.arena, group);
     config.retention.maxExtractedPackages = 0u;
     config.retention.maxRawArchives = 0u;
     config.retention.maxInvalidArchives = 1u;
 
-    CrashTestText archive0 = CrashTestText(testArena.arena);
-    archive0 += s_InvalidArchiveHeader;
-    EXPECT_FALSE(ProcessCrashArchive(testArena.arena, group, stem0, archive0, config).accepted);
+    String archive0 = "";
+    archive0.append(s_InvalidArchiveHeader);
+    EXPECT_FALSE(ProcessCrashArchive(testArena.arena, group, stem0, StringView(archive0), config).accepted);
 
-    CrashTestText archive1 = CrashTestText(testArena.arena);
-    archive1 += s_InvalidArchiveHeader;
-    EXPECT_FALSE(ProcessCrashArchive(testArena.arena, group, stem1, archive1, config).accepted);
+    String archive1 = "";
+    archive1.append(s_InvalidArchiveHeader);
+    EXPECT_FALSE(ProcessCrashArchive(testArena.arena, group, stem1, StringView(archive1), config).accepted);
 
-    ExpectPathExists(InvalidArchivePath(testArena.arena, group, stem0), false);
-    ExpectIsRegularFile(InvalidArchivePath(testArena.arena, group, stem1), true);
+    ExpectPathExists(InvalidArchivePath(group, stem0), false);
+    ExpectIsRegularFile(InvalidArchivePath(group, stem1), true);
 
-    RemoveTestArtifacts(testArena.arena, group);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::LoggerCrashCases{
-
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-NWB_NOINLINE void LinuxForceAssertFalseForCrashObservation(){
-#if NWB_OCCUR_ASSERT
-    NWB_ASSERT(false);
-#else
-    NWB_FATAL_ASSERT(false);
-#endif
-    _exit(120);
-}
-#endif
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    RemoveTestArtifacts(group);
 }
 
 
@@ -852,6 +781,19 @@ native{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+namespace NWB::Tests::LoggerCrashCases{
+
+NWB_NOINLINE void LinuxForceAssertFalseForCrashObservation(){
+#if NWB_OCCUR_ASSERT
+    NWB_ASSERT(false);
+#else
+    NWB_FATAL_ASSERT(false);
+#endif
+    _exit(120);
+}
+
+};
 
 TEST_F(LoggerServerCrash, LinuxCrashPackageDoesNotWrapSymbolOffset){ VerifyLoggerServerCrash_LinuxCrashPackageDoesNotWrapSymbolOffset(*this); }
 

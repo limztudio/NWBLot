@@ -79,35 +79,12 @@ public:
         m_child.open();
     }
 
-    [[nodiscard]] WidgetId parentHost()const{
-        return UiTestSupport::RequireWidgetId(UiTestSupport::RequireWidgetId(UiTestSupport::RequireRootId(m_root), s_ParentPopupKey), s_RadioGroupKey);
-    }
-
-    [[nodiscard]] b8 beginParent(const u64 generation){
-        if(!begin(generation) || !m_builder.beginPopup(s_ParentPopupKey, m_parent, UiWidgetTests::NestedParentOptions()))
-            return false;
-        m_result = m_builder.radioGroup(s_RadioGroupKey, m_source, m_state);
-        return m_result.valid;
-    }
-
-    [[nodiscard]] b8 declareFamily(const u64 generation){
-        if(!beginParent(generation) || !m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions()))
-            return false;
-        m_childResult = m_builder.radioGroup(s_RadioGroupKey, m_childSource, m_childState);
-        return m_childResult.valid && m_builder.endPopup();
-    }
-
-    [[nodiscard]] b8 finishParent(){
-        return m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame();
-    }
-
-    [[nodiscard]] b8 acceptParent(const u64 generation){
-        return beginParent(generation) && finishParent() && m_context.commitFrame(generation);
-    }
-
-    [[nodiscard]] b8 acceptFamily(const u64 generation){
-        return declareFamily(generation) && finishParent() && m_context.commitFrame(generation);
-    }
+    [[nodiscard]] WidgetId parentHost()const;
+    [[nodiscard]] b8 beginParent(u64 generation);
+    [[nodiscard]] b8 declareFamily(u64 generation);
+    [[nodiscard]] b8 finishParent();
+    [[nodiscard]] b8 acceptParent(u64 generation);
+    [[nodiscard]] b8 acceptFamily(u64 generation);
 
 
 public:
@@ -161,6 +138,34 @@ using ::NWB::Impl::Ui::CalculateScrollPlacement;
 using ::NWB::Impl::Ui::CalculateScrollRowBounds;
 using ::NWB::Impl::Ui::CalculateScrollViewportPlacement;
 using ::NWB::Impl::Ui::TryUpdateScrollViewportOffsets;
+
+WidgetId GetUiRadioGroupPopupParentHost(const UiRadioGroupPopupTests& self)noexcept;
+b8 BeginUiRadioGroupPopupParent(UiRadioGroupPopupTests& self, u64 generation)noexcept;
+b8 DeclareUiRadioGroupPopupFamily(UiRadioGroupPopupTests& self, u64 generation)noexcept;
+b8 FinishUiRadioGroupPopupParent(UiRadioGroupPopupTests& self)noexcept;
+b8 AcceptUiRadioGroupPopupParent(UiRadioGroupPopupTests& self, u64 generation)noexcept;
+b8 AcceptUiRadioGroupPopupFamily(UiRadioGroupPopupTests& self, u64 generation)noexcept;
+};
+
+namespace __hidden_ui_radio_group_popup_tests{
+NWB_INLINE WidgetId UiRadioGroupPopupTests::parentHost()const{
+    return ::__hidden_ui_glyph_sdf_tests::GetUiRadioGroupPopupParentHost(*this);
+}
+NWB_INLINE b8 UiRadioGroupPopupTests::beginParent(const u64 generation){
+    return ::__hidden_ui_glyph_sdf_tests::BeginUiRadioGroupPopupParent(*this, generation);
+}
+NWB_INLINE b8 UiRadioGroupPopupTests::declareFamily(const u64 generation){
+    return ::__hidden_ui_glyph_sdf_tests::DeclareUiRadioGroupPopupFamily(*this, generation);
+}
+NWB_INLINE b8 UiRadioGroupPopupTests::finishParent(){
+    return ::__hidden_ui_glyph_sdf_tests::FinishUiRadioGroupPopupParent(*this);
+}
+NWB_INLINE b8 UiRadioGroupPopupTests::acceptParent(const u64 generation){
+    return ::__hidden_ui_glyph_sdf_tests::AcceptUiRadioGroupPopupParent(*this, generation);
+}
+NWB_INLINE b8 UiRadioGroupPopupTests::acceptFamily(const u64 generation){
+    return ::__hidden_ui_glyph_sdf_tests::AcceptUiRadioGroupPopupFamily(*this, generation);
+}
 };
 
 
@@ -172,6 +177,36 @@ using ::NWB::Impl::Ui::TryUpdateScrollViewportOffsets;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+WidgetId GetUiRadioGroupPopupParentHost(in UiRadioGroupPopupTests self){
+    return RequireUiWidgetId(RequireUiWidgetId(RequireUiRootId(self.m_root), s_UiFixtureParentPopupKey), s_RadioGroupKey);
+}
+
+b8 BeginUiRadioGroupPopupParent(mut UiRadioGroupPopupTests self, in u64 generation){
+    if(!self.begin(generation) || !self.m_builder.beginPopup(s_UiFixtureParentPopupKey, self.m_parent, MakeNestedParentPopupOptions()))
+        return false;
+    self.m_result = self.m_builder.radioGroup(s_RadioGroupKey, self.m_source, self.m_state);
+    return self.m_result.valid;
+}
+
+b8 DeclareUiRadioGroupPopupFamily(mut UiRadioGroupPopupTests self, in u64 generation){
+    if(!BeginUiRadioGroupPopupParent(self, generation) || !self.m_builder.beginPopup(s_UiFixtureChildPopupKey, self.m_child, MakeNestedChildPopupOptions()))
+        return false;
+    self.m_childResult = self.m_builder.radioGroup(s_RadioGroupKey, self.m_childSource, self.m_childState);
+    return self.m_childResult.valid && self.m_builder.endPopup();
+}
+
+b8 FinishUiRadioGroupPopupParent(mut UiRadioGroupPopupTests self){
+    return self.m_builder.endPopup() && self.m_context.endRoot() && self.m_context.finishFrame();
+}
+
+b8 AcceptUiRadioGroupPopupParent(mut UiRadioGroupPopupTests self, in u64 generation){
+    return BeginUiRadioGroupPopupParent(self, generation) && FinishUiRadioGroupPopupParent(self) && self.m_context.commitFrame(generation);
+}
+
+b8 AcceptUiRadioGroupPopupFamily(mut UiRadioGroupPopupTests self, in u64 generation){
+    return DeclareUiRadioGroupPopupFamily(self, generation) && FinishUiRadioGroupPopupParent(self) && self.m_context.commitFrame(generation);
+}
 
 const u32 s_UiRadioScrollQuietNaNF32Bits = 0x7fc00000u;
 const u32 s_UiRadioScrollPosInfF32Bits = 0x7f800000u;
@@ -226,9 +261,7 @@ void ExpectUiRadioGroupPopupSourceClosure(mut UiRadioGroupPopupTests self, in Ui
     ASSERT_TRUE(self.finishParent());
     ASSERT_TRUE(self.m_context.commitFrame(2u));
     EXPECT_EQ(self.m_context.input().popupCount(), 0u);
-    native(in self){
-        EXPECT_EQ(self.target(self.parentHost()), nullptr);
-    }
+    EXPECT_FALSE(self.hasTarget(self.parentHost()));
     self.m_parent.open();
     ASSERT_TRUE(self.acceptParent(3u));
     held.repeat = true;
@@ -692,12 +725,9 @@ void VerifyUiRadioGroupPopupTests_AParentStateCannotBeAliasedByItsLiveChildRadio
 void VerifyUiRadioGroupPopupTests_AncestorClosureSuppressesMetadataAndRetiresCaptureBeforeFreshChildReuse(mut UiRadioGroupPopupTests self){
     ASSERT_TRUE(self.acceptFamily(1u));
     ASSERT_TRUE(self.declareFamily(2u));
-    Rect rowRect = Rect();
-    native(in self, mut rowRect){
-        const auto* row = self.choice(20u, self.m_childState);
-        ASSERT_NE(row, nullptr);
-        rowRect = row->rectangle;
-    }
+    const auto row = self.tryChoice(20u, self.m_childState);
+    ASSERT_TRUE(row.has_value());
+    const Rect rowRect = row.value().rectangle;
     const Point point = CenterUiRect(rowRect);
     InputEvent down = InputEvent();
     down.position = point;

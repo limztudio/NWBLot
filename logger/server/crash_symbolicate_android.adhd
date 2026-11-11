@@ -2,7 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <logger/server/crash_symbolicate_internal.adhd>
 #include <logger/server/crash_values.adhd>
 
 
@@ -29,92 +28,37 @@ StringView SelectAndroidTombstoneDetailLine(in b8 hasFrames){
     return s_CrashSymbolicateAndroidAndroidTombstoneNoFramesDetail;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/crash/package_names.h>
-
-#include <global/text_utils.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_LOG_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace LoggerCrashSymbolicateDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace CrashNames = ::NWB::Core::Crash::PackageNames;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void AppendAndroidTombstoneSummary(const CrashScratchPath& packageDirectory, Core::Alloc::ScratchArena& arena, CrashReportText& outReport){
-    AString<Core::Alloc::ScratchArena> tombstone{arena};
-    const b8 tombstonePresent = ReadTextFile(packageDirectory / CrashNames::s_AndroidTombstoneFileName, tombstone) && !tombstone.empty();
-    if(!tombstonePresent){
-        outReport += s_CrashSymbolicateAndroidAndroidTombstoneMissingReport;
+void AppendParsedAndroidTombstoneReport(in b8 tombstonePresent, in StringView tombstoneText, mut String outReport){
+    if(!tombstonePresent || tombstoneText.empty()){
+        outReport.append(s_CrashSymbolicateAndroidAndroidTombstoneMissingReport);
         return;
     }
 
-    AString<Core::Alloc::ScratchArena> frames{arena};
-    frames.reserve(AddSize(tombstone.size(), 1u));
-    const AStringView tombstoneText(tombstone.data(), tombstone.size());
+    String frames;
+    frames.reserve(tombstoneText.size() + 1u);
     usize cursor = 0u;
-    while(const auto line = NextTextLine(tombstoneText, cursor)){
-        const AStringView trimmed = TrimLeftView(*line);
+    while(true){
+        const Expected<StringView> line = NextTextLine(tombstoneText, cursor);
+        if(!line.has_value())
+            break;
+        const StringView trimmed = TrimLeftView(line.value());
         if(!IsAndroidTombstoneFrameLine(trimmed))
             continue;
 
-        frames.append(trimmed.data(), trimmed.size());
-        frames += '\n';
+        frames.append(trimmed);
+        frames.append("\n");
     }
 
     const b8 hasFrames = !frames.empty();
-    outReport += SelectAndroidTombstoneStatusLine(hasFrames);
-    outReport += s_CrashSymbolicateAndroidAndroidTombstoneResolverLine;
-    outReport += s_CrashSymbolicateAndroidAndroidTombstonePresentLine;
-    outReport += SelectAndroidTombstoneDetailLine(hasFrames);
+    outReport.append(SelectAndroidTombstoneStatusLine(hasFrames));
+    outReport.append(s_CrashSymbolicateAndroidAndroidTombstoneResolverLine);
+    outReport.append(s_CrashSymbolicateAndroidAndroidTombstonePresentLine);
+    outReport.append(SelectAndroidTombstoneDetailLine(hasFrames));
 
     if(hasFrames){
-        outReport += s_CrashSymbolicateAndroidTombstoneCallstackSectionHeader;
-        outReport += frames;
+        outReport.append(s_CrashSymbolicateAndroidTombstoneCallstackSectionHeader);
+        outReport.append(frames);
     }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_LOG_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

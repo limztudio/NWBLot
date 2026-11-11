@@ -74,6 +74,10 @@ b8 ValidOpticalUploadRecordState(
     ;
 }
 
+void LogInvalidAcceptedOpticalUploadProvenance(){
+    error("Ray optical scene: accepted upload has invalid residency provenance");
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -459,7 +463,7 @@ public:
 
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
         if(!payload.reservation.accept(token))
-            NWB_LOGGER_ERROR(NWB_TEXT("Ray optical scene: accepted upload has invalid residency provenance"));
+            LogInvalidAcceptedOpticalUploadProvenance();
     }
 
     static void Discarded(Payload& payload)noexcept{

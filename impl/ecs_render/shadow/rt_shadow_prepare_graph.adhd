@@ -14,6 +14,22 @@ const StringView s_ShadowPrepareSwBvhCounterClearSuffix = ":shadow_prepare_sw_bv
 const StringView s_ShadowPrepareSwBvhBuildSuffix = ":shadow_prepare_sw_bvh_build";
 const usize s_ShadowPrepareSwBvhBuildResourceUseCount = 7u;
 
+Expected<Name> DeriveShadowPrepareSwBvhKeysClearIdentity(in Name meshName){
+    return DeriveName(meshName, s_ShadowPrepareSwBvhKeysClearSuffix);
+}
+
+Expected<Name> DeriveShadowPrepareSwBvhParentClearIdentity(in Name meshName){
+    return DeriveName(meshName, s_ShadowPrepareSwBvhParentClearSuffix);
+}
+
+Expected<Name> DeriveShadowPrepareSwBvhCounterClearIdentity(in Name meshName){
+    return DeriveName(meshName, s_ShadowPrepareSwBvhCounterClearSuffix);
+}
+
+Expected<Name> DeriveShadowPrepareSwBvhBuildIdentity(in Name meshName){
+    return DeriveName(meshName, s_ShadowPrepareSwBvhBuildSuffix);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -445,14 +461,14 @@ b8 ShadowSoftwareBvhBuildChain::declare(
     for(const PreparedMeshSwBvhGraphResources& resources : pureSoftwareMeshSwBvhGraphResources){
         const PreparedMeshSwBvhBuild& build = resources.build;
         if(!build.performRefit){
-            if(!appendPureSoftwareBvhClear(addPureSoftwareBvhClear(DeriveName(build.meshName, s_ShadowPrepareSwBvhKeysClearSuffix), "Shadow Prepare SW-BVH Sort-Key Clear", resources.sortKeys, BvhNodeIndex::Invalid))
-                || !appendPureSoftwareBvhClear(addPureSoftwareBvhClear(DeriveName(build.meshName, s_ShadowPrepareSwBvhParentClearSuffix), "Shadow Prepare SW-BVH Parent Clear", resources.parent, BvhNodeIndex::Invalid))
+            if(!appendPureSoftwareBvhClear(addPureSoftwareBvhClear(DeriveShadowPrepareSwBvhKeysClearIdentity(build.meshName), "Shadow Prepare SW-BVH Sort-Key Clear", resources.sortKeys, BvhNodeIndex::Invalid))
+                || !appendPureSoftwareBvhClear(addPureSoftwareBvhClear(DeriveShadowPrepareSwBvhParentClearIdentity(build.meshName), "Shadow Prepare SW-BVH Parent Clear", resources.parent, BvhNodeIndex::Invalid))
             ){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare pure software BVH sentinel clears"));
                 return false;
             }
         }
-        if(!appendPureSoftwareBvhClear(addPureSoftwareBvhClear(DeriveName(build.meshName, s_ShadowPrepareSwBvhCounterClearSuffix), "Shadow Prepare SW-BVH Counter Clear", resources.visitCounter, 0u))){
+        if(!appendPureSoftwareBvhClear(addPureSoftwareBvhClear(DeriveShadowPrepareSwBvhCounterClearIdentity(build.meshName), "Shadow Prepare SW-BVH Counter Clear", resources.visitCounter, 0u))){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare pure software BVH counter clear"));
             return false;
         }
@@ -466,7 +482,7 @@ b8 ShadowSoftwareBvhBuildChain::declare(
             ReadWriteUse(resources.sortPayload, Core::ResourceStates::UnorderedAccess),
             ReadWriteUse(resources.visitCounter, Core::ResourceStates::UnorderedAccess),
         };
-        const auto buildIdentity = DeriveName(build.meshName, s_ShadowPrepareSwBvhBuildSuffix);
+        const auto buildIdentity = DeriveShadowPrepareSwBvhBuildIdentity(build.meshName);
         if(!buildIdentity){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare pure software BVH build callback"));
             return false;

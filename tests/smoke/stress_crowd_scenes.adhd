@@ -25,32 +25,7 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <loader/project_entry.adhd.h>
-#include <impl/assets_csg/shape_id.adhd.h>
-#include <impl/assets_material/asset.adhd.h>
-#include <impl/ecs_csg/module.adhd.h>
-#include <impl/ecs_scene/module.adhd.h>
-#include <impl/ecs_mesh/system.adhd.h>
-#include <impl/ecs_model/system.adhd.h>
-#include <impl/ecs_render/material/material_instance.adhd.h>
-#include <core/alloc/general.h>
-#include <core/alloc/scratch.h>
-#include <core/common/log.h>
-#include <core/ecs/entity_id.h>
-#include <core/ecs/world.h>
-#include <core/graphics/runtime/runtime.h>
-#include <global/assert.h>
-#include <global/containers.h>
-#include <global/simd/constant.h>
-#include <global/simd/frame.h>
-#include <global/simd/quaternion.h>
-#include <global/simd/type.h>
-#include <global/simdmath.h>
-#include <global/span.h>
-
 namespace NWB::Tests::Smoke{
-using StressEntityVector = Vector<Core::ECS::EntityID, Core::Alloc::GlobalArena>;
-inline constexpr ModelObjectKindEnum s_StressObjectKindSkinnedMesh = Impl::ModelObjectKind::SkinnedMesh;
 #if defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)
 inline constexpr b8 s_StressHardwareShadowBoundaryBenchmark = true;
 #else
@@ -93,69 +68,34 @@ const SmokeMaterialRef s_StressOpaqueMaterial = "project/smoke/transparent_multi
 const SmokeMaterialRef s_StressGroundMaterial = "project/smoke/transparent_multi/materials/ground";
 const SmokeMeshRef s_StressGroundMesh = "project/meshes/shadow_plane";
 
-VectorSingle StressCharacterTint(in u32 classIndex, in b8 transparent){
-    const u32 slot = classIndex % s_StressCrowdCharacterTintCount;
-    if(transparent){
-        if(slot == 0u)
-            return VectorSingle(0.72f, 0.86f, 1.00f, 0.42f);
-        if(slot == 1u)
-            return VectorSingle(0.60f, 1.00f, 0.85f, 0.42f);
-        if(slot == 2u)
-            return VectorSingle(1.00f, 0.82f, 0.88f, 0.44f);
-        if(slot == 3u)
-            return VectorSingle(0.86f, 0.80f, 1.00f, 0.45f);
-        return VectorSingle(0.70f, 0.96f, 1.00f, 0.40f);
-    }
-    if(slot == 0u)
-        return VectorSingle(0.90f, 0.52f, 0.42f, 1.0f);
-    if(slot == 1u)
-        return VectorSingle(0.52f, 0.70f, 0.90f, 1.0f);
-    if(slot == 2u)
-        return VectorSingle(0.62f, 0.82f, 0.52f, 1.0f);
-    if(slot == 3u)
-        return VectorSingle(0.88f, 0.78f, 0.50f, 1.0f);
-    return VectorSingle(0.74f, 0.62f, 0.84f, 1.0f);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 class StressCsgScene{
-    public b8 initialize(in StressEntityVector owners, in b8 opaqueOnly, mut World world){
-        b8 skipCsg = false;
-        b8 invalidProfile = false;
-        native(mut skipCsg, mut invalidProfile){
-            Core::Alloc::ScratchArena scratchArena(s_SmokeEnvironmentArena);
-            const auto value = ReadSmokeEnvironmentText(scratchArena, "NWB_STRESS_CSG_PROFILE");
-            if(!value || AStringView(value->data(), value->size()) == "none")
-                skipCsg = true;
-            else if(AStringView(value->data(), value->size()) != "waist_bands")
-                invalidProfile = true;
-        }
-        if(skipCsg)
+    public b8 initialize(in Span<EntityID> owners, in b8 opaqueOnly, mut World world){
+        const Expected<String> profileText = ReadSmokeEnvironmentString("NWB_STRESS_CSG_PROFILE");
+        if(!profileText.has_value())
             return true;
-        if(invalidProfile){
-            error("StressTestSmokeProjectImpl: CSG profile must be none or waist_bands");
+        const StringView profile = StringView(profileText.value());
+        if(profile == "none")
+            return true;
+        if(profile != "waist_bands"){
+            error("StressTestSmokeProject: CSG profile must be none or waist_bands");
             return false;
         }
-        usize ownerCount = 0u;
-        native(in owners, mut ownerCount){
-            ownerCount = owners.size();
-        }
+
+        const usize ownerCount = owners.size();
         if(ownerCount != s_StressCsgBodyCount || opaqueOnly){
-            error("StressTestSmokeProjectImpl: waist_bands requires twenty bodies with ten per material class");
+            error("StressTestSmokeProject: waist_bands requires twenty bodies with ten per material class");
             return false;
         }
+
         Array<EntityID, s_StressCsgBodyCount> meshes;
         for(usize index = 0u; index < ownerCount; ++index){
-            EntityID owner = s_InvalidEntityId;
-            native(in owners, in index, mut owner){
-                owner = owners[index];
-            }
-            meshes[index] = FindSpawnedModelObject(owner, s_SmokeNameMesh, s_StressObjectKindSkinnedMesh, world);
+            meshes[index] = FindSpawnedModelObject(owners[index], s_SmokeNameMesh, ModelObjectKind::SkinnedMesh, world);
             if(!meshes[index].valid()){
-                error("StressTestSmokeProjectImpl: CSG receiver mesh child missing for body {}", index);
+                error("StressTestSmokeProject: CSG receiver mesh child missing for body {}", index);
                 return false;
             }
         }
@@ -170,25 +110,22 @@ class StressCsgScene{
             Name receiverGroup = s_SmokeNameStressCsgTransparent;
             if(row == 1u)
                 receiverGroup = s_SmokeNameStressCsgOpaque;
-            EntityID cutterEntity = s_InvalidEntityId;
-            native(in receiverGroup, mut world, mut cutterEntity){
-                auto entity = world.createEntity();
-                auto& cutter = entity.addComponent<Impl::CsgCutterComponent>();
-                cutter.receiverGroup = receiverGroup;
-                cutter.shapeType = Name(Impl::s_CsgBoxShapeName);
-                Impl::CsgBoxShapeParameters parameters;
-                parameters.halfExtents = Float4(s_StressCutterHalfX, s_StressCutterHalfY, s_StressCutterHalfZ, 0.0f);
-                AssignCsgCutterParameters(parameters, cutter);
-                cutterEntity = entity.id();
-            }
-            this.m_cutters[row] = cutterEntity;
+            this.m_cutters[row] = CreateSmokeCsgBoxCutter(
+                receiverGroup,
+                s_CsgBoxShapeName,
+                true,
+                f32x4(s_StressCutterHalfX, s_StressCutterHalfY, s_StressCutterHalfZ, 0.0f),
+                VectorSingle(0.0f, 0.0f, 0.0f, 0.0f),
+                QuaternionIdentity(),
+                world
+            );
         }
         this.m_enabled = true;
         if(!this.update(0.0f, world))
             return false;
         const usize perClass = ownerCount / s_StressCsgCutterCount;
         [essential] info(
-            "StressTestSmokeProjectImpl: CSG profile=waist_bands receivers={} transparent={} opaque={} cutters={} half_x={} half_y={} half_z={} center_y={} amplitude_y={} front_z={} back_z={} motion=crowd_yaw"
+            "StressTestSmokeProject: CSG profile=waist_bands receivers={} transparent={} opaque={} cutters={} half_x={} half_y={} half_z={} center_y={} amplitude_y={} front_z={} back_z={} motion=crowd_yaw"
             , ownerCount
             , perClass
             , perClass
@@ -208,17 +145,13 @@ class StressCsgScene{
         if(!this.m_enabled)
             return true;
         if(!IsFinite(yaw)){
-            error("StressTestSmokeProjectImpl: nonfinite CSG cutter yaw");
+            error("StressTestSmokeProject: nonfinite CSG cutter yaw");
             return false;
         }
-        f32 heightFront = 0.0f;
-        f32 heightBack = 0.0f;
-        native(in yaw, mut heightFront, mut heightBack){
-            const SIMDVectorSingle phases = VectorAdd(VectorReplicate(yaw), VectorSet(0.0f, s_PI, 0.0f, 0.0f));
-            const SIMDVectorSingle heights = VectorMultiplyAddExpression(VectorSin(phases), VectorReplicate(s_StressCutterAmplitude), VectorReplicate(s_StressCutterHeight));
-            heightFront = VectorGetX(heights);
-            heightBack = VectorGetY(heights);
-        }
+        const VectorSingle phases = VectorSingle(yaw) + VectorSingle(0.0f, s_PI, 0.0f, 0.0f);
+        const VectorSingle heights = Sin(phases) * VectorSingle(s_StressCutterAmplitude) + VectorSingle(s_StressCutterHeight);
+        const f32 heightFront = heights.x;
+        const f32 heightBack = heights.y;
         for(usize row = 0u; row < s_StressCsgCutterCount; ++row){
             f32 height = heightFront;
             f32 depth = s_StressTransparentRowZ;
@@ -226,16 +159,8 @@ class StressCsgScene{
                 height = heightBack;
                 depth = s_StressCrowdOpaqueRowZ;
             }
-            const EntityID cutterId = this.m_cutters[row];
-            b8 cutterFound = false;
-            native(in cutterId, in height, in depth, mut world, mut cutterFound){
-                if(auto* cutter = world.tryGetComponent<Impl::CsgCutterComponent>(cutterId)){
-                    AssignCsgCutterTransform(VectorSet(0.0f, height, depth, 0.0f), QuaternionIdentity(), *cutter);
-                    cutterFound = true;
-                }
-            }
-            if(!cutterFound){
-                error("StressTestSmokeProjectImpl: CSG cutter disappeared");
+            if(!SetSmokeCsgCutterTransform(this.m_cutters[row], VectorSingle(0.0f, height, depth, 0.0f), QuaternionIdentity(), world)){
+                error("StressTestSmokeProject: CSG cutter disappeared");
                 return false;
             }
         }
@@ -246,24 +171,7 @@ class StressCsgScene{
     private b8 m_enabled = false;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class StressCrowdScene{
-    public StressCrowdScene(mut ProjectRuntimeContext context){
-        this.m_characterOwners = StressEntityVector(context.objectArena);
-        this.m_csgScene = StressCsgScene();
-        this.m_groundEntity = s_InvalidEntityId;
-        this.m_wallPosX = s_InvalidEntityId;
-        this.m_wallNegX = s_InvalidEntityId;
-        this.m_wallPosZ = s_InvalidEntityId;
-        this.m_ceiling = s_InvalidEntityId;
-        this.m_charactersPerClass = 0u;
-        this.m_comparison = false;
-        this.m_opaqueOnly = false;
-    }
-
     public b8 initialize(mut ProjectRuntimeContext context, mut World world, in u32 charactersPerClass, in b8 comparison, in b8 opaqueOnly){
         this.m_charactersPerClass = charactersPerClass;
         this.m_comparison = comparison;
@@ -278,44 +186,30 @@ class StressCrowdScene{
             cameraPitch = s_StressCrowdComparisonCameraPitch;
         }
         const EntityID activeCamera = CreateSmokeCamera(cameraHeight, cameraDistance, cameraPitch, world);
-        b8 hasCamera = false;
         f32 cameraVerticalFov = 0.0f;
         f32 cameraNearPlane = 0.0f;
         f32 cameraFarPlane = 0.0f;
         f32 cameraAspectRatio = 0.0f;
-        native(in activeCamera, mut world, mut hasCamera, mut cameraVerticalFov, mut cameraNearPlane, mut cameraFarPlane, mut cameraAspectRatio){
-            if(const auto* const camera = world.tryGetComponent<Impl::Scene::CameraComponent>(activeCamera)){
-                hasCamera = true;
-                cameraVerticalFov = camera->verticalFovRadians();
-                cameraNearPlane = camera->nearPlane();
-                cameraFarPlane = camera->farPlane();
-                cameraAspectRatio = camera->aspectRatio();
-            }
-        }
-        if(!hasCamera){
-            error("StressTestSmokeProjectImpl: workload camera is unavailable");
+        if(!TryReadSmokeCameraProjection(activeCamera, world, cameraVerticalFov, cameraNearPlane, cameraFarPlane, cameraAspectRatio)){
+            error("StressTestSmokeProject: workload camera is unavailable");
             return false;
         }
 
-        EntityID directionalLight = s_InvalidEntityId;
-        EntityID pointLight = s_InvalidEntityId;
-        native(mut world, mut directionalLight, mut pointLight){
-            directionalLight = Impl::Scene::CreateDirectionalLightEntity(
-                world,
-                s_StressCrowdDirectionalLightPitch,
-                s_StressCrowdDirectionalLightYaw,
-                0.0f,
-                Float4(1.0f, 0.96f, 0.88f),
-                s_StressCrowdDirectionalLightIntensity
-            );
-            pointLight = Impl::Scene::CreatePointLightEntity(
-                world,
-                Float4(0.8f, s_StressCrowdPointLightHeight, -0.6f, 0.0f),
-                Float4(0.60f, 0.76f, 1.00f),
-                s_StressCrowdPointLightIntensity,
-                s_StressCrowdPointLightRange
-            );
-        }
+        const EntityID directionalLight = CreateSmokeDirectionalLight(
+            s_StressCrowdDirectionalLightPitch,
+            s_StressCrowdDirectionalLightYaw,
+            0.0f,
+            f32x4(1.0f, 0.96f, 0.88f, 0.0f),
+            s_StressCrowdDirectionalLightIntensity,
+            world
+        );
+        const EntityID pointLight = CreateSmokePointLight(
+            f32x4(0.8f, s_StressCrowdPointLightHeight, -0.6f, 0.0f),
+            f32x4(0.60f, 0.76f, 1.00f, 0.0f),
+            s_StressCrowdPointLightIntensity,
+            s_StressCrowdPointLightRange,
+            world
+        );
 
         this.m_groundEntity = CreateTintedStaticMeshEntity(
             s_StressGroundMesh,
@@ -336,38 +230,18 @@ class StressCrowdScene{
         this.m_ceiling = this.createCeiling(VectorSingle(0.90f, 0.86f, 0.72f, 1.0f), world);
 
         const u32 characterCount = this.m_charactersPerClass * 2u;
-        native(in characterCount, mut owners = this.m_characterOwners){
-            owners.reserve(characterCount);
-        }
-        for(u32 index = 0u; index < characterCount; ++index){
-            const EntityID created = this.createCharacter(index, world);
-            native(in created, mut owners = this.m_characterOwners){
-                owners.push_back(created);
-            }
-        }
+        this.m_characterOwners.reserve(characterCount);
+        for(u32 index = 0u; index < characterCount; ++index)
+            this.m_characterOwners.push_back(this.createCharacter(index, world));
 
         SyncSmokeModelRuntimes(world);
-        usize spawnedOwnerCount = 0u;
-        native(in owners = this.m_characterOwners, mut spawnedOwnerCount){
-            spawnedOwnerCount = owners.size();
-        }
+        const usize spawnedOwnerCount = this.m_characterOwners.size();
         for(usize index = 0u; index < spawnedOwnerCount; ++index){
             if(this.m_opaqueOnly || (index % 2u) != 0u)
                 continue;
-            EntityID owner = s_InvalidEntityId;
-            native(in owners = this.m_characterOwners, in index, mut owner){
-                owner = owners[index];
-            }
-            const EntityID meshEntity = FindSpawnedModelObject(owner, s_SmokeNameMesh, s_StressObjectKindSkinnedMesh, world);
-            b8 refractorReady = false;
-            native(in meshEntity, mut world, mut refractorReady){
-                if(auto* const renderer = world.tryGetComponent<Impl::RendererComponent>(meshEntity)){
-                    renderer->opticalBoundaryMode = Impl::OpticalBoundaryMode::ClosedNested;
-                    refractorReady = true;
-                }
-            }
-            if(!refractorReady){
-                error("StressTestSmokeProjectImpl: closed refractor renderer is unavailable (index {})", index);
+            const EntityID meshEntity = FindSpawnedModelObject(this.m_characterOwners[index], s_SmokeNameMesh, ModelObjectKind::SkinnedMesh, world);
+            if(!SetSmokeOpticalBoundaryMode(meshEntity, OpticalBoundaryMode::ClosedNested, world)){
+                error("StressTestSmokeProject: closed refractor renderer is unavailable (index {})", index);
                 return false;
             }
         }
@@ -375,29 +249,27 @@ class StressCrowdScene{
             return false;
 
         b8 allCharactersValid = spawnedOwnerCount == cast<usize>(characterCount);
-        native(in owners = this.m_characterOwners, mut allCharactersValid){
-            for(const Core::ECS::EntityID owner : owners)
-                allCharactersValid = allCharactersValid && owner.valid();
-        }
+        for(in EntityID owner : this.m_characterOwners)
+            allCharactersValid = allCharactersValid && owner.valid();
+
         [essential] assert(
             activeCamera.valid() && directionalLight.valid() && pointLight.valid() && this.m_groundEntity.valid() && allCharactersValid
             && this.m_wallPosX.valid() && this.m_wallNegX.valid() && this.m_wallPosZ.valid() && this.m_ceiling.valid(),
-            "StressTestSmokeProjectImpl failed to create all scene entities"
+            "StressTestSmokeProject failed to create all scene entities"
         );
 
         if(s_StressHardwareShadowBoundaryBenchmark){
-            b8 rayQueryCapable = false;
-            native(in context, mut rayQueryCapable){
-                rayQueryCapable = context.graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && context.graphics.queryFeatureSupport(Core::Feature::RayQuery);
+            const b8 rayQueryCapable = context.graphics.queryFeatureSupport(Feature::RayTracingAccelStruct)
+                && context.graphics.queryFeatureSupport(Feature::RayQuery);
+            if(!rayQueryCapable){
+                [essential] info("StressTestSmokeProject: hardware shadow boundary skipped because RayQuery-capable hardware is unavailable");
             }
-            if(!rayQueryCapable)
-                [essential] info("StressTestSmokeProjectImpl: hardware shadow boundary skipped because RayQuery-capable hardware is unavailable");
             else{
-                [essential] info("StressTestSmokeProjectImpl: RayQuery-capable hardware shadow route available");
+                [essential] info("StressTestSmokeProject: RayQuery-capable hardware shadow route available");
                 if(this.m_opaqueOnly)
-                    [essential] info("StressTestSmokeProjectImpl: enabled natural opaque hardware-shadow baseline");
+                    [essential] info("StressTestSmokeProject: enabled natural opaque hardware-shadow baseline");
                 else
-                    [essential] info("StressTestSmokeProjectImpl: enabled healthy hardware transparent-shadow benchmark");
+                    [essential] info("StressTestSmokeProject: enabled healthy hardware transparent-shadow benchmark");
             }
         }
 
@@ -405,7 +277,7 @@ class StressCrowdScene{
         if(this.m_opaqueOnly)
             transparentCharacterCount = 0u;
         [essential] info(
-            "StressTestSmokeProjectImpl: spawned {} spinning characters ({} transparent + {} opaque) over ground, directional + point light"
+            "StressTestSmokeProject: spawned {} spinning characters ({} transparent + {} opaque) over ground, directional + point light"
             , spawnedOwnerCount
             , transparentCharacterCount
             , characterCount - transparentCharacterCount
@@ -421,7 +293,7 @@ class StressCrowdScene{
         const f32 rowSpacingX = s_StressCrowdCharacterSpacingX * rowSpacingScale;
         const f32 rowStaggerX = s_StressCrowdCharacterSpacingX * rowStaggerScale;
         [essential] info(
-            "StressTestSmokeProjectImpl: workload characters_per_class={} total={} transparent={} opaque={} layout={} rows=2 columns={} row_spacing_x={} row_stagger_x={} front_z={} back_z={} body_scale=1 camera_x=0 camera_y={} camera_z={} camera_pitch={} vertical_fov={} near_plane={} far_plane={} aspect={}"
+            "StressTestSmokeProject: workload characters_per_class={} total={} transparent={} opaque={} layout={} rows=2 columns={} row_spacing_x={} row_stagger_x={} front_z={} back_z={} body_scale=1 camera_x=0 camera_y={} camera_z={} camera_pitch={} vertical_fov={} near_plane={} far_plane={} aspect={}"
             , this.m_charactersPerClass
             , spawnedOwnerCount
             , transparentCharacterCount
@@ -488,7 +360,7 @@ class StressCrowdScene{
             world
         );
         if(!modelResult.tintApplied)
-            error("StressTestSmokeProjectImpl: failed to set character tint (index {})", index);
+            error("StressTestSmokeProject: failed to set character tint (index {})", index);
         return modelResult.entity;
     }
 
@@ -503,13 +375,11 @@ class StressCrowdScene{
             world
         );
         if(entity.valid()){
-            native(in entity, in yawDeg, mut world){
-                const SIMDVectorSingle pitchQuat = QuaternionRotationRollPitchYaw(s_PIDIV2, 0.0f, 0.0f);
-                const SIMDVectorSingle yawQuat = QuaternionRotationRollPitchYawFromVector(VectorScale(VectorSet(0.0f, yawDeg, 0.0f, 0.0f), s_PI / 180.0f));
-                const SIMDVectorSingle wallRotation = QuaternionMultiply(yawQuat, pitchQuat);
-                if(auto* transform = world.tryGetComponent<Impl::Scene::TransformComponent>(entity))
-                    StoreFloat(wallRotation, transform->rotation);
-            }
+            const VectorSingle pitchQuat = QuaternionRotationRollPitchYawFromVector(VectorSingle(s_PIDIV2, 0.0f, 0.0f, 0.0f));
+            const VectorSingle yawQuat = QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, yawDeg, 0.0f, 0.0f) * (s_PI / 180.0f));
+            const VectorSingle wallRotation = QuaternionMultiply(yawQuat, pitchQuat);
+            if(!SetSmokeEntityRotation(entity, f32x4(wallRotation), world))
+                return s_InvalidEntityId;
         }
         return entity;
     }
@@ -525,38 +395,61 @@ class StressCrowdScene{
             world
         );
         if(entity.valid()){
-            native(in entity, mut world){
-                const SIMDVectorSingle ceilingRotation = QuaternionRotationRollPitchYaw(s_PI, 0.0f, 0.0f);
-                if(auto* transform = world.tryGetComponent<Impl::Scene::TransformComponent>(entity))
-                    StoreFloat(ceilingRotation, transform->rotation);
-            }
+            const VectorSingle ceilingRotation = QuaternionRotationRollPitchYawFromVector(VectorSingle(s_PI, 0.0f, 0.0f, 0.0f));
+            if(!SetSmokeEntityRotation(entity, f32x4(ceilingRotation), world))
+                return s_InvalidEntityId;
         }
         return entity;
     }
 
     private void spinCharacters(in f32 yawBase, mut World world){
         const f32 phaseStep = s_StressTwoPi / cast<f32>(this.m_charactersPerClass * 2u);
-        native(in owners = this.m_characterOwners, in yawBase, in phaseStep, mut world){
-            for(usize index = 0u; index < owners.size(); ++index){
-                auto* transform = world.tryGetComponent<Impl::Scene::TransformComponent>(owners[index]);
-                if(!transform)
-                    continue;
-                const f32 yaw = yawBase + static_cast<f32>(index) * phaseStep;
-                StoreFloat(QuaternionRotationRollPitchYaw(0.0f, yaw, 0.0f), transform->rotation);
-            }
+        for(usize index = 0u; index < this.m_characterOwners.size(); ++index){
+            const f32 yaw = yawBase + cast<f32>(index) * phaseStep;
+            const VectorSingle rotation = QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, yaw, 0.0f, 0.0f));
+            if(!SetSmokeEntityRotation(this.m_characterOwners[index], f32x4(rotation), world))
+                continue;
         }
     }
 
-    private StressEntityVector m_characterOwners;
-    private StressCsgScene m_csgScene;
-    private EntityID m_groundEntity;
-    private EntityID m_wallPosX;
-    private EntityID m_wallNegX;
-    private EntityID m_wallPosZ;
-    private EntityID m_ceiling;
-    private u32 m_charactersPerClass;
-    private b8 m_comparison;
-    private b8 m_opaqueOnly;
+    private Vector<EntityID> m_characterOwners;
+    private StressCsgScene m_csgScene = StressCsgScene();
+    private EntityID m_groundEntity = s_InvalidEntityId;
+    private EntityID m_wallPosX = s_InvalidEntityId;
+    private EntityID m_wallNegX = s_InvalidEntityId;
+    private EntityID m_wallPosZ = s_InvalidEntityId;
+    private EntityID m_ceiling = s_InvalidEntityId;
+    private u32 m_charactersPerClass = 0u;
+    private b8 m_comparison = false;
+    private b8 m_opaqueOnly = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+VectorSingle StressCharacterTint(in u32 classIndex, in b8 transparent){
+    const u32 slot = classIndex % s_StressCrowdCharacterTintCount;
+    if(transparent){
+        if(slot == 0u)
+            return VectorSingle(0.72f, 0.86f, 1.00f, 0.42f);
+        if(slot == 1u)
+            return VectorSingle(0.60f, 1.00f, 0.85f, 0.42f);
+        if(slot == 2u)
+            return VectorSingle(1.00f, 0.82f, 0.88f, 0.44f);
+        if(slot == 3u)
+            return VectorSingle(0.86f, 0.80f, 1.00f, 0.45f);
+        return VectorSingle(0.70f, 0.96f, 1.00f, 0.40f);
+    }
+    if(slot == 0u)
+        return VectorSingle(0.90f, 0.52f, 0.42f, 1.0f);
+    if(slot == 1u)
+        return VectorSingle(0.52f, 0.70f, 0.90f, 1.0f);
+    if(slot == 2u)
+        return VectorSingle(0.62f, 0.82f, 0.52f, 1.0f);
+    if(slot == 3u)
+        return VectorSingle(0.88f, 0.78f, 0.50f, 1.0f);
+    return VectorSingle(0.74f, 0.62f, 0.84f, 1.0f);
 }
 
 

@@ -49,12 +49,7 @@ using namespace NWB::UiTextAreaTests;
 
 class UiTextAreaScrollLifetimeTests : public TextAreaFixture{
 public:
-    [[nodiscard]] static TextAreaOptions SmallOptions()noexcept{
-        TextAreaOptions options;
-        options.width = { LayoutSizePolicy::Fixed, 180.0f };
-        options.height = { LayoutSizePolicy::Fixed, 100.0f };
-        return options;
-    }
+    [[nodiscard]] static TextAreaOptions SmallOptions()noexcept;
 
 
 public:
@@ -75,43 +70,12 @@ public:
         return AStringView(m_dense.data(), m_dense.size());
     }
 
-    [[nodiscard]] b8 seedModel(){
-        return m_model.setText(AStringView(m_dense)) && m_model.setSelection(0u, 0u) && m_state.scrollTo({});
-    }
-
-    [[nodiscard]] b8 prepareOverflow(const u64 generation = 1u, const TextAreaOptions& options = SmallOptions(), const Rect& bounds = { 20.0f, 20.0f, 740.0f, 520.0f }){
-        return seedModel() && frameArea(generation, options, bounds) && m_state.scrollbars().horizontal.visible && m_state.scrollbars().vertical.visible;
-    }
-
-    [[nodiscard]] WidgetId popupArea()const{
-        const WidgetId parent = UiTestSupport::RequireWidgetId(UiTestSupport::RequireRootId(m_root), s_ParentPopupKey);
-        return UiTestSupport::RequireWidgetId(UiTestSupport::RequireWidgetId(parent, s_ChildPopupKey), s_TextAreaKey);
-    }
-
-    [[nodiscard]] b8 popupFrame(const u64 generation){
-        if(!begin(generation) || !m_builder.beginPopup(s_ParentPopupKey, m_parent, LargeLoanParentOptions()) || !m_builder.beginPopup(s_ChildPopupKey, m_child, LargeLoanChildOptions()))
-            return false;
-        m_result = m_builder.textArea(s_TextAreaKey, m_model, m_state, SmallOptions());
-        return m_result.valid && m_builder.endPopup() && m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame() && m_context.commitFrame(generation);
-    }
-
-    [[nodiscard]] b8 wheel(const f64 delta = -1.0){
-        InputEvent event;
-        event.type = InputEventType::PointerWheel;
-        event.position = UiWidgetTests::Center(m_state.scrollbars().viewport);
-        event.scrollY = delta;
-        return send(event).pointerConsumed;
-    }
-
-    [[nodiscard]] b8 startThumb(const WidgetId area){
-        const WidgetId thumbId = UiTestSupport::RequireWidgetId(area, "scroll.y.thumb");
-        const HitTarget* thumb = target(thumbId);
-        if(thumb == nullptr)
-            return false;
-        const Point origin = UiWidgetTests::Center(thumb->rectangle);
-        const Point destination{ origin.x, origin.y + 24.0f };
-        return send({ .position = origin, .type = InputEventType::PrimaryDown }).pointerConsumed && send({ .position = destination, .type = InputEventType::PointerMove }).pointerConsumed && m_context.input().capture() == thumbId;
-    }
+    [[nodiscard]] b8 seedModel();
+    [[nodiscard]] b8 prepareOverflow(u64 generation = 1u, const TextAreaOptions& options = SmallOptions(), const Rect& bounds = { 20.0f, 20.0f, 740.0f, 520.0f });
+    [[nodiscard]] WidgetId popupArea()const;
+    [[nodiscard]] b8 popupFrame(u64 generation);
+    [[nodiscard]] b8 wheel(f64 delta = -1.0);
+    [[nodiscard]] b8 startThumb(WidgetId area);
 
 
 public:
@@ -139,19 +103,7 @@ namespace __hidden_ui_text_area_scroll_tests{
 using namespace NWB;
 using namespace NWB::UiTextAreaTests;
 
-class UiTextAreaScrollTests : public TextAreaFixture{
-public:
-    [[nodiscard]] static AStringView DenseText()noexcept{
-        return "aaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa";
-    }
-
-    [[nodiscard]] static TextAreaOptions SmallOptions()noexcept{
-        TextAreaOptions options;
-        options.width = { LayoutSizePolicy::Fixed, 90.0f };
-        options.height = { LayoutSizePolicy::Fixed, 42.0f };
-        return options;
-    }
-};
+class UiTextAreaScrollTests : public TextAreaFixture{};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -174,15 +126,8 @@ using namespace NWB::UiMultilineViewTests;
 
 class UiTextAreaViewTests : public MultilineViewFixture{
 public:
-    [[nodiscard]] b8 prepareDense(){ return m_model.setText("abcdef\nabcdef\nabcdef") && shapeView(); }
-
-    [[nodiscard]] b8 manualPlace(const Point scroll, const f32 width = 20.0f, const f32 height = 12.0f)noexcept{
-        const auto placement = m_view.arrange({ 10.0f, 20.0f, width, height }, {}, { 0.0f, 0.0f, 500.0f, 500.0f }, scroll, 1.0f, false);
-        if(!placement)
-            return false;
-        m_placement = *placement;
-        return true;
-    }
+    [[nodiscard]] b8 prepareDense();
+    [[nodiscard]] b8 manualPlace(Point scroll, f32 width = 20.0f, f32 height = 12.0f)noexcept;
 };
 
 
@@ -282,6 +227,38 @@ public:
         if(!layoutResult)
             return false;
         m_layout = Move(*layoutResult);
+        return true;
+    }
+
+    [[nodiscard]] b8 corruptPayloadFontHash(){
+        const auto binary = SerializeFontAtlasPayload(m_atlas.payload(), m_arena, m_scratchArena);
+        if(!binary)
+            return false;
+        auto payload = DeserializeFontAtlasPayload(*binary, m_arena, m_scratchArena);
+        if(!payload)
+            return false;
+        payload->fontSha256.bytes[0u] ^= 1u;
+        m_atlas.setPayload(Move(*payload));
+        return true;
+    }
+
+    [[nodiscard]] b8 rebindPayloadFont(const StringView path){
+        const auto binary = SerializeFontAtlasPayload(m_atlas.payload(), m_arena, m_scratchArena);
+        if(!binary)
+            return false;
+        auto payload = DeserializeFontAtlasPayload(*binary, m_arena, m_scratchArena);
+        if(!payload)
+            return false;
+        payload->font = Core::Assets::AssetRef<Font>::FromText(path).value_or(Core::Assets::AssetRef<Font>{});
+        m_atlas.setPayload(Move(*payload));
+        return true;
+    }
+
+    [[nodiscard]] b8 replaceWithUnbakedFontAndClearAtlas(){
+        const FontSource source{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_font, 2u };
+        if(!m_text.setFonts(m_scratchArena, Span(&source, 1u)))
+            return false;
+        m_atlas.setPayload(FontAtlasPayload(m_arena));
         return true;
     }
 
@@ -407,36 +384,59 @@ namespace InputEventType = ::NWB::Impl::Ui::InputEventType;
 using InputEventTypeEnum = ::NWB::Impl::Ui::InputEventType::Enum;
 namespace UiTextScrollBakedKey = ::NWB::Core::Key;
 
-[[nodiscard]] inline TextAreaOptions UiTextAreaScrollLifetimeSmallOptions()noexcept{
-    return ::__hidden_ui_text_area_scroll_lifetime_tests::UiTextAreaScrollLifetimeTests::SmallOptions();
-}
+TextAreaOptions UiTextAreaScrollLifetimeSmallOptions()noexcept;
+b8 SeedUiTextAreaScrollLifetimeModel(UiTextAreaScrollLifetimeTests& self)noexcept;
+b8 PrepareUiTextAreaScrollOverflow(UiTextAreaScrollLifetimeTests& self, u64 generation, const TextAreaOptions& options, const Rect& bounds)noexcept;
+WidgetId GetUiTextAreaScrollPopupArea(const UiTextAreaScrollLifetimeTests& self)noexcept;
+b8 RunUiTextAreaScrollPopupFrame(UiTextAreaScrollLifetimeTests& self, u64 generation)noexcept;
+b8 SendUiTextAreaScrollWheel(UiTextAreaScrollLifetimeTests& self, f64 delta)noexcept;
+b8 StartUiTextAreaScrollThumb(UiTextAreaScrollLifetimeTests& self, const WidgetId& area)noexcept;
+b8 PrepareUiTextAreaViewDense(UiTextAreaViewTests& self)noexcept;
+b8 ArrangeUiTextAreaViewManual(UiTextAreaViewTests& self, const Point& scroll, f32 width, f32 height)noexcept;
 
-[[nodiscard]] inline TextAreaOptions UiTextAreaScrollSmallOptions()noexcept{
-    return ::__hidden_ui_text_area_scroll_tests::UiTextAreaScrollTests::SmallOptions();
-}
-
-[[nodiscard]] inline AStringView UiTextAreaScrollDenseText()noexcept{
-    return ::__hidden_ui_text_area_scroll_tests::UiTextAreaScrollTests::DenseText();
-}
-
-[[nodiscard]] inline PopupOptions UiTextScrollLargeLoanParentOptions()noexcept{
-    return ::NWB::UiWidgetTests::LargeLoanParentOptions();
-}
-
-[[nodiscard]] inline PopupOptions UiTextScrollLargeLoanChildOptions()noexcept{
-    return ::NWB::UiWidgetTests::LargeLoanChildOptions();
-}
-
-inline void ExpectUiMultilineViewPlacement(const ::NWB::Impl::Ui::EditBoxPlacement& actual, const ::NWB::Impl::Ui::EditBoxPlacement& expected){
+NWB_INLINE void ExpectUiMultilineViewPlacement(const ::NWB::Impl::Ui::EditBoxPlacement& actual, const ::NWB::Impl::Ui::EditBoxPlacement& expected){
     ::NWB::UiMultilineViewTests::ExpectPlacement(actual, expected);
 }
 
-[[nodiscard]] inline AStringView UiTextScrollPublicationText(const ::NWB::UiTextAreaTests::AreaPublication& item)noexcept{
+[[nodiscard]] NWB_INLINE AStringView UiTextScrollPublicationText(const ::NWB::UiTextAreaTests::AreaPublication& item)noexcept{
     return AStringView(item.text.data(), item.text.size());
 }
 
-[[nodiscard]] inline AStringView UiTextScrollActionText(const AString<::NWB::Core::Alloc::GlobalArena>& text)noexcept{
+[[nodiscard]] NWB_INLINE AStringView UiTextScrollActionText(const AString<::NWB::Core::Alloc::GlobalArena>& text)noexcept{
     return AStringView(text.data(), text.size());
+}
+};
+
+namespace __hidden_ui_text_area_scroll_lifetime_tests{
+NWB_INLINE TextAreaOptions UiTextAreaScrollLifetimeTests::SmallOptions()noexcept{
+    return ::__hidden_ui_glyph_sdf_tests::UiTextAreaScrollLifetimeSmallOptions();
+}
+NWB_INLINE b8 UiTextAreaScrollLifetimeTests::seedModel(){
+    return ::__hidden_ui_glyph_sdf_tests::SeedUiTextAreaScrollLifetimeModel(*this);
+}
+NWB_INLINE b8 UiTextAreaScrollLifetimeTests::prepareOverflow(const u64 generation, const TextAreaOptions& options, const Rect& bounds){
+    return ::__hidden_ui_glyph_sdf_tests::PrepareUiTextAreaScrollOverflow(*this, generation, options, bounds);
+}
+NWB_INLINE WidgetId UiTextAreaScrollLifetimeTests::popupArea()const{
+    return ::__hidden_ui_glyph_sdf_tests::GetUiTextAreaScrollPopupArea(*this);
+}
+NWB_INLINE b8 UiTextAreaScrollLifetimeTests::popupFrame(const u64 generation){
+    return ::__hidden_ui_glyph_sdf_tests::RunUiTextAreaScrollPopupFrame(*this, generation);
+}
+NWB_INLINE b8 UiTextAreaScrollLifetimeTests::wheel(const f64 delta){
+    return ::__hidden_ui_glyph_sdf_tests::SendUiTextAreaScrollWheel(*this, delta);
+}
+NWB_INLINE b8 UiTextAreaScrollLifetimeTests::startThumb(const WidgetId area){
+    return ::__hidden_ui_glyph_sdf_tests::StartUiTextAreaScrollThumb(*this, area);
+}
+};
+
+namespace __hidden_ui_text_area_view_tests{
+NWB_INLINE b8 UiTextAreaViewTests::prepareDense(){
+    return ::__hidden_ui_glyph_sdf_tests::PrepareUiTextAreaViewDense(*this);
+}
+NWB_INLINE b8 UiTextAreaViewTests::manualPlace(const Point scroll, const f32 width, const f32 height)noexcept{
+    return ::__hidden_ui_glyph_sdf_tests::ArrangeUiTextAreaViewManual(*this, scroll, width, height);
 }
 };
 
@@ -537,6 +537,84 @@ ShapeRequest MakeUiTextScrollShapeRequest(in StringView text, in f32 fontSize){
     return request;
 }
 
+TextAreaOptions UiTextAreaScrollLifetimeSmallOptions(){
+    TextAreaOptions options = TextAreaOptions();
+    options.width = LayoutSize(LayoutSizePolicy::Fixed, 180.0f);
+    options.height = LayoutSize(LayoutSizePolicy::Fixed, 100.0f);
+    return options;
+}
+
+TextAreaOptions UiTextAreaScrollSmallOptions(){
+    TextAreaOptions options = TextAreaOptions();
+    options.width = LayoutSize(LayoutSizePolicy::Fixed, 90.0f);
+    options.height = LayoutSize(LayoutSizePolicy::Fixed, 42.0f);
+    return options;
+}
+
+AStringView UiTextAreaScrollDenseText(){
+    return "aaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa";
+}
+
+PopupOptions UiTextScrollLargeLoanParentOptions(){
+    return MakeLargeLoanParentPopupOptions();
+}
+
+PopupOptions UiTextScrollLargeLoanChildOptions(){
+    return MakeLargeLoanChildPopupOptions();
+}
+
+b8 SeedUiTextAreaScrollLifetimeModel(mut UiTextAreaScrollLifetimeTests self){
+    return self.m_model.setText(self.denseView()) && self.m_model.setSelection(0u, 0u) && self.m_state.scrollTo(Point());
+}
+
+b8 PrepareUiTextAreaScrollOverflow(mut UiTextAreaScrollLifetimeTests self, in u64 generation, in TextAreaOptions options, in Rect bounds){
+    return self.seedModel() && self.frameArea(generation, options, bounds) && self.m_state.scrollbars().horizontal.visible && self.m_state.scrollbars().vertical.visible;
+}
+
+WidgetId GetUiTextAreaScrollPopupArea(in UiTextAreaScrollLifetimeTests self){
+    const WidgetId parent = RequireUiWidgetId(RequireUiRootId(self.m_root), s_UiTextScrollParentPopupKey);
+    return RequireUiWidgetId(RequireUiWidgetId(parent, s_UiTextScrollChildPopupKey), s_UiTextScrollAreaKey);
+}
+
+b8 RunUiTextAreaScrollPopupFrame(mut UiTextAreaScrollLifetimeTests self, in u64 generation){
+    if(!self.begin(generation) || !self.m_builder.beginPopup(s_UiTextScrollParentPopupKey, self.m_parent, UiTextScrollLargeLoanParentOptions()) || !self.m_builder.beginPopup(s_UiTextScrollChildPopupKey, self.m_child, UiTextScrollLargeLoanChildOptions()))
+        return false;
+    self.m_result = self.m_builder.textArea(s_UiTextScrollAreaKey, self.m_model, self.m_state, UiTextAreaScrollLifetimeSmallOptions());
+    return self.m_result.valid && self.m_builder.endPopup() && self.m_builder.endPopup() && self.m_context.endRoot() && self.m_context.finishFrame() && self.m_context.commitFrame(generation);
+}
+
+b8 SendUiTextAreaScrollWheel(mut UiTextAreaScrollLifetimeTests self, in f64 delta){
+    InputEvent event = InputEvent();
+    event.type = InputEventType::PointerWheel;
+    event.position = CenterUiRect(self.m_state.scrollbars().viewport);
+    event.scrollY = delta;
+    return self.send(event).pointerConsumed;
+}
+
+b8 StartUiTextAreaScrollThumb(mut UiTextAreaScrollLifetimeTests self, in WidgetId area){
+    const WidgetId thumbId = RequireUiWidgetId(area, "scroll.y.thumb");
+    const auto thumb = self.tryTarget(thumbId);
+    if(!thumb.has_value())
+        return false;
+    const Point origin = CenterUiRect(thumb.value().rectangle);
+    const Point destination = Point(origin.x, origin.y + 24.0f);
+    return self.send(MakeUiTextScrollPointerEvent(origin, InputEventType::PrimaryDown)).pointerConsumed
+        && self.send(MakeUiTextScrollPointerEvent(destination, InputEventType::PointerMove)).pointerConsumed
+        && self.m_context.input().capture() == thumbId;
+}
+
+b8 PrepareUiTextAreaViewDense(mut UiTextAreaViewTests self){
+    return self.m_model.setText("abcdef\nabcdef\nabcdef") && self.shapeView();
+}
+
+b8 ArrangeUiTextAreaViewManual(mut UiTextAreaViewTests self, in Point scroll, in f32 width, in f32 height){
+    const auto placement = self.m_view.arrange(Rect(10.0f, 20.0f, width, height), Insets(), Rect(0.0f, 0.0f, 500.0f, 500.0f), scroll, 1.0f, false);
+    if(!placement.has_value())
+        return false;
+    self.m_placement = placement.value();
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -545,12 +623,9 @@ void VerifyUiTextAreaScrollLifetimeTests_IdenticalExternalScrollIntentRetiresAnA
     ASSERT_TRUE(self.prepareOverflow());
     const UiTextAreaModelSnapshot model = UiTextAreaModelSnapshot(self.m_model);
     const WidgetId afterId = RequireUiWidgetId(self.id(s_UiTextScrollAreaKey, s_UiTextScrollPanelKey), "scroll.y.after");
-    Rect afterRect = Rect();
-    native(in self, in afterId, mut afterRect){
-        const auto* after = self.target(afterId);
-        ASSERT_NE(after, nullptr);
-        afterRect = after->rectangle;
-    }
+    const auto firstAfter = self.tryTarget(afterId);
+    ASSERT_TRUE(firstAfter.has_value());
+    Rect afterRect = firstAfter.value().rectangle;
     self.click(CenterUiRect(afterRect));
     const Point scroll = self.m_state.scroll();
     const u64 revision = self.m_state.revision();
@@ -560,11 +635,9 @@ void VerifyUiTextAreaScrollLifetimeTests_IdenticalExternalScrollIntentRetiresAnA
     EXPECT_FLOAT_EQ(self.m_state.scroll().x, scroll.x);
     EXPECT_FLOAT_EQ(self.m_state.scroll().y, scroll.y);
     ExpectUiTextAreaScrollLifetimeModel(self, self.m_model, model);
-    native(in self, in afterId, mut afterRect){
-        const auto* after = self.target(afterId);
-        ASSERT_NE(after, nullptr);
-        afterRect = after->rectangle;
-    }
+    const auto secondAfter = self.tryTarget(afterId);
+    ASSERT_TRUE(secondAfter.has_value());
+    afterRect = secondAfter.value().rectangle;
     self.click(CenterUiRect(afterRect));
     ASSERT_TRUE(self.frameArea(3u, UiTextAreaScrollLifetimeSmallOptions()));
     EXPECT_GT(self.m_state.scroll().y, scroll.y);
@@ -678,12 +751,9 @@ void VerifyUiTextAreaScrollLifetimeTests_ActualViewportResizeRetiresWheelWithUnc
 void VerifyUiTextAreaScrollLifetimeTests_ChangedWheelLinesRetiresTheCopiedStepAndAcceptsItsNewPolicy(mut UiTextAreaScrollLifetimeTests self){
     ASSERT_TRUE(self.prepareOverflow());
     const UiTextAreaModelSnapshot model = UiTextAreaModelSnapshot(self.m_model);
-    f64 oldStep = 0.0;
-    native(in self, mut oldStep){
-        const auto* host = self.target(self.id("area", "panel"));
-        ASSERT_NE(host, nullptr);
-        oldStep = host->scrollStep;
-    }
+    const auto oldHost = self.tryTarget(self.id("area", "panel"));
+    ASSERT_TRUE(oldHost.has_value());
+    const f64 oldStep = oldHost.value().scrollStep;
     ASSERT_GT(oldStep, 0.0);
     ASSERT_TRUE(self.wheel());
     TextAreaOptions options = UiTextAreaScrollLifetimeSmallOptions();
@@ -691,12 +761,9 @@ void VerifyUiTextAreaScrollLifetimeTests_ChangedWheelLinesRetiresTheCopiedStepAn
     ASSERT_TRUE(self.frameArea(2u, options));
     EXPECT_FLOAT_EQ(self.m_state.scroll().y, 0.0f);
     ExpectUiTextAreaScrollLifetimeModel(self, self.m_model, model);
-    f64 newStep = 0.0;
-    native(in self, mut newStep){
-        const auto* host = self.target(self.id("area", "panel"));
-        ASSERT_NE(host, nullptr);
-        newStep = host->scrollStep;
-    }
+    const auto newHost = self.tryTarget(self.id("area", "panel"));
+    ASSERT_TRUE(newHost.has_value());
+    const f64 newStep = newHost.value().scrollStep;
     EXPECT_GT(newStep, oldStep);
     ASSERT_TRUE(self.wheel());
     ASSERT_TRUE(self.frameArea(3u, options));
@@ -1020,12 +1087,11 @@ void VerifyUiTextAreaScrollTests_DocumentEdgesRevealCombiningMarksAndFallbackInk
     ASSERT_GT(visual.y + visual.height, logical.y);
     b8 sawLatin = false;
     b8 sawKorean = false;
-    native(in reference, mut sawLatin, mut sawKorean){
-        for(const auto& glyph : reference.layout().glyphs()){
-            ASSERT_TRUE(glyph.face);
-            sawLatin = sawLatin || glyph.face->identity().name() == Name("tests/ui/fonts/latin");
-            sawKorean = sawKorean || glyph.face->identity().name() == Name("tests/ui/fonts/korean");
-        }
+    for(usize index = 0u; index < reference.layout().glyphs().size(); ++index){
+        const PlacedGlyph glyph = reference.layout().glyphs()[index];
+        ASSERT_TRUE(cast<b8>(glyph.face));
+        sawLatin = sawLatin || FontFaceIdentityName(glyph.face) == Name(s_TestLatinFontPath);
+        sawKorean = sawKorean || FontFaceIdentityName(glyph.face) == Name(s_TestKoreanFontPath);
     }
     ASSERT_TRUE(sawLatin && sawKorean);
     TextAreaOptions options = TextAreaOptions();
@@ -1265,61 +1331,39 @@ void VerifyUiTextAreaViewTests_FailedManualArrangementPreservesThePriorPlacement
 
 
 void VerifyTextBakedTests_FontHashMismatchUsesCoverageForTheAlreadySelectedFace(mut TextBakedTests self){
-    native(mut self){
-        const auto binary = ::NWB::Impl::SerializeFontAtlasPayload(self.m_atlas.payload(), self.m_arena, self.m_scratchArena);
-        ASSERT_TRUE(binary);
-        auto payload = ::NWB::Impl::DeserializeFontAtlasPayload(*binary, self.m_arena, self.m_scratchArena);
-        ASSERT_TRUE(payload);
-        payload->fontSha256.bytes[0u] ^= 1u;
-        self.m_atlas.setPayload(Move(*payload));
-    }
+    ASSERT_TRUE(self.corruptPayloadFontHash());
     ASSERT_TRUE(self.installAtlas());
     ShapeRequest request = ShapeRequest();
     request.text = s_UiTextBakedSampleGlyphText;
     ASSERT_TRUE(self.applyLayout(request));
-    native(in self){
-        EXPECT_FALSE(self.m_layout.glyphs()[0u].face->bakedAtlas());
-        EXPECT_EQ(self.m_layout.glyphs()[0u].face->identity().name(), Name("tests/ui/fonts/latin"));
-    }
+    EXPECT_FALSE(FontFaceHasBakedAtlas(self.m_layout.glyphs()[0u].face));
+    EXPECT_EQ(FontFaceIdentityName(self.m_layout.glyphs()[0u].face), Name(s_TestLatinFontPath));
     const DrawSnapshot snapshot = self.paint();
     EXPECT_TRUE(snapshot.sdfPages().empty());
     EXPECT_FALSE(snapshot.glyphPages().empty());
 }
 
 void VerifyTextBakedTests_LogicalFontIdentityMustMatchEvenWhenTheBytesMatch(mut TextBakedTests self){
-    native(mut self){
-        const auto binary = ::NWB::Impl::SerializeFontAtlasPayload(self.m_atlas.payload(), self.m_arena, self.m_scratchArena);
-        ASSERT_TRUE(binary);
-        auto payload = ::NWB::Impl::DeserializeFontAtlasPayload(*binary, self.m_arena, self.m_scratchArena);
-        ASSERT_TRUE(payload);
-        payload->font = ::NWB::Core::Assets::AssetRef<::NWB::Impl::Font>("tests/ui/fonts/other");
-        self.m_atlas.setPayload(Move(*payload));
-    }
+    ASSERT_TRUE(self.rebindPayloadFont("tests/ui/fonts/other"));
     ASSERT_TRUE(self.installAtlas());
     ASSERT_TRUE(self.applyLayout(MakeUiTextScrollShapeRequest(s_UiTextBakedSampleGlyphText, 24.0f)));
-    native(in self){
-        EXPECT_FALSE(self.m_layout.glyphs()[0u].face->bakedAtlas());
-    }
+    EXPECT_FALSE(FontFaceHasBakedAtlas(self.m_layout.glyphs()[0u].face));
     EXPECT_TRUE(self.paint().sdfPages().empty());
 }
 
 void VerifyTextBakedTests_OldLayoutAndSnapshotOwnTheirAtlasAfterFontReplacementAndAssetRelease(mut TextBakedTests self){
     ASSERT_TRUE(self.installAtlas());
     ASSERT_TRUE(self.applyLayout(MakeUiTextScrollShapeRequest(s_UiTextBakedSampleGlyphText, 24.0f)));
-    native(mut self){
-        const auto retained = self.m_layout.glyphs()[0u].face->bakedAtlas();
-        const DrawSnapshot first = self.paint();
-        ASSERT_EQ(first.sdfPages().size(), 1u);
-        const ::NWB::Impl::Ui::FontSource source{ ::NWB::Core::Assets::AssetRef<::NWB::Impl::Font>("tests/ui/fonts/latin"), self.m_font, 2u };
-        ASSERT_TRUE(self.m_text.setFonts(self.m_scratchArena, Span(&source, 1u)));
-        self.m_atlas.setPayload(::NWB::Impl::FontAtlasPayload(self.m_arena));
-        const DrawSnapshot second = self.paint();
-        ASSERT_EQ(second.sdfPages().size(), 1u);
-        EXPECT_EQ(first.sdfPages()[0u].get(), second.sdfPages()[0u].get());
-        EXPECT_EQ(second.sdfPages()[0u]->binding().fontGeneration, 1u);
-        EXPECT_EQ(retained.get(), self.m_layout.glyphs()[0u].face->bakedAtlas().get());
-        EXPECT_EQ(first.sdfPages()[0u]->pixels()[0u], 128u);
-    }
+    const SharedBakedFontAtlas retained = FontFaceBakedAtlas(self.m_layout.glyphs()[0u].face);
+    const DrawSnapshot first = self.paint();
+    ASSERT_EQ(first.sdfPages().size(), 1u);
+    ASSERT_TRUE(self.replaceWithUnbakedFontAndClearAtlas());
+    const DrawSnapshot second = self.paint();
+    ASSERT_EQ(second.sdfPages().size(), 1u);
+    EXPECT_EQ(first.sdfPages()[0u], second.sdfPages()[0u]);
+    EXPECT_EQ(SdfPageBindingOf(second.sdfPages()[0u]).fontGeneration, 1u);
+    EXPECT_EQ(retained, FontFaceBakedAtlas(self.m_layout.glyphs()[0u].face));
+    EXPECT_EQ(SdfPagePixelsOf(first.sdfPages()[0u])[0u], 128u);
 }
 
 void VerifyTextBakedTests_OutsideBakedSizeRangeUsesCoverageWithLowerThresholdControl(mut TextBakedTests self){

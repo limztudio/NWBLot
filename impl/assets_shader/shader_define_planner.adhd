@@ -2,58 +2,28 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+b8 ShouldReserveMergedShaderDefines(in b8 canReserve, in usize reserveCount, in usize existingCount){
+    return canReserve && reserveCount > existingCount;
+}
 
+b8 ValidateDerivedShaderStageText(in StringView nwbFilePathText, in StringView stageText){
+    if(!stageText.empty())
+        return true;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    error("Shader meta '{}': failed to derive shader stage", nwbFilePathText);
+    return false;
+}
 
+b8 ValidateNonEmptyShaderEntryPoint(in StringView nwbFilePathText, in StringView entryPoint){
+    if(!entryPoint.empty())
+        return true;
 
-#if defined(NWB_COOK)
+    error("Shader meta '{}': entry_point must not be empty", nwbFilePathText);
+    return false;
+}
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_shader/cook.adhd.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class ShaderDefinePlanner final : NoCopy{
-public:
-    explicit ShaderDefinePlanner(ShaderCook::CookArena& memoryArena)noexcept : m_memoryArena(memoryArena){}
-    void mergeInheritedDefines(Span<const Path> dependencies, const ShaderCook::CookMap<ShaderCook::CookString, ShaderCook::IncludeEntry>& includeMetadata, Core::Alloc::ScratchArena& scratchArena, ShaderCook::ShaderEntry& inOutEntry);
-    [[nodiscard]] b8 expandDefineCombinations(const ShaderCook::CookMap<ShaderCook::CookString, ShaderCook::DefineEntry>& defineValues, Core::Alloc::ScratchArena& scratchArena, ShaderCook::CookVector<ShaderCook::DefineCombo>& outCombinations);
-
-
-private:
-    ShaderCook::CookArena& m_memoryArena;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+b8 IsIncludeShaderAssetType(in StringView assetTypeText, in StringView expectedIncludeAssetType){
+    return assetTypeText == expectedIncludeAssetType;
 }
 
 

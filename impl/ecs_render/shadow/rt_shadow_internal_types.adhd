@@ -336,7 +336,7 @@ namespace RayTracingShadowVisibilityTaskDetail{
 
 // Both opaque resolve callbacks share one all-lit fallback: clear visibility, realign UAV state, retire timing.
 template<typename PayloadT>
-inline void RecoverOpaqueSoftShadowAllLit(const PayloadT& payload, Core::CommandList& commandList){
+NWB_INLINE void RecoverOpaqueSoftShadowAllLit(const PayloadT& payload, Core::CommandList& commandList){
     payload.raytracingSystem.clearShadowVisibility(commandList, payload.targets);
     // Skipped transparent callbacks still declare this output as UAV. Realign the tracker after the typed fallback clear.
     commandList.setTextureState(payload.targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
@@ -355,7 +355,7 @@ inline void RecoverOpaqueSoftShadowAllLit(const PayloadT& payload, Core::Command
 }
 
 template<typename PayloadT>
-inline void DiscardOpaqueSoftShadowResolve(PayloadT& payload)noexcept{
+NWB_INLINE void DiscardOpaqueSoftShadowResolve(PayloadT& payload)noexcept{
     payload.opaqueProduced = false;
     Core::DiscardGpuTimingMeasure(&payload.asyncTiming);
     Core::DiscardGpuTimingMeasure(&payload.shadowVisibilityTiming);
@@ -363,7 +363,7 @@ inline void DiscardOpaqueSoftShadowResolve(PayloadT& payload)noexcept{
 }
 
 template<typename PayloadT>
-inline void DiscardTransparentSoftShadowResolve(PayloadT& payload)noexcept{
+NWB_INLINE void DiscardTransparentSoftShadowResolve(PayloadT& payload)noexcept{
     payload.transparentTraceProduced = false;
     Core::DiscardGpuTimingMeasure(&payload.transparentResolveTiming);
 }

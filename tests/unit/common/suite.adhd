@@ -51,7 +51,7 @@ namespace NameSymbols = Core::Common::NameSymbols;
 using Arena = Core::Alloc::GlobalArena;
 
 template<typename CharT>
-[[nodiscard]] inline BasicString<CharT, Arena> CopyAsciiText(Arena& arena, const AStringView source){
+[[nodiscard]] NWB_INLINE BasicString<CharT, Arena> CopyAsciiText(Arena& arena, const AStringView source){
     BasicString<CharT, Arena> text(arena);
     text.reserve(source.size());
     for(const char ch : source)
@@ -236,10 +236,8 @@ void BuildResolvedSpanSources(in Name shortName, mut b8 longNameCreated, mut Str
 }
 
 void VerifyNameSymbolDecodeTests_UnknownAndBoundaryNarrowTokensDoNotAllocate(){
-    native{
-        NameSymbols::InstallRuntimeRegistry();
-        NameSymbols::ClearRuntimeSymbols();
-    }
+    NameSymbols::InstallRuntimeRegistry();
+    NameSymbols::ClearRuntimeSymbols();
     GlobalArena arena(Name("Tests/NameSymbols/Boundaries"));
     const Name known(s_DecodeKnownSymbol);
     String source = "";
@@ -318,10 +316,8 @@ void VerifyNameSymbolDecodeTests_UnknownAndBoundaryWideTokensDoNotAllocate(){
 }
 
 void VerifyNameSymbolDecodeTests_ResolvesNarrowSpansWithoutChangingUnresolvedText(){
-    native{
-        NameSymbols::InstallRuntimeRegistry();
-        NameSymbols::ClearRuntimeSymbols();
-    }
+    NameSymbols::InstallRuntimeRegistry();
+    NameSymbols::ClearRuntimeSymbols();
     GlobalArena arena(Name("Tests/NameSymbols/Resolved"));
     const Name shortName(s_DecodeShortSymbol);
     b8 longNameCreated = false;
@@ -388,10 +384,8 @@ void VerifyNameSymbolDecodeTests_ResolvesWideSpansWithoutChangingUnresolvedText(
 void VerifyNameSymbolDecodeTests_EscapedDocumentRoundTripsAndMalformedRecordsStayUnpublished(){
     GlobalArena arena(Name("Tests/NameSymbols/EscapedDocument"));
     ScratchArena scratchArena(s_CommonNameTestsNameSymbolsScratch);
-    native{
-        NameSymbols::InstallRuntimeRegistry();
-        NameSymbols::ClearRuntimeSymbols();
-    }
+    NameSymbols::InstallRuntimeRegistry();
+    NameSymbols::ClearRuntimeSymbols();
     const StringView original = s_OriginalEscapedSymbol;
     const Name stored(s_OriginalEscapedSymbol);
     b8 serialized = false;
@@ -441,10 +435,8 @@ void VerifyNameSymbolDecodeTests_EscapedDocumentRoundTripsAndMalformedRecordsSta
 void VerifyNameSymbolDecodeTests_RejectsNoncurrentDocumentHeaderBeforePublishingSymbols(){
     GlobalArena arena(Name("Tests/NameSymbols/DocumentAdmission"));
     ScratchArena scratchArena(s_CommonNameTestsNameSymbolsScratch);
-    native{
-        NameSymbols::InstallRuntimeRegistry();
-        NameSymbols::ClearRuntimeSymbols();
-    }
+    NameSymbols::InstallRuntimeRegistry();
+    NameSymbols::ClearRuntimeSymbols();
     const Name retained(s_RetainedAdmissionSymbol);
     Array<StringView, 6> rejectedHeaders = Array<StringView, 6>();
     rejectedHeaders[0u] = "";
@@ -499,41 +491,34 @@ void VerifyNameSymbolDecodeTests_RejectsNoncurrentDocumentHeaderBeforePublishing
     EXPECT_EQ(incomingView, "admission/incoming");
 }
 
+Expected<b8, ErrorCode> LoadNameSymbolsFileForTest(in Path path, mut ScratchArena scratchArena){
+    return NameSymbols::LoadFile(path, scratchArena);
+}
+
 void VerifyNameSymbolDecodeTests_FileLoadSeparatesHeaderAnswerFromNativeReadFailure(){
-    GlobalArena arena(Name("Tests/NameSymbols/FileAdmission"));
     ScratchArena scratchArena(s_CommonNameTestsNameSymbolsScratch);
+    const Path path("name_symbol_expected_file_unit.namesym");
+    ASSERT_TRUE(RemoveAllIfExists(path).has_value());
+
+    const b8 wroteV1 = WriteTextFile(path, "nwb_namesym_v1\n");
     Expected<b8, ErrorCode> accepted = false;
+    if(wroteV1)
+        accepted = LoadNameSymbolsFileForTest(path, scratchArena);
+
+    const b8 wroteV2 = wroteV1 && WriteTextFile(path, "nwb_namesym_v2\n");
     Expected<b8, ErrorCode> rejectedHeader = true;
-    Expected<b8, ErrorCode> removed = false;
-    Expected<u64, ErrorCode> missingFileSize = 0u;
-    Expected<b8, ErrorCode> missing = true;
-    b8 sameErrorCategory = false;
-    b8 cleanedUp = false;
+    if(wroteV2)
+        rejectedHeader = LoadNameSymbolsFileForTest(path, scratchArena);
 
-    native(mut arena, mut scratchArena, mut accepted, mut rejectedHeader, mut removed, mut missingFileSize, mut missing, mut sameErrorCategory, mut cleanedUp){
-        const ::Path<GlobalArena> path(arena, "name_symbol_expected_file_unit.namesym");
-        ASSERT_TRUE(RemoveAllIfExists(path));
-        ScopeExit cleanup([&]()noexcept{
-            if(const auto cleanupRemoved = RemoveFile(path); !cleanupRemoved)
-                CaptureDiagnosticEvent("name_symbol_file_admission", "Failed to remove unit name-symbol fixture", __FILE__, __LINE__);
-        });
+    const Expected<b8, ErrorCode> removed = RemoveFile(path);
+    const Expected<u64, ErrorCode> missingFileSize = FileSize(path);
+    const Expected<b8, ErrorCode> missing = LoadNameSymbolsFileForTest(path, scratchArena);
+    const b8 cleanedUp = RemoveFile(path).has_value();
 
-        ASSERT_TRUE(WriteTextFile(path, "nwb_namesym_v1\n"));
-        accepted = NameSymbols::LoadFile(path, scratchArena);
-
-        ASSERT_TRUE(WriteTextFile(path, "nwb_namesym_v2\n"));
-        rejectedHeader = NameSymbols::LoadFile(path, scratchArena);
-
-        removed = RemoveFile(path);
-        missingFileSize = FileSize(path);
-        missing = NameSymbols::LoadFile(path, scratchArena);
-        if(!missing && !missingFileSize)
-            sameErrorCategory = &missing.error().category() == &missingFileSize.error().category();
-        cleanedUp = RemoveFile(path).has_value();
-    }
-
+    ASSERT_TRUE(wroteV1);
     ASSERT_TRUE(accepted.has_value());
     EXPECT_TRUE(accepted.value());
+    ASSERT_TRUE(wroteV2);
     ASSERT_TRUE(rejectedHeader.has_value());
     EXPECT_FALSE(rejectedHeader.value());
     ASSERT_TRUE(removed.has_value());
@@ -541,7 +526,7 @@ void VerifyNameSymbolDecodeTests_FileLoadSeparatesHeaderAnswerFromNativeReadFail
     ASSERT_FALSE(missingFileSize.has_value());
     ASSERT_FALSE(missing.has_value());
     EXPECT_EQ(missing.error(), missingFileSize.error());
-    EXPECT_TRUE(sameErrorCategory);
+    EXPECT_EQ(missing.error().category(), missingFileSize.error().category());
     EXPECT_TRUE(cleanedUp);
 }
 
@@ -1003,6 +988,13 @@ void VerifyFrameData_CopiesIndependentWindowState(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+NWB_ADHD_GTEST(NameSymbolDecodeTests, UnknownAndBoundaryNarrowTokensDoNotAllocate, VerifyNameSymbolDecodeTests_UnknownAndBoundaryNarrowTokensDoNotAllocate)
+NWB_ADHD_GTEST(NameSymbolDecodeTests, ResolvesNarrowSpansWithoutChangingUnresolvedText, VerifyNameSymbolDecodeTests_ResolvesNarrowSpansWithoutChangingUnresolvedText)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [source]
 native{
 
@@ -1058,39 +1050,9 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ADHD_GTEST(NameSymbolDecodeTests, UnknownAndBoundaryNarrowTokensDoNotAllocate, VerifyNameSymbolDecodeTests_UnknownAndBoundaryNarrowTokensDoNotAllocate)
-NWB_ADHD_GTEST(NameSymbolDecodeTests, ResolvesNarrowSpansWithoutChangingUnresolvedText, VerifyNameSymbolDecodeTests_ResolvesNarrowSpansWithoutChangingUnresolvedText)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 #if defined(NWB_UNICODE)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 TEST(NameSymbolDecodeTests, UnknownAndBoundaryWideTokensDoNotAllocate){ VerifyNameSymbolDecodeTests_UnknownAndBoundaryWideTokensDoNotAllocate(); }
 TEST(NameSymbolDecodeTests, ResolvesWideSpansWithoutChangingUnresolvedText){ VerifyNameSymbolDecodeTests_ResolvesWideSpansWithoutChangingUnresolvedText(); }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 #endif
 
 

@@ -64,6 +64,8 @@ using TestArena = NWB::Tests::TestArena<>;
 using ScopedTestTrace = NWB::Tests::ScopedTestTrace;
 using TextInputEvent = NWB::Core::TextInputEvent;
 namespace TextInputPollResult = NWB::Core::TextInputPollResult;
+using TextInputPollResultEnum = NWB::Core::TextInputPollResult::Enum;
+using TextInputAdmissionEnum = NWB::Core::TextInputAdmission::Enum;
 namespace TextInputEventKind = NWB::Core::TextInputEventKind;
 using UiEditLimits = NWB::Impl::Ui::EditLimits;
 using UiEditClipboardController = NWB::Impl::UiEditClipboardController;
@@ -96,14 +98,6 @@ inline constexpr TextInputRect s_OwnedTestCaret{ 10, 20, 1, 18 };
 inline constexpr UiTextEditOwner s_SessionTestOwner{ { 17u }, 1u, 1u };
 inline constexpr TextInputRect s_SessionTestCaret{ 100, 32, 1, 18 };
 
-[[nodiscard]] inline UiTextEditOwner MakeSelectionDeletionOwner(const u64 modelGeneration)noexcept{
-    return { { 371u }, 3u, modelGeneration };
-}
-
-[[nodiscard]] inline UiTextEditOwner MakeReplacedSessionOwner(const u64 modelGeneration)noexcept{
-    return { s_SessionTestOwner.widget, s_SessionTestOwner.declarationGeneration, modelGeneration };
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -118,6 +112,23 @@ inline constexpr TextInputRect s_SessionTestCaret{ 100, 32, 1, 18 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+UiTextEditOwner MakeSelectionDeletionOwner(in u64 modelGeneration){
+    UiTextEditOwner owner = UiTextEditOwner();
+    owner.widget.value = 371u;
+    owner.declarationGeneration = 3u;
+    owner.modelGeneration = modelGeneration;
+    return owner;
+}
+
+UiTextEditOwner MakeReplacedSessionOwner(in u64 modelGeneration){
+    UiTextEditOwner owner = UiTextEditOwner();
+    owner.widget = s_SessionTestOwner.widget;
+    owner.declarationGeneration = s_SessionTestOwner.declarationGeneration;
+    owner.modelGeneration = modelGeneration;
+    return owner;
+}
 
 
 void VerifyPaintSlot_ClearAndRemoveReaddDoNotRestoreTheRunningCallback(){
@@ -483,18 +494,16 @@ void VerifyUiTextEditOwned_OwnedCollectionAdoptionAndCancellationRejectAnotherTh
     ASSERT_TRUE(service.setFocused(true));
     ASSERT_EQ(session.begin(s_OwnedTestOwner, s_OwnedTestCaret, model), TextInputAdmission::Accepted);
     b8 cancelled = true;
-    native(mut session, mut event, mut model, mut cancelled){
-        TextInputPollResult::Enum poll = TextInputPollResult::Pending;
-        TextInputAdmission::Enum adopt = TextInputAdmission::Accepted;
-        Thread other([&]()noexcept{
-            poll = session.pollOwned(event);
-            adopt = session.adoptLocal(s_OwnedTestOwner, model, s_OwnedTestCaret);
-            cancelled = session.cancel();
-        });
-        other.join();
-        EXPECT_EQ(poll, TextInputPollResult::WrongThread);
-        EXPECT_EQ(adopt, TextInputAdmission::WrongThread);
-    }
+    TextInputPollResultEnum poll = TextInputPollResult::Pending;
+    TextInputAdmissionEnum adopt = TextInputAdmission::Accepted;
+    Thread other = Thread(lambda[mut session, mut event, mut model, mut poll, mut adopt, mut cancelled]() -> void{
+        poll = session.pollOwned(event);
+        adopt = session.adoptLocal(s_OwnedTestOwner, model, s_OwnedTestCaret);
+        cancelled = session.cancel();
+    });
+    other.join();
+    EXPECT_EQ(poll, TextInputPollResult::WrongThread);
+    EXPECT_EQ(adopt, TextInputAdmission::WrongThread);
     EXPECT_FALSE(cancelled);
     EXPECT_TRUE(session.token().valid());
     EXPECT_TRUE(session.cancel());

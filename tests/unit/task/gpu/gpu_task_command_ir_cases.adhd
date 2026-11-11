@@ -46,6 +46,8 @@ using GpuCmdIrReadStatusEnum = Core::GpuCommandIrStreamReadStatus::Enum;
 using GpuCmdIrReplayErrorEnum = Core::GpuCommandIrReplayError::Enum;
 using GpuCmdIrWireOpcodeEnum = Core::GpuCommandIrWireOpcode::Enum;
 using GpuCmdIrRasterReplayState = Core::GpuCommandIrDetail::RasterReplayState;
+using Core::GpuCommandIrDetail::ValidateRasterGraphOperation;
+using Core::GpuCommandIrDetail::ValidateReplayCommandListQueue;
 
 struct GpuCmdIrOwnerReleaseProbe{
     u32* releases = nullptr;
@@ -64,6 +66,14 @@ public:
             ++*releases;
     }
 };
+
+[[nodiscard]] NWB_INLINE Expected<Core::GpuCommandIrOwnerAnchor> MakeOwnerReleaseProbeAnchor(TestArena& ownerArena, u32& releases)noexcept{
+    return Core::MakeGpuCommandIrOwnerAnchor(ownerArena.arena, GpuCmdIrOwnerReleaseProbe(releases));
+}
+
+[[nodiscard]] NWB_INLINE Expected<Core::GpuUploadBlobId> CopyU32AlignedUploadBytes(Core::GpuTaskGraph& graph, const GraphicsBytes& caller){
+    return graph.copyUploadData(caller.data(), caller.size(), alignof(u32));
+}
 
 inline constexpr usize s_GpuCmdIrStreamHeaderBytes = sizeof(Core::GpuCommandIrStreamHeader);
 inline constexpr usize s_GpuCmdIrRecordHeaderBytes = sizeof(Core::GpuCommandIrHeader);
@@ -180,77 +190,43 @@ GpuUploadBlobId GpuCmdIr_MakeBlobId(in u64 generation, in u32 index){
 }
 
 BinaryByteView GpuCmdIr_SpanByteView(in Span<u8> bytes){
-    BinaryByteView view = BinaryByteView();
-    native(in bytes, mut view){
-        view = BinaryByteView{ bytes.data(), bytes.size() };
-    }
-    return view;
+    return MakeBinaryByteView(bytes);
 }
 
 BinaryByteView GpuCmdIr_GraphicsByteView(in GraphicsBytes bytes){
-    BinaryByteView view = BinaryByteView();
-    native(in bytes, mut view){
-        view = BinaryByteView{ bytes.data(), bytes.size() };
-    }
-    return view;
+    return MakeGraphicsByteView(bytes);
 }
 
 BinaryByteView GpuCmdIr_SubByteView(in BinaryByteView source, in usize offset, in usize count){
-    BinaryByteView view = BinaryByteView();
-    native(in source, in offset, in count, mut view){
-        view = BinaryByteView{ source.data() + offset, count };
-    }
-    return view;
+    return SubBinaryByteView(source, offset, count);
 }
 
 b8 GpuCmdIr_BytesEqual(in BinaryByteView lhs, in BinaryByteView rhs){
-    if(lhs.size() != rhs.size())
-        return false;
-    b8 equal = true;
-    native(in lhs, in rhs, mut equal){
-        if(!lhs.empty())
-            equal = NWB_MEMCMP(lhs.data(), rhs.data(), lhs.size()) == 0;
-    }
-    return equal;
+    return BinaryByteViewsEqual(lhs, rhs);
 }
 
 void GpuCmdIr_WriteU8(in usize offset, in u8 value, mut GraphicsBytes bytes){
-    native(in offset, in value, mut bytes){
-        WriteCommandIrPod(offset, value, bytes);
-    }
+    WriteCommandIrU8(offset, value, bytes);
 }
 
 void GpuCmdIr_WriteU16(in usize offset, in u16 value, mut GraphicsBytes bytes){
-    native(in offset, in value, mut bytes){
-        WriteCommandIrPod(offset, value, bytes);
-    }
+    WriteCommandIrU16(offset, value, bytes);
 }
 
 void GpuCmdIr_WriteU32(in usize offset, in u32 value, mut GraphicsBytes bytes){
-    native(in offset, in value, mut bytes){
-        WriteCommandIrPod(offset, value, bytes);
-    }
+    WriteCommandIrU32(offset, value, bytes);
 }
 
 void GpuCmdIr_WriteU64(in usize offset, in u64 value, mut GraphicsBytes bytes){
-    native(in offset, in value, mut bytes){
-        WriteCommandIrPod(offset, value, bytes);
-    }
+    WriteCommandIrU64(offset, value, bytes);
 }
 
 void GpuCmdIr_WriteF32(in usize offset, in f32 value, mut GraphicsBytes bytes){
-    native(in offset, in value, mut bytes){
-        WriteCommandIrPod(offset, value, bytes);
-    }
+    WriteCommandIrF32(offset, value, bytes);
 }
 
 Optional<GpuSubmissionPacket> GpuCmdIr_PacketPlan(in GpuCompiledPacketView view){
-    Optional<GpuSubmissionPacket> out = Optional<GpuSubmissionPacket>();
-    native(in view, mut out){
-        if(view.plan)
-            out = *view.plan;
-    }
-    return out;
+    return PacketPlan(view);
 }
 
 void VerifyGpuCmdIr_RejectsForeignGraphAndPlanGenerationsWithoutChangingCapturedBytes(){
@@ -389,12 +365,7 @@ void VerifyGpuCmdIr_RollbackPreservesExactMixedRecordPrefixAtRecordBoundaries(){
         GpuCmdIr_SubByteView(GpuCmdIr_GraphicsByteView(expectedPrefix), s_GpuCmdIrStreamHeaderBytes, expectedPrefix.size() - s_GpuCmdIrStreamHeaderBytes)
     ));
 
-    Optional<GpuCommandIrStreamHeader> streamHeader = Optional<GpuCommandIrStreamHeader>();
-    native(in rolledBackBytes, mut streamHeader){
-        usize cursor = 0u;
-        if(const auto parsed = ReadPOD<Core::GpuCommandIrStreamHeader>(rolledBackBytes, cursor))
-            streamHeader = *parsed;
-    }
+    const Optional<GpuCommandIrStreamHeader> streamHeader = ReadCommandIrPodAt<GpuCommandIrStreamHeader>(rolledBackBytes, 0u);
     ASSERT_TRUE(streamHeader.has_value());
     EXPECT_EQ(streamHeader.value().recordCount, 2u);
     EXPECT_EQ(streamHeader.value().commandBytes, s_GpuCmdIrCopyBufferRecordBytes + s_GpuCmdIrCopyTextureRecordBytes);
@@ -407,14 +378,9 @@ void VerifyGpuCmdIr_RetainedOwnerAnchorOutlivesIndependentCaptureArena(){
     {
         TestArena captureArena = TestArena();
         GpuCommandIrCapture capture = GpuCommandIrCapture(captureArena.arena);
-        b8 hasSource = false;
-        native(mut ownerArena, mut releases, mut exported, mut hasSource){
-            const auto source = Core::MakeGpuCommandIrOwnerAnchor(ownerArena.arena, GpuCmdIrOwnerReleaseProbe(releases));
-            hasSource = source.has_value();
-            if(source)
-                exported = *source;
-        }
-        ASSERT_TRUE(hasSource);
+        const auto source = MakeOwnerReleaseProbeAnchor(ownerArena, releases);
+        ASSERT_TRUE(source.has_value());
+        exported = source.value();
         capture.reset();
         EXPECT_EQ(releases, 0u);
     }
@@ -550,12 +516,10 @@ void VerifyGpuCmdIr_DrawWithoutHeapBindingRejectsWholePacket(){
     indexedDraw.task = task;
     indexedDraw.drawArguments.setVertexCount(3u);
 
-    native(in declarations, in task, in stateRecord, in heapRecord, in pushRecord, in indexedDraw, mut graphState){
-        ASSERT_EQ(Core::GpuCommandIrDetail::ValidateRasterGraphOperation(stateRecord, declarations, declarations.taskAt(task.index), graphState), Core::GpuCommandIrReplayError::None);
-        ASSERT_EQ(Core::GpuCommandIrDetail::ValidateRasterGraphOperation(heapRecord, declarations, declarations.taskAt(task.index), graphState), Core::GpuCommandIrReplayError::None);
-        ASSERT_EQ(Core::GpuCommandIrDetail::ValidateRasterGraphOperation(pushRecord, declarations, declarations.taskAt(task.index), graphState), Core::GpuCommandIrReplayError::None);
-        EXPECT_EQ(Core::GpuCommandIrDetail::ValidateRasterGraphOperation(indexedDraw, declarations, declarations.taskAt(task.index), graphState), Core::GpuCommandIrReplayError::InvalidRasterDraw);
-    }
+    ASSERT_EQ(ValidateRasterGraphOperation(stateRecord, declarations, declarations.taskAt(task.index), graphState), GpuCommandIrReplayError::None);
+    ASSERT_EQ(ValidateRasterGraphOperation(heapRecord, declarations, declarations.taskAt(task.index), graphState), GpuCommandIrReplayError::None);
+    ASSERT_EQ(ValidateRasterGraphOperation(pushRecord, declarations, declarations.taskAt(task.index), graphState), GpuCommandIrReplayError::None);
+    EXPECT_EQ(ValidateRasterGraphOperation(indexedDraw, declarations, declarations.taskAt(task.index), graphState), GpuCommandIrReplayError::InvalidRasterDraw);
 }
 
 GpuCommandIrRasterStateDesc GpuCmdIr_RasterState(){
@@ -711,10 +675,7 @@ void VerifyGpuCmdIr_RejectsMalformedHeadersBeforeReadingRecords(){
     ASSERT_TRUE(CaptureAllBuiltinCommandIrRecords(capture));
     const BinaryByteView validBytes = capture.commandBytes();
 
-    GpuCommandIrStreamValidationResult nullData = GpuCommandIrStreamValidationResult();
-    native(mut nullData){
-        nullData = Core::ValidateGpuCommandIrStream(BinaryByteView{ nullptr, 1u });
-    }
+    const GpuCommandIrStreamValidationResult nullData = ValidateGpuCommandIrStream(MakeNullBinaryByteView(1u));
     EXPECT_EQ(nullData.error, GpuCommandIrStreamValidationError::NullData);
     EXPECT_TRUE(nullData.complete);
     EXPECT_FALSE(nullData.valid());
@@ -892,11 +853,9 @@ void VerifyGpuCmdIr_RequiresExactPhysicalQueueBeyondBroadQueueClass(){
     wrongClassDescription.setPhysicalQueue(packetQueue.id);
     wrongClassDescription.queueType = CommandQueue::Compute;
 
-    native(in packetQueue, in exactDescription, in sameClassWrongDescription, in wrongClassDescription){
-        EXPECT_EQ(Core::GpuCommandIrDetail::ValidateReplayCommandListQueue(exactDescription, packetQueue.id, packetQueue.queueClass), Core::GpuCommandIrReplayError::None);
-        EXPECT_EQ(Core::GpuCommandIrDetail::ValidateReplayCommandListQueue(sameClassWrongDescription, packetQueue.id, packetQueue.queueClass), Core::GpuCommandIrReplayError::CommandListQueueMismatch);
-        EXPECT_EQ(Core::GpuCommandIrDetail::ValidateReplayCommandListQueue(wrongClassDescription, packetQueue.id, packetQueue.queueClass), Core::GpuCommandIrReplayError::CommandListQueueMismatch);
-    }
+    EXPECT_EQ(ValidateReplayCommandListQueue(exactDescription, packetQueue.id, packetQueue.queueClass), GpuCommandIrReplayError::None);
+    EXPECT_EQ(ValidateReplayCommandListQueue(sameClassWrongDescription, packetQueue.id, packetQueue.queueClass), GpuCommandIrReplayError::CommandListQueueMismatch);
+    EXPECT_EQ(ValidateReplayCommandListQueue(wrongClassDescription, packetQueue.id, packetQueue.queueClass), GpuCommandIrReplayError::CommandListQueueMismatch);
 }
 
 void VerifyGpuCmdIr_PreflightsTheWholeStreamAgainstTheCompiledPacketBeforeLowering(){
@@ -1209,10 +1168,7 @@ void VerifyGpuCmdIr_OwnsLargeGraphBlobAfterCallerMutationAndGraphReset(){
         expected[index] = b;
     }
 
-    Expected<GpuUploadBlobId> blobResult = MakeUnexpected(Failure());
-    native(mut graph, in caller, mut blobResult){
-        blobResult = graph.copyUploadData(caller.data(), caller.size(), alignof(u32));
-    }
+    const auto blobResult = CopyU32AlignedUploadBytes(graph, caller);
     ASSERT_TRUE(blobResult.has_value());
     const GpuUploadBlobId blob = blobResult.value();
     ASSERT_TRUE(blob.valid());
@@ -1315,11 +1271,7 @@ void VerifyGpuCmdIr_RejectedInputsAndForeignOrStaleCheckpointsPreserveAcceptedBy
     ASSERT_TRUE(before.has_value());
     EXPECT_FALSE(capture.beginRecordingAttempt(32u));
     EXPECT_FALSE(capture.captureUploadBuffer(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, staleBlob, s_CommandIrDestination, 16u, GpuCmdIr_SpanByteView(bytes), ResourceStates::CopyDest));
-    b8 nullRejected = false;
-    native(mut capture, in blob, mut nullRejected){
-        nullRejected = !capture.captureUploadBuffer(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, blob, s_CommandIrDestination, 16u, BinaryByteView{ nullptr, 4u }, Core::ResourceStates::CopyDest);
-    }
-    EXPECT_TRUE(nullRejected);
+    EXPECT_FALSE(capture.captureUploadBuffer(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, blob, s_CommandIrDestination, 16u, MakeNullBinaryByteView(4u), ResourceStates::CopyDest));
     EXPECT_FALSE(foreign.rollback(checkpoint));
     const auto after = capture.exportOwned(testArena.arena);
     ASSERT_TRUE(after.has_value());

@@ -11,11 +11,11 @@ native{
 
 #include <impl/ecs_render/kernel/timing_names.adhd.h>
 
-#include <core/common/log.h>
 #include <core/graphics/runtime/render_pass.h>
 #include <core/graphics/runtime/runtime.h>
 
 namespace NWB::Tests::Smoke{
+namespace RendererGpuTimingScope = Impl::RendererGpuTimingScope;
 using Core::GraphicsRuntime;
 using Core::IRenderPass;
 
@@ -37,19 +37,17 @@ public:
 
 
 const u32 s_TimingProbeInFlightRanges = 32u;
+const StringView s_AvboitTimingProbeName = "AvboitTimingProbe";
+const StringView s_ShadowTimingProbeName = "ShadowTimingProbe";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 PrepareTimingProbeScopes(mut GraphicsRuntime graphics, in Span<Name> scopes, in TStringView probeName){
+b8 PrepareTimingProbeScopes(mut GraphicsRuntime graphics, in Span<Name> scopes, in StringView probeName){
     for(usize i = 0u; i < scopes.size(); ++i){
         const Name scope = scopes[i];
-        b8 prepared = false;
-        native(mut graphics, in scope, mut prepared){
-            prepared = graphics.gpuTiming().prepareScopeQueries(scope, graphics.getDevice(), s_TimingProbeInFlightRanges);
-        }
-        if(!prepared){
+        if(!graphics.gpuTiming().prepareScopeQueries(scope, graphics.getDevice(), s_TimingProbeInFlightRanges)){
             error("{}: failed to prepare scope '{}'", probeName, scope.resolvedText());
             return false;
         }
@@ -57,10 +55,8 @@ b8 PrepareTimingProbeScopes(mut GraphicsRuntime graphics, in Span<Name> scopes, 
     return true;
 }
 
-void RegisterTimingProbeRenderPass(mut GraphicsRuntime graphics, mut TimingProbeUnfocusedPass pass, in TStringView probeName){
-    native(mut graphics, mut pass){
-        graphics.addRenderPassToBack(pass);
-    }
+void RegisterTimingProbeRenderPass(mut GraphicsRuntime graphics, mut TimingProbeUnfocusedPass pass, in StringView probeName){
+    graphics.addRenderPassToBack(pass);
     [essential] info("{}: in-flight ranges {}", probeName, s_TimingProbeInFlightRanges);
     [essential] info("{}: render unfocused 1", probeName);
 }
@@ -83,47 +79,41 @@ class AvboitTimingRenderPass{
         if(this.m_registered)
             return this.m_includeCaustics == includeCaustics;
 
-        TStringView probeName = TStringView();
         Array<Name, 24u> scopes;
+        scopes[0u] = RendererGpuTimingScope::s_Frame.identity;
+        scopes[1u] = RendererGpuTimingScope::s_OpaqueRegular.identity;
+        scopes[2u] = RendererGpuTimingScope::s_ShadowVisibility.identity;
+        scopes[3u] = RendererGpuTimingScope::s_LightSpaceShadowViews.identity;
+        scopes[4u] = RendererGpuTimingScope::s_LightSpaceShadowOpaqueCapture.identity;
+        scopes[5u] = RendererGpuTimingScope::s_LightSpaceShadowTransparentCapture.identity;
+        scopes[6u] = RendererGpuTimingScope::s_LightSpaceShadowShade.identity;
+        scopes[7u] = RendererGpuTimingScope::s_LightSpaceShadowMapOpaque.identity;
+        scopes[8u] = RendererGpuTimingScope::s_LightSpaceShadowMapTransparent.identity;
+        scopes[9u] = RendererGpuTimingScope::s_LightSpaceShadowFallbackOpaque.identity;
+        scopes[10u] = RendererGpuTimingScope::s_LightSpaceShadowFallbackTransparent.identity;
+        scopes[11u] = RendererGpuTimingScope::s_DeferredLighting.identity;
+        scopes[12u] = RendererGpuTimingScope::s_DeferredComposite.identity;
+        scopes[13u] = RendererGpuTimingScope::s_DeferredPresent.identity;
+        scopes[14u] = RendererGpuTimingScope::s_AvboitClear.identity;
+        scopes[15u] = RendererGpuTimingScope::s_AvboitOccupancy.identity;
+        scopes[16u] = RendererGpuTimingScope::s_AvboitDepthWarp.identity;
+        scopes[17u] = RendererGpuTimingScope::s_AvboitExtinction.identity;
+        scopes[18u] = RendererGpuTimingScope::s_AvboitIntegration.identity;
+        scopes[19u] = RendererGpuTimingScope::s_AvboitAccumulate.identity;
+        scopes[20u] = RendererGpuTimingScope::s_RefractionResolve.identity;
+        scopes[21u] = RendererGpuTimingScope::s_RefractionClassifyTiles.identity;
+        scopes[22u] = RendererGpuTimingScope::s_RefractionClearTileArguments.identity;
+        scopes[23u] = RendererGpuTimingScope::s_OpticalBoundsFinalize.identity;
+
         Array<Name, 2u> causticScopes;
-        native(mut probeName, mut scopes, mut causticScopes){
-            probeName = NWB_TEXT("AvboitTimingProbe");
-            scopes = {
-                Impl::RendererGpuTimingScope::s_Frame.identity,
-                Impl::RendererGpuTimingScope::s_OpaqueRegular.identity,
-                Impl::RendererGpuTimingScope::s_ShadowVisibility.identity,
-                Impl::RendererGpuTimingScope::s_LightSpaceShadowViews.identity,
-                Impl::RendererGpuTimingScope::s_LightSpaceShadowOpaqueCapture.identity,
-                Impl::RendererGpuTimingScope::s_LightSpaceShadowTransparentCapture.identity,
-                Impl::RendererGpuTimingScope::s_LightSpaceShadowShade.identity,
-                Impl::RendererGpuTimingScope::s_LightSpaceShadowMapOpaque.identity,
-                Impl::RendererGpuTimingScope::s_LightSpaceShadowMapTransparent.identity,
-                Impl::RendererGpuTimingScope::s_LightSpaceShadowFallbackOpaque.identity,
-                Impl::RendererGpuTimingScope::s_LightSpaceShadowFallbackTransparent.identity,
-                Impl::RendererGpuTimingScope::s_DeferredLighting.identity,
-                Impl::RendererGpuTimingScope::s_DeferredComposite.identity,
-                Impl::RendererGpuTimingScope::s_DeferredPresent.identity,
-                Impl::RendererGpuTimingScope::s_AvboitClear.identity,
-                Impl::RendererGpuTimingScope::s_AvboitOccupancy.identity,
-                Impl::RendererGpuTimingScope::s_AvboitDepthWarp.identity,
-                Impl::RendererGpuTimingScope::s_AvboitExtinction.identity,
-                Impl::RendererGpuTimingScope::s_AvboitIntegration.identity,
-                Impl::RendererGpuTimingScope::s_AvboitAccumulate.identity,
-                Impl::RendererGpuTimingScope::s_RefractionResolve.identity,
-                Impl::RendererGpuTimingScope::s_RefractionClassifyTiles.identity,
-                Impl::RendererGpuTimingScope::s_RefractionClearTileArguments.identity,
-                Impl::RendererGpuTimingScope::s_OpticalBoundsFinalize.identity,
-            };
-            causticScopes = {
-                Impl::RendererGpuTimingScope::s_CausticPhotons.identity,
-                Impl::RendererGpuTimingScope::s_CausticResolve.identity,
-            };
-        }
-        if(!PrepareTimingProbeScopes(this.m_graphics, scopes, probeName))
+        causticScopes[0u] = RendererGpuTimingScope::s_CausticPhotons.identity;
+        causticScopes[1u] = RendererGpuTimingScope::s_CausticResolve.identity;
+
+        if(!PrepareTimingProbeScopes(this.m_graphics, scopes, s_AvboitTimingProbeName))
             return false;
-        if(includeCaustics && !PrepareTimingProbeScopes(this.m_graphics, causticScopes, probeName))
+        if(includeCaustics && !PrepareTimingProbeScopes(this.m_graphics, causticScopes, s_AvboitTimingProbeName))
             return false;
-        RegisterTimingProbeRenderPass(this.m_graphics, this.m_pass, probeName);
+        RegisterTimingProbeRenderPass(this.m_graphics, this.m_pass, s_AvboitTimingProbeName);
         this.m_registered = true;
         this.m_includeCaustics = includeCaustics;
         if(includeCaustics)
@@ -159,29 +149,24 @@ class ShadowTimingRenderPass{
         if(this.m_registered)
             return true;
 
-        TStringView probeName = TStringView();
         Array<Name, 13u> scopes;
-        native(mut probeName, mut scopes){
-            probeName = NWB_TEXT("ShadowTimingProbe");
-            scopes = {
-                Impl::RendererGpuTimingScope::s_Frame.identity,
-                Impl::RendererGpuTimingScope::s_OpaqueRegular.identity,
-                Impl::RendererGpuTimingScope::s_DeferredLighting.identity,
-                Impl::RendererGpuTimingScope::s_DeferredComposite.identity,
-                Impl::RendererGpuTimingScope::s_DeferredPresent.identity,
-                Impl::RendererGpuTimingScope::s_ShadowVisibility.identity,
-                Impl::RendererGpuTimingScope::s_ShadowOpaqueTrace.identity,
-                Impl::RendererGpuTimingScope::s_ShadowGeometryDownsample.identity,
-                Impl::RendererGpuTimingScope::s_ShadowOpaqueTemporal.identity,
-                Impl::RendererGpuTimingScope::s_ShadowOpaqueResolve.identity,
-                Impl::RendererGpuTimingScope::s_ShadowTransparentTrace.identity,
-                Impl::RendererGpuTimingScope::s_ShadowTransparentTemporal.identity,
-                Impl::RendererGpuTimingScope::s_ShadowTransparentResolve.identity,
-            };
-        }
-        if(!PrepareTimingProbeScopes(this.m_graphics, scopes, probeName))
+        scopes[0u] = RendererGpuTimingScope::s_Frame.identity;
+        scopes[1u] = RendererGpuTimingScope::s_OpaqueRegular.identity;
+        scopes[2u] = RendererGpuTimingScope::s_DeferredLighting.identity;
+        scopes[3u] = RendererGpuTimingScope::s_DeferredComposite.identity;
+        scopes[4u] = RendererGpuTimingScope::s_DeferredPresent.identity;
+        scopes[5u] = RendererGpuTimingScope::s_ShadowVisibility.identity;
+        scopes[6u] = RendererGpuTimingScope::s_ShadowOpaqueTrace.identity;
+        scopes[7u] = RendererGpuTimingScope::s_ShadowGeometryDownsample.identity;
+        scopes[8u] = RendererGpuTimingScope::s_ShadowOpaqueTemporal.identity;
+        scopes[9u] = RendererGpuTimingScope::s_ShadowOpaqueResolve.identity;
+        scopes[10u] = RendererGpuTimingScope::s_ShadowTransparentTrace.identity;
+        scopes[11u] = RendererGpuTimingScope::s_ShadowTransparentTemporal.identity;
+        scopes[12u] = RendererGpuTimingScope::s_ShadowTransparentResolve.identity;
+
+        if(!PrepareTimingProbeScopes(this.m_graphics, scopes, s_ShadowTimingProbeName))
             return false;
-        RegisterTimingProbeRenderPass(this.m_graphics, this.m_pass, probeName);
+        RegisterTimingProbeRenderPass(this.m_graphics, this.m_pass, s_ShadowTimingProbeName);
         this.m_registered = true;
         return true;
     }

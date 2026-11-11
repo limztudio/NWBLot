@@ -8,42 +8,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <utilities/global.adhd.h>
-
-namespace NWB::FbxToNwb{
-using UtilityVec3Vector = DefaultVector<Vec3, Core::Alloc::GlobalArena, QueryUtilityGlobalArena<s_UtilityArena>>;
-using UtilityVec4Vector = DefaultVector<Vec4, Core::Alloc::GlobalArena, QueryUtilityGlobalArena<s_UtilityArena>>;
-using UtilitySkinInfluenceVector = DefaultVector<MeshSkinInfluence, Core::Alloc::GlobalArena, QueryUtilityGlobalArena<s_UtilityArena>>;
-using UtilitySourceVertexRefVector = DefaultVector<SourceVertexRef, Core::Alloc::GlobalArena, QueryUtilityGlobalArena<s_UtilityArena>>;
-using UtilityU32Vector = DefaultVector<u32, Core::Alloc::GlobalArena, QueryUtilityGlobalArena<s_UtilityArena>>;
-using ScratchU32Vector = Vector<u32, Core::Alloc::ScratchArena>;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+class PositionAlignedSkinnedMeshStreamsResult{
+    public Vector<Vec3> positions;
+    public Vector<MeshSkinInfluence> positionSkin;
+    public Vector<SourceVertexRef> vertexRefs;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 DropSourceMeshTangentsStreams(
+Vector<SourceVertexRef> CompactSourceVertexRefsWithoutTangents(
     in Span<SourceVertexRef> sourceVertexRefs,
-    mut UtilityVec4Vector inOutTangents,
-    mut UtilitySourceVertexRefVector inOutVertexRefs,
     mut Span<u32> inOutIndices
 ){
-    inOutTangents.clear();
-
     HashMap<SourceVertexRef, u32> compactLookup;
     compactLookup.reserve(sourceVertexRefs.size());
     Vector<SourceVertexRef> compactVertexRefs;
@@ -71,11 +49,7 @@ b8 DropSourceMeshTangentsStreams(
         assert(cast<usize>(index) < vertexRefRemap.size());
         inOutIndices[i] = vertexRefRemap[cast<usize>(index)];
     }
-    inOutVertexRefs.clear();
-    inOutVertexRefs.reserve(compactVertexRefs.size());
-    for(in SourceVertexRef ref : compactVertexRefs)
-        inOutVertexRefs.push_back(ref);
-    return true;
+    return compactVertexRefs;
 }
 
 Expected<usize> TryComputeTriangleIndexScratchCapacity(in usize maxFaceTriangles){
@@ -95,20 +69,15 @@ b8 EnsureTriangleIndexScratchCapacityCount(in usize maxFaceTriangles, mut Scratc
     return true;
 }
 
-b8 BuildPositionAlignedSkinnedMeshStreams(
+Expected<PositionAlignedSkinnedMeshStreamsResult> BuildPositionAlignedSkinnedMeshStreams(
     in Span<Vec3> sourcePositions,
     in Span<MeshSkinInfluence> sourceSkin,
-    in Span<SourceVertexRef> sourceVertexRefs,
-    mut UtilityVec3Vector outPositions,
-    mut UtilitySkinInfluenceVector outPositionSkin,
-    mut UtilitySourceVertexRefVector outVertexRefs
+    in Span<SourceVertexRef> sourceVertexRefs
 ){
-    outVertexRefs.clear();
-    outPositions.clear();
-    outPositionSkin.clear();
-    outVertexRefs.reserve(sourceVertexRefs.size());
-    outPositions.reserve(sourceVertexRefs.size());
-    outPositionSkin.reserve(sourceVertexRefs.size());
+    PositionAlignedSkinnedMeshStreamsResult out;
+    out.vertexRefs.reserve(sourceVertexRefs.size());
+    out.positions.reserve(sourceVertexRefs.size());
+    out.positionSkin.reserve(sourceVertexRefs.size());
 
     HashMap<u64, u32> positionSkinLookup;
     positionSkinLookup.reserve(sourceVertexRefs.size());
@@ -119,23 +88,23 @@ b8 BuildPositionAlignedSkinnedMeshStreams(
             positionIndex = positionSkinLookup[key];
         }
         else{
-            if(outPositions.size() > cast<usize>(u32.max)){
+            if(out.positions.size() > cast<usize>(u32.max)){
                 error("Failed to write NWB model: split skinned mesh has too many positions");
-                return false;
+                return MakeUnexpected(Failure());
             }
 
-            positionIndex = cast<u32>(outPositions.size());
-            outPositions.push_back(sourcePositions[cast<usize>(sourceRef.position)]);
-            outPositionSkin.push_back(sourceSkin[cast<usize>(sourceRef.skin)]);
+            positionIndex = cast<u32>(out.positions.size());
+            out.positions.push_back(sourcePositions[cast<usize>(sourceRef.position)]);
+            out.positionSkin.push_back(sourceSkin[cast<usize>(sourceRef.skin)]);
             positionSkinLookup.insert_or_assign(key, positionIndex);
         }
 
         SourceVertexRef ref = sourceRef;
         ref.position = positionIndex;
         ref.skin = s_MeshMissingStreamIndex;
-        outVertexRefs.push_back(ref);
+        out.vertexRefs.push_back(ref);
     }
-    return true;
+    return out;
 }
 
 b8 RemapSourceVertexRefs(

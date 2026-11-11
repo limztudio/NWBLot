@@ -55,7 +55,7 @@ class SceneAssetBinaryCodec{
 
     private void collectSortedAssetEntries<TAsset>(
         in HashMap<Name, AssetRef<TAsset>> assets,
-        mut SceneScratchAssetEntryBinaryVector outEntries
+        mut Vector<SceneAssetEntryBinary> outEntries
     )const{
         outEntries.clear();
         outEntries.reserve(assets.size());
@@ -97,9 +97,9 @@ class SceneAssetBinaryCodec{
         in Span<AssetRef<TSubsystem>> subsystems,
         in Span<AssetRef<TEntity>> entities,
         in HashMap<Name, AssetRef<TAsset>> assets,
-        mut SceneScratchAssetEntryBinaryVector scratchAssetEntries,
         mut Vector<u8> outBinary
     )const{
+        Vector<SceneAssetEntryBinary> scratchAssetEntries;
         this.collectSortedAssetEntries(assets, scratchAssetEntries);
         usize reserveBytes = s_SceneHeaderBinaryBytes;
         const b8 canReserve =
@@ -152,7 +152,7 @@ class SceneAssetBinaryCodec{
         in StringView failureContext,
         in StringView label,
         mut usize inOutCursor,
-        mut SceneScratchNameHashVector outHashes
+        mut Vector<NameHash> outHashes
     )const{
         outHashes.clear();
         if(count64 > cast<u64>(usize.max / s_NameHashBinaryBytes)){
@@ -181,7 +181,7 @@ class SceneAssetBinaryCodec{
         in Span<u8> binary,
         in u64 count64,
         mut usize inOutCursor,
-        mut SceneScratchAssetEntryBinaryVector outEntries
+        mut Vector<SceneAssetEntryBinary> outEntries
     )const{
         outEntries.clear();
         if(count64 > cast<u64>(usize.max / s_SceneAssetEntryBinaryBytes)){
@@ -206,9 +206,9 @@ class SceneAssetBinaryCodec{
         return true;
     }
 
-    public b8 deserializeEntity(
+    public b8 deserializeEntity<TComponent>(
         in Span<u8> binary,
-        mut SceneScratchNameHashVector outComponentHashes
+        mut Vector<AssetRef<TComponent>> outComponents
     )const{
         usize cursor = 0u;
         const Expected<EntityHeaderBinary> headerResult = ReadPOD<EntityHeaderBinary>(binary, cursor);
@@ -223,20 +223,22 @@ class SceneAssetBinaryCodec{
         }
         if(!this.validateEntityHeader(header))
             return false;
-        if(!this.readNameHashes(binary, header.componentCount, "EntityAsset::loadBinary", "components", cursor, outComponentHashes))
+        Vector<NameHash> componentHashes;
+        if(!this.readNameHashes(binary, header.componentCount, "EntityAsset::loadBinary", "components", cursor, componentHashes))
             return false;
         if(cursor != binary.size()){
             error("EntityAsset::loadBinary failed: trailing bytes detected");
             return false;
         }
+        AssignAssetRefsFromHashes(componentHashes, outComponents);
         return true;
     }
 
-    public b8 deserializeScene(
+    public b8 deserializeScene<TSubsystem, TEntity, TAsset>(
         in Span<u8> binary,
-        mut SceneScratchNameHashVector outSubsystemHashes,
-        mut SceneScratchNameHashVector outEntityHashes,
-        mut SceneScratchAssetEntryBinaryVector outAssetEntries
+        mut Vector<AssetRef<TSubsystem>> outSubsystems,
+        mut Vector<AssetRef<TEntity>> outEntities,
+        mut HashMap<Name, AssetRef<TAsset>> outAssets
     )const{
         usize cursor = 0u;
         const Expected<SceneHeaderBinary> headerResult = ReadPOD<SceneHeaderBinary>(binary, cursor);
@@ -251,17 +253,22 @@ class SceneAssetBinaryCodec{
         }
         if(!this.validateSceneHeader(header))
             return false;
-        if(!this.readNameHashes(binary, header.subsystemCount, "SceneAsset::loadBinary", "subsystems", cursor, outSubsystemHashes))
+        Vector<NameHash> subsystemHashes;
+        Vector<NameHash> entityHashes;
+        Vector<SceneAssetEntryBinary> assetEntries;
+        if(!this.readNameHashes(binary, header.subsystemCount, "SceneAsset::loadBinary", "subsystems", cursor, subsystemHashes))
             return false;
-        if(!this.readNameHashes(binary, header.entityCount, "SceneAsset::loadBinary", "entities", cursor, outEntityHashes))
+        if(!this.readNameHashes(binary, header.entityCount, "SceneAsset::loadBinary", "entities", cursor, entityHashes))
             return false;
-        if(!this.readAssetEntries(binary, header.assetCount, cursor, outAssetEntries))
+        if(!this.readAssetEntries(binary, header.assetCount, cursor, assetEntries))
             return false;
         if(cursor != binary.size()){
             error("SceneAsset::loadBinary failed: trailing bytes detected");
             return false;
         }
-        return true;
+        AssignAssetRefsFromHashes(subsystemHashes, outSubsystems);
+        AssignAssetRefsFromHashes(entityHashes, outEntities);
+        return UnpackSceneAssetEntriesBinary(assetEntries, outAssets);
     }
 }
 

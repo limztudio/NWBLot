@@ -59,7 +59,7 @@ public:
     }
 };
 
-[[nodiscard]] inline b8 operator==(const MaterialTypedByteContentKey& lhs, const MaterialTypedByteContentKey& rhs)noexcept{
+[[nodiscard]] NWB_INLINE b8 operator==(const MaterialTypedByteContentKey& lhs, const MaterialTypedByteContentKey& rhs)noexcept{
     return EqualMaterialTypedByteContent(lhs.byteHash, lhs.bytes, rhs.byteHash, rhs.bytes);
 }
 
@@ -93,7 +93,7 @@ using MaterialTypedByteContentRangeMap = HashMap<MaterialTypedByteContentKey, Ma
 using NWB::Impl::TryBuildMaterialTypedByteAppendRange;
 
 template<typename DestinationByteVector>
-[[nodiscard]] inline Expected<MaterialTypedByteRange> AppendMaterialTypedByteRange(const Span<const u8> typedBytes, DestinationByteVector& materialTypedBytes){
+[[nodiscard]] NWB_INLINE Expected<MaterialTypedByteRange> AppendMaterialTypedByteRange(const Span<const u8> typedBytes, DestinationByteVector& materialTypedBytes){
     const auto appendRange = TryBuildMaterialTypedByteAppendRange(materialTypedBytes.size(), typedBytes.size());
     if(!appendRange)
         return MakeUnexpected(Failure{});
@@ -110,7 +110,7 @@ template<typename DestinationByteVector>
 }
 
 template<typename DestinationByteVector>
-[[nodiscard]] inline Expected<MaterialTypedByteRange> FindOrAppendMaterialConstantTypedByteRange(
+[[nodiscard]] NWB_INLINE Expected<MaterialTypedByteRange> FindOrAppendMaterialConstantTypedByteRange(
     const Name& materialName,
     const u64 typedLayoutHash,
     const Span<const u8> typedBytes,
@@ -135,7 +135,7 @@ template<typename DestinationByteVector>
 }
 
 template<typename DestinationByteVector, typename MaterialTypedByteRangeMap>
-[[nodiscard]] inline Expected<MaterialTypedByteRange> FindOrAppendMaterialTypedByteRange(const Span<const u8> typedBytes, DestinationByteVector& materialTypedBytes, MaterialTypedByteRangeMap& rangeMap){
+[[nodiscard]] NWB_INLINE Expected<MaterialTypedByteRange> FindOrAppendMaterialTypedByteRange(const Span<const u8> typedBytes, DestinationByteVector& materialTypedBytes, MaterialTypedByteRangeMap& rangeMap){
     if(typedBytes.empty())
         return MaterialTypedByteRange{};
 

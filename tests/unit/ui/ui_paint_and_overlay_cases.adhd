@@ -270,11 +270,11 @@ using ::NWB::Impl::Ui::s_PaintMaxOverlayDepth;
 using ::NWB::Tests::UiCases::s_UiInputNameMissing;
 using ::NWB::Tests::UiCases::s_UiInputNameSprite;
 
-inline void ExpectUiPaintOverlaySameImagePaint(const DrawSnapshot& actual, const DrawSnapshot& expected){
+NWB_INLINE void ExpectUiPaintOverlaySameImagePaint(const DrawSnapshot& actual, const DrawSnapshot& expected){
     ::NWB::UiPaintImageTests::ExpectSameImagePaint(actual, expected);
 }
 
-[[nodiscard]] inline b8 UiPaintOverlayPrepareGlyphsAndSingleSdfAndImage(
+[[nodiscard]] NWB_INLINE b8 UiPaintOverlayPrepareGlyphsAndSingleSdfAndImage(
     PaintBuilder& builder,
     const ::Span<const SharedGlyphPage> glyphs,
     const SharedSdfAtlasPage& sdf,
@@ -282,7 +282,7 @@ inline void ExpectUiPaintOverlaySameImagePaint(const DrawSnapshot& actual, const
 ){
     return builder.prepareImages(glyphs, ::Span(&sdf, 1u), ::Span(&image, 1u));
 }
-[[nodiscard]] inline b8 UiPaintOverlayPrepareOneEach(
+[[nodiscard]] NWB_INLINE b8 UiPaintOverlayPrepareOneEach(
     PaintBuilder& builder,
     const SharedGlyphPage& glyph,
     const SharedSdfAtlasPage& sdf,
@@ -290,14 +290,14 @@ inline void ExpectUiPaintOverlaySameImagePaint(const DrawSnapshot& actual, const
 ){
     return builder.prepareImages(::Span(&glyph, 1u), ::Span(&sdf, 1u), ::Span(&image, 1u));
 }
-[[nodiscard]] inline b8 UiPaintOverlayPrepareOneGlyphAndOneImage(
+[[nodiscard]] NWB_INLINE b8 UiPaintOverlayPrepareOneGlyphAndOneImage(
     PaintBuilder& builder,
     const SharedGlyphPage& glyph,
     const SharedImageSource& image
 ){
     return builder.prepareImages(::Span(&glyph, 1u), {}, ::Span(&image, 1u));
 }
-[[nodiscard]] inline b8 UiPaintOverlayPrepareOneGlyphOneSdfAndImageSpan(
+[[nodiscard]] NWB_INLINE b8 UiPaintOverlayPrepareOneGlyphOneSdfAndImageSpan(
     PaintBuilder& builder,
     const SharedGlyphPage& glyph,
     const SharedSdfAtlasPage& sdf,
@@ -305,96 +305,96 @@ inline void ExpectUiPaintOverlaySameImagePaint(const DrawSnapshot& actual, const
 ){
     return builder.prepareImages(::Span(&glyph, 1u), ::Span(&sdf, 1u), images);
 }
-[[nodiscard]] inline b8 UiPaintOverlayPrepareSingleTextureImage(PaintBuilder& builder, const SharedImageSource& image){
+[[nodiscard]] NWB_INLINE b8 UiPaintOverlayPrepareSingleTextureImage(PaintBuilder& builder, const SharedImageSource& image){
     return builder.prepareTextureImages(::Span(&image, 1u));
 }
 
-[[nodiscard]] inline b8 UiPaintOverlayHasGlyphPage(const SharedGlyphPage& page)noexcept{
+[[nodiscard]] NWB_INLINE b8 UiPaintOverlayHasGlyphPage(const SharedGlyphPage& page)noexcept{
     return static_cast<b8>(page != nullptr);
 }
-[[nodiscard]] inline usize UiPaintOverlayGlyphPageAddress(const SharedGlyphPage& page)noexcept{
+[[nodiscard]] NWB_INLINE usize UiPaintOverlayGlyphPageAddress(const SharedGlyphPage& page)noexcept{
     return reinterpret_cast<usize>(page.get());
 }
-[[nodiscard]] inline u64 UiPaintOverlayGlyphPageGeneration(const SharedGlyphPage& page)noexcept{
+[[nodiscard]] NWB_INLINE u64 UiPaintOverlayGlyphPageGeneration(const SharedGlyphPage& page)noexcept{
     return page->binding().generation;
 }
-[[nodiscard]] inline u8 UiPaintOverlayGlyphPagePixel(const SharedGlyphPage& page, const usize index)noexcept{
+[[nodiscard]] NWB_INLINE u8 UiPaintOverlayGlyphPagePixel(const SharedGlyphPage& page, const usize index)noexcept{
     return page->pixels()[index];
 }
 
-[[nodiscard]] inline b8 UiPaintOverlayHasSdfPage(const SharedSdfAtlasPage& page)noexcept{
+[[nodiscard]] NWB_INLINE b8 UiPaintOverlayHasSdfPage(const SharedSdfAtlasPage& page)noexcept{
     return static_cast<b8>(page != nullptr);
 }
-[[nodiscard]] inline usize UiPaintOverlaySdfPageAddress(const SharedSdfAtlasPage& page)noexcept{
+[[nodiscard]] NWB_INLINE usize UiPaintOverlaySdfPageAddress(const SharedSdfAtlasPage& page)noexcept{
     return reinterpret_cast<usize>(page.get());
 }
-[[nodiscard]] inline u8 UiPaintOverlaySdfPagePixel(const SharedSdfAtlasPage& page, const usize index)noexcept{
+[[nodiscard]] NWB_INLINE u8 UiPaintOverlaySdfPagePixel(const SharedSdfAtlasPage& page, const usize index)noexcept{
     return page->pixels()[index];
 }
-[[nodiscard]] inline Sha256Digest UiPaintOverlaySdfPagePixelsHash(const SharedSdfAtlasPage& page)noexcept{
+[[nodiscard]] NWB_INLINE Sha256Digest UiPaintOverlaySdfPagePixelsHash(const SharedSdfAtlasPage& page)noexcept{
     return page->binding().pixelsSha256;
 }
-[[nodiscard]] inline u8 UiPaintOverlaySdfPageFontHashByte(const SharedSdfAtlasPage& page, const usize index)noexcept{
+[[nodiscard]] NWB_INLINE u8 UiPaintOverlaySdfPageFontHashByte(const SharedSdfAtlasPage& page, const usize index)noexcept{
     return page->binding().fontSha256.bytes[index];
 }
-[[nodiscard]] inline SdfAtlasPageBinding UiPaintOverlaySdfPageBinding(const SharedSdfAtlasPage& page)noexcept{
+[[nodiscard]] NWB_INLINE SdfAtlasPageBinding UiPaintOverlaySdfPageBinding(const SharedSdfAtlasPage& page)noexcept{
     return page->binding();
 }
 
-[[nodiscard]] inline b8 UiPaintOverlayHasImage(const SharedImageSource& image)noexcept{
+[[nodiscard]] NWB_INLINE b8 UiPaintOverlayHasImage(const SharedImageSource& image)noexcept{
     return static_cast<b8>(image != nullptr);
 }
-[[nodiscard]] inline usize UiPaintOverlayImageAddress(const SharedImageSource& image)noexcept{
+[[nodiscard]] NWB_INLINE usize UiPaintOverlayImageAddress(const SharedImageSource& image)noexcept{
     return reinterpret_cast<usize>(image.get());
 }
-[[nodiscard]] inline u64 UiPaintOverlayImageGeneration(const SharedImageSource& image)noexcept{
+[[nodiscard]] NWB_INLINE u64 UiPaintOverlayImageGeneration(const SharedImageSource& image)noexcept{
     return image->generation();
 }
-[[nodiscard]] inline ImageIdentity UiPaintOverlayImageIdentity(const SharedImageSource& image)noexcept{
+[[nodiscard]] NWB_INLINE ImageIdentity UiPaintOverlayImageIdentity(const SharedImageSource& image)noexcept{
     return image->identity();
 }
-[[nodiscard]] inline u8 UiPaintOverlayImagePayloadByte(const SharedImageSource& image, const usize index)noexcept{
+[[nodiscard]] NWB_INLINE u8 UiPaintOverlayImagePayloadByte(const SharedImageSource& image, const usize index)noexcept{
     return image->texture().payloadBytes()[index];
 }
-[[nodiscard]] inline u32 UiPaintOverlayImageWidth(const SharedImageSource& image)noexcept{
+[[nodiscard]] NWB_INLINE u32 UiPaintOverlayImageWidth(const SharedImageSource& image)noexcept{
     return image->texture().width();
 }
-[[nodiscard]] inline u32 UiPaintOverlayImageHeight(const SharedImageSource& image)noexcept{
+[[nodiscard]] NWB_INLINE u32 UiPaintOverlayImageHeight(const SharedImageSource& image)noexcept{
     return image->texture().height();
 }
-[[nodiscard]] inline usize UiPaintOverlayImageMipCount(const SharedImageSource& image)noexcept{
+[[nodiscard]] NWB_INLINE usize UiPaintOverlayImageMipCount(const SharedImageSource& image)noexcept{
     return image->texture().mipLevels().size();
 }
 
-inline void TakeUiPaintOverlayGlyphPage(SharedGlyphPage& dst, ::Expected<SharedGlyphPage>& src)noexcept{
+NWB_INLINE void TakeUiPaintOverlayGlyphPage(SharedGlyphPage& dst, ::Expected<SharedGlyphPage>& src)noexcept{
     dst = ::Move(*src);
 }
-inline void TakeUiPaintOverlayGlyphPage(SharedGlyphPage& dst, ::Expected<SharedGlyphPage>&& src)noexcept{
+NWB_INLINE void TakeUiPaintOverlayGlyphPage(SharedGlyphPage& dst, ::Expected<SharedGlyphPage>&& src)noexcept{
     dst = ::Move(*src);
 }
-inline void TakeUiPaintOverlaySdfPage(SharedSdfAtlasPage& dst, ::Expected<SharedSdfAtlasPage>& src)noexcept{
+NWB_INLINE void TakeUiPaintOverlaySdfPage(SharedSdfAtlasPage& dst, ::Expected<SharedSdfAtlasPage>& src)noexcept{
     dst = ::Move(*src);
 }
-inline void TakeUiPaintOverlaySdfPage(SharedSdfAtlasPage& dst, ::Expected<SharedSdfAtlasPage>&& src)noexcept{
+NWB_INLINE void TakeUiPaintOverlaySdfPage(SharedSdfAtlasPage& dst, ::Expected<SharedSdfAtlasPage>&& src)noexcept{
     dst = ::Move(*src);
 }
-inline void TakeUiPaintOverlayImageSource(SharedImageSource& dst, ::Expected<SharedImageSource>& src)noexcept{
+NWB_INLINE void TakeUiPaintOverlayImageSource(SharedImageSource& dst, ::Expected<SharedImageSource>& src)noexcept{
     dst = ::Move(*src);
 }
-inline void TakeUiPaintOverlayImageSource(SharedImageSource& dst, ::Expected<SharedImageSource>&& src)noexcept{
+NWB_INLINE void TakeUiPaintOverlayImageSource(SharedImageSource& dst, ::Expected<SharedImageSource>&& src)noexcept{
     dst = ::Move(*src);
 }
 
-[[nodiscard]] inline f32 UiPaintOverlayInfinityF32()noexcept{
+[[nodiscard]] NWB_INLINE f32 UiPaintOverlayInfinityF32()noexcept{
     return ::Limit<f32>::s_Infinity;
 }
-[[nodiscard]] inline f32 UiPaintOverlayQuietNaNF32()noexcept{
+[[nodiscard]] NWB_INLINE f32 UiPaintOverlayQuietNaNF32()noexcept{
     return ::Limit<f32>::s_QuietNaN;
 }
-[[nodiscard]] inline b8 UiPaintOverlaySignBit(const f32 value)noexcept{
+[[nodiscard]] NWB_INLINE b8 UiPaintOverlaySignBit(const f32 value)noexcept{
     return ::SignBit(value);
 }
-[[nodiscard]] inline usize UiPaintOverlayVerticesAddress(const DrawSnapshot& snapshot)noexcept{
+[[nodiscard]] NWB_INLINE usize UiPaintOverlayVerticesAddress(const DrawSnapshot& snapshot)noexcept{
     return reinterpret_cast<usize>(snapshot.vertices().data());
 }
 };

@@ -24,6 +24,9 @@ using TestSchedulerConfig = ::NWB::Core::CpuTaskSchedulerConfig;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const u32 s_PollIntervalMS = 1u;
+const u32 s_GateTimeoutMS = 4000u;
+const u32 s_TestTimeoutMS = 15000u;
 const u32 s_CompletionTimeoutMS = 10000u;
 const u32 s_ProfilingPollIntervalMS = 1u;
 const Name s_CpuProfilingNameTestsCpuScope = "tests.cpu.scope";
@@ -38,6 +41,45 @@ class InlineRangeFailure{
     public i32 code = 0;
 }
 
+class TaskGate{
+    public Atomic<b8> entered = false;
+    public Atomic<b8> released = false;
+    public Atomic<b8> expired = false;
+
+    public void block(){
+        this.entered.store(true, MemoryOrder::release);
+        if(!WaitUntil(this.released, s_GateTimeoutMS)){
+            this.expired.store(true, MemoryOrder::release);
+        }
+    }
+
+    public void open(){
+        this.released.store(true, MemoryOrder::release);
+    }
+}
+
+
+b8 WaitUntil(in Atomic<b8> condition, in u32 timeoutMS){
+    const Timer begin = TimerNow();
+    while(!condition.load(MemoryOrder::acquire)){
+        if(DurationInMS<u64>(TimerNow(), begin) >= cast<u64>(timeoutMS)){
+            return false;
+        }
+        SleepMS(s_PollIntervalMS);
+    }
+    return true;
+}
+
+b8 WaitUntilCount(in Atomic<u32> counter, in u32 expected, in u32 timeoutMS){
+    const Timer begin = TimerNow();
+    while(counter.load(MemoryOrder::acquire) != expected){
+        if(DurationInMS<u64>(TimerNow(), begin) >= cast<u64>(timeoutMS)){
+            return false;
+        }
+        SleepMS(s_PollIntervalMS);
+    }
+    return true;
+}
 
 TestSchedulerConfig HomogeneousWorkers(in u32 count){
     TestSchedulerConfig config = TestSchedulerConfig();

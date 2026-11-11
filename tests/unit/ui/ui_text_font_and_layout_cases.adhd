@@ -128,6 +128,28 @@ public:
         return true;
     }
 
+    [[nodiscard]] b8 setLatinFontGeneration(const u64 generation){
+        Core::Alloc::ScratchArena fontScratchArena(s_FontScratchArenaName);
+        const FontSource replacement{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_latin, generation };
+        return m_service.setFonts(fontScratchArena, Span(&replacement, 1u));
+    }
+
+    void clearLatinFontBytes(){
+        Core::Assets::AssetBytes cleared(m_arena);
+        m_latin.setFontBytes(Move(cleared));
+    }
+
+    [[nodiscard]] b8 setEmptyFonts(){
+        Core::Alloc::ScratchArena fontScratchArena(s_FontScratchArenaName);
+        return m_service.setFonts(fontScratchArena, {});
+    }
+
+    [[nodiscard]] Expected<SharedFontFace> makeLatinFace(const u64 generation = 1u){
+        Core::Alloc::ScratchArena fontScratchArena(s_FontScratchArenaName);
+        const FontSource source{ Core::Assets::AssetRef<Font>(s_TestLatinFontPath), m_latin, generation };
+        return MakeFontFace(fontScratchArena, m_arena, source);
+    }
+
 
 public:
     Core::Alloc::GlobalArena m_arena;
@@ -417,7 +439,7 @@ using ::NWB::Impl::Ui::s_GlyphAtlasNoPage;
 using ::NWB::Impl::Ui::s_GlyphAtlasMaxPages;
 using ::NWB::Impl::Ui::s_GlyphAtlasPageExtent;
 
-[[nodiscard]] inline Expected<Rect> UiTextGlyphCoverageRect(
+[[nodiscard]] NWB_INLINE Expected<Rect> UiTextGlyphCoverageRect(
     const ::NWB::Impl::Ui::PlacedGlyph& glyph,
     const ::NWB::Impl::Ui::AtlasGlyph& record,
     const f32 scale,
@@ -427,7 +449,7 @@ using ::NWB::Impl::Ui::s_GlyphAtlasPageExtent;
     return ::NWB::Impl::Ui::TextGlyphVisibility::CoverageRectangle(glyph, record, scale, origin, pixelScale);
 }
 
-[[nodiscard]] inline TextGlyphIntersectionEnum UiTextGlyphCandidateNoAtlas(
+[[nodiscard]] NWB_INLINE TextGlyphIntersectionEnum UiTextGlyphCandidateNoAtlas(
     const ::NWB::Impl::Ui::PlacedGlyph& glyph,
     const f32 fontSize,
     const f32 physicalSize,
@@ -438,7 +460,7 @@ using ::NWB::Impl::Ui::s_GlyphAtlasPageExtent;
     return ::NWB::Impl::Ui::TextGlyphVisibility::Candidate(glyph, nullptr, fontSize, physicalSize, origin, clip, pixelScale);
 }
 
-[[nodiscard]] inline TextGlyphIntersectionEnum UiTextGlyphCandidateWithAtlas(
+[[nodiscard]] NWB_INLINE TextGlyphIntersectionEnum UiTextGlyphCandidateWithAtlas(
     const ::NWB::Impl::Ui::PlacedGlyph& glyph,
     const ::NWB::Impl::Ui::SharedBakedFontAtlas& atlas,
     const f32 fontSize,
@@ -449,7 +471,7 @@ using ::NWB::Impl::Ui::s_GlyphAtlasPageExtent;
     return ::NWB::Impl::Ui::TextGlyphVisibility::Candidate(glyph, atlas.get(), fontSize, physicalSize, origin, clip);
 }
 
-[[nodiscard]] inline Expected<Rect> UiTextGlyphAtlasRect(
+[[nodiscard]] NWB_INLINE Expected<Rect> UiTextGlyphAtlasRect(
     const ::NWB::Impl::Ui::PlacedGlyph& glyph,
     const ::NWB::Impl::Ui::SharedBakedFontAtlas& atlas,
     const f32 fontSize,
@@ -458,7 +480,7 @@ using ::NWB::Impl::Ui::s_GlyphAtlasPageExtent;
     return ::NWB::Impl::Ui::TextGlyphVisibility::AtlasRectangle(glyph, *atlas, fontSize, origin);
 }
 
-[[nodiscard]] inline StringView MakeUiTextLayoutNullByteView()noexcept{
+[[nodiscard]] NWB_INLINE StringView MakeUiTextLayoutNullByteView()noexcept{
     return StringView("\0", 1u);
 }
 };
@@ -544,10 +566,8 @@ void VerifyTextFontTests_MissingLatinHangulGlyphsUseKoreanFallbackForBothLabelCl
     request.language = s_UiTextFontKoreanLanguage;
     ASSERT_TRUE(self.applyLayout(request));
     ASSERT_EQ(self.m_layout.clusters().size(), 2u);
-    native(in self){
-        for(const auto& glyph : self.m_layout.glyphs())
-            EXPECT_EQ(glyph.face->identity().name(), Name(::NWB::UiWidgetTests::s_TestKoreanFontPath));
-    }
+    for(usize index = 0u; index < self.m_layout.glyphs().size(); ++index)
+        EXPECT_EQ(FontFaceIdentityName(self.m_layout.glyphs()[index].face), Name(s_TestKoreanFontPath));
 }
 
 void VerifyTextFontTests_RtlHarfBuzzClustersUseLogicalEndRatherThanNextVisualStart(mut TextFontTests self){
@@ -566,25 +586,17 @@ void VerifyTextFontTests_FontReplacementAndAssetMutationKeepOldCpuFaceAndLayoutU
     ASSERT_TRUE(self.applyLayout(MakeUiTextFontLayoutRequest("AV")));
     const f32 width = self.m_layout.measure().x;
     const u64 oldServiceGeneration = self.m_service.generation();
-    u64 oldFaceGeneration = 0u;
-    u64 pageFontGeneration = 0u;
-    b8 setEmptyAccepted = true;
-    native(mut self, in oldServiceGeneration, mut oldFaceGeneration, mut pageFontGeneration, mut setEmptyAccepted){
-        ::NWB::Core::Alloc::ScratchArena fontScratchArena(::NWB::UiWidgetTests::s_FontScratchArenaName);
-        const auto oldFace = self.m_layout.glyphs()[0u].face;
-        const ::NWB::Impl::Ui::FontSource replacement{ ::NWB::Core::Assets::AssetRef<::NWB::Impl::Font>(::NWB::UiWidgetTests::s_TestLatinFontPath), self.m_latin, 2u };
-        ASSERT_TRUE(self.m_service.setFonts(fontScratchArena, Span(&replacement, 1u)));
-        EXPECT_EQ(self.m_service.generation(), oldServiceGeneration + 1u);
-        ::NWB::Core::Assets::AssetBytes cleared(self.m_arena);
-        self.m_latin.setFontBytes(Move(cleared));
-        self.beginPaint(1u);
-        ASSERT_TRUE(self.m_service.paint(self.m_paint, self.m_layout, { 20.0f, 20.0f }));
-        const DrawSnapshot snapshot = self.m_paint.freeze();
-        ASSERT_FALSE(snapshot.glyphPages().empty());
-        pageFontGeneration = snapshot.glyphPages()[0u]->binding().fontGeneration;
-        oldFaceGeneration = oldFace->generation();
-        setEmptyAccepted = self.m_service.setFonts(fontScratchArena, {});
-    }
+    const SharedFontFace oldFace = self.m_layout.glyphs()[0u].face;
+    ASSERT_TRUE(self.setLatinFontGeneration(2u));
+    EXPECT_EQ(self.m_service.generation(), oldServiceGeneration + 1u);
+    self.clearLatinFontBytes();
+    self.beginPaint(1u);
+    ASSERT_TRUE(self.m_service.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    ASSERT_FALSE(snapshot.glyphPages().empty());
+    const u64 pageFontGeneration = GlyphPageBindingOf(snapshot.glyphPages()[0u]).fontGeneration;
+    const u64 oldFaceGeneration = FontFaceGeneration(oldFace);
+    const b8 setEmptyAccepted = self.setEmptyFonts();
     EXPECT_EQ(pageFontGeneration, 1u);
     EXPECT_EQ(oldFaceGeneration, 1u);
     EXPECT_FLOAT_EQ(self.m_layout.measure().x, width);
@@ -603,18 +615,22 @@ void VerifyTextFontTests_AppendingGlyphKeepsEarlierCoverageBytesImmutable(mut Te
     ASSERT_TRUE(self.m_service.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
     const DrawSnapshot second = self.m_paint.freeze();
     ASSERT_EQ(second.glyphPages().size(), 1u);
-    native(mut self, in first, in second){
-        const auto oldPage = first.glyphPages()[0u];
-        ::NWB::Impl::Ui::PaintVector<u8> saved(self.m_arena);
-        saved.assign(oldPage->pixels().begin(), oldPage->pixels().end());
-        const auto newPage = second.glyphPages()[0u];
-        EXPECT_EQ(newPage->binding().atlasIdentity, oldPage->binding().atlasIdentity);
-        EXPECT_GT(newPage->binding().generation, oldPage->binding().generation);
-        EXPECT_EQ(oldPage->pixels(), saved);
-        for(usize pixel = 0u; pixel < saved.size(); ++pixel){
-            if(saved[pixel] != 0u)
-                EXPECT_EQ(newPage->pixels()[pixel], saved[pixel]);
-        }
+    const SharedGlyphPage oldPage = first.glyphPages()[0u];
+    const Span<u8> initialOldPixels = GlyphPagePixelsOf(oldPage);
+    Vector<u8> saved = Vector<u8>();
+    saved.reserve(initialOldPixels.size());
+    for(usize index = 0u; index < initialOldPixels.size(); ++index)
+        saved.push_back(initialOldPixels[index]);
+    const SharedGlyphPage newPage = second.glyphPages()[0u];
+    EXPECT_EQ(GlyphPageBindingOf(newPage).atlasIdentity, GlyphPageBindingOf(oldPage).atlasIdentity);
+    EXPECT_GT(GlyphPageBindingOf(newPage).generation, GlyphPageBindingOf(oldPage).generation);
+    const Span<u8> currentOldPixels = GlyphPagePixelsOf(oldPage);
+    ASSERT_EQ(currentOldPixels.size(), saved.size());
+    const Span<u8> newPixels = GlyphPagePixelsOf(newPage);
+    for(usize pixel = 0u; pixel < saved.size(); ++pixel){
+        EXPECT_EQ(currentOldPixels[pixel], saved[pixel]);
+        if(saved[pixel] != 0u)
+            EXPECT_EQ(newPixels[pixel], saved[pixel]);
     }
 }
 
@@ -631,9 +647,7 @@ void VerifyTextFontTests_RasterDpiChangesPagesWithoutChangingLogicalMeasurement(
     EXPECT_FLOAT_EQ(self.m_layout.measure().y, measured.y);
     ASSERT_EQ(first.glyphPages().size(), 1u);
     ASSERT_EQ(second.glyphPages().size(), 1u);
-    native(in first, in second){
-        EXPECT_GT(second.glyphPages()[0u]->binding().generation, first.glyphPages()[0u]->binding().generation);
-    }
+    EXPECT_GT(GlyphPageBindingOf(second.glyphPages()[0u]).generation, GlyphPageBindingOf(first.glyphPages()[0u]).generation);
 }
 
 void VerifyTextFontTests_OversizedGlyphRejectsWholeLabelBeforePaintingAnyQuads(mut TextFontTests self){
@@ -653,55 +667,52 @@ void VerifyTextFontTests_GlyphAtlasIndexKeepsFaceSizeAndEmptyGlyphsDistinctAcros
     ASSERT_EQ(self.m_layout.glyphs().size(), 1u);
     const u32 glyphId = self.m_layout.glyphs()[0u].glyphId;
     GlyphAtlas atlas = GlyphAtlas(self.m_arena);
-    native(mut self, mut atlas, in glyphId){
-        ::NWB::Core::Alloc::ScratchArena fontScratchArena(::NWB::UiWidgetTests::s_FontScratchArenaName);
-        const auto face = self.m_layout.glyphs()[0u].face;
-        const ::NWB::Impl::Ui::FontSource source{ ::NWB::Core::Assets::AssetRef<::NWB::Impl::Font>(::NWB::UiWidgetTests::s_TestLatinFontPath), self.m_latin, 1u };
-        auto otherFaceResult = ::NWB::Impl::Ui::MakeFontFace(fontScratchArena, self.m_arena, source);
-        ASSERT_TRUE(otherFaceResult && (*otherFaceResult)->valid());
-        const auto otherFace = Move(*otherFaceResult);
-        ASSERT_NE(face.get(), otherFace.get());
-        ASSERT_TRUE(atlas.prepare(face, glyphId, 24u));
-        const AtlasGlyph* first = atlas.find(face, glyphId, 24u);
-        ASSERT_NE(first, nullptr);
-        ASSERT_TRUE(atlas.prepare(face, glyphId, 24u));
-        EXPECT_EQ(atlas.glyphCount(), 1u);
-        EXPECT_EQ(atlas.find(face, glyphId, 24u), first);
-        ASSERT_TRUE(atlas.prepare(face, glyphId, 32u));
-        ASSERT_TRUE(atlas.prepare(otherFace, glyphId, 24u));
-        EXPECT_EQ(atlas.glyphCount(), 3u);
-        EXPECT_NE(atlas.find(face, glyphId, 32u), first);
-        EXPECT_NE(atlas.find(otherFace, glyphId, 24u), first);
+    const SharedFontFace face = self.m_layout.glyphs()[0u].face;
+    const auto otherFaceResult = self.makeLatinFace(1u);
+    ASSERT_TRUE(otherFaceResult.has_value());
+    const SharedFontFace otherFace = otherFaceResult.value();
+    ASSERT_TRUE(FontFaceValid(otherFace));
+    ASSERT_NE(face, otherFace);
+    ASSERT_TRUE(atlas.prepare(face, glyphId, 24u));
+    const usize firstSlot = AtlasGlyphSlotId(atlas, face, glyphId, 24u);
+    ASSERT_NE(firstSlot, 0u);
+    ASSERT_TRUE(atlas.prepare(face, glyphId, 24u));
+    EXPECT_EQ(atlas.glyphCount(), 1u);
+    EXPECT_EQ(AtlasGlyphSlotId(atlas, face, glyphId, 24u), firstSlot);
+    ASSERT_TRUE(atlas.prepare(face, glyphId, 32u));
+    ASSERT_TRUE(atlas.prepare(otherFace, glyphId, 24u));
+    EXPECT_EQ(atlas.glyphCount(), 3u);
+    EXPECT_NE(AtlasGlyphSlotId(atlas, face, glyphId, 32u), firstSlot);
+    EXPECT_NE(AtlasGlyphSlotId(atlas, otherFace, glyphId, 24u), firstSlot);
 
-        ASSERT_TRUE(self.applyLayout(::NWB::Impl::Ui::ShapeRequest{ " " }));
-        ASSERT_EQ(self.m_layout.glyphs().size(), 1u);
-        const u32 spaceId = self.m_layout.glyphs()[0u].glyphId;
-        GlyphBitmap bitmap(self.m_arena);
-        ASSERT_TRUE(face->rasterize(spaceId, 24u, bitmap));
-        ASSERT_TRUE(bitmap.width == 0u || bitmap.height == 0u);
-        ASSERT_TRUE(atlas.prepare(face, spaceId, 24u));
-        const AtlasGlyph* space = atlas.find(face, spaceId, 24u);
-        ASSERT_NE(space, nullptr);
-        EXPECT_EQ(space->pageIndex, s_GlyphAtlasNoPage);
-        ASSERT_TRUE(atlas.prepare(face, spaceId, 24u));
-        EXPECT_EQ(atlas.glyphCount(), 4u);
+    ASSERT_TRUE(self.applyLayout(MakeUiTextFontLayoutRequest(" ")));
+    ASSERT_EQ(self.m_layout.glyphs().size(), 1u);
+    const u32 spaceId = self.m_layout.glyphs()[0u].glyphId;
+    GlyphBitmap bitmap = GlyphBitmap(self.m_arena);
+    ASSERT_TRUE(FontFaceRasterize(face, spaceId, 24u, bitmap));
+    ASSERT_TRUE(bitmap.width == 0u || bitmap.height == 0u);
+    ASSERT_TRUE(atlas.prepare(face, spaceId, 24u));
+    const auto spaceResult = TryFindAtlasGlyph(atlas, face, spaceId, 24u);
+    ASSERT_TRUE(spaceResult.has_value());
+    EXPECT_EQ(spaceResult.value().pageIndex, s_GlyphAtlasNoPage);
+    ASSERT_TRUE(atlas.prepare(face, spaceId, 24u));
+    EXPECT_EQ(atlas.glyphCount(), 4u);
 
-        auto oldPageCreationResult = atlas.page(0u);
-        ASSERT_TRUE(oldPageCreationResult);
-        const auto oldPage = Move(*oldPageCreationResult);
-        ASSERT_TRUE(oldPage);
-        atlas.reset();
-        EXPECT_EQ(atlas.glyphCount(), 0u);
-        EXPECT_EQ(atlas.pageCount(), 0u);
-        EXPECT_EQ(atlas.find(face, glyphId, 24u), nullptr);
-        EXPECT_EQ(atlas.find(face, spaceId, 24u), nullptr);
-        ASSERT_TRUE(atlas.prepare(face, glyphId, 24u));
-        auto newPageCreationResult = atlas.page(0u);
-        ASSERT_TRUE(newPageCreationResult);
-        const auto newPage = Move(*newPageCreationResult);
-        ASSERT_TRUE(newPage);
-        EXPECT_NE(newPage->binding().atlasIdentity, oldPage->binding().atlasIdentity);
-    }
+    const auto oldPageCreationResult = atlas.page(0u);
+    ASSERT_TRUE(oldPageCreationResult.has_value());
+    const SharedGlyphPage oldPage = oldPageCreationResult.value();
+    ASSERT_TRUE(cast<b8>(oldPage));
+    atlas.reset();
+    EXPECT_EQ(atlas.glyphCount(), 0u);
+    EXPECT_EQ(atlas.pageCount(), 0u);
+    EXPECT_FALSE(HasAtlasGlyph(atlas, face, glyphId, 24u));
+    EXPECT_FALSE(HasAtlasGlyph(atlas, face, spaceId, 24u));
+    ASSERT_TRUE(atlas.prepare(face, glyphId, 24u));
+    const auto newPageCreationResult = atlas.page(0u);
+    ASSERT_TRUE(newPageCreationResult.has_value());
+    const SharedGlyphPage newPage = newPageCreationResult.value();
+    ASSERT_TRUE(cast<b8>(newPage));
+    EXPECT_NE(GlyphPageBindingOf(newPage).atlasIdentity, GlyphPageBindingOf(oldPage).atlasIdentity);
 }
 
 void VerifyTextFontTests_AtlasWrapsToNextRowWithoutChangingExistingGlyphs(mut TextFontTests self){
@@ -710,21 +721,15 @@ void VerifyTextFontTests_AtlasWrapsToNextRowWithoutChangingExistingGlyphs(mut Te
     const PlacedGlyph glyph = self.m_layout.glyphs()[0u];
     GlyphAtlas atlas = GlyphAtlas(self.m_arena);
     ASSERT_TRUE(atlas.prepare(glyph.face, glyph.glyphId, 24u));
-    Rect firstPixels = Rect();
-    native(in atlas, in glyph, mut firstPixels){
-        const AtlasGlyph* first = atlas.find(glyph.face, glyph.glyphId, 24u);
-        ASSERT_NE(first, nullptr);
-        firstPixels = first->pixels;
-    }
+    const auto firstFound = TryFindAtlasGlyph(atlas, glyph.face, glyph.glyphId, 24u);
+    ASSERT_TRUE(firstFound.has_value());
+    const Rect firstPixels = firstFound.value().pixels;
     b8 wrapped = false;
     for(u32 size = 25u; size <= 120u; ++size){
         ASSERT_TRUE(atlas.prepare(glyph.face, glyph.glyphId, size));
-        AtlasGlyph record = AtlasGlyph();
-        native(in atlas, in glyph, in size, mut record){
-            const AtlasGlyph* found = atlas.find(glyph.face, glyph.glyphId, size);
-            ASSERT_NE(found, nullptr);
-            record = *found;
-        }
+        const auto foundRecord = TryFindAtlasGlyph(atlas, glyph.face, glyph.glyphId, size);
+        ASSERT_TRUE(foundRecord.has_value());
+        const AtlasGlyph record = foundRecord.value();
         if(record.pageIndex == 0u && record.pixels.y > firstPixels.y){
             EXPECT_FLOAT_EQ(record.pixels.x, 1.0f);
             wrapped = true;
@@ -732,12 +737,9 @@ void VerifyTextFontTests_AtlasWrapsToNextRowWithoutChangingExistingGlyphs(mut Te
         }
     }
     ASSERT_TRUE(wrapped);
-    Rect currentPixels = Rect();
-    native(in atlas, in glyph, mut currentPixels){
-        const AtlasGlyph* first = atlas.find(glyph.face, glyph.glyphId, 24u);
-        ASSERT_NE(first, nullptr);
-        currentPixels = first->pixels;
-    }
+    const auto currentFound = TryFindAtlasGlyph(atlas, glyph.face, glyph.glyphId, 24u);
+    ASSERT_TRUE(currentFound.has_value());
+    const Rect currentPixels = currentFound.value().pixels;
     ExpectUiRect(currentPixels, firstPixels);
 }
 
@@ -748,24 +750,18 @@ void VerifyTextFontTests_AtlasGrowthStaysWithinBoundsAndStopsAtSixteenPages(mut 
     for(u32 index = 0u; index < s_GlyphAtlasMaxPages; ++index){
         ASSERT_TRUE(atlas.prepare(glyph.face, glyph.glyphId, 460u + index));
         ASSERT_EQ(cast<u32>(atlas.pageCount()), index + 1u);
-        AtlasGlyph record = AtlasGlyph();
-        native(mut atlas, in glyph, in index, mut record){
-            const AtlasGlyph* found = atlas.find(glyph.face, glyph.glyphId, 460u + index);
-            ASSERT_NE(found, nullptr);
-            record = *found;
-            auto pageResult = atlas.page(index);
-            ASSERT_TRUE(pageResult);
-            const auto page = Move(*pageResult);
-            ASSERT_TRUE(page);
-        }
+        const auto foundRecord = TryFindAtlasGlyph(atlas, glyph.face, glyph.glyphId, 460u + index);
+        ASSERT_TRUE(foundRecord.has_value());
+        const AtlasGlyph record = foundRecord.value();
+        const auto pageResult = atlas.page(index);
+        ASSERT_TRUE(pageResult.has_value());
+        ASSERT_TRUE(cast<b8>(pageResult.value()));
         const VectorSingle pixelEnd = VectorSingle(record.pixels.x, record.pixels.y, 0.0f, 0.0f) + VectorSingle(record.pixels.width, record.pixels.height, 0.0f, 0.0f);
         EXPECT_LT(pixelEnd.x, cast<f32>(s_GlyphAtlasPageExtent));
         EXPECT_LT(pixelEnd.y, cast<f32>(s_GlyphAtlasPageExtent));
     }
     EXPECT_FALSE(atlas.prepare(glyph.face, glyph.glyphId, 476u));
-    native(in atlas, in glyph){
-        EXPECT_EQ(atlas.find(glyph.face, glyph.glyphId, 476u), nullptr);
-    }
+    EXPECT_FALSE(HasAtlasGlyph(atlas, glyph.face, glyph.glyphId, 476u));
     EXPECT_TRUE(atlas.prepare(glyph.face, glyph.glyphId, 460u));
     EXPECT_EQ(atlas.glyphCount(), s_GlyphAtlasMaxPages);
     EXPECT_EQ(atlas.pageCount(), s_GlyphAtlasMaxPages);
@@ -782,16 +778,10 @@ void VerifyTextFontTests_NativeCffCoverageAndFaceSurviveFontReplacement(mut Text
     EXPECT_GT(glyph.coverage.ink.width, 0.0f);
     EXPECT_GT(glyph.coverage.ink.height, 0.0f);
     const Rect saved = glyph.coverage.ink;
-    b8 reliableBefore = true;
-    b8 validAfter = false;
-    native(mut self, mut reliableBefore, mut validAfter){
-        ::NWB::Core::Alloc::ScratchArena fontScratchArena(::NWB::UiWidgetTests::s_FontScratchArenaName);
-        const auto& placed = self.m_layout.glyphs()[0u];
-        reliableBefore = placed.face->coverageInkReliable();
-        const ::NWB::Impl::Ui::FontSource replacement{ ::NWB::Core::Assets::AssetRef<::NWB::Impl::Font>(::NWB::UiWidgetTests::s_TestLatinFontPath), self.m_latin, 2u };
-        ASSERT_TRUE(self.m_service.setFonts(fontScratchArena, Span(&replacement, 1u)));
-        validAfter = placed.face->valid();
-    }
+    const SharedFontFace placedFace = self.m_layout.glyphs()[0u].face;
+    const b8 reliableBefore = FontFaceCoverageInkReliable(placedFace);
+    ASSERT_TRUE(self.setLatinFontGeneration(2u));
+    const b8 validAfter = FontFaceValid(placedFace);
     EXPECT_FALSE(reliableBefore);
     EXPECT_TRUE(self.m_layout.glyphs()[0u].coverage.known);
     EXPECT_FLOAT_EQ(self.m_layout.glyphs()[0u].coverage.ink.x, saved.x);
@@ -817,9 +807,7 @@ void VerifyTextFontTests_NativeCffBoundsCoverFractionalDpiRasterFringes(mut Text
         const f32 pixelSizeFloat = Ceil(fontSize * 1.375f);
         const u32 pixelSize = cast<u32>(pixelSizeFloat);
         GlyphBitmap bitmap = GlyphBitmap(self.m_arena);
-        native(in glyph, in pixelSize, mut bitmap){
-            ASSERT_TRUE(glyph.face->rasterize(glyph.glyphId, pixelSize, bitmap));
-        }
+        ASSERT_TRUE(FontFaceRasterize(glyph.face, glyph.glyphId, pixelSize, bitmap));
         const f32 scaleValue = pixelSizeFloat / fontSize;
         const VectorSingle scale = VectorSingle(scaleValue, scaleValue, scaleValue, scaleValue);
         const f32 fringeScalar = 2.0f / scaleValue;

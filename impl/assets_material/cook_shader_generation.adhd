@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_material/material_shadow_dispatch.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const StringView s_AvboitAccumulateGeneratedDirLeaf = "material_avboit_accumulate_pixel_shaders";
 const StringView s_AvboitAccumulateAuthoringHeader = "avboit/accumulate_ps_authoring.slangi";
 const StringView s_AvboitOccupancyGeneratedDirLeaf = "material_avboit_occupancy_pixel_shaders";
@@ -13,47 +19,12 @@ const StringView s_MaterialGeneratedPixelShaderDirLeaf = "material_pixel_shaders
 const StringView s_MaterialGeneratedPixelShaderHeaderLine = "// Generated per-material G-buffer pixel shader: engine pixel-shader authoring + this material's\n";
 const StringView s_MaterialGeneratedPixelShaderAuthoringHeader = "mesh/material_ps_authoring.slangi";
 const StringView s_MaterialGeneratedPixelShaderNamePrefix = "generated/material_ps/";
-const StringView s_DeferredBxdfDispatchGenerationLabel = "Deferred bxdf dispatch";
-const StringView s_ShadowSurfaceDispatchGenerationLabel = "Shadow surface dispatch";
-
 b8 ShouldEmitMaterialAvboitPixelShader(in b8 transparent, in StringView surfaceSource){
     return transparent && !surfaceSource.empty();
 }
 
 b8 ShouldEmitGeneratedMaterialPixelShader(in b8 hasExplicitShaders, in StringView surfaceSource){
     return !hasExplicitShaders && !surfaceSource.empty();
-}
-
-usize ResolveDispatchSlotTableCapacity(in b8 hasAnySlot, in u32 maxSlotId){
-    if(hasAnySlot)
-        return cast<usize>(maxSlotId) + 1u;
-    return 0u;
-}
-
-b8 ValidateUniqueDeferredBxdfSlot(in u32 shadingModelId, in StringView existingSlot, in StringView incomingSource){
-    if(existingSlot.empty() || existingSlot == incomingSource)
-        return true;
-
-    error("Deferred bxdf dispatch: shading model id {} maps to multiple bxdf sources", shadingModelId);
-    return false;
-}
-
-b8 ValidateUniqueShadowSurfaceDispatchSlot(
-    in u32 surfaceDispatchId,
-    in StringView existingSurface,
-    in StringView incomingSurface,
-    in StringView existingInterface,
-    in StringView incomingInterface
-){
-    if(!existingSurface.empty() && existingSurface != incomingSurface){
-        error("Shadow surface dispatch: model id {} maps to multiple surface sources", surfaceDispatchId);
-        return false;
-    }
-    if(!existingInterface.empty() && existingInterface != incomingInterface){
-        error("Shadow surface dispatch: model id {} maps to multiple material interfaces", surfaceDispatchId);
-        return false;
-    }
-    return true;
 }
 
 
@@ -75,11 +46,9 @@ native{
 
 #include <impl/assets_material/cook.adhd.h>
 #include <impl/assets_material/cook_private.adhd.h>
-#include <impl/assets_material/bind.adhd.h>
 #include <impl/assets_material/bind_source_emitter.adhd.h>
 #include <impl/assets_material/layout_validation.adhd.h>
 #include <impl/assets_material/material_avboit_shader_generator.adhd.h>
-#include <impl/assets_material/material_shadow_dispatch.adhd.h>
 #include <impl/assets_material/shadow_surface_source_builder.adhd.h>
 
 #include <core/assets/cook_metadata.h>
@@ -188,9 +157,8 @@ static Expected<ScratchString> BuildMaterialBindIncludeVirtualPathImpl(const Mat
 }
 
 static void AssignGeneratedMaterialShaderSource(const ScratchPath& sourcePath, ScratchArena& scratchArena, CookString& inOutSource){
-    ScratchString sourceText = PathToString(scratchArena, sourcePath);
-    Replace(sourceText.begin(), sourceText.end(), '\\', '/');
-    inOutSource += sourceText;
+    const ScratchString sourceText = PathToGenericString(scratchArena, sourcePath);
+    inOutSource += AStringView(sourceText);
 }
 
 static b8 AppendShadowSurfaceBindAliases(
@@ -674,16 +642,9 @@ Expected<Path> ShadowSurfaceDispatchGenerator::emit(
     // Shadow uses only neutral optical fields; GI may use baseColor, where fixed mid-grey is the no-surface fallback.
     sourceBuilder.appendDispatchFunction(surfaceById, source);
 
-    const ScratchPath outputPath = ScratchPath(scratchArena, includeRoot) / s_ShadowSurfaceModuleSubPath;
-    auto ensureDirectoriesResult2 = EnsureDirectories(outputPath.parentPath());
-    if(!ensureDirectoriesResult2){
-        NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: failed to create generated include parent '{}': {}"), PathToString<tchar>(outputPath.parentPathView()), ConvertString(ensureDirectoriesResult2.error().message()));
+    const Path outputPath = includeRoot / s_ShadowSurfaceModuleSubPath;
+    if(!WriteShadowSurfaceGeneratedIncludeFile(outputPath, AStringView(source)))
         return MakeUnexpected(Failure{});
-    }
-    if(!WriteTextFile(outputPath, AStringView(source))){
-        NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: failed to write generated include '{}'"), PathToString<tchar>(outputPath));
-        return MakeUnexpected(Failure{});
-    }
     return includeRoot;
 }
 

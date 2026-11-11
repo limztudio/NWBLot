@@ -39,7 +39,7 @@ native{
 #include <global/simd/frame.h>
 
 namespace NWB::Tests::Smoke{
-inline constexpr TStringView s_FlickerProjectName = NWB_TEXT("FlickerTestSmokeProject");
+inline constexpr AStringView s_FlickerProjectName = "FlickerTestSmokeProject";
 
 using FlickerModelRef = Core::Assets::AssetRef<Impl::Model>;
 using FlickerMaterialRef = Core::Assets::AssetRef<Impl::Material>;
@@ -53,27 +53,7 @@ inline constexpr FlickerMaterialRef s_FlickerTransparentMaterial{"project/smoke/
 inline constexpr FlickerMeshRef s_FlickerGroundMesh{"project/meshes/shadow_plane"};
 inline constexpr AStringView s_FlickerSmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 
-inline constexpr f32 s_FlickerGroundScale = 8.0f;
-inline constexpr f32 s_FlickerCharacterSpacingX = 0.22f;
-inline constexpr f32 s_FlickerTransparentFrontZ = -0.32f;
-inline constexpr f32 s_FlickerOpaqueBackZ = 0.32f;
-
-inline constexpr f32 s_FlickerCameraDistance = 3.8f;
-inline constexpr f32 s_FlickerCameraHeight = 1.6f;
-inline constexpr f32 s_FlickerCameraPitch = 0.22f;
-
-inline constexpr f32 s_FlickerDirectionalLightPitch = 0.9f;
-inline constexpr f32 s_FlickerDirectionalLightYaw = 0.65f;
-inline constexpr f32 s_FlickerDirectionalLightIntensity = 2.0f;
-
-// The repro targets point-light shadows: per-pixel directions and finite ray lengths.
-inline constexpr f32 s_FlickerPointLightHeight = 2.6f;
-inline constexpr f32 s_FlickerPointLightIntensity = 9.0f;
-inline constexpr f32 s_FlickerPointLightRange = 16.0f;
-
-inline constexpr f32 s_FlickerSpinSpeed = s_SmokeSpinSpeed;
-inline constexpr f32 s_FlickerManualYawSpeed = 0.6f;
-inline constexpr f32 s_FlickerMaxSpinDelta = 1.0f / 15.0f;
+namespace ModelObjectKind = Impl::ModelObjectKind;
 };
 
 
@@ -81,6 +61,32 @@ inline constexpr f32 s_FlickerMaxSpinDelta = 1.0f / 15.0f;
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_FlickerGroundScale = 8.0f;
+const f32 s_FlickerCharacterSpacingX = 0.22f;
+const f32 s_FlickerTransparentFrontZ = -0.32f;
+const f32 s_FlickerOpaqueBackZ = 0.32f;
+
+const f32 s_FlickerCameraDistance = 3.8f;
+const f32 s_FlickerCameraHeight = 1.6f;
+const f32 s_FlickerCameraPitch = 0.22f;
+
+const f32 s_FlickerDirectionalLightPitch = 0.9f;
+const f32 s_FlickerDirectionalLightYaw = 0.65f;
+const f32 s_FlickerDirectionalLightIntensity = 2.0f;
+
+// The repro targets point-light shadows: per-pixel directions and finite ray lengths.
+const f32 s_FlickerPointLightHeight = 2.6f;
+const f32 s_FlickerPointLightIntensity = 9.0f;
+const f32 s_FlickerPointLightRange = 16.0f;
+
+const f32 s_FlickerSpinSpeed = s_SmokeSpinSpeed;
+const f32 s_FlickerManualYawSpeed = 0.6f;
+const f32 s_FlickerMaxSpinDelta = 1.0f / 15.0f;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -107,57 +113,75 @@ class FlickerTestSmokeProject : IProjectEntryCallbacks{
     public b8 onStartup()override{
         // Register arrow yaw scrubbing at the front of the input chain.
         this.m_context.input.addHandlerToBack(this.m_arrowYawInput);
-        b8 ok = true;
-        native(mut ok){
-            const Core::ECS::EntityID activeCamera = CreateSmokeCamera(s_FlickerCameraHeight, s_FlickerCameraDistance, s_FlickerCameraPitch, *this->m_world);
+        const EntityID activeCamera = CreateSmokeCamera(s_FlickerCameraHeight, s_FlickerCameraDistance, s_FlickerCameraPitch, SmokeWorldRef(this.m_world));
 
-            const Core::ECS::EntityID directionalLight = Impl::Scene::CreateDirectionalLightEntity(*this->m_world, s_FlickerDirectionalLightPitch, s_FlickerDirectionalLightYaw, 0.0f, Float4(1.0f, 0.96f, 0.88f), s_FlickerDirectionalLightIntensity);
-            const Core::ECS::EntityID pointLight = Impl::Scene::CreatePointLightEntity(*this->m_world, Float4(0.8f, s_FlickerPointLightHeight, -0.6f, 0.0f), Float4(0.60f, 0.76f, 1.00f), s_FlickerPointLightIntensity, s_FlickerPointLightRange);
-            // Enable caustics unless NWB_FLICKER_TEST_NO_CAUSTICS is set.
-            static const b8 s_DisableCaustics = [](){
-                Core::Alloc::ScratchArena arena(s_SmokeEnvironmentArena);
-                const auto value = ReadSmokeEnvironmentText(arena, "NWB_FLICKER_TEST_NO_CAUSTICS");
-                return value && (*value)[0] == '1';
-            }();
-            if(s_DisableCaustics){
+        // Enable caustics unless NWB_FLICKER_TEST_NO_CAUSTICS is set.
+        const Expected<String> noCausticsValue = ReadSmokeEnvironmentString("NWB_FLICKER_TEST_NO_CAUSTICS");
+        const b8 disableCaustics = noCausticsValue.has_value() && StringView(noCausticsValue.value()).starts_with("1");
+
+        this.m_groundEntity = CreateTintedStaticMeshEntity(
+            s_FlickerGroundMesh,
+            s_FlickerOpaqueMaterial,
+            NameTextAscii(s_FlickerSmokeSurfaceMaterialInterface),
+            VectorSingle(0.82f, 0.82f, 0.85f, 1.0f),
+            VectorSingle(0.0f, 0.0f, 0.0f, 0.0f),
+            VectorSingle(s_FlickerGroundScale, 1.0f, s_FlickerGroundScale, 0.0f),
+            SmokeWorldRef(this.m_world)
+        );
+
+        // Overlapping opaque and glass shadows exercise their combined response.
+        const SmokeTintedModelEntityResult opaqueModel = CreateTintedModelEntity(
+            s_FlickerModel,
+            s_FlickerOpaqueMaterial,
+            NameTextAscii(s_FlickerSmokeSurfaceMaterialInterface),
+            VectorSingle(0.86f, 0.80f, 0.74f, 1.0f),
+            VectorSingle(-s_FlickerCharacterSpacingX, 0.0f, s_FlickerOpaqueBackZ, 0.0f),
+            VectorSingle(1.0f, 1.0f, 1.0f, 0.0f),
+            SmokeWorldRef(this.m_world)
+        );
+        this.m_opaqueOwner = opaqueModel.entity;
+        const SmokeTintedModelEntityResult transparentModel = CreateTintedModelEntity(
+            s_FlickerCausticModel,
+            s_FlickerTransparentMaterial,
+            NameTextAscii(s_FlickerSmokeSurfaceMaterialInterface),
+            VectorSingle(0.72f, 0.86f, 1.00f, 0.42f),
+            VectorSingle(s_FlickerCharacterSpacingX, 0.0f, s_FlickerTransparentFrontZ, 0.0f),
+            VectorSingle(1.0f, 1.0f, 1.0f, 0.0f),
+            SmokeWorldRef(this.m_world)
+        );
+        this.m_transparentOwner = transparentModel.entity;
+        if(!opaqueModel.tintApplied || !transparentModel.tintApplied)
+            error("FlickerTestSmokeProject: failed to set character tint (opaque {}, transparent {})", opaqueModel.tintApplied, transparentModel.tintApplied);
+
+        SyncSmokeModelRuntimes(SmokeWorldRef(this.m_world));
+        const EntityID meshEntity = FindSpawnedModelObject(this.m_transparentOwner, s_SmokeNameMesh, ModelObjectKind::SkinnedMesh, SmokeWorldRef(this.m_world));
+
+        b8 ok = true;
+        native(in disableCaustics, in meshEntity, mut world = this.m_world, mut ok){
+            const Core::ECS::EntityID directionalLight = Impl::Scene::CreateDirectionalLightEntity(*world, s_FlickerDirectionalLightPitch, s_FlickerDirectionalLightYaw, 0.0f, Float4(1.0f, 0.96f, 0.88f), s_FlickerDirectionalLightIntensity);
+            const Core::ECS::EntityID pointLight = Impl::Scene::CreatePointLightEntity(*world, Float4(0.8f, s_FlickerPointLightHeight, -0.6f, 0.0f), Float4(0.60f, 0.76f, 1.00f), s_FlickerPointLightIntensity, s_FlickerPointLightRange);
+            if(disableCaustics){
                 for(const Core::ECS::EntityID lightEntity : { directionalLight, pointLight }){
-                    if(auto* light = this->m_world->tryGetComponent<Impl::Scene::LightComponent>(lightEntity))
+                    if(auto* light = world->tryGetComponent<Impl::Scene::LightComponent>(lightEntity))
                         light->enableCaustics = false;
                 }
             }
-
-            this->m_groundEntity = CreateTintedStaticMeshEntity(s_FlickerGroundMesh, s_FlickerOpaqueMaterial, s_FlickerSmokeSurfaceMaterialInterface, VectorSet(0.82f, 0.82f, 0.85f, 1.0f), VectorSet(0.0f, 0.0f, 0.0f, 0.0f), VectorSet(s_FlickerGroundScale, 1.0f, s_FlickerGroundScale, 0.0f), *this->m_world);
-
-            // Overlapping opaque and glass shadows exercise their combined response.
-            const auto opaqueModel = CreateTintedModelEntity(s_FlickerModel, s_FlickerOpaqueMaterial, s_FlickerSmokeSurfaceMaterialInterface, VectorSet(0.86f, 0.80f, 0.74f, 1.0f), VectorSet(-s_FlickerCharacterSpacingX, 0.0f, s_FlickerOpaqueBackZ, 0.0f), VectorSet(1.0f, 1.0f, 1.0f, 0.0f), *this->m_world);
-            this->m_opaqueOwner = opaqueModel.entity;
-            const auto transparentModel = CreateTintedModelEntity(
-                s_FlickerCausticModel,
-                s_FlickerTransparentMaterial,
-                s_FlickerSmokeSurfaceMaterialInterface,
-                VectorSet(0.72f, 0.86f, 1.00f, 0.42f),
-                VectorSet(s_FlickerCharacterSpacingX, 0.0f, s_FlickerTransparentFrontZ, 0.0f),
-                VectorSet(1.0f, 1.0f, 1.0f, 0.0f),
-                *this->m_world
-            );
-            this->m_transparentOwner = transparentModel.entity;
-            if(!opaqueModel.tintApplied || !transparentModel.tintApplied)
-                NWB_LOGGER_ERROR(NWB_TEXT("FlickerTestSmokeProject: failed to set character tint (opaque {}, transparent {})"), opaqueModel.tintApplied, transparentModel.tintApplied);
-
-            SyncSmokeModelRuntimes(*this->m_world);
-            const auto meshEntity = FindSpawnedModelObject(this->m_transparentOwner, Name(s_SmokeNameMesh), Impl::ModelObjectKind::SkinnedMesh, *this->m_world);
-            auto* const renderer = this->m_world->tryGetComponent<Impl::RendererComponent>(meshEntity);
-            if(!renderer){
-                NWB_LOGGER_ERROR(NWB_TEXT("FlickerTestSmokeProject: closed refractor renderer is unavailable"));
+            auto* const renderer = world->tryGetComponent<Impl::RendererComponent>(meshEntity);
+            if(!renderer)
                 ok = false;
-            }
-            else{
+            else
                 renderer->opticalBoundaryMode = Impl::OpticalBoundaryMode::ClosedNested;
-                NWB_FATAL_ASSERT_MSG(activeCamera.valid() && this->m_groundEntity.valid() && this->m_opaqueOwner.valid() && this->m_transparentOwner.valid(), NWB_TEXT("FlickerTestSmokeProject failed to create all scene entities"));
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("FlickerTestSmokeProject: spawned one opaque + one transparent character over an opaque ground plane, directional + point light"));
-            }
         }
-        return ok;
+        if(!ok){
+            error("FlickerTestSmokeProject: closed refractor renderer is unavailable");
+            return false;
+        }
+        [essential] assert(
+            activeCamera.valid() && this.m_groundEntity.valid() && this.m_opaqueOwner.valid() && this.m_transparentOwner.valid(),
+            "FlickerTestSmokeProject failed to create all scene entities"
+        );
+        [essential] info("FlickerTestSmokeProject: spawned one opaque + one transparent character over an opaque ground plane, directional + point light");
+        return true;
     }
 
     public void onShutdown()override{
@@ -175,27 +199,20 @@ class FlickerTestSmokeProject : IProjectEntryCallbacks{
         const f32 frozen = FrozenYaw();
         this.m_yaw.update(safeDelta, frozen, frozen >= 0.0f, this.m_arrowYawInput, s_FlickerManualYawSpeed, s_FlickerSpinSpeed, s_FlickerMaxSpinDelta);
         this.spinCharacters();
-        b8 ticked = false;
-        native(in safeDelta, mut ticked){
-            SetSmokeYawWindowTitle(this->m_yaw.yaw(), this->m_yaw.manualControl(), s_2PI, *this->m_context);
-            ticked = TickSmokeWorld(safeDelta, *this->m_world);
-        }
-        return ticked;
+        SetSmokeYawWindowTitle(this.m_yaw.yaw(), this.m_yaw.manualControl(), s_2PI, this.m_context);
+        return TickSmokeWorld(safeDelta, SmokeWorldRef(this.m_world));
     }
 
     private void destroyWorld(){
-        native{
-            DestroySmokeSkinnedRenderWorld(*this->m_context, this->m_world);
-        }
+        DestroySmokeSkinnedRenderWorld(this.m_context, this.m_world);
     }
 
     private void spinCharacters(){
-        native{
-            for(const Core::ECS::EntityID owner : { this->m_opaqueOwner, this->m_transparentOwner }){
-                auto* transform = this->m_world->tryGetComponent<Impl::Scene::TransformComponent>(owner);
-                if(!transform)
-                    continue;
-                StoreFloat(QuaternionRotationRollPitchYaw(0.0f, this->m_yaw.yaw(), 0.0f), transform->rotation);
+        const f32x4 rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, this.m_yaw.yaw(), 0.0f, 0.0f)));
+        native(in opaqueOwner = this.m_opaqueOwner, in transparentOwner = this.m_transparentOwner, in rotation, mut world = this.m_world){
+            for(const Core::ECS::EntityID owner : { opaqueOwner, transparentOwner }){
+                if(auto* transform = world->tryGetComponent<Impl::Scene::TransformComponent>(owner))
+                    transform->rotation = rotation;
             }
         }
     }

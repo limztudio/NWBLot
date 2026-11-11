@@ -37,6 +37,10 @@ Expected<b8> TryConvertMaterialBoolInteger(in i64 propertyInt){
     return MakeUnexpected(Failure());
 }
 
+b8 HasMaterialBindSourceExtension(in StringView extensionText, in StringView expectedExtension){
+    return EqualsAsciiIgnoreCase(extensionText, expectedExtension);
+}
+
 b8 ValidateNonEmptyMaterialCookInterface(in StringView materialVirtualPath, in StringView materialInterface){
     if(!materialInterface.empty())
         return true;
@@ -64,7 +68,6 @@ native{
 
 #include <impl/assets_material/cook.adhd.h>
 #include <impl/assets_material/cook_private.adhd.h>
-#include <impl/assets_material/bind.adhd.h>
 #include <impl/assets_material/bind_parameter_application.adhd.h>
 #include <impl/assets_material/layout_validation.adhd.h>
 #include <impl/assets_material/material_binary_writer.adhd.h>
@@ -114,9 +117,7 @@ static b8 TryResolveMaterialBindDependencyInterface(const ScratchPath& normalize
     if(!PathHasDirectoryAncestor(normalizedDependency, normalizedMaterialBindIncludeRoot))
         return true;
 
-    ScratchString extension = PathToString(scratchArena, normalizedDependency.extensionView());
-    CanonicalizeTextInPlace(extension);
-    if(extension != s_MaterialBindSourceExtensionText)
+    if(!HasMaterialBindSourceExtension(PathToString(scratchArena, normalizedDependency.extension()), s_MaterialBindSourceExtensionText))
         return true;
 
     ScratchPath relativePath = normalizedDependency.lexicallyRelative(normalizedMaterialBindIncludeRoot);

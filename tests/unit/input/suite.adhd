@@ -283,31 +283,31 @@ void VerifyInputDispatcher_ReplacementAtRemovedHandlerAddressStartsOnNextDispatc
 
 void VerifyInputDispatcher_KeyHandlerCanRemoveAndDestroyItselfBeforeReturningPolicy(){
     InputDispatcher dispatcher = InputDispatcher();
-    native(mut dispatcher){
-        Optional<SelfDestroyingKeyHandler> owner;
-        owner.emplace(dispatcher, owner);
-        dispatcher.addHandlerToBack(*owner);
-        dispatcher.keyboardUpdate(Key::A, 30, InputAction::Press, 0);
-        EXPECT_FALSE(owner);
-        EXPECT_TRUE(dispatcher.keyboardTextBlocked(30));
-        dispatcher.keyboardUpdate(Key::A, 30, InputAction::Press, 0);
-        EXPECT_FALSE(dispatcher.keyboardTextBlocked(30));
-    }
+    Optional<SelfDestroyingKeyHandler> owner = Optional<SelfDestroyingKeyHandler>();
+    owner.emplace(dispatcher, owner);
+    dispatcher.addHandlerToBack(owner.value());
+    dispatcher.keyboardUpdate(Key::A, 30, InputAction::Press, 0);
+    EXPECT_FALSE(owner.has_value());
+    EXPECT_TRUE(dispatcher.keyboardTextBlocked(30));
+    dispatcher.keyboardUpdate(Key::A, 30, InputAction::Press, 0);
+    EXPECT_FALSE(dispatcher.keyboardTextBlocked(30));
+}
+
+void AddDestroyOtherHandlerToBack(mut InputDispatcher dispatcher, mut DestroyOtherKeyHandler handler){
+    dispatcher.addHandlerToBack(handler);
 }
 
 void VerifyInputDispatcher_RemovedHandlerCanBeDestroyedBeforeItsTurn(){
     InputDispatcher dispatcher = InputDispatcher();
-    native(mut dispatcher){
-        Optional<FocusHandler> victim;
-        victim.emplace(dispatcher);
-        DestroyOtherKeyHandler killer(dispatcher, victim);
-        dispatcher.addHandlerToFront(*victim);
-        dispatcher.addHandlerToBack(killer);
-        dispatcher.keyboardUpdate(Key::A, 30, InputAction::Press, 0);
-        EXPECT_FALSE(victim);
-        dispatcher.keyboardUpdate(Key::A, 30, InputAction::Press, 0);
-        EXPECT_FALSE(dispatcher.keyboardTextBlocked(30));
-    }
+    Optional<FocusHandler> victim = Optional<FocusHandler>();
+    victim.emplace(dispatcher);
+    DestroyOtherKeyHandler killer(dispatcher, victim);
+    dispatcher.addHandlerToFront(victim.value());
+    AddDestroyOtherHandlerToBack(dispatcher, killer);
+    dispatcher.keyboardUpdate(Key::A, 30, InputAction::Press, 0);
+    EXPECT_FALSE(victim.has_value());
+    dispatcher.keyboardUpdate(Key::A, 30, InputAction::Press, 0);
+    EXPECT_FALSE(dispatcher.keyboardTextBlocked(30));
 }
 
 void VerifyFocusTransitionHistory(in FocusHandler handler){

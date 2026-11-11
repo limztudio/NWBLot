@@ -68,6 +68,8 @@ public:
     [[nodiscard]] Core::Common::LogType::Enum lastType()const noexcept;
     [[nodiscard]] b8 sawMessageContaining(TStringView text)const noexcept;
     [[nodiscard]] b8 sawErrorContaining(TStringView text)const noexcept;
+    [[nodiscard]] b8 sawMessageContainingUtf8(AStringView text)const noexcept;
+    [[nodiscard]] b8 sawErrorContainingUtf8(AStringView text)const noexcept;
 
 
 private:
@@ -107,23 +109,11 @@ NWB_END
 
 
 b8 SawCapturedMessage(in CapturingLogger logger, in StringView text){
-    b8 found = false;
-    native(in logger, in text, mut found){
-        Core::Alloc::ScratchArena scratchArena(s_CapturingLoggerArena);
-        const auto converted = ConvertString(scratchArena, text);
-        found = logger.sawMessageContaining(TStringView(converted));
-    }
-    return found;
+    return logger.sawMessageContainingUtf8(text);
 }
 
 b8 SawCapturedError(in CapturingLogger logger, in StringView text){
-    b8 found = false;
-    native(in logger, in text, mut found){
-        Core::Alloc::ScratchArena scratchArena(s_CapturingLoggerArena);
-        const auto converted = ConvertString(scratchArena, text);
-        found = logger.sawErrorContaining(TStringView(converted));
-    }
-    return found;
+    return logger.sawErrorContainingUtf8(text);
 }
 
 
@@ -182,6 +172,18 @@ b8 CapturingLogger::sawErrorContaining(const TStringView text)const noexcept{
             return true;
     }
     return false;
+}
+
+b8 CapturingLogger::sawMessageContainingUtf8(const AStringView text)const noexcept{
+    Core::Alloc::ScratchArena scratchArena(s_CapturingLoggerArena);
+    const auto converted = ConvertString(scratchArena, text);
+    return sawMessageContaining(TStringView(converted));
+}
+
+b8 CapturingLogger::sawErrorContainingUtf8(const AStringView text)const noexcept{
+    Core::Alloc::ScratchArena scratchArena(s_CapturingLoggerArena);
+    const auto converted = ConvertString(scratchArena, text);
+    return sawErrorContaining(TStringView(converted));
 }
 
 void CapturingLogger::record(const TStringView str, const Core::Common::LogType::Enum type){

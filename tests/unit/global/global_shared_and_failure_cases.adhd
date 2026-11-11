@@ -92,7 +92,7 @@ struct ThrowingByteSizeComparison{
 public:
     explicit operator b8()const{ throw RuntimeException("byte size comparison failure"); }
 };
-[[nodiscard]] inline ThrowingByteSizeComparison operator>(const usize, const ThrowingByteSize)noexcept{ return {}; }
+[[nodiscard]] NWB_INLINE ThrowingByteSizeComparison operator>(const usize, const ThrowingByteSize)noexcept{ return {}; }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -173,7 +173,7 @@ public:
 
 struct StatefulPlacementCallable{
 public:
-    static inline u32 s_Allocations = 0u;
+    static NWB_INLINE u32 s_Allocations = 0u;
     u32& calls;
 
 
@@ -282,13 +282,13 @@ public:
     explicit operator b8()const noexcept{ return target != nullptr; }
 };
 
-[[nodiscard]] inline b8 operator==(const ThrowingFancyPointer& lhs, const ThrowingFancyPointer& rhs)noexcept{
+[[nodiscard]] NWB_INLINE b8 operator==(const ThrowingFancyPointer& lhs, const ThrowingFancyPointer& rhs)noexcept{
     return lhs.target == rhs.target;
 }
 
-inline u32 RefCountAddReference(ThrowingFancyPointer)noexcept{ return 1u; }
+NWB_INLINE u32 RefCountAddReference(ThrowingFancyPointer)noexcept{ return 1u; }
 
-inline u32 RefCountRelease(ThrowingFancyPointer)noexcept{ return 1u; }
+NWB_INLINE u32 RefCountRelease(ThrowingFancyPointer)noexcept{ return 1u; }
 
 struct FancyPointerDeleter{
 public:
@@ -326,21 +326,21 @@ public:
 using UniqueComparisonOwner = UniquePtr<int, ComparisonProxyDeleter<int>>;
 using ReferenceComparisonOwner = RefCountPtr<ComparisonReferenceTarget, ComparisonProxyDeleter<ComparisonReferenceTarget>>;
 
-[[nodiscard]] inline ThrowingComparisonResult operator<(const UniqueComparisonOwner&, const UniqueComparisonOwner&)noexcept{ return {}; }
+[[nodiscard]] NWB_INLINE ThrowingComparisonResult operator<(const UniqueComparisonOwner&, const UniqueComparisonOwner&)noexcept{ return {}; }
 
-[[nodiscard]] inline ThrowingComparisonResult operator<(const UniqueComparisonOwner&, decltype(nullptr))noexcept{ return {}; }
+[[nodiscard]] NWB_INLINE ThrowingComparisonResult operator<(const UniqueComparisonOwner&, decltype(nullptr))noexcept{ return {}; }
 
-[[nodiscard]] inline ThrowingComparisonResult operator<(decltype(nullptr), const UniqueComparisonOwner&)noexcept{ return {}; }
+[[nodiscard]] NWB_INLINE ThrowingComparisonResult operator<(decltype(nullptr), const UniqueComparisonOwner&)noexcept{ return {}; }
 
-[[nodiscard]] inline ThrowingComparisonResult operator<(const ReferenceComparisonOwner&, const ReferenceComparisonOwner&)noexcept{ return {}; }
+[[nodiscard]] NWB_INLINE ThrowingComparisonResult operator<(const ReferenceComparisonOwner&, const ReferenceComparisonOwner&)noexcept{ return {}; }
 
-[[nodiscard]] inline ThrowingComparisonResult operator<(const ReferenceComparisonOwner&, decltype(nullptr))noexcept{ return {}; }
+[[nodiscard]] NWB_INLINE ThrowingComparisonResult operator<(const ReferenceComparisonOwner&, decltype(nullptr))noexcept{ return {}; }
 
-[[nodiscard]] inline ThrowingComparisonResult operator<(decltype(nullptr), const ReferenceComparisonOwner&)noexcept{ return {}; }
+[[nodiscard]] NWB_INLINE ThrowingComparisonResult operator<(decltype(nullptr), const ReferenceComparisonOwner&)noexcept{ return {}; }
 
-[[nodiscard]] inline ThrowingComparisonResult operator!(const UniqueComparisonOwner&)noexcept{ return {}; }
+[[nodiscard]] NWB_INLINE ThrowingComparisonResult operator!(const UniqueComparisonOwner&)noexcept{ return {}; }
 
-[[nodiscard]] inline ThrowingComparisonResult operator!(const ReferenceComparisonOwner&)noexcept{ return {}; }
+[[nodiscard]] NWB_INLINE ThrowingComparisonResult operator!(const ReferenceComparisonOwner&)noexcept{ return {}; }
 
 template<typename OwnerT>
 void VerifyComparisonResultConversions(u32& outWrapperChecks, b8& outFirstNull, b8& outSecondNull){
@@ -376,7 +376,7 @@ void VerifyComparisonResultConversions(u32& outWrapperChecks, b8& outFirstNull, 
 
 struct ObservationPointer{
 public:
-    static inline b8 s_FailCopy = false;
+    static NWB_INLINE b8 s_FailCopy = false;
     RefCountTarget* target = nullptr;
 
 
@@ -407,11 +407,11 @@ public:
     explicit operator b8()const noexcept{ return target != nullptr; }
 };
 
-[[nodiscard]] inline b8 operator==(const ObservationPointer& first, const ObservationPointer& second)noexcept{ return first.target == second.target; }
+[[nodiscard]] NWB_INLINE b8 operator==(const ObservationPointer& first, const ObservationPointer& second)noexcept{ return first.target == second.target; }
 
-inline u32 RefCountAddReference(ObservationPointer)noexcept{ return 1u; }
+NWB_INLINE u32 RefCountAddReference(ObservationPointer)noexcept{ return 1u; }
 
-inline u32 RefCountRelease(ObservationPointer)noexcept{ return 1u; }
+NWB_INLINE u32 RefCountRelease(ObservationPointer)noexcept{ return 1u; }
 
 struct ObservationDeleter{
 public:
@@ -445,9 +445,9 @@ public:
     }
 };
 
-[[nodiscard]] inline ThrowingHexCapacityPredicate operator>(HexCapacityValue, HexCapacityValue)noexcept{ return {}; }
+[[nodiscard]] NWB_INLINE ThrowingHexCapacityPredicate operator>(HexCapacityValue, HexCapacityValue)noexcept{ return {}; }
 
-[[nodiscard]] inline usize operator-(const HexCapacityValue lhs, const HexCapacityValue rhs)noexcept{ return lhs.value - rhs.value; }
+[[nodiscard]] NWB_INLINE usize operator-(const HexCapacityValue lhs, const HexCapacityValue rhs)noexcept{ return lhs.value - rhs.value; }
 
 struct ThrowingHexCapacityString{
 public:
@@ -582,9 +582,27 @@ public:
     FixedVectorNonAssignable& operator=(FixedVectorNonAssignable&&) = delete;
 };
 
-inline void swap([[maybe_unused]] ThrowingFixedVectorSwap& lhs, [[maybe_unused]] ThrowingFixedVectorSwap& rhs){
+NWB_INLINE void swap([[maybe_unused]] ThrowingFixedVectorSwap& lhs, [[maybe_unused]] ThrowingFixedVectorSwap& rhs){
     throw s_ElementSwapFailure;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::GlobalCases{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using NativeChar = char;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -680,6 +698,18 @@ void VerifyGlobal_BinarySharedHelpersPreserveEdgeCases(){
     }
 }
 
+VectorSingle EvalVectorQuantizeSNorm(in VectorSingle value, in VectorSingle scale){
+    return VectorQuantizeSNorm(value, scale);
+}
+
+VectorSingle EvalVectorQuantizeUNorm(in VectorSingle value, in VectorSingle scale){
+    return VectorQuantizeUNorm(value, scale);
+}
+
+VectorSingle EvalVectorLinearToSRGB(in VectorSingle value){
+    return VectorLinearToSRGB(value);
+}
+
 void VerifyGlobal_NumericSharedHelpersPreserveEdgeCases(){
     EXPECT_EQ(PackUnorderedU32Pair(0u, u32.max), 0xffffffffu);
     EXPECT_EQ(PackUnorderedU32Pair(u32.max, 0u), 0xffffffffu);
@@ -736,92 +766,125 @@ void VerifyGlobal_NumericSharedHelpersPreserveEdgeCases(){
     EXPECT_EQ(ClassifyFloatGrammar(".e"), s_NumericGrammarInvalid);
     EXPECT_EQ(ClassifyFloatGrammar("1."), s_NumericGrammarComplete);
 
-    native{
-        const Array<f64, 2u> signedZeroSamples{ 0.0, -0.0 };
-        const OnlineF64Statistics zeroStatistics = ComputeOnlineF64Statistics(signedZeroSamples);
-        EXPECT_EQ(zeroStatistics.count, 2u);
-        EXPECT_EQ(BitCast<u64>(zeroStatistics.minimum), 0x8000000000000000ull);
-        EXPECT_EQ(BitCast<u64>(zeroStatistics.maximum), 0x8000000000000000ull);
-        EXPECT_EQ(QuantizeUNormScalar(-Limit<f32>::s_Infinity, 255.0f), 0.0f);
-        EXPECT_EQ(QuantizeUNormScalar(Limit<f32>::s_Infinity, 255.0f), 255.0f);
-        EXPECT_EQ(QuantizeUNormScalar(0.5f, 255.0f), 128.0f);
-        EXPECT_EQ(QuantizeSNormScalar(-0.5f, 127.0f), -64.0f);
-        EXPECT_EQ(BitCast<u32>(QuantizeSNormScalar(-0.0f, 127.0f)), 0u);
-        EXPECT_EQ(QuantizeSNormScalar(BitCast<f32>(0x7fc01234u), 127.0f), -127.0f);
-        const SIMDVectorSingle signedColor = VectorQuantizeSNorm(VectorSet(-0.0f, -0.5f, 0.5f, -2.0f), VectorReplicate(127.0f));
-        EXPECT_EQ(VectorGetX(signedColor), 0.0f);
-        EXPECT_EQ(VectorGetY(signedColor), -64.0f);
-        EXPECT_EQ(VectorGetZ(signedColor), 64.0f);
-        EXPECT_EQ(VectorGetW(signedColor), -127.0f);
-        const SIMDVectorSingle quantizedColor = VectorQuantizeUNorm(VectorSet(-1.0f, 0.5f, 1.0f, 2.0f), VectorReplicate(255.0f));
-        EXPECT_EQ(VectorGetX(quantizedColor), 0.0f);
-        EXPECT_EQ(VectorGetY(quantizedColor), 128.0f);
-        EXPECT_EQ(VectorGetZ(quantizedColor), 255.0f);
-        EXPECT_EQ(VectorGetW(quantizedColor), 255.0f);
-        const SIMDVectorSingle encodedColor = VectorLinearToSRGB(VectorSet(-1.0f, 0.0031308f, 1.0f, 2.0f));
-        EXPECT_EQ(VectorGetX(encodedColor), 0.0f);
-        EXPECT_NEAR(VectorGetY(encodedColor), 0.0031308f * 12.92f, 0.000001f);
-        EXPECT_NEAR(VectorGetZ(encodedColor), 1.0f, 0.000001f);
-        EXPECT_NEAR(VectorGetW(encodedColor), 1.0f, 0.000001f);
-        const Array<u32, 2u> narrowSum{ Limit<u32>::s_Max, 1u };
-        const auto wrappedNarrowSum = TrySumUnsignedWithU64Limit<u32>(narrowSum);
-        ASSERT_TRUE(wrappedNarrowSum);
-        EXPECT_EQ(*wrappedNarrowSum, 0u);
-        const Array<u64, 2u> wideSumOverflow{ Limit<u64>::s_Max, 1u };
-        EXPECT_FALSE(TrySumUnsignedWithU64Limit<u64>(wideSumOverflow));
-        EXPECT_EQ(TrySumUnsignedWithU64Limit<u64>(Span<const u64>{}).value(), 0u);
-        const Array<u64, 2u> exactMaximumSum{ Limit<u64>::s_Max - 1u, 1u };
-        EXPECT_EQ(TrySumUnsignedWithU64Limit<u64>(exactMaximumSum).value(), Limit<u64>::s_Max);
-        const Array<u64, 2u> maximumThenZero{ Limit<u64>::s_Max, 0u };
-        EXPECT_FALSE(TrySumNonzeroU64(maximumThenZero));
-        const Array<u64, 1u> maximumCount{ Limit<u64>::s_Max };
-        const Array<u64, 2u> overflowingCounts{ Limit<u64>::s_Max, 1u };
-        const Array<u64, 1u> zeroCount{ 0u };
-        EXPECT_EQ(TrySumNonzeroU64(Span<const u64>{}).value(), 0u);
-        EXPECT_EQ(TrySumNonzeroU64(maximumCount).value(), Limit<u64>::s_Max);
-        EXPECT_FALSE(TrySumNonzeroU64(overflowingCounts));
-        EXPECT_FALSE(TrySumNonzeroU64(zeroCount));
-        u64 total = 11u;
-        EXPECT_FALSE(AccumulateBoundedCount(0u, 10u, total));
-        EXPECT_EQ(total, 11u);
-        total = Limit<u64>::s_Max - 1u;
-        EXPECT_FALSE(AccumulateBoundedCount(2u, Limit<u64>::s_Max, total));
-        EXPECT_EQ(total, Limit<u64>::s_Max - 1u);
-        EXPECT_EQ(PackFourCharTag('H', 'a', 'n', 'g'), 0x48616e67u);
-        EXPECT_EQ(PackFourCharTag(static_cast<char>(0x80), 'a', 'b', 'c'), (static_cast<u32>(static_cast<char>(0x80)) << 24u) | 0x00616263u);
-        EXPECT_EQ(*SignedDifference(0u, static_cast<u64>(Limit<i64>::s_Max) + 1u), Limit<i64>::s_Min);
-        EXPECT_FALSE(SignedDifference(0u, static_cast<u64>(Limit<i64>::s_Max) + 2u));
-        EXPECT_FALSE(SignedDifference(static_cast<u64>(Limit<i64>::s_Max) + 1u, 0u));
-        EXPECT_FALSE(AlignUpCheckedSize(Limit<usize>::s_Max, 4u));
-        EXPECT_TRUE(DifferentF64Bits(0.0, -0.0));
-        EXPECT_FALSE(DifferentF64Bits(BitCast<f64>(0x7ff8000000001234ull), BitCast<f64>(0x7ff8000000001234ull)));
-        EXPECT_TRUE(DifferentF64Bits(BitCast<f64>(0x7ff8000000001234ull), BitCast<f64>(0x7ff8000000001235ull)));
-        EXPECT_EQ(SaturateU64ToI32(static_cast<u64>(Limit<i32>::s_Max) + 1u), Limit<i32>::s_Max);
-        EXPECT_EQ(AddSignedOffset(u64(1) << 63u, Limit<i64>::s_Min).value(), 0u);
-        EXPECT_FALSE(AddSignedOffset(0u, Limit<i64>::s_Min));
-        EXPECT_FALSE(AddSignedOffset(Limit<u64>::s_Max, 1));
-        EXPECT_EQ(DivideUpWrapping(usize(9), 8u), usize(2));
-        const BalancedPartitionRange firstRange = ComputeBalancedPartitionRange(10u, 0u, 2u, 1u);
-        const BalancedPartitionRange lastRange = ComputeBalancedPartitionRange(10u, 2u, 2u, 1u);
-        EXPECT_EQ(firstRange.first, 10u);
-        EXPECT_EQ(firstRange.last, 13u);
-        EXPECT_EQ(lastRange.first, 15u);
-        EXPECT_EQ(lastRange.last, 17u);
-        Atomic<u64> wrappingIdentity{ Limit<u64>::s_Max };
-        EXPECT_EQ(NextAtomicWrappingNonzero(wrappingIdentity), 1u);
-        EXPECT_FALSE(HasSingleSetBit(u16(0)));
-        EXPECT_TRUE(HasSingleSetBit(u16(0x8000)));
-        EXPECT_EQ(LowestSetBit(u8(0x90)), u8(0x10));
-        EXPECT_EQ(AlignmentOffsetPowerOfTwo(Limit<usize>::s_Max, 8u), 1u);
-        EXPECT_EQ(SubtractSaturating(u64(1), u64(2)), 0u);
-        EXPECT_EQ(BitCast<u32>(RoundF64ToF32Bound(0x1p-150, false)), 0u);
-        EXPECT_EQ(BitCast<u32>(RoundF64ToF32Bound(0x1p-150, true)), 1u);
-        EXPECT_EQ(BitCast<u32>(RoundF64ToF32Bound(-0x1p-150, false)), 0x80000001u);
-        EXPECT_EQ(BitCast<u32>(RoundF64ToF32Bound(-0x1p-150, true)), 0x80000000u);
-        EXPECT_EQ(BitCast<u32>(RoundF64ToF32Bound(-0.0, false)), 0x80000000u);
-        EXPECT_EQ(BitCast<u32>(RoundF64ToF32Bound(1.0 + 0x1p-24, false)), 0x3f800000u);
-        EXPECT_EQ(BitCast<u32>(RoundF64ToF32Bound(1.0 + 0x1p-24, true)), 0x3f800001u);
-    }
+    Array<f64, 2> signedZeroSamples = Array<f64, 2>();
+    signedZeroSamples[0u] = 0.0;
+    signedZeroSamples[1u] = -0.0;
+    const OnlineF64Statistics zeroStatistics = ComputeOnlineF64Statistics(signedZeroSamples);
+    EXPECT_EQ(zeroStatistics.count, 2u);
+    EXPECT_EQ(bit_cast<u64>(zeroStatistics.minimum), 0x8000000000000000u);
+    EXPECT_EQ(bit_cast<u64>(zeroStatistics.maximum), 0x8000000000000000u);
+
+    EXPECT_EQ(QuantizeUNormScalar(-bit_cast<f32>(0x7f800000u), 255.0f), 0.0f);
+    EXPECT_EQ(QuantizeUNormScalar(bit_cast<f32>(0x7f800000u), 255.0f), 255.0f);
+    EXPECT_EQ(QuantizeUNormScalar(0.5f, 255.0f), 128.0f);
+    EXPECT_EQ(QuantizeSNormScalar(-0.5f, 127.0f), -64.0f);
+    EXPECT_EQ(bit_cast<u32>(QuantizeSNormScalar(-0.0f, 127.0f)), 0u);
+    EXPECT_EQ(QuantizeSNormScalar(bit_cast<f32>(0x7fc01234u), 127.0f), -127.0f);
+
+    const VectorSingle signedColor = EvalVectorQuantizeSNorm(VectorSingle(-0.0f, -0.5f, 0.5f, -2.0f), VectorSingle(127.0f, 127.0f, 127.0f, 127.0f));
+    EXPECT_EQ(signedColor.x, 0.0f);
+    EXPECT_EQ(signedColor.y, -64.0f);
+    EXPECT_EQ(signedColor.z, 64.0f);
+    EXPECT_EQ(signedColor.w, -127.0f);
+
+    const VectorSingle quantizedColor = EvalVectorQuantizeUNorm(VectorSingle(-1.0f, 0.5f, 1.0f, 2.0f), VectorSingle(255.0f, 255.0f, 255.0f, 255.0f));
+    EXPECT_EQ(quantizedColor.x, 0.0f);
+    EXPECT_EQ(quantizedColor.y, 128.0f);
+    EXPECT_EQ(quantizedColor.z, 255.0f);
+    EXPECT_EQ(quantizedColor.w, 255.0f);
+
+    const VectorSingle encodedColor = EvalVectorLinearToSRGB(VectorSingle(-1.0f, 0.0031308f, 1.0f, 2.0f));
+    EXPECT_EQ(encodedColor.x, 0.0f);
+    EXPECT_NEAR(encodedColor.y, 0.0031308f * 12.92f, 0.000001f);
+    EXPECT_NEAR(encodedColor.z, 1.0f, 0.000001f);
+    EXPECT_NEAR(encodedColor.w, 1.0f, 0.000001f);
+
+    Array<u32, 2> narrowSum = Array<u32, 2>();
+    narrowSum[0u] = u32.max;
+    narrowSum[1u] = 1u;
+    const Expected<u32> wrappedNarrowSum = TrySumUnsignedWithU64Limit<u32>(narrowSum);
+    ASSERT_TRUE(wrappedNarrowSum.has_value());
+    EXPECT_EQ(wrappedNarrowSum.value(), 0u);
+
+    Array<u64, 2> wideSumOverflow = Array<u64, 2>();
+    wideSumOverflow[0u] = u64.max;
+    wideSumOverflow[1u] = 1u;
+    EXPECT_FALSE(TrySumUnsignedWithU64Limit<u64>(wideSumOverflow).has_value());
+    EXPECT_EQ(TrySumUnsignedWithU64Limit<u64>(Span<u64>()).value(), 0u);
+
+    Array<u64, 2> exactMaximumSum = Array<u64, 2>();
+    exactMaximumSum[0u] = u64.max - 1u;
+    exactMaximumSum[1u] = 1u;
+    EXPECT_EQ(TrySumUnsignedWithU64Limit<u64>(exactMaximumSum).value(), u64.max);
+
+    Array<u64, 2> maximumThenZero = Array<u64, 2>();
+    maximumThenZero[0u] = u64.max;
+    maximumThenZero[1u] = 0u;
+    EXPECT_FALSE(TrySumNonzeroU64(maximumThenZero).has_value());
+
+    Array<u64, 1> maximumCount = Array<u64, 1>();
+    maximumCount[0u] = u64.max;
+    Array<u64, 2> overflowingCounts = Array<u64, 2>();
+    overflowingCounts[0u] = u64.max;
+    overflowingCounts[1u] = 1u;
+    Array<u64, 1> zeroCount = Array<u64, 1>();
+    zeroCount[0u] = 0u;
+    EXPECT_EQ(TrySumNonzeroU64(Span<u64>()).value(), 0u);
+    EXPECT_EQ(TrySumNonzeroU64(maximumCount).value(), u64.max);
+    EXPECT_FALSE(TrySumNonzeroU64(overflowingCounts).has_value());
+    EXPECT_FALSE(TrySumNonzeroU64(zeroCount).has_value());
+
+    u64 total = 11u;
+    EXPECT_FALSE(AccumulateBoundedCount(0u, 10u, total));
+    EXPECT_EQ(total, 11u);
+    total = u64.max - 1u;
+    EXPECT_FALSE(AccumulateBoundedCount(2u, u64.max, total));
+    EXPECT_EQ(total, u64.max - 1u);
+
+    const NativeChar highByteChar = bit_cast<NativeChar>(cast<u8>(0x80u));
+    EXPECT_EQ(PackFourCharTag('H', 'a', 'n', 'g'), 0x48616e67u);
+    EXPECT_EQ(PackFourCharTag(highByteChar, 'a', 'b', 'c'), (cast<u32>(cast<i32>(highByteChar)) << 24u) | 0x00616263u);
+
+    const Expected<i64> minSignedDiff = SignedDifference(0u, cast<u64>(i64.max) + 1u);
+    ASSERT_TRUE(minSignedDiff.has_value());
+    EXPECT_EQ(minSignedDiff.value(), i64.min);
+    EXPECT_FALSE(SignedDifference(0u, cast<u64>(i64.max) + 2u).has_value());
+    EXPECT_FALSE(SignedDifference(cast<u64>(i64.max) + 1u, 0u).has_value());
+    EXPECT_FALSE(AlignUpCheckedSize(usize.max, 4u).has_value());
+
+    EXPECT_TRUE(DifferentF64Bits(0.0, -0.0));
+    EXPECT_FALSE(DifferentF64Bits(bit_cast<f64>(cast<u64>(0x7ff8000000001234u)), bit_cast<f64>(cast<u64>(0x7ff8000000001234u))));
+    EXPECT_TRUE(DifferentF64Bits(bit_cast<f64>(cast<u64>(0x7ff8000000001234u)), bit_cast<f64>(cast<u64>(0x7ff8000000001235u))));
+    EXPECT_EQ(SaturateU64ToI32(cast<u64>(i32.max) + 1u), i32.max);
+    EXPECT_EQ(AddSignedOffset(cast<u64>(1u) << 63u, i64.min).value(), 0u);
+    EXPECT_FALSE(AddSignedOffset(0u, i64.min).has_value());
+    EXPECT_FALSE(AddSignedOffset(u64.max, 1).has_value());
+    EXPECT_EQ(DivideUpWrapping(cast<usize>(9u), cast<usize>(8u)), cast<usize>(2u));
+
+    const BalancedPartitionRange firstRange = ComputeBalancedPartitionRange(10u, 0u, 2u, 1u);
+    const BalancedPartitionRange lastRange = ComputeBalancedPartitionRange(10u, 2u, 2u, 1u);
+    EXPECT_EQ(firstRange.first, 10u);
+    EXPECT_EQ(firstRange.last, 13u);
+    EXPECT_EQ(lastRange.first, 15u);
+    EXPECT_EQ(lastRange.last, 17u);
+
+    Atomic<u64> wrappingIdentity = Atomic<u64>(u64.max);
+    EXPECT_EQ(NextAtomicWrappingNonzero(wrappingIdentity), 1u);
+    EXPECT_FALSE(HasSingleSetBit(cast<u16>(0u)));
+    EXPECT_TRUE(HasSingleSetBit(cast<u16>(0x8000u)));
+    EXPECT_EQ(LowestSetBit(cast<u8>(0x90u)), cast<u8>(0x10u));
+    EXPECT_EQ(AlignmentOffsetPowerOfTwo(usize.max, 8u), 1u);
+    EXPECT_EQ(SubtractSaturating(cast<u64>(1u), cast<u64>(2u)), 0u);
+
+    const f64 tinySubnormal = bit_cast<f64>(cast<u64>(0x3690000000000000u));
+    const f64 aboveOneHalfUlp = 1.0 + bit_cast<f64>(cast<u64>(0x3e70000000000000u));
+    EXPECT_EQ(bit_cast<u32>(RoundF64ToF32Bound(tinySubnormal, false)), 0u);
+    EXPECT_EQ(bit_cast<u32>(RoundF64ToF32Bound(tinySubnormal, true)), 1u);
+    EXPECT_EQ(bit_cast<u32>(RoundF64ToF32Bound(-tinySubnormal, false)), 0x80000001u);
+    EXPECT_EQ(bit_cast<u32>(RoundF64ToF32Bound(-tinySubnormal, true)), 0x80000000u);
+    EXPECT_EQ(bit_cast<u32>(RoundF64ToF32Bound(-0.0, false)), 0x80000000u);
+    EXPECT_EQ(bit_cast<u32>(RoundF64ToF32Bound(aboveOneHalfUlp, false)), 0x3f800000u);
+    EXPECT_EQ(bit_cast<u32>(RoundF64ToF32Bound(aboveOneHalfUlp, true)), 0x3f800001u);
 }
 
 void VerifyGlobal_CollectionSharedHelpersPreserveEdgeCases(){

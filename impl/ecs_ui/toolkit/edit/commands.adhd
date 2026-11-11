@@ -9,42 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] b8 EraseEditWord(EditModel& model, b8 forward);
-
-// Active preedit owns editing keys and Enter.
-// Escape first cancels preedit without cancelling the widget.
-// Clipboard actions describe requests; the host borrows its OS service to perform the actual exchange.
-[[nodiscard]] EditCommandResult ApplyEditCommand(EditModel& model, const EditCommandRequest& request, b8 readOnly = false);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 IsAdmittedEditCommand(in EditCommand command){
     return command != EditCommand::None && cast<u8>(command) <= cast<u8>(EditCommand::Newline);
 }
@@ -71,28 +35,11 @@ void FinalizeAppliedEditCommand(
     }
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 EraseEditWord(EditModel& model, const b8 forward){
+b8 EraseEditWord(mut EditModel model, in b8 forward){
     if(model.hasSelection())
-        return model.replaceSelection({});
+        return model.replaceSelection("");
     const usize caret = model.caret();
-    if(!model.move(ResolveEditWordEraseMove(forward)))
+    if(!model.move(ResolveEditWordEraseMove(forward), false))
         return false;
     const usize boundary = model.caret();
     if(!model.setSelection(caret, caret))
@@ -103,7 +50,10 @@ b8 EraseEditWord(EditModel& model, const b8 forward){
     return model.eraseSurrounding(beforeBytes, afterBytes);
 }
 
-EditCommandResult ApplyEditCommand(EditModel& model, const EditCommandRequest& request, const b8 readOnly){
+// Active preedit owns editing keys and Enter.
+// Escape first cancels preedit without cancelling the widget.
+// Clipboard actions describe requests; the host borrows its OS service to perform the actual exchange.
+EditCommandResult ApplyEditCommand(mut EditModel model, in EditCommandRequest request, in b8 readOnly){
     EditCommandResult result;
     if(!IsAdmittedEditCommand(request.command))
         return result;
@@ -120,14 +70,16 @@ EditCommandResult ApplyEditCommand(EditModel& model, const EditCommandRequest& r
     if(readOnly && IsMutatingEditCommand(request.command))
         return result;
     EditCommandMapping mapping;
-    if(const auto passiveResult = mapping.passiveResult(request.command))
-        return *passiveResult;
+    const Expected<EditCommandResult> passiveResult = mapping.passiveResult(request.command);
+    if(passiveResult.has_value())
+        return passiveResult.value();
     const u64 revision = model.revision();
     const usize anchor = model.anchor();
     const usize caret = model.caret();
     b8 applied = true;
-    if(const auto movement = mapping.movement(request.command)){
-        applied = model.move(*movement, request.extend);
+    const Expected<EditMove> movement = mapping.movement(request.command);
+    if(movement.has_value()){
+        applied = model.move(movement.value(), request.extend);
     }
     else{
         switch(request.command){
@@ -146,16 +98,8 @@ EditCommandResult ApplyEditCommand(EditModel& model, const EditCommandRequest& r
     return result;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+EditCommandResult ApplyEditCommand(mut EditModel model, in EditCommandRequest request){
+    return ApplyEditCommand(model, request, false);
 }
 
 

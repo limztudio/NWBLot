@@ -15,7 +15,8 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_csg/components.adhd.h>
+#include <impl/assets_csg/shape_id.adhd.h>
+#include <impl/ecs_csg/module.adhd.h>
 
 #include <core/ecs/entity.h>
 #include <core/ecs/world.h>
@@ -28,11 +29,95 @@ using Core::ECS::World;
 using Impl::CsgCutterComponent;
 using Impl::StaticCsgMeshComponent;
 using Impl::SkinnedCsgMeshComponent;
+using Impl::s_CsgPlaneShapeName;
+using Impl::s_CsgBoxShapeName;
 
 template<typename ParameterT>
-inline void AssignCsgCutterParameters(const ParameterT& parameters, Impl::CsgCutterComponent& cutter){
+NWB_INLINE void AssignCsgCutterParameters(const ParameterT& parameters, Impl::CsgCutterComponent& cutter){
     cutter.parameterBytes.resize(sizeof(ParameterT));
     NWB_MEMCPY(cutter.parameterBytes.data(), cutter.parameterBytes.size(), &parameters, sizeof(ParameterT));
+}
+
+NWB_INLINE Core::ECS::EntityID CreateSmokeCsgBoxCutter(
+    const Name receiverGroup,
+    const Name shapeType,
+    const b8 active,
+    const Float4& halfExtents,
+    const SIMDVectorSingle center,
+    const SIMDVectorSingle rotation,
+    Core::ECS::World& world
+){
+    auto entity = world.createEntity();
+    auto& component = entity.addComponent<Impl::CsgCutterComponent>();
+    component.receiverGroup = receiverGroup;
+    component.shapeType = shapeType;
+    component.active = active;
+    Impl::CsgBoxShapeParameters parameters{};
+    parameters.halfExtents = halfExtents;
+    AssignCsgCutterParameters(parameters, component);
+    SIMDMatrix worldToShape{};
+    SIMDMatrix shapeToWorld{};
+    ComputeCsgCutterTransforms(center, rotation, worldToShape, shapeToWorld);
+    StoreFloat(worldToShape, component.worldToShape);
+    StoreFloat(shapeToWorld, component.shapeToWorld);
+    return entity.id();
+}
+
+NWB_INLINE Core::ECS::EntityID CreateSmokeCsgPlaneCutter(
+    const Name receiverGroup,
+    const Name shapeType,
+    const b8 active,
+    const Float4& normalDistance,
+    const SIMDVectorSingle center,
+    const SIMDVectorSingle rotation,
+    Core::ECS::World& world
+){
+    auto entity = world.createEntity();
+    auto& component = entity.addComponent<Impl::CsgCutterComponent>();
+    component.receiverGroup = receiverGroup;
+    component.shapeType = shapeType;
+    component.active = active;
+    Impl::CsgPlaneShapeParameters parameters{};
+    parameters.normalDistance = normalDistance;
+    AssignCsgCutterParameters(parameters, component);
+    SIMDMatrix worldToShape{};
+    SIMDMatrix shapeToWorld{};
+    ComputeCsgCutterTransforms(center, rotation, worldToShape, shapeToWorld);
+    StoreFloat(worldToShape, component.worldToShape);
+    StoreFloat(shapeToWorld, component.shapeToWorld);
+    return entity.id();
+}
+
+NWB_INLINE Core::ECS::EntityID CreateSmokeCsgPlaneCutter(
+    const Name receiverGroup,
+    const Name shapeType,
+    const b8 active,
+    const Float4& normalDistance,
+    Core::ECS::World& world
+){
+    return CreateSmokeCsgPlaneCutter(receiverGroup, shapeType, active, normalDistance, VectorZero(), QuaternionIdentity(), world);
+}
+
+NWB_INLINE b8 SetSmokeCsgCutterTransform(
+    const Core::ECS::EntityID cutterEntity,
+    const SIMDVectorSingle center,
+    const SIMDVectorSingle rotation,
+    Core::ECS::World& world
+){
+    if(auto* const cutter = world.tryGetComponent<Impl::CsgCutterComponent>(cutterEntity)){
+        SIMDMatrix worldToShape{};
+        SIMDMatrix shapeToWorld{};
+        ComputeCsgCutterTransforms(center, rotation, worldToShape, shapeToWorld);
+        StoreFloat(worldToShape, cutter->worldToShape);
+        StoreFloat(shapeToWorld, cutter->shapeToWorld);
+        return true;
+    }
+    return false;
+}
+
+NWB_INLINE void SetSmokeCsgCutterActive(const Core::ECS::EntityID cutterEntity, const b8 active, Core::ECS::World& world){
+    auto& cutter = *MakeNotNull(world.tryGetComponent<Impl::CsgCutterComponent>(cutterEntity));
+    cutter.active = active;
 }
 };
 

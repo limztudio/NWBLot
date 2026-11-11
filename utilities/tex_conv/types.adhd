@@ -16,6 +16,8 @@ const StringView s_TgaExtension = ".tga";
 const StringView s_QoiExtension = ".qoi";
 const StringView s_ExrExtension = ".exr";
 const StringView s_HdrExtension = ".hdr";
+const StringView s_NwbOutputExtension = ".nwb";
+const StringView s_TexOutputExtension = ".tex";
 const u32 s_ColorChannelCount = 4u;
 const f32 s_UastcHdrMaximum = 65216.0f;
 const f32 s_SrgbLinearSegmentScale = 12.92f;
@@ -46,6 +48,7 @@ const i32 s_TexConvExitSuccess = 0;
 const i32 s_TexConvExitFailure = 1;
 const i32 s_TexConvExitFatal = -1;
 const usize s_CompletionReportReserveSlack = 128u;
+const usize s_MetadataTextReserveBytes = 256u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -56,6 +59,27 @@ enum<u8> AlphaSourceMode{
     Original,
     Constant,
     Image
+}
+
+enum<u8> TexConvDimension{
+    Texture2D = 0,
+    TextureCube = 1,
+    Texture3D = 2,
+    kCount
+}
+
+enum<u8> TexConvPayloadFormat{
+    UastcLdr4x4 = 0,
+    UastcHdr4x4 = 1,
+    kCount
+}
+
+enum<u8> TexConvAlphaMode{
+    Opaque = 0,
+    EmbeddedLdr = 1,
+    ConstantUnorm8 = 2,
+    SeparateUastcLdr4x4 = 3,
+    kCount
 }
 
 

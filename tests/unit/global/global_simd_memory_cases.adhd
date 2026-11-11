@@ -80,7 +80,7 @@ public:
 }
 
 #if defined(NWB_PLATFORM_WINDOWS) || defined(NWB_PLATFORM_LINUX)
-inline void ExpectRejectedCopy(void* destination, const usize capacity, const void* source, const usize count){
+NWB_INLINE void ExpectRejectedCopy(void* destination, const usize capacity, const void* source, const usize count){
     // An access violation cannot satisfy this predicate, so rejection must happen before either range is accessed.
     EXPECT_EXIT({
         if(signal(SIGABRT, ExitOnAbort) == SIG_ERR)

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <utilities/font_builder/bake.adhd>
+#include <utilities/font_builder/font_atlas_packer.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,84 +22,55 @@ usize ComputeGroupPixelCapacity(in u32 extent){
     return cast<usize>(extent) * cast<usize>(extent) * cast<usize>(s_FontAtlasMaxChannelCount);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/common/log.h>
-
-#include <global/sha256.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_FONT_BUILDER_UTILITY_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 PackGlyphs(const BakeOptions& options, const Span<const RasterGlyph> glyphs, Core::Alloc::ScratchArena& scratch, Impl::FontAtlasPayload& outPayload){
-    Vector<u32, Core::Alloc::ScratchArena> order(scratch);
-    order.reserve(glyphs.size());
-    for(u32 index = 0u; index < glyphs.size(); ++index){
-        if(glyphs[index].record.drawable != 0u)
-            order.push_back(index);
+void SiftDownDrawableGlyphOrder(in Span<FontAtlasGlyph> glyphs, in usize rootIndex, in usize endIndex, mut Vector<u32> inOutOrder){
+    FontAtlasPacker packer;
+    usize root = rootIndex;
+    while(root * 2u + 1u < endIndex){
+        const usize leftChild = root * 2u + 1u;
+        usize swapIndex = root;
+        if(packer.packOrderBefore(glyphs[cast<usize>(inOutOrder[swapIndex])], glyphs[cast<usize>(inOutOrder[leftChild])]))
+            swapIndex = leftChild;
+        const usize rightChild = leftChild + 1u;
+        if(rightChild < endIndex && packer.packOrderBefore(glyphs[cast<usize>(inOutOrder[swapIndex])], glyphs[cast<usize>(inOutOrder[rightChild])]))
+            swapIndex = rightChild;
+        if(swapIndex == root)
+            return;
+        const u32 tmp = inOutOrder[root];
+        inOutOrder[root] = inOutOrder[swapIndex];
+        inOutOrder[swapIndex] = tmp;
+        root = swapIndex;
     }
-    Sort(order.begin(), order.end(), [&glyphs](u32 left, u32 right)noexcept{
-        return FontAtlasPacker{}.packOrderBefore(glyphs[left].record, glyphs[right].record);
-    });
-    outPayload.glyphs.reserve(glyphs.size());
-    for(const RasterGlyph& glyph : glyphs)
-        outPayload.glyphs.push_back(glyph.record);
-    Array<Shelf, s_MaxBakeShelfPages> shelves{};
-    u32 lastPage = 0u;
-    for(const u32 index : order){
-        const RasterGlyph& glyph = glyphs[index];
-        const u32 width = ComputeGuardedGlyphExtent(glyph.record.width);
-        const u32 height = ComputeGuardedGlyphExtent(glyph.record.height);
-        const auto placed = FontAtlasPacker{}.placeInShelves(width, height, options.extent, options.maxGroups, shelves);
-        if(!placed){
-            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: capacity exhausted at glyph {} footprint {}x{} in {}x{} / {} groups; increase extent or lower ppem"), glyph.record.glyphId, width, height, options.extent, options.extent, options.maxGroups);
-            return false;
-        }
-        const u32 groupIndex = placed->group;
-        while(outPayload.groups.size() <= groupIndex){
-            Impl::FontAtlasGroup group(outPayload.groups.get_allocator().arena());
-            group.width = options.extent;
-            group.height = options.extent;
-            group.channelCount = Impl::s_FontAtlasMaxChannelCount;
-            group.pixels.resize(ComputeGroupPixelCapacity(options.extent), 0u);
-            outPayload.groups.push_back(Move(group));
-        }
-        FontAtlasPacker{}.copyGlyphToGroup(glyph.pixels, options.extent, *placed, outPayload.glyphs[index], outPayload.groups[groupIndex].pixels);
-        lastPage = Max(lastPage, placed->page);
-    }
-    CompactAtlasGroups(outPayload);
-    for(auto& group : outPayload.groups)
-        group.sha256 = ComputeSha256(BinaryByteView{ .bytes = group.pixels.data(), .byteCount = group.pixels.size() });
-    NWB_LOGGER_INFO(NWB_TEXT("font_builder: packed {} glyphs into {} logical pages / {} compact groups"), glyphs.size(), ComputePackedLogicalPageCount(order.empty(), lastPage), outPayload.groups.size());
-    return true;
 }
 
+Vector<u32> BuildSortedDrawableGlyphOrder(in Span<FontAtlasGlyph> glyphs){
+    Vector<u32> order;
+    order.reserve(glyphs.size());
+    for(usize index = 0u; index < glyphs.size(); ++index){
+        if(glyphs[index].drawable != 0u)
+            order.push_back(cast<u32>(index));
+    }
+    const usize count = order.size();
+    if(count <= 1u)
+        return order;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    for(usize start = count / 2u; start > 0u; --start)
+        SiftDownDrawableGlyphOrder(glyphs, start - 1u, count, order);
 
+    for(usize end = count - 1u; end > 0u; --end){
+        const u32 tmp = order[end];
+        order[end] = order[0u];
+        order[0u] = tmp;
+        SiftDownDrawableGlyphOrder(glyphs, 0u, end, order);
+    }
+    return order;
+}
 
-NWB_FONT_BUILDER_UTILITY_END
+void LogAtlasPackCapacityExhausted(in u32 glyphId, in u32 width, in u32 height, in u32 extent, in u32 maxGroups){
+    error("font_builder: capacity exhausted at glyph {} footprint {}x{} in {}x{} / {} groups; increase extent or lower ppem", glyphId, width, height, extent, extent, maxGroups);
+}
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+void LogAtlasPackSummary(in usize glyphCount, in u32 logicalPages, in usize groupCount){
+    info("font_builder: packed {} glyphs into {} logical pages / {} compact groups", glyphCount, logicalPages, groupCount);
 }
 
 

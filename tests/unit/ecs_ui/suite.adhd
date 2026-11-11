@@ -121,6 +121,32 @@ using UiEditNavigationSnapshot = NWB::Impl::Ui::EditNavigationSnapshot;
 using UiEditNavigationState = NWB::Impl::Ui::EditNavigationState;
 namespace UiEditNavigationDirection = NWB::Impl::Ui::EditNavigationDirection;
 
+Expected<UiEditNavigationResult> ResolveEcsUiEditViewNavigation(RecordingNavigationResolver& self, const UiEditModel& model, const UiEditNavigationDirectionEnum& direction, const UiEditNavigationSnapshot& navigation, f32 viewportHeight)noexcept;
+b8 ApplyEcsUiAcceptingNavigationAction(AcceptingNavigationActions& self, UiEditModel& model, const UiEditActionEnum& action)noexcept;
+usize CountEcsUiNavigationActions(const AcceptingNavigationActions& self, const UiEditActionEnum& action)noexcept;
+b8 PrepareEcsUiNavigationModel(UiEditNavigationHostTests& self, UiEditModel& model, UiEditNavigationState& navigation, const UiEditBoxOptions& options, const UiRect& bounds, const UiPoint& previousScroll)noexcept;
+b8 CommitEcsUiNavigationText(UiEditNavigationHostTests& self, AStringView text)noexcept;
+
+NWB_INLINE Expected<Ui::EditNavigationResult> RecordingNavigationResolver::resolve(const Ui::EditModel& model, const Ui::EditNavigationDirection::Enum direction, const Ui::EditNavigationSnapshot& navigation, const f32 viewportHeight){
+    return ResolveEcsUiEditViewNavigation(*this, model, direction, navigation, viewportHeight);
+}
+
+NWB_INLINE b8 AcceptingNavigationActions::apply(Ui::EditModel& model, const Ui::EditAction::Enum action, const b8){
+    return ApplyEcsUiAcceptingNavigationAction(*this, model, action);
+}
+
+NWB_INLINE usize AcceptingNavigationActions::count(const Ui::EditAction::Enum action)const noexcept{
+    return CountEcsUiNavigationActions(*this, action);
+}
+
+NWB_INLINE b8 UiEditNavigationHostTests::prepareNavigationModel(Ui::EditModel& model, Ui::EditNavigationState& navigation, const Ui::EditBoxOptions& options, const Ui::Rect& bounds, const Ui::Point previousScroll){
+    return PrepareEcsUiNavigationModel(*this, model, navigation, options, bounds, previousScroll);
+}
+
+NWB_INLINE b8 UiEditNavigationHostTests::commitNative(const AStringView text){
+    return CommitEcsUiNavigationText(*this, text);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -452,55 +478,6 @@ void VerifyUiTextEditSession_DestructionReleasesServiceWithoutBorrowingTheDestro
         EXPECT_TRUE(service.activeSession().valid());
     }
     EXPECT_FALSE(service.activeSession().valid());
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::EcsUi{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<Ui::EditNavigationResult> RecordingNavigationResolver::resolve(const Ui::EditModel& model, const Ui::EditNavigationDirection::Enum direction, const Ui::EditNavigationSnapshot& navigation, const f32 viewportHeight){
-    return ResolveEcsUiEditViewNavigation(*this, model, direction, navigation, viewportHeight);
-}
-
-b8 AcceptingNavigationActions::apply(Ui::EditModel& model, const Ui::EditAction::Enum action, const b8){
-    return ApplyEcsUiAcceptingNavigationAction(*this, model, action);
-}
-
-usize AcceptingNavigationActions::count(const Ui::EditAction::Enum action)const noexcept{
-    return CountEcsUiNavigationActions(*this, action);
-}
-
-b8 UiEditNavigationHostTests::prepareNavigationModel(Ui::EditModel& model, Ui::EditNavigationState& navigation, const Ui::EditBoxOptions& options, const Ui::Rect& bounds, const Ui::Point previousScroll){
-    return PrepareEcsUiNavigationModel(*this, model, navigation, options, bounds, previousScroll);
-}
-
-b8 UiEditNavigationHostTests::commitNative(const AStringView text){
-    return CommitEcsUiNavigationText(*this, text);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

@@ -307,62 +307,62 @@ using ::NWB::Impl::Ui::s_InputMaxActions;
 using ::NWB::Impl::Ui::s_LayoutNoParent;
 using ::NWB::Impl::Ui::s_LayoutMaxNodes;
 
-[[nodiscard]] inline f32 UiInputLayoutInfinityF32()noexcept{ return ::Limit<f32>::s_Infinity; }
-[[nodiscard]] inline f32 UiInputLayoutQuietNaNF32()noexcept{ return ::Limit<f32>::s_QuietNaN; }
-[[nodiscard]] inline f64 UiInputLayoutInfinityF64()noexcept{ return ::Limit<f64>::s_Infinity; }
-[[nodiscard]] inline f64 UiInputLayoutQuietNaNF64()noexcept{ return ::Limit<f64>::s_QuietNaN; }
+[[nodiscard]] NWB_INLINE f32 UiInputLayoutInfinityF32()noexcept{ return ::Limit<f32>::s_Infinity; }
+[[nodiscard]] NWB_INLINE f32 UiInputLayoutQuietNaNF32()noexcept{ return ::Limit<f32>::s_QuietNaN; }
+[[nodiscard]] NWB_INLINE f64 UiInputLayoutInfinityF64()noexcept{ return ::Limit<f64>::s_Infinity; }
+[[nodiscard]] NWB_INLINE f64 UiInputLayoutQuietNaNF64()noexcept{ return ::Limit<f64>::s_QuietNaN; }
 
-inline void ExpectUiIntegerModelRejected(const NumericEditResult& result, const b8 restored = false){
+NWB_INLINE void ExpectUiIntegerModelRejected(const NumericEditResult& result, const b8 restored = false){
     ::NWB::UiNumericTests::ExpectRejected(result, restored);
 }
 
-inline void ExpectUiLayoutRect(const Rect& actual, const Rect& expected){
+NWB_INLINE void ExpectUiLayoutRect(const Rect& actual, const Rect& expected){
     ::NWB::UiPaintAssertions::ExpectRect(actual, expected);
 }
 
-[[nodiscard]] inline usize UiLayoutTreeBoxAddress(const LayoutTree& tree, const u32 index)noexcept{
+[[nodiscard]] NWB_INLINE usize UiLayoutTreeBoxAddress(const LayoutTree& tree, const u32 index)noexcept{
     return reinterpret_cast<usize>(tree.box(index));
 }
 
-[[nodiscard]] inline b8 UiListBehaviorReconcile(ListState& state, const ::NWB::Impl::Ui::IListDataSource& source){
+[[nodiscard]] NWB_INLINE b8 UiListBehaviorReconcile(ListState& state, const ::NWB::Impl::Ui::IListDataSource& source){
     return ::NWB::Impl::Ui::ListBehavior::Reconcile(state, source);
 }
 
-[[nodiscard]] inline b8 UiListBehaviorApply(const ::NWB::Impl::Ui::IListDataSource& source, const ListOptions& options, const ControlAction& action, ListState& state, ListResult& result){
+[[nodiscard]] NWB_INLINE b8 UiListBehaviorApply(const ::NWB::Impl::Ui::IListDataSource& source, const ListOptions& options, const ControlAction& action, ListState& state, ListResult& result){
     return ::NWB::Impl::Ui::ListBehavior::Apply(source, options, action, state, result);
 }
 
-[[nodiscard]] inline ControlAction MakeUiListBehaviorAction(const ListState& state, const UiListBehaviorRangeSource& source, const ControlActionKindEnum kind)noexcept{
+[[nodiscard]] NWB_INLINE ControlAction MakeUiListBehaviorAction(const ListState& state, const UiListBehaviorRangeSource& source, const ControlActionKindEnum kind)noexcept{
     return ::UiListBehaviorTestSupport::Action(state, source, kind);
 }
 
-inline void ExpectUiListBehaviorResult(const ListResult& actual, const ListResult& expected){
+NWB_INLINE void ExpectUiListBehaviorResult(const ListResult& actual, const ListResult& expected){
     ::UiListBehaviorTestSupport::ExpectResult(actual, expected);
 }
 
-[[nodiscard]] inline ListOptions MakeUiListScrollbarDefaultOptions()noexcept{
+[[nodiscard]] NWB_INLINE ListOptions MakeUiListScrollbarDefaultOptions()noexcept{
     return ::NWB::UiListTests::Options();
 }
 
-[[nodiscard]] inline Point UiListScrollbarCenter(const Rect& bounds)noexcept{
+[[nodiscard]] NWB_INLINE Point UiListScrollbarCenter(const Rect& bounds)noexcept{
     return ::NWB::UiWidgetTests::Center(bounds);
 }
 
-[[nodiscard]] inline WidgetId UiListScrollbarRequireWidgetId(const WidgetId parent, const StringView stableKey){
+[[nodiscard]] NWB_INLINE WidgetId UiListScrollbarRequireWidgetId(const WidgetId parent, const StringView stableKey){
     return ::UiTestSupport::RequireWidgetId(parent, stableKey);
 }
 
-[[nodiscard]] inline Optional<HitTarget> FindUiListScrollbarTarget(const UiListBuilderTests& self, const WidgetId widget)noexcept{
+[[nodiscard]] NWB_INLINE Optional<HitTarget> FindUiListScrollbarTarget(const UiListBuilderTests& self, const WidgetId widget)noexcept{
     if(const HitTarget* found = self.target(widget))
         return *found;
     return {};
 }
 
-[[nodiscard]] inline b8 UiListScrollbarPrepareSinglePopup(UiListBuilderTests& self, const u64 generation, PopupState& lowerPopup, ListState& lowerState){
+[[nodiscard]] NWB_INLINE b8 UiListScrollbarPrepareSinglePopup(UiListBuilderTests& self, const u64 generation, PopupState& lowerPopup, ListState& lowerState){
     return self.preparePopups(generation, lowerPopup, lowerState);
 }
 
-[[nodiscard]] inline b8 UiListScrollbarPrepareTwoPopups(UiListBuilderTests& self, const u64 generation, PopupState& lowerPopup, ListState& lowerState, PopupState& upperPopup, ListState& upperState){
+[[nodiscard]] NWB_INLINE b8 UiListScrollbarPrepareTwoPopups(UiListBuilderTests& self, const u64 generation, PopupState& lowerPopup, ListState& lowerState, PopupState& upperPopup, ListState& upperState){
     return self.preparePopups(generation, lowerPopup, lowerState, &upperPopup, &upperState);
 }
 };

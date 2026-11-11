@@ -17,13 +17,7 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/common/log.h>
 #include <core/perf/timing.h>
-
-#include <global/filesystem.h>
-#include <global/name.h>
-#include <global/simplemath.h>
-#include <global/type.h>
 
 namespace NWB::Tests::Smoke{
 using Core::Perf::TimingStats;
@@ -67,7 +61,11 @@ class GpuPassTimingScopeReportLine{
 }
 
 class GpuPassTimingProbe{
-    public GpuPassTimingProbe(in TStringView label){
+    public GpuPassTimingProbe(){
+        this.m_label = "";
+    }
+
+    public GpuPassTimingProbe(in StringView label){
         this.m_label = label;
     }
 
@@ -164,33 +162,32 @@ class GpuPassTimingProbe{
         if(!timingPath.has_value())
             return;
 
+        String reportBlock = StringFormat("=== interval: {} frames / {:.4f}s ===\n", this.m_intervalFrames, this.m_intervalSeconds);
+        for(in GpuPassTimingScopeReportLine line : lines){
+            StringAppendFormat(
+                reportBlock,
+                "  {}: window_avg_ms={:.4f} window_min_ms={:.4f} window_max_ms={:.4f} published_windows={} total_ms={:.4f} gpu_samples={} sample_avg_ms={:.4f}\n",
+                line.scopeName.resolvedText(),
+                line.avgMs,
+                line.minMs,
+                line.maxMs,
+                line.frames,
+                line.totalMs,
+                line.samples,
+                line.sampleAvgMs
+            );
+        }
         const String timingPathValue = timingPath.value();
         b8 openFailed = false;
         b8 closeFailed = false;
-        native(in timingPathValue, in lines, in frames = this.m_intervalFrames, in seconds = this.m_intervalSeconds, mut openFailed, mut closeFailed){
-            // Write per-pass timings to the optional file sink for A/B scripts.
-            OutputFileStream timingFile;
-            timingFile.open(timingPathValue.c_str(), s_FileOpenAppend);
+        native(in timingPathValue, in reportBlock, mut openFailed, mut closeFailed){
+            // Append formatted interval timings to the optional file sink for A/B scripts.
+            OutputFileStream timingFile(timingPathValue.c_str(), s_FileOpenAppend);
             if(!timingFile.is_open()){
                 openFailed = true;
             }
             else{
-                timingFile.setf(s_FileFormatFixed, s_FileFormatFloatField);
-                timingFile.precision(s_GpuTimingFilePrecision);
-                timingFile << "=== interval: " << frames << " frames / " << seconds << "s ===\n";
-                for(const GpuPassTimingScopeReportLine& line : lines){
-                    timingFile
-                        << "  " << line.scopeName.resolvedText()
-                        << ": window_avg_ms=" << line.avgMs
-                        << " window_min_ms=" << line.minMs
-                        << " window_max_ms=" << line.maxMs
-                        << " published_windows=" << line.frames
-                        << " total_ms=" << line.totalMs
-                        << " gpu_samples=" << line.samples
-                        << " sample_avg_ms=" << line.sampleAvgMs
-                        << "\n"
-                    ;
-                }
+                timingFile.write(reportBlock.data(), static_cast<std::streamsize>(reportBlock.size()));
                 timingFile.close();
                 closeFailed = !timingFile.good();
             }
@@ -209,7 +206,7 @@ class GpuPassTimingProbe{
     }
 
     private Vector<GpuPassTimingScopeState> m_scopes;
-    private TStringView m_label;
+    private StringView m_label;
     private f64 m_elapsedSeconds = 0.0;
     private f64 m_intervalSeconds = 0.0;
     private u32 m_intervalFrames = 0u;

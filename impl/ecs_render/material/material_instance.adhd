@@ -28,12 +28,12 @@ NWB_IMPL_BEGIN
 
 
 template<typename TElement>
-[[nodiscard]] inline UInt4U PackMaterialInstanceBytes(const Span<const TElement> elements)noexcept{
+[[nodiscard]] NWB_INLINE UInt4U PackMaterialInstanceBytes(const Span<const TElement> elements)noexcept{
     return PackMaterialInstanceBytes(Span<const u8>(reinterpret_cast<const u8*>(elements.data()), elements.size() * sizeof(TElement)));
 }
 
 template<typename TValue>
-[[nodiscard]] inline UInt4U PackMaterialInstanceValue(const TValue& value)noexcept{
+[[nodiscard]] NWB_INLINE UInt4U PackMaterialInstanceValue(const TValue& value)noexcept{
     return PackMaterialInstanceBytes(Span<const u8>(reinterpret_cast<const u8*>(&value), sizeof(TValue)));
 }
 
@@ -47,7 +47,7 @@ struct MaterialInstanceValueTraits<f32>{
 
 public:
     [[nodiscard]] static UInt4U Pack(const f32 value)noexcept{
-        return PackMaterialInstanceValue(value);
+        return PackMaterialInstanceF32(value);
     }
 };
 
@@ -58,7 +58,7 @@ struct MaterialInstanceValueTraits<Half>{
 
 public:
     [[nodiscard]] static UInt4U Pack(const Half value)noexcept{
-        return PackMaterialInstanceValue(value);
+        return PackMaterialInstanceHalfBits(value);
     }
 };
 
@@ -69,7 +69,7 @@ struct MaterialInstanceValueTraits<Float4>{
 
 public:
     [[nodiscard]] static UInt4U Pack(const Float4& value)noexcept{
-        return PackMaterialInstanceBytes(Span<const u8>(reinterpret_cast<const u8*>(value.raw), sizeof(f32) * s_MaterialInstanceVectorComponentCount));
+        return PackMaterialInstanceFloat4(::LoadFloat(value));
     }
 };
 
@@ -80,20 +80,20 @@ struct MaterialInstanceValueTraits<Half4U>{
 
 public:
     [[nodiscard]] static UInt4U Pack(const Half4U& value)noexcept{
-        return PackMaterialInstanceBytes(Span<const u8>(reinterpret_cast<const u8*>(value.raw), sizeof(Half) * s_MaterialInstanceVectorComponentCount));
+        return PackMaterialInstanceHalf4U(value);
     }
 };
 
-[[nodiscard]] inline MaterialInstanceComponent* ResolveMaterialInstanceComponentForSet(Core::ECS::World& world, const Core::ECS::EntityID entity){
+[[nodiscard]] NWB_INLINE MaterialInstanceComponent* ResolveMaterialInstanceComponentForSet(Core::ECS::World& world, const Core::ECS::EntityID entity){
     MaterialInstanceComponent* component = world.tryGetComponent<MaterialInstanceComponent>(entity);
     if(component)
         return component;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: entity {} has no material instance component"), entity.id);
+    LogMissingMaterialInstanceComponent(entity);
     return nullptr;
 }
 
-[[nodiscard]] inline b8 SetMaterialMutableParameter(Core::ECS::World& world, const Core::ECS::EntityID entity, const Name& materialInterface, const AStringView parameterName, const MaterialLayoutFieldType::Enum fieldType, const UInt4U value){
+[[nodiscard]] NWB_INLINE b8 SetMaterialMutableParameter(Core::ECS::World& world, const Core::ECS::EntityID entity, const Name& materialInterface, const AStringView parameterName, const MaterialLayoutFieldType::Enum fieldType, const UInt4U value){
     MaterialInstanceComponent* component = ResolveMaterialInstanceComponentForSet(world, entity);
     if(!component)
         return false;
@@ -102,12 +102,12 @@ public:
 }
 
 template<typename TValue>
-[[nodiscard]] inline b8 SetMaterialMutableValue(Core::ECS::World& world, const Core::ECS::EntityID entity, const Name& materialInterface, const AStringView parameterName, const TValue& value){
+[[nodiscard]] NWB_INLINE b8 SetMaterialMutableValue(Core::ECS::World& world, const Core::ECS::EntityID entity, const Name& materialInterface, const AStringView parameterName, const TValue& value){
     return SetMaterialMutableParameter(world, entity, materialInterface, parameterName, MaterialInstanceValueTraits<TValue>::s_FieldType, MaterialInstanceValueTraits<TValue>::Pack(value));
 }
 
-[[nodiscard]] inline b8 SetMaterialMutableHalf4(Core::ECS::World& world, const Core::ECS::EntityID entity, const Name& materialInterface, const AStringView parameterName, const Float4& value){
-    const Half4U packedValue = MakeHalf4U(value.x, value.y, value.z, value.w);
+[[nodiscard]] NWB_INLINE b8 SetMaterialMutableHalf4(Core::ECS::World& world, const Core::ECS::EntityID entity, const Name& materialInterface, const AStringView parameterName, const Float4& value){
+    const Half4U packedValue = ConvertMaterialInstanceHalf4(::LoadFloat(value));
     return SetMaterialMutableValue(world, entity, materialInterface, parameterName, packedValue);
 }
 

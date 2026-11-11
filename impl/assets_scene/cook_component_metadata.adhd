@@ -2,54 +2,115 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/assets_scene/component_assets.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_COOK)
+const usize s_SceneFloat3ComponentCount = 3u;
+const usize s_SceneQuaternionComponentCount = 4u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_scene/cook.adhd.h>
+f32x4 MakeSceneMetadataFloat3(in f32 x, in f32 y, in f32 z){
+    return f32x4(x, y, z, 0.0f);
+}
 
+f32 ConvertSceneDegreesToRadians(in f32 degrees){
+    return degrees * s_SceneDegreesToRadians;
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+f32x4 BuildTransformEulerRadiansQuaternion(in VectorSingle eulerRadians){
+    return f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(eulerRadians.xyz, 0.0f)));
+}
 
+f32x4 BuildTransformEulerDegreesQuaternion(in VectorSingle eulerDegrees){
+    const VectorSingle angles = VectorSingle(eulerDegrees.xyz, 0.0f) * s_SceneDegreesToRadians;
+    return f32x4(QuaternionRotationRollPitchYawFromVector(angles));
+}
 
-NWB_IMPL_BEGIN
+usize CountTransformRotationFields(in b8 hasRotation, in b8 hasEuler, in b8 hasEulerDegrees){
+    usize count = 0u;
+    if(hasRotation)
+        ++count;
+    if(hasEuler)
+        ++count;
+    if(hasEulerDegrees)
+        ++count;
+    return count;
+}
 
+b8 ValidateOptionalSceneMetadataMap(in b8 isNullOrMap, in StringView diagnosticPrefix, in StringView filePathText){
+    if(isNullOrMap)
+        return true;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    error("{} '{}': asset is not a map", diagnosticPrefix, filePathText);
+    return false;
+}
 
+b8 ValidateSceneFloatListArity(
+    in b8 isList,
+    in usize count,
+    in usize expectedCount,
+    in StringView diagnosticPrefix,
+    in StringView filePathText,
+    in StringView fieldLabel
+){
+    if(isList && count == expectedCount)
+        return true;
 
-class SceneComponentMetadataParser final{
-public:
-    [[nodiscard]] static Expected<TransformComponentCookEntry> ParseTransform(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] static Expected<CameraComponentCookEntry> ParseCamera(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] static Expected<LightComponentCookEntry> ParseLight(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-};
+    error(
+        "{} '{}': field '{}' must be a {}-element numeric list"
+        , diagnosticPrefix
+        , filePathText
+        , fieldLabel
+        , expectedCount
+    );
+    return false;
+}
 
+Expected<f32x4> ResolveTransformMetadataQuaternion(
+    in f32 x,
+    in f32 y,
+    in f32 z,
+    in f32 w,
+    in StringView diagnosticPrefix,
+    in StringView filePathText,
+    in StringView fieldLabel
+){
+    const Expected<VectorSingle> normalized = TryNormalizeTransformQuaternion(x, y, z, w);
+    if(!normalized.has_value()){
+        error("{} '{}': field '{}' must be a non-zero quaternion", diagnosticPrefix, filePathText, fieldLabel);
+        return MakeUnexpected(Failure());
+    }
+    return f32x4(normalized.value());
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+b8 ValidateTransformSingleRotationField(in usize rotationFieldCount, in StringView filePathText){
+    if(rotationFieldCount <= 1u)
+        return true;
 
+    error(
+        "{} '{}': only one of 'rotation', 'rotation_euler', or 'rotation_euler_degrees' may be specified"
+        , s_TransformDiagnosticPrefix
+        , filePathText
+    );
+    return false;
+}
 
-NWB_IMPL_END
+b8 ValidateCameraSingleFovField(in b8 hasFovDegrees, in b8 hasFovRadians, in StringView filePathText){
+    if(!(hasFovDegrees && hasFovRadians))
+        return true;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    error(
+        "{} '{}': only one of 'vertical_fov_degrees' or 'vertical_fov_radians' may be specified"
+        , s_CameraDiagnosticPrefix
+        , filePathText
+    );
+    return false;
 }
 
 

@@ -2,98 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <logger/server/crash_symbolicate.adhd>
-#include <logger/server/crash_symbolicate_internal.adhd>
 #include <logger/server/crash_values.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_LOG_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace LoggerCrashSymbolicateDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct LinuxSymbolFileCacheEntry{
-    AString<Core::Alloc::ScratchArena> modulePath;
-    AString<Core::Alloc::ScratchArena> symbolPath;
-    b8 found = false;
-
-
-public:
-    explicit LinuxSymbolFileCacheEntry(Core::Alloc::ScratchArena& arena)noexcept(noexcept(decltype(modulePath)(arena)) && noexcept(decltype(symbolPath)(arena)))
-        : modulePath(arena)
-        , symbolPath(arena)
-    {}
-};
-
-struct LinuxSymbolFileCache{
-    Vector<LinuxSymbolFileCacheEntry, Core::Alloc::ScratchArena> entries;
-
-
-public:
-    explicit LinuxSymbolFileCache(Core::Alloc::ScratchArena& arena)noexcept(noexcept(decltype(entries)(arena)))
-        : entries(arena)
-    {}
-};
-
-
-class LinuxFrameSymbolResolver final : NoCopy{
-public:
-    LinuxFrameSymbolResolver(const CrashSymbolicationConfig& config, Core::Alloc::ScratchArena& arena, usize frameCount);
-    [[nodiscard]] Expected<AString<Core::Alloc::ScratchArena>> resolve(AStringView modulePathText, u64 moduleOffset);
-
-
-private:
-    const CrashSymbolicationConfig& m_config;
-    Core::Alloc::ScratchArena& m_arena;
-    LinuxSymbolFileCache m_cache;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_LOG_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -114,256 +23,41 @@ b8 IsRejectedLinuxModulePath(in StringView modulePathText){
     return modulePathText == s_CrashSymbolicateLinuxAnonymousModulePath;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <global/overflow.h>
-#include <global/process_capture.h>
-#include <global/process_execution.h>
-#include <global/text_utils.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_LOG_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace LoggerCrashSymbolicateDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_linux_frame_symbol_resolver{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static Expected<AString<Core::Alloc::ScratchArena>> ExtractSymbolizerResult(const AStringView outputText, Core::Alloc::ScratchArena& arena){
-    AString<Core::Alloc::ScratchArena> outSymbol(arena);
-    outSymbol.reserve(AddSize(outputText.size(), SizeOf<s_CrashSymbolicateLinuxSymbolizerResultReserveMultiplier>(outputText.size())));
+Expected<String> ExtractLinuxSymbolizerResult(in StringView outputText){
+    String outSymbol;
+    outSymbol.reserve(outputText.size());
 
     usize cursor = 0u;
-    while(const auto function = NextTrimmedTextLine(outputText, cursor)){
-        const auto location = NextTrimmedTextLine(outputText, cursor);
+    while(true){
+        const Expected<StringView> functionLine = NextTrimmedTextLine(outputText, cursor);
+        if(!functionLine.has_value())
+            break;
+        const Expected<StringView> locationLine = NextTrimmedTextLine(outputText, cursor);
 
-        const b8 hasFunction = !IsUnknownLinuxSymbolLine(*function);
-        const b8 hasLocation = location && !IsUnknownLinuxSymbolLine(*location);
+        const b8 hasFunction = !IsUnknownLinuxSymbolLine(functionLine.value());
+        const b8 hasLocation = locationLine.has_value() && !IsUnknownLinuxSymbolLine(locationLine.value());
         if(!hasFunction && !hasLocation)
             continue;
 
         if(!outSymbol.empty())
-            outSymbol += s_CrashSymbolicateLinuxLinuxSymbolFrameSeparator;
+            outSymbol.append(s_CrashSymbolicateLinuxLinuxSymbolFrameSeparator);
         b8 wroteFrame = false;
         if(hasFunction){
-            outSymbol.append(function->data(), function->size());
+            outSymbol.append(functionLine.value());
             wroteFrame = true;
         }
         if(hasLocation){
             if(wroteFrame)
-                outSymbol += s_CrashSymbolicateLinuxLinuxSymbolLocationSeparator;
+                outSymbol.append(s_CrashSymbolicateLinuxLinuxSymbolLocationSeparator);
             else
-                outSymbol += s_CrashSymbolicateLinuxLinuxSymbolLocationBarePrefix;
-            outSymbol.append(location->data(), location->size());
+                outSymbol.append(s_CrashSymbolicateLinuxLinuxSymbolLocationBarePrefix);
+            outSymbol.append(locationLine.value());
         }
     }
 
     if(outSymbol.empty())
-        return MakeUnexpected(Failure{});
+        return MakeUnexpected(Failure());
     return outSymbol;
-}
-
-[[nodiscard]] static Expected<AString<Core::Alloc::ScratchArena>> RunLinuxSymbolizerCommand(const Span<const AStringView> arguments, Core::Alloc::ScratchArena& arena){
-    AString<Core::Alloc::ScratchArena> output{arena};
-    output.reserve(ProcessExecutionDetail::s_DefaultCaptureOutputMaxBytes);
-    const auto captured = CaptureProcessOutput(output, arena, arguments);
-    if(!captured){
-        const ProcessCaptureFailure& failure = captured.error();
-        NWB_LOGGER_INFO(NWB_TEXT("Linux symbolizer capture failed: phase {}, native {}, completion {}, exit {}, signal {}, truncated {}")
-            , static_cast<u32>(failure.kind)
-            , static_cast<i32>(failure.nativeError)
-            , static_cast<i32>(failure.completionError)
-            , failure.exitCode
-            , failure.terminationSignal
-            , failure.outputTruncated
-        );
-        return MakeUnexpected(Failure{});
-    }
-
-    return ExtractSymbolizerResult(AStringView(output.data(), output.size()), arena);
-}
-
-[[nodiscard]] static Expected<AString<Core::Alloc::ScratchArena>> TryRunLinuxSymbolizer(const AStringView toolName, const AStringView modulePathText, const u64 moduleOffset, Core::Alloc::ScratchArena& arena){
-    AString<Core::Alloc::ScratchArena> addressArgument{arena};
-    addressArgument.reserve(s_HexAddressPrefix.size() + ::s_HexU64DigitCount);
-    addressArgument += s_HexAddressPrefix;
-    AppendHexU64(moduleOffset, addressArgument);
-
-    if(toolName == s_CrashSymbolicateLinuxLlvmSymbolizerTool){
-        AString<Core::Alloc::ScratchArena> objectArgument{arena};
-        objectArgument.reserve(AddSize(s_CrashSymbolicateLinuxLlvmSymbolizerObjectPrefix.size(), modulePathText.size()));
-        objectArgument += s_CrashSymbolicateLinuxLlvmSymbolizerObjectPrefix;
-        objectArgument.append(modulePathText.data(), modulePathText.size());
-
-        const Array<AStringView, 6> arguments = {{
-            s_CrashSymbolicateLinuxLlvmSymbolizerTool,
-            s_CrashSymbolicateLinuxLlvmSymbolizerDemangleFlag,
-            s_CrashSymbolicateLinuxLlvmSymbolizerFunctionsFlag,
-            s_CrashSymbolicateLinuxLlvmSymbolizerInliningFlag,
-            AStringView(objectArgument),
-            AStringView(addressArgument),
-        }};
-
-        return RunLinuxSymbolizerCommand(arguments, arena);
-    }
-
-    AString<Core::Alloc::ScratchArena> modulePathArgument{arena};
-    modulePathArgument.reserve(modulePathText.size());
-    modulePathArgument.append(modulePathText.data(), modulePathText.size());
-
-    const Array<AStringView, 7> arguments = {{
-        s_CrashSymbolicateLinuxAddr2LineTool,
-        s_CrashSymbolicateLinuxAddr2LineFunctionsFlag,
-        s_CrashSymbolicateLinuxAddr2LineDemangleFlag,
-        s_CrashSymbolicateLinuxAddr2LineInlineFlag,
-        s_CrashSymbolicateLinuxAddr2LineExeFlag,
-        AStringView(modulePathArgument),
-        AStringView(addressArgument),
-    }};
-
-    return RunLinuxSymbolizerCommand(arguments, arena);
-}
-
-[[nodiscard]] static Expected<CrashScratchPath> FindLinuxSymbolFile(const AStringView modulePathText, const CrashSymbolicationConfig& config, Core::Alloc::ScratchArena& arena){
-    if(IsRejectedLinuxModulePath(modulePathText))
-        return MakeUnexpected(Failure{});
-
-    CrashScratchPath modulePath(arena, modulePathText);
-    const auto regularModule = IsRegularFile(modulePath);
-    if(!regularModule){
-        NWB_LOGGER_WARNING(NWB_TEXT("Log server: failed to inspect Linux symbol module '{}': {}"), PathToString<tchar>(modulePath), ConvertString(regularModule.error().message()));
-        return MakeUnexpected(Failure{});
-    }
-    if(*regularModule)
-        return modulePath;
-
-    const CrashScratchPath symbolStoreDirectory = EffectiveSymbolStoreDirectory(config, arena);
-    if(symbolStoreDirectory.empty())
-        return MakeUnexpected(Failure{});
-
-    const auto moduleFileName = modulePath.filenameView();
-    if(moduleFileName.empty())
-        return MakeUnexpected(Failure{});
-
-    CrashScratchPath symbolStoreCandidate = symbolStoreDirectory / moduleFileName;
-    const auto regularCandidate = IsRegularFile(symbolStoreCandidate);
-    if(!regularCandidate){
-        NWB_LOGGER_WARNING(NWB_TEXT("Log server: failed to inspect Linux symbol-store candidate '{}': {}"), PathToString<tchar>(symbolStoreCandidate), ConvertString(regularCandidate.error().message()));
-        return MakeUnexpected(Failure{});
-    }
-    if(*regularCandidate)
-        return symbolStoreCandidate;
-
-    return MakeUnexpected(Failure{});
-}
-
-[[nodiscard]] static Expected<AStringView> FindLinuxSymbolFileText(const AStringView modulePathText, const CrashSymbolicationConfig& config, Core::Alloc::ScratchArena& arena, LinuxSymbolFileCache& cache){
-    for(const LinuxSymbolFileCacheEntry& entry : cache.entries){
-        if(AStringView(entry.modulePath.data(), entry.modulePath.size()) != modulePathText)
-            continue;
-
-        if(!entry.found)
-            return MakeUnexpected(Failure{});
-
-        return AStringView(entry.symbolPath.data(), entry.symbolPath.size());
-    }
-
-    LinuxSymbolFileCacheEntry& entry = cache.entries.emplace_back(cache.entries.get_allocator().arena());
-    entry.modulePath.assign(modulePathText.data(), modulePathText.size());
-
-    const auto symbolPath = FindLinuxSymbolFile(modulePathText, config, arena);
-    entry.found = symbolPath.has_value();
-    if(!entry.found)
-        return MakeUnexpected(Failure{});
-
-    const auto symbolPathText = PathToString<char>(cache.entries.get_allocator().arena(), *symbolPath);
-    entry.symbolPath.assign(symbolPathText.data(), symbolPathText.size());
-    return AStringView(entry.symbolPath.data(), entry.symbolPath.size());
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-LinuxFrameSymbolResolver::LinuxFrameSymbolResolver(const CrashSymbolicationConfig& config, Core::Alloc::ScratchArena& arena, const usize frameCount)
-    : m_config(config)
-    , m_arena(arena)
-    , m_cache(arena)
-{
-    m_cache.entries.reserve(frameCount);
-}
-
-Expected<AString<Core::Alloc::ScratchArena>> LinuxFrameSymbolResolver::resolve(const AStringView modulePathText, const u64 moduleOffset){
-    const CrashSymbolicationConfig& config = m_config;
-    Core::Alloc::ScratchArena& arena = m_arena;
-    LinuxSymbolFileCache& cache = m_cache;
-    const auto symbolPathText = __hidden_linux_frame_symbol_resolver::FindLinuxSymbolFileText(modulePathText, config, arena, cache);
-    if(!symbolPathText)
-        return MakeUnexpected(Failure{});
-
-    auto llvmSymbol = __hidden_linux_frame_symbol_resolver::TryRunLinuxSymbolizer(s_CrashSymbolicateLinuxLlvmSymbolizerTool, *symbolPathText, moduleOffset, arena);
-    if(llvmSymbol)
-        return Move(*llvmSymbol);
-    return __hidden_linux_frame_symbol_resolver::TryRunLinuxSymbolizer(s_CrashSymbolicateLinuxAddr2LineTool, *symbolPathText, moduleOffset, arena);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_LOG_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

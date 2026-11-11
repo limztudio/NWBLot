@@ -3,7 +3,6 @@
 
 
 #include <tests/common/gtest_macros.adhd>
-#include <tests/common/test_context.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -17,10 +16,6 @@ native{
 
 
 #include <logger/rgd/decode.adhd.h>
-
-#include <global/diagnostics.h>
-#include <global/filesystem.h>
-#include <global/scope_exit.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -58,39 +53,25 @@ Expected<u8, StringView> ProbeRgdCrashDumpDecode(in StringView path){
 }
 
 void VerifyRgdFixtureRejectsPayload(in StringView fixturePath, in Span<u8> payload, in StringView cleanupFailureMessage, in StringView expectedError){
-    b8 wroteFile = false;
-    b8 removeCallSucceeded = false;
-    b8 removedFile = false;
-    b8 decodeSucceeded = false;
-    StringView decodeError = "";
-    native(in fixturePath, in payload, in cleanupFailureMessage, mut wroteFile, mut removeCallSucceeded, mut removedFile, mut decodeSucceeded, mut decodeError){
-        NWB::Tests::TestArena<> testArena;
-        ::Path<NWB::Core::Alloc::GlobalArena> inputPath(testArena.arena, fixturePath);
-        ScopeExit cleanup([&inputPath, &cleanupFailureMessage]()noexcept{
-            const auto removed = RemoveFile(inputPath);
-            if(!removed)
-                CaptureDiagnosticEvent(s_RgdCleanupDiagnosticCategory, cleanupFailureMessage, __FILE__, __LINE__);
-        });
-        wroteFile = static_cast<b8>(WriteBinaryFile(inputPath, payload));
-        if(wroteFile){
-            const auto result = NWB::Log::Rgd::DecodeCrashDumpToText(fixturePath);
-            if(result)
-                decodeSucceeded = true;
-            else
-                decodeError = result.error();
-            const auto removed = RemoveFile(inputPath);
-            if(removed){
-                removeCallSucceeded = true;
-                removedFile = *removed;
-                cleanup.release();
-            }
-        }
+    const Path inputPath = Path(fixturePath);
+    const b8 wroteFile = WriteBinaryFile(inputPath, payload);
+    if(!wroteFile){
+        const Expected<b8, ErrorCode> cleanupRemoved = RemoveFile(inputPath);
+        if(!cleanupRemoved.has_value())
+            CaptureDiagnosticMessage(s_RgdCleanupDiagnosticCategory, cleanupFailureMessage);
+        ASSERT_TRUE(wroteFile);
+        return;
     }
-    ASSERT_TRUE(wroteFile);
-    ASSERT_TRUE(removeCallSucceeded);
-    EXPECT_TRUE(removedFile);
-    ASSERT_FALSE(decodeSucceeded);
-    EXPECT_EQ(decodeError, expectedError);
+    const Expected<u8, StringView> decoded = ProbeRgdCrashDumpDecode(fixturePath);
+    const Expected<b8, ErrorCode> removed = RemoveFile(inputPath);
+    if(!removed.has_value()){
+        CaptureDiagnosticMessage(s_RgdCleanupDiagnosticCategory, cleanupFailureMessage);
+        ASSERT_TRUE(removed.has_value());
+        return;
+    }
+    EXPECT_TRUE(removed.value());
+    ASSERT_FALSE(decoded.has_value());
+    EXPECT_EQ(decoded.error(), expectedError);
 }
 
 void VerifyRgdDecodeMissingFile(){

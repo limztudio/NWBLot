@@ -2,59 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <utilities/tex_conv/module.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <basisu_enc.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_TEX_CONV_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using FloatPlanes = basisu::vector<basisu::imagef>;
-
-struct TextureEncodeInput{
-    FloatPlanes planes;
-    u32 width = 0u;
-    u32 height = 0u;
-    u32 depth = 1u;
-    TextureDimension::Enum dimension = TextureDimension::Texture2D;
-    TexturePayloadFormat::Enum format = TexturePayloadFormat::UastcLdr4x4;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] Expected<PreparedTexture> EncodeLinearTexture(TextureEncodeInput&& input, Core::Alloc::ScratchArena& scratchArena);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_TEX_CONV_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+#include <utilities/tex_conv/encode_uastc.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -66,167 +14,21 @@ u32 ResolveTexConvEncodeDepth(in b8 is3d, in usize inputCount){
     return 1u;
 }
 
-TexturePayloadFormatEnum ResolveTexConvPayloadFormat(
-    in b8 hdr,
-    in TexturePayloadFormatEnum hdrFormat,
-    in TexturePayloadFormatEnum ldrFormat
-){
+TexConvPayloadFormat ResolveTexConvPayloadFormat(in b8 hdr){
     if(hdr)
-        return hdrFormat;
-    return ldrFormat;
+        return TexConvPayloadFormat::UastcHdr4x4;
+    return TexConvPayloadFormat::UastcLdr4x4;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/common/log.h>
-
-#include <global/simdmath.h>
-#include <global/simplemath.h>
-
-#include <basisu_transcoder.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_TEX_CONV_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_encode{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static Expected<basisu::imagef> LoadImage(const ScratchPath& path, Core::Alloc::ScratchArena& scratchArena){
-    basisu::imagef image;
-    const auto pathText = PathToGenericString(scratchArena, path);
-    if(!basisu::load_image_hdr(pathText.c_str(), image, false)){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to decode input image '{}'."), PathToString<tchar>(path));
-        return MakeUnexpected(Failure{});
-    }
-    if(image.get_width() == 0u || image.get_height() == 0u || image.get_width() > basist::BASISU_MAX_SUPPORTED_TEXTURE_DIMENSION || image.get_height() > basist::BASISU_MAX_SUPPORTED_TEXTURE_DIMENSION){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: input image '{}' has an unsupported resolution."), PathToString<tchar>(path));
-        return MakeUnexpected(Failure{});
-    }
-    return image;
-}
-
-[[nodiscard]] static b8 PrepareLinearPlane(const basisu::imagef& alphaMask, const AlphaSource& alphaSource, const b8 hdr, const b8 srgb, basisu::imagef& inOutPlane){
-    const f32 maxRgb = ResolveMaxTexConvRgb(hdr);
-    for(u32 y = 0u; y < inOutPlane.get_height(); ++y){
-        for(u32 x = 0u; x < inOutPlane.get_width(); ++x){
-            basisu::vec4F& pixel = inOutPlane(x, y);
-            const f32 maskAlpha = alphaSource.mode == AlphaSourceMode::Image ? alphaMask(x, y)[0u] : 0.0f;
-            const Expected<SIMDVectorSingleResult> prepared = TryPrepareTexConvLinearPixel(
-                VectorSet(pixel[0u], pixel[1u], pixel[2u], 0.0f),
-                pixel[3u],
-                alphaSource.mode,
-                alphaSource.constant,
-                maskAlpha,
-                maxRgb,
-                srgb
-            );
-            if(!prepared)
-                return false;
-            const SIMDVectorSingle linear = prepared->value;
-            pixel.set(VectorGetX(linear), VectorGetY(linear), VectorGetZ(linear), VectorGetW(linear));
+b8 ValidateTexConvInputPathsHdrConsistency(in Span<Path> inputPaths, mut b8 outHdr){
+    outHdr = IsHdrTexConvInputPath(inputPaths[0u]);
+    for(usize i = 1u; i < inputPaths.size(); ++i){
+        if(IsHdrTexConvInputPath(inputPaths[i]) != outHdr){
+            error("tex_conv: an individual texture conversion cannot mix HDR and LDR source images.");
+            return false;
         }
     }
     return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<PreparedTexture> PrepareTexture(const Span<const ScratchPath> inputPaths, const TextureDimension::Enum dimension, const b8 srgb, const AlphaSource& alphaSource, Core::Alloc::ScratchArena& scratchArena){
-    if(!ValidateTexConvInputImageCount(
-        inputPaths.size(),
-        IsValidTextureDimension(dimension),
-        dimension == TextureDimension::Texture2D,
-        dimension == TextureDimension::TextureCube,
-        TextureFormat::s_TextureCubeFaceCount
-    ))
-        return MakeUnexpected(Failure{});
-    if(!IsValidAlphaSourceMode(alphaSource.mode)){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: unsupported alpha source."));
-        return MakeUnexpected(Failure{});
-    }
-
-    const b8 hdr = PathHasListedExtension(inputPaths.front(), s_HdrInputExtensions);
-    for(const ScratchPath& path : inputPaths){
-        if(PathHasListedExtension(path, s_HdrInputExtensions) != hdr){
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: an individual texture conversion cannot mix HDR and LDR source images."));
-            return MakeUnexpected(Failure{});
-        }
-    }
-
-    TextureEncodeInput input;
-    input.dimension = dimension;
-    input.depth = ResolveTexConvEncodeDepth(dimension == TextureDimension::Texture3D, inputPaths.size());
-    input.format = ResolveTexConvPayloadFormat(hdr, TexturePayloadFormat::UastcHdr4x4, TexturePayloadFormat::UastcLdr4x4);
-    input.planes.reserve(inputPaths.size());
-    basisu::imagef alphaMask;
-    if(alphaSource.mode == AlphaSourceMode::Image){
-        auto decoded = __hidden_encode::LoadImage(alphaSource.path, scratchArena);
-        if(!decoded)
-            return MakeUnexpected(Failure{});
-        alphaMask = Move(*decoded);
-    }
-
-    for(const ScratchPath& path : inputPaths){
-        auto plane = __hidden_encode::LoadImage(path, scratchArena);
-        if(!plane)
-            return MakeUnexpected(Failure{});
-        if(!ValidateTexConvPlaneResolution(
-            input.planes.empty(),
-            dimension == TextureDimension::TextureCube,
-            alphaSource.mode == AlphaSourceMode::Image,
-            plane->get_width(),
-            plane->get_height(),
-            alphaMask.get_width(),
-            alphaMask.get_height(),
-            input.width,
-            input.height
-        ))
-            return MakeUnexpected(Failure{});
-        if(!__hidden_encode::PrepareLinearPlane(alphaMask, alphaSource, hdr, !hdr && srgb, *plane))
-            return MakeUnexpected(Failure{});
-        input.planes.push_back(Move(*plane));
-    }
-
-    return EncodeLinearTexture(Move(input), scratchArena);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_TEX_CONV_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

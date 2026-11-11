@@ -29,20 +29,8 @@ b8 HasValidPrefixSceneUploadInputs(
     return meshViewValid && lightsValid && sceneShadingValid && shadowPrepareTaskValid;
 }
 
-b8 UsesOpaqueMaterialGeometry(in b8 regularEmpty, in b8 csgReceiverSurfaceEmpty){
-    return !regularEmpty || !csgReceiverSurfaceEmpty;
-}
-
 b8 ValidateAddressableUploadElementCount(in usize count, in usize elementStride){
     return count <= usize.max / elementStride;
-}
-
-void LogOpaqueMaterialGeometryStatesUnavailable(){
-    warning("RendererSystem: could not declare prepared opaque material geometry states");
-}
-
-void LogOpaqueMaterialSampledTexturesUnavailable(){
-    warning("RendererSystem: could not declare prepared opaque material sampled textures");
 }
 
 
@@ -432,41 +420,38 @@ Expected<OpaqueUploadChainResult> OpaqueUploadChainBuilder::declare(const Opaque
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<OpaqueGbufferMaterialResources> OpaqueGbufferMaterialResourceCollector::gather(const MaterialPassDrawItemPartitions& drawItems){
+Expected<Core::GpuGraphResourceSetId> GatherOpaqueGbufferGeometrySet(
+    Core::GpuTaskGraph* const graph,
+    Core::Alloc::ScratchArena* const scratchArena,
+    const MaterialPassDrawItemPartitions& drawItems
+){
     using namespace RendererTaskGraphDetail;
 
-    OpaqueGbufferMaterialResources resources;
+    if(!graph || !scratchArena)
+        return MakeUnexpected(Failure{});
     const Array<MaterialPassDrawItemsView, 2> drawSets = { drawItems.regular, drawItems.csgReceiverSurface, };
-    const b8 usesMaterialGeometry = UsesOpaqueMaterialGeometry(drawItems.regular.empty(), drawItems.csgReceiverSurface.empty());
-    if(usesMaterialGeometry){
-        const auto geometrySet = GatherPreparedMaterialGeometryResourceSet(drawSets, Name(s_GbufferMaterialGeometrySet), "Opaque Material Geometry", m_graph, m_scratchArena);
-        resources.geometryStatesGraphOwned = geometrySet.has_value();
-        if(geometrySet)
-            resources.geometrySet = *geometrySet;
-    }
-    if(usesMaterialGeometry && !resources.geometryStatesGraphOwned){
-        LogOpaqueMaterialGeometryStatesUnavailable();
-        // Frozen heap slots require a complete graph declaration before this material callback can record.
+    return GatherPreparedMaterialGeometryResourceSet(drawSets, Name(s_GbufferMaterialGeometrySet), "Opaque Material Geometry", *graph, *scratchArena);
+}
+
+Expected<Core::GpuGraphResourceSetId> GatherOpaqueGbufferSampledTextureSet(
+    Core::GpuTaskGraph* const graph,
+    const RendererMaterialSystem* const materialSystem,
+    Core::Alloc::ScratchArena* const scratchArena,
+    const MaterialPassDrawItemPartitions& drawItems
+){
+    using namespace RendererTaskGraphDetail;
+
+    if(!graph || !materialSystem || !scratchArena)
         return MakeUnexpected(Failure{});
-    }
-    if(usesMaterialGeometry){
-        const auto sampledTextureSet = GatherPreparedMaterialSampledTextureResourceSet(
-            m_materialSystem,
-            drawSets,
-            Name(s_FrameGraphNameRenderGraphicsPrefixGbufferMaterialSampledTextures),
-            "Opaque Material Sampled Textures",
-            m_graph,
-            m_scratchArena
-        );
-        resources.sampledTexturesCollected = sampledTextureSet.has_value();
-        if(sampledTextureSet)
-            resources.sampledTextureSet = *sampledTextureSet;
-    }
-    if(usesMaterialGeometry && !resources.sampledTexturesCollected){
-        LogOpaqueMaterialSampledTexturesUnavailable();
-        return MakeUnexpected(Failure{});
-    }
-    return resources;
+    const Array<MaterialPassDrawItemsView, 2> drawSets = { drawItems.regular, drawItems.csgReceiverSurface, };
+    return GatherPreparedMaterialSampledTextureResourceSet(
+        *materialSystem,
+        drawSets,
+        Name(s_FrameGraphNameRenderGraphicsPrefixGbufferMaterialSampledTextures),
+        "Opaque Material Sampled Textures",
+        *graph,
+        *scratchArena
+    );
 }
 
 

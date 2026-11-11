@@ -415,7 +415,7 @@ private:
     SoftwareSceneRefitHandle m_preparedSceneSwBvhRefit;
     PreparedShadowTraceGeometryBufferVector m_preparedShadowTraceGeometryBuffers;
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_acceptedShadowTraceGeometryBuffers;
-    PreparedShadowTraceMaterialSampledTextureVector m_preparedShadowTraceMaterialSampledTextures;
+    Vector<Core::TextureHandle, Core::Alloc::GlobalArena> m_preparedShadowTraceMaterialSampledTextures;
     // Retain packed NwbCausticEmissionTargetGpu bytes across declaration and recording without regathering state.
     Vector<u8, Core::Alloc::GlobalArena> m_preparedCausticEmissionTargetBytes;
     // Transient HW fallback keeps material context only (Shadow Prep already froze the TLAS/BLAS plan).
@@ -424,14 +424,14 @@ private:
     PreparedSceneTlasBuild m_preparedSceneTlas;
     // Fresh uploads and static-cache reuse both freeze the traversal table. Recording never rebuilds scene data; ECS versions reject stale plans.
     PreparedSceneSwBvhTraversal m_preparedSceneSwBvhTraversal;
-    PreparedMeshBlasBuildVector m_preparedMeshBlasBuilds;
+    Vector<PreparedMeshBlasBuild, Core::Alloc::GlobalArena> m_preparedMeshBlasBuilds;
     // Per-frame BLAS actions keyed by dirty reason.
     u64 m_blasLedgerStaticSkipped = 0u;
     u64 m_blasLedgerFirstBuilds = 0u;
     u64 m_blasLedgerRefits = 0u;
     u64 m_blasLedgerRebuilds = 0u;
     u64 m_blasLedgerUploadedBytes = 0u;
-    PreparedMeshSwBvhBuildVector m_preparedMeshSwBvhBuilds;
+    Vector<PreparedMeshSwBvhBuild, Core::Alloc::GlobalArena> m_preparedMeshSwBvhBuilds;
     DeferredFrameTargets* m_shadowVisibilityPreparedTargets = nullptr;
     RayTracingSceneContentStamp m_preparedSceneContentStamp;
     CausticQualitySettings m_causticQualitySettings;

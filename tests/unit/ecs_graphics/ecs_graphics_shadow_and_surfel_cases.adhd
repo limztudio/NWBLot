@@ -86,6 +86,11 @@ public:
     }
 };
 
+struct SoftShadowDispatchContext{
+    Core::Alloc::GlobalArena arena{ NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsSoftShadowResolveDispatchBuilder };
+    Impl::RendererRayTracingState state{ arena };
+};
+
 struct TaskTimingFeedbackTestsTag{};
 
 struct TaskTimingFeedbackContext{
@@ -131,19 +136,19 @@ public:
     }
 };
 
-[[nodiscard]] inline Core::GpuTaskId MakeGpuTaskId(const u32 generation, const u32 index)noexcept{
+[[nodiscard]] NWB_INLINE Core::GpuTaskId MakeGpuTaskId(const u32 generation, const u32 index)noexcept{
     return Core::GpuTaskId{ .generation = generation, .index = index };
 }
 
-[[nodiscard]] inline Impl::RayTracingSceneContentStamp MakeRtSceneStamp(const u64 geometry, const u64 material, const b8 trusted)noexcept{
+[[nodiscard]] NWB_INLINE Impl::RayTracingSceneContentStamp MakeRtSceneStamp(const u64 geometry, const u64 material, const b8 trusted)noexcept{
     return Impl::RayTracingSceneContentStamp{ geometry, material, trusted };
 }
 
-[[nodiscard]] inline Core::QueueSubmissionToken MakeQueueToken(const u64 value, const u16 physicalQueueIndex, const u16 deviceGeneration, const Core::CommandQueue::Enum queue)noexcept{
+[[nodiscard]] NWB_INLINE Core::QueueSubmissionToken MakeQueueToken(const u64 value, const u16 physicalQueueIndex, const u16 deviceGeneration, const Core::CommandQueue::Enum queue)noexcept{
     return Core::QueueSubmissionToken{ .value = value, .physicalQueueIndex = physicalQueueIndex, .deviceGeneration = deviceGeneration, .queue = queue };
 }
 
-[[nodiscard]] inline Core::GpuTaskTimingFeedbackPolicy MakeFeedbackPolicy(
+[[nodiscard]] NWB_INLINE Core::GpuTaskTimingFeedbackPolicy MakeFeedbackPolicy(
     const f64 minimumAbsoluteBenefitSeconds,
     const f64 minimumRelativeBenefit,
     const u32 minimumFramesBetweenSwitches,
@@ -199,12 +204,12 @@ public:
     ShaderFloat4(const ShaderFloat3 rgb, const f32 alpha)noexcept : x(rgb.x), y(rgb.y), z(rgb.z), w(alpha){}
 };
 
-[[nodiscard]] inline ShaderFloat3 operator/(const ShaderFloat3 value, const f32 divisor)noexcept{
+[[nodiscard]] NWB_INLINE ShaderFloat3 operator/(const ShaderFloat3 value, const f32 divisor)noexcept{
     const SIMDVectorSingle quotient = VectorDivide(VectorSet(value.x, value.y, value.z, 0.0f), VectorSet(divisor, divisor, divisor, 1.0f));
     return ShaderFloat3(VectorGetX(quotient), VectorGetY(quotient), VectorGetZ(quotient));
 }
 
-[[nodiscard]] inline f32 exp(const f32 value)noexcept{ return ::Exp(value); }
+[[nodiscard]] NWB_INLINE f32 exp(const f32 value)noexcept{ return ::Exp(value); }
 
 [[nodiscard]] f32 nwbSurfelGatherCoverage(f32 totalWeight);
 [[nodiscard]] b8 nwbSurfelUpsampleNormalCompatible(f32 normalDot);
@@ -248,21 +253,21 @@ public:
     {}
 };
 
-[[nodiscard]] inline Float3U operator/(const Float3U value, const f32 divisor)noexcept{
+[[nodiscard]] NWB_INLINE Float3U operator/(const Float3U value, const f32 divisor)noexcept{
     return Float3U(value.x / divisor, value.y / divisor, value.z / divisor);
 }
 
-[[nodiscard]] inline b8 operator==(const ShaderInt3 first, const ShaderInt3 second)noexcept{
+[[nodiscard]] NWB_INLINE b8 operator==(const ShaderInt3 first, const ShaderInt3 second)noexcept{
     return first.x == second.x && first.y == second.y && first.z == second.z;
 }
 
-[[nodiscard]] inline Float3U FloorShaderVector(const Float3U value)noexcept{
+[[nodiscard]] NWB_INLINE Float3U FloorShaderVector(const Float3U value)noexcept{
     Float3U floored;
     StoreFloat(VectorFloor(LoadFloat(value)), floored);
     return floored;
 }
 
-[[nodiscard]] inline b8 AllShaderLanes(const b8 value)noexcept{ return value; }
+[[nodiscard]] NWB_INLINE b8 AllShaderLanes(const b8 value)noexcept{ return value; }
 
 [[nodiscard]] ShaderInt3 nwbSurfelCellCoord(Float3U worldPosition, f32 cellSize);
 [[nodiscard]] b8 nwbSurfelSameCell(ShaderInt3 ownerCell, ShaderInt3 visitedCell);
@@ -314,6 +319,12 @@ namespace CommandQueue = Core::CommandQueue;
 using CommandQueueEnum = Core::CommandQueue::Enum;
 using GpuDescriptorHandle = Core::GpuDescriptorHandle;
 using GpuTaskId = Core::GpuTaskId;
+
+using RendererRayTracingState = Impl::RendererRayTracingState;
+using SoftShadowDispatchContext = EcsGraphicsShadowSurfelDetail::SoftShadowDispatchContext;
+using ShadowMaterialContextPolicy = Impl::ShadowMaterialContextPolicy;
+namespace PreparedShadowMaterialContextRoute = Impl::PreparedShadowMaterialContextRoute;
+inline constexpr usize s_ShadowInstanceGpuDataBytes = sizeof(Impl::InstanceGpuData);
 
 using Impl::ResolveMaterialTypedBufferByteCount;
 using Impl::ResolveWrappingRayTracingDispatchGroup;
@@ -421,55 +432,73 @@ void VerifyShadowMaterialContext_TypedByteCountPreservesAlignmentAndWrapping(){
     EXPECT_EQ(ResolveMaterialTypedBufferByteCount(maximum, 4u), 0u);
 }
 
+void CaptureShadowMaterialContextBytes(
+    in ShadowMaterialContextPolicy policy,
+    in Span<NwbRtInstanceMaterialGpu> materials,
+    in Span<InstanceGpuData> instances,
+    in Span<u8> typed,
+    mut Vector<u8> materialBytes,
+    mut Vector<u8> instanceBytes,
+    mut Vector<u8> typedBytes
+){
+    policy.captureBytes(materials, instances, typed, materialBytes, instanceBytes, typedBytes);
+}
+
+b8 ValidateShadowMaterialContextRetainState(
+    in ShadowMaterialContextPolicy policy,
+    in usize materialCount,
+    in usize instanceCount,
+    in usize typedCount,
+    in usize materialSize,
+    in usize instanceSize,
+    in usize typedSize
+){
+    return policy.validateRetainState(
+        PreparedShadowMaterialContextRoute::Hardware,
+        materialCount,
+        instanceCount,
+        typedCount,
+        true,
+        materialCount,
+        materialCount,
+        instanceCount,
+        instanceCount,
+        typedCount,
+        typedCount,
+        true,
+        true,
+        false,
+        false,
+        0u,
+        0u,
+        0u,
+        materialSize,
+        instanceSize,
+        typedSize
+    );
+}
+
 void VerifyShadowMaterialContext_RetainedPayloadUsesActualInstanceStrideAndRejectsTruncation(){
     CapturingLogger logger = CapturingLogger();
     const LoggerRegistrationGuard loggerGuard = LoggerRegistrationGuard(logger, LoggerBreakPolicy::ReportOnly);
-    native{
-        Core::Alloc::GlobalArena arena{ Name(s_EcsCaseTestsShadowMaterialContext) };
-        const Array<Impl::NwbRtInstanceMaterialGpu, 2> materials{};
-        const Array<Impl::InstanceGpuData, 2> instances{};
-        const Array<u8, 4> typed{ 1u, 2u, 3u, 4u };
-        Vector<u8, Core::Alloc::GlobalArena> materialBytes(arena);
-        Vector<u8, Core::Alloc::GlobalArena> instanceBytes(arena);
-        Vector<u8, Core::Alloc::GlobalArena> typedBytes(arena);
-        Impl::ShadowMaterialContextPolicy().captureBytes(
-            Span<const Impl::NwbRtInstanceMaterialGpu>(materials.data(), materials.size()),
-            Span<const Impl::InstanceGpuData>(instances.data(), instances.size()),
-            Span<const u8>(typed.data(), typed.size()),
-            materialBytes,
-            instanceBytes,
-            typedBytes
-        );
-        EXPECT_EQ(instanceBytes.size(), instances.size() * sizeof(Impl::InstanceGpuData));
-        const auto validate = [&](const usize materialSize, const usize instanceSize, const usize typedSize)noexcept{
-            return Impl::ShadowMaterialContextPolicy().validateRetainState(
-                Impl::PreparedShadowMaterialContextRoute::Hardware,
-                materials.size(),
-                instances.size(),
-                typed.size(),
-                true,
-                materials.size(),
-                materials.size(),
-                instances.size(),
-                instances.size(),
-                typed.size(),
-                typed.size(),
-                true,
-                true,
-                false,
-                false,
-                0u,
-                0u,
-                0u,
-                materialSize,
-                instanceSize,
-                typedSize
-            );
-        };
-        EXPECT_TRUE(validate(materialBytes.size(), instanceBytes.size(), typedBytes.size()));
-        EXPECT_FALSE(validate(materialBytes.size() - 1u, instanceBytes.size(), typedBytes.size()));
-        EXPECT_FALSE(validate(materialBytes.size(), instanceBytes.size() - 1u, typedBytes.size()));
-        EXPECT_FALSE(validate(materialBytes.size(), instanceBytes.size(), typedBytes.size() - 1u));
+    {
+        const ShadowMaterialContextPolicy policy = ShadowMaterialContextPolicy();
+        const Array<NwbRtInstanceMaterialGpu, 2> materials = Array<NwbRtInstanceMaterialGpu, 2>();
+        const Array<InstanceGpuData, 2> instances = Array<InstanceGpuData, 2>();
+        Array<u8, 4> typed = Array<u8, 4>();
+        typed[0u] = 1u;
+        typed[1u] = 2u;
+        typed[2u] = 3u;
+        typed[3u] = 4u;
+        Vector<u8> materialBytes = Vector<u8>();
+        Vector<u8> instanceBytes = Vector<u8>();
+        Vector<u8> typedBytes = Vector<u8>();
+        CaptureShadowMaterialContextBytes(policy, materials, instances, typed, materialBytes, instanceBytes, typedBytes);
+        EXPECT_EQ(instanceBytes.size(), instances.size() * s_ShadowInstanceGpuDataBytes);
+        EXPECT_TRUE(ValidateShadowMaterialContextRetainState(policy, materials.size(), instances.size(), typed.size(), materialBytes.size(), instanceBytes.size(), typedBytes.size()));
+        EXPECT_FALSE(ValidateShadowMaterialContextRetainState(policy, materials.size(), instances.size(), typed.size(), materialBytes.size() - 1u, instanceBytes.size(), typedBytes.size()));
+        EXPECT_FALSE(ValidateShadowMaterialContextRetainState(policy, materials.size(), instances.size(), typed.size(), materialBytes.size(), instanceBytes.size() - 1u, typedBytes.size()));
+        EXPECT_FALSE(ValidateShadowMaterialContextRetainState(policy, materials.size(), instances.size(), typed.size(), materialBytes.size(), instanceBytes.size(), typedBytes.size() - 1u));
     }
     EXPECT_EQ(logger.errorCount(), 3u);
 }
@@ -752,6 +781,22 @@ void VerifyShadowVisibilityMergeValidator_CombinedTemporalRejectsEveryRemainingP
     }
 }
 
+SoftShadowResolveDispatch BuildOpaqueSoftShadowDispatch(
+    in OpaqueSoftShadowResolveOptions options,
+    in RendererRayTracingState state,
+    mut DeferredFrameTargets targets
+){
+    return SoftShadowResolveDispatchBuilder::Opaque(options, state, targets);
+}
+
+SoftShadowResolveDispatch BuildTransparentSoftShadowDispatch(
+    in TransparentSoftShadowResolveOptions options,
+    in RendererRayTracingState state,
+    mut DeferredFrameTargets targets
+){
+    return SoftShadowResolveDispatchBuilder::Transparent(options, state, targets);
+}
+
 void VerifySoftShadowResolveDispatchBuilder_AlternatingHistoryUsesTheNewMomentsAndGraphOwnedBoundaries(){
     DeferredFrameTargets targets = DeferredFrameTargets();
     targets.bindless.shadowHistB = GpuDescriptorHandle(31u);
@@ -765,27 +810,20 @@ void VerifySoftShadowResolveDispatchBuilder_AlternatingHistoryUsesTheNewMomentsA
     opaque.dispatchResolve = true;
     opaque.phase = SoftShadowOpaqueResolvePhase::WaveletOnly;
 
-    SoftShadowResolveDispatch first = SoftShadowResolveDispatch();
-    SoftShadowResolveDispatch noHistory = SoftShadowResolveDispatch();
     TransparentSoftShadowResolveOptions transparent = TransparentSoftShadowResolveOptions();
     transparent.frontIsA = false;
     transparent.temporalActive = true;
     transparent.dispatchResolve = true;
     transparent.splitResolve = true;
-    SoftShadowResolveDispatch second = SoftShadowResolveDispatch();
-    SoftShadowResolveDispatch ownMerge = SoftShadowResolveDispatch();
 
-    native(in targets, mut opaque, mut first, mut noHistory, mut transparent, mut second, mut ownMerge){
-        Core::Alloc::GlobalArena arena(s_EcsCaseTestsSoftShadowResolveDispatchBuilder);
-        Impl::RendererRayTracingState state(arena);
-        first = SoftShadowResolveDispatchBuilder::Opaque(opaque, state, targets);
-        opaque.temporalActive = false;
-        opaque.phase = SoftShadowOpaqueResolvePhase::TemporalAndWavelet;
-        noHistory = SoftShadowResolveDispatchBuilder::Opaque(opaque, state, targets);
-        second = SoftShadowResolveDispatchBuilder::Transparent(transparent, state, targets);
-        transparent.dispatchTemporalMerge = true;
-        ownMerge = SoftShadowResolveDispatchBuilder::Transparent(transparent, state, targets);
-    }
+    const SoftShadowDispatchContext context = SoftShadowDispatchContext();
+    const SoftShadowResolveDispatch first = BuildOpaqueSoftShadowDispatch(opaque, context.state, targets);
+    opaque.temporalActive = false;
+    opaque.phase = SoftShadowOpaqueResolvePhase::TemporalAndWavelet;
+    const SoftShadowResolveDispatch noHistory = BuildOpaqueSoftShadowDispatch(opaque, context.state, targets);
+    const SoftShadowResolveDispatch second = BuildTransparentSoftShadowDispatch(transparent, context.state, targets);
+    transparent.dispatchTemporalMerge = true;
+    const SoftShadowResolveDispatch ownMerge = BuildTransparentSoftShadowDispatch(transparent, context.state, targets);
 
     EXPECT_EQ(first.firstWaveletResources.inputColor, 31u);
     EXPECT_EQ(first.firstWaveletResources.moments, 32u);
@@ -866,27 +904,39 @@ void VerifySoftwareTransparentSampling_MovingCasterWithStationaryReceiverCannotR
     EXPECT_FALSE(history.usable());
 }
 
+void PerturbSceneLightField(mut SceneLightGpuData light, in u32 fieldIndex){
+    switch(fieldIndex){
+    case 0u:
+        light.position.x += 0.125f;
+        break;
+    case 1u:
+        light.direction.x += 0.125f;
+        break;
+    case 2u:
+        light.colorIntensity.x += 0.125f;
+        break;
+    case 3u:
+        light.params.x += 0.125f;
+        break;
+    default:
+        light.params2.x += 0.125f;
+        break;
+    }
+}
+
 void VerifySoftwareTransparentSampling_EveryLightInputAndSlotOrderInvalidatesTrust(){
     const RayTracingSceneContentStamp scene = MakeRtSceneStamp(10u, 20u, true);
     Array<SceneLightGpuData, 2> original = Array<SceneLightGpuData, 2>();
     original[1u].direction.x = 0.25f;
-    native(in scene, in original){
-        constexpr Array<Float4 SceneLightGpuData::*, 5> s_Fields = {
-            &SceneLightGpuData::position, &SceneLightGpuData::direction,
-            &SceneLightGpuData::colorIntensity, &SceneLightGpuData::params,
-            &SceneLightGpuData::params2,
-        };
-        for(const auto field : s_Fields){
-            SoftwareTransparentSamplingHistory history;
-            history.prepareScene(scene);
-            history.prepareLighting(SceneLightSpan(original.data(), 2u));
-            history.accept();
-            Array<SceneLightGpuData, 2> changed = { original[0], original[1] };
-            Float4& value = changed[0].*field;
-            value.x = value.x + 0.125f;
-            history.prepareLighting(SceneLightSpan(changed.data(), 2u));
-            EXPECT_FALSE(history.usable());
-        }
+    for(u32 fieldIndex = 0u; fieldIndex < 5u; ++fieldIndex){
+        SoftwareTransparentSamplingHistory history = SoftwareTransparentSamplingHistory();
+        history.prepareScene(scene);
+        history.prepareLighting(SceneLightSpan(original.data(), 2u));
+        history.accept();
+        Array<SceneLightGpuData, 2> changed = original;
+        PerturbSceneLightField(changed[0u], fieldIndex);
+        history.prepareLighting(SceneLightSpan(changed.data(), 2u));
+        EXPECT_FALSE(history.usable());
     }
     SoftwareTransparentSamplingHistory history = SoftwareTransparentSamplingHistory();
     history.prepareScene(scene);

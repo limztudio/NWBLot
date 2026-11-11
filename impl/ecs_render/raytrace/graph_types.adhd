@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/raytrace/scene_bvh.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -9,10 +15,20 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <core/alloc/scratch.h>
+#include <core/graphics/rhi/device.h>
 #include <core/task/gpu/types.h>
+#include <impl/ecs_render/raytrace/scene_bvh.adhd.h>
 namespace NWB::Impl{
 using RefitGraphTaskId = Core::GpuTaskId;
 using PreparedGraphUploadId = Core::GpuUploadBlobId;
+using RayTraceBufferHandle = Core::BufferHandle;
+using RayTraceAccelStructHandle = Core::RayTracingAccelStructHandle;
+using RayTraceDescriptorHandle = Core::GpuDescriptorHandle;
+using ScratchSceneBvhIndexVector = Vector<u32, Core::Alloc::ScratchArena>;
+using ScratchSceneBvhNodeCalculationVector = Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena>;
+using ScratchSceneBvhNodeGpuVector = Vector<NwbBvhNodeGpu, Core::Alloc::ScratchArena>;
+using MutableSceneBvhIndexSpan = Span<u32>;
 };
 
 

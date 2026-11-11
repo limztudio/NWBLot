@@ -3,10 +3,19 @@
 
 
 #include <logger/server/arena_names.adhd>
+#include <logger/server/clipboard_text.adhd>
+#include <logger/server/crash_auth.adhd>
+#include <logger/server/crash_ingest.adhd>
 #include <logger/server/crash_ingest_worker.adhd>
+#include <logger/server/crash_paths.adhd>
 #include <logger/server/frame.adhd>
+#include <logger/server/frame_linux.adhd>
+#include <logger/server/frame_win.adhd>
+#include <logger/server/http_connection_upload.adhd>
 #include <logger/server/http_handler.adhd>
+#include <logger/server/log_row_painter.adhd>
 #include <logger/server/server_values.adhd>
+#include <logger/telemetry/ingest.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19,14 +28,127 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <microhttpd.h>
+
 #include <logger/common.h>
 #include <logger/processed_message_file.h>
+
+#include <core/common/frame_data.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_LOG_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class Frame{
+#if defined(NWB_PLATFORM_WINDOWS)
+    using NativeFrameData = Core::Common::WinFrame;
+#else
+    using NativeFrameData = Core::Common::FrameData;
+#endif
+
+
+public:
+    static void Print(BasicStringView<tchar> str, Core::Common::LogType::Enum type);
+
+
+public:
+    Frame(void* inst)noexcept(IsSame_V<NativeFrameData, Core::Common::FrameData>);
+    ~Frame()noexcept;
+
+
+public:
+    b8 init()noexcept(IsSame_V<NativeFrameData, Core::Common::FrameData>);
+    void showFrame();
+    b8 mainLoop()noexcept(IsSame_V<NativeFrameData, Core::Common::FrameData>);
+
+
+public:
+    template<typename T>
+    NWB_INLINE T& data()noexcept{ return static_cast<T&>(m_data); }
+
+
+private:
+    NativeFrameData m_data;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr usize s_MaxPendingCrashUploadPathText = ::NWB::Log::s_LogServerValueModuleMaxPendingCrashUploadPathText;
+
+struct PendingCrashUpload{
+    Array<char, s_MaxPendingCrashUploadPathText> path = {};
+};
+
+using CrashUploadQueue = ParallelQueue<PendingCrashUpload, LogArena>;
+
+interface ICrashIngestSink{
+    virtual ~ICrashIngestSink()noexcept = default;
+    virtual void deliverCrashIngestMessage(LogString&& message, Core::Common::LogType::Enum type) = 0;
+};
+
+class CrashIngestWorker final : NoCopy{
+public:
+    CrashIngestWorker(LogArena& arena, ICrashIngestSink& sink);
+    ~CrashIngestWorker()noexcept;
+
+
+public:
+    void configure(AStringView symbolStoreDirectory, CrashRetentionConfig retention);
+    void start();
+    void stop();
+    [[nodiscard]] b8 enqueue(const Path& path, Core::Alloc::ScratchArena& scratchArena);
+
+
+private:
+    void run();
+    [[nodiscard]] Expected<PendingCrashUpload> tryDequeue();
+
+
+private:
+    ICrashIngestSink& m_sink;
+    CrashIngestConfig m_config;
+    CrashUploadQueue m_uploads;
+    Semaphore<> m_semaphore;
+    Atomic<b8> m_exit;
+    Thread m_thread;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class Server;
+
+class ServerHttpHandler final : NoCopy{
+public:
+    ServerHttpHandler(Server& server, LogArena& arena);
+    ~ServerHttpHandler()noexcept;
+
+    void configure(AStringView crashUploadToken, AStringView readinessToken);
+    [[nodiscard]] b8 start(u16 port);
+    void stop()noexcept;
+
+
+private:
+    static MHD_Result RequestCallback(void* serverContext, MHD_Connection* connection, const char* url, const char* method, const char* version, const char* uploadData, size_t* uploadDataSizeAddress, void** connectionContextAddress);
+    [[nodiscard]] b8 crashUploadAuthorized(MHD_Connection& connection)const noexcept;
+
+
+private:
+    Server& m_server;
+    MHD_Daemon* m_daemon = nullptr;
+    TelemetryIngestConfig m_telemetryIngestConfig;
+    AString<LogArena> m_crashUploadToken;
+    AString<LogArena> m_readinessToken;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -103,14 +225,938 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <logger/message_payload_codec.h>
+
 #include <core/alloc/module.h>
 #include <core/common/name_symbols.h>
+
+#include <global/algorithm.h>
+#include <global/diagnostics.h>
+#include <global/expected.h>
+#include <global/fixed_buffer.h>
+#include <global/process.h>
+#include <global/scope_exit.h>
+#include <global/thread.h>
+#include <global/unique_ptr.h>
+
+#if defined(NWB_PLATFORM_LINUX)
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#endif
+
+#if defined(NWB_PLATFORM_WINDOWS)
+#include <windows.h>
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_LOG_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_PLATFORM_LINUX)
+namespace FrameDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static Futex s_PrintMutex;
+static volatile SignalAtomic s_ShouldExit = 0;
+
+static void SignalHandler(i32)noexcept{
+    s_ShouldExit = 1;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+void Frame::Print(BasicStringView<tchar> str, Core::Common::LogType::Enum type){
+    ScopedLock lock(FrameDetail::s_PrintMutex);
+
+    auto& stream = Log::MessageTypeWritesToErrorStream(type) ? NWB_TCERR : NWB_TCOUT;
+    stream << str << static_cast<tchar>('\n');
+    stream.flush();
+}
+
+Frame::Frame(void*)noexcept{
+}
+
+Frame::~Frame()noexcept = default;
+
+b8 Frame::init()noexcept{
+    FrameDetail::s_ShouldExit = 0;
+
+    if(!SetSignalHandler(ProcessSignal::Interrupt, FrameDetail::SignalHandler))
+        return false;
+    if(!SetSignalHandler(ProcessSignal::Terminate, FrameDetail::SignalHandler))
+        return false;
+
+    return true;
+}
+
+void Frame::showFrame(){
+    NWB_COUT << s_LinuxConsoleStartupBanner << '\n';
+}
+
+b8 Frame::mainLoop()noexcept{
+    while(!FrameDetail::s_ShouldExit)
+        SleepMS(s_LogServerValueFrameLinuxConsoleUpdateIntervalMilliseconds);
+
+    return true;
+}
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_PLATFORM_WINDOWS)
+namespace FrameDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr SHORT s_ControlKeyDownMask = 0x8000;
+inline constexpr WPARAM s_CopyControlKey = static_cast<WPARAM>('C');
+inline constexpr UINT s_SynchronizeMessageRows = WM_APP + 1u;
+
+// Keep the store inside Frame so it tears down before the allocator runtime; late prints are safe no-ops.
+struct MessageStore{
+    LogArena arena;
+    MessageDeque messages;
+
+
+public:
+    MessageStore()
+        : arena(s_LogServerArenaNameLoggerServerFrameMessages)
+        , messages(arena)
+    {}
+};
+
+static Frame* s_Frame = nullptr;
+static HFONT s_Font = nullptr;
+static HWND s_ListHwnd = nullptr;
+
+// Points at the live Frame store; null outside Frame lifetime. Guarded by s_ListMutex.
+static UniquePtr<MessageStore> s_Store;
+
+static Futex s_ListMutex;
+
+static WNDPROC s_OrigListProc = nullptr;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static void ReleaseLogFont()noexcept{
+    if(!s_Font)
+        return;
+    if(!DeleteObject(s_Font))
+        CaptureDiagnosticEvent(s_LogServerValueFrameWinLifecycleDiagnosticCategory, "Log server: failed to delete its font", __FILE__, __LINE__);
+    s_Font = nullptr;
+}
+
+// This runs on the UI thread; native row queries and additions cannot interleave with a resize rebuild.
+[[nodiscard]] static Expected<void> SynchronizeMessageRows(const HWND listHwnd)noexcept{
+    usize messageCount = 0u;
+    {
+        NothrowScopedLock lock(s_ListMutex);
+        messageCount = s_Store ? s_Store->messages.size() : 0u;
+    }
+    const LRESULT existingCount = SendMessage(listHwnd, LB_GETCOUNT, 0, 0);
+    if(existingCount == LB_ERR || !CanSynchronizeDisplayedMessageCount(static_cast<i64>(existingCount), messageCount))
+        return MakeUnexpected(Failure{});
+    for(usize index = static_cast<usize>(existingCount); index < messageCount; ++index){
+        const LRESULT added = SendMessage(listHwnd, LB_ADDSTRING, 0, 0);
+        if(added == LB_ERR || added == LB_ERRSPACE)
+            return MakeUnexpected(Failure{});
+    }
+    if(messageCount != 0u && SendMessage(listHwnd, LB_SETCURSEL, messageCount - 1u, 0) == LB_ERR)
+        return MakeUnexpected(Failure{});
+    return {};
+}
+
+// Callers must already hold s_ListMutex; validates the item index against the live store.
+static b8 IsMessageIndexValid(const UINT itemID)noexcept{
+    return s_Store && IsDisplayedMessageIndexValid(static_cast<usize>(itemID), s_Store->messages.size());
+}
+
+static void CopyMessagesToClipboard(const HWND hwnd)noexcept{
+    Optional<ClipboardText> memory;
+    Optional<ClipboardTextFailure> buildFailure;
+    {
+        NothrowScopedLock lock(s_ListMutex);
+        if(!s_Store || s_Store->messages.empty())
+            return;
+        auto built = BuildClipboardText(s_Store->messages);
+        if(!built)
+            buildFailure.emplace(Move(built.error()));
+        else
+            memory.emplace(Move(*built));
+    }
+    if(buildFailure){
+        ClipboardTextFailure& failure = *buildFailure;
+        Expected<void, ErrorCode> cleanup;
+        if(failure.memory)
+            cleanup = failure.memory->close();
+        const DiagnosticEventText detail = cleanup
+            ? MakeDiagnosticEventText("{}: native_category={} native_code={}", failure.operation, failure.code.category().name(), failure.code.value())
+            : MakeDiagnosticEventText("{}: native_category={} native_code={}; cleanup_category={} cleanup_code={}", failure.operation, failure.code.category().name(), failure.code.value(), cleanup.error().category().name(), cleanup.error().value());
+        CaptureDiagnosticEvent(s_ClipboardDiagnosticCategory, detail.view(), __FILE__, __LINE__);
+        return;
+    }
+
+    if(!OpenClipboard(hwnd)){
+        CaptureDiagnosticEvent(s_ClipboardDiagnosticCategory, "Failed to open clipboard", __FILE__, __LINE__);
+        return;
+    }
+    ScopeExit closeClipboard([]()noexcept{
+        if(!CloseClipboard())
+            CaptureDiagnosticEvent(s_ClipboardDiagnosticCategory, "Failed to close clipboard", __FILE__, __LINE__);
+    });
+    if(!EmptyClipboard()){
+        CaptureDiagnosticEvent(s_ClipboardDiagnosticCategory, "Failed to empty clipboard", __FILE__, __LINE__);
+        return;
+    }
+#if defined(UNICODE) || defined(_UNICODE)
+    const HANDLE transferred = SetClipboardData(CF_UNICODETEXT, memory->native());
+#else
+    const HANDLE transferred = SetClipboardData(CF_TEXT, memory->native());
+#endif
+    if(!transferred){
+        CaptureDiagnosticEvent(s_ClipboardDiagnosticCategory, "Failed to publish clipboard text", __FILE__, __LINE__);
+        return;
+    }
+    memory->release();
+}
+
+static LRESULT CALLBACK ListProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
+    if(uMsg == s_SynchronizeMessageRows){
+        const auto synchronized = SynchronizeMessageRows(hwnd);
+        if(!synchronized){
+            CaptureDiagnosticEvent(s_LogServerValueFrameWinMessagesDiagnosticCategory, "Log server: failed to synchronize its displayed log rows", __FILE__, __LINE__);
+            return FALSE;
+        }
+        return TRUE;
+    }
+    if(uMsg == WM_KEYDOWN && wParam == s_CopyControlKey && (GetKeyState(VK_CONTROL) & s_ControlKeyDownMask)){
+        SendMessage(GetParent(hwnd), uMsg, wParam, lParam);
+        return 0;
+    }
+    return CallWindowProc(s_OrigListProc, hwnd, uMsg, wParam, lParam);
+}
+
+static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
+    if(auto* frame = s_Frame){
+        switch(uMsg){
+        case WM_DESTROY:
+        {
+            ReleaseLogFont();
+            {
+                ScopedLock lock(s_ListMutex);
+                s_ListHwnd = nullptr;
+            }
+            frame->data<Core::Common::WinFrame>().setHwnd(nullptr);
+            PostQuitMessage(0);
+        }
+        return 0;
+
+        case WM_CLOSE:
+            if(!DestroyWindow(hwnd))
+                CaptureDiagnosticEvent(s_LogServerValueFrameWinLifecycleDiagnosticCategory, "Log server: failed to destroy its window", __FILE__, __LINE__);
+            return 0;
+
+        case WM_CREATE:
+        {
+            s_Font = CreateFont(LogRowPainter::s_FontHeight, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, NWB_TEXT("Terminal"));
+            if(!s_Font)
+                CaptureDiagnosticEvent(s_LogServerValueFrameWinLifecycleDiagnosticCategory, "Log server: failed to create its font; using the system font", __FILE__, __LINE__);
+
+            const HWND listHwnd = CreateWindowEx(0, NWB_TEXT("LISTBOX"), nullptr, WS_CHILD | WS_VISIBLE | LBS_OWNERDRAWVARIABLE | WS_VSCROLL | LBS_NOTIFY, 0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(1), frame->data<Core::Common::WinFrame>().instance(), nullptr);
+            if(!listHwnd){
+                CaptureDiagnosticEvent(s_LogServerValueFrameWinLifecycleDiagnosticCategory, "Log server: failed to create its message list", __FILE__, __LINE__);
+                return -1;
+            }
+            SendMessage(listHwnd, WM_SETFONT, reinterpret_cast<WPARAM>(s_Font), TRUE);
+            const LONG_PTR originalProc = SetWindowLongPtr(listHwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(ListProc));
+            if(originalProc == 0){
+                CaptureDiagnosticEvent(s_LogServerValueFrameWinLifecycleDiagnosticCategory, "Log server: failed to subclass its message list", __FILE__, __LINE__);
+                return -1;
+            }
+            s_OrigListProc = reinterpret_cast<WNDPROC>(originalProc);
+            {
+                ScopedLock lock(s_ListMutex);
+                s_ListHwnd = listHwnd;
+            }
+            const auto synchronized = SynchronizeMessageRows(listHwnd);
+            if(!synchronized){
+                CaptureDiagnosticEvent(s_LogServerValueFrameWinMessagesDiagnosticCategory, "Log server: failed to initialize its displayed log rows", __FILE__, __LINE__);
+                return -1;
+            }
+        }
+        return 0;
+
+        case WM_SIZE:
+        {
+            if(!s_ListHwnd)
+                return 0;
+            RECT clientRect = {};
+            if(!GetClientRect(hwnd, &clientRect)){
+                CaptureDiagnosticEvent(s_LogServerValueFrameWinLayoutDiagnosticCategory, "Log server: failed to query its client rectangle", __FILE__, __LINE__);
+                return 0;
+            }
+            if(!MoveWindow(s_ListHwnd, clientRect.left, clientRect.top, clientRect.right - clientRect.left, clientRect.bottom - clientRect.top, TRUE))
+                CaptureDiagnosticEvent(s_LogServerValueFrameWinLayoutDiagnosticCategory, "Log server: failed to resize its message list", __FILE__, __LINE__);
+        }
+        return 0;
+
+        case WM_EXITSIZEMOVE:
+        {
+            const HWND listHwnd = s_ListHwnd;
+            if(!listHwnd)
+                return 0;
+            SendMessage(listHwnd, WM_SETREDRAW, FALSE, 0);
+            ScopeExit restoreRedraw([listHwnd]()noexcept{
+                SendMessage(listHwnd, WM_SETREDRAW, TRUE, 0);
+                if(!InvalidateRect(listHwnd, nullptr, TRUE))
+                    CaptureDiagnosticEvent(s_LogServerValueFrameWinLayoutDiagnosticCategory, "Log server: failed to invalidate its message list", __FILE__, __LINE__);
+            });
+
+            SendMessage(listHwnd, LB_RESETCONTENT, 0, 0);
+            const auto synchronized = SynchronizeMessageRows(listHwnd);
+            if(!synchronized)
+                CaptureDiagnosticEvent(s_LogServerValueFrameWinMessagesDiagnosticCategory, "Log server: failed to rebuild its displayed log rows", __FILE__, __LINE__);
+        }
+        return 0;
+
+        case WM_MEASUREITEM:
+        {
+            auto& mis = *MakeNotNull(reinterpret_cast<LPMEASUREITEMSTRUCT>(lParam));
+            ScopedLock lock(s_ListMutex);
+            if(IsMessageIndexValid(mis.itemID))
+                LogRowPainter::Measure(hwnd, s_ListHwnd, mis, s_Store->messages[static_cast<usize>(mis.itemID)]);
+        }
+        return TRUE;
+
+        case WM_KEYDOWN:
+            if(wParam == s_CopyControlKey && (GetKeyState(VK_CONTROL) & s_ControlKeyDownMask))
+                CopyMessagesToClipboard(hwnd);
+            return 0;
+
+        case WM_DRAWITEM:
+        {
+            auto& dis = *MakeNotNull(reinterpret_cast<LPDRAWITEMSTRUCT>(lParam));
+            ScopedLock lock(s_ListMutex);
+            if(IsMessageIndexValid(dis.itemID))
+                LogRowPainter::Draw(dis, s_Store->messages[static_cast<usize>(dis.itemID)]);
+        }
+        return TRUE;
+        }
+    }
+    return DefWindowProc(hwnd, uMsg, wParam, lParam);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+void Frame::Print(BasicStringView<tchar> str, Core::Common::LogType::Enum type){
+    HWND listHwnd = nullptr;
+    {
+        ScopedLock lock(FrameDetail::s_ListMutex);
+
+        if(!FrameDetail::s_Store)
+            return;
+
+        FrameDetail::s_Store->messages.emplace_back(LogString(str, FrameDetail::s_Store->arena), type);
+        listHwnd = FrameDetail::s_ListHwnd;
+    }
+
+    if(!listHwnd)
+        return;
+
+    if(!SendMessage(listHwnd, FrameDetail::s_SynchronizeMessageRows, 0, 0)){
+        ScopedLock lock(FrameDetail::s_ListMutex);
+        if(FrameDetail::s_ListHwnd == listHwnd)
+            CaptureDiagnosticEvent(s_LogServerValueFrameWinMessagesDiagnosticCategory, "Log server: failed to publish its displayed log rows", __FILE__, __LINE__);
+    }
+}
+
+Frame::Frame(void* inst){
+    {
+        ScopedLock lock(FrameDetail::s_ListMutex);
+        FrameDetail::s_Store = MakeUnique<FrameDetail::MessageStore>();
+    }
+    FrameDetail::s_Frame = this;
+
+    data<Core::Common::WinFrame>().setInstance(static_cast<HINSTANCE>(inst));
+}
+
+Frame::~Frame()noexcept{
+    const HWND hwnd = data<Core::Common::WinFrame>().hwnd();
+    if(hwnd && !DestroyWindow(hwnd)){
+        CaptureDiagnosticEvent(DiagnosticEventRecord{
+            .event = DiagnosticEventName::s_Warning,
+            .category = s_LogServerValueFrameWinLifecycleDiagnosticCategory,
+            .message = "Log server: failed to destroy its window during shutdown",
+            .file = __FILE__,
+            .line = __LINE__,
+        });
+    }
+
+    FrameDetail::ReleaseLogFont();
+
+    ScopedLock lock(FrameDetail::s_ListMutex);
+    FrameDetail::s_Frame = nullptr;
+    FrameDetail::s_ListHwnd = nullptr;
+    FrameDetail::s_Store.reset();
+}
+
+b8 Frame::init(){
+    static constexpr TStringView s_WindowClassName = NWB_TEXT("NWB_LOGGER");
+    static constexpr TStringView s_WindowTitle = NWB_TEXT("NWBLogger");
+    constexpr DWORD s_WindowExtendedStyle = 0;
+    constexpr DWORD s_WindowStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SIZEBOX;
+
+    WNDCLASSEX wc = {};
+    {
+        wc.cbSize = sizeof(WNDCLASSEX);
+        wc.style = CS_HREDRAW | CS_VREDRAW;
+        wc.lpfnWndProc = FrameDetail::WinProc;
+        wc.hInstance = data<Core::Common::WinFrame>().instance();
+        wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
+        wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
+        wc.lpszClassName = s_WindowClassName.data();
+    }
+    if(!RegisterClassEx(&wc))
+        return false;
+
+    HWND hwnd = CreateWindowEx(s_WindowExtendedStyle, wc.lpszClassName, s_WindowTitle.data(), s_WindowStyle, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, nullptr, nullptr, wc.hInstance, nullptr);
+    data<Core::Common::WinFrame>().setHwnd(hwnd);
+    if(!data<Core::Common::WinFrame>().hwnd())
+        return false;
+
+    return true;
+}
+
+void Frame::showFrame(){
+    ShowWindow(data<Core::Common::WinFrame>().hwnd(), SW_SHOW);
+}
+
+b8 Frame::mainLoop(){
+    MSG message = {};
+    for(;;){
+        const BOOL result = GetMessage(&message, nullptr, 0, 0);
+        if(result == -1)
+            return false;
+        if(result == 0)
+            return true;
+
+        TranslateMessage(&message);
+        DispatchMessage(&message);
+    }
+}
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+CrashIngestWorker::CrashIngestWorker(LogArena& arena, ICrashIngestSink& sink)
+    : m_sink(sink)
+    , m_config(arena)
+    , m_uploads(arena)
+    , m_semaphore(0)
+    , m_exit(false)
+{}
+
+CrashIngestWorker::~CrashIngestWorker()noexcept{
+    stop();
+}
+
+void CrashIngestWorker::configure(const AStringView symbolStoreDirectory, const CrashRetentionConfig retention){
+    m_config.symbolication.symbolStoreDirectory.clear();
+    if(!symbolStoreDirectory.empty())
+        m_config.symbolication.symbolStoreDirectory = symbolStoreDirectory;
+    m_config.retention = retention;
+}
+
+void CrashIngestWorker::start(){
+    m_exit.store(false, MemoryOrder::release);
+    m_thread = Thread([this](){ run(); });
+}
+
+void CrashIngestWorker::stop(){
+    const b8 alreadyStopping = m_exit.exchange(true, MemoryOrder::acq_rel);
+    if(!alreadyStopping)
+        m_semaphore.release();
+    if(m_thread.joinable())
+        m_thread.join();
+}
+
+b8 CrashIngestWorker::enqueue(const Path& path, Core::Alloc::ScratchArena& scratchArena){
+    PendingCrashUpload upload;
+    const AString<Core::Alloc::ScratchArena> pathText = PathToString<char>(scratchArena, path);
+    if(!CanFitPendingCrashUploadPath(pathText.size()))
+        return false;
+
+    CopyFixedBuffer(upload.path, AStringView(pathText.data(), pathText.size()));
+    m_uploads.emplace(upload);
+    m_semaphore.release();
+    return true;
+}
+
+void CrashIngestWorker::run(){
+    for(;;){
+        m_semaphore.acquire();
+
+        while(const auto crashUpload = tryDequeue()){
+            LogArena ingestArena(s_LogServerArenaNameLoggerServerCrashIngest);
+            CrashIngestConfig ingestConfig(ingestArena);
+            ingestConfig.storageDirectory = m_config.storageDirectory;
+            ingestConfig.symbolication.symbolStoreDirectory = m_config.symbolication.symbolStoreDirectory;
+            ingestConfig.retention = m_config.retention;
+
+            const Path archivePath(ingestArena, AStringView(crashUpload->path.data()));
+            CrashIngestResult ingestResult = ProcessCrashUpload(ingestArena, archivePath, ingestConfig);
+            m_sink.deliverCrashIngestMessage(Move(ingestResult.message), ingestResult.type);
+        }
+
+        if(m_exit.load(MemoryOrder::acquire))
+            break;
+    }
+}
+
+Expected<PendingCrashUpload> CrashIngestWorker::tryDequeue(){
+    PendingCrashUpload upload;
+    if(!m_uploads.try_pop(upload))
+        return MakeUnexpected(Failure{});
+    return upload;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace LoggerServerImpl{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct ConnectionInfo : NoCopy{
+    u8* buffer = nullptr;
+    usize size = 0u;
+    usize capacity = 0u;
+    u32 rejectionStatus = 0u;
+    ServerUploadKind::Enum uploadKind = ServerUploadKind::LogMessage;
+    b8 crashUploadOwned = false;
+    Path crashUploadPath;
+    OutputFileStream crashUploadStream;
+
+
+public:
+    explicit ConnectionInfo(LogArena& arena)
+        : crashUploadPath(arena)
+    {}
+    ~ConnectionInfo()noexcept{
+        if(crashUploadOwned)
+            discardCrashUpload();
+        else if(!closeCrashUploadStream())
+            CaptureDiagnosticEvent(s_LogServerValueModuleUploadDiagnosticCategory, "Failed to close crash upload stream", __FILE__, __LINE__);
+        Core::Alloc::CoreFree(buffer);
+    }
+
+
+public:
+    [[nodiscard]] b8 append(const BinaryByteView uploadData){
+        const usize appendSize = uploadData.size();
+        if(appendSize == 0u)
+            return true;
+
+        if(!CanAppendConnectionUploadBytes(size, appendSize))
+            return false;
+
+        if(uploadKind == ServerUploadKind::Crash)
+            return appendCrashUpload(uploadData);
+
+        const usize requiredSize = size + appendSize;
+        if(!reserve(requiredSize))
+            return false;
+
+        NWB_MEMCPY(buffer + size, appendSize, uploadData.data(), appendSize);
+        size = requiredSize;
+        return true;
+    }
+
+    [[nodiscard]] b8 appendCrashUpload(const BinaryByteView uploadData){
+        if(!crashUploadStream.is_open())
+            return false;
+
+        crashUploadStream.write(reinterpret_cast<const char*>(uploadData.data()), static_cast<StreamSize>(uploadData.size()));
+        if(!crashUploadStream.good())
+            return false;
+
+        size += uploadData.size();
+        return true;
+    }
+
+    [[nodiscard]] b8 closeCrashUploadStream()noexcept{
+        if(crashUploadStream.is_open())
+            crashUploadStream.close();
+
+        return crashUploadStream.good();
+    }
+
+    void discardCrashUpload()noexcept{
+        if(!crashUploadOwned)
+            return;
+        if(!closeCrashUploadStream())
+            CaptureDiagnosticEvent(s_LogServerValueModuleUploadDiagnosticCategory, "Failed to close discarded crash upload stream", __FILE__, __LINE__);
+        const auto removed = RemoveFile(crashUploadPath);
+        if(!removed){
+            const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Failed to remove discarded crash upload '{}', error {}", crashUploadPath.c_str(), removed.error().value());
+            CaptureDiagnosticEvent(s_LogServerValueModuleUploadDiagnosticCategory, diagnostic.view(), __FILE__, __LINE__);
+        }
+        crashUploadOwned = false;
+    }
+
+    [[nodiscard]] b8 reserve(const usize requiredSize)noexcept{
+        if(requiredSize <= capacity)
+            return true;
+
+        const usize newCapacity = ::NextGrowingCapacity(capacity, requiredSize, s_LogServerValueModuleConnectionInitialBufferCapacity);
+
+        auto* newBuffer = static_cast<u8*>(Core::Alloc::CoreRealloc(buffer, newCapacity));
+        if(!newBuffer)
+            return false;
+
+        buffer = newBuffer;
+        capacity = newCapacity;
+        return true;
+    }
+};
+
+inline constexpr TStringView s_ServerName = NWB_TEXT("Server");
+
+static void DestroyConnectionInfo(ConnectionInfo*& info, void*& connectionContext)noexcept;
+
+static void EnqueueServerMessage(Server& server, const TStringView message, const Core::Common::LogType::Enum type){
+    server.enqueue(StringFormat(server.arena(), NWB_TEXT("{} on {}"), message, s_ServerName), type);
+}
+
+[[nodiscard]] static MHD_Result QueueEmptyResponse(Server& server, MHD_Connection& connection, const unsigned int statusCode = MHD_HTTP_OK){
+    static char s_EmptyResponse[] = "";
+
+    auto* response = MHD_create_response_from_buffer(0, s_EmptyResponse, MHD_RESPMEM_PERSISTENT);
+    if(!response){
+        EnqueueServerMessage(server, NWB_TEXT("Failed to create a response"), Core::Common::LogType::Fatal);
+        return MHD_NO;
+    }
+
+    const auto responseResult = MHD_queue_response(&connection, statusCode, response);
+    MHD_destroy_response(response);
+    return responseResult;
+}
+
+[[nodiscard]] static MHD_Result FinishConnectionUpload(Server& server, MHD_Connection& connection, ConnectionInfo*& info, void*& connectionContext, const u32 statusCode){
+    const MHD_Result responseResult = QueueEmptyResponse(server, connection, statusCode);
+    DestroyConnectionInfo(info, connectionContext);
+    return responseResult;
+}
+
+[[nodiscard]] static CrashScratchPath CrashInboxDirectory(Core::Alloc::ScratchArena& scratchArena){
+    return CrashDefaultRootDirectory(scratchArena) / s_CrashInboxDirectoryName;
+}
+
+[[nodiscard]] static Path MakeCrashPackagePath(Server& server, Core::Alloc::ScratchArena& scratchArena){
+    static Atomic<u64> s_CrashPackageCounter{ 1u };
+
+    const auto timeResult = GetLocalTime();
+    if(!timeResult)
+        NWB_LOGGER_WARNING(NWB_TEXT("Failed to read local time for crash package name"));
+    const LocalTime localTime = timeResult ? *timeResult : LocalTime{};
+
+    const u64 counter = s_CrashPackageCounter.fetch_add(1u, MemoryOrder::relaxed);
+    const auto fileName = StringFormat(
+        scratchArena,
+        "{}{:04}{:02}{:02}_{:02}{:02}{:02}_{}_{}{}",
+        s_CrashUploadArchiveFilePrefix,
+        localTime.tm_year + s_LocalTimeYearBase,
+        localTime.tm_mon + s_LocalTimeMonthBase,
+        localTime.tm_mday,
+        localTime.tm_hour,
+        localTime.tm_min,
+        localTime.tm_sec,
+        CurrentProcessId(),
+        counter,
+        s_CrashUploadArchiveFileExtension
+    );
+
+    return Path(server.arena(), CrashInboxDirectory(scratchArena) / fileName);
+}
+
+[[nodiscard]] static Expected<void, ErrorCode> OpenCrashUploadStream(Server& server, ConnectionInfo& info, Core::Alloc::ScratchArena& scratchArena){
+    const CrashScratchPath inboxDirectory = CrashInboxDirectory(scratchArena);
+    const auto directories = EnsureDirectories(inboxDirectory);
+    if(!directories)
+        return MakeUnexpected(directories.error());
+
+    info.crashUploadPath = MakeCrashPackagePath(server, scratchArena);
+    const AString<Core::Alloc::ScratchArena> pathText = PathToString<char>(scratchArena, info.crashUploadPath);
+    if(!CanFitPendingCrashUploadPath(pathText.size()))
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::filename_too_long));
+
+    info.crashUploadStream.open(info.crashUploadPath.c_str(), s_FileOpenBinary | OutputFileStream::noreplace);
+    info.crashUploadOwned = info.crashUploadStream.is_open();
+    if(!info.crashUploadOwned)
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::io_error));
+    return {};
+}
+
+[[nodiscard]] static Expected<NotNull<ConnectionInfo*>, ErrorCode> CreateConnectionInfo(Server& server, const ServerUploadKind::Enum uploadKind){
+    void* memory = Core::Alloc::CoreAlloc(sizeof(ConnectionInfo));
+    if(!memory)
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::not_enough_memory));
+
+    ScopeExit releaseMemory([&]()noexcept{ Core::Alloc::CoreFree(memory); });
+    auto& info = *new(memory) ConnectionInfo(server.arena());
+    releaseMemory.release();
+    ScopeExit releaseInfo([&]()noexcept{
+        info.~ConnectionInfo();
+        Core::Alloc::CoreFree(&info);
+    });
+    info.uploadKind = uploadKind;
+    if(uploadKind == ServerUploadKind::Crash){
+        Core::Alloc::ScratchArena scratchArena{Name(s_LogServerArenaNameLoggerServerCrashUploadScratch)};
+        const auto opened = OpenCrashUploadStream(server, info, scratchArena);
+        if(!opened)
+            return MakeUnexpected(opened.error());
+    }
+    releaseInfo.release();
+    return MakeNotNull(&info);
+}
+
+static void DestroyConnectionInfo(ConnectionInfo*& info, void*& connectionContext)noexcept{
+    if(info){
+        info->~ConnectionInfo();
+        Core::Alloc::CoreFree(info);
+    }
+
+    info = nullptr;
+    connectionContext = nullptr;
+}
+
+static void RequestCompleted([[maybe_unused]] void* serverContext, [[maybe_unused]] MHD_Connection* connection, void** connectionContextAddress, [[maybe_unused]] MHD_RequestTerminationCode terminationCode)noexcept{
+    if(!connectionContextAddress)
+        return;
+    auto* info = static_cast<ConnectionInfo*>(*connectionContextAddress);
+    DestroyConnectionInfo(info, *connectionContextAddress);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+MHD_Result ServerHttpHandler::RequestCallback(void* serverContext, MHD_Connection* connection, const char* url, const char* method, [[maybe_unused]] const char* version, const char* uploadData, size_t* uploadDataSizeAddress, void** connectionContextAddress){
+    if(!serverContext || !connection || !url || !method || !uploadDataSizeAddress || !connectionContextAddress)
+        return MHD_NO;
+
+    const AStringView methodView(method);
+    const AStringView urlView(url);
+    const auto handler = MakeNotNull(static_cast<ServerHttpHandler*>(serverContext));
+    const auto thisPtr = MakeNotNull(&handler->m_server);
+    if(IsReadinessProbeRequest(methodView, urlView, AStringView(handler->m_readinessToken.data(), handler->m_readinessToken.size()))){
+        auto* response = MHD_create_response_from_buffer(handler->m_readinessToken.size(), handler->m_readinessToken.data(), MHD_RESPMEM_MUST_COPY);
+        if(!response)
+            return MHD_NO;
+        const MHD_Result result = MHD_queue_response(connection, MHD_HTTP_OK, response);
+        MHD_destroy_response(response);
+        return result;
+    }
+    if(methodView != s_HttpMethodPost)
+        return MHD_NO;
+    const auto uploadDataSizePtr = MakeNotNull(uploadDataSizeAddress);
+    auto& uploadDataSize = *uploadDataSizePtr;
+    const auto connectionContextPtr = MakeNotNull(connectionContextAddress);
+    auto& connectionContext = *connectionContextPtr;
+
+    if(urlView == s_LogServerValueModuleUnsupportedNameSymbolUploadPath)
+        return LoggerServerImpl::QueueEmptyResponse(*thisPtr, *connection, MHD_HTTP_NOT_FOUND);
+
+    const b8 isCrashUpload = urlView == Core::Crash::PackageNames::s_CrashUploadEndpoint;
+    const b8 isTelemetryUpload = urlView == s_TelemetryUploadEndpoint;
+    const ServerUploadKind::Enum uploadKind = SelectServerUploadKind(isCrashUpload, isTelemetryUpload);
+
+    if(!connectionContext){
+        if(isCrashUpload && !handler->crashUploadAuthorized(*connection)){
+            LoggerServerImpl::EnqueueServerMessage(*thisPtr, NWB_TEXT("Rejected unauthorized crash upload"), Core::Common::LogType::Warning);
+            return LoggerServerImpl::QueueEmptyResponse(*thisPtr, *connection, MHD_HTTP_UNAUTHORIZED);
+        }
+
+        const auto info = LoggerServerImpl::CreateConnectionInfo(*thisPtr, uploadKind);
+        if(!info){
+            thisPtr->enqueue(
+                StringFormat(thisPtr->arena(), NWB_TEXT("Failed to initialize connection upload state: [{}] {} on {}"), info.error().value(), ConvertString(info.error().message()), LoggerServerImpl::s_ServerName),
+                Core::Common::LogType::Error
+            );
+            return LoggerServerImpl::QueueEmptyResponse(*thisPtr, *connection, MHD_HTTP_SERVICE_UNAVAILABLE);
+        }
+
+        connectionContext = info->get();
+        return MHD_YES;
+    }
+
+    auto* info = static_cast<LoggerServerImpl::ConnectionInfo*>(connectionContext);
+
+    if(uploadDataSize){
+        if(info->rejectionStatus){
+            uploadDataSize = 0u;
+            return MHD_YES;
+        }
+        if(!uploadData){
+            LoggerServerImpl::EnqueueServerMessage(*thisPtr, NWB_TEXT("Received a malformed upload chunk"), Core::Common::LogType::Error);
+            info->discardCrashUpload();
+            info->rejectionStatus = MHD_HTTP_BAD_REQUEST;
+            uploadDataSize = 0u;
+            return MHD_YES;
+        }
+
+        const usize uploadSizeLimit = SelectServerUploadSizeLimit(info->uploadKind, s_MaxTelemetryUploadBytes, s_MaxLogMessageUploadBytes);
+        if(ExceedsServerUploadBudget(info->size, static_cast<usize>(uploadDataSize), uploadSizeLimit)){
+            LoggerServerImpl::EnqueueServerMessage(*thisPtr, NWB_TEXT("Received an oversized message"), Core::Common::LogType::Error);
+            info->discardCrashUpload();
+            info->rejectionStatus = MHD_HTTP_CONTENT_TOO_LARGE;
+            uploadDataSize = 0u;
+            return MHD_YES;
+        }
+
+        const usize appendSize = static_cast<usize>(uploadDataSize);
+        if(!info->append(BinaryByteView(reinterpret_cast<const u8*>(uploadData), appendSize))){
+            LoggerServerImpl::EnqueueServerMessage(*thisPtr, NWB_TEXT("Failed to store upload chunk"), Core::Common::LogType::Fatal);
+            info->discardCrashUpload();
+            info->rejectionStatus = MHD_HTTP_SERVICE_UNAVAILABLE;
+            uploadDataSize = 0u;
+            return MHD_YES;
+        }
+
+        uploadDataSize = 0;
+        return MHD_YES;
+    }
+
+    if(info->rejectionStatus)
+        return LoggerServerImpl::FinishConnectionUpload(*thisPtr, *connection, info, connectionContext, info->rejectionStatus);
+
+    u32 responseStatus = MHD_HTTP_OK;
+    if(info->uploadKind == ServerUploadKind::Crash){
+        if(info->closeCrashUploadStream() && info->crashUploadOwned){
+            Core::Alloc::ScratchArena scratchArena{Name(s_LogServerArenaNameLoggerServerCrashEnqueueScratch)};
+            const Path& storedPath = info->crashUploadPath;
+            if(thisPtr->enqueueCrashUpload(storedPath, scratchArena)){
+                info->crashUploadOwned = false;
+                thisPtr->enqueue(StringFormat(thisPtr->arena(), NWB_TEXT("Crash upload queued for ingest at '{}'"), PathToString<tchar>(storedPath)), Core::Common::LogType::EssentialInfo);
+            }
+            else{
+                info->crashUploadOwned = false;
+                responseStatus = MHD_HTTP_SERVICE_UNAVAILABLE;
+                thisPtr->enqueue(StringFormat(thisPtr->arena(), NWB_TEXT("Crash upload could not be queued and was retained at '{}'"), PathToString<tchar>(storedPath)), Core::Common::LogType::Error);
+            }
+        }
+        else{
+            info->crashUploadOwned = false;
+            responseStatus = MHD_HTTP_SERVICE_UNAVAILABLE;
+            thisPtr->enqueue(StringFormat(thisPtr->arena(), NWB_TEXT("Crash upload could not be closed and was retained at '{}'"), PathToString<tchar>(info->crashUploadPath)), Core::Common::LogType::Error);
+        }
+    }
+    else if(info->uploadKind == ServerUploadKind::Telemetry){
+        TelemetryIngestResult result = ProcessTelemetryUpload(thisPtr->arena(), info->buffer, info->size, handler->m_telemetryIngestConfig);
+        if(!result.storedRaw)
+            responseStatus = info->size == 0u ? MHD_HTTP_BAD_REQUEST : MHD_HTTP_SERVICE_UNAVAILABLE;
+        if(result.rawCleanupError){
+            thisPtr->enqueue(StringFormat(thisPtr->arena(), NWB_TEXT("Telemetry raw stream was stored but staging cleanup failed: raw='{}' staging_retained={} error={}"), PathToString<tchar>(result.rawPath), result.rawStagingRetained, result.rawCleanupError.value()), Core::Common::LogType::Error);
+        }
+        thisPtr->enqueue(Move(result.message), result.type);
+    }
+    else{
+        auto message = MessagePayloadCodec::Parse(thisPtr->arena(), info->buffer, info->size);
+        if(message)
+            thisPtr->enqueue(Move(*message));
+        else{
+            responseStatus = MHD_HTTP_BAD_REQUEST;
+            LoggerServerImpl::EnqueueServerMessage(*thisPtr, message.error(), Core::Common::LogType::Error);
+        }
+    }
+
+    return LoggerServerImpl::FinishConnectionUpload(*thisPtr, *connection, info, connectionContext, responseStatus);
+}
+
+ServerHttpHandler::ServerHttpHandler(Server& server, LogArena& arena)
+    : m_server(server)
+    , m_telemetryIngestConfig(arena)
+    , m_crashUploadToken(arena)
+    , m_readinessToken(arena)
+{}
+
+ServerHttpHandler::~ServerHttpHandler()noexcept{
+    stop();
+}
+
+void ServerHttpHandler::configure(const AStringView crashUploadToken, const AStringView readinessToken){
+    m_crashUploadToken.assign(crashUploadToken.data(), crashUploadToken.size());
+    m_readinessToken.assign(readinessToken.data(), readinessToken.size());
+}
+
+b8 ServerHttpHandler::start(const u16 port){
+    sockaddr_in listenAddress = {};
+    listenAddress.sin_family = AF_INET;
+    listenAddress.sin_port = htons(port);
+    listenAddress.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    m_daemon = MHD_start_daemon(MHD_USE_INTERNAL_POLLING_THREAD
+        , 0u
+        , nullptr
+        , nullptr
+        , &ServerHttpHandler::RequestCallback
+        , this
+        , MHD_OPTION_SOCK_ADDR_LEN
+        , static_cast<socklen_t>(sizeof(listenAddress))
+        , &listenAddress
+        , MHD_OPTION_NOTIFY_COMPLETED
+        , &LoggerServerImpl::RequestCompleted
+        , nullptr
+        , MHD_OPTION_END
+    );
+
+    return m_daemon != nullptr;
+}
+
+void ServerHttpHandler::stop()noexcept{
+    if(m_daemon){
+        MHD_stop_daemon(m_daemon);
+        m_daemon = nullptr;
+    }
+}
+
+b8 ServerHttpHandler::crashUploadAuthorized(MHD_Connection& connection)const noexcept{
+    const char* authorizationHeader = MHD_lookup_connection_value(&connection, MHD_HEADER_KIND, s_HttpAuthorizationHeaderName.data());
+    return CrashUploadAuthorizationMatches(AStringView(m_crashUploadToken.data(), m_crashUploadToken.size()), authorizationHeader ? AStringView(authorizationHeader) : AStringView{});
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

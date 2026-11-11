@@ -158,7 +158,7 @@ namespace ECSRenderMaterialShaderVariants{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Expected<Core::GraphicsString> BuildCsgClipShaderVariantName(Core::GraphicsArena& arena, const AStringView baseVariant, const Span<const ShaderVariantDefineAssignment> defineAssignments){
+[[nodiscard]] NWB_INLINE Expected<Core::GraphicsString> BuildCsgClipShaderVariantName(Core::GraphicsArena& arena, const AStringView baseVariant, const Span<const ShaderVariantDefineAssignment> defineAssignments){
     const auto variant = CsgShaderVariantBuilder().buildClipVariant(baseVariant, Core::ShaderArchive::s_DefaultVariant, defineAssignments);
     if(!variant)
         return MakeUnexpected(Failure{});

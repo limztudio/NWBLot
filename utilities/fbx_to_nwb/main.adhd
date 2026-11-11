@@ -27,8 +27,6 @@ native{
 
 #include <core/common/application_entry.h>
 
-#include <global/cpu_topology.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -40,14 +38,10 @@ namespace __hidden_fbx_to_nwb_main{
 
 
 static i32 Run(const i32 argc, char** argv){
-    const u32 coreCount = ::QueryCpuCoreCount(CpuAffinity::Any);
-    const u32 workerCount = NWB::FbxToNwb::ComputeWorkerCount(coreCount);
-    NWB::Core::CpuTaskScheduler cpuScheduler(workerCount);
     NWB::Core::Alloc::ScratchArena scratchArena(NWB::FbxToNwb::s_UtilityScratch);
 
     b8 prompted = false;
-    const i32 result = NWB::FbxToNwb::Run(argc, argv, cpuScheduler, scratchArena, prompted);
-    cpuScheduler.wait();
+    const i32 result = NWB::FbxToNwb::Run(argc, argv, scratchArena, prompted);
     if(NWB::FbxToNwb::ShouldPauseAfterPromptedRun(prompted, result)){
         NWB_COUT << "Press Enter to exit...";
         NWB::FbxToNwb::ScratchString line(scratchArena);

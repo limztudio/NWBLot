@@ -41,7 +41,7 @@ public:
 
 private:
     RendererRayTracingSystem& m_owner;
-    PreparedSceneSwBvhMeshVector m_preparedSceneSwBvhMeshes;
+    Vector<PreparedSceneSwBvhMesh, Core::Alloc::GlobalArena> m_preparedSceneSwBvhMeshes;
     u64 m_preparedSceneSwBvhRendererMutationVersion = 0u;
     u64 m_preparedSceneSwBvhTransformMutationVersion = 0u;
     u64 m_preparedSceneSwBvhMaterialMutationVersion = 0u;

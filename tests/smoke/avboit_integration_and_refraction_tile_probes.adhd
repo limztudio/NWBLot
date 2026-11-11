@@ -111,7 +111,7 @@ public:
     }
 };
 
-[[nodiscard]] inline Expected<Core::GpuTaskId> DeclareAvboitIntegrationProbe(void* userData, Core::GpuTaskGraph& graph){
+[[nodiscard]] NWB_INLINE Expected<Core::GpuTaskId> DeclareAvboitIntegrationProbe(void* userData, Core::GpuTaskGraph& graph){
     const auto& payload = *MakeNotNull(static_cast<const AvboitIntegrationProbeTask::Payload*>(userData));
     const Name probeName = Name(s_SmokeNameAvboitIntegrationProbe);
     payload.stage = NWB_TEXT("buffer imports");
@@ -310,7 +310,7 @@ public:
     }
 };
 
-[[nodiscard]] inline Expected<Core::GpuTaskId> DeclareRefractionTileProbe(void* userData, Core::GpuTaskGraph& graph){
+[[nodiscard]] NWB_INLINE Expected<Core::GpuTaskId> DeclareRefractionTileProbe(void* userData, Core::GpuTaskGraph& graph){
     const auto& payload = *MakeNotNull(static_cast<const RefractionTileProbeTask::Payload*>(userData));
     const Name probeName = Name(s_SmokeNameRefractionTileProbe);
     payload.stage = NWB_TEXT("graph imports");
@@ -376,7 +376,7 @@ const u32 s_AvboitOverflowInvalid = 0xffffffffu;
 
 const u32 s_RefractionTileProbeSentinel = 0xa573d91bu;
 const u32 s_RefractionTileProbePhaseCount = 6u;
-const u32 s_RefractionTileProbeGuardWords = 8u;
+const u32 s_RefractionTileProbeGuardWords = 16u;
 const u32 s_RefractionTileProbeHeaderWords = 6u;
 const u32 s_RefractionTileProbeArgumentBytes = 32u;
 const u32 s_RefractionTileProbeArgumentWords = 8u + s_RefractionTileProbeGuardWords;

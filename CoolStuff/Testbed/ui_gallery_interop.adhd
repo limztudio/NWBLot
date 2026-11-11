@@ -8,133 +8,39 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+type UiNestedPopupSource = UiFilteredListSource<UiFilteredListState<UiNestedPopupLabelResolver, s_NestedPopupLabelCount, s_NestedPopupDisabledKey>>;
+type UiSearchComboSource = UiFilteredListSource<UiFilteredListState<UiSearchComboLabelResolver, s_SearchComboLabelCount, s_SearchComboDisabledKey>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_scene/asset.adhd.h>
-#include <impl/assets_ui_skin/asset.adhd.h>
-#include <impl/ecs_ui/paint_context.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/float_model.adhd.h>
-#include <impl/ecs_ui/toolkit/edit/integer_model.adhd.h>
-#include <impl/ecs_ui/toolkit/images/image_loader.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/combo.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/context_menu.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/edit_box_state.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/label.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/list.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/popup.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/radio_group.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/search_combo.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/text_area.adhd.h>
-#include <impl/ecs_ui/toolkit/widgets/tooltip.adhd.h>
-
-#include <core/alloc/scratch.h>
-#include <core/assets/manager.h>
-#include <core/common/log.h>
-
-namespace Testbed{
-using NWB::Core::Alloc::GlobalArena;
-using NWB::Core::Alloc::ScratchArena;
-using NWB::Core::Assets::AssetManager;
-using NWB::Core::Assets::AssetRef;
-using NWB::Impl::ActiveSceneSubsystems;
-using NWB::Impl::Texture;
-using NWB::Impl::UiPaintContext;
-using NWB::Impl::UiSkin;
-using NWB::Impl::UiSubsystem;
-using ScratchString = AString<ScratchArena>;
-using namespace NWB::Impl::Ui;
-
-// C++ interface adapter required because ISearchableListDataSource::filtered() returns const IListDataSource&.
-template<typename ResolverT, usize LabelCount, u64 DisabledKey>
-class UiFilteredListSource final : public ISearchableListDataSource, NoCopy{
-private:
-    class View final : public IListDataSource, NoCopy{
-    public:
-        explicit View(const UiFilteredListSource& source)noexcept
-            : m_source(source)
-        {}
-
-    public:
-        virtual u64 instanceGeneration()const noexcept override{ return s_FilteredInstanceGeneration; }
-        virtual u64 revision()const noexcept override{ return m_source.m_state.filteredRevision(); }
-        virtual u64 rowCount()const noexcept override{ return m_source.m_state.filteredRowCount(); }
-        virtual u64 key(const u64 index)const noexcept override{ return m_source.m_state.filteredKey(index); }
-        virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{ return m_source.m_state.filteredIndexOf(keyValue); }
-        virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{ return m_source.m_state.filteredFindEnabled(start, reverse); }
-        virtual StringView text(const u64 index)const noexcept override{ return m_source.m_state.filteredText(index); }
-        virtual b8 enabled(const u64 index)const noexcept override{ return m_source.m_state.filteredEnabled(index); }
-
-    private:
-        const UiFilteredListSource& m_source;
-    };
-
-public:
-    explicit UiFilteredListSource(GlobalArena&)noexcept
-        : m_view(*this)
-    {}
-
-public:
-    virtual u64 instanceGeneration()const noexcept override{ return 1u; }
-    virtual u64 revision()const noexcept override{ return 1u; }
-    virtual u64 rowCount()const noexcept override{ return m_state.rowCount(); }
-    virtual u64 key(const u64 index)const noexcept override{ return m_state.key(index); }
-    virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{ return m_state.indexOf(keyValue); }
-    virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{ return m_state.findEnabled(start, reverse); }
-    virtual StringView text(const u64 index)const noexcept override{ return m_state.text(index); }
-    virtual b8 enabled(const u64 index)const noexcept override{ return m_state.enabled(index); }
-    [[nodiscard]] virtual b8 filter(const AStringView query)override{ return m_state.applyFilter(query); }
-    [[nodiscard]] virtual const IListDataSource& filtered()const noexcept override{ return m_view; }
-
-private:
-    UiFilteredListState<ResolverT, LabelCount, DisabledKey> m_state;
-    View m_view;
-};
-
-using UiNestedPopupSource = UiFilteredListSource<UiNestedPopupLabelResolver, s_NestedPopupLabelCount, s_NestedPopupDisabledKey>;
-using UiSearchComboSource = UiFilteredListSource<UiSearchComboLabelResolver, s_SearchComboLabelCount, s_SearchComboDisabledKey>;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 DeclareSelectedKeyLabel(mut Builder ui, mut ScratchArena scratchArena, in u64 selectedKey){
+b8 DeclareSelectedKeyLabel(mut Builder ui, in u64 selectedKey){
     const String text = StringFormat(s_SelectedTextFormat, selectedKey);
     return ui.label(s_SelectedKey, StringView(text));
 }
 
-b8 DeclareCommittedNumericLabel(mut Builder ui, mut ScratchArena scratchArena, in i64 integerValue, in f64 floatValue){
+b8 DeclareCommittedNumericLabel(mut Builder ui, in i64 integerValue, in f64 floatValue){
     const String text = StringFormat("Committed: {} / {}", integerValue, floatValue);
     return ui.label("committed", StringView(text));
 }
 
-b8 DeclarePopupToolsStatusLabel(mut Builder ui, mut ScratchArena scratchArena, in u64 commandKey, in u32 anchorClicks){
+b8 DeclarePopupToolsStatusLabel(mut Builder ui, in u64 commandKey, in u32 anchorClicks){
     const String text = StringFormat("Command: {} / Clicks: {}", commandKey, anchorClicks);
     return ui.label(s_SelectedKey, StringView(text));
 }
 
-b8 DeclareProgressPercentLabel(mut Builder ui, mut ScratchArena scratchArena, in f64 percent){
+b8 DeclareProgressPercentLabel(mut Builder ui, in f64 percent){
     const String text = StringFormat("Completed: {:.0f}%", percent);
     return ui.label("value", StringView(text));
 }
 
-b8 DeclareGallerySectionLabel(mut Builder ui, mut ScratchArena scratchArena, in u32 sectionNumber, in u32 sectionCount, in StringView sectionName){
+b8 DeclareGallerySectionLabel(mut Builder ui, in u32 sectionNumber, in u32 sectionCount, in StringView sectionName){
     const String text = StringFormat("UI samples {}/{}: {}", sectionNumber, sectionCount, sectionName);
     return ui.label("section", StringView(text));
 }
 
-b8 DeclareCounterLabel(mut Builder ui, mut ScratchArena scratchArena, in u32 count){
+b8 DeclareCounterLabel(mut Builder ui, in u32 count){
     const String text = StringFormat("Count: {}", count);
     return ui.label("count", StringView(text));
 }
@@ -159,35 +65,11 @@ usize WriteVirtualListRowLabelBytes(in u64 rowKey, mut Array<u8, s_VirtualListLa
     return s_VirtualListRowPrefixLength + digitCount;
 }
 
-StringView FormatVirtualListRowLabel(in u64 rowKey, in Array<u8, s_VirtualListLabelCapacity> labelStorage){
-    if(rowKey == 0u)
-        return "";
-    StringView result = "";
-    native(in rowKey, in labelStorage, mut result){
-        auto& mutableStorage = const_cast<Array<u8, s_VirtualListLabelCapacity>&>(labelStorage);
-        const usize length = WriteVirtualListRowLabelBytes(rowKey, mutableStorage);
-        result = StringView(reinterpret_cast<const char*>(mutableStorage.data()), length);
-    }
-    return result;
-}
-
-b8 LoadUiGallerySkinImageSource(mut GlobalArena arena, in AssetManager assets, in ActiveSceneSubsystems sceneSubsystems, mut SharedImageSource outSource){
-    AssetRef<Texture> textureRef = AssetRef<Texture>();
-    native(in assets, in sceneSubsystems, mut textureRef){
-        const UiSubsystem* const uiSubsystem = sceneSubsystems.findSubsystem<UiSubsystem>();
-        if(uiSubsystem && uiSubsystem->basicSkin.valid()){
-            auto skin = assets.loadTypedSync<UiSkin>(uiSubsystem->basicSkin.name(), NWB_TEXT("UiImageGallery"));
-            if(skin)
-                textureRef = (*skin)->texture();
-        }
-    }
+Expected<SharedImageSource> LoadUiGallerySkinImageSource(mut GlobalArena arena, in AssetManager assets, in ActiveSceneSubsystems sceneSubsystems){
+    const AssetRef<Texture> textureRef = ResolveUiGallerySkinTextureRef(assets, sceneSubsystems);
     if(!textureRef.valid())
-        return false;
-    Expected<SharedImageSource> source = LoadImageSource(arena, assets, textureRef);
-    if(!source.has_value())
-        return false;
-    outSource = source.value();
-    return true;
+        return MakeUnexpected(Failure());
+    return LoadImageSource(arena, assets, textureRef);
 }
 
 

@@ -99,6 +99,10 @@ b8 ShouldAppendPendingSwBvhBuildInputs(in b8 runtimeMesh, in b8 swBvhBuildPendin
     return runtimeMesh || swBvhBuildPending;
 }
 
+Expected<Name> FormatCsgQueueReadCompleteIdentity(in u32 physicalQueueIndex){
+    return ParseName(StringFormat("render.raytrace.csg_queue_{}.read_complete", physicalQueueIndex));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -128,13 +132,13 @@ inline constexpr Array<Core::BufferHandle MeshSnapshot::*, s_ShadowTraceMemberCo
     &MeshSnapshot::swBvhNodeBuffer,
 };
 
-[[nodiscard]] inline Expected<Core::GpuGraphResourceId> ImportOptionalExternalBuffer(Core::GpuTaskGraph& graph, const Core::BufferHandle& buffer, const Name identity, const AStringView label){
+[[nodiscard]] NWB_INLINE Expected<Core::GpuGraphResourceId> ImportOptionalExternalBuffer(Core::GpuTaskGraph& graph, const Core::BufferHandle& buffer, const Name identity, const AStringView label){
     if(!buffer)
         return Core::GpuGraphResourceId{};
     return RendererTaskGraphDetail::ImportExternalBuffer(graph, buffer, identity, label);
 }
 
-[[nodiscard]] inline b8 AppendChainedUploadBufferTask(
+[[nodiscard]] NWB_INLINE b8 AppendChainedUploadBufferTask(
     Core::GpuTaskGraph& graph,
     const Name identity,
     const AStringView markerLabel,
@@ -290,12 +294,11 @@ b8 ShadowPrepareUploadChainBuilder::declareSelectorAndContextUploads(const Shado
         for(const auto& token : inputs.rayTracingResources.rayTraceContextReadSubmissionTokens){
             if(!token.valid())
                 continue;
-            const AString<Core::Alloc::ScratchArena> completionName = StringFormat(scratchArena, "render.raytrace.csg_queue_{}.read_complete", token.physicalQueueIndex);
-            Core::GpuExternalCompletionDesc readCompleteDesc;
-            const auto completionIdentity = ToName(completionName);
-            if(!completionIdentity || !*completionIdentity)
+            const Expected<Name> completionIdentity = FormatCsgQueueReadCompleteIdentity(token.physicalQueueIndex);
+            if(!completionIdentity)
                 return false;
-            readCompleteDesc.setIdentity(**completionIdentity).setMarkerLabel("Prior CSG Ray Read Complete").setToken(token);
+            Core::GpuExternalCompletionDesc readCompleteDesc;
+            readCompleteDesc.setIdentity(*completionIdentity).setMarkerLabel("Prior CSG Ray Read Complete").setToken(token);
             const auto readCompleteResult = m_graph.importExternalCompletion(readCompleteDesc);
             if(!readCompleteResult)
                 return false;

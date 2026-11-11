@@ -76,7 +76,7 @@ using MetaArena = Core::Metascript::MetaArena;
 using Core::Metascript::Adhd::Compiler::Compile;
 using Core::Metascript::Adhd::Compiler::DeriveNamespaceFromPath;
 
-[[nodiscard]] inline b8 CompileWithResolver(
+[[nodiscard]] NWB_INLINE b8 CompileWithResolver(
     const MStringView source,
     const MStringView virtualFilePath,
     Core::Metascript::IIncludeResolver& resolver,
@@ -86,83 +86,83 @@ using Core::Metascript::Adhd::Compiler::DeriveNamespaceFromPath;
     return Compile(source, virtualFilePath, &resolver, arena, outResult);
 }
 
-[[nodiscard]] inline AStringView GeneratedHeaderView(const CompileResult& result)noexcept{
+[[nodiscard]] NWB_INLINE AStringView GeneratedHeaderView(const CompileResult& result)noexcept{
     return AStringView(result.generatedHeader.data(), result.generatedHeader.size());
 }
 
-[[nodiscard]] inline AStringView GeneratedSourceView(const CompileResult& result)noexcept{
+[[nodiscard]] NWB_INLINE AStringView GeneratedSourceView(const CompileResult& result)noexcept{
     return AStringView(result.generatedSource.data(), result.generatedSource.size());
 }
 
-[[nodiscard]] inline AStringView FirstErrorMessage(const CompileResult& result)noexcept{
+[[nodiscard]] NWB_INLINE AStringView FirstErrorMessage(const CompileResult& result)noexcept{
     return AStringView(result.errors[0u].message);
 }
 
-[[nodiscard]] inline AStringView MStringAsView(const MString& text)noexcept{
+[[nodiscard]] NWB_INLINE AStringView MStringAsView(const MString& text)noexcept{
     return AStringView(text.data(), text.size());
 }
 
-[[nodiscard]] inline usize UnitClassCount(const CompileResult& result)noexcept{
+[[nodiscard]] NWB_INLINE usize UnitClassCount(const CompileResult& result)noexcept{
     return result.unit.classes.size();
 }
 
-[[nodiscard]] inline b8 UnitClassIsSerialize(const CompileResult& result, const usize classIdx)noexcept{
+[[nodiscard]] NWB_INLINE b8 UnitClassIsSerialize(const CompileResult& result, const usize classIdx)noexcept{
     return result.unit.classes[classIdx]->isSerialize;
 }
 
-[[nodiscard]] inline usize UnitClassTotalAlign(const CompileResult& result, const usize classIdx)noexcept{
+[[nodiscard]] NWB_INLINE usize UnitClassTotalAlign(const CompileResult& result, const usize classIdx)noexcept{
     return result.unit.classes[classIdx]->totalAlign;
 }
 
-[[nodiscard]] inline usize UnitClassTotalSize(const CompileResult& result, const usize classIdx)noexcept{
+[[nodiscard]] NWB_INLINE usize UnitClassTotalSize(const CompileResult& result, const usize classIdx)noexcept{
     return result.unit.classes[classIdx]->totalSize;
 }
 
-[[nodiscard]] inline AStringView UnitClassName(const CompileResult& result, const usize classIdx)noexcept{
+[[nodiscard]] NWB_INLINE AStringView UnitClassName(const CompileResult& result, const usize classIdx)noexcept{
     return AStringView(result.unit.classes[classIdx]->name);
 }
 
-[[nodiscard]] inline usize UnitClassOrderedFieldCount(const CompileResult& result, const usize classIdx)noexcept{
+[[nodiscard]] NWB_INLINE usize UnitClassOrderedFieldCount(const CompileResult& result, const usize classIdx)noexcept{
     return result.unit.classes[classIdx]->orderedFields.size();
 }
 
-[[nodiscard]] inline AStringView UnitClassOrderedFieldName(const CompileResult& result, const usize classIdx, const usize fieldIdx)noexcept{
+[[nodiscard]] NWB_INLINE AStringView UnitClassOrderedFieldName(const CompileResult& result, const usize classIdx, const usize fieldIdx)noexcept{
     return AStringView(result.unit.classes[classIdx]->orderedFields[fieldIdx]->name);
 }
 
-[[nodiscard]] inline usize UnitClassOrderedFieldAlign(const CompileResult& result, const usize classIdx, const usize fieldIdx)noexcept{
+[[nodiscard]] NWB_INLINE usize UnitClassOrderedFieldAlign(const CompileResult& result, const usize classIdx, const usize fieldIdx)noexcept{
     return result.unit.classes[classIdx]->orderedFields[fieldIdx]->resolvedAlign;
 }
 
-[[nodiscard]] inline usize UnitClassOrderedFieldOffset(const CompileResult& result, const usize classIdx, const usize fieldIdx)noexcept{
+[[nodiscard]] NWB_INLINE usize UnitClassOrderedFieldOffset(const CompileResult& result, const usize classIdx, const usize fieldIdx)noexcept{
     return result.unit.classes[classIdx]->orderedFields[fieldIdx]->resolvedOffset;
 }
 
-[[nodiscard]] inline usize UnitTemplateInstCount(const CompileResult& result)noexcept{
+[[nodiscard]] NWB_INLINE usize UnitTemplateInstCount(const CompileResult& result)noexcept{
     return result.unit.templateInstantiations.size();
 }
 
-[[nodiscard]] inline usize UnitTemplateInstOrderedFieldCount(const CompileResult& result, const usize instIdx)noexcept{
+[[nodiscard]] NWB_INLINE usize UnitTemplateInstOrderedFieldCount(const CompileResult& result, const usize instIdx)noexcept{
     return result.unit.templateInstantiations[instIdx]->orderedFields.size();
 }
 
-[[nodiscard]] inline AStringView UnitTemplateInstOrderedFieldName(const CompileResult& result, const usize instIdx, const usize fieldIdx)noexcept{
+[[nodiscard]] NWB_INLINE AStringView UnitTemplateInstOrderedFieldName(const CompileResult& result, const usize instIdx, const usize fieldIdx)noexcept{
     return AStringView(result.unit.templateInstantiations[instIdx]->orderedFields[fieldIdx]->name);
 }
 
-[[nodiscard]] inline usize UnitIncludedAdhdFileCount(const CompileResult& result)noexcept{
+[[nodiscard]] NWB_INLINE usize UnitIncludedAdhdFileCount(const CompileResult& result)noexcept{
     return result.unit.includedAdhdFiles.size();
 }
 
-[[nodiscard]] inline AStringView UnitIncludedAdhdFileView(const CompileResult& result, const usize idx)noexcept{
+[[nodiscard]] NWB_INLINE AStringView UnitIncludedAdhdFileView(const CompileResult& result, const usize idx)noexcept{
     return AStringView(result.unit.includedAdhdFiles[idx].data(), result.unit.includedAdhdFiles[idx].size());
 }
 
-[[nodiscard]] inline usize UnitResolvedIncludedFileCount(const CompileResult& result)noexcept{
+[[nodiscard]] NWB_INLINE usize UnitResolvedIncludedFileCount(const CompileResult& result)noexcept{
     return result.unit.resolvedIncludedFiles.size();
 }
 
-[[nodiscard]] inline AStringView UnitResolvedIncludedFileView(const CompileResult& result, const usize idx)noexcept{
+[[nodiscard]] NWB_INLINE AStringView UnitResolvedIncludedFileView(const CompileResult& result, const usize idx)noexcept{
     return AStringView(result.unit.resolvedIncludedFiles[idx].data(), result.unit.resolvedIncludedFiles[idx].size());
 }
 

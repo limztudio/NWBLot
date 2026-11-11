@@ -472,12 +472,7 @@ public:
 
 
 public:
-    [[nodiscard]] b8 declareEpochSearch(const u64 generation){
-        if(!begin(generation) || !m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 280.0f }))
-            return false;
-        m_searchResult = m_builder.searchComboBox("combo", m_epochSource, m_search, Options());
-        return m_searchResult.combo.valid;
-    }
+    [[nodiscard]] b8 declareEpochSearch(u64 generation);
 
 
 public:
@@ -549,30 +544,40 @@ using InputEvent = ::NWB::Impl::Ui::InputEvent;
 namespace InputEventType = ::NWB::Impl::Ui::InputEventType;
 namespace UiSearchComboKey = ::NWB::Core::Key;
 
-[[nodiscard]] inline b8 UiSearchComboReconcileCombo(::NWB::Impl::Ui::ComboState& state, const ::NWB::Impl::Ui::IListDataSource& source){
+[[nodiscard]] NWB_INLINE b8 UiSearchComboReconcileCombo(::NWB::Impl::Ui::ComboState& state, const ::NWB::Impl::Ui::IListDataSource& source){
     return ::NWB::Impl::Ui::ComboBehavior::Reconcile(state, source);
 }
 
-[[nodiscard]] inline b8 UiSearchComboFilterState(::NWB::Impl::Ui::SearchComboState& state, ::NWB::Impl::Ui::ISearchableListDataSource& source){
+[[nodiscard]] NWB_INLINE b8 UiSearchComboFilterState(::NWB::Impl::Ui::SearchComboState& state, ::NWB::Impl::Ui::ISearchableListDataSource& source){
     return ::NWB::Impl::Ui::SearchComboBehavior::Filter(state, source);
 }
 
-[[nodiscard]] inline b8 UiSearchComboReconcilePreview(::NWB::Impl::Ui::SearchComboState& state, const ::NWB::Impl::Ui::IListDataSource& source){
+[[nodiscard]] NWB_INLINE b8 UiSearchComboReconcilePreview(::NWB::Impl::Ui::SearchComboState& state, const ::NWB::Impl::Ui::IListDataSource& source){
     return ::NWB::Impl::Ui::ListBehavior::Reconcile(::NWB::Impl::Ui::ComboBehavior::Preview(state.combo()), source);
 }
 
-inline void UiSearchComboSelectPreview(::NWB::Impl::Ui::SearchComboState& state, const u64 keyValue)noexcept{
+NWB_INLINE void UiSearchComboSelectPreview(::NWB::Impl::Ui::SearchComboState& state, const u64 keyValue)noexcept{
     ::NWB::Impl::Ui::ComboBehavior::Preview(state.combo()).select(keyValue);
 }
 
-[[nodiscard]] inline b8 UiSearchComboScrollPreview(::NWB::Impl::Ui::SearchComboState& state, const f64 offset)noexcept{
+[[nodiscard]] NWB_INLINE b8 UiSearchComboScrollPreview(::NWB::Impl::Ui::SearchComboState& state, const f64 offset)noexcept{
     return ::NWB::Impl::Ui::ComboBehavior::Preview(state.combo()).scrollTo(offset);
 }
 
-[[nodiscard]] inline SearchComboOptions UiSearchComboFixtureOptions()noexcept{
+[[nodiscard]] NWB_INLINE SearchComboOptions UiSearchComboFixtureOptions()noexcept{
     return ::NWB::UiSearchComboTests::SearchFixture::Options();
 }
+
+b8 DeclareUiSearchSelectionEpoch(UiSearchSelectionEpochTests& self, u64 generation)noexcept;
 };
+
+NWB_BEGIN
+namespace __hidden_ui_search_selection_epoch_tests{
+NWB_INLINE b8 UiSearchSelectionEpochTests::declareEpochSearch(const u64 generation){
+    return ::__hidden_ui_glyph_sdf_tests::DeclareUiSearchSelectionEpoch(*this, generation);
+}
+};
+NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -583,6 +588,18 @@ inline void UiSearchComboSelectPreview(::NWB::Impl::Ui::SearchComboState& state,
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+b8 DeclareUiSearchSelectionEpoch(mut UiSearchSelectionEpochTests self, in u64 generation){
+    Rect bounds = Rect();
+    bounds.x = 10.0f;
+    bounds.y = 10.0f;
+    bounds.width = 320.0f;
+    bounds.height = 280.0f;
+    if(!self.begin(generation) || !self.m_builder.beginPanel("panel", bounds))
+        return false;
+    self.m_searchResult = self.m_builder.searchComboBox("combo", self.m_epochSource, self.m_search, UiSearchComboFixtureOptions());
+    return self.m_searchResult.combo.valid;
+}
 
 const AStringView s_UiSearchComboCallbackQuery = "callback";
 const AStringView s_UiSearchComboEmptyResultQuery = "None";
@@ -600,18 +617,10 @@ b8 AcceptUiSearchSelectionEpochInitial(mut UiSearchSelectionEpochTests self){
         return false;
     if(!self.declareEpochSearch(1u) || !self.finishPanel() || !self.m_context.commitFrame(1u))
         return false;
-    b8 foundEditor = false;
-    Rect editorRect = Rect();
-    native(in self, mut foundEditor, mut editorRect){
-        const auto* editor = self.target(self.query());
-        if(editor != nullptr){
-            foundEditor = true;
-            editorRect = editor->rectangle;
-        }
-    }
-    if(!foundEditor)
+    const auto editor = self.tryTarget(self.query());
+    if(!editor.has_value())
         return false;
-    self.m_displayedEditor = editorRect;
+    self.m_displayedEditor = editor.value().rectangle;
     self.m_displayedFocus = self.m_context.input().focus();
     self.m_queryRevision = self.m_search.query().revision();
     self.m_queryExternalRevision = self.m_search.query().externalRevision();
@@ -637,12 +646,9 @@ void ExpectUiSearchSelectionEpochPreservedState(mut UiSearchSelectionEpochTests 
         EXPECT_FALSE(self.m_context.input().focus().valid());
     else
         EXPECT_EQ(self.m_context.input().focus(), self.m_displayedFocus);
-    Rect actualEditor = Rect();
-    native(in self, mut actualEditor){
-        const auto* editor = self.target(self.query());
-        ASSERT_NE(editor, nullptr);
-        actualEditor = editor->rectangle;
-    }
+    const auto editor = self.tryTarget(self.query());
+    ASSERT_TRUE(editor.has_value());
+    const Rect actualEditor = editor.value().rectangle;
     ExpectUiRect(actualEditor, self.m_displayedEditor);
 }
 
@@ -979,10 +985,8 @@ void VerifyUiSearchComboBuilderTests_ClosedFieldUsesFullSelectionWithoutBorrowin
     EXPECT_EQ(self.m_searchSource.full.textCalls, 1u);
     EXPECT_EQ(self.m_host.loans, 0u);
     EXPECT_EQ(self.m_host.publications, 0u);
-    native(in self){
-        EXPECT_EQ(self.target(self.query()), nullptr);
-        EXPECT_EQ(self.target(self.list()), nullptr);
-    }
+    EXPECT_FALSE(self.hasTarget(self.query()));
+    EXPECT_FALSE(self.hasTarget(self.list()));
 }
 
 void VerifyUiSearchComboBuilderTests_TabMovesFromQueryToResultsThenExitsWithoutCommittingPreview(mut UiSearchComboBuilderTests self){
@@ -1098,11 +1102,9 @@ void VerifyUiSearchComboBuilderTests_ChangedQueryFiltersRowsAndDiscardsNavigatio
     self.m_search.combo().select(1u);
     ASSERT_TRUE(self.acceptSearch(1u));
     ASSERT_TRUE(self.openSearch(2u));
-    ControlToken previous = ControlToken();
-    native(in self, mut previous){
-        ASSERT_NE(self.target(self.list()), nullptr);
-        previous = self.target(self.list())->control;
-    }
+    const auto previousList = self.tryTarget(self.list());
+    ASSERT_TRUE(previousList.has_value());
+    const ControlToken previous = previousList.value().control;
     self.press(UiSearchComboKey::Down);
     self.m_host.text(s_UiSearchComboSecondHalfQuery);
     ASSERT_TRUE(self.acceptSearch(3u));
@@ -1110,12 +1112,11 @@ void VerifyUiSearchComboBuilderTests_ChangedQueryFiltersRowsAndDiscardsNavigatio
     EXPECT_EQ(self.m_search.query().text(), s_UiSearchComboSecondHalfQuery);
     EXPECT_EQ(self.m_search.combo().selectedKey(), 1u);
     EXPECT_EQ(self.m_search.combo().listState().cursorKey(), 0u);
-    native(in self, in previous){
-        ASSERT_NE(self.target(self.list()), nullptr);
-        EXPECT_NE(self.target(self.list())->control, previous);
-        EXPECT_EQ(self.target(self.row(1u)), nullptr);
-        EXPECT_NE(self.target(self.row(2u)), nullptr);
-    }
+    const auto updatedList = self.tryTarget(self.list());
+    ASSERT_TRUE(updatedList.has_value());
+    EXPECT_NE(updatedList.value().control, previous);
+    EXPECT_FALSE(self.hasTarget(self.row(1u)));
+    EXPECT_TRUE(self.hasTarget(self.row(2u)));
     EXPECT_FALSE(self.m_searchResult.combo.committed);
     EXPECT_EQ(self.m_context.input().focus(), self.query());
     self.press(UiSearchComboKey::Down);
@@ -1154,11 +1155,10 @@ void VerifyUiSearchComboBuilderTests_PreeditDisablesDelegationAndCannotCommitQue
     ASSERT_TRUE(self.acceptSearch(3u));
     EXPECT_TRUE(self.m_search.query().composition().active);
     EXPECT_TRUE(self.m_host.publishedComposing);
-    native(in self){
-        ASSERT_NE(self.target(self.query()), nullptr);
-        EXPECT_FALSE(self.target(self.query())->commandOwner.valid());
-        EXPECT_TRUE(self.target(self.query())->commandControl.empty());
-    }
+    const auto queryTarget = self.tryTarget(self.query());
+    ASSERT_TRUE(queryTarget.has_value());
+    EXPECT_FALSE(queryTarget.value().commandOwner.valid());
+    EXPECT_TRUE(queryTarget.value().commandControl.empty());
     EXPECT_FALSE(self.m_searchResult.combo.committed);
     EXPECT_EQ(self.m_search.combo().selectedKey(), 1u);
     EXPECT_EQ(self.m_search.combo().listState().cursorKey(), 1u);
@@ -1201,11 +1201,9 @@ void VerifyUiSearchComboBuilderTests_DeferredQueryTextOrSelectionChangesRejectTh
     ASSERT_TRUE(self.m_search.query().setText(s_UiSearchComboSecondHalfQuery));
     self.m_search.combo().open();
     ASSERT_TRUE(self.acceptSearch(1u));
-    Rect displayed = Rect();
-    native(in self, mut displayed){
-        ASSERT_NE(self.target(self.query()), nullptr);
-        displayed = self.target(self.query())->rectangle;
-    }
+    const auto displayedQuery = self.tryTarget(self.query());
+    ASSERT_TRUE(displayedQuery.has_value());
+    const Rect displayed = displayedQuery.value().rectangle;
     ASSERT_TRUE(self.declareSearch(2u));
     ASSERT_TRUE(self.m_search.query().setSelection(1u, 1u));
     EXPECT_FALSE(self.m_builder.endPanel());
@@ -1214,11 +1212,9 @@ void VerifyUiSearchComboBuilderTests_DeferredQueryTextOrSelectionChangesRejectTh
     EXPECT_EQ(self.m_search.query().anchor(), 1u);
     EXPECT_EQ(self.m_search.query().caret(), 1u);
     EXPECT_EQ(self.m_context.input().layoutGeneration(), 1u);
-    Rect current = Rect();
-    native(in self, mut current){
-        ASSERT_NE(self.target(self.query()), nullptr);
-        current = self.target(self.query())->rectangle;
-    }
+    const auto currentQuery = self.tryTarget(self.query());
+    ASSERT_TRUE(currentQuery.has_value());
+    const Rect current = currentQuery.value().rectangle;
     ExpectUiRect(current, displayed);
 }
 
@@ -1273,24 +1269,18 @@ void VerifyUiSearchComboBuilderTests_PublishingQueryMutationCannotReplaceTheAcce
     self.m_search.combo().select(1u);
     self.m_search.combo().open();
     ASSERT_TRUE(self.acceptSearch(1u));
-    Rect displayed = Rect();
-    native(in self, mut displayed){
-        ASSERT_NE(self.target(self.query()), nullptr);
-        displayed = self.target(self.query())->rectangle;
-    }
+    const auto displayedQuery = self.tryTarget(self.query());
+    ASSERT_TRUE(displayedQuery.has_value());
+    const Rect displayed = displayedQuery.value().rectangle;
     ASSERT_TRUE(self.declareSearch(2u));
-    native(mut self){
-        self.m_host.publishMutation = &self.m_search.query();
-    }
+    self.m_host.armPublishMutation(self.m_search.query());
     EXPECT_FALSE(self.m_builder.endPanel());
     EXPECT_TRUE(self.m_context.failed());
     EXPECT_FALSE(self.m_context.commitFrame(2u));
     EXPECT_EQ(self.m_search.query().text(), "published");
-    Rect current = Rect();
-    native(in self, mut current){
-        ASSERT_NE(self.target(self.query()), nullptr);
-        current = self.target(self.query())->rectangle;
-    }
+    const auto currentQuery = self.tryTarget(self.query());
+    ASSERT_TRUE(currentQuery.has_value());
+    const Rect current = currentQuery.value().rectangle;
     ExpectUiRect(current, displayed);
     EXPECT_EQ(self.m_context.input().layoutGeneration(), 1u);
 }
@@ -1298,9 +1288,7 @@ void VerifyUiSearchComboBuilderTests_PublishingQueryMutationCannotReplaceTheAcce
 void VerifyUiSearchComboBuilderTests_FilterCallbackQueryMutationRejectsBeforeBorrowingTheEditor(mut UiSearchComboBuilderTests self){
     self.m_search.combo().select(1u);
     self.m_search.combo().open();
-    native(mut self){
-        self.m_searchSource.filterMutation = &self.m_search.query();
-    }
+    self.m_searchSource.armFilterMutation(self.m_search.query());
     EXPECT_FALSE(self.declareSearch(1u));
     EXPECT_TRUE(self.m_context.failed());
     EXPECT_EQ(self.m_search.query().text(), s_UiSearchComboCallbackQuery);
@@ -1311,9 +1299,7 @@ void VerifyUiSearchComboBuilderTests_FilterCallbackQueryMutationRejectsBeforeBor
 void VerifyUiSearchComboBuilderTests_InitialFilteredReconcileCannotAdoptAQueryChangedBySourceCallbacks(mut UiSearchComboBuilderTests self){
     self.m_search.combo().select(1u);
     self.m_search.combo().open();
-    native(mut self){
-        self.m_searchSource.view.enabledMutation = &self.m_search.query();
-    }
+    self.m_searchSource.view.armEnabledMutation(self.m_search.query());
     EXPECT_FALSE(self.declareSearch(1u));
     EXPECT_TRUE(self.m_context.failed());
     EXPECT_EQ(self.m_search.query().text(), s_UiSearchComboEmptyResultQuery);
@@ -1325,9 +1311,7 @@ void VerifyUiSearchComboBuilderTests_InitialFilteredReconcileCannotAdoptAQueryCh
 void VerifyUiSearchComboBuilderTests_FullSourceReconcileQueryMutationRejectsBeforeFilteringOrEditorLoans(mut UiSearchComboBuilderTests self){
     self.m_search.combo().select(1u);
     self.m_search.combo().open();
-    native(mut self){
-        self.m_searchSource.fullMutation = &self.m_search.query();
-    }
+    self.m_searchSource.armFullMutation(self.m_search.query());
     EXPECT_FALSE(self.declareSearch(1u));
     EXPECT_TRUE(self.m_context.failed());
     EXPECT_EQ(self.m_search.query().text(), s_UiSearchComboEmptyResultQuery);
@@ -1343,9 +1327,7 @@ void VerifyUiSearchComboBuilderTests_RowTextCallbackQueryMutationRejectsDeferred
     self.m_search.combo().open();
     ASSERT_TRUE(self.acceptSearch(1u));
     ASSERT_TRUE(self.declareSearch(2u));
-    native(mut self){
-        self.m_searchSource.view.textMutation = &self.m_search.query();
-    }
+    self.m_searchSource.view.armTextMutation(self.m_search.query());
     EXPECT_FALSE(self.m_builder.endPanel());
     EXPECT_TRUE(self.m_context.failed());
     EXPECT_FALSE(self.m_context.commitFrame(2u));
@@ -1377,17 +1359,13 @@ void VerifyUiSearchComboBuilderTests_OmissionRetiresTheQueryAndCannotReopenItsOl
     ASSERT_TRUE(self.m_builder.label("label", "Search hidden"));
     ASSERT_TRUE(self.finishPanel());
     ASSERT_TRUE(self.m_context.commitFrame(3u));
-    native(in self){
-        EXPECT_EQ(self.target(self.query()), nullptr);
-        EXPECT_EQ(self.target(self.list()), nullptr);
-    }
+    EXPECT_FALSE(self.hasTarget(self.query()));
+    EXPECT_FALSE(self.hasTarget(self.list()));
     EXPECT_TRUE(self.m_context.input().controlActions().empty());
     ASSERT_TRUE(self.acceptSearch(4u));
     EXPECT_FALSE(self.m_search.combo().isOpen());
     EXPECT_EQ(self.m_search.combo().selectedKey(), 1u);
-    native(in self){
-        EXPECT_EQ(self.target(self.query()), nullptr);
-    }
+    EXPECT_FALSE(self.hasTarget(self.query()));
 }
 
 void VerifyUiSearchComboBuilderTests_PlainToSearchSwitchRetiresTheOldPopupAndReopensWithEditorFocus(mut UiSearchComboBuilderTests self){
@@ -1398,15 +1376,13 @@ void VerifyUiSearchComboBuilderTests_PlainToSearchSwitchRetiresTheOldPopupAndReo
     ASSERT_TRUE(self.m_builder.comboBox(s_UiSearchComboKey, self.m_searchSource, self.m_search.combo(), UiSearchComboFixtureOptions().combo).valid);
     ASSERT_TRUE(self.finishPanel());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
-    PopupToken oldPopup = PopupToken();
-    u64 oldDeclaration = 0u;
-    native(in self, mut oldPopup, mut oldDeclaration){
-        ASSERT_NE(self.target(self.list()), nullptr);
-        ASSERT_NE(self.target(self.popup()), nullptr);
-        ASSERT_NE(self.target(self.id("combo", "panel")), nullptr);
-        oldPopup = self.target(self.popup())->popup;
-        oldDeclaration = self.target(self.id("combo", "panel"))->declarationGeneration;
-    }
+    ASSERT_TRUE(self.hasTarget(self.list()));
+    const auto oldPopupTarget = self.tryTarget(self.popup());
+    const auto oldComboTarget = self.tryTarget(self.id("combo", "panel"));
+    ASSERT_TRUE(oldPopupTarget.has_value());
+    ASSERT_TRUE(oldComboTarget.has_value());
+    const PopupToken oldPopup = oldPopupTarget.value().popup;
+    const u64 oldDeclaration = oldComboTarget.value().declarationGeneration;
     EXPECT_EQ(self.m_context.input().focus(), self.list());
     self.press(UiSearchComboKey::Down);
     ASSERT_TRUE(self.acceptSearch(2u));
@@ -1414,18 +1390,16 @@ void VerifyUiSearchComboBuilderTests_PlainToSearchSwitchRetiresTheOldPopupAndReo
     EXPECT_FALSE(self.m_searchResult.combo.committed);
     EXPECT_FALSE(self.m_search.combo().isOpen());
     EXPECT_EQ(self.m_search.combo().selectedKey(), 1u);
-    native(in self, in oldDeclaration){
-        ASSERT_NE(self.target(self.id("combo", "panel")), nullptr);
-        EXPECT_NE(self.target(self.id("combo", "panel"))->declarationGeneration, oldDeclaration);
-        EXPECT_EQ(self.target(self.popup()), nullptr);
-    }
+    const auto switchedCombo = self.tryTarget(self.id("combo", "panel"));
+    ASSERT_TRUE(switchedCombo.has_value());
+    EXPECT_NE(switchedCombo.value().declarationGeneration, oldDeclaration);
+    EXPECT_FALSE(self.hasTarget(self.popup()));
     EXPECT_TRUE(self.m_context.input().controlActions().empty());
     ASSERT_TRUE(self.openSearch(3u));
-    native(in self, in oldPopup){
-        ASSERT_NE(self.target(self.query()), nullptr);
-        ASSERT_NE(self.target(self.popup()), nullptr);
-        EXPECT_NE(self.target(self.popup())->popup, oldPopup);
-    }
+    ASSERT_TRUE(self.hasTarget(self.query()));
+    const auto reopenedPopup = self.tryTarget(self.popup());
+    ASSERT_TRUE(reopenedPopup.has_value());
+    EXPECT_NE(reopenedPopup.value().popup, oldPopup);
     EXPECT_EQ(self.m_context.input().focus(), self.query());
     EXPECT_EQ(self.m_search.combo().listState().cursorKey(), 1u);
 }
@@ -1435,11 +1409,9 @@ void VerifyUiSearchComboBuilderTests_SearchToPlainSwitchRetiresTheEditorAndCanno
     self.m_search.combo().open();
     ASSERT_TRUE(self.acceptSearch(1u));
     EXPECT_EQ(self.m_context.input().focus(), self.query());
-    PopupToken oldPopup = PopupToken();
-    native(in self, mut oldPopup){
-        ASSERT_NE(self.target(self.popup()), nullptr);
-        oldPopup = self.target(self.popup())->popup;
-    }
+    const auto oldPopupTarget = self.tryTarget(self.popup());
+    ASSERT_TRUE(oldPopupTarget.has_value());
+    const PopupToken oldPopup = oldPopupTarget.value().popup;
     self.press(UiSearchComboKey::Down);
     self.press(UiSearchComboKey::Enter);
     ASSERT_FALSE(self.m_context.input().controlActions().empty());
@@ -1453,13 +1425,11 @@ void VerifyUiSearchComboBuilderTests_SearchToPlainSwitchRetiresTheEditorAndCanno
     ASSERT_TRUE(self.m_context.commitFrame(2u));
     EXPECT_FALSE(self.m_search.combo().isOpen());
     EXPECT_EQ(self.m_search.combo().selectedKey(), 1u);
-    Rect comboRect = Rect();
-    native(in self, mut comboRect){
-        EXPECT_EQ(self.target(self.query()), nullptr);
-        EXPECT_EQ(self.target(self.popup()), nullptr);
-        ASSERT_NE(self.target(self.id("combo", "panel")), nullptr);
-        comboRect = self.target(self.id("combo", "panel"))->rectangle;
-    }
+    EXPECT_FALSE(self.hasTarget(self.query()));
+    EXPECT_FALSE(self.hasTarget(self.popup()));
+    const auto comboTarget = self.tryTarget(self.id("combo", "panel"));
+    ASSERT_TRUE(comboTarget.has_value());
+    const Rect comboRect = comboTarget.value().rectangle;
     EXPECT_TRUE(self.m_context.input().controlActions().empty());
     self.click(CenterUiRect(comboRect));
     ASSERT_TRUE(self.begin(3u));
@@ -1470,11 +1440,10 @@ void VerifyUiSearchComboBuilderTests_SearchToPlainSwitchRetiresTheEditorAndCanno
     EXPECT_FALSE(reopened.committed);
     ASSERT_TRUE(self.finishPanel());
     ASSERT_TRUE(self.m_context.commitFrame(3u));
-    native(in self, in oldPopup){
-        EXPECT_EQ(self.target(self.query()), nullptr);
-        ASSERT_NE(self.target(self.popup()), nullptr);
-        EXPECT_NE(self.target(self.popup())->popup, oldPopup);
-    }
+    EXPECT_FALSE(self.hasTarget(self.query()));
+    const auto reopenedPopup = self.tryTarget(self.popup());
+    ASSERT_TRUE(reopenedPopup.has_value());
+    EXPECT_NE(reopenedPopup.value().popup, oldPopup);
     EXPECT_EQ(self.m_context.input().focus(), self.list());
     EXPECT_EQ(self.m_search.combo().selectedKey(), 1u);
     EXPECT_EQ(self.m_search.combo().listState().cursorKey(), 1u);
@@ -1494,9 +1463,7 @@ void VerifyUiSearchComboBuilderTests_CancelledPopupRetiresEditorFocusWhileKeepin
     EXPECT_FALSE(self.m_search.editorState().focused);
     EXPECT_EQ(self.m_search.combo().selectedKey(), 1u);
     EXPECT_EQ(self.m_search.query().text(), "First");
-    native(in self){
-        EXPECT_EQ(self.target(self.query()), nullptr);
-    }
+    EXPECT_FALSE(self.hasTarget(self.query()));
 }
 
 
@@ -1539,9 +1506,7 @@ void VerifyUiSeparatorTests_MissingRegionRejectsCandidateWithoutReplacingAccepte
     EXPECT_FALSE(self.m_context.finishFrame());
     EXPECT_FALSE(self.m_context.commitFrame(2u));
     EXPECT_EQ(self.m_context.input().layoutGeneration(), 1u);
-    native(in self){
-        EXPECT_NE(self.target(self.id("apply", "panel")), nullptr);
-    }
+    EXPECT_TRUE(self.hasTarget(self.id("apply", "panel")));
 }
 
 void VerifyUiSeparatorTests_InvalidThicknessPoisonsBuildAndPreservesPreviousLayout(mut UiSeparatorTests self){

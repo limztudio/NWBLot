@@ -2,69 +2,59 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/assets_csg/cook.adhd>
+#include <impl/assets_csg/shape_module_source.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_COOK)
+b8 ValidateUniqueCsgShapeName(in b8 inserted, in Name shapeName){
+    if(inserted)
+        return true;
 
+    error("CSG shape include generation: duplicate shape '{}'", shapeName.resolvedText());
+    return false;
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+b8 ValidateSharedCsgGeneratedIncludeOwner(
+    in b8 inserted,
+    in Name existingModule,
+    in Name currentModule,
+    in StringView moduleInclude
+){
+    if(!IsSharedCsgGeneratedIncludeConflict(inserted, existingModule, currentModule))
+        return true;
 
+    error(
+        "CSG shape include generation: generated include '{}' is shared by modules '{}' and '{}'",
+        moduleInclude,
+        existingModule.resolvedText(),
+        currentModule.resolvedText()
+    );
+    return false;
+}
 
-#include <impl/assets_csg/cook.adhd.h>
+Path ResolveCsgModuleOutputPath(in Path includeRoot, in StringView moduleInclude){
+    return includeRoot / moduleInclude;
+}
 
+Path ResolveDefaultCsgModuleOutputPath(in Path includeRoot){
+    return includeRoot / s_DefaultGeneratedIncludeDirectory / s_CsgBuiltInModuleIncludeFileName;
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace AssetsCsgCook{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class CsgShapeModuleWriter final{
-public:
-    [[nodiscard]] Expected<Path> emit(const Path& cacheDirectory, AStringView configurationSafeName, Span<const CsgShapeCookEntry> csgShapeEntries, ScratchArena& scratchArena)const;
-
-
-private:
-    [[nodiscard]] static b8 WriteModuleInclude(Span<const CsgShapeCookEntry> csgShapeEntries, Name shaderModule, AStringView moduleInclude, const Path& includeRoot, ScratchArena& scratchArena, CookString& source);
-    [[nodiscard]] static b8 WriteEmptyDefaultModuleInclude(const Path& includeRoot, ScratchArena& scratchArena);
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+b8 WriteCsgGeneratedIncludeFile(in Path outputPath, in StringView source){
+    const Path parentPath = outputPath.parentPath();
+    const auto ensureResult = EnsureDirectories(parentPath);
+    if(!ensureResult.has_value()){
+        error("CSG shape include generation: failed to create generated include parent '{}' (error {})", PathToString(parentPath), ensureResult.error().value());
+        return false;
+    }
+    if(!WriteTextFile(outputPath, source)){
+        error("CSG shape include generation: failed to write generated include '{}'", PathToString(outputPath));
+        return false;
+    }
+    return true;
 }
 
 

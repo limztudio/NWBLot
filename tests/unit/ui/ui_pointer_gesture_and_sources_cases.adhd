@@ -41,19 +41,6 @@ using namespace NWB::Impl::Ui;
 
 constexpr AStringView s_TitleKey = "title";
 
-[[nodiscard]] inline HitTarget GestureTarget(const u64 value = 1u)noexcept{
-    HitTarget target;
-    target.id = { value };
-    target.rectangle = { 10.0f, 20.0f, 80.0f, 30.0f };
-    target.clip = { 0.0f, 0.0f, 200.0f, 200.0f };
-    target.pointerGesture = true;
-    return target;
-}
-
-[[nodiscard]] inline InputEvent PointerEvent(const InputEventType::Enum type, const Point& position = { 15.0f, 25.0f })noexcept{
-    return { .position = position, .type = type };
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -71,16 +58,8 @@ public:
         return m_router.commitTargets(Span(&target, 1u), generation);
     }
 
-    InputRoutingResult sendToContext(const InputEvent& event){
-        EXPECT_TRUE(m_context.input().queue(UiTestSupport::NativeInput(event)));
-        return m_context.input().process();
-    }
-
-    void complete(const Point& position = { 45.0f, 55.0f }){
-        EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
-        EXPECT_TRUE(send(PointerEvent(InputEventType::PointerMove, position)).pointerConsumed);
-        EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryUp, position)).pointerConsumed);
-    }
+    InputRoutingResult sendToContext(const InputEvent& event);
+    void complete(const Point& position = { 45.0f, 55.0f });
 
     [[nodiscard]] Expected<WidgetState> declarePanel(){
         const auto state = m_context.declare(s_TitleKey, WidgetKind::Panel);
@@ -93,21 +72,7 @@ public:
         m_context.retainRoots({});
     }
 
-    [[nodiscard]] Expected<WidgetState> prepare(const u64 generation, const WidgetRoot& root = { 91u, 1u }){
-        EXPECT_TRUE(m_context.beginFrame(generation));
-        EXPECT_TRUE(m_context.beginRoot(root));
-        const auto state = m_context.declare(s_TitleKey, WidgetKind::Panel);
-        EXPECT_TRUE(state);
-        if(!state)
-            return MakeUnexpected(state.error());
-        const WidgetState snapshot = **state;
-        EXPECT_TRUE(m_context.addTarget(snapshot, GestureTarget()));
-        EXPECT_TRUE(m_context.endRoot());
-        EXPECT_TRUE(m_context.finishFrame());
-        if(m_context.failed())
-            return MakeUnexpected(Failure{});
-        return snapshot;
-    }
+    [[nodiscard]] Expected<WidgetState> prepare(u64 generation, const WidgetRoot& root = { 91u, 1u });
 
 
 public:
@@ -220,30 +185,9 @@ namespace __hidden_ui_pointer_sources_tests{
 using namespace NWB;
 using namespace NWB::Impl::Ui;
 
-[[nodiscard]] inline HitTarget MakeSourceTarget(const u64 id, const f32 x)noexcept{
-    HitTarget target;
-    target.id = { id };
-    target.declarationGeneration = 7u;
-    target.rectangle = { x, 10.0f, 80.0f, 60.0f };
-    target.clip = { 0.0f, 0.0f, 300.0f, 200.0f };
-    target.focusable = true;
-    target.activatable = true;
-    target.pointerGesture = true;
-    target.contextMenu = true;
-    target.value = id * 17u;
-    return target;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class UiPointerSourceTests : public UiTestSupport::RouterTestFixture{
 public:
-    UiPointerSourceTests()
-        : RouterTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiPointerSources))
-        , m_targets{ MakeSourceTarget(1u, 10.0f), MakeSourceTarget(2u, 110.0f) }
-    {}
+    UiPointerSourceTests();
 
 
 public:
@@ -251,18 +195,7 @@ public:
         ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     }
 
-    void cancelCommand(){
-        InputEvent command;
-        command.type = InputEventType::CommandDown;
-        command.source = { 21u, 1u };
-        command.command = InputCommand::Cancel;
-        ASSERT_TRUE(m_router.queue(command));
-        EXPECT_TRUE(m_router.process().commandConsumed);
-        command.type = InputEventType::CommandUp;
-        command.command = InputCommand::None;
-        ASSERT_TRUE(m_router.queue(command));
-        EXPECT_TRUE(m_router.process().commandConsumed);
-    }
+    void cancelCommand();
 
 
 public:
@@ -313,6 +246,62 @@ namespace WidgetKind = ::NWB::Impl::Ui::WidgetKind;
 using ::NWB::Impl::Ui::s_InputMaxPointerGestures;
 using ::NWB::Impl::Ui::s_InputMaxSources;
 using ::UiTestSupport::NativeInput;
+
+InputRoutingResult SendUiPointerGestureToContext(UiPointerGestureTests& self, const InputEvent& event)noexcept;
+void CompleteUiPointerGesture(UiPointerGestureTests& self, const Point& position)noexcept;
+Expected<WidgetState> PrepareUiPointerGesture(UiPointerGestureTests& self, u64 generation, const WidgetRoot& root)noexcept;
+void InitUiPointerGestureValueTargets(Array<HitTarget, 2u>& targets)noexcept;
+b8 PublishUiPointerGestureValueTargets(UiPointerGestureValueTests& self, usize count)noexcept;
+Expected<PointerGesture> TakeUiPointerGestureValue(UiPointerGestureValueTests& self)noexcept;
+Expected<ControlAction> TakeUiPointerGestureValueControl(UiPointerGestureValueTests& self)noexcept;
+void FocusUiPointerGestureValueHost(UiPointerGestureValueTests& self)noexcept;
+HitTarget MakeUiPointerSourceTarget(u64 idValue, f32 x)noexcept;
+void CancelUiPointerSourceCommand(UiPointerSourceTests& self)noexcept;
+};
+
+namespace __hidden_ui_pointer_gesture_tests{
+NWB_INLINE InputRoutingResult UiPointerGestureTests::sendToContext(const InputEvent& event){
+    return ::__hidden_ui_glyph_sdf_tests::SendUiPointerGestureToContext(*this, event);
+}
+NWB_INLINE void UiPointerGestureTests::complete(const Point& position){
+    ::__hidden_ui_glyph_sdf_tests::CompleteUiPointerGesture(*this, position);
+}
+NWB_INLINE Expected<WidgetState> UiPointerGestureTests::prepare(const u64 generation, const WidgetRoot& root){
+    return ::__hidden_ui_glyph_sdf_tests::PrepareUiPointerGesture(*this, generation, root);
+}
+};
+
+namespace __hidden_ui_pointer_gesture_value_tests{
+NWB_INLINE UiPointerGestureValueTests::UiPointerGestureValueTests()
+    : RouterTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiPointerGestureValue))
+{
+    ::__hidden_ui_glyph_sdf_tests::InitUiPointerGestureValueTargets(m_targets);
+}
+NWB_INLINE b8 UiPointerGestureValueTests::publish(const usize count){
+    return ::__hidden_ui_glyph_sdf_tests::PublishUiPointerGestureValueTargets(*this, count);
+}
+NWB_INLINE Expected<PointerGesture> UiPointerGestureValueTests::take()noexcept{
+    return ::__hidden_ui_glyph_sdf_tests::TakeUiPointerGestureValue(*this);
+}
+NWB_INLINE Expected<ControlAction> UiPointerGestureValueTests::takeControl()noexcept{
+    return ::__hidden_ui_glyph_sdf_tests::TakeUiPointerGestureValueControl(*this);
+}
+NWB_INLINE void UiPointerGestureValueTests::focusHost(){
+    ::__hidden_ui_glyph_sdf_tests::FocusUiPointerGestureValueHost(*this);
+}
+};
+
+namespace __hidden_ui_pointer_sources_tests{
+NWB_INLINE UiPointerSourceTests::UiPointerSourceTests()
+    : RouterTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiPointerSources))
+    , m_targets{
+        ::__hidden_ui_glyph_sdf_tests::MakeUiPointerSourceTarget(1u, 10.0f),
+        ::__hidden_ui_glyph_sdf_tests::MakeUiPointerSourceTarget(2u, 110.0f)
+    }
+{}
+NWB_INLINE void UiPointerSourceTests::cancelCommand(){
+    ::__hidden_ui_glyph_sdf_tests::CancelUiPointerSourceCommand(*this);
+}
 };
 
 
@@ -1821,81 +1810,112 @@ void VerifyUiPointerSourceTests_CancelConsumesARetainedUiContactWithoutClaimingA
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[source]
-native{
+InputRoutingResult SendUiPointerGestureToContext(mut UiPointerGestureTests self, in InputEvent event){
+    EXPECT_TRUE(self.m_context.input().queue(NativeInput(event)).has_value());
+    return self.m_context.input().process();
+}
 
+void CompleteUiPointerGesture(mut UiPointerGestureTests self, in Point position){
+    EXPECT_TRUE(self.send(MakeUiPointerGestureEvent(InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerGestureEventAt(InputEventType::PointerMove, position.x, position.y)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerGestureEventAt(InputEventType::PrimaryUp, position.x, position.y)).pointerConsumed);
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+Expected<WidgetState> PrepareUiPointerGesture(mut UiPointerGestureTests self, in u64 generation, in WidgetRoot root){
+    EXPECT_TRUE(self.m_context.beginFrame(generation));
+    EXPECT_TRUE(self.m_context.beginRoot(root));
+    const auto state = self.declarePanel();
+    EXPECT_TRUE(state.has_value());
+    if(!state.has_value())
+        return MakeUnexpected(state.error());
+    const WidgetState snapshot = state.value();
+    EXPECT_TRUE(self.m_context.addTarget(snapshot, MakeUiPointerGestureTarget(1u)));
+    EXPECT_TRUE(self.m_context.endRoot());
+    EXPECT_TRUE(self.m_context.finishFrame());
+    if(self.m_context.failed())
+        return MakeUnexpected(Failure());
+    return snapshot;
+}
 
-
-namespace __hidden_ui_pointer_gesture_value_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-UiPointerGestureValueTests::UiPointerGestureValueTests()
-    : RouterTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiPointerGestureValue))
-{
-    HitTarget& host = m_targets[0u];
-    host.id = { 1u };
+void InitUiPointerGestureValueTargets(mut Array<HitTarget, 2u> targets){
+    HitTarget host = HitTarget();
+    host.id.value = 1u;
     host.declarationGeneration = 7u;
-    host.rectangle = { 0.0f, 0.0f, 200.0f, 100.0f };
-    host.clip = { 0.0f, 0.0f, 300.0f, 200.0f };
+    host.rectangle = MakeUiPointerGestureRect(0.0f, 0.0f, 200.0f, 100.0f);
+    host.clip = MakeUiPointerGestureRect(0.0f, 0.0f, 300.0f, 200.0f);
     host.focusable = true;
-    host.control = { 11u, 21u, 31u };
+    host.control.instanceGeneration = 11u;
+    host.control.contentGeneration = 21u;
+    host.control.contentRevision = 31u;
     host.navigable = true;
     host.horizontalNavigation = true;
+    targets[0u] = host;
 
-    HitTarget& thumb = m_targets[1u];
-    thumb.id = { 2u };
+    HitTarget thumb = HitTarget();
+    thumb.id.value = 2u;
     thumb.declarationGeneration = host.declarationGeneration;
-    thumb.rectangle = { 20.0f, 20.0f, 40.0f, 20.0f };
+    thumb.rectangle = MakeUiPointerGestureRect(20.0f, 20.0f, 40.0f, 20.0f);
     thumb.clip = host.clip;
     thumb.paintOrder = 1u;
     thumb.pointerGesture = true;
-    thumb.gestureReference = { 10.0f, 20.0f, 180.0f, 20.0f };
+    thumb.gestureReference = MakeUiPointerGestureRect(10.0f, 20.0f, 180.0f, 20.0f);
     thumb.control = host.control;
     thumb.owner = host.id;
     thumb.ownerDeclarationGeneration = host.declarationGeneration;
-    thumb.value = BitCast<u64>(-0.0);
+    thumb.value = bit_cast<u64>(-0.0);
     thumb.gestureMaximum = 9.0;
+    targets[1u] = thumb;
 }
 
-b8 UiPointerGestureValueTests::publish(const usize count){
-    const u64 generation = m_generation + 1u;
-    if(!m_router.commitTargets(Span(m_targets.data(), count), generation))
+b8 PublishUiPointerGestureValueTargets(mut UiPointerGestureValueTests self, in usize count){
+    const u64 generation = self.m_generation + 1u;
+    if(!self.m_router.commitTargets(Span<HitTarget>(self.m_targets.data(), count), generation))
         return false;
-    m_generation = generation;
+    self.m_generation = generation;
     return true;
 }
 
-Expected<PointerGesture> UiPointerGestureValueTests::take()noexcept{
-    const HitTarget& thumb = m_targets[1u];
-    return m_router.consumePointerGesture(thumb.id, thumb.declarationGeneration);
+Expected<PointerGesture> TakeUiPointerGestureValue(mut UiPointerGestureValueTests self){
+    const HitTarget thumb = self.m_targets[1u];
+    return self.m_router.consumePointerGesture(thumb.id, thumb.declarationGeneration);
 }
 
-Expected<ControlAction> UiPointerGestureValueTests::takeControl()noexcept{
-    const HitTarget& host = m_targets[0u];
-    return m_router.consumeControlAction(host.id, host.declarationGeneration, host.control);
+Expected<ControlAction> TakeUiPointerGestureValueControl(mut UiPointerGestureValueTests self){
+    const HitTarget host = self.m_targets[0u];
+    return self.m_router.consumeControlAction(host.id, host.declarationGeneration, host.control);
 }
 
-void UiPointerGestureValueTests::focusHost(){
-    EXPECT_TRUE(send({ .position = { 5.0f, 5.0f }, .type = InputEventType::PrimaryDown }).pointerConsumed);
-    EXPECT_TRUE(send({ .position = { 5.0f, 5.0f }, .type = InputEventType::PrimaryUp }).pointerConsumed);
-    EXPECT_EQ(m_router.focus(), m_targets[0u].id);
+void FocusUiPointerGestureValueHost(mut UiPointerGestureValueTests self){
+    EXPECT_TRUE(self.send(MakeUiPointerGestureEventAt(InputEventType::PrimaryDown, 5.0f, 5.0f)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerGestureEventAt(InputEventType::PrimaryUp, 5.0f, 5.0f)).pointerConsumed);
+    EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
 }
 
+HitTarget MakeUiPointerSourceTarget(in u64 idValue, in f32 x){
+    HitTarget target = HitTarget();
+    target.id.value = idValue;
+    target.declarationGeneration = 7u;
+    target.rectangle = MakeUiPointerGestureRect(x, 10.0f, 80.0f, 60.0f);
+    target.clip = MakeUiPointerGestureRect(0.0f, 0.0f, 300.0f, 200.0f);
+    target.focusable = true;
+    target.activatable = true;
+    target.pointerGesture = true;
+    target.contextMenu = true;
+    target.value = idValue * 17u;
+    return target;
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+void CancelUiPointerSourceCommand(mut UiPointerSourceTests self){
+    InputEvent command = InputEvent();
+    command.type = InputEventType::CommandDown;
+    command.source = MakeUiPointerGestureSource(21u, 1u);
+    command.command = InputCommand::Cancel;
+    ASSERT_TRUE(self.m_router.queue(command).has_value());
+    EXPECT_TRUE(self.m_router.process().commandConsumed);
+    command.type = InputEventType::CommandUp;
+    command.command = InputCommand::None;
+    ASSERT_TRUE(self.m_router.queue(command).has_value());
+    EXPECT_TRUE(self.m_router.process().commandConsumed);
 }
 
 

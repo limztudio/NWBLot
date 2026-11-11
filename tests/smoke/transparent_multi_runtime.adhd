@@ -15,39 +15,20 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <loader/project_entry.adhd.h>
-#if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
-#include <impl/assets_csg/shape_id.adhd.h>
-#include <impl/ecs_csg/module.adhd.h>
-#endif
-#include <impl/ecs_scene/module.adhd.h>
-#include <impl/ecs_mesh/system.adhd.h>
-#include <impl/ecs_render/module.adhd.h>
-#include <impl/ecs_render/material/material_instance.adhd.h>
-#include <core/alloc/scratch.h>
-#include <core/common/log.h>
-#include <core/ecs/module.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/input/module.h>
-#include <global/simd/constant.h>
-#include <global/simd/frame.h>
-#include <global/simdmath.h>
-#include <global/simplemath.h>
-
 namespace NWB::Tests::Smoke{
-[[nodiscard]] inline TStringView TransparentMultiProjectName()noexcept{
-    return NWB_TEXT("TransparentMultiSmokeProjectImpl");
+[[nodiscard]] NWB_INLINE AStringView TransparentMultiProjectName()noexcept{
+    return "TransparentMultiSmokeProject";
 }
 
-[[nodiscard]] inline TStringView CausticSphereProjectName()noexcept{
-    return NWB_TEXT("CausticSphereSmokeProject");
+[[nodiscard]] NWB_INLINE AStringView CausticSphereProjectName()noexcept{
+    return "CausticSphereSmokeProject";
 }
 
-[[nodiscard]] inline TStringView TransparentMultiFpsLabel()noexcept{
+[[nodiscard]] NWB_INLINE AStringView TransparentMultiFpsLabel()noexcept{
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
-    return NWB_TEXT("FrameLaggedAsyncLightingSmokeProject");
+    return "FrameLaggedAsyncLightingSmokeProject";
 #elif defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
-    return NWB_TEXT("TransparentCsgSmokeProject");
+    return "TransparentCsgSmokeProject";
 #elif defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
     return CausticSphereProjectName();
 #else
@@ -55,20 +36,7 @@ namespace NWB::Tests::Smoke{
 #endif
 }
 
-#if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
-inline constexpr f32 s_TransparentSceneDefaultRotationSpeed = 0.0f;
-#else
-inline constexpr f32 s_TransparentSceneDefaultRotationSpeed = 0.55f;
-#endif
-inline constexpr f32 s_TransparentMultiQuietNaN = Limit<f32>::s_QuietNaN;
-inline constexpr i32 s_TransparentMultiKeyF1 = Core::Key::F1;
 inline constexpr u32 s_CausticSphereTemporalPhaseCount = Impl::s_CausticTemporalPhaseCount;
-
-[[nodiscard]] inline NotNullUniquePtr<Core::ECS::World> CreateTransparentMultiWorldOrDie(ProjectRuntimeContext& context){
-    auto world = CreateSmokeWorldOrDie(TransparentMultiProjectName(), context);
-    ConfigureTransparentMultiRenderer(*world, context);
-    return world;
-}
 };
 
 
@@ -84,10 +52,15 @@ inline constexpr u32 s_CausticSphereTemporalPhaseCount = Impl::s_CausticTemporal
 const StringView s_CausticSparsePreset = "sparse";
 const StringView s_CausticPopulatedPreset = "populated";
 const u32 s_CausticSphereDefaultCaptureFrameCount = 360u;
+const u32 s_TransparentMultiQuietNaNBits = 0x7fc00000u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 class FrameLaggedAsyncLightingToggleInputHandler : IInputEventHandler{
     public KeyboardInputResult keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods)override{
-        if(key != s_TransparentMultiKeyF1)
+        if(key != Key::F1)
             return false;
         if(action == InputAction::Press)
             this.m_toggleRequested = true;
@@ -103,48 +76,6 @@ class FrameLaggedAsyncLightingToggleInputHandler : IInputEventHandler{
     private b8 m_toggleRequested = false;
 }
 
-f32 ParseTransparentMultiRotationSpeed(){
-    const Expected<f32> parsed = ReadSmokeEnvironmentF32("NWB_TRANSPARENT_MULTI_SPIN_SPEED");
-    if(!parsed.has_value())
-        return s_TransparentSceneDefaultRotationSpeed;
-    const f32 speed = parsed.value();
-    if(IsFinite(speed) && speed >= 0.0f)
-        return speed;
-    return s_TransparentSceneDefaultRotationSpeed;
-}
-
-f32 EffectiveTransparentMultiRotationSpeed(){
-    f32 cachedSpeed = 0.0f;
-    native(mut cachedSpeed){
-        static const f32 s_Speed = ParseTransparentMultiRotationSpeed();
-        cachedSpeed = s_Speed;
-    }
-    return cachedSpeed;
-}
-
-f32 ParseTransparentMultiFrozenAngle(){
-    const Expected<f32> parsed = ReadSmokeEnvironmentF32("NWB_TRANSPARENT_MULTI_SPIN_ANGLE");
-    if(!parsed.has_value())
-        return s_TransparentMultiQuietNaN;
-    const f32 angle = parsed.value();
-    if(IsFinite(angle))
-        return angle;
-    return s_TransparentMultiQuietNaN;
-}
-
-f32 EffectiveTransparentMultiFrozenAngle(){
-    f32 cachedAngle = s_TransparentMultiQuietNaN;
-    native(mut cachedAngle){
-        static const f32 s_Angle = ParseTransparentMultiFrozenAngle();
-        cachedAngle = s_Angle;
-    }
-    return cachedAngle;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class TransparentMultiSmokeProjectImpl : IProjectEntryCallbacks{
     public TransparentMultiSmokeProjectImpl(mut ProjectRuntimeContext context){
         this.m_context = context;
@@ -153,24 +84,22 @@ class TransparentMultiSmokeProjectImpl : IProjectEntryCallbacks{
         this.m_fpsProbe = FpsProbe(TransparentMultiFpsLabel());
         this.m_gpuPassTimingProbe = GpuPassTimingProbe(TransparentMultiFpsLabel());
         this.m_frameLaggedAsyncLightingUnfocusedPass = TimingProbeUnfocusedPass(context.graphics);
+        this.m_rotationSpeed = ParseTransparentMultiRotationSpeed();
+        this.m_frozenAngle = ParseTransparentMultiFrozenAngle();
     }
 
     public ~TransparentMultiSmokeProjectImpl(){
         this.m_timingRenderPass.stop();
-        native(mut ctx = this.m_context, mut arrow = this.m_arrowYawInput, mut f1Toggle = this.m_frameLaggedAsyncLightingToggleInput){
-            ctx.input.removeHandler(arrow);
-            if(s_TransparentMultiFrameLaggedAsyncLighting)
-                ctx.input.removeHandler(f1Toggle);
-        }
-        if(s_TransparentMultiFrameLaggedAsyncLighting)
+        this.m_context.input.removeHandler(this.m_arrowYawInput);
+        if(s_TransparentMultiFrameLaggedAsyncLighting){
+            this.m_context.input.removeHandler(this.m_frameLaggedAsyncLightingToggleInput);
             this.removeFrameLaggedAsyncLightingUnfocusedPass();
+        }
         this.destroyWorld();
     }
 
     public b8 onStartup()override{
-        native(mut ctx = this.m_context){
-            ctx.setPerfCapture(Core::Perf::CaptureOptions::GpuTimingOnly());
-        }
+        this.m_context.setPerfCapture(SmokePerfGpuTimingOnly());
 
         b8 causticTiming = false;
         if(s_TransparentMultiCausticSphere)
@@ -178,24 +107,14 @@ class TransparentMultiSmokeProjectImpl : IProjectEntryCallbacks{
         if((causticTiming || ReadSmokeEnvironmentFlag("NWB_AVBOIT_SMOKE_TIMING")) && !this.m_timingRenderPass.start(causticTiming))
             return false;
 
-        if(s_TransparentMultiCausticSphere){
-            if(!this.configureFramebufferCapture())
-                return false;
-        }
+        if(s_TransparentMultiCausticSphere && !this.configureFramebufferCapture())
+            return false;
 
-        native(
-            mut ctx = this.m_context,
-            mut arrow = this.m_arrowYawInput,
-            mut unfocusedPass = this.m_frameLaggedAsyncLightingUnfocusedPass,
-            mut f1Toggle = this.m_frameLaggedAsyncLightingToggleInput,
-            mut unfocusedRegistered = this.m_frameLaggedAsyncLightingUnfocusedPassRegistered
-        ){
-            ctx.input.addHandlerToBack(arrow);
-            if(s_TransparentMultiFrameLaggedAsyncLighting){
-                ctx.graphics.addRenderPassToBack(unfocusedPass);
-                unfocusedRegistered = true;
-                ctx.input.addHandlerToBack(f1Toggle);
-            }
+        this.m_context.input.addHandlerToBack(this.m_arrowYawInput);
+        if(s_TransparentMultiFrameLaggedAsyncLighting){
+            this.m_context.graphics.addRenderPassToBack(this.m_frameLaggedAsyncLightingUnfocusedPass);
+            this.m_frameLaggedAsyncLightingUnfocusedPassRegistered = true;
+            this.m_context.input.addHandlerToBack(this.m_frameLaggedAsyncLightingToggleInput);
         }
 
         f32 cameraDistance = s_TransparentCameraStartDepth;
@@ -224,7 +143,7 @@ class TransparentMultiSmokeProjectImpl : IProjectEntryCallbacks{
             [essential] info(
                 "CausticTimingProbe: fixed delta {} yaw {} sphere scale {}"
                 , RendererBaselineFixedDelta()
-                , EffectiveTransparentMultiFrozenAngle()
+                , this.m_frozenAngle
                 , s_TransparentMultiCausticSphereScale
             );
             [essential] info("CausticTimingProbe: photon phases {}", s_CausticSphereTemporalPhaseCount);
@@ -236,46 +155,32 @@ class TransparentMultiSmokeProjectImpl : IProjectEntryCallbacks{
             );
         }
 
-        const f32 initialYaw = this.m_sceneYaw.yaw();
-        b8 populated = false;
-        native(
-            in cameraDistance,
-            in causticTiming,
-            in initialYaw,
-            mut world = this.m_world,
-            mut transforms = this.m_sceneTransforms,
-            mut populated
-        ){
-            populated = PopulateTransparentMultiScene(cameraDistance, causticTiming, initialYaw, *world, transforms);
-        }
-        return populated;
+        return PopulateTransparentMultiScene(
+            cameraDistance,
+            causticTiming,
+            this.m_sceneYaw.yaw(),
+            SmokeWorldRef(this.m_world),
+            this.m_sceneTransforms
+        );
     }
 
     public void onShutdown()override{
         this.m_timingRenderPass.stop();
         this.m_context.graphics.setFrameSubmissionSuspended(false);
-        native(mut ctx = this.m_context, mut arrow = this.m_arrowYawInput, mut f1Toggle = this.m_frameLaggedAsyncLightingToggleInput){
-            ctx.input.removeHandler(arrow);
-            if(s_TransparentMultiFrameLaggedAsyncLighting)
-                ctx.input.removeHandler(f1Toggle);
-        }
-        if(s_TransparentMultiFrameLaggedAsyncLighting)
+        this.m_context.input.removeHandler(this.m_arrowYawInput);
+        if(s_TransparentMultiFrameLaggedAsyncLighting){
+            this.m_context.input.removeHandler(this.m_frameLaggedAsyncLightingToggleInput);
             this.removeFrameLaggedAsyncLightingUnfocusedPass();
+        }
         this.destroyWorld();
-        [essential] info("TransparentMultiSmokeProjectImpl: shutdown");
+        [essential] info("TransparentMultiSmokeProject: shutdown");
     }
 
     public b8 onUpdate(in f32 delta)override{
         u32 captureFreezeFrame = RendererBaselineCaptureFreezeFrame();
         if(s_TransparentMultiCausticSphere){
-            b8 hasCapture = false;
-            native(mut capture = this.m_framebufferCapture, mut hasCapture){
-                if(capture){
-                    capture->update();
-                    hasCapture = true;
-                }
-            }
-            if(hasCapture)
+            UpdateSmokeFramebufferCapture(this.m_framebufferCapture);
+            if(SmokeFramebufferCaptureValid(this.m_framebufferCapture))
                 captureFreezeFrame = 0u;
         }
 
@@ -284,7 +189,7 @@ class TransparentMultiSmokeProjectImpl : IProjectEntryCallbacks{
                 this.m_context.graphics.setFrameSubmissionSuspended(true);
                 this.m_rendererBaselineCapturePaused = true;
                 [essential] info(
-                    "TransparentMultiSmokeProjectImpl: renderer baseline capture ready after {} rendered frames; render submission suspended"
+                    "TransparentMultiSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"
                     , this.m_rendererBaselineRenderedFrameCount
                 );
             }
@@ -303,74 +208,51 @@ class TransparentMultiSmokeProjectImpl : IProjectEntryCallbacks{
 
         if(s_TransparentMultiFrameLaggedAsyncLighting && this.m_frameLaggedAsyncLightingToggleInput.consumeToggleRequest()){
             this.m_frameLaggedAsyncLightingEnabled = !this.m_frameLaggedAsyncLightingEnabled;
-            native(in lagged = this.m_frameLaggedAsyncLightingEnabled, mut world = this.m_world){
-                Impl::RendererSystem& rendererSystem = *MakeNotNull(world->getSystem<Impl::RendererSystem>());
-                rendererSystem.setFrameLaggedAsyncLightingEnabled(lagged);
-            }
+            SmokeRendererSystemRef(SmokeWorldRef(this.m_world)).setFrameLaggedAsyncLightingEnabled(this.m_frameLaggedAsyncLightingEnabled);
             if(this.m_frameLaggedAsyncLightingEnabled)
                 [essential] info("FrameLaggedAsyncLightingSmoke: F1 re-enabled frame-lagged async lighting");
             else
                 [essential] info("FrameLaggedAsyncLightingSmoke: F1 requested current-frame path");
         }
 
-        const f32 frozenAngle = EffectiveTransparentMultiFrozenAngle();
         this.m_sceneYaw.update(
             safeDelta,
-            frozenAngle,
-            IsFinite(frozenAngle),
+            this.m_frozenAngle,
+            IsFinite(this.m_frozenAngle),
             this.m_arrowYawInput,
             s_TransparentManualYawSpeed,
-            EffectiveTransparentMultiRotationSpeed(),
+            this.m_rotationSpeed,
             s_TransparentMaxAnimationDelta
         );
         const f32 currentYaw = this.m_sceneYaw.yaw();
-        native(in currentYaw, in transforms = this.m_sceneTransforms, mut world = this.m_world){
-            transforms.update(currentYaw, *world);
-        }
+        this.m_sceneTransforms.update(currentYaw, SmokeWorldRef(this.m_world));
         SetSmokeYawWindowTitle(currentYaw, this.m_sceneYaw.manualControl(), s_TransparentMultiTwoPi, this.m_context);
 
-        b8 ticked = false;
-        native(in safeDelta, mut world = this.m_world, mut ticked){
-            ticked = TickSmokeWorld(safeDelta, *world);
-        }
-        if(!ticked)
+        if(!TickSmokeWorld(safeDelta, SmokeWorldRef(this.m_world)))
             return false;
         ++this.m_rendererBaselineRenderedFrameCount;
         return true;
     }
 
     private void destroyWorld(){
-        if(s_TransparentMultiCausticSphere){
-            native(mut capture = this.m_framebufferCapture){
-                if(capture){
-                    capture->stop();
-                    capture.reset();
-                }
-            }
-        }
+        if(s_TransparentMultiCausticSphere)
+            StopAndResetSmokeFramebufferCapture(this.m_framebufferCapture);
         DestroySmokeRenderWorld(this.m_context, this.m_world);
     }
 
     private b8 configureFramebufferCapture(){
-        SmokeCaptureFactory captureFactory = SmokeCaptureFactory(this.m_context);
-        Expected<UniquePtr<FramebufferCapture>> capture = captureFactory.configure(
-            CausticSphereProjectName(),
-            s_CausticSphereDefaultCaptureFrameCount
+        return ConfigureSmokeFramebufferCapture(
+            this.m_context,
+            "CausticSphereSmokeProject",
+            s_CausticSphereDefaultCaptureFrameCount,
+            this.m_framebufferCapture
         );
-        if(!capture.has_value())
-            return false;
-        native(mut dst = this.m_framebufferCapture, mut capture){
-            dst = Move(*capture);
-        }
-        return true;
     }
 
     private void removeFrameLaggedAsyncLightingUnfocusedPass(){
         if(!this.m_frameLaggedAsyncLightingUnfocusedPassRegistered)
             return;
-        native(mut ctx = this.m_context, mut unfocusedPass = this.m_frameLaggedAsyncLightingUnfocusedPass){
-            ctx.graphics.removeRenderPass(unfocusedPass);
-        }
+        this.m_context.graphics.removeRenderPass(this.m_frameLaggedAsyncLightingUnfocusedPass);
         this.m_frameLaggedAsyncLightingUnfocusedPassRegistered = false;
     }
 
@@ -379,16 +261,54 @@ class TransparentMultiSmokeProjectImpl : IProjectEntryCallbacks{
     private AvboitTimingRenderPass m_timingRenderPass;
     private FpsProbe m_fpsProbe;
     private GpuPassTimingProbe m_gpuPassTimingProbe;
-    private ArrowYawInputHandler m_arrowYawInput;
+    private ArrowYawInputHandler m_arrowYawInput = ArrowYawInputHandler();
     private UniquePtr<FramebufferCapture> m_framebufferCapture = UniquePtr<FramebufferCapture>();
-    private FrameLaggedAsyncLightingToggleInputHandler m_frameLaggedAsyncLightingToggleInput;
+    private FrameLaggedAsyncLightingToggleInputHandler m_frameLaggedAsyncLightingToggleInput = FrameLaggedAsyncLightingToggleInputHandler();
     private TimingProbeUnfocusedPass m_frameLaggedAsyncLightingUnfocusedPass;
-    private TransparentMultiSceneTransforms m_sceneTransforms;
-    private YawSpinController m_sceneYaw;
+    private TransparentMultiSceneTransforms m_sceneTransforms = TransparentMultiSceneTransforms();
+    private YawSpinController m_sceneYaw = YawSpinController();
+    private f32 m_rotationSpeed;
+    private f32 m_frozenAngle;
     private u32 m_rendererBaselineRenderedFrameCount = 0u;
     private b8 m_rendererBaselineCapturePaused = false;
     private b8 m_frameLaggedAsyncLightingUnfocusedPassRegistered = false;
     private b8 m_frameLaggedAsyncLightingEnabled = true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NotNullUniquePtr<World> CreateTransparentMultiWorldOrDie(mut ProjectRuntimeContext context){
+    NotNullUniquePtr<World> world = CreateSmokeWorldOrDie(TransparentMultiProjectName(), context);
+    ConfigureTransparentMultiRenderer(SmokeWorldRef(world), context);
+    return world;
+}
+
+f32 DefaultTransparentMultiRotationSpeed(){
+    if(s_TransparentMultiCausticSphere)
+        return 0.0f;
+    return 0.55f;
+}
+
+f32 ParseTransparentMultiRotationSpeed(){
+    const Expected<f32> parsed = ReadSmokeEnvironmentF32("NWB_TRANSPARENT_MULTI_SPIN_SPEED");
+    if(!parsed.has_value())
+        return DefaultTransparentMultiRotationSpeed();
+    const f32 speed = parsed.value();
+    if(IsFinite(speed) && speed >= 0.0f)
+        return speed;
+    return DefaultTransparentMultiRotationSpeed();
+}
+
+f32 ParseTransparentMultiFrozenAngle(){
+    const Expected<f32> parsed = ReadSmokeEnvironmentF32("NWB_TRANSPARENT_MULTI_SPIN_ANGLE");
+    if(!parsed.has_value())
+        return bit_cast<f32>(s_TransparentMultiQuietNaNBits);
+    const f32 angle = parsed.value();
+    if(IsFinite(angle))
+        return angle;
+    return bit_cast<f32>(s_TransparentMultiQuietNaNBits);
 }
 
 

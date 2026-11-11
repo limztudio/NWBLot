@@ -3,7 +3,6 @@
 
 
 #include <logger/server/crash_symbolicate.adhd>
-#include <logger/server/crash_symbolicate_internal.adhd>
 #include <logger/server/crash_values.adhd>
 
 
@@ -61,6 +60,9 @@ const StringView s_ComposerTombstoneBareHeader = "[tombstone_callstack]\n";
 const StringView s_ComposerCallstackHeading = "callstack:\n";
 const StringView s_ComposerCallstackUnavailableLine = "<unavailable>\n";
 const StringView s_ComposerDetailsHeading = "\ndetails:\n";
+const StringView s_ComposerLocationPrefix = "at ";
+const StringView s_ComposerBareLinePrefix = "line ";
+const StringView s_ComposerLineColon = ":";
 
 class CrashReportSectionRange{
     public usize removeBegin = usize.max;
@@ -115,18 +117,100 @@ StringView ExtractCrashReportSectionContent(in StringView report, in CrashReport
     return TrimView(report.substr(range.contentBegin, range.contentEnd - range.contentBegin));
 }
 
+void AppendReportWithoutSection(in StringView report, in CrashReportSectionRange range, mut String outReport){
+    if(!range.found()){
+        outReport.append(report);
+        return;
+    }
+
+    if(range.removeBegin > 0u)
+        outReport.append(report.substr(0u, range.removeBegin));
+    if(range.removeEnd < report.size())
+        outReport.append(report.substr(range.removeEnd));
+}
+
+b8 AppendCrashHeadlineFields(
+    in StringView triggerExpression,
+    in StringView triggerMessage,
+    in StringView triggerFile,
+    in u64 triggerLine,
+    mut String outReport
+){
+    b8 wrote = false;
+    if(!triggerExpression.empty()){
+        outReport.append(triggerExpression);
+        outReport.append(s_CrashSymbolicateReportLineEnd);
+        wrote = true;
+    }
+    if(!triggerMessage.empty()){
+        outReport.append(triggerMessage);
+        outReport.append(s_CrashSymbolicateReportLineEnd);
+        wrote = true;
+    }
+    if(!triggerFile.empty() || triggerLine != 0u){
+        outReport.append(s_ComposerLocationPrefix);
+        if(!triggerFile.empty())
+            outReport.append(triggerFile);
+        else
+            outReport.append(s_ComposerBareLinePrefix);
+        if(triggerLine != 0u){
+            if(!triggerFile.empty())
+                outReport.append(s_ComposerLineColon);
+            AppendUnsignedU64Text(outReport, triggerLine);
+        }
+        outReport.append(s_CrashSymbolicateReportLineEnd);
+        wrote = true;
+    }
+    return wrote;
+}
+
+void AppendVisibleCallstack(in StringView callstack, mut String outReport){
+    outReport.append(s_ComposerCallstackHeading);
+    if(callstack.empty()){
+        outReport.append(s_ComposerCallstackUnavailableLine);
+        return;
+    }
+
+    outReport.append(callstack);
+    if(outReport.back() != 10u)
+        outReport.append(s_CrashSymbolicateReportLineEnd);
+}
+
+String BuildOrderedCrashReportText(
+    in StringView triggerExpression,
+    in StringView triggerMessage,
+    in StringView triggerFile,
+    in u64 triggerLine,
+    in StringView detailReport
+){
+    const CrashReportSectionRange callstackSection = FindCrashCallstackSectionRange(detailReport);
+    const StringView callstack = ExtractCrashReportSectionContent(detailReport, callstackSection);
+
+    String details;
+    details.reserve(detailReport.size());
+    AppendReportWithoutSection(detailReport, callstackSection, details);
+    const StringView detailsView = TrimView(details);
+
+    String report;
+    report.reserve(AddSaturating<usize>(AddSaturating<usize>(detailsView.size(), callstack.size()), s_CrashSymbolicateInternalCrashReportReserveBytes));
+    if(AppendCrashHeadlineFields(triggerExpression, triggerMessage, triggerFile, triggerLine, report))
+        report.append(s_CrashSymbolicateReportLineEnd);
+    AppendVisibleCallstack(callstack, report);
+    report.append(s_ComposerDetailsHeading);
+    if(!detailsView.empty()){
+        report.append(detailsView);
+        if(report.back() != 10u)
+            report.append(s_CrashSymbolicateReportLineEnd);
+    }
+    return report;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [source]
 native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <global/text_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -144,100 +228,9 @@ namespace LoggerCrashSymbolicateDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_crash_report_composer{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void AppendReportWithoutSection(const AStringView report, const CrashReportSectionRange& range, AString<Core::Alloc::ScratchArena>& outReport){
-    if(!range.found()){
-        outReport.append(report.data(), report.size());
-        return;
-    }
-
-    if(range.removeBegin > 0u)
-        outReport.append(report.data(), range.removeBegin);
-    if(range.removeEnd < report.size())
-        outReport.append(report.data() + range.removeEnd, report.size() - range.removeEnd);
-}
-
-[[nodiscard]] b8 AppendCrashHeadline(const CrashPackageSummary& summary, CrashReportText& outReport){
-    b8 wrote = false;
-    if(!summary.triggerExpression.empty()){
-        outReport += summary.triggerExpression;
-        outReport += s_ReportLineEnd;
-        wrote = true;
-    }
-    if(!summary.triggerMessage.empty()){
-        outReport += summary.triggerMessage;
-        outReport += s_ReportLineEnd;
-        wrote = true;
-    }
-    if(!summary.triggerFile.empty() || summary.triggerLine != 0u){
-        outReport += "at ";
-        if(!summary.triggerFile.empty())
-            outReport += summary.triggerFile;
-        else
-            outReport += "line ";
-        if(summary.triggerLine != 0u){
-            if(!summary.triggerFile.empty())
-                outReport += ":";
-            Array<char, s_DecimalTextBufferCapacity> buffer{};
-            outReport += FormatDecimal(static_cast<usize>(summary.triggerLine), buffer);
-        }
-        outReport += s_ReportLineEnd;
-        wrote = true;
-    }
-    return wrote;
-}
-
-void AppendVisibleCallstack(const AStringView callstack, CrashReportText& outReport){
-    outReport += s_ComposerCallstackHeading;
-    if(callstack.empty()){
-        outReport += s_ComposerCallstackUnavailableLine;
-        return;
-    }
-
-    outReport.append(callstack.data(), callstack.size());
-    if(outReport.back() != '\n')
-        outReport += s_ReportLineEnd;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-CrashReportText CrashReportComposer::BuildOrderedCrashReport(const CrashPackageSummary& summary, Core::Alloc::ScratchArena& scratchArena, CrashReportText&& detailReport){
-    CrashReportText report(Move(detailReport));
-    const AStringView detailReportView(report.data(), report.size());
-    const CrashReportSectionRange callstackSection = FindCrashCallstackSectionRange(detailReportView);
-    const AStringView callstack = ExtractCrashReportSectionContent(detailReportView, callstackSection);
-
-    AString<Core::Alloc::ScratchArena> details(scratchArena);
-    details.reserve(report.size());
-    __hidden_crash_report_composer::AppendReportWithoutSection(detailReportView, callstackSection, details);
-    const AStringView detailsView = TrimView(AStringView(details.data(), details.size()));
-
-    const AString<Core::Alloc::ScratchArena> callstackCopy(callstack.data(), callstack.size(), scratchArena);
-    report.clear();
-    report.reserve(AddSize(AddSize(detailsView.size(), callstackCopy.size()), s_CrashReportReserveBytes));
-    if(__hidden_crash_report_composer::AppendCrashHeadline(summary, report))
-        report += s_ReportLineEnd;
-    __hidden_crash_report_composer::AppendVisibleCallstack(AStringView(callstackCopy.data(), callstackCopy.size()), report);
-    report += s_ComposerDetailsHeading;
-    if(!detailsView.empty()){
-        report.append(detailsView.data(), detailsView.size());
-        if(report.back() != '\n')
-            report += s_ReportLineEnd;
-    }
-    return report;
+CrashReportText CrashReportComposer::BuildOrderedCrashReport(const CrashPackageSummary& summary, [[maybe_unused]] Core::Alloc::ScratchArena& scratchArena, CrashReportText&& detailReport){
+    const CrashReportText sourceReport(Move(detailReport));
+    return BuildOrderedCrashReportText(summary.triggerExpression, summary.triggerMessage, summary.triggerFile, summary.triggerLine, sourceReport);
 }
 
 

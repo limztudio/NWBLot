@@ -161,35 +161,19 @@ VectorDouble MakeVolatileDoubleFloats(in f64 x, in f64 y, in f64 z, in f64 w){
 }
 
 u32 GetSingleLaneBits(in VectorSingle vec, in usize lane){
-    u32 result = 0u;
-    native(in vec, in lane, mut result){
-        result = VectorGetIntByIndex(vec, lane);
-    }
-    return result;
+    return VectorGetIntByIndex(vec, lane);
 }
 
 u64 GetDoubleLaneBits(in VectorDouble vec, in usize lane){
-    u64 result = 0u;
-    native(in vec, in lane, mut result){
-        result = VectorDoubleGetIntByIndex(vec, lane);
-    }
-    return result;
+    return VectorDoubleGetIntByIndex(vec, lane);
 }
 
 f32 GetSingleLaneFloat(in VectorSingle vec, in usize lane){
-    f32 result = 0.0f;
-    native(in vec, in lane, mut result){
-        result = VectorGetByIndex(vec, lane);
-    }
-    return result;
+    return VectorGetByIndex(vec, lane);
 }
 
 f64 GetDoubleLaneFloat(in VectorDouble vec, in usize lane){
-    f64 result = 0.0;
-    native(in vec, in lane, mut result){
-        result = vec[lane];
-    }
-    return result;
+    return vec[lane];
 }
 
 Array<u32, 4> MakeU32Array4(in u32 x, in u32 y, in u32 z, in u32 w){

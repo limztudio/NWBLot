@@ -301,7 +301,7 @@ template<typename Value, usize Count>
 }
 #endif
 
-[[nodiscard]] inline PageBoundaryCaseResult RunPageBoundaryCase([[maybe_unused]] const u32 caseIndex)noexcept{
+[[nodiscard]] NWB_INLINE PageBoundaryCaseResult RunPageBoundaryCase([[maybe_unused]] const u32 caseIndex)noexcept{
 #if defined(__linux__)
     switch(caseIndex){
     case 0u: return RunPageBoundaryTyped<RawEqualityStorage<b8, 1u>, 1u>();
@@ -337,7 +337,7 @@ void ObserveBooleanFallbackStep(const usize flipLane, b8& outInitialEqual, b8& o
     outRestoredEqual = StorageEqual(lhs, rhs);
 }
 
-inline void RunBooleanFallbackStepByIndex(const usize countIndex, const usize flipLane, b8& outInitialEqual, b8& outFlippedEqual, b8& outFlippedLegacy, b8& outRestoredEqual)noexcept{
+NWB_INLINE void RunBooleanFallbackStepByIndex(const usize countIndex, const usize flipLane, b8& outInitialEqual, b8& outFlippedEqual, b8& outFlippedLegacy, b8& outRestoredEqual)noexcept{
     switch(countIndex){
     case 0u: ObserveBooleanFallbackStep<1u>(flipLane, outInitialEqual, outFlippedEqual, outFlippedLegacy, outRestoredEqual); break;
     case 1u: ObserveBooleanFallbackStep<2u>(flipLane, outInitialEqual, outFlippedEqual, outFlippedLegacy, outRestoredEqual); break;
@@ -469,6 +469,9 @@ using MathStorageCasesDetail::HasSse2RawMxcsrSupport;
 using MathStorageCasesDetail::RunPageBoundaryCase;
 using MathStorageCasesDetail::RunBooleanFallbackStepByIndex;
 using MathStorageCasesDetail::MxcsrEqualityEnvironmentGuard;
+using MathStorageCasesDetail::RunDoubleStorePaddingStep;
+using MathStorageCasesDetail::PoisonDoubleStoragePadding;
+using MathStorageCasesDetail::ObserveNaNComparisonPair;
 };
 
 
@@ -496,19 +499,11 @@ Array<f64x3u, 3> MakeTriangleVertices(in f64 x0, in f64 y0, in f64 z0, in f64 x1
 }
 
 b8 EvalTriangleSingleIntersects(in VectorSingle a0, in VectorSingle a1, in VectorSingle a2, in VectorSingle b0, in VectorSingle b1, in VectorSingle b2){
-    b8 result = false;
-    native(in a0, in a1, in a2, in b0, in b1, in b2, mut result){
-        result = TriangleTests::Intersects(a0, a1, a2, b0, b1, b2);
-    }
-    return result;
+    return TriangleTests::Intersects(a0, a1, a2, b0, b1, b2);
 }
 
 b8 EvalTriangleDoubleIntersects(in VectorDouble a0, in VectorDouble a1, in VectorDouble a2, in VectorDouble b0, in VectorDouble b1, in VectorDouble b2){
-    b8 result = false;
-    native(in a0, in a1, in a2, in b0, in b1, in b2, mut result){
-        result = TriangleDoubleTests::Intersects(a0, a1, a2, b0, b1, b2);
-    }
-    return result;
+    return TriangleDoubleTests::Intersects(a0, a1, a2, b0, b1, b2);
 }
 
 Array<Array<usize, 3>, 6> MakeTrianglePermutations(){
@@ -559,6 +554,22 @@ void CheckTriangleBothPrecisions(in Array<f64x3u, 3> first, in Array<f64x3u, 3> 
         }
     }
     CheckTriangleDoubleWindingAndOrder(first, second, expected);
+}
+
+VectorDouble EvalStorageVectorDoubleSetIntByIndex(in VectorDouble vec, in u64 value, in usize lane){
+    return VectorDoubleSetIntByIndex(vec, value, lane);
+}
+
+VectorDouble EvalStorageVectorDoubleEqualInt(in VectorDouble lhs, in VectorDouble rhs){
+    return VectorDoubleEqualInt(lhs, rhs);
+}
+
+VectorSingle EvalStorageConvertVectorDoubleToSingle(in VectorDouble vec){
+    return ConvertVectorDoubleToSingle(vec);
+}
+
+VectorDouble EvalStorageConvertVectorSingleToDouble(in VectorSingle vec){
+    return ConvertVectorSingleToDouble(vec);
 }
 
 void VerifyMath_SignedZeroStorageEqualityProducesEqualHashes(){
@@ -615,10 +626,7 @@ void VerifyMath_AlignedShortDoubleStoresAndStreamsPreservePoisonedPaddingAndNeig
 
     for(in b8 stream : streamModes){
         f64x2 storedPair = f64x2();
-        b8 pairPadOk = false;
-        native(in pairSource, in stream, mut storedPair, mut pairPadOk){
-            pairPadOk = MathStorageCasesDetail::RunDoubleStorePaddingStep<Double2, 2u>(pairSource, stream, storedPair);
-        }
+        const b8 pairPadOk = RunDoubleStorePaddingStep<Double2, 2u>(pairSource, stream, storedPair);
         EXPECT_TRUE(pairPadOk);
         EXPECT_EQ(bit_cast<u64>(storedPair.x), bit_cast<u64>(-0.0));
         EXPECT_EQ(bit_cast<u64>(storedPair.y), bit_cast<u64>(onePlusEps));
@@ -630,10 +638,7 @@ void VerifyMath_AlignedShortDoubleStoresAndStreamsPreservePoisonedPaddingAndNeig
         EXPECT_EQ(transformedPair.y, onePlusEps);
 
         f64x3 storedTriple = f64x3();
-        b8 triplePadOk = false;
-        native(in tripleSource, in stream, mut storedTriple, mut triplePadOk){
-            triplePadOk = MathStorageCasesDetail::RunDoubleStorePaddingStep<Double3, 3u>(tripleSource, stream, storedTriple);
-        }
+        const b8 triplePadOk = RunDoubleStorePaddingStep<Double3, 3u>(tripleSource, stream, storedTriple);
         EXPECT_TRUE(triplePadOk);
         EXPECT_EQ(bit_cast<u64>(storedTriple.x), bit_cast<u64>(-0.0));
         EXPECT_EQ(bit_cast<u64>(storedTriple.y), bit_cast<u64>(onePlusEps));
@@ -646,29 +651,36 @@ void VerifyMath_AlignedShortDoubleStoresAndStreamsPreservePoisonedPaddingAndNeig
         EXPECT_EQ(transformedTriple.z, pow40Plus1);
 
         f64x3x3 storedMat = f64x3x3();
-        b8 matPadOk = false;
-        native(in matrixSource, in stream, mut storedMat, mut matPadOk){
-            matPadOk = MathStorageCasesDetail::RunDoubleStorePaddingStep<Double33, 9u>(matrixSource, stream, storedMat);
-        }
+        const b8 matPadOk = RunDoubleStorePaddingStep<Double33, 9u>(matrixSource, stream, storedMat);
         EXPECT_TRUE(matPadOk);
+        EXPECT_EQ(bit_cast<u64>(storedMat._11), bit_cast<u64>(matrixExpected[0u]));
+        EXPECT_EQ(bit_cast<u64>(storedMat._12), bit_cast<u64>(matrixExpected[1u]));
+        EXPECT_EQ(bit_cast<u64>(storedMat._13), bit_cast<u64>(matrixExpected[2u]));
+        EXPECT_EQ(bit_cast<u64>(storedMat._21), bit_cast<u64>(matrixExpected[3u]));
+        EXPECT_EQ(bit_cast<u64>(storedMat._22), bit_cast<u64>(matrixExpected[4u]));
+        EXPECT_EQ(bit_cast<u64>(storedMat._23), bit_cast<u64>(matrixExpected[5u]));
+        EXPECT_EQ(bit_cast<u64>(storedMat._31), bit_cast<u64>(matrixExpected[6u]));
+        EXPECT_EQ(bit_cast<u64>(storedMat._32), bit_cast<u64>(matrixExpected[7u]));
+        EXPECT_EQ(bit_cast<u64>(storedMat._33), bit_cast<u64>(matrixExpected[8u]));
+
         const MatrixDouble loadedMat = MatrixDouble(storedMat);
-        b8 lastRowIdentity = false;
-        Array<f64x4, 3> loadedRows = Array<f64x4, 3>();
-        native(in storedMat, in matrixExpected, in loadedMat, mut loadedRows, mut lastRowIdentity){
-            for(usize lane = 0u; lane < 9u; ++lane)
-                EXPECT_EQ(BitCast<u64>(storedMat.raw[lane]), BitCast<u64>(matrixExpected[lane]));
-            StoreDouble(loadedMat.v[0], loadedRows[0u]);
-            StoreDouble(loadedMat.v[1], loadedRows[1u]);
-            StoreDouble(loadedMat.v[2], loadedRows[2u]);
-            lastRowIdentity = VectorDouble4Equal(loadedMat.v[3], SIMDVectorDouble{ 0.0, 0.0, 0.0, 1.0 });
-        }
-        for(usize row = 0u; row < 3u; ++row){
-            EXPECT_EQ(bit_cast<u64>(loadedRows[row].w), 0u);
-            EXPECT_EQ(bit_cast<u64>(loadedRows[row].x), bit_cast<u64>(matrixExpected[row * 3u + 0u]));
-            EXPECT_EQ(bit_cast<u64>(loadedRows[row].y), bit_cast<u64>(matrixExpected[row * 3u + 1u]));
-            EXPECT_EQ(bit_cast<u64>(loadedRows[row].z), bit_cast<u64>(matrixExpected[row * 3u + 2u]));
-        }
-        EXPECT_TRUE(lastRowIdentity);
+        const f64x4x4 loadedMat44 = f64x4x4(loadedMat);
+        EXPECT_EQ(bit_cast<u64>(loadedMat44._11), bit_cast<u64>(matrixExpected[0u]));
+        EXPECT_EQ(bit_cast<u64>(loadedMat44._12), bit_cast<u64>(matrixExpected[1u]));
+        EXPECT_EQ(bit_cast<u64>(loadedMat44._13), bit_cast<u64>(matrixExpected[2u]));
+        EXPECT_EQ(bit_cast<u64>(loadedMat44._14), 0u);
+        EXPECT_EQ(bit_cast<u64>(loadedMat44._21), bit_cast<u64>(matrixExpected[3u]));
+        EXPECT_EQ(bit_cast<u64>(loadedMat44._22), bit_cast<u64>(matrixExpected[4u]));
+        EXPECT_EQ(bit_cast<u64>(loadedMat44._23), bit_cast<u64>(matrixExpected[5u]));
+        EXPECT_EQ(bit_cast<u64>(loadedMat44._24), 0u);
+        EXPECT_EQ(bit_cast<u64>(loadedMat44._31), bit_cast<u64>(matrixExpected[6u]));
+        EXPECT_EQ(bit_cast<u64>(loadedMat44._32), bit_cast<u64>(matrixExpected[7u]));
+        EXPECT_EQ(bit_cast<u64>(loadedMat44._33), bit_cast<u64>(matrixExpected[8u]));
+        EXPECT_EQ(bit_cast<u64>(loadedMat44._34), 0u);
+        EXPECT_EQ(loadedMat44._41, 0.0);
+        EXPECT_EQ(loadedMat44._42, 0.0);
+        EXPECT_EQ(loadedMat44._43, 0.0);
+        EXPECT_EQ(loadedMat44._44, 1.0);
     }
 }
 
@@ -677,9 +689,7 @@ void VerifyMath_AlignedShortDoubleAndCompactMatrixHashesIgnorePaddingWithSignedZ
 
     f64x2 lhs2 = f64x2(-0.0, onePlusEps);
     f64x2 rhs2 = f64x2(0.0, onePlusEps);
-    native(mut lhs2, mut rhs2){
-        MathStorageCasesDetail::PoisonDoubleStoragePadding<Double2, 2u>(lhs2, rhs2);
-    }
+    PoisonDoubleStoragePadding<Double2, 2u>(lhs2, rhs2);
     EXPECT_EQ(lhs2, rhs2);
     EXPECT_EQ(HashValue(lhs2), HashValue(rhs2));
     rhs2.y = 1.0;
@@ -687,28 +697,24 @@ void VerifyMath_AlignedShortDoubleAndCompactMatrixHashesIgnorePaddingWithSignedZ
 
     f64x3 lhs3 = f64x3(-0.0, onePlusEps, onePlusEps);
     f64x3 rhs3 = f64x3(0.0, onePlusEps, onePlusEps);
-    native(mut lhs3, mut rhs3){
-        MathStorageCasesDetail::PoisonDoubleStoragePadding<Double3, 3u>(lhs3, rhs3);
-    }
+    PoisonDoubleStoragePadding<Double3, 3u>(lhs3, rhs3);
     EXPECT_EQ(lhs3, rhs3);
     EXPECT_EQ(HashValue(lhs3), HashValue(rhs3));
     rhs3.z = 1.0;
     EXPECT_NE(lhs3, rhs3);
 
     f64x3x3 lhs33 = f64x3x3();
+    lhs33._11 = -0.0; lhs33._12 = onePlusEps; lhs33._13 = onePlusEps;
+    lhs33._21 = onePlusEps; lhs33._22 = onePlusEps; lhs33._23 = onePlusEps;
+    lhs33._31 = onePlusEps; lhs33._32 = onePlusEps; lhs33._33 = onePlusEps;
     f64x3x3 rhs33 = f64x3x3();
-    native(in onePlusEps, mut lhs33, mut rhs33){
-        for(usize lane = 0u; lane < 9u; ++lane){
-            lhs33.raw[lane] = lane == 0u ? -0.0 : onePlusEps;
-            rhs33.raw[lane] = lane == 0u ? 0.0 : onePlusEps;
-        }
-        MathStorageCasesDetail::PoisonDoubleStoragePadding<Double33, 9u>(lhs33, rhs33);
-    }
+    rhs33._11 = 0.0; rhs33._12 = onePlusEps; rhs33._13 = onePlusEps;
+    rhs33._21 = onePlusEps; rhs33._22 = onePlusEps; rhs33._23 = onePlusEps;
+    rhs33._31 = onePlusEps; rhs33._32 = onePlusEps; rhs33._33 = onePlusEps;
+    PoisonDoubleStoragePadding<Double33, 9u>(lhs33, rhs33);
     EXPECT_EQ(lhs33, rhs33);
     EXPECT_EQ(HashValue(lhs33), HashValue(rhs33));
-    native(mut rhs33){
-        rhs33.raw[8u] = 1.0;
-    }
+    rhs33._33 = 1.0;
     EXPECT_NE(lhs33, rhs33);
 }
 
@@ -792,13 +798,9 @@ void VerifyMath_DoubleRawIntegerEqualityRequiresBoth32BitHalvesOfEveryLane(){
     for(usize changedLane = 0u; changedLane < 4u; ++changedLane){
         for(in u64 difference : differences){
             const u64 modifiedBits = firstBits[changedLane] ^ difference;
-            VectorDouble maskForward = VectorDouble(0.0, 0.0, 0.0, 0.0);
-            VectorDouble maskReverse = VectorDouble(0.0, 0.0, 0.0, 0.0);
-            native(in first, in modifiedBits, in changedLane, mut maskForward, mut maskReverse){
-                const SIMDVectorDouble second = VectorDoubleSetIntByIndex(first, modifiedBits, changedLane);
-                maskForward = VectorDoubleEqualInt(first, second);
-                maskReverse = VectorDoubleEqualInt(second, first);
-            }
+            const VectorDouble second = EvalStorageVectorDoubleSetIntByIndex(first, modifiedBits, changedLane);
+            const VectorDouble maskForward = EvalStorageVectorDoubleEqualInt(first, second);
+            const VectorDouble maskReverse = EvalStorageVectorDoubleEqualInt(second, first);
             for(usize lane = 0u; lane < 4u; ++lane){
                 u64 expectedMask = u64.max;
                 if(lane == changedLane)
@@ -812,22 +814,15 @@ void VerifyMath_DoubleRawIntegerEqualityRequiresBoth32BitHalvesOfEveryLane(){
 
 void VerifyMath_DoubleSingleConversionsRetainSubnormalsAndSignsAndRoundHalfUlpTiesEven(){
     const VectorDouble overflowIn = MakeVolatileDoubleFloats(f64.max, -f64.max, -0.0, 0.0);
-    VectorSingle overflow = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-    native(in overflowIn, mut overflow){
-        overflow = ConvertVectorDoubleToSingle(overflowIn);
-    }
+    const VectorSingle overflow = EvalStorageConvertVectorDoubleToSingle(overflowIn);
     const Array<u32, 4> overflowExpected = MakeU32Array4(0x7f800000u, 0xff800000u, 0x80000000u, 0u);
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(GetSingleLaneBits(overflow, lane), overflowExpected[lane]);
 
     const Array<u32, 4> subnormalBits = MakeU32Array4(1u, 0x80000001u, 0x007fffffu, 0x807fffffu);
     const VectorSingle subnormals = MakeVolatileSingleBits(subnormalBits[0u], subnormalBits[1u], subnormalBits[2u], subnormalBits[3u]);
-    VectorDouble widened = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    VectorSingle narrowed = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-    native(in subnormals, mut widened, mut narrowed){
-        widened = ConvertVectorSingleToDouble(subnormals);
-        narrowed = ConvertVectorDoubleToSingle(widened);
-    }
+    const VectorDouble widened = EvalStorageConvertVectorSingleToDouble(subnormals);
+    const VectorSingle narrowed = EvalStorageConvertVectorDoubleToSingle(widened);
     const Array<u64, 4> widenedExpected = MakeU64Array4(0x36a0000000000000u, 0xb6a0000000000000u, 0x380fffffc0000000u, 0xb80fffffc0000000u);
     for(usize lane = 0u; lane < 4u; ++lane){
         EXPECT_EQ(GetDoubleLaneBits(widened, lane), widenedExpected[lane]);
@@ -835,28 +830,19 @@ void VerifyMath_DoubleSingleConversionsRetainSubnormalsAndSignsAndRoundHalfUlpTi
     }
 
     const VectorSingle zeroIn = MakeVolatileSingleBits(0x80000000u, 0u, 0x80000000u, 0u);
-    VectorDouble signedZeros = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    native(in zeroIn, mut signedZeros){
-        signedZeros = ConvertVectorSingleToDouble(zeroIn);
-    }
+    const VectorDouble signedZeros = EvalStorageConvertVectorSingleToDouble(zeroIn);
     const Array<u64, 4> zeroExpected = MakeU64Array4(0x8000000000000000u, 0u, 0x8000000000000000u, 0u);
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(GetDoubleLaneBits(signedZeros, lane), zeroExpected[lane]);
 
     const VectorDouble roundedIn = MakeVolatileDoubleBits(0x3ff0000010000000u, 0x3ff0000030000000u, 0xbff0000010000000u, 0xbff0000030000000u);
-    VectorSingle rounded = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-    native(in roundedIn, mut rounded){
-        rounded = ConvertVectorDoubleToSingle(roundedIn);
-    }
+    const VectorSingle rounded = EvalStorageConvertVectorDoubleToSingle(roundedIn);
     const Array<u32, 4> roundedExpected = MakeU32Array4(0x3f800000u, 0x3f800002u, 0xbf800000u, 0xbf800002u);
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(GetSingleLaneBits(rounded, lane), roundedExpected[lane]);
 
     const VectorDouble underflowIn = MakeVolatileDoubleBits(0x3690000000000000u, 0x36a8000000000000u, 0xb690000000000000u, 0xb6a8000000000000u);
-    VectorSingle underflow = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-    native(in underflowIn, mut underflow){
-        underflow = ConvertVectorDoubleToSingle(underflowIn);
-    }
+    const VectorSingle underflow = EvalStorageConvertVectorDoubleToSingle(underflowIn);
     const Array<u32, 4> underflowExpected = MakeU32Array4(0u, 2u, 0x80000000u, 0x80000002u);
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(GetSingleLaneBits(underflow, lane), underflowExpected[lane]);
@@ -1062,10 +1048,7 @@ void VerifyMath_StorageEqualityPreservesNaNShortCircuitExceptionFlags(){
                 i32 expectedFlags = 0;
                 b8 actual = false;
                 i32 actualFlags = 0;
-                b8 ok = false;
-                native(in nanBits, in nanLane, in mismatch, mut expected, mut expectedFlags, mut actual, mut actualFlags, mut ok){
-                    ok = MathStorageCasesDetail::ObserveNaNComparisonPair<Float4U, 4u>(nanBits, nanLane, mismatch, expected, expectedFlags, actual, actualFlags);
-                }
+                const b8 ok = ObserveNaNComparisonPair<Float4U, 4u>(nanBits, nanLane, mismatch, expected, expectedFlags, actual, actualFlags);
                 ASSERT_TRUE(ok);
                 EXPECT_EQ(actual, expected);
                 EXPECT_EQ(actualFlags, expectedFlags);
@@ -1077,10 +1060,7 @@ void VerifyMath_StorageEqualityPreservesNaNShortCircuitExceptionFlags(){
                 i32 expectedFlags = 0;
                 b8 actual = false;
                 i32 actualFlags = 0;
-                b8 ok = false;
-                native(in nanBits, in nanLane, in mismatch, mut expected, mut expectedFlags, mut actual, mut actualFlags, mut ok){
-                    ok = MathStorageCasesDetail::ObserveNaNComparisonPair<Float33U, 9u>(nanBits, nanLane, mismatch, expected, expectedFlags, actual, actualFlags);
-                }
+                const b8 ok = ObserveNaNComparisonPair<Float33U, 9u>(nanBits, nanLane, mismatch, expected, expectedFlags, actual, actualFlags);
                 ASSERT_TRUE(ok);
                 EXPECT_EQ(actual, expected);
                 EXPECT_EQ(actualFlags, expectedFlags);

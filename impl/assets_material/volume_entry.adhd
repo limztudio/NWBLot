@@ -29,6 +29,7 @@ native{
 
 #include <impl/assets_material/cook.adhd.h>
 
+#include <impl/assets_shader/asset.adhd.h>
 #include <impl/assets_shader/shader_types.adhd.h>
 
 #include <core/assets/cook_dependency_registry.h>

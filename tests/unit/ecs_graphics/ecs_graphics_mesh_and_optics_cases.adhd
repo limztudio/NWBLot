@@ -78,43 +78,43 @@ public:
 };
 using float3 = ShaderFloat3;
 
-[[nodiscard]] inline ShaderFloat3 operator+(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
+[[nodiscard]] NWB_INLINE ShaderFloat3 operator+(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
     const SIMDVectorDouble sum = VectorDoubleAdd(VectorDoubleSet(a.x, a.y, a.z, 0.0), VectorDoubleSet(b.x, b.y, b.z, 0.0));
     return { VectorDoubleGetX(sum), VectorDoubleGetY(sum), VectorDoubleGetZ(sum) };
 }
 
-[[nodiscard]] inline ShaderFloat3 operator*(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
+[[nodiscard]] NWB_INLINE ShaderFloat3 operator*(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
     const SIMDVectorDouble product = VectorDoubleMultiply(VectorDoubleSet(a.x, a.y, a.z, 0.0), VectorDoubleSet(b.x, b.y, b.z, 0.0));
     return { VectorDoubleGetX(product), VectorDoubleGetY(product), VectorDoubleGetZ(product) };
 }
 
-[[nodiscard]] inline ShaderFloat3 operator/(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
+[[nodiscard]] NWB_INLINE ShaderFloat3 operator/(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
     const SIMDVectorDouble quotient = VectorDoubleDivide(VectorDoubleSet(a.x, a.y, a.z, 0.0), VectorDoubleSet(b.x, b.y, b.z, 1.0));
     return { VectorDoubleGetX(quotient), VectorDoubleGetY(quotient), VectorDoubleGetZ(quotient) };
 }
 
 // Sum lanes in scalar left-to-right order.
-[[nodiscard]] inline f64 dot(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
+[[nodiscard]] NWB_INLINE f64 dot(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
     return (a.x * b.x + a.y * b.y) + a.z * b.z;
 }
 
-[[nodiscard]] inline ShaderFloat3 max(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
+[[nodiscard]] NWB_INLINE ShaderFloat3 max(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
     const SIMDVectorDouble larger = VectorDoubleMax(VectorDoubleSet(a.x, a.y, a.z, 0.0), VectorDoubleSet(b.x, b.y, b.z, 0.0));
     return { VectorDoubleGetX(larger), VectorDoubleGetY(larger), VectorDoubleGetZ(larger) };
 }
 
-[[nodiscard]] inline f32 saturate(const f32 a)noexcept{
+[[nodiscard]] NWB_INLINE f32 saturate(const f32 a)noexcept{
     return a > 0.0f ? Min(1.0f, a) : 0.0f;
 }
 
-[[nodiscard]] inline ShaderFloat3 saturate(const ShaderFloat3 a)noexcept{
+[[nodiscard]] NWB_INLINE ShaderFloat3 saturate(const ShaderFloat3 a)noexcept{
     // Max then min in this operand order maps NaN and -0 to +0.
     const SIMDVectorDouble lower = VectorDoubleMax(VectorDoubleSet(a.x, a.y, a.z, 0.0), VectorDoubleZero());
     const SIMDVectorDouble saturated = VectorDoubleMin(VectorDoubleSplatOne(), lower);
     return { VectorDoubleGetX(saturated), VectorDoubleGetY(saturated), VectorDoubleGetZ(saturated) };
 }
 
-[[nodiscard]] inline ShaderFloat3 pow(const ShaderFloat3 a, const f64 b)noexcept{
+[[nodiscard]] NWB_INLINE ShaderFloat3 pow(const ShaderFloat3 a, const f64 b)noexcept{
     // VectorDoublePow calls Pow per lane, so the bits match.
     const SIMDVectorDouble power = VectorDoublePow(VectorDoubleSet(a.x, a.y, a.z, 1.0), VectorDoubleReplicate(b));
     return { VectorDoubleGetX(power), VectorDoubleGetY(power), VectorDoubleGetZ(power) };
@@ -170,13 +170,85 @@ public:
     u32 acceptanceCount = 0u;
 };
 
+struct OpaqueCsgClearContext{
+    Tests::TestArena<> testArena;
+    Core::GpuTaskGraph graph{ testArena.arena };
+};
+
+[[nodiscard]] NWB_INLINE Expected<OpaqueCsgIntervalClearResult> DeclareOpaqueCsgIntervalClear(
+    Core::GpuTaskGraph& graph,
+    DeferredFrameTargets& targets,
+    const Core::GpuTaskId dependency,
+    GraphClearTimingRecordState& clearTimingState
+){
+    const OpaqueCsgIntervalClearInputs inputs{
+        .targets = targets,
+        .csgFrameData = {},
+        .csgIntervalId = {},
+        .csgReceiverEventCount = {},
+        .csgPeelSubresources = {},
+        .csgReceiverEventCountSubresources = {},
+        .dependencyTask = dependency,
+        .hasOpaqueCsgFrameWork = false,
+    };
+    OpaqueCsgIntervalClearBuilder builder(graph);
+    return builder.declare(inputs, clearTimingState);
+}
+
+[[nodiscard]] NWB_INLINE Vector<Core::GpuTaskResourceUse> CollectSparseCsgOpaqueGbufferResourceUses(
+    const DeferredGraphResourceImportResult& resources,
+    const Core::TextureSubresourceSet& peel,
+    const Core::TextureSubresourceSet& events,
+    const Core::TextureSubresourceSet& counts
+){
+    Core::Alloc::ScratchArena scratch(NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsOpaqueGbufferCsgSparse);
+    const OpaqueGbufferResourceUseInputs inputs{
+        .resources = resources,
+        .materialInstanceRange = {},
+        .materialTypedRange = {},
+        .csgReceiverRange = {},
+        .csgCutterRange = {},
+        .csgPeelSubresources = peel,
+        .csgReceiverEventDataSubresources = events,
+        .csgReceiverEventCountSubresources = counts,
+        .hasOpaqueDrawItems = false,
+        .hasCsgFrameGpuWork = false,
+        .hasOpaqueCsgFrameWork = true,
+    };
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> scratchUses{ scratch };
+    OpaqueGbufferResourceUseBuilder::Append(inputs, scratchUses);
+    Vector<Core::GpuTaskResourceUse> uses(NWB::Tests::TestDetail::Arena());
+    uses.assign(scratchUses.begin(), scratchUses.end());
+    return uses;
+}
+
+[[nodiscard]] NWB_INLINE u32 ReadCopiedU32(const Span<const u8> bytes, const usize offset)noexcept{
+    u32 value = 0u;
+    NWB_MEMCPY(&value, sizeof(value), bytes.data() + offset, sizeof(u32));
+    return value;
+}
+
+NWB_INLINE void AcceptNullOutputLayer(const u64 frameGeneration, const Core::QueueSubmissionToken& token)noexcept{
+    RendererTaskGraphDetail::DeferredPresentGraphTask::AcceptOutputLayer(nullptr, frameGeneration, token);
+}
+
+NWB_INLINE void AcceptRecordingOutputLayer(RecordingLayerContributor& contributor, const u64 frameGeneration, const Core::QueueSubmissionToken& token)noexcept{
+    RendererTaskGraphDetail::DeferredPresentGraphTask::AcceptOutputLayer(&contributor, frameGeneration, token);
+}
+
 struct PreparedSoftwareBvhGraphResourcesTestsTag{};
 struct BuildContext{
     Tests::TestArena<PreparedSoftwareBvhGraphResourcesTestsTag> testArena;
     Core::GpuTaskGraph graph{ testArena.arena };
 };
 
-[[nodiscard]] inline Float34U MakeZeroFloat34U()noexcept{
+struct RaySceneGraphReadsTestsTag{};
+struct RaySceneGraphReadsContext{
+    Tests::TestArena<RaySceneGraphReadsTestsTag> testArena;
+    Core::GpuTaskGraph graph{ testArena.arena };
+};
+
+[[nodiscard]] NWB_INLINE Float34U MakeZeroFloat34U()noexcept{
     return Float34U{};
 }
 
@@ -266,8 +338,29 @@ using EcsGraphicsOutputLayerColorDetail::EcsGraphicsMeshOptics_nwbHdr10EncodeSce
 using EcsGraphicsOutputLayerColorDetail::EcsGraphicsMeshOptics_nwbHdr10EncodeUiLinear;
 using EcsGraphicsOutputLayerColorDetail::EcsGraphicsMeshOptics_nwbHdr10EncodeSceneWithUi;
 
+using ScratchArena = Core::Alloc::ScratchArena;
+using GpuTaskId = Core::GpuTaskId;
+using GpuTaskGraph = Core::GpuTaskGraph;
+using GpuTaskGraphDeclarationReadView = Core::GpuTaskGraph::DeclarationReadView;
+namespace CommandQueue = Core::CommandQueue;
+namespace ResourceStates = Core::ResourceStates;
+using DeferredFrameTargets = Impl::DeferredFrameTargets;
+using GraphClearTimingRecordState = Impl::GraphClearTimingRecordState;
+using OpaqueCsgIntervalClearResult = Impl::OpaqueCsgIntervalClearResult;
+using OpaqueCsgClearContext = EcsGraphicsMeshOpticsDetail::OpaqueCsgClearContext;
+using EcsGraphicsMeshOpticsDetail::DeclareOpaqueCsgIntervalClear;
+using EcsGraphicsMeshOpticsDetail::CollectSparseCsgOpaqueGbufferResourceUses;
+using EcsGraphicsMeshOpticsDetail::ReadCopiedU32;
 using RecordingLayerContributor = EcsGraphicsMeshOpticsDetail::RecordingLayerContributor;
+using EcsGraphicsMeshOpticsDetail::AcceptNullOutputLayer;
+using EcsGraphicsMeshOpticsDetail::AcceptRecordingOutputLayer;
 using SwBvhBuildContext = EcsGraphicsMeshOpticsDetail::BuildContext;
+using PreparedMeshSwBvhBuild = Impl::PreparedMeshSwBvhBuild;
+using PreparedMeshSwBvhBuildSpan = Span<const Impl::PreparedMeshSwBvhBuild>;
+using PreparedMeshSwBvhGraphResourceVectorResult = Expected<Impl::PreparedMeshSwBvhGraphResourceVector>;
+using Impl::ResolvePreparedSoftwareBvhGraphResources;
+using RaySceneGraphReadsContext = EcsGraphicsMeshOpticsDetail::RaySceneGraphReadsContext;
+using Impl::ImportRayTracingSceneGraphReads;
 using EcsGraphicsMeshOpticsDetail::MakeZeroFloat34U;
 
 using PresentationSettings = Impl::PresentationSettings;
@@ -474,48 +567,43 @@ void VerifyObjectGeometryCacheTests_ImmutableStaticContentReusesZeroRevisionOnly
     EXPECT_FALSE(accepted.valid());
 }
 
+Expected<OpaqueCsgIntervalClearResult> RunOpaqueCsgIntervalClear(
+    mut OpaqueCsgClearContext context,
+    mut DeferredFrameTargets targets,
+    in GpuTaskId dependency,
+    mut GraphClearTimingRecordState clearTimingState
+){
+    return DeclareOpaqueCsgIntervalClear(context.graph, targets, dependency, clearTimingState);
+}
+
 void VerifyOpaqueCsgIntervalClearBuilder_NoOpaqueWorkDoesNotPublishDependencyAsClear(){
-    ComputeOutputTestArena testArena = ComputeOutputTestArena();
-    native(mut testArena){
-        Core::GpuTaskGraph graph(testArena.arena);
-        Core::GpuTaskDesc dependencyDesc;
-        dependencyDesc.setIdentity(Name(s_EcsCaseTestsOpaqueCsgIntervalClearDependency)).setMarkerLabel("Incoming CSG Dependency");
-        const auto dependencyResult = graph.addTask(dependencyDesc);
-        ASSERT_TRUE(dependencyResult);
-        const Core::GpuTaskId dependency = *dependencyResult;
-        ASSERT_TRUE(dependency.valid());
+    OpaqueCsgClearContext context = OpaqueCsgClearContext();
+    GpuTaskDesc dependencyDesc = GpuTaskDesc();
+    dependencyDesc.setIdentity(Name(s_EcsCaseTestsOpaqueCsgIntervalClearDependency)).setMarkerLabel("Incoming CSG Dependency");
+    const Expected<GpuTaskId> dependencyResult = context.graph.addTask(dependencyDesc);
+    ASSERT_TRUE(dependencyResult.has_value());
+    const GpuTaskId dependency = dependencyResult.value();
+    ASSERT_TRUE(dependency.valid());
 
-        usize initialTaskCount = 0u;
-        {
-            const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
-            initialTaskCount = declarations.taskCount();
-            ASSERT_EQ(initialTaskCount, 1u);
-            ASSERT_TRUE(declarations.validTask(dependency));
-        }
-
-        Impl::DeferredFrameTargets targets;
-        Impl::GraphClearTimingRecordState clearTimingState;
-        const Impl::OpaqueCsgIntervalClearInputs inputs{
-            .targets = targets,
-            .csgFrameData = {},
-            .csgIntervalId = {},
-            .csgReceiverEventCount = {},
-            .csgPeelSubresources = {},
-            .csgReceiverEventCountSubresources = {},
-            .dependencyTask = dependency,
-            .hasOpaqueCsgFrameWork = false,
-        };
-        Impl::OpaqueCsgIntervalClearBuilder builder(graph);
-        const auto result = builder.declare(inputs, clearTimingState);
-        ASSERT_TRUE(result);
-        EXPECT_FALSE(result->clearTask.valid());
-        EXPECT_FALSE(result->clearFirstTask.valid());
-
-        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
-        ASSERT_EQ(declarations.taskCount(), initialTaskCount);
-        EXPECT_TRUE(declarations.validTask(dependency));
-        EXPECT_EQ(declarations.taskAt(0u).id, dependency);
+    usize initialTaskCount = 0u;
+    {
+        const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(context.graph);
+        initialTaskCount = declarations.taskCount();
+        ASSERT_EQ(initialTaskCount, 1u);
+        ASSERT_TRUE(declarations.validTask(dependency));
     }
+
+    DeferredFrameTargets targets = DeferredFrameTargets();
+    GraphClearTimingRecordState clearTimingState = GraphClearTimingRecordState();
+    const Expected<OpaqueCsgIntervalClearResult> result = RunOpaqueCsgIntervalClear(context, targets, dependency, clearTimingState);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_FALSE(result.value().clearTask.valid());
+    EXPECT_FALSE(result.value().clearFirstTask.valid());
+
+    const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(context.graph);
+    ASSERT_EQ(declarations.taskCount(), initialTaskCount);
+    EXPECT_TRUE(declarations.validTask(dependency));
+    EXPECT_EQ(declarations.taskAt(0u).id, dependency);
 }
 
 GpuGraphResourceId MakeGraphResourceId(in u32 generation, in u32 index){
@@ -535,26 +623,7 @@ void VerifyOpaqueGbufferResourceUses_CsgSparseValidityKeepsReadWriteRangesWithou
     const TextureSubresourceSet peel = TextureSubresourceSet(0u, 1u, 0u, 4u);
     const TextureSubresourceSet events = TextureSubresourceSet(0u, 1u, 0u, 8u);
     const TextureSubresourceSet counts = TextureSubresourceSet(0u, 1u, 0u, 1u);
-    Vector<GpuTaskResourceUse> uses = Vector<GpuTaskResourceUse>();
-    native(in resources, in peel, in events, in counts, mut uses){
-        Core::Alloc::ScratchArena scratch(s_EcsCaseTestsOpaqueGbufferCsgSparse);
-        const Impl::OpaqueGbufferResourceUseInputs inputs{
-            .resources = resources,
-            .materialInstanceRange = {},
-            .materialTypedRange = {},
-            .csgReceiverRange = {},
-            .csgCutterRange = {},
-            .csgPeelSubresources = peel,
-            .csgReceiverEventDataSubresources = events,
-            .csgReceiverEventCountSubresources = counts,
-            .hasOpaqueDrawItems = false,
-            .hasCsgFrameGpuWork = false,
-            .hasOpaqueCsgFrameWork = true,
-        };
-        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> scratchUses{ scratch };
-        Impl::OpaqueGbufferResourceUseBuilder::Append(inputs, scratchUses);
-        uses.assign(scratchUses.begin(), scratchUses.end());
-    }
+    const Vector<GpuTaskResourceUse> uses = CollectSparseCsgOpaqueGbufferResourceUses(resources, peel, events, counts);
     ASSERT_EQ(uses.size(), 11u);
     EXPECT_EQ(uses[1u].resource, resources.csgCapBackNormal);
     EXPECT_EQ(uses[1u].access, GpuTaskResourceAccess::Write);
@@ -751,12 +820,9 @@ void VerifyOpticalScene_FrozenUploadOwnsBytesAfterGatherChanges(){
 
     ASSERT_EQ(upload.bytes.size(), cast<usize>(s_RtOpticalSceneHeaderBytes + s_RtOpticalInstanceBytes));
     EXPECT_EQ(upload.instanceCount, 1u);
-    u32 storedCount = 0u;
-    u32 storedEntity = 0u;
-    native(in upload, mut storedCount, mut storedEntity){
-        NWB_MEMCPY(&storedCount, sizeof(storedCount), upload.bytes.data() + s_RtOpticalSceneTransparentCountOffset, sizeof(u32));
-        NWB_MEMCPY(&storedEntity, sizeof(storedEntity), upload.bytes.data() + s_RtOpticalSceneHeaderBytes, sizeof(u32));
-    }
+    const ConstByteSpan uploadedBytes = ConstByteSpan(upload.bytes.data(), upload.bytes.size());
+    const u32 storedCount = ReadCopiedU32(uploadedBytes, s_RtOpticalSceneTransparentCountOffset);
+    const u32 storedEntity = ReadCopiedU32(uploadedBytes, cast<usize>(s_RtOpticalSceneHeaderBytes));
     EXPECT_EQ(storedCount, 1u);
     EXPECT_EQ(storedEntity, EntityID(7u, 2u).id);
 }
@@ -953,33 +1019,46 @@ void VerifyOutputLayerColor_NegativeUiRadianceClampsAndHighlightsRemainBelowTheO
     OutputLayerColor_ExpectColorNear(EcsGraphicsMeshOptics_nwbHdr10EncodeUiLinear(ShaderFloat3(-1.0)), EcsGraphicsMeshOptics_nwbHdr10EncodeUiLinear(ShaderFloat3(0.0)), 0.000001);
 }
 
+void PublishRecordingOutputLayer(mut RecordingLayerContributor contributor, in u64 frameGeneration, in QueueSubmissionToken token){
+    AcceptRecordingOutputLayer(contributor, frameGeneration, token);
+}
+
 void VerifyOutputLayer_MissingContributorInvalidTokenAndZeroGenerationCannotPublishAcceptance(){
     RecordingLayerContributor contributor = RecordingLayerContributor();
-    native(mut contributor){
-        Impl::RendererTaskGraphDetail::DeferredPresentGraphTask::AcceptOutputLayer(nullptr, 17u, {});
-        Impl::RendererTaskGraphDetail::DeferredPresentGraphTask::AcceptOutputLayer(&contributor, 17u, {});
-        EXPECT_EQ(contributor.acceptanceCount, 0u);
-        const Core::QueueSubmissionToken consumerToken{ .value = 101u, .physicalQueueIndex = 0u, .deviceGeneration = 3u, .queue = Core::CommandQueue::Graphics, };
-        Impl::RendererTaskGraphDetail::DeferredPresentGraphTask::AcceptOutputLayer(&contributor, 17u, consumerToken);
-        EXPECT_EQ(contributor.acceptanceCount, 1u);
-        Impl::RendererTaskGraphDetail::DeferredPresentGraphTask::AcceptOutputLayer(&contributor, 0u, consumerToken);
-    }
+    const QueueSubmissionToken emptyToken = QueueSubmissionToken();
+    AcceptNullOutputLayer(17u, emptyToken);
+    PublishRecordingOutputLayer(contributor, 17u, emptyToken);
+    EXPECT_EQ(contributor.acceptanceCount, 0u);
+    QueueSubmissionToken consumerToken = QueueSubmissionToken();
+    consumerToken.value = 101u;
+    consumerToken.physicalQueueIndex = 0u;
+    consumerToken.deviceGeneration = 3u;
+    consumerToken.queue = CommandQueue::Graphics;
+    PublishRecordingOutputLayer(contributor, 17u, consumerToken);
     EXPECT_EQ(contributor.acceptanceCount, 1u);
+    PublishRecordingOutputLayer(contributor, 0u, consumerToken);
+    EXPECT_EQ(contributor.acceptanceCount, 1u);
+}
+
+PreparedMeshSwBvhGraphResourceVectorResult ResolveSwBvhGraphResources(
+    in GpuTaskGraph graph,
+    in PreparedMeshSwBvhBuildSpan builds,
+    mut ScratchArena scratch
+){
+    return ResolvePreparedSoftwareBvhGraphResources(graph, builds, scratch);
 }
 
 void VerifyPreparedSoftwareBvhGraphResources_MissingImportedBuildBuffersCannotPublishResources(){
     SwBvhBuildContext context = SwBvhBuildContext();
-    native(mut context){
-        Core::Alloc::ScratchArena scratch{ Name(s_EcsCaseTestsPreparedSwBvhMissing) };
-        const auto emptyResources = Impl::ResolvePreparedSoftwareBvhGraphResources(context.graph, {}, scratch);
-        ASSERT_TRUE(emptyResources);
-        EXPECT_TRUE(emptyResources->empty());
-        const Impl::PreparedMeshSwBvhBuild missingBuild{};
-        EXPECT_FALSE(Impl::ResolvePreparedSoftwareBvhGraphResources(context.graph, Span<const Impl::PreparedMeshSwBvhBuild>(&missingBuild, 1u), scratch));
-        const Core::GpuTaskGraph::DeclarationReadView view(context.graph);
-        ASSERT_TRUE(view.valid());
-        EXPECT_EQ(view.resourceCount(), 0u);
-    }
+    ScratchArena scratch = ScratchArena(Name(s_EcsCaseTestsPreparedSwBvhMissing));
+    const PreparedMeshSwBvhGraphResourceVectorResult emptyResources = ResolveSwBvhGraphResources(context.graph, PreparedMeshSwBvhBuildSpan(), scratch);
+    ASSERT_TRUE(emptyResources.has_value());
+    EXPECT_TRUE(emptyResources.value().empty());
+    const Array<PreparedMeshSwBvhBuild, 1> missingBuilds = Array<PreparedMeshSwBvhBuild, 1>();
+    EXPECT_FALSE(ResolveSwBvhGraphResources(context.graph, PreparedMeshSwBvhBuildSpan(missingBuilds.data(), missingBuilds.size()), scratch).has_value());
+    const GpuTaskGraphDeclarationReadView view = GpuTaskGraphDeclarationReadView(context.graph);
+    ASSERT_TRUE(view.valid());
+    EXPECT_EQ(view.resourceCount(), 0u);
 }
 
 void VerifyPresentationSettings_AcceptsZeroExposureAtTheLowerBoundary(){
@@ -1020,27 +1099,31 @@ void VerifyEcsGraphics_RaySceneSnapshotDoesNotTreatMissingResourcesAsHardwareAva
     EXPECT_FALSE(resources.valid());
 }
 
-void VerifyEcsGraphics_RaySceneGraphReadsMissingResourcesRetainScratchArena(){
-    RayTracingSceneGraphResources resources = RayTracingSceneGraphResources();
-    native(in resources){
-        struct RaySceneGraphReadsTestsTag{};
-        Tests::TestArena<RaySceneGraphReadsTestsTag> testArena;
-        Core::GpuTaskGraph graph(testArena.arena);
-        Core::Alloc::ScratchArena scratchArena{ Name(s_EcsCaseTestsRaySceneGraphReadsScratch) };
-        const auto scratchBefore = scratchArena.memoryStats();
-        const auto reads = Impl::ImportRayTracingSceneGraphReads(resources, Core::ResourceStates::Common, {}, graph, scratchArena);
-        const auto scratchAfter = scratchArena.memoryStats();
+b8 TryImportRaySceneGraphReads(
+    in RayTracingSceneGraphResources resources,
+    mut RaySceneGraphReadsContext context,
+    mut ScratchArena scratchArena
+){
+    return ImportRayTracingSceneGraphReads(resources, ResourceStates::Common, GpuTaskId(), context.graph, scratchArena).has_value();
+}
 
-        EXPECT_FALSE(reads.has_value());
-        EXPECT_EQ(scratchAfter.usedBytes, scratchBefore.usedBytes);
-        EXPECT_EQ(scratchAfter.reservedBytes, scratchBefore.reservedBytes);
-        EXPECT_EQ(scratchAfter.allocationCount, scratchBefore.allocationCount);
-        EXPECT_EQ(scratchAfter.reallocationCount, scratchBefore.reallocationCount);
-        EXPECT_EQ(scratchAfter.deallocationCount, scratchBefore.deallocationCount);
-        const Core::GpuTaskGraph::DeclarationReadView view(graph);
-        ASSERT_TRUE(view.valid());
-        EXPECT_EQ(view.resourceCount(), 0u);
-    }
+void VerifyEcsGraphics_RaySceneGraphReadsMissingResourcesRetainScratchArena(){
+    const RayTracingSceneGraphResources resources = RayTracingSceneGraphResources();
+    RaySceneGraphReadsContext context = RaySceneGraphReadsContext();
+    ScratchArena scratchArena = ScratchArena(Name(s_EcsCaseTestsRaySceneGraphReadsScratch));
+    const ArenaMemoryStats scratchBefore = scratchArena.memoryStats();
+    const b8 hasReads = TryImportRaySceneGraphReads(resources, context, scratchArena);
+    const ArenaMemoryStats scratchAfter = scratchArena.memoryStats();
+
+    EXPECT_FALSE(hasReads);
+    EXPECT_EQ(scratchAfter.usedBytes, scratchBefore.usedBytes);
+    EXPECT_EQ(scratchAfter.reservedBytes, scratchBefore.reservedBytes);
+    EXPECT_EQ(scratchAfter.allocationCount, scratchBefore.allocationCount);
+    EXPECT_EQ(scratchAfter.reallocationCount, scratchBefore.reallocationCount);
+    EXPECT_EQ(scratchAfter.deallocationCount, scratchBefore.deallocationCount);
+    const GpuTaskGraphDeclarationReadView view = GpuTaskGraphDeclarationReadView(context.graph);
+    ASSERT_TRUE(view.valid());
+    EXPECT_EQ(view.resourceCount(), 0u);
 }
 
 void VerifyRayTracingSceneIdentityTests_UntrustedScenesNeverPublishTrustedContentAndAbsentCsgIsIgnored(){

@@ -137,73 +137,42 @@ public:
 
 
 void VerifyGlobal_EnvironmentVariableNamesSupportSlicesAndRejectEmbeddedNull(){
+    const StringView pathName = "PATH";
     const StringView slicedPathName = StringView("PATH.trailing").substr(0u, 4u);
-    b8 readExpectedOk = false;
-    b8 readSlicedOk = false;
-    b8 expectedPresent = false;
-    b8 slicedMatchesExpected = false;
-    Expected<b8, ErrorCode> exactMatch = false;
-    Expected<b8, ErrorCode> mutatedMatch = true;
-    Expected<b8, ErrorCode> hasValueResult = false;
-    b8 expectedNonEmpty = false;
-    b8 invalidReadRejected = false;
-    b8 invalidEqualsSameError = false;
-    b8 invalidHasValueSameError = false;
+    const Expected<Optional<String>, ErrorCode> expected = ReadEnvironmentVariable(pathName);
+    const Expected<Optional<String>, ErrorCode> actual = ReadEnvironmentVariable(slicedPathName);
+    ASSERT_TRUE(expected.has_value());
+    ASSERT_TRUE(actual.has_value());
 
-    native(
-        in slicedPathName,
-        mut readExpectedOk,
-        mut readSlicedOk,
-        mut expectedPresent,
-        mut slicedMatchesExpected,
-        mut exactMatch,
-        mut mutatedMatch,
-        mut hasValueResult,
-        mut expectedNonEmpty,
-        mut invalidReadRejected,
-        mut invalidEqualsSameError,
-        mut invalidHasValueSameError
-    ){
-        using namespace __hidden_process_filesystem_boundary_tests;
-        NWB::Tests::TestArena<> testArena;
-        const auto expected = ReadEnvironmentVariable(testArena.arena, AStringView(s_PathEnvironment));
-        const auto actual = ReadEnvironmentVariable(testArena.arena, slicedPathName);
-        readExpectedOk = expected.has_value();
-        readSlicedOk = actual.has_value();
-        if(expected && actual && *expected){
-            expectedPresent = true;
-            slicedMatchesExpected = *actual == *expected;
-            expectedNonEmpty = !(**expected).empty();
-            auto different = **expected;
-            different += 'x';
-            exactMatch = EnvironmentVariableEquals(testArena.arena, s_PathEnvironment, AStringView(**expected));
-            mutatedMatch = EnvironmentVariableEquals(testArena.arena, s_PathEnvironment, AStringView(different));
-            hasValueResult = HasEnvironmentValue(testArena.arena, s_PathEnvironment);
-        }
-        const Array<char, 6u> invalidName = { 'P', 'A', 'T', 'H', '\0', 'X' };
-        const auto invalid = ReadEnvironmentVariable(testArena.arena, AStringView(invalidName.data(), invalidName.size()));
-        invalidReadRejected = !invalid && invalid.error() == MakeErrorCode(ErrorCondition::invalid_argument);
-        const auto invalidEquals = EnvironmentVariableEquals(testArena.arena, AStringView(invalidName.data(), invalidName.size()), "unused");
-        const auto invalidHasValue = HasEnvironmentValue(testArena.arena, AStringView(invalidName.data(), invalidName.size()));
-        if(!invalid){
-            invalidEqualsSameError = !invalidEquals && invalidEquals.error() == invalid.error();
-            invalidHasValueSameError = !invalidHasValue && invalidHasValue.error() == invalid.error();
-        }
-    }
+    const Optional<String> expectedOpt = expected.value();
+    const Optional<String> actualOpt = actual.value();
+    ASSERT_TRUE(expectedOpt.has_value());
+    ASSERT_TRUE(actualOpt.has_value());
+    const String expectedValue = expectedOpt.value();
+    EXPECT_EQ(StringView(actualOpt.value()), StringView(expectedValue));
 
-    ASSERT_TRUE(readExpectedOk);
-    ASSERT_TRUE(readSlicedOk);
-    ASSERT_TRUE(expectedPresent);
-    EXPECT_TRUE(slicedMatchesExpected);
+    String different = expectedValue;
+    different.append("x");
+    const Expected<b8, ErrorCode> exactMatch = EnvironmentVariableEquals(pathName, StringView(expectedValue));
+    const Expected<b8, ErrorCode> mutatedMatch = EnvironmentVariableEquals(pathName, StringView(different));
+    const Expected<b8, ErrorCode> hasValueResult = HasEnvironmentValue(pathName);
     ASSERT_TRUE(exactMatch.has_value());
     EXPECT_TRUE(exactMatch.value());
     ASSERT_TRUE(mutatedMatch.has_value());
     EXPECT_FALSE(mutatedMatch.value());
     ASSERT_TRUE(hasValueResult.has_value());
-    EXPECT_EQ(hasValueResult.value(), expectedNonEmpty);
-    EXPECT_TRUE(invalidReadRejected);
-    EXPECT_TRUE(invalidEqualsSameError);
-    EXPECT_TRUE(invalidHasValueSameError);
+    EXPECT_EQ(hasValueResult.value(), !expectedValue.empty());
+
+    const StringView invalidName = StringView("PATH\0X", 6u);
+    const Expected<Optional<String>, ErrorCode> invalid = ReadEnvironmentVariable(invalidName);
+    ASSERT_FALSE(invalid.has_value());
+    EXPECT_EQ(invalid.error(), MakeErrorCode(ErrorCondition::invalid_argument));
+    const Expected<b8, ErrorCode> invalidEquals = EnvironmentVariableEquals(invalidName, "unused");
+    const Expected<b8, ErrorCode> invalidHasValue = HasEnvironmentValue(invalidName);
+    ASSERT_FALSE(invalidEquals.has_value());
+    ASSERT_FALSE(invalidHasValue.has_value());
+    EXPECT_EQ(invalidEquals.error(), invalid.error());
+    EXPECT_EQ(invalidHasValue.error(), invalid.error());
 }
 
 void VerifyGlobal_DirectoryRetentionPreservesPredicateErrorAndRetainsUnadmittedEntries(){
@@ -262,38 +231,23 @@ void VerifyGlobal_FileWriteSizeRejectionPreservesExistingOutput(){
 }
 
 void VerifyGlobal_DirectoryCreationRejectsExistingFileWithoutChangingIt(){
-    Expected<b8, ErrorCode> unchangedDirectory = true;
-    Expected<b8, ErrorCode> collidedCreate = true;
-    b8 ensureBlockerAccepted = true;
-    b8 readBackOk = false;
-    String retainedText = "";
-    b8 removedRoot = false;
+    const Path root = Path("global_test_artifacts/directory_creation_file_collision");
+    const Path blocker = root / "existing.txt";
+    ASSERT_TRUE(EnsureEmptyDirectory(root).has_value());
+    ASSERT_TRUE(WriteTextFile(blocker, "retained"));
 
-    native(mut unchangedDirectory, mut collidedCreate, mut ensureBlockerAccepted, mut readBackOk, mut retainedText, mut removedRoot){
-        NWB::Tests::TestArena<> testArena;
-        const ::Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/directory_creation_file_collision");
-        const auto blocker = root / "existing.txt";
-        ASSERT_TRUE(EnsureEmptyDirectory(root));
-        ASSERT_TRUE(WriteTextFile(blocker, AStringView("retained")));
-
-        unchangedDirectory = CreateDirectories(root);
-        collidedCreate = CreateDirectories(blocker);
-        ensureBlockerAccepted = EnsureDirectories(blocker).has_value();
-        NWB::Tests::TestAString retained(testArena.arena);
-        readBackOk = ReadTextFile(blocker, retained).has_value();
-        retainedText.assign(AStringView(retained));
-        removedRoot = RemoveAllIfExists(root).has_value();
-    }
-
+    const Expected<b8, ErrorCode> unchangedDirectory = CreateDirectories(root);
+    const Expected<b8, ErrorCode> collidedCreate = CreateDirectories(blocker);
     ASSERT_TRUE(unchangedDirectory.has_value());
     EXPECT_FALSE(unchangedDirectory.value());
-    EXPECT_FALSE(collidedCreate.has_value());
-    if(!collidedCreate.has_value())
-        EXPECT_NE(collidedCreate.error().value(), 0);
-    EXPECT_FALSE(ensureBlockerAccepted);
-    ASSERT_TRUE(readBackOk);
+    ASSERT_FALSE(collidedCreate.has_value());
+    EXPECT_NE(collidedCreate.error().value(), 0);
+    EXPECT_FALSE(EnsureDirectories(blocker).has_value());
+
+    String retainedText = "";
+    ASSERT_TRUE(ReadTextFile(blocker, retainedText).has_value());
     EXPECT_EQ(StringView(retainedText), StringView("retained"));
-    EXPECT_TRUE(removedRoot);
+    EXPECT_TRUE(RemoveAllIfExists(root).has_value());
 }
 
 void VerifyGlobal_FileWritesRejectBufferedDeviceFailure(){
@@ -418,41 +372,29 @@ void VerifyGlobal_PathNativeComponentViewsBorrowSourceStorageWithoutAllocating()
 }
 
 void VerifyGlobal_MovePathReplacesExistingDestinationWithoutRetainingSource(){
-    b8 movedMatchesDestination = false;
-    b8 readDestinationOk = false;
+    const StringView sourceFilename = "source.txt";
+    const Path root = Path("global_test_artifacts/move_path_to_directory");
+    const Path source = root / sourceFilename;
+    const Path destinationDirectory = root / "moved";
+    const Path destination = destinationDirectory / sourceFilename;
+
+    ASSERT_TRUE(EnsureEmptyDirectory(root).has_value());
+    ASSERT_TRUE(WriteTextFile(source, "fresh"));
+    ASSERT_TRUE(EnsureDirectories(destinationDirectory).has_value());
+    ASSERT_TRUE(WriteTextFile(destination, "old"));
+
+    const Expected<Path, ErrorCode> movedPath = MovePathToDirectory(source, destinationDirectory);
+    ASSERT_TRUE(movedPath.has_value());
+    EXPECT_EQ(movedPath.value(), destination);
+
     String destinationText = "";
-    Expected<b8, ErrorCode> sourceExistsAfterMove = true;
-    b8 removedRoot = false;
-
-    native(mut movedMatchesDestination, mut readDestinationOk, mut destinationText, mut sourceExistsAfterMove, mut removedRoot){
-        using namespace __hidden_process_filesystem_boundary_tests;
-        NWB::Tests::TestArena<> testArena;
-        const ::Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/move_path_to_directory");
-        const ::Path<NWB::Core::Alloc::GlobalArena> source = root / s_SourceFilename;
-        const ::Path<NWB::Core::Alloc::GlobalArena> destinationDirectory = root / "moved";
-        const ::Path<NWB::Core::Alloc::GlobalArena> destination = destinationDirectory / s_SourceFilename;
-
-        ASSERT_TRUE(EnsureEmptyDirectory(root));
-        ASSERT_TRUE(WriteTextFile(source, AStringView("fresh")));
-        ASSERT_TRUE(EnsureDirectories(destinationDirectory));
-        ASSERT_TRUE(WriteTextFile(destination, AStringView("old")));
-
-        const auto movedPath = MovePathToDirectory(source, destinationDirectory);
-        movedMatchesDestination = movedPath.has_value() && *movedPath == destination;
-
-        BasicString<char, NWB::Core::Alloc::GlobalArena> movedText{testArena.arena};
-        readDestinationOk = ReadTextFile(destination, movedText).has_value();
-        destinationText.assign(AStringView(movedText.data(), movedText.size()));
-        sourceExistsAfterMove = FileExists(source);
-        removedRoot = RemoveAllIfExists(root).has_value();
-    }
-
-    ASSERT_TRUE(movedMatchesDestination);
-    ASSERT_TRUE(readDestinationOk);
+    ASSERT_TRUE(ReadTextFile(destination, destinationText).has_value());
     EXPECT_EQ(StringView(destinationText), StringView("fresh"));
+
+    const Expected<b8, ErrorCode> sourceExistsAfterMove = FileExists(source);
     ASSERT_TRUE(sourceExistsAfterMove.has_value());
     EXPECT_FALSE(sourceExistsAfterMove.value());
-    EXPECT_TRUE(removedRoot);
+    EXPECT_TRUE(RemoveAllIfExists(root).has_value());
 }
 
 void VerifyGlobal_PathViewAccessorsAndSelfAliasingMutationsPreserveBoundariesWithoutExtraAllocations(){

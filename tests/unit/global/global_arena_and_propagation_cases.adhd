@@ -212,6 +212,24 @@ void VerifyStringSwap(const b8 foreignArena, const b8 shortFirst){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace NWB::Tests::GlobalCases{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using Utf8CharArray4 = Array<char, 4>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -630,16 +648,13 @@ void VerifyGlobal_AutoRegistrationQueueDeduplicatesAndSnapshots(){
 
 void VerifyGlobal_GenericPathKeepsNativeFilenameCharacters(){
     b8 windowsPlatform = false;
-    String rendered = "";
-    native(mut windowsPlatform, mut rendered){
+    native(mut windowsPlatform){
 #if defined(NWB_PLATFORM_WINDOWS)
         windowsPlatform = true;
 #endif
-        NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
-        const ::Path<NWB::Core::Alloc::ScratchArena> path(scratchArena, "one\\two");
-        const auto text = PathToGenericString<char>(scratchArena, path);
-        rendered.assign(AStringView(text));
     }
+    const Path path = Path("one\\two");
+    const String rendered = PathToGenericString(path);
     const StringView renderedView = rendered;
     if(windowsPlatform)
         EXPECT_EQ(renderedView, "one/two");
@@ -693,30 +708,31 @@ void VerifyGlobal_UnicodeAndAsciiHelpersRejectSurrogatesOverlongsAndInvalidIdent
     EXPECT_EQ(DecodeUtf16SurrogatePair(0xD800u, 0xDC00u), 0x10000u);
     EXPECT_EQ(DecodeUtf16SurrogatePair(0xDBFFu, 0xDFFFu), s_UnicodeMaxCodePoint);
 
-    native{
-        const Array<char, 4u> bomPrefixed = { static_cast<char>(0xEF), static_cast<char>(0xBB), static_cast<char>(0xBF), 'a' };
-        EXPECT_TRUE(HasUtf8Bom(AStringView(bomPrefixed.data(), bomPrefixed.size())));
-        EXPECT_FALSE(HasUtf8Bom(AStringView(bomPrefixed.data(), 2u)));
+    const StringView bomPrefixed = StringView("\357\273\277a", 4u);
+    EXPECT_TRUE(HasUtf8Bom(bomPrefixed));
+    EXPECT_FALSE(HasUtf8Bom(bomPrefixed.substr(0u, 2u)));
 
-        Array<char, s_Utf8MaxSequenceBytes> encoded = {};
-        EXPECT_FALSE(EncodeUtf8CodePoint(0xD800u, encoded));
-        EXPECT_FALSE(EncodeUtf8CodePoint(s_UnicodeMaxCodePoint + 1u, encoded));
-        const auto encodedBytes = EncodeUtf8CodePoint(s_UnicodeMaxCodePoint, encoded);
-        ASSERT_TRUE(encodedBytes);
-        ASSERT_EQ(*encodedBytes, 4u);
-        EXPECT_TRUE(IsUtf8ScalarBoundary(AStringView(encoded.data(), encoded.size()), 0u));
-        EXPECT_FALSE(IsUtf8ScalarBoundary(AStringView(encoded.data(), encoded.size()), 1u));
-        EXPECT_TRUE(IsUtf8ScalarBoundary(AStringView(encoded.data(), encoded.size()), 4u));
-        EXPECT_FALSE(IsUtf8ScalarBoundary(AStringView(encoded.data(), encoded.size()), 5u));
+    Utf8CharArray4 encoded = Utf8CharArray4();
+    EXPECT_FALSE(EncodeUtf8CodePoint(0xD800u, encoded).has_value());
+    EXPECT_FALSE(EncodeUtf8CodePoint(s_UnicodeMaxCodePoint + 1u, encoded).has_value());
+    const Expected<usize> encodedBytes = EncodeUtf8CodePoint(s_UnicodeMaxCodePoint, encoded);
+    ASSERT_TRUE(encodedBytes.has_value());
+    ASSERT_EQ(encodedBytes.value(), 4u);
 
-        const auto decoded = DecodeUtf8Scalar(AStringView(encoded.data(), encoded.size()));
-        ASSERT_TRUE(decoded);
-        EXPECT_EQ(decoded->codePoint, s_UnicodeMaxCodePoint);
-        EXPECT_EQ(decoded->byteCount, 4);
-        EXPECT_FALSE(DecodeUtf8Scalar(AStringView(encoded.data(), 3u)));
-        const Array<char, 3u> surrogateBytes = { static_cast<char>(0xED), static_cast<char>(0xA0), static_cast<char>(0x80) };
-        EXPECT_FALSE(DecodeUtf8Scalar(AStringView(surrogateBytes.data(), surrogateBytes.size())));
-    }
+    const StringView maxScalarView = StringView("\xF4\x8F\xBF\xBF", 4u);
+    for(usize i = 0u; i < 4u; ++i)
+        EXPECT_EQ(cast<u8>(encoded[i]), maxScalarView[i]);
+    EXPECT_TRUE(IsUtf8ScalarBoundary(maxScalarView, 0u));
+    EXPECT_FALSE(IsUtf8ScalarBoundary(maxScalarView, 1u));
+    EXPECT_TRUE(IsUtf8ScalarBoundary(maxScalarView, 4u));
+    EXPECT_FALSE(IsUtf8ScalarBoundary(maxScalarView, 5u));
+
+    const Expected<DecodedUtf8CodePoint> decoded = DecodeUtf8Scalar(maxScalarView);
+    ASSERT_TRUE(decoded.has_value());
+    EXPECT_EQ(decoded.value().codePoint, s_UnicodeMaxCodePoint);
+    EXPECT_EQ(decoded.value().byteCount, 4);
+    EXPECT_FALSE(DecodeUtf8Scalar(maxScalarView.substr(0u, 3u)).has_value());
+    EXPECT_FALSE(DecodeUtf8Scalar(StringView("\xED\xA0\x80", 3u)).has_value());
 
     EXPECT_TRUE(IsUnicodeWhitespace(0x2000u));
     EXPECT_TRUE(IsUnicodeWhitespace(0x200au));
@@ -763,11 +779,9 @@ void VerifyGlobal_UnicodeAndAsciiHelpersRejectSurrogatesOverlongsAndInvalidIdent
     EXPECT_FALSE(IsRelativeSlashPathWithoutDotSegments("a\\b"));
     EXPECT_FALSE(FitsFixedText(StringView(), 0u));
     EXPECT_TRUE(FitsFixedText(StringView(), 1u));
-    native{
-        EXPECT_FALSE(FitsFixedText(AStringView("a\0b", 3u), 4u));
-        EXPECT_FALSE(TryFiniteF32FromF64(Limit<f64>::s_Infinity));
-        EXPECT_FALSE(TryFiniteF32FromF64(static_cast<f64>(Limit<f32>::s_Max) * 2.0));
-    }
+    EXPECT_FALSE(FitsFixedText(StringView("a\0b", 3u), 4u));
+    EXPECT_FALSE(TryFiniteF32FromF64(bit_cast<f64>(cast<u64>(0x7ff0000000000000u))).has_value());
+    EXPECT_FALSE(TryFiniteF32FromF64(cast<f64>(f32.max) * 2.0).has_value());
     const Expected<f32> negZero = ParseFiniteF32ViaF64("-0.0");
     ASSERT_TRUE(negZero.has_value());
     EXPECT_EQ(bit_cast<u32>(negZero.value()), 0x80000000u);
@@ -815,6 +829,26 @@ GlobalArena& DefaultOwner(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if !defined(_MSC_VER)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(Global, BoundedRuntimeWrappersTerminateTruncatedText){
+    VerifyGlobal_BoundedRuntimeWrappersTerminateTruncatedText();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -837,39 +871,6 @@ NWB_ADHD_GTEST(Global, AutoRegistrationQueueDeduplicatesAndSnapshots, VerifyGlob
 NWB_ADHD_GTEST(Global, GenericPathKeepsNativeFilenameCharacters, VerifyGlobal_GenericPathKeepsNativeFilenameCharacters)
 NWB_ADHD_GTEST(Global, UnicodeAndAsciiHelpersRejectSurrogatesOverlongsAndInvalidIdentifiers, VerifyGlobal_UnicodeAndAsciiHelpersRejectSurrogatesOverlongsAndInvalidIdentifiers)
 NWB_ADHD_GTEST(Global, OwnershipInvariantTerminationIsAlwaysActive, VerifyGlobal_OwnershipInvariantTerminationIsAlwaysActive)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if !defined(_MSC_VER)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(Global, BoundedRuntimeWrappersTerminateTruncatedText){
-    VerifyGlobal_BoundedRuntimeWrappersTerminateTruncatedText();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

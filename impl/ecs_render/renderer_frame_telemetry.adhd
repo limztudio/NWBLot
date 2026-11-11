@@ -108,10 +108,10 @@ b8 RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& b
         }
     }
     m_frameGraphRendererLabel.clear();
-    if(!RendererGraphRuntimeLabel::Append(deferredRuntimeStatistics, runtimeQueueTopology, physicalQueueRuntimeStatistics, deferredCompiledPlan, m_deferredLightingRecordedGraph, m_graphics.getDevice(), m_frameGraphRendererLabel))
+    if(!RendererGraphRuntimeLabel{}.append(deferredRuntimeStatistics, runtimeQueueTopology, physicalQueueRuntimeStatistics, deferredCompiledPlan, m_deferredLightingRecordedGraph, m_graphics.getDevice(), m_frameGraphRendererLabel))
         return false;
 
-    RendererDeviceDiagnosticsLabel::Append(m_graphics, m_frameGraphRendererLabel);
+    RendererDeviceDiagnosticsLabel{}.append(m_graphics, m_frameGraphRendererLabel);
 
     const Handle rendererFrame = builder.addPass(Name(s_FrameGraphNameEcsRenderFrame), AStringView(m_frameGraphRendererLabel.data(), m_frameGraphRendererLabel.size()), rendererFrameMetadata);
     for(const Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& queueStatistics : physicalQueueRuntimeStatistics){

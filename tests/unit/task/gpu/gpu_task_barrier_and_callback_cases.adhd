@@ -59,18 +59,18 @@ struct GpuBarrierCallbackContext{
 
 inline constexpr u64 s_GpuBarrierAcceptedTokenValue = 7u;
 
-inline void GpuBarrierRecordInvocation(GpuBarrierCallbackContext& context){
+NWB_INLINE void GpuBarrierRecordInvocation(GpuBarrierCallbackContext& context){
     ++context.state.count;
     if(context.state.order)
         context.state.order->push_back(context.taskIndex);
 }
 
-inline b8 GpuBarrierInvokeRecorded(void* const context, const Core::CommandListResourceStateHandoff*){
+NWB_INLINE b8 GpuBarrierInvokeRecorded(void* const context, const Core::CommandListResourceStateHandoff*){
     GpuBarrierRecordInvocation(*MakeNotNull(static_cast<GpuBarrierCallbackContext*>(context)));
     return true;
 }
 
-inline b8 GpuBarrierInvokeAccepted(void* const context, const Core::QueueSubmissionToken& token){
+NWB_INLINE b8 GpuBarrierInvokeAccepted(void* const context, const Core::QueueSubmissionToken& token){
     if(token.value != s_GpuBarrierAcceptedTokenValue)
         return false;
     GpuBarrierRecordInvocation(*MakeNotNull(static_cast<GpuBarrierCallbackContext*>(context)));
@@ -78,7 +78,7 @@ inline b8 GpuBarrierInvokeAccepted(void* const context, const Core::QueueSubmiss
 }
 
 template<typename Callback>
-[[nodiscard]] inline Callback GpuBarrierMakeCallback(const Core::GpuTaskId task, GpuBarrierCallbackContext& context){
+[[nodiscard]] NWB_INLINE Callback GpuBarrierMakeCallback(const Core::GpuTaskId task, GpuBarrierCallbackContext& context){
     if constexpr(IsSame_V<Callback, Core::GpuTaskGraphTaskRecordedCallback>)
         return Callback{ .task = task, .context = &context, .invoke = GpuBarrierInvokeRecorded };
     else
@@ -86,13 +86,117 @@ template<typename Callback>
 }
 
 template<typename Callback>
-[[nodiscard]] inline b8 GpuBarrierInvokeBoundCallback(const Callback& callback){
+[[nodiscard]] NWB_INLINE b8 GpuBarrierInvokeBoundCallback(const Callback& callback){
     if constexpr(IsSame_V<Callback, Core::GpuTaskGraphTaskRecordedCallback>)
         return callback.invoke(callback.context, nullptr);
     else{
         const Core::QueueSubmissionToken token{ .value = s_GpuBarrierAcceptedTokenValue, .queue = Core::CommandQueue::Graphics };
         return callback.invoke(callback.context, token);
     }
+}
+
+NWB_INLINE void CheckReorderedCallbackBindings(
+    const Core::GpuTaskGraph::DeclarationReadView& declarations,
+    const Core::GpuCompiledGraph::ReadView& plan,
+    Span<const Core::GpuTaskId> tasks,
+    const usize callbackCount,
+    const b8 recordedKind,
+    Core::Alloc::ScratchArena& scratch
+){
+    const auto runForType = [&]<typename Callback>(){
+        Vector<u32, Core::Alloc::ScratchArena> order(scratch);
+        order.reserve(callbackCount);
+        GpuBarrierCallbackInvocationState state{ .order = &order };
+        Vector<GpuBarrierCallbackContext, Core::Alloc::ScratchArena> contexts(scratch);
+        Vector<Callback, Core::Alloc::ScratchArena> callbacks(scratch);
+        contexts.reserve(callbackCount);
+        callbacks.reserve(callbackCount);
+        for(usize index = 0u; index < callbackCount; ++index){
+            const Core::GpuTaskId task = tasks[callbackCount - 1u - index];
+            contexts.push_back(GpuBarrierCallbackContext{ .state = state, .taskIndex = task.index });
+            callbacks.push_back(GpuBarrierMakeCallback<Callback>(task, contexts.back()));
+        }
+        Core::GpuTaskSubmissionDetail::TaskCallbackBindings<Callback> bindings(scratch);
+        ASSERT_TRUE(bindings.resolve(declarations, plan, plan.allPacketRange(), callbacks.data(), callbacks.size()));
+        const ArenaMemoryStats before = scratch.memoryStats();
+        for(const Core::GpuTaskId task : tasks){
+            const Callback* const callback = bindings.find(task);
+            ASSERT_NE(callback, nullptr);
+            ASSERT_TRUE(GpuBarrierInvokeBoundCallback(*callback));
+        }
+        ExpectMemoryStatsEqual(before, scratch.memoryStats());
+        ASSERT_EQ(order.size(), callbackCount);
+        for(usize index = 0u; index < callbackCount; ++index)
+            EXPECT_EQ(order[index], tasks[index].index);
+        EXPECT_EQ(state.count, callbackCount);
+        Core::GpuTaskId stale = tasks.front();
+        ++stale.generation;
+        EXPECT_EQ(bindings.find(stale), nullptr);
+        EXPECT_EQ(bindings.find({}), nullptr);
+    };
+    if(recordedKind)
+        runForType.template operator()<Core::GpuTaskGraphTaskRecordedCallback>();
+    else
+        runForType.template operator()<Core::GpuTaskGraphTaskAcceptedCallback>();
+}
+
+NWB_INLINE void CheckInvalidCallbackBindings(
+    const Core::GpuTaskGraph::DeclarationReadView& declarations,
+    const Core::GpuCompiledGraph::ReadView& plan,
+    const Core::GpuSubmissionPacketRange& range,
+    Span<const Core::GpuTaskId> tasks,
+    const usize callbackCount,
+    const b8 recordedKind,
+    Core::Alloc::ScratchArena& scratch
+){
+    const auto runForType = [&]<typename Callback>(){
+        GpuBarrierCallbackInvocationState state{};
+        Vector<GpuBarrierCallbackContext, Core::Alloc::ScratchArena> contexts(scratch);
+        Vector<Callback, Core::Alloc::ScratchArena> callbacks(scratch);
+        contexts.reserve(callbackCount);
+        callbacks.reserve(callbackCount);
+        for(usize index = 0u; index < callbackCount; ++index){
+            const Core::GpuTaskId task = tasks[index];
+            contexts.push_back(GpuBarrierCallbackContext{ .state = state, .taskIndex = task.index });
+            callbacks.push_back(GpuBarrierMakeCallback<Callback>(task, contexts.back()));
+        }
+        Core::GpuTaskSubmissionDetail::TaskCallbackBindings<Callback> bindings(scratch);
+        const Callback saved = callbacks.back();
+        const auto expectRejectedAndReset = [&](){
+            EXPECT_FALSE(bindings.resolve(declarations, plan, range, callbacks.data(), callbacks.size()));
+            EXPECT_EQ(bindings.find(callbacks.front().task), nullptr);
+            callbacks.back() = saved;
+            EXPECT_TRUE(bindings.resolve(declarations, plan, range, callbacks.data(), callbacks.size()));
+            EXPECT_NE(bindings.find(saved.task), nullptr);
+        };
+        ASSERT_TRUE(bindings.resolve(declarations, plan, range, callbacks.data(), callbacks.size()));
+        callbacks.back().task = callbacks.front().task;
+        expectRejectedAndReset();
+        ++callbacks.back().task.generation;
+        expectRejectedAndReset();
+        callbacks.back().invoke = nullptr;
+        expectRejectedAndReset();
+        callbacks.back().task = tasks.back();
+        expectRejectedAndReset();
+        callbacks.back().task.index = static_cast<u32>(tasks.size());
+        expectRejectedAndReset();
+        EXPECT_EQ(bindings.find(tasks.back()), nullptr);
+        EXPECT_FALSE(bindings.resolve(declarations, plan, range, static_cast<const Callback*>(nullptr), callbackCount));
+        EXPECT_EQ(bindings.find(saved.task), nullptr);
+        EXPECT_TRUE(bindings.resolve(declarations, plan, range, static_cast<const Callback*>(nullptr), 0u));
+        EXPECT_EQ(bindings.find(saved.task), nullptr);
+        const ArenaMemoryStats beforeOversized = scratch.memoryStats();
+        EXPECT_FALSE(bindings.resolve(declarations, plan, range, callbacks.data(), Limit<usize>::s_Max));
+        EXPECT_FALSE(bindings.resolve(declarations, plan, range, callbacks.data(), tasks.size() + 1u));
+        ExpectMemoryStatsEqual(beforeOversized, scratch.memoryStats());
+        EXPECT_EQ(bindings.find(saved.task), nullptr);
+        EXPECT_FALSE(bindings.resolve(declarations, plan, {}, callbacks.data(), callbacks.size()));
+        EXPECT_EQ(bindings.find(saved.task), nullptr);
+    };
+    if(recordedKind)
+        runForType.template operator()<Core::GpuTaskGraphTaskRecordedCallback>();
+    else
+        runForType.template operator()<Core::GpuTaskGraphTaskAcceptedCallback>();
 }
 
 
@@ -134,134 +238,63 @@ SingleQueueCompile GpuBarrier_MakeSingleQueueCompile(mut TestArena testArena){
 }
 
 GpuPhysicalQueueTopology GpuBarrier_MakeTopology(in Span<GpuPhysicalQueueInfo> queues){
-    GpuPhysicalQueueTopology topology = GpuPhysicalQueueTopology();
-    native(in queues, mut topology){
-        topology.queues = queues.data();
-        topology.queueCount = queues.size();
-    }
-    return topology;
+    return MakeTopology(queues);
 }
 
 b8 GpuBarrier_HasEdge(in GpuTaskGraphAnalysis analysis, in GpuTaskId producer, in GpuTaskId consumer){
-    b8 found = false;
-    native(in analysis, in producer, in consumer, mut found){
-        found = FindEdge(analysis, producer, consumer) != nullptr;
-    }
-    return found;
+    return HasEdge(analysis, producer, consumer);
 }
 
 Optional<GpuCompiledTask> GpuBarrier_TaskPlan(in GpuCompiledTaskView view){
-    Optional<GpuCompiledTask> out = Optional<GpuCompiledTask>();
-    native(in view, mut out){
-        if(view.plan)
-            out = *view.plan;
-    }
-    return out;
+    return TaskPlan(view);
 }
 
 b8 GpuBarrier_HasPrologueSeedsPtr(in GpuCompiledTaskView view){
-    b8 hasPtr = false;
-    native(in view, mut hasPtr){
-        hasPtr = view.prologueStateSeeds != nullptr;
-    }
-    return hasPtr;
+    return HasPrologueStateSeedsPtr(view);
 }
 
 b8 GpuBarrier_HasPrologueBarriersPtr(in GpuCompiledTaskView view){
-    b8 hasPtr = false;
-    native(in view, mut hasPtr){
-        hasPtr = view.prologueBarriers != nullptr;
-    }
-    return hasPtr;
+    return HasPrologueBarriersPtr(view);
 }
 
 b8 GpuBarrier_HasEpilogueBarriersPtr(in GpuCompiledTaskView view){
-    b8 hasPtr = false;
-    native(in view, mut hasPtr){
-        hasPtr = view.epilogueBarriers != nullptr;
-    }
-    return hasPtr;
+    return HasEpilogueBarriersPtr(view);
 }
 
 Span<GpuPacketStateSeed> GpuBarrier_PrologueSeeds(in GpuCompiledTaskView view){
-    Span<GpuPacketStateSeed> out = Span<GpuPacketStateSeed>();
-    native(in view, mut out){
-        if(view.plan && view.prologueStateSeeds)
-            out = Span<const Core::GpuPacketStateSeed>(view.prologueStateSeeds, view.plan->prologueStateSeedCount);
-    }
-    return out;
+    return PrologueStateSeeds(view);
 }
 
 Span<GpuCompiledBarrier> GpuBarrier_PrologueBarriers(in GpuCompiledTaskView view){
-    Span<GpuCompiledBarrier> out = Span<GpuCompiledBarrier>();
-    native(in view, mut out){
-        if(view.plan && view.prologueBarriers)
-            out = Span<const Core::GpuCompiledBarrier>(view.prologueBarriers, view.plan->prologueBarrierCount);
-    }
-    return out;
+    return PrologueBarriers(view);
 }
 
 Span<GpuCompiledBarrier> GpuBarrier_EpilogueBarriers(in GpuCompiledTaskView view){
-    Span<GpuCompiledBarrier> out = Span<GpuCompiledBarrier>();
-    native(in view, mut out){
-        if(view.plan && view.epilogueBarriers)
-            out = Span<const Core::GpuCompiledBarrier>(view.epilogueBarriers, view.plan->epilogueBarrierCount);
-    }
-    return out;
+    return EpilogueBarriers(view);
 }
 
 Optional<GpuSubmissionPacket> GpuBarrier_PacketPlan(in GpuCompiledPacketView view){
-    Optional<GpuSubmissionPacket> out = Optional<GpuSubmissionPacket>();
-    native(in view, mut out){
-        if(view.plan)
-            out = *view.plan;
-    }
-    return out;
+    return PacketPlan(view);
 }
 
 Span<GpuPacketDependency> GpuBarrier_PacketDependencies(in GpuCompiledPacketView view){
-    Span<GpuPacketDependency> out = Span<GpuPacketDependency>();
-    native(in view, mut out){
-        if(view.plan && view.dependencies)
-            out = Span<const Core::GpuPacketDependency>(view.dependencies, view.plan->dependencyCount);
-    }
-    return out;
+    return PacketDependencies(view);
 }
 
 Span<GpuTaskId> GpuBarrier_PacketTasks(in GpuCompiledPacketView view){
-    Span<GpuTaskId> out = Span<GpuTaskId>();
-    native(in view, mut out){
-        if(view.plan && view.tasks)
-            out = Span<const Core::GpuTaskId>(view.tasks, view.plan->taskCount);
-    }
-    return out;
+    return PacketTasks(view);
 }
 
 Optional<GpuCompiledExternalResourceExport> GpuBarrier_ExportPlan(in GpuCompiledExternalResourceExportView view){
-    Optional<GpuCompiledExternalResourceExport> out = Optional<GpuCompiledExternalResourceExport>();
-    native(in view, mut out){
-        if(view.plan)
-            out = *view.plan;
-    }
-    return out;
+    return ExportPlan(view);
 }
 
 Span<GpuCompiledExternalResourceExportSource> GpuBarrier_ExportSources(in GpuCompiledExternalResourceExportView view){
-    Span<GpuCompiledExternalResourceExportSource> out = Span<GpuCompiledExternalResourceExportSource>();
-    native(in view, mut out){
-        if(view.plan && view.sources)
-            out = Span<const Core::GpuCompiledExternalResourceExportSource>(view.sources, view.plan->sourceCount);
-    }
-    return out;
+    return ExportSources(view);
 }
 
 Optional<GpuCompiledOwnershipTransfer> GpuBarrier_OwnershipTransferAt(in GpuCompiledGraphReadView plan, in usize index){
-    Optional<GpuCompiledOwnershipTransfer> out = Optional<GpuCompiledOwnershipTransfer>();
-    native(in plan, in index, mut out){
-        if(const Core::GpuCompiledOwnershipTransfer* const found = plan.logicalOwnershipTransferAt(index))
-            out = *found;
-    }
-    return out;
+    return LogicalOwnershipTransferAtValue(plan, index);
 }
 
 GpuTaskResourceUse GpuBarrier_MakeResourceUse(
@@ -338,11 +371,7 @@ Optional<GpuCompiledBarrier> GpuBarrier_FindRangeBarrier(
 }
 
 b8 GpuBarrier_HasFatalFailure(){
-    b8 failed = false;
-    native(mut failed){
-        failed = ::testing::Test::HasFatalFailure();
-    }
-    return failed;
+    return TestHasFatalFailure();
 }
 
 void VerifyGpuBarrier_ForcesMergedSameStateWriteDependenciesAcrossResourceKinds(){
@@ -1499,43 +1528,7 @@ void GpuBarrier_CheckReorderedBindingsForKind(
     const GpuCompiledGraphReadView plan = GpuCompiledGraphReadView(compilation.compiledGraph);
     ASSERT_LT(plan.packetCount(), tasks.size());
 
-    native(in declarations, in plan, in tasks, in callbackCount, in recordedKind, mut scratch){
-        const auto runForType = [&]<typename Callback>(){
-            Vector<u32, Core::Alloc::ScratchArena> order(scratch);
-            order.reserve(callbackCount);
-            GpuBarrierCallbackInvocationState state{ .order = &order };
-            Vector<GpuBarrierCallbackContext, Core::Alloc::ScratchArena> contexts(scratch);
-            Vector<Callback, Core::Alloc::ScratchArena> callbacks(scratch);
-            contexts.reserve(callbackCount);
-            callbacks.reserve(callbackCount);
-            for(usize index = 0u; index < callbackCount; ++index){
-                const Core::GpuTaskId task = tasks[callbackCount - 1u - index];
-                contexts.push_back(GpuBarrierCallbackContext{ .state = state, .taskIndex = task.index });
-                callbacks.push_back(GpuBarrierMakeCallback<Callback>(task, contexts.back()));
-            }
-            Core::GpuTaskSubmissionDetail::TaskCallbackBindings<Callback> bindings(scratch);
-            ASSERT_TRUE(bindings.resolve(declarations, plan, plan.allPacketRange(), callbacks.data(), callbacks.size()));
-            const ArenaMemoryStats before = scratch.memoryStats();
-            for(const Core::GpuTaskId task : tasks){
-                const Callback* const callback = bindings.find(task);
-                ASSERT_NE(callback, nullptr);
-                ASSERT_TRUE(GpuBarrierInvokeBoundCallback(*callback));
-            }
-            ExpectMemoryStatsEqual(before, scratch.memoryStats());
-            ASSERT_EQ(order.size(), callbackCount);
-            for(usize index = 0u; index < callbackCount; ++index)
-                EXPECT_EQ(order[index], tasks[index].index);
-            EXPECT_EQ(state.count, callbackCount);
-            Core::GpuTaskId stale = tasks.front();
-            ++stale.generation;
-            EXPECT_EQ(bindings.find(stale), nullptr);
-            EXPECT_EQ(bindings.find({}), nullptr);
-        };
-        if(recordedKind)
-            runForType.template operator()<Core::GpuTaskGraphTaskRecordedCallback>();
-        else
-            runForType.template operator()<Core::GpuTaskGraphTaskAcceptedCallback>();
-    }
+    CheckReorderedCallbackBindings(declarations, plan, tasks, callbackCount, recordedKind, scratch);
 }
 
 void GpuBarrier_CheckInvalidBindingsForKind(
@@ -1556,56 +1549,7 @@ void GpuBarrier_CheckInvalidBindingsForKind(
         plan.packetIdAt(plan.packetCount() - s_GpuBarrierExcludedPacketCount - 1u)
     );
 
-    native(in declarations, in plan, in range, in tasks, in callbackCount, in recordedKind, mut scratch){
-        const auto runForType = [&]<typename Callback>(){
-            GpuBarrierCallbackInvocationState state{};
-            Vector<GpuBarrierCallbackContext, Core::Alloc::ScratchArena> contexts(scratch);
-            Vector<Callback, Core::Alloc::ScratchArena> callbacks(scratch);
-            contexts.reserve(callbackCount);
-            callbacks.reserve(callbackCount);
-            for(usize index = 0u; index < callbackCount; ++index){
-                const Core::GpuTaskId task = tasks[index];
-                contexts.push_back(GpuBarrierCallbackContext{ .state = state, .taskIndex = task.index });
-                callbacks.push_back(GpuBarrierMakeCallback<Callback>(task, contexts.back()));
-            }
-            Core::GpuTaskSubmissionDetail::TaskCallbackBindings<Callback> bindings(scratch);
-            const Callback saved = callbacks.back();
-            const auto expectRejectedAndReset = [&](){
-                EXPECT_FALSE(bindings.resolve(declarations, plan, range, callbacks.data(), callbacks.size()));
-                EXPECT_EQ(bindings.find(callbacks.front().task), nullptr);
-                callbacks.back() = saved;
-                EXPECT_TRUE(bindings.resolve(declarations, plan, range, callbacks.data(), callbacks.size()));
-                EXPECT_NE(bindings.find(saved.task), nullptr);
-            };
-            ASSERT_TRUE(bindings.resolve(declarations, plan, range, callbacks.data(), callbacks.size()));
-            callbacks.back().task = callbacks.front().task;
-            expectRejectedAndReset();
-            ++callbacks.back().task.generation;
-            expectRejectedAndReset();
-            callbacks.back().invoke = nullptr;
-            expectRejectedAndReset();
-            callbacks.back().task = tasks.back();
-            expectRejectedAndReset();
-            callbacks.back().task.index = static_cast<u32>(tasks.size());
-            expectRejectedAndReset();
-            EXPECT_EQ(bindings.find(tasks.back()), nullptr);
-            EXPECT_FALSE(bindings.resolve(declarations, plan, range, static_cast<const Callback*>(nullptr), callbackCount));
-            EXPECT_EQ(bindings.find(saved.task), nullptr);
-            EXPECT_TRUE(bindings.resolve(declarations, plan, range, static_cast<const Callback*>(nullptr), 0u));
-            EXPECT_EQ(bindings.find(saved.task), nullptr);
-            const ArenaMemoryStats beforeOversized = scratch.memoryStats();
-            EXPECT_FALSE(bindings.resolve(declarations, plan, range, callbacks.data(), Limit<usize>::s_Max));
-            EXPECT_FALSE(bindings.resolve(declarations, plan, range, callbacks.data(), tasks.size() + 1u));
-            ExpectMemoryStatsEqual(beforeOversized, scratch.memoryStats());
-            EXPECT_EQ(bindings.find(saved.task), nullptr);
-            EXPECT_FALSE(bindings.resolve(declarations, plan, {}, callbacks.data(), callbacks.size()));
-            EXPECT_EQ(bindings.find(saved.task), nullptr);
-        };
-        if(recordedKind)
-            runForType.template operator()<Core::GpuTaskGraphTaskRecordedCallback>();
-        else
-            runForType.template operator()<Core::GpuTaskGraphTaskAcceptedCallback>();
-    }
+    CheckInvalidCallbackBindings(declarations, plan, range, tasks, callbackCount, recordedKind, scratch);
 }
 
 void VerifyGpuBarrier_ReversedBindingsInvokeInMergedCompiledTaskOrderWithoutLookupAllocation(){

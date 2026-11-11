@@ -2,27 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ValidateTemporarySequenceNotOverflowed(in u64 sequence){
-    if(sequence != u64.max)
-        return true;
-
-    error("ShaderCook: compiler temporary sequence overflow");
-    return false;
-}
-
-b8 ValidateCompilerRequestHasDependencies(in StringView shaderName, in b8 dependenciesEmpty){
-    if(!dependenciesEmpty)
-        return true;
-
-    error("ShaderCook: compiler request for '{}' has no resolved source dependencies", shaderName);
-    return false;
-}
-
-usize AdvanceLineScanBegin(in usize lineEnd, in usize textSize){
-    if(lineEnd < textSize)
-        return lineEnd + 1u;
-    return lineEnd;
-}
+#include <impl/assets_shader/cook_internal.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -42,7 +22,6 @@ native{
 
 
 #include <impl/assets_shader/cook.adhd.h>
-#include <impl/assets_shader/cook_internal.adhd.h>
 #include <impl/assets_shader/shader_source_fingerprint.adhd.h>
 #include <impl/assets_shader/source_dependencies.adhd.h>
 
@@ -185,14 +164,13 @@ Expected<SlangCompilerWorkspace::ScratchPath> SlangCompilerWorkspace::BuildCompi
     const auto rootKeyCapacity = ShaderBinaryPayload::TryComputeCompilerOverlayRootKeyCapacity(rootText->size());
     if(!rootKeyCapacity)
         return MakeUnexpected(Failure{});
-    ScratchString rootKey(ShaderBinaryPayload::s_SlangWorkspaceRootKeyPrefix, scratchArena);
-    rootKey.reserve(*rootKeyCapacity);
-    for(const char ch : *rootText){
-        const u8 byte = static_cast<u8>(ch);
-        rootKey += ShaderBinaryPayload::s_SlangWorkspaceHexDigits[byte >> s_HexNibbleBits];
-        rootKey += ShaderBinaryPayload::s_SlangWorkspaceHexDigits[byte & s_HexNibbleMask];
-    }
-    return overlayRoot / rootKey / relativePath;
+    const auto rootKey = FormatCompilerOverlayRootKey(
+        ShaderBinaryPayload::s_SlangWorkspaceRootKeyPrefix,
+        AStringView(ShaderBinaryPayload::s_SlangWorkspaceHexDigits.data(), ShaderBinaryPayload::s_SlangWorkspaceHexDigits.size()),
+        AStringView(*rootText),
+        *rootKeyCapacity
+    );
+    return overlayRoot / AStringView(rootKey) / relativePath;
 }
 
 b8 SlangCompilerWorkspace::IsCompilerDependency(const Span<const Path> dependencies, const ScratchPath& absolutePath)noexcept{
@@ -432,10 +410,8 @@ Expected<u64> SlangCompilerFingerprint::Compute(const Path& temporaryRoot, Core:
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to read configured compiler version '{}': {}:{}"), PathToString<tchar>(versionPath), ConvertString(versionRead.error().category().name()), versionRead.error().value());
         return MakeUnexpected(Failure{});
     }
-    if(TrimView(versionText).empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: configured compiler '{}' returned empty version text"), PathToString<tchar>(compilerPath));
+    if(!ValidateNonEmptyCompilerVersionText(AStringView(NWB_SLANGC_EXECUTABLE), AStringView(versionText)))
         return MakeUnexpected(Failure{});
-    }
 
     // The version identifies the loaded Slang compiler library as well as its executable launcher.
     return ShaderSourceFingerprint{}.finalizeCompilerFingerprint(AStringView(versionText), commonArguments, baselineCapabilities, stageMappings, fingerprint);

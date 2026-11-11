@@ -58,11 +58,27 @@ public:
     [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ observeCallback(); return generation; }
     [[nodiscard]] virtual u64 revision()const override{ observeCallback(); return contentRevision; }
     [[nodiscard]] virtual u64 rowCount()const noexcept override{ observeCallback(); return count; }
-    [[nodiscard]] virtual u64 key(u64 index)const noexcept override;
-    [[nodiscard]] virtual Expected<u64> indexOf(u64 value)const noexcept override;
-    [[nodiscard]] virtual Expected<u64> findEnabled(u64 start, b8 backwards)const noexcept override;
-    [[nodiscard]] virtual StringView text(u64 index)const override;
-    [[nodiscard]] virtual b8 enabled(u64 index)const noexcept override;
+    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{ observeCallback(); ++keyCalls; return rawKey(index); }
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 value)const noexcept override{
+        observeCallback();
+        ++lookupCalls;
+        return UiWidgetTests::FindArithmeticFixtureRowIndex(count, removed, reverse, value);
+    }
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 backwards)const noexcept override{
+        observeCallback();
+        ++searchCalls;
+        return UiWidgetTests::FindSingleDisabledFixtureRow(count, removed, reverse, start, backwards, disabled);
+    }
+    [[nodiscard]] virtual StringView text(const u64 index)const override{
+        observeCallback();
+        ++textCalls;
+        return index % 2u == 0u ? "First" : "Second";
+    }
+    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{
+        observeCallback();
+        ++enabledCalls;
+        return index < count && rawKey(index) != disabled;
+    }
     void resetCounters()const noexcept;
 
 
@@ -281,14 +297,30 @@ public:
 
 
 public:
-    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override;
-    [[nodiscard]] virtual u64 revision()const noexcept override;
-    [[nodiscard]] virtual u64 rowCount()const noexcept override;
-    [[nodiscard]] virtual u64 key(u64 index)const noexcept override;
-    [[nodiscard]] virtual Expected<u64> indexOf(u64 value)const noexcept override;
-    [[nodiscard]] virtual Expected<u64> findEnabled(u64 start, b8 backwards)const noexcept override;
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ invalidateText(); return generation; }
+    [[nodiscard]] virtual u64 revision()const noexcept override{ invalidateText(); return contentRevision; }
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{ invalidateText(); return count; }
+    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
+        invalidateText();
+        ++keyCalls;
+        return duplicate ? 1u : rawKey(index);
+    }
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 value)const noexcept override{
+        invalidateText();
+        ++lookupCalls;
+        if(malformedLookup)
+            return count;
+        return UiWidgetTests::FindArithmeticFixtureRowIndex(count, removed, reverse, value);
+    }
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 backwards)const noexcept override{
+        invalidateText();
+        return UiWidgetTests::FindSingleDisabledFixtureRow(count, removed, reverse, start, backwards, disabled);
+    }
     [[nodiscard]] virtual StringView text(u64 index)const noexcept override;
-    [[nodiscard]] virtual b8 enabled(u64 index)const noexcept override;
+    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{
+        invalidateText();
+        return rawKey(index) != disabled;
+    }
 
 
 private:
@@ -356,6 +388,61 @@ public:
 
 NWB_END
 
+namespace __hidden_ui_glyph_sdf_tests{
+using ComboSource = ::NWB::UiComboTests::ComboSource;
+using ComboFixture = ::NWB::UiComboTests::ComboFixture;
+using ArithmeticSource = ::NWB::UiListTests::ArithmeticSource;
+using UiListBuilderTests = ::NWB::UiListTests::UiListBuilderTests;
+using ::NWB::UiComboTests::s_ComboPanelKey;
+using ::NWB::UiComboTests::s_ComboKey;
+
+ComboOptions MakeComboFixtureOptions()noexcept;
+ListOptions MakeListFixtureOptions()noexcept;
+ControlAction MakeUiListControlAction(u64 instanceGeneration, u64 contentGeneration, u64 contentRevision, const ControlActionKindEnum& kind)noexcept;
+void ExpectUiListResult(const ListResult& actual, const ListResult& expected)noexcept;
+void ResetComboSourceCounters(ComboSource& self)noexcept;
+b8 DeclareComboFixtureSource(ComboFixture& self, u64 generation, const IListDataSource& source, ComboState& state, const ComboOptions& options, const Rect& bounds)noexcept;
+b8 OpenComboFixtureByPointer(ComboFixture& self, u64 generation)noexcept;
+StringView FormatArithmeticSourceText(ArithmeticSource& self, u64 index)noexcept;
+b8 PrepareUiListFixtureSource(UiListBuilderTests& self, u64 generation, const IListDataSource& source, ListState& state, const ListOptions& options, const DisplayMetrics& display)noexcept;
+b8 PrepareUiListFixtureLowerPopup(UiListBuilderTests& self, u64 generation, PopupState& lowerPopup, ListState& lowerState)noexcept;
+b8 PrepareUiListFixtureTwoPopups(UiListBuilderTests& self, u64 generation, PopupState& lowerPopup, ListState& lowerState, PopupState& upperPopup, ListState& upperState)noexcept;
+b8 SendUiListFixtureWheel(UiListBuilderTests& self, f64 delta)noexcept;
+};
+
+NWB_BEGIN
+namespace UiComboTests{
+NWB_INLINE void ComboSource::resetCounters()const noexcept{ ::__hidden_ui_glyph_sdf_tests::ResetComboSourceCounters(const_cast<ComboSource&>(*this)); }
+NWB_INLINE ComboOptions Options()noexcept{ return ::__hidden_ui_glyph_sdf_tests::MakeComboFixtureOptions(); }
+NWB_INLINE b8 ComboFixture::declareSource(const u64 generation, const IListDataSource& source, ComboState& state, const ComboOptions& options, const Rect& bounds){
+    return ::__hidden_ui_glyph_sdf_tests::DeclareComboFixtureSource(*this, generation, source, state, options, bounds);
+}
+NWB_INLINE b8 ComboFixture::openByPointer(const u64 generation){ return ::__hidden_ui_glyph_sdf_tests::OpenComboFixtureByPointer(*this, generation); }
+};
+namespace UiListTests{
+NWB_INLINE StringView ArithmeticSource::text(const u64 index)const noexcept{ return ::__hidden_ui_glyph_sdf_tests::FormatArithmeticSourceText(const_cast<ArithmeticSource&>(*this), index); }
+NWB_INLINE ListOptions Options()noexcept{ return ::__hidden_ui_glyph_sdf_tests::MakeListFixtureOptions(); }
+NWB_INLINE b8 UiListBuilderTests::prepareSource(const u64 generation, const IListDataSource& source, ListState& state, const ListOptions& options, const DisplayMetrics& display){
+    return ::__hidden_ui_glyph_sdf_tests::PrepareUiListFixtureSource(*this, generation, source, state, options, display);
+}
+NWB_INLINE b8 UiListBuilderTests::preparePopups(const u64 generation, PopupState& lowerPopup, ListState& lowerState, PopupState* upperPopup, ListState* upperState){
+    if(upperPopup && upperState)
+        return ::__hidden_ui_glyph_sdf_tests::PrepareUiListFixtureTwoPopups(*this, generation, lowerPopup, lowerState, *upperPopup, *upperState);
+    return ::__hidden_ui_glyph_sdf_tests::PrepareUiListFixtureLowerPopup(*this, generation, lowerPopup, lowerState);
+}
+NWB_INLINE b8 UiListBuilderTests::wheel(const f64 delta){ return ::__hidden_ui_glyph_sdf_tests::SendUiListFixtureWheel(*this, delta); }
+};
+NWB_END
+
+namespace UiListBehaviorTestSupport{
+NWB_INLINE ControlAction Action(const ListState& state, const RangeSource& source, const ControlActionKind::Enum kind)noexcept{
+    return ::__hidden_ui_glyph_sdf_tests::MakeUiListControlAction(state.inputGeneration(), source.instanceGeneration(), source.revision(), kind);
+}
+NWB_INLINE void ExpectResult(const ListResult& actual, const ListResult& expected){
+    ::__hidden_ui_glyph_sdf_tests::ExpectUiListResult(actual, expected);
+}
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -402,261 +489,97 @@ void ExpectUiListResult(in ListResult actual, in ListResult expected){
     EXPECT_EQ(actual.focused, expected.focused);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace UiComboTests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-u64 ComboSource::key(const u64 index)const noexcept{
-    observeCallback();
-    ++keyCalls;
-    return rawKey(index);
+void ResetComboSourceCounters(mut ComboSource self){
+    self.keyCalls = 0u;
+    self.lookupCalls = 0u;
+    self.searchCalls = 0u;
+    self.textCalls = 0u;
+    self.enabledCalls = 0u;
 }
 
-Expected<u64> ComboSource::indexOf(const u64 value)const noexcept{
-    observeCallback();
-    ++lookupCalls;
-    return UiWidgetTests::FindArithmeticFixtureRowIndex(count, removed, reverse, value);
-}
-
-Expected<u64> ComboSource::findEnabled(const u64 start, const b8 backwards)const noexcept{
-    observeCallback();
-    ++searchCalls;
-    return UiWidgetTests::FindSingleDisabledFixtureRow(count, removed, reverse, start, backwards, disabled);
-}
-
-StringView ComboSource::text(const u64 index)const{
-    observeCallback();
-    ++textCalls;
-    return index % 2u == 0u ? "First" : "Second";
-}
-
-b8 ComboSource::enabled(const u64 index)const noexcept{
-    observeCallback();
-    ++enabledCalls;
-    return index < count && rawKey(index) != disabled;
-}
-
-void ComboSource::resetCounters()const noexcept{
-    keyCalls = 0u;
-    lookupCalls = 0u;
-    searchCalls = 0u;
-    textCalls = 0u;
-    enabledCalls = 0u;
-}
-
-ComboOptions Options()noexcept{
-    return ::__hidden_ui_glyph_sdf_tests::MakeComboFixtureOptions();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ComboFixture::declareSource(const u64 generation, const IListDataSource& source, ComboState& state, const ComboOptions& options, const Rect& bounds){
-    if(!begin(generation) || !m_builder.beginPanel(s_ComboPanelKey, bounds))
+b8 DeclareComboFixtureSource(mut ComboFixture self, in u64 generation, in IListDataSource source, mut ComboState state, in ComboOptions options, in Rect bounds){
+    if(!self.begin(generation) || !self.m_builder.beginPanel(s_ComboPanelKey, bounds))
         return false;
-    m_result = m_builder.comboBox(s_ComboKey, source, state, options);
-    return m_result.valid;
+    self.m_result = self.m_builder.comboBox(s_ComboKey, source, state, options);
+    return self.m_result.valid;
 }
 
-b8 ComboFixture::openByPointer(const u64 generation){
-    const HitTarget* field = target(id(s_ComboKey, s_ComboPanelKey));
-    if(!field)
+b8 OpenComboFixtureByPointer(mut ComboFixture self, in u64 generation){
+    const Expected<HitTarget> field = self.tryTarget(self.id(s_ComboKey, s_ComboPanelKey));
+    if(!field.has_value())
         return false;
-    click(Center(field->rectangle));
-    return accept(generation) && m_state.isOpen();
+    self.click(CenterUiRect(field.value().rectangle));
+    return self.accept(generation) && self.m_state.isOpen();
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace UiListBehaviorTestSupport{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-ControlAction Action(const ListState& state, const RangeSource& source, const ControlActionKind::Enum kind)noexcept{
-    return ::__hidden_ui_glyph_sdf_tests::MakeUiListControlAction(state.inputGeneration(), source.instanceGeneration(), source.revision(), kind);
-}
-
-void ExpectResult(const ListResult& actual, const ListResult& expected){
-    ::__hidden_ui_glyph_sdf_tests::ExpectUiListResult(actual, expected);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace UiListTests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-u64 ArithmeticSource::instanceGeneration()const noexcept{
-    invalidateText();
-    return generation;
-}
-
-u64 ArithmeticSource::revision()const noexcept{
-    invalidateText();
-    return contentRevision;
-}
-
-u64 ArithmeticSource::rowCount()const noexcept{
-    invalidateText();
-    return count;
-}
-
-u64 ArithmeticSource::key(const u64 index)const noexcept{
-    invalidateText();
-    ++keyCalls;
-    if(duplicate)
-        return 1u;
-    return rawKey(index);
-}
-
-Expected<u64> ArithmeticSource::indexOf(const u64 value)const noexcept{
-    invalidateText();
-    ++lookupCalls;
-    if(malformedLookup)
-        return count;
-    return UiWidgetTests::FindArithmeticFixtureRowIndex(count, removed, reverse, value);
-}
-
-Expected<u64> ArithmeticSource::findEnabled(const u64 start, const b8 backwards)const noexcept{
-    invalidateText();
-    return UiWidgetTests::FindSingleDisabledFixtureRow(count, removed, reverse, start, backwards, disabled);
-}
-
-StringView ArithmeticSource::text(const u64 index)const noexcept{
-    ++textCalls;
-    if(index < textCallsByIndex.size())
-        ++textCallsByIndex[index];
-    if(index == specialIndex){
-        for(usize byte = 0u; byte < specialText.size(); ++byte)
-            temporary[byte] = specialText[byte];
-        return { temporary.data(), specialText.size() };
+StringView FormatArithmeticSourceText(mut ArithmeticSource self, in u64 index){
+    ++self.textCalls;
+    if(index < self.textCallsByIndex.size())
+        ++self.textCallsByIndex[cast<usize>(index)];
+    if(index == self.specialIndex){
+        for(usize byte = 0u; byte < self.specialText.size(); ++byte)
+            self.temporary[byte] = self.specialText[byte];
+        return StringView(self.temporary.data(), self.specialText.size());
     }
-    temporary[0u] = static_cast<char>('A' + index % 26u);
-    temporary[1u] = 'x';
-    return { temporary.data(), 2u };
+    const StringView letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    self.temporary[0u] = letters[cast<usize>(index % 26u)];
+    self.temporary[1u] = 'x';
+    return StringView(self.temporary.data(), 2u);
 }
 
-b8 ArithmeticSource::enabled(const u64 index)const noexcept{
-    invalidateText();
-    return rawKey(index) != disabled;
-}
-
-ListOptions Options()noexcept{
-    return ::__hidden_ui_glyph_sdf_tests::MakeListFixtureOptions();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 UiListBuilderTests::prepareSource(const u64 generation, const IListDataSource& source, ListState& state, const ListOptions& options, const DisplayMetrics& display){
-    if(!begin(generation, display) || !m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 260.0f }))
+b8 PrepareUiListFixtureSource(mut UiListBuilderTests self, in u64 generation, in IListDataSource source, mut ListState state, in ListOptions options, in DisplayMetrics display){
+    if(!self.begin(generation, display) || !self.m_builder.beginPanel("panel", Rect(10.0f, 10.0f, 320.0f, 260.0f)))
         return false;
-    m_result = m_builder.virtualList(s_ListKey, source, state, options);
-    return m_result.valid && finishPanel();
+    self.m_result = self.m_builder.virtualList("list", source, state, options);
+    return self.m_result.valid && self.finishPanel();
 }
 
-b8 UiListBuilderTests::preparePopups(const u64 generation, PopupState& lowerPopup, ListState& lowerState, PopupState* upperPopup, ListState* upperState){
-    if(!begin(generation) || !m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 260.0f }))
+b8 PrepareUiListFixtureLowerPopup(mut UiListBuilderTests self, in u64 generation, mut PopupState lowerPopup, mut ListState lowerState){
+    const ListOptions listOptions = MakeListFixtureOptions();
+    if(!self.begin(generation) || !self.m_builder.beginPanel("panel", Rect(10.0f, 10.0f, 320.0f, 260.0f)))
         return false;
-    if(!m_builder.virtualList(s_ListKey, m_source, m_state, Options()).valid || !m_builder.endPanel())
+    if(!self.m_builder.virtualList("list", self.m_source, self.m_state, listOptions).valid || !self.m_builder.endPanel())
         return false;
-    PopupOptions popup;
-    popup.anchor = { 350.0f, 10.0f, 10.0f, 10.0f };
-    popup.size = { 320.0f, 180.0f };
-    if(m_builder.beginPopup(s_PopupKey, lowerPopup, popup)){
-        if(!m_builder.virtualList(s_ListKey, m_source, lowerState, Options()).valid || !m_builder.endPopup())
+    PopupOptions popup = PopupOptions();
+    popup.anchor = Rect(350.0f, 10.0f, 10.0f, 10.0f);
+    popup.size = Point(320.0f, 180.0f);
+    if(self.m_builder.beginPopup("popup", lowerPopup, popup)){
+        if(!self.m_builder.virtualList("list", self.m_source, lowerState, listOptions).valid || !self.m_builder.endPopup())
             return false;
     }
-    if(upperPopup && upperState){
-        popup.anchor = { 400.0f, 220.0f, 10.0f, 10.0f };
-        if(m_builder.beginPopup(s_UpperPopupKey, *upperPopup, popup)){
-            if(!m_builder.virtualList(s_ListKey, m_source, *upperState, Options()).valid || !m_builder.endPopup())
-                return false;
-        }
-    }
-    return m_context.endRoot() && m_context.finishFrame();
+    return self.m_context.endRoot() && self.m_context.finishFrame();
 }
 
-b8 UiListBuilderTests::wheel(const f64 delta){
-    const HitTarget* accepted = target(id(s_ListKey, s_PanelKey));
-    if(!accepted)
+b8 PrepareUiListFixtureTwoPopups(mut UiListBuilderTests self, in u64 generation, mut PopupState lowerPopup, mut ListState lowerState, mut PopupState upperPopup, mut ListState upperState){
+    const ListOptions listOptions = MakeListFixtureOptions();
+    if(!self.begin(generation) || !self.m_builder.beginPanel("panel", Rect(10.0f, 10.0f, 320.0f, 260.0f)))
         return false;
-    InputEvent event;
-    event.type = InputEventType::PointerWheel;
-    event.position = Center(accepted->rectangle);
-    event.scrollY = delta;
-    return send(event).pointerConsumed;
+    if(!self.m_builder.virtualList("list", self.m_source, self.m_state, listOptions).valid || !self.m_builder.endPanel())
+        return false;
+    PopupOptions popup = PopupOptions();
+    popup.anchor = Rect(350.0f, 10.0f, 10.0f, 10.0f);
+    popup.size = Point(320.0f, 180.0f);
+    if(self.m_builder.beginPopup("popup", lowerPopup, popup)){
+        if(!self.m_builder.virtualList("list", self.m_source, lowerState, listOptions).valid || !self.m_builder.endPopup())
+            return false;
+    }
+    popup.anchor = Rect(400.0f, 220.0f, 10.0f, 10.0f);
+    if(self.m_builder.beginPopup("upper", upperPopup, popup)){
+        if(!self.m_builder.virtualList("list", self.m_source, upperState, listOptions).valid || !self.m_builder.endPopup())
+            return false;
+    }
+    return self.m_context.endRoot() && self.m_context.finishFrame();
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+b8 SendUiListFixtureWheel(mut UiListBuilderTests self, in f64 delta){
+    const Expected<HitTarget> accepted = self.tryTarget(self.id("list", "panel"));
+    if(!accepted.has_value())
+        return false;
+    InputEvent event = InputEvent();
+    event.type = InputEventType::PointerWheel;
+    event.position = CenterUiRect(accepted.value().rectangle);
+    event.scrollY = delta;
+    return self.send(event).pointerConsumed;
 }
 
 

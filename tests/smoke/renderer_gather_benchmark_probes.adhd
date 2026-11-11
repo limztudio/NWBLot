@@ -31,6 +31,12 @@ native{
 namespace NWB::Tests::Smoke{
 using PerfSessionReport = Core::Perf::SessionReport;
 using PerfMemorySnapshot = Core::Perf::MemorySnapshot;
+namespace MemorySource = Core::Perf::MemorySource;
+using NameTextErrorEnum = NameTextError::Enum;
+
+[[nodiscard]] NWB_INLINE Expected<Name, NameTextError::Enum> SmokeNameFromText(const AStringView text){
+    return Name::FromText(text);
+}
 using Core::Perf::TimingStats;
 using Core::Alloc::GlobalArena;
 
@@ -322,21 +328,30 @@ class RendererGatherGpuSample{
     public u32 scope;
 }
 
-void WriteGatherBenchmarkMemory(in Span<PerfMemorySnapshot> snapshots, mut OutputFileStream output){
-    native(in snapshots, mut output){
-        output << '{';
-        for(u32 scope = 0u; scope < s_GatherBenchmarkArenaScopeCount; ++scope){
-            if(scope != 0u)
-                output << ',';
-            const auto& snapshot = snapshots[scope];
-            output << '"' << GatherBenchmarkArenaScopeName(scope) << "\":{\"present\":" << (snapshot.valid() ? "true" : "false")
-                << ",\"frame\":" << snapshot.frameIndex << ",\"reserved\":" << snapshot.reservedBytes
-                << ",\"used\":" << snapshot.usedBytes << ",\"historical_arena_peak\":" << snapshot.peakUsedBytes
-                << ",\"allocations\":" << snapshot.allocationCount << ",\"reallocations\":" << snapshot.reallocationCount
-                << ",\"deallocations\":" << snapshot.deallocationCount << '}';
-        }
-        output << '}';
+void AppendGatherBenchmarkMemory(in Span<PerfMemorySnapshot> snapshots, mut String out){
+    out.push_back('{');
+    for(u32 scope = 0u; scope < s_GatherBenchmarkArenaScopeCount; ++scope){
+        if(scope != 0u)
+            out.push_back(',');
+        const PerfMemorySnapshot snapshot = snapshots[scope];
+        StringView presentText = "false";
+        if(snapshot.valid())
+            presentText = "true";
+        StringAppendFormat(
+            out,
+            "\"{}\":{{\"present\":{},\"frame\":{},\"reserved\":{},\"used\":{},\"historical_arena_peak\":{},\"allocations\":{},\"reallocations\":{},\"deallocations\":{}}}",
+            GatherBenchmarkArenaScopeName(scope),
+            presentText,
+            snapshot.frameIndex,
+            snapshot.reservedBytes,
+            snapshot.usedBytes,
+            snapshot.peakUsedBytes,
+            snapshot.allocationCount,
+            snapshot.reallocationCount,
+            snapshot.deallocationCount
+        );
     }
+    out.push_back('}');
 }
 
 class RendererGatherBenchmarkProbe{
@@ -351,77 +366,43 @@ class RendererGatherBenchmarkProbe{
     }
 
     public b8 poll(in PerfSessionReport report, in b8 memoryEnabled){
-        const StringView frameScopeText = GatherBenchmarkCpuScopeName(0u);
-        b8 skipFrame = false;
-        b8 invalidFrame = false;
-        u64 publishFrame = 0u;
-        u64 sourceFrame = 0u;
-        native(
-            in report,
-            in frameScopeText,
-            in hasPub = this.m_hasPublication,
-            in lastPub = this.m_lastPublish,
-            in successful = this.m_successfulFrames,
-            mut skipFrame,
-            mut invalidFrame,
-            mut publishFrame,
-            mut sourceFrame
-        ){
-            const auto& frame = report.cpuTiming.stats(Name(frameScopeText));
-            if(!frame.valid() || (hasPub && frame.publishFrameIndex == lastPub)){
-                skipFrame = true;
-            }
-            else if((hasPub && frame.publishFrameIndex < lastPub) || frame.sampleCount != 1u || frame.firstSampleFrameIndex != frame.lastSampleFrameIndex){
-                invalidFrame = true;
-            }
-            else{
-                const auto& failedPreparation = report.cpuTiming.stats(Name(s_PresentationTimingNamePrepareResourcesFailed));
-                if(failedPreparation.valid() && failedPreparation.publishFrameIndex == frame.publishFrameIndex){
-                    invalidFrame = true;
-                }
-                else{
-                    const auto& preamble = report.cpuTiming.stats(Name(s_PresentationTimingNameFramePreamble));
-                    if((!preamble.valid() || preamble.publishFrameIndex != frame.publishFrameIndex) && successful == 0u){
-                        skipFrame = true;
-                    }
-                    else{
-                        publishFrame = frame.publishFrameIndex;
-                        sourceFrame = frame.firstSampleFrameIndex;
-                    }
-                }
-            }
-        }
-        if(invalidFrame)
+        const Expected<Name, NameTextErrorEnum> frameScopeName = SmokeNameFromText(GatherBenchmarkCpuScopeName(0u));
+        if(!frameScopeName.has_value())
             return false;
-        if(skipFrame)
+        const TimingStats frame = report.cpuTiming.stats(frameScopeName.value());
+        if(!frame.valid() || (this.m_hasPublication && frame.publishFrameIndex == this.m_lastPublish))
             return true;
+        if((this.m_hasPublication && frame.publishFrameIndex < this.m_lastPublish) || frame.sampleCount != 1u || frame.firstSampleFrameIndex != frame.lastSampleFrameIndex)
+            return false;
+
+        const TimingStats failedPreparation = report.cpuTiming.stats(s_PresentationTimingNamePrepareResourcesFailed);
+        if(failedPreparation.valid() && failedPreparation.publishFrameIndex == frame.publishFrameIndex)
+            return false;
+
+        const TimingStats preamble = report.cpuTiming.stats(s_PresentationTimingNameFramePreamble);
+        if((!preamble.valid() || preamble.publishFrameIndex != frame.publishFrameIndex) && this.m_successfulFrames == 0u)
+            return true;
+
+        const u64 publishFrame = frame.publishFrameIndex;
+        const u64 sourceFrame = frame.firstSampleFrameIndex;
 
         RendererGatherCpuSample sample = RendererGatherCpuSample();
         sample.sourceFrame = sourceFrame;
         sample.publishFrame = publishFrame;
         for(u32 scope = 0u; scope < s_GatherBenchmarkCpuScopeCount; ++scope){
-            const StringView scopeText = GatherBenchmarkCpuScopeName(scope);
-            b8 ok = false;
-            f64 seconds = 0.0;
-            native(in report, in scopeText, in publishFrame, in sourceFrame, mut ok, mut seconds){
-                const auto scopeName = Name::FromText(scopeText);
-                if(scopeName){
-                    const auto& timing = report.cpuTiming.stats(*scopeName);
-                    if(
-                        timing.valid()
-                        && timing.sampleCount == 1u
-                        && timing.publishFrameIndex == publishFrame
-                        && timing.firstSampleFrameIndex == sourceFrame
-                        && timing.lastSampleFrameIndex == sourceFrame
-                    ){
-                        seconds = timing.seconds;
-                        ok = true;
-                    }
-                }
-            }
-            if(!ok)
+            const Expected<Name, NameTextErrorEnum> scopeName = SmokeNameFromText(GatherBenchmarkCpuScopeName(scope));
+            if(!scopeName.has_value())
                 return false;
-            sample.milliseconds[scope] = seconds;
+            const TimingStats timing = report.cpuTiming.stats(scopeName.value());
+            if(
+                !timing.valid()
+                || timing.sampleCount != 1u
+                || timing.publishFrameIndex != publishFrame
+                || timing.firstSampleFrameIndex != sourceFrame
+                || timing.lastSampleFrameIndex != sourceFrame
+            )
+                return false;
+            sample.milliseconds[scope] = timing.seconds;
         }
 
         u32 cpuScope = 0u;
@@ -436,53 +417,26 @@ class RendererGatherBenchmarkProbe{
 
         if(memoryEnabled){
             for(u32 arenaIndex = 0u; arenaIndex < s_GatherBenchmarkArenaScopeCount; ++arenaIndex){
-                const StringView arenaText = GatherBenchmarkArenaScopeName(arenaIndex);
-                b8 ok = false;
-                PerfMemorySnapshot snapshot = PerfMemorySnapshot();
-                native(in report, in arenaText, in publishFrame, mut ok, mut snapshot){
-                    const auto arenaName = Name::FromText(arenaText);
-                    if(arenaName){
-                        const auto& current = report.memory.snapshot(*arenaName, Core::Perf::MemorySource::Arena);
-                        if(!current.valid() || current.frameIndex == publishFrame){
-                            snapshot = current;
-                            ok = true;
-                        }
-                    }
-                }
-                if(!ok)
+                const Expected<Name, NameTextErrorEnum> arenaName = SmokeNameFromText(GatherBenchmarkArenaScopeName(arenaIndex));
+                if(!arenaName.has_value())
                     return false;
-                sample.memory[arenaIndex] = snapshot;
+                const PerfMemorySnapshot current = report.memory.snapshot(arenaName.value(), MemorySource::Arena);
+                if(current.valid() && current.frameIndex != publishFrame)
+                    return false;
+                sample.memory[arenaIndex] = current;
             }
         }
 
         for(u32 gpuScope = 0u; gpuScope < s_GatherBenchmarkGpuScopeCount; ++gpuScope){
-            const StringView gpuScopeText = GatherBenchmarkGpuScopeName(gpuScope);
+            const Expected<Name, NameTextErrorEnum> gpuScopeName = SmokeNameFromText(GatherBenchmarkGpuScopeName(gpuScope));
+            if(!gpuScopeName.has_value())
+                return false;
             const b8 hadPub = this.m_hasGpuPublication[gpuScope];
             const u64 prevPub = this.m_gpuPublish[gpuScope];
-            b8 invalidGpu = false;
-            b8 newGpu = false;
-            TimingStats gpuTiming = TimingStats();
-            native(in report, in gpuScopeText, in hadPub, in prevPub, mut invalidGpu, mut newGpu, mut gpuTiming){
-                const auto scopeName = Name::FromText(gpuScopeText);
-                if(!scopeName){
-                    invalidGpu = true;
-                }
-                else{
-                    const auto& timing = report.gpuTiming.stats(*scopeName);
-                    if(timing.valid() && (!hadPub || timing.publishFrameIndex != prevPub)){
-                        if(hadPub && timing.publishFrameIndex < prevPub){
-                            invalidGpu = true;
-                        }
-                        else{
-                            gpuTiming = timing;
-                            newGpu = true;
-                        }
-                    }
-                }
-            }
-            if(invalidGpu)
-                return false;
-            if(newGpu){
+            const TimingStats gpuTiming = report.gpuTiming.stats(gpuScopeName.value());
+            if(gpuTiming.valid() && (!hadPub || gpuTiming.publishFrameIndex != prevPub)){
+                if(hadPub && gpuTiming.publishFrameIndex < prevPub)
+                    return false;
                 this.m_hasGpuPublication[gpuScope] = true;
                 this.m_gpuPublish[gpuScope] = gpuTiming.publishFrameIndex;
                 this.m_gpu.push_back(RendererGatherGpuSample(gpuTiming, gpuScope));
@@ -517,84 +471,71 @@ class RendererGatherBenchmarkProbe{
         in u32 runtimeOwners
     )const{
         const b8 complete = this.finished() && this.m_cpu.size() == s_GatherBenchmarkSampleFrames;
-        const String pathStr = String(path);
-        b8 good = false;
-        native(
-            in pathStr,
-            in workload,
-            in memoryEnabled,
-            in renderers,
-            in runtimeRenderers,
-            in transparentRenderers,
-            in runtimeOwners,
-            in complete,
-            in successfulFrames = this.m_successfulFrames,
-            in memoryBaseline = this.m_memoryBaseline,
-            in cpuSamples = this.m_cpu,
-            in gpuSamples = this.m_gpu,
-            mut good
-        ){
-            OutputFileStream output(pathStr.c_str(), s_FileOpenTruncate);
-            if(output.is_open()){
-                output.setf(s_FileFormatFixed, s_FileFormatFloatField);
-                output.precision(9);
-                output << "{\"type\":\"configuration\",\"schema\":2,\"workload\":\"" << workload
-                    << "\",\"mode\":\"" << (memoryEnabled ? "memory" : "timing")
-                    << "\",\"width\":960,\"height\":720,\"warmup\":" << s_GatherBenchmarkWarmupFrames
-                    << ",\"samples\":" << s_GatherBenchmarkSampleFrames << ",\"drain\":" << s_GatherBenchmarkDrainFrames
-                    << ",\"successful_frames\":" << successfulFrames << ",\"renderers\":" << renderers
-                    << ",\"runtime_renderers\":" << runtimeRenderers << ",\"transparent_renderers\":" << transparentRenderers
-                    << ",\"runtime_owners\":" << runtimeOwners
-                    << ",\"reflection_mode\":\"hardware\",\"hardware_budget\":4096,\"optical_queries\":16"
-                    << ",\"temporal\":false,\"spatial\":false,\"feedback\":false,\"diagnostics\":false"
-                    << ",\"fixed_delta_seconds\":0.016666667,\"sampling_seed\":0,\"refraction\":true}\n";
-                if(memoryEnabled){
-                    output << "{\"type\":\"memory_baseline\",\"arenas\":";
-                    WriteGatherBenchmarkMemory(memoryBaseline, output);
-                    output << "}\n";
-                }
-                for(const RendererGatherCpuSample& sample : cpuSamples){
-                    output << "{\"type\":\"cpu\",\"source_frame\":" << sample.sourceFrame << ",\"publish_frame\":" << sample.publishFrame << ",\"scopes_ms\":{";
-                    for(u32 scope = 0u; scope < s_GatherBenchmarkCpuScopeCount; ++scope){
-                        if(scope != 0u)
-                            output << ',';
-                        output << '"' << GatherBenchmarkCpuScopeName(scope) << "\":" << sample.milliseconds[scope];
-                    }
-                    output << '}';
-                    if(memoryEnabled){
-                        output << ",\"arenas\":";
-                        WriteGatherBenchmarkMemory(sample.memory, output);
-                    }
-                    output << "}\n";
-                }
-                for(usize index = 0u; index < gpuSamples.size(); index += 2u){
-                    const usize count = Min(usize{ 2u }, gpuSamples.size() - index);
-                    const SIMDVectorDouble milliseconds = VectorDoubleScale(
-                        VectorDoubleSet(
-                            gpuSamples[index].timing.seconds,
-                            count > 1u ? gpuSamples[index + 1u].timing.seconds : 0.0,
-                            0.0,
-                            0.0
-                        ),
-                        s_PresentationPacingMsPerSecond
-                    );
-                    for(usize lane = 0u; lane < count; ++lane){
-                        const RendererGatherGpuSample& sample = gpuSamples[index + lane];
-                        output << "{\"type\":\"gpu\",\"scope\":\"" << GatherBenchmarkGpuScopeName(sample.scope)
-                            << "\",\"publish_frame\":" << sample.timing.publishFrameIndex
-                            << ",\"first_source_frame\":" << sample.timing.firstSampleFrameIndex
-                            << ",\"last_source_frame\":" << sample.timing.lastSampleFrameIndex
-                            << ",\"total_ms\":" << VectorDoubleGetByIndex(milliseconds, lane)
-                            << ",\"samples\":" << sample.timing.sampleCount << "}\n";
-                    }
-                }
-                if(complete)
-                    output << "{\"type\":\"complete\"}\n";
-                output.close();
-                good = output.good() && complete;
+        String modeText = "timing";
+        if(memoryEnabled)
+            modeText = "memory";
+        String out = String();
+        out.reserve(65536u);
+        StringAppendFormat(
+            out,
+            "{{\"type\":\"configuration\",\"schema\":2,\"workload\":\"{}\",\"mode\":\"{}\",\"width\":960,\"height\":720,\"warmup\":{},\"samples\":{},\"drain\":{},\"successful_frames\":{},\"renderers\":{},\"runtime_renderers\":{},\"transparent_renderers\":{},\"runtime_owners\":{},\"reflection_mode\":\"hardware\",\"hardware_budget\":4096,\"optical_queries\":16,\"temporal\":false,\"spatial\":false,\"feedback\":false,\"diagnostics\":false,\"fixed_delta_seconds\":0.016666667,\"sampling_seed\":0,\"refraction\":true}}\n",
+            workload,
+            modeText,
+            s_GatherBenchmarkWarmupFrames,
+            s_GatherBenchmarkSampleFrames,
+            s_GatherBenchmarkDrainFrames,
+            this.m_successfulFrames,
+            renderers,
+            runtimeRenderers,
+            transparentRenderers,
+            runtimeOwners
+        );
+        if(memoryEnabled){
+            out.append("{\"type\":\"memory_baseline\",\"arenas\":");
+            AppendGatherBenchmarkMemory(Span<PerfMemorySnapshot>(this.m_memoryBaseline), out);
+            out.append("}\n");
+        }
+        for(in RendererGatherCpuSample sample : this.m_cpu){
+            StringAppendFormat(out, "{{\"type\":\"cpu\",\"source_frame\":{},\"publish_frame\":{},\"scopes_ms\":{{", sample.sourceFrame, sample.publishFrame);
+            for(u32 scope = 0u; scope < s_GatherBenchmarkCpuScopeCount; ++scope){
+                if(scope != 0u)
+                    out.push_back(',');
+                StringAppendFormat(out, "\"{}\":{:.9f}", GatherBenchmarkCpuScopeName(scope), sample.milliseconds[scope]);
+            }
+            out.push_back('}');
+            if(memoryEnabled){
+                out.append(",\"arenas\":");
+                AppendGatherBenchmarkMemory(Span<PerfMemorySnapshot>(sample.memory), out);
+            }
+            out.append("}\n");
+        }
+        for(usize index = 0u; index < this.m_gpu.size(); index += 2u){
+            const usize count = Min(2u, this.m_gpu.size() - index);
+            f64 secondSeconds = 0.0;
+            if(count > 1u)
+                secondSeconds = this.m_gpu[index + 1u].timing.seconds;
+            const VectorDouble milliseconds = VectorDouble(this.m_gpu[index].timing.seconds, secondSeconds, 0.0, 0.0) * s_PresentationPacingMsPerSecond;
+            for(usize lane = 0u; lane < count; ++lane){
+                const RendererGatherGpuSample sample = this.m_gpu[index + lane];
+                f64 totalMs = milliseconds.x;
+                if(lane != 0u)
+                    totalMs = milliseconds.y;
+                StringAppendFormat(
+                    out,
+                    "{{\"type\":\"gpu\",\"scope\":\"{}\",\"publish_frame\":{},\"first_source_frame\":{},\"last_source_frame\":{},\"total_ms\":{:.9f},\"samples\":{}}}\n",
+                    GatherBenchmarkGpuScopeName(sample.scope),
+                    sample.timing.publishFrameIndex,
+                    sample.timing.firstSampleFrameIndex,
+                    sample.timing.lastSampleFrameIndex,
+                    totalMs,
+                    sample.timing.sampleCount
+                );
             }
         }
-        return good;
+        if(complete)
+            out.append("{\"type\":\"complete\"}\n");
+        const Expected<b8> written = WriteTextFile(Path(path), out);
+        return written.has_value() && written.value() && complete;
     }
 
     private Array<PerfMemorySnapshot, s_GatherBenchmarkArenaScopeCount> m_memoryBaseline;

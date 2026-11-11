@@ -118,6 +118,7 @@ namespace NWB::Tests::GlobalCases{
 
 
 using BinaryVectorPayloadFailureEnum = ::BinaryVectorPayloadFailure::Enum;
+using BinaryVectorVoidResult = Expected<void, ::BinaryVectorPayloadFailure::Enum>;
 namespace BinaryVectorPayloadFailure = ::BinaryVectorPayloadFailure;
 
 
@@ -255,35 +256,24 @@ void VerifyGlobal_AtomicIdentityAndHighWaterRespectLimits(){
     EXPECT_EQ(identities.load(MemoryOrder::relaxed), u64.max);
 
     Atomic<u32> boundedIdentity = Atomic<u32>(cast<u32>(u16.max));
-    Expected<u16> lastBoundedIdentity = MakeUnexpected(Failure());
-    b8 overflowBoundedOk = true;
-    b8 zeroBoundedOk = true;
-    Atomic<u32> zeroBoundedIdentity = Atomic<u32>(0u);
-    native(mut boundedIdentity, mut lastBoundedIdentity, mut overflowBoundedOk, mut zeroBoundedIdentity, mut zeroBoundedOk){
-        lastBoundedIdentity = TryNextAtomicBoundedIdentity<u16>(boundedIdentity);
-        overflowBoundedOk = TryNextAtomicBoundedIdentity<u16>(boundedIdentity).has_value();
-        zeroBoundedOk = TryNextAtomicBoundedIdentity<u16>(zeroBoundedIdentity).has_value();
-    }
+    const Expected<u16> lastBoundedIdentity = TryNextAtomicBoundedIdentity<u16>(boundedIdentity);
     ASSERT_TRUE(lastBoundedIdentity.has_value());
     EXPECT_EQ(lastBoundedIdentity.value(), u16.max);
     EXPECT_EQ(boundedIdentity.load(MemoryOrder::relaxed), cast<u32>(u16.max) + 1u);
-    EXPECT_FALSE(overflowBoundedOk);
-    EXPECT_FALSE(zeroBoundedOk);
+    EXPECT_FALSE(TryNextAtomicBoundedIdentity<u16>(boundedIdentity).has_value());
+
+    Atomic<u32> zeroBoundedIdentity = Atomic<u32>(0u);
+    EXPECT_FALSE(TryNextAtomicBoundedIdentity<u16>(zeroBoundedIdentity).has_value());
     EXPECT_EQ(zeroBoundedIdentity.load(MemoryOrder::relaxed), 0u);
 
     Atomic<u64> zeroIdentity = Atomic<u64>(0u);
     EXPECT_EQ(TryNextAtomicIdentity(zeroIdentity), 0u);
     EXPECT_EQ(zeroIdentity.load(MemoryOrder::relaxed), 0u);
-    Expected<u64> allowedZeroIdentity = MakeUnexpected(Failure());
-    b8 overflowAllowZeroOk = true;
-    native(mut zeroIdentity, mut allowedZeroIdentity, mut identities, mut overflowAllowZeroOk){
-        allowedZeroIdentity = TryNextAtomicIdentityAllowZero(zeroIdentity);
-        overflowAllowZeroOk = TryNextAtomicIdentityAllowZero(identities).has_value();
-    }
+    const Expected<u64> allowedZeroIdentity = TryNextAtomicIdentityAllowZero(zeroIdentity);
     ASSERT_TRUE(allowedZeroIdentity.has_value());
     EXPECT_EQ(allowedZeroIdentity.value(), 0u);
     EXPECT_EQ(zeroIdentity.load(MemoryOrder::relaxed), 1u);
-    EXPECT_FALSE(overflowAllowZeroOk);
+    EXPECT_FALSE(TryNextAtomicIdentityAllowZero(identities).has_value());
     EXPECT_EQ(identities.load(MemoryOrder::relaxed), u64.max);
 }
 
@@ -294,20 +284,13 @@ void VerifyGlobal_ExhaustedPodReadsPreserveCursor(){
     AppendPOD(binary, writtenValue);
 
     usize cursor = 0u;
-    Expected<u32> readValue = MakeUnexpected(Failure());
-    b8 secondReadOk = true;
-    native(in binary, mut cursor, mut readValue){
-        readValue = ReadPOD<u32>(binary, cursor);
-    }
+    const Expected<u32> readValue = ReadPOD<u32>(binary, cursor);
     ASSERT_TRUE(readValue.has_value());
     EXPECT_EQ(readValue.value(), writtenValue);
     EXPECT_EQ(cursor, 4u);
 
     const usize failedCursor = cursor;
-    native(in binary, mut cursor, mut secondReadOk){
-        secondReadOk = ReadPOD<u32>(binary, cursor).has_value();
-    }
-    EXPECT_FALSE(secondReadOk);
+    EXPECT_FALSE(ReadPOD<u32>(binary, cursor).has_value());
     EXPECT_EQ(cursor, failedCursor);
 }
 
@@ -375,19 +358,13 @@ void VerifyGlobal_EmptyBinaryVectorReadClearsReusedOutputWithoutAdvancing(){
     usize cursor = 0u;
     Vector<u16> parsed = Vector<u16>();
     parsed.reserve(4u);
-    b8 firstReadOk = false;
-    native(in binary, in source, mut cursor, mut parsed, mut firstReadOk){
-        firstReadOk = ReadBinaryVectorPayload(binary, static_cast<u64>(source.size()), cursor, parsed).has_value();
-    }
-    ASSERT_TRUE(firstReadOk);
+    const BinaryVectorVoidResult firstRead = ReadBinaryVectorPayload(binary, cast<u64>(source.size()), cursor, parsed);
+    ASSERT_TRUE(firstRead.has_value());
 
     cursor = 0u;
     parsed.push_back(7u);
-    b8 emptyReadOk = false;
-    native(in binary, mut cursor, mut parsed, mut emptyReadOk){
-        emptyReadOk = ReadBinaryVectorPayload(binary, 0u, cursor, parsed).has_value();
-    }
-    ASSERT_TRUE(emptyReadOk);
+    const BinaryVectorVoidResult emptyRead = ReadBinaryVectorPayload(binary, 0u, cursor, parsed);
+    ASSERT_TRUE(emptyRead.has_value());
     EXPECT_EQ(cursor, 0u);
     EXPECT_TRUE(parsed.empty());
 }
@@ -404,9 +381,9 @@ void VerifyGlobal_FixedVectorOverflowDoesNotAdvanceBinaryCursor(){
 
     usize vectorCursor = 0u;
     FixedVector<u16, 2> tooSmall = FixedVector<u16, 2>();
-    native(in vectorBinary, mut vectorCursor, mut tooSmall){
-        EXPECT_EQ(ReadBinaryVectorPayload(vectorBinary, 3u, vectorCursor, tooSmall), MakeUnexpected(BinaryVectorPayloadFailure::OutputOverflow));
-    }
+    const BinaryVectorVoidResult overflowRead = ReadBinaryVectorPayload(vectorBinary, 3u, vectorCursor, tooSmall);
+    ASSERT_FALSE(overflowRead.has_value());
+    EXPECT_EQ(overflowRead.error(), BinaryVectorPayloadFailure::OutputOverflow);
     EXPECT_EQ(vectorCursor, 0u);
     EXPECT_TRUE(tooSmall.empty());
 }
@@ -421,9 +398,9 @@ void VerifyGlobal_RejectedBinaryVectorPayloadReadsDoNotAdvanceCursor(){
     Vector<u32> parsed = Vector<u32>();
     parsed.reserve(4u);
     parsed.push_back(0xAABBCCDDu);
-    native(in truncated, mut cursor, mut parsed){
-        EXPECT_EQ(ReadBinaryVectorPayload(truncated, 2u, cursor, parsed), MakeUnexpected(BinaryVectorPayloadFailure::SourceTruncated));
-    }
+    const BinaryVectorVoidResult truncatedRead = ReadBinaryVectorPayload(truncated, 2u, cursor, parsed);
+    ASSERT_FALSE(truncatedRead.has_value());
+    EXPECT_EQ(truncatedRead.error(), BinaryVectorPayloadFailure::SourceTruncated);
     EXPECT_EQ(cursor, 0u);
     EXPECT_TRUE(parsed.empty());
 }
@@ -435,9 +412,7 @@ void VerifyGlobal_AppendTriviallyCopyableVectorSelfAppend(){
     values.push_back(2u);
     values.push_back(3u);
 
-    native(mut values){
-        AppendTriviallyCopyableVector(values, values);
-    }
+    AppendTriviallyCopyableVector(values, values);
 
     EXPECT_EQ(values.size(), 6u);
     EXPECT_EQ(values[0u], 1u);
@@ -489,20 +464,13 @@ void VerifyGlobal_DirectionalSearchHandlesChangingCountsAndThrows(){
     const auto matchFirst = lambda[](in u64 index) -> b8{
         return index == 0u;
     };
-    Expected<u64> firstReverse = MakeUnexpected(Failure());
-    native(in countRows, in matchFirst, mut firstReverse){
-        firstReverse = FindDirectionalIndex(2u, true, countRows, matchFirst);
-    }
+    const Expected<u64> firstReverse = FindDirectionalIndex(2u, true, countRows, matchFirst);
     ASSERT_TRUE(firstReverse.has_value());
     EXPECT_EQ(firstReverse.value(), 0u);
     EXPECT_EQ(countCalls, 4u);
 
     countCalls = 0u;
-    b8 outOfRangeFound = true;
-    native(in countRows, in matchFirst, mut outOfRangeFound){
-        outOfRangeFound = FindDirectionalIndex(3u, false, countRows, matchFirst).has_value();
-    }
-    EXPECT_FALSE(outOfRangeFound);
+    EXPECT_FALSE(FindDirectionalIndex(3u, false, countRows, matchFirst).has_value());
     EXPECT_EQ(countCalls, 1u);
 
     native{

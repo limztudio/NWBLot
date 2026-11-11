@@ -23,6 +23,7 @@ native{
 #include <impl/ecs_ui/toolkit/edit/float_model.adhd.h>
 #include <impl/ecs_ui/toolkit/edit/integer_model.adhd.h>
 #include <impl/ecs_ui/toolkit/edit/numeric_types.adhd.h>
+#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
 #include <impl/ecs_ui/toolkit/input/bindings.adhd.h>
 
 #include <gtest/gtest.h>
@@ -64,22 +65,62 @@ public:
 
 class NumericHost final : public IEditBoxHost{
 public:
-    explicit NumericHost(Core::Alloc::GlobalArena& arena);
+    explicit NumericHost(Core::Alloc::GlobalArena& arena)
+        : displayed(arena)
+        , m_arena(arena)
+        , m_events(arena)
+        , m_bindings(arena)
+    {}
     virtual ~NumericHost()noexcept override = default;
 
 
 public:
-    void text(AStringView value);
-    void key(i32 key, b8 control = false);
-    void replace(AStringView value);
-    void preedit(AStringView value);
-    void action(EditAction::Enum action);
+    void text(const AStringView value){
+        NumericEvent event(m_arena);
+        event.text.assign(value.data(), value.size());
+        m_events.push_back(Move(event));
+    }
+    void key(const i32 key, const b8 control = false){
+        NumericEvent event(m_arena);
+        event.kind = NumericEventKind::Key;
+        event.intent = m_bindings.resolve(key, control ? Core::InputModifier::Control : 0);
+        m_events.push_back(Move(event));
+    }
+    void replace(const AStringView value){
+        key(Core::Key::A, true);
+        text(value);
+    }
+    void preedit(const AStringView value){
+        NumericEvent event(m_arena);
+        event.kind = NumericEventKind::Preedit;
+        event.text.assign(value.data(), value.size());
+        m_events.push_back(Move(event));
+    }
+    void action(const EditAction::Enum action){
+        NumericEvent event(m_arena);
+        event.kind = NumericEventKind::Action;
+        event.action = action;
+        m_events.push_back(Move(event));
+    }
 
-    [[nodiscard]] virtual EditBoxResult edit(const WidgetState& widget, const EditBoxOptions& options, EditModel& draft)noexcept override;
+    [[nodiscard]] virtual EditBoxResult edit(const WidgetState&, const EditBoxOptions&, EditModel&)noexcept override{
+        ++ordinaryLoans;
+        EditBoxResult result;
+        result.valid = true;
+        return result;
+    }
     [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&)noexcept override{ return {}; }
     [[nodiscard]] virtual EditBoxResult editActions(const WidgetState& widget, const EditBoxOptions& options, const PopupToken& popup, EditModel& draft, IEditActionSink& sink)override;
     [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)noexcept override{ return {}; }
-    [[nodiscard]] virtual b8 publish(const WidgetState& widget, const EditBoxView& view, const EditBoxPlacement& placement, const EditBoxOptions& options)override;
+    [[nodiscard]] virtual b8 publish(const WidgetState&, const EditBoxView& view, const EditBoxPlacement&, const EditBoxOptions&)override{
+        ++publishes;
+        displayed.assign(view.displayText().data(), view.displayText().size());
+        if(onPublishInteger)
+            mutationApplied = onPublishInteger->setValue(mutationValue);
+        if(onPublishFloat)
+            mutationApplied = onPublishFloat->setValue(static_cast<f64>(mutationValue));
+        return true;
+    }
 
 
 public:
@@ -97,7 +138,7 @@ public:
     b8 mutationApplied = false;
 
 
-private:
+public:
     Core::Alloc::GlobalArena& m_arena;
     PaintVector<NumericEvent> m_events;
     InputBindings m_bindings;
@@ -109,7 +150,11 @@ private:
 
 class NumericFixture : public WidgetFixture{
 public:
-    NumericFixture();
+    NumericFixture()
+        : m_integer(m_arena)
+        , m_float(m_arena)
+        , m_host(m_arena)
+    {}
 
 
 public:
@@ -201,11 +246,21 @@ inline constexpr AStringView s_MenuKey = "menu";
 class PopupToolsSource final : public IListDataSource{
 public:
     [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return generation; }
-    [[nodiscard]] virtual u64 revision()const noexcept override;
+    [[nodiscard]] virtual u64 revision()const noexcept override{
+        if(closeComboOnRevision){
+            ComboState& state = *MakeNotNull(Exchange(closeComboOnRevision, nullptr));
+            state.close();
+        }
+        return contentRevision;
+    }
     [[nodiscard]] virtual u64 rowCount()const noexcept override{ return count; }
     [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{ return index < count ? index + 1u : 0u; }
-    [[nodiscard]] virtual Expected<u64> indexOf(u64 value)const noexcept override;
-    [[nodiscard]] virtual Expected<u64> findEnabled(u64 start, b8 reverse)const noexcept override;
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 value)const noexcept override{
+        return UiWidgetTests::FindArithmeticFixtureRowIndex(count, 0u, false, value);
+    }
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{
+        return UiWidgetTests::FindSingleDisabledFixtureRow(count, 0u, false, start, reverse, 3u);
+    }
     [[nodiscard]] virtual StringView text(u64 index)const noexcept override;
     [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{ return index < count && index + 1u != 3u; }
 
@@ -228,6 +283,7 @@ public:
 
 class PopupToolsFixture : public WidgetFixture{
 public:
+    void setUpWidgetBase(){ WidgetFixture::SetUp(); }
     virtual void SetUp()override;
     [[nodiscard]] b8 declareTools(u64 generation, b8 tooltip = true, b8 menu = true, const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f });
     [[nodiscard]] b8 prepareTools(const u64 generation, const b8 tooltip = true, const b8 menu = true, const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f }){
@@ -237,8 +293,20 @@ public:
         return prepareTools(generation, tooltip, menu, bounds) && m_context.commitFrame(generation);
     }
     [[nodiscard]] b8 acceptPopupTooltip(u64 generation);
-    [[nodiscard]] const HitTarget* menuHost()const noexcept;
-    [[nodiscard]] const HitTarget* menuRow(u64 key)const noexcept;
+    [[nodiscard]] const HitTarget* menuHost()const noexcept{
+        for(const HitTarget& entry : m_context.input().targets()){
+            if(entry.navigable && entry.popup.instanceGeneration == m_menu.instanceGeneration())
+                return &entry;
+        }
+        return nullptr;
+    }
+    [[nodiscard]] const HitTarget* menuRow(const u64 key)const noexcept{
+        for(const HitTarget& entry : m_context.input().targets()){
+            if(entry.value == key && entry.popup.instanceGeneration == m_menu.instanceGeneration())
+                return &entry;
+        }
+        return nullptr;
+    }
     [[nodiscard]] b8 moveToAnchor(AStringView parent = s_PopupToolsPanelKey);
     void secondaryClick(const Point& point);
     [[nodiscard]] b8 openBySecondary(u64 generation);
@@ -267,6 +335,96 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+NWB_END
+
+namespace __hidden_ui_glyph_sdf_tests{
+using Insets = ::NWB::Impl::Ui::Insets;
+using NumericEvent = ::NWB::UiNumericEditTests::NumericEvent;
+using NumericHost = ::NWB::UiNumericEditTests::NumericHost;
+using PopupToolsFixture = ::NWB::UiPopupToolsTests::PopupToolsFixture;
+using ContextMenuResult = ::NWB::Impl::Ui::ContextMenuResult;
+using IEditActionSink = ::NWB::Impl::Ui::IEditActionSink;
+using EditCommandResult = ::NWB::Impl::Ui::EditCommandResult;
+namespace EditAction = ::NWB::Impl::Ui::EditAction;
+namespace EditTextMode = ::NWB::Impl::Ui::EditTextMode;
+using ::NWB::Impl::Ui::ApplyEditCommand;
+using ::NWB::Impl::Ui::TranslateEditCommand;
+using ::NWB::UiPopupToolsTests::s_PopupToolsPanelKey;
+using ::NWB::UiPopupToolsTests::s_AnchorKey;
+using ::NWB::UiPopupToolsTests::s_TooltipKey;
+using ::NWB::UiPopupToolsTests::s_MenuKey;
+
+void ExpectNumericEditRejected(const NumericEditResult& result, b8 restored)noexcept;
+PopupOptions MakePopupTooltipFixtureOptions()noexcept;
+b8 ApplyNumericHostEvent(const NumericEvent& event, const EditBoxOptions& options, EditModel& draft, IEditActionSink& sink, EditBoxResult& result)noexcept;
+StringView FormatPopupToolsRowLabel(u64 count, u64 index)noexcept;
+void SetUpPopupToolsFixture(PopupToolsFixture& self)noexcept;
+b8 DeclarePopupToolsFixture(PopupToolsFixture& self, u64 generation, b8 tooltip, b8 menu, const Rect& bounds)noexcept;
+b8 AcceptPopupTooltipFixture(PopupToolsFixture& self, u64 generation)noexcept;
+b8 MovePopupToolsToAnchor(PopupToolsFixture& self, AStringView parent)noexcept;
+void SecondaryClickPopupTools(PopupToolsFixture& self, const Point& point)noexcept;
+b8 OpenPopupToolsBySecondary(PopupToolsFixture& self, u64 generation)noexcept;
+};
+
+NWB_BEGIN
+namespace UiNumericEditTests{
+NWB_INLINE EditBoxResult NumericHost::editActions(const WidgetState&, const EditBoxOptions& options, const PopupToken& popup, EditModel& draft, IEditActionSink& sink){
+    ++loans;
+    lastPopup = popup;
+    EditBoxResult result;
+    result.valid = true;
+    result.focused = options.enabled && focused;
+    const u64 revision = draft.revision();
+    const usize anchor = draft.anchor();
+    const usize caret = draft.caret();
+    for(const auto& event : m_events){
+        if(!::__hidden_ui_glyph_sdf_tests::ApplyNumericHostEvent(event, options, draft, sink, result))
+            break;
+    }
+    m_events.clear();
+    if(onLoanInteger)
+        mutationApplied = onLoanInteger->setValue(mutationValue);
+    if(resetBuilder)
+        resetBuilder->reset();
+    result.textChanged = revision != draft.revision();
+    result.selectionChanged = anchor != draft.anchor() || caret != draft.caret();
+    return result;
+}
+};
+namespace UiNumericTests{
+NWB_INLINE void ExpectRejected(const NumericEditResult& result, const b8 restored){
+    ::__hidden_ui_glyph_sdf_tests::ExpectNumericEditRejected(result, restored);
+}
+};
+namespace UiPopupToolsTests{
+NWB_INLINE StringView PopupToolsSource::text(const u64 index)const noexcept{
+    if(changeRevisionOnText){
+        changeRevisionOnText = false;
+        ++contentRevision;
+    }
+    if(closeOnText){
+        ContextMenuState& state = *MakeNotNull(Exchange(closeOnText, nullptr));
+        state.close();
+    }
+    if(resetTooltipOnText){
+        TooltipState& state = *MakeNotNull(Exchange(resetTooltipOnText, nullptr));
+        state.reset();
+    }
+    if(selectListOnText){
+        ListState& state = *MakeNotNull(Exchange(selectListOnText, nullptr));
+        state.select(selectListKey);
+    }
+    return ::__hidden_ui_glyph_sdf_tests::FormatPopupToolsRowLabel(count, index);
+}
+NWB_INLINE void PopupToolsFixture::SetUp(){ ::__hidden_ui_glyph_sdf_tests::SetUpPopupToolsFixture(*this); }
+NWB_INLINE b8 PopupToolsFixture::declareTools(const u64 generation, const b8 tooltip, const b8 menu, const Rect& bounds){
+    return ::__hidden_ui_glyph_sdf_tests::DeclarePopupToolsFixture(*this, generation, tooltip, menu, bounds);
+}
+NWB_INLINE b8 PopupToolsFixture::acceptPopupTooltip(const u64 generation){ return ::__hidden_ui_glyph_sdf_tests::AcceptPopupTooltipFixture(*this, generation); }
+NWB_INLINE b8 PopupToolsFixture::moveToAnchor(const AStringView parent){ return ::__hidden_ui_glyph_sdf_tests::MovePopupToolsToAnchor(*this, parent); }
+NWB_INLINE void PopupToolsFixture::secondaryClick(const Point& point){ ::__hidden_ui_glyph_sdf_tests::SecondaryClickPopupTools(*this, point); }
+NWB_INLINE b8 PopupToolsFixture::openBySecondary(const u64 generation){ return ::__hidden_ui_glyph_sdf_tests::OpenPopupToolsBySecondary(*this, generation); }
+};
 NWB_END
 
 
@@ -300,325 +458,136 @@ PopupOptions MakePopupTooltipFixtureOptions(){
     return options;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace UiNumericEditTests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NumericHost::NumericHost(Core::Alloc::GlobalArena& arena)
-    : displayed(arena)
-    , m_arena(arena)
-    , m_events(arena)
-    , m_bindings(arena)
-{}
-
-void NumericHost::text(const AStringView value){
-    NumericEvent event(m_arena);
-    event.text.assign(value.data(), value.size());
-    m_events.push_back(Move(event));
-}
-
-void NumericHost::key(const i32 key, const b8 control){
-    NumericEvent event(m_arena);
-    event.kind = NumericEventKind::Key;
-    event.intent = m_bindings.resolve(key, control ? Core::InputModifier::Control : 0);
-    m_events.push_back(Move(event));
-}
-
-void NumericHost::replace(const AStringView value){
-    key(Core::Key::A, true);
-    text(value);
-}
-
-void NumericHost::preedit(const AStringView value){
-    NumericEvent event(m_arena);
-    event.kind = NumericEventKind::Preedit;
-    event.text.assign(value.data(), value.size());
-    m_events.push_back(Move(event));
-}
-
-void NumericHost::action(const EditAction::Enum action){
-    NumericEvent event(m_arena);
-    event.kind = NumericEventKind::Action;
-    event.action = action;
-    m_events.push_back(Move(event));
-}
-
-EditBoxResult NumericHost::edit([[maybe_unused]] const WidgetState& widget, [[maybe_unused]] const EditBoxOptions& options, [[maybe_unused]] EditModel& draft)noexcept{
-    ++ordinaryLoans;
-    EditBoxResult result;
-    result.valid = true;
-    return result;
-}
-
-EditBoxResult NumericHost::editActions([[maybe_unused]] const WidgetState& widget, const EditBoxOptions& options, const PopupToken& popup, EditModel& draft, IEditActionSink& sink){
-    ++loans;
-    lastPopup = popup;
-    EditBoxResult result;
-    result.valid = true;
-    result.focused = options.enabled && focused;
-    const u64 revision = draft.revision();
-    const usize anchor = draft.anchor();
-    const usize caret = draft.caret();
-    for(const auto& event : m_events){
-        if(event.kind == NumericEventKind::Action){
-            if(!sink.apply(draft, event.action, options.readOnly)){
+b8 ApplyNumericHostEvent(in NumericEvent event, in EditBoxOptions options, mut EditModel draft, mut IEditActionSink sink, mut EditBoxResult result){
+    if(event.kind == UiFixtureNumericEventKind::Action){
+        if(!sink.apply(draft, event.action, options.readOnly)){
+            result.valid = false;
+            return false;
+        }
+        result.blurred = result.blurred || (event.action == EditAction::Blur);
+        result.abandoned = result.abandoned || (event.action == EditAction::Abandon);
+        if(event.action == EditAction::Blur)
+            result.focused = false;
+        return true;
+    }
+    if(options.enabled && event.kind == UiFixtureNumericEventKind::Text && !options.readOnly){
+        if(!draft.replaceSelection(StringView(event.text.data(), event.text.size()))){
+            result.valid = false;
+            return false;
+        }
+        return true;
+    }
+    if(options.enabled && event.kind == UiFixtureNumericEventKind::Preedit && !options.readOnly){
+        const StringView textView = StringView(event.text.data(), event.text.size());
+        if(!draft.beginComposition() || !draft.updateComposition(textView, textView.size(), textView.size())){
+            result.valid = false;
+            return false;
+        }
+        return true;
+    }
+    if(options.enabled && event.kind == UiFixtureNumericEventKind::Key){
+        const EditCommandResult command = ApplyEditCommand(draft, TranslateEditCommand(event.intent, false, EditTextMode::SingleLine), options.readOnly);
+        result.submitted = result.submitted || command.submitted;
+        result.cancelled = result.cancelled || command.cancelled;
+        if(command.submitted || command.cancelled){
+            auto action = EditAction::Cancel;
+            if(command.submitted)
+                action = EditAction::Submit;
+            if(!sink.apply(draft, action, options.readOnly)){
                 result.valid = false;
-                break;
+                return false;
             }
-            result.blurred |= event.action == EditAction::Blur;
-            result.abandoned |= event.action == EditAction::Abandon;
-            if(event.action == EditAction::Blur)
+            if(command.cancelled){
                 result.focused = false;
-        }
-        else if(options.enabled && event.kind == NumericEventKind::Text && !options.readOnly){
-            if(!draft.replaceSelection(event.text)){
-                result.valid = false;
-                break;
-            }
-        }
-        else if(options.enabled && event.kind == NumericEventKind::Preedit && !options.readOnly){
-            if(!draft.beginComposition() || !draft.updateComposition(event.text, event.text.size(), event.text.size())){
-                result.valid = false;
-                break;
-            }
-        }
-        else if(options.enabled && event.kind == NumericEventKind::Key){
-            const auto command = ApplyEditCommand(draft, TranslateEditCommand(event.intent, false, EditTextMode::SingleLine), options.readOnly);
-            result.submitted |= command.submitted;
-            result.cancelled |= command.cancelled;
-            if(command.submitted || command.cancelled){
-                if(!sink.apply(draft, command.submitted ? EditAction::Submit : EditAction::Cancel, options.readOnly)){
-                    result.valid = false;
-                    break;
-                }
-                if(command.cancelled){
-                    result.focused = false;
-                    break;
-                }
+                return false;
             }
         }
     }
-    m_events.clear();
-    if(onLoanInteger)
-        mutationApplied = onLoanInteger->setValue(mutationValue);
-    if(resetBuilder)
-        resetBuilder->reset();
-    result.textChanged = revision != draft.revision();
-    result.selectionChanged = anchor != draft.anchor() || caret != draft.caret();
-    return result;
-}
-
-b8 NumericHost::publish([[maybe_unused]] const WidgetState& widget, const EditBoxView& view, [[maybe_unused]] const EditBoxPlacement& placement, [[maybe_unused]] const EditBoxOptions& options){
-    ++publishes;
-    displayed.assign(view.displayText().data(), view.displayText().size());
-    if(onPublishInteger)
-        mutationApplied = onPublishInteger->setValue(mutationValue);
-    if(onPublishFloat)
-        mutationApplied = onPublishFloat->setValue(static_cast<f64>(mutationValue));
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NumericFixture::NumericFixture()
-    : m_integer(m_arena)
-    , m_float(m_arena)
-    , m_host(m_arena)
-{}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace UiNumericTests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void ExpectRejected(const NumericEditResult& result, const b8 restored){
-    ::__hidden_ui_glyph_sdf_tests::ExpectNumericEditRejected(result, restored);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace UiPopupToolsTests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-u64 PopupToolsSource::revision()const noexcept{
-    if(closeComboOnRevision){
-        ComboState& state = *MakeNotNull(Exchange(closeComboOnRevision, nullptr));
-        state.close();
+StringView FormatPopupToolsRowLabel(in u64 count, in u64 index){
+    if(index >= count)
+        return "";
+    switch(index){
+    case 0u: return "One";
+    case 1u: return "Two";
+    case 2u: return "Three";
+    case 3u: return "Four";
+    case 4u: return "Five";
+    default: return "";
     }
-    return contentRevision;
 }
 
-Expected<u64> PopupToolsSource::indexOf(const u64 value)const noexcept{
-    return UiWidgetTests::FindArithmeticFixtureRowIndex(count, 0u, false, value);
+void SetUpPopupToolsFixture(mut PopupToolsFixture self){
+    self.setUpWidgetBase();
+    self.m_anchorOptions.width.policy = LayoutSizePolicy::Fixed;
+    self.m_anchorOptions.width.value = 220.0f;
+    self.m_anchorOptions.height.policy = LayoutSizePolicy::Fixed;
+    self.m_anchorOptions.height.value = 32.0f;
+    self.m_tooltipOptions.delaySeconds = 0.0f;
+    self.m_menuOptions.size = Point(240.0f, 220.0f);
 }
 
-Expected<u64> PopupToolsSource::findEnabled(const u64 start, const b8 reverse)const noexcept{
-    return UiWidgetTests::FindSingleDisabledFixtureRow(count, 0u, false, start, reverse, 3u);
-}
-
-StringView PopupToolsSource::text(const u64 index)const noexcept{
-    if(changeRevisionOnText){
-        changeRevisionOnText = false;
-        ++contentRevision;
-    }
-    if(closeOnText){
-        ContextMenuState& state = *MakeNotNull(Exchange(closeOnText, nullptr));
-        state.close();
-    }
-    if(resetTooltipOnText){
-        TooltipState& state = *MakeNotNull(Exchange(resetTooltipOnText, nullptr));
-        state.reset();
-    }
-    if(selectListOnText){
-        ListState& state = *MakeNotNull(Exchange(selectListOnText, nullptr));
-        state.select(selectListKey);
-    }
-    constexpr Array<StringView, 5u> s_Labels = { "One", "Two", "Three", "Four", "Five" };
-    return index < count && index < s_Labels.size() ? s_Labels[index] : StringView{};
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void PopupToolsFixture::SetUp(){
-    WidgetFixture::SetUp();
-    m_anchorOptions.width = { LayoutSizePolicy::Fixed, 220.0f };
-    m_anchorOptions.height = { LayoutSizePolicy::Fixed, 32.0f };
-    m_tooltipOptions.delaySeconds = 0.0f;
-    m_menuOptions.size = { 240.0f, 220.0f };
-}
-
-b8 PopupToolsFixture::declareTools(const u64 generation, const b8 tooltip, const b8 menu, const Rect& bounds){
-    if(!begin(generation) || !m_builder.beginPanel(s_PopupToolsPanelKey, bounds))
+b8 DeclarePopupToolsFixture(mut PopupToolsFixture self, in u64 generation, in b8 tooltip, in b8 menu, in Rect bounds){
+    if(!self.begin(generation) || !self.m_builder.beginPanel(s_PopupToolsPanelKey, bounds))
         return false;
-    m_builder.setDeltaSeconds(m_deltaSeconds);
-    m_anchorActivated = m_builder.button(s_AnchorKey, "Anchor", m_anchorOptions);
-    m_menuResult = {};
-    if(tooltip && !m_builder.tooltip(s_TooltipKey, s_AnchorKey, "Helpful text", m_tooltip, m_tooltipOptions))
+    self.m_builder.setDeltaSeconds(self.m_deltaSeconds);
+    self.m_anchorActivated = self.m_builder.button(s_AnchorKey, "Anchor", self.m_anchorOptions);
+    self.m_menuResult = ContextMenuResult();
+    if(tooltip && !self.m_builder.tooltip(s_TooltipKey, s_AnchorKey, "Helpful text", self.m_tooltip, self.m_tooltipOptions))
         return false;
     if(menu){
-        m_menuResult = m_builder.contextMenu(s_MenuKey, s_AnchorKey, m_source, m_menu, m_menuOptions);
-        if(!m_menuResult.valid)
+        self.m_menuResult = self.m_builder.contextMenu(s_MenuKey, s_AnchorKey, self.m_source, self.m_menu, self.m_menuOptions);
+        if(!self.m_menuResult.valid)
             return false;
     }
     return true;
 }
 
-b8 PopupToolsFixture::acceptPopupTooltip(const u64 generation){
-    if(!begin(generation))
+b8 AcceptPopupTooltipFixture(mut PopupToolsFixture self, in u64 generation){
+    if(!self.begin(generation))
         return false;
-    const PopupOptions options = ::__hidden_ui_glyph_sdf_tests::MakePopupTooltipFixtureOptions();
-    m_builder.setDeltaSeconds(m_deltaSeconds);
-    if(!m_builder.beginPopup("plain", m_plainPopup, options))
+    const PopupOptions options = MakePopupTooltipFixtureOptions();
+    self.m_builder.setDeltaSeconds(self.m_deltaSeconds);
+    if(!self.m_builder.beginPopup("plain", self.m_plainPopup, options))
         return false;
-    m_anchorActivated = m_builder.button(s_AnchorKey, "Popup anchor", m_anchorOptions);
-    return m_builder.tooltip(s_TooltipKey, s_AnchorKey, "Overlay help", m_tooltip, m_tooltipOptions) && m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame() && m_context.commitFrame(generation);
+    self.m_anchorActivated = self.m_builder.button(s_AnchorKey, "Popup anchor", self.m_anchorOptions);
+    return self.m_builder.tooltip(s_TooltipKey, s_AnchorKey, "Overlay help", self.m_tooltip, self.m_tooltipOptions)
+        && self.m_builder.endPopup()
+        && self.m_context.endRoot()
+        && self.m_context.finishFrame()
+        && self.m_context.commitFrame(generation);
 }
 
-const HitTarget* PopupToolsFixture::menuHost()const noexcept{
-    for(const HitTarget& entry : m_context.input().targets()){
-        if(entry.navigable && entry.popup.instanceGeneration == m_menu.instanceGeneration())
-            return &entry;
-    }
-    return nullptr;
-}
-
-const HitTarget* PopupToolsFixture::menuRow(const u64 key)const noexcept{
-    for(const HitTarget& entry : m_context.input().targets()){
-        if(entry.value == key && entry.popup.instanceGeneration == m_menu.instanceGeneration())
-            return &entry;
-    }
-    return nullptr;
-}
-
-b8 PopupToolsFixture::moveToAnchor(const AStringView parent){
-    const HitTarget* accepted = target(id(s_AnchorKey, parent));
-    if(!accepted)
+b8 MovePopupToolsToAnchor(mut PopupToolsFixture self, in StringView parent){
+    const WidgetId anchorId = self.id(s_AnchorKey, parent);
+    const Expected<HitTarget> accepted = self.tryTarget(anchorId);
+    if(!accepted.has_value())
         return false;
-    const Point point = Center(accepted->rectangle);
-    return send({ .position = point, .type = InputEventType::PointerMove }).hover == id(s_AnchorKey, parent);
+    InputEvent move = InputEvent();
+    move.position = CenterUiRect(accepted.value().rectangle);
+    move.type = InputEventType::PointerMove;
+    return self.send(move).hover == anchorId;
 }
 
-void PopupToolsFixture::secondaryClick(const Point& point){
-    EXPECT_TRUE(send({ .position = point, .type = InputEventType::SecondaryDown }).pointerConsumed);
-    EXPECT_TRUE(send({ .position = point, .type = InputEventType::SecondaryUp }).pointerConsumed);
+void SecondaryClickPopupTools(mut PopupToolsFixture self, in Point point){
+    InputEvent down = InputEvent();
+    down.position = point;
+    down.type = InputEventType::SecondaryDown;
+    EXPECT_TRUE(self.send(down).pointerConsumed);
+    InputEvent up = InputEvent();
+    up.position = point;
+    up.type = InputEventType::SecondaryUp;
+    EXPECT_TRUE(self.send(up).pointerConsumed);
 }
 
-b8 PopupToolsFixture::openBySecondary(const u64 generation){
-    const HitTarget* accepted = target(id(s_AnchorKey, s_PopupToolsPanelKey));
-    if(!accepted)
+b8 OpenPopupToolsBySecondary(mut PopupToolsFixture self, in u64 generation){
+    const Expected<HitTarget> accepted = self.tryTarget(self.id(s_AnchorKey, s_PopupToolsPanelKey));
+    if(!accepted.has_value())
         return false;
-    const Point point = Center(accepted->rectangle);
-    secondaryClick(point);
-    return acceptTools(generation, false) && m_menu.isOpen();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    self.secondaryClick(CenterUiRect(accepted.value().rectangle));
+    return self.acceptTools(generation, false) && self.m_menu.isOpen();
 }
 
 

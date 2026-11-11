@@ -23,6 +23,7 @@ native{
 #include <impl/ecs_mesh/system.adhd.h>
 #include <impl/ecs_render/material/material_instance.adhd.h>
 #include <impl/ecs_render/module.adhd.h>
+#include <impl/ecs_render/reflection/statistics_types.adhd.h>
 #include <impl/ecs_scene/module.adhd.h>
 
 #include <core/alloc/scratch.h>
@@ -34,19 +35,329 @@ native{
 #include <core/telemetry/frame_graph_registry.h>
 
 #include <global/limit.h>
+#include <global/simd/convert.h>
 
 namespace NWB::Tests::Smoke{
 using SmokeMaterialRef = Core::Assets::AssetRef<Impl::Material>;
 using SmokeMeshRef = Core::Assets::AssetRef<Impl::Mesh>;
 using NameTextAscii = NameText<char>;
-using Core::ECS::s_InvalidEntityId;
+using NameTextErrorEnum = NameTextError::Enum;
+
+[[nodiscard]] NWB_INLINE Expected<SmokeMeshRef, NameTextError::Enum> SmokeMeshRefFromText(const AStringView path){
+    return SmokeMeshRef::FromText(path);
+}
+
+[[nodiscard]] NWB_INLINE Expected<SmokeMaterialRef, NameTextError::Enum> SmokeMaterialRefFromText(const AStringView path){
+    return SmokeMaterialRef::FromText(path);
+}
+namespace Feature = Core::Feature;
 using Impl::CausticQualitySettings;
 using Impl::SurfelGiQualitySettings;
+namespace SurfelGiResolveResolution = Impl::SurfelGiResolveResolution;
 using Impl::ShadowQualitySettings;
+namespace ShadowReceiverResolution = Impl::ShadowReceiverResolution;
+namespace TransparentShadowSampling = Impl::TransparentShadowSampling;
 using Impl::SoftwareShadowSettings;
+namespace SoftwareShadowBackend = Impl::SoftwareShadowBackend;
+namespace SoftwareShadowBlockerSearch = Impl::SoftwareShadowBlockerSearch;
+namespace SoftwareShadowCaptureCadence = Impl::SoftwareShadowCaptureCadence;
+namespace SoftwareShadowCoverage = Impl::SoftwareShadowCoverage;
 using Impl::ReflectionSettings;
+namespace ReflectionTraceMode = Impl::ReflectionTraceMode;
+using Impl::PresentationSettings;
+namespace PresentationToneMap = Impl::PresentationToneMap;
+namespace OpticalBoundaryMode = Impl::OpticalBoundaryMode;
+namespace OpticalVolumeCoincidence = Impl::OpticalVolumeCoincidence;
+namespace ReflectionDebugView = Impl::ReflectionDebugView;
+using Impl::ReflectionStatistics;
 using Impl::RendererSystem;
 using Impl::MeshSystem;
+
+[[nodiscard]] NWB_INLINE Impl::RendererSystem& SmokeRendererSystemRef(Core::ECS::World& world)noexcept{
+    return *MakeNotNull(world.getSystem<Impl::RendererSystem>());
+}
+
+[[nodiscard]] NWB_INLINE Impl::MeshSystem& SmokeMeshSystemRef(Core::ECS::World& world)noexcept{
+    return *MakeNotNull(world.getSystem<Impl::MeshSystem>());
+}
+
+[[nodiscard]] NWB_INLINE b8 SetSmokeEntityRotation(const Core::ECS::EntityID entity, const Float4& rotation, Core::ECS::World& world)noexcept{
+    if(auto* const transform = world.tryGetComponent<Impl::Scene::TransformComponent>(entity)){
+        transform->rotation = rotation;
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] NWB_INLINE b8 SetSmokeEntityTransform(const Core::ECS::EntityID entity, const Float4& position, const Float4& rotation, Core::ECS::World& world)noexcept{
+    if(auto* const transform = world.tryGetComponent<Impl::Scene::TransformComponent>(entity)){
+        transform->position = position;
+        transform->rotation = rotation;
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] NWB_INLINE b8 SetSmokeEntityPosition(const Core::ECS::EntityID entity, const Float4& position, Core::ECS::World& world)noexcept{
+    if(auto* const transform = world.tryGetComponent<Impl::Scene::TransformComponent>(entity)){
+        transform->position = position;
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] NWB_INLINE b8 SetSmokeEntityPositionX(const Core::ECS::EntityID entity, const f32 x, Core::ECS::World& world)noexcept{
+    if(auto* const transform = world.tryGetComponent<Impl::Scene::TransformComponent>(entity)){
+        transform->position.x = x;
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] NWB_INLINE b8 SetSmokeEntityPositionZ(const Core::ECS::EntityID entity, const f32 z, Core::ECS::World& world)noexcept{
+    if(auto* const transform = world.tryGetComponent<Impl::Scene::TransformComponent>(entity)){
+        transform->position.z = z;
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] NWB_INLINE b8 SetSmokeEntityScaleX(const Core::ECS::EntityID entity, const f32 scaleX, Core::ECS::World& world)noexcept{
+    if(auto* const transform = world.tryGetComponent<Impl::Scene::TransformComponent>(entity)){
+        transform->scale.x = scaleX;
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] NWB_INLINE b8 SetSmokeEntityVisible(const Core::ECS::EntityID entity, const b8 visible, Core::ECS::World& world)noexcept{
+    if(auto* const renderer = world.tryGetComponent<Impl::RendererComponent>(entity)){
+        renderer->visible = visible;
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] NWB_INLINE b8 SetSmokeOpticalBoundaryMode(const Core::ECS::EntityID entity, const Impl::OpticalBoundaryMode::Enum mode, Core::ECS::World& world)noexcept{
+    if(auto* const renderer = world.tryGetComponent<Impl::RendererComponent>(entity)){
+        renderer->opticalBoundaryMode = mode;
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] NWB_INLINE b8 ConfigureSmokeOpticalBoundary(
+    const Core::ECS::EntityID entity,
+    const Impl::OpticalBoundaryMode::Enum mode,
+    const i32 priority,
+    Core::ECS::World& world
+)noexcept{
+    if(auto* const renderer = world.tryGetComponent<Impl::RendererComponent>(entity)){
+        renderer->opticalBoundaryMode = mode;
+        renderer->opticalMediumPriority = priority;
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] NWB_INLINE b8 ConfigureSmokeOpticalVolume(
+    const Core::ECS::EntityID entity,
+    const Name& group,
+    const i32 priority,
+    const Impl::OpticalVolumeCoincidence::Enum coincidence,
+    Core::ECS::World& world
+)noexcept{
+    if(auto* const renderer = world.tryGetComponent<Impl::RendererComponent>(entity)){
+        renderer->opticalVolumeGroup = group;
+        renderer->opticalVolumePriority = priority;
+        renderer->opticalVolumeCoincidence = coincidence;
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] NWB_INLINE b8 SetSmokeMaterialHalf4(
+    const Core::ECS::EntityID entity,
+    const Name& materialInterface,
+    const AStringView parameterPath,
+    const Float4& value,
+    Core::ECS::World& world
+){
+    return Impl::SetMaterialMutableHalf4(world, entity, materialInterface, parameterPath, value);
+}
+
+[[nodiscard]] NWB_INLINE b8 SetSmokeSurfaceRoughnessF0(
+    const Core::ECS::EntityID entity,
+    const Name& materialInterface,
+    const AStringView f0Path,
+    const AStringView roughnessPath,
+    const f32 f0,
+    const f32 roughness,
+    Core::ECS::World& world
+){
+    const Half4U packedF0 = MakeHalf4U(f0, f0, f0, 0.0f);
+    const Half packedRoughness = ConvertFloatToHalf(roughness);
+    return Impl::SetMaterialMutableParameter(
+        world,
+        entity,
+        materialInterface,
+        f0Path,
+        Impl::MaterialLayoutFieldType::f16x3,
+        Impl::PackMaterialInstanceBytes(Span<const Half>(packedF0.raw, 3u))
+    ) && Impl::SetMaterialMutableParameter(
+        world,
+        entity,
+        materialInterface,
+        roughnessPath,
+        Impl::MaterialLayoutFieldType::f16,
+        Impl::PackMaterialInstanceValue(packedRoughness)
+    );
+}
+
+[[nodiscard]] NWB_INLINE b8 SetSmokeOpticalMaterialParameters(
+    const Core::ECS::EntityID entity,
+    const Name& materialInterface,
+    const f32 ior,
+    const Float4& transmission,
+    Core::ECS::World& world
+){
+    const Half packedIor = ConvertFloatToHalf(ior);
+    const Half4U packedTransmission = MakeHalf4U(transmission.x, transmission.y, transmission.z, 0.0f);
+    return Impl::SetMaterialMutableParameter(
+        world,
+        entity,
+        materialInterface,
+        "runtime.ior",
+        Impl::MaterialLayoutFieldType::f16,
+        Impl::PackMaterialInstanceValue(packedIor)
+    ) && Impl::SetMaterialMutableParameter(
+        world,
+        entity,
+        materialInterface,
+        "runtime.unit_transmission",
+        Impl::MaterialLayoutFieldType::f16x3,
+        Impl::PackMaterialInstanceBytes(Span<const Half>(packedTransmission.raw, 3u))
+    );
+}
+
+[[nodiscard]] NWB_INLINE b8 SetSmokeLightColor(const Core::ECS::EntityID entity, const SIMDVectorSingle color, Core::ECS::World& world)noexcept{
+    if(auto* const light = world.tryGetComponent<Impl::Scene::LightComponent>(entity)){
+        light->setColor(color);
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] NWB_INLINE b8 SetSmokeCameraVerticalFov(const Core::ECS::EntityID entity, const f32 verticalFov, Core::ECS::World& world)noexcept{
+    if(auto* const camera = world.tryGetComponent<Impl::Scene::CameraComponent>(entity)){
+        camera->setVerticalFovRadians(verticalFov);
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] NWB_INLINE b8 SetSmokeCameraProjection(const Core::ECS::EntityID entity, const f32 verticalFov, const f32 aspectRatio, Core::ECS::World& world)noexcept{
+    if(auto* const camera = world.tryGetComponent<Impl::Scene::CameraComponent>(entity)){
+        camera->setVerticalFovRadians(verticalFov);
+        camera->setAspectRatio(aspectRatio);
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] NWB_INLINE b8 SetSmokeCameraNearPlane(const Core::ECS::EntityID entity, const f32 nearPlane, Core::ECS::World& world)noexcept{
+    if(auto* const camera = world.tryGetComponent<Impl::Scene::CameraComponent>(entity)){
+        camera->setNearPlane(nearPlane);
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] NWB_INLINE b8 TryReadSmokeCameraProjection(
+    const Core::ECS::EntityID entity,
+    Core::ECS::World& world,
+    f32& outVerticalFov,
+    f32& outNearPlane,
+    f32& outFarPlane,
+    f32& outAspectRatio
+)noexcept{
+    if(const auto* const camera = world.tryGetComponent<Impl::Scene::CameraComponent>(entity)){
+        outVerticalFov = camera->verticalFovRadians();
+        outNearPlane = camera->nearPlane();
+        outFarPlane = camera->farPlane();
+        outAspectRatio = camera->aspectRatio();
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] NWB_INLINE Core::ECS::EntityID CreateSmokePointLight(
+    const Float4& position,
+    const Float4& color,
+    const f32 intensity,
+    const f32 range,
+    Core::ECS::World& world
+){
+    return Impl::Scene::CreatePointLightEntity(world, position, color, intensity, range);
+}
+
+[[nodiscard]] NWB_INLINE b8 RecycleSmokeEntityGenerations(const u32 count, Core::ECS::World& world){
+    for(u32 generation = 0u; generation < count; ++generation){
+        const auto recycled = world.createEntity();
+        if(!recycled.id().valid())
+            return false;
+        world.destroyEntity(recycled.id());
+    }
+    return true;
+}
+
+[[nodiscard]] NWB_INLINE u32 SmokeEntityRawId(const Core::ECS::EntityID entity)noexcept{
+    return entity.id;
+}
+
+[[nodiscard]] NWB_INLINE Core::ECS::EntityID CreateSmokeDirectionalLight(
+    const f32 pitch,
+    const f32 yaw,
+    const f32 roll,
+    const Float4& color,
+    const f32 intensity,
+    Core::ECS::World& world
+){
+    return Impl::Scene::CreateDirectionalLightEntity(world, pitch, yaw, roll, color, intensity);
+}
+
+[[nodiscard]] NWB_INLINE Core::ECS::EntityID CreateSmokeDirectionalLight(
+    const f32 pitch,
+    const f32 yaw,
+    const f32 roll,
+    const Float4& color,
+    const f32 intensity,
+    const b8 enableCaustics,
+    Core::ECS::World& world
+){
+    const auto light = Impl::Scene::CreateDirectionalLightEntity(world, pitch, yaw, roll, color, intensity);
+    if(auto* const comp = world.tryGetComponent<Impl::Scene::LightComponent>(light))
+        comp->enableCaustics = enableCaustics;
+    return light;
+}
+
+[[nodiscard]] NWB_INLINE Core::ECS::EntityID CreateSmokePointLight(
+    const Float4& position,
+    const Float4& color,
+    const f32 intensity,
+    const f32 range,
+    const f32 sourceRadius,
+    const b8 enableCaustics,
+    Core::ECS::World& world
+){
+    const auto light = Impl::Scene::CreatePointLightEntity(world, position, color, intensity, range);
+    if(auto* const comp = world.tryGetComponent<Impl::Scene::LightComponent>(light)){
+        comp->sourceRadius = sourceRadius;
+        comp->enableCaustics = enableCaustics;
+        return light;
+    }
+    return Core::ECS::s_InvalidEntityId;
+}
 
 struct SmokeRenderSystems{
     Impl::MeshSystem& mesh;
@@ -54,7 +365,7 @@ struct SmokeRenderSystems{
 };
 
 Impl::RendererSystem& AddSmokeRenderSystems(Core::ECS::World& world, ProjectRuntimeContext& context)noexcept;
-[[nodiscard]] NotNullUniquePtr<Core::ECS::World> CreateSmokeRenderWorldOrDie(TStringView projectName, ProjectRuntimeContext& context);
+[[nodiscard]] NotNullUniquePtr<Core::ECS::World> CreateSmokeRenderWorldOrDie(AStringView projectName, ProjectRuntimeContext& context);
 };
 
 
@@ -112,16 +423,11 @@ b8 ApplySurfelGiQualitySmokeSettings(mut RendererSystem renderer, in SurfelGiQua
     const Expected<String> value = ReadSmokeEnvironmentString("NWB_SURFEL_GI_RESOLVE_RESOLUTION");
     if(value.has_value()){
         const StringView resolution = StringView(value.value());
-        b8 validResolution = true;
-        native(in resolution, mut settings, mut validResolution){
-            if(resolution == "half")
-                settings.resolveResolution = Impl::SurfelGiResolveResolution::Half;
-            else if(resolution == "quarter")
-                settings.resolveResolution = Impl::SurfelGiResolveResolution::Quarter;
-            else
-                validResolution = false;
-        }
-        if(!validResolution)
+        if(resolution == "half")
+            settings.resolveResolution = SurfelGiResolveResolution::Half;
+        else if(resolution == "quarter")
+            settings.resolveResolution = SurfelGiResolveResolution::Quarter;
+        else
             return false;
     }
     if(!renderer.setSurfelGiQualitySettings(settings))
@@ -139,31 +445,21 @@ b8 ApplyShadowQualitySmokeSettings(mut RendererSystem renderer, in ShadowQuality
     const Expected<String> samplingValue = ReadSmokeEnvironmentString("NWB_SHADOW_TRANSPARENT_SAMPLING");
     if(samplingValue.has_value()){
         const StringView sampling = StringView(samplingValue.value());
-        b8 validSampling = true;
-        native(in sampling, mut settings, mut validSampling){
-            if(sampling == "reference_three")
-                settings.transparentSampling = Impl::TransparentShadowSampling::ReferenceThree;
-            else if(sampling == "temporal_one")
-                settings.transparentSampling = Impl::TransparentShadowSampling::TemporalOne;
-            else
-                validSampling = false;
-        }
-        if(!validSampling)
+        if(sampling == "reference_three")
+            settings.transparentSampling = TransparentShadowSampling::ReferenceThree;
+        else if(sampling == "temporal_one")
+            settings.transparentSampling = TransparentShadowSampling::TemporalOne;
+        else
             return false;
     }
     const Expected<String> resolutionValue = ReadSmokeEnvironmentString("NWB_SHADOW_RECEIVER_RESOLUTION");
     if(resolutionValue.has_value()){
         const StringView resolution = StringView(resolutionValue.value());
-        b8 validResolution = true;
-        native(in resolution, mut settings, mut validResolution){
-            if(resolution == "half")
-                settings.receiverResolution = Impl::ShadowReceiverResolution::Half;
-            else if(resolution == "quarter")
-                settings.receiverResolution = Impl::ShadowReceiverResolution::Quarter;
-            else
-                validResolution = false;
-        }
-        if(!validResolution)
+        if(resolution == "half")
+            settings.receiverResolution = ShadowReceiverResolution::Half;
+        else if(resolution == "quarter")
+            settings.receiverResolution = ShadowReceiverResolution::Quarter;
+        else
             return false;
     }
     if(!renderer.setShadowQualitySettings(settings))
@@ -185,67 +481,47 @@ b8 ApplySoftwareShadowSmokeSettings(mut RendererSystem renderer, in SoftwareShad
     const Expected<String> backendValue = ReadSmokeEnvironmentString("NWB_SOFTWARE_SHADOW_BACKEND");
     if(backendValue.has_value()){
         const StringView mode = StringView(backendValue.value());
-        b8 validMode = true;
-        native(in mode, mut settings, mut validMode){
-            if(mode == "automatic")
-                settings.backend = Impl::SoftwareShadowBackend::Automatic;
-            else if(mode == "trace")
-                settings.backend = Impl::SoftwareShadowBackend::SoftwareTrace;
-            else if(mode == "light_space")
-                settings.backend = Impl::SoftwareShadowBackend::LightSpace;
-            else
-                validMode = false;
-        }
-        if(!validMode)
+        if(mode == "automatic")
+            settings.backend = SoftwareShadowBackend::Automatic;
+        else if(mode == "trace")
+            settings.backend = SoftwareShadowBackend::SoftwareTrace;
+        else if(mode == "light_space")
+            settings.backend = SoftwareShadowBackend::LightSpace;
+        else
             return false;
     }
     const Expected<String> coverageValue = ReadSmokeEnvironmentString("NWB_SOFTWARE_SHADOW_COVERAGE");
     if(coverageValue.has_value()){
         const StringView coverage = StringView(coverageValue.value());
-        b8 validCoverage = true;
-        native(in coverage, mut settings, mut validCoverage){
-            if(coverage == "reference")
-                settings.coverage = Impl::SoftwareShadowCoverage::Reference;
-            else if(coverage == "fitted_volume")
-                settings.coverage = Impl::SoftwareShadowCoverage::FittedVolume;
-            else
-                validCoverage = false;
-        }
-        if(!validCoverage)
+        if(coverage == "reference")
+            settings.coverage = SoftwareShadowCoverage::Reference;
+        else if(coverage == "fitted_volume")
+            settings.coverage = SoftwareShadowCoverage::FittedVolume;
+        else
             return false;
     }
     const Expected<String> searchValue = ReadSmokeEnvironmentString("NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH");
     if(searchValue.has_value()){
         const StringView search = StringView(searchValue.value());
-        b8 validSearch = true;
-        native(in search, mut settings, mut validSearch){
-            if(search == "reference_grid9")
-                settings.blockerSearch = Impl::SoftwareShadowBlockerSearch::ReferenceGrid9;
-            else if(search == "compact_cross5")
-                settings.blockerSearch = Impl::SoftwareShadowBlockerSearch::CompactCross5;
-            else if(search == "center1")
-                settings.blockerSearch = Impl::SoftwareShadowBlockerSearch::Center1;
-            else
-                validSearch = false;
-        }
-        if(!validSearch)
+        if(search == "reference_grid9")
+            settings.blockerSearch = SoftwareShadowBlockerSearch::ReferenceGrid9;
+        else if(search == "compact_cross5")
+            settings.blockerSearch = SoftwareShadowBlockerSearch::CompactCross5;
+        else if(search == "center1")
+            settings.blockerSearch = SoftwareShadowBlockerSearch::Center1;
+        else
             return false;
     }
     const Expected<String> cadenceValue = ReadSmokeEnvironmentString("NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE");
     if(cadenceValue.has_value()){
         const StringView cadence = StringView(cadenceValue.value());
-        b8 validCadence = true;
-        native(in cadence, mut settings, mut validCadence){
-            if(cadence == "every_frame")
-                settings.captureCadence = Impl::SoftwareShadowCaptureCadence::EveryFrame;
-            else if(cadence == "reuse_one_frame")
-                settings.captureCadence = Impl::SoftwareShadowCaptureCadence::ReuseOneFrame;
-            else if(cadence == "reuse_two_frames")
-                settings.captureCadence = Impl::SoftwareShadowCaptureCadence::ReuseTwoFrames;
-            else
-                validCadence = false;
-        }
-        if(!validCadence)
+        if(cadence == "every_frame")
+            settings.captureCadence = SoftwareShadowCaptureCadence::EveryFrame;
+        else if(cadence == "reuse_one_frame")
+            settings.captureCadence = SoftwareShadowCaptureCadence::ReuseOneFrame;
+        else if(cadence == "reuse_two_frames")
+            settings.captureCadence = SoftwareShadowCaptureCadence::ReuseTwoFrames;
+        else
             return false;
     }
     const Expected<String> directionalValue = ReadSmokeEnvironmentString("NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION");
@@ -446,20 +722,13 @@ void DestroySmokeRenderWorld(mut ProjectRuntimeContext context, mut NotNullUniqu
     if(!world.owner())
         return;
 
-    native(mut context, mut world){
-        RemoveSmokeRendererSystem(context, *world);
-    }
+    RemoveSmokeRendererSystem(context, SmokeWorldRef(world));
     FinishDestroyingSmokeWorld(context, world);
 }
 
 void DestroyCapturedSmokeRenderWorld(mut ProjectRuntimeContext context, mut NotNullUniquePtr<World> world, mut UniquePtr<FramebufferCapture> capture){
     DestroySmokeRenderWorld(context, world);
-    native(mut capture){
-        if(capture){
-            capture->stop();
-            capture.reset();
-        }
-    }
+    StopAndResetSmokeFramebufferCapture(capture);
 }
 
 
@@ -479,7 +748,7 @@ Impl::RendererSystem& AddSmokeRenderSystems(Core::ECS::World& world, ProjectRunt
     return *MakeNotNull(world.getSystem<Impl::RendererSystem>());
 }
 
-NotNullUniquePtr<Core::ECS::World> CreateSmokeRenderWorldOrDie(const TStringView projectName, ProjectRuntimeContext& context){
+NotNullUniquePtr<Core::ECS::World> CreateSmokeRenderWorldOrDie(const AStringView projectName, ProjectRuntimeContext& context){
     auto world = CreateSmokeWorldOrDie(projectName, context);
     SetupSmokeRenderSystems(*world, context);
     return world;

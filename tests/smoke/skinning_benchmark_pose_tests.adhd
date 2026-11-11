@@ -22,8 +22,7 @@ native{
 #include <core/ecs/entity.h>
 
 namespace NWB::Tests::Smoke{
-    using EcsTestWorld = NWB::Tests::EcsTestWorld;
-    using EntityID = NWB::Core::ECS::EntityID;
+using EcsTestWorld = NWB::Tests::EcsTestWorld;
 };
 
 
@@ -43,11 +42,11 @@ const u32 s_SkinningBenchmarkTestJointCount = 64u;
 
 
 b8 JointMatricesEqual(in Span<f32x3x4> lhs, in Span<f32x3x4> rhs, in usize index){
-    b8 equal = false;
-    native(in lhs, in rhs, in index, mut equal){
-        equal = NWB_MEMCMP(&lhs[index], &rhs[index], sizeof(lhs[index])) == 0;
-    }
-    return equal;
+    const f32x3x4 a = lhs[index];
+    const f32x3x4 b = rhs[index];
+    return EqualF32x4Bits(LoadFloat(a.rows[0u]), LoadFloat(b.rows[0u]))
+        && EqualF32x4Bits(LoadFloat(a.rows[1u]), LoadFloat(b.rows[1u]))
+        && EqualF32x4Bits(LoadFloat(a.rows[2u]), LoadFloat(b.rows[2u]));
 }
 
 void AnimateSkinningBenchmarkTestEntities(mut EcsTestWorld context, in Span<EntityID> entities, in Span<f32x3x4> bindJoints, in f32 timeSeconds, in b8 staticPreview){
@@ -104,21 +103,22 @@ void VerifySkinningBenchmarkPoseStep4(in Span<f32x3x4> bindJoints, in Span<f32x3
 
 void VerifySkinningBenchmarkPose(){
     EcsTestWorld context = EcsTestWorld();
-    EntityID skeleton = EntityID();
-    EntityID missingPose = EntityID();
+    EntityID skeleton = s_InvalidEntityId;
+    EntityID missingPose = s_InvalidEntityId;
     Vector<f32x3x4> bindJoints;
     Vector<f32x3x4> firstPose;
     Vector<f32x3x4> localJoints;
-    native(mut context, mut skeleton, mut missingPose, mut bindJoints){
+    f32x3x4 identity = f32x3x4();
+    identity.rows[0u] = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+    identity.rows[1u] = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
+    identity.rows[2u] = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+    bindJoints.resize(s_SkinningBenchmarkTestJointCount, identity);
+    native(mut context, mut skeleton, mut missingPose, in bindJoints){
         auto& world = context.world;
         skeleton = world.createEntity().id();
         missingPose = world.createEntity().id();
         auto& pose = world.entity(skeleton).addComponent<NWB::Impl::SkeletonPoseComponent>();
-        for(u32 i = 0u; i < s_SkinningBenchmarkTestJointCount; ++i){
-            const Float34 identity = MatrixIdentity<Float34>();
-            bindJoints.push_back(identity);
-            pose.localJoints.push_back(identity);
-        }
+        pose.localJoints.assign(bindJoints.begin(), bindJoints.end());
     }
     Array<EntityID, 2u> entities;
     entities[0u] = missingPose;

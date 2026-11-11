@@ -306,14 +306,8 @@ void ObserveNestedPopupSmokeTargets(
     for(in HitTarget target : input.targets()){
         if(target.popup.valid())
             ++outPopupTargets;
-        if(target.popup.instanceGeneration == childGen){
-            b8 matchesParent = false;
-            native(in input, in target, in parentGen, mut matchesParent){
-                const Impl::Ui::PopupScope* scope = input.popupScope(target.popup);
-                matchesParent = scope != nullptr && scope->parent.instanceGeneration == parentGen;
-            }
-            outChildParentScope = outChildParentScope || matchesParent;
-        }
+        if(target.popup.instanceGeneration == childGen)
+            outChildParentScope = outChildParentScope || SmokePopupMatchesParentGeneration(input, target.popup, parentGen);
         if(target.id != input.focus())
             continue;
         if(target.popup.valid()){

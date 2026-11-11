@@ -77,20 +77,11 @@ NWB_END
 const usize s_VerifyAlignedReallocationGrownBytes = s_AllocCaseVerifyAlignedReallocationAlignment * 4u;
 
 usize PersistentStructureAlignedSize(in usize bytes){
-    usize aligned = 0u;
-    native(in bytes, mut aligned){
-        const auto structureAlignedSize = static_cast<usize(*)(usize)>(&PersistentArena::StructureAlignedSize);
-        aligned = structureAlignedSize(bytes);
-    }
-    return aligned;
+    return PersistentArena::StructureAlignedSize(bytes);
 }
 
 usize PersistentStructureAlignedSize(in usize bytes, in usize alignment){
-    usize aligned = 0u;
-    native(in bytes, in alignment, mut aligned){
-        aligned = PersistentArena::StructureAlignedSize(bytes, alignment);
-    }
-    return aligned;
+    return PersistentArena::StructureAlignedSize(bytes, alignment);
 }
 
 void VerifyAlignedReallocation<Arena>(mut Arena arena){

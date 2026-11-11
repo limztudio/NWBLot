@@ -19,7 +19,6 @@ native{
 
 #include <impl/assets_mesh/binary_payload_io.adhd.h>
 #include <impl/assets_mesh/cook.adhd.h>
-#include <impl/assets_mesh/cook_meshlet_growth.adhd.h>
 #include <impl/assets_mesh/cook_solid_topology.adhd.h>
 #include <impl/assets_mesh/meshlet_triangle_visit.adhd.h>
 
@@ -77,6 +76,41 @@ static_assert(!noexcept(Impl::MeshAssetBinaryPayload::AddMeshBaseReserveBytes(De
 static_assert(noexcept(Impl::ForEachMeshletTriangleCorner(DeclVal<const OneMeshlet&>(), DeclVal<const OneLocalVertex&>(), DeclVal<const OnePrimitive&>(), DeclVal<NoThrowCornerVisitor&>())));
 static_assert(!noexcept(Impl::ForEachMeshletTriangleCorner(DeclVal<const OneMeshlet&>(), DeclVal<const OneLocalVertex&>(), DeclVal<const OnePrimitive&>(), DeclVal<ThrowingCornerVisitor&>())));
 
+inline constexpr usize s_MeshletCountHeaderOffset = offsetof(Impl::MeshBinaryHeader, meshletCount);
+inline constexpr usize s_MeshletBoundCountHeaderOffset = offsetof(Impl::MeshBinaryHeader, meshletBoundCount);
+inline constexpr usize s_MeshletPrimitiveIndexCountHeaderOffset = offsetof(Impl::MeshBinaryHeader, meshletPrimitiveIndexCount);
+inline constexpr u64 s_UnaddressableMeshBoundsCount = static_cast<u64>(Limit<u32>::s_Max / Impl::s_MeshletBoundsStride) + 1u;
+static_assert((s_UnaddressableMeshBoundsCount - 1u) * Impl::s_MeshletBoundsStride <= Limit<u32>::s_Max);
+static_assert(s_UnaddressableMeshBoundsCount * Impl::s_MeshletBoundsStride > Limit<u32>::s_Max);
+
+NWB_INLINE void OverwritePodU32(Core::Assets::AssetBytes& bytes, const usize offset, const u32 value)noexcept{
+    NWB_MEMCPY(bytes.data() + offset, sizeof(value), &value, sizeof(value));
+}
+
+NWB_INLINE void OverwritePodU64(Core::Assets::AssetBytes& bytes, const usize offset, const u64 value)noexcept{
+    NWB_MEMCPY(bytes.data() + offset, sizeof(value), &value, sizeof(value));
+}
+
+[[nodiscard]] NWB_INLINE b8 AppendCompactBoundsPayload(
+    const Core::Assets::AssetVector<Impl::MeshletBounds>& bounds,
+    Core::Assets::AssetBytes& outBinary
+){
+    return Core::Assets::AppendVectorPayload(bounds, NWB_TEXT("compact bounds"), NWB_TEXT("bounds"), outBinary);
+}
+
+[[nodiscard]] NWB_INLINE b8 ReadCompactBoundsPayload(
+    const Span<const u8> binary,
+    const usize count,
+    usize& inOutCursor,
+    Core::Assets::AssetVector<Impl::MeshletBounds>& outBounds
+){
+    return Core::Assets::ReadVectorPayload(binary, count, NWB_TEXT("compact bounds"), NWB_TEXT("bounds"), inOutCursor, outBounds);
+}
+
+[[nodiscard]] NWB_INLINE Expected<u32> ReadPayloadWordAt(const Span<const u8> binary, usize& inOutCursor)noexcept{
+    return ReadPOD<u32>(binary, inOutCursor);
+}
+
 [[nodiscard]] Expected<Core::Assets::AssetBytes> CookMeshBinary(Core::Assets::AssetArena& arena);
 
 
@@ -101,7 +135,18 @@ using ScratchArena = Core::Alloc::ScratchArena;
 using LoggerRegistrationGuard = Core::Common::LoggerRegistrationGuard;
 namespace LoggerBreakPolicy = Core::Common::LoggerBreakPolicy;
 using Mesh = Impl::Mesh;
+using MeshletBounds = Impl::MeshletBounds;
+using AssetMeshletBoundsVector = Core::Assets::AssetVector<Impl::MeshletBounds>;
 using MeshSolidCodecTestsDetail::CookMeshBinary;
+using MeshSolidCodecTestsDetail::s_MeshletCountHeaderOffset;
+using MeshSolidCodecTestsDetail::s_MeshletBoundCountHeaderOffset;
+using MeshSolidCodecTestsDetail::s_MeshletPrimitiveIndexCountHeaderOffset;
+using MeshSolidCodecTestsDetail::s_UnaddressableMeshBoundsCount;
+using MeshSolidCodecTestsDetail::OverwritePodU32;
+using MeshSolidCodecTestsDetail::OverwritePodU64;
+using MeshSolidCodecTestsDetail::AppendCompactBoundsPayload;
+using MeshSolidCodecTestsDetail::ReadCompactBoundsPayload;
+using MeshSolidCodecTestsDetail::ReadPayloadWordAt;
 using Impl::BuildSolidTriangleWords;
 
 
@@ -131,24 +176,22 @@ void VerifyMeshSolidCodec_MissingTruncatedOrExtraMembershipWordsAreRejected(){
     LoggerRegistrationGuard loggerRegistration(logger, LoggerBreakPolicy::ReportOnly);
     AssetArena arena(s_SolidCaseMeshSolidCodecTruncated);
 
-    native(mut arena){
-        const auto cooked = CookMeshBinary(arena);
-        ASSERT_TRUE(cooked);
-        Mesh control(arena, s_OneOffNameTestsMeshSolidCodec);
-        ASSERT_TRUE(control.loadBinary(*cooked));
-        ASSERT_EQ(control.solidTriangleWords().size(), 1u);
-        ASSERT_EQ(control.solidTriangleWords()[0], 0xfu);
+    const Expected<AssetBytes> cooked = CookMeshBinary(arena);
+    ASSERT_TRUE(cooked.has_value());
+    Mesh control(arena, s_OneOffNameTestsMeshSolidCodec);
+    ASSERT_TRUE(control.loadBinary(cooked.value()));
+    ASSERT_EQ(control.solidTriangleWords().size(), 1u);
+    ASSERT_EQ(control.solidTriangleWords()[0u], 0xfu);
 
-        Mesh rejected(arena, s_OneOffNameTestsMeshSolidCodec);
-        for(usize removedBytes = 1u; removedBytes <= sizeof(u32); ++removedBytes){
-            AssetBytes malformed(*cooked);
-            malformed.resize(malformed.size() - removedBytes);
-            EXPECT_FALSE(rejected.loadBinary(malformed)) << "removed membership bytes: " << removedBytes;
-        }
-        AssetBytes extraWord(*cooked);
-        AppendPOD(extraWord, u32(0u));
-        EXPECT_FALSE(rejected.loadBinary(extraWord));
+    Mesh rejected(arena, s_OneOffNameTestsMeshSolidCodec);
+    for(usize removedBytes = 1u; removedBytes <= 4u; ++removedBytes){
+        AssetBytes malformed = cooked.value();
+        malformed.resize(malformed.size() - removedBytes);
+        EXPECT_FALSE(rejected.loadBinary(malformed));
     }
+    AssetBytes extraWord = cooked.value();
+    AppendPOD(extraWord, 0u);
+    EXPECT_FALSE(rejected.loadBinary(extraWord));
 
     EXPECT_GT(logger.errorCount(), 0u);
 }
@@ -158,28 +201,23 @@ void VerifyMeshSolidCodec_UnaddressableBoundsCountIsRejectedBeforeStreamReadAndP
     LoggerRegistrationGuard loggerRegistration(logger, LoggerBreakPolicy::ReportOnly);
     AssetArena arena(s_SolidCaseMeshSolidCodecUnaddressableBounds);
 
-    native(mut arena){
-        const auto cooked = CookMeshBinary(arena);
-        ASSERT_TRUE(cooked);
-        Mesh loaded(arena, s_OneOffNameTestsMeshSolidCodec);
-        ASSERT_TRUE(loaded.loadBinary(*cooked));
-        const usize retainedMeshletCount = loaded.meshlets().size();
-        const usize retainedPositionCount = loaded.positionStream().size();
-        ASSERT_EQ(loaded.solidTriangleWords().size(), 1u);
-        const u32 retainedSolidWord = loaded.solidTriangleWords()[0];
+    const Expected<AssetBytes> cooked = CookMeshBinary(arena);
+    ASSERT_TRUE(cooked.has_value());
+    Mesh loaded(arena, s_OneOffNameTestsMeshSolidCodec);
+    ASSERT_TRUE(loaded.loadBinary(cooked.value()));
+    const usize retainedMeshletCount = loaded.meshlets().size();
+    const usize retainedPositionCount = loaded.positionStream().size();
+    ASSERT_EQ(loaded.solidTriangleWords().size(), 1u);
+    const u32 retainedSolidWord = loaded.solidTriangleWords()[0u];
 
-        AssetBytes malformed(*cooked);
-        constexpr u64 s_UnaddressableBoundsCount = static_cast<u64>(Limit<u32>::s_Max / Impl::s_MeshletBoundsStride) + 1u;
-        static_assert((s_UnaddressableBoundsCount - 1u) * Impl::s_MeshletBoundsStride <= Limit<u32>::s_Max);
-        static_assert(s_UnaddressableBoundsCount * Impl::s_MeshletBoundsStride > Limit<u32>::s_Max);
-        NWB_MEMCPY(malformed.data() + offsetof(Impl::MeshBinaryHeader, meshletCount), sizeof(s_UnaddressableBoundsCount), &s_UnaddressableBoundsCount, sizeof(s_UnaddressableBoundsCount));
-        NWB_MEMCPY(malformed.data() + offsetof(Impl::MeshBinaryHeader, meshletBoundCount), sizeof(s_UnaddressableBoundsCount), &s_UnaddressableBoundsCount, sizeof(s_UnaddressableBoundsCount));
-        EXPECT_FALSE(loaded.loadBinary(malformed));
-        EXPECT_EQ(loaded.meshlets().size(), retainedMeshletCount);
-        EXPECT_EQ(loaded.positionStream().size(), retainedPositionCount);
-        ASSERT_EQ(loaded.solidTriangleWords().size(), 1u);
-        EXPECT_EQ(loaded.solidTriangleWords()[0], retainedSolidWord);
-    }
+    AssetBytes malformed = cooked.value();
+    OverwritePodU64(malformed, s_MeshletCountHeaderOffset, s_UnaddressableMeshBoundsCount);
+    OverwritePodU64(malformed, s_MeshletBoundCountHeaderOffset, s_UnaddressableMeshBoundsCount);
+    EXPECT_FALSE(loaded.loadBinary(malformed));
+    EXPECT_EQ(loaded.meshlets().size(), retainedMeshletCount);
+    EXPECT_EQ(loaded.positionStream().size(), retainedPositionCount);
+    ASSERT_EQ(loaded.solidTriangleWords().size(), 1u);
+    EXPECT_EQ(loaded.solidTriangleWords()[0u], retainedSolidWord);
 
     EXPECT_TRUE(SawCapturedError(logger, "mesh payload is incomplete"));
 }
@@ -189,24 +227,25 @@ void VerifyMeshSolidCodec_TailPaddingAndInconsistentPrimitiveCountsAreRejected()
     LoggerRegistrationGuard loggerRegistration(logger, LoggerBreakPolicy::ReportOnly);
     AssetArena arena(s_SolidCaseMeshSolidCodecPadding);
 
-    native(mut arena){
-        const auto cooked = CookMeshBinary(arena);
-        ASSERT_TRUE(cooked);
-        Mesh control(arena, s_OneOffNameTestsMeshSolidCodec);
-        ASSERT_TRUE(control.loadBinary(*cooked));
-        ASSERT_EQ(control.solidTriangleWords().size(), 1u);
+    const Expected<AssetBytes> cooked = CookMeshBinary(arena);
+    ASSERT_TRUE(cooked.has_value());
+    Mesh control(arena, s_OneOffNameTestsMeshSolidCodec);
+    ASSERT_TRUE(control.loadBinary(cooked.value()));
+    ASSERT_EQ(control.solidTriangleWords().size(), 1u);
 
-        Mesh rejected(arena, s_OneOffNameTestsMeshSolidCodec);
-        for(const u32 invalidWord : { 0x1fu, 0x8000000fu }){
-            AssetBytes malformed(*cooked);
-            NWB_MEMCPY(malformed.data() + malformed.size() - sizeof(u32), sizeof(invalidWord), &invalidWord, sizeof(invalidWord));
-            EXPECT_FALSE(rejected.loadBinary(malformed));
-        }
-        AssetBytes wrongCount(*cooked);
-        constexpr u64 s_InconsistentIndexCount = 99u;
-        NWB_MEMCPY(wrongCount.data() + offsetof(Impl::MeshBinaryHeader, meshletPrimitiveIndexCount), sizeof(s_InconsistentIndexCount), &s_InconsistentIndexCount, sizeof(s_InconsistentIndexCount));
-        EXPECT_FALSE(rejected.loadBinary(wrongCount));
+    Mesh rejected(arena, s_OneOffNameTestsMeshSolidCodec);
+    Array<u32, 2> invalidWords = Array<u32, 2>();
+    invalidWords[0u] = 0x1fu;
+    invalidWords[1u] = 0x8000000fu;
+    for(in u32 invalidWord : invalidWords){
+        AssetBytes malformed = cooked.value();
+        OverwritePodU32(malformed, malformed.size() - 4u, invalidWord);
+        EXPECT_FALSE(rejected.loadBinary(malformed));
     }
+    AssetBytes wrongCount = cooked.value();
+    const u64 inconsistentIndexCount = 99u;
+    OverwritePodU64(wrongCount, s_MeshletPrimitiveIndexCountHeaderOffset, inconsistentIndexCount);
+    EXPECT_FALSE(rejected.loadBinary(wrongCount));
 
     EXPECT_TRUE(SawCapturedError(logger, "invalid solid triangle padding"));
 }
@@ -216,41 +255,58 @@ void VerifyMeshSolidCodec_AdjacentBoundsPreserveFloatBitsAndRejectATruncatedLast
     LoggerRegistrationGuard loggerRegistration(logger, LoggerBreakPolicy::ReportOnly);
     AssetArena arena(s_SolidCaseMeshSolidCodecCompactBounds);
 
-    native(mut arena){
-        const Array<u32, 10u> words{ 0x80000000u, 0x00000001u, 0x7f7fffffu, 0x3f800000u, 0xff000001u, 0x00000000u, 0x80000001u, 0xff7fffffu, 0x00800000u, 0x80000001u };
-        Core::Assets::AssetVector<Impl::MeshletBounds> bounds(arena);
-        bounds.resize(2u);
-        for(usize index = 0u; index < bounds.size(); ++index){
-            for(usize component = 0u; component < 4u; ++component)
-                bounds[index].sphere.raw[component] = BitCast<f32>(words[index * 5u + component]);
-            bounds[index].conePacked = words[index * 5u + 4u];
-        }
-        AssetBytes binary(arena);
-        ASSERT_TRUE(Core::Assets::AppendVectorPayload(bounds, NWB_TEXT("compact bounds"), NWB_TEXT("bounds"), binary));
-        ASSERT_EQ(binary.size(), sizeof(u32) * words.size());
-        usize wordCursor = 0u;
-        for(const u32 word : words){
-            const auto stored = ReadPOD<u32>(binary, wordCursor);
-            ASSERT_TRUE(stored);
-            EXPECT_EQ(*stored, word);
-        }
-        Core::Assets::AssetVector<Impl::MeshletBounds> decoded(arena);
-        usize cursor = 0u;
-        ASSERT_TRUE(Core::Assets::ReadVectorPayload(binary, bounds.size(), NWB_TEXT("compact bounds"), NWB_TEXT("bounds"), cursor, decoded));
-        ASSERT_EQ(decoded.size(), bounds.size());
-        for(usize index = 0u; index < decoded.size(); ++index){
-            for(usize component = 0u; component < 4u; ++component)
-                EXPECT_EQ(BitCast<u32>(decoded[index].sphere.raw[component]), words[index * 5u + component]);
-            EXPECT_EQ(decoded[index].conePacked, words[index * 5u + 4u]);
-        }
-        for(usize removedBytes = 1u; removedBytes <= sizeof(u32); ++removedBytes){
-            AssetBytes truncated(binary);
-            truncated.resize(truncated.size() - removedBytes);
-            cursor = 0u;
-            EXPECT_FALSE(Core::Assets::ReadVectorPayload(truncated, bounds.size(), NWB_TEXT("compact bounds"), NWB_TEXT("bounds"), cursor, decoded)) << "missing final cone bytes: " << removedBytes;
-            EXPECT_EQ(cursor, 0u);
-            EXPECT_TRUE(decoded.empty());
-        }
+    Array<u32, 10> words = Array<u32, 10>();
+    words[0u] = 0x80000000u;
+    words[1u] = 0x00000001u;
+    words[2u] = 0x7f7fffffu;
+    words[3u] = 0x3f800000u;
+    words[4u] = 0xff000001u;
+    words[5u] = 0x00000000u;
+    words[6u] = 0x80000001u;
+    words[7u] = 0xff7fffffu;
+    words[8u] = 0x00800000u;
+    words[9u] = 0x80000001u;
+
+    AssetMeshletBoundsVector bounds(arena);
+    bounds.resize(2u);
+    for(usize index = 0u; index < bounds.size(); ++index){
+        bounds[index].sphere = f32x4u(
+            BitCast<f32>(words[index * 5u + 0u]),
+            BitCast<f32>(words[index * 5u + 1u]),
+            BitCast<f32>(words[index * 5u + 2u]),
+            BitCast<f32>(words[index * 5u + 3u])
+        );
+        bounds[index].conePacked = words[index * 5u + 4u];
+    }
+
+    AssetBytes binary(arena);
+    ASSERT_TRUE(AppendCompactBoundsPayload(bounds, binary));
+    ASSERT_EQ(binary.size(), 4u * words.size());
+    usize wordCursor = 0u;
+    for(in u32 word : words){
+        const Expected<u32> stored = ReadPayloadWordAt(binary, wordCursor);
+        ASSERT_TRUE(stored.has_value());
+        EXPECT_EQ(stored.value(), word);
+    }
+
+    AssetMeshletBoundsVector decoded(arena);
+    usize cursor = 0u;
+    ASSERT_TRUE(ReadCompactBoundsPayload(binary, bounds.size(), cursor, decoded));
+    ASSERT_EQ(decoded.size(), bounds.size());
+    for(usize index = 0u; index < decoded.size(); ++index){
+        EXPECT_EQ(BitCast<u32>(decoded[index].sphere.x), words[index * 5u + 0u]);
+        EXPECT_EQ(BitCast<u32>(decoded[index].sphere.y), words[index * 5u + 1u]);
+        EXPECT_EQ(BitCast<u32>(decoded[index].sphere.z), words[index * 5u + 2u]);
+        EXPECT_EQ(BitCast<u32>(decoded[index].sphere.w), words[index * 5u + 3u]);
+        EXPECT_EQ(decoded[index].conePacked, words[index * 5u + 4u]);
+    }
+    for(usize removedBytes = 1u; removedBytes <= 4u; ++removedBytes){
+        AssetBytes truncated = binary;
+        truncated.resize(truncated.size() - removedBytes);
+        cursor = 0u;
+        EXPECT_FALSE(ReadCompactBoundsPayload(truncated, bounds.size(), cursor, decoded));
+        EXPECT_EQ(cursor, 0u);
+        EXPECT_TRUE(decoded.empty());
     }
 
     EXPECT_EQ(logger.errorCount(), 4u);
@@ -261,18 +317,16 @@ void VerifyMeshSolidCodec_PreviousMeshMagicCannotAdmitOtherwiseValidCurrentPaylo
     LoggerRegistrationGuard loggerRegistration(logger, LoggerBreakPolicy::ReportOnly);
     AssetArena arena(s_SolidCaseMeshSolidCodecPreviousEncoding);
 
-    native(mut arena){
-        const auto cooked = CookMeshBinary(arena);
-        ASSERT_TRUE(cooked);
-        Mesh control(arena, s_OneOffNameTestsMeshSolidCodec);
-        ASSERT_TRUE(control.loadBinary(*cooked));
+    const Expected<AssetBytes> cooked = CookMeshBinary(arena);
+    ASSERT_TRUE(cooked.has_value());
+    Mesh control(arena, s_OneOffNameTestsMeshSolidCodec);
+    ASSERT_TRUE(control.loadBinary(cooked.value()));
 
-        AssetBytes previousEncoding(*cooked);
-        constexpr u32 s_PreviousMeshMagic = 0x4d534836u;
-        NWB_MEMCPY(previousEncoding.data(), sizeof(s_PreviousMeshMagic), &s_PreviousMeshMagic, sizeof(s_PreviousMeshMagic));
-        Mesh rejected(arena, s_OneOffNameTestsMeshSolidCodec);
-        EXPECT_FALSE(rejected.loadBinary(previousEncoding));
-    }
+    AssetBytes previousEncoding = cooked.value();
+    const u32 previousMeshMagic = 0x4d534836u;
+    OverwritePodU32(previousEncoding, 0u, previousMeshMagic);
+    Mesh rejected(arena, s_OneOffNameTestsMeshSolidCodec);
+    EXPECT_FALSE(rejected.loadBinary(previousEncoding));
 
     EXPECT_GT(logger.errorCount(), 0u);
 }

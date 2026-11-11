@@ -105,18 +105,26 @@ template<typename Canonicalize>
     return result;
 }
 
-[[nodiscard]] Expected<b8, ErrorCode> CanonicalizeDraft(const Expected<AStringView, ErrorCode>& formatted, EditModel& inOutDraft, AString<Core::Alloc::GlobalArena>& outAcceptedDraft);
+[[nodiscard]] NWB_INLINE Expected<b8, ErrorCode> CanonicalizeDraft(const Expected<AStringView, ErrorCode>& formatted, EditModel& inOutDraft, AString<Core::Alloc::GlobalArena>& outAcceptedDraft){
+    if(!formatted)
+        return MakeUnexpected(formatted.error());
+    const b8 changed = HasCanonicalDraftChanged(*formatted, inOutDraft.text());
+    const b8 updated = inOutDraft.setText(*formatted);
+    return FinalizeCanonicalNumericDraft(*formatted, changed, updated, outAcceptedDraft);
+}
 
 template<typename Value, typename Formatter>
-[[nodiscard]] inline Expected<b8, ErrorCode> FormatCanonicalDraft(const Value value, Formatter formatter, EditModel& inOutDraft, AString<Core::Alloc::GlobalArena>& outAcceptedDraft){
+[[nodiscard]] NWB_INLINE Expected<b8, ErrorCode> FormatCanonicalDraft(const Value value, Formatter formatter, EditModel& inOutDraft, AString<Core::Alloc::GlobalArena>& outAcceptedDraft){
     Array<char, s_NumericEditMaxBytes> buffer{};
     return CanonicalizeDraft(formatter(value, buffer), inOutDraft, outAcceptedDraft);
 }
 
-[[nodiscard]] b8 SetDraftText(AStringView text, EditModel& inOutDraft, u64& inOutRevision);
+[[nodiscard]] NWB_INLINE b8 SetDraftText(const AStringView text, EditModel& inOutDraft, u64& inOutRevision){
+    return FinalizeNumericDraftTextUpdate(inOutDraft.setText(text), inOutRevision);
+}
 
 template<typename Canonicalize>
-[[nodiscard]] inline NumericEditResult RestoreModelDraft(Canonicalize canonicalize, const b8 cancelled, u64& inOutRevision)noexcept(noexcept(RestoreDraft(Move(canonicalize), cancelled))){
+[[nodiscard]] NWB_INLINE NumericEditResult RestoreModelDraft(Canonicalize canonicalize, const b8 cancelled, u64& inOutRevision)noexcept(noexcept(RestoreDraft(Move(canonicalize), cancelled))){
     NumericEditResult result = RestoreDraft(Move(canonicalize), cancelled);
     if(result.valid)
         AdvanceNonWrappingRevision(inOutRevision);
@@ -221,72 +229,6 @@ protected:
     AString<Core::Alloc::GlobalArena> m_acceptedDraft;
     TValue m_value = TValue{};
     u64 m_revision = 1u;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 HasCanonicalDraftChanged(in StringView formatted, in StringView currentDraft){
-    return formatted != currentDraft;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NumericEditDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<b8, ErrorCode> CanonicalizeDraft(const Expected<AStringView, ErrorCode>& formatted, EditModel& inOutDraft, AString<Core::Alloc::GlobalArena>& outAcceptedDraft){
-    if(!formatted)
-        return MakeUnexpected(formatted.error());
-    const b8 changed = HasCanonicalDraftChanged(*formatted, inOutDraft.text());
-    if(!inOutDraft.setText(*formatted))
-        return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
-    outAcceptedDraft.assign(formatted->data(), formatted->size());
-    return changed;
-}
-
-b8 SetDraftText(const AStringView text, EditModel& inOutDraft, u64& inOutRevision){
-    if(!inOutDraft.setText(text))
-        return false;
-    AdvanceNonWrappingRevision(inOutRevision);
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 

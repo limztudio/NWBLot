@@ -499,25 +499,25 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAren
             const Core::BufferDesc& positionDesc = meshResult->meshResources.positionBuffer->getCreationDescription();
             const Core::BufferDesc& indexDesc = meshResult->meshResources.triangleIndexBuffer->getCreationDescription();
             const Core::BufferDesc& attributeDesc = meshResult->meshResources.attributeBuffer->getCreationDescription();
-            preparedMeshes.push_back(PreparedSceneSwBvhMesh{
-                .meshName = meshResult->meshResources.meshName,
-                .nodeBuffer = meshResult->meshResources.swBvhNodeBuffer,
-                .positionBuffer = meshResult->meshResources.positionBuffer,
-                .triangleIndexBuffer = meshResult->meshResources.triangleIndexBuffer,
-                .attributeBuffer = meshResult->meshResources.attributeBuffer,
-                .nodeHeapHandle = nodeHandle,
-                .positionHeapHandle = positionHandle,
-                .triangleIndexHeapHandle = indexHandle,
-                .attributeHeapHandle = *attributeHandle,
-                .runtimeMeshVersion = meshResult->meshResources.runtimeMeshVersion,
-                .geometryContentRevision = meshResult->meshResources.runtimeGeometryContentRevision,
-                .nodeByteSize = nodeDesc.byteSize,
-                .positionByteSize = positionDesc.byteSize,
-                .triangleIndexByteSize = indexDesc.byteSize,
-                .attributeByteSize = attributeDesc.byteSize,
-                .primitiveCount = ComputeMeshTrianglePrimitiveCount(meshResult->meshResources.meshletPrimitiveIndexCount),
-                .runtimeMesh = meshResult->meshResources.runtimeMesh,
-            });
+            PreparedSceneSwBvhMesh preparedMesh;
+            preparedMesh.meshName = meshResult->meshResources.meshName;
+            preparedMesh.nodeBuffer = meshResult->meshResources.swBvhNodeBuffer;
+            preparedMesh.positionBuffer = meshResult->meshResources.positionBuffer;
+            preparedMesh.triangleIndexBuffer = meshResult->meshResources.triangleIndexBuffer;
+            preparedMesh.attributeBuffer = meshResult->meshResources.attributeBuffer;
+            preparedMesh.nodeHeapHandle = nodeHandle;
+            preparedMesh.positionHeapHandle = positionHandle;
+            preparedMesh.triangleIndexHeapHandle = indexHandle;
+            preparedMesh.attributeHeapHandle = *attributeHandle;
+            preparedMesh.runtimeMeshVersion = meshResult->meshResources.runtimeMeshVersion;
+            preparedMesh.geometryContentRevision = meshResult->meshResources.runtimeGeometryContentRevision;
+            preparedMesh.nodeByteSize = nodeDesc.byteSize;
+            preparedMesh.positionByteSize = positionDesc.byteSize;
+            preparedMesh.triangleIndexByteSize = indexDesc.byteSize;
+            preparedMesh.attributeByteSize = attributeDesc.byteSize;
+            preparedMesh.primitiveCount = ComputeMeshTrianglePrimitiveCount(meshResult->meshResources.meshletPrimitiveIndexCount);
+            preparedMesh.runtimeMesh = meshResult->meshResources.runtimeMesh;
+            preparedMeshes.push_back(Move(preparedMesh));
 
             meshSlot = m_rayTracingState.m_swShadowMeshCount;
             m_rayTracingState.m_swShadowMeshNodeBuffers.push_back(meshNodeBuffer);

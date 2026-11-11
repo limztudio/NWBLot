@@ -470,9 +470,9 @@ b8 GbufferGraphTask::Record(const Payload& payload, Core::CommandList& commandLi
     // Clears begin the first segment; continuations resume with LOAD.
     Core::RenderPassParameters renderPassParameters;
     renderPassParameters.colorClearValues[NWB_MESH_GBUFFER_BASE_COLOR_LOCATION] = ECSRenderDetail::s_ClearColor;
-    renderPassParameters.colorClearValues[NWB_MESH_GBUFFER_NORMAL_LOCATION] = ECSRenderDetail::s_GBufferNormalClearColor;
-    renderPassParameters.colorClearValues[NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION] = ECSRenderDetail::s_GBufferWorldPositionClearColor;
-    renderPassParameters.colorClearValues[NWB_MESH_GBUFFER_SPECULAR_ROUGHNESS_LOCATION] = ECSRenderDetail::s_GBufferSpecularRoughnessClearColor;
+    renderPassParameters.colorClearValues[NWB_MESH_GBUFFER_NORMAL_LOCATION] = s_GBufferNormalClearColor;
+    renderPassParameters.colorClearValues[NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION] = s_GBufferWorldPositionClearColor;
+    renderPassParameters.colorClearValues[NWB_MESH_GBUFFER_SPECULAR_ROUGHNESS_LOCATION] = s_GBufferSpecularRoughnessClearColor;
     for(u32 attachmentIndex = 0u; attachmentIndex < NWB_MESH_GBUFFER_TARGET_COUNT; ++attachmentIndex)
         renderPassParameters.colorAttachmentActions[attachmentIndex].loadAction = Core::RenderPassLoadAction::Clear;
     renderPassParameters.depthAttachmentActions.loadAction = Core::RenderPassLoadAction::Clear;

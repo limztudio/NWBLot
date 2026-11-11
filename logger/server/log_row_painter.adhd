@@ -91,6 +91,49 @@ LogRowColorPair SelectAlternateLogRowColorPair(in b8 alternate, in LogRowColorPa
     return even;
 }
 
+LogRowColorPair ResolveLogRowColorsByType(in u8 logType, in b8 alternate){
+    if(logType == 2u){
+        return SelectAlternateLogRowColorPair(
+            alternate,
+            MakeLogRowColorPair(0u, 0u, 0u, 170u, 170u, 0u),
+            MakeLogRowColorPair(60u, 60u, 60u, 200u, 200u, 0u)
+        );
+    }
+    if(logType == 3u){
+        return SelectAlternateLogRowColorPair(
+            alternate,
+            MakeLogRowColorPair(240u, 240u, 240u, 170u, 80u, 0u),
+            MakeLogRowColorPair(255u, 255u, 255u, 200u, 100u, 0u)
+        );
+    }
+    if(logType == 6u){
+        return SelectAlternateLogRowColorPair(
+            alternate,
+            MakeLogRowColorPair(200u, 200u, 200u, 120u, 0u, 160u),
+            MakeLogRowColorPair(255u, 255u, 255u, 145u, 20u, 190u)
+        );
+    }
+    if(logType == 4u){
+        return SelectAlternateLogRowColorPair(
+            alternate,
+            MakeLogRowColorPair(200u, 200u, 200u, 170u, 0u, 0u),
+            MakeLogRowColorPair(255u, 255u, 255u, 200u, 0u, 0u)
+        );
+    }
+    if(logType == 5u){
+        return SelectAlternateLogRowColorPair(
+            alternate,
+            MakeLogRowColorPair(200u, 200u, 0u, 220u, 0u, 0u),
+            MakeLogRowColorPair(255u, 255u, 0u, 250u, 0u, 0u)
+        );
+    }
+    return SelectAlternateLogRowColorPair(
+        alternate,
+        MakeLogRowColorPair(0u, 0u, 0u, 230u, 230u, 230u),
+        MakeLogRowColorPair(80u, 80u, 80u, 255u, 255u, 255u)
+    );
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -127,60 +170,13 @@ namespace FrameDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_log_row_painter{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static LogRowColorPair ResolveLogRowColors(const Core::Common::LogType::Enum type, const b8 alternate)noexcept{
-    const LogRowColorPair defaultEven = MakeLogRowColorPair(0u, 0u, 0u, 230u, 230u, 230u);
-    const LogRowColorPair infoOdd = MakeLogRowColorPair(80u, 80u, 80u, 255u, 255u, 255u);
-
-    switch(type){
-    case Core::Common::LogType::EssentialInfo:
-    case Core::Common::LogType::Info:
-        return SelectAlternateLogRowColorPair(alternate, defaultEven, infoOdd);
-    case Core::Common::LogType::Warning:
-        return SelectAlternateLogRowColorPair(
-            alternate,
-            MakeLogRowColorPair(0u, 0u, 0u, 170u, 170u, 0u),
-            MakeLogRowColorPair(60u, 60u, 60u, 200u, 200u, 0u)
-        );
-    case Core::Common::LogType::CriticalWarning:
-        return SelectAlternateLogRowColorPair(
-            alternate,
-            MakeLogRowColorPair(240u, 240u, 240u, 170u, 80u, 0u),
-            MakeLogRowColorPair(255u, 255u, 255u, 200u, 100u, 0u)
-        );
-    case Core::Common::LogType::Assert:
-        return SelectAlternateLogRowColorPair(
-            alternate,
-            MakeLogRowColorPair(200u, 200u, 200u, 120u, 0u, 160u),
-            MakeLogRowColorPair(255u, 255u, 255u, 145u, 20u, 190u)
-        );
-    case Core::Common::LogType::Error:
-        return SelectAlternateLogRowColorPair(
-            alternate,
-            MakeLogRowColorPair(200u, 200u, 200u, 170u, 0u, 0u),
-            MakeLogRowColorPair(255u, 255u, 255u, 200u, 0u, 0u)
-        );
-    case Core::Common::LogType::Fatal:
-        return SelectAlternateLogRowColorPair(
-            alternate,
-            MakeLogRowColorPair(200u, 200u, 0u, 220u, 0u, 0u),
-            MakeLogRowColorPair(255u, 255u, 0u, 250u, 0u, 0u)
-        );
-    default:
-        return SelectAlternateLogRowColorPair(alternate, defaultEven, infoOdd);
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
+static_assert(static_cast<u8>(Core::Common::LogType::Info) == 0u);
+static_assert(static_cast<u8>(Core::Common::LogType::EssentialInfo) == 1u);
+static_assert(static_cast<u8>(Core::Common::LogType::Warning) == 2u);
+static_assert(static_cast<u8>(Core::Common::LogType::CriticalWarning) == 3u);
+static_assert(static_cast<u8>(Core::Common::LogType::Error) == 4u);
+static_assert(static_cast<u8>(Core::Common::LogType::Fatal) == 5u);
+static_assert(static_cast<u8>(Core::Common::LogType::Assert) == 6u);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -235,7 +231,7 @@ void LogRowPainter::Draw(DRAWITEMSTRUCT& dis, const MessageItem& curData){
     HDC hdc = dis.hDC;
     RECT rect = dis.rcItem;
 
-    const LogRowColorPair colors = __hidden_log_row_painter::ResolveLogRowColors(curData.second(), (dis.itemID & 1) != 0);
+    const LogRowColorPair colors = ResolveLogRowColorsByType(static_cast<u8>(curData.second()), (dis.itemID & 1) != 0);
     const HBRUSH brush = CreateSolidBrush(static_cast<COLORREF>(colors.background));
     if(!brush){
         CaptureDiagnosticEvent(s_LogServerValueFrameWinPaintDiagnosticCategory, "Log server: failed to create its row background brush", __FILE__, __LINE__);

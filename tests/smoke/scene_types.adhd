@@ -2,25 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <global/environment.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const StringView s_ShadowSmokeAnalyticAtlas = "analytic";
 const f32 s_ShadowSmokeCameraDepth = -4.0f;
 const StringView s_ShadowSmokeCapsuleShapePath = "engine/csg/capsule";
@@ -697,6 +678,17 @@ u32 ExpectedRefractionProbeTileCount(in u32 phase){
     return s_RefractionTileProbeTileCount - 1u;
 }
 
+b8 TryReadNonEmptySmokeEnvVar(in StringView name, mut String outValue){
+    const Expected<Optional<String>, ErrorCode> result = ReadEnvironmentVariable(name);
+    if(!result.has_value())
+        return false;
+    const Optional<String> candidate = result.value();
+    if(!candidate.has_value() || candidate.value().empty())
+        return false;
+    outValue = candidate.value();
+    return true;
+}
+
 class CsgShadowMode{
     public CsgShadowArm arm = CsgShadowArm::Cut;
     public CsgShadowOpenCase openCase = CsgShadowOpenCase::Retained;
@@ -757,25 +749,11 @@ class CsgShadowMode{
         String sourceStr;
         String atlasStr;
         String openCaseStr;
-        b8 hasArm = false;
-        b8 hasLight = false;
-        b8 hasSource = false;
-        b8 hasAtlas = false;
-        b8 hasOpenCase = false;
-        native(mut armStr, mut lightStr, mut sourceStr, mut atlasStr, mut openCaseStr, mut hasArm, mut hasLight, mut hasSource, mut hasAtlas, mut hasOpenCase){
-            const auto ReadEnv = [&](const AStringView varName, auto& outStr, b8& outHas){
-                const auto v = ReadEnvironmentVariable(__adhd_scratch, varName);
-                if(v && *v && !(*v)->empty()){
-                    outStr.assign((*v)->data(), (*v)->size());
-                    outHas = true;
-                }
-            };
-            ReadEnv("NWB_CSG_SHADOW_ARM", armStr, hasArm);
-            ReadEnv("NWB_CSG_SHADOW_LIGHT", lightStr, hasLight);
-            ReadEnv("NWB_CSG_SHADOW_LIGHT_SOURCE", sourceStr, hasSource);
-            ReadEnv("NWB_CSG_SHADOW_ATLAS", atlasStr, hasAtlas);
-            ReadEnv("NWB_CSG_SHADOW_OPEN_CASE", openCaseStr, hasOpenCase);
-        }
+        const b8 hasArm = TryReadNonEmptySmokeEnvVar("NWB_CSG_SHADOW_ARM", armStr);
+        const b8 hasLight = TryReadNonEmptySmokeEnvVar("NWB_CSG_SHADOW_LIGHT", lightStr);
+        const b8 hasSource = TryReadNonEmptySmokeEnvVar("NWB_CSG_SHADOW_LIGHT_SOURCE", sourceStr);
+        const b8 hasAtlas = TryReadNonEmptySmokeEnvVar("NWB_CSG_SHADOW_ATLAS", atlasStr);
+        const b8 hasOpenCase = TryReadNonEmptySmokeEnvVar("NWB_CSG_SHADOW_OPEN_CASE", openCaseStr);
         return this.applyEnvironmentValues(armStr, hasArm, lightStr, hasLight, sourceStr, hasSource, atlasStr, hasAtlas, openCaseStr, hasOpenCase, caustic);
     }
 

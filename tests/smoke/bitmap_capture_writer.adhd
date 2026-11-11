@@ -33,9 +33,9 @@ native{
 #include <global/refcount_ptr.h>
 
 namespace NWB::Tests::Smoke{
+namespace Format = Core::Format;
 using FormatEnum = Core::Format::Enum;
 using Core::TextureDesc;
-using GlobalPath = ::Path<Core::Alloc::GlobalArena>;
 };
 
 
@@ -74,23 +74,14 @@ void WriteBitmapU32LE(in u32 value, in usize offset, mut Vector<u8> destination)
 }
 
 b8 IsBitmapBgraFormat(in FormatEnum format){
-    b8 isBgra = false;
-    native(in format, mut isBgra){
-        isBgra = format == Core::Format::BGRA8_UNORM || format == Core::Format::BGRA8_UNORM_SRGB;
-    }
-    return isBgra;
+    return format == Format::BGRA8_UNORM || format == Format::BGRA8_UNORM_SRGB;
 }
 
 b8 IsSupportedFramebufferSdrFormat(in FormatEnum format){
-    b8 supported = false;
-    native(in format, mut supported){
-        supported = format == Core::Format::RGBA8_UNORM
-            || format == Core::Format::RGBA8_UNORM_SRGB
-            || format == Core::Format::BGRA8_UNORM
-            || format == Core::Format::BGRA8_UNORM_SRGB
-        ;
-    }
-    return supported;
+    return format == Format::RGBA8_UNORM
+        || format == Format::RGBA8_UNORM_SRGB
+        || format == Format::BGRA8_UNORM
+        || format == Format::BGRA8_UNORM_SRGB;
 }
 
 class BitmapCaptureWriter{
@@ -100,7 +91,7 @@ class BitmapCaptureWriter{
         this.m_format = captureDescription.format;
     }
 
-    public b8 write(in GlobalPath outputPath, in Span<u8> sourceBytes, in usize sourceRowPitch)const{
+    public b8 write(in Path outputPath, in Span<u8> sourceBytes, in usize sourceRowPitch)const{
         const u32 width = this.m_width;
         const u32 height = this.m_height;
         if(width > s_BitmapMaxSignedDimension || height > s_BitmapMaxSignedDimension)
@@ -165,34 +156,22 @@ class BitmapCaptureWriter{
             }
         }
 
-        b8 wroteAtomically = false;
-        b8 warnIncompleteRemove = false;
-        b8 warnUncommittedRemove = false;
-        native(in outputPath, in bitmapBytes, mut wroteAtomically, mut warnIncompleteRemove, mut warnUncommittedRemove){
-            Core::Alloc::ScratchArena scratchArena(s_SmokeNameSmokeFramebufferCaptureBitmap);
-            const ::Path<Core::Alloc::ScratchArena> targetPath(scratchArena, outputPath);
-            const auto outputDirectory = targetPath.parentPath();
-            if(outputDirectory.empty() || EnsureDirectories(outputDirectory)){
-                ::Path<Core::Alloc::ScratchArena> partialPath(scratchArena, targetPath);
-                partialPath += NWB_TEXT(".partial");
-                if(!WriteBinaryFile(partialPath, bitmapBytes)){
-                    if(!RemoveFile(partialPath))
-                        warnIncompleteRemove = true;
-                }
-                else if(!RenamePath(partialPath, targetPath)){
-                    if(!RemoveFile(partialPath))
-                        warnUncommittedRemove = true;
-                }
-                else{
-                    wroteAtomically = true;
-                }
-            }
+        const Path outputDirectory = outputPath.parentPath();
+        if(!outputDirectory.empty() && !EnsureDirectories(outputDirectory).has_value())
+            return false;
+        const String partialPathText = StringFormat("{}.partial", PathToString(outputPath));
+        const Path partialPath = Path(StringView(partialPathText));
+        if(!WriteBinaryFile(partialPath, bitmapBytes)){
+            if(!RemoveFile(partialPath).has_value())
+                warning("FramebufferCapture: failed to remove an incomplete partial capture");
+            return false;
         }
-        if(warnIncompleteRemove)
-            warning("FramebufferCapture: failed to remove an incomplete partial capture");
-        if(warnUncommittedRemove)
-            warning("FramebufferCapture: failed to remove an uncommitted partial capture");
-        return wroteAtomically;
+        if(!RenamePath(partialPath, outputPath).has_value()){
+            if(!RemoveFile(partialPath).has_value())
+                warning("FramebufferCapture: failed to remove an uncommitted partial capture");
+            return false;
+        }
+        return true;
     }
 
     private u32 m_width;

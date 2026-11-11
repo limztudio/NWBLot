@@ -23,515 +23,6 @@ native{
 #include <core/telemetry/frame_graph_contributor.h>
 #include <core/telemetry/frame_graph_registry.h>
 
-#include <global/not_null.h>
-#include <global/text_utils.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace TelemetryScalingCasesDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using namespace NWB;
-using namespace TelemetryTestDetail;
-namespace TestCases = NWB::Tests::TelemetryCases;
-
-inline constexpr AStringView s_Target = "target";
-inline constexpr AStringView s_ReportArenaName = "tests/telemetry/report_work";
-inline constexpr AStringView s_PacketIndex = "\"packet\": {\"index\":";
-inline constexpr AStringView s_RuntimePacketSubmissionCount3 = "runtime_packet_submission_count=3";
-inline constexpr AStringView s_RuntimePacketSubmissionCount2 = "runtime_packet_submission_count=2";
-inline constexpr AStringView s_QueueAliasOwner = "queue_alias_owner";
-inline constexpr AStringView s_QueueAliasOwnerLabel = "Queue alias owner";
-
-class PendingNameFrameGraphContributor final : public Telemetry::IFrameGraphContributor{
-public:
-    virtual b8 appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
-        const Telemetry::FrameGraphNodeHandle source = builder.addPass(Name(TestCases::s_TelemetryCaseSource), "Source");
-        const Telemetry::FrameGraphNodeHandle target = builder.addResource(Name(s_Target), "Target");
-        const Telemetry::FrameGraphNodeHandle duplicateTarget = builder.addResource(Name(s_Target), "Duplicate Target");
-        if(!target.valid() || !duplicateTarget.valid())
-            return false;
-
-        builder.dependsOnByName(source, Name(s_Target), 7u);
-        builder.dependsOnByName(source, Name(TestCases::s_TelemetryCaseMissing), 9u);
-        return true;
-    }
-};
-
-struct ContributionFailure{};
-
-class LocalLabelContributor final : public Telemetry::IFrameGraphContributor{
-public:
-    virtual b8 appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
-        char label[] = "local label";
-        const auto node = builder.addPass(Name(TestCases::s_TelemetryCaseLocalLabel), AStringView(label));
-        label[0u] = 'X';
-        return node.valid();
-    }
-};
-
-class MutatingContributor final : public Telemetry::IFrameGraphContributor{
-public:
-    explicit MutatingContributor(Telemetry::FrameGraphRegistry& registry)noexcept
-        : m_registry(&registry)
-    {}
-
-    virtual b8 appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
-        ++calls;
-        const auto node = builder.addPass(Name(TestCases::s_TelemetryCaseMutation), "mutation");
-        if(clearRegistry)
-            m_registry->clear();
-        if(removeSelf)
-            m_registry->unregisterContributor(*this);
-        if(removeOther)
-            m_registry->unregisterContributor(*removeOther);
-        if(addOther)
-            m_registry->registerContributor(*addOther);
-        if(throwAfterMutation)
-            throw ContributionFailure{};
-        return node.valid();
-    }
-
-    void setRemoveOther(Telemetry::IFrameGraphContributor& other)noexcept{ removeOther = &other; }
-    void setAddOther(Telemetry::IFrameGraphContributor& other)noexcept{ addOther = &other; }
-
-
-public:
-    Telemetry::IFrameGraphContributor* removeOther = nullptr;
-    Telemetry::IFrameGraphContributor* addOther = nullptr;
-    usize calls = 0u;
-    b8 removeSelf = false;
-    b8 clearRegistry = false;
-    b8 throwAfterMutation = false;
-
-
-private:
-    Telemetry::FrameGraphRegistry* m_registry = nullptr;
-};
-
-class OwnedLabelContributor final : public Telemetry::IFrameGraphContributor{
-public:
-    OwnedLabelContributor(Telemetry::FrameGraphRegistry& registry, Telemetry::TelemetryArena& arena)
-        : m_registry(&registry)
-        , m_label("label retained after contributor destruction", arena)
-    {}
-
-    virtual b8 appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
-        const auto node = builder.addPass(Name(TestCases::s_TelemetryCaseOwnedLabel), AStringView(m_label));
-        m_registry->unregisterContributor(*this);
-        return node.valid();
-    }
-
-
-private:
-    Telemetry::FrameGraphRegistry* m_registry = nullptr;
-    AString<Telemetry::TelemetryArena> m_label;
-};
-
-class DestroyContributor final : public Telemetry::IFrameGraphContributor{
-public:
-    explicit DestroyContributor(Optional<OwnedLabelContributor>& target)noexcept
-        : m_target(&target)
-    {}
-
-    virtual b8 appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
-        m_target->reset();
-        return builder.addPass(Name(TestCases::s_TelemetryCaseDestroyer), "destroyer").valid();
-    }
-
-
-private:
-    Optional<OwnedLabelContributor>* m_target = nullptr;
-};
-
-class CacheLifetimeContributor final : public Telemetry::IFrameGraphContributor{
-public:
-    CacheLifetimeContributor(Telemetry::FrameGraphRegistry& registry, Telemetry::CaptureSession& session, const AString<Telemetry::TelemetryArena>& label)noexcept
-        : m_registry(&registry)
-        , m_session(&session)
-        , m_label(&label)
-    {}
-
-
-public:
-    virtual b8 appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
-        if(!builder.addPass(Name(TestCases::s_TelemetryCaseCacheLifetime), AStringView(*m_label)).valid())
-            return false;
-        if(m_throwNext){
-            m_throwNext = false;
-            throw ContributionFailure{};
-        }
-        m_reentryRejected = !m_registry->record(*m_session);
-        return true;
-    }
-
-
-public:
-    b8 m_throwNext = true;
-    b8 m_reentryRejected = false;
-
-
-private:
-    Telemetry::FrameGraphRegistry* m_registry = nullptr;
-    Telemetry::CaptureSession* m_session = nullptr;
-    const AString<Telemetry::TelemetryArena>* m_label = nullptr;
-};
-
-struct ReportFixture{
-    Telemetry::FrameGraphNodeDescs nodes;
-    Telemetry::FrameGraphEdgeDescs edges;
-    Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords queues;
-    Telemetry::FrameGraphPacketSubmissionStatisticsRecords packets;
-
-
-public:
-    explicit ReportFixture(Telemetry::TelemetryArena& arena)noexcept
-        : nodes(arena)
-        , edges(arena)
-        , queues(arena)
-        , packets(arena)
-    {}
-
-    void addUnmeasuredNode(){
-        nodes.push_back(Telemetry::FrameGraphNodeDesc{
-            .name = Name(TestCases::s_ReportTask),
-            .label = "Unmeasured task",
-            .kind = Telemetry::FrameGraphNodeKind::Pass,
-            .flags = 0u,
-            .queueAssignment = {},
-            .compiledTask = {},
-            .runtimeStatistics = {},
-        });
-    }
-
-    void addOwner(const u32 packetCount, const u16 firstQueueIndex, const b8 includeQueues = true){
-        const u32 ownerIndex = static_cast<u32>(nodes.size());
-        const Telemetry::FrameGraphRuntimeStatistics owner = OwnerStatistics(packetCount);
-        nodes.push_back(Telemetry::FrameGraphNodeDesc{
-            .name = Name(TestCases::s_ReportOwner),
-            .label = "Measured owner",
-            .kind = Telemetry::FrameGraphNodeKind::Pass,
-            .queueAssignment = {},
-            .compiledTask = {},
-            .runtimeStatistics = owner,
-        });
-        if(includeQueues){
-            const u32 queueCount = packetCount > 1u ? 2u : packetCount;
-            for(u32 queueOffset = 0u; queueOffset < queueCount; ++queueOffset){
-                const u32 acceptedCount = packetCount / 2u + (queueOffset == 0u ? packetCount % 2u : 0u);
-                Telemetry::FrameGraphPhysicalQueueRuntimeStatistics statistics;
-                statistics.graphGeneration = owner.graphGeneration;
-                statistics.planGeneration = owner.planGeneration;
-                statistics.recordingAttemptGeneration = owner.recordingAttemptGeneration;
-                statistics.deviceGeneration = owner.deviceGeneration;
-                statistics.queue = { .index = static_cast<u16>(firstQueueIndex + queueOffset), .deviceGeneration = 17u };
-                statistics.queueClass = Telemetry::FrameGraphQueueClass::Graphics;
-                statistics.compile.taskCount = acceptedCount;
-                statistics.compile.packetCount = acceptedCount;
-                statistics.recording.packetCount = acceptedCount;
-                statistics.recording.taskCount = acceptedCount;
-                statistics.recording.commandListCount = acceptedCount;
-                statistics.submission.acceptedPacketCount = acceptedCount;
-                statistics.submission.acceptedTaskCount = acceptedCount;
-                statistics.submission.nativeSubmissionCount = acceptedCount;
-                statistics.submission.nativeCommandListCount = acceptedCount;
-                queues.push_back({ .ownerNodeIndex = ownerIndex, .statistics = statistics });
-            }
-        }
-        // Deliberately unsorted producer input exercises the codec's canonical owner and packet ordering.
-        for(u32 remaining = packetCount; remaining != 0u; --remaining){
-            const u32 packetIndex = remaining - 1u;
-            packets.push_back(Telemetry::FrameGraphPacketSubmissionStatisticsRecord{
-                .packetGeneration = owner.planGeneration,
-                .taskCount = 1u,
-                .commandListCount = 1u,
-                .plannedWaitTokenCount = 0u,
-                .sameQueueWaitElisionCount = 0u,
-                .timelineWaitCount = 0u,
-                .mergedTimelineWaitCount = 0u,
-                .inheritedTimelineWaitElisionCount = 0u,
-                .submissionSeconds = 0.0,
-                .queue = { .index = static_cast<u16>(firstQueueIndex + packetIndex % 2u), .deviceGeneration = 17u },
-                .ownerNodeIndex = ownerIndex,
-                .packetIndex = packetIndex,
-                .queueClass = Telemetry::FrameGraphQueueClass::Graphics,
-                .joinsAcceptedQueueFrontier = false,
-                .recoverySubmission = false,
-            });
-        }
-    }
-};
-
-[[nodiscard]] inline AStringView FindLineWithPrefix(const AStringView text, const AStringView prefix)noexcept{
-    const usize begin = text.find(prefix);
-    if(begin == AStringView::npos)
-        return {};
-    const usize end = text.find('\n', begin);
-    return text.substr(begin, end == AStringView::npos ? text.size() - begin : end - begin);
-}
-
-using FrameGraphRuntimeStatisticsMutation = void(*)(Telemetry::FrameGraphRuntimeStatistics&);
-
-inline constexpr Array<NotNull<FrameGraphRuntimeStatisticsMutation>, 38> s_RuntimeStatisticsCountMutations = {
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.compile.packetCount = statistics.compile.taskCount + 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        ++statistics.compile.mergedTaskCount;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.compile.resourceVersionCount = 0u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.compile.directResourceUseCount = statistics.compile.resourceUseCount + 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        ++statistics.compile.expandedResourceSetMemberUseCount;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.compile.payloadObjectCount = statistics.compile.taskCount + 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.compile.logicalOwnershipTransferSignatureCount = statistics.compile.logicalOwnershipTransferCount + 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.compile.repeatedOwnershipTransferSignatureCount = statistics.compile.logicalOwnershipTransferSignatureCount + 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.compile.concurrentSharingCouldAvoidTransferCount = statistics.compile.logicalOwnershipTransferCount + 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.compile.concurrentSharingAdviceResourceCount = statistics.compile.resourceCount + 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.compile.logicalOwnershipTransferInternalCount = statistics.compile.logicalOwnershipTransferCount + 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.compile.logicalOwnershipTransferExternalImportCount = statistics.compile.logicalOwnershipTransferCount - statistics.compile.logicalOwnershipTransferInternalCount + 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        ++statistics.compile.logicalOwnershipTransferExternalExportCount;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.recording.packetCount = statistics.compile.packetCount + 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.recording.taskCount = statistics.compile.taskCount + 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.recording.taskCount = statistics.recording.packetCount - 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.recording.commandListCount = statistics.recording.packetCount - 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.recording.workerRoutedPacketCount = statistics.recording.packetCount + 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.recording.parallelPacketCount = statistics.recording.packetCount + 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.submission.acceptedPacketCount = statistics.compile.packetCount + 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.submission.rejectedPacketCount = statistics.compile.packetCount - statistics.submission.acceptedPacketCount + 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.submission.acceptedTaskCount = statistics.compile.taskCount + 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.submission.rejectedTaskCount = statistics.compile.taskCount - statistics.submission.acceptedTaskCount + 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.submission.acceptedTaskCount = statistics.submission.acceptedPacketCount - 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.submission.rejectedTaskCount = statistics.submission.rejectedPacketCount - 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.submission.acceptedPacketCount = statistics.submission.nativeSubmissionCount - 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.submission.rejectedSubmissionCount = statistics.submission.rejectedPacketCount + 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.submission.acceptedFrontierSubmissionCount = statistics.submission.nativeSubmissionCount + 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.submission.recoverySubmissionCount = statistics.submission.acceptedFrontierSubmissionCount + 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.submission.nativeSubmissionCount = statistics.recording.packetCount + 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.submission.nativeCommandListCount = statistics.submission.nativeSubmissionCount - 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.submission.nativeCommandListCount = statistics.recording.commandListCount + 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.submission.sameQueueWaitElisionCount = statistics.submission.plannedWaitTokenCount + 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.submission.mergedTimelineWaitCount = statistics.submission.plannedWaitTokenCount - statistics.submission.sameQueueWaitElisionCount + 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.submission.inheritedTimelineWaitElisionCount = statistics.submission.plannedWaitTokenCount - statistics.submission.sameQueueWaitElisionCount - statistics.submission.mergedTimelineWaitCount + 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.submission.inheritedTimelineWaitElisionCount = Limit<u64>::s_Max;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        statistics.submission = {};
-        statistics.submission.plannedWaitTokenCount = 1u;
-        statistics.submission.inheritedTimelineWaitElisionCount = 1u;
-    }),
-    MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
-        ++statistics.submission.timelineWaitCount;
-    }),
-};
-
-struct SnapshotValidationFixture{
-    TestArena arena;
-    Telemetry::FrameGraphPayload payload{ arena.arena };
-    Telemetry::FrameGraphRuntimeStatistics runtime;
-
-
-public:
-    SnapshotValidationFixture(){
-        runtime.planGeneration = 9u;
-        runtime.compile.taskCount = 4u;
-        runtime.compile.packetCount = 3u;
-        runtime.submission.acceptedTaskCount = 3u;
-        runtime.submission.acceptedPacketCount = 2u;
-        runtime.submission.rejectedTaskCount = 1u;
-        runtime.submission.rejectedPacketCount = 1u;
-        const Array<Name, 4u> names{ Name(TestCases::s_RenderFirst), Name(TestCases::s_RenderSecond), Name(TestCases::s_RenderPresent), Name(TestCases::s_RenderFrameRecovery) };
-        const Array<u32, 4u> packets{ 0u, 0u, 1u, 2u };
-        for(usize index = 0u; index < names.size(); ++index){
-            auto& node = payload.nodes.emplace_back();
-            node.name = names[index];
-            node.compiledTask = { .planGeneration = runtime.planGeneration, .packetIndex = packets[index], .present = true };
-        }
-        for(u32 index = 0u; index < 2u; ++index){
-            auto& packet = payload.packetSubmissionStatistics.emplace_back();
-            packet.packetGeneration = runtime.planGeneration;
-            packet.packetIndex = index;
-            packet.taskCount = index == 0u ? 2u : 1u;
-            packet.queue = { .index = 0u, .deviceGeneration = 1u };
-        }
-    }
-
-    [[nodiscard]] b8 valid()const noexcept{
-        return NWB::Tests::Smoke::ValidateNormalFrameSnapshotCompletion(payload, runtime);
-    }
-};
-
-struct StatisticsFixture{
-    Telemetry::FrameGraphNodeDescs nodes;
-    Telemetry::FrameGraphEdgeDescs edges;
-    Telemetry::FrameGraphPendingNameEdges pendingEdges;
-    Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords queues;
-    Telemetry::FrameGraphPacketSubmissionStatisticsRecords packets;
-
-
-public:
-    explicit StatisticsFixture(Telemetry::TelemetryArena& arena)noexcept
-        : nodes(arena)
-        , edges(arena)
-        , pendingEdges(arena)
-        , queues(arena)
-        , packets(arena)
-    {}
-};
-
-[[nodiscard]] inline Telemetry::FrameGraphPhysicalQueueRuntimeStatistics QueueStatistics(const u16 queueIndex, const u32 packetCount)noexcept{
-    Telemetry::FrameGraphPhysicalQueueRuntimeStatistics stats;
-    stats.graphGeneration = 71u;
-    stats.planGeneration = 72u;
-    stats.recordingAttemptGeneration = 73u;
-    stats.deviceGeneration = 17u;
-    stats.queue = { .index = queueIndex, .deviceGeneration = 17u };
-    stats.queueClass = queueIndex == 1u ? Telemetry::FrameGraphQueueClass::Graphics : Telemetry::FrameGraphQueueClass::Compute;
-    stats.compile.taskCount = packetCount;
-    stats.compile.packetCount = packetCount;
-    stats.recording.packetCount = packetCount;
-    stats.recording.taskCount = packetCount;
-    stats.recording.commandListCount = packetCount;
-    stats.submission.acceptedPacketCount = packetCount;
-    stats.submission.acceptedTaskCount = packetCount;
-    stats.submission.nativeSubmissionCount = packetCount;
-    stats.submission.nativeCommandListCount = packetCount;
-    return stats;
-}
-
-inline void PrepareFixture(const u32 packetCount, const u32 ownerCount, StatisticsFixture& fixture){
-    const u32 packetsPerOwner = packetCount / ownerCount;
-    fixture.nodes.reserve(ownerCount);
-    fixture.queues.reserve(ownerCount * 2u);
-    fixture.packets.reserve(packetCount);
-    for(u32 ownerIndex = 0u; ownerIndex < ownerCount; ++ownerIndex){
-        fixture.nodes.push_back(Telemetry::FrameGraphNodeDesc{
-            .name = Name(TestCases::s_TelemetryCaseScalingOwner),
-            .label = "Scaling owner",
-            .kind = Telemetry::FrameGraphNodeKind::Pass,
-            .queueAssignment = {},
-            .compiledTask = {},
-            .runtimeStatistics = OwnerStatistics(packetsPerOwner),
-        });
-    }
-}
-
-[[nodiscard]] inline b8 AppendFixtureStatistics(const u32 packetCount, const u32 ownerCount, Core::Alloc::ScratchArena& scratchArena, StatisticsFixture& fixture){
-    Telemetry::FrameGraphBuilder builder(scratchArena, fixture.nodes, fixture.edges, fixture.pendingEdges, fixture.queues, fixture.packets);
-    const u32 packetsPerOwner = packetCount / ownerCount;
-    for(u32 ownerIndex = 0u; ownerIndex < ownerCount; ++ownerIndex){
-        const Telemetry::FrameGraphNodeHandle owner{ ownerIndex };
-        if(!builder.addPhysicalQueueRuntimeStatistics(owner, QueueStatistics(3u, packetsPerOwner / 2u)))
-            return false;
-        if(!builder.addPhysicalQueueRuntimeStatistics(owner, QueueStatistics(1u, packetsPerOwner / 2u)))
-            return false;
-    }
-    // Odd multiplication permutes the power-of-two workload, interleaving both owners and physical queues.
-    for(u32 index = 0u; index < packetCount; ++index){
-        const u32 shuffled = (index * 2053u + 7u) % packetCount;
-        const u32 ownerIndex = shuffled / packetsPerOwner;
-        const u32 packetIndex = shuffled % packetsPerOwner;
-        const u16 queueIndex = (packetIndex & 1u) == 0u ? 1u : 3u;
-        const Telemetry::FrameGraphPacketSubmissionStatisticsRecord packet{
-            .packetGeneration = 72u,
-            .taskCount = 1u,
-            .commandListCount = 1u,
-            .plannedWaitTokenCount = 0u,
-            .sameQueueWaitElisionCount = 0u,
-            .timelineWaitCount = 0u,
-            .mergedTimelineWaitCount = 0u,
-            .inheritedTimelineWaitElisionCount = 0u,
-            .submissionSeconds = 0.0,
-            .queue = { .index = queueIndex, .deviceGeneration = 17u },
-            .ownerNodeIndex = ownerIndex,
-            .packetIndex = packetIndex,
-            .queueClass = queueIndex == 1u ? Telemetry::FrameGraphQueueClass::Graphics : Telemetry::FrameGraphQueueClass::Compute,
-            .joinsAcceptedQueueFrontier = false,
-            .recoverySubmission = false,
-        };
-        if(!builder.addPacketSubmissionStatistics(Telemetry::FrameGraphNodeHandle{ ownerIndex }, packet))
-            return false;
-    }
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -548,61 +39,197 @@ namespace Tests::TelemetryCases{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr AStringView s_ProbeRegressionLabel = "Probe regression";
+inline constexpr AStringView s_ProbeGrowthLabel = "Probe growth";
+inline constexpr AStringView s_ScalingTargetText = "target";
+
+struct ContributionFailure{};
+
+class PendingNameFrameGraphContributor final : public Core::Telemetry::IFrameGraphContributor{
+public:
+    virtual b8 appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder)override{
+        const Core::Telemetry::FrameGraphNodeHandle source = builder.addPass(s_TelemetryCaseSource, "Source");
+        const Core::Telemetry::FrameGraphNodeHandle target = builder.addResource(Name(s_ScalingTargetText), "Target");
+        const Core::Telemetry::FrameGraphNodeHandle duplicateTarget = builder.addResource(Name(s_ScalingTargetText), "Duplicate Target");
+        if(!target.valid() || !duplicateTarget.valid())
+            return false;
+
+        builder.dependsOnByName(source, Name(s_ScalingTargetText), 7u);
+        builder.dependsOnByName(source, s_TelemetryCaseMissing, 9u);
+        return true;
+    }
+};
+
+class LocalLabelContributor final : public Core::Telemetry::IFrameGraphContributor{
+public:
+    virtual b8 appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder)override{
+        char label[] = "local label";
+        const auto node = builder.addPass(s_TelemetryCaseLocalLabel, AStringView(label));
+        label[0u] = 'X';
+        return node.valid();
+    }
+};
+
+class MutatingContributor final : public Core::Telemetry::IFrameGraphContributor{
+public:
+    explicit MutatingContributor(Core::Telemetry::FrameGraphRegistry& registry)noexcept
+        : m_registry(&registry)
+    {}
+
+    virtual b8 appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder)override{
+        ++calls;
+        const auto node = builder.addPass(s_TelemetryCaseMutation, "mutation");
+        if(clearRegistry)
+            m_registry->clear();
+        if(removeSelf)
+            m_registry->unregisterContributor(*this);
+        if(removeOther)
+            m_registry->unregisterContributor(*removeOther);
+        if(addOther)
+            m_registry->registerContributor(*addOther);
+        if(throwAfterMutation)
+            throw ContributionFailure{};
+        return node.valid();
+    }
+
+    void setRemoveOther(Core::Telemetry::IFrameGraphContributor& other)noexcept{ removeOther = &other; }
+    void setAddOther(Core::Telemetry::IFrameGraphContributor& other)noexcept{ addOther = &other; }
+
+
+public:
+    Core::Telemetry::IFrameGraphContributor* removeOther = nullptr;
+    Core::Telemetry::IFrameGraphContributor* addOther = nullptr;
+    usize calls = 0u;
+    b8 removeSelf = false;
+    b8 clearRegistry = false;
+    b8 throwAfterMutation = false;
+
+
+private:
+    Core::Telemetry::FrameGraphRegistry* m_registry = nullptr;
+};
+
+class OwnedLabelContributor final : public Core::Telemetry::IFrameGraphContributor{
+public:
+    OwnedLabelContributor(Core::Telemetry::FrameGraphRegistry& registry, Core::Telemetry::TelemetryArena& arena)
+        : m_registry(&registry)
+        , m_label("label retained after contributor destruction", arena)
+    {}
+
+    virtual b8 appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder)override{
+        const auto node = builder.addPass(s_TelemetryCaseOwnedLabel, AStringView(m_label));
+        m_registry->unregisterContributor(*this);
+        return node.valid();
+    }
+
+
+private:
+    Core::Telemetry::FrameGraphRegistry* m_registry = nullptr;
+    AString<Core::Telemetry::TelemetryArena> m_label;
+};
+
+class DestroyContributor final : public Core::Telemetry::IFrameGraphContributor{
+public:
+    explicit DestroyContributor(Optional<OwnedLabelContributor>& target)noexcept
+        : m_target(&target)
+    {}
+
+    virtual b8 appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder)override{
+        m_target->reset();
+        return builder.addPass(s_TelemetryCaseDestroyer, "destroyer").valid();
+    }
+
+
+private:
+    Optional<OwnedLabelContributor>* m_target = nullptr;
+};
+
+class CacheLifetimeContributor final : public Core::Telemetry::IFrameGraphContributor{
+public:
+    CacheLifetimeContributor(Core::Telemetry::FrameGraphRegistry& registry, Core::Telemetry::CaptureSession& session, const AString<Core::Telemetry::TelemetryArena>& label)noexcept
+        : m_registry(&registry)
+        , m_session(&session)
+        , m_label(&label)
+    {}
+
+
+public:
+    virtual b8 appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder)override{
+        if(!builder.addPass(s_TelemetryCaseCacheLifetime, AStringView(*m_label)).valid())
+            return false;
+        if(m_throwNext){
+            m_throwNext = false;
+            throw ContributionFailure{};
+        }
+        m_reentryRejected = !m_registry->record(*m_session);
+        return true;
+    }
+
+
+public:
+    b8 m_throwNext = true;
+    b8 m_reentryRejected = false;
+
+
+private:
+    Core::Telemetry::FrameGraphRegistry* m_registry = nullptr;
+    Core::Telemetry::CaptureSession* m_session = nullptr;
+    const AString<Core::Telemetry::TelemetryArena>* m_label = nullptr;
+};
+
+struct ReportFixture{
+    Core::Telemetry::FrameGraphNodeDescs nodes;
+    Core::Telemetry::FrameGraphEdgeDescs edges;
+    Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords queues;
+    Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecords packets;
+
+
+public:
+    explicit ReportFixture(Core::Telemetry::TelemetryArena& arena)noexcept
+        : nodes(arena)
+        , edges(arena)
+        , queues(arena)
+        , packets(arena)
+    {}
+};
+
+struct SnapshotValidationFixture{
+    Core::Telemetry::FrameGraphPayload payload;
+    Core::Telemetry::FrameGraphRuntimeStatistics runtime;
+
+
+public:
+    explicit SnapshotValidationFixture(Core::Telemetry::TelemetryArena& arena)noexcept
+        : payload(arena)
+    {}
+};
+
+struct StatisticsFixture{
+    Core::Telemetry::FrameGraphNodeDescs nodes;
+    Core::Telemetry::FrameGraphEdgeDescs edges;
+    Core::Telemetry::FrameGraphPendingNameEdges pendingEdges;
+    Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords queues;
+    Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecords packets;
+
+
+public:
+    explicit StatisticsFixture(Core::Telemetry::TelemetryArena& arena)noexcept
+        : nodes(arena)
+        , edges(arena)
+        , pendingEdges(arena)
+        , queues(arena)
+        , packets(arena)
+    {}
+};
+
 using CapturingLogger = Tests::CapturingLogger;
-using LoggerRegistrationGuard = Core::Common::LoggerRegistrationGuard;
+using GpuPassTimingProbe = Tests::Smoke::GpuPassTimingProbe;
+using Tests::Smoke::ValidateNormalFrameSnapshotCompletion;
 using FrameGraphRegistry = Core::Telemetry::FrameGraphRegistry;
 using FrameGraphBuilder = Core::Telemetry::FrameGraphBuilder;
 using FrameGraphNodeHandle = Core::Telemetry::FrameGraphNodeHandle;
-using FrameGraphNodeDescs = Core::Telemetry::FrameGraphNodeDescs;
-using FrameGraphEdgeDescs = Core::Telemetry::FrameGraphEdgeDescs;
 using FrameGraphPendingNameEdges = Core::Telemetry::FrameGraphPendingNameEdges;
-using FrameGraphPhysicalQueueRuntimeStatisticsRecords = Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords;
-using FrameGraphPacketSubmissionStatisticsRecords = Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecords;
-using FrameGraphPacketSubmissionStatisticsRecord = Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord;
-using FrameGraphRuntimeStatistics = Core::Telemetry::FrameGraphRuntimeStatistics;
-using FrameGraphPhysicalQueueRuntimeStatistics = Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics;
 using FrameGraphPassMetadata = Core::Telemetry::FrameGraphPassMetadata;
-namespace FrameGraphNodeKind = Core::Telemetry::FrameGraphNodeKind;
-namespace FrameGraphQueueClass = Core::Telemetry::FrameGraphQueueClass;
-namespace FrameGraphQueueAssignmentAcceptance = Core::Telemetry::FrameGraphQueueAssignmentAcceptance;
-namespace FrameGraphTaskPacketizationDecision = Core::Telemetry::FrameGraphTaskPacketizationDecision;
-
-using LocalLabelContributor = TelemetryScalingCasesDetail::LocalLabelContributor;
-using MutatingContributor = TelemetryScalingCasesDetail::MutatingContributor;
-using OwnedLabelContributor = TelemetryScalingCasesDetail::OwnedLabelContributor;
-using DestroyContributor = TelemetryScalingCasesDetail::DestroyContributor;
-using CacheLifetimeContributor = TelemetryScalingCasesDetail::CacheLifetimeContributor;
-using PendingNameFrameGraphContributor = TelemetryScalingCasesDetail::PendingNameFrameGraphContributor;
-using ContributionFailure = TelemetryScalingCasesDetail::ContributionFailure;
-using ReportFixture = TelemetryScalingCasesDetail::ReportFixture;
-using SnapshotValidationFixture = TelemetryScalingCasesDetail::SnapshotValidationFixture;
-using StatisticsFixture = TelemetryScalingCasesDetail::StatisticsFixture;
-using TelemetryScalingCasesDetail::FindLineWithPrefix;
-using TelemetryScalingCasesDetail::QueueStatistics;
-using TelemetryScalingCasesDetail::PrepareFixture;
-using TelemetryScalingCasesDetail::AppendFixtureStatistics;
-using TelemetryScalingCasesDetail::s_PacketIndex;
-using TelemetryScalingCasesDetail::s_RuntimePacketSubmissionCount3;
-using TelemetryScalingCasesDetail::s_RuntimePacketSubmissionCount2;
-using TelemetryScalingCasesDetail::s_QueueAliasOwner;
-using TelemetryScalingCasesDetail::s_QueueAliasOwnerLabel;
-
-using Core::Telemetry::BuildFrameGraphPayload;
-using Core::Telemetry::IsValidFrameGraphRuntimeStatistics;
-using Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics;
-using Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner;
-
-[[nodiscard]] inline FrameGraphNodeHandle MakeNodeHandle(const u32 index)noexcept{
-    return FrameGraphNodeHandle{ index };
-}
-
-[[nodiscard]] inline Expected<Name> MakeDecimalScopeName(const u32 index){
-    Array<char, 32u> scopeText = {};
-    const auto parsed = Name::FromText(FormatDecimal(index, scopeText));
-    if(!parsed.has_value())
-        return MakeUnexpected(Failure{});
-    return parsed.value();
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -626,22 +253,399 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const Name s_QueueAliasOwnerName = "queue_alias_owner";
+const StringView s_QueueAliasOwnerLabel = "Queue alias owner";
+const StringView s_PacketIndex = "\"packet\": {\"index\":";
+const StringView s_RuntimePacketSubmissionCount3 = "runtime_packet_submission_count=3";
+const StringView s_RuntimePacketSubmissionCount2 = "runtime_packet_submission_count=2";
+const usize s_RuntimeStatisticsCountMutationCount = 38u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void RegisterTestContributor<ContributorT>(mut FrameGraphRegistry registry, mut ContributorT contributor){
+    registry.registerContributor(contributor);
+}
+
+b8 RecordRegistryFrameGraph(mut FrameGraphRegistry registry, mut TelemetryCaptureSession session){
+    return registry.record(session);
+}
+
+FrameGraphNodeHandle MakeNodeHandle(in u32 index){
+    FrameGraphNodeHandle handle = FrameGraphNodeHandle();
+    handle.index = index;
+    return handle;
+}
+
+Expected<Name> MakeDecimalScopeName(in u32 index){
+    String scopeText = String();
+    AppendUnsignedU64Text(scopeText, cast<u64>(index));
+    return ParseName(StringView(scopeText));
+}
+
+StringView FindLineWithPrefix(in StringView text, in StringView prefix){
+    const usize begin = text.find(prefix);
+    if(begin == usize.max)
+        return "";
+    const usize end = text.find("\n", begin);
+    if(end == usize.max)
+        return text.substr(begin, text.size() - begin);
+    return text.substr(begin, end - begin);
+}
+
+void AddReportUnmeasuredNode(mut ReportFixture fixture){
+    FrameGraphNodeDesc node = FrameGraphNodeDesc();
+    node.name = s_ReportTask;
+    node.label = "Unmeasured task";
+    node.kind = FrameGraphNodeKind::Pass;
+    node.flags = 0u;
+    fixture.nodes.push_back(node);
+}
+
+void AddReportOwner(mut ReportFixture fixture, in u32 packetCount, in u16 firstQueueIndex, in b8 includeQueues){
+    const u32 ownerIndex = cast<u32>(fixture.nodes.size());
+    const FrameGraphRuntimeStatistics owner = OwnerStatistics(packetCount);
+
+    FrameGraphNodeDesc ownerNode = FrameGraphNodeDesc();
+    ownerNode.name = s_ReportOwner;
+    ownerNode.label = "Measured owner";
+    ownerNode.kind = FrameGraphNodeKind::Pass;
+    ownerNode.runtimeStatistics = owner;
+    fixture.nodes.push_back(ownerNode);
+
+    if(includeQueues){
+        u32 queueCount = packetCount;
+        if(packetCount > 1u)
+            queueCount = 2u;
+        for(u32 queueOffset = 0u; queueOffset < queueCount; ++queueOffset){
+            u32 acceptedCount = packetCount / 2u;
+            if(queueOffset == 0u)
+                acceptedCount += packetCount % 2u;
+
+            FrameGraphPhysicalQueueRuntimeStatistics statistics = FrameGraphPhysicalQueueRuntimeStatistics();
+            statistics.graphGeneration = owner.graphGeneration;
+            statistics.planGeneration = owner.planGeneration;
+            statistics.recordingAttemptGeneration = owner.recordingAttemptGeneration;
+            statistics.deviceGeneration = owner.deviceGeneration;
+            statistics.queue.index = firstQueueIndex + cast<u16>(queueOffset);
+            statistics.queue.deviceGeneration = 17u;
+            statistics.queueClass = FrameGraphQueueClass::Graphics;
+            statistics.compile.taskCount = acceptedCount;
+            statistics.compile.packetCount = acceptedCount;
+            statistics.recording.packetCount = acceptedCount;
+            statistics.recording.taskCount = acceptedCount;
+            statistics.recording.commandListCount = acceptedCount;
+            statistics.submission.acceptedPacketCount = acceptedCount;
+            statistics.submission.acceptedTaskCount = acceptedCount;
+            statistics.submission.nativeSubmissionCount = acceptedCount;
+            statistics.submission.nativeCommandListCount = acceptedCount;
+
+            FrameGraphPhysicalQueueRuntimeStatisticsRecord record = FrameGraphPhysicalQueueRuntimeStatisticsRecord();
+            record.ownerNodeIndex = ownerIndex;
+            record.statistics = statistics;
+            fixture.queues.push_back(record);
+        }
+    }
+
+    // Deliberately unsorted producer input exercises canonical owner and packet ordering.
+    for(u32 remaining = packetCount; remaining != 0u; --remaining){
+        const u32 packetIndex = remaining - 1u;
+        FrameGraphPacketSubmissionStatisticsRecord packet = FrameGraphPacketSubmissionStatisticsRecord();
+        packet.packetGeneration = owner.planGeneration;
+        packet.taskCount = 1u;
+        packet.commandListCount = 1u;
+        packet.queue.index = firstQueueIndex + cast<u16>(packetIndex % 2u);
+        packet.queue.deviceGeneration = 17u;
+        packet.ownerNodeIndex = ownerIndex;
+        packet.packetIndex = packetIndex;
+        packet.queueClass = FrameGraphQueueClass::Graphics;
+        fixture.packets.push_back(packet);
+    }
+}
+
+void AddReportOwner(mut ReportFixture fixture, in u32 packetCount, in u16 firstQueueIndex){
+    AddReportOwner(fixture, packetCount, firstQueueIndex, true);
+}
+
+void SeedSnapshotValidationFixture(mut SnapshotValidationFixture fixture){
+    fixture.runtime.planGeneration = 9u;
+    fixture.runtime.compile.taskCount = 4u;
+    fixture.runtime.compile.packetCount = 3u;
+    fixture.runtime.submission.acceptedTaskCount = 3u;
+    fixture.runtime.submission.acceptedPacketCount = 2u;
+    fixture.runtime.submission.rejectedTaskCount = 1u;
+    fixture.runtime.submission.rejectedPacketCount = 1u;
+
+    Array<Name, 4> names = Array<Name, 4>();
+    names[0u] = s_RenderFirst;
+    names[1u] = s_RenderSecond;
+    names[2u] = s_RenderPresent;
+    names[3u] = s_RenderFrameRecovery;
+
+    Array<u32, 4> packets = Array<u32, 4>();
+    packets[0u] = 0u;
+    packets[1u] = 0u;
+    packets[2u] = 1u;
+    packets[3u] = 2u;
+
+    for(usize index = 0u; index < names.size(); ++index){
+        FrameGraphNodePayload node = FrameGraphNodePayload();
+        node.name = names[index];
+        node.compiledTask.planGeneration = fixture.runtime.planGeneration;
+        node.compiledTask.packetIndex = packets[index];
+        node.compiledTask.present = true;
+        fixture.payload.nodes.push_back(node);
+    }
+
+    for(u32 index = 0u; index < 2u; ++index){
+        FrameGraphPacketSubmissionStatisticsRecord packet = FrameGraphPacketSubmissionStatisticsRecord();
+        packet.packetGeneration = fixture.runtime.planGeneration;
+        packet.packetIndex = index;
+        if(index == 0u)
+            packet.taskCount = 2u;
+        else
+            packet.taskCount = 1u;
+        packet.queue.index = 0u;
+        packet.queue.deviceGeneration = 1u;
+        fixture.payload.packetSubmissionStatistics.push_back(packet);
+    }
+}
+
+b8 IsSnapshotValidationFixtureValid(in SnapshotValidationFixture fixture){
+    return ValidateNormalFrameSnapshotCompletion(fixture.payload, fixture.runtime);
+}
+
+FrameGraphPhysicalQueueRuntimeStatistics QueueStatistics(in u16 queueIndex, in u32 packetCount){
+    FrameGraphPhysicalQueueRuntimeStatistics stats = FrameGraphPhysicalQueueRuntimeStatistics();
+    stats.graphGeneration = 71u;
+    stats.planGeneration = 72u;
+    stats.recordingAttemptGeneration = 73u;
+    stats.deviceGeneration = 17u;
+    stats.queue.index = queueIndex;
+    stats.queue.deviceGeneration = 17u;
+    if(queueIndex == 1u)
+        stats.queueClass = FrameGraphQueueClass::Graphics;
+    else
+        stats.queueClass = FrameGraphQueueClass::Compute;
+    stats.compile.taskCount = packetCount;
+    stats.compile.packetCount = packetCount;
+    stats.recording.packetCount = packetCount;
+    stats.recording.taskCount = packetCount;
+    stats.recording.commandListCount = packetCount;
+    stats.submission.acceptedPacketCount = packetCount;
+    stats.submission.acceptedTaskCount = packetCount;
+    stats.submission.nativeSubmissionCount = packetCount;
+    stats.submission.nativeCommandListCount = packetCount;
+    return stats;
+}
+
+void PrepareFixture(in u32 packetCount, in u32 ownerCount, mut StatisticsFixture fixture){
+    const u32 packetsPerOwner = packetCount / ownerCount;
+    fixture.nodes.reserve(ownerCount);
+    fixture.queues.reserve(ownerCount * 2u);
+    fixture.packets.reserve(packetCount);
+    for(u32 ownerIndex = 0u; ownerIndex < ownerCount; ++ownerIndex){
+        FrameGraphNodeDesc node = FrameGraphNodeDesc();
+        node.name = s_TelemetryCaseScalingOwner;
+        node.label = "Scaling owner";
+        node.kind = FrameGraphNodeKind::Pass;
+        node.runtimeStatistics = OwnerStatistics(packetsPerOwner);
+        fixture.nodes.push_back(node);
+    }
+}
+
+b8 AppendFixtureStatistics(in u32 packetCount, in u32 ownerCount, mut ScratchArena scratchArena, mut StatisticsFixture fixture){
+    FrameGraphBuilder builder = FrameGraphBuilder(scratchArena, fixture.nodes, fixture.edges, fixture.pendingEdges, fixture.queues, fixture.packets);
+    const u32 packetsPerOwner = packetCount / ownerCount;
+    for(u32 ownerIndex = 0u; ownerIndex < ownerCount; ++ownerIndex){
+        const FrameGraphNodeHandle owner = MakeNodeHandle(ownerIndex);
+        if(!builder.addPhysicalQueueRuntimeStatistics(owner, QueueStatistics(3u, packetsPerOwner / 2u)))
+            return false;
+        if(!builder.addPhysicalQueueRuntimeStatistics(owner, QueueStatistics(1u, packetsPerOwner / 2u)))
+            return false;
+    }
+
+    // Odd multiplication permutes the power-of-two workload, interleaving owners and physical queues.
+    for(u32 index = 0u; index < packetCount; ++index){
+        const u32 shuffled = (index * 2053u + 7u) % packetCount;
+        const u32 ownerIndex = shuffled / packetsPerOwner;
+        const u32 packetIndex = shuffled % packetsPerOwner;
+        u16 queueIndex = 3u;
+        FrameGraphQueueClassEnum queueClass = FrameGraphQueueClass::Compute;
+        if((packetIndex & 1u) == 0u){
+            queueIndex = 1u;
+            queueClass = FrameGraphQueueClass::Graphics;
+        }
+
+        FrameGraphPacketSubmissionStatisticsRecord packet = FrameGraphPacketSubmissionStatisticsRecord();
+        packet.packetGeneration = 72u;
+        packet.taskCount = 1u;
+        packet.commandListCount = 1u;
+        packet.queue.index = queueIndex;
+        packet.queue.deviceGeneration = 17u;
+        packet.ownerNodeIndex = ownerIndex;
+        packet.packetIndex = packetIndex;
+        packet.queueClass = queueClass;
+        if(!builder.addPacketSubmissionStatistics(MakeNodeHandle(ownerIndex), packet))
+            return false;
+    }
+    return true;
+}
+
+void ApplyRuntimeStatisticsCountMutation(mut FrameGraphRuntimeStatistics statistics, in usize mutationIndex){
+    switch(mutationIndex){
+    case 0u:
+        statistics.compile.packetCount = statistics.compile.taskCount + 1u;
+        break;
+    case 1u:
+        ++statistics.compile.mergedTaskCount;
+        break;
+    case 2u:
+        statistics.compile.resourceVersionCount = 0u;
+        break;
+    case 3u:
+        statistics.compile.directResourceUseCount = statistics.compile.resourceUseCount + 1u;
+        break;
+    case 4u:
+        ++statistics.compile.expandedResourceSetMemberUseCount;
+        break;
+    case 5u:
+        statistics.compile.payloadObjectCount = statistics.compile.taskCount + 1u;
+        break;
+    case 6u:
+        statistics.compile.logicalOwnershipTransferSignatureCount = statistics.compile.logicalOwnershipTransferCount + 1u;
+        break;
+    case 7u:
+        statistics.compile.repeatedOwnershipTransferSignatureCount = statistics.compile.logicalOwnershipTransferSignatureCount + 1u;
+        break;
+    case 8u:
+        statistics.compile.concurrentSharingCouldAvoidTransferCount = statistics.compile.logicalOwnershipTransferCount + 1u;
+        break;
+    case 9u:
+        statistics.compile.concurrentSharingAdviceResourceCount = statistics.compile.resourceCount + 1u;
+        break;
+    case 10u:
+        statistics.compile.logicalOwnershipTransferInternalCount = statistics.compile.logicalOwnershipTransferCount + 1u;
+        break;
+    case 11u:
+        statistics.compile.logicalOwnershipTransferExternalImportCount = statistics.compile.logicalOwnershipTransferCount - statistics.compile.logicalOwnershipTransferInternalCount + 1u;
+        break;
+    case 12u:
+        ++statistics.compile.logicalOwnershipTransferExternalExportCount;
+        break;
+    case 13u:
+        statistics.recording.packetCount = statistics.compile.packetCount + 1u;
+        break;
+    case 14u:
+        statistics.recording.taskCount = statistics.compile.taskCount + 1u;
+        break;
+    case 15u:
+        statistics.recording.taskCount = statistics.recording.packetCount - 1u;
+        break;
+    case 16u:
+        statistics.recording.commandListCount = statistics.recording.packetCount - 1u;
+        break;
+    case 17u:
+        statistics.recording.workerRoutedPacketCount = statistics.recording.packetCount + 1u;
+        break;
+    case 18u:
+        statistics.recording.parallelPacketCount = statistics.recording.packetCount + 1u;
+        break;
+    case 19u:
+        statistics.submission.acceptedPacketCount = statistics.compile.packetCount + 1u;
+        break;
+    case 20u:
+        statistics.submission.rejectedPacketCount = statistics.compile.packetCount - statistics.submission.acceptedPacketCount + 1u;
+        break;
+    case 21u:
+        statistics.submission.acceptedTaskCount = statistics.compile.taskCount + 1u;
+        break;
+    case 22u:
+        statistics.submission.rejectedTaskCount = statistics.compile.taskCount - statistics.submission.acceptedTaskCount + 1u;
+        break;
+    case 23u:
+        statistics.submission.acceptedTaskCount = statistics.submission.acceptedPacketCount - 1u;
+        break;
+    case 24u:
+        statistics.submission.rejectedTaskCount = statistics.submission.rejectedPacketCount - 1u;
+        break;
+    case 25u:
+        statistics.submission.acceptedPacketCount = statistics.submission.nativeSubmissionCount - 1u;
+        break;
+    case 26u:
+        statistics.submission.rejectedSubmissionCount = statistics.submission.rejectedPacketCount + 1u;
+        break;
+    case 27u:
+        statistics.submission.acceptedFrontierSubmissionCount = statistics.submission.nativeSubmissionCount + 1u;
+        break;
+    case 28u:
+        statistics.submission.recoverySubmissionCount = statistics.submission.acceptedFrontierSubmissionCount + 1u;
+        break;
+    case 29u:
+        statistics.submission.nativeSubmissionCount = statistics.recording.packetCount + 1u;
+        break;
+    case 30u:
+        statistics.submission.nativeCommandListCount = statistics.submission.nativeSubmissionCount - 1u;
+        break;
+    case 31u:
+        statistics.submission.nativeCommandListCount = statistics.recording.commandListCount + 1u;
+        break;
+    case 32u:
+        statistics.submission.sameQueueWaitElisionCount = statistics.submission.plannedWaitTokenCount + 1u;
+        break;
+    case 33u:
+        statistics.submission.mergedTimelineWaitCount = statistics.submission.plannedWaitTokenCount - statistics.submission.sameQueueWaitElisionCount + 1u;
+        break;
+    case 34u:
+        statistics.submission.inheritedTimelineWaitElisionCount = statistics.submission.plannedWaitTokenCount - statistics.submission.sameQueueWaitElisionCount - statistics.submission.mergedTimelineWaitCount + 1u;
+        break;
+    case 35u:
+        statistics.submission.inheritedTimelineWaitElisionCount = u64.max;
+        break;
+    case 36u:
+        statistics.submission = FrameGraphSubmissionRuntimeStatistics();
+        statistics.submission.plannedWaitTokenCount = 1u;
+        statistics.submission.inheritedTimelineWaitElisionCount = 1u;
+        break;
+    default:
+        ++statistics.submission.timelineWaitCount;
+        break;
+    }
+}
+
+b8 ReloadRuntimeStatisticsPayload(
+    in FrameGraphNodeDescs nodes,
+    in FrameGraphEdgeDescs edges,
+    in usize runtimeStatisticsOffset,
+    mut ScratchArena scratchArena,
+    mut TelemetryBytes outPayload,
+    mut EncodedFrameGraphRuntimeStatistics outFirst,
+    mut EncodedFrameGraphRuntimeStatistics outSecond
+){
+    if(!BuildTestFrameGraphPayload(911u, nodes, edges, scratchArena, outPayload))
+        return false;
+    ReadTelemetryPod(outPayload, runtimeStatisticsOffset, outFirst);
+    ReadTelemetryPod(outPayload, runtimeStatisticsOffset + s_EncodedFrameGraphRuntimeStatisticsByteSize, outSecond);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void VerifyTelemetry_RegistryOwnsLabelsFromContributorCallbacks(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryCaptureSession session = TelemetryCaptureSession(testArena.arena);
     session.setCaptureOptions(CaptureFrameGraphOnly());
     FrameGraphRegistry registry = FrameGraphRegistry(testArena.arena);
-    native(mut testArena, mut session, mut registry){
-        LocalLabelContributor contributor;
-        registry.registerContributor(contributor);
-        ASSERT_TRUE(registry.record(session));
-        const auto* event = session.view().eventAt(0u);
-        ASSERT_NE(event, nullptr);
-        const auto parsed = Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, event->payload.data(), event->payload.size());
-        ASSERT_TRUE(parsed.has_value());
-        ASSERT_EQ(parsed.value().nodes.size(), 1u);
-        EXPECT_EQ(parsed.value().nodes[0u].label, "local label");
-    }
+    LocalLabelContributor contributor = LocalLabelContributor();
+    RegisterTestContributor(registry, contributor);
+    ASSERT_TRUE(RecordRegistryFrameGraph(registry, session));
+    const Expected<FrameGraphPayload> parsed = ParseFrameGraphEventAt(testArena.arena, testArena.scratchArena, session.view(), 0u);
+    ASSERT_TRUE(parsed.has_value());
+    ASSERT_EQ(parsed.value().nodes.size(), 1u);
+    EXPECT_EQ(parsed.value().nodes[0u].label, "local label");
 }
 
 void VerifyTelemetry_RegistryDefersAddedContributorsAndSkipsRemovedOnes(){
@@ -656,16 +660,16 @@ void VerifyTelemetry_RegistryDefersAddedContributorsAndSkipsRemovedOnes(){
     first.removeSelf = true;
     first.setRemoveOther(removed);
     first.setAddOther(added);
-    registry.registerContributor(first);
-    registry.registerContributor(removed);
-    registry.registerContributor(last);
+    RegisterTestContributor(registry, first);
+    RegisterTestContributor(registry, removed);
+    RegisterTestContributor(registry, last);
 
-    ASSERT_TRUE(registry.record(session));
+    ASSERT_TRUE(RecordRegistryFrameGraph(registry, session));
     EXPECT_EQ(first.calls, 1u);
     EXPECT_EQ(removed.calls, 0u);
     EXPECT_EQ(last.calls, 1u);
     EXPECT_EQ(added.calls, 0u);
-    ASSERT_TRUE(registry.record(session));
+    ASSERT_TRUE(RecordRegistryFrameGraph(registry, session));
     EXPECT_EQ(first.calls, 1u);
     EXPECT_EQ(removed.calls, 0u);
     EXPECT_EQ(last.calls, 2u);
@@ -677,21 +681,21 @@ void VerifyTelemetry_RegistryKeepsLabelsAfterRemovedContributorIsDestroyed(){
     TelemetryCaptureSession session = TelemetryCaptureSession(testArena.arena);
     session.setCaptureOptions(CaptureFrameGraphOnly());
     FrameGraphRegistry registry = FrameGraphRegistry(testArena.arena);
-    native(mut testArena, mut session, mut registry){
+    b8 firstDestroyed = false;
+    native(mut testArena, mut session, mut registry, mut firstDestroyed){
         Optional<OwnedLabelContributor> first;
         first.emplace(registry, testArena.arena);
         DestroyContributor destroyer(first);
         registry.registerContributor(first.value());
         registry.registerContributor(destroyer);
         ASSERT_TRUE(registry.record(session));
-        EXPECT_FALSE(first.has_value());
-        const auto* event = session.view().eventAt(0u);
-        ASSERT_NE(event, nullptr);
-        const auto parsed = Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, event->payload.data(), event->payload.size());
-        ASSERT_TRUE(parsed.has_value());
-        ASSERT_EQ(parsed.value().nodes.size(), 2u);
-        EXPECT_EQ(parsed.value().nodes[0u].label, "label retained after contributor destruction");
+        firstDestroyed = !first.has_value();
     }
+    EXPECT_TRUE(firstDestroyed);
+    const Expected<FrameGraphPayload> parsed = ParseFrameGraphEventAt(testArena.arena, testArena.scratchArena, session.view(), 0u);
+    ASSERT_TRUE(parsed.has_value());
+    ASSERT_EQ(parsed.value().nodes.size(), 2u);
+    EXPECT_EQ(parsed.value().nodes[0u].label, "label retained after contributor destruction");
 }
 
 void VerifyTelemetry_RegistryClearDuringCallbackSkipsRemainingContributors(){
@@ -704,14 +708,14 @@ void VerifyTelemetry_RegistryClearDuringCallbackSkipsRemainingContributors(){
     MutatingContributor added = MutatingContributor(registry);
     first.clearRegistry = true;
     first.setAddOther(added);
-    registry.registerContributor(first);
-    registry.registerContributor(skipped);
+    RegisterTestContributor(registry, first);
+    RegisterTestContributor(registry, skipped);
 
-    ASSERT_TRUE(registry.record(session));
+    ASSERT_TRUE(RecordRegistryFrameGraph(registry, session));
     EXPECT_EQ(first.calls, 1u);
     EXPECT_EQ(skipped.calls, 0u);
     EXPECT_EQ(added.calls, 0u);
-    ASSERT_TRUE(registry.record(session));
+    ASSERT_TRUE(RecordRegistryFrameGraph(registry, session));
     EXPECT_EQ(first.calls, 1u);
     EXPECT_EQ(skipped.calls, 0u);
     EXPECT_EQ(added.calls, 1u);
@@ -725,10 +729,10 @@ void VerifyTelemetry_RegistryCanRemoveAndReregisterTheCurrentContributor(){
     MutatingContributor contributor = MutatingContributor(registry);
     contributor.removeSelf = true;
     contributor.setAddOther(contributor);
-    registry.registerContributor(contributor);
-    ASSERT_TRUE(registry.record(session));
+    RegisterTestContributor(registry, contributor);
+    ASSERT_TRUE(RecordRegistryFrameGraph(registry, session));
     EXPECT_EQ(contributor.calls, 1u);
-    ASSERT_TRUE(registry.record(session));
+    ASSERT_TRUE(RecordRegistryFrameGraph(registry, session));
     EXPECT_EQ(contributor.calls, 2u);
 }
 
@@ -744,13 +748,13 @@ void VerifyTelemetry_RegistryAppliesCallbackMutationsAfterUnwind(){
     first.setRemoveOther(skipped);
     first.setAddOther(added);
     first.throwAfterMutation = true;
-    registry.registerContributor(first);
-    registry.registerContributor(skipped);
+    RegisterTestContributor(registry, first);
+    RegisterTestContributor(registry, skipped);
     native(mut registry, mut session){
         EXPECT_THROW(EXPECT_TRUE(registry.record(session)), ContributionFailure);
     }
     EXPECT_EQ(session.eventCount(), 0u);
-    ASSERT_TRUE(registry.record(session));
+    ASSERT_TRUE(RecordRegistryFrameGraph(registry, session));
     EXPECT_EQ(first.calls, 1u);
     EXPECT_EQ(skipped.calls, 0u);
     EXPECT_EQ(added.calls, 1u);
@@ -761,23 +765,24 @@ void VerifyTelemetry_RegistryClearsBorrowedDescriptorsAfterUnwindAndReusesGraphC
     TelemetryCaptureSession session = TelemetryCaptureSession(testArena.arena);
     session.setCaptureOptions(CaptureFrameGraphOnly());
     FrameGraphRegistry registry = FrameGraphRegistry(testArena.arena);
-    native(mut testArena, mut session, mut registry){
+    const StringView replacementLabel = "replacement label after unwind";
+    b8 reentryRejected = false;
+    native(mut testArena, mut session, mut registry, in replacementLabel, mut reentryRejected){
         AString<Core::Telemetry::TelemetryArena> label("first borrowed label", testArena.arena);
         CacheLifetimeContributor contributor(registry, session, label);
         registry.registerContributor(contributor);
         EXPECT_THROW(EXPECT_TRUE(registry.record(session)), ContributionFailure);
         EXPECT_EQ(session.eventCount(), 0u);
 
-        label.assign("replacement label after unwind");
+        label.assign(replacementLabel.data(), replacementLabel.size());
         ASSERT_TRUE(registry.record(session));
-        EXPECT_TRUE(contributor.m_reentryRejected);
-        const auto* const event = session.view().eventAt(0u);
-        ASSERT_NE(event, nullptr);
-        const auto parsed = Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, event->payload.data(), event->payload.size());
-        ASSERT_TRUE(parsed.has_value());
-        ASSERT_EQ(parsed.value().nodes.size(), 1u);
-        EXPECT_EQ(AStringView(parsed.value().nodes[0u].label), AStringView(label));
+        reentryRejected = contributor.m_reentryRejected;
     }
+    EXPECT_TRUE(reentryRejected);
+    const Expected<FrameGraphPayload> parsed = ParseFrameGraphEventAt(testArena.arena, testArena.scratchArena, session.view(), 0u);
+    ASSERT_TRUE(parsed.has_value());
+    ASSERT_EQ(parsed.value().nodes.size(), 1u);
+    EXPECT_EQ(parsed.value().nodes[0u].label, replacementLabel);
 }
 
 void VerifyTelemetry_PendingNameEdgesChooseFirstDuplicateAndOmitMissingTargets(){
@@ -787,22 +792,16 @@ void VerifyTelemetry_PendingNameEdgesChooseFirstDuplicateAndOmitMissingTargets()
 
     FrameGraphRegistry registry = FrameGraphRegistry(testArena.arena);
     PendingNameFrameGraphContributor contributor = PendingNameFrameGraphContributor();
-    native(mut registry, mut contributor){
-        registry.registerContributor(contributor);
-    }
+    RegisterTestContributor(registry, contributor);
 
-    EXPECT_TRUE(registry.record(session));
+    EXPECT_TRUE(RecordRegistryFrameGraph(registry, session));
     EXPECT_EQ(session.eventCount(), 1u);
-    native(mut testArena, in session){
-        const EventRecord* event = session.view().eventAt(0u);
-        ASSERT_NE(event, nullptr);
-        const auto parsed = Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, event->payload.data(), event->payload.size());
-        ASSERT_TRUE(parsed.has_value());
-        ASSERT_EQ(parsed.value().nodes.size(), 3u);
-        ASSERT_EQ(parsed.value().edges.size(), 1u);
-        EXPECT_EQ(parsed.value().edges[0u].fromNodeIndex, 0u);
-        EXPECT_EQ(parsed.value().edges[0u].toNodeIndex, 1u);
-    }
+    const Expected<FrameGraphPayload> parsed = ParseFrameGraphEventAt(testArena.arena, testArena.scratchArena, session.view(), 0u);
+    ASSERT_TRUE(parsed.has_value());
+    ASSERT_EQ(parsed.value().nodes.size(), 3u);
+    ASSERT_EQ(parsed.value().edges.size(), 1u);
+    EXPECT_EQ(parsed.value().edges[0u].fromNodeIndex, 0u);
+    EXPECT_EQ(parsed.value().edges[0u].toNodeIndex, 1u);
 }
 
 void VerifyTelemetry_PhysicalQueueBuilderOwnsSourceAndRejectsDuplicateOrExcessCounts(){
@@ -844,25 +843,22 @@ void VerifyTelemetry_PhysicalQueueBuilderOwnsSourceAndRejectsDuplicateOrExcessCo
 void VerifyFrameGraphReport_GroupsSparseOwnersWithoutLeakingStatisticsIntoAdjacentNodes(){
     TelemetryTestArena testArena = TelemetryTestArena();
     ReportFixture fixture = ReportFixture(testArena.arena);
-    fixture.addUnmeasuredNode();
-    fixture.addOwner(3u, 1u);
-    fixture.addUnmeasuredNode();
-    fixture.addOwner(0u, 5u);
-    fixture.addUnmeasuredNode();
-    fixture.addOwner(2u, 7u, false);
-    fixture.addUnmeasuredNode();
+    AddReportUnmeasuredNode(fixture);
+    AddReportOwner(fixture, 3u, 1u);
+    AddReportUnmeasuredNode(fixture);
+    AddReportOwner(fixture, 0u, 5u);
+    AddReportUnmeasuredNode(fixture);
+    AddReportOwner(fixture, 2u, 7u, false);
+    AddReportUnmeasuredNode(fixture);
+
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
     recorder.setCaptureOptions(CaptureAll());
-    native(mut recorder, mut testArena, in fixture){
-        ASSERT_TRUE(RecordFrameGraph(recorder, testArena.scratchArena, 918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, 19u));
-    }
+    ASSERT_TRUE(RecordTestFrameGraph(recorder, testArena.scratchArena, 918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, 19u));
+
     ScratchArena scratchArena = ScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
-    TelemetryReport report = TelemetryReport(testArena.arena);
-    native(in recorder, mut testArena, mut scratchArena, mut report){
-        auto reportResult = BuildTelemetryReport(recorder.view(), testArena.arena, scratchArena);
-        ASSERT_TRUE(reportResult.has_value());
-        report = Move(reportResult.value());
-    }
+    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, scratchArena);
+    ASSERT_TRUE(reportResult.has_value());
+    in TelemetryReport report = reportResult.value();
     ASSERT_EQ(report.summary.parseFailureCount, 0u);
     ASSERT_EQ(report.summary.frameGraphNodeCount, 7u);
     const StringView json = ReportJsonView(report);
@@ -903,94 +899,91 @@ void VerifyFrameGraphReport_GroupsSparseOwnersWithoutLeakingStatisticsIntoAdjace
 void VerifyFrameGraphReport_RestartsOwnerRangesForEveryCaptureAndReportRebuild(){
     TelemetryTestArena testArena = TelemetryTestArena();
     ReportFixture first = ReportFixture(testArena.arena);
-    first.addOwner(3u, 1u);
-    first.addUnmeasuredNode();
+    AddReportOwner(first, 3u, 1u);
+    AddReportUnmeasuredNode(first);
     ReportFixture second = ReportFixture(testArena.arena);
-    second.addUnmeasuredNode();
-    second.addOwner(2u, 7u);
+    AddReportUnmeasuredNode(second);
+    AddReportOwner(second, 2u, 7u);
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
     recorder.setCaptureOptions(CaptureAll());
     ScratchArena scratchArena = ScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
-    TelemetryReport report = TelemetryReport(testArena.arena);
-    native(mut recorder, mut testArena, mut scratchArena, in first, in second, mut report){
-        ASSERT_TRUE(RecordFrameGraph(recorder, testArena.scratchArena, 918u, first.nodes, first.edges, first.queues, first.packets, 19u));
-        ASSERT_TRUE(RecordFrameGraph(recorder, testArena.scratchArena, 919u, second.nodes, second.edges, second.queues, second.packets, 20u));
-        auto reportResult3 = BuildTelemetryReport(recorder.view(), testArena.arena, scratchArena);
-        ASSERT_TRUE(reportResult3.has_value());
-        report = Move(reportResult3.value());
-    }
-    ASSERT_EQ(report.summary.frameGraphFrameCount, 2u);
-    EXPECT_EQ(CountText(ReportJsonView(report), s_PacketIndex), 5u);
-    EXPECT_EQ(CountText(ReportGraphView(report), "runtime_physical_queue_count=2"), 2u);
-    EXPECT_EQ(CountText(ReportGraphView(report), s_RuntimePacketSubmissionCount3), 1u);
-    EXPECT_EQ(CountText(ReportGraphView(report), s_RuntimePacketSubmissionCount2), 1u);
+
+    ASSERT_TRUE(RecordTestFrameGraph(recorder, testArena.scratchArena, 918u, first.nodes, first.edges, first.queues, first.packets, 19u));
+    ASSERT_TRUE(RecordTestFrameGraph(recorder, testArena.scratchArena, 919u, second.nodes, second.edges, second.queues, second.packets, 20u));
+    const Expected<TelemetryReport> reportResult3 = BuildTestTelemetryReport(recorder.view(), testArena.arena, scratchArena);
+    ASSERT_TRUE(reportResult3.has_value());
+    in TelemetryReport report3 = reportResult3.value();
+    ASSERT_EQ(report3.summary.frameGraphFrameCount, 2u);
+    EXPECT_EQ(CountText(ReportJsonView(report3), s_PacketIndex), 5u);
+    EXPECT_EQ(CountText(ReportGraphView(report3), "runtime_physical_queue_count=2"), 2u);
+    EXPECT_EQ(CountText(ReportGraphView(report3), s_RuntimePacketSubmissionCount3), 1u);
+    EXPECT_EQ(CountText(ReportGraphView(report3), s_RuntimePacketSubmissionCount2), 1u);
 
     recorder.clear();
-    native(mut recorder, mut testArena, mut scratchArena, in second, mut report){
-        ASSERT_TRUE(RecordFrameGraph(recorder, testArena.scratchArena, 920u, second.nodes, second.edges, second.queues, second.packets, 21u));
-        auto reportResult4 = BuildTelemetryReport(recorder.view(), testArena.arena, scratchArena);
-        ASSERT_TRUE(reportResult4.has_value());
-        report = Move(reportResult4.value());
-    }
-    ASSERT_EQ(report.summary.frameGraphFrameCount, 1u);
-    EXPECT_EQ(CountText(ReportJsonView(report), s_PacketIndex), 2u);
-    EXPECT_EQ(CountText(ReportGraphView(report), s_RuntimePacketSubmissionCount2), 1u);
-    EXPECT_FALSE(ReportGraphView(report).contains(s_RuntimePacketSubmissionCount3));
+    ASSERT_TRUE(RecordTestFrameGraph(recorder, testArena.scratchArena, 920u, second.nodes, second.edges, second.queues, second.packets, 21u));
+    const Expected<TelemetryReport> reportResult4 = BuildTestTelemetryReport(recorder.view(), testArena.arena, scratchArena);
+    ASSERT_TRUE(reportResult4.has_value());
+    in TelemetryReport report4 = reportResult4.value();
+    ASSERT_EQ(report4.summary.frameGraphFrameCount, 1u);
+    EXPECT_EQ(CountText(ReportJsonView(report4), s_PacketIndex), 2u);
+    EXPECT_EQ(CountText(ReportGraphView(report4), s_RuntimePacketSubmissionCount2), 1u);
+    EXPECT_FALSE(ReportGraphView(report4).contains(s_RuntimePacketSubmissionCount3));
 }
 
 void VerifyFrameGraphReport_RejectsMalformedOwnerTablesBeforeReportingAndRetainsTheNextValidCapture(){
     TelemetryTestArena testArena = TelemetryTestArena();
     ReportFixture fixture = ReportFixture(testArena.arena);
-    fixture.addUnmeasuredNode();
-    fixture.addOwner(3u, 1u);
+    AddReportUnmeasuredNode(fixture);
+    AddReportOwner(fixture, 3u, 1u);
     TelemetryBytes original = TelemetryBytes(testArena.arena);
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
     recorder.setCaptureOptions(CaptureAll());
     ScratchArena scratchArena = ScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
-    TelemetryReport report = TelemetryReport(testArena.arena);
-    native(mut testArena, in fixture, mut original, mut recorder, mut scratchArena, mut report){
-        ASSERT_TRUE(BuildFrameGraphPayload(918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, testArena.scratchArena, original));
-        Core::Telemetry::EncodedFrameGraphPayloadHeader header;
-        NWB_MEMCPY(&header, sizeof(header), original.data(), sizeof(header));
-        ASSERT_EQ(header.queueAssignmentCount, 0u);
-        ASSERT_EQ(header.compiledTaskCount, 0u);
-        ASSERT_EQ(header.edgeCount, 0u);
-        ASSERT_EQ(header.runtimeStatisticsCount, 1u);
-        ASSERT_EQ(header.physicalQueueRuntimeStatisticsCount, 2u);
-        ASSERT_EQ(header.packetSubmissionStatisticsCount, 3u);
-        const usize queueOffset = sizeof(header) + header.nodeCount * sizeof(Core::Telemetry::EncodedFrameGraphNode) + sizeof(Core::Telemetry::EncodedFrameGraphRuntimeStatistics);
-        const usize packetOffset = queueOffset + 2u * sizeof(Core::Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics);
-        ASSERT_LE(packetOffset + 3u * sizeof(Core::Telemetry::EncodedFrameGraphPacketSubmissionStatistics), original.size());
 
-        TelemetryBytes malformed(original);
-        Core::Telemetry::EncodedFrameGraphPacketSubmissionStatistics packet;
-        NWB_MEMCPY(&packet, sizeof(packet), malformed.data() + packetOffset, sizeof(packet));
-        packet.ownerNodeIndex = header.nodeCount;
-        NWB_MEMCPY(malformed.data() + packetOffset, malformed.size() - packetOffset, &packet, sizeof(packet));
-        ASSERT_TRUE(recorder.recordBinary(EventKind::FrameGraphFrame, 918u, malformed.data(), malformed.size(), 1u));
+    ASSERT_TRUE(BuildTestFrameGraphPayload(918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, testArena.scratchArena, original));
+    EncodedFrameGraphPayloadHeader header = EncodedFrameGraphPayloadHeader();
+    ReadTelemetryPod(original, 0u, header);
+    ASSERT_EQ(header.queueAssignmentCount, 0u);
+    ASSERT_EQ(header.compiledTaskCount, 0u);
+    ASSERT_EQ(header.edgeCount, 0u);
+    ASSERT_EQ(header.runtimeStatisticsCount, 1u);
+    ASSERT_EQ(header.physicalQueueRuntimeStatisticsCount, 2u);
+    ASSERT_EQ(header.packetSubmissionStatisticsCount, 3u);
+    const usize queueOffset = s_EncodedFrameGraphPayloadHeaderByteSize
+        + cast<usize>(header.nodeCount) * s_EncodedFrameGraphNodeByteSize
+        + s_EncodedFrameGraphRuntimeStatisticsByteSize;
+    const usize packetOffset = queueOffset + 2u * s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsByteSize;
+    ASSERT_LE(packetOffset + 3u * s_EncodedFrameGraphPacketSubmissionStatisticsByteSize, original.size());
 
-        malformed = original;
-        Core::Telemetry::EncodedFrameGraphPacketSubmissionStatistics nextPacket;
-        NWB_MEMCPY(&packet, sizeof(packet), original.data() + packetOffset, sizeof(packet));
-        NWB_MEMCPY(&nextPacket, sizeof(nextPacket), original.data() + packetOffset + sizeof(packet), sizeof(nextPacket));
-        NWB_MEMCPY(malformed.data() + packetOffset, malformed.size() - packetOffset, &nextPacket, sizeof(nextPacket));
-        NWB_MEMCPY(malformed.data() + packetOffset + sizeof(packet), sizeof(packet), &packet, sizeof(packet));
-        ASSERT_TRUE(recorder.recordBinary(EventKind::FrameGraphFrame, 918u, malformed.data(), malformed.size(), 2u));
+    TelemetryBytes malformed = TelemetryBytes(testArena.arena);
+    CopyTelemetryBytes(original, malformed);
+    EncodedFrameGraphPacketSubmissionStatistics packet = EncodedFrameGraphPacketSubmissionStatistics();
+    ReadTelemetryPod(malformed, packetOffset, packet);
+    packet.ownerNodeIndex = header.nodeCount;
+    WriteTelemetryPod(malformed, packetOffset, packet);
+    ASSERT_TRUE(RecordBinaryBytes(recorder, EventKind::FrameGraphFrame, 918u, malformed, 1u));
 
-        malformed = original;
-        Core::Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics queue;
-        Core::Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics nextQueue;
-        NWB_MEMCPY(&queue, sizeof(queue), original.data() + queueOffset, sizeof(queue));
-        NWB_MEMCPY(&nextQueue, sizeof(nextQueue), original.data() + queueOffset + sizeof(queue), sizeof(nextQueue));
-        NWB_MEMCPY(malformed.data() + queueOffset, malformed.size() - queueOffset, &nextQueue, sizeof(nextQueue));
-        NWB_MEMCPY(malformed.data() + queueOffset + sizeof(queue), sizeof(queue), &queue, sizeof(queue));
-        ASSERT_TRUE(recorder.recordBinary(EventKind::FrameGraphFrame, 918u, malformed.data(), malformed.size(), 3u));
-        ASSERT_TRUE(recorder.recordBinary(EventKind::FrameGraphFrame, 918u, original.data(), original.size(), 4u));
+    CopyTelemetryBytes(original, malformed);
+    EncodedFrameGraphPacketSubmissionStatistics nextPacket = EncodedFrameGraphPacketSubmissionStatistics();
+    ReadTelemetryPod(original, packetOffset, packet);
+    ReadTelemetryPod(original, packetOffset + s_EncodedFrameGraphPacketSubmissionStatisticsByteSize, nextPacket);
+    WriteTelemetryPod(malformed, packetOffset, nextPacket);
+    WriteTelemetryPod(malformed, packetOffset + s_EncodedFrameGraphPacketSubmissionStatisticsByteSize, packet);
+    ASSERT_TRUE(RecordBinaryBytes(recorder, EventKind::FrameGraphFrame, 918u, malformed, 2u));
 
-        auto reportResult5 = BuildTelemetryReport(recorder.view(), testArena.arena, scratchArena);
-        ASSERT_TRUE(reportResult5.has_value());
-        report = Move(reportResult5.value());
-    }
+    CopyTelemetryBytes(original, malformed);
+    EncodedFrameGraphPhysicalQueueRuntimeStatistics queue = EncodedFrameGraphPhysicalQueueRuntimeStatistics();
+    EncodedFrameGraphPhysicalQueueRuntimeStatistics nextQueue = EncodedFrameGraphPhysicalQueueRuntimeStatistics();
+    ReadTelemetryPod(original, queueOffset, queue);
+    ReadTelemetryPod(original, queueOffset + s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsByteSize, nextQueue);
+    WriteTelemetryPod(malformed, queueOffset, nextQueue);
+    WriteTelemetryPod(malformed, queueOffset + s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsByteSize, queue);
+    ASSERT_TRUE(RecordBinaryBytes(recorder, EventKind::FrameGraphFrame, 918u, malformed, 3u));
+    ASSERT_TRUE(RecordBinaryBytes(recorder, EventKind::FrameGraphFrame, 918u, original, 4u));
+
+    const Expected<TelemetryReport> reportResult5 = BuildTestTelemetryReport(recorder.view(), testArena.arena, scratchArena);
+    ASSERT_TRUE(reportResult5.has_value());
+    in TelemetryReport report = reportResult5.value();
     EXPECT_EQ(report.summary.eventCount, 4u);
     EXPECT_EQ(report.summary.parseFailureCount, 3u);
     EXPECT_EQ(report.summary.frameGraphFrameCount, 1u);
@@ -1006,104 +999,96 @@ void VerifyTelemetry_FrameGraphRuntimeStatisticsPayloadRejectsMalformedRecords()
     FrameGraphEdgeDescs edges = FrameGraphEdgeDescs(testArena.arena);
     BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
-    native(mut testArena, in nodes, in edges, mut payload){
-        const usize runtimeStatisticsOffset = sizeof(Core::Telemetry::EncodedFrameGraphPayloadHeader)
-            + sizeof(Core::Telemetry::EncodedFrameGraphNode) * nodes.size()
-            + sizeof(Core::Telemetry::EncodedFrameGraphEdge) * edges.size()
-            + sizeof(Core::Telemetry::EncodedFrameGraphQueueAssignment) * 2u
-            + sizeof(Core::Telemetry::EncodedFrameGraphCompiledTask) * 2u;
-        Core::Telemetry::EncodedFrameGraphRuntimeStatistics first;
-        Core::Telemetry::EncodedFrameGraphRuntimeStatistics second;
-        const auto loadRuntimeStatistics = [&]()->b8{
-            if(!BuildFrameGraphPayload(911u, nodes, edges, testArena.scratchArena, payload))
-                return false;
-            NWB_MEMCPY(&first, sizeof(first), payload.data() + runtimeStatisticsOffset, sizeof(first));
-            NWB_MEMCPY(&second, sizeof(second), payload.data() + runtimeStatisticsOffset + sizeof(first), sizeof(second));
-            return true;
-        };
 
-        ASSERT_TRUE(loadRuntimeStatistics());
-        second.nodeIndex = first.nodeIndex;
-        NWB_MEMCPY(payload.data() + runtimeStatisticsOffset + sizeof(first), payload.size() - runtimeStatisticsOffset - sizeof(first), &second, sizeof(second));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
+    const usize runtimeStatisticsOffset = s_EncodedFrameGraphPayloadHeaderByteSize
+        + s_EncodedFrameGraphNodeByteSize * nodes.size()
+        + s_EncodedFrameGraphEdgeByteSize * edges.size()
+        + s_EncodedFrameGraphQueueAssignmentByteSize * 2u
+        + s_EncodedFrameGraphCompiledTaskByteSize * 2u;
+    EncodedFrameGraphRuntimeStatistics first = EncodedFrameGraphRuntimeStatistics();
+    EncodedFrameGraphRuntimeStatistics second = EncodedFrameGraphRuntimeStatistics();
 
-        ASSERT_TRUE(loadRuntimeStatistics());
-        first.nodeIndex = 2u;
-        second.nodeIndex = 0u;
-        NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
-        NWB_MEMCPY(payload.data() + runtimeStatisticsOffset + sizeof(first), payload.size() - runtimeStatisticsOffset - sizeof(first), &second, sizeof(second));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
+    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena.scratchArena, payload, first, second));
+    second.nodeIndex = first.nodeIndex;
+    WriteTelemetryPod(payload, runtimeStatisticsOffset + s_EncodedFrameGraphRuntimeStatisticsByteSize, second);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-        ASSERT_TRUE(loadRuntimeStatistics());
-        first.nodeIndex = 1u;
-        NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
+    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena.scratchArena, payload, first, second));
+    first.nodeIndex = 2u;
+    second.nodeIndex = 0u;
+    WriteTelemetryPod(payload, runtimeStatisticsOffset, first);
+    WriteTelemetryPod(payload, runtimeStatisticsOffset + s_EncodedFrameGraphRuntimeStatisticsByteSize, second);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-        ASSERT_TRUE(loadRuntimeStatistics());
-        first.nodeIndex = 3u;
-        NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
+    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena.scratchArena, payload, first, second));
+    first.nodeIndex = 1u;
+    WriteTelemetryPod(payload, runtimeStatisticsOffset, first);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-        ASSERT_TRUE(loadRuntimeStatistics());
-        first.reserved = 1u;
-        NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
+    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena.scratchArena, payload, first, second));
+    first.nodeIndex = 3u;
+    WriteTelemetryPod(payload, runtimeStatisticsOffset, first);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-        ASSERT_TRUE(loadRuntimeStatistics());
-        first.graphGeneration = 0u;
-        NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
+    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena.scratchArena, payload, first, second));
+    first.reserved = 1u;
+    WriteTelemetryPod(payload, runtimeStatisticsOffset, first);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-        ASSERT_TRUE(loadRuntimeStatistics());
-        first.planGeneration = 0u;
-        NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
+    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena.scratchArena, payload, first, second));
+    first.graphGeneration = 0u;
+    WriteTelemetryPod(payload, runtimeStatisticsOffset, first);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-        ASSERT_TRUE(loadRuntimeStatistics());
-        first.recordingAttemptGeneration = 0u;
-        NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
+    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena.scratchArena, payload, first, second));
+    first.planGeneration = 0u;
+    WriteTelemetryPod(payload, runtimeStatisticsOffset, first);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-        ASSERT_TRUE(loadRuntimeStatistics());
-        first.deviceGeneration = 0u;
-        NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
+    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena.scratchArena, payload, first, second));
+    first.recordingAttemptGeneration = 0u;
+    WriteTelemetryPod(payload, runtimeStatisticsOffset, first);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-        ASSERT_TRUE(loadRuntimeStatistics());
-        first.compile.declarationSeconds = -1.0;
-        NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
+    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena.scratchArena, payload, first, second));
+    first.deviceGeneration = 0u;
+    WriteTelemetryPod(payload, runtimeStatisticsOffset, first);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-        ASSERT_TRUE(loadRuntimeStatistics());
-        first.recording.recordingSeconds = Limit<f64>::s_Infinity;
-        NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
+    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena.scratchArena, payload, first, second));
+    first.compile.declarationSeconds = -1.0;
+    WriteTelemetryPod(payload, runtimeStatisticsOffset, first);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-        ASSERT_TRUE(loadRuntimeStatistics());
-        first.submission.submissionSeconds = Limit<f64>::s_QuietNaN;
-        NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
+    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena.scratchArena, payload, first, second));
+    first.recording.recordingSeconds = bit_cast<f64>(0x7FF0000000000000uLL);
+    WriteTelemetryPod(payload, runtimeStatisticsOffset, first);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-        for(usize mutationIndex = 0u; mutationIndex < LengthOf(TelemetryScalingCasesDetail::s_RuntimeStatisticsCountMutations); ++mutationIndex){
-            ScopedTestTrace trace(mutationIndex);
-            ASSERT_TRUE(loadRuntimeStatistics());
-            FrameGraphRuntimeStatistics malformed = MakeFrameGraphRuntimeStatistics();
-            TelemetryScalingCasesDetail::s_RuntimeStatisticsCountMutations[mutationIndex].get()(malformed);
-            first = EncodeTestFrameGraphRuntimeStatistics(malformed, first.nodeIndex, first.reserved);
-            NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
-            EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
-        }
+    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena.scratchArena, payload, first, second));
+    first.submission.submissionSeconds = bit_cast<f64>(0x7FF8000000000000uLL);
+    WriteTelemetryPod(payload, runtimeStatisticsOffset, first);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
 
-        ASSERT_TRUE(loadRuntimeStatistics());
-        Core::Telemetry::EncodedFrameGraphPayloadHeader header;
-        NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
-        header.runtimeStatisticsCount = 4u;
-        NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()).has_value());
-
-        ASSERT_TRUE(loadRuntimeStatistics());
-        EXPECT_FALSE(Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size() - 1u).has_value());
+    for(usize mutationIndex = 0u; mutationIndex < s_RuntimeStatisticsCountMutationCount; ++mutationIndex){
+        ScopedTestTrace trace = ScopedTestTrace(mutationIndex);
+        ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena.scratchArena, payload, first, second));
+        FrameGraphRuntimeStatistics malformed = MakeFrameGraphRuntimeStatistics();
+        ApplyRuntimeStatisticsCountMutation(malformed, mutationIndex);
+        first = EncodeTestFrameGraphRuntimeStatistics(malformed, first.nodeIndex, first.reserved);
+        WriteTelemetryPod(payload, runtimeStatisticsOffset, first);
+        EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
     }
+
+    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena.scratchArena, payload, first, second));
+    EncodedFrameGraphPayloadHeader header = EncodedFrameGraphPayloadHeader();
+    ReadTelemetryPod(payload, 0u, header);
+    header.runtimeStatisticsCount = 4u;
+    WriteTelemetryPod(payload, 0u, header);
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload).has_value());
+
+    ASSERT_TRUE(ReloadRuntimeStatisticsPayload(nodes, edges, runtimeStatisticsOffset, testArena.scratchArena, payload, first, second));
+    EXPECT_FALSE(ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload, payload.size() - 1u).has_value());
 }
 
 void VerifyTelemetry_FrameGraphPayloadRejectsInvalidInput(){
@@ -1114,54 +1099,53 @@ void VerifyTelemetry_FrameGraphPayloadRejectsInvalidInput(){
     BuildTestFrameGraph(testArena.arena, nodes, edges);
 
     nodes[0u].kind = FrameGraphNodeKind::Unknown;
-    EXPECT_FALSE(BuildFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 
     BuildTestFrameGraph(testArena.arena, nodes, edges);
-    native(mut nodes){
-        nodes[0u].label = AStringView("bad\0label", 9u);
-    }
-    EXPECT_FALSE(BuildFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
+    String embeddedNulLabel = String("bad");
+    embeddedNulLabel.resize(4u);
+    embeddedNulLabel.append("label");
+    nodes[0u].label = StringView(embeddedNulLabel);
+    EXPECT_FALSE(BuildTestFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 
     BuildTestFrameGraph(testArena.arena, nodes, edges);
     edges[0u].toNodeIndex = 99u;
-    EXPECT_FALSE(BuildFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 
     BuildTestAssignedFrameGraph(testArena.arena, nodes, edges);
     nodes[0u].queueAssignment.acceptance = FrameGraphQueueAssignmentAcceptance::First;
-    EXPECT_FALSE(BuildFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 
     BuildTestAssignedFrameGraph(testArena.arena, nodes, edges);
     nodes[1u].queueAssignment = MakeChangedFrameGraphQueueAssignment();
-    EXPECT_FALSE(BuildFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 
     BuildTestCompiledFrameGraph(testArena.arena, nodes, edges);
     nodes[1u].compiledTask = MakeFrameGraphCompiledTask(41u, 7u, FrameGraphTaskPacketizationDecision::FirstTask);
-    EXPECT_FALSE(BuildFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 
     BuildTestFrameGraph(testArena.arena, nodes, edges);
     nodes[1u].runtimeStatistics = MakeFrameGraphRuntimeStatistics();
-    EXPECT_FALSE(BuildFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 
     BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
     nodes[0u].runtimeStatistics.graphGeneration = 0u;
-    EXPECT_FALSE(BuildFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 
     BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
     nodes[0u].runtimeStatistics.compile.totalSeconds = -1.0;
-    EXPECT_FALSE(BuildFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 
     BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
     nodes[0u].runtimeStatistics.recording.recordingElapsedSeconds = bit_cast<f64>(0x7FF8000000000000uLL);
-    EXPECT_FALSE(BuildFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 
-    native(mut testArena, mut nodes, mut edges, mut payload){
-        for(usize mutationIndex = 0u; mutationIndex < LengthOf(TelemetryScalingCasesDetail::s_RuntimeStatisticsCountMutations); ++mutationIndex){
-            ScopedTestTrace trace(mutationIndex);
-            BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
-            TelemetryScalingCasesDetail::s_RuntimeStatisticsCountMutations[mutationIndex].get()(nodes[0u].runtimeStatistics);
-            EXPECT_FALSE(IsValidFrameGraphRuntimeStatistics(nodes[0u].runtimeStatistics));
-            EXPECT_FALSE(BuildFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
-        }
+    for(usize mutationIndex = 0u; mutationIndex < s_RuntimeStatisticsCountMutationCount; ++mutationIndex){
+        ScopedTestTrace trace = ScopedTestTrace(mutationIndex);
+        BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
+        ApplyRuntimeStatisticsCountMutation(nodes[0u].runtimeStatistics, mutationIndex);
+        EXPECT_FALSE(IsValidFrameGraphRuntimeStatistics(nodes[0u].runtimeStatistics));
+        EXPECT_FALSE(BuildTestFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
     }
 }
 
@@ -1199,22 +1183,26 @@ void VerifyTelemetry_FrameGraphDurationTailsRejectInvalidValuesAndPreserveSigned
 }
 
 void VerifyFrameGraphSnapshotValidation_FullyAcceptedCountsCannotHideMissingTasksOrPackets(){
-    SnapshotValidationFixture fixture = SnapshotValidationFixture();
-    ASSERT_TRUE(fixture.valid());
+    TelemetryTestArena testArena = TelemetryTestArena();
+    SnapshotValidationFixture fixture = SnapshotValidationFixture(testArena.arena);
+    SeedSnapshotValidationFixture(fixture);
+    ASSERT_TRUE(IsSnapshotValidationFixtureValid(fixture));
     fixture.payload.nodes.pop_back();
     --fixture.runtime.compile.taskCount;
     --fixture.runtime.compile.packetCount;
     fixture.runtime.submission.rejectedTaskCount = 0u;
     fixture.runtime.submission.rejectedPacketCount = 0u;
     fixture.payload.nodes[2u].compiledTask.present = false;
-    EXPECT_FALSE(fixture.valid());
+    EXPECT_FALSE(IsSnapshotValidationFixtureValid(fixture));
     fixture.payload.nodes[2u].compiledTask.present = true;
     fixture.payload.packetSubmissionStatistics.pop_back();
-    EXPECT_FALSE(fixture.valid());
+    EXPECT_FALSE(IsSnapshotValidationFixtureValid(fixture));
 }
 
 void VerifyFrameGraphSnapshotValidation_FullyAcceptedCountsStillRejectExecutedRecovery(){
-    SnapshotValidationFixture fixture = SnapshotValidationFixture();
+    TelemetryTestArena testArena = TelemetryTestArena();
+    SnapshotValidationFixture fixture = SnapshotValidationFixture(testArena.arena);
+    SeedSnapshotValidationFixture(fixture);
     fixture.runtime.submission.acceptedTaskCount = fixture.runtime.compile.taskCount;
     fixture.runtime.submission.acceptedPacketCount = fixture.runtime.compile.packetCount;
     fixture.runtime.submission.rejectedTaskCount = 0u;
@@ -1228,65 +1216,77 @@ void VerifyFrameGraphSnapshotValidation_FullyAcceptedCountsStillRejectExecutedRe
     recovery.queue.deviceGeneration = 1u;
     recovery.recoverySubmission = true;
     fixture.payload.packetSubmissionStatistics.push_back(recovery);
-    EXPECT_FALSE(fixture.valid());
+    EXPECT_FALSE(IsSnapshotValidationFixtureValid(fixture));
     fixture.runtime.submission.recoverySubmissionCount = 0u;
-    EXPECT_FALSE(fixture.valid());
+    EXPECT_FALSE(IsSnapshotValidationFixtureValid(fixture));
     fixture.payload.packetSubmissionStatistics[2u].recoverySubmission = false;
-    EXPECT_FALSE(fixture.valid());
+    EXPECT_FALSE(IsSnapshotValidationFixtureValid(fixture));
 }
 
 void VerifyFrameGraphSnapshotValidation_RejectsNativeFailureOrExecutedRecovery(){
-    SnapshotValidationFixture fixture = SnapshotValidationFixture();
+    TelemetryTestArena testArena = TelemetryTestArena();
+    SnapshotValidationFixture fixture = SnapshotValidationFixture(testArena.arena);
+    SeedSnapshotValidationFixture(fixture);
     fixture.runtime.submission.rejectedSubmissionCount = 1u;
-    EXPECT_FALSE(fixture.valid());
+    EXPECT_FALSE(IsSnapshotValidationFixtureValid(fixture));
     fixture.runtime.submission.rejectedSubmissionCount = 0u;
     fixture.runtime.submission.recoverySubmissionCount = 1u;
-    EXPECT_FALSE(fixture.valid());
+    EXPECT_FALSE(IsSnapshotValidationFixtureValid(fixture));
 }
 
 void VerifyFrameGraphSnapshotValidation_RejectsAMissingNormalTaskOrAcceptedRecoveryTask(){
-    SnapshotValidationFixture fixture = SnapshotValidationFixture();
+    TelemetryTestArena testArena = TelemetryTestArena();
+    SnapshotValidationFixture fixture = SnapshotValidationFixture(testArena.arena);
+    SeedSnapshotValidationFixture(fixture);
     fixture.payload.nodes[3u].name = s_TelemetryCaseRenderNormalWork;
-    EXPECT_FALSE(fixture.valid());
+    EXPECT_FALSE(IsSnapshotValidationFixtureValid(fixture));
     fixture.payload.nodes[3u].name = s_RenderFrameRecovery;
     fixture.payload.packetSubmissionStatistics[1u].packetIndex = 2u;
-    EXPECT_FALSE(fixture.valid());
+    EXPECT_FALSE(IsSnapshotValidationFixtureValid(fixture));
 }
 
 void VerifyFrameGraphSnapshotValidation_RejectsRecoverySharingItsUnsubmittedPacket(){
-    SnapshotValidationFixture fixture = SnapshotValidationFixture();
+    TelemetryTestArena testArena = TelemetryTestArena();
+    SnapshotValidationFixture fixture = SnapshotValidationFixture(testArena.arena);
+    SeedSnapshotValidationFixture(fixture);
     fixture.payload.nodes[2u].compiledTask.packetIndex = 2u;
-    EXPECT_FALSE(fixture.valid());
+    EXPECT_FALSE(IsSnapshotValidationFixtureValid(fixture));
 }
 
 void VerifyFrameGraphSnapshotValidation_RejectsAdditionalDiscardsOrIncompleteAcceptanceCounts(){
-    SnapshotValidationFixture fixture = SnapshotValidationFixture();
+    TelemetryTestArena testArena = TelemetryTestArena();
+    SnapshotValidationFixture fixture = SnapshotValidationFixture(testArena.arena);
+    SeedSnapshotValidationFixture(fixture);
     fixture.runtime.submission.rejectedPacketCount = 2u;
-    EXPECT_FALSE(fixture.valid());
+    EXPECT_FALSE(IsSnapshotValidationFixtureValid(fixture));
     fixture.runtime.submission.rejectedPacketCount = 1u;
     fixture.runtime.submission.rejectedTaskCount = 2u;
-    EXPECT_FALSE(fixture.valid());
+    EXPECT_FALSE(IsSnapshotValidationFixtureValid(fixture));
     fixture.runtime.submission.rejectedTaskCount = 1u;
     --fixture.runtime.submission.acceptedTaskCount;
-    EXPECT_FALSE(fixture.valid());
+    EXPECT_FALSE(IsSnapshotValidationFixtureValid(fixture));
 }
 
 void VerifyFrameGraphSnapshotValidation_RejectsDuplicatePacketRowsAndMismatchedTaskCounts(){
-    SnapshotValidationFixture fixture = SnapshotValidationFixture();
+    TelemetryTestArena testArena = TelemetryTestArena();
+    SnapshotValidationFixture fixture = SnapshotValidationFixture(testArena.arena);
+    SeedSnapshotValidationFixture(fixture);
     fixture.payload.packetSubmissionStatistics[1u].packetIndex = 0u;
-    EXPECT_FALSE(fixture.valid());
+    EXPECT_FALSE(IsSnapshotValidationFixtureValid(fixture));
     fixture.payload.packetSubmissionStatistics[1u].packetIndex = 1u;
     fixture.payload.packetSubmissionStatistics[0u].taskCount = 1u;
-    EXPECT_FALSE(fixture.valid());
+    EXPECT_FALSE(IsSnapshotValidationFixtureValid(fixture));
 }
 
 void VerifyFrameGraphSnapshotValidation_RejectsGenerationMismatchAndMissingCompiledTask(){
-    SnapshotValidationFixture fixture = SnapshotValidationFixture();
+    TelemetryTestArena testArena = TelemetryTestArena();
+    SnapshotValidationFixture fixture = SnapshotValidationFixture(testArena.arena);
+    SeedSnapshotValidationFixture(fixture);
     ++fixture.payload.nodes[0u].compiledTask.planGeneration;
-    EXPECT_FALSE(fixture.valid());
+    EXPECT_FALSE(IsSnapshotValidationFixtureValid(fixture));
     --fixture.payload.nodes[0u].compiledTask.planGeneration;
     fixture.payload.nodes[0u].compiledTask.present = false;
-    EXPECT_FALSE(fixture.valid());
+    EXPECT_FALSE(IsSnapshotValidationFixtureValid(fixture));
 }
 
 void VerifyTelemetry_PacketStatisticsDuplicateRejectionPreservesSeededTables(){
@@ -1320,12 +1320,11 @@ void VerifyTelemetry_PacketStatisticsPreserveOptionalQueueCoverageAndRejectMisma
     ASSERT_TRUE(AppendFixtureStatistics(64u, 2u, testArena.scratchArena, fixture));
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
     fixture.queues.erase(fixture.queues.begin());
-    ASSERT_TRUE(BuildFrameGraphPayload(918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, testArena.scratchArena, payload));
-    native(mut testArena, in payload){
-        const auto decoded = Core::Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size());
-        ASSERT_TRUE(decoded.has_value());
-        ASSERT_EQ(decoded.value().physicalQueueRuntimeStatistics.size(), 3u);
-    }
+    ASSERT_TRUE(BuildTestFrameGraphPayload(918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, testArena.scratchArena, payload));
+    const Expected<FrameGraphPayload> decoded = ParseTestFrameGraphPayload(testArena.arena, testArena.scratchArena, payload);
+    ASSERT_TRUE(decoded.has_value());
+    ASSERT_EQ(decoded.value().physicalQueueRuntimeStatistics.size(), 3u);
+
     const FrameGraphPacketSubmissionStatisticsRecord original = fixture.packets[0u];
     if(original.queue.index == 1u)
         fixture.packets[0u].queue.index = 3u;
@@ -1335,7 +1334,7 @@ void VerifyTelemetry_PacketStatisticsPreserveOptionalQueueCoverageAndRejectMisma
         fixture.packets[0u].queueClass = FrameGraphQueueClass::Compute;
     else
         fixture.packets[0u].queueClass = FrameGraphQueueClass::Graphics;
-    EXPECT_FALSE(BuildFrameGraphPayload(918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, testArena.scratchArena, payload));
     EXPECT_TRUE(payload.empty());
 }
 
@@ -1350,17 +1349,13 @@ void VerifyTelemetry_PacketStatisticsSparsePacketIdentifiersRemainValid(){
     FrameGraphBuilder builder = FrameGraphBuilder(testArena.scratchArena, fixture.nodes, fixture.edges, fixture.pendingEdges, fixture.queues, fixture.packets);
     EXPECT_FALSE(builder.addPacketSubmissionStatistics(MakeNodeHandle(0u), fixture.packets[0u]));
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
-    native(mut testArena, in fixture, mut payload){
-        EXPECT_TRUE(BuildFrameGraphPayload(918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, testArena.scratchArena, payload));
-    }
+    EXPECT_TRUE(BuildTestFrameGraphPayload(918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, testArena.scratchArena, payload));
 }
 
 void VerifyTelemetry_PacketStatisticsInvalidInputDoesNotConsumeIdentity(){
     TelemetryTestArena testArena = TelemetryTestArena();
     StatisticsFixture fixture = StatisticsFixture(testArena.arena);
-    native(in testArena, mut fixture){
-        PrepareFixture(2u, 1u, fixture);
-    }
+    PrepareFixture(2u, 1u, fixture);
     FrameGraphBuilder builder = FrameGraphBuilder(testArena.scratchArena, fixture.nodes, fixture.edges, fixture.pendingEdges, fixture.queues, fixture.packets);
     FrameGraphPhysicalQueueRuntimeStatistics queue = QueueStatistics(1u, 1u);
     queue.planGeneration = 74u;
@@ -1390,14 +1385,14 @@ void VerifyTelemetry_PacketStatisticsQueueSourceSurvivesDestinationGrowth(){
     FrameGraphBuilder builder = FrameGraphBuilder(testArena.scratchArena, fixture.nodes, fixture.edges, fixture.pendingEdges, fixture.queues, fixture.packets);
     FrameGraphPassMetadata metadata = FrameGraphPassMetadata();
     metadata.runtimeStatistics = OwnerStatistics(1u);
-    const FrameGraphNodeHandle firstOwner = builder.addPass(Name(s_QueueAliasOwner), s_QueueAliasOwnerLabel, metadata);
+    const FrameGraphNodeHandle firstOwner = builder.addPass(s_QueueAliasOwnerName, s_QueueAliasOwnerLabel, metadata);
     ASSERT_TRUE(builder.addPhysicalQueueRuntimeStatistics(firstOwner, QueueStatistics(1u, 1u)));
     while(fixture.queues.size() < fixture.queues.capacity()){
-        const FrameGraphNodeHandle owner = builder.addPass(Name(s_QueueAliasOwner), s_QueueAliasOwnerLabel, metadata);
+        const FrameGraphNodeHandle owner = builder.addPass(s_QueueAliasOwnerName, s_QueueAliasOwnerLabel, metadata);
         ASSERT_TRUE(builder.addPhysicalQueueRuntimeStatistics(owner, fixture.queues[0u].statistics));
     }
     const usize capacityBeforeGrowth = fixture.queues.capacity();
-    const FrameGraphNodeHandle owner = builder.addPass(Name(s_QueueAliasOwner), s_QueueAliasOwnerLabel, metadata);
+    const FrameGraphNodeHandle owner = builder.addPass(s_QueueAliasOwnerName, s_QueueAliasOwnerLabel, metadata);
     ASSERT_TRUE(builder.addPhysicalQueueRuntimeStatistics(owner, fixture.queues[0u].statistics));
     ASSERT_GT(fixture.queues.capacity(), capacityBeforeGrowth);
     EXPECT_EQ(fixture.queues.back().ownerNodeIndex, owner.index);
@@ -1420,7 +1415,7 @@ void VerifyTelemetry_PacketStatisticsSeededDuplicatesRemainInvalidPayloads(){
     EXPECT_EQ(fixture.queues.size(), 3u);
     EXPECT_EQ(fixture.packets.size(), 3u);
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
-    EXPECT_FALSE(BuildFrameGraphPayload(918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, testArena.scratchArena, payload));
+    EXPECT_FALSE(BuildTestFrameGraphPayload(918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, testArena.scratchArena, payload));
     EXPECT_TRUE(payload.empty());
 }
 
@@ -1428,9 +1423,9 @@ void VerifyGpuPassTimingProbe_ReportsEveryRegisteredScopeBeyondSixtyFour(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TimingRecorder recorder = TimingRecorder(testArena.arena);
     recorder.setEnabled(true);
-    const u32 s_ScopeCount = 96u;
+    const u32 scopeCount = 96u;
     Name lastScope = s_NameNone;
-    for(u32 index = 0u; index < s_ScopeCount; ++index){
+    for(u32 index = 0u; index < scopeCount; ++index){
         const Expected<Name> scopeName = MakeDecimalScopeName(index);
         ASSERT_TRUE(scopeName.has_value());
         lastScope = scopeName.value();
@@ -1444,13 +1439,11 @@ void VerifyGpuPassTimingProbe_ReportsEveryRegisteredScopeBeyondSixtyFour(){
     const TimingView view = TimingView(recorder);
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard registration = LoggerRegistrationGuard(logger);
-    native(in view){
-        Tests::Smoke::GpuPassTimingProbe probe(NWB_TEXT("Probe regression"));
-        probe.recordFrame(0.25f, view);
-        probe.recordFrame(0.25f, view);
-    }
+    GpuPassTimingProbe probe = GpuPassTimingProbe(s_ProbeRegressionLabel);
+    probe.recordFrame(0.25f, view);
+    probe.recordFrame(0.25f, view);
 
-    EXPECT_EQ(logger.messageCount(), s_ScopeCount + 1u);
+    EXPECT_EQ(logger.messageCount(), scopeCount + 1u);
     String expectedScopeLine = String("  ");
     expectedScopeLine += lastScope.resolvedText();
     expectedScopeLine += ": gpu_window_ms";
@@ -1472,37 +1465,36 @@ void VerifyGpuPassTimingProbe_GrowthPreservesAccumulationAndWatermarksAcrossInte
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard registration = LoggerRegistrationGuard(logger);
 
-    const u32 s_AddedScopes = 96u;
-    native(in s_AddedScopes, in firstScope, in view, mut recorder, in logger){
-        Tests::Smoke::GpuPassTimingProbe probe(NWB_TEXT("Probe growth"));
-        probe.recordFrame(0.25f, view);
-        TimingScopeId lastScope;
-        for(u32 index = 0u; index < s_AddedScopes; ++index){
-            const auto scopeName = MakeDecimalScopeName(index);
-            ASSERT_TRUE(scopeName.has_value());
-            const auto scopeResult = recorder.registerScope(scopeName.value());
-            ASSERT_TRUE(scopeResult.has_value());
-            lastScope = scopeResult.value();
-            ASSERT_TRUE(lastScope.valid());
-        }
-        probe.recordFrame(0.25f, view);
-        EXPECT_EQ(logger.messageCount(), 2u);
-        EXPECT_FALSE(SawCapturedMessage(logger, "published_windows=2"));
-
-        // The old publication remains visible, but the next interval must not count it again.
-        probe.recordFrame(0.25f, view);
-        probe.recordFrame(0.25f, view);
-        EXPECT_EQ(logger.messageCount(), 3u);
-
-        recorder.recordSample(firstScope, 0.002, 2u);
-        recorder.recordSample(lastScope, 0.004, 2u);
-        recorder.publishFrame(2u);
-        probe.recordFrame(0.25f, view);
-        probe.recordFrame(0.25f, view);
+    const u32 addedScopes = 96u;
+    GpuPassTimingProbe probe = GpuPassTimingProbe(s_ProbeGrowthLabel);
+    probe.recordFrame(0.25f, view);
+    TimingScopeId lastScope = TimingScopeId();
+    for(u32 index = 0u; index < addedScopes; ++index){
+        const Expected<Name> scopeName = MakeDecimalScopeName(index);
+        ASSERT_TRUE(scopeName.has_value());
+        const Expected<TimingScopeId> scopeResult = recorder.registerScope(scopeName.value());
+        ASSERT_TRUE(scopeResult.has_value());
+        lastScope = scopeResult.value();
+        ASSERT_TRUE(lastScope.valid());
     }
+    probe.recordFrame(0.25f, view);
+    EXPECT_EQ(logger.messageCount(), 2u);
+    EXPECT_FALSE(SawCapturedMessage(logger, "published_windows=2"));
+
+    // The old publication remains visible, but the next interval must not count it again.
+    probe.recordFrame(0.25f, view);
+    probe.recordFrame(0.25f, view);
+    EXPECT_EQ(logger.messageCount(), 3u);
+
+    recorder.recordSample(firstScope, 0.002, 2u);
+    recorder.recordSample(lastScope, 0.004, 2u);
+    recorder.publishFrame(2u);
+    probe.recordFrame(0.25f, view);
+    probe.recordFrame(0.25f, view);
+
     EXPECT_EQ(logger.messageCount(), 6u);
     String expectedScopeLine = String("  ");
-    expectedScopeLine += recorder.scopeNameAt(s_AddedScopes).resolvedText();
+    expectedScopeLine += recorder.scopeNameAt(addedScopes).resolvedText();
     expectedScopeLine += ": gpu_window_ms";
     EXPECT_TRUE(SawCapturedMessage(logger, StringView(expectedScopeLine)));
     EXPECT_FALSE(SawCapturedMessage(logger, "published_windows=2"));

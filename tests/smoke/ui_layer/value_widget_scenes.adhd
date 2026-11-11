@@ -552,9 +552,13 @@ b8 UiProgressSmokeScene::paintFrozen(mut Builder ui, in Rect bounds){
     ui.progressStyle().padding = MakeUniformSmokeInsets(20.0f);
     ui.progressStyle().fillTint = Color(0.0f, 0.0f, 0.0f, 1.0f);
     const b8 painted = ui.endPanel();
-    native(mut ui, in original){
-        ui.progressStyle() = original;
-    }
+    ui.progressStyle().track = original.track;
+    ui.progressStyle().fill = original.fill;
+    ui.progressStyle().trackFallback = original.trackFallback;
+    ui.progressStyle().fillFallback = original.fillFallback;
+    ui.progressStyle().padding = original.padding;
+    ui.progressStyle().trackTint = original.trackTint;
+    ui.progressStyle().fillTint = original.fillTint;
     return painted;
 }
 

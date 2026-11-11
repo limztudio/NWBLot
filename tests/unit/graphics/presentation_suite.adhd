@@ -58,6 +58,35 @@ public:
 
 [[nodiscard]] VkQueue MakeDummyVkQueue(usize handleValue)noexcept;
 
+struct QueuePlanVerification{
+    Core::Alloc::ScratchArena scratch{ NWB::Tests::s_TestArena };
+    Vector<VkQueueFamilyProperties, Core::Alloc::ScratchArena> families;
+    Tests::TestArena<> arena;
+    Core::DeviceCreationParameters params;
+    Optional<Core::GraphicsBackend::VulkanQueueRequestPlan> plan;
+
+
+public:
+    explicit QueuePlanVerification(Span<const u32> expectedCounts);
+
+    [[nodiscard]] Span<const Core::GraphicsBackend::VulkanQueueRequestPlan::SameClassQueueRequest> sameClassRequests()const noexcept{
+        return plan->sameClassQueueRequests();
+    }
+
+    [[nodiscard]] Span<const VkDeviceQueueCreateInfo> queueDescriptions()const noexcept{
+        return plan->queueDescriptions();
+    }
+
+    [[nodiscard]] b8 sharesFirstQueuePriorities(const u32 index)const noexcept{
+        const auto& queues = plan->queueDescriptions();
+        return queues[index].pQueuePriorities == queues[0u].pQueuePriorities;
+    }
+
+    [[nodiscard]] f32 queuePriorityAt(const u32 queueIndex, const u32 priorityIndex)const noexcept{
+        return plan->queueDescriptions()[queueIndex].pQueuePriorities[priorityIndex];
+    }
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -110,6 +139,9 @@ namespace PresentationReceiptStatus = Core::PresentationReceiptStatus;
 static_assert(IsTriviallyCopyable_V<PresentationReceipt>);
 
 using Tests::GraphicsPresentationDetail::MakeDummyVkQueue;
+using QueuePlanVerification = Tests::GraphicsPresentationDetail::QueuePlanVerification;
+using SameClassQueueRequestSpan = Span<const Core::GraphicsBackend::VulkanQueueRequestPlan::SameClassQueueRequest>;
+using VkDeviceQueueCreateInfoSpan = Span<const VkDeviceQueueCreateInfo>;
 using Core::GetCooperativeVectorOptimalMatrixStride;
 using Core::IsValidHardwareRayTracingPolicy;
 
@@ -304,53 +336,27 @@ void VerifyDeviceCreationPolicy_QueuePlanKeepsCrossFamilyOrderAndStablePrioritie
     expectedCounts[1u] = 1u;
     expectedCounts[2u] = 2u;
     expectedCounts[3u] = 1u;
-    native(in expectedCounts){
-        using Plan = Core::GraphicsBackend::VulkanQueueRequestPlan;
-        Core::Alloc::ScratchArena scratch(NWB::Tests::s_TestArena);
-        Vector<VkQueueFamilyProperties, Core::Alloc::ScratchArena> families(scratch);
-        families.resize(4u);
-        for(usize index = 0u; index < 4u; ++index)
-            families[index].queueCount = expectedCounts[index];
-        NWB::Tests::TestArena<> arena;
-        Core::DeviceCreationParameters params(arena.arena);
-        params.enableSameClassMultiQueue = true;
-        params.headlessDevice = false;
-        const Plan::Input input{
-            .deviceParams = params,
-            .physicalQueueFamilies = families,
-            .graphicsQueueFamily = 0,
-            .secondaryGraphicsQueueFamily = 1,
-            .presentQueueFamily = 1,
-            .schedulerComputeQueueFamily = 2,
-            .secondaryComputeQueueFamily = -1,
-            .transferQueueFamily = 3,
-            .secondaryTransferQueueFamily = -1,
-            .createCrossFamilySecondaryGraphicsQueue = true,
-            .createComputeQueue = true,
-            .createCrossFamilySecondaryComputeQueue = false,
-            .createDedicatedTransferQueue = true,
-            .createCrossFamilySecondaryTransferQueue = false,
-        };
-        const Plan plan(scratch, input);
-        const auto& requests = plan.sameClassQueueRequests();
-        ASSERT_EQ(requests.size(), 4u);
-        EXPECT_EQ(requests[0].family, 1);
-        EXPECT_EQ(requests[0].queueIndex, 0u);
-        EXPECT_EQ(requests[1].family, 0);
-        EXPECT_EQ(requests[1].queueIndex, 1u);
-        EXPECT_EQ(requests[2].family, 0);
-        EXPECT_EQ(requests[2].queueIndex, 2u);
-        EXPECT_EQ(requests[3].family, 2);
-        EXPECT_EQ(requests[3].queueIndex, 1u);
-        const auto& queues = plan.queueDescriptions();
-        ASSERT_EQ(queues.size(), 4u);
-        for(u32 i = 0u; i < 4u; ++i){
-            EXPECT_EQ(queues[i].queueFamilyIndex, i);
-            EXPECT_EQ(queues[i].queueCount, expectedCounts[i]);
-            EXPECT_EQ(queues[i].pQueuePriorities, queues[0].pQueuePriorities);
-            for(u32 j = 0u; j < queues[i].queueCount; ++j)
-                EXPECT_EQ(queues[i].pQueuePriorities[j], 1.0f);
-        }
+
+    const QueuePlanVerification verification = QueuePlanVerification(expectedCounts);
+    const SameClassQueueRequestSpan requests = verification.sameClassRequests();
+    ASSERT_EQ(requests.size(), 4u);
+    EXPECT_EQ(requests[0u].family, 1);
+    EXPECT_EQ(requests[0u].queueIndex, 0u);
+    EXPECT_EQ(requests[1u].family, 0);
+    EXPECT_EQ(requests[1u].queueIndex, 1u);
+    EXPECT_EQ(requests[2u].family, 0);
+    EXPECT_EQ(requests[2u].queueIndex, 2u);
+    EXPECT_EQ(requests[3u].family, 2);
+    EXPECT_EQ(requests[3u].queueIndex, 1u);
+
+    const VkDeviceQueueCreateInfoSpan queues = verification.queueDescriptions();
+    ASSERT_EQ(queues.size(), 4u);
+    for(u32 i = 0u; i < 4u; ++i){
+        EXPECT_EQ(queues[i].queueFamilyIndex, i);
+        EXPECT_EQ(queues[i].queueCount, expectedCounts[i]);
+        EXPECT_TRUE(verification.sharesFirstQueuePriorities(i));
+        for(u32 j = 0u; j < queues[i].queueCount; ++j)
+            EXPECT_EQ(verification.queuePriorityAt(i, j), 1.0f);
     }
 }
 
@@ -503,6 +509,34 @@ u32 CooperativeVectorQueryHarness::callCount()const noexcept{
 
 VkQueue MakeDummyVkQueue(const usize handleValue)noexcept{
     return reinterpret_cast<VkQueue>(handleValue);
+}
+
+QueuePlanVerification::QueuePlanVerification(const Span<const u32> expectedCounts)
+    : families(scratch)
+    , params(arena.arena)
+{
+    families.resize(expectedCounts.size());
+    for(usize index = 0u; index < expectedCounts.size(); ++index)
+        families[index].queueCount = expectedCounts[index];
+    params.enableSameClassMultiQueue = true;
+    params.headlessDevice = false;
+    const Core::GraphicsBackend::VulkanQueueRequestPlan::Input input{
+        .deviceParams = params,
+        .physicalQueueFamilies = families,
+        .graphicsQueueFamily = 0,
+        .secondaryGraphicsQueueFamily = 1,
+        .presentQueueFamily = 1,
+        .schedulerComputeQueueFamily = 2,
+        .secondaryComputeQueueFamily = -1,
+        .transferQueueFamily = 3,
+        .secondaryTransferQueueFamily = -1,
+        .createCrossFamilySecondaryGraphicsQueue = true,
+        .createComputeQueue = true,
+        .createCrossFamilySecondaryComputeQueue = false,
+        .createDedicatedTransferQueue = true,
+        .createCrossFamilySecondaryTransferQueue = false,
+    };
+    plan.emplace(scratch, input);
 }
 
 

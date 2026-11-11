@@ -147,6 +147,7 @@ private:
     RendererShaderSystem& m_shaderSystem;
     RendererMeshSystem& m_meshSystem;
 };
+static_assert(sizeof(RendererCsgState) == s_RendererCsgStateByteSize, "RendererCsgState should keep its compact CPU-only layout");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

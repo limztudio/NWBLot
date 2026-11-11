@@ -2,66 +2,73 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/assets_texture/loader.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_texture/asset.adhd.h>
+usize ComputeUastcBlockByteOffset(in u32 blockX, in u32 blockY, in u32 blockCountX){
+    const u64 blockIndex = cast<u64>(blockY) * cast<u64>(blockCountX) + cast<u64>(blockX);
+    return cast<usize>(blockIndex * s_TextureUastcBytesPerBlock);
+}
 
-#include <core/alloc/scratch.h>
-#include <core/graphics/rhi/format.h>
+usize ComputeDecodedUastcDestinationTexelIndex(
+    in u64 destinationX,
+    in u64 destinationY,
+    in u32 mipWidth
+){
+    return cast<usize>(destinationY * cast<u64>(mipWidth) + destinationX);
+}
 
+f32 NormalizeTextureAlphaUnorm8(in u8 alphaUnorm8){
+    return cast<f32>(alphaUnorm8) / cast<f32>(u8.max);
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+u8 ResolveHdrUniformAlphaUnorm8(in b8 isConstantUnorm8, in u8 alphaConstantUnorm8){
+    if(isConstantUnorm8)
+        return alphaConstantUnorm8;
+    return u8.max;
+}
 
+b8 ValidateAstcSliceByteCount(in b8 hasSource, in u64 sourceBytes, in usize uploadBytes){
+    if(hasSource && sourceBytes == cast<u64>(uploadBytes))
+        return true;
 
-NWB_IMPL_BEGIN
+    error("TextureAssetLoader: ASTC UASTC slice size is invalid");
+    return false;
+}
 
+b8 ValidateRgba8SliceLayout(in b8 hasSource, in usize expectedBytes, in usize uploadBytes){
+    if(hasSource && expectedBytes == uploadBytes)
+        return true;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    error("TextureAssetLoader: invalid RGBA8 UASTC slice layout");
+    return false;
+}
 
+b8 ValidateSupportedLdrTextureUploadFormat(in b8 isSupported){
+    if(isSupported)
+        return true;
 
-// Owns UASTC slice layout plus LDR/HDR mip decode feeding texture uploads.
-struct TextureDecodedMipUpload{
-    Vector<u8, Core::Alloc::ScratchArena> bytes;
-    usize rowPitch = 0u;
-    usize sliceByteCount = 0u;
+    error("TextureAssetLoader: unsupported linear LDR texture upload format");
+    return false;
+}
 
+b8 ValidateSupportedHdrTextureUploadFormat(in b8 isSupported){
+    if(isSupported)
+        return true;
 
-public:
-    explicit TextureDecodedMipUpload(Core::Alloc::ScratchArena& arena)noexcept
-        : bytes(arena)
-    {}
-};
+    error("TextureAssetLoader: unsupported HDR texture upload format");
+    return false;
+}
 
+void LogUnsupportedTexturePayloadFormat(){
+    error("TextureAssetLoader: unsupported texture payload format");
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class TextureMipDecoder final : NoCopy{
-public:
-    [[nodiscard]] Expected<TextureDecodedMipUpload> decode(const Texture& textureAsset, const TextureMipLevel& mip, u32 mipLevel, Core::Format::Enum format, Core::Alloc::ScratchArena& arena);
-
-
-private:
-    [[nodiscard]] Expected<TextureDecodedMipUpload> decodeLdr(const Texture& textureAsset, const TextureMipLevel& mip, u32 mipLevel, Core::Format::Enum format, Core::Alloc::ScratchArena& arena);
-
-    [[nodiscard]] Expected<TextureDecodedMipUpload> decodeHdr(const Texture& textureAsset, const TextureMipLevel& mip, u32 mipLevel, Core::Format::Enum format, Core::Alloc::ScratchArena& arena);
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+void LogUastcTranscodeFailure(in StringView message){
+    error("TextureAssetLoader: {}", message);
 }
 
 

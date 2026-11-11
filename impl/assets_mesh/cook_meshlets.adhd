@@ -183,7 +183,7 @@ void PrecomputeMeshletTriangleStreams(
     for(in u32 offset : outPositionTriangleOffsets)
         positionTriangleCursors.push_back(offset);
 
-    for(usize triangleIndex = 0u; triangleIndex < triangleCount; ++triangleIndex){
+    parallel_for(usize triangleIndex = 0u; triangleIndex < triangleCount; ++triangleIndex){
         MeshletTriangleData triangle;
         MeshletTriangleCalculation triangleCalculation;
         ComputeMeshletTriangleDataAndCalculation(
@@ -196,6 +196,10 @@ void PrecomputeMeshletTriangleStreams(
         );
         outTriangles[triangleIndex] = triangle;
         outTriangleCalculations[triangleIndex] = triangleCalculation;
+    }
+
+    for(usize triangleIndex = 0u; triangleIndex < triangleCount; ++triangleIndex){
+        const MeshletTriangleData triangle = outTriangles[triangleIndex];
         for(usize cornerIndex = 0u; cornerIndex < cast<usize>(s_MeshletTriangleIndexCount); ++cornerIndex){
             const u32 positionIndex = triangle.positions[cornerIndex];
             const u32 slot = positionTriangleCursors[cast<usize>(positionIndex)];

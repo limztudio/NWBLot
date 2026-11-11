@@ -2,73 +2,58 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/deferred/presentation_settings.adhd>
+#include <impl/ecs_render/kernel/renderer_format_private.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/ecs_render/deferred/presentation_settings.adhd.h>
-#include <impl/assets/graphics/scene/binding_slots.h>
-
-#include <core/graphics/rhi/pipeline.h>
-#include <core/graphics/rhi/pipeline_state.h>
-
-#include <global/containers.h>
+const usize s_DeferredSceneShadingGpuByteCount = 16u;
+const usize s_DeferredLightGpuByteCount = 5120u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererDeferredState final : NoCopy{
-public:
-    RendererDeferredState()noexcept = default;
-
-
-public:
-    void invalidateResources()noexcept;
-
-
-public:
-    PresentationSettings m_presentationSettings;
-    Core::BindingLayoutHandle m_lightingBindingLayout;
-    Core::BufferHandle m_sceneShadingBuffer;
-    Core::BufferHandle m_lightBuffer;
-    Core::ShaderHandle m_lightingComputeShader;
-    Core::ComputePipelineHandle m_lightingPipeline;
-    Core::BindingLayoutHandle m_compositeComputeBindingLayout;
-    Core::ShaderHandle m_compositeComputeShader;
-    Core::ComputePipelineHandle m_compositeComputePipeline;
-    Core::BindingLayoutHandle m_presentBindingLayout;
-    Core::SamplerHandle m_sampler;
-    Core::ShaderHandle m_presentPixelShader;
-    Core::GraphicsPipelineHandle m_presentPipeline;
-    u32 m_lightGpuDataCount = 0u;
-    Array<u8, sizeof(f32) * NWB_SCENE_SHADING_BUFFER_FLOAT_COUNT> m_sceneShadingGpuData = {};
-    b8 m_sceneShadingGpuDataValid = false;
+class RendererDeferredState : NoCopy{
+    public PresentationSettings m_presentationSettings = PresentationSettings();
+    public KernelBindingLayoutHandle m_lightingBindingLayout = KernelBindingLayoutHandle();
+    public KernelBufferHandle m_sceneShadingBuffer = KernelBufferHandle();
+    public KernelBufferHandle m_lightBuffer = KernelBufferHandle();
+    public KernelShaderHandle m_lightingComputeShader = KernelShaderHandle();
+    public KernelComputePipelineHandle m_lightingPipeline = KernelComputePipelineHandle();
+    public KernelBindingLayoutHandle m_compositeComputeBindingLayout = KernelBindingLayoutHandle();
+    public KernelShaderHandle m_compositeComputeShader = KernelShaderHandle();
+    public KernelComputePipelineHandle m_compositeComputePipeline = KernelComputePipelineHandle();
+    public KernelBindingLayoutHandle m_presentBindingLayout = KernelBindingLayoutHandle();
+    public KernelSamplerHandle m_sampler = KernelSamplerHandle();
+    public KernelShaderHandle m_presentPixelShader = KernelShaderHandle();
+    public KernelGraphicsPipelineHandle m_presentPipeline = KernelGraphicsPipelineHandle();
+    public u32 m_lightGpuDataCount = 0u;
+    public Array<u8, s_DeferredSceneShadingGpuByteCount> m_sceneShadingGpuData;
+    public b8 m_sceneShadingGpuDataValid = false;
     // Cached bytes avoid redundant light-buffer uploads.
-    Array<u8, sizeof(f32) * NWB_SCENE_LIGHT_RECORD_FLOAT_COUNT * NWB_SCENE_MAX_LIGHTS> m_lightGpuData = {};
-    b8 m_lightGpuDataValid = false;
-};
+    public Array<u8, s_DeferredLightGpuByteCount> m_lightGpuData;
+    public b8 m_lightGpuDataValid = false;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public void invalidateResources(){
+        this.m_lightingBindingLayout.reset();
+        this.m_sceneShadingBuffer.reset();
+        this.m_lightBuffer.reset();
+        this.m_lightingComputeShader.reset();
+        this.m_lightingPipeline.reset();
+        this.m_compositeComputeBindingLayout.reset();
+        this.m_compositeComputeShader.reset();
+        this.m_compositeComputePipeline.reset();
+        this.m_presentBindingLayout.reset();
+        this.m_sampler.reset();
+        this.m_presentPixelShader.reset();
+        this.m_presentPipeline.reset();
+        this.m_sceneShadingGpuDataValid = false;
+        this.m_lightGpuDataCount = 0u;
+        this.m_lightGpuDataValid = false;
+    }
 }
 
 

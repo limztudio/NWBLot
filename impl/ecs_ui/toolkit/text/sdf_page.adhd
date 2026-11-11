@@ -56,7 +56,7 @@ private:
 using SharedSdfAtlasPage = RefCountPtr<RefCounter<SdfAtlasPage>, ArenaRefDeleter<RefCounter<SdfAtlasPage>, Core::Alloc::GlobalArena>>;
 
 // The factory calculates pixelsSha256 from the exact immutable bytes; callers need not supply it.
-[[nodiscard]] inline Expected<SharedSdfAtlasPage> CreateSdfAtlasPage(Core::Alloc::GlobalArena& arena, const SdfAtlasPageBinding& binding, SdfAtlasPage::Pixels&& pixels)noexcept{
+[[nodiscard]] NWB_INLINE Expected<SharedSdfAtlasPage> CreateSdfAtlasPage(Core::Alloc::GlobalArena& arena, const SdfAtlasPageBinding& binding, SdfAtlasPage::Pixels&& pixels)noexcept{
     if(!ValidSdfAtlasPageBinding(binding, pixels.size()))
         return MakeUnexpected(Failure{});
     SdfAtlasPageBinding immutable = binding;
@@ -67,7 +67,7 @@ using SharedSdfAtlasPage = RefCountPtr<RefCounter<SdfAtlasPage>, ArenaRefDeleter
     return SharedSdfAtlasPage(page, ArenaRefDeleter<RefCounter<SdfAtlasPage>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
-[[nodiscard]] inline Expected<SharedSdfAtlasPage> CreateSdfAtlasPage(Core::Alloc::GlobalArena& arena, const FontAtlas& atlas, const u64 fontGeneration, const u64 atlasIdentity, const u32 groupIndex){
+[[nodiscard]] NWB_INLINE Expected<SharedSdfAtlasPage> CreateSdfAtlasPage(Core::Alloc::GlobalArena& arena, const FontAtlas& atlas, const u64 fontGeneration, const u64 atlasIdentity, const u32 groupIndex){
     // The asset codec/font installation validates the whole payload once before publishing matching glyph metadata.
     const FontAtlasPayload& payload = atlas.payload();
     if(groupIndex >= payload.groups.size())

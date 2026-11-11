@@ -45,33 +45,33 @@ using namespace NWB;
 using namespace NWB::Impl;
 using namespace NWB::Impl::Ui;
 
-[[nodiscard]] inline b8 ValidImageBindings(const DrawSnapshot& snapshot)noexcept{
+[[nodiscard]] NWB_INLINE b8 ValidImageBindings(const DrawSnapshot& snapshot)noexcept{
     return GpuImageResources::ValidateGlyphPages(snapshot) && GpuImageResources::ValidateSdfPages(snapshot) && GpuImageResources::ValidateTextureImages(snapshot);
 }
 
-inline void SetCommandTextureImageIndex(DrawSnapshot& snapshot, const usize commandIndex, const u32 imageIndex)noexcept{
+NWB_INLINE void SetCommandTextureImageIndex(DrawSnapshot& snapshot, const usize commandIndex, const u32 imageIndex)noexcept{
     const_cast<DrawCommand&>(snapshot.commands()[commandIndex]).textureImageIndex = imageIndex;
 }
 
-inline void ResetFirstSnapshotTextureImage(DrawSnapshot& snapshot)noexcept{
+NWB_INLINE void ResetFirstSnapshotTextureImage(DrawSnapshot& snapshot)noexcept{
     const_cast<SharedImageSource&>(snapshot.textureImages()[0u]).reset();
 }
 
-inline void AppendSnapshotTextureImage(DrawSnapshot& snapshot, const SharedImageSource& image){
-    const_cast<PaintVector<SharedImageSource>&>(snapshot.textureImages()).push_back(image);
+NWB_INLINE void AppendSnapshotTextureImage(DrawSnapshot& snapshot, const SharedImageSource& image){
+    const_cast<Impl::Ui::PaintVector<SharedImageSource>&>(snapshot.textureImages()).push_back(image);
 }
 
-inline void SetSnapshotCommandRaw(DrawSnapshot& snapshot, const usize commandIndex, const DrawCommand& command)noexcept{
+NWB_INLINE void SetSnapshotCommandRaw(DrawSnapshot& snapshot, const usize commandIndex, const DrawCommand& command)noexcept{
     const_cast<DrawCommand&>(snapshot.commands()[commandIndex]) = command;
 }
 
-inline void SetFirstCommandUnknownMaterial(DrawSnapshot& snapshot)noexcept{
+NWB_INLINE void SetFirstCommandUnknownMaterial(DrawSnapshot& snapshot)noexcept{
     DrawCommand& command = const_cast<DrawCommand&>(snapshot.commands()[0u]);
     command.material = static_cast<PaintMaterial::Enum>(Limit<u8>::s_Max);
     command.textureImageIndex = Limit<u32>::s_Max;
 }
 
-[[nodiscard]] inline b8 BuildMaxGlyphBudgetSnapshot(UiPaintImageTests::PaintImageFixture& self, const b8 withExtraImage, DrawSnapshot& outSnapshot){
+[[nodiscard]] NWB_INLINE b8 BuildMaxGlyphBudgetSnapshot(UiPaintImageTests::PaintImageFixture& self, const b8 withExtraImage, DrawSnapshot& outSnapshot){
     FixedVector<SharedGlyphPage, s_PaintMaxImages - 2u> glyphs;
     for(usize index = 0u; index < glyphs.max_size(); ++index){
         auto glyphResult = self.makeGlyph(100u + index);
@@ -100,12 +100,12 @@ inline void SetFirstCommandUnknownMaterial(DrawSnapshot& snapshot)noexcept{
         auto additionResult = self.makeImage("tests/ui/overflow_gpu_image", 73u);
         if(!additionResult || !*additionResult)
             return false;
-        const_cast<PaintVector<SharedImageSource>&>(outSnapshot.textureImages()).push_back(Move(*additionResult));
+        const_cast<Impl::Ui::PaintVector<SharedImageSource>&>(outSnapshot.textureImages()).push_back(Move(*additionResult));
     }
     return true;
 }
 
-[[nodiscard]] inline b8 PrepareSingleGlyphSdfAndImage(UiPaintImageTests::PaintImageFixture& self, SharedImageSource& outImage){
+[[nodiscard]] NWB_INLINE b8 PrepareSingleGlyphSdfAndImage(UiPaintImageTests::PaintImageFixture& self, SharedImageSource& outImage){
     auto imageResult = self.makeImage();
     auto glyphResult = self.makeGlyph();
     auto sdfResult = self.makeSdf();
@@ -194,7 +194,7 @@ using namespace NWB::Impl::Ui;
 
 constexpr AStringView s_TexturePath = "tests/ui/image_loader/texture";
 
-[[nodiscard]] inline AssetBytes MakeTextureBinary(const u8 initialValue, AssetArena& arena){
+[[nodiscard]] NWB_INLINE AssetBytes MakeTextureBinary(const u8 initialValue, AssetArena& arena){
     TextureBinaryPayload::HeaderBinary header;
     header.dimension = static_cast<u32>(TextureDimension::Texture2D);
     header.width = 2u;
@@ -225,7 +225,7 @@ constexpr AStringView s_TexturePath = "tests/ui/image_loader/texture";
     return binary;
 }
 
-inline void ExpectPayload(const Texture& texture, const u8 initialValue){
+NWB_INLINE void ExpectPayload(const Texture& texture, const u8 initialValue){
     ASSERT_EQ(texture.payloadBytes().size(), 32u);
     for(usize index = 0u; index < texture.payloadBytes().size(); ++index)
         EXPECT_EQ(texture.payloadBytes()[index], static_cast<u8>(initialValue + index));
@@ -603,79 +603,79 @@ using ::NWB::Tests::UiCases::s_UiFixtureNameWhite;
 using ::NWB::Tests::UiCases::s_UiInputNameSprite;
 using ::NWB::Tests::UiCases::s_UiInputNameUnknownRegion;
 
-[[nodiscard]] inline b8 UiGpuValGlyphPages(const DrawSnapshot& snapshot)noexcept{
+[[nodiscard]] NWB_INLINE b8 UiGpuValGlyphPages(const DrawSnapshot& snapshot)noexcept{
     return ::NWB::Impl::Ui::GpuImageResources::ValidateGlyphPages(snapshot);
 }
-[[nodiscard]] inline b8 UiGpuValSdfPages(const DrawSnapshot& snapshot)noexcept{
+[[nodiscard]] NWB_INLINE b8 UiGpuValSdfPages(const DrawSnapshot& snapshot)noexcept{
     return ::NWB::Impl::Ui::GpuImageResources::ValidateSdfPages(snapshot);
 }
-[[nodiscard]] inline b8 UiGpuValTextureImages(const DrawSnapshot& snapshot)noexcept{
+[[nodiscard]] NWB_INLINE b8 UiGpuValTextureImages(const DrawSnapshot& snapshot)noexcept{
     return ::NWB::Impl::Ui::GpuImageResources::ValidateTextureImages(snapshot);
 }
-[[nodiscard]] inline b8 UiGpuValAllImageBindings(const DrawSnapshot& snapshot)noexcept{
+[[nodiscard]] NWB_INLINE b8 UiGpuValAllImageBindings(const DrawSnapshot& snapshot)noexcept{
     return __hidden_ui_gpu_texture_image_validation_tests::ValidImageBindings(snapshot);
 }
-inline void UiGpuValSetCommandTextureIndex(DrawSnapshot& snapshot, const usize commandIndex, const u32 imageIndex)noexcept{
+NWB_INLINE void UiGpuValSetCommandTextureIndex(DrawSnapshot& snapshot, const usize commandIndex, const u32 imageIndex)noexcept{
     __hidden_ui_gpu_texture_image_validation_tests::SetCommandTextureImageIndex(snapshot, commandIndex, imageIndex);
 }
-inline void UiGpuValResetFirstTexture(DrawSnapshot& snapshot)noexcept{
+NWB_INLINE void UiGpuValResetFirstTexture(DrawSnapshot& snapshot)noexcept{
     __hidden_ui_gpu_texture_image_validation_tests::ResetFirstSnapshotTextureImage(snapshot);
 }
-inline void UiGpuValAppendTexture(DrawSnapshot& snapshot, const SharedImageSource& image){
+NWB_INLINE void UiGpuValAppendTexture(DrawSnapshot& snapshot, const SharedImageSource& image){
     __hidden_ui_gpu_texture_image_validation_tests::AppendSnapshotTextureImage(snapshot, image);
 }
-inline void UiGpuValSetCommand(DrawSnapshot& snapshot, const usize commandIndex, const DrawCommand& command)noexcept{
+NWB_INLINE void UiGpuValSetCommand(DrawSnapshot& snapshot, const usize commandIndex, const DrawCommand& command)noexcept{
     __hidden_ui_gpu_texture_image_validation_tests::SetSnapshotCommandRaw(snapshot, commandIndex, command);
 }
-inline void UiGpuValSetFirstCommandUnknownMaterial(DrawSnapshot& snapshot)noexcept{
+NWB_INLINE void UiGpuValSetFirstCommandUnknownMaterial(DrawSnapshot& snapshot)noexcept{
     __hidden_ui_gpu_texture_image_validation_tests::SetFirstCommandUnknownMaterial(snapshot);
 }
-[[nodiscard]] inline b8 UiGpuValBuildMaxBudgetSnapshot(GpuTextureImageValidationFixture& self, const b8 withExtraImage, DrawSnapshot& outSnapshot){
+[[nodiscard]] NWB_INLINE b8 UiGpuValBuildMaxBudgetSnapshot(GpuTextureImageValidationFixture& self, const b8 withExtraImage, DrawSnapshot& outSnapshot){
     return __hidden_ui_gpu_texture_image_validation_tests::BuildMaxGlyphBudgetSnapshot(self, withExtraImage, outSnapshot);
 }
-[[nodiscard]] inline b8 UiGpuValPrepareSingleGlyphSdfAndImage(GpuTextureImageValidationFixture& self, SharedImageSource& outImage){
+[[nodiscard]] NWB_INLINE b8 UiGpuValPrepareSingleGlyphSdfAndImage(GpuTextureImageValidationFixture& self, SharedImageSource& outImage){
     return __hidden_ui_gpu_texture_image_validation_tests::PrepareSingleGlyphSdfAndImage(self, outImage);
 }
 
-[[nodiscard]] inline b8 UiImageHandlePresent(const SharedImageSource& image)noexcept{ return static_cast<b8>(image); }
-[[nodiscard]] inline b8 UiGlyphHandlePresent(const SharedGlyphPage& page)noexcept{ return static_cast<b8>(page); }
-[[nodiscard]] inline b8 UiSdfHandlePresent(const SharedSdfAtlasPage& page)noexcept{ return static_cast<b8>(page); }
-inline void UiResetImageHandle(SharedImageSource& image)noexcept{ image.reset(); }
-inline void UiResetImageHandle(SharedImageSource&& image)noexcept{ image.reset(); }
-[[nodiscard]] inline ::NWB::Core::Assets::AssetRef<Texture> UiReadImageIdentity(const SharedImageSource& image)noexcept{ return image->identity(); }
-[[nodiscard]] inline u64 UiReadImageGeneration(const SharedImageSource& image)noexcept{ return image->generation(); }
-[[nodiscard]] inline const Texture& UiReadImageTexture(const SharedImageSource& image)noexcept{ return image->texture(); }
-[[nodiscard]] inline b8 UiSameImageHandlePtr(const SharedImageSource& lhs, const SharedImageSource& rhs)noexcept{ return lhs.get() == rhs.get(); }
-[[nodiscard]] inline b8 UiSameTextureAddress(const SharedImageSource& lhs, const SharedImageSource& rhs)noexcept{ return &lhs->texture() == &rhs->texture(); }
-[[nodiscard]] inline b8 UiDistinctLoadedTextureStorage(const SharedImageSource& lhs, const SharedImageSource& rhs)noexcept{
+[[nodiscard]] NWB_INLINE b8 UiImageHandlePresent(const SharedImageSource& image)noexcept{ return static_cast<b8>(image); }
+[[nodiscard]] NWB_INLINE b8 UiGlyphHandlePresent(const SharedGlyphPage& page)noexcept{ return static_cast<b8>(page); }
+[[nodiscard]] NWB_INLINE b8 UiSdfHandlePresent(const SharedSdfAtlasPage& page)noexcept{ return static_cast<b8>(page); }
+NWB_INLINE void UiResetImageHandle(SharedImageSource& image)noexcept{ image.reset(); }
+NWB_INLINE void UiResetImageHandle(SharedImageSource&& image)noexcept{ image.reset(); }
+[[nodiscard]] NWB_INLINE ::NWB::Core::Assets::AssetRef<Texture> UiReadImageIdentity(const SharedImageSource& image)noexcept{ return image->identity(); }
+[[nodiscard]] NWB_INLINE u64 UiReadImageGeneration(const SharedImageSource& image)noexcept{ return image->generation(); }
+[[nodiscard]] NWB_INLINE const Texture& UiReadImageTexture(const SharedImageSource& image)noexcept{ return image->texture(); }
+[[nodiscard]] NWB_INLINE b8 UiSameImageHandlePtr(const SharedImageSource& lhs, const SharedImageSource& rhs)noexcept{ return lhs.get() == rhs.get(); }
+[[nodiscard]] NWB_INLINE b8 UiSameTextureAddress(const SharedImageSource& lhs, const SharedImageSource& rhs)noexcept{ return &lhs->texture() == &rhs->texture(); }
+[[nodiscard]] NWB_INLINE b8 UiDistinctLoadedTextureStorage(const SharedImageSource& lhs, const SharedImageSource& rhs)noexcept{
     return lhs->texture().payloadBytes().data() != rhs->texture().payloadBytes().data()
         && lhs->texture().mipLevels().data() != rhs->texture().mipLevels().data();
 }
-inline void UiImageLoaderExpectPayload(const SharedImageSource& image, const u8 initialValue){
+NWB_INLINE void UiImageLoaderExpectPayload(const SharedImageSource& image, const u8 initialValue){
     __hidden_ui_image_loader_tests::ExpectPayload(image->texture(), initialValue);
 }
-inline void UiImageSourceExpectCopy(const Texture& original, const SharedImageSource& copied){
+NWB_INLINE void UiImageSourceExpectCopy(const Texture& original, const SharedImageSource& copied){
     __hidden_ui_image_source_tests::UiImageSourceTests::ExpectCopy(original, copied->texture());
 }
 
-[[nodiscard]] inline HitTarget MakeUiHorizontalNavPart(const HitTarget& host)noexcept{
+[[nodiscard]] NWB_INLINE HitTarget MakeUiHorizontalNavPart(const HitTarget& host)noexcept{
     return ::NWB::UiHorizontalNavigationTests::Part(host);
 }
-[[nodiscard]] inline PopupScope MakeUiHorizontalNavPopup(const HitTarget& owner, const u64 openGeneration = 7u)noexcept{
+[[nodiscard]] NWB_INLINE PopupScope MakeUiHorizontalNavPopup(const HitTarget& owner, const u64 openGeneration = 7u)noexcept{
     return ::NWB::UiHorizontalNavigationTests::Popup(owner, openGeneration);
 }
-[[nodiscard]] inline ImageOptions MakeUiImageBuilderFixedOptions(const f32 width = 96.0f, const f32 height = 40.0f)noexcept{
+[[nodiscard]] NWB_INLINE ImageOptions MakeUiImageBuilderFixedOptions(const f32 width = 96.0f, const f32 height = 40.0f)noexcept{
     return ::NWB::UiWidgetTests::WidgetFixture::Fixed(width, height);
 }
-[[nodiscard]] inline f32 UiHorizImageInfinityF32()noexcept{ return ::Limit<f32>::s_Infinity; }
-[[nodiscard]] inline f32 UiHorizImageQuietNaNF32()noexcept{ return ::Limit<f32>::s_QuietNaN; }
-[[nodiscard]] inline ::NWB::Impl::Ui::LayoutSizePolicy::Enum MakeUiInvalidLayoutSizePolicy()noexcept{
+[[nodiscard]] NWB_INLINE f32 UiHorizImageInfinityF32()noexcept{ return ::Limit<f32>::s_Infinity; }
+[[nodiscard]] NWB_INLINE f32 UiHorizImageQuietNaNF32()noexcept{ return ::Limit<f32>::s_QuietNaN; }
+[[nodiscard]] NWB_INLINE ::NWB::Impl::Ui::LayoutSizePolicy::Enum MakeUiInvalidLayoutSizePolicy()noexcept{
     return static_cast<::NWB::Impl::Ui::LayoutSizePolicy::Enum>(3u);
 }
-[[nodiscard]] inline ::NWB::Impl::UiSkinDrawMode::Enum MakeUiInvalidSkinDrawMode()noexcept{
+[[nodiscard]] NWB_INLINE ::NWB::Impl::UiSkinDrawMode::Enum MakeUiInvalidSkinDrawMode()noexcept{
     return static_cast<::NWB::Impl::UiSkinDrawMode::Enum>(2u);
 }
-[[nodiscard]] inline ::NWB::Core::Assets::AssetRef<Texture> MakeUiMissingTextureAssetRef()noexcept{
+[[nodiscard]] NWB_INLINE ::NWB::Core::Assets::AssetRef<Texture> MakeUiMissingTextureAssetRef()noexcept{
     return ::NWB::Core::Assets::AssetRef<Texture>("tests/ui/image_loader/missing");
 }
 };

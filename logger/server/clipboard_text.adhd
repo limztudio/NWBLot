@@ -79,7 +79,7 @@ struct ClipboardTextFailure{
     Optional<ClipboardText> memory{};
 };
 
-[[nodiscard]] inline Expected<usize, ErrorCode> ClipboardByteCount(const usize characterCount)noexcept{
+[[nodiscard]] NWB_INLINE Expected<usize, ErrorCode> ClipboardByteCount(const usize characterCount)noexcept{
     if(characterCount > (Limit<usize>::s_Max / sizeof(tchar)) - 1u)
         return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
     return (characterCount + 1u) * sizeof(tchar);

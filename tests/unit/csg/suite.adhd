@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_csg/module.adhd>
 #include <tests/common/capturing_logger.adhd>
 #include <tests/common/ecs_test_world.adhd>
 #include <tests/common/gtest_macros.adhd>
@@ -18,11 +19,10 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_csg/deform_edit.adhd.h>
-#include <impl/ecs_csg/module.adhd.h>
-
 #include <core/common/module.h>
 #include <core/ecs/module.h>
+
+#include <global/binary.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,35 +40,94 @@ namespace CsgTestsDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class TestProjectSlabShape final : public Impl::ICsgShape{
-public:
-    virtual Name shapeTypeName()const noexcept override;
-    virtual u32 parameterByteSize()const noexcept override;
-    virtual Impl::CsgShapeInlineParameters defaultParameters()const noexcept override;
-    virtual Expected<Impl::CsgShapeLocalBounds> computeLocalBounds(const Impl::CsgShapeInlineParameters& parameters)const noexcept override;
-    virtual f32 evaluateSignedDistance(SIMDVectorSingle shapePosition, const Impl::CsgShapeInlineParameters& parameters)const noexcept override;
-};
-
-class OversizedProjectShape final : public Impl::ICsgShape{
-public:
-    virtual Name shapeTypeName()const noexcept override;
-    virtual u32 parameterByteSize()const noexcept override;
-    virtual Impl::CsgShapeInlineParameters defaultParameters()const noexcept override;
-    virtual Expected<Impl::CsgShapeLocalBounds> computeLocalBounds(const Impl::CsgShapeInlineParameters&)const noexcept override;
-    virtual f32 evaluateSignedDistance(SIMDVectorSingle, const Impl::CsgShapeInlineParameters&)const noexcept override;
-};
-
 struct TestCsgVisibilityFilter{
     Core::ECS::EntityID hiddenEntity = Core::ECS::s_InvalidEntityId;
 };
 
-b8 TestCsgReceiverVisible(
-    Core::ECS::World& world,
-    Core::ECS::EntityID entity,
-    Impl::CsgReceiverKind::Enum receiverKind,
-    const Impl::CsgReceiverComponent& receiver,
+[[nodiscard]] NWB_INLINE b8 TestCsgReceiverVisible(
+    [[maybe_unused]] Core::ECS::World& world,
+    const Core::ECS::EntityID entity,
+    [[maybe_unused]] const Impl::CsgReceiverKind::Enum receiverKind,
+    [[maybe_unused]] const Impl::CsgReceiverComponent& receiver,
     void* userData
-)noexcept;
+)noexcept{
+    const auto* filter = static_cast<const TestCsgVisibilityFilter*>(userData);
+    return !filter || entity != filter->hiddenEntity;
+}
+
+[[nodiscard]] NWB_INLINE Impl::CsgFrameState BuildFilteredCsgFrameState(
+    Core::ECS::World& world,
+    Core::Alloc::ScratchArena& scratchArena,
+    const Core::ECS::EntityID hiddenEntity
+){
+    TestCsgVisibilityFilter filter;
+    filter.hiddenEntity = hiddenEntity;
+
+    Impl::CsgFrameBuildDesc desc;
+    desc.receiverVisible = &TestCsgReceiverVisible;
+    desc.receiverVisibleUserData = &filter;
+    return Impl::BuildCsgFrameState(world, scratchArena, desc);
+}
+
+[[nodiscard]] NWB_INLINE Expected<Impl::CsgDeformStats, Impl::CsgDeformFailure> PreviewDeformWithoutRegistry(
+    Core::Alloc::ScratchArena& scratchArena,
+    const Span<const Impl::CsgDeformVertex> inputVertices,
+    const Span<const Impl::CsgDeformTriangle> inputTriangles,
+    const Span<const Impl::CsgDeformCutDesc> cuts,
+    const Impl::CsgDeformBuildOptions& options,
+    Impl::CsgDeformVertexVector<Core::Alloc::ScratchArena>& outVertices,
+    Impl::CsgDeformTriangleVector<Core::Alloc::ScratchArena>& outTriangles
+){
+    return Impl::PreviewCsgDeformCuts(scratchArena, inputVertices, inputTriangles, cuts, options, nullptr, outVertices, outTriangles);
+}
+
+template<typename CommitArenaT>
+[[nodiscard]] NWB_INLINE Expected<Impl::CsgDeformStats, Impl::CsgDeformFailure> CommitDeformWithoutRegistry(
+    Core::Alloc::ScratchArena& scratchArena,
+    CommitArenaT& commitArena,
+    const Span<const Impl::CsgDeformVertex> inputVertices,
+    const Span<const Impl::CsgDeformTriangle> inputTriangles,
+    const Span<const Impl::CsgDeformCutDesc> cuts,
+    const Impl::CsgDeformBuildOptions& options,
+    Impl::CsgDeformVertexVector<CommitArenaT>& outVertices,
+    Impl::CsgDeformTriangleVector<CommitArenaT>& outTriangles
+){
+    return Impl::CommitCsgDeformCuts(scratchArena, commitArena, inputVertices, inputTriangles, cuts, options, nullptr, outVertices, outTriangles);
+}
+
+template<typename CommitArenaT>
+[[nodiscard]] NWB_INLINE Expected<Impl::CsgDeformStats, Impl::CsgDeformFailure> CommitDeformWithRegistry(
+    Core::Alloc::ScratchArena& scratchArena,
+    CommitArenaT& commitArena,
+    const Span<const Impl::CsgDeformVertex> inputVertices,
+    const Span<const Impl::CsgDeformTriangle> inputTriangles,
+    const Span<const Impl::CsgDeformCutDesc> cuts,
+    const Impl::CsgDeformBuildOptions& options,
+    const Impl::CsgShapeRegistry& registry,
+    Impl::CsgDeformVertexVector<CommitArenaT>& outVertices,
+    Impl::CsgDeformTriangleVector<CommitArenaT>& outTriangles
+){
+    return Impl::CommitCsgDeformCuts(scratchArena, commitArena, inputVertices, inputTriangles, cuts, options, &registry, outVertices, outTriangles);
+}
+
+[[nodiscard]] NWB_INLINE Impl::CsgDeformViability CheckDeformViabilityWithRegistry(
+    Core::Alloc::ScratchArena& scratchArena,
+    const Span<const Impl::CsgDeformVertex> inputVertices,
+    const Span<const Impl::CsgDeformTriangle> inputTriangles,
+    const Span<const Impl::CsgDeformCutDesc> cuts,
+    const Impl::CsgDeformBuildOptions& options,
+    const Impl::CsgShapeRegistry& registry
+){
+    return Impl::CheckCsgDeformCutsViability(scratchArena, inputVertices, inputTriangles, cuts, options, &registry);
+}
+
+[[nodiscard]] NWB_INLINE f32 CsgWorldBoundsMinX(const Impl::CsgShapeBounds& bounds)noexcept{
+    return VectorGetX(bounds.minBounds);
+}
+
+[[nodiscard]] NWB_INLINE f32 CsgWorldBoundsMaxX(const Impl::CsgShapeBounds& bounds)noexcept{
+    return VectorGetX(bounds.maxBounds);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -92,12 +151,20 @@ using World = Core::ECS::World;
 using LoggerRegistrationGuard = Core::Common::LoggerRegistrationGuard;
 namespace LoggerBreakPolicy = Core::Common::LoggerBreakPolicy;
 
+using ICsgShape = Impl::ICsgShape;
 using CsgDeformVertex = Impl::CsgDeformVertex;
 using CsgDeformTriangle = Impl::CsgDeformTriangle;
 using CsgDeformCutDesc = Impl::CsgDeformCutDesc;
 using CsgDeformBuildOptions = Impl::CsgDeformBuildOptions;
 using CsgDeformViability = Impl::CsgDeformViability;
+using CsgDeformStats = Impl::CsgDeformStats;
+using CsgDeformFailure = Impl::CsgDeformFailure;
+using CsgShapeBounds = Impl::CsgShapeBounds;
 namespace CsgDeformViabilityReason = Impl::CsgDeformViabilityReason;
+using GlobalDeformVertices = Impl::CsgDeformVertexVector<GlobalArena>;
+using GlobalDeformTriangles = Impl::CsgDeformTriangleVector<GlobalArena>;
+using ScratchDeformVertices = Impl::CsgDeformVertexVector<ScratchArena>;
+using ScratchDeformTriangles = Impl::CsgDeformTriangleVector<ScratchArena>;
 
 using CsgShapeTypeId = Impl::CsgShapeTypeId;
 using CsgShapeRegistry = Impl::CsgShapeRegistry;
@@ -110,6 +177,7 @@ using Impl::s_CsgShapeInlineParameterMaxBytes;
 using Impl::s_CsgZeroShapeParameter;
 using Impl::MakeCsgShapeInlineParameters;
 using Impl::MakeCsgSymmetricLocalBounds;
+using Impl::CheckCsgDeformCutsViability;
 
 using CsgCutterComponent = Impl::CsgCutterComponent;
 using StaticCsgMeshComponent = Impl::StaticCsgMeshComponent;
@@ -121,9 +189,6 @@ using CsgReceiverDrawState = Impl::CsgReceiverDrawState;
 namespace CsgReceiverPass = Impl::CsgReceiverPass;
 using CsgReceiverPassEnum = Impl::CsgReceiverPass::Enum;
 
-using OversizedProjectShape = CsgTestsDetail::OversizedProjectShape;
-using TestProjectSlabShape = CsgTestsDetail::TestProjectSlabShape;
-
 using Impl::s_CsgPlaneShapeName;
 using Impl::s_CsgBoxShapeName;
 using Impl::s_CsgSphereShapeName;
@@ -133,6 +198,14 @@ using Impl::TryResolveCsgShapeTypeIdFromName;
 using Impl::RegisterBuiltInCsgShapeTypes;
 using Impl::HasCsgFrameCandidates;
 using Impl::BuildCsgFrameState;
+
+using CsgTestsDetail::BuildFilteredCsgFrameState;
+using CsgTestsDetail::PreviewDeformWithoutRegistry;
+using CsgTestsDetail::CommitDeformWithoutRegistry;
+using CsgTestsDetail::CommitDeformWithRegistry;
+using CsgTestsDetail::CheckDeformViabilityWithRegistry;
+using CsgTestsDetail::CsgWorldBoundsMinX;
+using CsgTestsDetail::CsgWorldBoundsMaxX;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -150,6 +223,57 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class TestProjectSlabShape : ICsgShape{
+    public Name shapeTypeName()const override{
+        return Name(s_CsgInputNameProjectCsgSlab);
+    }
+
+    public u32 parameterByteSize()const override{
+        return s_CsgShapeParameterRegisterBytes;
+    }
+
+    public CsgShapeInlineParameters defaultParameters()const override{
+        return MakeCsgShapeInlineParameters(VectorSingle(0.5f, 1.0f, 1.0f, 0.0f), VectorSingle(s_CsgZeroShapeParameter));
+    }
+
+    public Expected<CsgShapeLocalBounds> computeLocalBounds(in CsgShapeInlineParameters parameters)const override{
+        return MakeCsgSymmetricLocalBounds(VectorSingle(parameters.parameter0));
+    }
+
+    public f32 evaluateSignedDistance(in VectorSingle shapePosition, in CsgShapeInlineParameters parameters)const override{
+        return shapePosition.x + parameters.parameter0.x;
+    }
+}
+
+class OversizedProjectShape : ICsgShape{
+    public Name shapeTypeName()const override{
+        return Name(s_CsgInputNameProjectCsgOversized);
+    }
+
+    public u32 parameterByteSize()const override{
+        return cast<u32>(s_CsgShapeInlineParameterMaxBytes) + 1u;
+    }
+
+    public CsgShapeInlineParameters defaultParameters()const override{
+        return CsgShapeInlineParameters();
+    }
+
+    public Expected<CsgShapeLocalBounds> computeLocalBounds(in CsgShapeInlineParameters parameters)const override{
+        const f32 unused = parameters.parameter0.x;
+        if(unused != unused)
+            return MakeUnexpected(Failure());
+        return MakeUnexpected(Failure());
+    }
+
+    public f32 evaluateSignedDistance(in VectorSingle shapePosition, in CsgShapeInlineParameters parameters)const override{
+        return (shapePosition.x - shapePosition.x) + (parameters.parameter0.x - parameters.parameter0.x);
+    }
 }
 
 
@@ -209,6 +333,56 @@ Expected<CsgReceiverDrawState> ResolveTestCsgReceiverDrawState(in EntityID entit
     return receiverLookup.resolveReceiverDrawState(entity, receiverPass);
 }
 
+Expected<CsgDeformStats, CsgDeformFailure> PreviewDeform(
+    mut ScratchArena scratchArena,
+    in Span<CsgDeformVertex> inputVertices,
+    in Span<CsgDeformTriangle> inputTriangles,
+    in Span<CsgDeformCutDesc> cuts,
+    in CsgDeformBuildOptions options,
+    mut ScratchDeformVertices outVertices,
+    mut ScratchDeformTriangles outTriangles
+){
+    return PreviewDeformWithoutRegistry(scratchArena, inputVertices, inputTriangles, cuts, options, outVertices, outTriangles);
+}
+
+Expected<CsgDeformStats, CsgDeformFailure> CommitDeform(
+    mut ScratchArena scratchArena,
+    mut GlobalArena commitArena,
+    in Span<CsgDeformVertex> inputVertices,
+    in Span<CsgDeformTriangle> inputTriangles,
+    in Span<CsgDeformCutDesc> cuts,
+    in CsgDeformBuildOptions options,
+    mut GlobalDeformVertices outVertices,
+    mut GlobalDeformTriangles outTriangles
+){
+    return CommitDeformWithoutRegistry(scratchArena, commitArena, inputVertices, inputTriangles, cuts, options, outVertices, outTriangles);
+}
+
+Expected<CsgDeformStats, CsgDeformFailure> CommitDeformRegistered(
+    mut ScratchArena scratchArena,
+    mut GlobalArena commitArena,
+    in Span<CsgDeformVertex> inputVertices,
+    in Span<CsgDeformTriangle> inputTriangles,
+    in Span<CsgDeformCutDesc> cuts,
+    in CsgDeformBuildOptions options,
+    in CsgShapeRegistry registry,
+    mut GlobalDeformVertices outVertices,
+    mut GlobalDeformTriangles outTriangles
+){
+    return CommitDeformWithRegistry(scratchArena, commitArena, inputVertices, inputTriangles, cuts, options, registry, outVertices, outTriangles);
+}
+
+CsgDeformViability CheckDeformViabilityRegistered(
+    mut ScratchArena scratchArena,
+    in Span<CsgDeformVertex> inputVertices,
+    in Span<CsgDeformTriangle> inputTriangles,
+    in Span<CsgDeformCutDesc> cuts,
+    in CsgDeformBuildOptions options,
+    in CsgShapeRegistry registry
+){
+    return CheckDeformViabilityWithRegistry(scratchArena, inputVertices, inputTriangles, cuts, options, registry);
+}
+
 void VerifyCsg_SequentialCutsPreserveEarlierHalfSpaceAndUnweldedSourceVertices(){
     ScratchArena scratchArena(s_OneOffNameTestsCsgScratch);
     GlobalArena commitArena(s_OneOffNameTestsCsgScratch);
@@ -230,36 +404,34 @@ void VerifyCsg_SequentialCutsPreserveEarlierHalfSpaceAndUnweldedSourceVertices()
 
     const CsgDeformBuildOptions options = CsgDeformBuildOptions();
 
-    native(in inputVertices, in inputTriangles, in cuts, in options, mut scratchArena, mut commitArena){
-        Impl::CsgDeformVertexVector<GlobalArena> commitVertices(commitArena);
-        Impl::CsgDeformTriangleVector<GlobalArena> commitTriangles(commitArena);
-        const auto commit = Impl::CommitCsgDeformCuts(scratchArena, commitArena, inputVertices, inputTriangles, cuts, options, nullptr, commitVertices, commitTriangles);
-        ASSERT_TRUE(commit);
-        EXPECT_EQ(commit->appliedCutCount, 2u);
-        ASSERT_FALSE(commitTriangles.empty());
-        ASSERT_GE(commitVertices.size(), 8u);
+    GlobalDeformVertices commitVertices(commitArena);
+    GlobalDeformTriangles commitTriangles(commitArena);
+    const Expected<CsgDeformStats, CsgDeformFailure> commit = CommitDeform(scratchArena, commitArena, inputVertices, inputTriangles, cuts, options, commitVertices, commitTriangles);
+    ASSERT_TRUE(commit.has_value());
+    EXPECT_EQ(commit.value().appliedCutCount, 2u);
+    ASSERT_FALSE(commitTriangles.empty());
+    ASSERT_GE(commitVertices.size(), 8u);
 
-        // Referenced vertices must satisfy both cuts while unreferenced source vertices stay unchanged.
-        for(const CsgDeformTriangle& triangle : commitTriangles){
-            for(const u32 index : triangle.indices){
-                ASSERT_LT(index, commitVertices.size());
-                EXPECT_GE(commitVertices[index].position.x, -0.5001f);
-                EXPECT_GE(commitVertices[index].position.y, -0.5001f);
-            }
+    // Referenced vertices must satisfy both cuts while unreferenced source vertices stay unchanged.
+    for(in CsgDeformTriangle triangle : commitTriangles){
+        for(in u32 index : triangle.indices){
+            ASSERT_LT(cast<usize>(index), commitVertices.size());
+            EXPECT_GE(commitVertices[index].position.x, -0.5001f);
+            EXPECT_GE(commitVertices[index].position.y, -0.5001f);
         }
-        // Seam-safe rebuild never welds or drops source verts: originals survive verbatim.
-        EXPECT_EQ(commitVertices[0u].position.x, -1.0f);
-        EXPECT_EQ(commitVertices[0u].position.y, -1.0f);
-        EXPECT_EQ(commitVertices[2u].position.x, 1.0f);
-        EXPECT_EQ(commitVertices[2u].position.y, 1.0f);
-        // The second cut refines the first cut's output: at least one split vertex sits on x == -0.5.
-        b8 foundCutWall = false;
-        for(const CsgDeformVertex& vertex : commitVertices){
-            if(vertex.position.x > -0.5001f && vertex.position.x < -0.4999f)
-                foundCutWall = true;
-        }
-        EXPECT_TRUE(foundCutWall);
     }
+    // Seam-safe rebuild never welds or drops source verts: originals survive verbatim.
+    EXPECT_EQ(commitVertices[0u].position.x, -1.0f);
+    EXPECT_EQ(commitVertices[0u].position.y, -1.0f);
+    EXPECT_EQ(commitVertices[2u].position.x, 1.0f);
+    EXPECT_EQ(commitVertices[2u].position.y, 1.0f);
+    // The second cut refines the first cut output: at least one split vertex sits on x == -0.5.
+    b8 foundCutWall = false;
+    for(in CsgDeformVertex vertex : commitVertices){
+        if(vertex.position.x > -0.5001f && vertex.position.x < -0.4999f)
+            foundCutWall = true;
+    }
+    EXPECT_TRUE(foundCutWall);
 }
 
 void VerifyCsg_CsgDeformCutViabilityRejectsDegenerateCommit(){
@@ -288,48 +460,45 @@ void VerifyCsg_CsgDeformCutViabilityRejectsDegenerateCommit(){
 
     const CsgDeformBuildOptions options = CsgDeformBuildOptions();
 
-    native(in vertex, in inputVertices, in inputTriangles, in cuts, in options, mut scratchArena, mut commitArena){
-        const Span<const CsgDeformCutDesc> cutSpan(cuts.data(), cuts.size());
-        const CsgDeformViability viability = Impl::CheckCsgDeformCutsViability(scratchArena, inputVertices, inputTriangles, cutSpan, options);
-        EXPECT_FALSE(viability.viable);
+    const CsgDeformViability viability = CheckCsgDeformCutsViability(scratchArena, inputVertices, inputTriangles, cuts, options);
+    EXPECT_FALSE(viability.viable);
 
-        Impl::CsgDeformVertexVector<ScratchArena> previewVertices(scratchArena);
-        Impl::CsgDeformTriangleVector<ScratchArena> previewTriangles(scratchArena);
-        const auto preview = Impl::PreviewCsgDeformCuts(scratchArena, inputVertices, inputTriangles, cutSpan, options, nullptr, previewVertices, previewTriangles);
-        ASSERT_FALSE(preview);
-        EXPECT_EQ(preview.error().reason, CsgDeformViabilityReason::NoKeptGeometry);
-        EXPECT_EQ(preview.error().stats.inputVertexCount, 3u);
-        EXPECT_EQ(preview.error().stats.inputTriangleCount, 1u);
-        EXPECT_EQ(preview.error().stats.outputVertexCount, 0u);
-        EXPECT_EQ(preview.error().stats.outputTriangleCount, 0u);
+    ScratchDeformVertices previewVertices(scratchArena);
+    ScratchDeformTriangles previewTriangles(scratchArena);
+    const Expected<CsgDeformStats, CsgDeformFailure> preview = PreviewDeform(scratchArena, inputVertices, inputTriangles, cuts, options, previewVertices, previewTriangles);
+    ASSERT_FALSE(preview.has_value());
+    EXPECT_EQ(preview.error().reason, CsgDeformViabilityReason::NoKeptGeometry);
+    EXPECT_EQ(preview.error().stats.inputVertexCount, 3u);
+    EXPECT_EQ(preview.error().stats.inputTriangleCount, 1u);
+    EXPECT_EQ(preview.error().stats.outputVertexCount, 0u);
+    EXPECT_EQ(preview.error().stats.outputTriangleCount, 0u);
 
-        Impl::CsgDeformVertexVector<GlobalArena> commitVertices(commitArena);
-        Impl::CsgDeformTriangleVector<GlobalArena> commitTriangles(commitArena);
-        const auto commit = Impl::CommitCsgDeformCuts(scratchArena, commitArena, inputVertices, inputTriangles, cutSpan, options, nullptr, commitVertices, commitTriangles);
-        ASSERT_FALSE(commit);
-        EXPECT_EQ(commit.error().reason, CsgDeformViabilityReason::NoKeptGeometry);
-        EXPECT_EQ(commit.error().stats.inputVertexCount, 3u);
-        EXPECT_EQ(commit.error().stats.inputTriangleCount, 1u);
-        EXPECT_EQ(commit.error().stats.outputVertexCount, 0u);
-        EXPECT_EQ(commit.error().stats.outputTriangleCount, 0u);
-        EXPECT_TRUE(commitVertices.empty());
-        EXPECT_TRUE(commitTriangles.empty());
+    GlobalDeformVertices commitVertices(commitArena);
+    GlobalDeformTriangles commitTriangles(commitArena);
+    const Expected<CsgDeformStats, CsgDeformFailure> commit = CommitDeform(scratchArena, commitArena, inputVertices, inputTriangles, cuts, options, commitVertices, commitTriangles);
+    ASSERT_FALSE(commit.has_value());
+    EXPECT_EQ(commit.error().reason, CsgDeformViabilityReason::NoKeptGeometry);
+    EXPECT_EQ(commit.error().stats.inputVertexCount, 3u);
+    EXPECT_EQ(commit.error().stats.inputTriangleCount, 1u);
+    EXPECT_EQ(commit.error().stats.outputVertexCount, 0u);
+    EXPECT_EQ(commit.error().stats.outputTriangleCount, 0u);
+    EXPECT_TRUE(commitVertices.empty());
+    EXPECT_TRUE(commitTriangles.empty());
 
-        GlobalArena otherArena(s_OneOffNameTestsCsgScratch);
-        Impl::CsgDeformVertexVector<GlobalArena> wrongVertices(otherArena);
-        Impl::CsgDeformTriangleVector<GlobalArena> wrongTriangles(otherArena);
-        wrongVertices.push_back(vertex);
-        wrongTriangles.push_back(inputTriangles[0u]);
-        const auto wrongArena = Impl::CommitCsgDeformCuts(scratchArena, commitArena, inputVertices, inputTriangles, cutSpan, options, nullptr, wrongVertices, wrongTriangles);
-        ASSERT_FALSE(wrongArena);
-        EXPECT_EQ(wrongArena.error().reason, CsgDeformViabilityReason::InvalidOutputArena);
-        EXPECT_EQ(wrongArena.error().stats.inputVertexCount, 0u);
-        EXPECT_EQ(wrongArena.error().stats.inputTriangleCount, 0u);
-        ASSERT_EQ(wrongVertices.size(), 1u);
-        ASSERT_EQ(wrongTriangles.size(), 1u);
-        EXPECT_EQ(wrongVertices.front().position.x, vertex.position.x);
-        EXPECT_EQ(wrongTriangles.front().indices[0u], inputTriangles[0u].indices[0u]);
-    }
+    GlobalArena otherArena(s_OneOffNameTestsCsgScratch);
+    GlobalDeformVertices wrongVertices(otherArena);
+    GlobalDeformTriangles wrongTriangles(otherArena);
+    wrongVertices.push_back(vertex);
+    wrongTriangles.push_back(inputTriangles[0u]);
+    const Expected<CsgDeformStats, CsgDeformFailure> wrongArena = CommitDeform(scratchArena, commitArena, inputVertices, inputTriangles, cuts, options, wrongVertices, wrongTriangles);
+    ASSERT_FALSE(wrongArena.has_value());
+    EXPECT_EQ(wrongArena.error().reason, CsgDeformViabilityReason::InvalidOutputArena);
+    EXPECT_EQ(wrongArena.error().stats.inputVertexCount, 0u);
+    EXPECT_EQ(wrongArena.error().stats.inputTriangleCount, 0u);
+    ASSERT_EQ(wrongVertices.size(), 1u);
+    ASSERT_EQ(wrongTriangles.size(), 1u);
+    EXPECT_EQ(wrongVertices.front().position.x, vertex.position.x);
+    EXPECT_EQ(wrongTriangles.front().indices[0u], inputTriangles[0u].indices[0u]);
 }
 
 void VerifyCsg_ShapeIdentityRetains64BitFoldForCookedAssetsAndRejectsAnEmptyName(){
@@ -370,16 +539,24 @@ void VerifyCsg_ShapeBoundsRejectShortPayloadAndKeepPlaneUnbounded(){
     CsgShapeRegistry registry(testWorld.arena);
     ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(registry));
 
-    native(in registry){
-        const SIMDMatrix shapeToWorldMatrix = MatrixTranslation(10.0f, -5.0f, 1.0f);
-        CsgPlaneShapeParameters planeParameters;
-        const auto planeBounds = registry.buildShapeBounds(s_CsgInputNameEngineCsgPlane, shapeToWorldMatrix, Span<const u8>(reinterpret_cast<const u8*>(&planeParameters), sizeof(planeParameters)));
-        ASSERT_TRUE(planeBounds);
-        EXPECT_FALSE(planeBounds->finiteBounds);
+    const MatrixSingle shapeToWorldMatrix = MatrixAffineTransformation(
+        VectorSingle(1.0f, 1.0f, 1.0f, 0.0f),
+        VectorSingle(0.0f, 0.0f, 0.0f, 0.0f),
+        QuaternionIdentity(),
+        VectorSingle(10.0f, -5.0f, 1.0f, 0.0f)
+    );
+    CsgPlaneShapeParameters planeParameters = CsgPlaneShapeParameters();
+    Vector<u8> planeBytes = Vector<u8>();
+    AppendPOD(planeBytes, planeParameters);
+    const Expected<CsgShapeBounds> planeBounds = registry.buildShapeBounds(s_CsgInputNameEngineCsgPlane, shapeToWorldMatrix, planeBytes);
+    ASSERT_TRUE(planeBounds.has_value());
+    EXPECT_FALSE(planeBounds.value().finiteBounds);
 
-        CsgBoxShapeParameters boxParameters;
-        EXPECT_FALSE(registry.buildShapeBounds(s_CsgInputNameEngineCsgBox, shapeToWorldMatrix, Span<const u8>(reinterpret_cast<const u8*>(&boxParameters), sizeof(boxParameters) - 1u)));
-    }
+    CsgBoxShapeParameters boxParameters = CsgBoxShapeParameters();
+    Vector<u8> boxBytes = Vector<u8>();
+    AppendPOD(boxBytes, boxParameters);
+    boxBytes.pop_back();
+    EXPECT_FALSE(registry.buildShapeBounds(s_CsgInputNameEngineCsgBox, shapeToWorldMatrix, boxBytes).has_value());
 }
 
 void VerifyCsg_OversizedProjectShapeDoesNotChangeRegistry(){
@@ -393,9 +570,7 @@ void VerifyCsg_OversizedProjectShapeDoesNotChangeRegistry(){
     EXPECT_FALSE(registry.registerShape<OversizedProjectShape>().has_value());
     EXPECT_EQ(registry.shapeTypeCount(), count);
     EXPECT_EQ(registry.revision(), revision);
-    native(in registry){
-        EXPECT_FALSE(registry.findShapeType(s_CsgLookupNameProjectCsgOversized));
-    }
+    EXPECT_FALSE(registry.findShapeType(s_CsgLookupNameProjectCsgOversized).has_value());
     EXPECT_TRUE(SawCapturedError(logger, "parameter size larger than the inline shader ABI"));
 }
 
@@ -422,32 +597,31 @@ void VerifyCsg_ProjectDefinedICsgShapeRegistersBoundsSignedDistanceAndDeformCuts
     const CsgDeformBuildOptions options = CsgDeformBuildOptions();
     const CsgShapeTypeId resolvedSlabId = slabId.value();
 
-    native(in registry, in resolvedSlabId, in inputVertices, in inputTriangles, in cuts, in options, mut scratchArena, mut commitArena){
-        const auto defaultBounds = registry.buildShapeBounds(resolvedSlabId, ::MatrixIdentity(), Span<const u8>{});
-        ASSERT_TRUE(defaultBounds);
-        EXPECT_TRUE(defaultBounds->finiteBounds);
-        EXPECT_FLOAT_EQ(VectorGetX(defaultBounds->minBounds), -0.5f);
-        EXPECT_FLOAT_EQ(VectorGetX(defaultBounds->maxBounds), 0.5f);
+    const Span<u8> emptyPayload = Span<u8>();
+    const MatrixSingle identityMatrix = MatrixSingle(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
+    const Expected<CsgShapeBounds> defaultBounds = registry.buildShapeBounds(resolvedSlabId, identityMatrix, emptyPayload);
+    ASSERT_TRUE(defaultBounds.has_value());
+    EXPECT_TRUE(defaultBounds.value().finiteBounds);
+    EXPECT_FLOAT_EQ(CsgWorldBoundsMinX(defaultBounds.value()), -0.5f);
+    EXPECT_FLOAT_EQ(CsgWorldBoundsMaxX(defaultBounds.value()), 0.5f);
 
-        const auto defaultDistance = registry.evaluateSignedDistance(resolvedSlabId, VectorSet(-0.25f, 0.0f, 0.0f, 1.0f), Span<const u8>{});
-        ASSERT_TRUE(defaultDistance);
-        EXPECT_FLOAT_EQ(*defaultDistance, 0.25f);
+    const Expected<f32> defaultDistance = registry.evaluateSignedDistance(resolvedSlabId, VectorSingle(-0.25f, 0.0f, 0.0f, 1.0f), emptyPayload);
+    ASSERT_TRUE(defaultDistance.has_value());
+    EXPECT_FLOAT_EQ(defaultDistance.value(), 0.25f);
 
-        const Span<const CsgDeformCutDesc> cutSpan(cuts.data(), cuts.size());
-        EXPECT_FALSE(Impl::CheckCsgDeformCutsViability(scratchArena, inputVertices, inputTriangles, cutSpan, options).viable);
-        EXPECT_TRUE(Impl::CheckCsgDeformCutsViability(scratchArena, inputVertices, inputTriangles, cutSpan, options, &registry).viable);
+    EXPECT_FALSE(CheckCsgDeformCutsViability(scratchArena, inputVertices, inputTriangles, cuts, options).viable);
+    EXPECT_TRUE(CheckDeformViabilityRegistered(scratchArena, inputVertices, inputTriangles, cuts, options, registry).viable);
 
-        Impl::CsgDeformVertexVector<GlobalArena> commitVertices(commitArena);
-        Impl::CsgDeformTriangleVector<GlobalArena> commitTriangles(commitArena);
-        const auto commit = Impl::CommitCsgDeformCuts(scratchArena, commitArena, inputVertices, inputTriangles, cutSpan, options, &registry, commitVertices, commitTriangles);
-        ASSERT_TRUE(commit);
-        EXPECT_EQ(commit->appliedCutCount, 1u);
-        ASSERT_FALSE(commitTriangles.empty());
-        for(const CsgDeformTriangle& triangle : commitTriangles){
-            for(const u32 index : triangle.indices){
-                ASSERT_LT(index, commitVertices.size());
-                EXPECT_GE(commitVertices[index].position.x, -0.5001f);
-            }
+    GlobalDeformVertices commitVertices(commitArena);
+    GlobalDeformTriangles commitTriangles(commitArena);
+    const Expected<CsgDeformStats, CsgDeformFailure> commit = CommitDeformRegistered(scratchArena, commitArena, inputVertices, inputTriangles, cuts, options, registry, commitVertices, commitTriangles);
+    ASSERT_TRUE(commit.has_value());
+    EXPECT_EQ(commit.value().appliedCutCount, 1u);
+    ASSERT_FALSE(commitTriangles.empty());
+    for(in CsgDeformTriangle triangle : commitTriangles){
+        for(in u32 index : triangle.indices){
+            ASSERT_LT(cast<usize>(index), commitVertices.size());
+            EXPECT_GE(commitVertices[index].position.x, -0.5001f);
         }
     }
 }
@@ -546,17 +720,7 @@ void VerifyCsg_CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs(){
         cutter.receiverGroup = s_CsgInputNameProjectCsgGroupA;
         cutter.shapeType = s_CsgInputNameEngineCsgCapsule;
 
-        CsgFrameState state = CsgFrameState();
-        native(in hiddenReceiverEntity, mut world, mut scratchArena, mut state){
-            CsgTestsDetail::TestCsgVisibilityFilter filter;
-            filter.hiddenEntity = hiddenReceiverEntity;
-
-            CsgFrameBuildDesc desc;
-            desc.receiverVisible = &CsgTestsDetail::TestCsgReceiverVisible;
-            desc.receiverVisibleUserData = &filter;
-
-            state = BuildCsgFrameState(world, scratchArena, desc);
-        }
+        const CsgFrameState state = BuildFilteredCsgFrameState(world, scratchArena, hiddenReceiverEntity);
 
         EXPECT_FALSE(state.empty());
         EXPECT_EQ(state.receiverCount, 1u);
@@ -639,16 +803,19 @@ void VerifyCsg_ReceiverLookupExcludesIncompleteInactiveUntypedAndWrongPassInputs
         EXPECT_EQ(opaqueDrawStateResult2.value().cutterCount, 2u);
 
         usize resolvedCutterCount = 0u;
-        native(in receiverEntity, in receiver, mut world, mut scratchArena, mut resolvedCutterCount){
-            const CsgFrameReceiverLookup receiverLookup(world, scratchArena);
-            const auto resolvedDrawStateResult1 = receiverLookup.resolveReceiverDrawState(receiverEntity, CsgReceiverPass::Opaque);
-            ASSERT_TRUE(resolvedDrawStateResult1);
-            const auto& resolvedDrawState = *resolvedDrawStateResult1;
-            receiverLookup.forEachReceiverCutter(resolvedDrawState, [&](const Core::ECS::EntityID, const CsgCutterComponent& resolvedCutter){
-                EXPECT_EQ(resolvedCutter.receiverGroup, receiver.receiverGroup);
+        const Name expectedGroup = receiver.receiverGroup;
+        const CsgFrameReceiverLookup receiverLookup(world, scratchArena);
+        const Expected<CsgReceiverDrawState> resolvedDrawStateResult1 = receiverLookup.resolveReceiverDrawState(receiverEntity, CsgReceiverPass::Opaque);
+        ASSERT_TRUE(resolvedDrawStateResult1.has_value());
+        receiverLookup.forEachReceiverCutter(
+            resolvedDrawStateResult1.value(),
+            lambda[in expectedGroup, mut resolvedCutterCount](in EntityID cutterEntityId, in CsgCutterComponent resolvedCutter) -> void{
+                if(cutterEntityId == s_InvalidEntityId)
+                    return;
+                EXPECT_EQ(resolvedCutter.receiverGroup, expectedGroup);
                 ++resolvedCutterCount;
-            });
-        }
+            }
+        );
         EXPECT_EQ(resolvedCutterCount, 2u);
     }
 
@@ -694,138 +861,6 @@ void VerifyCsg_ReceiverLookupExcludesIncompleteInactiveUntypedAndWrongPassInputs
         ASSERT_TRUE(transparentDrawStateResult6.has_value());
         EXPECT_EQ(transparentDrawStateResult6.value().cutterCount, 1u);
     }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Name GetTestProjectSlabShapeName(){
-    return Name(s_CsgInputNameProjectCsgSlab);
-}
-
-u32 GetTestProjectSlabShapeParameterBytes(){
-    return s_CsgShapeParameterRegisterBytes;
-}
-
-CsgShapeInlineParameters MakeTestProjectSlabShapeDefaultParameters(){
-    return MakeCsgShapeInlineParameters(VectorSet(0.5f, 1.0f, 1.0f, 0.0f), LoadFloat(s_CsgZeroShapeParameter));
-}
-
-Expected<CsgShapeLocalBounds> ComputeTestProjectSlabShapeBounds(in CsgShapeInlineParameters parameters){
-    return MakeCsgSymmetricLocalBounds(LoadFloat(parameters.parameter0));
-}
-
-f32 EvaluateTestProjectSlabShapeSignedDistance(in SIMDVectorSingle shapePosition, in CsgShapeInlineParameters parameters){
-    return VectorGetX(shapePosition) + parameters.parameter0.x;
-}
-
-Name GetOversizedProjectShapeName(){
-    return Name(s_CsgInputNameProjectCsgOversized);
-}
-
-u32 GetOversizedProjectShapeParameterBytes(){
-    return cast<u32>(s_CsgShapeInlineParameterMaxBytes) + 1u;
-}
-
-CsgShapeInlineParameters MakeOversizedProjectShapeDefaultParameters(){
-    return CsgShapeInlineParameters();
-}
-
-Expected<CsgShapeLocalBounds> ComputeOversizedProjectShapeBounds(){
-    return MakeUnexpected(Failure());
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace CsgTestsDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Name TestProjectSlabShape::shapeTypeName()const noexcept{
-    return Tests::CsgCases::GetTestProjectSlabShapeName();
-}
-
-u32 TestProjectSlabShape::parameterByteSize()const noexcept{
-    return Tests::CsgCases::GetTestProjectSlabShapeParameterBytes();
-}
-
-Impl::CsgShapeInlineParameters TestProjectSlabShape::defaultParameters()const noexcept{
-    return Tests::CsgCases::MakeTestProjectSlabShapeDefaultParameters();
-}
-
-Expected<Impl::CsgShapeLocalBounds> TestProjectSlabShape::computeLocalBounds(const Impl::CsgShapeInlineParameters& parameters)const noexcept{
-    return Tests::CsgCases::ComputeTestProjectSlabShapeBounds(parameters);
-}
-
-f32 TestProjectSlabShape::evaluateSignedDistance(const SIMDVectorSingle shapePosition, const Impl::CsgShapeInlineParameters& parameters)const noexcept{
-    return Tests::CsgCases::EvaluateTestProjectSlabShapeSignedDistance(shapePosition, parameters);
-}
-
-Name OversizedProjectShape::shapeTypeName()const noexcept{
-    return Tests::CsgCases::GetOversizedProjectShapeName();
-}
-
-u32 OversizedProjectShape::parameterByteSize()const noexcept{
-    return Tests::CsgCases::GetOversizedProjectShapeParameterBytes();
-}
-
-Impl::CsgShapeInlineParameters OversizedProjectShape::defaultParameters()const noexcept{
-    return Tests::CsgCases::MakeOversizedProjectShapeDefaultParameters();
-}
-
-Expected<Impl::CsgShapeLocalBounds> OversizedProjectShape::computeLocalBounds(const Impl::CsgShapeInlineParameters&)const noexcept{
-    return Tests::CsgCases::ComputeOversizedProjectShapeBounds();
-}
-
-f32 OversizedProjectShape::evaluateSignedDistance(const SIMDVectorSingle, const Impl::CsgShapeInlineParameters&)const noexcept{
-    return 0.0f;
-}
-
-b8 TestCsgReceiverVisible(
-    [[maybe_unused]] Core::ECS::World& world,
-    const Core::ECS::EntityID entity,
-    [[maybe_unused]] const Impl::CsgReceiverKind::Enum receiverKind,
-    [[maybe_unused]] const Impl::CsgReceiverComponent& receiver,
-    void* userData
-)noexcept{
-    const auto* filter = static_cast<const TestCsgVisibilityFilter*>(userData);
-    return !filter || entity != filter->hiddenEntity;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

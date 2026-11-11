@@ -16,39 +16,22 @@ native{
 
 
 #include <loader/project_entry.adhd.h>
-#include <impl/assets_csg/shape_id.adhd.h>
-#include <impl/ecs_csg/module.adhd.h>
-#include <impl/assets_model/asset.adhd.h>
-#include <impl/assets_material/asset.adhd.h>
 #include <impl/assets_skeleton/asset.adhd.h>
-#include <impl/ecs_scene/module.adhd.h>
-#include <impl/ecs_mesh/system.adhd.h>
-#include <impl/ecs_model/system.adhd.h>
-#include <impl/ecs_model_renderer/model_renderer.adhd.h>
 #include <impl/ecs_render/module.adhd.h>
-#include <impl/ecs_render/material/material_instance.adhd.h>
 #include <impl/ecs_mesh/skinning/system.adhd.h>
-#include <core/alloc/scratch.h>
-#include <core/assets/manager.h>
-#include <core/common/log.h>
-#include <core/ecs/module.h>
-#include <core/graphics/backend_selection/backend.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/telemetry/frame_graph_contributor.h>
-#include <global/assert.h>
 #include <global/simd/frame.h>
-#include <global/simd/vector.h>
-#include <global/timer.h>
+#include <global/simd/matrix_decompose.h>
 
 namespace NWB::Tests::Smoke{
-[[nodiscard]] inline TStringView SkinnedCausticProjectName()noexcept{
-    return NWB_TEXT("SkinnedCausticSmokeProject");
+[[nodiscard]] NWB_INLINE AStringView SkinnedCausticProjectName()noexcept{
+    return "SkinnedCausticSmokeProject";
 }
 
 inline constexpr f32 s_SkinnedCausticAffineEpsilon = Impl::s_SkeletonAffineEpsilon;
 inline constexpr f32 s_SkinnedCausticDeterminantEpsilon = Impl::s_SkeletonJointDeterminantEpsilon;
+using ::MatrixIsInvertibleAffine;
 
-[[nodiscard]] inline NotNullUniquePtr<Core::ECS::World> CreateSkinnedCausticWorldOrDie(ProjectRuntimeContext& context){
+[[nodiscard]] NWB_INLINE NotNullUniquePtr<Core::ECS::World> CreateSkinnedCausticWorldOrDie(ProjectRuntimeContext& context){
     auto world = CreateSmokeSkinnedRenderWorldOrDie(SkinnedCausticProjectName(), SmokeRenderQualitySettings(), context);
     if(ReadSmokeEnvironmentFlag(s_SkinnedCausticCsgTransitionEnvironment)){
         auto& renderer = *MakeNotNull(world->getSystem<Impl::RendererSystem>());
@@ -88,11 +71,7 @@ MatrixSingle BuildSkinnedCausticWaveJointMatrix(in MatrixSingle bindJoint, in f3
     const VectorSingle rotationAngles = VectorSingle(0.4f, 1.0f, 0.25f, 0.0f) * angle;
     const MatrixSingle rotation = MatrixRotationRollPitchYawFromVector(rotationAngles);
     const MatrixSingle animated = Mul(bindJoint, rotation);
-    b8 invertible = false;
-    native(in animated, mut invertible){
-        invertible = MatrixIsInvertibleAffine(animated, Impl::s_SkeletonAffineEpsilon, Impl::s_SkeletonJointDeterminantEpsilon);
-    }
-    if(!invertible)
+    if(!MatrixIsInvertibleAffine(animated, s_SkinnedCausticAffineEpsilon, s_SkinnedCausticDeterminantEpsilon))
         return bindJoint;
     return animated;
 }
@@ -105,7 +84,6 @@ class SkinnedCausticSmokeProjectImpl : IProjectEntryCallbacks{
     public SkinnedCausticSmokeProjectImpl(mut ProjectRuntimeContext context){
         this.m_context = context;
         this.m_world = CreateSkinnedCausticWorldOrDie(context);
-        this.m_bindJoints = SkeletonJointMatrixVector(context.objectArena);
         this.m_fpsProbe = FpsProbe(SkinnedCausticProjectName());
         this.m_gpuPassTimingProbe = GpuPassTimingProbe(SkinnedCausticProjectName());
         this.m_transition = SkinnedCausticTransition(context);
@@ -116,9 +94,7 @@ class SkinnedCausticSmokeProjectImpl : IProjectEntryCallbacks{
     }
 
     public b8 onStartup()override{
-        native(mut ctx = this.m_context){
-            ctx.setPerfCapture(Core::Perf::CaptureOptions::GpuTimingOnly());
-        }
+        this.m_context.setPerfCapture(SmokePerfGpuTimingOnly());
         if(!this.m_transition.prepare())
             return false;
 
@@ -132,80 +108,54 @@ class SkinnedCausticSmokeProjectImpl : IProjectEntryCallbacks{
         );
         if(!bindJoints.has_value())
             return false;
-        native(mut dst = this.m_bindJoints, mut bindJoints){
-            dst = Move(*bindJoints);
-        }
+        this.m_bindJoints = bindJoints.value();
 
         const b8 enableCaustics = !this.m_transition.enabled() || !ReadSmokeEnvironmentFlag(s_SkinnedCausticCsgNoPhotonsEnvironment);
-        EntityID cameraEntity = s_InvalidEntityId;
-        EntityID groundEntity = s_InvalidEntityId;
-        native(in enableCaustics, mut world = this.m_world, mut cameraEntity, mut groundEntity){
-            auto activeCameraEntity = world->createEntity();
-            auto& activeCamera = activeCameraEntity.addComponent<Impl::Scene::ActiveCameraComponent>();
-            activeCamera.camera = Impl::Scene::CreateSceneCameraEntity(*world, Float4(0.0f, s_SkinnedCausticCameraHeight, -s_SkinnedCausticCameraDistance, 0.0f));
-            cameraEntity = activeCamera.camera;
-            const auto lightEntity = Impl::Scene::CreateDirectionalLightEntity(
-                *world,
-                s_SkinnedCausticDefaultDirectionalLightPitch,
-                s_SkinnedCausticDefaultDirectionalLightYaw,
-                0.0f,
-                Float4(1.0f, 0.96f, 0.88f),
-                s_SkinnedCausticDefaultDirectionalLightIntensity
-            );
-            if(auto* light = world->tryGetComponent<Impl::Scene::LightComponent>(lightEntity))
-                light->enableCaustics = enableCaustics;
-
-            groundEntity = CreateTintedStaticMeshEntity(
-                s_SkinnedCausticGroundMesh,
-                s_SkinnedCausticGroundMaterial,
-                NameTextAscii(s_SmokeSurfaceMaterialInterface),
-                VectorSet(0.82f, 0.82f, 0.85f, 1.0f),
-                VectorSet(0.0f, 0.0f, 0.0f, 0.0f),
-                VectorSet(s_SkinnedCausticGroundScale, 1.0f, s_SkinnedCausticGroundScale, 0.0f),
-                *world
-            );
-        }
-        this.m_groundEntity = groundEntity;
+        const EntityID cameraEntity = CreateSmokeCamera(
+            s_SkinnedCausticCameraHeight,
+            s_SkinnedCausticCameraDistance,
+            0.0f,
+            SmokeWorldRef(this.m_world)
+        );
+        const EntityID lightEntity = CreateSmokeDirectionalLight(
+            s_SkinnedCausticDefaultDirectionalLightPitch,
+            s_SkinnedCausticDefaultDirectionalLightYaw,
+            0.0f,
+            f32x4(1.0f, 0.96f, 0.88f, 1.0f),
+            s_SkinnedCausticDefaultDirectionalLightIntensity,
+            enableCaustics,
+            SmokeWorldRef(this.m_world)
+        );
+        this.m_groundEntity = CreateTintedStaticMeshEntity(
+            s_SkinnedCausticGroundMesh,
+            s_SkinnedCausticGroundMaterial,
+            NameTextAscii(s_SmokeSurfaceMaterialInterface),
+            VectorSingle(0.82f, 0.82f, 0.85f, 1.0f),
+            VectorSingle(0.0f, 0.0f, 0.0f, 0.0f),
+            VectorSingle(s_SkinnedCausticGroundScale, 1.0f, s_SkinnedCausticGroundScale, 0.0f),
+            SmokeWorldRef(this.m_world)
+        );
         this.m_character = this.createGlassCharacter();
 
-        b8 hasClosedRefractor = false;
-        EntityID skeletonEntity = s_InvalidEntityId;
-        native(in character = this.m_character, mut world = this.m_world, mut hasClosedRefractor, mut skeletonEntity){
-            SyncSmokeModelRuntimes(*world);
-            const auto meshEntity = FindSpawnedModelObject(character, s_SmokeNameMesh, s_SkinnedCausticObjectKindMesh, *world);
-            if(auto* const renderer = world->tryGetComponent<Impl::RendererComponent>(meshEntity)){
-                renderer->opticalBoundaryMode = Impl::OpticalBoundaryMode::ClosedNested;
-                hasClosedRefractor = true;
-            }
-            skeletonEntity = FindSpawnedModelObject(character, s_SmokeNameSkeleton, s_SkinnedCausticObjectKindSkeleton, *world);
-        }
-        if(!hasClosedRefractor){
+        SyncSmokeModelRuntimes(SmokeWorldRef(this.m_world));
+        const EntityID meshEntity = FindSpawnedModelObject(this.m_character, s_SmokeNameMesh, ModelObjectKind::SkinnedMesh, SmokeWorldRef(this.m_world));
+        if(!SetSmokeOpticalBoundaryMode(meshEntity, OpticalBoundaryMode::ClosedNested, SmokeWorldRef(this.m_world))){
             error("SkinnedCausticSmokeProject: closed refractor renderer is unavailable");
             return false;
         }
-        this.m_skeletonEntity = skeletonEntity;
+        this.m_skeletonEntity = FindSpawnedModelObject(this.m_character, s_SmokeNameSkeleton, ModelObjectKind::Skeleton, SmokeWorldRef(this.m_world));
 
         [essential] assert(
-            cameraEntity.valid() && this.m_groundEntity.valid() && this.m_character.valid() && this.m_skeletonEntity.valid(),
+            cameraEntity.valid() && lightEntity.valid() && this.m_groundEntity.valid() && this.m_character.valid() && this.m_skeletonEntity.valid(),
             "SkinnedCausticSmokeProject failed to create all scene entities"
         );
 
-        if(this.m_transition.enabled()){
-            b8 cutterInstalled = false;
-            native(in character = this.m_character, mut transition = this.m_transition, mut world = this.m_world, mut cutterInstalled){
-                cutterInstalled = transition.installTransitionCutter(character, *world);
-            }
-            if(!cutterInstalled){
-                error("SkinnedCausticTransition: could not install the skinned CSG receiver");
-                return false;
-            }
+        if(this.m_transition.enabled() && !this.m_transition.installTransitionCutter(this.m_character, SmokeWorldRef(this.m_world))){
+            error("SkinnedCausticTransition: could not install the skinned CSG receiver");
+            return false;
         }
 
-        u32 jointCount = 0u;
-        native(in bindJoints = this.m_bindJoints, mut jointCount){
-            jointCount = static_cast<u32>(bindJoints.size());
-        }
-        [essential] info("SkinnedCausticSmokeProject: skinned glass refractor over ground created ({} joints)", jointCount);
+        [essential] info("SkinnedCausticSmokeProject: skinned glass refractor over ground created ({} joints)", cast<u32>(this.m_bindJoints.size()));
         return true;
     }
 
@@ -223,9 +173,7 @@ class SkinnedCausticSmokeProjectImpl : IProjectEntryCallbacks{
         if(this.m_transition.enabled()){
             const f64 phaseAngle = cast<f64>(this.m_context.graphics.getFrameIndex() % s_SkinnedCausticTransitionPhaseFrames) * s_SkinnedCausticTwoPi;
             this.m_animationTime = phaseAngle / (cast<f64>(s_SkinnedCausticTransitionPhaseFrames) * cast<f64>(s_SkinnedCausticPoseAnimationSpeed));
-            native(mut transition = this.m_transition, mut world = this.m_world, mut animTime = this.m_animationTime){
-                transition.updateTransitionState(*world, animTime);
-            }
+            this.m_transition.updateTransitionState(SmokeWorldRef(this.m_world), this.m_animationTime);
         }
         else{
             const f32 animationStep = Min(safeDelta, s_SkinnedCausticMaxAnimationDelta) * s_SkinnedCausticPoseAnimationSpeed;
@@ -235,10 +183,7 @@ class SkinnedCausticSmokeProjectImpl : IProjectEntryCallbacks{
         f32 tickDelta = safeDelta;
         if(this.m_transition.enabled())
             tickDelta = 1.0f / 60.0f;
-        b8 ticked = false;
-        native(in tickDelta, mut world = this.m_world, mut ticked){
-            ticked = TickSmokeWorld(tickDelta, *world);
-        }
+        const b8 ticked = TickSmokeWorld(tickDelta, SmokeWorldRef(this.m_world));
         if(ticked && this.m_transition.enabled())
             this.m_transition.updateTransitionCapture();
         return ticked;
@@ -250,30 +195,24 @@ class SkinnedCausticSmokeProjectImpl : IProjectEntryCallbacks{
     }
 
     private EntityID createGlassCharacter(){
-        EntityID characterEntity = s_InvalidEntityId;
-        b8 tintApplied = false;
-        native(mut world = this.m_world, mut characterEntity, mut tintApplied){
-            const auto modelResult = CreateTintedModelEntity(
-                s_SkinnedCausticPrismModel,
-                s_SkinnedCausticGlassMaterial,
-                NameTextAscii(s_SmokeSurfaceMaterialInterface),
-                VectorSet(0.72f, 0.86f, 1.0f, 0.42f),
-                VectorSet(0.0f, s_SkinnedCausticCharacterLift, 0.0f, 0.0f),
-                VectorSet(1.0f, 1.0f, 1.0f, 0.0f),
-                *world
-            );
-            characterEntity = modelResult.entity;
-            tintApplied = modelResult.tintApplied;
-        }
-        if(!tintApplied)
+        const SmokeTintedModelEntityResult modelResult = CreateTintedModelEntity(
+            s_SkinnedCausticPrismModel,
+            s_SkinnedCausticGlassMaterial,
+            NameTextAscii(s_SmokeSurfaceMaterialInterface),
+            VectorSingle(0.72f, 0.86f, 1.0f, 0.42f),
+            VectorSingle(0.0f, s_SkinnedCausticCharacterLift, 0.0f, 0.0f),
+            VectorSingle(1.0f, 1.0f, 1.0f, 0.0f),
+            SmokeWorldRef(this.m_world)
+        );
+        if(!modelResult.tintApplied)
             error("SkinnedCausticSmokeProject: failed to set glass character tint");
-        return characterEntity;
+        return modelResult.entity;
     }
 
     private void animatePoses(){
         const f32 timeSeconds = cast<f32>(this.m_animationTime);
         native(in skeleton = this.m_skeletonEntity, in bindJoints = this.m_bindJoints, in timeSeconds, mut world = this.m_world){
-            auto* pose = world->tryGetComponent<Impl::SkeletonPoseComponent>(skeleton);
+            auto* const pose = world->tryGetComponent<Impl::SkeletonPoseComponent>(skeleton);
             if(pose){
                 for(u32 jointIndex = 0u; jointIndex < pose->localJoints.size() && jointIndex < bindJoints.size(); ++jointIndex){
                     if(jointIndex == 0u){
@@ -293,7 +232,7 @@ class SkinnedCausticSmokeProjectImpl : IProjectEntryCallbacks{
 
     private mut ProjectRuntimeContext m_context;
     private NotNullUniquePtr<World> m_world;
-    private SkeletonJointMatrixVector m_bindJoints;
+    private Vector<f32x3x4> m_bindJoints;
     private FpsProbe m_fpsProbe;
     private GpuPassTimingProbe m_gpuPassTimingProbe;
     private f64 m_animationTime = 0.0;

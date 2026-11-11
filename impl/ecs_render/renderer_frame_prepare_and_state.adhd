@@ -261,7 +261,7 @@ b8 RendererFramePipeline::validateResources(const u32 width, const u32 height, c
         invalidateResources();
     }
 
-    if(!RendererGpuTimingScopeReservations::Prepare(m_graphics))
+    if(!RendererGpuTimingScopeReservations{}.prepare(m_graphics))
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU timing scope preparation failed; timing samples may be skipped"));
 
     DeferredFrameTargets* deferredTargets = m_frameTargets.valid() ? &m_frameTargets : nullptr;

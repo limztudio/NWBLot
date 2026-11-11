@@ -123,7 +123,7 @@ b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
             return true;
         }
         if(callee == "ComputeSha256" && expr.arguments.size() == 1u && expr.arguments[0]){
-            out.append("([](const auto& __adhd_bytes)noexcept{ return ::ComputeSha256(::BinaryByteView{ reinterpret_cast<const ::u8*>(__adhd_bytes.data()), __adhd_bytes.size() }); }(");
+            out.append("([](const auto& __adhd_bytes)noexcept{ if constexpr(requires{ __adhd_bytes.data(); __adhd_bytes.size(); }){ return ::ComputeSha256(::BinaryByteView{ reinterpret_cast<const ::u8*>(__adhd_bytes.data()), __adhd_bytes.size() }); }else{ const ::AStringView __adhd_sv(__adhd_bytes); return ::ComputeSha256(::BinaryByteView{ reinterpret_cast<const ::u8*>(__adhd_sv.data()), __adhd_sv.size() }); } }(");
             m_emitter.emitExpr(out, *expr.arguments[0]);
             out.append("))");
             return true;

@@ -119,6 +119,28 @@ static_assert(CanTrimView<AStringView>);
 static_assert(CanTrimView<AStringView&>);
 static_assert(CanTrimView<AString<>&>);
 static_assert(!CanTrimView<AString<>>);
+static_assert(LiteralView("a\0b").size() == 3u);
+static_assert(::TryMultiply<u64>(0u, Limit<u64>::s_Max) && *::TryMultiply<u64>(0u, Limit<u64>::s_Max) == 0u);
+static_assert(::TryMultiply<i64>(Limit<i64>::s_Min, 1) && *::TryMultiply<i64>(Limit<i64>::s_Min, 1) == Limit<i64>::s_Min);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::GlobalCases{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using Latin1TextErrorEnum = ::Latin1TextError::Enum;
+namespace Latin1TextError = ::Latin1TextError;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -150,11 +172,30 @@ public:
     operator usize()const noexcept{ return value; }
 };
 
-[[nodiscard]] inline const ThrowingReplacementComparison& operator>(const ReplacementOffset lhs, const ReplacementOffset rhs)noexcept{
+[[nodiscard]] NWB_INLINE const ThrowingReplacementComparison& operator>(const ReplacementOffset lhs, const ReplacementOffset rhs)noexcept{
     static const ThrowingReplacementComparison s_True(true);
     static const ThrowingReplacementComparison s_False(false);
     return lhs.value > rhs.value ? s_True : s_False;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::GlobalCases{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using Latin1VoidResult = Expected<void, ::Latin1TextError::Enum>;
+using ConstU32Span = Span<const u32>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -237,39 +278,21 @@ void VerifyGlobal_MultiplicationDistinguishesOverflowSignedBoundariesAndSuccessf
     const Expected<i64> minProduct = TryMultiply<i64>(i64.min, 1);
     ASSERT_TRUE(minProduct.has_value());
     EXPECT_EQ(minProduct.value(), i64.min);
-
-    native{
-        constexpr auto s_Zero = ::TryMultiply<u64>(0u, Limit<u64>::s_Max);
-        static_assert(s_Zero && *s_Zero == 0u);
-        constexpr auto s_Minimum = ::TryMultiply<i64>(Limit<i64>::s_Min, 1);
-        static_assert(s_Minimum && *s_Minimum == Limit<i64>::s_Min);
-    }
 }
 
 void VerifyGlobal_CheckedAdditionDistinguishesSignedLimitsAndSuccessfulZero(){
-    Expected<i64> lower = MakeUnexpected(Failure());
-    Expected<i64> upper = MakeUnexpected(Failure());
-    Expected<i64> zero = MakeUnexpected(Failure());
-    b8 maxSignedOverflow = true;
-    b8 minSignedOverflow = true;
-    b8 maxUnsignedOverflow = true;
-    native(mut lower, mut upper, mut zero, mut maxSignedOverflow, mut minSignedOverflow, mut maxUnsignedOverflow){
-        maxSignedOverflow = AddNoOverflow<i64>(Limit<i64>::s_Max, 1).has_value();
-        minSignedOverflow = AddNoOverflow<i64>(Limit<i64>::s_Min, -1).has_value();
-        lower = AddNoOverflow<i64>(Limit<i64>::s_Min, 1);
-        upper = AddNoOverflow<i64>(Limit<i64>::s_Max, -1);
-        zero = AddNoOverflow<i64>(Limit<i64>::s_Max, -Limit<i64>::s_Max);
-        maxUnsignedOverflow = AddNoOverflow<u64>(Limit<u64>::s_Max, 1u).has_value();
-    }
-    EXPECT_FALSE(maxSignedOverflow);
-    EXPECT_FALSE(minSignedOverflow);
+    EXPECT_FALSE(AddNoOverflow<i64>(i64.max, 1).has_value());
+    EXPECT_FALSE(AddNoOverflow<i64>(i64.min, -1).has_value());
+    const Expected<i64> lower = AddNoOverflow<i64>(i64.min, 1);
+    const Expected<i64> upper = AddNoOverflow<i64>(i64.max, -1);
+    const Expected<i64> zero = AddNoOverflow<i64>(i64.max, -i64.max);
     ASSERT_TRUE(lower.has_value());
     EXPECT_EQ(lower.value(), i64.min + 1);
     ASSERT_TRUE(upper.has_value());
     EXPECT_EQ(upper.value(), i64.max - 1);
     ASSERT_TRUE(zero.has_value());
     EXPECT_EQ(zero.value(), 0);
-    EXPECT_FALSE(maxUnsignedOverflow);
+    EXPECT_FALSE(AddNoOverflow<u64>(u64.max, 1u).has_value());
 }
 
 void VerifyGlobal_NumericParsersRespectViewBoundsAndRejectEmptyInput(){
@@ -661,30 +684,14 @@ void VerifyGlobal_FixedBufferTextViewsTruncateAtCapacityWithoutReadingPastSlice(
 }
 
 void VerifyGlobal_Utf8DecoderRespectsBoundedNonterminatedInput(){
-    b8 decodedOk = false;
-    i32 decodedBytes = 0;
-    u32 decodedCodePoint = 0u;
-    b8 anyPrefixAccepted = false;
-    b8 overlongAccepted = true;
-    native(mut decodedOk, mut decodedBytes, mut decodedCodePoint, mut anyPrefixAccepted, mut overlongAccepted){
-        const Array<char, 4u> bytes = { static_cast<char>(0xF0), static_cast<char>(0x9F), static_cast<char>(0x98), static_cast<char>(0x80) };
-        const AStringView text(bytes.data(), bytes.size());
-        const auto decoded = DecodeUtf8CodePoint(text);
-        decodedOk = decoded.has_value();
-        if(decoded){
-            decodedBytes = decoded->byteCount;
-            decodedCodePoint = decoded->codePoint;
-        }
-        for(usize size = 0u; size < text.size(); ++size)
-            anyPrefixAccepted = anyPrefixAccepted || DecodeUtf8CodePoint(text.substr(0u, size)).has_value();
-        const Array<char, 2u> overlong = { static_cast<char>(0xC0), static_cast<char>(0x80) };
-        overlongAccepted = DecodeUtf8CodePoint(AStringView(overlong.data(), overlong.size())).has_value();
-    }
-    ASSERT_TRUE(decodedOk);
-    EXPECT_EQ(decodedBytes, 4);
-    EXPECT_EQ(decodedCodePoint, 0x1F600u);
-    EXPECT_FALSE(anyPrefixAccepted);
-    EXPECT_FALSE(overlongAccepted);
+    const StringView text = StringView("\xF0\x9F\x98\x80", 4u);
+    const Expected<DecodedUtf8CodePoint> decoded = DecodeUtf8CodePoint(text);
+    ASSERT_TRUE(decoded.has_value());
+    EXPECT_EQ(decoded.value().byteCount, 4);
+    EXPECT_EQ(decoded.value().codePoint, 0x1F600u);
+    for(usize size = 0u; size < text.size(); ++size)
+        EXPECT_FALSE(DecodeUtf8CodePoint(text.substr(0u, size)).has_value());
+    EXPECT_FALSE(DecodeUtf8CodePoint(StringView("\xC0\x80", 2u)).has_value());
 }
 
 void VerifyGlobal_CompactStringSearchUsesStoredCanonicalTextAndViewBoundaries(){
@@ -693,22 +700,17 @@ void VerifyGlobal_CompactStringSearchUsesStoredCanonicalTextAndViewBoundaries(){
     EXPECT_EQ(compact.front(), 102u);
     EXPECT_EQ(compact.back(), 101u);
     EXPECT_EQ(compact.find(StringView("/example")), 6u);
-    native(in compact){
-        EXPECT_EQ(compact.find('e', 8u), 13u);
-        EXPECT_EQ(compact.find(AStringView{}, compact.size()), compact.size());
-        EXPECT_EQ(compact.find(AStringView("EXAMPLE")), ACompactString::s_NPos);
-        EXPECT_EQ(compact.find('z'), ACompactString::s_NPos);
-    }
+    EXPECT_EQ(compact.find('e', 8u), 13u);
+    EXPECT_EQ(compact.find(StringView(), compact.size()), compact.size());
+    EXPECT_EQ(compact.find(StringView("EXAMPLE")), usize.max);
+    EXPECT_EQ(compact.find('z'), usize.max);
 }
 
 void VerifyGlobal_RejectedACompactStringAssignResetsText(){
     CompactString compact = CompactString();
     ASSERT_TRUE(compact.assign("seed"));
-    native(mut compact){
-        const Array<char, 3u> textWithNull = { 'a', '\0', 'b' };
-        EXPECT_FALSE(compact.assign(AStringView(textWithNull.data(), textWithNull.size())));
-        EXPECT_EQ(compact.c_str()[0], '\0');
-    }
+    EXPECT_FALSE(compact.assign(StringView("a\0b", 3u)));
+    EXPECT_TRUE(StringView(compact.c_str()).empty());
     EXPECT_TRUE(compact.empty());
     EXPECT_TRUE(compact.view().empty());
 }
@@ -768,32 +770,39 @@ void VerifyGlobal_CallAndOptionTextRejectInvalidBoundaries(){
     EXPECT_EQ(ExtractLeadingIdentifier("9a-"), "9a");
     EXPECT_TRUE(IsEscapedQuoteAt("\\", 1u));
     EXPECT_FALSE(IsEscapedQuoteAt("\\\\", 2u));
-    native{
-        static_assert(LiteralView("a\0b").size() == 3u);
-        const auto nestedCall = SplitNonemptyCallText("  item ( a(b) ) ");
-        ASSERT_TRUE(nestedCall);
-        EXPECT_EQ(nestedCall->name, "item");
-        EXPECT_EQ(nestedCall->arguments, "a(b)");
-        const auto permissiveCall = SplitNonemptyCallText("f(a)b)");
-        ASSERT_TRUE(permissiveCall);
-        EXPECT_EQ(permissiveCall->arguments, "a)b");
-        EXPECT_FALSE(SplitNonemptyCallText("item( \t )"));
-        EXPECT_FALSE(SplitNonemptyCallText("item()"));
-        EXPECT_FALSE(SplitNonemptyCallText("(value)"));
-        EXPECT_FALSE(SplitNonemptyCallText("item(value)tail"));
-        const char callWithNull[]{ 'f', '(', '\0', 'x', ')' };
-        const auto nullCall = SplitNonemptyCallText(AStringView(callWithNull, sizeof(callWithNull)));
-        ASSERT_TRUE(nullCall);
-        EXPECT_EQ(nullCall->arguments.size(), 2u);
-        EXPECT_EQ(nullCall->arguments[0u], '\0');
-        const Array<u32, 3> choices{ 0u, 1u, 2u };
-        const auto optionText = [](const u32 value)noexcept -> AStringView{ return value == 2u ? "other" : "mixed"; };
-        const auto parsed = ParseOptionText(AStringView("  MiXeD\t"), Span<const u32>(choices), optionText);
-        ASSERT_TRUE(parsed);
-        EXPECT_EQ(*parsed, 0u);
-        EXPECT_FALSE(ParseOptionText(AStringView("missing"), Span<const u32>(choices), optionText));
-        EXPECT_FALSE(ParseOptionText(AStringView("mixed"), Span<const u32>{}, optionText));
-    }
+
+    const Expected<CallTextParts> nestedCall = SplitNonemptyCallText("  item ( a(b) ) ");
+    ASSERT_TRUE(nestedCall.has_value());
+    EXPECT_EQ(nestedCall.value().name, "item");
+    EXPECT_EQ(nestedCall.value().arguments, "a(b)");
+    const Expected<CallTextParts> permissiveCall = SplitNonemptyCallText("f(a)b)");
+    ASSERT_TRUE(permissiveCall.has_value());
+    EXPECT_EQ(permissiveCall.value().arguments, "a)b");
+    EXPECT_FALSE(SplitNonemptyCallText("item( \t )").has_value());
+    EXPECT_FALSE(SplitNonemptyCallText("item()").has_value());
+    EXPECT_FALSE(SplitNonemptyCallText("(value)").has_value());
+    EXPECT_FALSE(SplitNonemptyCallText("item(value)tail").has_value());
+
+    const Expected<CallTextParts> nullCall = SplitNonemptyCallText(StringView("f(\0x)", 5u));
+    ASSERT_TRUE(nullCall.has_value());
+    const StringView nullArgs = nullCall.value().arguments;
+    ASSERT_EQ(nullArgs.size(), 2u);
+    EXPECT_EQ(nullArgs[0u], 0u);
+
+    Array<u32, 3> choices = Array<u32, 3>();
+    choices[0u] = 0u;
+    choices[1u] = 1u;
+    choices[2u] = 2u;
+    const auto optionText = lambda[](in u32 value) -> StringView{
+        if(value == 2u)
+            return "other";
+        return "mixed";
+    };
+    const Expected<u32> parsed = ParseOptionText(StringView("  MiXeD\t"), ConstU32Span(choices), optionText);
+    ASSERT_TRUE(parsed.has_value());
+    EXPECT_EQ(parsed.value(), 0u);
+    EXPECT_FALSE(ParseOptionText(StringView("missing"), ConstU32Span(choices), optionText).has_value());
+    EXPECT_FALSE(ParseOptionText(StringView("mixed"), ConstU32Span(), optionText).has_value());
 }
 
 void VerifyGlobal_TextReplacementsAndIdentifiersPreserveInputBoundaries(){
@@ -855,29 +864,27 @@ void VerifyGlobal_TextReplacementsAndIdentifiersPreserveInputBoundaries(){
     EXPECT_EQ(pascalSelected, 1u);
 }
 
+Latin1VoidResult EvalEncodeLatin1Text(in StringView text, in usize maxBytes, mut String output){
+    return EncodeLatin1Text(text, maxBytes, output);
+}
+
 void VerifyGlobal_Latin1RejectsInvalidTextAndCapacity(){
     String latinText = String();
-    b8 decodedOk = false;
-    b8 decodedMatchesExpected = false;
-    b8 tooSmallRejected = false;
-    b8 embeddedNulRejected = false;
-    b8 invalidUtf8Rejected = false;
-    native(mut latinText, mut decodedOk, mut decodedMatchesExpected, mut tooSmallRejected, mut embeddedNulRejected, mut invalidUtf8Rejected){
-        decodedOk = DecodeLatin1Text("\x80", 2u, latinText).has_value();
-        decodedMatchesExpected = AStringView(latinText) == AStringView("\xC2\x80");
-        const auto tooSmall = DecodeLatin1Text("\x80", 1u, latinText);
-        tooSmallRejected = !tooSmall && tooSmall.error() == Latin1TextError::TooLarge;
-        const auto embeddedNul = DecodeLatin1Text(AStringView("\x80\0", 2u), 2u, latinText);
-        embeddedNulRejected = !embeddedNul && embeddedNul.error() == Latin1TextError::InvalidText;
-        const auto invalidUtf8 = EncodeLatin1Text(AStringView("\xC4\x80\xFF", 3u), 3u, latinText);
-        invalidUtf8Rejected = !invalidUtf8 && invalidUtf8.error() == Latin1TextError::InvalidText;
-    }
-    EXPECT_TRUE(decodedOk);
-    EXPECT_TRUE(decodedMatchesExpected);
-    EXPECT_TRUE(tooSmallRejected);
+    ASSERT_TRUE(DecodeLatin1Text(StringView("\x80", 1u), 2u, latinText).has_value());
+    EXPECT_EQ(StringView(latinText), StringView("\xC2\x80", 2u));
+
+    const Latin1VoidResult tooSmall = DecodeLatin1Text(StringView("\x80", 1u), 1u, latinText);
+    ASSERT_FALSE(tooSmall.has_value());
+    EXPECT_EQ(tooSmall.error(), Latin1TextError::TooLarge);
     EXPECT_TRUE(latinText.empty());
-    EXPECT_TRUE(embeddedNulRejected);
-    EXPECT_TRUE(invalidUtf8Rejected);
+
+    const Latin1VoidResult embeddedNul = DecodeLatin1Text(StringView("\x80\0", 2u), 2u, latinText);
+    ASSERT_FALSE(embeddedNul.has_value());
+    EXPECT_EQ(embeddedNul.error(), Latin1TextError::InvalidText);
+
+    const Latin1VoidResult invalidUtf8 = EvalEncodeLatin1Text(StringView("\xC4\x80\xFF", 3u), 3u, latinText);
+    ASSERT_FALSE(invalidUtf8.has_value());
+    EXPECT_EQ(invalidUtf8.error(), Latin1TextError::InvalidText);
 }
 
 void VerifyGlobal_SourceAndNewlineTextPreserveBoundaries(){
@@ -941,24 +948,19 @@ void VerifyGlobal_UnsignedTextAndBytesAgreeAtMaximum(){
 }
 
 void VerifyGlobal_GraphemeAndTransparentHashRespectInvalidAndEmbeddedNull(){
-    b8 emptyBoundariesOk = false;
-    usize emptyBoundariesSize = 0u;
-    usize firstBoundary = 1u;
-    b8 invalidSurrogateBoundariesOk = true;
+    const Expected<Vector<usize>> emptyBoundaries = BuildGraphemeBoundaries(StringView());
+    ASSERT_TRUE(emptyBoundaries.has_value());
+    const Vector<usize> boundaries = emptyBoundaries.value();
+    ASSERT_EQ(boundaries.size(), 1u);
+    EXPECT_EQ(boundaries[0u], 0u);
+    EXPECT_FALSE(BuildGraphemeBoundaries(StringView("\xED\xA0\x80", 3u)).has_value());
+
     usize keyHash = 0u;
     usize borrowedHash = 1u;
     b8 embeddedNullEqual = false;
     b8 shortPrefixEqual = true;
-    native(mut emptyBoundariesOk, mut emptyBoundariesSize, mut firstBoundary, mut invalidSurrogateBoundariesOk, mut keyHash, mut borrowedHash, mut embeddedNullEqual, mut shortPrefixEqual){
+    native(mut keyHash, mut borrowedHash, mut embeddedNullEqual, mut shortPrefixEqual){
         NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
-        const auto emptyBoundaries = BuildGraphemeBoundaries(scratchArena, AStringView{});
-        emptyBoundariesOk = emptyBoundaries.has_value();
-        if(emptyBoundaries && !emptyBoundaries->empty()){
-            emptyBoundariesSize = emptyBoundaries->size();
-            firstBoundary = (*emptyBoundaries)[0u];
-        }
-        invalidSurrogateBoundariesOk = BuildGraphemeBoundaries(scratchArena, AStringView("\xED\xA0\x80", 3u)).has_value();
-
         using ScratchText = AString<NWB::Core::Alloc::ScratchArena>;
         const ScratchText key("a\0b", 3u, scratchArena);
         const AStringView borrowed("a\0b", 3u);
@@ -967,10 +969,6 @@ void VerifyGlobal_GraphemeAndTransparentHashRespectInvalidAndEmbeddedNull(){
         embeddedNullEqual = TransparentStringEqual<ScratchText>{}(key, borrowed);
         shortPrefixEqual = TransparentStringEqual<ScratchText>{}(key, AStringView("a", 1u));
     }
-    ASSERT_TRUE(emptyBoundariesOk);
-    ASSERT_EQ(emptyBoundariesSize, 1u);
-    EXPECT_EQ(firstBoundary, 0u);
-    EXPECT_FALSE(invalidSurrogateBoundariesOk);
     EXPECT_EQ(keyHash, borrowedHash);
     EXPECT_TRUE(embeddedNullEqual);
     EXPECT_FALSE(shortPrefixEqual);

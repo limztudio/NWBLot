@@ -13,6 +13,20 @@ b8 ValidateAssetGathererOutputDirectory(in b8 hasOutputDirectory){
     return true;
 }
 
+u64 ComputeGatheredPayloadHash(in Span<u8> payload){
+    u64 hash = s_Fnv64OffsetBasis;
+    for(usize i = 0u; i < payload.size(); ++i)
+        hash = UpdateFnv64Byte(hash, payload[i]);
+    return hash;
+}
+
+String ResolveEffectiveGatherConfiguration(in StringView configuration){
+    const String canonical = BuildCanonicalSafeCacheName(configuration);
+    if(canonical.empty())
+        return String(s_DefaultGatherConfig);
+    return canonical;
+}
+
 b8 AreGatheredAssetPayloadsIdentical(in Span<u8> lhs, in Span<u8> rhs){
     if(lhs.size() != rhs.size())
         return false;

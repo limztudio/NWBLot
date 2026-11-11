@@ -94,12 +94,7 @@ void VerifyGlobal_DerivedNamesReportInvalidInputsAndPreserveCanonicalBinaryIdent
     ASSERT_TRUE(upper.has_value());
     EXPECT_NE(lower.value(), s_NameNone);
     EXPECT_EQ(lower.value(), upper.value());
-    b8 embeddedNullDerived = true;
-    native(in base, mut embeddedNullDerived){
-        constexpr Array<char, 3u> s_EmbeddedNull = { 'a', '\0', 'b' };
-        embeddedNullDerived = DeriveName(base, AStringView(s_EmbeddedNull.data(), s_EmbeddedNull.size())).has_value();
-    }
-    EXPECT_FALSE(embeddedNullDerived);
+    EXPECT_FALSE(DeriveName(base, StringView("a\0b", 3u)).has_value());
 }
 
 void VerifyGlobal_ConstexprNameViewsPreserveBoundedIdentityAndSymbolCallbacks(){

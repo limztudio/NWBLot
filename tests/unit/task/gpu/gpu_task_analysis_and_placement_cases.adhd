@@ -9,77 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/task/gpu/inferred_dependency_collector.h>
-#include <core/task/gpu/output_layer_contributor.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace TaskGraphTestUtils{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using GpuAnalysisTestArena = ::NWB::Tests::TestArena<struct TaskGraphAnalysisTestsTag>;
-using GpuTaskGraphReadViews = ::NWB::Tests::GpuTaskGraphReadViews;
-using ScopedTestTrace = ::NWB::Tests::ScopedTestTrace;
-using GpuResourceVersionOriginEnum = Core::GpuGraphResourceVersionOrigin::Enum;
-using GpuResourceAccessEnum = Core::GpuTaskResourceAccess::Enum;
-using GpuResourceVersionRoleEnum = Core::GpuTaskResourceVersionRole::Enum;
-using GpuResourceStatesMask = Core::ResourceStates::Mask;
-using GpuTaskSchedulingReachability = Core::GpuTaskGraphCompilerDetail::GpuTaskSchedulingReachability;
-using GpuAnalysisTaskGraphicsVector = Core::GraphicsVector<Core::GpuTaskId>;
-using GpuAnalysisEdgeGraphicsVector = Core::GraphicsVector<Core::GpuTaskDependencyEdge>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 enum<u8> GpuAnalysisReadyOrderShape{
     ConsumerFirstPairs = 0,
     ProducerFirstPairs = 1,
@@ -125,29 +54,15 @@ GpuTaskDependencyEdge GpuAnalysis_MakeEdge(
 }
 
 GpuPhysicalQueueTopology GpuAnalysis_MakeTopology(in Span<GpuPhysicalQueueInfo> queues){
-    GpuPhysicalQueueTopology topology = GpuPhysicalQueueTopology();
-    native(in queues, mut topology){
-        topology.queues = queues.data();
-        topology.queueCount = queues.size();
-    }
-    return topology;
+    return MakeTopology(queues);
 }
 
 Optional<GpuTaskQueueAssignment> GpuAnalysis_FindQueueAssignment(in GpuTaskGraphQueueAssignments assignments, in GpuTaskId task){
-    Optional<GpuTaskQueueAssignment> result = Optional<GpuTaskQueueAssignment>();
-    native(in assignments, in task, mut result){
-        if(const Core::GpuTaskQueueAssignment* const found = assignments.find(task))
-            result = *found;
-    }
-    return result;
+    return FindQueueAssignment(assignments, task);
 }
 
 b8 GpuAnalysis_HasFatalFailure(){
-    b8 failed = false;
-    native(mut failed){
-        failed = ::testing::Test::HasFatalFailure();
-    }
-    return failed;
+    return TestHasFatalFailure();
 }
 
 void GpuAnalysis_CheckPacketQueries(in usize taskCount){
@@ -161,7 +76,7 @@ void GpuAnalysis_CheckPacketQueries(in usize taskCount){
         ASSERT_TRUE(declarations.valid());
         graphGeneration = declarations.generation();
     }
-    GpuAnalysisTaskGraphicsVector tasks = GpuAnalysisTaskGraphicsVector(testArena.arena);
+    TaskGraphicsVector tasks = TaskGraphicsVector(testArena.arena);
     tasks.resize(taskCount);
     for(usize declarationIndex = 0u; declarationIndex < taskCount; ++declarationIndex){
         const usize orderIndex = taskCount - declarationIndex - 1u;
@@ -238,12 +153,10 @@ void GpuAnalysis_CheckPacketQueries(in usize taskCount){
     EXPECT_FALSE(views.compiled.tasksFormContiguousPacketSequence(noncontiguous));
     EXPECT_FALSE(views.compiled.tasksFormContiguousPacketSequence(crossesPackets));
     EXPECT_FALSE(views.compiled.tasksFormContiguousPacketSequence(staleSeq));
-    native(in views, in tasks){
-        EXPECT_TRUE(views.compiled.tasksFormContiguousPacketSequence(Span<const Core::GpuTaskId>(tasks.data(), tasks.size())));
-        EXPECT_TRUE(views.compiled.tasksFormContiguousPacketSequence(Span<const Core::GpuTaskId>(tasks.data() + 1u, tasks.size() - 2u)));
-        EXPECT_FALSE(views.compiled.tasksFormContiguousPacketSequence(Span<const Core::GpuTaskId>(static_cast<const Core::GpuTaskId*>(nullptr), 1u)));
-        EXPECT_FALSE(views.compiled.tasksFormContiguousPacketSequence(Span<const Core::GpuTaskId>(tasks.data(), 0u)));
-    }
+    EXPECT_TRUE(views.compiled.tasksFormContiguousPacketSequence(PrefixSpan<GpuTaskId>(tasks, tasks.size())));
+    EXPECT_TRUE(views.compiled.tasksFormContiguousPacketSequence(SubSpan<GpuTaskId>(tasks, 1u, tasks.size() - 2u)));
+    EXPECT_FALSE(views.compiled.tasksFormContiguousPacketSequence(MakeNullTaskSpan(1u)));
+    EXPECT_FALSE(views.compiled.tasksFormContiguousPacketSequence(PrefixSpan<GpuTaskId>(tasks, 0u)));
 }
 
 void VerifyGpuAnalysis_PacketQueriesFollowExecutionOrderAcrossReverseDeclarations(){
@@ -263,9 +176,7 @@ void VerifyGpuAnalysis_PreservesUploadOnlyAndCompleteColorForms(){
     EXPECT_FALSE(layer.validShape());
     layer.colorVersion = GpuAnalysis_MakeResourceVersionId(3u, 2u);
     EXPECT_FALSE(layer.validShape());
-    native(mut layer){
-        layer.sampledImage = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::SampledImage, 4u);
-    }
+    layer.sampledImage = MakeSampledImageDescriptor(4u);
     EXPECT_TRUE(layer.validShape());
 
     layer.readyTask = GpuTaskId();
@@ -282,15 +193,13 @@ void VerifyGpuAnalysis_RejectsPartialColorWithoutAReadyTask(){
     EXPECT_FALSE(layer.validShape());
 
     layer.colorVersion = GpuGraphResourceVersionId();
-    native(mut layer){
-        layer.sampledImage = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::SampledImage, 4u);
-    }
+    layer.sampledImage = MakeSampledImageDescriptor(4u);
     EXPECT_FALSE(layer.validShape());
 }
 
 void GpuAnalysis_BuildVersionChain(
     mut GpuTaskGraph graph,
-    in GpuResourceVersionOriginEnum origin,
+    in GpuGraphResourceVersionOriginEnum origin,
     in usize taskCount,
     in b8 disjointClobber,
     in b8 overlappingClobber
@@ -382,10 +291,10 @@ void GpuAnalysis_BuildVersionChain(
 void VerifyGpuAnalysis_ResourceVersionsWithoutOverlappingClobbersPreserveStableOrder(){
     ScratchArena operationScratchArena = ScratchArena(s_TaskGpuScratch);
 
-    Array<GpuResourceVersionOriginEnum, 2> origins = Array<GpuResourceVersionOriginEnum, 2>();
+    Array<GpuGraphResourceVersionOriginEnum, 2> origins = Array<GpuGraphResourceVersionOriginEnum, 2>();
     origins[0u] = GpuGraphResourceVersionOrigin::ImportedRoot;
     origins[1u] = GpuGraphResourceVersionOrigin::TaskProduced;
-    for(in GpuResourceVersionOriginEnum origin : origins){
+    for(in GpuGraphResourceVersionOriginEnum origin : origins){
         const ScopedTestTrace trace = ScopedTestTrace(origin);
         TestArena testArena = TestArena();
         GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -590,16 +499,11 @@ void VerifyGpuAnalysis_ResourceVersionPreBirthReachabilityHandlesFrozenSemanticC
     }
 
     ScratchArena scratchArena = ScratchArena(s_GpuCaseAnalysisOptimizationSemanticCycleScratch);
-    Vector<GpuTaskDependencyEdge> edges = Vector<GpuTaskDependencyEdge>();
+    ScratchDependencyEdges edges = ScratchDependencyEdges(scratchArena);
     b8 builtEdges = false;
     {
         const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(graph);
-        native(in declarations, mut scratchArena, mut edges, mut builtEdges){
-            Vector<Core::GpuTaskDependencyEdge, Core::Alloc::ScratchArena> rawEdges(scratchArena);
-            builtEdges = Core::GpuTaskGraphCompilerDetail::BuildResourceVersionDependencyEdges(declarations, scratchArena, rawEdges).has_value();
-            for(const Core::GpuTaskDependencyEdge& edge : rawEdges)
-                edges.push_back(edge);
-        }
+        builtEdges = TryBuildResourceVersionDependencyEdges(declarations, scratchArena, edges);
     }
     ASSERT_TRUE(builtEdges);
     ASSERT_EQ(edges.size(), 2u);
@@ -654,8 +558,8 @@ void VerifyGpuAnalysis_VersionLifetimeEdgesPreserveDistinctTaskAndVersionOrder()
         Array<GpuTaskId, 3> tasks = Array<GpuTaskId, 3>();
         for(usize index = 0u; index < tasks.size(); ++index){
             const b8 writer = index != 1u;
-            GpuResourceStatesMask state = ResourceStates::ShaderResource;
-            GpuResourceAccessEnum access = GpuTaskResourceAccess::Read;
+            ResourceStatesMask state = ResourceStates::ShaderResource;
+            GpuTaskResourceAccessEnum access = GpuTaskResourceAccess::Read;
             if(writer){
                 state = ResourceStates::UnorderedAccess;
                 access = GpuTaskResourceAccess::Write;
@@ -676,7 +580,7 @@ void VerifyGpuAnalysis_VersionLifetimeEdgesPreserveDistinctTaskAndVersionOrder()
             physicalUses[2u].requiredState = state;
             physicalUses[2u].access = access;
 
-            GpuResourceVersionRoleEnum role = GpuTaskResourceVersionRole::Consume;
+            GpuTaskResourceVersionRoleEnum role = GpuTaskResourceVersionRole::Consume;
             if(index == 0u)
                 role = GpuTaskResourceVersionRole::Produce;
             Array<GpuTaskResourceVersionUse, 2> versionUses = Array<GpuTaskResourceVersionUse, 2>();
@@ -700,16 +604,11 @@ void VerifyGpuAnalysis_VersionLifetimeEdgesPreserveDistinctTaskAndVersionOrder()
         }
 
         ScratchArena scratchArena = ScratchArena(s_GpuCaseAnalysisOptimizationLifetimeEdgeScratch);
-        Vector<GpuTaskDependencyEdge> edges = Vector<GpuTaskDependencyEdge>();
+        ScratchDependencyEdges edges = ScratchDependencyEdges(scratchArena);
         b8 builtEdges = false;
         {
             const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(graph);
-            native(in declarations, mut scratchArena, mut edges, mut builtEdges){
-                Vector<Core::GpuTaskDependencyEdge, Core::Alloc::ScratchArena> rawEdges(scratchArena);
-                builtEdges = Core::GpuTaskGraphCompilerDetail::BuildResourceVersionDependencyEdges(declarations, scratchArena, rawEdges).has_value();
-                for(const Core::GpuTaskDependencyEdge& edge : rawEdges)
-                    edges.push_back(edge);
-            }
+            builtEdges = TryBuildResourceVersionDependencyEdges(declarations, scratchArena, edges);
         }
         ASSERT_TRUE(builtEdges);
         ASSERT_EQ(edges.size(), 4u);
@@ -887,11 +786,7 @@ void GpuAnalysis_ExpectDagAnalysis(
     }
 
     GpuTaskSchedulingReachability schedulingReachability = GpuTaskSchedulingReachability(scratchArena);
-    b8 reachabilityBuilt = false;
-    native(in declarations, in analysis, mut schedulingReachability, mut reachabilityBuilt){
-        reachabilityBuilt = Core::GpuTaskGraphCompilerDetail::BuildGpuTaskSchedulingReachability(declarations, analysis, schedulingReachability);
-    }
-    ASSERT_TRUE(reachabilityBuilt);
+    ASSERT_TRUE(BuildGpuTaskSchedulingReachability(declarations, analysis, schedulingReachability));
     for(usize source = 0u; source < taskCount; ++source){
         for(usize destination = 0u; destination < taskCount; ++destination){
             const GpuTaskId sourceTask = declarations.taskAt(source).id;
@@ -1050,7 +945,7 @@ void VerifyGpuAnalysis_PreservesLowestReadyIdAcrossRepeatedBackwardReleasesAndPa
         for(in GpuAnalysisReadyOrderShape shape : shapes){
             const ScopedTestTrace traceCount = ScopedTestTrace(count);
             const ScopedTestTrace traceShape = ScopedTestTrace(cast<u32>(shape));
-            GpuAnalysisTestArena testArena = GpuAnalysisTestArena();
+            TestArena testArena = TestArena();
             GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
             GpuAnalysis_DeclareReadyOrderGraph(graph, count, shape);
             ASSERT_FALSE(GpuAnalysis_HasFatalFailure());
@@ -1067,7 +962,7 @@ void VerifyGpuAnalysis_PreservesLowestReadyIdAcrossRepeatedBackwardReleasesAndPa
 
 void VerifyGpuAnalysis_RetainsCycleDiagnosticsAfterBackwardReleasePrefixExhaustsReadyWork(){
     const usize prefixCount = 130u;
-    GpuAnalysisTestArena testArena = GpuAnalysisTestArena();
+    TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
     GpuAnalysis_DeclareReadyOrderGraph(graph, prefixCount, GpuAnalysisReadyOrderShape::ConsumerFirstPairs);
     ASSERT_FALSE(GpuAnalysis_HasFatalFailure());
@@ -1112,7 +1007,7 @@ void VerifyGpuAnalysis_ReducesShortcutEdgesAtTheLastDirectConsumerBeforeLongTail
     reversedDeclarations[1u] = true;
     for(in b8 reversed : reversedDeclarations){
         const ScopedTestTrace trace = ScopedTestTrace(reversed);
-        GpuAnalysisTestArena testArena = GpuAnalysisTestArena();
+        TestArena testArena = TestArena();
         GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
         GpuAnalysis_DeclareShortcutChain(graph, taskCount, reversed);
         ASSERT_FALSE(GpuAnalysis_HasFatalFailure());
@@ -1147,7 +1042,7 @@ void VerifyGpuAnalysis_MatchesIndependentReferenceForPermutedDagsAndDuplicateDep
         for(in u32 seed : seeds){
             const ScopedTestTrace traceCount = ScopedTestTrace(taskCount);
             const ScopedTestTrace traceSeed = ScopedTestTrace(seed);
-            GpuAnalysisTestArena testArena = GpuAnalysisTestArena();
+            TestArena testArena = TestArena();
             ScratchArena scratchArena = ScratchArena(s_TaskGpuAnalysisScratch);
             GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
             u64 generation = 0u;
@@ -1211,9 +1106,9 @@ void VerifyGpuAnalysis_MatchesIndependentReferenceForPermutedDagsAndDuplicateDep
     }
 }
 
-void GpuAnalysis_RunInferredReasonPromotion(mut GpuAnalysisTestArena testArena, mut ScratchArena scratchArena){
-    GpuAnalysisEdgeGraphicsVector edges = GpuAnalysisEdgeGraphicsVector(testArena.arena);
-    GpuAnalysisEdgeGraphicsVector inferred = GpuAnalysisEdgeGraphicsVector(testArena.arena);
+void GpuAnalysis_RunInferredReasonPromotion(mut TestArena testArena, mut ScratchArena scratchArena){
+    EdgeGraphicsVector edges = EdgeGraphicsVector(testArena.arena);
+    EdgeGraphicsVector inferred = EdgeGraphicsVector(testArena.arena);
     usize explicitCount = 0u;
     usize inferredCount = 0u;
     usize versionCount = 0u;
@@ -1251,13 +1146,13 @@ void GpuAnalysis_RunInferredReasonPromotion(mut GpuAnalysisTestArena testArena, 
 }
 
 void VerifyGpuAnalysis_InferredReasonPromotionKeepsPriorReasonsAndExplicitPriority(){
-    GpuAnalysisTestArena testArena = GpuAnalysisTestArena();
+    TestArena testArena = TestArena();
     ScratchArena scratchArena = ScratchArena(s_TaskGpuAnalysisScratch);
     GpuAnalysis_RunInferredReasonPromotion(testArena, scratchArena);
 }
 
 void VerifyGpuAnalysis_DeduplicatesHazardReasonsAndPreservesExplicitRawEdgePriority(){
-    GpuAnalysisTestArena testArena = GpuAnalysisTestArena();
+    TestArena testArena = TestArena();
     ScratchArena scratchArena = ScratchArena(s_TaskGpuAnalysisScratch);
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
     Array<GpuGraphResourceId, 3> resources = Array<GpuGraphResourceId, 3>();
@@ -1271,7 +1166,7 @@ void VerifyGpuAnalysis_DeduplicatesHazardReasonsAndPreservesExplicitRawEdgePrior
     }
 
     Array<GpuTaskId, 3> tasks = Array<GpuTaskId, 3>();
-    Array<GpuResourceAccessEnum, 9> accesses = Array<GpuResourceAccessEnum, 9>();
+    Array<GpuTaskResourceAccessEnum, 9> accesses = Array<GpuTaskResourceAccessEnum, 9>();
     accesses[0u] = GpuTaskResourceAccess::ReadWrite;
     accesses[1u] = GpuTaskResourceAccess::Read;
     accesses[2u] = GpuTaskResourceAccess::Write;
@@ -1333,7 +1228,7 @@ void VerifyGpuAnalysis_DeduplicatesHazardReasonsAndPreservesExplicitRawEdgePrior
 
 void VerifyGpuAnalysis_EmptySchedulingReachabilityAvoidsStorageAndResetsAcrossDependencyGraphs(){
     const usize taskCount = 65u;
-    GpuAnalysisTestArena testArena = GpuAnalysisTestArena();
+    TestArena testArena = TestArena();
     ScratchArena analysisScratchArena = ScratchArena(s_TaskGpuAnalysisScratch);
     ScratchArena reachabilityScratchArena = ScratchArena(s_GpuCaseTaskGpuEdgefreeReachability);
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
@@ -1358,11 +1253,7 @@ void VerifyGpuAnalysis_EmptySchedulingReachabilityAvoidsStorageAndResetsAcrossDe
     const ArenaMemoryStats before = reachabilityScratchArena.memoryStats();
     {
         const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(graph);
-        b8 built = false;
-        native(in declarations, in analysis, mut reachability, mut built){
-            built = Core::GpuTaskGraphCompilerDetail::BuildGpuTaskSchedulingReachability(declarations, analysis, reachability);
-        }
-        ASSERT_TRUE(built);
+        ASSERT_TRUE(BuildGpuTaskSchedulingReachability(declarations, analysis, reachability));
     }
     const ArenaMemoryStats after = reachabilityScratchArena.memoryStats();
     EXPECT_EQ(after.allocationCount, before.allocationCount);
@@ -1410,11 +1301,7 @@ void VerifyGpuAnalysis_EmptySchedulingReachabilityAvoidsStorageAndResetsAcrossDe
         const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(dependentGraph);
         ASSERT_TRUE(compiler.analyze(declarations, analysisScratchArena, dependentAnalysis));
         ASSERT_FALSE(dependentAnalysis.schedulingEdges().empty());
-        b8 built = false;
-        native(in declarations, in dependentAnalysis, mut reachability, mut built){
-            built = Core::GpuTaskGraphCompilerDetail::BuildGpuTaskSchedulingReachability(declarations, dependentAnalysis, reachability);
-        }
-        ASSERT_TRUE(built);
+        ASSERT_TRUE(BuildGpuTaskSchedulingReachability(declarations, dependentAnalysis, reachability));
     }
     EXPECT_TRUE(reachability.reaches(producer, consumer));
     EXPECT_FALSE(reachability.reaches(consumer, producer));
@@ -1427,11 +1314,7 @@ void VerifyGpuAnalysis_EmptySchedulingReachabilityAvoidsStorageAndResetsAcrossDe
     const ArenaMemoryStats beforeReuse = reachabilityScratchArena.memoryStats();
     {
         const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(graph);
-        b8 built = false;
-        native(in declarations, in analysis, mut reachability, mut built){
-            built = Core::GpuTaskGraphCompilerDetail::BuildGpuTaskSchedulingReachability(declarations, analysis, reachability);
-        }
-        ASSERT_TRUE(built);
+        ASSERT_TRUE(BuildGpuTaskSchedulingReachability(declarations, analysis, reachability));
     }
     EXPECT_EQ(reachabilityScratchArena.memoryStats().allocationCount, beforeReuse.allocationCount);
     EXPECT_FALSE(reachability.reaches(tasks[0u], tasks[taskCount - 1u]));
@@ -1496,11 +1379,9 @@ void VerifyGpuAnalysis_PreservesDiagnosticsForSingleLegalClassAndIndependentMerg
     GpuTaskQueueLoad queueLoad = GpuTaskQueueLoad();
     queueLoad.queue = graphicsQueue.id;
     queueLoad.estimatedCost = 13u;
-    GpuTaskGraphQueueAssignmentOptions options = GpuTaskGraphQueueAssignmentOptions();
-    native(in queueLoad, mut options){
-        options.queueLoads = &queueLoad;
-        options.queueLoadCount = 1u;
-    }
+    Array<GpuTaskQueueLoad, 1> queueLoads = Array<GpuTaskQueueLoad, 1>();
+    queueLoads[0u] = queueLoad;
+    const GpuTaskGraphQueueAssignmentOptions options = MakeQueueAssignmentOptionsWithLoads(queueLoads);
 
     Array<GpuTaskId, 3> tasks = Array<GpuTaskId, 3>();
     tasks[0u] = graphics;

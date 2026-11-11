@@ -2,10 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_mesh/cook_meshlet_scoring.adhd>
-#include <impl/assets_mesh/cook_types.adhd>
+#include <impl/assets_mesh/cook_meshlet_growth.adhd>
 #include <impl/assets_mesh/mesh_binary_codec.adhd>
-#include <impl/assets_mesh/skin_binary_codec.adhd>
+#include <impl/assets_mesh/skin_cook.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,6 +24,7 @@ native{
 
 
 #include <impl/assets_mesh/asset.adhd.h>
+#include <impl/assets_mesh/skin_asset.adhd.h>
 #include <impl/assets_mesh/cook_types.adhd.h>
 
 #include <core/alloc/scratch.h>
@@ -95,6 +95,29 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct SkinCookEntry{
+    Name virtualPath = s_NameNone;
+    Core::Assets::AssetRef<Mesh> mesh;
+    Core::Assets::AssetRef<Skeleton> skeleton;
+    Core::Assets::AssetVector<SkinInfluence4> influences;
+    Core::Assets::AssetVector<SkeletonJointMatrix> inverseBindMatrices;
+
+
+public:
+    explicit SkinCookEntry(Core::Assets::AssetArena& arena)noexcept
+        : influences(arena)
+        , inverseBindMatrices(arena)
+    {}
+};
+
+[[nodiscard]] Expected<SkinCookEntry> ParseSkinCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<SkinCookEntry> ParseSkinCookMetadata(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena);
+[[nodiscard]] Expected<Skin> BuildSkinAsset(SkinCookEntry& skinEntry, Core::Assets::AssetArena& arena);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_IMPL_END
 
 
@@ -112,38 +135,6 @@ NWB_IMPL_END
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-usize ComputeMeshletParallelCandidateReserve(in u32 workerThreadCount){
-    return (cast<usize>(workerThreadCount) + 1u) * s_MeshletDisconnectedCandidateParallelOversubscription;
-}
-
-b8 ValidateBuiltMeshletsNonEmpty(in usize meshletCount, in StringView metaKind, in StringView filePathText){
-    if(meshletCount != 0u)
-        return true;
-
-    error("{} meta '{}': meshlet build produced no meshlets", metaKind, filePathText);
-    return false;
-}
-
-b8 ValidateSkinCookInverseBindMatrix(in MatrixSingle matrix, in StringView filePathText, in usize matrixIndex){
-    if(IsValidSkinInverseBindMatrix(matrix))
-        return true;
-
-    error(
-        "Skin meta '{}': inverse_bind_matrices[{}] is not a finite invertible affine matrix"
-        , filePathText
-        , matrixIndex
-    );
-    return false;
-}
-
-b8 ValidateSkinCookInverseBindMatricesNonEmpty(in usize matrixCount, in StringView filePathText){
-    if(matrixCount != 0u)
-        return true;
-
-    error("Skin meta '{}': '{}' must not be empty", filePathText, s_SkinInverseBindMatricesField);
-    return false;
-}
 
 b8 SerializeMeshBinaryPayload(
     in Span<f32x3u> positions,
@@ -178,17 +169,6 @@ b8 SerializeMeshBinaryPayload(
     );
 }
 
-b8 SerializeSkinBinaryPayload(
-    in NameHash meshNameHash,
-    in NameHash skeletonNameHash,
-    in Span<SkinInfluence4> influences,
-    in Span<SkeletonJointMatrix> inverseBindMatrices,
-    mut Vector<u8> outBinary
-){
-    SkinBinaryCodec codec;
-    return codec.serialize(meshNameHash, skeletonNameHash, influences, inverseBindMatrices, outBinary);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -206,21 +186,18 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_mesh/skin_cook.adhd.h>
 #include <impl/assets_mesh/cook_metadata.adhd.h>
 #include <core/alloc/scratch.h>
 #include <core/assets/cook_metadata.h>
 #include <core/assets/metadata_fields.h>
 #include <core/assets/paths.h>
 #include <impl/assets_mesh/meshlet_ref_encode.adhd.h>
-#include <impl/assets_mesh/cook_meshlet_growth.adhd.h>
 #include <impl/assets_mesh/binary_payload_io.adhd.h>
 #include <impl/assets_mesh/meshlet_triangle_indices.adhd.h>
 #include <impl/assets_mesh/payload_validation.adhd.h>
 #include <impl/assets_mesh/cook_stream_reorder.adhd.h>
 #include <impl/assets_mesh/cook_solid_topology.adhd.h>
-#include <impl/assets_mesh/cook_meshlet_metrics.adhd.h>
-#include <impl/assets_skeleton/cook_matrix.adhd.h>
+#include <impl/assets_skeleton/cook.adhd.h>
 #include <core/assets/binary_payload_io.h>
 #include <global/algorithm.h>
 #include <global/simd/vector.h>
@@ -230,202 +207,6 @@ native{
 
 
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 MeshCookMeshlets::GrowMeshletFromFrontier(
-    const AStringView metaKind,
-    const AStringView filePathText,
-    const usize seedSearchOffset,
-    Core::CpuTaskScheduler& cpuScheduler,
-    MeshletTrianglePrecompute& trianglePrecompute,
-    Core::Assets::AssetVector<u32>& localSourceVertexRefs,
-    Core::Assets::AssetVector<u32>& localTriangleIndices,
-    MeshletDesc& meshlet,
-    Core::Assets::AssetVector<u8>& primitiveIndices,
-    MeshletScoreState& scoreState,
-    Vector<MeshletCandidateSearchResult, Core::Alloc::ScratchArena>& parallelCandidates,
-    Core::Assets::AssetVector<u32>& frontier,
-    Core::Assets::AssetVector<u8>& frontierFlags
-){
-    while(MeshletPrimitiveCount(meshlet) < s_MeshMaxMeshletTriangles){
-        if(frontier.empty()){
-            const auto disconnectedCandidate = MeshletCandidateSearch::FindBestDisconnectedMeshletCandidate(trianglePrecompute, seedSearchOffset + 1u, localTriangleIndices, scoreState, meshlet, localSourceVertexRefs, cpuScheduler, parallelCandidates);
-            if(!disconnectedCandidate)
-                break;
-
-            if(!AddVisitedMeshletTriangle(
-                metaKind,
-                filePathText,
-                disconnectedCandidate->triangleIndex,
-                trianglePrecompute.triangles,
-                trianglePrecompute.triangleCalculations,
-                trianglePrecompute.positionTriangleOffsets,
-                trianglePrecompute.positionTriangleIndices,
-                trianglePrecompute.visitedTriangles,
-                localSourceVertexRefs,
-                localTriangleIndices,
-                meshlet,
-                primitiveIndices,
-                scoreState,
-                frontier,
-                frontierFlags
-            ))
-                return false;
-            continue;
-        }
-
-        const auto bestCandidate = FindBestMeshletFrontierCandidateFromPrecompute(
-            trianglePrecompute.triangles,
-            trianglePrecompute.triangleCalculations,
-            frontier,
-            localTriangleIndices,
-            scoreState,
-            meshlet,
-            localSourceVertexRefs
-        );
-        if(!bestCandidate)
-            break;
-
-        RemoveMeshletFrontierCandidate(bestCandidate->frontierOffset, frontier, frontierFlags);
-        if(!AddVisitedMeshletTriangle(
-            metaKind,
-            filePathText,
-            bestCandidate->triangleIndex,
-            trianglePrecompute.triangles,
-            trianglePrecompute.triangleCalculations,
-            trianglePrecompute.positionTriangleOffsets,
-            trianglePrecompute.positionTriangleIndices,
-            trianglePrecompute.visitedTriangles,
-            localSourceVertexRefs,
-            localTriangleIndices,
-            meshlet,
-            primitiveIndices,
-            scoreState,
-            frontier,
-            frontierFlags
-        ))
-            return false;
-    }
-
-    return true;
-}
-
-
-b8 MeshCookMeshlets::BuildMeshlets(const Path& nwbFilePath, const TStringView metaKind, const Span<const u32> indices, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, MeshCookEntry& entry){
-    auto precomputed = MeshletTriangleGeometry::PrecomputeMeshletTriangleData(nwbFilePath, metaKind, indices, entry, scratchArena);
-    if(!precomputed)
-        return false;
-    MeshletTrianglePrecompute& trianglePrecompute = *precomputed;
-
-    MeshletDesc current;
-    const AString<Core::Alloc::ScratchArena> filePathText = PathToString<char>(scratchArena, nwbFilePath);
-    Core::Assets::AssetArena& assetArena = entry.positions.get_allocator().arena();
-    Core::Assets::AssetVector<u32> localSourceVertexRefs(assetArena);
-    Core::Assets::AssetVector<u32> localTriangleIndices(assetArena);
-    Vector<MeshletCandidateSearchResult, Core::Alloc::ScratchArena> parallelCandidates(scratchArena);
-    Core::Assets::AssetVector<u32> frontier(assetArena);
-    Core::Assets::AssetVector<u8> frontierFlags(assetArena);
-    PrepareMeshletBuildOutputStreams(
-        indices.size(),
-        trianglePrecompute.triangles.size(),
-        entry.meshlets,
-        entry.meshletBounds,
-        entry.meshletPositionStreamRefs,
-        entry.meshletAttributeStreamRefs,
-        entry.meshletLocalVertexRefs,
-        entry.meshletPrimitiveIndices,
-        localSourceVertexRefs,
-        localTriangleIndices,
-        frontier,
-        frontierFlags
-    );
-    parallelCandidates.reserve(ComputeMeshletParallelCandidateReserve(cpuScheduler.workerThreadCount()));
-
-    MeshletScoreState scoreState;
-
-    auto resetCurrentMeshlet = [&]()noexcept{
-        ResetMeshletBuilderState(entry.meshletPrimitiveIndices.size(), current, localSourceVertexRefs, localTriangleIndices, scoreState);
-    };
-
-    auto flushMeshlet = [&]() -> b8{
-        if(!FlushBuiltMeshlet(
-            s_MeshMetaKindText,
-            AStringView(filePathText),
-            entry.positions,
-            entry.vertexRefs,
-            entry.meshletPrimitiveIndices,
-            localSourceVertexRefs,
-            current,
-            entry.meshletPositionStreamRefs,
-            entry.meshletAttributeStreamRefs,
-            entry.meshletLocalVertexRefs,
-            entry.meshlets,
-            entry.meshletBounds
-        ))
-            return false;
-
-        resetCurrentMeshlet();
-        return true;
-    };
-
-    usize seedSearchOffset = 0u;
-    while(const Expected<u32> seedTriangleIndex = TryFindNextUnvisitedMeshletTriangle(trianglePrecompute.visitedTriangles, trianglePrecompute.triangles.size(), seedSearchOffset)){
-        seedSearchOffset = *seedTriangleIndex;
-        ClearMeshletFrontier(frontier, frontierFlags);
-        resetCurrentMeshlet();
-
-        if(!AddVisitedMeshletTriangle(
-            s_MeshMetaKindText,
-            AStringView(filePathText),
-            *seedTriangleIndex,
-            trianglePrecompute.triangles,
-            trianglePrecompute.triangleCalculations,
-            trianglePrecompute.positionTriangleOffsets,
-            trianglePrecompute.positionTriangleIndices,
-            trianglePrecompute.visitedTriangles,
-            localSourceVertexRefs,
-            localTriangleIndices,
-            current,
-            entry.meshletPrimitiveIndices,
-            scoreState,
-            frontier,
-            frontierFlags
-        ))
-            return false;
-
-        if(!GrowMeshletFromFrontier(s_MeshMetaKindText, AStringView(filePathText), seedSearchOffset, cpuScheduler, trianglePrecompute, localSourceVertexRefs, localTriangleIndices, current, entry.meshletPrimitiveIndices, scoreState, parallelCandidates, frontier, frontierFlags))
-            return false;
-
-        ClearMeshletFrontier(frontier, frontierFlags);
-        if(!flushMeshlet())
-            return false;
-    }
-
-    if(!ValidateBuiltMeshletsNonEmpty(entry.meshlets.size(), s_MeshMetaKindText, AStringView(filePathText)))
-        return false;
-
-    LogMeshletCookMetrics(
-        s_MeshMetaKindText,
-        AStringView(filePathText),
-        indices,
-        entry.positions,
-        entry.normals,
-        entry.tangents,
-        entry.uv0,
-        entry.colors,
-        entry.vertexRefs,
-        entry.meshlets,
-        entry.meshletBounds,
-        entry.meshletPositionStreamRefs,
-        entry.meshletAttributeStreamRefs,
-        entry.meshletLocalVertexRefs,
-        entry.meshletPrimitiveIndices
-    );
-    return true;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -457,7 +238,24 @@ static b8 ParseSourceMeshMeta(const Path& nwbFilePath, const Core::Metascript::V
         outEntry.colors,
         outEntry.vertexRefs
     );
-    return MeshCookMeshlets::BuildMeshlets(nwbFilePath, s_MeshMetaKind, streams.indices, cpuScheduler, scratchArena, outEntry);
+    return BuildCookMeshlets(
+        nwbFilePath,
+        streams.indices,
+        cpuScheduler.isParallelEnabled(),
+        cpuScheduler.workerThreadCount(),
+        outEntry.positions,
+        outEntry.normals,
+        outEntry.tangents,
+        outEntry.uv0,
+        outEntry.colors,
+        outEntry.vertexRefs,
+        outEntry.meshlets,
+        outEntry.meshletBounds,
+        outEntry.meshletPositionStreamRefs,
+        outEntry.meshletAttributeStreamRefs,
+        outEntry.meshletLocalVertexRefs,
+        outEntry.meshletPrimitiveIndices
+    );
 }
 
 

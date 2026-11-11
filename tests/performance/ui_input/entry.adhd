@@ -67,6 +67,33 @@ protected:
         NWB_FATAL_ASSERT(completed);
     }
 };
+
+NWB_INLINE void WriteUiBenchmarkStdout(const AStringView text){
+    NWB_COUT << text;
+}
+
+NWB_INLINE void ConfigureEmptySkinAtlas(GlobalArena& arena, UiSkin& skin, const Name textureName){
+    UiSkin::RegionVector regions(arena);
+    skin.setAtlas(AssetRef<Texture>(textureName), 8u, 8u, 1.0f, Move(regions));
+}
+
+NWB_INLINE b8 AdoptBuiltTextLayout(TextLayoutBuilder& layoutBuilder, const ShapeRequest& request, EditBoxView& view){
+    auto layout = layoutBuilder.layout(request);
+    return layout && view.adoptLayout(Move(*layout));
+}
+
+NWB_INLINE b8 TryDeclareEditBoxWidget(Context& context, const AStringView id, WidgetState& outWidget){
+    const auto widget = context.declare(id, WidgetKind::EditBox);
+    if(!widget)
+        return false;
+    outWidget = **widget;
+    return true;
+}
+
+NWB_INLINE b8 HasCommittedTargetWithWidth(const Context& context, const WidgetId id, const u64 declarationGeneration, const f32 expectedWidth){
+    const HitTarget* const target = context.input().findTarget(id, declarationGeneration);
+    return target != nullptr && target->rectangle.width == expectedWidth;
+}
 };
 
 
@@ -123,9 +150,9 @@ u64 BoolToU64(in b8 value){
 
 EditLimits MakeBenchmarkEditLimits(in usize maxBytes){
     EditLimits limits = EditLimits();
-    native(mut limits, in maxBytes){
-        limits = { maxBytes, 0u, 0u };
-    }
+    limits.maxBytes = maxBytes;
+    limits.maxHistoryRecords = 0u;
+    limits.maxHistoryBytes = 0u;
     return limits;
 }
 
@@ -137,9 +164,8 @@ WidgetId MakeWidgetId(in u64 idValue){
 
 InputSource MakeInputSource(in u64 deviceId, in u64 sourceId){
     InputSource source = InputSource();
-    native(mut source, in deviceId, in sourceId){
-        source = { deviceId, sourceId };
-    }
+    source.device = deviceId;
+    source.control = sourceId;
     return source;
 }
 
@@ -151,10 +177,7 @@ DisplayMetrics MakeDisplayMetrics(in f32 width, in f32 height){
 }
 
 void ConfigureBenchmarkSkinAtlas(mut GlobalArena arena, mut UiSkin skin){
-    native(mut arena, mut skin){
-        UiSkin::RegionVector regions(arena);
-        skin.setAtlas(AssetRef<Texture>(s_TexturePath), 8u, 8u, 1.0f, Move(regions));
-    }
+    ConfigureEmptySkinAtlas(arena, skin, Name(s_TexturePath));
 }
 
 StringView ResolvePointerWorkloadName(in PointerWorkloadKind kind){
@@ -187,10 +210,7 @@ Expected<f64> MeasureBatch<CaseT : IUiBenchmarkCase>(mut CaseT benchmark, in usi
         if(!benchmark.operation())
             return MakeUnexpected(Failure());
     }
-    f64 elapsed = 0.0;
-    native(in begin, mut elapsed){
-        elapsed = DurationInNS<f64>(TimerNow(), begin);
-    }
+    const f64 elapsed = DurationInNS<f64>(TimerNow(), begin);
     const Expected<u64> batchChecksum = benchmark.checksum();
     if(!batchChecksum.has_value() || batchChecksum.value() != expectedChecksum)
         return MakeUnexpected(Failure());
@@ -230,18 +250,21 @@ b8 Measure<CaseT : IUiBenchmarkCase>(in StringView name, in u64 setupChecksum, m
     Array<f64, s_BenchmarkSamples> sorted = samples;
     SortBenchmarkSamples(sorted);
     const f64 medianSample = sorted[s_BenchmarkSamples / 2u];
-    native(in name, in iterations, in setupChecksum, in expectedChecksum, in medianSample, in samples){
-        const auto oldPrecision = NWB_COUT.precision(17);
-        NWB_COUT << "{\"type\":\"ui_input_benchmark\",\"name\":\"" << name << "\",\"iterationsPerSample\":" << iterations
-            << ",\"setupChecksum\":" << setupChecksum << ",\"behaviorChecksum\":" << expectedChecksum << ",\"medianNsPerOperation\":" << medianSample << ",\"samplesNsPerOperation\":[";
-        for(usize index = 0u; index < samples.size(); ++index){
-            if(index != 0u)
-                NWB_COUT << ',';
-            NWB_COUT << samples[index];
-        }
-        NWB_COUT << "]}\n";
-        NWB_COUT.precision(oldPrecision);
+    String output = StringFormat(
+        "{{\"type\":\"ui_input_benchmark\",\"name\":\"{}\",\"iterationsPerSample\":{},\"setupChecksum\":{},\"behaviorChecksum\":{},\"medianNsPerOperation\":{:.17g},\"samplesNsPerOperation\":[",
+        name,
+        iterations,
+        setupChecksum,
+        expectedChecksum,
+        medianSample
+    );
+    for(usize index = 0u; index < samples.size(); ++index){
+        if(index != 0u)
+            output.push_back(',');
+        StringAppendFormat(output, "{:.17g}", samples[index]);
     }
+    output.append("]}\n");
+    WriteUiBenchmarkStdout(output);
     return true;
 }
 
@@ -258,12 +281,12 @@ class BenchmarkShaper : ITextShaper{
 
     public Expected<ShapedRun, TextLayoutStatusEnum> shape(in ShapeRequest request)override{
         ShapedRun run = ShapedRun(this.m_arena);
-        native(mut run, in request){
-            run.metrics = { 8.0f, 2.0f, 2.0f };
-            run.glyphs.reserve(request.text.size());
-            for(usize byte = 0u; byte < request.text.size(); ++byte)
-                run.glyphs.push_back({ {}, 1u, static_cast<u32>(byte), static_cast<u32>(byte + 1u), {}, { 10.0f, 0.0f }, {} });
-        }
+        run.metrics.ascender = 8.0f;
+        run.metrics.descender = 2.0f;
+        run.metrics.lineGap = 2.0f;
+        run.glyphs.reserve(request.text.size());
+        for(usize byte = 0u; byte < request.text.size(); ++byte)
+            run.glyphs.push_back(ShapedGlyph(SharedFontFace(), 1u, cast<u32>(byte), cast<u32>(byte + 1u), Point(), Point(10.0f, 0.0f), Rect()));
         return run;
     }
 }
@@ -298,28 +321,21 @@ class PublicationCase : IUiBenchmarkCase{
     }
 
     public b8 setup(){
-        b8 configured = false;
-        mut GlobalArena arena = this.m_arena;
-        mut EditModel model = this.m_model;
-        mut TextLayoutBuilder layoutBuilder = this.m_layoutBuilder;
-        mut EditBoxView view = this.m_view;
-        mut EditBoxPlacement outPlacement = this.m_placement;
-        const usize stops = this.m_stops;
-        native(mut arena, mut model, mut layoutBuilder, mut view, mut outPlacement, in stops, mut configured){
-            AString<GlobalArena> text(arena);
-            text.assign(stops - 1u, 'a');
-            if(model.setText(text) && model.setSelection(0u, 0u) && view.snapshot(model)){
-                auto layout = layoutBuilder.layout({ view.displayText() });
-                if(layout && view.adoptLayout(Move(*layout))){
-                    const auto placement = view.arrange({ 10.0f, 20.0f, 320.0f, 30.0f }, {}, { 0.0f, 0.0f, 500.0f, 200.0f }, {}, 1.0f, false);
-                    if(placement && view.caretStops().size() == stops){
-                        outPlacement = *placement;
-                        configured = true;
-                    }
-                }
-            }
-        }
-        return configured;
+        String text = "";
+        text.reserve(this.m_stops - 1u);
+        for(usize index = 0u; index + 1u < this.m_stops; ++index)
+            text.push_back('a');
+        if(!this.m_model.setText(text) || !this.m_model.setSelection(0u, 0u) || !this.m_view.snapshot(this.m_model))
+            return false;
+        ShapeRequest request = ShapeRequest();
+        request.text = this.m_view.displayText();
+        if(!AdoptBuiltTextLayout(this.m_layoutBuilder, request, this.m_view))
+            return false;
+        const Expected<EditBoxPlacement> placement = this.m_view.arrange(Rect(10.0f, 20.0f, 320.0f, 30.0f), Insets(), Rect(0.0f, 0.0f, 500.0f, 200.0f), Point(), 1.0f, false);
+        if(!placement.has_value() || this.m_view.caretStops().size() != this.m_stops)
+            return false;
+        this.m_placement = placement.value();
+        return true;
     }
 
     public b8 operation()override{
@@ -328,19 +344,10 @@ class PublicationCase : IUiBenchmarkCase{
             return false;
         this.m_host.beginFrame(this.m_generation, MakeDisplayMetrics(500.0f, 200.0f));
 
-        b8 declared = false;
-        mut Context context = this.m_context;
-        mut WidgetState outWidget = this.m_widget;
-        native(mut context, mut outWidget, mut declared){
-            if(context.beginRoot({ 17u, 1u })){
-                const auto widget = context.declare("edit", WidgetKind::EditBox);
-                if(widget){
-                    outWidget = **widget;
-                    declared = true;
-                }
-            }
-        }
-        if(!declared)
+        WidgetRoot root = WidgetRoot();
+        root.value = 17u;
+        root.generation = 1u;
+        if(!this.m_context.beginRoot(root) || !TryDeclareEditBoxWidget(this.m_context, "edit", this.m_widget))
             return false;
 
         EditBoxOptions options = EditBoxOptions();
@@ -363,13 +370,7 @@ class PublicationCase : IUiBenchmarkCase{
     }
 
     public Expected<u64> checksum()const override{
-        b8 targetValid = false;
-        in Context context = this.m_context;
-        in WidgetState widget = this.m_widget;
-        native(in context, in widget, mut targetValid){
-            const HitTarget* const target = context.input().findTarget(widget.id, widget.declarationGeneration);
-            targetValid = target != nullptr && target->rectangle.width == 320.0f;
-        }
+        const b8 targetValid = HasCommittedTargetWithWidth(this.m_context, this.m_widget.id, this.m_widget.declarationGeneration, 320.0f);
         if(this.m_context.input().layoutGeneration() != this.m_generation || !targetValid || this.m_host.hasTextFocus() || !this.m_view.ready())
             return MakeUnexpected(Failure());
 
@@ -410,28 +411,21 @@ class EmptySelectionCase : IUiBenchmarkCase{
 
     public b8 setup(){
         ConfigureBenchmarkSkinAtlas(this.m_arena, this.m_skin);
-        b8 configured = false;
-        mut GlobalArena arena = this.m_arena;
-        mut EditModel model = this.m_model;
-        mut TextLayoutBuilder layoutBuilder = this.m_layoutBuilder;
-        mut EditBoxView view = this.m_view;
-        mut EditBoxPlacement outPlacement = this.m_placement;
-        const usize lines = this.m_lines;
-        native(mut arena, mut model, mut layoutBuilder, mut view, mut outPlacement, in lines, mut configured){
-            AString<GlobalArena> text(arena);
-            text.assign(lines - 1u, '\n');
-            if(model.setText(text) && model.setSelection(0u, 0u) && view.snapshot(model)){
-                auto layout = layoutBuilder.layout({ view.displayText() });
-                if(layout && view.adoptLayout(Move(*layout))){
-                    const auto placement = view.arrange({ 10.0f, 10.0f, 300.0f, 100.0f }, {}, { 0.0f, 0.0f, 500.0f, 200.0f }, {}, 1.0f, false);
-                    if(placement && view.layout().lines().size() == lines && view.layout().glyphs().empty()){
-                        outPlacement = *placement;
-                        configured = true;
-                    }
-                }
-            }
-        }
-        return configured;
+        String text = "";
+        text.reserve(this.m_lines - 1u);
+        for(usize index = 0u; index + 1u < this.m_lines; ++index)
+            text.push_back('\n');
+        if(!this.m_model.setText(text) || !this.m_model.setSelection(0u, 0u) || !this.m_view.snapshot(this.m_model))
+            return false;
+        ShapeRequest request = ShapeRequest();
+        request.text = this.m_view.displayText();
+        if(!AdoptBuiltTextLayout(this.m_layoutBuilder, request, this.m_view))
+            return false;
+        const Expected<EditBoxPlacement> placement = this.m_view.arrange(Rect(10.0f, 10.0f, 300.0f, 100.0f), Insets(), Rect(0.0f, 0.0f, 500.0f, 200.0f), Point(), 1.0f, false);
+        if(!placement.has_value() || this.m_view.layout().lines().size() != this.m_lines || !this.m_view.layout().glyphs().empty())
+            return false;
+        this.m_placement = placement.value();
+        return true;
     }
 
     public b8 operation()override{
@@ -603,13 +597,8 @@ class PointerWorkload : IUiBenchmarkCase{
                 return false;
         }
         const InputSource firstSource = MakeInputSource(s_FirstPointerDevice, 1u);
-        b8 gestureValid = false;
-        mut InputRouter router = this.m_router;
-        native(mut router, in firstWidget, in firstSource, mut gestureValid){
-            const auto gesture = router.consumePointerGesture(firstWidget, 1u);
-            gestureValid = gesture && gesture->inputSource == firstSource;
-        }
-        return gestureValid && this.movePointer(lastPosition);
+        const Expected<PointerGesture> gesture = this.m_router.consumePointerGesture(firstWidget, 1u);
+        return gesture.has_value() && gesture.value().inputSource == firstSource && this.movePointer(lastPosition);
     }
 
     public b8 operation()override{
@@ -678,18 +667,15 @@ class PointerWorkload : IUiBenchmarkCase{
         if(!result.pointerConsumed || !result.pointerRouted || result.capture != expectedCapture || result.hover != expectedHover)
             return false;
         if(active){
-            b8 gestureValid = false;
             const WidgetId firstWidget = MakeWidgetId(1u);
-            mut InputRouter router = this.m_router;
-            native(mut router, in firstWidget, in firstSource, in position, mut gestureValid){
-                const auto gesture = router.consumePointerGesture(firstWidget, 1u);
-                gestureValid = gesture
-                    && gesture->state == PointerGestureState::Active
-                    && gesture->inputSource == firstSource
-                    && gesture->position.x == position.x
-                    && gesture->position.y == position.y;
-            }
-            if(!gestureValid)
+            const Expected<PointerGesture> gesture = this.m_router.consumePointerGesture(firstWidget, 1u);
+            if(
+                !gesture.has_value()
+                || gesture.value().state != PointerGestureState::Active
+                || gesture.value().inputSource != firstSource
+                || gesture.value().position.x != position.x
+                || gesture.value().position.y != position.y
+            )
                 return false;
         }
         return !result.activationOverflow && !result.gestureOverflow;
@@ -700,25 +686,22 @@ class PointerWorkload : IUiBenchmarkCase{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 MeasurePointerWorkload(mut GlobalArena arena, mut PointerWorkload workload){
+b8 MeasurePointerWorkload(mut PointerWorkload workload){
     if(!workload.initialize())
         return false;
-    b8 measured = false;
-    const StringView workloadName = ResolvePointerWorkloadName(workload.kind());
-    const usize targetCount = workload.targetCount();
-    const usize contactCount = workload.contactCount();
-    const u64 setupChecksum = workload.setupChecksum();
-    native(mut arena, in workloadName, in targetCount, in contactCount, in setupChecksum, mut workload, mut measured){
-        const auto name = ::StringFormat(arena, "{}_targets_{}_sources_{}", workloadName, targetCount, contactCount);
-        measured = Measure(AStringView(name.data(), name.size()), setupChecksum, workload);
-    }
-    return measured;
+    const String name = StringFormat(
+        "{}_targets_{}_sources_{}",
+        ResolvePointerWorkloadName(workload.kind()),
+        workload.targetCount(),
+        workload.contactCount()
+    );
+    return Measure(name, workload.setupChecksum(), workload);
 }
 
 b8 RunPointerCase(in usize targetCount, in PointerWorkloadKind kind, in usize contactCount){
     GlobalArena arena = GlobalArena(s_UiBenchmarkNameTestsPerformanceUiInputPointer);
     PointerWorkload workload = PointerWorkload(arena, targetCount, kind, contactCount);
-    return MeasurePointerWorkload(arena, workload);
+    return MeasurePointerWorkload(workload);
 }
 
 b8 RunPointerBenchmarks(){

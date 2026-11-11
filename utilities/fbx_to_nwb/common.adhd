@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <utilities/fbx_to_nwb/module.adhd>
+#include <utilities/fbx_to_nwb/types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -14,152 +14,143 @@ StringView SelectOptionListSeparator(in b8 isLast){
     return s_OptionSeparatorText;
 }
 
+String OutputAssetTypeOptionsText(){
+    Array<OutputAssetType, 5u> values;
+    values[0u] = OutputAssetType::Bunch;
+    values[1u] = OutputAssetType::Mesh;
+    values[2u] = OutputAssetType::Model;
+    values[3u] = OutputAssetType::Skeleton;
+    values[4u] = OutputAssetType::Skin;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_FBX_TO_NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_common{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr Array<OutputAssetType::Enum, 5u> s_OutputAssetTypeValues = { OutputAssetType::Bunch, OutputAssetType::Mesh, OutputAssetType::Model, OutputAssetType::Skeleton, OutputAssetType::Skin };
-inline constexpr Array<NormalMode::Enum, 3u> s_NormalModeValues = { NormalMode::Imported, NormalMode::Smooth, NormalMode::Regenerate };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename EnumT, typename TextFunction>
-[[nodiscard]] ScratchString BuildOptionTexts(const Span<const EnumT> values, TextFunction textFunction, Core::Alloc::ScratchArena& scratchArena){
-    usize capacity = 0u;
+    String out;
+    out.reserve(64u);
     for(usize i = 0u; i < values.size(); ++i){
         if(i > 0u)
-            capacity = AddSize(capacity, SelectOptionListSeparator(i + 1u == values.size()).size());
-        capacity = AddSize(capacity, textFunction(values[i]).size());
+            out.append(SelectOptionListSeparator(i + 1u == values.size()));
+        out.append(OutputAssetTypeText(values[i]));
     }
-    ScratchString text(scratchArena);
-    text.reserve(capacity);
+    return out;
+}
+
+String OutputAssetTypeErrorText(){
+    const String options = OutputAssetTypeOptionsText();
+    String out;
+    out.reserve(32u + options.size());
+    out.append("Asset type must be ");
+    out.append(options);
+    return out;
+}
+
+Expected<OutputAssetType> ParseAssetTypeText(in StringView value){
+    const StringView trimmed = TrimView(value);
+    Array<OutputAssetType, 5u> values;
+    values[0u] = OutputAssetType::Bunch;
+    values[1u] = OutputAssetType::Mesh;
+    values[2u] = OutputAssetType::Model;
+    values[3u] = OutputAssetType::Skeleton;
+    values[4u] = OutputAssetType::Skin;
+    for(usize i = 0u; i < values.size(); ++i){
+        if(EqualsAsciiIgnoreCase(trimmed, OutputAssetTypeText(values[i])))
+            return values[i];
+    }
+    return MakeUnexpected(Failure());
+}
+
+String NormalModeOptionsText(){
+    Array<NormalMode, 3u> values;
+    values[0u] = NormalMode::Imported;
+    values[1u] = NormalMode::Smooth;
+    values[2u] = NormalMode::Regenerate;
+
+    String out;
+    out.reserve(48u);
     for(usize i = 0u; i < values.size(); ++i){
         if(i > 0u)
-            text += SelectOptionListSeparator(i + 1u == values.size());
-        text += textFunction(values[i]);
+            out.append(SelectOptionListSeparator(i + 1u == values.size()));
+        out.append(NormalModeText(values[i]));
     }
-    return text;
+    return out;
 }
 
-template<typename TextFunction, typename ParseFunction>
-b8 ValidateOptionText(TextFunction textFunction, ParseFunction parseValue, UtilityString& inOutValue){
-    const auto parsed = parseValue(AStringView(inOutValue));
-    if(parsed){
-        inOutValue.assign(textFunction(*parsed));
-        return true;
+String NormalModeErrorText(){
+    const String options = NormalModeOptionsText();
+    String out;
+    out.reserve(32u + options.size());
+    out.append("normal mode must be ");
+    out.append(options);
+    return out;
+}
+
+Expected<NormalMode> ParseNormalModeText(in StringView value){
+    const StringView trimmed = TrimView(value);
+    Array<NormalMode, 3u> values;
+    values[0u] = NormalMode::Imported;
+    values[1u] = NormalMode::Smooth;
+    values[2u] = NormalMode::Regenerate;
+    for(usize i = 0u; i < values.size(); ++i){
+        if(EqualsAsciiIgnoreCase(trimmed, NormalModeText(values[i])))
+            return values[i];
     }
-
-    inOutValue = NormalizeOptionText(Move(inOutValue));
-    return false;
+    return MakeUnexpected(Failure());
 }
 
-template<typename OptionsTextFunction>
-[[nodiscard]] ScratchString BuildOptionErrorText(const AStringView prefix, OptionsTextFunction optionsTextFunction, Core::Alloc::ScratchArena& scratchArena){
-    const ScratchString options = optionsTextFunction(scratchArena);
-    ScratchString message(prefix, scratchArena);
-    message.reserve(AddSize(message.size(), options.size()));
-    message += options;
-    return message;
+String NormalizeFbxOptionText(in StringView text){
+    const StringView trimmed = TrimView(text);
+    String out;
+    out.reserve(trimmed.size());
+    for(usize i = 0u; i < trimmed.size(); ++i)
+        out.push_back(cast<u8>(ToAsciiLower(trimmed[i])));
+    return out;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-ScratchString OutputAssetTypeOptionsText(Core::Alloc::ScratchArena& scratchArena){
-    return __hidden_common::BuildOptionTexts(Span<const OutputAssetType::Enum>(__hidden_common::s_OutputAssetTypeValues), OutputAssetTypeText, scratchArena);
+Expected<StringView> NextFbxColorComponentToken(in StringView text, mut usize inOutCursor){
+    while(inOutCursor < text.size() && (IsAsciiSpace(text[inOutCursor]) || text[inOutCursor] == s_AsciiCommaByte))
+        ++inOutCursor;
+    if(inOutCursor >= text.size())
+        return MakeUnexpected(Failure());
+    const usize start = inOutCursor;
+    while(inOutCursor < text.size() && !IsAsciiSpace(text[inOutCursor]) && text[inOutCursor] != s_AsciiCommaByte)
+        ++inOutCursor;
+    return text.substr(start, inOutCursor - start);
 }
 
-ScratchString OutputAssetTypeErrorText(Core::Alloc::ScratchArena& scratchArena){
-    return __hidden_common::BuildOptionErrorText("Asset type must be ", OutputAssetTypeOptionsText, scratchArena);
+Expected<Vec4> ParseFbxColorText(in StringView text){
+    usize cursor = 0u;
+    const Expected<StringView> rToken = NextFbxColorComponentToken(text, cursor);
+    if(!rToken.has_value())
+        return MakeUnexpected(Failure());
+    const Expected<StringView> gToken = NextFbxColorComponentToken(text, cursor);
+    if(!gToken.has_value())
+        return MakeUnexpected(Failure());
+    const Expected<StringView> bToken = NextFbxColorComponentToken(text, cursor);
+    if(!bToken.has_value())
+        return MakeUnexpected(Failure());
+    const Expected<StringView> aToken = NextFbxColorComponentToken(text, cursor);
+    if(!aToken.has_value())
+        return MakeUnexpected(Failure());
+    if(NextFbxColorComponentToken(text, cursor).has_value())
+        return MakeUnexpected(Failure());
+
+    const Expected<f32> red = ParseF32(rToken.value());
+    if(!red.has_value())
+        return MakeUnexpected(Failure());
+    const Expected<f32> green = ParseF32(gToken.value());
+    if(!green.has_value())
+        return MakeUnexpected(Failure());
+    const Expected<f32> blue = ParseF32(bToken.value());
+    if(!blue.has_value())
+        return MakeUnexpected(Failure());
+    const Expected<f32> alpha = ParseF32(aToken.value());
+    if(!alpha.has_value())
+        return MakeUnexpected(Failure());
+
+    return TryMakeFiniteColorVec4(red.value(), green.value(), blue.value(), alpha.value());
 }
 
-Expected<OutputAssetType::Enum> ParseAssetTypeText(const AStringView value)noexcept{
-    return ParseOptionText(value, Span<const OutputAssetType::Enum>(__hidden_common::s_OutputAssetTypeValues), OutputAssetTypeText);
-}
-
-b8 ValidateAssetTypeText(UtilityString& inOutValue){
-    return __hidden_common::ValidateOptionText(OutputAssetTypeText, ParseAssetTypeText, inOutValue);
-}
-
-ScratchString NormalModeOptionsText(Core::Alloc::ScratchArena& scratchArena){
-    return __hidden_common::BuildOptionTexts(Span<const NormalMode::Enum>(__hidden_common::s_NormalModeValues), NormalModeText, scratchArena);
-}
-
-ScratchString NormalModeErrorText(Core::Alloc::ScratchArena& scratchArena){
-    return __hidden_common::BuildOptionErrorText("normal mode must be ", NormalModeOptionsText, scratchArena);
-}
-
-Expected<NormalMode::Enum> ParseNormalModeText(const AStringView value)noexcept{
-    return ParseOptionText(value, Span<const NormalMode::Enum>(__hidden_common::s_NormalModeValues), NormalModeText);
-}
-
-b8 ValidateNormalModeText(UtilityString& inOutValue){
-    return __hidden_common::ValidateOptionText(NormalModeText, ParseNormalModeText, inOutValue);
-}
-
-Expected<Vec4> ParseColorText(const AStringView text, Core::Alloc::ScratchArena& scratchArena){
-    ScratchString normalized(text, scratchArena);
-    Replace(normalized.begin(), normalized.end(), ',', ' ');
-    ScratchStringStream in(normalized, ScratchStringStream::in, scratchArena);
-
-    f32 red = 0.0f;
-    f32 green = 0.0f;
-    f32 blue = 0.0f;
-    f32 alpha = 0.0f;
-    if(!(in >> red >> green >> blue >> alpha))
-        return MakeUnexpected(Failure{});
-
-    ScratchString trailing(scratchArena);
-    if(in >> trailing)
-        return MakeUnexpected(Failure{});
-
-    return TryMakeFiniteColorVec4(red, green, blue, alpha);
-}
-
-ScratchPath DefaultOutputPath(const AStringView inputPath, Core::Alloc::ScratchArena& scratchArena){
-    ScratchPath outputPath(scratchArena, inputPath);
-    outputPath.replaceExtension(Core::Assets::s_NwbExtension);
+Path DefaultFbxOutputPath(in StringView inputPath){
+    Path outputPath(inputPath);
+    outputPath.replaceExtension(s_NwbFileExtensionText);
     return outputPath;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_FBX_TO_NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

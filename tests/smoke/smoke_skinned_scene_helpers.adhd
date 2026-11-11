@@ -32,11 +32,38 @@ using Core::Alloc::GlobalArena;
 using Core::Assets::AssetManager;
 using Impl::SkeletonJointMatrix;
 using ModelObjectKindEnum = Impl::ModelObjectKind::Enum;
+namespace ModelObjectKind = Impl::ModelObjectKind;
 using SkeletonJointMatrixVector = Vector<Impl::SkeletonJointMatrix, Core::Alloc::GlobalArena>;
 
+[[nodiscard]] NWB_INLINE Impl::MeshSkinningSystem& SmokeMeshSkinningSystemRef(Core::ECS::World& world)noexcept{
+    return *MakeNotNull(world.getSystem<Impl::MeshSkinningSystem>());
+}
+
+[[nodiscard]] NWB_INLINE b8 HasSmokeMeshSkinningSystem(Core::ECS::World& world)noexcept{
+    return world.getSystem<Impl::MeshSkinningSystem>() != nullptr;
+}
+
+[[nodiscard]] NWB_INLINE AStringView DefaultSmokeSkinnedLabel()noexcept{
+    return "SmokeSkinnedScene";
+}
+
+template<typename JointContainerT>
+[[nodiscard]] NWB_INLINE b8 SetSmokeSkeletonLocalJoints(
+    const Core::ECS::EntityID entity,
+    const JointContainerT& joints,
+    Core::ECS::World& world
+)noexcept{
+    auto* const pose = world.tryGetComponent<Impl::SkeletonPoseComponent>(entity);
+    if(!pose || pose->localJoints.size() != joints.size())
+        return false;
+    for(usize index = 0u; index < joints.size(); ++index)
+        pose->localJoints[index] = joints[index];
+    return true;
+}
+
 class SmokeRenderQualitySettings;
-[[nodiscard]] NotNullUniquePtr<Core::ECS::World> CreateSmokeSkinnedRenderWorldOrDie(TStringView projectName, const SmokeRenderQualitySettings& baseSettings, ProjectRuntimeContext& context);
-[[nodiscard]] NotNullUniquePtr<Core::ECS::World> CreateSmokeSkinnedRenderWorldOrDie(TStringView projectName, ProjectRuntimeContext& context);
+[[nodiscard]] NotNullUniquePtr<Core::ECS::World> CreateSmokeSkinnedRenderWorldOrDie(AStringView projectName, const SmokeRenderQualitySettings& baseSettings, ProjectRuntimeContext& context);
+[[nodiscard]] NotNullUniquePtr<Core::ECS::World> CreateSmokeSkinnedRenderWorldOrDie(AStringView projectName, ProjectRuntimeContext& context);
 };
 
 
@@ -72,7 +99,7 @@ void AddSmokeSkinnedRenderSystems(mut World world, mut ProjectRuntimeContext con
 
 Expected<SkeletonJointMatrixVector> LoadSmokeSkeletonBindJoints(
     in SmokeModelRef modelRef,
-    in TStringView projectName,
+    in StringView projectName,
     in Name preferredSkeletonObject,
     in b8 requireInvertibleBindPose,
     mut GlobalArena arena,
@@ -185,6 +212,23 @@ Expected<SkeletonJointMatrixVector> LoadSmokeSkeletonBindJoints(
     return bindJoints;
 }
 
+Expected<SkeletonJointMatrixVector> LoadSmokeSkeletonBindJoints(
+    in SmokeModelRef modelRef,
+    in Name preferredSkeletonObject,
+    in b8 requireInvertibleBindPose,
+    mut GlobalArena arena,
+    mut AssetManager assetManager
+){
+    return LoadSmokeSkeletonBindJoints(
+        modelRef,
+        DefaultSmokeSkinnedLabel(),
+        preferredSkeletonObject,
+        requireInvertibleBindPose,
+        arena,
+        assetManager
+    );
+}
+
 void DestroySmokeSkinnedRenderWorld(mut ProjectRuntimeContext context, mut NotNullUniquePtr<World> world){
     if(!world.owner())
         return;
@@ -260,13 +304,13 @@ native{
 
 
 namespace NWB::Tests::Smoke{
-NotNullUniquePtr<Core::ECS::World> CreateSmokeSkinnedRenderWorldOrDie(const TStringView projectName, const SmokeRenderQualitySettings& baseSettings, ProjectRuntimeContext& context){
+NotNullUniquePtr<Core::ECS::World> CreateSmokeSkinnedRenderWorldOrDie(const AStringView projectName, const SmokeRenderQualitySettings& baseSettings, ProjectRuntimeContext& context){
     auto world = CreateSmokeWorldOrDie(projectName, context);
     AddSmokeSkinnedRenderSystems(*world, context, baseSettings);
     return world;
 }
 
-NotNullUniquePtr<Core::ECS::World> CreateSmokeSkinnedRenderWorldOrDie(const TStringView projectName, ProjectRuntimeContext& context){
+NotNullUniquePtr<Core::ECS::World> CreateSmokeSkinnedRenderWorldOrDie(const AStringView projectName, ProjectRuntimeContext& context){
     return CreateSmokeSkinnedRenderWorldOrDie(projectName, SmokeRenderQualitySettings(), context);
 }
 };

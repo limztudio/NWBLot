@@ -18,39 +18,29 @@ native{
 
 #include <tests/common/floating_point_environment_guard.adhd.h>
 
-#include <global/binary.h>
 #include <global/floating_point_environment.h>
 #include <global/named_registry.h>
 #include <global/not_null.h>
-#include <global/scope_exit.h>
-#include <global/text_utils.h>
 #include <global/thread.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace TelemetryRecorderReportDetail{
+NWB_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using namespace NWB;
-using namespace TelemetryTestDetail;
-namespace TestCases = NWB::Tests::TelemetryCases;
-namespace LogType = Core::Common::LogType;
+namespace Tests::TelemetryCases{
 
-inline constexpr AStringView s_MemoryProjectArena = TestCases::s_TelemetryMemoryProjectArena;
-inline constexpr AStringView s_ProjectArenaText = TestCases::s_TelemetryProjectArenaText;
-inline constexpr AStringView s_RendererFrame = "renderer/frame";
-inline constexpr AStringView s_RendererFrameText = "Renderer Frame";
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 inline constexpr u32 s_ScopeNameConversionFailure = 0x5C0FEu;
-inline constexpr AStringView s_ReportArenaName = "tests/telemetry/report_work";
-inline constexpr AStringView s_GBuffer = "gbuffer";
-inline constexpr AStringView s_RuntimeStatisticsNone = "runtime_statistics=\"none\"";
-inline constexpr AStringView s_RuntimeStatisticsNullJson = "\"runtimeStatistics\": null";
-inline constexpr AStringView s_ResourceWithNullStatisticsJson = "\"kind\": \"resource\", \"flags\": 0, \"queueAssignment\": null, \"compiledTask\": null, \"runtimeStatistics\": null";
+inline constexpr i32 s_FeToNearest = FE_TONEAREST;
 
 struct GenericScopeRecord{
     Name name;
@@ -76,62 +66,7 @@ struct ThrowingScopeRecord{
 
 struct PayloadBuildFailure{};
 
-[[nodiscard]] inline b8 RecordFilledPayload(Telemetry::Recorder& recorder, const usize byteCount, const u8 value){
-    return recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, 1u, 0u, [byteCount, value](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes& payload){
-        EXPECT_TRUE(payload.empty());
-        payload.resize(byteCount, value);
-        return true;
-    });
-}
-
-void RunConcurrentReset(b8 disableCapture);
-
-void CheckTextLogPayload(Span<const u8> payload, Span<const u8> expected = {});
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests::TelemetryCases{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using FrameGraphNodeDescs = Core::Telemetry::FrameGraphNodeDescs;
-using FrameGraphEdgeDescs = Core::Telemetry::FrameGraphEdgeDescs;
-using FrameGraphPhysicalQueueRuntimeStatisticsRecords = Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords;
-using FrameGraphPacketSubmissionStatisticsRecords = Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecords;
-namespace LogType = Core::Common::LogType;
-
-using TelemetryRecorderReportDetail::RecordFilledPayload;
-using TelemetryRecorderReportDetail::RunConcurrentReset;
-using TelemetryRecorderReportDetail::CheckTextLogPayload;
-using TelemetryRecorderReportDetail::s_RendererFrame;
-using TelemetryRecorderReportDetail::s_RendererFrameText;
-using TelemetryRecorderReportDetail::s_GBuffer;
-using TelemetryRecorderReportDetail::s_RuntimeStatisticsNone;
-using TelemetryRecorderReportDetail::s_RuntimeStatisticsNullJson;
-using TelemetryRecorderReportDetail::s_ResourceWithNullStatisticsJson;
-
-using FloatingPointEnvironment = ::FloatingPointEnvironment;
 using FloatingPointEnvironmentGuard = Tests::FloatingPointEnvironmentGuard;
-using GenericScopeRecord = TelemetryRecorderReportDetail::GenericScopeRecord;
-using ::HoldFloatingPointExceptions;
-using Core::Telemetry::BuildPerfTimingPayload;
-using Core::Telemetry::BuildFrameGraphPayload;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -150,6 +85,17 @@ NWB_END
 
 
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_RendererFrame = "renderer/frame";
+const StringView s_RendererFrameText = "Renderer Frame";
+const StringView s_GBuffer = "gbuffer";
+const StringView s_RuntimeStatisticsNone = "runtime_statistics=\"none\"";
+const StringView s_RuntimeStatisticsNullJson = "\"runtimeStatistics\": null";
+const StringView s_ResourceWithNullStatisticsJson = "\"kind\": \"resource\", \"flags\": 0, \"queueAssignment\": null, \"compiledTask\": null, \"runtimeStatistics\": null";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -176,6 +122,13 @@ MemoryDifferenceCase RecorderReport_MakeDiffCase(in u64 current, in u64 previous
     return item;
 }
 
+MemoryUnrepresentableCase RecorderReport_MakeUnrepresentableCase(in u64 current, in u64 previous){
+    MemoryUnrepresentableCase item = MemoryUnrepresentableCase();
+    item.current = current;
+    item.previous = previous;
+    return item;
+}
+
 MemoryDeltaCase RecorderReport_MakeDeltaCase(in i64 first, in i64 second, in i64 expected, in b8 valid){
     MemoryDeltaCase item = MemoryDeltaCase();
     item.first = first;
@@ -185,12 +138,216 @@ MemoryDeltaCase RecorderReport_MakeDeltaCase(in i64 first, in i64 second, in i64
     return item;
 }
 
-b8 RecorderReport_BuildPerfMemoryPayload(in Name scopeName, in StringView scopeText, in MemorySnapshot snapshot, in MemoryDelta delta, mut TelemetryBytes payload){
-    return BuildPerfMemoryPayload(scopeName, scopeText, snapshot, delta, payload);
+void RecorderReport_SetSnapshotCounterByField(mut MemorySnapshot snapshot, in usize fieldIndex, in u64 value){
+    switch(fieldIndex){
+    case 0u:
+        snapshot.reservedBytes = value;
+        break;
+    case 1u:
+        snapshot.usedBytes = value;
+        break;
+    case 2u:
+        snapshot.peakUsedBytes = value;
+        break;
+    case 3u:
+        snapshot.allocationCount = value;
+        break;
+    case 4u:
+        snapshot.reallocationCount = value;
+        break;
+    case 5u:
+        snapshot.deallocationCount = value;
+        break;
+    default:
+        break;
+    }
 }
 
-b8 RecorderReport_BuildPerfTimingPayload(in PerfTimingSourceEnum source, in Name scopeName, in StringView scopeText, in TimingStats stats, mut TelemetryBytes payload){
-    return BuildPerfTimingPayload(source, scopeName, scopeText, stats, payload);
+u64 RecorderReport_GetSnapshotCounterByField(in MemorySnapshot snapshot, in usize fieldIndex){
+    switch(fieldIndex){
+    case 0u:
+        return snapshot.reservedBytes;
+    case 1u:
+        return snapshot.usedBytes;
+    case 2u:
+        return snapshot.peakUsedBytes;
+    case 3u:
+        return snapshot.allocationCount;
+    case 4u:
+        return snapshot.reallocationCount;
+    case 5u:
+        return snapshot.deallocationCount;
+    default:
+        return 0u;
+    }
+}
+
+void RecorderReport_SetTimingField(mut TimingStats stats, in usize fieldIndex, in f64 value){
+    switch(fieldIndex){
+    case 0u:
+        stats.seconds = value;
+        break;
+    case 1u:
+        stats.minSeconds = value;
+        break;
+    case 2u:
+        stats.maxSeconds = value;
+        break;
+    case 3u:
+        stats.lastSeconds = value;
+        break;
+    default:
+        break;
+    }
+}
+
+void RecorderReport_SetEncodedTimingField(mut EncodedPerfTimingPayloadHeader header, in usize fieldIndex, in f64 value){
+    switch(fieldIndex){
+    case 0u:
+        header.seconds = value;
+        break;
+    case 1u:
+        header.minSeconds = value;
+        break;
+    case 2u:
+        header.maxSeconds = value;
+        break;
+    case 3u:
+        header.lastSeconds = value;
+        break;
+    default:
+        break;
+    }
+}
+
+b8 RecorderReport_RecordBuiltFilledPayload(mut TelemetryRecorder recorder, in usize byteCount, in u8 value){
+    b8 recorded = false;
+    native(mut recorder, in byteCount, in value, mut recorded){
+        recorded = recorder.recordBuiltPayload(EventKind::PerfFrame, 1u, 0u, [byteCount, value](TelemetryArena&, TelemetryBytes& payload){
+            EXPECT_TRUE(payload.empty());
+            payload.resize(byteCount, value);
+            return true;
+        });
+    }
+    return recorded;
+}
+
+StringView RecorderReport_SeedAliasedText(in StringView text, mut TelemetryBytes payload){
+    StringView aliased = "";
+    native(in text, mut payload, mut aliased){
+        payload.clear();
+        payload.reserve(512u);
+        payload.resize(text.size());
+        NWB_MEMCPY(payload.data(), payload.size(), text.data(), text.size());
+        aliased = AStringView(reinterpret_cast<const char*>(payload.data()), payload.size());
+    }
+    return aliased;
+}
+
+void CheckTextLogPayload(in TelemetryBytes payload, in Span<u8> expected){
+    ASSERT_EQ(payload.size(), s_EncodedTextLogPayloadHeaderByteSize + expected.size());
+    EncodedTextLogPayloadHeader header = EncodedTextLogPayloadHeader();
+    ReadTelemetryPod(payload, 0u, header);
+    EXPECT_EQ(header.messageBytes, expected.size());
+    for(usize index = 0u; index < expected.size(); ++index)
+        EXPECT_EQ(payload[s_EncodedTextLogPayloadHeaderByteSize + index], expected[index]);
+}
+
+void CheckTextLogPayload(in TelemetryBytes payload){
+    ASSERT_EQ(payload.size(), s_EncodedTextLogPayloadHeaderByteSize);
+    EncodedTextLogPayloadHeader header = EncodedTextLogPayloadHeader();
+    ReadTelemetryPod(payload, 0u, header);
+    EXPECT_EQ(header.messageBytes, 0u);
+}
+
+void RunConcurrentReset(in b8 disableCapture){
+    const usize s_WorkerCount = 4u;
+    TelemetryTestArena testArena = TelemetryTestArena();
+    const ArenaMemoryStats initial = testArena.arena.memoryStats();
+    {
+        TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
+        recorder.setCaptureOptions(CapturePerfOnly());
+        usize acceptedCount = 0u;
+        usize damagedPayloadCount = 0u;
+        b8 markerRecorded = false;
+        native(in disableCapture, mut recorder, mut acceptedCount, mut damagedPayloadCount, mut markerRecorded){
+            constexpr usize kWorkerCount = 4u;
+            Atomic<usize> accepted{ 0u };
+            Atomic<usize> damagedPayloads{ 0u };
+            Latch payloadsReady(kWorkerCount);
+            Latch releasePayloads(1u);
+            Array<Thread, kWorkerCount> workers;
+            for(usize index = 0u; index < kWorkerCount; ++index){
+                workers[index] = Thread([&, index](){
+                    b8 enteredBuilder = false;
+                    const b8 recorded = recorder.recordBuiltPayload(EventKind::PerfFrame, 42u, static_cast<u32>(index), [&](TelemetryArena&, TelemetryBytes& payload){
+                        enteredBuilder = true;
+                        payload.resize(256u, static_cast<u8>(index + 1u));
+                        payloadsReady.count_down();
+                        releasePayloads.wait();
+                        for(const u8 value : payload){
+                            if(value != index + 1u){
+                                damagedPayloads.fetch_add(1u, MemoryOrder::relaxed);
+                                break;
+                            }
+                        }
+                        return true;
+                    });
+                    if(!enteredBuilder)
+                        payloadsReady.count_down();
+                    if(recorded)
+                        accepted.fetch_add(1u, MemoryOrder::relaxed);
+                });
+            }
+            payloadsReady.wait();
+            recorder.clear();
+            const u8 marker = 99u;
+            markerRecorded = recorder.recordBinary(EventKind::PerfFrame, 7u, &marker, sizeof(marker), 99u);
+            if(disableCapture)
+                recorder.setCaptureOptions(CaptureDisabled());
+            releasePayloads.count_down();
+            for(Thread& worker : workers)
+                worker.join();
+            acceptedCount = accepted.load(MemoryOrder::relaxed);
+            damagedPayloadCount = damagedPayloads.load(MemoryOrder::relaxed);
+        }
+
+        EXPECT_TRUE(markerRecorded);
+        EXPECT_EQ(damagedPayloadCount, 0u);
+        usize expectedAccepted = s_WorkerCount;
+        usize expectedEvents = s_WorkerCount + 1u;
+        if(disableCapture){
+            expectedAccepted = 0u;
+            expectedEvents = 0u;
+        }
+        EXPECT_EQ(acceptedCount, expectedAccepted);
+        EXPECT_EQ(recorder.eventCount(), expectedEvents);
+        if(!disableCapture){
+            Array<b8, 4> seen = Array<b8, 4>();
+            for(usize index = 1u; index < recorder.eventCount(); ++index){
+                const Expected<EventHeader> header = ReadEventHeaderAt(recorder.view(), index);
+                ASSERT_TRUE(header.has_value());
+                const u32 streamId = header.value().streamId;
+                ASSERT_LT(streamId, s_WorkerCount);
+                EXPECT_FALSE(seen[streamId]);
+                seen[streamId] = true;
+                const Expected<usize> payloadSize = EventPayloadSizeAt(recorder.view(), index);
+                const Expected<u8> payloadFront = EventPayloadFrontAt(recorder.view(), index);
+                const Expected<u8> payloadBack = EventPayloadBackAt(recorder.view(), index);
+                ASSERT_TRUE(payloadSize.has_value());
+                ASSERT_TRUE(payloadFront.has_value());
+                ASSERT_TRUE(payloadBack.has_value());
+                ASSERT_EQ(payloadSize.value(), 256u);
+                EXPECT_EQ(payloadFront.value(), cast<u8>(streamId + 1u));
+                EXPECT_EQ(payloadBack.value(), cast<u8>(streamId + 1u));
+            }
+            for(in b8 recorded : seen)
+                EXPECT_TRUE(recorded);
+        }
+    }
+    const ArenaMemoryStats after = testArena.arena.memoryStats();
+    EXPECT_EQ(after.usedBytes, initial.usedBytes);
+    EXPECT_EQ(after.reservedBytes, initial.reservedBytes);
 }
 
 void VerifyTelemetry_PerfMemoryPayloadRejectsInvalidInput(){
@@ -200,15 +357,15 @@ void VerifyTelemetry_PerfMemoryPayloadRejectsInvalidInput(){
     MemorySnapshot snapshot = MakeTestMemorySnapshot(scopeName);
     MemoryDelta delta = MakeTestMemoryDelta();
 
-    EXPECT_FALSE(RecorderReport_BuildPerfMemoryPayload(s_NameNone, s_TelemetryProjectArenaText, snapshot, delta, payload));
-    EXPECT_FALSE(RecorderReport_BuildPerfMemoryPayload(scopeName, "", snapshot, delta, payload));
+    EXPECT_FALSE(BuildTestPerfMemoryPayload(s_NameNone, s_TelemetryProjectArenaText, snapshot, delta, payload));
+    EXPECT_FALSE(BuildTestPerfMemoryPayload(scopeName, "", snapshot, delta, payload));
 
     snapshot.scopeName = s_TelemetryCaseMemoryOtherArena;
-    EXPECT_FALSE(RecorderReport_BuildPerfMemoryPayload(scopeName, s_TelemetryProjectArenaText, snapshot, delta, payload));
+    EXPECT_FALSE(BuildTestPerfMemoryPayload(scopeName, s_TelemetryProjectArenaText, snapshot, delta, payload));
 
     snapshot = MakeTestMemorySnapshot(scopeName);
     delta.currentFrameIndex = 99u;
-    EXPECT_FALSE(RecorderReport_BuildPerfMemoryPayload(scopeName, s_TelemetryProjectArenaText, snapshot, delta, payload));
+    EXPECT_FALSE(BuildTestPerfMemoryPayload(scopeName, s_TelemetryProjectArenaText, snapshot, delta, payload));
 }
 
 void VerifyTelemetry_MemoryDifferencePreservesSignedLimitsAndLargeUnsignedCounters(){
@@ -247,44 +404,33 @@ void VerifyTelemetry_MemoryDifferenceOmitsUnrepresentableCountersFromTelemetry()
     TelemetryTestArena testArena = TelemetryTestArena();
     const Name scopeName = Name(s_TelemetryMemoryProjectArena);
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
-    native(in scopeName, mut payload){
-        using CounterField = u64 MemorySnapshot::*;
-        constexpr Array<CounterField, 6> s_Fields = {
-            &MemorySnapshot::reservedBytes,
-            &MemorySnapshot::usedBytes,
-            &MemorySnapshot::peakUsedBytes,
-            &MemorySnapshot::allocationCount,
-            &MemorySnapshot::reallocationCount,
-            &MemorySnapshot::deallocationCount,
-        };
-        constexpr u64 s_MinMagnitude = static_cast<u64>(Limit<i64>::s_Max) + 1u;
-        constexpr Array<MemoryUnrepresentableCase, 4> s_Cases = {{
-            { .current = s_MinMagnitude, .previous = 0u },
-            { .current = 0u, .previous = s_MinMagnitude + 1u },
-            { .current = Limit<u64>::s_Max, .previous = 0u },
-            { .current = 0u, .previous = Limit<u64>::s_Max },
-        }};
-        for(const CounterField field : s_Fields){
-            for(const MemoryUnrepresentableCase& test : s_Cases){
-                ScopedTestTrace traceCurrent(test.current);
-                ScopedTestTrace tracePrevious(test.previous);
-                MemorySnapshot previous;
-                previous.scopeName = scopeName;
-                previous.frameIndex = 1u;
-                previous.*field = test.previous;
-                MemorySnapshot current;
-                current.scopeName = scopeName;
-                current.frameIndex = 2u;
-                current.*field = test.current;
-                const auto delta = Difference(current, previous);
-                EXPECT_FALSE(delta.valid());
-                ASSERT_TRUE(BuildPerfMemoryPayload(scopeName, s_TelemetryProjectArenaText, current, delta, payload));
-                const auto parsed = Core::Telemetry::ParsePerfMemoryPayload(payload.data(), payload.size());
-                ASSERT_TRUE(parsed.has_value());
-                EXPECT_FALSE(parsed.value().delta.valid());
-                EXPECT_EQ(parsed.value().snapshot.*field, test.current);
-                EXPECT_EQ(parsed.value().snapshot.frameIndex, 2u);
-            }
+    const u64 s_MinMagnitude = cast<u64>(i64.max) + 1u;
+    Array<MemoryUnrepresentableCase, 4> cases = Array<MemoryUnrepresentableCase, 4>();
+    cases[0u] = RecorderReport_MakeUnrepresentableCase(s_MinMagnitude, 0u);
+    cases[1u] = RecorderReport_MakeUnrepresentableCase(0u, s_MinMagnitude + 1u);
+    cases[2u] = RecorderReport_MakeUnrepresentableCase(u64.max, 0u);
+    cases[3u] = RecorderReport_MakeUnrepresentableCase(0u, u64.max);
+
+    for(usize fieldIndex = 0u; fieldIndex < 6u; ++fieldIndex){
+        for(in MemoryUnrepresentableCase test : cases){
+            ScopedTestTrace traceCurrent = ScopedTestTrace(test.current);
+            ScopedTestTrace tracePrevious = ScopedTestTrace(test.previous);
+            MemorySnapshot previous = MemorySnapshot();
+            previous.scopeName = scopeName;
+            previous.frameIndex = 1u;
+            RecorderReport_SetSnapshotCounterByField(previous, fieldIndex, test.previous);
+            MemorySnapshot current = MemorySnapshot();
+            current.scopeName = scopeName;
+            current.frameIndex = 2u;
+            RecorderReport_SetSnapshotCounterByField(current, fieldIndex, test.current);
+            const MemoryDelta delta = Difference(current, previous);
+            EXPECT_FALSE(delta.valid());
+            ASSERT_TRUE(BuildTestPerfMemoryPayload(scopeName, s_TelemetryProjectArenaText, current, delta, payload));
+            const Expected<PerfMemoryPayload> parsed = ParsePerfMemoryBytes(payload);
+            ASSERT_TRUE(parsed.has_value());
+            EXPECT_FALSE(parsed.value().delta.valid());
+            EXPECT_EQ(RecorderReport_GetSnapshotCounterByField(parsed.value().snapshot, fieldIndex), test.current);
+            EXPECT_EQ(parsed.value().snapshot.frameIndex, 2u);
         }
     }
 }
@@ -308,54 +454,55 @@ void VerifyTelemetry_MemoryReportMarksUnrepresentableTotalsWithoutChangingIndivi
         MemorySnapshot snapshot = MakeTestMemorySnapshot(scopeName);
         MemoryDelta delta = MakeTestMemoryDelta();
         delta.usedBytes = test.first;
-        ASSERT_TRUE(RecordPerfMemory(recorder, scopeName, s_TelemetryProjectArenaText, snapshot, delta));
+        ASSERT_TRUE(RecordTestPerfMemory(recorder, scopeName, s_TelemetryProjectArenaText, snapshot, delta));
         ++snapshot.frameIndex;
         ++delta.previousFrameIndex;
         ++delta.currentFrameIndex;
         delta.usedBytes = test.second;
-        ASSERT_TRUE(RecordPerfMemory(recorder, scopeName, s_TelemetryProjectArenaText, snapshot, delta));
+        ASSERT_TRUE(RecordTestPerfMemory(recorder, scopeName, s_TelemetryProjectArenaText, snapshot, delta));
 
-        native(mut testArena, mut recorder, in scopeName, mut snapshot, mut delta, in test){
-            const auto report = BuildTelemetryReport(recorder.view(), testArena.arena, testArena.scratchArena);
-            ASSERT_TRUE(report.has_value());
-            EXPECT_EQ(report.value().summary.parseFailureCount, 0u);
-            EXPECT_EQ(report.value().summary.memoryEventCount, 2u);
-            const auto& summary = report.value().summary.memorySources[MemorySource::ExplicitScope];
-            EXPECT_EQ(summary.eventCount, 2u);
-            EXPECT_EQ(summary.maxUsedBytes, snapshot.usedBytes);
-            EXPECT_EQ(summary.totalUsedDeltaValid, test.valid);
-            const AStringView json(report.value().json);
-            if(test.valid){
-                EXPECT_EQ(summary.totalUsedDeltaBytes, test.expected);
-                const auto expected = StringFormat(testArena.arena, "\"totalUsedDeltaBytes\": {}", test.expected);
-                EXPECT_NE(json.find(AStringView(expected)), AStringView::npos);
-                EXPECT_EQ(json.find("\"totalUsedDeltaBytes\": null"), AStringView::npos);
-            }
-            else{
-                EXPECT_NE(json.find("\"totalUsedDeltaBytes\": null"), AStringView::npos);
-                ++snapshot.frameIndex;
-                ++delta.previousFrameIndex;
-                ++delta.currentFrameIndex;
-                delta.usedBytes = -test.second;
-                ASSERT_TRUE(RecordPerfMemory(recorder, scopeName, s_TelemetryProjectArenaText, snapshot, delta));
-                const auto continued = BuildTelemetryReport(recorder.view(), testArena.arena, testArena.scratchArena);
-                ASSERT_TRUE(continued.has_value());
-                EXPECT_FALSE(continued.value().summary.memorySources[MemorySource::ExplicitScope].totalUsedDeltaValid);
-                EXPECT_EQ(continued.value().summary.memoryEventCount, 3u);
-            }
-            for(const i64 value : { test.first, test.second }){
-                const auto expected = StringFormat(testArena.arena, "\"usedBytes\": {}", value);
-                EXPECT_NE(json.find(AStringView(expected)), AStringView::npos);
-            }
-
-            recorder.clear();
-            delta.usedBytes = 0;
-            ASSERT_TRUE(RecordPerfMemory(recorder, scopeName, s_TelemetryProjectArenaText, snapshot, delta));
-            const auto reset = BuildTelemetryReport(recorder.view(), testArena.arena, testArena.scratchArena);
-            ASSERT_TRUE(reset.has_value());
-            EXPECT_TRUE(reset.value().summary.memorySources[MemorySource::ExplicitScope].totalUsedDeltaValid);
-            EXPECT_EQ(reset.value().summary.memorySources[MemorySource::ExplicitScope].totalUsedDeltaBytes, 0);
+        const Expected<TelemetryReport> report = BuildTestTelemetryReport(recorder.view(), testArena.arena, testArena.scratchArena);
+        ASSERT_TRUE(report.has_value());
+        EXPECT_EQ(report.value().summary.parseFailureCount, 0u);
+        EXPECT_EQ(report.value().summary.memoryEventCount, 2u);
+        const TelemetryMemorySummary summary = report.value().summary.memorySources[MemorySource::ExplicitScope];
+        EXPECT_EQ(summary.eventCount, 2u);
+        EXPECT_EQ(summary.maxUsedBytes, snapshot.usedBytes);
+        EXPECT_EQ(summary.totalUsedDeltaValid, test.valid);
+        const StringView json = ReportJsonView(report.value());
+        if(test.valid){
+            EXPECT_EQ(summary.totalUsedDeltaBytes, test.expected);
+            const String expected = StringFormat("\"totalUsedDeltaBytes\": {}", test.expected);
+            EXPECT_NE(json.find(StringView(expected)), usize.max);
+            EXPECT_EQ(json.find("\"totalUsedDeltaBytes\": null"), usize.max);
         }
+        else{
+            EXPECT_NE(json.find("\"totalUsedDeltaBytes\": null"), usize.max);
+            ++snapshot.frameIndex;
+            ++delta.previousFrameIndex;
+            ++delta.currentFrameIndex;
+            delta.usedBytes = -test.second;
+            ASSERT_TRUE(RecordTestPerfMemory(recorder, scopeName, s_TelemetryProjectArenaText, snapshot, delta));
+            const Expected<TelemetryReport> continued = BuildTestTelemetryReport(recorder.view(), testArena.arena, testArena.scratchArena);
+            ASSERT_TRUE(continued.has_value());
+            EXPECT_FALSE(continued.value().summary.memorySources[MemorySource::ExplicitScope].totalUsedDeltaValid);
+            EXPECT_EQ(continued.value().summary.memoryEventCount, 3u);
+        }
+        Array<i64, 2> deltaValues = Array<i64, 2>();
+        deltaValues[0u] = test.first;
+        deltaValues[1u] = test.second;
+        for(in i64 value : deltaValues){
+            const String expected = StringFormat("\"usedBytes\": {}", value);
+            EXPECT_NE(json.find(StringView(expected)), usize.max);
+        }
+
+        recorder.clear();
+        delta.usedBytes = 0;
+        ASSERT_TRUE(RecordTestPerfMemory(recorder, scopeName, s_TelemetryProjectArenaText, snapshot, delta));
+        const Expected<TelemetryReport> reset = BuildTestTelemetryReport(recorder.view(), testArena.arena, testArena.scratchArena);
+        ASSERT_TRUE(reset.has_value());
+        EXPECT_TRUE(reset.value().summary.memorySources[MemorySource::ExplicitScope].totalUsedDeltaValid);
+        EXPECT_EQ(reset.value().summary.memorySources[MemorySource::ExplicitScope].totalUsedDeltaBytes, 0);
     }
 }
 
@@ -365,28 +512,29 @@ void VerifyTelemetry_PerfTimingPayloadRejectsNonCurrentVersionsAndCorruptMagicAf
     const TimingStats stats = MakeTestTimingStats();
 
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
-    ASSERT_TRUE(RecorderReport_BuildPerfTimingPayload(PerfTimingSource::Gpu, scopeName, s_RendererFrameText, stats, payload));
-    native(in scopeName, mut payload){
-        ASSERT_TRUE(Core::Telemetry::ParsePerfTimingPayload(payload.data(), payload.size()).has_value());
-        const TelemetryBytes current = payload;
-        const Array<u16, 3> unsupportedVersions = { 0u, static_cast<u16>(Core::Telemetry::s_PerfTimingPayloadVersion + 1u), Limit<u16>::s_Max };
-        for(const u16 version : unsupportedVersions){
-            ScopedTestTrace trace(version);
-            usize cursor = 0u;
-            const auto readHeader = ReadPOD<Core::Telemetry::EncodedPerfTimingPayloadHeader>(current, cursor);
-            ASSERT_TRUE(readHeader.has_value());
-            Core::Telemetry::EncodedPerfTimingPayloadHeader header = readHeader.value();
-            header.version = version;
-            NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
-            EXPECT_FALSE(Core::Telemetry::ParsePerfTimingPayload(payload.data(), payload.size()).has_value());
-            const auto parsed = Core::Telemetry::ParsePerfTimingPayload(current.data(), current.size());
-            ASSERT_TRUE(parsed.has_value());
-            EXPECT_EQ(parsed.value().scopeName, scopeName);
-        }
-        payload = current;
-        payload[0u] = 0u;
-        EXPECT_FALSE(Core::Telemetry::ParsePerfTimingPayload(payload.data(), payload.size()).has_value());
+    ASSERT_TRUE(BuildTestPerfTimingPayload(PerfTimingSource::Gpu, scopeName, s_RendererFrameText, stats, payload));
+    ASSERT_TRUE(ParsePerfTimingBytes(payload).has_value());
+    TelemetryBytes current = TelemetryBytes(testArena.arena);
+    CopyTelemetryBytes(payload, current);
+
+    Array<u16, 3> unsupportedVersions = Array<u16, 3>();
+    unsupportedVersions[0u] = 0u;
+    unsupportedVersions[1u] = cast<u16>(s_PerfTimingPayloadVersion + 1u);
+    unsupportedVersions[2u] = u16.max;
+    for(in u16 version : unsupportedVersions){
+        ScopedTestTrace trace = ScopedTestTrace(version);
+        EncodedPerfTimingPayloadHeader header = EncodedPerfTimingPayloadHeader();
+        ReadTelemetryPod(current, 0u, header);
+        header.version = version;
+        WriteTelemetryPod(payload, 0u, header);
+        EXPECT_FALSE(ParsePerfTimingBytes(payload).has_value());
+        const Expected<PerfTimingPayload> parsed = ParsePerfTimingBytes(current);
+        ASSERT_TRUE(parsed.has_value());
+        EXPECT_EQ(parsed.value().scopeName, scopeName);
     }
+    CopyTelemetryBytes(current, payload);
+    payload[0u] = 0u;
+    EXPECT_FALSE(ParsePerfTimingBytes(payload).has_value());
 }
 
 void VerifyTelemetry_PerfPayloadBuildersPreserveAliasedScopeText(){
@@ -396,35 +544,28 @@ void VerifyTelemetry_PerfPayloadBuildersPreserveAliasedScopeText(){
     const MemorySnapshot snapshot = MakeTestMemorySnapshot(scopeName);
     const MemoryDelta delta = MakeTestMemoryDelta();
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
-    native(in scopeName, in stats, in snapshot, in delta, mut payload){
-        constexpr AStringView s_Text = "borrowed scope inside output";
-        const auto seed = [&](){
-            payload.clear();
-            payload.reserve(512u);
-            payload.resize(s_Text.size());
-            NWB_MEMCPY(payload.data(), payload.size(), s_Text.data(), s_Text.size());
-            return AStringView(reinterpret_cast<const char*>(payload.data()), payload.size());
-        };
+    const StringView s_Text = "borrowed scope inside output";
 
-        ASSERT_TRUE(BuildPerfTimingPayload(PerfTimingSource::Cpu, scopeName, seed(), stats, payload));
-        const auto timing = Core::Telemetry::ParsePerfTimingPayload(payload.data(), payload.size());
-        ASSERT_TRUE(timing.has_value());
-        EXPECT_EQ(timing.value().scopeText, s_Text);
+    const StringView timingSeed = RecorderReport_SeedAliasedText(s_Text, payload);
+    ASSERT_TRUE(BuildTestPerfTimingPayload(PerfTimingSource::Cpu, scopeName, timingSeed, stats, payload));
+    const Expected<PerfTimingPayload> timing = ParsePerfTimingBytes(payload);
+    ASSERT_TRUE(timing.has_value());
+    EXPECT_EQ(timing.value().scopeText, s_Text);
 
-        ASSERT_TRUE(BuildPerfMemoryPayload(scopeName, seed(), snapshot, delta, payload));
-        const auto memory = Core::Telemetry::ParsePerfMemoryPayload(payload.data(), payload.size());
-        ASSERT_TRUE(memory.has_value());
-        EXPECT_EQ(memory.value().scopeText, s_Text);
+    const StringView memorySeed = RecorderReport_SeedAliasedText(s_Text, payload);
+    ASSERT_TRUE(BuildTestPerfMemoryPayload(scopeName, memorySeed, snapshot, delta, payload));
+    const Expected<PerfMemoryPayload> memory = ParsePerfMemoryBytes(payload);
+    ASSERT_TRUE(memory.has_value());
+    EXPECT_EQ(memory.value().scopeText, s_Text);
 
-        ASSERT_TRUE(BuildPerfTimingPayload(PerfTimingSource::Cpu, scopeName, memory.value().scopeText.substr(9u), stats, payload));
-        const auto converted = Core::Telemetry::ParsePerfTimingPayload(payload.data(), payload.size());
-        ASSERT_TRUE(converted.has_value());
-        EXPECT_EQ(converted.value().scopeText, "scope inside output");
-        ASSERT_TRUE(BuildPerfMemoryPayload(scopeName, converted.value().scopeText, snapshot, delta, payload));
-        const auto expanded = Core::Telemetry::ParsePerfMemoryPayload(payload.data(), payload.size());
-        ASSERT_TRUE(expanded.has_value());
-        EXPECT_EQ(expanded.value().scopeText, "scope inside output");
-    }
+    ASSERT_TRUE(BuildTestPerfTimingPayload(PerfTimingSource::Cpu, scopeName, memory.value().scopeText.substr(9u), stats, payload));
+    const Expected<PerfTimingPayload> converted = ParsePerfTimingBytes(payload);
+    ASSERT_TRUE(converted.has_value());
+    EXPECT_EQ(converted.value().scopeText, "scope inside output");
+    ASSERT_TRUE(BuildTestPerfMemoryPayload(scopeName, converted.value().scopeText, snapshot, delta, payload));
+    const Expected<PerfMemoryPayload> expanded = ParsePerfMemoryBytes(payload);
+    ASSERT_TRUE(expanded.has_value());
+    EXPECT_EQ(expanded.value().scopeText, "scope inside output");
 }
 
 void VerifyTelemetry_PerfTimingPayloadRejectsInvalidInput(){
@@ -432,9 +573,9 @@ void VerifyTelemetry_PerfTimingPayloadRejectsInvalidInput(){
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
     TimingStats stats = MakeTestTimingStats();
 
-    EXPECT_FALSE(RecorderReport_BuildPerfTimingPayload(PerfTimingSource::Unknown, Name(s_RendererFrame), s_RendererFrameText, stats, payload));
+    EXPECT_FALSE(BuildTestPerfTimingPayload(PerfTimingSource::Unknown, Name(s_RendererFrame), s_RendererFrameText, stats, payload));
     stats.sampleCount = 0u;
-    EXPECT_FALSE(RecorderReport_BuildPerfTimingPayload(PerfTimingSource::Cpu, Name(s_RendererFrame), s_RendererFrameText, stats, payload));
+    EXPECT_FALSE(BuildTestPerfTimingPayload(PerfTimingSource::Cpu, Name(s_RendererFrame), s_RendererFrameText, stats, payload));
 }
 
 void VerifyTelemetry_PerfTimingRejectsNonfiniteDurationsAtBuildAndWireAdmission(){
@@ -443,37 +584,30 @@ void VerifyTelemetry_PerfTimingRejectsNonfiniteDurationsAtBuildAndWireAdmission(
     TelemetryBytes current = TelemetryBytes(testArena.arena);
     const Name scopeName = Name(s_RendererFrame);
     const TimingStats validStats = MakeTestTimingStats();
-    ASSERT_TRUE(RecorderReport_BuildPerfTimingPayload(PerfTimingSource::Cpu, scopeName, s_RendererFrameText, validStats, current));
-    native(in scopeName, in validStats, in current, mut payload){
-        using TimingField = f64 TimingStats::*;
-        using WireField = f64 Core::Telemetry::EncodedPerfTimingPayloadHeader::*;
-        constexpr Array<TimingField, 4u> s_Fields = { &TimingStats::seconds, &TimingStats::minSeconds, &TimingStats::maxSeconds, &TimingStats::lastSeconds };
-        constexpr Array<WireField, 4> s_WireFields = {
-            &Core::Telemetry::EncodedPerfTimingPayloadHeader::seconds,
-            &Core::Telemetry::EncodedPerfTimingPayloadHeader::minSeconds,
-            &Core::Telemetry::EncodedPerfTimingPayloadHeader::maxSeconds,
-            &Core::Telemetry::EncodedPerfTimingPayloadHeader::lastSeconds,
-        };
-        constexpr Array<u64, 3> s_NonfiniteBits = { 0x7FF0000000000000uLL, 0xFFF0000000000000uLL, 0x7FF8000000000001uLL };
-        for(usize field = 0u; field < s_Fields.size(); ++field){
-            for(const u64 bits : s_NonfiniteBits){
-                ScopedTestTrace traceField(field);
-                ScopedTestTrace traceBits(bits);
-                TimingStats invalid = validStats;
-                invalid.*s_Fields[field] = BitCast<f64>(bits);
-                EXPECT_FALSE(BuildPerfTimingPayload(PerfTimingSource::Cpu, scopeName, s_RendererFrameText, invalid, payload));
-                payload = current;
-                usize cursor = 0u;
-                const auto readHeader = ReadPOD<Core::Telemetry::EncodedPerfTimingPayloadHeader>(current, cursor);
-                ASSERT_TRUE(readHeader.has_value());
-                auto header = readHeader.value();
-                header.*s_WireFields[field] = BitCast<f64>(bits);
-                NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
-                EXPECT_FALSE(Core::Telemetry::ParsePerfTimingPayload(payload.data(), payload.size()).has_value());
-                const auto recovered = Core::Telemetry::ParsePerfTimingPayload(current.data(), current.size());
-                ASSERT_TRUE(recovered.has_value());
-                EXPECT_EQ(recovered.value().stats.seconds, validStats.seconds);
-            }
+    ASSERT_TRUE(BuildTestPerfTimingPayload(PerfTimingSource::Cpu, scopeName, s_RendererFrameText, validStats, current));
+
+    Array<u64, 3> nonfiniteBits = Array<u64, 3>();
+    nonfiniteBits[0u] = 0x7FF0000000000000uLL;
+    nonfiniteBits[1u] = 0xFFF0000000000000uLL;
+    nonfiniteBits[2u] = 0x7FF8000000000001uLL;
+    for(usize fieldIndex = 0u; fieldIndex < 4u; ++fieldIndex){
+        for(in u64 bits : nonfiniteBits){
+            ScopedTestTrace traceField = ScopedTestTrace(fieldIndex);
+            ScopedTestTrace traceBits = ScopedTestTrace(bits);
+            const f64 invalidValue = bit_cast<f64>(bits);
+            TimingStats invalid = validStats;
+            RecorderReport_SetTimingField(invalid, fieldIndex, invalidValue);
+            EXPECT_FALSE(BuildTestPerfTimingPayload(PerfTimingSource::Cpu, scopeName, s_RendererFrameText, invalid, payload));
+
+            CopyTelemetryBytes(current, payload);
+            EncodedPerfTimingPayloadHeader header = EncodedPerfTimingPayloadHeader();
+            ReadTelemetryPod(current, 0u, header);
+            RecorderReport_SetEncodedTimingField(header, fieldIndex, invalidValue);
+            WriteTelemetryPod(payload, 0u, header);
+            EXPECT_FALSE(ParsePerfTimingBytes(payload).has_value());
+            const Expected<PerfTimingPayload> recovered = ParsePerfTimingBytes(current);
+            ASSERT_TRUE(recovered.has_value());
+            EXPECT_EQ(recovered.value().stats.seconds, validStats.seconds);
         }
     }
 }
@@ -499,9 +633,6 @@ void VerifyTelemetry_GenericScopeHelpersPreserveBorrowedPointerValuesAndImplicit
     usize wrongIndexAddress = 1u;
     Name resolvedName = s_NameNone;
     native(mut record, in scope, in wrongGeneration, in wrongIndex, mut recordAddress, mut foundAddress, mut wrongGenerationAddress, mut wrongIndexAddress, mut resolvedName){
-        using TelemetryRecorderReportDetail::BorrowedScopePointer;
-        using TelemetryRecorderReportDetail::ThrowingScopeRecord;
-
         recordAddress = reinterpret_cast<usize>(&record);
         const Array<BorrowedScopePointer, 1u> ownerStorage{ BorrowedScopePointer{ &record } };
         const Span<const BorrowedScopePointer> owners(ownerStorage);
@@ -550,75 +681,81 @@ void VerifyTelemetry_RecorderFiltersOwnsCallerPayloadAndRejectsEndIndex(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
     recorder.setCaptureOptions(CaptureFrameGraphOnly());
-    native(mut recorder){
-        const Array<u8, 2> perfPayload = { 1u, 2u };
-        EXPECT_FALSE(recorder.recordBinary(EventKind::PerfFrame, 12u, perfPayload.data(), sizeof(perfPayload)));
-        EXPECT_EQ(recorder.eventCount(), 0u);
 
-        Array<u8, 3> frameGraphPayload = { 4u, 5u, 6u };
-        EXPECT_TRUE(recorder.recordBinary(EventKind::FrameGraphFrame, 13u, frameGraphPayload.data(), sizeof(frameGraphPayload), 7u));
-        frameGraphPayload[0u] = 99u;
+    TelemetryBytes perfPayload = TelemetryBytes(testArena.arena);
+    perfPayload.push_back(1u);
+    perfPayload.push_back(2u);
+    EXPECT_FALSE(RecordBinaryBytes(recorder, EventKind::PerfFrame, 12u, perfPayload));
+    EXPECT_EQ(recorder.eventCount(), 0u);
 
-        const EventView view = recorder.view();
-        EXPECT_EQ(view.eventCount(), 1u);
-        const EventRecord* record = view.eventAt(0u);
-        ASSERT_NE(record, nullptr);
-        EXPECT_EQ(record->payload.size(), 3u);
-        EXPECT_EQ(record->payload[0u], 4u);
-        EXPECT_EQ(view.eventAt(1u), nullptr);
-    }
+    TelemetryBytes frameGraphPayload = TelemetryBytes(testArena.arena);
+    frameGraphPayload.push_back(4u);
+    frameGraphPayload.push_back(5u);
+    frameGraphPayload.push_back(6u);
+    EXPECT_TRUE(RecordBinaryBytes(recorder, EventKind::FrameGraphFrame, 13u, frameGraphPayload, 7u));
+    frameGraphPayload[0u] = 99u;
+
+    const EventView view = recorder.view();
+    EXPECT_EQ(view.eventCount(), 1u);
+    const Expected<usize> payloadSize = EventPayloadSizeAt(view, 0u);
+    const Expected<u8> payloadFront = EventPayloadFrontAt(view, 0u);
+    ASSERT_TRUE(payloadSize.has_value());
+    ASSERT_TRUE(payloadFront.has_value());
+    EXPECT_EQ(payloadSize.value(), 3u);
+    EXPECT_EQ(payloadFront.value(), 4u);
+    EXPECT_FALSE(ReadEventHeaderAt(view, 1u).has_value());
 }
 
 void VerifyTelemetry_EventCodecRejectsInvalidInput(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryBytes encoded = TelemetryBytes(testArena.arena);
-    native(mut testArena, mut encoded){
+    native(mut encoded){
         EventHeader invalidKindHeader;
         invalidKindHeader.kind = EventKind::Unknown;
         invalidKindHeader.payloadBytes = 0u;
-        EXPECT_FALSE(Core::Telemetry::EncodeEvent(invalidKindHeader, nullptr, 0u, encoded));
+        EXPECT_FALSE(EncodeEvent(invalidKindHeader, nullptr, 0u, encoded));
 
         const u8 payload = 5u;
         EventHeader validHeader;
         validHeader.kind = EventKind::PerfFrame;
         validHeader.payloadBytes = sizeof(payload);
-        EXPECT_FALSE(Core::Telemetry::EncodeEvent(validHeader, nullptr, sizeof(payload), encoded));
+        EXPECT_FALSE(EncodeEvent(validHeader, nullptr, sizeof(payload), encoded));
 
         validHeader.payloadBytes = 0u;
-        EXPECT_TRUE(Core::Telemetry::EncodeEvent(validHeader, nullptr, 0u, encoded));
-        encoded[0u] = 0u;
-
-        auto result = Core::Telemetry::DecodeEvent(testArena.arena, encoded.data(), encoded.size());
-        ASSERT_FALSE(result.has_value());
-        EXPECT_EQ(result.error().status, DecodeStatus::InvalidHeader);
-
-        result = Core::Telemetry::DecodeEvent(testArena.arena, encoded.data(), sizeof(Core::Telemetry::EncodedEventHeader) - 1u);
-        ASSERT_FALSE(result.has_value());
-        EXPECT_EQ(result.error().status, DecodeStatus::TruncatedHeader);
+        EXPECT_TRUE(EncodeEvent(validHeader, nullptr, 0u, encoded));
     }
+    encoded[0u] = 0u;
+
+    Expected<DecodedEvent, DecodeResult> result = DecodeTestEventBytes(testArena.arena, encoded);
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error().status, DecodeStatus::InvalidHeader);
+
+    result = DecodeTestEventBytes(testArena.arena, encoded, s_EncodedEventHeaderByteSize - 1u);
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error().status, DecodeStatus::TruncatedHeader);
 }
 
 void VerifyTelemetry_EventCodecReportsTruncatedPayload(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryBytes encoded = TelemetryBytes(testArena.arena);
-    native(mut testArena, mut encoded){
+    native(mut encoded){
         const Array<u8, 3> payload = { 1u, 2u, 3u };
         EventHeader header;
         header.kind = EventKind::PerfFrame;
         header.payloadBytes = sizeof(payload);
-        EXPECT_TRUE(Core::Telemetry::EncodeEvent(header, payload.data(), sizeof(payload), encoded));
-
-        const auto result = Core::Telemetry::DecodeEvent(testArena.arena, encoded.data(), encoded.size() - 1u);
-        ASSERT_FALSE(result.has_value());
-        EXPECT_EQ(result.error().status, DecodeStatus::TruncatedPayload);
+        EXPECT_TRUE(EncodeEvent(header, payload.data(), sizeof(payload), encoded));
     }
+
+    const Expected<DecodedEvent, DecodeResult> result = DecodeTestEventBytes(testArena.arena, encoded, encoded.size() - 1u);
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error().status, DecodeStatus::TruncatedPayload);
 }
 
 void VerifyTelemetry_EventCodecPreservesAliasedPayloadAcrossCapacityGrowthAndSubranges(){
     TelemetryTestArena testArena = TelemetryTestArena();
     native(mut testArena){
         constexpr Array<u8, 5> s_Expected = { 17u, 29u, 43u, 71u, 113u };
-        const Array<usize, 2> prefixes = { 0u, sizeof(Core::Telemetry::EncodedEventHeader) + 3u };
+        const Array<usize, 2> prefixes = { 0u, s_EncodedEventHeaderByteSize + 3u };
         for(const usize prefix : prefixes){
             for(const b8 spareCapacity : { false, true }){
                 ScopedTestTrace tracePrefix(prefix);
@@ -629,16 +766,16 @@ void VerifyTelemetry_EventCodecPreservesAliasedPayloadAcrossCapacityGrowthAndSub
                 event.payload.resize(prefix + sizeof(s_Expected));
                 NWB_MEMCPY(event.payload.data() + prefix, sizeof(s_Expected), s_Expected.data(), sizeof(s_Expected));
                 if(spareCapacity)
-                    event.payload.reserve(event.payload.size() + sizeof(Core::Telemetry::EncodedEventHeader));
+                    event.payload.reserve(event.payload.size() + s_EncodedEventHeaderByteSize);
                 if(prefix == 0u){
                     if(!spareCapacity)
-                        ASSERT_LT(event.payload.capacity(), event.payload.size() + sizeof(Core::Telemetry::EncodedEventHeader));
-                    ASSERT_TRUE(Core::Telemetry::EncodeEvent(event, event.payload));
+                        ASSERT_LT(event.payload.capacity(), event.payload.size() + s_EncodedEventHeaderByteSize);
+                    ASSERT_TRUE(EncodeEvent(event, event.payload));
                 }
                 else
-                    ASSERT_TRUE(Core::Telemetry::EncodeEvent(event.header, event.payload.data() + prefix, sizeof(s_Expected), event.payload));
+                    ASSERT_TRUE(EncodeEvent(event.header, event.payload.data() + prefix, sizeof(s_Expected), event.payload));
 
-                const auto decoded = Core::Telemetry::DecodeEvent(testArena.arena, event.payload.data(), event.payload.size());
+                const auto decoded = DecodeEvent(testArena.arena, event.payload.data(), event.payload.size());
                 ASSERT_TRUE(decoded.has_value());
                 ASSERT_EQ(decoded.value().event.payload.size(), sizeof(s_Expected));
                 EXPECT_EQ(NWB_MEMCMP(decoded.value().event.payload.data(), s_Expected.data(), sizeof(s_Expected)), 0);
@@ -652,14 +789,13 @@ void VerifyTelemetry_EventStreamCodecHandlesEmptyStreams(){
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
     TelemetryBytes encoded = TelemetryBytes(testArena.arena);
     TelemetryRecorder decoded = TelemetryRecorder(testArena.arena);
-    native(mut testArena, in recorder, mut encoded, mut decoded){
-        EXPECT_TRUE(Core::Telemetry::EncodeEventStream(recorder.view(), encoded));
-        EXPECT_EQ(encoded.size(), sizeof(Core::Telemetry::EncodedStreamHeader));
 
-        const auto result = Core::Telemetry::DecodeEventStream(encoded.data(), encoded.size(), testArena.arena, decoded);
-        ASSERT_TRUE(result.has_value());
-        EXPECT_EQ(result.value(), encoded.size());
-    }
+    EXPECT_TRUE(EncodeTestEventStream(recorder.view(), encoded));
+    EXPECT_EQ(encoded.size(), s_EncodedStreamHeaderByteSize);
+
+    const Expected<usize, DecodeResult> result = DecodeTestEventStreamBytes(encoded, testArena.arena, decoded);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result.value(), encoded.size());
     EXPECT_EQ(decoded.eventCount(), 0u);
 }
 
@@ -667,14 +803,18 @@ void VerifyTelemetry_EventStreamCanDecodeBytesBorrowedFromDestinationRecorder(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryRecorder source = TelemetryRecorder(testArena.arena);
     source.setCaptureOptions(CaptureAll());
+    TelemetryBytes first = TelemetryBytes(testArena.arena);
+    first.push_back(7u);
+    first.push_back(8u);
+    TelemetryBytes second = TelemetryBytes(testArena.arena);
+    second.push_back(9u);
+    second.push_back(10u);
+    ASSERT_TRUE(RecordBinaryBytes(source, EventKind::PerfFrame, 1u, first));
+    ASSERT_TRUE(RecordBinaryBytes(source, EventKind::PerfFrame, 2u, second));
     TelemetryBytes encoded = TelemetryBytes(testArena.arena);
-    native(mut testArena, mut source, mut encoded){
-        const Array<u8, 2u> first = { 7u, 8u };
-        const Array<u8, 2u> second = { 9u, 10u };
-        ASSERT_TRUE(source.recordBinary(EventKind::PerfFrame, 1u, first.data(), first.size()));
-        ASSERT_TRUE(source.recordBinary(EventKind::PerfFrame, 2u, second.data(), second.size()));
-        ASSERT_TRUE(Core::Telemetry::EncodeEventStream(source.view(), encoded));
+    ASSERT_TRUE(EncodeTestEventStream(source.view(), encoded));
 
+    native(mut testArena, in second, in encoded){
         TelemetryBytes wrapped(testArena.arena);
         wrapped.resize(encoded.size() + 3u);
         NWB_MEMCPY(wrapped.data() + 3u, encoded.size(), encoded.data(), encoded.size());
@@ -689,7 +829,7 @@ void VerifyTelemetry_EventStreamCanDecodeBytesBorrowedFromDestinationRecorder(){
             ASSERT_TRUE(destination.append(envelope, wrapped.data(), wrapped.size()));
             const EventRecord* borrowed = destination.view().eventAt(0u);
             ASSERT_NE(borrowed, nullptr);
-            ASSERT_TRUE(Core::Telemetry::DecodeEventStream(borrowed->payload.data() + 3u, encoded.size(), testArena.arena, destination).has_value());
+            ASSERT_TRUE(DecodeEventStream(borrowed->payload.data() + 3u, encoded.size(), testArena.arena, destination).has_value());
             ASSERT_EQ(destination.eventCount(), 2u);
             const EventRecord* decoded = destination.view().eventAt(1u);
             ASSERT_NE(decoded, nullptr);
@@ -704,37 +844,38 @@ void VerifyTelemetry_EventStreamCodecRejectsInvalidInput(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
     recorder.setCaptureOptions(CapturePerfOnly());
+    TelemetryBytes payload = TelemetryBytes(testArena.arena);
+    payload.push_back(7u);
+    payload.push_back(8u);
+    EXPECT_TRUE(RecordBinaryBytes(recorder, EventKind::PerfFrame, 1u, payload));
+
     TelemetryBytes encoded = TelemetryBytes(testArena.arena);
+    EXPECT_TRUE(EncodeTestEventStream(recorder.view(), encoded));
+
     TelemetryRecorder decoded = TelemetryRecorder(testArena.arena);
-    native(mut testArena, mut recorder, mut encoded, mut decoded){
-        const Array<u8, 2> payload = { 7u, 8u };
-        EXPECT_TRUE(recorder.recordBinary(EventKind::PerfFrame, 1u, payload.data(), sizeof(payload)));
-        EXPECT_TRUE(Core::Telemetry::EncodeEventStream(recorder.view(), encoded));
+    Expected<usize, DecodeResult> result = DecodeTestEventStreamBytes(encoded, s_EncodedStreamHeaderByteSize - 1u, testArena.arena, decoded);
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error().status, DecodeStatus::TruncatedHeader);
 
-        auto result = Core::Telemetry::DecodeEventStream(encoded.data(), sizeof(Core::Telemetry::EncodedStreamHeader) - 1u, testArena.arena, decoded);
-        ASSERT_FALSE(result.has_value());
-        EXPECT_EQ(result.error().status, DecodeStatus::TruncatedHeader);
+    TelemetryBytes corrupted = TelemetryBytes(testArena.arena);
+    CopyTelemetryBytes(encoded, corrupted);
+    corrupted[0u] = 0u;
+    result = DecodeTestEventStreamBytes(corrupted, testArena.arena, decoded);
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error().status, DecodeStatus::InvalidHeader);
 
-        TelemetryBytes corrupted(testArena.arena);
-        corrupted = encoded;
-        corrupted[0u] = 0u;
-        result = Core::Telemetry::DecodeEventStream(corrupted.data(), corrupted.size(), testArena.arena, decoded);
-        ASSERT_FALSE(result.has_value());
-        EXPECT_EQ(result.error().status, DecodeStatus::InvalidHeader);
+    result = DecodeTestEventStreamBytes(encoded, encoded.size() - 1u, testArena.arena, decoded);
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error().status, DecodeStatus::TruncatedPayload);
 
-        result = Core::Telemetry::DecodeEventStream(encoded.data(), encoded.size() - 1u, testArena.arena, decoded);
-        ASSERT_FALSE(result.has_value());
-        EXPECT_EQ(result.error().status, DecodeStatus::TruncatedPayload);
-
-        corrupted = encoded;
-        Core::Telemetry::EncodedStreamHeader streamHeader;
-        NWB_MEMCPY(&streamHeader, sizeof(streamHeader), corrupted.data(), sizeof(streamHeader));
-        streamHeader.eventCount = 0u;
-        NWB_MEMCPY(corrupted.data(), corrupted.size(), &streamHeader, sizeof(streamHeader));
-        result = Core::Telemetry::DecodeEventStream(corrupted.data(), corrupted.size(), testArena.arena, decoded);
-        ASSERT_FALSE(result.has_value());
-        EXPECT_EQ(result.error().status, DecodeStatus::InvalidHeader);
-    }
+    CopyTelemetryBytes(encoded, corrupted);
+    EncodedStreamHeader streamHeader = EncodedStreamHeader();
+    ReadTelemetryPod(corrupted, 0u, streamHeader);
+    streamHeader.eventCount = 0u;
+    WriteTelemetryPod(corrupted, 0u, streamHeader);
+    result = DecodeTestEventStreamBytes(corrupted, testArena.arena, decoded);
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error().status, DecodeStatus::InvalidHeader);
 }
 
 void VerifyTelemetry_EventCodecRejectsNonCurrentVersionsAndRecovers(){
@@ -746,34 +887,32 @@ void VerifyTelemetry_EventCodecRejectsNonCurrentVersionsAndRecovers(){
         EventHeader header;
         header.kind = EventKind::PerfFrame;
         header.payloadBytes = sizeof(payload);
-        ASSERT_TRUE(Core::Telemetry::EncodeEvent(header, payload.data(), sizeof(payload), encoded));
+        ASSERT_TRUE(EncodeEvent(header, payload.data(), sizeof(payload), encoded));
         const TelemetryBytes current = encoded;
 
-        const Array<u16, 3> unsupportedVersions = { 0u, static_cast<u16>(Core::Telemetry::s_TelemetryFormatVersion + 1u), Limit<u16>::s_Max, };
+        const Array<u16, 3> unsupportedVersions = { 0u, static_cast<u16>(s_TelemetryFormatVersion + 1u), Limit<u16>::s_Max, };
         for(const u16 version : unsupportedVersions){
             ScopedTestTrace trace(version);
             header.version = version;
-            EXPECT_FALSE(Core::Telemetry::EncodeEvent(header, payload.data(), sizeof(payload), encoded));
+            EXPECT_FALSE(EncodeEvent(header, payload.data(), sizeof(payload), encoded));
             EXPECT_EQ(encoded, current);
             EXPECT_FALSE(recorder.append(header, payload.data(), sizeof(payload)));
             EXPECT_EQ(recorder.eventCount(), 0u);
 
-            usize cursor = 0u;
-            const auto readEncodedHeader = ReadPOD<Core::Telemetry::EncodedEventHeader>(current, cursor);
-            ASSERT_TRUE(readEncodedHeader.has_value());
-            Core::Telemetry::EncodedEventHeader encodedHeader = readEncodedHeader.value();
+            EncodedEventHeader encodedHeader;
+            NWB_MEMCPY(&encodedHeader, sizeof(encodedHeader), current.data(), sizeof(encodedHeader));
             encodedHeader.version = version;
             NWB_MEMCPY(encoded.data(), encoded.size(), &encodedHeader, sizeof(encodedHeader));
-            auto decoded = Core::Telemetry::DecodeEvent(testArena.arena, encoded.data(), encoded.size());
+            auto decoded = DecodeEvent(testArena.arena, encoded.data(), encoded.size());
             ASSERT_FALSE(decoded.has_value());
             EXPECT_EQ(decoded.error().status, DecodeStatus::InvalidHeader);
             encoded = current;
-            decoded = Core::Telemetry::DecodeEvent(testArena.arena, current.data(), current.size());
+            decoded = DecodeEvent(testArena.arena, current.data(), current.size());
             ASSERT_TRUE(decoded.has_value());
             ASSERT_EQ(decoded.value().event.payload.size(), sizeof(payload));
             EXPECT_EQ(decoded.value().event.payload[0u], payload[0u]);
         }
-        header.version = Core::Telemetry::s_TelemetryFormatVersion;
+        header.version = s_TelemetryFormatVersion;
         ASSERT_TRUE(recorder.append(header, payload.data(), sizeof(payload)));
     }
     EXPECT_EQ(recorder.eventCount(), 1u);
@@ -783,72 +922,76 @@ void VerifyTelemetry_EventStreamRejectsNonCurrentStreamAndNestedEventVersionsAnd
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
     recorder.setCaptureOptions(CapturePerfOnly());
+    TelemetryBytes payload = TelemetryBytes(testArena.arena);
+    payload.push_back(7u);
+    payload.push_back(8u);
+    ASSERT_TRUE(RecordBinaryBytes(recorder, EventKind::PerfFrame, 1u, payload));
+
     TelemetryBytes encoded = TelemetryBytes(testArena.arena);
+    ASSERT_TRUE(EncodeTestEventStream(recorder.view(), encoded));
+    TelemetryBytes current = TelemetryBytes(testArena.arena);
+    CopyTelemetryBytes(encoded, current);
+
     TelemetryRecorder decoded = TelemetryRecorder(testArena.arena);
-    native(mut testArena, mut recorder, mut encoded, mut decoded){
-        const Array<u8, 2> payload = { 7u, 8u };
-        ASSERT_TRUE(recorder.recordBinary(EventKind::PerfFrame, 1u, payload.data(), sizeof(payload)));
-        ASSERT_TRUE(Core::Telemetry::EncodeEventStream(recorder.view(), encoded));
-        const TelemetryBytes current = encoded;
+    Array<u16, 3> unsupportedVersions = Array<u16, 3>();
+    unsupportedVersions[0u] = 0u;
+    unsupportedVersions[1u] = cast<u16>(s_TelemetryFormatVersion + 1u);
+    unsupportedVersions[2u] = u16.max;
+    for(in u16 version : unsupportedVersions){
+        ScopedTestTrace trace = ScopedTestTrace(version);
+        EncodedStreamHeader streamHeader = EncodedStreamHeader();
+        ReadTelemetryPod(current, 0u, streamHeader);
+        streamHeader.version = version;
+        WriteTelemetryPod(encoded, 0u, streamHeader);
+        const Expected<usize, DecodeResult> invalidStream = DecodeTestEventStreamBytes(encoded, testArena.arena, decoded);
+        ASSERT_FALSE(invalidStream.has_value());
+        EXPECT_EQ(invalidStream.error().status, DecodeStatus::InvalidHeader);
+        EXPECT_EQ(decoded.eventCount(), 0u);
 
-        const Array<u16, 3> unsupportedVersions = { 0u, static_cast<u16>(Core::Telemetry::s_TelemetryFormatVersion + 1u), Limit<u16>::s_Max, };
-        for(const u16 version : unsupportedVersions){
-            ScopedTestTrace trace(version);
-            usize cursor = 0u;
-            const auto readStreamHeader = ReadPOD<Core::Telemetry::EncodedStreamHeader>(current, cursor);
-            ASSERT_TRUE(readStreamHeader.has_value());
-            Core::Telemetry::EncodedStreamHeader streamHeader = readStreamHeader.value();
-            streamHeader.version = version;
-            NWB_MEMCPY(encoded.data(), encoded.size(), &streamHeader, sizeof(streamHeader));
-            const auto invalidStream = Core::Telemetry::DecodeEventStream(encoded.data(), encoded.size(), testArena.arena, decoded);
-            ASSERT_FALSE(invalidStream.has_value());
-            EXPECT_EQ(invalidStream.error().status, DecodeStatus::InvalidHeader);
-            EXPECT_EQ(decoded.eventCount(), 0u);
+        CopyTelemetryBytes(current, encoded);
+        EncodedEventHeader eventHeader = EncodedEventHeader();
+        ReadTelemetryPod(current, s_EncodedStreamHeaderByteSize, eventHeader);
+        eventHeader.version = version;
+        WriteTelemetryPod(encoded, s_EncodedStreamHeaderByteSize, eventHeader);
+        const Expected<usize, DecodeResult> invalidEvent = DecodeTestEventStreamBytes(encoded, testArena.arena, decoded);
+        ASSERT_FALSE(invalidEvent.has_value());
+        EXPECT_EQ(invalidEvent.error().status, DecodeStatus::InvalidHeader);
+        EXPECT_EQ(decoded.eventCount(), 0u);
 
-            encoded = current;
-            const auto readEventHeader = ReadPOD<Core::Telemetry::EncodedEventHeader>(current, cursor);
-            ASSERT_TRUE(readEventHeader.has_value());
-            Core::Telemetry::EncodedEventHeader eventHeader = readEventHeader.value();
-            eventHeader.version = version;
-            NWB_MEMCPY(encoded.data() + sizeof(streamHeader), encoded.size() - sizeof(streamHeader), &eventHeader, sizeof(eventHeader));
-            const auto invalidEvent = Core::Telemetry::DecodeEventStream(encoded.data(), encoded.size(), testArena.arena, decoded);
-            ASSERT_FALSE(invalidEvent.has_value());
-            EXPECT_EQ(invalidEvent.error().status, DecodeStatus::InvalidHeader);
-            EXPECT_EQ(decoded.eventCount(), 0u);
-            encoded = current;
-            ASSERT_TRUE(Core::Telemetry::DecodeEventStream(current.data(), current.size(), testArena.arena, decoded).has_value());
-            ASSERT_EQ(decoded.eventCount(), 1u);
-            const EventRecord* record = decoded.view().eventAt(0u);
-            ASSERT_NE(record, nullptr);
-            EXPECT_EQ(record->payload.size(), sizeof(payload));
-        }
+        CopyTelemetryBytes(current, encoded);
+        ASSERT_TRUE(DecodeTestEventStreamBytes(current, testArena.arena, decoded).has_value());
+        ASSERT_EQ(decoded.eventCount(), 1u);
+        const Expected<usize> decodedPayloadSize = EventPayloadSizeAt(decoded.view(), 0u);
+        ASSERT_TRUE(decodedPayloadSize.has_value());
+        EXPECT_EQ(decodedPayloadSize.value(), payload.size());
     }
 }
 
 void VerifyTelemetry_DiagnosticPayloadRejectsNonCurrentVersionsAndRecovers(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryBytes encoded = TelemetryBytes(testArena.arena);
-    native(mut testArena, mut encoded){
-        DiagnosticEventRecord record;
-        record.event = "assert";
-        record.message = "retained diagnostic";
-        ASSERT_TRUE(Core::Telemetry::BuildDiagnosticPayload(record, testArena.arena, encoded));
-        const TelemetryBytes current = encoded;
-        const Array<u16, 3> unsupportedVersions = { 0u, static_cast<u16>(Core::Telemetry::s_DiagnosticPayloadVersion + 1u), Limit<u16>::s_Max, };
-        for(const u16 version : unsupportedVersions){
-            ScopedTestTrace trace(version);
-            ASSERT_TRUE(Core::Telemetry::ParseDiagnosticPayload(current.data(), current.size()).has_value());
-            usize cursor = 0u;
-            const auto readHeader = ReadPOD<Core::Telemetry::EncodedDiagnosticPayloadHeader>(current, cursor);
-            ASSERT_TRUE(readHeader.has_value());
-            Core::Telemetry::EncodedDiagnosticPayloadHeader header = readHeader.value();
-            header.version = version;
-            NWB_MEMCPY(encoded.data(), encoded.size(), &header, sizeof(header));
-            EXPECT_FALSE(Core::Telemetry::ParseDiagnosticPayload(encoded.data(), encoded.size()).has_value());
-            const auto parsed = Core::Telemetry::ParseDiagnosticPayload(current.data(), current.size());
-            ASSERT_TRUE(parsed.has_value());
-            EXPECT_EQ(AStringView(parsed.value().message), record.message);
-        }
+    DiagnosticEventRecord record = DiagnosticEventRecord();
+    record.event = "assert";
+    record.message = "retained diagnostic";
+    ASSERT_TRUE(BuildTestDiagnosticPayload(record, testArena.arena, encoded));
+    TelemetryBytes current = TelemetryBytes(testArena.arena);
+    CopyTelemetryBytes(encoded, current);
+
+    Array<u16, 3> unsupportedVersions = Array<u16, 3>();
+    unsupportedVersions[0u] = 0u;
+    unsupportedVersions[1u] = cast<u16>(s_DiagnosticPayloadVersion + 1u);
+    unsupportedVersions[2u] = u16.max;
+    for(in u16 version : unsupportedVersions){
+        ScopedTestTrace trace = ScopedTestTrace(version);
+        ASSERT_TRUE(ParseDiagnosticBytes(current).has_value());
+        EncodedDiagnosticPayloadHeader header = EncodedDiagnosticPayloadHeader();
+        ReadTelemetryPod(current, 0u, header);
+        header.version = version;
+        WriteTelemetryPod(encoded, 0u, header);
+        EXPECT_FALSE(ParseDiagnosticBytes(encoded).has_value());
+        const Expected<DiagnosticPayload> parsed = ParseDiagnosticBytes(current);
+        ASSERT_TRUE(parsed.has_value());
+        EXPECT_EQ(parsed.value().message, record.message);
     }
 }
 
@@ -884,14 +1027,14 @@ void VerifyTelemetry_RecorderDisableReleasesClearedAndEmptyPayloadStorage(){
     {
         TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
         recorder.setCaptureOptions(CapturePerfOnly());
-        ASSERT_TRUE(RecordFilledPayload(recorder, 256u, 11u));
+        ASSERT_TRUE(RecorderReport_RecordBuiltFilledPayload(recorder, 256u, 11u));
         recorder.clear();
         const ArenaMemoryStats warmed = testArena.arena.memoryStats();
 
-        ASSERT_TRUE(RecordFilledPayload(recorder, 0u, 0u));
-        native(in recorder){
-            EXPECT_TRUE(recorder.view().eventAt(0u)->payload.empty());
-        }
+        ASSERT_TRUE(RecorderReport_RecordBuiltFilledPayload(recorder, 0u, 0u));
+        const Expected<usize> emptySize = EventPayloadSizeAt(recorder.view(), 0u);
+        ASSERT_TRUE(emptySize.has_value());
+        EXPECT_EQ(emptySize.value(), 0u);
         recorder.clear();
         recorder.setCaptureOptions(CaptureDisabled());
         EXPECT_LT(testArena.arena.memoryStats().usedBytes, warmed.usedBytes);
@@ -905,9 +1048,9 @@ void VerifyTelemetry_RecorderBuilderCanClearAndReenterWhileItsPayloadIsLeased(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
     recorder.setCaptureOptions(CapturePerfOnly());
-    ASSERT_TRUE(RecordFilledPayload(recorder, 256u, 3u));
+    ASSERT_TRUE(RecorderReport_RecordBuiltFilledPayload(recorder, 256u, 3u));
     native(in testArena, mut recorder){
-        ASSERT_TRUE(recorder.recordBuiltPayload(EventKind::PerfFrame, 2u, 7u, [&](Core::Telemetry::TelemetryArena& arena, TelemetryBytes& payload){
+        ASSERT_TRUE(recorder.recordBuiltPayload(EventKind::PerfFrame, 2u, 7u, [&](TelemetryArena& arena, TelemetryBytes& payload){
             EXPECT_EQ(&arena, &testArena.arena);
             EXPECT_TRUE(payload.empty());
             payload.resize(128u, 42u);
@@ -941,8 +1084,10 @@ void VerifyTelemetry_RecorderDisableDuringBuildRejectsPublicationAndReleasesLeas
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
     recorder.setCaptureOptions(CapturePerfOnly());
     const ArenaMemoryStats before = testArena.arena.memoryStats();
-    native(mut recorder){
-        EXPECT_FALSE(recorder.recordBuiltPayload(EventKind::PerfFrame, 1u, 0u, [&](Core::Telemetry::TelemetryArena&, TelemetryBytes& payload){
+    b8 builderCalled = false;
+    ArenaMemoryStats disabled = ArenaMemoryStats();
+    native(in before, in testArena, mut recorder, mut builderCalled, mut disabled){
+        EXPECT_FALSE(recorder.recordBuiltPayload(EventKind::PerfFrame, 1u, 0u, [&](TelemetryArena&, TelemetryBytes& payload){
             payload.resize(256u, 19u);
             recorder.setCaptureOptions(CaptureDisabled());
             EXPECT_EQ(payload.front(), 19u);
@@ -950,13 +1095,10 @@ void VerifyTelemetry_RecorderDisableDuringBuildRejectsPublicationAndReleasesLeas
             EXPECT_EQ(payload.back(), 37u);
             return true;
         }));
-    }
-    EXPECT_EQ(recorder.eventCount(), 0u);
-    const ArenaMemoryStats disabled = testArena.arena.memoryStats();
-    EXPECT_EQ(disabled.usedBytes, before.usedBytes);
-    b8 builderCalled = false;
-    native(mut recorder, mut builderCalled){
-        EXPECT_FALSE(recorder.recordBuiltPayload(EventKind::PerfFrame, 2u, 0u, [&](Core::Telemetry::TelemetryArena&, TelemetryBytes&)noexcept{
+        EXPECT_EQ(recorder.eventCount(), 0u);
+        disabled = testArena.arena.memoryStats();
+        EXPECT_EQ(disabled.usedBytes, before.usedBytes);
+        EXPECT_FALSE(recorder.recordBuiltPayload(EventKind::PerfFrame, 2u, 0u, [&](TelemetryArena&, TelemetryBytes&)noexcept{
             builderCalled = true;
             return true;
         }));
@@ -964,9 +1106,7 @@ void VerifyTelemetry_RecorderDisableDuringBuildRejectsPublicationAndReleasesLeas
     EXPECT_FALSE(builderCalled);
     EXPECT_EQ(testArena.arena.memoryStats().allocationCount, disabled.allocationCount);
     recorder.setCaptureOptions(CapturePerfOnly());
-    native(mut recorder){
-        EXPECT_TRUE(RecordFilledPayload(recorder, 64u, 23u));
-    }
+    EXPECT_TRUE(RecorderReport_RecordBuiltFilledPayload(recorder, 64u, 23u));
 }
 
 void VerifyTelemetry_RecorderPublicationUsesCaptureOptionsAtBuilderCompletion(){
@@ -974,7 +1114,7 @@ void VerifyTelemetry_RecorderPublicationUsesCaptureOptionsAtBuilderCompletion(){
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
     recorder.setCaptureOptions(CapturePerfOnly());
     native(mut recorder){
-        ASSERT_TRUE(recorder.recordBuiltPayload(EventKind::PerfFrame, 1u, 0u, [&](Core::Telemetry::TelemetryArena&, TelemetryBytes& payload){
+        ASSERT_TRUE(recorder.recordBuiltPayload(EventKind::PerfFrame, 1u, 0u, [&](TelemetryArena&, TelemetryBytes& payload){
             payload.resize(64u, 71u);
             recorder.setCaptureOptions(CaptureDisabled());
             recorder.setCaptureOptions(CapturePerfOnly());
@@ -982,7 +1122,7 @@ void VerifyTelemetry_RecorderPublicationUsesCaptureOptionsAtBuilderCompletion(){
         }));
         ASSERT_EQ(recorder.eventCount(), 1u);
         EXPECT_EQ(recorder.view().eventAt(0u)->payload.back(), 71u);
-        EXPECT_FALSE(recorder.recordBuiltPayload(EventKind::PerfFrame, 2u, 0u, [&](Core::Telemetry::TelemetryArena&, TelemetryBytes& payload){
+        EXPECT_FALSE(recorder.recordBuiltPayload(EventKind::PerfFrame, 2u, 0u, [&](TelemetryArena&, TelemetryBytes& payload){
             payload.resize(64u, 29u);
             recorder.setCaptureOptions(CaptureFrameGraphOnly());
             return true;
@@ -995,22 +1135,21 @@ void VerifyTelemetry_RecorderFailedAndThrowingBuildersRecycleWithoutAllocations(
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
     recorder.setCaptureOptions(CapturePerfOnly());
-    ASSERT_TRUE(RecordFilledPayload(recorder, 256u, 13u));
+    ASSERT_TRUE(RecorderReport_RecordBuiltFilledPayload(recorder, 256u, 13u));
     recorder.clear();
     const ArenaMemoryStats warmed = testArena.arena.memoryStats();
     native(mut recorder){
-        using TelemetryRecorderReportDetail::PayloadBuildFailure;
-        EXPECT_FALSE(recorder.recordBuiltPayload(EventKind::PerfFrame, 1u, 0u, [](Core::Telemetry::TelemetryArena&, TelemetryBytes& payload){
+        EXPECT_FALSE(recorder.recordBuiltPayload(EventKind::PerfFrame, 1u, 0u, [](TelemetryArena&, TelemetryBytes& payload){
             payload.resize(128u, 31u);
             return false;
         }));
-        EXPECT_THROW(EXPECT_TRUE(recorder.recordBuiltPayload(EventKind::PerfFrame, 2u, 0u, [](Core::Telemetry::TelemetryArena&, TelemetryBytes& payload)->b8{
+        EXPECT_THROW(EXPECT_TRUE(recorder.recordBuiltPayload(EventKind::PerfFrame, 2u, 0u, [](TelemetryArena&, TelemetryBytes& payload)->b8{
             payload.resize(128u, 47u);
             throw PayloadBuildFailure{};
         })), PayloadBuildFailure);
     }
     EXPECT_EQ(recorder.eventCount(), 0u);
-    ASSERT_TRUE(RecordFilledPayload(recorder, 64u, 59u));
+    ASSERT_TRUE(RecorderReport_RecordBuiltFilledPayload(recorder, 64u, 59u));
     recorder.clear();
     const ArenaMemoryStats after = testArena.arena.memoryStats();
     EXPECT_EQ(after.allocationCount, warmed.allocationCount);
@@ -1055,7 +1194,7 @@ void VerifyTelemetry_RecorderReusedSlotsKeepForeignPayloadsIndependentAndMoveOwn
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
     recorder.setCaptureOptions(CapturePerfOnly());
-    ASSERT_TRUE(RecordFilledPayload(recorder, 256u, 17u));
+    ASSERT_TRUE(RecorderReport_RecordBuiltFilledPayload(recorder, 256u, 17u));
     recorder.clear();
     native(mut testArena, mut recorder){
         {
@@ -1090,7 +1229,7 @@ void VerifyTelemetry_RecorderRejectsInvalidInputsWithoutConsumingPayloadsOrReuse
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
     recorder.setCaptureOptions(CaptureAll());
-    ASSERT_TRUE(RecordFilledPayload(recorder, 256u, 5u));
+    ASSERT_TRUE(RecorderReport_RecordBuiltFilledPayload(recorder, 256u, 5u));
     recorder.clear();
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
     payload.resize(64u, 17u);
@@ -1100,7 +1239,7 @@ void VerifyTelemetry_RecorderRejectsInvalidInputsWithoutConsumingPayloadsOrReuse
         const Array<EventKind::Enum, 2> invalidKinds = { EventKind::Unknown, static_cast<EventKind::Enum>(0xffffu), };
         b8 builderCalled = false;
         for(const auto kind : invalidKinds){
-            EXPECT_FALSE(recorder.recordBuiltPayload(kind, 1u, 0u, [&](Core::Telemetry::TelemetryArena&, TelemetryBytes&)noexcept{ builderCalled = true; return true; }));
+            EXPECT_FALSE(recorder.recordBuiltPayload(kind, 1u, 0u, [&](TelemetryArena&, TelemetryBytes&)noexcept{ builderCalled = true; return true; }));
             EventHeader header;
             header.kind = kind;
             header.payloadBytes = payload.size();
@@ -1112,7 +1251,7 @@ void VerifyTelemetry_RecorderRejectsInvalidInputsWithoutConsumingPayloadsOrReuse
         header.payloadBytes = payload.size();
         header.magic = 0u;
         EXPECT_FALSE(recorder.append(header, Move(payload)));
-        header.magic = Core::Telemetry::s_EventMagic;
+        header.magic = s_EventMagic;
         EXPECT_FALSE(recorder.append(header, nullptr, payload.size()));
         ++header.payloadBytes;
         EXPECT_FALSE(recorder.append(header, Move(payload)));
@@ -1121,41 +1260,43 @@ void VerifyTelemetry_RecorderRejectsInvalidInputsWithoutConsumingPayloadsOrReuse
         EXPECT_EQ(payload.data(), payloadData);
         EXPECT_EQ(payload.size(), 64u);
         EXPECT_EQ(testArena.arena.memoryStats().allocationCount, before.allocationCount);
-        ASSERT_TRUE(RecordFilledPayload(recorder, 64u, 23u));
-        EXPECT_EQ(testArena.arena.memoryStats().allocationCount, before.allocationCount);
     }
+    ASSERT_TRUE(RecorderReport_RecordBuiltFilledPayload(recorder, 64u, 23u));
+    EXPECT_EQ(testArena.arena.memoryStats().allocationCount, before.allocationCount);
 }
 
 void VerifyTelemetry_RecorderBuilderForeignMovesKeepOwnershipWithinEachArena(){
     TelemetryTestArena testArena = TelemetryTestArena();
     const ArenaMemoryStats initial = testArena.arena.memoryStats();
-    native(mut testArena){
-        TelemetryRecorder recorder(testArena.arena);
+    {
+        TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
         recorder.setCaptureOptions(CapturePerfOnly());
-        ASSERT_TRUE(RecordFilledPayload(recorder, 256u, 7u));
+        ASSERT_TRUE(RecorderReport_RecordBuiltFilledPayload(recorder, 256u, 7u));
         recorder.clear();
-        {
-            TelemetryTestArena foreignArena;
-            const ArenaMemoryStats foreignInitial = foreignArena.arena.memoryStats();
+        native(in testArena, mut recorder){
             {
-                TelemetryBytes foreignPayload(foreignArena.arena);
-                foreignPayload.resize(64u, 83u);
-                ASSERT_TRUE(recorder.recordBuiltPayload(EventKind::PerfFrame, 3u, 0u, [&](Core::Telemetry::TelemetryArena&, TelemetryBytes& payload)noexcept{
-                    payload = Move(foreignPayload);
-                    return true;
-                }));
+                TelemetryTestArena foreignArena;
+                const ArenaMemoryStats foreignInitial = foreignArena.arena.memoryStats();
+                {
+                    TelemetryBytes foreignPayload(foreignArena.arena);
+                    foreignPayload.resize(64u, 83u);
+                    ASSERT_TRUE(recorder.recordBuiltPayload(EventKind::PerfFrame, 3u, 0u, [&](TelemetryArena&, TelemetryBytes& payload)noexcept{
+                        payload = Move(foreignPayload);
+                        return true;
+                    }));
+                }
+                EXPECT_EQ(foreignArena.arena.memoryStats().usedBytes, foreignInitial.usedBytes);
             }
-            EXPECT_EQ(foreignArena.arena.memoryStats().usedBytes, foreignInitial.usedBytes);
+            ASSERT_EQ(recorder.eventCount(), 1u);
+            const auto* event = recorder.view().eventAt(0u);
+            ASSERT_NE(event, nullptr);
+            EXPECT_EQ(event->payload.get_allocator().arenaPtr(), &testArena.arena);
+            ASSERT_EQ(event->payload.size(), 64u);
+            EXPECT_EQ(event->payload.front(), 83u);
+            EXPECT_EQ(event->payload.back(), 83u);
         }
-        ASSERT_EQ(recorder.eventCount(), 1u);
-        const auto* event = recorder.view().eventAt(0u);
-        ASSERT_NE(event, nullptr);
-        EXPECT_EQ(event->payload.get_allocator().arenaPtr(), &testArena.arena);
-        ASSERT_EQ(event->payload.size(), 64u);
-        EXPECT_EQ(event->payload.front(), 83u);
-        EXPECT_EQ(event->payload.back(), 83u);
         recorder.clear();
-        ASSERT_TRUE(RecordFilledPayload(recorder, 64u, 29u));
+        ASSERT_TRUE(RecorderReport_RecordBuiltFilledPayload(recorder, 64u, 29u));
     }
     EXPECT_EQ(testArena.arena.memoryStats().usedBytes, initial.usedBytes);
 }
@@ -1163,50 +1304,51 @@ void VerifyTelemetry_RecorderBuilderForeignMovesKeepOwnershipWithinEachArena(){
 void VerifyTelemetry_RecorderExplicitForeignBuilderStorageIsCopiedOrReleasedOnEveryExit(){
     TelemetryTestArena testArena = TelemetryTestArena();
     const ArenaMemoryStats initial = testArena.arena.memoryStats();
-    native(mut testArena){
-        using Payload = TelemetryBytes;
-        using TelemetryRecorderReportDetail::PayloadBuildFailure;
-        TelemetryRecorder recorder(testArena.arena);
+    {
+        TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
         recorder.setCaptureOptions(CapturePerfOnly());
-        for(u32 outcome = 0u; outcome < 4u; ++outcome){
-            recorder.setCaptureOptions(CapturePerfOnly());
-            recorder.clear();
-            {
-                TelemetryTestArena foreignArena;
-                const ArenaMemoryStats foreignInitial = foreignArena.arena.memoryStats();
+        native(in testArena, mut recorder){
+            using Payload = TelemetryBytes;
+            for(u32 outcome = 0u; outcome < 4u; ++outcome){
+                recorder.setCaptureOptions(CapturePerfOnly());
+                recorder.clear();
                 {
-                    Payload foreignPayload(foreignArena.arena);
-                    foreignPayload.resize(64u, 37u);
-                    const auto buildPayload = [&](Core::Telemetry::TelemetryArena&, Payload& payload)->b8{
-                        // Explicit move construction replaces allocator identity, independently of assignment policy.
-                        payload.~Payload();
-                        new(&payload) Payload(Move(foreignPayload));
-                        EXPECT_EQ(payload.get_allocator().arenaPtr(), &foreignArena.arena);
+                    TelemetryTestArena foreignArena;
+                    const ArenaMemoryStats foreignInitial = foreignArena.arena.memoryStats();
+                    {
+                        Payload foreignPayload(foreignArena.arena);
+                        foreignPayload.resize(64u, 37u);
+                        const auto buildPayload = [&](TelemetryArena&, Payload& payload)->b8{
+                            // Explicit move construction replaces allocator identity, independently of assignment policy.
+                            payload.~Payload();
+                            new(&payload) Payload(Move(foreignPayload));
+                            EXPECT_EQ(payload.get_allocator().arenaPtr(), &foreignArena.arena);
+                            if(outcome == 2u)
+                                throw PayloadBuildFailure{};
+                            if(outcome == 3u)
+                                recorder.setCaptureOptions(CaptureDisabled());
+                            return outcome != 1u;
+                        };
                         if(outcome == 2u)
-                            throw PayloadBuildFailure{};
-                        if(outcome == 3u)
-                            recorder.setCaptureOptions(CaptureDisabled());
-                        return outcome != 1u;
-                    };
-                    if(outcome == 2u)
-                        EXPECT_THROW(EXPECT_TRUE(recorder.recordBuiltPayload(EventKind::PerfFrame, 1u, 0u, buildPayload)), PayloadBuildFailure);
-                    else
-                        EXPECT_EQ(recorder.recordBuiltPayload(EventKind::PerfFrame, 1u, 0u, buildPayload), outcome == 0u);
+                            EXPECT_THROW(EXPECT_TRUE(recorder.recordBuiltPayload(EventKind::PerfFrame, 1u, 0u, buildPayload)), PayloadBuildFailure);
+                        else
+                            EXPECT_EQ(recorder.recordBuiltPayload(EventKind::PerfFrame, 1u, 0u, buildPayload), outcome == 0u);
+                    }
+                    EXPECT_EQ(foreignArena.arena.memoryStats().usedBytes, foreignInitial.usedBytes);
                 }
-                EXPECT_EQ(foreignArena.arena.memoryStats().usedBytes, foreignInitial.usedBytes);
-            }
-            ASSERT_EQ(recorder.eventCount(), outcome == 0u ? 1u : 0u);
-            if(outcome == 0u){
-                const auto* event = recorder.view().eventAt(0u);
-                ASSERT_NE(event, nullptr);
-                EXPECT_EQ(event->payload.get_allocator().arenaPtr(), &testArena.arena);
-                ASSERT_EQ(event->payload.size(), 64u);
-                EXPECT_EQ(event->payload.front(), 37u);
-                EXPECT_EQ(event->payload.back(), 37u);
+                ASSERT_EQ(recorder.eventCount(), outcome == 0u ? 1u : 0u);
+                if(outcome == 0u){
+                    const auto* event = recorder.view().eventAt(0u);
+                    ASSERT_NE(event, nullptr);
+                    EXPECT_EQ(event->payload.get_allocator().arenaPtr(), &testArena.arena);
+                    ASSERT_EQ(event->payload.size(), 64u);
+                    EXPECT_EQ(event->payload.front(), 37u);
+                    EXPECT_EQ(event->payload.back(), 37u);
+                }
             }
         }
         recorder.setCaptureOptions(CapturePerfOnly());
-        ASSERT_TRUE(RecordFilledPayload(recorder, 64u, 59u));
+        ASSERT_TRUE(RecorderReport_RecordBuiltFilledPayload(recorder, 64u, 59u));
     }
     EXPECT_EQ(testArena.arena.memoryStats().usedBytes, initial.usedBytes);
 }
@@ -1231,12 +1373,12 @@ void VerifyTelemetry_TelemetryReportKeepsCaptureOrderAndCorrelatesTimingByFrame(
     firstTiming.publishFrameIndex = 41u;
     firstTiming.firstSampleFrameIndex = 40u;
     firstTiming.lastSampleFrameIndex = 40u;
-    ASSERT_TRUE(RecordPerfTiming(recorder, PerfTimingSource::Gpu, gbufferScopeName, "gbuffer", firstTiming, 70u));
+    ASSERT_TRUE(RecordTestPerfTiming(recorder, PerfTimingSource::Gpu, gbufferScopeName, "gbuffer", firstTiming, 70u));
 
     FrameGraphNodeDescs nodes = FrameGraphNodeDescs(testArena.arena);
     FrameGraphEdgeDescs edges = FrameGraphEdgeDescs(testArena.arena);
     BuildTestFrameGraph(testArena.arena, nodes, edges);
-    ASSERT_TRUE(RecordFrameGraph(recorder, testArena.scratchArena, 40u, nodes, edges, 7u));
+    ASSERT_TRUE(RecordTestFrameGraph(recorder, testArena.scratchArena, 40u, nodes, edges, 7u));
 
     TimingStats secondTiming = MakeTestTimingStats();
     secondTiming.seconds = 0.042;
@@ -1244,23 +1386,18 @@ void VerifyTelemetry_TelemetryReportKeepsCaptureOrderAndCorrelatesTimingByFrame(
     secondTiming.publishFrameIndex = 42u;
     secondTiming.firstSampleFrameIndex = 41u;
     secondTiming.lastSampleFrameIndex = 41u;
-    ASSERT_TRUE(RecordPerfTiming(recorder, PerfTimingSource::Gpu, gbufferScopeName, "gbuffer", secondTiming, 80u));
+    ASSERT_TRUE(RecordTestPerfTiming(recorder, PerfTimingSource::Gpu, gbufferScopeName, "gbuffer", secondTiming, 80u));
 
     nodes[0u].label = "Second GBuffer Pass";
-    ASSERT_TRUE(RecordFrameGraph(recorder, testArena.scratchArena, 41u, nodes, edges, 8u));
+    ASSERT_TRUE(RecordTestFrameGraph(recorder, testArena.scratchArena, 41u, nodes, edges, 8u));
 
     nodes[0u].label = "Unmatched GBuffer Pass";
-    native(mut recorder, mut testArena, in nodes, in edges){
-        ASSERT_TRUE(RecordFrameGraph(recorder, testArena.scratchArena, 42u, nodes, edges, 9u));
-    }
+    ASSERT_TRUE(RecordTestFrameGraph(recorder, testArena.scratchArena, 42u, nodes, edges, 9u));
 
     ScratchArena scratchArena = ScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
-    TelemetryReport report = TelemetryReport(testArena.arena);
-    native(in recorder, mut testArena, mut scratchArena, mut report){
-        auto reportResult1 = BuildTelemetryReport(recorder.view(), testArena.arena, scratchArena);
-        ASSERT_TRUE(reportResult1.has_value());
-        report = Move(reportResult1.value());
-    }
+    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, scratchArena);
+    ASSERT_TRUE(reportResult.has_value());
+    const TelemetryReport report = reportResult.value();
     EXPECT_EQ(report.summary.frameGraphFrameCount, 3u);
 
     const StringView json = ReportJsonView(report);
@@ -1303,21 +1440,19 @@ void VerifyTelemetry_TelemetryReportDoesNotAttachAggregatedTimingToOneGraph(){
     aggregatedTiming.publishFrameIndex = 44u;
     aggregatedTiming.firstSampleFrameIndex = 43u;
     aggregatedTiming.lastSampleFrameIndex = 43u;
-    ASSERT_TRUE(RecordPerfTiming(recorder, PerfTimingSource::Gpu, Name(s_GBuffer), "gbuffer", aggregatedTiming, 70u));
+    ASSERT_TRUE(RecordTestPerfTiming(recorder, PerfTimingSource::Gpu, Name(s_GBuffer), "gbuffer", aggregatedTiming, 70u));
 
     FrameGraphNodeDescs nodes = FrameGraphNodeDescs(testArena.arena);
     FrameGraphEdgeDescs edges = FrameGraphEdgeDescs(testArena.arena);
     BuildTestFrameGraph(testArena.arena, nodes, edges);
-    ASSERT_TRUE(RecordFrameGraph(recorder, testArena.scratchArena, 43u, nodes, edges, 7u));
+    ASSERT_TRUE(RecordTestFrameGraph(recorder, testArena.scratchArena, 43u, nodes, edges, 7u));
     nodes[0u].label = "Publish Frame GBuffer Pass";
+    ASSERT_TRUE(RecordTestFrameGraph(recorder, testArena.scratchArena, 44u, nodes, edges, 8u));
+
     ScratchArena scratchArena = ScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
-    TelemetryReport report = TelemetryReport(testArena.arena);
-    native(mut recorder, mut testArena, in nodes, in edges, mut scratchArena, mut report){
-        ASSERT_TRUE(RecordFrameGraph(recorder, testArena.scratchArena, 44u, nodes, edges, 8u));
-        auto reportResult2 = BuildTelemetryReport(recorder.view(), testArena.arena, scratchArena);
-        ASSERT_TRUE(reportResult2.has_value());
-        report = Move(reportResult2.value());
-    }
+    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, scratchArena);
+    ASSERT_TRUE(reportResult.has_value());
+    const TelemetryReport report = reportResult.value();
     const StringView dot = ReportGraphView(report);
     EXPECT_TRUE(dot.contains("digraph frame_graph_43_7_0"));
     EXPECT_TRUE(dot.contains("digraph frame_graph_44_8_1"));
@@ -1332,30 +1467,25 @@ void VerifyTelemetry_TelemetryReportDistinguishesExactEmptyPacketSubmissionsFrom
     FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics = FrameGraphPhysicalQueueRuntimeStatisticsRecords(testArena.arena);
     FrameGraphPacketSubmissionStatisticsRecords packetSubmissionStatistics = FrameGraphPacketSubmissionStatisticsRecords(testArena.arena);
     BuildTestPacketSubmissionFrameGraph(testArena.arena, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics);
-    native(mut nodes){
-        nodes[0u].runtimeStatistics.submission = {};
-    }
+    nodes[0u].runtimeStatistics.submission = FrameGraphSubmissionRuntimeStatistics();
     physicalQueueRuntimeStatistics.clear();
     packetSubmissionStatistics.clear();
 
     ScratchArena scratchArena = ScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
-    TelemetryReport exactReport = TelemetryReport(testArena.arena);
-    TelemetryReport absentReport = TelemetryReport(testArena.arena);
-    native(mut testArena, in nodes, in edges, in physicalQueueRuntimeStatistics, in packetSubmissionStatistics, mut scratchArena, mut exactReport, mut absentReport){
-        TelemetryRecorder exactRecorder(testArena.arena);
-        exactRecorder.setCaptureOptions(CaptureAll());
-        ASSERT_TRUE(RecordFrameGraph(exactRecorder, testArena.scratchArena, 58u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, 18u));
-        auto reportResult3 = BuildTelemetryReport(exactRecorder.view(), testArena.arena, scratchArena);
-        ASSERT_TRUE(reportResult3.has_value());
-        exactReport = Move(reportResult3.value());
+    TelemetryRecorder exactRecorder = TelemetryRecorder(testArena.arena);
+    exactRecorder.setCaptureOptions(CaptureAll());
+    ASSERT_TRUE(RecordTestFrameGraph(exactRecorder, testArena.scratchArena, 58u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, 18u));
+    const Expected<TelemetryReport> exactReportResult = BuildTestTelemetryReport(exactRecorder.view(), testArena.arena, scratchArena);
+    ASSERT_TRUE(exactReportResult.has_value());
+    const TelemetryReport exactReport = exactReportResult.value();
 
-        TelemetryRecorder absentRecorder(testArena.arena);
-        absentRecorder.setCaptureOptions(CaptureAll());
-        ASSERT_TRUE(RecordFrameGraph(absentRecorder, testArena.scratchArena, 59u, nodes, edges, 19u));
-        auto reportResult4 = BuildTelemetryReport(absentRecorder.view(), testArena.arena, scratchArena);
-        ASSERT_TRUE(reportResult4.has_value());
-        absentReport = Move(reportResult4.value());
-    }
+    TelemetryRecorder absentRecorder = TelemetryRecorder(testArena.arena);
+    absentRecorder.setCaptureOptions(CaptureAll());
+    ASSERT_TRUE(RecordTestFrameGraph(absentRecorder, testArena.scratchArena, 59u, nodes, edges, 19u));
+    const Expected<TelemetryReport> absentReportResult = BuildTestTelemetryReport(absentRecorder.view(), testArena.arena, scratchArena);
+    ASSERT_TRUE(absentReportResult.has_value());
+    const TelemetryReport absentReport = absentReportResult.value();
+
     EXPECT_TRUE(ReportJsonView(exactReport).contains("\"packetSubmissions\": []"));
     EXPECT_TRUE(ReportGraphView(exactReport).contains("runtime_packet_submission_count=0"));
     EXPECT_TRUE(ReportJsonView(absentReport).contains("\"packetSubmissions\": null"));
@@ -1368,29 +1498,31 @@ void VerifyTelemetry_TelemetryReportRejectsNonCurrentFrameGraphPayloads(){
     FrameGraphEdgeDescs edges = FrameGraphEdgeDescs(testArena.arena);
     BuildTestFrameGraph(testArena.arena, nodes, edges);
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
-    ASSERT_TRUE(BuildFrameGraphPayload(55u, nodes, edges, testArena.scratchArena, payload));
+    ASSERT_TRUE(BuildTestFrameGraphPayload(55u, nodes, edges, testArena.scratchArena, payload));
 
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
     recorder.setCaptureOptions(CaptureAll());
-    ScratchArena scratchArena = ScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
-    TelemetryReport report = TelemetryReport(testArena.arena);
-    usize unsupportedCount = 0u;
-    native(mut testArena, in nodes, in edges, mut payload, mut recorder, mut scratchArena, mut report, mut unsupportedCount){
-        ASSERT_TRUE(RecordFrameGraph(recorder, testArena.scratchArena, 55u, nodes, edges, 15u));
-        const Array<u16, 12> unsupportedVersions = { 0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, static_cast<u16>(Core::Telemetry::s_FrameGraphPayloadVersion + 1u), Limit<u16>::s_Max, };
-        unsupportedCount = LengthOf(unsupportedVersions);
-        Core::Telemetry::EncodedFrameGraphPayloadHeader header;
-        NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
-        for(const u16 version : unsupportedVersions){
-            ScopedTestTrace trace(version);
-            header.version = version;
-            NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
-            ASSERT_TRUE(recorder.recordBinary(EventKind::FrameGraphFrame, 55u, payload.data(), payload.size(), 15u));
-        }
-        auto reportResult5 = BuildTelemetryReport(recorder.view(), testArena.arena, scratchArena);
-        ASSERT_TRUE(reportResult5.has_value());
-        report = Move(reportResult5.value());
+    ASSERT_TRUE(RecordTestFrameGraph(recorder, testArena.scratchArena, 55u, nodes, edges, 15u));
+
+    Array<u16, 12> unsupportedVersions = Array<u16, 12>();
+    for(usize idx = 0u; idx < 10u; ++idx)
+        unsupportedVersions[idx] = cast<u16>(idx);
+    unsupportedVersions[10u] = cast<u16>(s_FrameGraphPayloadVersion + 1u);
+    unsupportedVersions[11u] = u16.max;
+    const usize unsupportedCount = unsupportedVersions.size();
+    EncodedFrameGraphPayloadHeader header = EncodedFrameGraphPayloadHeader();
+    ReadTelemetryPod(payload, 0u, header);
+    for(in u16 version : unsupportedVersions){
+        ScopedTestTrace trace = ScopedTestTrace(version);
+        header.version = version;
+        WriteTelemetryPod(payload, 0u, header);
+        ASSERT_TRUE(RecordBinaryBytes(recorder, EventKind::FrameGraphFrame, 55u, payload, 15u));
     }
+
+    ScratchArena scratchArena = ScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
+    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, scratchArena);
+    ASSERT_TRUE(reportResult.has_value());
+    const TelemetryReport report = reportResult.value();
     EXPECT_EQ(report.summary.eventCount, unsupportedCount + 1u);
     EXPECT_EQ(report.summary.parseFailureCount, unsupportedCount);
     EXPECT_EQ(report.summary.frameGraphFrameCount, 1u);
@@ -1405,14 +1537,12 @@ void VerifyTelemetry_TelemetryReportMarksAbsentRuntimeStatistics(){
     FrameGraphNodeDescs nodes = FrameGraphNodeDescs(testArena.arena);
     FrameGraphEdgeDescs edges = FrameGraphEdgeDescs(testArena.arena);
     BuildTestCompiledFrameGraph(testArena.arena, nodes, edges);
+    ASSERT_TRUE(RecordTestFrameGraph(recorder, testArena.scratchArena, 53u, nodes, edges, 13u));
+
     ScratchArena scratchArena = ScratchArena(s_TelemetryCaseTestsTelemetryReportWork);
-    TelemetryReport report = TelemetryReport(testArena.arena);
-    native(mut recorder, mut testArena, in nodes, in edges, mut scratchArena, mut report){
-        ASSERT_TRUE(RecordFrameGraph(recorder, testArena.scratchArena, 53u, nodes, edges, 13u));
-        auto reportResult6 = BuildTelemetryReport(recorder.view(), testArena.arena, scratchArena);
-        ASSERT_TRUE(reportResult6.has_value());
-        report = Move(reportResult6.value());
-    }
+    const Expected<TelemetryReport> reportResult = BuildTestTelemetryReport(recorder.view(), testArena.arena, scratchArena);
+    ASSERT_TRUE(reportResult.has_value());
+    const TelemetryReport report = reportResult.value();
 
     const StringView json = ReportJsonView(report);
     const usize firstPassJsonOffset = json.find("\"label\": \"GBuffer Pass\"");
@@ -1476,27 +1606,14 @@ void VerifyTelemetry_TelemetryReportRetainsFiniteRecordsWhenTimingTotalsOverflow
     sources[0u] = PerfTimingSource::Cpu;
     sources[1u] = PerfTimingSource::Gpu;
     for(in PerfTimingSourceEnum source : sources){
-        ASSERT_TRUE(RecordPerfTiming(recorder, source, s_TelemetryCaseLargeFirst, "large_first", timing));
-        ASSERT_TRUE(RecordPerfTiming(recorder, source, s_TelemetryCaseLargeSecond, "large_second", timing));
+        ASSERT_TRUE(RecordTestPerfTiming(recorder, source, s_TelemetryCaseLargeFirst, "large_first", timing));
+        ASSERT_TRUE(RecordTestPerfTiming(recorder, source, s_TelemetryCaseLargeSecond, "large_second", timing));
     }
 
-    TelemetryReport report = TelemetryReport(testArena.arena);
-    b8 roundingApplied = false;
-    b8 reportBuilt = false;
-    native(in recorder, mut testArena, mut report, mut roundingApplied, mut reportBuilt){
-        {
-#pragma STDC FENV_ACCESS ON
-            roundingApplied = SetFloatingPointRoundingMode(FE_TONEAREST).has_value();
-            if(roundingApplied){
-                auto builtReport = BuildTelemetryReport(recorder.view(), testArena.arena, testArena.scratchArena);
-                reportBuilt = builtReport.has_value();
-                if(builtReport.has_value())
-                    report = Move(builtReport.value());
-            }
-        }
-    }
-    ASSERT_TRUE(roundingApplied);
-    ASSERT_TRUE(reportBuilt);
+    ASSERT_TRUE(SetFloatingPointRoundingMode(s_FeToNearest).has_value());
+    const Expected<TelemetryReport> builtReport = BuildTestTelemetryReport(recorder.view(), testArena.arena, testArena.scratchArena);
+    ASSERT_TRUE(builtReport.has_value());
+    const TelemetryReport report = builtReport.value();
     EXPECT_EQ(report.summary.eventCount, 4u);
     EXPECT_EQ(report.summary.parseFailureCount, 0u);
     EXPECT_EQ(report.summary.cpuTimingEventCount, 2u);
@@ -1515,197 +1632,122 @@ void VerifyTelemetry_TelemetryReportRetainsFiniteRecordsWhenTimingTotalsOverflow
 void VerifyTelemetry_TextLogPayloadPreservesUnicodeAndEmbeddedNullBytes(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
-    native(mut testArena, mut payload){
+    b8 built = false;
+    native(mut testArena, mut payload, mut built){
         constexpr TStringView s_Message(
             NWB_TEXT("A\u00e9\ud55c\U0001f642\0Z"),
             sizeof(NWB_TEXT("A\u00e9\ud55c\U0001f642\0Z")) / sizeof(tchar) - 1u
         );
-        constexpr Array<u8, 12> s_Expected = { 0x41u, 0xc3u, 0xa9u, 0xedu, 0x95u, 0x9cu, 0xf0u, 0x9fu, 0x99u, 0x82u, 0u, 0x5au };
-        ASSERT_TRUE(Core::Telemetry::BuildTextLogPayload(LogType::Warning, s_Message, testArena.scratchArena, payload));
-        CheckTextLogPayload(payload, s_Expected);
+        built = BuildTextLogPayload(LogType::Warning, s_Message, testArena.scratchArena, payload);
     }
+    ASSERT_TRUE(built);
+    Array<u8, 12> expected = Array<u8, 12>();
+    expected[0u] = 0x41u;
+    expected[1u] = 0xc3u;
+    expected[2u] = 0xa9u;
+    expected[3u] = 0xedu;
+    expected[4u] = 0x95u;
+    expected[5u] = 0x9cu;
+    expected[6u] = 0xf0u;
+    expected[7u] = 0x9fu;
+    expected[8u] = 0x99u;
+    expected[9u] = 0x82u;
+    expected[10u] = 0u;
+    expected[11u] = 0x5au;
+    CheckTextLogPayload(payload, expected);
 }
 
 void VerifyTelemetry_TextLogPayloadRetainsPlatformInvalidUnicodeConversion(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
-    native(mut testArena, mut payload){
+    Array<u8, 3> expected = Array<u8, 3>();
+    b8 built = false;
+    native(mut testArena, mut payload, mut expected, mut built){
 #if defined(NWB_UNICODE)
 #if WCHAR_MAX <= 0xffffu
         constexpr Array<tchar, 3> s_Message = { static_cast<tchar>(0xd800u), static_cast<tchar>('X'), static_cast<tchar>(0xdc00u) };
 #else
         constexpr Array<tchar, 3> s_Message = { static_cast<tchar>(0x110000u), static_cast<tchar>('X'), static_cast<tchar>(0xffffffffu) };
 #endif
-        constexpr Array<u8, 3> s_Expected = { static_cast<u8>('?'), static_cast<u8>('X'), static_cast<u8>('?') };
+        expected = { static_cast<u8>('?'), static_cast<u8>('X'), static_cast<u8>('?') };
 #else
         // Narrow byte strings pass through without repairing invalid UTF-8.
         constexpr Array<tchar, 3> s_Message = { static_cast<tchar>(0xc0u), static_cast<tchar>(0xafu), static_cast<tchar>('X') };
-        constexpr Array<u8, 3> s_Expected = { 0xc0u, 0xafu, static_cast<u8>('X') };
+        expected = { 0xc0u, 0xafu, static_cast<u8>('X') };
 #endif
-        ASSERT_TRUE(Core::Telemetry::BuildTextLogPayload(LogType::Info, TStringView(s_Message.data(), s_Message.size()), testArena.scratchArena, payload));
-        CheckTextLogPayload(payload, s_Expected);
+        built = BuildTextLogPayload(LogType::Info, TStringView(s_Message.data(), s_Message.size()), testArena.scratchArena, payload);
     }
+    ASSERT_TRUE(built);
+    CheckTextLogPayload(payload, expected);
 }
 
 void VerifyTelemetry_TextLogPayloadPreservesAliasedInputBeforeHeaderWrite(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
-    native(mut testArena, mut payload){
+    b8 built = false;
+    native(mut testArena, mut payload, mut built){
         constexpr TStringView s_Message = NWB_TEXT("captured \ud55c\U0001f642");
-        constexpr Array<u8, 16> s_Expected = { 'c', 'a', 'p', 't', 'u', 'r', 'e', 'd', ' ', 0xedu, 0x95u, 0x9cu, 0xf0u, 0x9fu, 0x99u, 0x82u };
         constexpr usize s_Offset = sizeof(tchar);
         constexpr usize s_MessageBytes = s_Message.size() * sizeof(tchar);
         payload.resize(s_Offset + s_MessageBytes);
         NWB_MEMCPY(payload.data() + s_Offset, s_MessageBytes, s_Message.data(), s_MessageBytes);
         const TStringView aliased(reinterpret_cast<const tchar*>(payload.data() + s_Offset), s_Message.size());
-        ASSERT_TRUE(Core::Telemetry::BuildTextLogPayload(LogType::Error, aliased, testArena.scratchArena, payload));
-        CheckTextLogPayload(payload, s_Expected);
+        built = BuildTextLogPayload(LogType::Error, aliased, testArena.scratchArena, payload);
     }
+    ASSERT_TRUE(built);
+    Array<u8, 16> expected = Array<u8, 16>();
+    expected[0u] = 0x63u;
+    expected[1u] = 0x61u;
+    expected[2u] = 0x70u;
+    expected[3u] = 0x74u;
+    expected[4u] = 0x75u;
+    expected[5u] = 0x72u;
+    expected[6u] = 0x65u;
+    expected[7u] = 0x64u;
+    expected[8u] = 0x20u;
+    expected[9u] = 0xedu;
+    expected[10u] = 0x95u;
+    expected[11u] = 0x9cu;
+    expected[12u] = 0xf0u;
+    expected[13u] = 0x9fu;
+    expected[14u] = 0x99u;
+    expected[15u] = 0x82u;
+    CheckTextLogPayload(payload, expected);
 }
 
 void VerifyTelemetry_TextLogPayloadRejectsNonCurrentVersionsAndRecovers(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
-    native(mut testArena, mut payload){
-        ASSERT_TRUE(Core::Telemetry::BuildTextLogPayload(LogType::Warning, NWB_TEXT("retained log"), testArena.scratchArena, payload));
-        const TelemetryBytes current = payload;
-        const Array<u16, 3> unsupportedVersions = { 0u, static_cast<u16>(Core::Telemetry::s_TextLogPayloadVersion + 1u), Limit<u16>::s_Max, };
-        for(const u16 version : unsupportedVersions){
-            ScopedTestTrace trace(version);
-            ASSERT_TRUE(Core::Telemetry::ParseTextLogPayload(current.data(), current.size()).has_value());
-            usize cursor = 0u;
-            const auto readHeader = ReadPOD<Core::Telemetry::EncodedTextLogPayloadHeader>(current, cursor);
-            ASSERT_TRUE(readHeader.has_value());
-            Core::Telemetry::EncodedTextLogPayloadHeader header = readHeader.value();
-            header.version = version;
-            NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
-            EXPECT_FALSE(Core::Telemetry::ParseTextLogPayload(payload.data(), payload.size()).has_value());
-            const auto parsed = Core::Telemetry::ParseTextLogPayload(current.data(), current.size());
-            ASSERT_TRUE(parsed.has_value());
-            EXPECT_EQ(AStringView(parsed.value().messageUtf8), AStringView("retained log"));
-        }
+    ASSERT_TRUE(BuildTestTextLogPayload(LogType::Warning, "retained log", testArena.scratchArena, payload));
+    TelemetryBytes current = TelemetryBytes(testArena.arena);
+    CopyTelemetryBytes(payload, current);
+
+    Array<u16, 3> unsupportedVersions = Array<u16, 3>();
+    unsupportedVersions[0u] = 0u;
+    unsupportedVersions[1u] = cast<u16>(s_TextLogPayloadVersion + 1u);
+    unsupportedVersions[2u] = u16.max;
+    for(in u16 version : unsupportedVersions){
+        ScopedTestTrace trace = ScopedTestTrace(version);
+        ASSERT_TRUE(ParseTextLogBytes(current).has_value());
+        EncodedTextLogPayloadHeader header = EncodedTextLogPayloadHeader();
+        ReadTelemetryPod(current, 0u, header);
+        header.version = version;
+        WriteTelemetryPod(payload, 0u, header);
+        EXPECT_FALSE(ParseTextLogBytes(payload).has_value());
+        const Expected<TextLogPayload> parsed = ParseTextLogBytes(current);
+        ASSERT_TRUE(parsed.has_value());
+        EXPECT_EQ(parsed.value().messageUtf8, "retained log");
     }
 }
 
 void VerifyTelemetry_TextLogPayloadEmptyAndInvalidTypeReplacePreviousBytes(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
-    native(mut testArena, mut payload){
-        ASSERT_TRUE(Core::Telemetry::BuildTextLogPayload(LogType::Info, NWB_TEXT("old payload"), testArena.scratchArena, payload));
-        ASSERT_TRUE(Core::Telemetry::BuildTextLogPayload(LogType::EssentialInfo, {}, testArena.scratchArena, payload));
-        CheckTextLogPayload(payload);
-        EXPECT_FALSE(Core::Telemetry::BuildTextLogPayload(static_cast<LogType::Enum>(0xffu), {}, testArena.scratchArena, payload));
-    }
+    ASSERT_TRUE(BuildTestTextLogPayload(LogType::Info, "old payload", testArena.scratchArena, payload));
+    ASSERT_TRUE(BuildTestTextLogPayload(LogType::EssentialInfo, "", testArena.scratchArena, payload));
+    CheckTextLogPayload(payload);
+    EXPECT_FALSE(BuildTestTextLogPayload(cast<LogTypeEnum>(0xffu), "", testArena.scratchArena, payload));
     EXPECT_TRUE(payload.empty());
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace TelemetryRecorderReportDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void RunConcurrentReset(const b8 disableCapture){
-    constexpr usize s_WorkerCount = 4u;
-    TestArena testArena;
-    const ArenaMemoryStats initial = testArena.arena.memoryStats();
-    {
-        Telemetry::Recorder recorder(testArena.arena);
-        recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
-        Atomic<usize> accepted{ 0u };
-        Atomic<usize> damagedPayloads{ 0u };
-        Latch payloadsReady(s_WorkerCount);
-        Latch releasePayloads(1u);
-        Array<Thread, s_WorkerCount> workers;
-        for(usize index = 0u; index < s_WorkerCount; ++index){
-            workers[index] = Thread([&, index](){
-                b8 enteredBuilder = false;
-                const b8 recorded = recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, 42u, static_cast<u32>(index), [&](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes& payload){
-                    enteredBuilder = true;
-                    payload.resize(256u, static_cast<u8>(index + 1u));
-                    payloadsReady.count_down();
-                    releasePayloads.wait();
-                    for(const u8 value : payload){
-                        if(value != index + 1u){
-                            damagedPayloads.fetch_add(1u, MemoryOrder::relaxed);
-                            break;
-                        }
-                    }
-                    return true;
-                });
-                if(!enteredBuilder)
-                    payloadsReady.count_down();
-                if(recorded)
-                    accepted.fetch_add(1u, MemoryOrder::relaxed);
-            });
-        }
-        payloadsReady.wait();
-        recorder.clear();
-        const u8 marker = 99u;
-        const b8 markerRecorded = recorder.recordBinary(Telemetry::EventKind::PerfFrame, 7u, &marker, sizeof(marker), 99u);
-        if(disableCapture)
-            recorder.setCaptureOptions(Telemetry::CaptureOptions::Disabled());
-        releasePayloads.count_down();
-        for(Thread& worker : workers)
-            worker.join();
-
-        EXPECT_TRUE(markerRecorded);
-        EXPECT_EQ(damagedPayloads.load(MemoryOrder::relaxed), 0u);
-        EXPECT_EQ(accepted.load(MemoryOrder::relaxed), disableCapture ? 0u : s_WorkerCount);
-        EXPECT_EQ(recorder.eventCount(), disableCapture ? 0u : s_WorkerCount + 1u);
-        if(!disableCapture){
-            Array<b8, s_WorkerCount> seen = {};
-            for(usize index = 1u; index < recorder.eventCount(); ++index){
-                const auto* event = recorder.view().eventAt(index);
-                ASSERT_NE(event, nullptr);
-                ASSERT_LT(event->header.streamId, s_WorkerCount);
-                EXPECT_FALSE(seen[event->header.streamId]);
-                seen[event->header.streamId] = true;
-                ASSERT_EQ(event->payload.size(), 256u);
-                EXPECT_EQ(event->payload.front(), event->header.streamId + 1u);
-                EXPECT_EQ(event->payload.back(), event->header.streamId + 1u);
-            }
-            for(const b8 recorded : seen)
-                EXPECT_TRUE(recorded);
-        }
-    }
-    const ArenaMemoryStats after = testArena.arena.memoryStats();
-    EXPECT_EQ(after.usedBytes, initial.usedBytes);
-    EXPECT_EQ(after.reservedBytes, initial.reservedBytes);
-}
-
-void CheckTextLogPayload(const Span<const u8> payload, const Span<const u8> expected){
-    ASSERT_EQ(payload.size(), sizeof(Telemetry::EncodedTextLogPayloadHeader) + expected.size());
-    usize cursor = 0u;
-    const auto readHeader = ReadPOD<Telemetry::EncodedTextLogPayloadHeader>(payload, cursor);
-    ASSERT_TRUE(readHeader.has_value());
-    Telemetry::EncodedTextLogPayloadHeader header = readHeader.value();
-    EXPECT_EQ(header.messageBytes, expected.size());
-    for(usize index = 0u; index < expected.size(); ++index)
-        EXPECT_EQ(payload[cursor + index], expected[index]) << index;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

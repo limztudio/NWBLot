@@ -18,6 +18,7 @@ native{
 
 #include <core/task/gpu/capture/command_ir.h>
 #include <core/task/gpu/capture/command_ir_internal.h>
+#include <core/task/gpu/capture/command_ir_raster.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -56,13 +57,59 @@ inline constexpr usize s_CommandIrClearTextureOffset = s_CommandIrClearBufferOff
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CopyCommandIrBytes(const BinaryByteView source, Core::GraphicsBytes& outBytes);
+[[nodiscard]] NWB_INLINE BinaryByteView MakeBinaryByteView(const Span<const u8> bytes)noexcept{
+    return BinaryByteView{ bytes.data(), bytes.size() };
+}
+
+[[nodiscard]] NWB_INLINE BinaryByteView MakeGraphicsByteView(const Core::GraphicsBytes& bytes)noexcept{
+    return BinaryByteView{ bytes.data(), bytes.size() };
+}
+
+[[nodiscard]] NWB_INLINE BinaryByteView MakeNullBinaryByteView(const usize size)noexcept{
+    return BinaryByteView{ nullptr, size };
+}
+
+[[nodiscard]] NWB_INLINE BinaryByteView SubBinaryByteView(const BinaryByteView source, const usize offset, const usize count)noexcept{
+    return BinaryByteView{ source.data() + offset, count };
+}
+
+[[nodiscard]] NWB_INLINE Span<const u8> ByteViewSpan(const BinaryByteView source)noexcept{
+    return source.data() ? Span<const u8>(source.data(), source.size()) : Span<const u8>{};
+}
 
 template<typename PodT>
-inline void WriteCommandIrPod(const usize byteOffset, const PodT& value, const Span<u8> bytes)noexcept(noexcept(NWB_MEMCPY(bytes.data() + byteOffset, bytes.size() - byteOffset, &value, sizeof(value)))){
+[[nodiscard]] NWB_INLINE Optional<PodT> ReadCommandIrPodAt(const BinaryByteView bytes, const usize offset = 0u)noexcept{
+    usize cursor = offset;
+    if(const auto parsed = ReadPOD<PodT>(bytes, cursor))
+        return *parsed;
+    return {};
+}
+
+template<typename PodT>
+NWB_INLINE void WriteCommandIrPod(const usize byteOffset, const PodT& value, const Span<u8> bytes)noexcept(noexcept(NWB_MEMCPY(bytes.data() + byteOffset, bytes.size() - byteOffset, &value, sizeof(value)))){
     NWB_ASSERT(byteOffset <= bytes.size());
     NWB_ASSERT(bytes.size() - byteOffset >= sizeof(PodT));
     NWB_MEMCPY(bytes.data() + byteOffset, bytes.size() - byteOffset, &value, sizeof(value));
+}
+
+NWB_INLINE void WriteCommandIrU8(const usize offset, const u8 value, Core::GraphicsBytes& bytes)noexcept{
+    WriteCommandIrPod(offset, value, bytes);
+}
+
+NWB_INLINE void WriteCommandIrU16(const usize offset, const u16 value, Core::GraphicsBytes& bytes)noexcept{
+    WriteCommandIrPod(offset, value, bytes);
+}
+
+NWB_INLINE void WriteCommandIrU32(const usize offset, const u32 value, Core::GraphicsBytes& bytes)noexcept{
+    WriteCommandIrPod(offset, value, bytes);
+}
+
+NWB_INLINE void WriteCommandIrU64(const usize offset, const u64 value, Core::GraphicsBytes& bytes)noexcept{
+    WriteCommandIrPod(offset, value, bytes);
+}
+
+NWB_INLINE void WriteCommandIrF32(const usize offset, const f32 value, Core::GraphicsBytes& bytes)noexcept{
+    WriteCommandIrPod(offset, value, bytes);
 }
 
 
@@ -78,9 +125,16 @@ struct PayloadDestroyTask{
         explicit Payload(u32* const value)noexcept
             : destructionCount(value)
         {}
-        Payload(Payload&& other)noexcept;
+        Payload(Payload&& other)noexcept
+            : destructionCount(other.destructionCount)
+        {
+            other.destructionCount = nullptr;
+        }
         Payload(const Payload&) = delete;
-        ~Payload()noexcept;
+        ~Payload()noexcept{
+            if(destructionCount)
+                ++*destructionCount;
+        }
     };
 };
 
@@ -93,11 +147,19 @@ struct PacketLifecycleTask{
 
 
 public:
-    static Core::GpuTaskCommandRequirements CommandRequirements(const Payload& payload)noexcept{ return Core::GpuTaskCommandRequirements{ payload.requiredCapabilities }; }
+    static Core::GpuTaskCommandRequirements CommandRequirements(const Payload& payload)noexcept{
+        return Core::GpuTaskCommandRequirements{ payload.requiredCapabilities };
+    }
 
-    static void Accepted(Payload& payload, const Core::QueueSubmissionToken&)noexcept;
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken&)noexcept{
+        if(payload.acceptedCount)
+            ++*payload.acceptedCount;
+    }
 
-    static void Discarded(Payload& payload)noexcept;
+    static void Discarded(Payload& payload)noexcept{
+        if(payload.discardedCount)
+            ++*payload.discardedCount;
+    }
 };
 
 struct ReentrantCompileDuringDeclarationTask{
@@ -112,7 +174,31 @@ struct ReentrantCompileDuringDeclarationTask{
     public:
         Payload()noexcept = default;
         Payload(const Payload&) = delete;
-        Payload(Payload&& other);
+        Payload(Payload&& other)
+            : graph(other.graph)
+            , analysis(other.analysis)
+            , scratchArena(other.scratchArena)
+            , compileAttempted(other.compileAttempted)
+            , compileSucceeded(other.compileSucceeded)
+        {
+            other.graph = nullptr;
+            other.analysis = nullptr;
+            other.scratchArena = nullptr;
+            other.compileAttempted = nullptr;
+            other.compileSucceeded = nullptr;
+            if(!graph || !analysis || !scratchArena)
+                return;
+
+            if(compileAttempted)
+                *compileAttempted = true;
+            const Core::GpuTaskGraphCompiler compiler;
+            const Core::GpuTaskGraph::DeclarationReadView declarations = Core::GpuTaskGraph::DeclarationReadView::TryAcquire(*graph);
+            b8 succeeded = false;
+            if(declarations.valid())
+                succeeded = compiler.analyze(declarations, *scratchArena, *analysis);
+            if(compileSucceeded)
+                *compileSucceeded = succeeded;
+        }
     };
 };
 
@@ -143,7 +229,23 @@ struct ReentrantTelemetryDuringDeclarationTask{
             : state(&value)
         {}
         Payload(const Payload&) = delete;
-        Payload(Payload&& other);
+        Payload(Payload&& other)
+            : state(other.state)
+        {
+            other.state = nullptr;
+            if(!state || !state->graph || !state->analysis || !state->assignments || !state->compiledGraph || !state->transaction || !state->tracker || !state->builder || !state->scratchArena)
+                return;
+
+            const Core::GpuTaskGraph::DeclarationReadView declarations = Core::GpuTaskGraph::DeclarationReadView::TryAcquire(*state->graph);
+            const Core::GpuCompiledGraph::ReadView compiledPlan(*state->compiledGraph);
+            state->trackerValidationAttempted = true;
+            state->trackerValidationSucceeded = state->tracker->validFor(declarations, *state->assignments, compiledPlan);
+            state->trackerUpdateAttempted = true;
+            state->trackerUpdateSucceeded = state->tracker->update(declarations, *state->assignments, compiledPlan, *state->transaction, *state->scratchArena);
+            const Core::GpuTaskGraphTelemetryOptions options{ .queueAssignments = state->assignments, .compiledPlan = &compiledPlan, .queueAssignmentTelemetry = state->tracker };
+            state->appendAttempted = true;
+            state->appendSucceeded = declarations.appendFrameGraphTelemetry(*state->analysis, *state->scratchArena, *state->builder, options);
+        }
     };
 };
 
@@ -158,7 +260,11 @@ public:
 
 
 public:
-    static b8 Record(const Payload& payload, Core::CommandList&, const Core::GpuTaskRecordContext&)noexcept;
+    static b8 Record(const Payload& payload, Core::CommandList&, const Core::GpuTaskRecordContext&)noexcept{
+        if(payload.recordCount)
+            ++*payload.recordCount;
+        return true;
+    }
 };
 
 struct MalformedLifecycleTask{
@@ -170,11 +276,22 @@ struct MalformedLifecycleTask{
 
 
 public:
-    static b8 Record(const Payload& payload, Core::CommandList&, const Core::GpuTaskRecordContext&, const u32 lookalike = 0u)noexcept;
+    static b8 Record(const Payload& payload, Core::CommandList&, const Core::GpuTaskRecordContext&, [[maybe_unused]] const u32 lookalike = 0u)noexcept{
+        if(payload.recordCount)
+            ++*payload.recordCount;
+        return true;
+    }
 
-    static b8 Accepted(Payload& payload, const Core::QueueSubmissionToken&)noexcept;
+    static b8 Accepted(Payload& payload, const Core::QueueSubmissionToken&)noexcept{
+        if(payload.acceptedCount)
+            ++*payload.acceptedCount;
+        return true;
+    }
 
-    static void Discarded(const Payload& payload)noexcept;
+    static void Discarded(const Payload& payload)noexcept{
+        if(payload.discardedCount)
+            ++*payload.discardedCount;
+    }
 };
 
 
@@ -204,6 +321,25 @@ NWB_END
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+void CopyCommandIrBytes(in BinaryByteView source, mut GraphicsBytes outBytes){
+    const Span<u8> bytes = ByteViewSpan(source);
+    outBytes.resize(bytes.size());
+    for(usize i = 0u; i < bytes.size(); ++i)
+        outBytes[i] = bytes[i];
+}
+
+b8 BinaryByteViewsEqual(in BinaryByteView lhs, in BinaryByteView rhs){
+    if(lhs.size() != rhs.size())
+        return false;
+    const Span<u8> lhsBytes = ByteViewSpan(lhs);
+    const Span<u8> rhsBytes = ByteViewSpan(rhs);
+    for(usize i = 0u; i < lhsBytes.size(); ++i){
+        if(lhsBytes[i] != rhsBytes[i])
+            return false;
+    }
+    return true;
+}
 
 b8 CaptureAllBuiltinCommandIrRecords(mut GpuCommandIrCapture capture){
     TextureSlice sourceSlice = TextureSlice();
@@ -232,177 +368,6 @@ b8 CaptureAllBuiltinCommandIrRecords(mut GpuCommandIrCapture capture){
         && capture.captureCopyTexture(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrSource, sourceSlice, s_CommandIrDestination, destinationSlice)
         && capture.captureClearBuffer(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrDestination, 0xdecafbadu)
         && capture.captureClearTexture(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrDestination, clearTexture);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace TaskGraphTestUtils{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void CopyCommandIrBytes(const BinaryByteView source, Core::GraphicsBytes& outBytes){
-    outBytes.resize(source.size());
-    if(!source.empty())
-        NWB_MEMCPY(outBytes.data(), outBytes.size(), source.data(), source.size());
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-PayloadDestroyTask::Payload::Payload(Payload&& other)noexcept
-    : destructionCount(other.destructionCount)
-{
-    other.destructionCount = nullptr;
-}
-
-PayloadDestroyTask::Payload::~Payload()noexcept{
-    if(destructionCount)
-        ++*destructionCount;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void PacketLifecycleTask::Accepted(Payload& payload, const Core::QueueSubmissionToken&)noexcept{
-    if(payload.acceptedCount)
-        ++*payload.acceptedCount;
-}
-
-void PacketLifecycleTask::Discarded(Payload& payload)noexcept{
-    if(payload.discardedCount)
-        ++*payload.discardedCount;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-ReentrantCompileDuringDeclarationTask::Payload::Payload(Payload&& other)
-    : graph(other.graph)
-    , analysis(other.analysis)
-    , scratchArena(other.scratchArena)
-    , compileAttempted(other.compileAttempted)
-    , compileSucceeded(other.compileSucceeded)
-{
-    other.graph = nullptr;
-    other.analysis = nullptr;
-    other.scratchArena = nullptr;
-    other.compileAttempted = nullptr;
-    other.compileSucceeded = nullptr;
-    if(!graph || !analysis || !scratchArena)
-        return;
-
-    if(compileAttempted)
-        *compileAttempted = true;
-    const Core::GpuTaskGraphCompiler compiler;
-    const Core::GpuTaskGraph::DeclarationReadView declarations = Core::GpuTaskGraph::DeclarationReadView::TryAcquire(*graph);
-    b8 succeeded = false;
-    if(declarations.valid())
-        succeeded = compiler.analyze(declarations, *scratchArena, *analysis);
-    if(compileSucceeded)
-        *compileSucceeded = succeeded;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-ReentrantTelemetryDuringDeclarationTask::Payload::Payload(Payload&& other)
-    : state(other.state)
-{
-    other.state = nullptr;
-    if(!state || !state->graph || !state->analysis || !state->assignments || !state->compiledGraph || !state->transaction || !state->tracker || !state->builder || !state->scratchArena)
-        return;
-
-    const Core::GpuTaskGraph::DeclarationReadView declarations = Core::GpuTaskGraph::DeclarationReadView::TryAcquire(*state->graph);
-    const Core::GpuCompiledGraph::ReadView compiledPlan(*state->compiledGraph);
-    state->trackerValidationAttempted = true;
-    state->trackerValidationSucceeded = state->tracker->validFor(declarations, *state->assignments, compiledPlan);
-    state->trackerUpdateAttempted = true;
-    state->trackerUpdateSucceeded = state->tracker->update(declarations, *state->assignments, compiledPlan, *state->transaction, *state->scratchArena);
-    const Core::GpuTaskGraphTelemetryOptions options{ .queueAssignments = state->assignments, .compiledPlan = &compiledPlan, .queueAssignmentTelemetry = state->tracker, };
-    state->appendAttempted = true;
-    state->appendSucceeded = declarations.appendFrameGraphTelemetry(*state->analysis, *state->scratchArena, *state->builder, options);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 NativeRecordProbeTask::Record(const Payload& payload, Core::CommandList&, const Core::GpuTaskRecordContext&)noexcept{
-    if(payload.recordCount)
-        ++*payload.recordCount;
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 MalformedLifecycleTask::Record(const Payload& payload, Core::CommandList&, const Core::GpuTaskRecordContext&, [[maybe_unused]] const u32 lookalike)noexcept{
-    if(payload.recordCount)
-        ++*payload.recordCount;
-    return true;
-}
-
-b8 MalformedLifecycleTask::Accepted(Payload& payload, const Core::QueueSubmissionToken&)noexcept{
-    if(payload.acceptedCount)
-        ++*payload.acceptedCount;
-    return true;
-}
-
-void MalformedLifecycleTask::Discarded(const Payload& payload)noexcept{
-    if(payload.discardedCount)
-        ++*payload.discardedCount;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

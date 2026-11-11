@@ -17,7 +17,667 @@ native{
 
 #include <logger/client/module.h>
 
+#include <core/assets/paths.h>
 #include <core/common/application_entry.h>
+#include <core/common/log.h>
+
+#include <global/compile.h>
+#include <global/containers.h>
+#include <global/filesystem.h>
+#include <global/filesystem/file_staging.h>
+#include <global/limit.h>
+#include <global/simdmath.h>
+#include <global/simplemath.h>
+#include <global/span.h>
+#include <global/terminal_entry.h>
+#include <global/text_utils.h>
+#include <global/texture_payload.h>
+#include <global/type.h>
+
+#include <basisu_comp.h>
+#include <basisu_enc.h>
+#include <basisu_transcoder.h>
+#include <CLI.hpp>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#define NWB_TEX_CONV_BEGIN NWB_BEGIN namespace TexConv{
+#define NWB_TEX_CONV_END }; NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_TEX_CONV_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_tex_conv{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static_assert(static_cast<u8>(TexConvDimension::Texture2D) == static_cast<u8>(TextureDimension::Texture2D));
+static_assert(static_cast<u8>(TexConvDimension::TextureCube) == static_cast<u8>(TextureDimension::TextureCube));
+static_assert(static_cast<u8>(TexConvDimension::Texture3D) == static_cast<u8>(TextureDimension::Texture3D));
+static_assert(static_cast<u8>(TexConvPayloadFormat::UastcLdr4x4) == static_cast<u8>(TexturePayloadFormat::UastcLdr4x4));
+static_assert(static_cast<u8>(TexConvPayloadFormat::UastcHdr4x4) == static_cast<u8>(TexturePayloadFormat::UastcHdr4x4));
+static_assert(static_cast<u8>(TexConvAlphaMode::Opaque) == static_cast<u8>(TextureAlphaMode::Opaque));
+static_assert(static_cast<u8>(TexConvAlphaMode::EmbeddedLdr) == static_cast<u8>(TextureAlphaMode::EmbeddedLdr));
+static_assert(static_cast<u8>(TexConvAlphaMode::ConstantUnorm8) == static_cast<u8>(TextureAlphaMode::ConstantUnorm8));
+static_assert(static_cast<u8>(TexConvAlphaMode::SeparateUastcLdr4x4) == static_cast<u8>(TextureAlphaMode::SeparateUastcLdr4x4));
+static_assert(static_cast<u8>(TextureFormat::MipChainLayoutFailure::InvalidMipChain) == 1u);
+static_assert(static_cast<u8>(TextureFormat::MipChainLayoutFailure::BlockLayoutOverflow) == 3u);
+static_assert(static_cast<u8>(TextureFormat::MipChainLayoutFailure::SliceCountInvalid) == 4u);
+static_assert(static_cast<u8>(TextureFormat::MipChainLayoutFailure::ByteSizeOverflow) == 6u);
+static_assert(static_cast<u8>(StagedFilePairFailureStage::QueryOutput) == 1u);
+static_assert(static_cast<u8>(StagedFilePairFailureStage::InspectOutput) == 2u);
+static_assert(static_cast<u8>(StagedFilePairFailureStage::NonRegularOutput) == 3u);
+static_assert(static_cast<u8>(StagedFilePairFailureStage::OutputAlreadyExists) == 5u);
+static_assert(static_cast<u8>(StagedFilePairFailureStage::QueryWorkPath) == 6u);
+static_assert(static_cast<u8>(StagedFilePairFailureStage::WorkPathAlreadyExists) == 7u);
+
+template<typename T>
+using UtilityVector = DefaultVector<T, Core::Alloc::GlobalArena, QueryUtilityGlobalArena<s_UtilityArena>>;
+using ScratchPath = ::Path<Core::Alloc::ScratchArena>;
+using FloatPlanes = basisu::vector<basisu::imagef>;
+using FloatMipChain = basisu::vector<FloatPlanes>;
+using EncodedMip = TextureFormat::MipLevelLayout;
+
+struct PreparedTexture{
+    UtilityVector<u8> bytes;
+
+    u32 width = 0u;
+    u32 height = 0u;
+    u32 depth = 1u;
+    u32 mipCount = 0u;
+
+    TextureDimension::Enum dimension = TextureDimension::Texture2D;
+    TexturePayloadFormat::Enum format = TexturePayloadFormat::UastcLdr4x4;
+    TextureAlphaMode::Enum alphaMode = TextureAlphaMode::Opaque;
+    u8 alphaConstantUnorm8 = TextureFormat::s_OpaqueAlphaUnorm8;
+};
+
+struct TextureEncodeInput{
+    FloatPlanes planes;
+    u32 width = 0u;
+    u32 height = 0u;
+    u32 depth = 1u;
+    TextureDimension::Enum dimension = TextureDimension::Texture2D;
+    TexturePayloadFormat::Enum format = TexturePayloadFormat::UastcLdr4x4;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static Expected<::Vector<EncodedMip, Core::Alloc::ScratchArena>> BuildMipLevels(const TextureEncodeInput& entry, Core::Alloc::ScratchArena& scratchArena){
+    auto mipLevels = TextureFormat::BuildMipChainLayout(
+        entry.format,
+        entry.dimension,
+        entry.width,
+        entry.height,
+        entry.depth,
+        ::Vector<EncodedMip, Core::Alloc::ScratchArena>(scratchArena),
+        [](const TextureFormat::MipLevelLayout& level)noexcept -> EncodedMip{
+            return level;
+        }
+    );
+    if(!mipLevels){
+        LogTexConvMipChainFailure(static_cast<u8>(mipLevels.error().failure), mipLevels.error().mipIndex);
+        return MakeUnexpected(Failure{});
+    }
+    return Move(*mipLevels);
+}
+
+[[nodiscard]] static Expected<FloatPlanes> GenerateNextMip(const FloatPlanes& source, const TextureDimension::Enum dimension){
+    if(source.empty())
+        return MakeUnexpected(Failure{});
+    const u32 sourceWidth = source.front().get_width();
+    const u32 sourceHeight = source.front().get_height();
+    const u32 targetWidth = TextureFormat::NextMipExtent(sourceWidth);
+    const u32 targetHeight = TextureFormat::NextMipExtent(sourceHeight);
+    FloatPlanes filtered;
+    filtered.resize(source.size());
+    for(usize planeIndex = 0u; planeIndex < source.size(); ++planeIndex){
+        basisu::imagef& target = filtered[planeIndex];
+        target.resize(targetWidth, targetHeight);
+        if(!basisu::image_resample(source[planeIndex], target, s_MipFilter.data(), 1.0f, false, 0u, s_ColorChannelCount)){
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to filter linear mip planes."));
+            return MakeUnexpected(Failure{});
+        }
+    }
+    if(dimension != TextureDimension::Texture3D || source.size() == 1u)
+        return filtered;
+
+    const u32 sourceDepth = static_cast<u32>(source.size());
+    const SIMDVectorSingle inverseDepth = ComputeVolumeMipInverseDepth(sourceDepth);
+    const u32 targetDepth = ComputeVolumeMipTargetDepth(sourceDepth);
+    FloatPlanes target;
+    target.resize(targetDepth);
+    for(u32 z = 0u; z < targetDepth; ++z){
+        // Integer interval coordinates preserve fractional source-slab coverage when the depth is odd.
+        const VolumeMipZSlabRange slabRange = ComputeVolumeMipZSlabRange(z, sourceDepth, targetDepth);
+        basisu::imagef& plane = target[z];
+        plane.resize(targetWidth, targetHeight);
+        for(u32 y = 0u; y < targetHeight; ++y){
+            for(u32 x = 0u; x < targetWidth; ++x){
+                SIMDVectorSingle sum = VectorZero();
+                for(u32 sourceZ = slabRange.first; sourceZ < slabRange.end; ++sourceZ){
+                    const basisu::vec4F& color = filtered[sourceZ](x, y);
+                    sum = AccumulateVolumeMipZSlabTexel(slabRange, sourceZ, targetDepth, VectorSet(color[0u], color[1u], color[2u], color[3u]), sum);
+                }
+                const SIMDVectorSingle mean = VectorMultiply(sum, inverseDepth);
+                plane(x, y).set(VectorGetX(mean), VectorGetY(mean), VectorGetZ(mean), VectorGetW(mean));
+            }
+        }
+    }
+    return target;
+}
+
+[[nodiscard]] static Expected<TexConvAlphaTransport> DeriveAlphaTransport(const FloatMipChain& mips, const TexturePayloadFormat::Enum format){
+    TexConvAlphaAccumulator accumulator(TextureFormat::s_OpaqueAlphaUnorm8);
+    for(const FloatPlanes& planes : mips){
+        for(const basisu::imagef& plane : planes){
+            for(u32 y = 0u; y < plane.get_height(); ++y){
+                for(u32 x = 0u; x < plane.get_width(); ++x){
+                    const basisu::vec4F& color = plane(x, y);
+                    const auto alphaResult = TryQuantizeTexConvMipAlpha(VectorSet(color[0u], color[1u], color[2u], color[3u]));
+                    if(!alphaResult)
+                        return MakeUnexpected(Failure{});
+                    accumulator.observe(*alphaResult, TextureFormat::s_OpaqueAlphaUnorm8);
+                }
+            }
+        }
+    }
+    return TryResolveTexConvAlphaTransport(
+        accumulator.found,
+        accumulator.opaque,
+        format == TexturePayloadFormat::UastcLdr4x4,
+        accumulator.constant,
+        accumulator.firstAlpha,
+        TextureFormat::s_OpaqueAlphaUnorm8
+    );
+}
+
+[[nodiscard]] static b8 InitializeEncoder(){
+    // All mip encoders in this process share the initialized Basis tables.
+    static const b8 s_Initialized = basisu::basisu_encoder_init(false);
+    if(!s_Initialized)
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to initialize Basis Universal."));
+    return s_Initialized;
+}
+
+[[nodiscard]] static b8 AppendEncodedMip(const basisu::basisu_backend_output& output, const EncodedMip& mip, const basist::basis_tex_format format, Core::Alloc::ScratchArena& scratchArena, UtilityVector<u8>& bytes){
+    if(output.m_tex_format != format || output.m_slice_desc.size() != mip.sliceCount || output.m_slice_desc.size() != output.m_slice_image_data.size())
+        return false;
+
+    ::Vector<usize, Core::Alloc::ScratchArena> slices(mip.sliceCount, s_InvalidSlice, scratchArena);
+    const u64 planeByteCount = ComputeTexConvMipPlaneByteCount(mip.sizeBytes, mip.sliceCount);
+    for(usize index = 0u; index < output.m_slice_desc.size(); ++index){
+        const basisu::basisu_backend_slice_desc& desc = output.m_slice_desc[index];
+        if(
+            !IsValidTexConvEncodedSliceDesc(
+                desc.m_source_file_index,
+                desc.m_mip_index,
+                desc.m_orig_width,
+                desc.m_orig_height,
+                desc.m_num_blocks_x,
+                desc.m_num_blocks_y,
+                output.m_slice_image_data[index].size_in_bytes(),
+                mip.sliceCount,
+                mip.width,
+                mip.height,
+                mip.blockCountX,
+                mip.blockCountY,
+                planeByteCount,
+                SelectTexConvSliceEntry(desc.m_source_file_index, mip.sliceCount, slices)
+            )
+        )
+            return false;
+        slices[desc.m_source_file_index] = index;
+    }
+    NWB_ASSERT(mip.sizeBytes <= Limit<usize>::s_Max && bytes.size() <= Limit<usize>::s_Max - static_cast<usize>(mip.sizeBytes));
+    for(const usize index : slices){
+        NWB_ASSERT(index != s_InvalidSlice);
+        const basisu::uint8_vec& blocks = output.m_slice_image_data[index];
+        bytes.insert(bytes.end(), blocks.get_ptr(), blocks.get_ptr() + blocks.size_in_bytes());
+    }
+    return true;
+}
+
+[[nodiscard]] static b8 EncodeMip(const FloatPlanes& planes, const TextureDimension::Enum dimension, const TexturePayloadFormat::Enum format, const b8 alphaOnly, const EncodedMip& mip, Core::Alloc::ScratchArena& scratchArena, UtilityVector<u8>& bytes){
+    basisu::job_pool jobs(s_EncoderWorkerCount);
+    basisu::basis_compressor_params params;
+    const b8 hdr = ResolveTexConvMipHdrMode(alphaOnly, IsHdrTexturePayloadFormat(format));
+    const basist::basis_tex_format basisFormat = hdr ? basist::basis_tex_format::cUASTC_HDR_4x4 : basist::basis_tex_format::cUASTC_LDR_4x4;
+    params.set_format_mode(basisFormat);
+    params.set_srgb_options(false);
+    params.m_status_output = false;
+    params.m_compute_stats = false;
+    params.m_print_stats = false;
+    params.m_write_output_basis_or_ktx2_files = false;
+    params.m_create_ktx2_file = false;
+    params.m_pJob_pool = &jobs;
+    params.m_read_source_images = false;
+    params.m_mip_gen = false;
+    params.m_tex_type = dimension == TextureDimension::TextureCube ? basist::cBASISTexTypeCubemapArray : dimension == TextureDimension::Texture3D ? basist::cBASISTexTypeVolume : basist::cBASISTexType2D;
+    if(hdr){
+        params.m_source_images_hdr = planes;
+        for(basisu::imagef& plane : params.m_source_images_hdr){
+            for(u32 y = 0u; y < plane.get_height(); ++y){
+                for(u32 x = 0u; x < plane.get_width(); ++x)
+                    plane(x, y)[3u] = 1.0f;
+            }
+        }
+    }
+    else{
+        params.m_source_images.resize(planes.size());
+        for(usize planeIndex = 0u; planeIndex < planes.size(); ++planeIndex){
+            const basisu::imagef& source = planes[planeIndex];
+            basisu::image& target = params.m_source_images[planeIndex];
+            target.resize(mip.width, mip.height);
+            for(u32 y = 0u; y < mip.height; ++y){
+                for(u32 x = 0u; x < mip.width; ++x){
+                    const basisu::vec4F& color = source(x, y);
+                    const Array<u8, 4u> rgba = QuantizeTexConvUnormBytes(VectorSet(color[0u], color[1u], color[2u], color[3u]), alphaOnly, TextureFormat::s_OpaqueAlphaUnorm8);
+                    target(x, y) = basisu::color_rgba(rgba[0u], rgba[1u], rgba[2u], rgba[3u]);
+                }
+            }
+        }
+    }
+
+    basisu::basis_compressor compressor;
+    if(!compressor.init(params)){
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal failed to initialize a linear mip encoder."));
+        return false;
+    }
+    const basisu::basis_compressor::error_code encoded = compressor.process();
+    if(encoded != basisu::basis_compressor::cECSuccess){
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal failed to encode a linear mip, error {}."), static_cast<i32>(encoded));
+        return false;
+    }
+    if(!AppendEncodedMip(compressor.get_uastc_backend_output(), mip, basisFormat, scratchArena, bytes)){
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal returned an invalid mip layout."));
+        return false;
+    }
+    return true;
+}
+
+[[nodiscard]] static Expected<PreparedTexture> EncodeLinearTexture(TextureEncodeInput&& input, Core::Alloc::ScratchArena& scratchArena){
+    auto mipLevels = BuildMipLevels(input, scratchArena);
+    if(!mipLevels)
+        return MakeUnexpected(Failure{});
+    const EncodedMip& lastMip = mipLevels->back();
+    const u64 primaryByteCount = lastMip.offsetBytes + lastMip.sizeBytes;
+
+    FloatMipChain mips;
+    mips.reserve(mipLevels->size());
+    mips.push_back(Move(input.planes));
+    for(usize level = 1u; level < mipLevels->size(); ++level){
+        auto next = GenerateNextMip(mips.back(), input.dimension);
+        if(!next)
+            return MakeUnexpected(Failure{});
+        mips.push_back(Move(*next));
+    }
+    const auto alpha = DeriveAlphaTransport(mips, input.format);
+    if(!alpha || !InitializeEncoder())
+        return MakeUnexpected(Failure{});
+
+    const TextureAlphaMode::Enum alphaMode = static_cast<TextureAlphaMode::Enum>(alpha->mode);
+    const b8 separateAlpha = alphaMode == TextureAlphaMode::SeparateUastcLdr4x4;
+    const auto payloadByteCountResult = TryComputeTexConvPayloadByteCount(primaryByteCount, separateAlpha);
+    if(!payloadByteCountResult)
+        return MakeUnexpected(Failure{});
+    const usize payloadByteCount = *payloadByteCountResult;
+
+    PreparedTexture prepared;
+    prepared.width = input.width;
+    prepared.height = input.height;
+    prepared.depth = input.depth;
+    prepared.mipCount = static_cast<u32>(mipLevels->size());
+    prepared.dimension = input.dimension;
+    prepared.format = input.format;
+    prepared.alphaMode = alphaMode;
+    prepared.alphaConstantUnorm8 = alpha->constantUnorm8;
+    prepared.bytes.reserve(payloadByteCount);
+
+    for(usize level = 0u; level < mips.size(); ++level){
+        if(!EncodeMip(mips[level], input.dimension, input.format, false, (*mipLevels)[level], scratchArena, prepared.bytes))
+            return MakeUnexpected(Failure{});
+    }
+    if(separateAlpha){
+        for(usize level = 0u; level < mips.size(); ++level){
+            if(!EncodeMip(mips[level], input.dimension, input.format, true, (*mipLevels)[level], scratchArena, prepared.bytes))
+                return MakeUnexpected(Failure{});
+        }
+    }
+    NWB_ASSERT(prepared.bytes.size() == payloadByteCount);
+    return prepared;
+}
+
+[[nodiscard]] static Expected<basisu::imagef> LoadImage(const ::Path<Core::Alloc::GlobalArena>& path, Core::Alloc::ScratchArena& scratchArena){
+    basisu::imagef image;
+    const auto pathText = PathToGenericString(scratchArena, path);
+    if(!basisu::load_image_hdr(pathText.c_str(), image, false)){
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to decode input image '{}'."), PathToString<tchar>(path));
+        return MakeUnexpected(Failure{});
+    }
+    if(image.get_width() == 0u || image.get_height() == 0u || image.get_width() > basist::BASISU_MAX_SUPPORTED_TEXTURE_DIMENSION || image.get_height() > basist::BASISU_MAX_SUPPORTED_TEXTURE_DIMENSION){
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: input image '{}' has an unsupported resolution."), PathToString<tchar>(path));
+        return MakeUnexpected(Failure{});
+    }
+    return image;
+}
+
+[[nodiscard]] static b8 PrepareLinearPlane(const basisu::imagef& alphaMask, const TexConvAlphaSource& alphaSource, const b8 hdr, const b8 srgb, basisu::imagef& inOutPlane){
+    const f32 maxRgb = ResolveMaxTexConvRgb(hdr);
+    for(u32 y = 0u; y < inOutPlane.get_height(); ++y){
+        for(u32 x = 0u; x < inOutPlane.get_width(); ++x){
+            basisu::vec4F& pixel = inOutPlane(x, y);
+            const f32 maskAlpha = alphaSource.mode == AlphaSourceMode::Image ? alphaMask(x, y)[0u] : 0.0f;
+            const Expected<SIMDVectorSingleResult> prepared = TryPrepareTexConvLinearPixel(
+                VectorSet(pixel[0u], pixel[1u], pixel[2u], 0.0f),
+                pixel[3u],
+                alphaSource.mode,
+                alphaSource.constant,
+                maskAlpha,
+                maxRgb,
+                srgb
+            );
+            if(!prepared)
+                return false;
+            const SIMDVectorSingle linear = prepared->value;
+            pixel.set(VectorGetX(linear), VectorGetY(linear), VectorGetZ(linear), VectorGetW(linear));
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] static Expected<PreparedTexture> PrepareTexture(const Span<const ::Path<Core::Alloc::GlobalArena>> inputPaths, const TextureDimension::Enum dimension, const b8 srgb, const TexConvAlphaSource& alphaSource, Core::Alloc::ScratchArena& scratchArena){
+    if(!ValidateTexConvInputImageCount(
+        inputPaths.size(),
+        IsValidTextureDimension(dimension),
+        dimension == TextureDimension::Texture2D,
+        dimension == TextureDimension::TextureCube,
+        TextureFormat::s_TextureCubeFaceCount
+    ))
+        return MakeUnexpected(Failure{});
+    if(!IsValidAlphaSourceMode(alphaSource.mode)){
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: unsupported alpha source."));
+        return MakeUnexpected(Failure{});
+    }
+
+    b8 hdr = false;
+    if(!ValidateTexConvInputPathsHdrConsistency(inputPaths, hdr))
+        return MakeUnexpected(Failure{});
+
+    TextureEncodeInput input;
+    input.dimension = dimension;
+    input.depth = ResolveTexConvEncodeDepth(dimension == TextureDimension::Texture3D, inputPaths.size());
+    input.format = static_cast<TexturePayloadFormat::Enum>(ResolveTexConvPayloadFormat(hdr));
+    input.planes.reserve(inputPaths.size());
+    basisu::imagef alphaMask;
+    if(alphaSource.mode == AlphaSourceMode::Image){
+        auto decoded = LoadImage(alphaSource.path, scratchArena);
+        if(!decoded)
+            return MakeUnexpected(Failure{});
+        alphaMask = Move(*decoded);
+    }
+
+    for(const ::Path<Core::Alloc::GlobalArena>& path : inputPaths){
+        auto plane = LoadImage(path, scratchArena);
+        if(!plane)
+            return MakeUnexpected(Failure{});
+        if(!ValidateTexConvPlaneResolution(
+            input.planes.empty(),
+            dimension == TextureDimension::TextureCube,
+            alphaSource.mode == AlphaSourceMode::Image,
+            plane->get_width(),
+            plane->get_height(),
+            alphaMask.get_width(),
+            alphaMask.get_height(),
+            input.width,
+            input.height
+        ))
+            return MakeUnexpected(Failure{});
+        if(!PrepareLinearPlane(alphaMask, alphaSource, hdr, !hdr && srgb, *plane))
+            return MakeUnexpected(Failure{});
+        input.planes.push_back(Move(*plane));
+    }
+
+    return EncodeLinearTexture(Move(input), scratchArena);
+}
+
+static void ReportStagedValidationFailure(const StagedFilePairPaths<Core::Alloc::ScratchArena>& paths, const StagedFilePairResult& result){
+    const ScratchPath& failedPath = FailedStagedFilePairPath(paths, result);
+    const ::Path<Core::Alloc::GlobalArena> globalPath(QueryUtilityGlobalArena<s_UtilityArena>(), failedPath);
+    const AInteropString errMsg = result.error.message();
+    LogTexConvStagedValidationFailure(static_cast<u8>(result.failureStage), globalPath, AStringView(errMsg));
+}
+
+[[nodiscard]] static b8 ValidateOutputPaths(const TexConvOutputPaths& outputPaths, const b8 force, Core::Alloc::ScratchArena& scratchArena){
+    const StagedFilePairPaths paths(scratchArena, outputPaths.data, outputPaths.metadata);
+    const StagedFilePairResult validation = ValidateStagedFilePairPaths(paths, force, false);
+    if(!validation){
+        ReportStagedValidationFailure(paths, validation);
+        return false;
+    }
+    return true;
+}
+
+[[nodiscard]] static Expected<AString<>> BuildMetadata(const PreparedTexture& payload){
+    const auto mipCount = TextureFormat::ComputeCompleteMipCount(payload.dimension, payload.width, payload.height, payload.depth);
+    if(
+        !IsCompleteTexConvMipCount(mipCount.has_value(), mipCount ? *mipCount : 0u, payload.mipCount)
+        || !TextureFormat::IsValidTextureDescriptor(payload.format, payload.dimension, payload.width, payload.height, payload.depth, payload.alphaMode, payload.alphaConstantUnorm8)
+    )
+        return MakeUnexpected(Failure{});
+
+    const AStringView format = TextureFormat::PayloadFormatText(payload.format);
+    const AStringView dimension = TextureFormat::DimensionText(payload.dimension);
+    const AStringView alphaMode = TextureFormat::AlphaModeText(payload.alphaMode);
+    if(!IsValidTexConvDescriptorText(format, dimension, alphaMode))
+        return MakeUnexpected(Failure{});
+
+    return BuildTexConvMetadataText(
+        format,
+        dimension,
+        payload.width,
+        payload.height,
+        payload.depth,
+        payload.dimension == TextureDimension::Texture3D,
+        alphaMode,
+        payload.alphaMode == TextureAlphaMode::ConstantUnorm8,
+        payload.alphaConstantUnorm8
+    );
+}
+
+[[nodiscard]] static b8 WriteOutputs(const TexConvOutputPaths& outputPaths, const PreparedTexture& payload, const b8 force, Core::Alloc::ScratchArena& scratchArena){
+    if(payload.bytes.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: cannot write an empty prepared texture."));
+        return false;
+    }
+    const auto metadata = BuildMetadata(payload);
+    if(!metadata){
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: cannot describe an invalid prepared texture."));
+        return false;
+    }
+
+    const StagedFilePairPaths paths(scratchArena, outputPaths.data, outputPaths.metadata);
+    const Span<const u8> dataBytes(payload.bytes.data(), payload.bytes.size());
+    const AStringView metadataText(metadata->data(), metadata->size());
+    const StagedFilePairResult published = StageAndPublishFilePair(
+        paths,
+        dataBytes,
+        metadataText,
+        force,
+        false,
+        false,
+        s_PublicationDiagnosticTag
+    );
+    const Array<NotNull<const ScratchPath*>, s_StagedFilePairCount> outputs = { MakeNotNull(&paths.primary), MakeNotNull(&paths.secondary) };
+    const Array<NotNull<const ScratchPath*>, s_StagedFilePairCount> temporaries = { MakeNotNull(&paths.primaryTemporary), MakeNotNull(&paths.secondaryTemporary) };
+    const Array<NotNull<const ScratchPath*>, s_StagedFilePairCount> backups = { MakeNotNull(&paths.primaryBackup), MakeNotNull(&paths.secondaryBackup) };
+
+    if(!published){
+        switch(published.failureStage){
+        case StagedFilePairFailureStage::StagePrimary:
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to stage output data file '{}': {}"), PathToString<tchar>(paths.primaryTemporary), ConvertString(published.error.message()));
+            break;
+        case StagedFilePairFailureStage::StageSecondary:
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to stage output metadata file '{}': {}"), PathToString<tchar>(paths.secondaryTemporary), ConvertString(published.error.message()));
+            break;
+        case StagedFilePairFailureStage::PreserveExistingOutput:
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to preserve existing output '{}': {}"), PathToString<tchar>(*outputs[published.failedIndex]), ConvertString(published.error.message()));
+            break;
+        case StagedFilePairFailureStage::FinalizeOutput:
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to finalize output '{}': {}"), PathToString<tchar>(*outputs[published.failedIndex]), ConvertString(published.error.message()));
+            break;
+        default:
+            ReportStagedValidationFailure(paths, published);
+            break;
+        }
+        for(u32 index = 0u; index < s_StagedFilePairCount; ++index){
+            if(published.backedUp[index] && (published.removalErrors[index] || published.restorationErrors[index])){
+                NWB_LOGGER_ERROR(
+                    NWB_TEXT("tex_conv: failed to restore '{}'; previous output retained at '{}' (remove {}, restore {})")
+                    , PathToString<tchar>(*outputs[index])
+                    , PathToString<tchar>(*backups[index])
+                    , published.removalErrors[index].value()
+                    , published.restorationErrors[index].value()
+                );
+            }
+            if(!published.backedUp[index] && published.removalErrors[index]){
+                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to remove newly published output '{}': {}"), PathToString<tchar>(*outputs[index]), ConvertString(published.removalErrors[index].message()));
+            }
+            if(published.temporaryErrors[index]){
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("tex_conv: failed to remove unpublished temporary '{}': {}"), PathToString<tchar>(*temporaries[index]), ConvertString(published.temporaryErrors[index].message()));
+            }
+        }
+        return false;
+    }
+
+    for(u32 index = 0u; index < s_StagedFilePairCount; ++index){
+        if(published.backupCleanupErrors[index]){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("tex_conv: published output pair but could not remove previous backup '{}': {}"), PathToString<tchar>(*backups[index]), ConvertString(published.backupCleanupErrors[index].message()));
+        }
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static i32 Run(const i32 argc, char** argv){
+    using namespace __hidden_tex_conv;
+
+    AInteropString inputArgument;
+    AInteropString outputArgument;
+    AInteropString alphaArgument;
+    InteropVector<AInteropString> cubeArguments;
+    InteropVector<AInteropString> volumeArguments;
+    b8 force = false;
+    b8 linear = false;
+
+    CLI::App app{ "Convert LDR or HDR images into prepared linear UASTC texture assets." };
+    app.add_option(s_InputOptionName.data(), inputArgument, "2D input image (.png, .jpg, .jpeg, .jfif, .tga, .qoi, .exr, or .hdr)");
+    app.add_option(s_CubeOptionName.data(), cubeArguments, "Six cubemap faces: +X -X +Y -Y +Z -Z")->expected(static_cast<i32>(TextureFormat::s_TextureCubeFaceCount));
+    app.add_option(s_VolumeOptionName.data(), volumeArguments, "Ordered volume Z slices: z0 z1 ... zN")->expected(s_MinVolumeSliceCount, s_UnboundedOptionCount);
+    app.add_option(s_OutputOptionName.data(), outputArgument, "Output base name or .nwb filename");
+    CLI::Option& alphaOption = *app.add_option(s_AlphaOptionName.data(), alphaArgument, "Alpha source: mask image red channel, white, or black");
+    app.add_flag(s_LinearFlagName.data(), linear, "Treat LDR input as linear data instead of sRGB color (HDR input is always linear)");
+    app.add_flag(s_ForceFlagName.data(), force, "Replace existing .nwb and .tex output files");
+
+    return ::InvokeTerminalEntry<CLI::ParseError>([&](){
+        app.parse(argc, argv);
+        Core::Alloc::ScratchArena scratchArena(s_ConversionScratchArena);
+        Core::Alloc::GlobalArena& utilityArena = QueryUtilityGlobalArena<s_UtilityArena>();
+
+        const AStringView outputPathText(outputArgument);
+        TextureDimension::Enum dimension = TextureDimension::Texture2D;
+        ::Vector<::Path<Core::Alloc::GlobalArena>> inputPaths(utilityArena);
+        TexConvAlphaSource alphaSource;
+
+        if(!ValidateTexConvInputModeCount(!inputArgument.empty(), !cubeArguments.empty(), !volumeArguments.empty()))
+            return s_TexConvExitFailure;
+
+        if(!inputArgument.empty()){
+            const AStringView inputPathText(inputArgument);
+            inputPaths.reserve(1u);
+            inputPaths.emplace_back(utilityArena, inputPathText);
+        }
+        else if(!cubeArguments.empty()){
+            dimension = TextureDimension::TextureCube;
+            inputPaths.reserve(cubeArguments.size());
+            for(const AInteropString& argument : cubeArguments)
+                inputPaths.emplace_back(utilityArena, AStringView(argument));
+        }
+        else{
+            dimension = TextureDimension::Texture3D;
+            inputPaths.reserve(volumeArguments.size());
+            for(const AInteropString& argument : volumeArguments)
+                inputPaths.emplace_back(utilityArena, AStringView(argument));
+        }
+
+        if(IsTexConvAlphaOptionPresent(static_cast<i32>(alphaOption.count()))){
+            const AStringView alphaText(alphaArgument);
+            if(!TryParseTexConvAlphaOption(alphaText, alphaSource.mode, alphaSource.constant))
+                return s_TexConvExitFailure;
+            if(alphaSource.mode == AlphaSourceMode::Image)
+                alphaSource.path = ::Path<Core::Alloc::GlobalArena>(utilityArena, alphaText);
+        }
+
+        for(const ::Path<Core::Alloc::GlobalArena>& inputPath : inputPaths){
+            if(!ValidateTexConvInputImagePath(inputPath, false))
+                return s_TexConvExitFailure;
+        }
+        if(alphaSource.mode == AlphaSourceMode::Image && !ValidateTexConvInputImagePath(alphaSource.path, true))
+            return s_TexConvExitFailure;
+
+        const auto outputPaths = ResolveTexConvOutputPaths(inputPaths.front(), outputPathText);
+        if(!outputPaths || !ValidateOutputPaths(*outputPaths, force, scratchArena))
+            return s_TexConvExitFailure;
+
+        const auto payload = PrepareTexture(inputPaths, dimension, !linear, alphaSource, scratchArena);
+        if(!payload)
+            return s_TexConvExitFailure;
+        if(!WriteOutputs(*outputPaths, *payload, force, scratchArena))
+            return s_TexConvExitFailure;
+
+        const AString<> report = FormatTexConvCompletionReport(
+            outputPaths->metadata,
+            outputPaths->data,
+            payload->width,
+            payload->height,
+            payload->depth,
+            payload->dimension == TextureDimension::TextureCube,
+            payload->dimension == TextureDimension::Texture3D,
+            payload->mipCount,
+            payload->bytes.size()
+        );
+        NWB_LOGGER_ESSENTIAL_INFO(ConvertString(report));
+        return s_TexConvExitSuccess;
+    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, []()noexcept{ return s_TexConvExitFatal; });
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_TEX_CONV_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

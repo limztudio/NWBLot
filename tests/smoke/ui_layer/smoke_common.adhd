@@ -54,6 +54,7 @@ native{
 #include <core/graphics/runtime/render_pass.h>
 #include <core/graphics/runtime/runtime.h>
 #include <core/input/module.h>
+#include <core/os/clipboard.h>
 #include <core/task/gpu/persistent_state.h>
 #include <loader/project_entry.adhd.h>
 
@@ -82,6 +83,9 @@ using Core::InputDispatcher;
 using Core::KeyboardInputResult;
 namespace Key = Core::Key;
 namespace InputAction = Core::InputAction;
+using ClipboardAdmissionEnum = Core::ClipboardAdmission::Enum;
+using ClipboardPollResultEnum = Core::ClipboardPollResult::Enum;
+namespace ClipboardAdmission = Core::ClipboardAdmission;
 namespace ClipboardChannel = Core::ClipboardChannel;
 namespace ClipboardPollResult = Core::ClipboardPollResult;
 namespace ClipboardOperation = Core::ClipboardOperation;
@@ -106,6 +110,7 @@ using Impl::Ui::EditBoxRange;
 using Impl::Ui::EditBoxResult;
 using Impl::Ui::EditBoxState;
 using Impl::Ui::EditBoxView;
+using Impl::Ui::EditCaretGeometry;
 using Impl::Ui::EditModel;
 using Impl::Ui::FloatBounds;
 using Impl::Ui::FloatEditModel;
@@ -114,6 +119,8 @@ using Impl::Ui::HitTarget;
 using Impl::Ui::IListDataSource;
 using Impl::Ui::ISearchableListDataSource;
 using Impl::Ui::ImageOptions;
+using Impl::Ui::InputBindings;
+using Impl::Ui::InputKeyBinding;
 using Impl::Ui::InputRouter;
 using Impl::Ui::IntegerEditModel;
 using Impl::Ui::IntegerEditOptions;
@@ -124,6 +131,7 @@ using Impl::Ui::ListState;
 using Impl::Ui::NumericEditBoxResult;
 using Impl::Ui::NumericEditResult;
 using Impl::Ui::PaintBuilder;
+using Impl::Ui::PopupToken;
 using Impl::Ui::PopupOptions;
 using Impl::Ui::PopupPlacement;
 using Impl::Ui::PopupScope;
@@ -145,6 +153,7 @@ using Impl::Ui::SearchComboOptions;
 using Impl::Ui::SearchComboResult;
 using Impl::Ui::SearchComboState;
 using Impl::Ui::SeparatorOptions;
+using Impl::Ui::ShapeRequest;
 using Impl::Ui::SharedGlyphPage;
 using Impl::Ui::SharedImageSource;
 using Impl::Ui::SharedSdfAtlasPage;
@@ -175,6 +184,7 @@ namespace UiRectPrecision = Impl::Ui::UiRectPrecision;
 
 using ::ComputeFnv32TextHash;
 using ::PackFourCharTag;
+using ::TerminateInvariant;
 
 inline constexpr i32 s_SmokeKeyTab = Core::Key::Tab;
 inline constexpr i32 s_SmokeKeyQ = Core::Key::Q;
@@ -202,10 +212,175 @@ struct SmokeClipboardRef final{
     Core::IClipboardService* ptr = nullptr;
     SmokeClipboardRef()noexcept = default;
     explicit SmokeClipboardRef(Core::IClipboardService& clipboard)noexcept : ptr(&clipboard){}
+
+    [[nodiscard]] b8 valid()const noexcept{ return ptr != nullptr; }
+
+    [[nodiscard]] b8 cancel(const Core::ClipboardRequestToken token)const{
+        return ptr != nullptr && ptr->cancel(token);
+    }
+
+    [[nodiscard]] Expected<Core::ClipboardRequestToken, Core::ClipboardAdmission::Enum> requestWriteText(
+        const Core::ClipboardChannel::Enum channel,
+        const AStringView text
+    )const{
+        if(ptr == nullptr)
+            return MakeUnexpected(Core::ClipboardAdmission::WrongThread);
+        return ptr->requestWriteText(channel, text);
+    }
+
+    [[nodiscard]] Core::ClipboardPollResult::Enum poll(const Core::ClipboardRequestToken token, Core::ClipboardCompletion& completion)const{
+        if(ptr == nullptr)
+            return Core::ClipboardPollResult::InvalidRequest;
+        return ptr->poll(token, completion);
+    }
 };
 
+[[nodiscard]] NWB_INLINE b8 SmokePopupMatchesParentGeneration(
+    const Impl::Ui::InputRouter& input,
+    const Impl::Ui::PopupToken& popup,
+    const u64 parentGen
+)noexcept{
+    const Impl::Ui::PopupScope* const scope = input.popupScope(popup);
+    return scope != nullptr && scope->parent.instanceGeneration == parentGen;
+}
 
-[[nodiscard]] inline StringView FormatSmokeRowLabel(const u64 rowKey, Array<char, 32u>& outBuffer)noexcept{
+[[nodiscard]] NWB_INLINE b8 CreateSmokeTextAtlasPages(
+    Core::Alloc::GlobalArena& arena,
+    const Span<const u8> coverageBytes,
+    const Array<Array<u8, 192u>, 4u>& sdfBytes,
+    Impl::Ui::SharedGlyphPage& outCoverage,
+    Array<Impl::Ui::SharedSdfAtlasPage, 4u>& outSdf
+){
+    constexpr AStringView s_LatinFontPath = "tests/smoke/ui_layer/coverage_font";
+    constexpr u64 s_CoverageAtlasIdentity = 0x5549534D4F4B45u;
+
+    const Impl::Ui::GlyphPageBinding coverageBinding{
+        .font = Core::Assets::AssetRef<Impl::Font>(s_LatinFontPath),
+        .fontGeneration = 1u,
+        .atlasIdentity = s_CoverageAtlasIdentity,
+        .generation = 1u,
+        .index = static_cast<u32>(Impl::Ui::s_GlyphAtlasMaxPages - 1u),
+        .width = 12u,
+        .height = 4u
+    };
+    Impl::Ui::GlyphPage::Pixels coveragePixels(arena);
+    coveragePixels.assign(coverageBytes.begin(), coverageBytes.end());
+    auto coverageResult = Impl::Ui::CreateGlyphPage(arena, coverageBinding, Move(coveragePixels));
+    if(coverageResult)
+        outCoverage = Move(*coverageResult);
+
+    b8 allSdfValid = true;
+    for(u32 channels = 1u; channels <= 4u; ++channels){
+        const Impl::Ui::SdfAtlasPageBinding sdfBinding{
+            .font = Core::Assets::AssetRef<Impl::Font>(s_LatinFontPath),
+            .fontGeneration = 1u,
+            .atlasIdentity = s_CoverageAtlasIdentity,
+            .generation = 1u,
+            .index = channels - 1u,
+            .width = 12u,
+            .height = 4u,
+            .channelCount = channels,
+            .spreadPixels = 8u
+        };
+        const usize byteCount = 48u * static_cast<usize>(channels);
+        Impl::Ui::SdfAtlasPage::Pixels sdfPixels(arena);
+        sdfPixels.assign(sdfBytes[channels - 1u].data(), sdfBytes[channels - 1u].data() + byteCount);
+        auto pageResult = Impl::Ui::CreateSdfAtlasPage(arena, sdfBinding, Move(sdfPixels));
+        if(pageResult)
+            outSdf[channels - 1u] = Move(*pageResult);
+        if(!outSdf[channels - 1u])
+            allSdfValid = false;
+    }
+
+    return static_cast<b8>(outCoverage) && allSdfValid;
+}
+
+[[nodiscard]] NWB_INLINE b8 SmokeImageSourceValid(const Impl::Ui::SharedImageSource& source)noexcept{
+    return static_cast<b8>(source);
+}
+
+[[nodiscard]] NWB_INLINE u32 SmokeImageSourceWidth(const Impl::Ui::SharedImageSource& source)noexcept{
+    return source ? source->texture().width() : 0u;
+}
+
+[[nodiscard]] NWB_INLINE u32 SmokeImageSourceHeight(const Impl::Ui::SharedImageSource& source)noexcept{
+    return source ? source->texture().height() : 0u;
+}
+
+[[nodiscard]] NWB_INLINE u64 SmokeImageSourceGeneration(const Impl::Ui::SharedImageSource& source)noexcept{
+    return source ? source->generation() : 0u;
+}
+
+[[nodiscard]] NWB_INLINE Name SmokeImageSourceIdentityName(const Impl::Ui::SharedImageSource& source)noexcept{
+    return source ? source->identity().name() : Name{};
+}
+
+NWB_INLINE void ResetSmokeImageSource(Impl::Ui::SharedImageSource& source)noexcept{
+    source.reset();
+}
+
+NWB_INLINE void LoadSmokeSkinImageSources(
+    Core::Alloc::GlobalArena& arena,
+    Core::Assets::AssetManager& assets,
+    const Name& alternateSkinName,
+    Impl::Ui::SharedImageSource& outDefault,
+    Impl::Ui::SharedImageSource& outAlternate
+){
+    auto loadSkinSource = [&](const Core::Assets::AssetRef<Impl::UiSkin>& skinRef) -> Expected<Impl::Ui::SharedImageSource>{
+        if(!skinRef.valid())
+            return MakeUnexpected(Failure{});
+        const auto skin = assets.loadTypedSync<Impl::UiSkin>(skinRef.name(), NWB_TEXT("UiTextureImageSmokeScene"));
+        if(!skin || !*skin || !(*skin)->texture().valid())
+            return MakeUnexpected(Failure{});
+        return Impl::Ui::LoadImageSource(arena, assets, (*skin)->texture());
+    };
+
+    Impl::ActiveSceneSubsystems sceneSubsystems(arena);
+    if(sceneSubsystems.loadProjectStartScene(assets)){
+        if(const Impl::UiSubsystem* const uiSubsystem = sceneSubsystems.findSubsystem<Impl::UiSubsystem>()){
+            auto loadedDefault = loadSkinSource(uiSubsystem->basicSkin);
+            if(loadedDefault)
+                outDefault = Move(*loadedDefault);
+        }
+        auto loadedAlternate = loadSkinSource(sceneSubsystems.findSceneAsset<Impl::UiSkin>(alternateSkinName));
+        if(loadedAlternate)
+            outAlternate = Move(*loadedAlternate);
+    }
+}
+
+[[nodiscard]] NWB_INLINE Impl::Ui::SharedImageSource CloneSmokeImageSourcePayload(
+    const SmokeArenaRef& arenaRef,
+    const Impl::Ui::SharedImageSource& identitySource,
+    const Impl::Ui::SharedImageSource& payloadSource
+){
+    if(arenaRef.ptr == nullptr || !identitySource || !payloadSource)
+        return {};
+    Core::Alloc::GlobalArena& arena = *arenaRef.ptr;
+    const Impl::Texture& payload = payloadSource->texture();
+    Impl::Texture replacement(arena, identitySource->identity().name());
+    Impl::Texture::MipLevelVector mipLevels(arena);
+    mipLevels.assign(payload.mipLevels().begin(), payload.mipLevels().end());
+    Core::Assets::AssetBytes bytes(arena);
+    bytes.assign(payload.payloadBytes().begin(), payload.payloadBytes().end());
+    replacement.setPayload(
+        payload.width(),
+        payload.height(),
+        Move(mipLevels),
+        Move(bytes),
+        payload.dimension(),
+        payload.depth(),
+        payload.payloadFormat(),
+        payload.alphaMode(),
+        payload.alphaConstantUnorm8()
+    );
+    auto nextSource = Impl::Ui::MakeImageSource(arena, replacement);
+    if(!nextSource)
+        return {};
+    return Move(*nextSource);
+}
+
+
+[[nodiscard]] NWB_INLINE StringView FormatSmokeRowLabel(const u64 rowKey, Array<char, 32u>& outBuffer)noexcept{
     if(rowKey == 0u)
         return {};
     outBuffer[0] = 'R';
@@ -621,20 +796,13 @@ Rect CaptureEditSelection(mut EditBoxView view, mut TextService text, in EditMod
     const EditBoxRange range = view.selectionRange();
     if(range.begin == range.end || placement.content.width <= 0.0f || placement.content.height <= 0.0f)
         return Rect();
-    b8 shaped = false;
-    Rect selection();
-    b8 hasSelection = false;
-    native(mut view, mut text, in fontSize, in range, in placement, mut shaped, mut selection, mut hasSelection){
-        shaped = view.shape(text, { .fontSize = fontSize }) == Impl::Ui::TextLayoutStatus::Success;
-        if(shaped){
-            const auto candidate = view.caretGeometry().rangeOnLine(range, 0u, placement.caret.width);
-            if(candidate.has_value()){
-                hasSelection = true;
-                selection = *candidate;
-            }
-        }
-    }
-    [essential] assert(shaped && hasSelection, "Edit box shaping or selection range query failed");
+    ShapeRequest request();
+    request.fontSize = fontSize;
+    const b8 shaped = view.shape(text, request) == TextLayoutStatus::Success;
+    [essential] assert(shaped, "Edit box shaping failed");
+    const Expected<Rect> candidate = view.caretGeometry().rangeOnLine(range, 0u, placement.caret.width);
+    [essential] assert(candidate.has_value(), "Edit box selection range query failed");
+    Rect selection = candidate.value();
     if(selection.width > 0.0f){
         const VectorSingle origin = VectorSingle(selection.x, selection.y, 0.0f, 0.0f) + VectorSingle(placement.textOrigin.x, placement.textOrigin.y, 0.0f, 0.0f);
         selection.x = origin.x;

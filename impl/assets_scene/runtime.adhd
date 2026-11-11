@@ -237,25 +237,22 @@ b8 LightComponentAsset::validatePayload()const{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 EntityAsset::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
+b8 EntityAsset::validatePayload(Core::Alloc::ScratchArena&)const{
     if(!checkVirtualPath(NWB_TEXT("EntityAsset::validatePayload")))
         return false;
     if(!ValidateEntityAssetComponentCount(m_components.size()))
         return false;
-    if(!ValidateUniqueAssetRefs(Span<const ComponentRef>(m_components), "EntityAsset::validatePayload", "component", scratchArena))
+    if(!ValidateUniqueAssetRefs(Span<const ComponentRef>(m_components), "EntityAsset::validatePayload", "component"))
         return false;
     return true;
 }
 
 b8 EntityAsset::loadBinary(const Span<const u8> binary){
     Core::Alloc::ScratchArena scratchArena(s_EntityLoadBinaryArena);
-    Vector<NameHash, Core::Alloc::ScratchArena> componentHashes(scratchArena);
-    if(!SceneAssetBinaryCodec().deserializeEntity(binary, componentHashes))
-        return false;
-
     auto& assetArena = m_components.get_allocator().arena();
     EntityAsset candidate(assetArena, virtualPath());
-    AssignAssetRefsFromHashes(Span<const NameHash>(componentHashes), candidate.m_components);
+    if(!SceneAssetBinaryCodec().deserializeEntity(binary, candidate.m_components))
+        return false;
 
     if(!candidate.validatePayload(scratchArena))
         return false;
@@ -283,14 +280,14 @@ b8 ProjectAsset::loadBinary(const Span<const u8> binary){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 SceneAsset::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
+b8 SceneAsset::validatePayload(Core::Alloc::ScratchArena&)const{
     if(!checkVirtualPath(NWB_TEXT("SceneAsset::validatePayload")))
         return false;
     if(!ValidateSceneAssetSubsystemCount(m_subsystems.size()))
         return false;
-    if(!ValidateUniqueAssetRefs(Span<const SubsystemRef>(m_subsystems), "SceneAsset::validatePayload", "subsystem", scratchArena))
+    if(!ValidateUniqueAssetRefs(Span<const SubsystemRef>(m_subsystems), "SceneAsset::validatePayload", "subsystem"))
         return false;
-    if(!ValidateUniqueAssetRefs(Span<const EntityRef>(m_entities), "SceneAsset::validatePayload", "entity", scratchArena))
+    if(!ValidateUniqueAssetRefs(Span<const EntityRef>(m_entities), "SceneAsset::validatePayload", "entity"))
         return false;
     if(!ValidateSceneAssetMap(m_assets))
         return false;
@@ -299,22 +296,11 @@ b8 SceneAsset::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
 
 b8 SceneAsset::loadBinary(const Span<const u8> binary){
     Core::Alloc::ScratchArena scratchArena(s_SceneLoadBinaryArena);
-    Vector<NameHash, Core::Alloc::ScratchArena> subsystemHashes(scratchArena);
-    Vector<NameHash, Core::Alloc::ScratchArena> entityHashes(scratchArena);
-    Vector<SceneAssetEntryBinary, Core::Alloc::ScratchArena> assetEntries(scratchArena);
-    if(!SceneAssetBinaryCodec().deserializeScene(binary, subsystemHashes, entityHashes, assetEntries))
-        return false;
-
     auto& assetArena = m_subsystems.get_allocator().arena();
     SceneAsset candidate(assetArena, virtualPath());
-
-    AssignAssetRefsFromHashes(Span<const NameHash>(subsystemHashes), candidate.m_subsystems);
-    DeduplicateSubsystemRefs(candidate.m_subsystems);
-
-    AssignAssetRefsFromHashes(Span<const NameHash>(entityHashes), candidate.m_entities);
-
-    if(!UnpackSceneAssetEntriesBinary(Span<const SceneAssetEntryBinary>(assetEntries), candidate.m_assets))
+    if(!SceneAssetBinaryCodec().deserializeScene(binary, candidate.m_subsystems, candidate.m_entities, candidate.m_assets))
         return false;
+    DeduplicateSubsystemRefs(candidate.m_subsystems);
 
     if(!candidate.validatePayload(scratchArena))
         return false;
@@ -365,7 +351,7 @@ b8 ActiveSceneSubsystems::loadScene(const SceneRef& scene, Core::Assets::AssetMa
     }
 
     Core::Alloc::ScratchArena scratchArena(s_ActiveSceneLoadArena);
-    SceneScratchNameHashSet seenSubsystems(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
+    HashSet<NameHash, Core::Alloc::ScratchArena, Hasher<NameHash>, EqualTo<NameHash>> seenSubsystems(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
     Vector<SubsystemRef, Core::Alloc::ScratchArena> pendingSubsystems(scratchArena);
     pendingSubsystems.reserve(sceneAsset.subsystems().size());
 

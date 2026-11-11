@@ -34,7 +34,7 @@ struct TrianglePairVectors{
     alignas(SIMDVectorDouble) Array<SIMDVectorDouble, 3> second{};
 };
 
-inline volatile u64 s_ChecksumSink = 0u;
+NWB_INLINE volatile u64 s_ChecksumSink = 0u;
 
 NWB_NOINLINE b8 NWB_SIMD_CALL Baseline(const SIMDVectorDouble a0, const SIMDVectorDouble a1, const SIMDVectorDouble a2, const SIMDVectorDouble b0, const SIMDVectorDouble b1, const SIMDVectorDouble b2)noexcept{
     const SIMDVectorDouble first0 = VectorDoubleAndInt(a0, s_DoubleSIMDMask3), first1 = VectorDoubleAndInt(a1, s_DoubleSIMDMask3), first2 = VectorDoubleAndInt(a2, s_DoubleSIMDMask3);
@@ -312,7 +312,7 @@ NWB_NOINLINE b8 NWB_SIMD_CALL AbsHoisted(const SIMDVectorDouble a0, const SIMDVe
     return !secondEdgeSeparated(edgeB0) && !secondEdgeSeparated(edgeB1) && !secondEdgeSeparated(edgeB2);
 }
 
-[[nodiscard]] inline Intersection SelectImplementation(const u32 implId)noexcept{
+[[nodiscard]] NWB_INLINE Intersection SelectImplementation(const u32 implId)noexcept{
     switch(implId){
     case 0u: return Baseline;
     case 1u: return CurrentDot3Baseline;
@@ -335,11 +335,11 @@ NWB_NOINLINE u64 RunBatch(const u32 implId, const Span<const PairT> pairs, const
 }
 
 template<typename PairT>
-[[nodiscard]] inline TrianglePairVectors LoadTrianglePair(const PairT& pair)noexcept{
+[[nodiscard]] NWB_INLINE TrianglePairVectors LoadTrianglePair(const PairT& pair)noexcept{
     return { { LoadDouble(pair.first[0]), LoadDouble(pair.first[1]), LoadDouble(pair.first[2]) }, { LoadDouble(pair.second[0]), LoadDouble(pair.second[1]), LoadDouble(pair.second[2]) } };
 }
 
-[[nodiscard]] inline b8 CheckExceptionEquivalence(const TrianglePairVectors& pair)noexcept{
+[[nodiscard]] NWB_INLINE b8 CheckExceptionEquivalence(const TrianglePairVectors& pair)noexcept{
 #pragma STDC FENV_ACCESS ON
     const auto originalEnvironment = HoldFloatingPointExceptions();
     if(!originalEnvironment)
@@ -363,11 +363,11 @@ template<typename PairT>
 }
 
 #if defined(NWB_PLATFORM_LINUX)
-inline void TrapHandler([[maybe_unused]] const i32 signalNumber, siginfo_t* information, [[maybe_unused]] void* context)noexcept{
+NWB_INLINE void TrapHandler([[maybe_unused]] const i32 signalNumber, siginfo_t* information, [[maybe_unused]] void* context)noexcept{
     _exit(32 + information->si_code);
 }
 
-[[nodiscard]] inline Expected<i32, ErrorCode> TrapResult(const NotNull<Intersection> implementation, const TrianglePairVectors& pair, const i32 mask)noexcept{
+[[nodiscard]] NWB_INLINE Expected<i32, ErrorCode> TrapResult(const NotNull<Intersection> implementation, const TrianglePairVectors& pair, const i32 mask)noexcept{
     const pid_t child = fork();
     if(child < 0)
         return MakeUnexpected(MakeErrorCode(static_cast<ErrorCondition>(errno)));
@@ -392,7 +392,7 @@ inline void TrapHandler([[maybe_unused]] const i32 signalNumber, siginfo_t* info
 }
 #endif
 
-[[nodiscard]] inline b8 CheckTrapEquivalence(const TrianglePairVectors& pair)noexcept{
+[[nodiscard]] NWB_INLINE b8 CheckTrapEquivalence(const TrianglePairVectors& pair)noexcept{
 #if defined(NWB_PLATFORM_LINUX)
     const auto production = MakeNotNull<Intersection>(TriangleDoubleTests::Intersects);
     for(const i32 mask : { FE_INVALID, FE_OVERFLOW, FE_INVALID | FE_OVERFLOW, FE_INVALID | FE_OVERFLOW | FE_UNDERFLOW | FE_INEXACT }){
@@ -412,6 +412,172 @@ inline void TrapHandler([[maybe_unused]] const i32 signalNumber, siginfo_t* info
     return true;
 }
 
+[[nodiscard]] NWB_INLINE u64 NextGeometryVerifySeed(u64& state)noexcept{
+    state ^= state << 13u;
+    state ^= state >> 7u;
+    state ^= state << 17u;
+    return state;
+}
+
+}
+
+template<typename PairT>
+[[nodiscard]] NWB_INLINE b8 CheckTrianglePairPermutationsKernel(const PairT& pair, const b8 expected)noexcept{
+    const GeometryKernels::TrianglePairVectors vectors = GeometryKernels::LoadTrianglePair(pair);
+    constexpr Array<Array<u32, 3>, 6> s_Permutations = {
+        Array<u32, 3>{ 0u, 1u, 2u },
+        Array<u32, 3>{ 0u, 2u, 1u },
+        Array<u32, 3>{ 1u, 0u, 2u },
+        Array<u32, 3>{ 1u, 2u, 0u },
+        Array<u32, 3>{ 2u, 0u, 1u },
+        Array<u32, 3>{ 2u, 1u, 0u },
+    };
+    b8 valid = true;
+    for(const auto& firstOrder : s_Permutations){
+        for(const auto& secondOrder : s_Permutations){
+            for(const b8 reverse : { false, true }){
+                const auto& first = reverse ? vectors.second : vectors.first;
+                const auto& second = reverse ? vectors.first : vectors.second;
+                const auto& firstIndices = reverse ? secondOrder : firstOrder;
+                const auto& secondIndices = reverse ? firstOrder : secondOrder;
+                const b8 baseline = GeometryKernels::Baseline(first[firstIndices[0]], first[firstIndices[1]], first[firstIndices[2]], second[secondIndices[0]], second[secondIndices[1]], second[secondIndices[2]]);
+                const b8 candidate = GeometryKernels::ZeroAxis(first[firstIndices[0]], first[firstIndices[1]], first[firstIndices[2]], second[secondIndices[0]], second[secondIndices[1]], second[secondIndices[2]]);
+                const b8 production = TriangleDoubleTests::Intersects(first[firstIndices[0]], first[firstIndices[1]], first[firstIndices[2]], second[secondIndices[0]], second[secondIndices[1]], second[secondIndices[2]]);
+                const b8 hoisted = GeometryKernels::AbsHoisted(first[firstIndices[0]], first[firstIndices[1]], first[firstIndices[2]], second[secondIndices[0]], second[secondIndices[1]], second[secondIndices[2]]);
+                if(baseline != expected || candidate != baseline || production != baseline || hoisted != baseline)
+                    valid = false;
+            }
+        }
+    }
+    return valid;
+}
+
+template<typename PairT>
+[[nodiscard]] NWB_INLINE b8 ValidateGeometryContainmentAndTrapsKernel(const PairT& fixture0, const PairT& fixture3)noexcept{
+#pragma STDC FENV_ACCESS ON
+    constexpr u64 s_VerifyInitialState = 0x4f1bbcdc6762c13fu;
+    constexpr u32 s_ContainedSampleCount = 200000u;
+    u64 state = s_VerifyInitialState;
+    b8 valid = true;
+    for(u32 sample = 0u; sample < s_ContainedSampleCount && valid; ++sample){
+        GeometryKernels::TrianglePairVectors pair{};
+        for(u32 vertex = 0u; vertex < 3u; ++vertex){
+            Array<f64, 3> coordinates{};
+            for(f64& coordinate : coordinates)
+                coordinate = static_cast<f64>(static_cast<i64>(GeometryKernels::NextGeometryVerifySeed(state) % 2000000001u) - 1000000000);
+            pair.first[vertex] = VectorDoubleScale(VectorDoubleSet(coordinates[0], coordinates[1], coordinates[2], 0.0), 0.25);
+        }
+        const SIMDVectorDouble contained = VectorDoubleScale(VectorDoubleAdd(VectorDoubleAdd(VectorDoubleScale(pair.first[0], 2.0), pair.first[1]), pair.first[2]), 0.25);
+        for(SIMDVectorDouble& vertex : pair.second)
+            vertex = contained;
+        if(
+            !GeometryKernels::Baseline(pair.first[0], pair.first[1], pair.first[2], contained, contained, contained)
+            || !GeometryKernels::ZeroAxis(pair.first[0], pair.first[1], pair.first[2], contained, contained, contained)
+            || !TriangleDoubleTests::Intersects(pair.first[0], pair.first[1], pair.first[2], contained, contained, contained)
+            || !GeometryKernels::AbsHoisted(pair.first[0], pair.first[1], pair.first[2], contained, contained, contained)
+        ){
+            valid = false;
+            break;
+        }
+        for(u32 vertex = 0u; vertex < 3u; ++vertex){
+            Array<f64, 3> coordinates{};
+            for(f64& coordinate : coordinates)
+                coordinate = static_cast<f64>(static_cast<i64>(GeometryKernels::NextGeometryVerifySeed(state) % 2000001u) - 1000000);
+            pair.first[vertex] = VectorDoubleSet(coordinates[0], coordinates[1], coordinates[2], 0.0);
+        }
+        const SIMDVectorDouble containedSingle = VectorDoubleScale(VectorDoubleAdd(VectorDoubleAdd(VectorDoubleScale(pair.first[0], 2.0), pair.first[1]), pair.first[2]), 0.25);
+        for(u32 vertex = 0u; vertex < 3u; ++vertex){
+            pair.first[vertex] = ConvertVectorSingleToDouble(ConvertVectorDoubleToSingle(pair.first[vertex]));
+            pair.second[vertex] = ConvertVectorSingleToDouble(ConvertVectorDoubleToSingle(containedSingle));
+        }
+        if(
+            !GeometryKernels::Baseline(pair.first[0], pair.first[1], pair.first[2], pair.second[0], pair.second[1], pair.second[2])
+            || !GeometryKernels::ZeroAxis(pair.first[0], pair.first[1], pair.first[2], pair.second[0], pair.second[1], pair.second[2])
+            || !TriangleDoubleTests::Intersects(pair.first[0], pair.first[1], pair.first[2], pair.second[0], pair.second[1], pair.second[2])
+            || !GeometryKernels::AbsHoisted(pair.first[0], pair.first[1], pair.first[2], pair.second[0], pair.second[1], pair.second[2])
+        ){
+            valid = false;
+            break;
+        }
+    }
+    if(valid){
+        GeometryKernels::TrianglePairVectors signaling = GeometryKernels::LoadTrianglePair(fixture0);
+        constexpr u64 s_SignalingNaNBits = 0x7ff0000000000001u;
+        for(SIMDVectorDouble& vertex : signaling.first)
+            vertex = VectorDoubleSetIntW(vertex, s_SignalingNaNBits);
+        for(SIMDVectorDouble& vertex : signaling.second)
+            vertex = VectorDoubleSetIntW(vertex, s_SignalingNaNBits);
+        const auto environment = HoldFloatingPointExceptions();
+        if(!environment){
+            valid = false;
+        }
+        else{
+            const b8 baseline = GeometryKernels::Baseline(signaling.first[0], signaling.first[1], signaling.first[2], signaling.second[0], signaling.second[1], signaling.second[2]);
+            const i32 baselineExceptions = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+            if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT)){
+                valid = false;
+            }
+            else{
+                const b8 candidate = GeometryKernels::ZeroAxis(signaling.first[0], signaling.first[1], signaling.first[2], signaling.second[0], signaling.second[1], signaling.second[2]);
+                const i32 candidateExceptions = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+                if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT)){
+                    valid = false;
+                }
+                else{
+                    const b8 production = TriangleDoubleTests::Intersects(signaling.first[0], signaling.first[1], signaling.first[2], signaling.second[0], signaling.second[1], signaling.second[2]);
+                    const i32 productionExceptions = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+                    if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT)){
+                        valid = false;
+                    }
+                    else{
+                        const b8 hoisted = GeometryKernels::AbsHoisted(signaling.first[0], signaling.first[1], signaling.first[2], signaling.second[0], signaling.second[1], signaling.second[2]);
+                        const i32 hoistedExceptions = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+                        if(!SetFloatingPointEnvironment(*environment))
+                            valid = false;
+                        if(!(baseline && candidate && production && hoisted && baselineExceptions == candidateExceptions && candidateExceptions == productionExceptions && productionExceptions == hoistedExceptions && (candidateExceptions & FE_INVALID) == 0))
+                            valid = false;
+                    }
+                }
+            }
+        }
+    }
+    if(valid){
+        const Array<u64, 3> activeBits = { 0x7ff0000000000000u, 0x7ff8000012345678u, 0x7ff0000000000001u };
+        constexpr Array<f64, 6> s_Scales = { 0.0, 0x1p-300, 0x1p-100, 0x1p+100, 0x1p+300, 0x1p+900 };
+        for(const f64 scale : s_Scales){
+            GeometryKernels::TrianglePairVectors scaled = GeometryKernels::LoadTrianglePair(fixture3);
+            for(u32 vertex = 0u; vertex < 3u; ++vertex){
+                scaled.first[vertex] = VectorDoubleMultiply(scaled.first[vertex], VectorDoubleReplicate(scale));
+                scaled.second[vertex] = VectorDoubleMultiply(scaled.second[vertex], VectorDoubleReplicate(scale));
+            }
+            if(!GeometryKernels::CheckExceptionEquivalence(scaled))
+                valid = false;
+        }
+        for(u32 index = 0u; index < activeBits.size(); ++index){
+            GeometryKernels::TrianglePairVectors active = GeometryKernels::LoadTrianglePair(fixture3);
+            volatile u64 bits = activeBits[index];
+            active.first[0] = VectorDoubleSetIntX(active.first[0], bits);
+            if(!GeometryKernels::CheckExceptionEquivalence(active))
+                valid = false;
+        }
+        constexpr f64 s_Maximum = Limit<f64>::s_Max;
+        Array<PairT, 2> extreme{};
+        extreme[0].first = { Double4(0.0, 1.0, 1.0, 0.0), Double4(0.0, 1.0, 1.0, 0.0), Double4(0.0, 1.0, 1.0, 0.0) };
+        extreme[0].second = { Double4(Limit<f64>::s_Infinity, 1.0, 2.0, 0.0), Double4(-1.0, -1.0, -1.0, 0.0), Double4(1.0, 3.0, 4.0, 0.0) };
+        extreme[1].first = { Double4(s_Maximum, 0.0, 0.0, 0.0), Double4(s_Maximum, 0.0, 0.0, 0.0), Double4(s_Maximum, 0.0, 0.0, 0.0) };
+        extreme[1].second = { Double4(-s_Maximum, -1.0, -1.0, 0.0), Double4(0.0, 1.0, 1.0, 0.0), Double4(s_Maximum, 0.0, 0.0, 0.0) };
+        for(const PairT& pair : extreme){
+            const GeometryKernels::TrianglePairVectors vectors = GeometryKernels::LoadTrianglePair(pair);
+            if(!GeometryKernels::CheckExceptionEquivalence(vectors) || !GeometryKernels::CheckTrapEquivalence(vectors))
+                valid = false;
+        }
+    }
+    return valid;
+}
+
+template<typename PairT, usize PairCount>
+[[nodiscard]] NWB_INLINE u64 RunGeometryBatchKernel(const u32 implId, const Array<PairT, PairCount>& pairs, const u32 passes)noexcept{
+    return GeometryKernels::RunBatch(implId, Span<const PairT>(pairs.data(), pairs.size()), passes);
 }
 };
 
@@ -529,35 +695,7 @@ void FillTrianglePairs(in u32 kind, mut Span<TrianglePair> pairs){
 }
 
 b8 CheckTrianglePair(in TrianglePair pair, in b8 expected){
-    b8 valid = true;
-    native(in pair, in expected, mut valid){
-        const GeometryKernels::TrianglePairVectors vectors = GeometryKernels::LoadTrianglePair(pair);
-        constexpr Array<Array<u32, 3>, 6> s_Permutations = {
-            Array<u32, 3>{ 0u, 1u, 2u },
-            Array<u32, 3>{ 0u, 2u, 1u },
-            Array<u32, 3>{ 1u, 0u, 2u },
-            Array<u32, 3>{ 1u, 2u, 0u },
-            Array<u32, 3>{ 2u, 0u, 1u },
-            Array<u32, 3>{ 2u, 1u, 0u },
-        };
-        for(const auto& firstOrder : s_Permutations){
-            for(const auto& secondOrder : s_Permutations){
-                for(const b8 reverse : { false, true }){
-                    const auto& first = reverse ? vectors.second : vectors.first;
-                    const auto& second = reverse ? vectors.first : vectors.second;
-                    const auto& firstIndices = reverse ? secondOrder : firstOrder;
-                    const auto& secondIndices = reverse ? firstOrder : secondOrder;
-                    const b8 baseline = GeometryKernels::Baseline(first[firstIndices[0]], first[firstIndices[1]], first[firstIndices[2]], second[secondIndices[0]], second[secondIndices[1]], second[secondIndices[2]]);
-                    const b8 candidate = GeometryKernels::ZeroAxis(first[firstIndices[0]], first[firstIndices[1]], first[firstIndices[2]], second[secondIndices[0]], second[secondIndices[1]], second[secondIndices[2]]);
-                    const b8 production = TriangleDoubleTests::Intersects(first[firstIndices[0]], first[firstIndices[1]], first[firstIndices[2]], second[secondIndices[0]], second[secondIndices[1]], second[secondIndices[2]]);
-                    const b8 hoisted = GeometryKernels::AbsHoisted(first[firstIndices[0]], first[firstIndices[1]], first[firstIndices[2]], second[secondIndices[0]], second[secondIndices[1]], second[secondIndices[2]]);
-                    if(baseline != expected || candidate != baseline || production != baseline || hoisted != baseline)
-                        valid = false;
-                }
-            }
-        }
-    }
-    return valid;
+    return CheckTrianglePairPermutationsKernel(pair, expected);
 }
 
 b8 ValidateGeometryBenchmark(){
@@ -572,128 +710,7 @@ b8 ValidateGeometryBenchmark(){
     const TrianglePair fixture0 = pairs[0];
     FillTrianglePairs(3u, pairs);
     const TrianglePair fixture3 = pairs[0];
-
-    b8 valid = true;
-    native(in fixture0, in fixture3, mut valid){
-#pragma STDC FENV_ACCESS ON
-        constexpr u64 s_VerifyInitialState = 0x4f1bbcdc6762c13fu;
-        constexpr u32 s_ContainedSampleCount = 200000u;
-        u64 state = s_VerifyInitialState;
-        for(u32 sample = 0u; sample < s_ContainedSampleCount && valid; ++sample){
-            GeometryKernels::TrianglePairVectors pair{};
-            for(u32 vertex = 0u; vertex < 3u; ++vertex){
-                Array<f64, 3> coordinates{};
-                for(f64& coordinate : coordinates)
-                    coordinate = static_cast<f64>(static_cast<i64>(NextSeed(state) % 2000000001u) - 1000000000);
-                pair.first[vertex] = VectorDoubleScale(VectorDoubleSet(coordinates[0], coordinates[1], coordinates[2], 0.0), 0.25);
-            }
-            const SIMDVectorDouble contained = VectorDoubleScale(VectorDoubleAdd(VectorDoubleAdd(VectorDoubleScale(pair.first[0], 2.0), pair.first[1]), pair.first[2]), 0.25);
-            for(SIMDVectorDouble& vertex : pair.second)
-                vertex = contained;
-            if(
-                !GeometryKernels::Baseline(pair.first[0], pair.first[1], pair.first[2], contained, contained, contained)
-                || !GeometryKernels::ZeroAxis(pair.first[0], pair.first[1], pair.first[2], contained, contained, contained)
-                || !TriangleDoubleTests::Intersects(pair.first[0], pair.first[1], pair.first[2], contained, contained, contained)
-                || !GeometryKernels::AbsHoisted(pair.first[0], pair.first[1], pair.first[2], contained, contained, contained)
-            ){
-                valid = false;
-                break;
-            }
-            for(u32 vertex = 0u; vertex < 3u; ++vertex){
-                Array<f64, 3> coordinates{};
-                for(f64& coordinate : coordinates)
-                    coordinate = static_cast<f64>(static_cast<i64>(NextSeed(state) % 2000001u) - 1000000);
-                pair.first[vertex] = VectorDoubleSet(coordinates[0], coordinates[1], coordinates[2], 0.0);
-            }
-            const SIMDVectorDouble containedSingle = VectorDoubleScale(VectorDoubleAdd(VectorDoubleAdd(VectorDoubleScale(pair.first[0], 2.0), pair.first[1]), pair.first[2]), 0.25);
-            for(u32 vertex = 0u; vertex < 3u; ++vertex){
-                pair.first[vertex] = ConvertVectorSingleToDouble(ConvertVectorDoubleToSingle(pair.first[vertex]));
-                pair.second[vertex] = ConvertVectorSingleToDouble(ConvertVectorDoubleToSingle(containedSingle));
-            }
-            if(
-                !GeometryKernels::Baseline(pair.first[0], pair.first[1], pair.first[2], pair.second[0], pair.second[1], pair.second[2])
-                || !GeometryKernels::ZeroAxis(pair.first[0], pair.first[1], pair.first[2], pair.second[0], pair.second[1], pair.second[2])
-                || !TriangleDoubleTests::Intersects(pair.first[0], pair.first[1], pair.first[2], pair.second[0], pair.second[1], pair.second[2])
-                || !GeometryKernels::AbsHoisted(pair.first[0], pair.first[1], pair.first[2], pair.second[0], pair.second[1], pair.second[2])
-            ){
-                valid = false;
-                break;
-            }
-        }
-        if(valid){
-            GeometryKernels::TrianglePairVectors signaling = GeometryKernels::LoadTrianglePair(fixture0);
-            constexpr u64 s_SignalingNaNBits = 0x7ff0000000000001u;
-            for(SIMDVectorDouble& vertex : signaling.first)
-                vertex = VectorDoubleSetIntW(vertex, s_SignalingNaNBits);
-            for(SIMDVectorDouble& vertex : signaling.second)
-                vertex = VectorDoubleSetIntW(vertex, s_SignalingNaNBits);
-            const auto environment = HoldFloatingPointExceptions();
-            if(!environment){
-                valid = false;
-            }
-            else{
-                const b8 baseline = GeometryKernels::Baseline(signaling.first[0], signaling.first[1], signaling.first[2], signaling.second[0], signaling.second[1], signaling.second[2]);
-                const i32 baselineExceptions = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-                if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT)){
-                    valid = false;
-                }
-                else{
-                    const b8 candidate = GeometryKernels::ZeroAxis(signaling.first[0], signaling.first[1], signaling.first[2], signaling.second[0], signaling.second[1], signaling.second[2]);
-                    const i32 candidateExceptions = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-                    if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT)){
-                        valid = false;
-                    }
-                    else{
-                        const b8 production = TriangleDoubleTests::Intersects(signaling.first[0], signaling.first[1], signaling.first[2], signaling.second[0], signaling.second[1], signaling.second[2]);
-                        const i32 productionExceptions = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-                        if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT)){
-                            valid = false;
-                        }
-                        else{
-                            const b8 hoisted = GeometryKernels::AbsHoisted(signaling.first[0], signaling.first[1], signaling.first[2], signaling.second[0], signaling.second[1], signaling.second[2]);
-                            const i32 hoistedExceptions = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-                            if(!SetFloatingPointEnvironment(*environment))
-                                valid = false;
-                            if(!(baseline && candidate && production && hoisted && baselineExceptions == candidateExceptions && candidateExceptions == productionExceptions && productionExceptions == hoistedExceptions && (candidateExceptions & FE_INVALID) == 0))
-                                valid = false;
-                        }
-                    }
-                }
-            }
-        }
-        if(valid){
-            const Array<u64, 3> activeBits = { 0x7ff0000000000000u, 0x7ff8000012345678u, 0x7ff0000000000001u };
-            constexpr Array<f64, 6> s_Scales = { 0.0, 0x1p-300, 0x1p-100, 0x1p+100, 0x1p+300, 0x1p+900 };
-            for(const f64 scale : s_Scales){
-                GeometryKernels::TrianglePairVectors scaled = GeometryKernels::LoadTrianglePair(fixture3);
-                for(u32 vertex = 0u; vertex < 3u; ++vertex){
-                    scaled.first[vertex] = VectorDoubleMultiply(scaled.first[vertex], VectorDoubleReplicate(scale));
-                    scaled.second[vertex] = VectorDoubleMultiply(scaled.second[vertex], VectorDoubleReplicate(scale));
-                }
-                if(!GeometryKernels::CheckExceptionEquivalence(scaled))
-                    valid = false;
-            }
-            for(u32 index = 0u; index < activeBits.size(); ++index){
-                GeometryKernels::TrianglePairVectors active = GeometryKernels::LoadTrianglePair(fixture3);
-                volatile u64 bits = activeBits[index];
-                active.first[0] = VectorDoubleSetIntX(active.first[0], bits);
-                if(!GeometryKernels::CheckExceptionEquivalence(active))
-                    valid = false;
-            }
-            constexpr f64 s_Maximum = Limit<f64>::s_Max;
-            Array<TrianglePair, 2> extreme{};
-            extreme[0].first = { Double4(0.0, 1.0, 1.0, 0.0), Double4(0.0, 1.0, 1.0, 0.0), Double4(0.0, 1.0, 1.0, 0.0) };
-            extreme[0].second = { Double4(Limit<f64>::s_Infinity, 1.0, 2.0, 0.0), Double4(-1.0, -1.0, -1.0, 0.0), Double4(1.0, 3.0, 4.0, 0.0) };
-            extreme[1].first = { Double4(s_Maximum, 0.0, 0.0, 0.0), Double4(s_Maximum, 0.0, 0.0, 0.0), Double4(s_Maximum, 0.0, 0.0, 0.0) };
-            extreme[1].second = { Double4(-s_Maximum, -1.0, -1.0, 0.0), Double4(0.0, 1.0, 1.0, 0.0), Double4(s_Maximum, 0.0, 0.0, 0.0) };
-            for(const TrianglePair& pair : extreme){
-                const GeometryKernels::TrianglePairVectors vectors = GeometryKernels::LoadTrianglePair(pair);
-                if(!GeometryKernels::CheckExceptionEquivalence(vectors) || !GeometryKernels::CheckTrapEquivalence(vectors))
-                    valid = false;
-            }
-        }
-    }
-    return valid;
+    return ValidateGeometryContainmentAndTrapsKernel(fixture0, fixture3);
 }
 
 void SortGeometryRoundValues(mut Array<f64, s_GeometryRounds> sorted){
@@ -714,29 +731,19 @@ void PrintGeometrySummary(in StringView prefix, in StringView workload, in Array
     const f64 medianValue = sorted[s_GeometryRounds / 2u];
     const f64 minValue = sorted[0];
     const f64 maxValue = sorted[s_GeometryRounds - 1u];
-    native(in prefix, in workload, in medianValue, in minValue, in maxValue){
-        NWB_COUT << prefix << "_summary," << workload << ',' << medianValue << ',' << minValue << ',' << maxValue << '\n';
-    }
+    WriteBenchmarkStdout(StringFormat("{}_summary,{},{},{},{}\n", prefix, workload, medianValue, minValue, maxValue));
 }
 
 u64 RunGeometryImplementation(in u32 implId, in Array<TrianglePair, s_GeometryFixtureCount> pairs, in u32 passes){
-    u64 checksum = 0u;
-    native(in implId, in pairs, in passes, mut checksum){
-        checksum = GeometryKernels::RunBatch(implId, Span<const TrianglePair>(pairs.data(), pairs.size()), passes);
-    }
-    return checksum;
+    return RunGeometryBatchKernel(implId, pairs, passes);
 }
 
 i32 RunGeometryBenchmark(in b8 validationOnly, in b8 measureAbs, in b8 guardOnly){
     if(!ValidateGeometryBenchmark()){
-        native(){
-            NWB_CERR << "validation failed\n";
-        }
+        WriteBenchmarkStderr("validation failed\n");
         return 1;
     }
-    native(){
-        NWB_COUT << "validation,400000 exact containment probes, winding, finite/nonfinite FENV and trap-order equivalence,passed\n";
-    }
+    WriteBenchmarkStdout("validation,400000 exact containment probes, winding, finite/nonfinite FENV and trap-order equivalence,passed\n");
     if(validationOnly)
         return 0;
 
@@ -760,10 +767,7 @@ i32 RunGeometryBenchmark(in b8 validationOnly, in b8 measureAbs, in b8 guardOnly
         modeLabel = "zero_axis_vs_current_dot3";
     }
 
-    native(in modeLabel){
-        NWB_COUT << "timer,TimerNow/DurationInNS\n";
-        NWB_COUT << "mode," << modeLabel << '\n';
-    }
+    WriteBenchmarkStdout(StringFormat("timer,TimerNow/DurationInNS\nmode,{}\n", modeLabel));
 
     Array<TrianglePair, s_GeometryFixtureCount> pairs;
     for(u32 kind = 0u; kind < 7u; ++kind){
@@ -787,10 +791,7 @@ i32 RunGeometryBenchmark(in b8 validationOnly, in b8 measureAbs, in b8 guardOnly
                 }
                 const Timer begin = TimerNow();
                 const u64 checksum = RunGeometryImplementation(implId, pairs, s_GeometryPasses);
-                f64 elapsedNs = 0.0;
-                native(in begin, mut elapsedNs){
-                    elapsedNs = DurationInNS<f64>(TimerNow(), begin);
-                }
+                const f64 elapsedNs = DurationInNS<f64>(TimerNow(), begin);
                 if(checksum != expected)
                     return 3;
                 const f64 nanoseconds = elapsedNs / cast<f64>(s_GeometryPasses * s_GeometryFixtureCount);
@@ -798,9 +799,7 @@ i32 RunGeometryBenchmark(in b8 validationOnly, in b8 measureAbs, in b8 guardOnly
                     candidateValues[cast<usize>(round)] = nanoseconds;
                 else
                     baselineValues[cast<usize>(round)] = nanoseconds;
-                native(in workloadName, in implName, in round, in nanoseconds, in checksum){
-                    NWB_COUT << "sample," << workloadName << ',' << implName << ',' << round << ',' << nanoseconds << ',' << checksum << '\n';
-                }
+                WriteBenchmarkStdout(StringFormat("sample,{},{},{},{},{}\n", workloadName, implName, round, nanoseconds, checksum));
             }
             ratios[cast<usize>(round)] = candidateValues[cast<usize>(round)] / baselineValues[cast<usize>(round)];
         }

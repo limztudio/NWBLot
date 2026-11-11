@@ -52,6 +52,7 @@ using TimingTestArena = Tests::TestArena<GpuTimingTestsTag>;
 static_assert(IsNothrowDestructible_V<Core::GpuTimingFrameTransaction>, "GPU timing frame transactions must unwind without throwing");
 static_assert(IsNothrowDestructible_V<Core::GpuTimingMeasure>, "GPU timing measures stored in Optional must unwind without throwing");
 static_assert(!Core::ResourceQueueSharing::IsValid(static_cast<Core::ResourceQueueSharing::Mask>(1u << 7u)));
+static_assert(noexcept(DeclVal<Core::GpuTimingRecorder&>().unsubscribeSampleListener(DeclVal<const Core::GpuTimingSampleSubscription&>())));
 
 struct RegistrationSentinel{};
 
@@ -175,11 +176,25 @@ struct GpuTimingSubscriptionCapture{
 
 
 public:
-    static void Invoke(void* context, const Core::GpuTimingSample&)noexcept;
+    static void Invoke(void* const context, const Core::GpuTimingSample&)noexcept{
+        GpuTimingSubscriptionCapture* const capture = static_cast<GpuTimingSubscriptionCapture*>(context);
+        if(!capture)
+            return;
+        ++capture->sampleCount;
+    }
 };
 
-[[nodiscard]] Core::GpuTimingSampleListener MakeSubscriptionListener(GpuTimingSubscriptionCapture& capture)noexcept;
-[[nodiscard]] Expected<Name> DeriveIndexedScopeName(const Name& prefix, usize scopeIndex)noexcept;
+[[nodiscard]] NWB_INLINE Core::GpuTimingSampleListener MakeSubscriptionListener(GpuTimingSubscriptionCapture& capture)noexcept{
+    return Core::GpuTimingSampleListener{
+        .context = &capture,
+        .invoke = &GpuTimingSubscriptionCapture::Invoke,
+    };
+}
+
+[[nodiscard]] NWB_INLINE Expected<Name> DeriveIndexedScopeName(const Name& prefix, const usize scopeIndex)noexcept{
+    Array<char, 32u> scopeIndexBuffer = {};
+    return DeriveName(prefix, FormatDecimal(scopeIndex, scopeIndexBuffer));
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -233,6 +248,7 @@ using VulkanViewportPolicy = Core::GraphicsBackend::VulkanViewportPolicy;
 using ResourceQueueSharingMask = Core::ResourceQueueSharing::Mask;
 
 using Core::TryComputeGpuTimestampOverlap;
+using Core::TryAggregateGpuPacketEnvelopeMetrics;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -301,17 +317,15 @@ TimerQueryResult MakeTimerQueryResult(in u64 beginTicks, in u64 endTicks, in f64
 }
 
 void RecordCorrelatorTimestampRange(mut GpuTimingMetricCorrelator correlator, in Name scopeName, in u64 frameIndex, in GpuComparableTimestampRange range, mut ScratchArena scratchArena, mut GpuTimingSinkSampleVector samples){
-    native(mut correlator, in scopeName, in frameIndex, in range, mut scratchArena, mut samples){
-        correlator.recordTimestampRange(scopeName, frameIndex, range, scratchArena, samples);
-    }
+    correlator.recordTimestampRange(scopeName, frameIndex, range, scratchArena, samples);
 }
 
 Expected<GpuPacketEnvelopeMetrics> AggregateEnvelopeMetrics(in Span<GpuComparableTimestampRange> ranges, mut PacketMetricsScratchContext context){
-    Expected<GpuPacketEnvelopeMetrics> result = MakeUnexpected(Failure());
-    native(in ranges, mut context, mut result){
-        result = Core::TryAggregateGpuPacketEnvelopeMetrics(ranges, context.scratchArena, context.queueMetrics);
-    }
-    return result;
+    return TryAggregateGpuPacketEnvelopeMetrics(ranges, context.scratchArena, context.queueMetrics);
+}
+
+Expected<GpuTimingSampleSubscription> SubscribeCaptureListener(mut GpuTimingRecorder recorder, mut GpuTimingSubscriptionCapture capture){
+    return recorder.subscribeSampleListener(MakeSubscriptionListener(capture));
 }
 
 void RecordAndPublishTimestampRange(in Name scopeName, in u64 frameIndex, in GpuComparableTimestampRange range, mut TimingMetricContext context){
@@ -502,9 +516,7 @@ void VerifyGpuTimingPacketEnvelopeMetrics_PublishesNoPartialFrameWhenOutputRegis
     EXPECT_TRUE(context.correlator.hasOutputRole(overlapScope));
     EXPECT_TRUE(context.correlator.hasOutputRole(outputs[0u].internalIdleScopeName));
     EXPECT_FALSE(context.correlator.hasOutputRole(outputs[1u].internalIdleScopeName));
-    native(mut context, in scopes, in overlapScope, in outputs){
-        ASSERT_TRUE(context.correlator.preparePacketEnvelopeMetrics(73u, scopes, overlapScope, outputs));
-    }
+    ASSERT_TRUE(context.correlator.preparePacketEnvelopeMetrics(73u, scopes, overlapScope, outputs));
 
     GpuTimingSinkSampleVector samples = GpuTimingSinkSampleVector(context.scratchArena);
     samples.reserve(3u);
@@ -671,12 +683,8 @@ void VerifyGpuTimingSampleSubscriptions_ScopedDemandsReplaceAtomicallyAndRemainS
     Array<Name, 1> singleMetricOutput = Array<Name, 1>();
     singleMetricOutput[0u] = metricOutput;
 
-    Expected<GpuTimingSampleSubscription> firstResult = MakeUnexpected(Failure());
-    Expected<GpuTimingSampleSubscription> secondResult = MakeUnexpected(Failure());
-    native(mut recorder, mut firstCapture, mut secondCapture, mut firstResult, mut secondResult){
-        firstResult = recorder.subscribeSampleListener(MakeSubscriptionListener(firstCapture));
-        secondResult = recorder.subscribeSampleListener(MakeSubscriptionListener(secondCapture));
-    }
+    const Expected<GpuTimingSampleSubscription> firstResult = SubscribeCaptureListener(recorder, firstCapture);
+    const Expected<GpuTimingSampleSubscription> secondResult = SubscribeCaptureListener(recorder, secondCapture);
     ASSERT_TRUE(firstResult.has_value());
     const GpuTimingSampleSubscription first = firstResult.value();
     ASSERT_TRUE(secondResult.has_value());
@@ -684,9 +692,6 @@ void VerifyGpuTimingSampleSubscriptions_ScopedDemandsReplaceAtomicallyAndRemainS
 
     ASSERT_TRUE(first.valid());
     ASSERT_TRUE(second.valid());
-    native(mut recorder, in first){
-        static_assert(noexcept(recorder.unsubscribeSampleListener(first)));
-    }
     EXPECT_NE(first, second);
     EXPECT_FALSE(recorder.collectionActive());
     ASSERT_TRUE(recorder.setFeedbackCollectionScopes(first, firstScopes));
@@ -1207,67 +1212,6 @@ void VerifyResourceQueueSharing_RejectsEveryUnknownSharingBit(){
         const ResourceQueueSharingMask sharing = cast<ResourceQueueSharingMask>(cast<u8>(rawValue));
         EXPECT_EQ(ResourceQueueSharing::IsValid(sharing), rawValue <= maxValidValue);
     }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Tests::GraphicsTimingCasesDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void GpuTimingSubscriptionCapture::Invoke(void* const context, const Core::GpuTimingSample&)noexcept{
-    GpuTimingSubscriptionCapture* const capture = static_cast<GpuTimingSubscriptionCapture*>(context);
-    if(!capture)
-        return;
-
-    ++capture->sampleCount;
-}
-
-Core::GpuTimingSampleListener MakeSubscriptionListener(GpuTimingSubscriptionCapture& capture)noexcept{
-    return Core::GpuTimingSampleListener{
-        .context = &capture,
-        .invoke = &GpuTimingSubscriptionCapture::Invoke,
-    };
-}
-
-Expected<Name> DeriveIndexedScopeName(const Name& prefix, const usize scopeIndex)noexcept{
-    Array<char, 32u> scopeIndexBuffer = {};
-    return DeriveName(prefix, FormatDecimal(scopeIndex, scopeIndexBuffer));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

@@ -76,64 +76,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace ECSRenderDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Core::Format::Enum SelectGBufferAlbedoFormat(Core::Device& device)noexcept{
-    constexpr Array<Core::Format::Enum, 1> s_Candidates = { Core::Format::RGBA16_FLOAT };
-    constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget;
-
-    return SelectSupportedFormat(device, s_Candidates, s_RequiredSupport);
-}
-
-Core::Format::Enum SelectDeferredOpaqueColorFormat(Core::Device& device)noexcept{
-    constexpr Array<Core::Format::Enum, 1> s_Candidates = { Core::Format::RGBA16_FLOAT };
-    constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::ShaderUavStore;
-
-    return SelectSupportedFormat(device, s_Candidates, s_RequiredSupport);
-}
-
-Core::Format::Enum SelectGBufferDepthFormat(Core::Device& device)noexcept{
-    constexpr Array<Core::Format::Enum, 3> s_Candidates = { Core::Format::D32, Core::Format::D24S8, Core::Format::D16 };
-
-    return SelectSupportedFormat(device, s_Candidates, Core::FormatSupport::DepthStencil);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void RendererDeferredState::invalidateResources()noexcept{
-    m_lightingBindingLayout.reset();
-    m_sceneShadingBuffer.reset();
-    m_lightBuffer.reset();
-    m_lightingComputeShader.reset();
-    m_lightingPipeline.reset();
-    m_compositeComputeBindingLayout.reset();
-    m_compositeComputeShader.reset();
-    m_compositeComputePipeline.reset();
-    m_presentBindingLayout.reset();
-    m_sampler.reset();
-    m_presentPixelShader.reset();
-    m_presentPipeline.reset();
-    m_sceneShadingGpuDataValid = false;
-    m_lightGpuDataCount = 0u;
-    m_lightGpuDataValid = false;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 DeferredLaggedLightingHistoryResources::valid()const noexcept{
     const b8 hasTextures = shadowVisibility != nullptr && causticIrradiance != nullptr && surfelIrradiance != nullptr;
     const b8 descriptorsValid = slotsBufferDescriptor.valid() && shadowVisibilityDescriptor.valid() && causticIrradianceDescriptor.valid() && surfelIrradianceDescriptor.valid();
@@ -235,22 +177,22 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
         return MakeUnexpected(Failure{});
 
     auto& device = m_graphics.getDevice();
-    const Core::Format::Enum albedoFormat = ECSRenderDetail::SelectGBufferAlbedoFormat(device);
-    const Core::Format::Enum normalFormat = ECSRenderDetail::SelectGBufferAlbedoFormat(device);
-    const Core::Format::Enum worldPositionFormat = ECSRenderDetail::SelectGBufferAlbedoFormat(device);
-    const Core::Format::Enum opaqueColorFormat = ECSRenderDetail::SelectDeferredOpaqueColorFormat(device);
-    const Core::Format::Enum depthFormat = ECSRenderDetail::SelectGBufferDepthFormat(device);
-    const Core::Format::Enum csgCapNormalFormat = ECSRenderDetail::SelectCsgFormat(NWB_CSG_CAP_NORMAL_CORE_FORMAT, ECSRenderDetail::s_CsgPeelFormatSupport, device);
-    const Core::Format::Enum csgIntervalDepthFormat = ECSRenderDetail::SelectCsgFormat(NWB_CSG_INTERVAL_DEPTH_CORE_FORMAT, ECSRenderDetail::s_CsgPeelFormatSupport, device);
-    const Core::Format::Enum csgIntervalIdFormat = ECSRenderDetail::SelectCsgFormat(NWB_CSG_INTERVAL_ID_CORE_FORMAT, ECSRenderDetail::s_CsgPeelFormatSupport, device);
-    const Core::Format::Enum csgReceiverEventDataFormat = ECSRenderDetail::SelectCsgFormat(NWB_CSG_RECEIVER_EVENT_DATA_CORE_FORMAT, ECSRenderDetail::s_CsgStorageFormatSupport, device);
-    const Core::Format::Enum csgReceiverEventCountFormat = ECSRenderDetail::SelectCsgFormat(NWB_CSG_RECEIVER_EVENT_COUNT_CORE_FORMAT, ECSRenderDetail::s_CsgStorageFormatSupport, device);
-    const Core::Format::Enum csgReceiverSpanDataFormat = ECSRenderDetail::SelectCsgFormat(NWB_CSG_RECEIVER_SPAN_DATA_CORE_FORMAT, ECSRenderDetail::s_CsgStorageFormatSupport, device);
-    const Core::Format::Enum csgReceiverSpanCountFormat = ECSRenderDetail::SelectCsgFormat(NWB_CSG_RECEIVER_SPAN_COUNT_CORE_FORMAT, ECSRenderDetail::s_CsgStorageFormatSupport, device);
-    const Core::Format::Enum csgRemovedIntervalDepthFormat = ECSRenderDetail::SelectCsgFormat(NWB_CSG_REMOVED_INTERVAL_DEPTH_CORE_FORMAT, ECSRenderDetail::s_CsgStorageFormatSupport, device);
-    const Core::Format::Enum csgRemovedIntervalCapNormalFormat = ECSRenderDetail::SelectCsgFormat(NWB_CSG_REMOVED_INTERVAL_CAP_NORMAL_CORE_FORMAT, ECSRenderDetail::s_CsgStorageFormatSupport, device);
-    const Core::Format::Enum csgRemovedIntervalDataFormat = ECSRenderDetail::SelectCsgFormat(NWB_CSG_REMOVED_INTERVAL_DATA_CORE_FORMAT, ECSRenderDetail::s_CsgStorageFormatSupport, device);
-    const Core::Format::Enum csgRemovedIntervalCountFormat = ECSRenderDetail::SelectCsgFormat(NWB_CSG_REMOVED_INTERVAL_COUNT_CORE_FORMAT, ECSRenderDetail::s_CsgStorageFormatSupport, device);
+    const Core::Format::Enum albedoFormat = SelectGBufferAlbedoFormat(device);
+    const Core::Format::Enum normalFormat = SelectGBufferAlbedoFormat(device);
+    const Core::Format::Enum worldPositionFormat = SelectGBufferAlbedoFormat(device);
+    const Core::Format::Enum opaqueColorFormat = SelectDeferredOpaqueColorFormat(device);
+    const Core::Format::Enum depthFormat = SelectGBufferDepthFormat(device);
+    const Core::Format::Enum csgCapNormalFormat = SelectCsgFormat(NWB_CSG_CAP_NORMAL_CORE_FORMAT, s_CsgPeelFormatSupport, device);
+    const Core::Format::Enum csgIntervalDepthFormat = SelectCsgFormat(NWB_CSG_INTERVAL_DEPTH_CORE_FORMAT, s_CsgPeelFormatSupport, device);
+    const Core::Format::Enum csgIntervalIdFormat = SelectCsgFormat(NWB_CSG_INTERVAL_ID_CORE_FORMAT, s_CsgPeelFormatSupport, device);
+    const Core::Format::Enum csgReceiverEventDataFormat = SelectCsgFormat(NWB_CSG_RECEIVER_EVENT_DATA_CORE_FORMAT, s_CsgStorageFormatSupport, device);
+    const Core::Format::Enum csgReceiverEventCountFormat = SelectCsgFormat(NWB_CSG_RECEIVER_EVENT_COUNT_CORE_FORMAT, s_CsgStorageFormatSupport, device);
+    const Core::Format::Enum csgReceiverSpanDataFormat = SelectCsgFormat(NWB_CSG_RECEIVER_SPAN_DATA_CORE_FORMAT, s_CsgStorageFormatSupport, device);
+    const Core::Format::Enum csgReceiverSpanCountFormat = SelectCsgFormat(NWB_CSG_RECEIVER_SPAN_COUNT_CORE_FORMAT, s_CsgStorageFormatSupport, device);
+    const Core::Format::Enum csgRemovedIntervalDepthFormat = SelectCsgFormat(NWB_CSG_REMOVED_INTERVAL_DEPTH_CORE_FORMAT, s_CsgStorageFormatSupport, device);
+    const Core::Format::Enum csgRemovedIntervalCapNormalFormat = SelectCsgFormat(NWB_CSG_REMOVED_INTERVAL_CAP_NORMAL_CORE_FORMAT, s_CsgStorageFormatSupport, device);
+    const Core::Format::Enum csgRemovedIntervalDataFormat = SelectCsgFormat(NWB_CSG_REMOVED_INTERVAL_DATA_CORE_FORMAT, s_CsgStorageFormatSupport, device);
+    const Core::Format::Enum csgRemovedIntervalCountFormat = SelectCsgFormat(NWB_CSG_REMOVED_INTERVAL_COUNT_CORE_FORMAT, s_CsgStorageFormatSupport, device);
     const b8 gbufferFormatsKnown =
         albedoFormat != Core::Format::UNKNOWN
         && normalFormat != Core::Format::UNKNOWN
@@ -339,7 +281,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
         .setIsRenderTarget(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/deferred/gbuffer_normal")
-        .setClearValue(ECSRenderDetail::s_GBufferNormalClearColor)
+        .setClearValue(s_GBufferNormalClearColor)
     ;
     auto normalResult = m_graphics.createTexture(normalDesc);
     if(normalResult)
@@ -359,7 +301,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
         .setIsRenderTarget(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/deferred/gbuffer_world_position")
-        .setClearValue(ECSRenderDetail::s_GBufferWorldPositionClearColor)
+        .setClearValue(s_GBufferWorldPositionClearColor)
     ;
     auto worldPositionResult = m_graphics.createTexture(worldPositionDesc);
     if(worldPositionResult)
@@ -379,7 +321,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
         .setIsRenderTarget(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/deferred/gbuffer_specular_roughness")
-        .setClearValue(ECSRenderDetail::s_GBufferSpecularRoughnessClearColor)
+        .setClearValue(s_GBufferSpecularRoughnessClearColor)
     ;
     auto specularRoughnessResult = m_graphics.createTexture(specularRoughnessDesc);
     if(specularRoughnessResult)

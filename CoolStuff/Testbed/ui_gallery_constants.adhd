@@ -43,6 +43,10 @@ class UiFilteredListState<ResolverT : IUiLabelResolver, const usize LabelCount, 
         return this.m_count;
     }
 
+    public u64 filteredGeneration()const{
+        return s_FilteredInstanceGeneration;
+    }
+
     public u64 filteredRevision()const{
         return this.m_viewRevision;
     }

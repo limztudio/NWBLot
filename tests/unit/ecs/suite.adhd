@@ -41,12 +41,58 @@ using EcsTestWorld = ::NWB::Tests::EcsTestWorld;
 using GlobalArena = ::NWB::Core::Alloc::GlobalArena;
 using CpuTaskScheduler = ::NWB::Core::CpuTaskScheduler;
 using CpuTaskScope = ::NWB::Core::CpuTaskScope;
+using CpuTaskOptions = ::NWB::Core::CpuTaskOptions;
+namespace CpuTaskAdmissionError = ::NWB::Core::CpuTaskAdmissionError;
+using TickAdmissionResult = Expected<void, ::NWB::Core::CpuTaskAdmissionError::Enum>;
+using TaskSubmitResult = Expected<::NWB::Core::CpuTaskScheduler::TaskHandle, ::NWB::Core::CpuTaskAdmissionError::Enum>;
+using Entity = ::NWB::Core::ECS::Entity;
 using World = ::NWB::Core::ECS::World;
 using SystemScheduler = ::NWB::Core::ECS::SystemScheduler;
+using ComponentTypeId = ::NWB::Core::ECS::ComponentTypeId;
+namespace AccessMode = ::NWB::Core::ECS::AccessMode;
+using ::NWB::Core::ECS::ComponentType;
+using ::NWB::Core::ECS::ECSDetail::s_EntityGenerationMask;
 using PublicationPositionComponent = ::__hidden_publication_failure_tests::PublicationPositionComponent;
 using PublicationVelocityComponent = ::__hidden_publication_failure_tests::PublicationVelocityComponent;
 
 extern thread_local b8 s_EcsCallerThread;
+
+NWB_INLINE void SetCallerThreadFlag(const b8 value)noexcept{
+    s_EcsCallerThread = value;
+}
+
+[[nodiscard]] NWB_INLINE b8 IsCallerThreadFlagSet()noexcept{
+    return s_EcsCallerThread;
+}
+
+[[nodiscard]] NWB_INLINE CpuTaskOptions MainThreadTaskOptions()noexcept{
+    return CpuTaskOptions{ .target = ::NWB::Core::CpuTaskTarget::MainThread };
+}
+
+template<typename T>
+[[nodiscard]] NWB_INLINE usize ComponentAddress(const T& component)noexcept{
+    return reinterpret_cast<usize>(AddressOf(component));
+}
+
+template<typename T>
+[[nodiscard]] NWB_INLINE b8 HasTryComponent(World& world, const ::NWB::Core::ECS::EntityID entityId)noexcept{
+    return world.tryGetComponent<T>(entityId) != nullptr;
+}
+
+template<typename T>
+[[nodiscard]] NWB_INLINE b8 HasConstTryComponent(const World& world, const ::NWB::Core::ECS::EntityID entityId)noexcept{
+    return world.tryGetComponent<T>(entityId) != nullptr;
+}
+
+template<typename T>
+[[nodiscard]] NWB_INLINE b8 TryComponentMatches(World& world, const ::NWB::Core::ECS::EntityID entityId, const T& expected)noexcept{
+    return world.tryGetComponent<T>(entityId) == AddressOf(expected);
+}
+
+template<typename T>
+[[nodiscard]] NWB_INLINE b8 ConstTryComponentMatches(const World& world, const ::NWB::Core::ECS::EntityID entityId, const T& expected)noexcept{
+    return world.tryGetComponent<T>(entityId) == AddressOf(expected);
+}
 
 class CountingSystem final : public NWB::Core::ECS::ISystem{
 public:
@@ -77,6 +123,40 @@ public:
     {
         for(const auto& access : accesses)
             registerAccess(access.typeId, access.mode);
+    }
+    ScheduledSystem(NWB::Core::Alloc::GlobalArena& arena, Function<void()> update, NWB::Core::CpuTaskOptions options = {})
+        : NWB::Core::ECS::ISystem(arena)
+        , m_update(Move(update))
+        , m_options(options)
+    {}
+    ScheduledSystem(
+        NWB::Core::Alloc::GlobalArena& arena,
+        const NWB::Core::ECS::ComponentTypeId typeId,
+        const NWB::Core::ECS::AccessMode::Enum mode,
+        Function<void()> update,
+        NWB::Core::CpuTaskOptions options = {}
+    )
+        : NWB::Core::ECS::ISystem(arena)
+        , m_update(Move(update))
+        , m_options(options)
+    {
+        registerAccess(typeId, mode);
+    }
+    ScheduledSystem(
+        NWB::Core::Alloc::GlobalArena& arena,
+        const NWB::Core::ECS::ComponentTypeId firstTypeId,
+        const NWB::Core::ECS::AccessMode::Enum firstMode,
+        const NWB::Core::ECS::ComponentTypeId secondTypeId,
+        const NWB::Core::ECS::AccessMode::Enum secondMode,
+        Function<void()> update,
+        NWB::Core::CpuTaskOptions options = {}
+    )
+        : NWB::Core::ECS::ISystem(arena)
+        , m_update(Move(update))
+        , m_options(options)
+    {
+        registerAccess(firstTypeId, firstMode);
+        registerAccess(secondTypeId, secondMode);
     }
 
 
@@ -121,10 +201,20 @@ public:
 struct alignas(32) OverAlignedComponent{
     Array<u8, 32> value{};
 };
+inline constexpr usize s_OverAlignedComponentAlignment = alignof(OverAlignedComponent);
 
 template<usize... Is>
-inline Array<usize, sizeof...(Is)> RegisterPoolSlotTypes(IndexSequence<Is...>)noexcept{
+NWB_INLINE Array<usize, sizeof...(Is)> RegisterPoolSlotTypes(IndexSequence<Is...>)noexcept{
     return { NWB::Core::ECS::ComponentType<PoolSlotComponent<Is>>()... };
+}
+
+[[nodiscard]] NWB_INLINE Array<usize, 64> RegisterPoolSlotTypes64()noexcept{
+    return RegisterPoolSlotTypes(IndexSequence<
+        0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u, 14u, 15u,
+        16u, 17u, 18u, 19u, 20u, 21u, 22u, 23u, 24u, 25u, 26u, 27u, 28u, 29u, 30u, 31u,
+        32u, 33u, 34u, 35u, 36u, 37u, 38u, 39u, 40u, 41u, 42u, 43u, 44u, 45u, 46u, 47u,
+        48u, 49u, 50u, 51u, 52u, 53u, 54u, 55u, 56u, 57u, 58u, 59u, 60u, 61u, 62u, 63u
+    >{});
 }
 
 struct MoveOnlyMessage{
@@ -269,6 +359,18 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 HasTryPositionComponent(mut World world, in EntityID entityId){
+    return HasTryComponent<PositionComponent>(world, entityId);
+}
+
+b8 HasTryPoolSlot63Component(mut World world, in EntityID entityId){
+    return HasTryComponent<PoolSlotComponent<63>>(world, entityId);
+}
+
+void RegisterScheduledSystem(mut SystemScheduler scheduler, mut ScheduledSystem system){
+    scheduler.addSystem(system);
+}
+
 void VerifyEcs_ParallelEachNestedInTaskBatchCompletes(){
     GlobalArena arena(s_EcsTestParallelArenaName);
     CpuTaskScheduler taskScheduler(3u);
@@ -279,16 +381,27 @@ void VerifyEcs_ParallelEachNestedInTaskBatchCompletes(){
         world.entity(id).addComponent<PositionComponent>().x = cast<i32>(i);
     }
 
-    u32 visitTotal = 0u;
-    native(mut world, mut visitTotal){
-        Atomic<u32> visits{ 0u };
-        EXPECT_TRUE((world.taskScope().parallelFor(static_cast<usize>(0), s_EcsTestNestedOuterCount, [&]([[maybe_unused]] usize outerIndex){
-            EXPECT_TRUE((world.view<PositionComponent>().parallelEach(world.taskScope(), 1u, [&visits](NWB::Core::ECS::EntityID, [[maybe_unused]] PositionComponent& position)noexcept{
-                visits.fetch_add(1u, MemoryOrder::relaxed);
-            })));
-        })));
-        visitTotal = visits.load(MemoryOrder::relaxed);
-    }
+    Atomic<u32> visits(0u);
+    const b8 outerParallelOk = world.taskScope().parallelFor(
+        cast<usize>(0u),
+        s_EcsTestNestedOuterCount,
+        lambda[mut world, mut visits](in usize outerIndex) -> void{
+            if(outerIndex == usize.max)
+                return;
+            const b8 innerParallelOk = world.view<PositionComponent>().parallelEach(
+                world.taskScope(),
+                1u,
+                lambda[mut visits](in EntityID entityId, mut PositionComponent position) -> void{
+                    if(!entityId.valid() && position.x == i32.min)
+                        return;
+                    visits.fetch_add(1u, MemoryOrder::relaxed);
+                }
+            ).has_value();
+            EXPECT_TRUE(innerParallelOk);
+        }
+    ).has_value();
+    EXPECT_TRUE(outerParallelOk);
+    const u32 visitTotal = visits.load(MemoryOrder::relaxed);
 
     EXPECT_EQ(visitTotal, s_EcsTestNestedEntityCount * cast<u32>(s_EcsTestNestedOuterCount));
 }
@@ -315,21 +428,19 @@ void VerifyEcs_WorldTickPropagatesRangeRejectionAndSkipsDependentSystems(){
     u32 independentUpdates = 0u;
     u32 laterCallbacks = 0u;
 
-    native(mut testWorld, mut independentUpdates, mut laterCallbacks){
-        auto& rejectedSystem = testWorld.world.addSystem<RejectingRangeSystem>();
-        auto& dependent = testWorld.world.addSystem<CountingSystem>();
-        testWorld.world.addSystem<ScheduledSystem>(InitializerList<NWB::Core::ECS::ComponentAccess>{}, Function<void()>([&]()noexcept{ ++independentUpdates; }));
-        const auto updated = testWorld.world.tick(0.5f);
-        ASSERT_FALSE(updated);
-        EXPECT_EQ(updated.error(), NWB::Core::CpuTaskAdmissionError::InvalidOptions);
-        EXPECT_EQ(rejectedSystem.callbacks, 0u);
-        EXPECT_EQ(dependent.prepares, 1u);
-        EXPECT_EQ(dependent.updates, 0u);
-        EXPECT_EQ(testWorld.taskScheduler.statistics().outstandingTasks, 0u);
-        const auto admitted = testWorld.taskScheduler.submit([&]()noexcept{ ++laterCallbacks; });
-        ASSERT_TRUE(admitted);
-        testWorld.taskScheduler.wait(*admitted);
-    }
+    mut RejectingRangeSystem rejectedSystem = testWorld.world.addSystem<RejectingRangeSystem>();
+    mut CountingSystem dependent = testWorld.world.addSystem<CountingSystem>();
+    testWorld.world.addSystem<ScheduledSystem>(lambda[mut independentUpdates]() -> void{ ++independentUpdates; });
+    const TickAdmissionResult updated = testWorld.world.tick(0.5f);
+    ASSERT_FALSE(updated.has_value());
+    EXPECT_EQ(updated.error(), CpuTaskAdmissionError::InvalidOptions);
+    EXPECT_EQ(rejectedSystem.callbacks, 0u);
+    EXPECT_EQ(dependent.prepares, 1u);
+    EXPECT_EQ(dependent.updates, 0u);
+    EXPECT_EQ(testWorld.taskScheduler.statistics().outstandingTasks, 0u);
+    const TaskSubmitResult admitted = testWorld.taskScheduler.submit(lambda[mut laterCallbacks]() -> void{ ++laterCallbacks; });
+    ASSERT_TRUE(admitted.has_value());
+    testWorld.taskScheduler.wait(admitted.value());
 
     EXPECT_EQ(independentUpdates, 1u);
     EXPECT_EQ(laterCallbacks, 1u);
@@ -341,33 +452,45 @@ void VerifyEcs_SystemDependenciesPreserveRegistrationOrderAcrossComponents(){
     i32 velocity = 0;
     i32 observed = 0;
 
-    native(mut testWorld, mut position, mut velocity, mut observed){
-        const auto positionType = NWB::Core::ECS::ComponentType<PositionComponent>();
-        const auto velocityType = NWB::Core::ECS::ComponentType<VelocityComponent>();
+    const ComponentTypeId positionType = ComponentType<PositionComponent>();
+    const ComponentTypeId velocityType = ComponentType<VelocityComponent>();
 
-        ScheduledSystem writer(testWorld.arena, { { positionType, NWB::Core::ECS::AccessMode::Write } }, [&]()noexcept{ position = 17; });
-        ScheduledSystem transfer(testWorld.arena, {
-            { positionType, NWB::Core::ECS::AccessMode::Read },
-            { velocityType, NWB::Core::ECS::AccessMode::Write },
-        }, [&]()noexcept{ velocity = position + 1; });
-        ScheduledSystem reader(testWorld.arena, { { velocityType, NWB::Core::ECS::AccessMode::Read } }, [&]()noexcept{ observed = velocity; });
+    ScheduledSystem writer(
+        testWorld.arena,
+        positionType,
+        AccessMode::Write,
+        lambda[mut position]() -> void{ position = 17; }
+    );
+    ScheduledSystem transfer(
+        testWorld.arena,
+        positionType,
+        AccessMode::Read,
+        velocityType,
+        AccessMode::Write,
+        lambda[mut position, mut velocity]() -> void{ velocity = position + 1; }
+    );
+    ScheduledSystem reader(
+        testWorld.arena,
+        velocityType,
+        AccessMode::Read,
+        lambda[mut velocity, mut observed]() -> void{ observed = velocity; }
+    );
 
-        SystemScheduler scheduler(testWorld.arena);
-        scheduler.addSystem(writer);
-        scheduler.addSystem(transfer);
-        scheduler.addSystem(reader);
-        ASSERT_TRUE(scheduler.execute(testWorld.world, 0.0f));
-        EXPECT_EQ(observed, 18);
+    SystemScheduler scheduler(testWorld.arena);
+    RegisterScheduledSystem(scheduler, writer);
+    RegisterScheduledSystem(scheduler, transfer);
+    RegisterScheduledSystem(scheduler, reader);
+    ASSERT_TRUE(scheduler.execute(testWorld.world, 0.0f).has_value());
+    EXPECT_EQ(observed, 18);
 
-        // Removing and adding a system invalidates the cached predecessor list.
-        scheduler.removeSystem(transfer);
-        velocity = 31;
-        ASSERT_TRUE(scheduler.execute(testWorld.world, 0.0f));
-        EXPECT_EQ(observed, 31);
-        scheduler.addSystem(transfer);
-        velocity = 47;
-        ASSERT_TRUE(scheduler.execute(testWorld.world, 0.0f));
-    }
+    // Removing and adding a system invalidates the cached predecessor list.
+    scheduler.removeSystem(transfer);
+    velocity = 31;
+    ASSERT_TRUE(scheduler.execute(testWorld.world, 0.0f).has_value());
+    EXPECT_EQ(observed, 31);
+    RegisterScheduledSystem(scheduler, transfer);
+    velocity = 47;
+    ASSERT_TRUE(scheduler.execute(testWorld.world, 0.0f).has_value());
 
     EXPECT_EQ(observed, 47);
     EXPECT_EQ(velocity, 18);
@@ -377,33 +500,43 @@ void VerifyEcs_SystemDependentsProceedWithoutWaitingForUnrelatedWork(){
     GlobalArena arena(s_EcsTestParallelArenaName);
     CpuTaskScheduler taskScheduler(3u);
     World world(arena, taskScheduler);
-    b8 observedCompletion = false;
 
-    native(mut arena, mut world, mut observedCompletion){
-        const auto positionType = NWB::Core::ECS::ComponentType<PositionComponent>();
-        Atomic<b8> dependentCompleted{ false };
-        Atomic<b8> independentObservedCompletion{ false };
-        i32 value = 0;
+    const ComponentTypeId positionType = ComponentType<PositionComponent>();
+    Atomic<b8> dependentCompleted(false);
+    Atomic<b8> independentObservedCompletion(false);
+    i32 value = 0;
 
-        ScheduledSystem writer(arena, { { positionType, NWB::Core::ECS::AccessMode::Write } }, [&]()noexcept{ value = 5; });
-        ScheduledSystem independent(arena, {}, [&]()noexcept{
+    ScheduledSystem writer(
+        arena,
+        positionType,
+        AccessMode::Write,
+        lambda[mut value]() -> void{ value = 5; }
+    );
+    ScheduledSystem independent(
+        arena,
+        lambda[mut dependentCompleted, mut independentObservedCompletion]() -> void{
             const Timer begin = TimerNow();
             while(!dependentCompleted.load(MemoryOrder::acquire) && DurationInMS<u64>(TimerNow(), begin) < s_EcsTestSystemCompletionTimeoutMS)
                 SleepMS(s_EcsTestPollIntervalMS);
             independentObservedCompletion.store(dependentCompleted.load(MemoryOrder::acquire), MemoryOrder::release);
-        });
-        ScheduledSystem dependent(arena, { { positionType, NWB::Core::ECS::AccessMode::Read } }, [&](){
+        }
+    );
+    ScheduledSystem dependent(
+        arena,
+        positionType,
+        AccessMode::Read,
+        lambda[mut value, mut dependentCompleted]() -> void{
             EXPECT_EQ(value, 5);
             dependentCompleted.store(true, MemoryOrder::release);
-        });
+        }
+    );
 
-        SystemScheduler scheduler(arena);
-        scheduler.addSystem(writer);
-        scheduler.addSystem(independent);
-        scheduler.addSystem(dependent);
-        ASSERT_TRUE(scheduler.execute(world, 0.0f));
-        observedCompletion = independentObservedCompletion.load(MemoryOrder::acquire);
-    }
+    SystemScheduler scheduler(arena);
+    RegisterScheduledSystem(scheduler, writer);
+    RegisterScheduledSystem(scheduler, independent);
+    RegisterScheduledSystem(scheduler, dependent);
+    ASSERT_TRUE(scheduler.execute(world, 0.0f).has_value());
+    const b8 observedCompletion = independentObservedCompletion.load(MemoryOrder::acquire);
 
     EXPECT_TRUE(observedCompletion);
 }
@@ -414,26 +547,40 @@ void VerifyEcs_MainThreadSystemRespectsWorkerDependencies(){
     World world(arena, taskScheduler);
     b8 executedOnCaller = false;
 
-    native(mut arena, mut world, mut executedOnCaller){
-        const auto positionType = NWB::Core::ECS::ComponentType<PositionComponent>();
-        s_EcsCallerThread = true;
-        i32 value = 0;
+    const ComponentTypeId positionType = ComponentType<PositionComponent>();
+    SetCallerThreadFlag(true);
+    i32 value = 0;
 
-        ScheduledSystem worker(arena, { { positionType, NWB::Core::ECS::AccessMode::Write } }, [&]()noexcept{ value = 23; });
-        ScheduledSystem caller(arena, { { positionType, NWB::Core::ECS::AccessMode::Write } }, [&](){
-            executedOnCaller = s_EcsCallerThread;
+    ScheduledSystem worker(
+        arena,
+        positionType,
+        AccessMode::Write,
+        lambda[mut value]() -> void{ value = 23; }
+    );
+    ScheduledSystem caller(
+        arena,
+        positionType,
+        AccessMode::Write,
+        lambda[mut executedOnCaller, mut value]() -> void{
+            executedOnCaller = IsCallerThreadFlagSet();
             EXPECT_EQ(value, 23);
             value = 29;
-        }, { .target = NWB::Core::CpuTaskTarget::MainThread });
-        ScheduledSystem consumer(arena, { { positionType, NWB::Core::ECS::AccessMode::Read } }, [&](){ EXPECT_EQ(value, 29); });
+        },
+        MainThreadTaskOptions()
+    );
+    ScheduledSystem consumer(
+        arena,
+        positionType,
+        AccessMode::Read,
+        lambda[mut value]() -> void{ EXPECT_EQ(value, 29); }
+    );
 
-        SystemScheduler scheduler(arena);
-        scheduler.addSystem(worker);
-        scheduler.addSystem(caller);
-        scheduler.addSystem(consumer);
-        ASSERT_TRUE(scheduler.execute(world, 0.0f));
-        s_EcsCallerThread = false;
-    }
+    SystemScheduler scheduler(arena);
+    RegisterScheduledSystem(scheduler, worker);
+    RegisterScheduledSystem(scheduler, caller);
+    RegisterScheduledSystem(scheduler, consumer);
+    ASSERT_TRUE(scheduler.execute(world, 0.0f).has_value());
+    SetCallerThreadFlag(false);
 
     EXPECT_TRUE(executedOnCaller);
 }
@@ -446,26 +593,45 @@ void VerifyEcs_DependentSystemObservesAllNestedQueryTasks(){
         world.createEntity().addComponent<PositionComponent>().x = cast<i32>(i);
     usize observed = 0u;
 
-    native(mut arena, mut world, mut observed){
-        const auto positionType = NWB::Core::ECS::ComponentType<PositionComponent>();
+    const ComponentTypeId positionType = ComponentType<PositionComponent>();
 
-        ScheduledSystem writer(arena, { { positionType, NWB::Core::ECS::AccessMode::Write } }, [&](){
-            EXPECT_TRUE((world.view<PositionComponent>().parallelEach(world.taskScope(), 8u, [](NWB::Core::ECS::EntityID, PositionComponent& position)noexcept{
-                position.y = position.x + 1;
-            })));
-        });
-        ScheduledSystem reader(arena, { { positionType, NWB::Core::ECS::AccessMode::Read } }, [&](){
-            world.view<PositionComponent>().each([&](NWB::Core::ECS::EntityID, PositionComponent& position){
-                EXPECT_EQ(position.y, position.x + 1);
-                ++observed;
-            });
-        });
+    ScheduledSystem writer(
+        arena,
+        positionType,
+        AccessMode::Write,
+        lambda[mut world]() -> void{
+            const b8 writerParallelOk = world.view<PositionComponent>().parallelEach(
+                world.taskScope(),
+                8u,
+                lambda[](in EntityID entityId, mut PositionComponent position) -> void{
+                    if(!entityId.valid() && position.x == i32.min)
+                        return;
+                    position.y = position.x + 1;
+                }
+            ).has_value();
+            EXPECT_TRUE(writerParallelOk);
+        }
+    );
+    ScheduledSystem reader(
+        arena,
+        positionType,
+        AccessMode::Read,
+        lambda[mut world, mut observed]() -> void{
+            world.view<PositionComponent>().each(
+                lambda[mut observed](in EntityID entityId, mut PositionComponent position) -> void{
+                    if(!entityId.valid() && position.x == i32.min)
+                        return;
+                    EXPECT_EQ(position.y, position.x + 1);
+                    ++observed;
+                }
+            );
+        }
+    );
 
-        SystemScheduler scheduler(arena);
-        scheduler.addSystem(writer);
-        scheduler.addSystem(reader);
-        ASSERT_TRUE(scheduler.execute(world, 0.0f));
-    }
+    SystemScheduler scheduler(arena);
+    RegisterScheduledSystem(scheduler, writer);
+    RegisterScheduledSystem(scheduler, reader);
+    ASSERT_TRUE(scheduler.execute(world, 0.0f).has_value());
 
     EXPECT_EQ(observed, s_EcsTestDependentQueryEntityCount);
 }
@@ -476,29 +642,41 @@ void VerifyEcs_SystemCompletionIncludesAsynchronousDescendants(){
     World world(arena, taskScheduler);
     i32 observed = 0;
 
-    native(mut arena, mut world, mut observed){
-        const auto positionType = NWB::Core::ECS::ComponentType<PositionComponent>();
-        Atomic<i32> value{ 0 };
+    const ComponentTypeId positionType = ComponentType<PositionComponent>();
+    Atomic<i32> value(0);
 
-        ScheduledSystem writer(arena, { { positionType, NWB::Core::ECS::AccessMode::Write } }, [&](){
-            const auto cpuTaskAdmission = world.taskScope().submit([&](){
-                SleepMS(s_EcsTestEntityWaitIntervalMS);
-                const auto secondCpuTaskAdmission = world.taskScope().submit([&]()noexcept{ value.store(41, MemoryOrder::release); });
-                ASSERT_TRUE(secondCpuTaskAdmission);
-                EXPECT_TRUE(secondCpuTaskAdmission->valid());
-            });
-            ASSERT_TRUE(cpuTaskAdmission);
-            EXPECT_TRUE(cpuTaskAdmission->valid());
-        });
-        ScheduledSystem reader(arena, { { positionType, NWB::Core::ECS::AccessMode::Read } }, [&]()noexcept{
+    ScheduledSystem writer(
+        arena,
+        positionType,
+        AccessMode::Write,
+        lambda[mut world, mut value]() -> void{
+            const TaskSubmitResult cpuTaskAdmission = world.taskScope().submit(
+                lambda[mut world, mut value]() -> void{
+                    SleepMS(s_EcsTestEntityWaitIntervalMS);
+                    const TaskSubmitResult secondCpuTaskAdmission = world.taskScope().submit(
+                        lambda[mut value]() -> void{ value.store(41, MemoryOrder::release); }
+                    );
+                    ASSERT_TRUE(secondCpuTaskAdmission.has_value());
+                    EXPECT_TRUE(secondCpuTaskAdmission.value().valid());
+                }
+            );
+            ASSERT_TRUE(cpuTaskAdmission.has_value());
+            EXPECT_TRUE(cpuTaskAdmission.value().valid());
+        }
+    );
+    ScheduledSystem reader(
+        arena,
+        positionType,
+        AccessMode::Read,
+        lambda[mut value, mut observed]() -> void{
             observed = value.load(MemoryOrder::acquire);
-        });
+        }
+    );
 
-        SystemScheduler scheduler(arena);
-        scheduler.addSystem(writer);
-        scheduler.addSystem(reader);
-        ASSERT_TRUE(scheduler.execute(world, 0.0f));
-    }
+    SystemScheduler scheduler(arena);
+    RegisterScheduledSystem(scheduler, writer);
+    RegisterScheduledSystem(scheduler, reader);
+    ASSERT_TRUE(scheduler.execute(world, 0.0f).has_value());
 
     EXPECT_EQ(observed, 41);
 }
@@ -508,29 +686,28 @@ void VerifyEcs_WorldClearDoesNotWaitForUnrelatedSchedulerTasks(){
     CpuTaskScheduler taskScheduler(2u);
     CpuTaskScope unrelatedTasks(taskScheduler);
     World world(arena, taskScheduler);
-    b8 unrelatedStillRunning = false;
 
-    native(mut unrelatedTasks, mut world, mut unrelatedStillRunning){
-        Atomic<b8> started{ false };
-        Atomic<b8> release{ false };
-        Atomic<b8> completed{ false };
-        const auto cpuTaskAdmission = unrelatedTasks.submit([&]()noexcept{
+    Atomic<b8> started(false);
+    Atomic<b8> release(false);
+    Atomic<b8> completed(false);
+    const TaskSubmitResult cpuTaskAdmission = unrelatedTasks.submit(
+        lambda[mut started, mut release, mut completed]() -> void{
             started.store(true, MemoryOrder::release);
             started.notify_all();
             const Timer begin = TimerNow();
             while(!release.load(MemoryOrder::acquire) && DurationInMS<u64>(TimerNow(), begin) < s_EcsTestSystemCompletionTimeoutMS)
                 SleepMS(s_EcsTestPollIntervalMS);
             completed.store(true, MemoryOrder::release);
-        });
-        ASSERT_TRUE(cpuTaskAdmission);
-        EXPECT_TRUE(cpuTaskAdmission->valid());
-        started.wait(false, MemoryOrder::acquire);
-        world.createEntity().addComponent<PositionComponent>();
-        world.clear();
-        unrelatedStillRunning = !completed.load(MemoryOrder::acquire);
-        release.store(true, MemoryOrder::release);
-        unrelatedTasks.wait();
-    }
+        }
+    );
+    ASSERT_TRUE(cpuTaskAdmission.has_value());
+    EXPECT_TRUE(cpuTaskAdmission.value().valid());
+    started.wait(false, MemoryOrder::acquire);
+    world.createEntity().addComponent<PositionComponent>();
+    world.clear();
+    const b8 unrelatedStillRunning = !completed.load(MemoryOrder::acquire);
+    release.store(true, MemoryOrder::release);
+    unrelatedTasks.wait();
 
     EXPECT_TRUE(unrelatedStillRunning);
     EXPECT_EQ(world.entityCount(), 0u);
@@ -538,11 +715,9 @@ void VerifyEcs_WorldClearDoesNotWaitForUnrelatedSchedulerTasks(){
 
 void VerifyEcs_ComponentStoragePreservesOverAlignment(){
     EcsTestWorld testWorld = EcsTestWorld();
-    native(mut testWorld){
-        auto entity = testWorld.world.createEntity();
-        auto& aligned = entity.addComponent<OverAlignedComponent>();
-        EXPECT_EQ(reinterpret_cast<usize>(&aligned) % alignof(OverAlignedComponent), 0u);
-    }
+    Entity entity = testWorld.world.createEntity();
+    mut OverAlignedComponent aligned = entity.addComponent<OverAlignedComponent>();
+    EXPECT_EQ(ComponentAddress(aligned) % s_OverAlignedComponentAlignment, 0u);
 }
 
 void VerifyEcs_StoredComponentLookupBypassesThrowingAddressOperators(){
@@ -604,20 +779,38 @@ void VerifyEcs_EmptyViewDoesNotAllocateComponentPools(){
     usize singleViewCount = 0u;
     usize multiViewCount = 0u;
 
-    native(mut testWorld, mut singleViewCount, mut multiViewCount){
-        testWorld.world.view<PositionComponent>().each([&singleViewCount](NWB::Core::ECS::EntityID, PositionComponent&)noexcept{
+    testWorld.world.view<PositionComponent>().each(
+        lambda[mut singleViewCount](in EntityID entityId, mut PositionComponent position) -> void{
+            if(!entityId.valid() && position.x == i32.min)
+                return;
             ++singleViewCount;
-        });
-        testWorld.world.view<PositionComponent, VelocityComponent>().each([&multiViewCount](NWB::Core::ECS::EntityID, PositionComponent&, VelocityComponent&)noexcept{
+        }
+    );
+    testWorld.world.view<PositionComponent, VelocityComponent>().each(
+        lambda[mut multiViewCount](in EntityID entityId, mut PositionComponent position, mut VelocityComponent velocity) -> void{
+            if(!entityId.valid() && position.x == i32.min && velocity.x == i32.min)
+                return;
             ++multiViewCount;
-        });
-        EXPECT_TRUE((testWorld.world.view<PositionComponent>().parallelEach(testWorld.world.taskScope(), [&singleViewCount](NWB::Core::ECS::EntityID, PositionComponent&)noexcept{
+        }
+    );
+    const b8 singleParallelOk = testWorld.world.view<PositionComponent>().parallelEach(
+        testWorld.world.taskScope(),
+        lambda[mut singleViewCount](in EntityID entityId, mut PositionComponent position) -> void{
+            if(!entityId.valid() && position.x == i32.min)
+                return;
             ++singleViewCount;
-        })));
-        EXPECT_TRUE((testWorld.world.view<PositionComponent, VelocityComponent>().parallelEach(testWorld.world.taskScope(), [&multiViewCount](NWB::Core::ECS::EntityID, PositionComponent&, VelocityComponent&)noexcept{
+        }
+    ).has_value();
+    EXPECT_TRUE(singleParallelOk);
+    const b8 multiParallelOk = testWorld.world.view<PositionComponent, VelocityComponent>().parallelEach(
+        testWorld.world.taskScope(),
+        lambda[mut multiViewCount](in EntityID entityId, mut PositionComponent position, mut VelocityComponent velocity) -> void{
+            if(!entityId.valid() && position.x == i32.min && velocity.x == i32.min)
+                return;
             ++multiViewCount;
-        })));
-    }
+        }
+    ).has_value();
+    EXPECT_TRUE(multiParallelOk);
 
     EXPECT_EQ(singleViewCount, 0u);
     EXPECT_EQ(multiViewCount, 0u);
@@ -635,9 +828,7 @@ void VerifyEcs_DestroyedEntityGenerationCannotReachRecycledComponents(){
 
     testWorld.world.entity(entityId).destroy();
     EXPECT_FALSE(testWorld.world.entity(entityId).alive());
-    native(in entityId, mut testWorld){
-        EXPECT_EQ(testWorld.world.tryGetComponent<PositionComponent>(entityId), nullptr);
-    }
+    EXPECT_FALSE(HasTryPositionComponent(testWorld.world, entityId));
 
     const EntityID recycledId = testWorld.world.createEntity().id();
     EXPECT_NE(recycledId, entityId);
@@ -647,10 +838,7 @@ void VerifyEcs_ExhaustedEntityGenerationNeverRevivesAStaleId(){
     EcsTestWorld testWorld = EcsTestWorld();
     EntityID currentId = testWorld.world.createEntity().id();
     const EntityID stale = currentId;
-    u32 generationMask = 0u;
-    native(mut generationMask){
-        generationMask = NWB::Core::ECS::ECSDetail::s_EntityGenerationMask;
-    }
+    const u32 generationMask = s_EntityGenerationMask;
     for(u32 generation = 0u; generation <= generationMask; ++generation){
         testWorld.world.entity(currentId).destroy();
         currentId = testWorld.world.createEntity().id();
@@ -667,10 +855,7 @@ void VerifyEcs_ClearingAtTheLastGenerationRetiresTheIndex(){
     EcsTestWorld testWorld = EcsTestWorld();
     EntityID currentId = testWorld.world.createEntity().id();
     const EntityID stale = currentId;
-    u32 generationMask = 0u;
-    native(mut generationMask){
-        generationMask = NWB::Core::ECS::ECSDetail::s_EntityGenerationMask;
-    }
+    const u32 generationMask = s_EntityGenerationMask;
     for(u32 generation = 0u; generation <= generationMask; ++generation){
         testWorld.world.clear();
         testWorld.world.clear();
@@ -695,9 +880,7 @@ void VerifyEcs_ClearedEntityFacadesCannotReachOrDestroyReplacementComponents(){
             const EntityID staleId = retiredIds[retired];
             EXPECT_FALSE(testWorld.world.entity(staleId).alive());
             EXPECT_FALSE(testWorld.world.entity(staleId).hasComponent<PositionComponent>());
-            native(in staleId, mut testWorld){
-                EXPECT_EQ(testWorld.world.tryGetComponent<PositionComponent>(staleId), nullptr);
-            }
+            EXPECT_FALSE(HasTryPositionComponent(testWorld.world, staleId));
             testWorld.world.entity(staleId).removeComponent<PositionComponent>();
             testWorld.world.entity(staleId).destroy();
         }
@@ -752,48 +935,43 @@ void VerifyEcs_ComponentPoolsPreserveSparseTypeLookupAndWorldIsolation(){
     EcsTestWorld firstWorld = EcsTestWorld();
     EcsTestWorld secondWorld = EcsTestWorld();
 
-    native(mut firstWorld, mut secondWorld){
-        const auto typeIds = RegisterPoolSlotTypes(IndexSequence<
-            0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u, 14u, 15u,
-            16u, 17u, 18u, 19u, 20u, 21u, 22u, 23u, 24u, 25u, 26u, 27u, 28u, 29u, 30u, 31u,
-            32u, 33u, 34u, 35u, 36u, 37u, 38u, 39u, 40u, 41u, 42u, 43u, 44u, 45u, 46u, 47u,
-            48u, 49u, 50u, 51u, 52u, 53u, 54u, 55u, 56u, 57u, 58u, 59u, 60u, 61u, 62u, 63u
-        >{});
-        EXPECT_NE(typeIds.front(), typeIds.back());
+    const Array<usize, 64> typeIds = RegisterPoolSlotTypes64();
+    EXPECT_NE(typeIds.front(), typeIds.back());
 
-        auto firstEntity = firstWorld.world.createEntity();
-        auto secondEntity = secondWorld.world.createEntity();
-        auto& firstComponent = firstEntity.addComponent<PoolSlotComponent<0u>>();
-        firstComponent.value = 17u;
-        const auto firstView = firstWorld.world.view<PoolSlotComponent<0u>>();
+    Entity firstEntity = firstWorld.world.createEntity();
+    Entity secondEntity = secondWorld.world.createEntity();
+    mut PoolSlotComponent<0> firstComponent = firstEntity.addComponent<PoolSlotComponent<0>>();
+    firstComponent.value = 17u;
 
-        secondEntity.addComponent<PoolSlotComponent<31u>>().value = 29u;
-        firstEntity.addComponent<PoolSlotComponent<64u>>().value = 41u;
+    secondEntity.addComponent<PoolSlotComponent<31>>().value = 29u;
+    firstEntity.addComponent<PoolSlotComponent<64>>().value = 41u;
 
-        EXPECT_EQ(firstWorld.world.tryGetComponent<PoolSlotComponent<0u>>(firstEntity.id()), &firstComponent);
-        EXPECT_EQ(firstWorld.world.tryGetComponent<PoolSlotComponent<31u>>(firstEntity.id()), nullptr);
-        EXPECT_EQ(secondWorld.world.tryGetComponent<PoolSlotComponent<0u>>(secondEntity.id()), nullptr);
-        EXPECT_EQ(secondWorld.world.tryGetComponent<PoolSlotComponent<64u>>(secondEntity.id()), nullptr);
-        EXPECT_EQ(firstWorld.world.componentMutationVersion<PoolSlotComponent<31u>>(), 0u);
+    EXPECT_TRUE(TryComponentMatches<PoolSlotComponent<0>>(firstWorld.world, firstEntity.id(), firstComponent));
+    EXPECT_FALSE(HasTryComponent<PoolSlotComponent<31>>(firstWorld.world, firstEntity.id()));
+    EXPECT_FALSE(HasTryComponent<PoolSlotComponent<0>>(secondWorld.world, secondEntity.id()));
+    EXPECT_FALSE(HasTryComponent<PoolSlotComponent<64>>(secondWorld.world, secondEntity.id()));
+    EXPECT_EQ(firstWorld.world.componentMutationVersion<PoolSlotComponent<31>>(), 0u);
 
-        const World& constFirstWorld = firstWorld.world;
-        EXPECT_EQ(constFirstWorld.tryGetComponent<PoolSlotComponent<0u>>(firstEntity.id()), &firstComponent);
-        EXPECT_EQ(constFirstWorld.tryGetComponent<PoolSlotComponent<31u>>(firstEntity.id()), nullptr);
-        EXPECT_EQ(constFirstWorld.tryGetComponent<VelocityComponent>(firstEntity.id()), nullptr);
+    EXPECT_TRUE(ConstTryComponentMatches<PoolSlotComponent<0>>(firstWorld.world, firstEntity.id(), firstComponent));
+    EXPECT_FALSE(HasConstTryComponent<PoolSlotComponent<31>>(firstWorld.world, firstEntity.id()));
+    EXPECT_FALSE(HasConstTryComponent<VelocityComponent>(firstWorld.world, firstEntity.id()));
 
-        usize visits = 0u;
-        firstView.each([&](NWB::Core::ECS::EntityID entityId, PoolSlotComponent<0u>& component){
-            EXPECT_EQ(entityId, firstEntity.id());
-            EXPECT_EQ(&component, &firstComponent);
+    usize visits = 0u;
+    const EntityID expectedFirstId = firstEntity.id();
+    const usize expectedFirstAddress = ComponentAddress(firstComponent);
+    firstWorld.world.view<PoolSlotComponent<0>>().each(
+        lambda[in expectedFirstId, in expectedFirstAddress, mut visits](in EntityID entityId, mut PoolSlotComponent<0> component) -> void{
+            EXPECT_EQ(entityId, expectedFirstId);
+            EXPECT_EQ(ComponentAddress(component), expectedFirstAddress);
             EXPECT_EQ(component.value, 17u);
             ++visits;
-        });
-        EXPECT_EQ(visits, 1u);
+        }
+    );
+    EXPECT_EQ(visits, 1u);
 
-        firstEntity.addComponent<PoolSlotComponent<31u>>().value = 53u;
-        EXPECT_EQ(firstEntity.getComponent<PoolSlotComponent<31u>>().value, 53u);
-        EXPECT_EQ(secondEntity.getComponent<PoolSlotComponent<31u>>().value, 29u);
-    }
+    firstEntity.addComponent<PoolSlotComponent<31>>().value = 53u;
+    EXPECT_EQ(firstEntity.getComponent<PoolSlotComponent<31>>().value, 53u);
+    EXPECT_EQ(secondEntity.getComponent<PoolSlotComponent<31>>().value, 29u);
 }
 
 void VerifyEcs_ComponentPoolsCanBeRecreatedAfterWorldClear(){
@@ -806,9 +984,7 @@ void VerifyEcs_ComponentPoolsCanBeRecreatedAfterWorldClear(){
     EXPECT_EQ(testWorld.world.entityCount(), 0u);
     EXPECT_EQ(testWorld.world.componentMutationVersion<PositionComponent>(), 0u);
     EXPECT_EQ(testWorld.world.componentMutationVersion<PoolSlotComponent<63>>(), 0u);
-    native(in entityId, mut testWorld){
-        EXPECT_EQ(testWorld.world.tryGetComponent<PoolSlotComponent<63>>(entityId), nullptr);
-    }
+    EXPECT_FALSE(HasTryPoolSlot63Component(testWorld.world, entityId));
     EXPECT_EQ(testWorld.world.view<PositionComponent>().candidateCount(), 0u);
 
     const EntityID recreatedId = testWorld.world.createEntity().id();
@@ -831,21 +1007,23 @@ void VerifyEcs_DuplicateComponentAddIsStable(){
     EcsTestWorld testWorld = EcsTestWorld();
 
     usize viewCount = 0u;
-    native(mut testWorld, mut viewCount){
-        auto entity = testWorld.world.createEntity();
-        auto& first = entity.addComponent<PositionComponent>();
-        first.x = 9;
-        first.y = 4;
+    Entity entity = testWorld.world.createEntity();
+    mut PositionComponent first = entity.addComponent<PositionComponent>();
+    first.x = 9;
+    first.y = 4;
 
-        auto& second = entity.addComponent<PositionComponent>();
-        EXPECT_EQ(&first, &second);
-        EXPECT_EQ(second.x, 9);
-        EXPECT_EQ(second.y, 4);
+    mut PositionComponent second = entity.addComponent<PositionComponent>();
+    EXPECT_EQ(ComponentAddress(first), ComponentAddress(second));
+    EXPECT_EQ(second.x, 9);
+    EXPECT_EQ(second.y, 4);
 
-        testWorld.world.view<PositionComponent>().each([&viewCount](NWB::Core::ECS::EntityID, PositionComponent&)noexcept{
+    testWorld.world.view<PositionComponent>().each(
+        lambda[mut viewCount](in EntityID entityId, mut PositionComponent position) -> void{
+            if(!entityId.valid() && position.x == i32.min)
+                return;
             ++viewCount;
-        });
-    }
+        }
+    );
     EXPECT_EQ(viewCount, 1u);
 }
 

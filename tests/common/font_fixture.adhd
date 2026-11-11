@@ -18,14 +18,14 @@ NWB_BEGIN
 
 namespace Tests{
 
-[[nodiscard]] inline Expected<Core::Assets::AssetBytes, AStringView> ReadBundledFontBytes(const Path& fontPath, Core::Assets::AssetArena& arena){
+[[nodiscard]] NWB_INLINE Expected<Core::Assets::AssetBytes, AStringView> ReadBundledFontBytes(const Path& fontPath, Core::Assets::AssetArena& arena){
     auto source = Impl::ReadPreparedFontSource(fontPath, false, arena);
     if(!source)
         return MakeUnexpected(source.error());
     return Move(source->fontBytes);
 }
 
-[[nodiscard]] inline b8 LoadBundledFont(Impl::Font& font, Core::Alloc::GlobalArena& arena, const StringView directory, const StringView filename){
+[[nodiscard]] NWB_INLINE b8 LoadBundledFont(Impl::Font& font, Core::Alloc::GlobalArena& arena, const StringView directory, const StringView filename){
     const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(arena, directory) / filename;
     auto bytes = ReadBundledFontBytes(path, arena);
     if(!bytes)
@@ -36,7 +36,7 @@ namespace Tests{
 
 #if defined(NWB_REPO_ROOT)
 template<typename TestArenaT>
-[[nodiscard]] inline ::Path<Core::Assets::AssetArena> DefaultBundledFontRoot(TestArenaT& testArena){
+[[nodiscard]] NWB_INLINE ::Path<Core::Assets::AssetArena> DefaultBundledFontRoot(TestArenaT& testArena){
     return ::Path<Core::Assets::AssetArena>(testArena.arena, NWB_REPO_ROOT) / "impl" / "assets" / "ui" / "fonts" / "default";
 }
 #endif

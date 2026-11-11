@@ -34,21 +34,7 @@ namespace __hidden_ui_configurable_edit_input_tests{
 
 using namespace UiEditNavigationTestSupport;
 
-class UiConfigurableEditInputTests : public UiEditNavigationHostTests{
-public:
-    [[nodiscard]] b8 command(const Ui::InputCommand::Enum command, const b8 extend = false, const Ui::InputSource source = { 7u, 3u }){
-        Ui::InputEvent event;
-        event.type = Ui::InputEventType::CommandDown;
-        event.source = source;
-        event.command = command;
-        event.extend = extend;
-        event.edit = true;
-        if(!dispatch(event))
-            return false;
-        event.type = Ui::InputEventType::CommandUp;
-        return dispatch(event);
-    }
-};
+class UiConfigurableEditInputTests : public UiEditNavigationHostTests{};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -133,8 +119,11 @@ using UiTextEditOwner = NWB::Impl::UiTextEditOwner;
 namespace UiClipboardPublicationStatus = NWB::Impl::UiClipboardPublicationStatus;
 namespace UiEditClickKind = NWB::Impl::UiEditClickKind;
 namespace UiEditClipboardStatus = NWB::Impl::UiEditClipboardStatus;
+using UiInputCommandEnum = NWB::Impl::Ui::InputCommand::Enum;
+using UiInputKeyBinding = NWB::Impl::Ui::InputKeyBinding;
 inline constexpr usize s_ClipboardMaxPublications = NWB::Impl::s_UiClipboardMaxPublications;
 inline constexpr usize s_EditInputMaxEvents = NWB::Impl::Ui::s_InputMaxEvents;
+inline constexpr usize s_TextInputMaxEvents = NWB::Core::s_TextInputMaxEvents;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -174,6 +163,20 @@ UiPoint MakeHostPoint(in f32 x, in f32 y){
     point.x = x;
     point.y = y;
     return point;
+}
+
+b8 DispatchConfigurableEditCommand(mut UiConfigurableEditInputTests self, in UiInputCommandEnum command){
+    UiInputEvent event = UiInputEvent();
+    event.type = UiInputEventType::CommandDown;
+    event.source = MakeEcsUiInputSource(7u, 3u);
+    event.command = command;
+    event.extend = false;
+    event.edit = true;
+    if(!self.dispatch(event)){
+        return false;
+    }
+    event.type = UiInputEventType::CommandUp;
+    return self.dispatch(event);
 }
 
 void VerifyUiClipboardPublications_CopiedWritePreservesNativeFifoBeforeLaterPasteRead(){
@@ -259,14 +262,12 @@ void VerifyUiClipboardPublications_AnotherThreadCannotRequestDrainOrCancelOwnedP
     UiClipboardPublicationStatusEnum requested = UiClipboardPublicationStatus::Idle;
     UiClipboardPublicationStatusEnum drained = UiClipboardPublicationStatus::Idle;
     b8 cancelled = true;
-    native(mut publications, mut requested, mut drained, mut cancelled){
-        Thread other([&]()noexcept{
-            requested = publications.request("other");
-            drained = publications.drain().status;
-            cancelled = publications.cancel();
-        });
-        other.join();
-    }
+    Thread other = Thread(lambda[mut publications, mut requested, mut drained, mut cancelled]() -> void{
+        requested = publications.request("other");
+        drained = publications.drain().status;
+        cancelled = publications.cancel();
+    });
+    other.join();
     EXPECT_EQ(requested, UiClipboardPublicationStatus::WrongThread);
     EXPECT_EQ(drained, UiClipboardPublicationStatus::WrongThread);
     EXPECT_FALSE(cancelled);
@@ -291,13 +292,11 @@ void VerifyUiClipboardPublications_DestructionCancelsUndeliveredWorkBeforeServic
 void VerifyUiConfigurableEditInputTests_EmptyKeyboardProfileLeavesNativeTextAndExplicitCommandsAvailable(mut UiConfigurableEditInputTests self){
     ASSERT_TRUE(self.m_model.setText("abc"));
     ASSERT_TRUE(self.activate());
-    native(mut self){
-        ASSERT_TRUE(self.m_context.input().setBindings({}));
-    }
+    ASSERT_TRUE(self.m_context.input().setBindings(Span<UiInputKeyBinding>()));
     ASSERT_TRUE(self.key(Key::Left));
     ASSERT_TRUE(self.frame(self.m_model));
     EXPECT_EQ(self.m_model.caret(), 3u);
-    ASSERT_TRUE(self.command(UiInputCommand::Left));
+    ASSERT_TRUE(DispatchConfigurableEditCommand(self, UiInputCommand::Left));
     ASSERT_EQ(self.m_textInput.commit("X"), TextInputAdmission::Accepted);
     ASSERT_TRUE(self.frame(self.m_model));
     EXPECT_EQ(self.m_model.text(), "abXc");
@@ -307,13 +306,15 @@ void VerifyUiConfigurableEditInputTests_EmptyKeyboardProfileLeavesNativeTextAndE
 void VerifyUiConfigurableEditInputTests_CopiedCommandRetainsItsMeaningAfterTheBindingProfileChanges(mut UiConfigurableEditInputTests self){
     ASSERT_TRUE(self.m_model.setText("abc"));
     ASSERT_TRUE(self.activate());
-    native(mut self){
-        const NWB::Impl::Ui::InputKeyBinding left{ .key = NWB::Core::Key::F8, .command = NWB::Impl::Ui::InputCommand::Left };
-        const NWB::Impl::Ui::InputKeyBinding erase{ .key = NWB::Core::Key::F8, .command = NWB::Impl::Ui::InputCommand::Backspace };
-        ASSERT_TRUE(self.m_context.input().setBindings(Span(&left, 1u)));
-        ASSERT_TRUE(self.key(NWB::Core::Key::F8));
-        ASSERT_TRUE(self.m_context.input().setBindings(Span(&erase, 1u)));
-    }
+    Array<UiInputKeyBinding, 1> left = Array<UiInputKeyBinding, 1>();
+    left[0u].key = Key::F8;
+    left[0u].command = UiInputCommand::Left;
+    Array<UiInputKeyBinding, 1> erase = Array<UiInputKeyBinding, 1>();
+    erase[0u].key = Key::F8;
+    erase[0u].command = UiInputCommand::Backspace;
+    ASSERT_TRUE(self.m_context.input().setBindings(left));
+    ASSERT_TRUE(self.key(Key::F8));
+    ASSERT_TRUE(self.m_context.input().setBindings(erase));
     EXPECT_EQ(self.m_model.caret(), 3u);
     ASSERT_TRUE(self.frame(self.m_model));
     EXPECT_EQ(self.m_model.text(), "abc");
@@ -330,12 +331,12 @@ void VerifyUiConfigurableEditInputTests_SemanticCancelFirstCancelsCompositionThe
     ASSERT_EQ(self.m_textInput.preedit("x", 1u, 1u), TextInputAdmission::Accepted);
     ASSERT_TRUE(self.frame(self.m_model));
     ASSERT_TRUE(self.m_model.composition().active);
-    ASSERT_TRUE(self.command(UiInputCommand::Cancel));
+    ASSERT_TRUE(DispatchConfigurableEditCommand(self, UiInputCommand::Cancel));
     ASSERT_TRUE(self.frame(self.m_model));
     EXPECT_FALSE(self.m_model.composition().active);
     EXPECT_FALSE(self.m_result.cancelled);
     EXPECT_EQ(self.m_model.text(), "base");
-    ASSERT_TRUE(self.command(UiInputCommand::Cancel));
+    ASSERT_TRUE(DispatchConfigurableEditCommand(self, UiInputCommand::Cancel));
     ASSERT_TRUE(self.frame(self.m_model));
     EXPECT_TRUE(self.m_result.cancelled);
     EXPECT_FALSE(self.m_context.input().focus().valid());
@@ -936,18 +937,19 @@ void VerifyUiEditBoxHostTests_RepeatedCandidatePublicationAcceptsOnlyTheLastGeom
     const TextInputRect displayed = self.m_textInput.caretRect();
     const UiRect bounds = MakeEcsUiRect(200.0f, 20.0f, 180.0f, 30.0f);
     ASSERT_TRUE(self.prepare(self.m_model, UiEditBoxOptions(), bounds));
-    native(mut self, in bounds){
-        NWB::Impl::Ui::EditBoxView replacement(self.m_arena);
-        ASSERT_TRUE(replacement.snapshot(self.m_model));
-        auto layout = self.m_layoutBuilder.layout({ replacement.displayText() });
-        ASSERT_TRUE(layout);
-        ASSERT_TRUE(replacement.adoptLayout(Move(*layout)));
-        const auto placement = replacement.arrange(bounds, { 10.0f, 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 500.0f, 200.0f }, {});
-        ASSERT_TRUE(placement);
-        ASSERT_TRUE(self.m_host.publish(self.m_widget, replacement, *placement, {}));
-        NWB::Impl::Ui::EditBoxView rejected(self.m_arena);
-        EXPECT_FALSE(self.m_host.publish(self.m_widget, rejected, *placement, {}));
-    }
+    UiEditBoxView replacement = UiEditBoxView(self.m_arena);
+    ASSERT_TRUE(replacement.snapshot(self.m_model));
+    UiShapeRequest layoutRequest = UiShapeRequest();
+    layoutRequest.text = replacement.displayText();
+    auto layout = self.m_layoutBuilder.layout(layoutRequest);
+    ASSERT_TRUE(AdoptExpectedEcsUiLayout(replacement, layout));
+    UiInsets pad = UiInsets();
+    pad.left = 10.0f;
+    const auto placement = replacement.arrange(bounds, pad, MakeEcsUiRect(0.0f, 0.0f, 500.0f, 200.0f), UiPoint());
+    ASSERT_TRUE(cast<b8>(placement));
+    ASSERT_TRUE(self.m_host.publish(self.m_widget, replacement, placement.value(), UiEditBoxOptions()));
+    UiEditBoxView rejected = UiEditBoxView(self.m_arena);
+    EXPECT_FALSE(self.m_host.publish(self.m_widget, rejected, placement.value(), UiEditBoxOptions()));
     self.m_host.commitFrame(self.m_generation);
     EXPECT_EQ(self.m_textInput.caretRect().x, displayed.x);
     ASSERT_TRUE(self.dispatchPoint(MakeEcsUiPoint(20.0f, 25.0f), UiInputEventType::PrimaryDown));
@@ -1003,9 +1005,8 @@ void VerifyUiEditBoxHostTests_HostEventOverflowDiscardsTheBoundedBatchBeforeAnyM
 void VerifyUiEditBoxHostTests_NativeEventOverflowCancelsTheBatchAndCanRecoverOnANewDeclaration(mut UiEditBoxHostTests self){
     ASSERT_TRUE(self.m_model.setText("base"));
     ASSERT_TRUE(self.activate());
-    native(mut self){
-        for(usize index = 0u; index < NWB::Core::s_TextInputMaxEvents; ++index)
-            ASSERT_EQ(self.m_textInput.commit("x"), TextInputAdmission::Accepted);
+    for(usize index = 0u; index < s_TextInputMaxEvents; ++index){
+        ASSERT_EQ(self.m_textInput.commit("x"), TextInputAdmission::Accepted);
     }
     EXPECT_EQ(self.m_textInput.commit("overflow"), TextInputAdmission::QueueFull);
     self.m_host.collectNative();
@@ -1381,14 +1382,12 @@ void VerifyUiEditClipboard_OwnerThreadViolationCannotPollApplyOrCancelAHostReque
     UiEditClipboardStatusEnum requestStatus = UiEditClipboardStatus::Idle;
     UiEditClipboardStatusEnum drainStatus = UiEditClipboardStatus::Idle;
     b8 cancelled = true;
-    native(mut controller, in owner, mut model, mut requestStatus, mut drainStatus, mut cancelled){
-        Thread other([&]()noexcept{
-            requestStatus = controller.request(owner, model, UiEditClipboardAction::Paste).status;
-            drainStatus = controller.drain(owner, model).status;
-            cancelled = controller.cancel();
-        });
-        other.join();
-    }
+    Thread other = Thread(lambda[mut controller, in owner, mut model, mut requestStatus, mut drainStatus, mut cancelled]() -> void{
+        requestStatus = controller.request(owner, model, UiEditClipboardAction::Paste).status;
+        drainStatus = controller.drain(owner, model).status;
+        cancelled = controller.cancel();
+    });
+    other.join();
     EXPECT_EQ(requestStatus, UiEditClipboardStatus::WrongThread);
     EXPECT_EQ(drainStatus, UiEditClipboardStatus::WrongThread);
     EXPECT_FALSE(cancelled);

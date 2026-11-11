@@ -270,68 +270,68 @@ using ::NWB::Impl::Ui::TranslateEditCommand;
 using ::NWB::Tests::UiCases::s_UiCaseButtonHover;
 using ::NWB::Tests::UiCases::s_UiCaseNameButtonNormal;
 
-[[nodiscard]] inline f32 UiListMultilineQuietNaNF32()noexcept{ return ::Limit<f32>::s_QuietNaN; }
+[[nodiscard]] NWB_INLINE f32 UiListMultilineQuietNaNF32()noexcept{ return ::Limit<f32>::s_QuietNaN; }
 
-[[nodiscard]] inline ListOptions MakeUiListBuilderDefaultOptions()noexcept{
+[[nodiscard]] NWB_INLINE ListOptions MakeUiListBuilderDefaultOptions()noexcept{
     return ::NWB::UiListTests::Options();
 }
 
-[[nodiscard]] inline Point UiListBuilderCenter(const Rect& bounds)noexcept{
+[[nodiscard]] NWB_INLINE Point UiListBuilderCenter(const Rect& bounds)noexcept{
     return ::NWB::UiWidgetTests::Center(bounds);
 }
 
-inline void ExpectUiListBuilderRect(const Rect& actual, const Rect& expected){
+NWB_INLINE void ExpectUiListBuilderRect(const Rect& actual, const Rect& expected){
     ::NWB::UiPaintAssertions::ExpectRect(actual, expected);
 }
 
-[[nodiscard]] inline WidgetId UiListBuilderRequireWidgetId(const WidgetId parent, const StringView stableKey){
+[[nodiscard]] NWB_INLINE WidgetId UiListBuilderRequireWidgetId(const WidgetId parent, const StringView stableKey){
     return ::UiTestSupport::RequireWidgetId(parent, stableKey);
 }
 
-[[nodiscard]] inline WidgetId UiListBuilderRequireWidgetPartId(const WidgetId parent, const u64 partKey){
+[[nodiscard]] NWB_INLINE WidgetId UiListBuilderRequireWidgetPartId(const WidgetId parent, const u64 partKey){
     return ::UiTestSupport::RequireWidgetPartId(parent, partKey);
 }
 
-[[nodiscard]] inline Optional<HitTarget> FindUiListBuilderTarget(const UiListBuilderTests& self, const WidgetId widget)noexcept{
+[[nodiscard]] NWB_INLINE Optional<HitTarget> FindUiListBuilderTarget(const UiListBuilderTests& self, const WidgetId widget)noexcept{
     if(const HitTarget* found = self.target(widget))
         return *found;
     return {};
 }
 
-[[nodiscard]] inline u32 MakeUiListLatnScriptTag()noexcept{
+[[nodiscard]] NWB_INLINE u32 MakeUiListLatnScriptTag()noexcept{
     return ::PackFourCharTag('L', 'a', 't', 'n');
 }
 
-[[nodiscard]] inline b8 UiListInstallLatinFont(::NWB::Core::Alloc::GlobalArena& arena, Font& font, TextService& text){
+[[nodiscard]] NWB_INLINE b8 UiListInstallLatinFont(::NWB::Core::Alloc::GlobalArena& arena, Font& font, TextService& text){
     ::NWB::Core::Alloc::ScratchArena scratchArena(::NWB::UiWidgetTests::s_FontScratchArenaName);
     return ::NWB::UiWidgetTests::InstallLatinFixtureFont(scratchArena, arena, font, text);
 }
 
-inline void CopyUiListBuilderStyles(Builder& source, Builder& destination)noexcept{
+NWB_INLINE void CopyUiListBuilderStyles(Builder& source, Builder& destination)noexcept{
     destination.style() = source.style();
     destination.listStyle() = source.listStyle();
 }
 
-inline void SetUiListBuilderRowStyle(Builder& builder, const SelectableStyle& row)noexcept{
+NWB_INLINE void SetUiListBuilderRowStyle(Builder& builder, const SelectableStyle& row)noexcept{
     builder.listStyle().row = row;
 }
 
-[[nodiscard]] inline b8 UiListReconcile(ListState& state, const ::NWB::Impl::Ui::IListDataSource& source){
+[[nodiscard]] NWB_INLINE b8 UiListReconcile(ListState& state, const ::NWB::Impl::Ui::IListDataSource& source){
     return ::NWB::Impl::Ui::ListBehavior::Reconcile(state, source);
 }
 
-[[nodiscard]] inline b8 UiListReconcileApply(const ::NWB::Impl::Ui::IListDataSource& source, const ListOptions& options, const ControlAction& action, ListState& state, ListResult& result){
+[[nodiscard]] NWB_INLINE b8 UiListReconcileApply(const ::NWB::Impl::Ui::IListDataSource& source, const ListOptions& options, const ControlAction& action, ListState& state, ListResult& result){
     return ::NWB::Impl::Ui::ListBehavior::Apply(source, options, action, state, result);
 }
 
-[[nodiscard]] inline ControlAction MakeUiListReconcileAction(const ListState& state, const UiListReconcileRangeSource& source, const ControlActionKindEnum kind)noexcept{
+[[nodiscard]] NWB_INLINE ControlAction MakeUiListReconcileAction(const ListState& state, const UiListReconcileRangeSource& source, const ControlActionKindEnum kind)noexcept{
     return ::UiListBehaviorTestSupport::Action(state, source, kind);
 }
 
-[[nodiscard]] inline StringView MakeUiMultilineEmbeddedNulXY()noexcept{ return ::AStringView("x\0y", 3u); }
-[[nodiscard]] inline StringView MakeUiMultilineEmbeddedNulAB()noexcept{ return ::AStringView("a\0b", 3u); }
-[[nodiscard]] inline StringView MakeUiMultilineSingleNul()noexcept{ return ::AStringView("\0", 1u); }
-[[nodiscard]] inline StringView MakeUiMultilineByteView(const Span<const u8> bytes)noexcept{
+[[nodiscard]] NWB_INLINE StringView MakeUiMultilineEmbeddedNulXY()noexcept{ return ::AStringView("x\0y", 3u); }
+[[nodiscard]] NWB_INLINE StringView MakeUiMultilineEmbeddedNulAB()noexcept{ return ::AStringView("a\0b", 3u); }
+[[nodiscard]] NWB_INLINE StringView MakeUiMultilineSingleNul()noexcept{ return ::AStringView("\0", 1u); }
+[[nodiscard]] NWB_INLINE StringView MakeUiMultilineByteView(const Span<const u8> bytes)noexcept{
     return ::AStringView(reinterpret_cast<const char*>(bytes.data()), bytes.size());
 }
 };

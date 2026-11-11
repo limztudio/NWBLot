@@ -43,7 +43,7 @@ native{
 #include <global/simd/frame.h>
 
 namespace NWB::Tests::Smoke{
-inline constexpr TStringView s_CsgSkinnedProjectName = NWB_TEXT("CsgSkinnedVisibleSmokeProject");
+inline constexpr AStringView s_CsgSkinnedProjectName = "CsgSkinnedVisibleSmokeProject";
 
 using CsgSkinnedModelRef = Core::Assets::AssetRef<Impl::Model>;
 using CsgSkinnedMaterialRef = Core::Assets::AssetRef<Impl::Material>;
@@ -83,19 +83,19 @@ inline constexpr Float4 s_CsgSkinnedPlainReceiverTint = Float4(0.86f, 0.88f, 0.9
 inline constexpr Float4 s_CsgSkinnedCsgReceiverTint = Float4(0.85f, 0.72f, 1.0f, 1.0f);
 inline constexpr Float4 s_CsgSkinnedWarmDirectionalLightColor = Float4(1.0f, 0.96f, 0.88f);
 
-[[nodiscard]] inline TStringView CsgSkinnedVisibleFpsLabel()noexcept{
+[[nodiscard]] NWB_INLINE AStringView CsgSkinnedVisibleFpsLabel()noexcept{
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER) && defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
-    return NWB_TEXT("CsgSkinnedTransparentSphereVisibleSmokeProject");
+    return "CsgSkinnedTransparentSphereVisibleSmokeProject";
 #elif defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
-    return NWB_TEXT("CsgSkinnedTransparentVisibleSmokeProject");
+    return "CsgSkinnedTransparentVisibleSmokeProject";
 #elif defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
-    return NWB_TEXT("CsgSkinnedSphereVisibleSmokeProject");
+    return "CsgSkinnedSphereVisibleSmokeProject";
 #else
     return s_CsgSkinnedProjectName;
 #endif
 }
 
-[[nodiscard]] inline f32 CsgSkinnedReceiverAlpha()noexcept{
+[[nodiscard]] NWB_INLINE f32 CsgSkinnedReceiverAlpha()noexcept{
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
     return s_CsgSkinnedTransparentReceiverAlpha;
 #else
@@ -103,33 +103,44 @@ inline constexpr Float4 s_CsgSkinnedWarmDirectionalLightColor = Float4(1.0f, 0.9
 #endif
 }
 
-[[nodiscard]] inline SIMDVectorSingle BuildCsgSkinnedReceiverRotation(const f32 animationTime)noexcept{
-    return QuaternionRotationRollPitchYawFromVector(VectorScale(VectorSet(0.0f, animationTime, 0.0f, 0.0f), s_CsgSkinnedReceiverYawSpeed));
-}
-
-[[nodiscard]] inline SIMDVectorSingle BuildCsgSkinnedReceiverPosition()noexcept{
-    return VectorSet(s_CsgSkinnedReceiverOffsetX, 0.0f, 0.0f, 0.0f);
-}
-
-[[nodiscard]] inline SIMDVectorSingle BuildCsgSkinnedCutterLocalRotation(const f32 animationTime)noexcept{
-    const SIMDVectorSingle horizontalCapsule = QuaternionRotationRollPitchYaw(s_PIDIV2, s_PIDIV2, 0.0f);
-    const SIMDVectorSingle gentleRoll = QuaternionRotationRollPitchYawFromVector(VectorScale(VectorSet(0.0f, animationTime, 0.0f, 0.0f), s_CsgSkinnedCutterGentleRollSpeed));
-    return QuaternionNormalize(QuaternionMultiply(horizontalCapsule, gentleRoll));
-}
-
-[[nodiscard]] inline SIMDVectorSingle BuildCsgSkinnedCutterWorldCenter(const SIMDVectorSingle cutterLocalCenter, const SIMDVectorSingle receiverRotation)noexcept{
-    return VectorAdd(BuildCsgSkinnedReceiverPosition(), Vector3Rotate(cutterLocalCenter, receiverRotation));
-}
-
-[[nodiscard]] inline SIMDVectorSingle BuildCsgSkinnedCutterWorldRotation(const f32 animationTime, const SIMDVectorSingle receiverRotation)noexcept{
-    return QuaternionNormalize(QuaternionMultiply(receiverRotation, BuildCsgSkinnedCutterLocalRotation(animationTime)));
-}
+#if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
+inline constexpr b8 s_CsgSkinnedTransparentReceiver = true;
+#else
+inline constexpr b8 s_CsgSkinnedTransparentReceiver = false;
+#endif
+namespace ModelObjectKind = Impl::ModelObjectKind;
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+VectorSingle BuildCsgSkinnedReceiverRotation(in f32 animationTime){
+    return QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, animationTime, 0.0f, 0.0f) * s_CsgSkinnedReceiverYawSpeed);
+}
+
+VectorSingle BuildCsgSkinnedReceiverPosition(){
+    return VectorSingle(s_CsgSkinnedReceiverOffsetX, 0.0f, 0.0f, 0.0f);
+}
+
+VectorSingle BuildCsgSkinnedCutterLocalRotation(in f32 animationTime){
+    const VectorSingle horizontalCapsule = QuaternionRotationRollPitchYawFromVector(VectorSingle(s_PIDIV2, s_PIDIV2, 0.0f, 0.0f));
+    const VectorSingle gentleRoll = QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, animationTime, 0.0f, 0.0f) * s_CsgSkinnedCutterGentleRollSpeed);
+    return QuaternionNormalize(QuaternionMultiply(horizontalCapsule, gentleRoll));
+}
+
+VectorSingle BuildCsgSkinnedCutterWorldCenter(in VectorSingle cutterLocalCenter, in VectorSingle receiverRotation){
+    return BuildCsgSkinnedReceiverPosition() + Vector3Rotate(cutterLocalCenter, receiverRotation);
+}
+
+VectorSingle BuildCsgSkinnedCutterWorldRotation(in f32 animationTime, in VectorSingle receiverRotation){
+    return QuaternionNormalize(QuaternionMultiply(receiverRotation, BuildCsgSkinnedCutterLocalRotation(animationTime)));
 }
 
 
@@ -215,53 +226,47 @@ class CsgSkinnedVisibleSmokeProject : IProjectEntryCallbacks{
         this.m_fpsProbe.recordFrame(safeDelta);
         this.m_animationTime = Min(safeDelta, s_CsgSkinnedMaxAnimationDelta) * s_CsgSkinnedCutterAnimationSpeed + this.m_animationTime;
 
-        b8 ticked = false;
-        native(in safeDelta, mut ticked){
-            const SIMDVectorSingle receiverRotation = BuildCsgSkinnedReceiverRotation(this->m_animationTime);
-            this->updateReceiverTransforms(receiverRotation);
-            this->updateCutterTransform(receiverRotation, LoadFloat(this->m_cutterLocalCenter));
-            ticked = TickSmokeWorld(safeDelta, *this->m_world);
-        }
-        if(!ticked)
+        const VectorSingle receiverRotation = BuildCsgSkinnedReceiverRotation(this.m_animationTime);
+        this.updateSceneTransforms(receiverRotation, LoadFloat(this.m_cutterLocalCenter));
+        if(!TickSmokeWorld(safeDelta, SmokeWorldRef(this.m_world)))
             return false;
         ++this.m_rendererBaselineRenderedFrameCount;
         return true;
     }
 
     private void destroyWorld(){
-        native{
-            DestroySmokeSkinnedRenderWorld(*this->m_context, this->m_world);
-        }
+        DestroySmokeSkinnedRenderWorld(this.m_context, this.m_world);
     }
 
     private EntityID createSkinnedReceiverInstance(in VectorSingle position, in VectorSingle colorTint){
-        EntityID entity = s_InvalidEntityId;
-        native(in position, in colorTint, mut entity){
-            const auto modelResult = CreateTintedModelEntity(s_CsgSkinnedModel, s_CsgSkinnedReceiverMaterial, s_SmokeSurfaceMaterialInterface, colorTint, position, VectorSet(1.0f, 1.0f, 1.0f, 0.0f), *this->m_world);
-            entity = modelResult.entity;
-            if(!modelResult.tintApplied)
-                NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: failed to set receiver material tint"));
-        }
-        return entity;
+        const SmokeTintedModelEntityResult modelResult = CreateTintedModelEntity(
+            s_CsgSkinnedModel,
+            s_CsgSkinnedReceiverMaterial,
+            NameTextAscii(s_SmokeSurfaceMaterialInterface),
+            colorTint,
+            position,
+            VectorSingle(1.0f, 1.0f, 1.0f, 0.0f),
+            SmokeWorldRef(this.m_world)
+        );
+        if(!modelResult.tintApplied)
+            error("CsgSkinnedVisibleSmokeProject: failed to set receiver material tint");
+        return modelResult.entity;
     }
 
     private b8 installCsgReceiverOnSpawnedModelObject(){
-        b8 ok = true;
-        native(mut ok){
-            this->m_receiverObject = FindSpawnedModelObject(this->m_receiver, s_SmokeNameMesh, Impl::ModelObjectKind::SkinnedMesh, *this->m_world);
-            if(!this->m_receiverObject.valid()){
-                NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: failed to find spawned receiver model object"));
-                ok = false;
-            }
-            else{
-#if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
-                AddSkinnedCsgMeshReceiver(this->m_receiverObject, s_CsgSkinnedReceiverGroup, false, true, *this->m_world);
-#else
-                AddSkinnedCsgMeshReceiver(this->m_receiverObject, s_CsgSkinnedReceiverGroup, true, false, *this->m_world);
-#endif
-            }
+        this.m_receiverObject = FindSpawnedModelObject(this.m_receiver, s_SmokeNameMesh, ModelObjectKind::SkinnedMesh, SmokeWorldRef(this.m_world));
+        if(!this.m_receiverObject.valid()){
+            error("CsgSkinnedVisibleSmokeProject: failed to find spawned receiver model object");
+            return false;
         }
-        return ok;
+        AddSkinnedCsgMeshReceiver(
+            this.m_receiverObject,
+            s_CsgSkinnedReceiverGroup,
+            !s_CsgSkinnedTransparentReceiver,
+            s_CsgSkinnedTransparentReceiver,
+            SmokeWorldRef(this.m_world)
+        );
+        return true;
     }
 
     private void createReceiver(){
@@ -332,24 +337,25 @@ class CsgSkinnedVisibleSmokeProject : IProjectEntryCallbacks{
         }
     }
 
-    private void updateReceiverRotation(in EntityID entity, in VectorSingle receiverRotation){
-        native(in entity, in receiverRotation){
-            auto* transform = this->m_world->tryGetComponent<Impl::Scene::TransformComponent>(entity);
-            if(transform)
-                StoreFloat(receiverRotation, transform->rotation);
-        }
-    }
-
-    private void updateReceiverTransforms(in VectorSingle receiverRotation){
-        this.updateReceiverRotation(this.m_plainReceiver, receiverRotation);
-        this.updateReceiverRotation(this.m_receiver, receiverRotation);
-    }
-
-    private void updateCutterTransform(in VectorSingle receiverRotation, in VectorSingle cutterLocalCenter){
-        native(in receiverRotation, in cutterLocalCenter){
-            auto* cutter = this->m_world->tryGetComponent<Impl::CsgCutterComponent>(this->m_cutter);
-            if(cutter)
-                AssignCsgCutterTransform(BuildCsgSkinnedCutterWorldCenter(cutterLocalCenter, receiverRotation), BuildCsgSkinnedCutterWorldRotation(this->m_animationTime, receiverRotation), *cutter);
+    private void updateSceneTransforms(in VectorSingle receiverRotation, in VectorSingle cutterLocalCenter){
+        const f32x4 storedReceiverRotation = f32x4(receiverRotation);
+        const VectorSingle cutterCenter = BuildCsgSkinnedCutterWorldCenter(cutterLocalCenter, receiverRotation);
+        const VectorSingle cutterRotation = BuildCsgSkinnedCutterWorldRotation(this.m_animationTime, receiverRotation);
+        native(
+            in plainReceiver = this.m_plainReceiver,
+            in csgReceiver = this.m_receiver,
+            in cutterEntity = this.m_cutter,
+            in storedReceiverRotation,
+            in cutterCenter,
+            in cutterRotation,
+            mut world = this.m_world
+        ){
+            for(const Core::ECS::EntityID entity : { plainReceiver, csgReceiver }){
+                if(auto* transform = world->tryGetComponent<Impl::Scene::TransformComponent>(entity))
+                    transform->rotation = storedReceiverRotation;
+            }
+            if(auto* cutter = world->tryGetComponent<Impl::CsgCutterComponent>(cutterEntity))
+                AssignCsgCutterTransform(cutterCenter, cutterRotation, *cutter);
         }
     }
 

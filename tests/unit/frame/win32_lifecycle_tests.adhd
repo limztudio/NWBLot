@@ -165,6 +165,10 @@ using LoopLogger = FrameLifecycleTestsDetail::LoopLogger;
 using ThrowingClampLogger = FrameLifecycleTestsDetail::ThrowingClampLogger;
 using Core::FrameDetail::LogicalDimensionForPixels;
 
+[[nodiscard]] NWB_INLINE b8 IsSameRenderPass(const NotNull<Core::IRenderPass*> ptr, const Core::IRenderPass& pass)noexcept{
+    return ptr.get() == &pass;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -223,10 +227,8 @@ void CheckRenderPassCollection(mut GraphicsRuntime graphics){
     first.valid = true;
     passes.addToBack(first, 64u, 64u, 1u);
     ASSERT_EQ(passes.passes().size(), 2u);
-    native(in first, in second, in passes){
-        EXPECT_EQ(passes.passes().front().get(), &second);
-        EXPECT_EQ(passes.passes().back().get(), &first);
-    }
+    EXPECT_TRUE(IsSameRenderPass(passes.passes().front(), second));
+    EXPECT_TRUE(IsSameRenderPass(passes.passes().back(), first));
     passes.remove(first);
     EXPECT_EQ(first.invalidationCount, 1u);
     EXPECT_EQ(passes.passes().size(), 1u);
@@ -434,6 +436,12 @@ void DrainQuitMessages()noexcept{
 
 NWB_END
 
+#if defined(NWB_PLATFORM_WINDOWS)
+TEST(FrameWin32Lifecycle, ThrowingClampObserverReleasesNativeClassBeforeLaterInitialization){ NWB::Tests::FrameCases::VerifyFrameWin32Lifecycle_ThrowingClampObserverReleasesNativeClassBeforeLaterInitialization(); }
+TEST(FrameWin32Lifecycle, InactiveWindowRunsAnUpdateForAnUnfocusedRenderPass){ NWB::Tests::FrameCases::VerifyFrameWin32Lifecycle_InactiveWindowRunsAnUpdateForAnUnfocusedRenderPass(); }
+TEST(FrameWin32Lifecycle, InactiveWindowWithoutUnfocusedRenderPassWaitsForQuit){ NWB::Tests::FrameCases::VerifyFrameWin32Lifecycle_InactiveWindowWithoutUnfocusedRenderPassWaitsForQuit(); }
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -445,39 +453,6 @@ NWB_END
 
 
 NWB_ADHD_GTEST(FrameWindowDimensions, LogicalDimensionsRemainPositiveAtLargestNativeScale, VerifyFrameWindowDimensions_LogicalDimensionsRemainPositiveAtLargestNativeScale)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_PLATFORM_WINDOWS)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(FrameWin32Lifecycle, ThrowingClampObserverReleasesNativeClassBeforeLaterInitialization){ VerifyFrameWin32Lifecycle_ThrowingClampObserverReleasesNativeClassBeforeLaterInitialization(); }
-TEST(FrameWin32Lifecycle, InactiveWindowRunsAnUpdateForAnUnfocusedRenderPass){ VerifyFrameWin32Lifecycle_InactiveWindowRunsAnUpdateForAnUnfocusedRenderPass(); }
-TEST(FrameWin32Lifecycle, InactiveWindowWithoutUnfocusedRenderPassWaitsForQuit){ VerifyFrameWin32Lifecycle_InactiveWindowWithoutUnfocusedRenderPassWaitsForQuit(); }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

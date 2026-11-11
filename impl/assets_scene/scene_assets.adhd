@@ -8,27 +8,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/alloc/scratch.h>
-
-namespace NWB::Impl{
-using SceneScratchArena = Core::Alloc::ScratchArena;
-using SceneScratchNameHashVector = Vector<NameHash, Core::Alloc::ScratchArena>;
-using SceneScratchNameHashSet = HashSet<NameHash, Core::Alloc::ScratchArena, Hasher<NameHash>, EqualTo<NameHash>>;
-using SceneScratchAssetEntryBinaryVector = Vector<SceneAssetEntryBinary, Core::Alloc::ScratchArena>;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+const usize s_EntityHeaderBinaryBytes = 16u;
+const usize s_ProjectHeaderBinaryBytes = 72u;
+const usize s_SceneHeaderBinaryBytes = 32u;
+const usize s_NameHashBinaryBytes = 64u;
+const usize s_SceneAssetEntryBinaryBytes = 128u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -171,10 +155,9 @@ b8 IsValidSceneAssetNicknameText(in StringView nicknameView){
 b8 ValidateUniqueAssetRefs<TAsset>(
     in Span<AssetRef<TAsset>> references,
     in StringView contextPrefix,
-    in StringView contextLabel,
-    mut SceneScratchArena scratchArena
+    in StringView contextLabel
 ){
-    SceneScratchNameHashSet seen(0u, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
+    HashMap<NameHash, u8> seen;
     seen.reserve(references.size());
     for(usize i = 0u; i < references.size(); ++i){
         const AssetRef<TAsset> entry = references[i];
@@ -187,7 +170,7 @@ b8 ValidateUniqueAssetRefs<TAsset>(
             error("{} failed: duplicate {} entry at index {}", contextPrefix, contextLabel, i);
             return false;
         }
-        seen.insert(hash);
+        seen[hash] = 1u;
     }
     return true;
 }
@@ -202,19 +185,13 @@ b8 ValidateSceneAssetMap<TAsset>(in HashMap<Name, AssetRef<TAsset>> assets){
 
 void CollectAssetRefHashes<TAsset>(
     in Span<AssetRef<TAsset>> references,
-    mut SceneScratchNameHashVector outHashes
+    mut Vector<NameHash> outHashes
 ){
     outHashes.clear();
     outHashes.reserve(references.size());
     for(in AssetRef<TAsset> item : references)
         outHashes.push_back(item.name().hash());
 }
-
-const usize s_EntityHeaderBinaryBytes = 16u;
-const usize s_ProjectHeaderBinaryBytes = 72u;
-const usize s_SceneHeaderBinaryBytes = 32u;
-const usize s_NameHashBinaryBytes = 64u;
-const usize s_SceneAssetEntryBinaryBytes = 128u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

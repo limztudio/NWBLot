@@ -16,12 +16,6 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/task/gpu/compiler_internal.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_BEGIN
 
 
@@ -40,115 +34,58 @@ namespace TaskGraphTestUtils{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using GpuScoringTestArena = ::NWB::Tests::TestArena<struct TaskGraphQueueScoringTestsTag>;
-using GpuScoringCompiledGraphReadView = Core::GpuCompiledGraph::ReadView;
-using GpuScoringCostHintEnum = Core::GpuTaskCostHint::Enum;
-using GpuScoringResourceTypeEnum = Core::GpuGraphResourceType::Enum;
-using GpuScoringSchedulingReachability = Core::GpuTaskGraphCompilerDetail::GpuTaskSchedulingReachability;
-using GpuScoringData = Core::GpuTaskGraphCompilerDetail::GpuTaskQueueScoringData;
-using GpuScoringExclusions = Core::GpuTaskGraphCompilerDetail::GpuTaskQueueScoreExclusions;
-using GpuScoringAssignmentVector = Core::GraphicsVector<Core::GpuTaskQueueAssignment>;
-using GpuScoringU32Vector = Core::GraphicsVector<u32>;
-using GpuScoringTrackedState = Core::GpuTaskGraphCompilerDetail::TrackedCompiledResourceState;
-using GpuScoringStateFragment = Core::GpuTaskGraphCompilerDetail::TrackedResourceStateFragment;
-using GpuScoringStateHistory = Core::GpuTaskGraphCompilerDetail::TrackedResourceStateHistory;
-using GpuScoringTrackedStates = Vector<Core::GpuTaskGraphCompilerDetail::TrackedCompiledResourceState, Core::Alloc::ScratchArena>;
-using GpuScoringStateFragments = Vector<Core::GpuTaskGraphCompilerDetail::TrackedResourceStateFragment, Core::Alloc::ScratchArena>;
-using GpuScoringRequestedRanges = Vector<Core::GpuTaskResourceRange, Core::Alloc::ScratchArena>;
-
-inline constexpr u64 s_GpuScoringAllBytes = Core::BufferRange::s_AllBytes;
-inline constexpr u32 s_GpuScoringAllMipLevels = Core::TextureSubresourceSet::s_AllMipLevels;
-inline constexpr u32 s_GpuScoringAllArraySlices = Core::TextureSubresourceSet::s_AllArraySlices;
-inline constexpr Core::GpuTaskTimingPolicy::Enum s_GpuScoringInvalidTimingPolicy = static_cast<Core::GpuTaskTimingPolicy::Enum>(Core::GpuTaskTimingPolicy::Count);
-
-[[nodiscard]] inline Core::GpuPhysicalQueueTopology MakeGpuScoringTopology(const Span<const Core::GpuPhysicalQueueInfo> queues)noexcept{
-    return Core::GpuPhysicalQueueTopology{ .queues = queues.data(), .queueCount = queues.size() };
-}
-
-[[nodiscard]] inline Span<const Core::GpuTaskId> MakeGpuScoringTaskPrefixSpan(const Span<const Core::GpuTaskId> tasks, const usize count)noexcept{
-    return Span<const Core::GpuTaskId>(tasks.data(), count);
-}
-
-inline void SetGpuScoringExternalQueueLoads(Core::GpuTaskGraphQueueAssignmentOptions& options, const Span<const Core::GpuTaskQueueLoad> loads)noexcept{
-    options.queueLoads = loads.data();
-    options.queueLoadCount = loads.size();
-}
-
-inline void SetGpuScoringTimingHistory(Core::GpuTaskGraphQueueAssignmentOptions& options, const Core::GpuTaskTimingHistorySnapshot& snapshot)noexcept{
+NWB_INLINE void SetGpuScoringTimingHistory(Core::GpuTaskGraphQueueAssignmentOptions& options, const Core::GpuTaskTimingHistorySnapshot& snapshot)noexcept{
     options.timingHistory = &snapshot;
 }
 
-struct GpuScoringContext{
-public:
-    Core::GpuTaskGraphCompilerDetail::GpuTaskSchedulingReachability reachability;
-    b8 reachabilityValid = false;
-    Core::GpuTaskGraphCompilerDetail::GpuTaskQueueScoringData scoringData;
-
-
-public:
-    GpuScoringContext(
-        const Core::GpuTaskGraph::DeclarationReadView& declarations,
-        const Core::GpuTaskGraphAnalysis& analysis,
-        const Core::GpuTaskGraphQueueAssignmentOptions& options,
-        Core::Alloc::ScratchArena& scratchArena
-    )
-        : reachability(scratchArena)
-        , reachabilityValid(Core::GpuTaskGraphCompilerDetail::BuildGpuTaskSchedulingReachability(declarations, analysis, reachability))
-        , scoringData(
-            declarations,
-            analysis,
-            reachability,
-            options,
-            scratchArena
-        )
-    {}
-};
-
-[[nodiscard]] inline Core::GpuQueueAssignmentScore BuildGpuScoringScore(
-    const Core::GpuTaskGraph::DeclarationReadView& declarations,
-    const Core::GpuTaskGraphAnalysis& analysis,
-    const GpuScoringAssignmentVector& assignments,
-    const GpuScoringU32Vector& assignmentIndices,
-    const Core::GpuPhysicalQueueTopology& topology,
-    const GpuScoringSchedulingReachability& reachability,
-    const GpuScoringData& scoringData,
-    const Core::GpuTaskGraphTaskView& task,
-    const Core::GpuPhysicalQueueInfo& candidate,
-    const GpuScoringExclusions& exclusions
+[[nodiscard]] NWB_INLINE Optional<Core::GpuTaskTimingAssignmentState> FindTimingAssignmentStateValue(
+    const Core::GpuTaskTimingHistoryStore& store,
+    const Core::GpuTaskTimingAssignmentKey& key
 )noexcept{
-    return Core::GpuTaskGraphCompilerDetail::BuildQueueAssignmentScore(
-        declarations,
-        analysis,
-        assignments,
-        assignmentIndices,
-        topology,
-        reachability,
-        scoringData,
-        task,
-        candidate,
-        exclusions
-    );
+    if(const Core::GpuTaskTimingAssignmentState* const found = store.findAssignment(key))
+        return *found;
+    return {};
 }
 
-[[nodiscard]] inline b8 CollectGpuScoringLatestFragments(
-    const GpuScoringTrackedStates& states,
-    const GpuScoringStateHistory& history,
+[[nodiscard]] NWB_INLINE b8 CollectGpuScoringLatestFragments(
+    const ScratchTrackedStates& states,
+    const TrackedResourceStateHistory& history,
     const Core::GpuTaskGraphResourceView& resource,
-    const GpuScoringRequestedRanges& requested,
+    const ScratchResourceRanges& requested,
     Core::Alloc::ScratchArena& scratchArena,
-    GpuScoringStateFragments& fragments
+    ScratchStateFragments& fragments
 ){
     return Core::GpuTaskGraphCompilerDetail::CollectLatestResourceStateFragments(states, history, resource, requested, scratchArena, fragments);
 }
 
-[[nodiscard]] inline b8 CollectGpuScoringTerminalFragments(
-    const GpuScoringTrackedStates& states,
-    const GpuScoringStateHistory& history,
+[[nodiscard]] NWB_INLINE b8 CollectGpuScoringTerminalFragments(
+    const ScratchTrackedStates& states,
+    const TrackedResourceStateHistory& history,
     const Core::GpuTaskGraphResourceView& resource,
     Core::Alloc::ScratchArena& scratchArena,
-    GpuScoringStateFragments& fragments
+    ScratchStateFragments& fragments
 ){
     return Core::GpuTaskGraphCompilerDetail::CollectTerminalResourceStateFragments(states, history, resource, scratchArena, fragments);
+}
+
+[[nodiscard]] NWB_INLINE b8 FragmentHasNullState(const TrackedResourceStateFragment& fragment)noexcept{
+    return fragment.state == nullptr;
+}
+
+[[nodiscard]] NWB_INLINE b8 FragmentMatchesTrackedState(
+    const TrackedResourceStateFragment& fragment,
+    const ScratchTrackedStates& states,
+    const usize index
+)noexcept{
+    return index < states.size() && fragment.state == &states[index];
+}
+
+NWB_INLINE void SeedFragmentWithFirstState(const ScratchTrackedStates& states, ScratchStateFragments& fragments){
+    TrackedResourceStateFragment seed{};
+    seed.state = &states[0u];
+    seed.stateIndex = 0u;
+    fragments.push_back(seed);
+    fragments.push_back(seed);
 }
 
 
@@ -186,31 +123,6 @@ const usize s_GpuScoringInitialState = usize.max;
 const Name s_GpuScoringCrossClassTimingComputeToGraphics = "tests/task_graph/cross_class_timing_compute_to_graphics";
 const Name s_GpuScoringCrossClassTimingGraphicsToCompute = "tests/task_graph/cross_class_timing_graphics_to_compute";
 
-void GpuScoringTakeSnapshot(in GpuTaskTimingHistoryStore store, mut GpuTaskTimingHistorySnapshot snapshot){
-    native(in store, mut snapshot){
-        store.snapshot(snapshot);
-    }
-}
-
-void GpuScoringRebuildLoads(
-    mut GpuScoringData scoringData,
-    in GpuScoringAssignmentVector assignments,
-    in GpuPhysicalQueueTopology topology
-){
-    native(mut scoringData, in assignments, in topology){
-        scoringData.rebuildAssignmentLoads(assignments, topology);
-    }
-}
-
-GpuScoringContext GpuScoringMakeContext(
-    in GpuTaskGraphDeclarationReadView declarations,
-    in GpuTaskGraphAnalysis analysis,
-    in GpuTaskGraphQueueAssignmentOptions options,
-    mut ScratchArena scratchArena
-){
-    return GpuScoringContext(declarations, analysis, options, scratchArena);
-}
-
 i32 GpuScoringSaturateReferenceTerm(in u64 value){
     if(value > cast<u64>(i32.max))
         return i32.max;
@@ -224,12 +136,12 @@ b8 GpuScoringRowIgnored(in usize row, in usize offset, in usize count){
 void GpuScoringExpectScores(
     in GpuTaskGraphDeclarationReadView declarations,
     in GpuTaskGraphAnalysis analysis,
-    in GpuScoringAssignmentVector assignments,
-    in GpuScoringU32Vector assignmentIndices,
+    in AssignmentGraphicsVector assignments,
+    in U32GraphicsVector assignmentIndices,
     in GpuPhysicalQueueTopology topology,
     in Span<GpuPhysicalQueueInfo> queues,
-    in GpuScoringSchedulingReachability reachability,
-    in GpuScoringData scoringData,
+    in GpuTaskSchedulingReachability reachability,
+    in GpuTaskQueueScoringData scoringData,
     in Span<u64> costs,
     in Array<Array<b8, 8>, 8> reachable,
     in Array<Array<usize, 2>, 5> ignoredRanges
@@ -252,7 +164,7 @@ void GpuScoringExpectScores(
         for(usize rangeIndex = 0u; rangeIndex < ignoredRanges.size(); ++rangeIndex){
             const usize rangeOffset = ignoredRanges[rangeIndex][0u];
             const usize rangeCount = ignoredRanges[rangeIndex][1u];
-            GpuScoringExclusions exclusions = GpuScoringExclusions();
+            GpuTaskQueueScoreExclusions exclusions = GpuTaskQueueScoreExclusions();
             exclusions.assignmentOffset = rangeOffset;
             exclusions.assignmentCount = rangeCount;
             for(usize row = 0u; row < assignments.size(); ++row){
@@ -308,7 +220,7 @@ void GpuScoringExpectScores(
                         ++outgoingCrossings;
                 }
 
-                const GpuQueueAssignmentScore score = BuildGpuScoringScore(
+                const GpuQueueAssignmentScore score = BuildQueueAssignmentScore(
                     declarations,
                     analysis,
                     assignments,
@@ -335,7 +247,7 @@ void VerifyGpuScoring_CachedLoadsAndScoresMatchIndependentReferenceAfterMovesAnd
     dependencyCases[0u] = false;
     dependencyCases[1u] = true;
 
-    Array<GpuScoringCostHintEnum, 8> hints = Array<GpuScoringCostHintEnum, 8>();
+    Array<GpuTaskCostHintEnum, 8> hints = Array<GpuTaskCostHintEnum, 8>();
     hints[0u] = GpuTaskCostHint::Tiny;
     hints[1u] = GpuTaskCostHint::Small;
     hints[2u] = GpuTaskCostHint::Medium;
@@ -399,7 +311,7 @@ void VerifyGpuScoring_CachedLoadsAndScoresMatchIndependentReferenceAfterMovesAnd
 
     for(in b8 hasDependencies : dependencyCases){
         const ScopedTestTrace trace = ScopedTestTrace(hasDependencies);
-        GpuScoringTestArena testArena = GpuScoringTestArena();
+        TestArena testArena = TestArena();
         ScratchArena scratchArena = ScratchArena(s_GpuCaseTaskGpuQueueScoring);
         GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
         Array<GpuTaskId, 8> tasks = Array<GpuTaskId, 8>();
@@ -422,7 +334,8 @@ void VerifyGpuScoring_CachedLoadsAndScoresMatchIndependentReferenceAfterMovesAnd
             GpuTaskDesc desc = GpuTaskDesc();
             desc.setIdentity(derivedNameResult.value());
             desc.setMarkerLabel("Queue Scoring Task");
-            desc.setDependencies(MakeGpuScoringTaskPrefixSpan(dependencies, dependencyCount));
+            const Span<GpuTaskId> dependenciesSpan = dependencies;
+            desc.setDependencies(PrefixSpan(dependenciesSpan, dependencyCount));
             desc.setScheduling(scheduling);
 
             GpuTaskCommandRequirements transferCommands = GpuTaskCommandRequirements();
@@ -452,7 +365,7 @@ void VerifyGpuScoring_CachedLoadsAndScoresMatchIndependentReferenceAfterMovesAnd
         queues[2u].queueClass = CommandQueue::Transfer;
         queues[2u].capabilities = GpuQueueCapability::Transfer;
 
-        const GpuPhysicalQueueTopology topology = MakeGpuScoringTopology(queues);
+        const GpuPhysicalQueueTopology topology = MakeTopology(queues);
 
         Array<GpuTaskQueueLoad, 2> externalLoads = Array<GpuTaskQueueLoad, 2>();
         externalLoads[0u].queue = queues[1u].id;
@@ -460,15 +373,15 @@ void VerifyGpuScoring_CachedLoadsAndScoresMatchIndependentReferenceAfterMovesAnd
         externalLoads[1u].queue = queues[2u].id;
         externalLoads[1u].estimatedCost = u64.max;
 
-        GpuTaskGraphQueueAssignmentOptions options = GpuTaskGraphQueueAssignmentOptions();
-        SetGpuScoringExternalQueueLoads(options, externalLoads);
+        const GpuTaskGraphQueueAssignmentOptions options = MakeQueueAssignmentOptionsWithLoads(externalLoads);
 
         GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
         const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(graph);
         const GpuTaskGraphCompiler compiler = GpuTaskGraphCompiler();
         ASSERT_TRUE(compiler.analyze(declarations, scratchArena, analysis));
-        GpuScoringContext scoringContext = GpuScoringMakeContext(declarations, analysis, options, scratchArena);
-        ASSERT_TRUE(scoringContext.reachabilityValid);
+        GpuTaskSchedulingReachability reachability = GpuTaskSchedulingReachability(scratchArena);
+        ASSERT_TRUE(BuildGpuTaskSchedulingReachability(declarations, analysis, reachability));
+        GpuTaskQueueScoringData scoringData = GpuTaskQueueScoringData(declarations, analysis, reachability, options, scratchArena);
 
         Array<Array<b8, 8>, 8> reachable = Array<Array<b8, 8>, 8>();
         const Span<GpuTaskDependencyEdge> allEdges = analysis.edges();
@@ -482,8 +395,8 @@ void VerifyGpuScoring_CachedLoadsAndScoresMatchIndependentReferenceAfterMovesAnd
                 for(usize consumer = 0u; consumer < s_GpuScoringTaskCount; ++consumer)
                     reachable[producer][consumer] = reachable[producer][consumer] || (reachable[producer][intermediate] && reachable[intermediate][consumer]);
 
-        GpuScoringAssignmentVector assignments = GpuScoringAssignmentVector(testArena.arena);
-        GpuScoringU32Vector assignmentIndices = GpuScoringU32Vector(testArena.arena);
+        AssignmentGraphicsVector assignments = AssignmentGraphicsVector(testArena.arena);
+        U32GraphicsVector assignmentIndices = U32GraphicsVector(testArena.arena);
         assignments.reserve(s_GpuScoringTaskCount);
         assignmentIndices.resize(s_GpuScoringTaskCount, u32.max);
         for(usize row = 0u; row < s_GpuScoringTaskCount; ++row){
@@ -497,7 +410,7 @@ void VerifyGpuScoring_CachedLoadsAndScoresMatchIndependentReferenceAfterMovesAnd
             assignmentIndices[taskIndex] = cast<u32>(row);
         }
 
-        GpuScoringRebuildLoads(scoringContext.scoringData, assignments, topology);
+        scoringData.rebuildAssignmentLoads(assignments, topology);
         GpuScoringExpectScores(
             declarations,
             analysis,
@@ -505,8 +418,8 @@ void VerifyGpuScoring_CachedLoadsAndScoresMatchIndependentReferenceAfterMovesAnd
             assignmentIndices,
             topology,
             queues,
-            scoringContext.reachability,
-            scoringContext.scoringData,
+            reachability,
+            scoringData,
             costs,
             reachable,
             ignoredRanges
@@ -529,7 +442,7 @@ void VerifyGpuScoring_CachedLoadsAndScoresMatchIndependentReferenceAfterMovesAnd
         for(usize moveIndex = 0u; moveIndex < moves.size(); ++moveIndex){
             const usize moveRow = moves[moveIndex][0u];
             const GpuPhysicalQueueId nextQueue = queues[moves[moveIndex][1u]].id;
-            scoringContext.scoringData.updateAssignmentLoads(assignments[moveRow].task, assignments[moveRow].queue, nextQueue);
+            scoringData.updateAssignmentLoads(assignments[moveRow].task, assignments[moveRow].queue, nextQueue);
             assignments[moveRow].queue = nextQueue;
             GpuScoringExpectScores(
                 declarations,
@@ -538,8 +451,8 @@ void VerifyGpuScoring_CachedLoadsAndScoresMatchIndependentReferenceAfterMovesAnd
                 assignmentIndices,
                 topology,
                 queues,
-                scoringContext.reachability,
-                scoringContext.scoringData,
+                reachability,
+                scoringData,
                 costs,
                 reachable,
                 ignoredRanges
@@ -548,7 +461,7 @@ void VerifyGpuScoring_CachedLoadsAndScoresMatchIndependentReferenceAfterMovesAnd
 
         // Exercise zero eligible off-queue cost, including cancellation by self and a singleton exclusion.
         for(usize row = 0u; row < assignments.size(); ++row){
-            scoringContext.scoringData.updateAssignmentLoads(assignments[row].task, assignments[row].queue, queues[0u].id);
+            scoringData.updateAssignmentLoads(assignments[row].task, assignments[row].queue, queues[0u].id);
             assignments[row].queue = queues[0u].id;
         }
         GpuScoringExpectScores(
@@ -558,8 +471,8 @@ void VerifyGpuScoring_CachedLoadsAndScoresMatchIndependentReferenceAfterMovesAnd
             assignmentIndices,
             topology,
             queues,
-            scoringContext.reachability,
-            scoringContext.scoringData,
+            reachability,
+            scoringData,
             costs,
             reachable,
             ignoredRanges
@@ -569,7 +482,7 @@ void VerifyGpuScoring_CachedLoadsAndScoresMatchIndependentReferenceAfterMovesAnd
         offQueueRows[0u] = 0u;
         offQueueRows[1u] = 3u;
         for(in usize row : offQueueRows){
-            scoringContext.scoringData.updateAssignmentLoads(assignments[row].task, assignments[row].queue, queues[1u].id);
+            scoringData.updateAssignmentLoads(assignments[row].task, assignments[row].queue, queues[1u].id);
             assignments[row].queue = queues[1u].id;
             GpuScoringExpectScores(
                 declarations,
@@ -578,20 +491,21 @@ void VerifyGpuScoring_CachedLoadsAndScoresMatchIndependentReferenceAfterMovesAnd
                 assignmentIndices,
                 topology,
                 queues,
-                scoringContext.reachability,
-                scoringContext.scoringData,
+                reachability,
+                scoringData,
                 costs,
                 reachable,
                 ignoredRanges
             );
         }
 
-        GpuScoringAssignmentVector emptyAssignments = GpuScoringAssignmentVector(testArena.arena);
-        GpuScoringRebuildLoads(scoringContext.scoringData, emptyAssignments, topology);
-        EXPECT_EQ(scoringContext.scoringData.totalAssignedCost, 0u);
+        AssignmentGraphicsVector emptyAssignments = AssignmentGraphicsVector(testArena.arena);
+        scoringData.rebuildAssignmentLoads(emptyAssignments, topology);
+        EXPECT_TRUE(emptyAssignments.empty());
+        EXPECT_EQ(scoringData.totalAssignedCost, 0u);
         for(in GpuPhysicalQueueInfo queue : queues)
-            EXPECT_EQ(scoringContext.scoringData.assignedQueueLoad(queue.id), 0u);
-        GpuScoringRebuildLoads(scoringContext.scoringData, assignments, topology);
+            EXPECT_EQ(scoringData.assignedQueueLoad(queue.id), 0u);
+        scoringData.rebuildAssignmentLoads(assignments, topology);
         GpuScoringExpectScores(
             declarations,
             analysis,
@@ -599,12 +513,15 @@ void VerifyGpuScoring_CachedLoadsAndScoresMatchIndependentReferenceAfterMovesAnd
             assignmentIndices,
             topology,
             queues,
-            scoringContext.reachability,
-            scoringContext.scoringData,
+            reachability,
+            scoringData,
             costs,
             reachable,
             ignoredRanges
         );
+        EXPECT_EQ(externalLoads.size(), 2u);
+        EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
+        EXPECT_GT(scratchArena.memoryStats().reservedBytes, 0u);
     }
 }
 
@@ -642,7 +559,7 @@ void VerifyGpuScoring_AppliesHistoricalTimingFeedbackWithHysteresisAndCompileOpt
     Array<GpuPhysicalQueueInfo, 2> queues = Array<GpuPhysicalQueueInfo, 2>();
     queues[0u] = GraphicsQueue();
     queues[1u] = auxiliaryGraphicsQueue;
-    const GpuPhysicalQueueTopology topology = MakeGpuScoringTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
 
@@ -658,7 +575,7 @@ void VerifyGpuScoring_AppliesHistoricalTimingFeedbackWithHysteresisAndCompileOpt
         ASSERT_TRUE(timingHistory.recordSample(timingKey, queues[0u].id, 0.010, frameIndex));
 
     GpuTaskTimingHistorySnapshot timingSnapshot = GpuTaskTimingHistorySnapshot(testArena.arena);
-    GpuScoringTakeSnapshot(timingHistory, timingSnapshot);
+    timingHistory.snapshot(timingSnapshot);
     ASSERT_TRUE(timingSnapshot.valid());
 
     GpuTaskTimingFeedbackPolicy timingPolicy = GpuTaskTimingFeedbackPolicy();
@@ -674,25 +591,23 @@ void VerifyGpuScoring_AppliesHistoricalTimingFeedbackWithHysteresisAndCompileOpt
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     // Disabled remains an exact deterministic fallback even when a complete snapshot is present.
     ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, assignmentOptions));
-    native(in assignments, in task, in queues){
-        const Core::GpuTaskQueueAssignment* const assignment = assignments.find(task);
-        ASSERT_NE(assignment, nullptr);
-        EXPECT_EQ(assignment->initialQueue, queues[0u].id);
-        EXPECT_EQ(assignment->queue, queues[0u].id);
-        EXPECT_FALSE(assignment->modifiers & Core::GpuTaskQueueAssignmentModifier::TimingFeedback);
-    }
+    const Optional<GpuTaskQueueAssignment> disabledAssignmentOpt = FindQueueAssignment(assignments, task);
+    ASSERT_TRUE(disabledAssignmentOpt.has_value());
+    const GpuTaskQueueAssignment disabledAssignment = disabledAssignmentOpt.value();
+    EXPECT_EQ(disabledAssignment.initialQueue, queues[0u].id);
+    EXPECT_EQ(disabledAssignment.queue, queues[0u].id);
+    EXPECT_EQ(disabledAssignment.modifiers & GpuTaskQueueAssignmentModifier::TimingFeedback, GpuTaskQueueAssignmentModifier::None);
 
     timingPolicy.enabled = true;
     assignmentOptions.timingFeedbackPolicy = timingPolicy;
     // The accepted primary route switched at frame five, so the configured dwell period still retains it.
     ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, assignmentOptions));
-    native(in assignments, in task, in queues){
-        const Core::GpuTaskQueueAssignment* const assignment = assignments.find(task);
-        ASSERT_NE(assignment, nullptr);
-        EXPECT_EQ(assignment->initialQueue, queues[0u].id);
-        EXPECT_EQ(assignment->queue, queues[0u].id);
-        EXPECT_FALSE(assignment->modifiers & Core::GpuTaskQueueAssignmentModifier::TimingFeedback);
-    }
+    const Optional<GpuTaskQueueAssignment> dwellAssignmentOpt = FindQueueAssignment(assignments, task);
+    ASSERT_TRUE(dwellAssignmentOpt.has_value());
+    const GpuTaskQueueAssignment dwellAssignment = dwellAssignmentOpt.value();
+    EXPECT_EQ(dwellAssignment.initialQueue, queues[0u].id);
+    EXPECT_EQ(dwellAssignment.queue, queues[0u].id);
+    EXPECT_EQ(dwellAssignment.modifiers & GpuTaskQueueAssignmentModifier::TimingFeedback, GpuTaskQueueAssignmentModifier::None);
 
     timingPolicy.minimumFramesBetweenSwitches = 0u;
     assignmentOptions.timingFeedbackPolicy = timingPolicy;
@@ -700,14 +615,15 @@ void VerifyGpuScoring_AppliesHistoricalTimingFeedbackWithHysteresisAndCompileOpt
     compileOptions.queueAssignmentOptions = assignmentOptions;
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology, compileOptions));
-    native(in assignments, in task, in queues, in auxiliaryGraphicsQueue){
-        const Core::GpuTaskQueueAssignment* const assignment = assignments.find(task);
-        ASSERT_NE(assignment, nullptr);
-        EXPECT_EQ(assignment->initialQueue, queues[0u].id);
-        EXPECT_EQ(assignment->queue, auxiliaryGraphicsQueue.id);
-        EXPECT_EQ(assignment->reason, Core::GpuTaskQueueAssignmentReason::RequiredGraphics);
-        EXPECT_TRUE(assignment->modifiers & Core::GpuTaskQueueAssignmentModifier::TimingFeedback);
-    }
+    const Optional<GpuTaskQueueAssignment> switchedAssignmentOpt = FindQueueAssignment(assignments, task);
+    ASSERT_TRUE(switchedAssignmentOpt.has_value());
+    const GpuTaskQueueAssignment switchedAssignment = switchedAssignmentOpt.value();
+    EXPECT_EQ(switchedAssignment.initialQueue, queues[0u].id);
+    EXPECT_EQ(switchedAssignment.queue, auxiliaryGraphicsQueue.id);
+    EXPECT_EQ(switchedAssignment.reason, GpuTaskQueueAssignmentReason::RequiredGraphics);
+    EXPECT_NE(switchedAssignment.modifiers & GpuTaskQueueAssignmentModifier::TimingFeedback, GpuTaskQueueAssignmentModifier::None);
+    EXPECT_TRUE(timingSnapshot.valid());
+    EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
 }
 
 void VerifyGpuScoring_CalibratesOptInTimingFeedbackBeforeHysteresisSwitches(){
@@ -746,7 +662,7 @@ void VerifyGpuScoring_CalibratesOptInTimingFeedbackBeforeHysteresisSwitches(){
     Array<GpuPhysicalQueueInfo, 2> queues = Array<GpuPhysicalQueueInfo, 2>();
     queues[0u] = GraphicsQueue();
     queues[1u] = auxiliaryGraphicsQueue;
-    const GpuPhysicalQueueTopology topology = MakeGpuScoringTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
 
@@ -770,70 +686,62 @@ void VerifyGpuScoring_CalibratesOptInTimingFeedbackBeforeHysteresisSwitches(){
     timingKey.resolutionClass = timingMetadata.resolutionClass;
     timingKey.queue = CommandQueue::Graphics;
 
-    GpuScoringTakeSnapshot(timingHistory, timingSnapshot);
+    timingHistory.snapshot(timingSnapshot);
     assignmentOptions.timingFrameIndex = 0u;
     ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, assignmentOptions));
-    native(in assignments, in task, in queues){
-        const Core::GpuTaskQueueAssignment* const assignment = assignments.find(task);
-        ASSERT_NE(assignment, nullptr);
-        EXPECT_EQ(assignment->initialQueue, queues[0u].id);
-        EXPECT_EQ(assignment->queue, queues[0u].id);
-        EXPECT_TRUE(assignment->modifiers & Core::GpuTaskQueueAssignmentModifier::TimingCalibration);
-    }
+    const Optional<GpuTaskQueueAssignment> frameZeroAssignmentOpt = FindQueueAssignment(assignments, task);
+    ASSERT_TRUE(frameZeroAssignmentOpt.has_value());
+    const GpuTaskQueueAssignment frameZeroAssignment = frameZeroAssignmentOpt.value();
+    EXPECT_EQ(frameZeroAssignment.initialQueue, queues[0u].id);
+    EXPECT_EQ(frameZeroAssignment.queue, queues[0u].id);
+    EXPECT_NE(frameZeroAssignment.modifiers & GpuTaskQueueAssignmentModifier::TimingCalibration, GpuTaskQueueAssignmentModifier::None);
 
     ASSERT_TRUE(timingHistory.recordNonCommittingSample(timingKey, queues[0u].id, 0.010));
-    GpuScoringTakeSnapshot(timingHistory, timingSnapshot);
+    timingHistory.snapshot(timingSnapshot);
     assignmentOptions.timingFrameIndex = 1u;
     GpuTaskGraphCompileOptions compileOptions = GpuTaskGraphCompileOptions();
     compileOptions.queueAssignmentOptions = assignmentOptions;
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology, compileOptions));
-    native(in assignments, in task, in queues, in auxiliaryGraphicsQueue){
-        const Core::GpuTaskQueueAssignment* const assignment = assignments.find(task);
-        ASSERT_NE(assignment, nullptr);
-        EXPECT_EQ(assignment->initialQueue, queues[0u].id);
-        EXPECT_EQ(assignment->queue, auxiliaryGraphicsQueue.id);
-        EXPECT_EQ(assignment->reason, Core::GpuTaskQueueAssignmentReason::RequiredGraphics);
-        EXPECT_TRUE(assignment->modifiers & Core::GpuTaskQueueAssignmentModifier::TimingCalibration);
-    }
+    const Optional<GpuTaskQueueAssignment> frameOneAssignmentOpt = FindQueueAssignment(assignments, task);
+    ASSERT_TRUE(frameOneAssignmentOpt.has_value());
+    const GpuTaskQueueAssignment frameOneAssignment = frameOneAssignmentOpt.value();
+    EXPECT_EQ(frameOneAssignment.initialQueue, queues[0u].id);
+    EXPECT_EQ(frameOneAssignment.queue, auxiliaryGraphicsQueue.id);
+    EXPECT_EQ(frameOneAssignment.reason, GpuTaskQueueAssignmentReason::RequiredGraphics);
+    EXPECT_NE(frameOneAssignment.modifiers & GpuTaskQueueAssignmentModifier::TimingCalibration, GpuTaskQueueAssignmentModifier::None);
     {
-        const GpuScoringCompiledGraphReadView compiledPlan = GpuScoringCompiledGraphReadView(compiledGraph);
-        native(in compiledPlan, in task){
-            const Core::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
-            ASSERT_NE(compiledTask, nullptr);
-            EXPECT_TRUE(compiledTask->recordsNonCommittingTimingSample);
-        }
+        const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
+        const Optional<GpuCompiledTask> compiledTaskOpt = TaskPlan(compiledPlan.findTask(task));
+        ASSERT_TRUE(compiledTaskOpt.has_value());
+        EXPECT_TRUE(compiledTaskOpt.value().recordsNonCommittingTimingSample);
     }
 
     ASSERT_TRUE(timingHistory.recordNonCommittingSample(timingKey, auxiliaryGraphicsQueue.id, 0.020));
     const GpuTaskTimingAssignmentKey assignmentKey = GpuTaskTimingAssignmentKeyFromHistoryKey(timingKey);
-    native(in timingHistory, in assignmentKey){
-        EXPECT_EQ(timingHistory.findAssignment(assignmentKey), nullptr);
-    }
-    GpuScoringTakeSnapshot(timingHistory, timingSnapshot);
+    EXPECT_FALSE(FindTimingAssignmentStateValue(timingHistory, assignmentKey).has_value());
+    timingHistory.snapshot(timingSnapshot);
     assignmentOptions.timingFrameIndex = 2u;
     ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, assignmentOptions));
-    native(in assignments, in task, in queues){
-        const Core::GpuTaskQueueAssignment* const assignment = assignments.find(task);
-        ASSERT_NE(assignment, nullptr);
-        EXPECT_EQ(assignment->initialQueue, queues[0u].id);
-        EXPECT_EQ(assignment->queue, queues[0u].id);
-        EXPECT_FALSE(assignment->modifiers & Core::GpuTaskQueueAssignmentModifier::TimingCalibration);
-    }
+    const Optional<GpuTaskQueueAssignment> frameTwoAssignmentOpt = FindQueueAssignment(assignments, task);
+    ASSERT_TRUE(frameTwoAssignmentOpt.has_value());
+    const GpuTaskQueueAssignment frameTwoAssignment = frameTwoAssignmentOpt.value();
+    EXPECT_EQ(frameTwoAssignment.initialQueue, queues[0u].id);
+    EXPECT_EQ(frameTwoAssignment.queue, queues[0u].id);
+    EXPECT_EQ(frameTwoAssignment.modifiers & GpuTaskQueueAssignmentModifier::TimingCalibration, GpuTaskQueueAssignmentModifier::None);
 
     // Calibration observations update route history without becoming the committed incumbent.
     ASSERT_TRUE(timingHistory.recordNonCommittingSample(timingKey, auxiliaryGraphicsQueue.id, 0.001));
-    GpuScoringTakeSnapshot(timingHistory, timingSnapshot);
+    timingHistory.snapshot(timingSnapshot);
     assignmentOptions.timingFrameIndex = 3u;
     ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, assignmentOptions));
-    native(in assignments, in task, in queues, in auxiliaryGraphicsQueue){
-        const Core::GpuTaskQueueAssignment* const assignment = assignments.find(task);
-        ASSERT_NE(assignment, nullptr);
-        EXPECT_EQ(assignment->initialQueue, queues[0u].id);
-        EXPECT_EQ(assignment->queue, auxiliaryGraphicsQueue.id);
-        EXPECT_EQ(assignment->reason, Core::GpuTaskQueueAssignmentReason::RequiredGraphics);
-        EXPECT_TRUE(assignment->modifiers & Core::GpuTaskQueueAssignmentModifier::TimingFeedback);
-    }
+    const Optional<GpuTaskQueueAssignment> frameThreeAssignmentOpt = FindQueueAssignment(assignments, task);
+    ASSERT_TRUE(frameThreeAssignmentOpt.has_value());
+    const GpuTaskQueueAssignment frameThreeAssignment = frameThreeAssignmentOpt.value();
+    EXPECT_EQ(frameThreeAssignment.initialQueue, queues[0u].id);
+    EXPECT_EQ(frameThreeAssignment.queue, auxiliaryGraphicsQueue.id);
+    EXPECT_EQ(frameThreeAssignment.reason, GpuTaskQueueAssignmentReason::RequiredGraphics);
+    EXPECT_NE(frameThreeAssignment.modifiers & GpuTaskQueueAssignmentModifier::TimingFeedback, GpuTaskQueueAssignmentModifier::None);
 
     // Under-sampled probe frames do not commit the probed route as the incumbent.
     GpuTaskTimingHistoryStore intervalTimingHistory = GpuTaskTimingHistoryStore(testArena.arena, 2u);
@@ -841,7 +749,7 @@ void VerifyGpuScoring_CalibratesOptInTimingFeedbackBeforeHysteresisSwitches(){
     ASSERT_TRUE(intervalTimingHistory.recordSample(timingKey, queues[0u].id, 0.010, 10u));
     ASSERT_TRUE(intervalTimingHistory.recordNonCommittingSample(timingKey, queues[0u].id, 0.010));
     GpuTaskTimingHistorySnapshot intervalTimingSnapshot = GpuTaskTimingHistorySnapshot(testArena.arena);
-    GpuScoringTakeSnapshot(intervalTimingHistory, intervalTimingSnapshot);
+    intervalTimingHistory.snapshot(intervalTimingSnapshot);
     GpuTaskTimingFeedbackPolicy intervalTimingPolicy = timingPolicy;
     intervalTimingPolicy.minimumSampleCount = 2u;
     intervalTimingPolicy.calibrationIntervalFrames = 2u;
@@ -850,40 +758,39 @@ void VerifyGpuScoring_CalibratesOptInTimingFeedbackBeforeHysteresisSwitches(){
     intervalAssignmentOptions.timingFeedbackPolicy = intervalTimingPolicy;
     intervalAssignmentOptions.timingFrameIndex = 12u;
     ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, intervalAssignmentOptions));
-    native(in assignments, in task, in auxiliaryGraphicsQueue){
-        const Core::GpuTaskQueueAssignment* const assignment = assignments.find(task);
-        ASSERT_NE(assignment, nullptr);
-        EXPECT_EQ(assignment->queue, auxiliaryGraphicsQueue.id);
-        EXPECT_TRUE(assignment->modifiers & Core::GpuTaskQueueAssignmentModifier::TimingCalibration);
-    }
+    const Optional<GpuTaskQueueAssignment> frameTwelveAssignmentOpt = FindQueueAssignment(assignments, task);
+    ASSERT_TRUE(frameTwelveAssignmentOpt.has_value());
+    const GpuTaskQueueAssignment frameTwelveAssignment = frameTwelveAssignmentOpt.value();
+    EXPECT_EQ(frameTwelveAssignment.queue, auxiliaryGraphicsQueue.id);
+    EXPECT_NE(frameTwelveAssignment.modifiers & GpuTaskQueueAssignmentModifier::TimingCalibration, GpuTaskQueueAssignmentModifier::None);
 
     ASSERT_TRUE(intervalTimingHistory.recordNonCommittingSample(timingKey, auxiliaryGraphicsQueue.id, 0.020));
-    native(in intervalTimingHistory, in assignmentKey, in queues){
-        const Core::GpuTaskTimingAssignmentState* const intervalAssignmentState = intervalTimingHistory.findAssignment(assignmentKey);
-        ASSERT_NE(intervalAssignmentState, nullptr);
-        EXPECT_EQ(intervalAssignmentState->lastAcceptedQueue, queues[0u].id);
-        EXPECT_EQ(intervalAssignmentState->lastAcceptedFrameIndex, 10u);
-        EXPECT_EQ(intervalAssignmentState->lastSwitchFrameIndex, 10u);
-    }
-    GpuScoringTakeSnapshot(intervalTimingHistory, intervalTimingSnapshot);
+    const Optional<GpuTaskTimingAssignmentState> intervalAssignmentStateOpt = FindTimingAssignmentStateValue(intervalTimingHistory, assignmentKey);
+    ASSERT_TRUE(intervalAssignmentStateOpt.has_value());
+    const GpuTaskTimingAssignmentState intervalAssignmentState = intervalAssignmentStateOpt.value();
+    EXPECT_EQ(intervalAssignmentState.lastAcceptedQueue, queues[0u].id);
+    EXPECT_EQ(intervalAssignmentState.lastAcceptedFrameIndex, 10u);
+    EXPECT_EQ(intervalAssignmentState.lastSwitchFrameIndex, 10u);
+    intervalTimingHistory.snapshot(intervalTimingSnapshot);
     intervalAssignmentOptions.timingFrameIndex = 13u;
     ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, intervalAssignmentOptions));
-    native(in assignments, in task, in queues){
-        const Core::GpuTaskQueueAssignment* const assignment = assignments.find(task);
-        ASSERT_NE(assignment, nullptr);
-        EXPECT_EQ(assignment->queue, queues[0u].id);
-        EXPECT_FALSE(assignment->modifiers & Core::GpuTaskQueueAssignmentModifier::TimingCalibration);
-        EXPECT_FALSE(assignment->modifiers & Core::GpuTaskQueueAssignmentModifier::TimingFeedback);
-    }
+    const Optional<GpuTaskQueueAssignment> frameThirteenAssignmentOpt = FindQueueAssignment(assignments, task);
+    ASSERT_TRUE(frameThirteenAssignmentOpt.has_value());
+    const GpuTaskQueueAssignment frameThirteenAssignment = frameThirteenAssignmentOpt.value();
+    EXPECT_EQ(frameThirteenAssignment.queue, queues[0u].id);
+    EXPECT_EQ(frameThirteenAssignment.modifiers & GpuTaskQueueAssignmentModifier::TimingCalibration, GpuTaskQueueAssignmentModifier::None);
+    EXPECT_EQ(frameThirteenAssignment.modifiers & GpuTaskQueueAssignmentModifier::TimingFeedback, GpuTaskQueueAssignmentModifier::None);
 
     intervalAssignmentOptions.timingFrameIndex = 14u;
     ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, intervalAssignmentOptions));
-    native(in assignments, in task, in auxiliaryGraphicsQueue){
-        const Core::GpuTaskQueueAssignment* const assignment = assignments.find(task);
-        ASSERT_NE(assignment, nullptr);
-        EXPECT_EQ(assignment->queue, auxiliaryGraphicsQueue.id);
-        EXPECT_TRUE(assignment->modifiers & Core::GpuTaskQueueAssignmentModifier::TimingCalibration);
-    }
+    const Optional<GpuTaskQueueAssignment> frameFourteenAssignmentOpt = FindQueueAssignment(assignments, task);
+    ASSERT_TRUE(frameFourteenAssignmentOpt.has_value());
+    const GpuTaskQueueAssignment frameFourteenAssignment = frameFourteenAssignmentOpt.value();
+    EXPECT_EQ(frameFourteenAssignment.queue, auxiliaryGraphicsQueue.id);
+    EXPECT_NE(frameFourteenAssignment.modifiers & GpuTaskQueueAssignmentModifier::TimingCalibration, GpuTaskQueueAssignmentModifier::None);
+    EXPECT_TRUE(timingSnapshot.valid());
+    EXPECT_TRUE(intervalTimingSnapshot.valid());
+    EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
 }
 
 void VerifyGpuScoring_IgnoresTimingFeedbackWithoutAnyEnabledRoute(){
@@ -912,13 +819,13 @@ void VerifyGpuScoring_IgnoresTimingFeedbackWithoutAnyEnabledRoute(){
     Array<GpuPhysicalQueueInfo, 1> queues = Array<GpuPhysicalQueueInfo, 1>();
     queues[0u] = GraphicsQueue();
     const GpuPhysicalQueueInfo queue = queues[0u];
-    const GpuPhysicalQueueTopology topology = MakeGpuScoringTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
     GpuTaskTimingHistoryStore timingHistory = GpuTaskTimingHistoryStore(testArena.arena);
     timingHistory.resetForDeviceGeneration(queue.id.deviceGeneration);
     GpuTaskTimingHistorySnapshot timingSnapshot = GpuTaskTimingHistorySnapshot(testArena.arena);
-    GpuScoringTakeSnapshot(timingHistory, timingSnapshot);
+    timingHistory.snapshot(timingSnapshot);
     ASSERT_TRUE(timingSnapshot.valid());
     GpuTaskTimingFeedbackPolicy timingPolicy = GpuTaskTimingFeedbackPolicy();
     timingPolicy.enabled = true;
@@ -929,14 +836,15 @@ void VerifyGpuScoring_IgnoresTimingFeedbackWithoutAnyEnabledRoute(){
     assignmentOptions.timingFeedbackPolicy = timingPolicy;
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, assignmentOptions));
-    native(in assignments, in task, in queue){
-        const Core::GpuTaskQueueAssignment* const assignment = assignments.find(task);
-        ASSERT_NE(assignment, nullptr);
-        EXPECT_EQ(assignment->initialQueue, queue.id);
-        EXPECT_EQ(assignment->queue, queue.id);
-        EXPECT_FALSE(assignment->modifiers & Core::GpuTaskQueueAssignmentModifier::TimingCalibration);
-        EXPECT_FALSE(assignment->modifiers & Core::GpuTaskQueueAssignmentModifier::TimingFeedback);
-    }
+    const Optional<GpuTaskQueueAssignment> assignmentOpt = FindQueueAssignment(assignments, task);
+    ASSERT_TRUE(assignmentOpt.has_value());
+    const GpuTaskQueueAssignment assignment = assignmentOpt.value();
+    EXPECT_EQ(assignment.initialQueue, queue.id);
+    EXPECT_EQ(assignment.queue, queue.id);
+    EXPECT_EQ(assignment.modifiers & GpuTaskQueueAssignmentModifier::TimingCalibration, GpuTaskQueueAssignmentModifier::None);
+    EXPECT_EQ(assignment.modifiers & GpuTaskQueueAssignmentModifier::TimingFeedback, GpuTaskQueueAssignmentModifier::None);
+    EXPECT_TRUE(timingSnapshot.valid());
+    EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
 }
 
 void VerifyGpuScoring_QueueTimingScoreUsesOnlyReducedIncomingDependencies(){
@@ -1009,7 +917,7 @@ void VerifyGpuScoring_QueueTimingScoreUsesOnlyReducedIncomingDependencies(){
     queues[0u] = GraphicsQueue();
     queues[1u] = firstAuxiliaryQueue;
     queues[2u] = secondAuxiliaryQueue;
-    const GpuPhysicalQueueTopology topology = MakeGpuScoringTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
 
     GpuTaskTimingKey firstTimingKey = GpuTaskTimingKey();
     firstTimingKey.task = firstIdentity;
@@ -1036,7 +944,7 @@ void VerifyGpuScoring_QueueTimingScoreUsesOnlyReducedIncomingDependencies(){
         ASSERT_TRUE(timingHistory.recordSample(thirdTimingKey, queues[0u].id, 0.010, frameIndex));
 
     GpuTaskTimingHistorySnapshot timingSnapshot = GpuTaskTimingHistorySnapshot(testArena.arena);
-    GpuScoringTakeSnapshot(timingHistory, timingSnapshot);
+    timingHistory.snapshot(timingSnapshot);
     ASSERT_TRUE(timingSnapshot.valid());
 
     GpuTaskTimingFeedbackPolicy timingPolicy = GpuTaskTimingFeedbackPolicy();
@@ -1057,18 +965,18 @@ void VerifyGpuScoring_QueueTimingScoreUsesOnlyReducedIncomingDependencies(){
     ASSERT_EQ(analysis.schedulingEdges().size(), 2u);
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, options));
-    native(in assignments, in first, in second, in third, in firstAuxiliaryQueue, in secondAuxiliaryQueue){
-        const Core::GpuTaskQueueAssignment* const firstAssignment = assignments.find(first);
-        const Core::GpuTaskQueueAssignment* const secondAssignment = assignments.find(second);
-        const Core::GpuTaskQueueAssignment* const thirdAssignment = assignments.find(third);
-        ASSERT_NE(firstAssignment, nullptr);
-        ASSERT_NE(secondAssignment, nullptr);
-        ASSERT_NE(thirdAssignment, nullptr);
-        EXPECT_EQ(firstAssignment->queue, firstAuxiliaryQueue.id);
-        EXPECT_EQ(secondAssignment->queue, secondAuxiliaryQueue.id);
-        // Transitive reduction drops the redundant A-to-C edge so C stays on B's queue.
-        EXPECT_EQ(thirdAssignment->queue, secondAuxiliaryQueue.id);
-    }
+    const Optional<GpuTaskQueueAssignment> firstAssignmentOpt = FindQueueAssignment(assignments, first);
+    const Optional<GpuTaskQueueAssignment> secondAssignmentOpt = FindQueueAssignment(assignments, second);
+    const Optional<GpuTaskQueueAssignment> thirdAssignmentOpt = FindQueueAssignment(assignments, third);
+    ASSERT_TRUE(firstAssignmentOpt.has_value());
+    ASSERT_TRUE(secondAssignmentOpt.has_value());
+    ASSERT_TRUE(thirdAssignmentOpt.has_value());
+    EXPECT_EQ(firstAssignmentOpt.value().queue, firstAuxiliaryQueue.id);
+    EXPECT_EQ(secondAssignmentOpt.value().queue, secondAuxiliaryQueue.id);
+    // Transitive reduction drops the redundant A-to-C edge so C stays on B's queue.
+    EXPECT_EQ(thirdAssignmentOpt.value().queue, secondAuxiliaryQueue.id);
+    EXPECT_TRUE(timingSnapshot.valid());
+    EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
 }
 
 void VerifyGpuScoring_RejectsInvalidGraphOwnedTimingPolicy(){
@@ -1077,7 +985,7 @@ void VerifyGpuScoring_RejectsInvalidGraphOwnedTimingPolicy(){
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
     GpuTaskTimingMetadata invalidTiming = GpuTaskTimingMetadata();
-    invalidTiming.policy = s_GpuScoringInvalidTimingPolicy;
+    invalidTiming.policy = GpuTaskTimingPolicy::Count;
     const Expected<GpuTaskId> taskResult = AddTaskWithCommands(
         s_GpuCaseTaskGraphTimingPolicyInvalid,
         "Timing Policy Invalid",
@@ -1094,6 +1002,7 @@ void VerifyGpuScoring_RejectsInvalidGraphOwnedTimingPolicy(){
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     EXPECT_FALSE(Analyze(graph, operationScratchArena, analysis));
     EXPECT_EQ(analysis.diagnostic().status, GpuTaskGraphAnalysisStatus::InvalidTask);
+    EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
 }
 
 void GpuScoringRunCrossClassTimingRouteCase(in b8 staticCompute){
@@ -1151,7 +1060,7 @@ void GpuScoringRunCrossClassTimingRouteCase(in b8 staticCompute){
     Array<GpuPhysicalQueueInfo, 2> queues = Array<GpuPhysicalQueueInfo, 2>();
     queues[0u] = GraphicsQueue();
     queues[1u] = DedicatedComputeQueue();
-    const GpuPhysicalQueueTopology topology = MakeGpuScoringTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
@@ -1163,12 +1072,11 @@ void GpuScoringRunCrossClassTimingRouteCase(in b8 staticCompute){
         incumbentQueue = queues[1u];
         candidateQueue = queues[0u];
     }
-    native(in assignments, in task, in incumbentQueue){
-        const Core::GpuTaskQueueAssignment* const assignment = assignments.find(task);
-        ASSERT_NE(assignment, nullptr);
-        EXPECT_EQ(assignment->initialQueue, incumbentQueue.id);
-        EXPECT_EQ(assignment->queue, incumbentQueue.id);
-    }
+    const Optional<GpuTaskQueueAssignment> staticAssignmentOpt = FindQueueAssignment(assignments, task);
+    ASSERT_TRUE(staticAssignmentOpt.has_value());
+    const GpuTaskQueueAssignment staticAssignment = staticAssignmentOpt.value();
+    EXPECT_EQ(staticAssignment.initialQueue, incumbentQueue.id);
+    EXPECT_EQ(staticAssignment.queue, incumbentQueue.id);
 
     GpuTaskTimingKey graphicsKey = GpuTaskTimingKey();
     graphicsKey.task = taskIdentity;
@@ -1194,7 +1102,7 @@ void GpuScoringRunCrossClassTimingRouteCase(in b8 staticCompute){
     ASSERT_TRUE(timingHistory.recordSample(incumbentKey, incumbentQueue.id, 0.010, 2u));
 
     GpuTaskTimingHistorySnapshot timingSnapshot = GpuTaskTimingHistorySnapshot(testArena.arena);
-    GpuScoringTakeSnapshot(timingHistory, timingSnapshot);
+    timingHistory.snapshot(timingSnapshot);
     ASSERT_TRUE(timingSnapshot.valid());
     GpuTaskTimingFeedbackPolicy timingPolicy = GpuTaskTimingFeedbackPolicy();
     timingPolicy.enabled = true;
@@ -1208,49 +1116,47 @@ void GpuScoringRunCrossClassTimingRouteCase(in b8 staticCompute){
     assignmentOptions.timingFeedbackPolicy = timingPolicy;
     assignmentOptions.timingFrameIndex = 10u;
     ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, assignmentOptions));
-    native(in assignments, in task, in incumbentQueue, in candidateQueue){
-        const Core::GpuTaskQueueAssignment* const assignment = assignments.find(task);
-        ASSERT_NE(assignment, nullptr);
-        EXPECT_EQ(assignment->initialQueue, incumbentQueue.id);
-        EXPECT_EQ(assignment->queue, candidateQueue.id);
-        EXPECT_EQ(assignment->queueClass, candidateQueue.queueClass);
-        EXPECT_TRUE(assignment->modifiers & Core::GpuTaskQueueAssignmentModifier::TimingFeedback);
-    }
+    const Optional<GpuTaskQueueAssignment> candidateAssignmentOpt = FindQueueAssignment(assignments, task);
+    ASSERT_TRUE(candidateAssignmentOpt.has_value());
+    const GpuTaskQueueAssignment candidateAssignment = candidateAssignmentOpt.value();
+    EXPECT_EQ(candidateAssignment.initialQueue, incumbentQueue.id);
+    EXPECT_EQ(candidateAssignment.queue, candidateQueue.id);
+    EXPECT_EQ(candidateAssignment.queueClass, candidateQueue.queueClass);
+    EXPECT_NE(candidateAssignment.modifiers & GpuTaskQueueAssignmentModifier::TimingFeedback, GpuTaskQueueAssignmentModifier::None);
 
     ASSERT_TRUE(timingHistory.noteAcceptedAssignment(candidateKey, candidateQueue.id, 10u));
     ASSERT_TRUE(timingHistory.recordNonCommittingSample(incumbentKey, incumbentQueue.id, 0.001));
     ASSERT_TRUE(timingHistory.recordNonCommittingSample(candidateKey, candidateQueue.id, 0.010));
     const GpuTaskTimingAssignmentKey assignmentKey = GpuTaskTimingAssignmentKeyFromHistoryKey(candidateKey);
-    native(in timingHistory, in assignmentKey, in candidateQueue){
-        const Core::GpuTaskTimingAssignmentState* const assignmentState = timingHistory.findAssignment(assignmentKey);
-        ASSERT_NE(assignmentState, nullptr);
-        EXPECT_EQ(assignmentState->lastAcceptedQueue, candidateQueue.id);
-        EXPECT_EQ(assignmentState->lastSwitchFrameIndex, 10u);
-    }
-    GpuScoringTakeSnapshot(timingHistory, timingSnapshot);
+    const Optional<GpuTaskTimingAssignmentState> assignmentStateOpt = FindTimingAssignmentStateValue(timingHistory, assignmentKey);
+    ASSERT_TRUE(assignmentStateOpt.has_value());
+    const GpuTaskTimingAssignmentState assignmentState = assignmentStateOpt.value();
+    EXPECT_EQ(assignmentState.lastAcceptedQueue, candidateQueue.id);
+    EXPECT_EQ(assignmentState.lastSwitchFrameIndex, 10u);
+    timingHistory.snapshot(timingSnapshot);
     timingPolicy.minimumFramesBetweenSwitches = 10u;
     assignmentOptions.timingFeedbackPolicy = timingPolicy;
     assignmentOptions.timingFrameIndex = 12u;
     ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, assignmentOptions));
-    native(in assignments, in task, in incumbentQueue, in candidateQueue){
-        const Core::GpuTaskQueueAssignment* const assignment = assignments.find(task);
-        ASSERT_NE(assignment, nullptr);
-        EXPECT_EQ(assignment->initialQueue, incumbentQueue.id);
-        EXPECT_EQ(assignment->queue, candidateQueue.id);
-        EXPECT_EQ(assignment->queueClass, candidateQueue.queueClass);
-        EXPECT_TRUE(assignment->modifiers & Core::GpuTaskQueueAssignmentModifier::TimingFeedback);
-    }
+    const Optional<GpuTaskQueueAssignment> dwellAssignmentOpt = FindQueueAssignment(assignments, task);
+    ASSERT_TRUE(dwellAssignmentOpt.has_value());
+    const GpuTaskQueueAssignment dwellAssignment = dwellAssignmentOpt.value();
+    EXPECT_EQ(dwellAssignment.initialQueue, incumbentQueue.id);
+    EXPECT_EQ(dwellAssignment.queue, candidateQueue.id);
+    EXPECT_EQ(dwellAssignment.queueClass, candidateQueue.queueClass);
+    EXPECT_NE(dwellAssignment.modifiers & GpuTaskQueueAssignmentModifier::TimingFeedback, GpuTaskQueueAssignmentModifier::None);
 
     assignmentOptions.timingFrameIndex = 20u;
     ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, assignmentOptions));
-    native(in assignments, in task, in incumbentQueue){
-        const Core::GpuTaskQueueAssignment* const assignment = assignments.find(task);
-        ASSERT_NE(assignment, nullptr);
-        EXPECT_EQ(assignment->initialQueue, incumbentQueue.id);
-        EXPECT_EQ(assignment->queue, incumbentQueue.id);
-        EXPECT_EQ(assignment->queueClass, incumbentQueue.queueClass);
-        EXPECT_TRUE(assignment->modifiers & Core::GpuTaskQueueAssignmentModifier::TimingFeedback);
-    }
+    const Optional<GpuTaskQueueAssignment> revertedAssignmentOpt = FindQueueAssignment(assignments, task);
+    ASSERT_TRUE(revertedAssignmentOpt.has_value());
+    const GpuTaskQueueAssignment revertedAssignment = revertedAssignmentOpt.value();
+    EXPECT_EQ(revertedAssignment.initialQueue, incumbentQueue.id);
+    EXPECT_EQ(revertedAssignment.queue, incumbentQueue.id);
+    EXPECT_EQ(revertedAssignment.queueClass, incumbentQueue.queueClass);
+    EXPECT_NE(revertedAssignment.modifiers & GpuTaskQueueAssignmentModifier::TimingFeedback, GpuTaskQueueAssignmentModifier::None);
+    EXPECT_TRUE(timingSnapshot.valid());
+    EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
 }
 
 void VerifyGpuScoring_RoutesOptInTimingFeedbackAcrossGraphicsAndComputeClasses(){
@@ -1306,14 +1212,14 @@ void VerifyGpuScoring_CrossClassTimingCalibrationPreservesStaticBaselineAndHonor
     Array<GpuPhysicalQueueInfo, 2> queues = Array<GpuPhysicalQueueInfo, 2>();
     queues[0u] = GraphicsQueue();
     queues[1u] = DedicatedComputeQueue();
-    const GpuPhysicalQueueTopology topology = MakeGpuScoringTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuTaskTimingHistoryStore timingHistory = GpuTaskTimingHistoryStore(testArena.arena);
     timingHistory.resetForDeviceGeneration(queues[0u].id.deviceGeneration);
     GpuTaskTimingHistorySnapshot timingSnapshot = GpuTaskTimingHistorySnapshot(testArena.arena);
-    GpuScoringTakeSnapshot(timingHistory, timingSnapshot);
+    timingHistory.snapshot(timingSnapshot);
     ASSERT_TRUE(timingSnapshot.valid());
 
     GpuTaskTimingFeedbackPolicy timingPolicy = GpuTaskTimingFeedbackPolicy();
@@ -1328,13 +1234,12 @@ void VerifyGpuScoring_CrossClassTimingCalibrationPreservesStaticBaselineAndHonor
     assignmentOptions.timingFeedbackPolicy = timingPolicy;
     assignmentOptions.timingFrameIndex = 0u;
     ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, assignmentOptions));
-    native(in assignments, in task, in queues){
-        const Core::GpuTaskQueueAssignment* const assignment = assignments.find(task);
-        ASSERT_NE(assignment, nullptr);
-        EXPECT_EQ(assignment->initialQueue, queues[1u].id);
-        EXPECT_EQ(assignment->queue, queues[1u].id);
-        EXPECT_FALSE(assignment->modifiers & Core::GpuTaskQueueAssignmentModifier::TimingFeedback);
-    }
+    const Optional<GpuTaskQueueAssignment> baselineAssignmentOpt = FindQueueAssignment(assignments, task);
+    ASSERT_TRUE(baselineAssignmentOpt.has_value());
+    const GpuTaskQueueAssignment baselineAssignment = baselineAssignmentOpt.value();
+    EXPECT_EQ(baselineAssignment.initialQueue, queues[1u].id);
+    EXPECT_EQ(baselineAssignment.queue, queues[1u].id);
+    EXPECT_EQ(baselineAssignment.modifiers & GpuTaskQueueAssignmentModifier::TimingFeedback, GpuTaskQueueAssignmentModifier::None);
 
     GpuTaskTimingKey graphicsKey = GpuTaskTimingKey();
     graphicsKey.task = taskIdentity;
@@ -1349,62 +1254,59 @@ void VerifyGpuScoring_CrossClassTimingCalibrationPreservesStaticBaselineAndHonor
     computeKey.queue = CommandQueue::Compute;
 
     ASSERT_TRUE(timingHistory.recordSample(computeKey, queues[1u].id, 0.010, 1u));
-    GpuScoringTakeSnapshot(timingHistory, timingSnapshot);
+    timingHistory.snapshot(timingSnapshot);
     assignmentOptions.timingFrameIndex = 1u;
     ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, assignmentOptions));
-    native(in assignments, in task, in queues){
-        const Core::GpuTaskQueueAssignment* const assignment = assignments.find(task);
-        ASSERT_NE(assignment, nullptr);
-        EXPECT_EQ(assignment->initialQueue, queues[1u].id);
-        EXPECT_EQ(assignment->queue, queues[0u].id);
-        EXPECT_TRUE(assignment->modifiers & Core::GpuTaskQueueAssignmentModifier::TimingCalibration);
-    }
+    const Optional<GpuTaskQueueAssignment> calibratedAssignmentOpt = FindQueueAssignment(assignments, task);
+    ASSERT_TRUE(calibratedAssignmentOpt.has_value());
+    const GpuTaskQueueAssignment calibratedAssignment = calibratedAssignmentOpt.value();
+    EXPECT_EQ(calibratedAssignment.initialQueue, queues[1u].id);
+    EXPECT_EQ(calibratedAssignment.queue, queues[0u].id);
+    EXPECT_NE(calibratedAssignment.modifiers & GpuTaskQueueAssignmentModifier::TimingCalibration, GpuTaskQueueAssignmentModifier::None);
 
     ASSERT_TRUE(timingHistory.recordNonCommittingSample(graphicsKey, queues[0u].id, 0.004));
     ASSERT_TRUE(timingHistory.recordSample(computeKey, queues[1u].id, 0.010, 3u));
     EXPECT_EQ(timingHistory.historyCount(), 2u);
     const GpuTaskTimingAssignmentKey assignmentKey = GpuTaskTimingAssignmentKeyFromHistoryKey(computeKey);
-    native(in timingHistory, in assignmentKey, in queues){
-        const Core::GpuTaskTimingAssignmentState* const assignmentState = timingHistory.findAssignment(assignmentKey);
-        ASSERT_NE(assignmentState, nullptr);
-        EXPECT_EQ(assignmentState->lastAcceptedQueue, queues[1u].id);
-        EXPECT_EQ(assignmentState->lastAcceptedFrameIndex, 3u);
-        EXPECT_EQ(assignmentState->lastSwitchFrameIndex, 1u);
-    }
-    GpuScoringTakeSnapshot(timingHistory, timingSnapshot);
+    const Optional<GpuTaskTimingAssignmentState> assignmentStateOpt = FindTimingAssignmentStateValue(timingHistory, assignmentKey);
+    ASSERT_TRUE(assignmentStateOpt.has_value());
+    const GpuTaskTimingAssignmentState assignmentState = assignmentStateOpt.value();
+    EXPECT_EQ(assignmentState.lastAcceptedQueue, queues[1u].id);
+    EXPECT_EQ(assignmentState.lastAcceptedFrameIndex, 3u);
+    EXPECT_EQ(assignmentState.lastSwitchFrameIndex, 1u);
+    timingHistory.snapshot(timingSnapshot);
 
     timingPolicy.minimumAbsoluteBenefitSeconds = 0.007;
     assignmentOptions.timingFeedbackPolicy = timingPolicy;
     assignmentOptions.timingFrameIndex = 20u;
     ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, assignmentOptions));
-    native(in assignments, in task, in queues){
-        const Core::GpuTaskQueueAssignment* const assignment = assignments.find(task);
-        ASSERT_NE(assignment, nullptr);
-        EXPECT_EQ(assignment->queue, queues[1u].id);
-        EXPECT_FALSE(assignment->modifiers & Core::GpuTaskQueueAssignmentModifier::TimingFeedback);
-    }
+    const Optional<GpuTaskQueueAssignment> hysteresisAssignmentOpt = FindQueueAssignment(assignments, task);
+    ASSERT_TRUE(hysteresisAssignmentOpt.has_value());
+    const GpuTaskQueueAssignment hysteresisAssignment = hysteresisAssignmentOpt.value();
+    EXPECT_EQ(hysteresisAssignment.queue, queues[1u].id);
+    EXPECT_EQ(hysteresisAssignment.modifiers & GpuTaskQueueAssignmentModifier::TimingFeedback, GpuTaskQueueAssignmentModifier::None);
 
     timingPolicy.minimumAbsoluteBenefitSeconds = 0.001;
     timingPolicy.minimumFramesBetweenSwitches = 10u;
     assignmentOptions.timingFeedbackPolicy = timingPolicy;
     assignmentOptions.timingFrameIndex = 5u;
     ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, assignmentOptions));
-    native(in assignments, in task, in queues){
-        const Core::GpuTaskQueueAssignment* const assignment = assignments.find(task);
-        ASSERT_NE(assignment, nullptr);
-        EXPECT_EQ(assignment->queue, queues[1u].id);
-        EXPECT_FALSE(assignment->modifiers & Core::GpuTaskQueueAssignmentModifier::TimingFeedback);
-    }
+    const Optional<GpuTaskQueueAssignment> dwellAssignmentOpt = FindQueueAssignment(assignments, task);
+    ASSERT_TRUE(dwellAssignmentOpt.has_value());
+    const GpuTaskQueueAssignment dwellAssignment = dwellAssignmentOpt.value();
+    EXPECT_EQ(dwellAssignment.queue, queues[1u].id);
+    EXPECT_EQ(dwellAssignment.modifiers & GpuTaskQueueAssignmentModifier::TimingFeedback, GpuTaskQueueAssignmentModifier::None);
 
     assignmentOptions.timingFrameIndex = 13u;
     ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, assignmentOptions));
-    native(in assignments, in task, in queues){
-        const Core::GpuTaskQueueAssignment* const assignment = assignments.find(task);
-        ASSERT_NE(assignment, nullptr);
-        EXPECT_EQ(assignment->initialQueue, queues[1u].id);
-        EXPECT_EQ(assignment->queue, queues[0u].id);
-        EXPECT_TRUE(assignment->modifiers & Core::GpuTaskQueueAssignmentModifier::TimingFeedback);
-    }
+    const Optional<GpuTaskQueueAssignment> switchedAssignmentOpt = FindQueueAssignment(assignments, task);
+    ASSERT_TRUE(switchedAssignmentOpt.has_value());
+    const GpuTaskQueueAssignment switchedAssignment = switchedAssignmentOpt.value();
+    EXPECT_EQ(switchedAssignment.initialQueue, queues[1u].id);
+    EXPECT_EQ(switchedAssignment.queue, queues[0u].id);
+    EXPECT_NE(switchedAssignment.modifiers & GpuTaskQueueAssignmentModifier::TimingFeedback, GpuTaskQueueAssignmentModifier::None);
+    EXPECT_TRUE(timingSnapshot.valid());
+    EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
 }
 
 void GpuScoringRunRejectedCrossClassCase(
@@ -1465,7 +1367,7 @@ void GpuScoringRunRejectedCrossClassCase(
     Array<GpuPhysicalQueueInfo, 2> queues = Array<GpuPhysicalQueueInfo, 2>();
     queues[0u] = GraphicsQueue();
     queues[1u] = DedicatedComputeQueue();
-    const GpuPhysicalQueueTopology topology = MakeGpuScoringTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
 
@@ -1494,7 +1396,7 @@ void GpuScoringRunRejectedCrossClassCase(
         ASSERT_TRUE(timingHistory.recordSample(incumbentKey, queues[incumbentQueueIndex].id, 0.010, frameIndex));
 
     GpuTaskTimingHistorySnapshot timingSnapshot = GpuTaskTimingHistorySnapshot(testArena.arena);
-    GpuScoringTakeSnapshot(timingHistory, timingSnapshot);
+    timingHistory.snapshot(timingSnapshot);
     ASSERT_TRUE(timingSnapshot.valid());
     GpuTaskTimingFeedbackPolicy timingPolicy = GpuTaskTimingFeedbackPolicy();
     timingPolicy.enabled = true;
@@ -1508,13 +1410,12 @@ void GpuScoringRunRejectedCrossClassCase(
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, assignmentOptions));
     const GpuPhysicalQueueId expectedQueue = queues[incumbentQueueIndex].id;
-    native(in assignments, in task, in expectedQueue){
-        const Core::GpuTaskQueueAssignment* const assignment = assignments.find(task);
-        ASSERT_NE(assignment, nullptr);
-        EXPECT_EQ(assignment->initialQueue, expectedQueue);
-        EXPECT_EQ(assignment->queue, expectedQueue);
-        EXPECT_FALSE(assignment->modifiers & Core::GpuTaskQueueAssignmentModifier::TimingFeedback);
-    }
+    const Optional<GpuTaskQueueAssignment> assignmentOpt = FindQueueAssignment(assignments, task);
+    ASSERT_TRUE(assignmentOpt.has_value());
+    const GpuTaskQueueAssignment assignment = assignmentOpt.value();
+    EXPECT_EQ(assignment.initialQueue, expectedQueue);
+    EXPECT_EQ(assignment.queue, expectedQueue);
+    EXPECT_EQ(assignment.modifiers & GpuTaskQueueAssignmentModifier::TimingFeedback, GpuTaskQueueAssignmentModifier::None);
 
     // A rejected policy must also drop the earlier valid result.
     timingPolicy.minimumRelativeBenefit = 2.0;
@@ -1526,9 +1427,9 @@ void GpuScoringRunRejectedCrossClassCase(
         const GpuTaskGraphDeclarationReadView declarations = GpuTaskGraphDeclarationReadView(graph);
         EXPECT_FALSE(assignments.validFor(declarations));
     }
-    native(in assignments, in task){
-        EXPECT_EQ(assignments.find(task), nullptr);
-    }
+    EXPECT_FALSE(HasQueueAssignment(assignments, task));
+    EXPECT_TRUE(timingSnapshot.valid());
+    EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
 }
 
 void VerifyGpuScoring_RejectsCrossClassTimingRoutesWithoutEveryRequiredOptIn(){
@@ -1588,7 +1489,7 @@ void VerifyGpuScoring_RanksEqualTimingRoutesDeterministicallyAndKeepsDwellAndFam
     queues[0u] = GraphicsQueue();
     queues[1u] = firstAuxiliaryGraphicsQueue;
     queues[2u] = secondAuxiliaryGraphicsQueue;
-    const GpuPhysicalQueueTopology topology = MakeGpuScoringTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
     GpuTaskGraphAnalysis analysis = GpuTaskGraphAnalysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
 
@@ -1604,7 +1505,7 @@ void VerifyGpuScoring_RanksEqualTimingRoutesDeterministicallyAndKeepsDwellAndFam
         ASSERT_TRUE(timingHistory.recordSample(targetTimingKey, queues[0u].id, 0.010, frameIndex));
 
     GpuTaskTimingHistorySnapshot timingSnapshot = GpuTaskTimingHistorySnapshot(testArena.arena);
-    GpuScoringTakeSnapshot(timingHistory, timingSnapshot);
+    timingHistory.snapshot(timingSnapshot);
     ASSERT_TRUE(timingSnapshot.valid());
 
     GpuTaskTimingFeedbackPolicy timingPolicy = GpuTaskTimingFeedbackPolicy();
@@ -1620,36 +1521,32 @@ void VerifyGpuScoring_RanksEqualTimingRoutesDeterministicallyAndKeepsDwellAndFam
 
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, assignmentOptions));
-    native(in assignments, in preload, in target, in firstAuxiliaryGraphicsQueue, in secondAuxiliaryGraphicsQueue){
-        const Core::GpuTaskQueueAssignment* const preloadAssignment = assignments.find(preload);
-        const Core::GpuTaskQueueAssignment* const targetAssignment = assignments.find(target);
-        ASSERT_NE(preloadAssignment, nullptr);
-        ASSERT_NE(targetAssignment, nullptr);
-        EXPECT_EQ(preloadAssignment->queue, firstAuxiliaryGraphicsQueue.id);
-        // Choose the unloaded second auxiliary queue when both histories are equally fast.
-        EXPECT_EQ(targetAssignment->queue, secondAuxiliaryGraphicsQueue.id);
-    }
+    const Optional<GpuTaskQueueAssignment> preloadAssignmentOpt = FindQueueAssignment(assignments, preload);
+    const Optional<GpuTaskQueueAssignment> targetAssignmentOpt = FindQueueAssignment(assignments, target);
+    ASSERT_TRUE(preloadAssignmentOpt.has_value());
+    ASSERT_TRUE(targetAssignmentOpt.has_value());
+    EXPECT_EQ(preloadAssignmentOpt.value().queue, firstAuxiliaryGraphicsQueue.id);
+    // Choose the unloaded second auxiliary queue when both histories are equally fast.
+    EXPECT_EQ(targetAssignmentOpt.value().queue, secondAuxiliaryGraphicsQueue.id);
 
     // A non-committing sample adds route history but must not move the committed incumbent or restart its dwell.
     ASSERT_TRUE(timingHistory.recordNonCommittingSample(targetTimingKey, firstAuxiliaryGraphicsQueue.id, 0.020));
     const GpuTaskTimingAssignmentKey targetAssignmentKey = GpuTaskTimingAssignmentKeyFromHistoryKey(targetTimingKey);
-    native(in timingHistory, in targetAssignmentKey, in queues){
-        const Core::GpuTaskTimingAssignmentState* const targetAssignmentState = timingHistory.findAssignment(targetAssignmentKey);
-        ASSERT_NE(targetAssignmentState, nullptr);
-        EXPECT_EQ(targetAssignmentState->lastAcceptedQueue, queues[0u].id);
-        EXPECT_EQ(targetAssignmentState->lastSwitchFrameIndex, 9u);
-    }
-    GpuScoringTakeSnapshot(timingHistory, timingSnapshot);
+    const Optional<GpuTaskTimingAssignmentState> targetAssignmentStateOpt = FindTimingAssignmentStateValue(timingHistory, targetAssignmentKey);
+    ASSERT_TRUE(targetAssignmentStateOpt.has_value());
+    const GpuTaskTimingAssignmentState targetAssignmentState = targetAssignmentStateOpt.value();
+    EXPECT_EQ(targetAssignmentState.lastAcceptedQueue, queues[0u].id);
+    EXPECT_EQ(targetAssignmentState.lastSwitchFrameIndex, 9u);
+    timingHistory.snapshot(timingSnapshot);
     timingPolicy.minimumFramesBetweenSwitches = 30u;
     assignmentOptions.timingFeedbackPolicy = timingPolicy;
     assignmentOptions.timingFrameIndex = 14u;
     ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology, assignmentOptions));
-    native(in assignments, in target, in queues){
-        const Core::GpuTaskQueueAssignment* const dwellAssignment = assignments.find(target);
-        ASSERT_NE(dwellAssignment, nullptr);
-        EXPECT_EQ(dwellAssignment->queue, queues[0u].id);
-        EXPECT_FALSE(dwellAssignment->modifiers & Core::GpuTaskQueueAssignmentModifier::TimingFeedback);
-    }
+    const Optional<GpuTaskQueueAssignment> dwellAssignmentOpt = FindQueueAssignment(assignments, target);
+    ASSERT_TRUE(dwellAssignmentOpt.has_value());
+    const GpuTaskQueueAssignment dwellAssignment = dwellAssignmentOpt.value();
+    EXPECT_EQ(dwellAssignment.queue, queues[0u].id);
+    EXPECT_EQ(dwellAssignment.modifiers & GpuTaskQueueAssignmentModifier::TimingFeedback, GpuTaskQueueAssignmentModifier::None);
 
     // The faster history on queue ID 1 now names another family, and the target has no cross-family opt-in.
     GpuPhysicalQueueInfo crossFamilyGraphicsQueue = GraphicsQueue(1u);
@@ -1657,16 +1554,18 @@ void VerifyGpuScoring_RanksEqualTimingRoutesDeterministicallyAndKeepsDwellAndFam
     Array<GpuPhysicalQueueInfo, 2> crossFamilyQueues = Array<GpuPhysicalQueueInfo, 2>();
     crossFamilyQueues[0u] = GraphicsQueue();
     crossFamilyQueues[1u] = crossFamilyGraphicsQueue;
-    const GpuPhysicalQueueTopology crossFamilyTopology = MakeGpuScoringTopology(crossFamilyQueues);
+    const GpuPhysicalQueueTopology crossFamilyTopology = MakeTopology(crossFamilyQueues);
     timingPolicy.minimumFramesBetweenSwitches = 0u;
     assignmentOptions.timingFeedbackPolicy = timingPolicy;
     ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, crossFamilyTopology, assignmentOptions));
-    native(in assignments, in target, in queues){
-        const Core::GpuTaskQueueAssignment* const crossFamilyAssignment = assignments.find(target);
-        ASSERT_NE(crossFamilyAssignment, nullptr);
-        EXPECT_EQ(crossFamilyAssignment->queue, queues[0u].id);
-        EXPECT_FALSE(crossFamilyAssignment->modifiers & Core::GpuTaskQueueAssignmentModifier::TimingFeedback);
-    }
+    const Optional<GpuTaskQueueAssignment> crossFamilyAssignmentOpt = FindQueueAssignment(assignments, target);
+    ASSERT_TRUE(crossFamilyAssignmentOpt.has_value());
+    const GpuTaskQueueAssignment crossFamilyAssignment = crossFamilyAssignmentOpt.value();
+    EXPECT_EQ(crossFamilyAssignment.queue, queues[0u].id);
+    EXPECT_EQ(crossFamilyAssignment.modifiers & GpuTaskQueueAssignmentModifier::TimingFeedback, GpuTaskQueueAssignmentModifier::None);
+    EXPECT_EQ(crossFamilyQueues.size(), 2u);
+    EXPECT_TRUE(timingSnapshot.valid());
+    EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
 }
 
 void VerifyGpuScoring_RoutesOptedInCrossFamilyTimingFeedbackWithExclusiveOwnershipHandoffs(){
@@ -1727,7 +1626,7 @@ void VerifyGpuScoring_RoutesOptedInCrossFamilyTimingFeedbackWithExclusiveOwnersh
     Array<GpuPhysicalQueueInfo, 2> queues = Array<GpuPhysicalQueueInfo, 2>();
     queues[0u] = GraphicsQueue();
     queues[1u] = auxiliaryGraphicsQueue;
-    const GpuPhysicalQueueTopology topology = MakeGpuScoringTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
 
     GpuTaskTimingKey consumerTimingKey = GpuTaskTimingKey();
     consumerTimingKey.task = consumerIdentity;
@@ -1739,7 +1638,7 @@ void VerifyGpuScoring_RoutesOptedInCrossFamilyTimingFeedbackWithExclusiveOwnersh
         ASSERT_TRUE(timingHistory.recordSample(consumerTimingKey, queues[0u].id, 0.010, frameIndex));
 
     GpuTaskTimingHistorySnapshot timingSnapshot = GpuTaskTimingHistorySnapshot(testArena.arena);
-    GpuScoringTakeSnapshot(timingHistory, timingSnapshot);
+    timingHistory.snapshot(timingSnapshot);
     ASSERT_TRUE(timingSnapshot.valid());
 
     GpuTaskTimingFeedbackPolicy timingPolicy = GpuTaskTimingFeedbackPolicy();
@@ -1760,47 +1659,62 @@ void VerifyGpuScoring_RoutesOptedInCrossFamilyTimingFeedbackWithExclusiveOwnersh
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology, compileOptions));
-    const GpuScoringCompiledGraphReadView compiledPlan = GpuScoringCompiledGraphReadView(compiledGraph);
+    const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(compiledGraph);
 
-    native(in assignments, in compiledPlan, in producer, in consumer, in buffer, in queues, in auxiliaryGraphicsQueue){
-        const Core::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
-        const Core::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(consumer);
-        ASSERT_NE(producerAssignment, nullptr);
-        ASSERT_NE(consumerAssignment, nullptr);
-        EXPECT_EQ(producerAssignment->queue, queues[0u].id);
-        EXPECT_EQ(consumerAssignment->queue, auxiliaryGraphicsQueue.id);
-        EXPECT_EQ(consumerAssignment->reason, Core::GpuTaskQueueAssignmentReason::RequiredGraphics);
-        EXPECT_TRUE(consumerAssignment->modifiers & Core::GpuTaskQueueAssignmentModifier::TimingFeedback);
+    const Optional<GpuTaskQueueAssignment> producerAssignmentOpt = FindQueueAssignment(assignments, producer);
+    const Optional<GpuTaskQueueAssignment> consumerAssignmentOpt = FindQueueAssignment(assignments, consumer);
+    ASSERT_TRUE(producerAssignmentOpt.has_value());
+    ASSERT_TRUE(consumerAssignmentOpt.has_value());
+    const GpuTaskQueueAssignment producerAssignment = producerAssignmentOpt.value();
+    const GpuTaskQueueAssignment consumerAssignment = consumerAssignmentOpt.value();
+    EXPECT_EQ(producerAssignment.queue, queues[0u].id);
+    EXPECT_EQ(consumerAssignment.queue, auxiliaryGraphicsQueue.id);
+    EXPECT_EQ(consumerAssignment.reason, GpuTaskQueueAssignmentReason::RequiredGraphics);
+    EXPECT_NE(consumerAssignment.modifiers & GpuTaskQueueAssignmentModifier::TimingFeedback, GpuTaskQueueAssignmentModifier::None);
 
-        const Core::GpuSubmissionPacketId producerPacket = compiledPlan.packetForTask(producer);
-        const Core::GpuSubmissionPacketId consumerPacket = compiledPlan.packetForTask(consumer);
-        const Core::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(producer).plan;
-        const Core::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(consumer).plan;
-        ASSERT_TRUE(producerPacket.valid());
-        ASSERT_TRUE(consumerPacket.valid());
-        ASSERT_NE(compiledProducer, nullptr);
-        ASSERT_NE(compiledConsumer, nullptr);
-        ASSERT_NE(producerPacket, consumerPacket);
-        ASSERT_EQ(compiledPlan.packet(consumerPacket).plan->dependencyCount, 1u);
-        EXPECT_EQ(compiledPlan.packet(consumerPacket).dependencies[0u].producer, producerPacket);
-        ASSERT_EQ(compiledProducer->epilogueBarrierCount, 1u);
-        ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
-        ASSERT_EQ(compiledConsumer->prologueBarrierCount, 2u);
+    const GpuSubmissionPacketId producerPacket = compiledPlan.packetForTask(producer);
+    const GpuSubmissionPacketId consumerPacket = compiledPlan.packetForTask(consumer);
+    const GpuCompiledTaskView producerTaskView = compiledPlan.findTask(producer);
+    const GpuCompiledTaskView consumerTaskView = compiledPlan.findTask(consumer);
+    const Optional<GpuCompiledTask> compiledProducerOpt = TaskPlan(producerTaskView);
+    const Optional<GpuCompiledTask> compiledConsumerOpt = TaskPlan(consumerTaskView);
+    ASSERT_TRUE(producerPacket.valid());
+    ASSERT_TRUE(consumerPacket.valid());
+    ASSERT_TRUE(compiledProducerOpt.has_value());
+    ASSERT_TRUE(compiledConsumerOpt.has_value());
+    const GpuCompiledTask compiledProducer = compiledProducerOpt.value();
+    const GpuCompiledTask compiledConsumer = compiledConsumerOpt.value();
+    ASSERT_NE(producerPacket, consumerPacket);
+    const GpuCompiledPacketView consumerPacketView = compiledPlan.packet(consumerPacket);
+    const Optional<GpuSubmissionPacket> consumerPacketPlanOpt = PacketPlan(consumerPacketView);
+    ASSERT_TRUE(consumerPacketPlanOpt.has_value());
+    ASSERT_EQ(consumerPacketPlanOpt.value().dependencyCount, 1u);
+    const Span<GpuPacketDependency> consumerPacketDependencies = PacketDependencies(consumerPacketView);
+    ASSERT_EQ(consumerPacketDependencies.size(), 1u);
+    EXPECT_EQ(consumerPacketDependencies[0u].producer, producerPacket);
+    ASSERT_EQ(compiledProducer.epilogueBarrierCount, 1u);
+    ASSERT_EQ(compiledConsumer.prologueStateSeedCount, 1u);
+    ASSERT_EQ(compiledConsumer.prologueBarrierCount, 2u);
 
-        const Core::GpuCompiledBarrier& release = compiledPlan.findTask(producer).epilogueBarriers[0u];
-        EXPECT_EQ(release.type, Core::GpuCompiledBarrierType::BufferOwnershipRelease);
-        EXPECT_EQ(release.resource, buffer);
-        EXPECT_EQ(release.sourceQueue, queues[0u].id);
-        EXPECT_EQ(release.destinationQueue, auxiliaryGraphicsQueue.id);
+    const Span<GpuCompiledBarrier> producerEpilogueBarriers = EpilogueBarriers(producerTaskView);
+    ASSERT_EQ(producerEpilogueBarriers.size(), 1u);
+    const GpuCompiledBarrier release = producerEpilogueBarriers[0u];
+    EXPECT_EQ(release.type, GpuCompiledBarrierType::BufferOwnershipRelease);
+    EXPECT_EQ(release.resource, buffer);
+    EXPECT_EQ(release.sourceQueue, queues[0u].id);
+    EXPECT_EQ(release.destinationQueue, auxiliaryGraphicsQueue.id);
 
-        const Core::GpuCompiledBarrier* const acquireAndTransition = compiledPlan.findTask(consumer).prologueBarriers;
-        ASSERT_NE(acquireAndTransition, nullptr);
-        EXPECT_EQ(acquireAndTransition[0u].type, Core::GpuCompiledBarrierType::BufferOwnershipAcquire);
-        EXPECT_EQ(acquireAndTransition[0u].resource, buffer);
-        EXPECT_EQ(acquireAndTransition[0u].sourceQueue, queues[0u].id);
-        EXPECT_EQ(acquireAndTransition[0u].destinationQueue, auxiliaryGraphicsQueue.id);
-        EXPECT_EQ(acquireAndTransition[1u].type, Core::GpuCompiledBarrierType::BufferTransition);
-    }
+    ASSERT_TRUE(HasPrologueBarriersPtr(consumerTaskView));
+    const Span<GpuCompiledBarrier> acquireAndTransition = PrologueBarriers(consumerTaskView);
+    ASSERT_EQ(acquireAndTransition.size(), 2u);
+    EXPECT_EQ(acquireAndTransition[0u].type, GpuCompiledBarrierType::BufferOwnershipAcquire);
+    EXPECT_EQ(acquireAndTransition[0u].resource, buffer);
+    EXPECT_EQ(acquireAndTransition[0u].sourceQueue, queues[0u].id);
+    EXPECT_EQ(acquireAndTransition[0u].destinationQueue, auxiliaryGraphicsQueue.id);
+    EXPECT_EQ(acquireAndTransition[1u].type, GpuCompiledBarrierType::BufferTransition);
+    EXPECT_TRUE(GpuCompiledGraphReadView(compiledGraph).valid());
+    EXPECT_TRUE(timingSnapshot.valid());
+    EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
 }
 
 GpuGraphResourceId GpuScoringMakeResourceId(in u64 generation, in u32 index){
@@ -1818,7 +1732,7 @@ GpuGraphResourceId GpuScoringOtherBufferId(){
     return GpuScoringMakeResourceId(1u, 1u);
 }
 
-GpuTaskGraphResourceView GpuScoringResourceView(in GpuGraphResourceId id, in GpuScoringResourceTypeEnum resourceType){
+GpuTaskGraphResourceView GpuScoringResourceView(in GpuGraphResourceId id, in GpuGraphResourceTypeEnum resourceType){
     GpuTaskGraphResourceView view = GpuTaskGraphResourceView();
     view.id = id;
     view.type = resourceType;
@@ -1840,13 +1754,13 @@ ExpectedBufferFragment GpuScoringExpectedFragment(in usize stateIndex, in u64 of
 }
 
 void GpuScoringAppendBufferState(
-    mut GpuScoringTrackedStates states,
-    mut GpuScoringStateHistory history,
+    mut ScratchTrackedStates states,
+    mut TrackedResourceStateHistory history,
     in GpuGraphResourceId resource,
     in u64 offset,
     in u64 size
 ){
-    GpuScoringTrackedState state = GpuScoringTrackedState();
+    TrackedCompiledResourceState state = TrackedCompiledResourceState();
     state.resource = resource;
     state.range = GpuScoringBufferRange(offset, size);
     state.task.generation = 1u;
@@ -1859,8 +1773,8 @@ void GpuScoringAppendBufferState(
 }
 
 void GpuScoringExpectBufferFragments(
-    in GpuScoringStateFragments fragments,
-    in GpuScoringTrackedStates states,
+    in ScratchStateFragments fragments,
+    in ScratchTrackedStates states,
     in Span<ExpectedBufferFragment> expected
 ){
     ASSERT_EQ(fragments.size(), expected.size());
@@ -1870,25 +1784,21 @@ void GpuScoringExpectBufferFragments(
         EXPECT_EQ(fragments[index].stateIndex, expectedItem.stateIndex);
         EXPECT_EQ(fragments[index].range.bufferRange, BufferRange(expectedItem.offset, expectedItem.size));
         if(expectedItem.stateIndex == s_GpuScoringInitialState){
-            native(in fragments, in index){
-                EXPECT_EQ(fragments[index].state, nullptr);
-            }
+            EXPECT_TRUE(FragmentHasNullState(fragments[index]));
         }
         else{
             ASSERT_LT(expectedItem.stateIndex, states.size());
             const usize expectedStateIndex = expectedItem.stateIndex;
-            native(in fragments, in states, in index, in expectedStateIndex){
-                EXPECT_EQ(fragments[index].state, &states[expectedStateIndex]);
-            }
+            EXPECT_TRUE(FragmentMatchesTrackedState(fragments[index], states, expectedStateIndex));
         }
     }
 }
 
 void VerifyGpuScoring_LatestPartialOverwritesKeepProducerAndFragmentOrderBeforeInitialGaps(){
     ScratchArena scratchArena = ScratchArena(s_TaskGraphScratchArena);
-    GpuScoringTrackedStates states = GpuScoringTrackedStates(scratchArena);
+    ScratchTrackedStates states = ScratchTrackedStates(scratchArena);
     states.reserve(5u);
-    GpuScoringStateHistory history = GpuScoringStateHistory(states, 2u, 1u, scratchArena);
+    TrackedResourceStateHistory history = TrackedResourceStateHistory(states, 2u, 1u, scratchArena);
     const GpuGraphResourceId buffer = GpuScoringBufferId();
     const GpuGraphResourceId otherBuffer = GpuScoringOtherBufferId();
     GpuScoringAppendBufferState(states, history, buffer, 16u, 96u);
@@ -1896,9 +1806,9 @@ void VerifyGpuScoring_LatestPartialOverwritesKeepProducerAndFragmentOrderBeforeI
     GpuScoringAppendBufferState(states, history, buffer, 32u, 16u);
     GpuScoringAppendBufferState(states, history, buffer, 64u, 16u);
     GpuScoringAppendBufferState(states, history, otherBuffer, 16u, 16u);
-    GpuScoringRequestedRanges requested = GpuScoringRequestedRanges(scratchArena);
+    ScratchResourceRanges requested = ScratchResourceRanges(scratchArena);
     requested.push_back(GpuScoringBufferRange(0u, 128u));
-    GpuScoringStateFragments fragments = GpuScoringStateFragments(scratchArena);
+    ScratchStateFragments fragments = ScratchStateFragments(scratchArena);
     const GpuTaskGraphResourceView resource = GpuScoringResourceView(buffer, GpuGraphResourceType::Buffer);
 
     ASSERT_TRUE(CollectGpuScoringLatestFragments(states, history, resource, requested, scratchArena, fragments));
@@ -1920,20 +1830,21 @@ void VerifyGpuScoring_LatestPartialOverwritesKeepProducerAndFragmentOrderBeforeI
     terminal[3u] = GpuScoringExpectedFragment(2u, 32u, 16u);
     terminal[4u] = GpuScoringExpectedFragment(3u, 64u, 16u);
     GpuScoringExpectBufferFragments(fragments, states, terminal);
+    EXPECT_GT(scratchArena.memoryStats().reservedBytes, 0u);
 }
 
 void VerifyGpuScoring_SparseProducerIndicesRetainUnsortedRequestOrderWithinEachProducer(){
     ScratchArena scratchArena = ScratchArena(s_TaskGraphScratchArena);
-    GpuScoringTrackedStates states = GpuScoringTrackedStates(scratchArena);
+    ScratchTrackedStates states = ScratchTrackedStates(scratchArena);
     states.reserve(130u);
-    GpuScoringStateHistory history = GpuScoringStateHistory(states, 2u, 1u, scratchArena);
+    TrackedResourceStateHistory history = TrackedResourceStateHistory(states, 2u, 1u, scratchArena);
     const GpuGraphResourceId buffer = GpuScoringBufferId();
     const GpuGraphResourceId otherBuffer = GpuScoringOtherBufferId();
     GpuScoringAppendBufferState(states, history, buffer, 16u, 96u);
     for(usize index = 1u; index < 129u; ++index)
         GpuScoringAppendBufferState(states, history, otherBuffer, cast<u64>(index) * 16u, 16u);
     GpuScoringAppendBufferState(states, history, buffer, 120u, 8u);
-    GpuScoringRequestedRanges requested = GpuScoringRequestedRanges(scratchArena);
+    ScratchResourceRanges requested = ScratchResourceRanges(scratchArena);
     requested.reserve(6u);
     requested.push_back(GpuScoringBufferRange(80u, 8u));
     requested.push_back(GpuScoringBufferRange(16u, 8u));
@@ -1941,7 +1852,7 @@ void VerifyGpuScoring_SparseProducerIndicesRetainUnsortedRequestOrderWithinEachP
     requested.push_back(GpuScoringBufferRange(48u, 8u));
     requested.push_back(GpuScoringBufferRange(144u, 8u));
     requested.push_back(GpuScoringBufferRange(0u, 8u));
-    GpuScoringStateFragments fragments = GpuScoringStateFragments(scratchArena);
+    ScratchStateFragments fragments = ScratchStateFragments(scratchArena);
     const GpuTaskGraphResourceView resource = GpuScoringResourceView(buffer, GpuGraphResourceType::Buffer);
 
     ASSERT_TRUE(CollectGpuScoringLatestFragments(states, history, resource, requested, scratchArena, fragments));
@@ -1953,19 +1864,20 @@ void VerifyGpuScoring_SparseProducerIndicesRetainUnsortedRequestOrderWithinEachP
     expected[4u] = GpuScoringExpectedFragment(s_GpuScoringInitialState, 144u, 8u);
     expected[5u] = GpuScoringExpectedFragment(s_GpuScoringInitialState, 0u, 8u);
     GpuScoringExpectBufferFragments(fragments, states, expected);
+    EXPECT_GT(scratchArena.memoryStats().reservedBytes, 0u);
 }
 
 void VerifyGpuScoring_EmptyAndUntrackedRequestsClearPriorOutputAndPreserveInitialOrder(){
     ScratchArena scratchArena = ScratchArena(s_TaskGraphScratchArena);
-    GpuScoringTrackedStates states = GpuScoringTrackedStates(scratchArena);
-    GpuScoringStateHistory history = GpuScoringStateHistory(states, 2u, 1u, scratchArena);
+    ScratchTrackedStates states = ScratchTrackedStates(scratchArena);
+    TrackedResourceStateHistory history = TrackedResourceStateHistory(states, 2u, 1u, scratchArena);
     const GpuGraphResourceId buffer = GpuScoringBufferId();
     const GpuGraphResourceId otherBuffer = GpuScoringOtherBufferId();
-    GpuScoringRequestedRanges requested = GpuScoringRequestedRanges(scratchArena);
+    ScratchResourceRanges requested = ScratchResourceRanges(scratchArena);
     requested.reserve(2u);
     requested.push_back(GpuScoringBufferRange(64u, 8u));
     requested.push_back(GpuScoringBufferRange(0u, 8u));
-    GpuScoringStateFragments fragments = GpuScoringStateFragments(scratchArena);
+    ScratchStateFragments fragments = ScratchStateFragments(scratchArena);
     const GpuTaskGraphResourceView resource = GpuScoringResourceView(buffer, GpuGraphResourceType::Buffer);
 
     ASSERT_TRUE(CollectGpuScoringLatestFragments(states, history, resource, requested, scratchArena, fragments));
@@ -1981,43 +1893,45 @@ void VerifyGpuScoring_EmptyAndUntrackedRequestsClearPriorOutputAndPreserveInitia
     EXPECT_TRUE(fragments.empty());
     ASSERT_TRUE(CollectGpuScoringTerminalFragments(states, history, resource, scratchArena, fragments));
     EXPECT_TRUE(fragments.empty());
+    EXPECT_GT(scratchArena.memoryStats().reservedBytes, 0u);
 }
 
 void VerifyGpuScoring_SymbolicBufferTailRemainsAfterFiniteRemainderWithinOldestProducer(){
     ScratchArena scratchArena = ScratchArena(s_TaskGraphScratchArena);
-    GpuScoringTrackedStates states = GpuScoringTrackedStates(scratchArena);
+    ScratchTrackedStates states = ScratchTrackedStates(scratchArena);
     states.reserve(2u);
-    GpuScoringStateHistory history = GpuScoringStateHistory(states, 2u, 1u, scratchArena);
+    TrackedResourceStateHistory history = TrackedResourceStateHistory(states, 2u, 1u, scratchArena);
     const GpuGraphResourceId buffer = GpuScoringBufferId();
-    GpuScoringAppendBufferState(states, history, buffer, 0u, s_GpuScoringAllBytes);
+    GpuScoringAppendBufferState(states, history, buffer, 0u, s_GpuAllBytes);
     GpuScoringAppendBufferState(states, history, buffer, 16u, 16u);
-    GpuScoringRequestedRanges requested = GpuScoringRequestedRanges(scratchArena);
-    requested.push_back(GpuScoringBufferRange(0u, s_GpuScoringAllBytes));
-    GpuScoringStateFragments fragments = GpuScoringStateFragments(scratchArena);
+    ScratchResourceRanges requested = ScratchResourceRanges(scratchArena);
+    requested.push_back(GpuScoringBufferRange(0u, s_GpuAllBytes));
+    ScratchStateFragments fragments = ScratchStateFragments(scratchArena);
     const GpuTaskGraphResourceView resource = GpuScoringResourceView(buffer, GpuGraphResourceType::Buffer);
     Array<ExpectedBufferFragment, 3> expected = Array<ExpectedBufferFragment, 3>();
     expected[0u] = GpuScoringExpectedFragment(0u, 0u, 16u);
-    expected[1u] = GpuScoringExpectedFragment(0u, 32u, s_GpuScoringAllBytes);
+    expected[1u] = GpuScoringExpectedFragment(0u, 32u, s_GpuAllBytes);
     expected[2u] = GpuScoringExpectedFragment(1u, 16u, 16u);
 
     ASSERT_TRUE(CollectGpuScoringLatestFragments(states, history, resource, requested, scratchArena, fragments));
     GpuScoringExpectBufferFragments(fragments, states, expected);
     ASSERT_TRUE(CollectGpuScoringTerminalFragments(states, history, resource, scratchArena, fragments));
     GpuScoringExpectBufferFragments(fragments, states, expected);
+    EXPECT_GT(scratchArena.memoryStats().reservedBytes, 0u);
 }
 
 void VerifyGpuScoring_TextureInteriorOverwritePreservesFourRemaindersInDiscoveryOrder(){
     ScratchArena scratchArena = ScratchArena(s_TaskGraphScratchArena);
-    GpuScoringTrackedStates states = GpuScoringTrackedStates(scratchArena);
+    ScratchTrackedStates states = ScratchTrackedStates(scratchArena);
     states.reserve(2u);
-    GpuScoringStateHistory history = GpuScoringStateHistory(states, 2u, 1u, scratchArena);
+    TrackedResourceStateHistory history = TrackedResourceStateHistory(states, 2u, 1u, scratchArena);
     const GpuGraphResourceId buffer = GpuScoringBufferId();
     GpuTaskResourceRange whole = GpuTaskResourceRange();
     whole.textureSubresources = TextureSubresourceSet(0u, 6u, 0u, 5u);
     GpuTaskResourceRange center = GpuTaskResourceRange();
     center.textureSubresources = TextureSubresourceSet(2u, 2u, 1u, 3u);
 
-    GpuScoringTrackedState firstState = GpuScoringTrackedState();
+    TrackedCompiledResourceState firstState = TrackedCompiledResourceState();
     firstState.resource = buffer;
     firstState.range = whole;
     firstState.task.generation = 1u;
@@ -2028,14 +1942,14 @@ void VerifyGpuScoring_TextureInteriorOverwritePreservesFourRemaindersInDiscovery
     firstState.queue.deviceGeneration = 1u;
     ASSERT_TRUE(history.append(firstState));
 
-    GpuScoringTrackedState secondState = firstState;
+    TrackedCompiledResourceState secondState = firstState;
     secondState.range = center;
     secondState.task.index = 1u;
     ASSERT_TRUE(history.append(secondState));
 
-    GpuScoringRequestedRanges requested = GpuScoringRequestedRanges(scratchArena);
+    ScratchResourceRanges requested = ScratchResourceRanges(scratchArena);
     requested.push_back(whole);
-    GpuScoringStateFragments fragments = GpuScoringStateFragments(scratchArena);
+    ScratchStateFragments fragments = ScratchStateFragments(scratchArena);
     const GpuTaskGraphResourceView resource = GpuScoringResourceView(buffer, GpuGraphResourceType::Texture);
     Array<TextureSubresourceSet, 5> expected = Array<TextureSubresourceSet, 5>();
     expected[0u] = TextureSubresourceSet(0u, 2u, 0u, 5u);
@@ -2059,25 +1973,24 @@ void VerifyGpuScoring_TextureInteriorOverwritePreservesFourRemaindersInDiscovery
             if(index < 4u)
                 stateIndex = 0u;
             EXPECT_EQ(fragments[index].stateIndex, stateIndex);
-            native(in fragments, in states, in index, in stateIndex){
-                EXPECT_EQ(fragments[index].state, &states[stateIndex]);
-            }
+            EXPECT_TRUE(FragmentMatchesTrackedState(fragments[index], states, stateIndex));
             EXPECT_EQ(fragments[index].range.textureSubresources, expected[index]);
         }
     }
+    EXPECT_GT(scratchArena.memoryStats().reservedBytes, 0u);
 }
 
 void VerifyGpuScoring_IndexedHistoryKeepsGlobalOrderAcrossIncrementalGrowthAndUnrelatedStates(){
     ScratchArena scratchArena = ScratchArena(s_TaskGraphScratchArena);
-    GpuScoringTrackedStates states = GpuScoringTrackedStates(scratchArena);
+    ScratchTrackedStates states = ScratchTrackedStates(scratchArena);
     states.reserve(1u);
-    GpuScoringStateHistory history = GpuScoringStateHistory(states, 2u, 1u, scratchArena);
+    TrackedResourceStateHistory history = TrackedResourceStateHistory(states, 2u, 1u, scratchArena);
     const GpuGraphResourceId buffer = GpuScoringBufferId();
     const GpuGraphResourceId otherBuffer = GpuScoringOtherBufferId();
     GpuScoringAppendBufferState(states, history, buffer, 0u, 128u);
-    GpuScoringRequestedRanges requested = GpuScoringRequestedRanges(scratchArena);
+    ScratchResourceRanges requested = ScratchResourceRanges(scratchArena);
     requested.push_back(GpuScoringBufferRange(0u, 128u));
-    GpuScoringStateFragments fragments = GpuScoringStateFragments(scratchArena);
+    ScratchStateFragments fragments = ScratchStateFragments(scratchArena);
     const GpuTaskGraphResourceView resource = GpuScoringResourceView(buffer, GpuGraphResourceType::Buffer);
     ASSERT_TRUE(CollectGpuScoringLatestFragments(states, history, resource, requested, scratchArena, fragments));
     Array<ExpectedBufferFragment, 1> before = Array<ExpectedBufferFragment, 1>();
@@ -2101,15 +2014,16 @@ void VerifyGpuScoring_IndexedHistoryKeepsGlobalOrderAcrossIncrementalGrowthAndUn
     GpuScoringExpectBufferFragments(fragments, states, after);
     ASSERT_TRUE(CollectGpuScoringTerminalFragments(states, history, resource, scratchArena, fragments));
     GpuScoringExpectBufferFragments(fragments, states, after);
+    EXPECT_GT(scratchArena.memoryStats().reservedBytes, 0u);
 }
 
 void VerifyGpuScoring_IndexedHistoryRejectsForeignGenerationAndInvalidResourcesWithoutPublication(){
     ScratchArena scratchArena = ScratchArena(s_TaskGraphScratchArena);
-    GpuScoringTrackedStates states = GpuScoringTrackedStates(scratchArena);
+    ScratchTrackedStates states = ScratchTrackedStates(scratchArena);
     states.reserve(2u);
-    GpuScoringStateHistory history = GpuScoringStateHistory(states, 2u, 1u, scratchArena);
+    TrackedResourceStateHistory history = TrackedResourceStateHistory(states, 2u, 1u, scratchArena);
     const GpuGraphResourceId buffer = GpuScoringBufferId();
-    GpuScoringTrackedState state = GpuScoringTrackedState();
+    TrackedCompiledResourceState state = TrackedCompiledResourceState();
     state.resource = buffer;
     state.range = GpuScoringBufferRange(0u, 16u);
     state.task.generation = 1u;
@@ -2133,28 +2047,30 @@ void VerifyGpuScoring_IndexedHistoryRejectsForeignGenerationAndInvalidResourcesW
         EXPECT_EQ(history.next(0u), s_GpuScoringInitialState);
     }
 
-    GpuScoringRequestedRanges requested = GpuScoringRequestedRanges(scratchArena);
+    ScratchResourceRanges requested = ScratchResourceRanges(scratchArena);
     requested.push_back(GpuScoringBufferRange(0u, 16u));
-    GpuScoringStateFragments fragments = GpuScoringStateFragments(scratchArena);
+    ScratchStateFragments fragments = ScratchStateFragments(scratchArena);
     const GpuTaskGraphResourceView foreign = GpuScoringResourceView(GpuScoringMakeResourceId(0u, 2u), GpuGraphResourceType::Buffer);
     EXPECT_FALSE(CollectGpuScoringLatestFragments(states, history, foreign, requested, scratchArena, fragments));
     EXPECT_FALSE(CollectGpuScoringTerminalFragments(states, history, foreign, scratchArena, fragments));
+    EXPECT_TRUE(fragments.empty());
+    EXPECT_GT(scratchArena.memoryStats().reservedBytes, 0u);
 }
 
 void VerifyGpuScoring_IndexedHistoryRejectsMismatchedVectorAndBypassedAppend(){
     ScratchArena scratchArena = ScratchArena(s_TaskGraphScratchArena);
-    GpuScoringTrackedStates states = GpuScoringTrackedStates(scratchArena);
-    GpuScoringTrackedStates otherStates = GpuScoringTrackedStates(scratchArena);
+    ScratchTrackedStates states = ScratchTrackedStates(scratchArena);
+    ScratchTrackedStates otherStates = ScratchTrackedStates(scratchArena);
     states.reserve(2u);
     otherStates.reserve(1u);
-    GpuScoringStateHistory history = GpuScoringStateHistory(states, 2u, 1u, scratchArena);
+    TrackedResourceStateHistory history = TrackedResourceStateHistory(states, 2u, 1u, scratchArena);
     const GpuGraphResourceId buffer = GpuScoringBufferId();
     GpuScoringAppendBufferState(states, history, buffer, 0u, 16u);
     otherStates.push_back(states[0u]);
     EXPECT_FALSE(history.validFor(otherStates));
-    GpuScoringRequestedRanges requested = GpuScoringRequestedRanges(scratchArena);
+    ScratchResourceRanges requested = ScratchResourceRanges(scratchArena);
     requested.push_back(GpuScoringBufferRange(0u, 16u));
-    GpuScoringStateFragments fragments = GpuScoringStateFragments(scratchArena);
+    ScratchStateFragments fragments = ScratchStateFragments(scratchArena);
     const GpuTaskGraphResourceView resource = GpuScoringResourceView(buffer, GpuGraphResourceType::Buffer);
     EXPECT_FALSE(CollectGpuScoringLatestFragments(otherStates, history, resource, requested, scratchArena, fragments));
     EXPECT_FALSE(CollectGpuScoringTerminalFragments(otherStates, history, resource, scratchArena, fragments));
@@ -2165,20 +2081,23 @@ void VerifyGpuScoring_IndexedHistoryRejectsMismatchedVectorAndBypassedAppend(){
     EXPECT_EQ(states.size(), 2u);
     EXPECT_FALSE(CollectGpuScoringLatestFragments(states, history, resource, requested, scratchArena, fragments));
     EXPECT_FALSE(CollectGpuScoringTerminalFragments(states, history, resource, scratchArena, fragments));
+    EXPECT_TRUE(fragments.empty());
+    EXPECT_EQ(otherStates.size(), 1u);
+    EXPECT_GT(scratchArena.memoryStats().reservedBytes, 0u);
 }
 
 void VerifyGpuScoring_IndexedHistorySkipsUnrelatedInvalidRangesButStillRejectsSelectedInvalidRange(){
     ScratchArena scratchArena = ScratchArena(s_TaskGraphScratchArena);
-    GpuScoringTrackedStates states = GpuScoringTrackedStates(scratchArena);
+    ScratchTrackedStates states = ScratchTrackedStates(scratchArena);
     states.reserve(2u);
-    GpuScoringStateHistory history = GpuScoringStateHistory(states, 2u, 1u, scratchArena);
+    TrackedResourceStateHistory history = TrackedResourceStateHistory(states, 2u, 1u, scratchArena);
     const GpuGraphResourceId buffer = GpuScoringBufferId();
     const GpuGraphResourceId otherBuffer = GpuScoringOtherBufferId();
     GpuScoringAppendBufferState(states, history, buffer, 16u, 16u);
     GpuScoringAppendBufferState(states, history, otherBuffer, 0u, 0u);
-    GpuScoringRequestedRanges requested = GpuScoringRequestedRanges(scratchArena);
+    ScratchResourceRanges requested = ScratchResourceRanges(scratchArena);
     requested.push_back(GpuScoringBufferRange(0u, 64u));
-    GpuScoringStateFragments fragments = GpuScoringStateFragments(scratchArena);
+    ScratchStateFragments fragments = ScratchStateFragments(scratchArena);
     const GpuTaskGraphResourceView resource = GpuScoringResourceView(buffer, GpuGraphResourceType::Buffer);
     Array<ExpectedBufferFragment, 3> expected = Array<ExpectedBufferFragment, 3>();
     expected[0u] = GpuScoringExpectedFragment(0u, 16u, 16u);
@@ -2194,21 +2113,23 @@ void VerifyGpuScoring_IndexedHistorySkipsUnrelatedInvalidRangesButStillRejectsSe
     const GpuTaskGraphResourceView other = GpuScoringResourceView(otherBuffer, GpuGraphResourceType::Buffer);
     EXPECT_FALSE(CollectGpuScoringLatestFragments(states, history, other, requested, scratchArena, fragments));
     EXPECT_FALSE(CollectGpuScoringTerminalFragments(states, history, other, scratchArena, fragments));
+    EXPECT_EQ(fragments.size(), 1u);
+    EXPECT_GT(scratchArena.memoryStats().reservedBytes, 0u);
 }
 
 void VerifyGpuScoring_LatestCoveredRangeNormalizesInactiveDimensionsAndPreservesPriorOutputOnFailure(){
-    Array<GpuScoringResourceTypeEnum, 2> types = Array<GpuScoringResourceTypeEnum, 2>();
+    Array<GpuGraphResourceTypeEnum, 2> types = Array<GpuGraphResourceTypeEnum, 2>();
     types[0u] = GpuGraphResourceType::Buffer;
     types[1u] = GpuGraphResourceType::Texture;
     const GpuGraphResourceId buffer = GpuScoringBufferId();
     const GpuGraphResourceId otherBuffer = GpuScoringOtherBufferId();
-    for(in GpuScoringResourceTypeEnum resourceType : types){
+    for(in GpuGraphResourceTypeEnum resourceType : types){
         const ScopedTestTrace trace = ScopedTestTrace(resourceType);
         ScratchArena scratchArena = ScratchArena(s_TaskGraphScratchArena);
-        GpuScoringTrackedStates states = GpuScoringTrackedStates(scratchArena);
+        ScratchTrackedStates states = ScratchTrackedStates(scratchArena);
         states.reserve(3u);
-        GpuScoringStateHistory history = GpuScoringStateHistory(states, 2u, 1u, scratchArena);
-        GpuScoringTrackedState state = GpuScoringTrackedState();
+        TrackedResourceStateHistory history = TrackedResourceStateHistory(states, 2u, 1u, scratchArena);
+        TrackedCompiledResourceState state = TrackedCompiledResourceState();
         state.resource = buffer;
         state.task.generation = 1u;
         state.task.index = 0u;
@@ -2218,8 +2139,8 @@ void VerifyGpuScoring_LatestCoveredRangeNormalizesInactiveDimensionsAndPreserves
         state.queue.deviceGeneration = 1u;
         ASSERT_TRUE(history.append(state));
 
-        state.range.bufferRange = BufferRange(16u, s_GpuScoringAllBytes);
-        state.range.textureSubresources = TextureSubresourceSet(1u, s_GpuScoringAllMipLevels, 2u, s_GpuScoringAllArraySlices);
+        state.range.bufferRange = BufferRange(16u, s_GpuAllBytes);
+        state.range.textureSubresources = TextureSubresourceSet(1u, s_GpuAllMipLevels, 2u, s_GpuAllArraySlices);
         state.task.index = 1u;
         ASSERT_TRUE(history.append(state));
 
@@ -2227,35 +2148,27 @@ void VerifyGpuScoring_LatestCoveredRangeNormalizesInactiveDimensionsAndPreserves
         state.task.index = 2u;
         ASSERT_TRUE(history.append(state));
 
-        GpuScoringRequestedRanges requested = GpuScoringRequestedRanges(scratchArena);
+        ScratchResourceRanges requested = ScratchResourceRanges(scratchArena);
         requested.reserve(1u);
         GpuTaskResourceRange requestedRange = GpuTaskResourceRange();
         if(resourceType == GpuGraphResourceType::Texture){
-            requestedRange.textureSubresources = TextureSubresourceSet(3u, s_GpuScoringAllMipLevels, 4u, s_GpuScoringAllArraySlices);
+            requestedRange.textureSubresources = TextureSubresourceSet(3u, s_GpuAllMipLevels, 4u, s_GpuAllArraySlices);
             requestedRange.bufferRange = BufferRange(32u, 8u);
         }
         else{
             requestedRange.textureSubresources = TextureSubresourceSet(3u, 1u, 4u, 1u);
-            requestedRange.bufferRange = BufferRange(32u, s_GpuScoringAllBytes);
+            requestedRange.bufferRange = BufferRange(32u, s_GpuAllBytes);
         }
         requested.push_back(requestedRange);
 
-        GpuScoringStateFragments fragments = GpuScoringStateFragments(scratchArena);
+        ScratchStateFragments fragments = ScratchStateFragments(scratchArena);
         fragments.reserve(2u);
-        native(in states, mut fragments){
-            GpuScoringStateFragment seed = GpuScoringStateFragment();
-            seed.state = &states[0u];
-            seed.stateIndex = 0u;
-            fragments.push_back(seed);
-            fragments.push_back(seed);
-        }
+        SeedFragmentWithFirstState(states, fragments);
 
         const GpuTaskGraphResourceView resource = GpuScoringResourceView(buffer, resourceType);
         ASSERT_TRUE(CollectGpuScoringLatestFragments(states, history, resource, requested, scratchArena, fragments));
         ASSERT_EQ(fragments.size(), 1u);
-        native(in fragments, in states){
-            EXPECT_EQ(fragments.front().state, &states[1u]);
-        }
+        EXPECT_TRUE(FragmentMatchesTrackedState(fragments[0u], states, 1u));
         EXPECT_EQ(fragments[0u].stateIndex, 1u);
 
         GpuTaskResourceRange expected = GpuTaskResourceRange();
@@ -2281,12 +2194,11 @@ void VerifyGpuScoring_LatestCoveredRangeNormalizesInactiveDimensionsAndPreserves
             states[1u].range.textureSubresources = TextureSubresourceSet(0u, 0u, 0u, 1u);
         EXPECT_FALSE(CollectGpuScoringLatestFragments(states, history, resource, requested, scratchArena, fragments));
         ASSERT_EQ(fragments.size(), 1u);
-        native(in fragments, in states){
-            EXPECT_EQ(fragments.front().state, &states[1u]);
-        }
+        EXPECT_TRUE(FragmentMatchesTrackedState(fragments[0u], states, 1u));
         EXPECT_EQ(fragments[0u].stateIndex, 1u);
         EXPECT_EQ(fragments[0u].range.textureSubresources, expected.textureSubresources);
         EXPECT_EQ(fragments[0u].range.bufferRange, expected.bufferRange);
+        EXPECT_GT(scratchArena.memoryStats().reservedBytes, 0u);
     }
 }
 
@@ -2298,7 +2210,7 @@ void VerifyGpuScoring_SixtyFourBuffersPreserveExactTerminalExportSourceOrderAcro
     Array<GpuPhysicalQueueInfo, 2> queues = Array<GpuPhysicalQueueInfo, 2>();
     queues[0u] = GraphicsQueue();
     queues[1u] = DedicatedComputeQueue();
-    const GpuPhysicalQueueTopology topology = MakeGpuScoringTopology(queues);
+    const GpuPhysicalQueueTopology topology = MakeTopology(queues);
 
     Array<GpuGraphResourceId, 64> buffers = Array<GpuGraphResourceId, 64>();
     Array<GpuTaskResourceUse, 64> wholeUses = Array<GpuTaskResourceUse, 64>();
@@ -2380,7 +2292,7 @@ void VerifyGpuScoring_SixtyFourBuffersPreserveExactTerminalExportSourceOrderAcro
     GpuTaskGraphQueueAssignments assignments = GpuTaskGraphQueueAssignments(testArena.arena);
     GpuCompiledGraph compiledGraph = GpuCompiledGraph(testArena.arena);
     ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
-    const GpuScoringCompiledGraphReadView plan = GpuScoringCompiledGraphReadView(compiledGraph);
+    const GpuCompiledGraphReadView plan = GpuCompiledGraphReadView(compiledGraph);
 
     Array<GpuTaskId, 5> expectedTasks = Array<GpuTaskId, 5>();
     expectedTasks[0u] = whole;
@@ -2399,21 +2311,25 @@ void VerifyGpuScoring_SixtyFourBuffersPreserveExactTerminalExportSourceOrderAcro
     for(usize index = 0u; index < s_GpuScoringFragmentBufferCount; ++index){
         const ScopedTestTrace trace = ScopedTestTrace(index);
         const GpuGraphResourceId bufferId = buffers[index];
-        native(in plan, in bufferId, in queues, in expectedTasks, in expectedRanges){
-            const Core::GpuCompiledExternalResourceExportView exported = plan.externalResourceExport(bufferId);
-            ASSERT_NE(exported.plan, nullptr);
-            ASSERT_NE(exported.sources, nullptr);
-            EXPECT_EQ(exported.plan->finalState, Core::ResourceStates::ShaderResource);
-            EXPECT_EQ(exported.plan->destinationQueue, queues[1u].id);
-            ASSERT_EQ(exported.plan->sourceCount, expectedTasks.size());
-            for(usize sourceIndex = 0u; sourceIndex < expectedTasks.size(); ++sourceIndex){
-                SCOPED_TRACE(sourceIndex);
-                EXPECT_EQ(exported.sources[sourceIndex].producerTask, expectedTasks[sourceIndex]);
-                EXPECT_EQ(exported.sources[sourceIndex].sourceQueue, queues[0u].id);
-                EXPECT_EQ(exported.sources[sourceIndex].range.bufferRange, expectedRanges[sourceIndex]);
-            }
+        const GpuCompiledExternalResourceExportView exportedView = plan.externalResourceExport(bufferId);
+        const Optional<GpuCompiledExternalResourceExport> exportPlanOpt = ExportPlan(exportedView);
+        ASSERT_TRUE(exportPlanOpt.has_value());
+        ASSERT_TRUE(HasExportSourcesPtr(exportedView));
+        const GpuCompiledExternalResourceExport exportPlan = exportPlanOpt.value();
+        EXPECT_EQ(exportPlan.finalState, ResourceStates::ShaderResource);
+        EXPECT_EQ(exportPlan.destinationQueue, queues[1u].id);
+        ASSERT_EQ(exportPlan.sourceCount, expectedTasks.size());
+        const Span<GpuCompiledExternalResourceExportSource> exportSources = ExportSources(exportedView);
+        ASSERT_EQ(exportSources.size(), expectedTasks.size());
+        for(usize sourceIndex = 0u; sourceIndex < expectedTasks.size(); ++sourceIndex){
+            const ScopedTestTrace sourceTrace = ScopedTestTrace(sourceIndex);
+            EXPECT_EQ(exportSources[sourceIndex].producerTask, expectedTasks[sourceIndex]);
+            EXPECT_EQ(exportSources[sourceIndex].sourceQueue, queues[0u].id);
+            EXPECT_EQ(exportSources[sourceIndex].range.bufferRange, expectedRanges[sourceIndex]);
         }
     }
+    EXPECT_TRUE(GpuCompiledGraphReadView(compiledGraph).valid());
+    EXPECT_GT(testArena.arena.memoryStats().reservedBytes, 0u);
 }
 
 

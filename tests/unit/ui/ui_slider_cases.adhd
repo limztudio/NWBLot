@@ -48,44 +48,10 @@ public:
         ASSERT_TRUE(refresh());
     }
 
-    [[nodiscard]] b8 refresh()noexcept{
-        const auto metrics = MeasureSlider(m_options, {});
-        if(!metrics)
-            return false;
-        const auto normalized = SliderBehavior::Normalize(m_options.minimum, m_options.maximum, m_state.value());
-        if(!normalized)
-            return false;
-        const auto placement = PlaceSlider(m_bounds, m_bounds, *metrics, *normalized);
-        if(!placement)
-            return false;
-        m_placement = *placement;
-        return SliderBehavior::Admit(m_state, m_options, m_placement);
-    }
-
-    [[nodiscard]] b8 set(const f64 value)noexcept{
-        return m_state.setValue(value) && refresh();
-    }
-
-    [[nodiscard]] ControlAction key(const ControlActionKind::Enum kind, const u64 sequence = 1u)const noexcept{
-        ControlAction action;
-        action.id = { { 41u }, 3u, 7u, sequence };
-        action.control = m_state.controlToken();
-        action.kind = kind;
-        return action;
-    }
-
-    [[nodiscard]] PointerGesture gesture(const b8 thumb = true)const noexcept{
-        PointerGesture item;
-        item.id = { { thumb ? 42u : 43u }, 3u, 7u, 11u };
-        item.origin = { m_placement.thumb.width * 0.5f + m_placement.thumb.x, 36.0f };
-        item.position = item.origin;
-        item.targetRectangle = thumb ? m_placement.thumb : m_placement.track;
-        item.referenceRectangle = thumb ? m_placement.travelBounds : m_placement.centerTravel;
-        item.control = m_state.controlToken();
-        item.updateSequence = 12u;
-        item.value = BitCast<u64>(m_state.value());
-        return item;
-    }
+    [[nodiscard]] b8 refresh()noexcept;
+    [[nodiscard]] b8 set(f64 value)noexcept;
+    [[nodiscard]] ControlAction key(ControlActionKind::Enum kind, u64 sequence = 1u)const noexcept;
+    [[nodiscard]] PointerGesture gesture(b8 thumb = true)const noexcept;
 
 
 public:
@@ -197,25 +163,11 @@ public:
         m_child.open();
     }
 
-    [[nodiscard]] b8 beginParent(const u64 generation){
-        return begin(generation) && m_builder.beginPopup(s_ParentPopupKey, m_parent, UiWidgetTests::NestedParentOptions()) && m_builder.slider(s_SliderKey, m_state, Options());
-    }
-
-    [[nodiscard]] b8 beginChild(){
-        return m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions()) && m_builder.slider(s_SliderKey, m_childState, Options());
-    }
-
-    [[nodiscard]] b8 declareFamily(const u64 generation){
-        return beginParent(generation) && beginChild() && m_builder.endPopup();
-    }
-
-    [[nodiscard]] b8 finishParent(){
-        return m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame();
-    }
-
-    [[nodiscard]] b8 acceptFamily(const u64 generation){
-        return declareFamily(generation) && finishParent() && m_context.commitFrame(generation);
-    }
+    [[nodiscard]] b8 beginParent(u64 generation);
+    [[nodiscard]] b8 beginChild();
+    [[nodiscard]] b8 declareFamily(u64 generation);
+    [[nodiscard]] b8 finishParent();
+    [[nodiscard]] b8 acceptFamily(u64 generation);
 
 
 public:
@@ -263,28 +215,73 @@ using UiSliderAcceptedInput64 = ::NWB::UiWidgetTests::AcceptedInputState<64u>;
 using ::NWB::Impl::Ui::MeasureSlider;
 using ::NWB::Impl::Ui::PlaceSlider;
 
-[[nodiscard]] inline b8 UiSliderAdmit(::NWB::Impl::Ui::SliderState& state, const ::NWB::Impl::Ui::SliderOptions& options, const ::NWB::Impl::Ui::SliderPlacement& placement)noexcept{
+[[nodiscard]] NWB_INLINE b8 UiSliderAdmit(::NWB::Impl::Ui::SliderState& state, const ::NWB::Impl::Ui::SliderOptions& options, const ::NWB::Impl::Ui::SliderPlacement& placement)noexcept{
     return ::NWB::Impl::Ui::SliderBehavior::Admit(state, options, placement);
 }
 
-[[nodiscard]] inline b8 UiSliderApply(const ::NWB::Impl::Ui::SliderOptions& options, const ::NWB::Impl::Ui::ControlAction& action, ::NWB::Impl::Ui::SliderState& state, ::NWB::Impl::Ui::SliderResult& result)noexcept{
+[[nodiscard]] NWB_INLINE b8 UiSliderApply(const ::NWB::Impl::Ui::SliderOptions& options, const ::NWB::Impl::Ui::ControlAction& action, ::NWB::Impl::Ui::SliderState& state, ::NWB::Impl::Ui::SliderResult& result)noexcept{
     return ::NWB::Impl::Ui::SliderBehavior::Apply(options, action, state, result);
 }
 
-[[nodiscard]] inline b8 UiSliderSeek(const ::NWB::Impl::Ui::SliderOptions& options, const ::NWB::Impl::Ui::PointerGesture& gesture, ::NWB::Impl::Ui::SliderState& state, ::NWB::Impl::Ui::SliderResult& result)noexcept{
+[[nodiscard]] NWB_INLINE b8 UiSliderSeek(const ::NWB::Impl::Ui::SliderOptions& options, const ::NWB::Impl::Ui::PointerGesture& gesture, ::NWB::Impl::Ui::SliderState& state, ::NWB::Impl::Ui::SliderResult& result)noexcept{
     return ::NWB::Impl::Ui::SliderBehavior::Seek(options, gesture, state, result);
 }
 
-[[nodiscard]] inline b8 UiSliderDrag(const ::NWB::Impl::Ui::SliderOptions& options, const ::NWB::Impl::Ui::PointerGesture& gesture, ::NWB::Impl::Ui::SliderState& state, ::NWB::Impl::Ui::SliderResult& result)noexcept{
+[[nodiscard]] NWB_INLINE b8 UiSliderDrag(const ::NWB::Impl::Ui::SliderOptions& options, const ::NWB::Impl::Ui::PointerGesture& gesture, ::NWB::Impl::Ui::SliderState& state, ::NWB::Impl::Ui::SliderResult& result)noexcept{
     return ::NWB::Impl::Ui::SliderBehavior::Drag(options, gesture, state, result);
 }
 
-[[nodiscard]] inline Expected<f64> UiSliderNormalize(const f64 minimum, const f64 maximum, const f64 value)noexcept{
+[[nodiscard]] NWB_INLINE Expected<f64> UiSliderNormalize(const f64 minimum, const f64 maximum, const f64 value)noexcept{
     return ::NWB::Impl::Ui::SliderBehavior::Normalize(minimum, maximum, value);
 }
 
-[[nodiscard]] inline Expected<f64> UiSliderInterpolate(const f64 minimum, const f64 maximum, const f64 normalized)noexcept{
+[[nodiscard]] NWB_INLINE Expected<f64> UiSliderInterpolate(const f64 minimum, const f64 maximum, const f64 normalized)noexcept{
     return ::NWB::Impl::Ui::SliderBehavior::Interpolate(minimum, maximum, normalized);
+}
+
+b8 RefreshUiSliderBehaviorFixture(UiSliderBehaviorTests& self)noexcept;
+b8 SetUiSliderBehaviorFixtureValue(UiSliderBehaviorTests& self, f64 value)noexcept;
+ControlAction MakeUiSliderBehaviorKeyAction(const UiSliderBehaviorTests& self, const ControlActionKindEnum& kind, u64 sequence)noexcept;
+PointerGesture MakeUiSliderBehaviorGesture(const UiSliderBehaviorTests& self, b8 thumb)noexcept;
+b8 BeginUiSliderPopupParent(UiSliderPopupTests& self, u64 generation)noexcept;
+b8 BeginUiSliderPopupChild(UiSliderPopupTests& self)noexcept;
+b8 DeclareUiSliderPopupFamily(UiSliderPopupTests& self, u64 generation)noexcept;
+b8 FinishUiSliderPopupParent(UiSliderPopupTests& self)noexcept;
+b8 AcceptUiSliderPopupFamily(UiSliderPopupTests& self, u64 generation)noexcept;
+};
+
+NWB_BEGIN
+namespace __hidden_ui_slider_behavior_tests{
+NWB_INLINE b8 UiSliderBehaviorTests::refresh()noexcept{
+    return ::__hidden_ui_glyph_sdf_tests::RefreshUiSliderBehaviorFixture(*this);
+}
+NWB_INLINE b8 UiSliderBehaviorTests::set(const f64 value)noexcept{
+    return ::__hidden_ui_glyph_sdf_tests::SetUiSliderBehaviorFixtureValue(*this, value);
+}
+NWB_INLINE ControlAction UiSliderBehaviorTests::key(const ControlActionKind::Enum kind, const u64 sequence)const noexcept{
+    return ::__hidden_ui_glyph_sdf_tests::MakeUiSliderBehaviorKeyAction(*this, kind, sequence);
+}
+NWB_INLINE PointerGesture UiSliderBehaviorTests::gesture(const b8 thumb)const noexcept{
+    return ::__hidden_ui_glyph_sdf_tests::MakeUiSliderBehaviorGesture(*this, thumb);
+}
+};
+NWB_END
+
+namespace __hidden_ui_slider_popup_tests{
+NWB_INLINE b8 UiSliderPopupTests::beginParent(const u64 generation){
+    return ::__hidden_ui_glyph_sdf_tests::BeginUiSliderPopupParent(*this, generation);
+}
+NWB_INLINE b8 UiSliderPopupTests::beginChild(){
+    return ::__hidden_ui_glyph_sdf_tests::BeginUiSliderPopupChild(*this);
+}
+NWB_INLINE b8 UiSliderPopupTests::declareFamily(const u64 generation){
+    return ::__hidden_ui_glyph_sdf_tests::DeclareUiSliderPopupFamily(*this, generation);
+}
+NWB_INLINE b8 UiSliderPopupTests::finishParent(){
+    return ::__hidden_ui_glyph_sdf_tests::FinishUiSliderPopupParent(*this);
+}
+NWB_INLINE b8 UiSliderPopupTests::acceptFamily(const u64 generation){
+    return ::__hidden_ui_glyph_sdf_tests::AcceptUiSliderPopupFamily(*this, generation);
 }
 };
 
@@ -297,6 +294,82 @@ using ::NWB::Impl::Ui::PlaceSlider;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+b8 RefreshUiSliderBehaviorFixture(mut UiSliderBehaviorTests self){
+    const auto metrics = MeasureSlider(self.m_options, SliderStyle());
+    if(!metrics.has_value())
+        return false;
+    const auto normalized = UiSliderNormalize(self.m_options.minimum, self.m_options.maximum, self.m_state.value());
+    if(!normalized.has_value())
+        return false;
+    const auto placement = PlaceSlider(self.m_bounds, self.m_bounds, metrics.value(), normalized.value());
+    if(!placement.has_value())
+        return false;
+    self.m_placement = placement.value();
+    return UiSliderAdmit(self.m_state, self.m_options, self.m_placement);
+}
+
+b8 SetUiSliderBehaviorFixtureValue(mut UiSliderBehaviorTests self, in f64 value){
+    return self.m_state.setValue(value) && RefreshUiSliderBehaviorFixture(self);
+}
+
+ControlAction MakeUiSliderBehaviorKeyAction(in UiSliderBehaviorTests self, in ControlActionKindEnum kind, in u64 sequence){
+    ControlAction action = ControlAction();
+    action.id.target.value = 41u;
+    action.id.declarationGeneration = 3u;
+    action.id.layoutGeneration = 7u;
+    action.id.sequence = sequence;
+    action.control = self.m_state.controlToken();
+    action.kind = kind;
+    return action;
+}
+
+PointerGesture MakeUiSliderBehaviorGesture(in UiSliderBehaviorTests self, in b8 thumb){
+    PointerGesture item = PointerGesture();
+    if(thumb){
+        item.id.target.value = 42u;
+        item.targetRectangle = self.m_placement.thumb;
+        item.referenceRectangle = self.m_placement.travelBounds;
+    }
+    else{
+        item.id.target.value = 43u;
+        item.targetRectangle = self.m_placement.track;
+        item.referenceRectangle = self.m_placement.centerTravel;
+    }
+    item.id.declarationGeneration = 3u;
+    item.id.layoutGeneration = 7u;
+    item.id.sequence = 11u;
+    item.origin.x = self.m_placement.thumb.width * 0.5f + self.m_placement.thumb.x;
+    item.origin.y = 36.0f;
+    item.position = item.origin;
+    item.control = self.m_state.controlToken();
+    item.updateSequence = 12u;
+    item.value = bit_cast<u64>(self.m_state.value());
+    return item;
+}
+
+b8 BeginUiSliderPopupParent(mut UiSliderPopupTests self, in u64 generation){
+    return self.begin(generation)
+        && self.m_builder.beginPopup(s_UiFixtureParentPopupKey, self.m_parent, MakeNestedParentPopupOptions())
+        && self.m_builder.slider(s_UiSliderKey, self.m_state, MakeSliderFixtureOptions());
+}
+
+b8 BeginUiSliderPopupChild(mut UiSliderPopupTests self){
+    return self.m_builder.beginPopup(s_UiFixtureChildPopupKey, self.m_child, MakeNestedChildPopupOptions())
+        && self.m_builder.slider(s_UiSliderKey, self.m_childState, MakeSliderFixtureOptions());
+}
+
+b8 DeclareUiSliderPopupFamily(mut UiSliderPopupTests self, in u64 generation){
+    return BeginUiSliderPopupParent(self, generation) && BeginUiSliderPopupChild(self) && self.m_builder.endPopup();
+}
+
+b8 FinishUiSliderPopupParent(mut UiSliderPopupTests self){
+    return self.m_builder.endPopup() && self.m_context.endRoot() && self.m_context.finishFrame();
+}
+
+b8 AcceptUiSliderPopupFamily(mut UiSliderPopupTests self, in u64 generation){
+    return DeclareUiSliderPopupFamily(self, generation) && FinishUiSliderPopupParent(self) && self.m_context.commitFrame(generation);
+}
 
 const u32 s_UiSliderQuietNaNF32Bits = 0x7fc00000u;
 const u32 s_UiSliderPosInfF32Bits = 0x7f800000u;
@@ -684,20 +757,14 @@ void VerifyUiSliderBehaviorTests_AClampedNonzeroMoveStillRestoresItsBaselineWhen
 void VerifyUiSliderBuilderTests_DeclarationPublishesItsResultAndOwnedPartsOnlyAfterScopeValidation(mut UiSliderBuilderTests self){
     ASSERT_TRUE(self.declare(1u));
     EXPECT_FALSE(self.m_state.result().valid);
-    native(in self){
-        EXPECT_EQ(self.target(self.host()), nullptr);
-    }
+    EXPECT_FALSE(self.hasTarget(self.host()));
     ASSERT_TRUE(self.finishPanel());
     EXPECT_TRUE(self.m_state.result().valid);
-    native(in self){
-        EXPECT_EQ(self.target(self.host()), nullptr);
-    }
+    EXPECT_FALSE(self.hasTarget(self.host()));
     ASSERT_TRUE(self.m_context.commitFrame(1u));
-    native(in self){
-        ASSERT_NE(self.target(self.host()), nullptr);
-        ASSERT_NE(self.target(self.track()), nullptr);
-        ASSERT_NE(self.target(self.thumb()), nullptr);
-    }
+    ASSERT_TRUE(self.hasTarget(self.host()));
+    ASSERT_TRUE(self.hasTarget(self.track()));
+    ASSERT_TRUE(self.hasTarget(self.thumb()));
 }
 
 void VerifyUiSliderBuilderTests_FiniteExternalValueOutsideTheRangeIsRetainedWhileItsThumbClampsVisually(mut UiSliderBuilderTests self){
@@ -733,11 +800,10 @@ void VerifyUiSliderBuilderTests_DisabledSliderKeepsAPointerBarrierWithoutApplyin
     ASSERT_TRUE(self.accept(2u, disabled));
     EXPECT_DOUBLE_EQ(self.m_state.value(), 0.25);
     EXPECT_FALSE(self.m_state.result().valueChanged);
-    native(in self){
-        ASSERT_NE(self.target(self.host()), nullptr);
-        EXPECT_FALSE(self.target(self.host())->enabled);
-        EXPECT_FALSE(self.target(self.host())->focusable);
-    }
+    const auto disabledHost = self.tryTarget(self.host());
+    ASSERT_TRUE(disabledHost.has_value());
+    EXPECT_FALSE(disabledHost.value().enabled);
+    EXPECT_FALSE(disabledHost.value().focusable);
     const Point center = CenterUiRect(self.m_state.placement().bounds);
     EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(center, InputEventType::PrimaryDown)).pointerConsumed);
     EXPECT_TRUE(self.send(MakeUiSliderPointerEvent(center, InputEventType::PrimaryUp)).pointerConsumed);
@@ -753,11 +819,10 @@ void VerifyUiSliderBuilderTests_ConstantRangeIsValidAndNoninteractiveWithoutRewr
     ASSERT_TRUE(self.accept(1u, constant));
     EXPECT_TRUE(self.m_state.result().valid);
     EXPECT_DOUBLE_EQ(self.m_state.value(), 0.25);
-    native(in self){
-        ASSERT_NE(self.target(self.host()), nullptr);
-        EXPECT_FALSE(self.target(self.host())->focusable);
-        EXPECT_FALSE(self.target(self.host())->enabled);
-    }
+    const auto constantHost = self.tryTarget(self.host());
+    ASSERT_TRUE(constantHost.has_value());
+    EXPECT_FALSE(constantHost.value().focusable);
+    EXPECT_FALSE(constantHost.value().enabled);
     self.click(CenterUiRect(self.m_state.placement().bounds));
     ASSERT_TRUE(self.accept(2u, constant));
     EXPECT_DOUBLE_EQ(self.m_state.value(), 0.25);
@@ -873,16 +938,13 @@ void VerifyUiSliderInputTests_HeldThumbRepaintPreservesCaptureAndReturningToOrig
     const f64 displacement = cast<f64>(destination.x) - cast<f64>(origin.x);
     EXPECT_NEAR(self.m_state.value(), baseline + displacement / travel, 0.00000001);
     EXPECT_EQ(self.m_context.input().capture(), self.thumb());
-    ControlToken token = ControlToken();
-    native(in self, mut token){
-        ASSERT_NE(self.target(self.host()), nullptr);
-        token = self.target(self.host())->control;
-    }
+    const auto beforeHost = self.tryTarget(self.host());
+    ASSERT_TRUE(beforeHost.has_value());
+    const ControlToken token = beforeHost.value().control;
     ASSERT_TRUE(self.accept(3u));
-    native(in self, in token){
-        ASSERT_NE(self.target(self.host()), nullptr);
-        EXPECT_EQ(self.target(self.host())->control, token);
-    }
+    const auto afterHost = self.tryTarget(self.host());
+    ASSERT_TRUE(afterHost.has_value());
+    EXPECT_EQ(afterHost.value().control, token);
     EXPECT_EQ(self.m_context.input().capture(), self.thumb());
     EXPECT_TRUE(self.m_state.result().dragging);
     EXPECT_FALSE(self.m_state.result().valueChanged);
@@ -1297,9 +1359,7 @@ void VerifyUiSliderLifetimeTests_LaterDeferredCallbackRejectsTheSliderCandidateA
     const UiSliderAcceptedInput64 displayed = self.accepted();
     self.press(UiSliderKey::Right);
     ASSERT_TRUE(self.declare(2u));
-    native(mut self){
-        self.m_laterSource.arm(UiSliderCallbackMutation::SetValue, &self.m_state);
-    }
+    self.m_laterSource.armState(UiSliderCallbackMutation::SetValue, self.m_state);
     ASSERT_TRUE(self.sibling());
     EXPECT_FALSE(self.m_builder.endPanel());
     EXPECT_TRUE(self.m_context.failed());
@@ -1317,9 +1377,7 @@ void VerifyUiSliderLifetimeTests_FinalWholeScopeValidationCannotPublishAnEarlier
     ASSERT_TRUE(self.declare(2u));
     ASSERT_TRUE(self.m_builder.slider("other", other, MakeSliderFixtureOptions()));
     const u64 token = self.m_state.inputGeneration();
-    native(mut self){
-        self.m_laterSource.arm(UiSliderCallbackMutation::AwayAndBack, &self.m_state);
-    }
+    self.m_laterSource.armState(UiSliderCallbackMutation::AwayAndBack, self.m_state);
     ASSERT_TRUE(self.sibling());
     EXPECT_FALSE(self.m_builder.endPanel());
     EXPECT_TRUE(self.m_context.failed());
@@ -1333,9 +1391,7 @@ void VerifyUiSliderLifetimeTests_DeferredCallbackBuilderResetCannotPublishStaged
     ASSERT_TRUE(self.accept(1u));
     const UiSliderAcceptedInput64 displayed = self.accepted();
     ASSERT_TRUE(self.declare(2u));
-    native(mut self){
-        self.m_laterSource.arm(UiSliderCallbackMutation::ResetBuilder, nullptr, &self.m_builder);
-    }
+    self.m_laterSource.armBuilder(UiSliderCallbackMutation::ResetBuilder, self.m_builder);
     ASSERT_TRUE(self.sibling());
     EXPECT_FALSE(self.m_builder.endPanel());
     EXPECT_TRUE(self.m_context.failed());
@@ -1347,9 +1403,7 @@ void VerifyUiSliderLifetimeTests_DeferredCallbackBuilderResetCannotPublishStaged
 void VerifyUiSliderLifetimeTests_DeferredBalancedScopeReentryRejectsBothAttemptsAndEveryStagedResult(mut UiSliderLifetimeTests self){
     ASSERT_TRUE(self.accept(1u));
     ASSERT_TRUE(self.declare(2u));
-    native(mut self){
-        self.m_laterSource.arm(UiSliderCallbackMutation::PanelBuilder, nullptr, &self.m_builder);
-    }
+    self.m_laterSource.armBuilder(UiSliderCallbackMutation::PanelBuilder, self.m_builder);
     ASSERT_TRUE(self.sibling());
     EXPECT_FALSE(self.m_builder.endPanel());
     EXPECT_TRUE(self.m_context.failed());
@@ -1366,9 +1420,7 @@ void VerifyUiSliderLifetimeTests_SuccessfulScopeEndReleasesTheValueLoanBeforeLat
     ASSERT_TRUE(self.m_context.commitFrame(1u));
     EXPECT_DOUBLE_EQ(self.m_state.value(), 0.9);
     EXPECT_FALSE(self.m_context.failed());
-    native(in self){
-        ASSERT_NE(self.target(self.host()), nullptr);
-    }
+    ASSERT_TRUE(self.hasTarget(self.host()));
 }
 
 
@@ -1537,9 +1589,7 @@ void VerifyUiSliderPopupTests_AnIdenticalIntentOnTheEndedChildRejectsBothUnpubli
 void VerifyUiSliderPopupTests_LaterParentLabelCallbackCannotPublishAPreviouslyPaintedChildLoan(mut UiSliderPopupTests self){
     ASSERT_TRUE(self.acceptFamily(1u));
     ASSERT_TRUE(self.declareFamily(2u));
-    native(mut self){
-        self.m_laterSource.arm(UiSliderCallbackMutation::SameValue, &self.m_childState);
-    }
+    self.m_laterSource.armState(UiSliderCallbackMutation::SameValue, self.m_childState);
     ASSERT_TRUE(self.sibling());
     EXPECT_FALSE(self.m_builder.endPopup());
     EXPECT_TRUE(self.m_context.failed());
@@ -1553,9 +1603,7 @@ void VerifyUiSliderPopupTests_ChildCallbackRejectsTheEarlierParentLoanInTheFinal
     ASSERT_TRUE(self.acceptFamily(1u));
     ASSERT_TRUE(self.beginParent(2u));
     ASSERT_TRUE(self.beginChild());
-    native(mut self){
-        self.m_laterSource.arm(UiSliderCallbackMutation::SetValue, &self.m_state);
-    }
+    self.m_laterSource.armState(UiSliderCallbackMutation::SetValue, self.m_state);
     ASSERT_TRUE(self.sibling());
     if(self.m_builder.endPopup())
         EXPECT_FALSE(self.m_builder.endPopup());

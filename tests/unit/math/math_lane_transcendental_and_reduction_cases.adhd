@@ -121,7 +121,7 @@ template<Reduction::Enum Kind>
     return true;
 }
 
-[[nodiscard]] inline b8 ObserveReductionByIndex(const u32 kindIndex, const SIMDVectorDouble input, const SIMDVectorDouble multiplier, SIMDVectorDouble& outExpected, i32& outExpectedFlags, SIMDVectorDouble& outActual, i32& outActualFlags)noexcept{
+[[nodiscard]] NWB_INLINE b8 ObserveReductionByIndex(const u32 kindIndex, const SIMDVectorDouble input, const SIMDVectorDouble multiplier, SIMDVectorDouble& outExpected, i32& outExpectedFlags, SIMDVectorDouble& outActual, i32& outActualFlags)noexcept{
     switch(kindIndex){
     case 0u: return ObserveReductionKind<Reduction::Dot2>(input, multiplier, outExpected, outExpectedFlags, outActual, outActualFlags);
     case 1u: return ObserveReductionKind<Reduction::Dot3>(input, multiplier, outExpected, outExpectedFlags, outActual, outActualFlags);
@@ -182,7 +182,7 @@ template<u32 Dimension>
     return true;
 }
 
-[[nodiscard]] inline b8 ObserveReciprocalLengthByDim(const u32 dimension, const SIMDVectorDouble input, SIMDVectorDouble& outExpected, i32& outExpectedFlags, SIMDVectorDouble& outActual, i32& outActualFlags, SIMDVectorDouble& outEstimate, i32& outEstimateFlags)noexcept{
+[[nodiscard]] NWB_INLINE b8 ObserveReciprocalLengthByDim(const u32 dimension, const SIMDVectorDouble input, SIMDVectorDouble& outExpected, i32& outExpectedFlags, SIMDVectorDouble& outActual, i32& outActualFlags, SIMDVectorDouble& outEstimate, i32& outEstimateFlags)noexcept{
     switch(dimension){
     case 2u: return ObserveReciprocalLengthDim<2u>(input, outExpected, outExpectedFlags, outActual, outActualFlags, outEstimate, outEstimateFlags);
     case 3u: return ObserveReciprocalLengthDim<3u>(input, outExpected, outExpectedFlags, outActual, outActualFlags, outEstimate, outEstimateFlags);
@@ -230,18 +230,66 @@ using MathLaneReductionDetail::RunPackedDot3InvalidPriorityForkChild;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+VectorDouble EvalLaneVectorDoubleEqual(in VectorDouble lhs, in VectorDouble rhs){
+    return VectorDoubleEqual(lhs, rhs);
+}
+
+VectorDouble EvalLaneVectorDoubleGreater(in VectorDouble lhs, in VectorDouble rhs){
+    return VectorDoubleGreater(lhs, rhs);
+}
+
+VectorDouble EvalLaneVectorDoubleSelect(in VectorDouble first, in VectorDouble second, in VectorDouble control){
+    return VectorDoubleSelect(first, second, control);
+}
+
+VectorDouble EvalLaneVectorDoubleAddInt(in VectorDouble lhs, in VectorDouble rhs){
+    return VectorDoubleAddInt(lhs, rhs);
+}
+
+VectorDouble EvalLaneVectorDouble2Dot(in VectorDouble lhs, in VectorDouble rhs){
+    return VectorDouble2Dot(lhs, rhs);
+}
+
+VectorDouble EvalLaneVectorDouble3Dot(in VectorDouble lhs, in VectorDouble rhs){
+    return VectorDouble3Dot(lhs, rhs);
+}
+
+VectorDouble EvalLaneVectorDouble2Cross(in VectorDouble lhs, in VectorDouble rhs){
+    return VectorDouble2Cross(lhs, rhs);
+}
+
+VectorSingle EvalLaneVector2Dot(in VectorSingle lhs, in VectorSingle rhs){
+    return Vector2Dot(lhs, rhs);
+}
+
+VectorSingle EvalLaneVector3Dot(in VectorSingle lhs, in VectorSingle rhs){
+    return Vector3Dot(lhs, rhs);
+}
+
+VectorSingle EvalLaneVector2Cross(in VectorSingle lhs, in VectorSingle rhs){
+    return Vector2Cross(lhs, rhs);
+}
+
+VectorDouble EvalLaneVectorDoubleTanH(in VectorDouble vec){
+    return VectorDoubleTanH(vec);
+}
+
+VectorSingle EvalLaneVectorSetIntByIndex(in VectorSingle vec, in u32 value, in usize lane){
+    return VectorSetIntByIndex(vec, value, lane);
+}
+
+VectorDouble EvalLaneVectorDoubleSetIntByIndex(in VectorDouble vec, in u64 value, in usize lane){
+    return VectorDoubleSetIntByIndex(vec, value, lane);
+}
+
 void VerifyMath_DoubleComparisonAndSelectionKeepAll64MaskBitsAndNaNOrdering(){
     const f64 qnan = bit_cast<f64>(cast<u64>(s_F64QuietNanBits));
     const f64 pow40 = 1099511627776.0;
     const VectorDouble lhs = VectorDouble(bit_cast<f64>(cast<u64>(0x3ff0000000000001u)), -0.0, qnan, pow40);
     const VectorDouble rhs = VectorDouble(1.0, 0.0, qnan, pow40 + 1.0);
 
-    VectorDouble equalVec = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    VectorDouble greaterVec = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    native(in lhs, in rhs, mut equalVec, mut greaterVec){
-        equalVec = VectorDoubleEqual(lhs, rhs);
-        greaterVec = VectorDoubleGreater(lhs, rhs);
-    }
+    const VectorDouble equalVec = EvalLaneVectorDoubleEqual(lhs, rhs);
+    const VectorDouble greaterVec = EvalLaneVectorDoubleGreater(lhs, rhs);
 
     const Array<u64, 4> equalBits = MakeU64Array4(0u, u64.max, 0u, 0u);
     const Array<u64, 4> greaterBits = MakeU64Array4(u64.max, 0u, 0u, 0u);
@@ -253,10 +301,7 @@ void VerifyMath_DoubleComparisonAndSelectionKeepAll64MaskBitsAndNaNOrdering(){
     const VectorDouble first = MakeVolatileDoubleBits(0x0123456789abcdefu, 0x8000000000000000u, 0x7ff8000000001234u, 1u);
     const VectorDouble second = MakeVolatileDoubleBits(0xfedcba9876543210u, 0u, 0x7ff800009abcdef0u, u64.max);
     const VectorDouble control = MakeVolatileDoubleBits(0xffffffff00000000u, 0x8000000000000000u, 0x00000000ffffffffu, 0u);
-    VectorDouble selected = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    native(in first, in second, in control, mut selected){
-        selected = VectorDoubleSelect(first, second, control);
-    }
+    const VectorDouble selected = EvalLaneVectorDoubleSelect(first, second, control);
     const Array<u64, 4> selectedBits = MakeU64Array4(0xfedcba9889abcdefu, 0u, 0x7ff800009abcdef0u, 1u);
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(GetDoubleLaneBits(selected, lane), selectedBits[lane]);
@@ -265,10 +310,7 @@ void VerifyMath_DoubleComparisonAndSelectionKeepAll64MaskBitsAndNaNOrdering(){
 void VerifyMath_DoubleIntegerAdditionWrapsAcross64BitLaneBoundaries(){
     const VectorDouble lhs = MakeVolatileDoubleBits(u64.max, 0xffffffffu, 0x8000000000000000u, 0xfffffffffffffffeu);
     const VectorDouble rhs = MakeVolatileDoubleBits(1u, 1u, 0x8000000000000000u, 3u);
-    VectorDouble sum = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    native(in lhs, in rhs, mut sum){
-        sum = VectorDoubleAddInt(lhs, rhs);
-    }
+    const VectorDouble sum = EvalLaneVectorDoubleAddInt(lhs, rhs);
     const Array<u64, 4> expected = MakeU64Array4(0u, 0x100000000u, 0u, 1u);
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(GetDoubleLaneBits(sum, lane), expected[lane]);
@@ -282,10 +324,7 @@ void VerifyMath_DoubleDotAndNearlyParallelCrossRetainResidualBeyondFloatPrecisio
 
     const VectorDouble dotLhs = VectorDouble(pow40 + 1.0, -pow40, 0.0, qnan);
     const VectorDouble dotRhs = VectorDouble(1.0, 1.0, 1.0, posInf);
-    VectorDouble dot = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    native(in dotLhs, in dotRhs, mut dot){
-        dot = VectorDouble3Dot(dotLhs, dotRhs);
-    }
+    const VectorDouble dot = EvalLaneVectorDouble3Dot(dotLhs, dotRhs);
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(GetDoubleLaneFloat(dot, lane), 1.0);
 
@@ -308,10 +347,7 @@ void VerifyMath_SinglePartialLaneDotIgnoresNonfiniteInactiveLanesWithoutInvalidE
         const VectorSingle lhs2 = MakeVolatileSingleBits(0x40000000u, 0x40400000u, leftInactive[index], leftInactive[index]);
         const VectorSingle rhs2 = MakeVolatileSingleBits(0x40a00000u, 0x40e00000u, rightInactive[index], rightInactive[index]);
         ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
-        VectorSingle dot2 = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-        native(in lhs2, in rhs2, mut dot2){
-            dot2 = Vector2Dot(lhs2, rhs2);
-        }
+        const VectorSingle dot2 = EvalLaneVector2Dot(lhs2, rhs2);
         EXPECT_EQ(TestFloatingPointExceptions(s_FeInvalid), 0);
         for(usize lane = 0u; lane < 4u; ++lane)
             EXPECT_EQ(GetSingleLaneFloat(dot2, lane), 31.0f);
@@ -319,10 +355,7 @@ void VerifyMath_SinglePartialLaneDotIgnoresNonfiniteInactiveLanesWithoutInvalidE
         const VectorSingle lhs3 = MakeVolatileSingleBits(0x40000000u, 0x40400000u, 0x40800000u, leftInactive[index]);
         const VectorSingle rhs3 = MakeVolatileSingleBits(0x40a00000u, 0x40e00000u, 0x41300000u, rightInactive[index]);
         ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
-        VectorSingle dot3 = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-        native(in lhs3, in rhs3, mut dot3){
-            dot3 = Vector3Dot(lhs3, rhs3);
-        }
+        const VectorSingle dot3 = EvalLaneVector3Dot(lhs3, rhs3);
         EXPECT_EQ(TestFloatingPointExceptions(s_FeInvalid), 0);
         for(usize lane = 0u; lane < 4u; ++lane)
             EXPECT_EQ(GetSingleLaneFloat(dot3, lane), 75.0f);
@@ -348,10 +381,7 @@ void VerifyMath_SinglePartialLaneCrossIgnoresNonfiniteAndOverflowingInactiveLane
         const VectorSingle lhs2 = MakeVolatileSingleBits(0x40000000u, 0x40400000u, leftInactive[index], leftInactive[index]);
         const VectorSingle rhs2 = MakeVolatileSingleBits(0x40a00000u, 0x40e00000u, rightInactive[index], rightInactive[index]);
         ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
-        VectorSingle cross2 = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-        native(in lhs2, in rhs2, mut cross2){
-            cross2 = Vector2Cross(lhs2, rhs2);
-        }
+        const VectorSingle cross2 = EvalLaneVector2Cross(lhs2, rhs2);
         EXPECT_EQ(TestFloatingPointExceptions(s_FeInvalid | s_FeOverflow), 0);
         for(usize lane = 0u; lane < 4u; ++lane)
             EXPECT_EQ(GetSingleLaneFloat(cross2, lane), -1.0f);
@@ -371,10 +401,7 @@ void VerifyMath_SinglePartialLaneCrossIgnoresNonfiniteAndOverflowingInactiveLane
     const VectorSingle lhs = VectorSingle(2.0f, 3.0f, 0.0f, 0.0f);
     const VectorSingle rhs = VectorSingle(posInf, 7.0f, 0.0f, 0.0f);
     ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
-    VectorSingle cross = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-    native(in lhs, in rhs, mut cross){
-        cross = Vector2Cross(lhs, rhs);
-    }
+    const VectorSingle cross = EvalLaneVector2Cross(lhs, rhs);
     EXPECT_EQ(TestFloatingPointExceptions(s_FeInvalid | s_FeOverflow), 0);
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(GetSingleLaneFloat(cross, lane), -posInf);
@@ -398,19 +425,13 @@ void VerifyMath_DoublePartialLaneDotAndCrossIgnoreNonfiniteInactiveLanesWithoutI
         const VectorDouble rhs2 = VectorDouble(5.0, 7.0, rhsInactive[index], rhsInactive[index]);
 
         EXPECT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
-        VectorDouble dot2 = VectorDouble(0.0, 0.0, 0.0, 0.0);
-        native(in lhs2, in rhs2, mut dot2){
-            dot2 = VectorDouble2Dot(lhs2, rhs2);
-        }
+        const VectorDouble dot2 = EvalLaneVectorDouble2Dot(lhs2, rhs2);
         EXPECT_EQ(TestFloatingPointExceptions(s_FeInvalid), 0);
         for(usize lane = 0u; lane < 4u; ++lane)
             EXPECT_EQ(GetDoubleLaneFloat(dot2, lane), 31.0);
 
         EXPECT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
-        VectorDouble cross2 = VectorDouble(0.0, 0.0, 0.0, 0.0);
-        native(in lhs2, in rhs2, mut cross2){
-            cross2 = VectorDouble2Cross(lhs2, rhs2);
-        }
+        const VectorDouble cross2 = EvalLaneVectorDouble2Cross(lhs2, rhs2);
         EXPECT_EQ(TestFloatingPointExceptions(s_FeInvalid), 0);
         for(usize lane = 0u; lane < 4u; ++lane)
             EXPECT_EQ(GetDoubleLaneFloat(cross2, lane), -1.0);
@@ -418,10 +439,7 @@ void VerifyMath_DoublePartialLaneDotAndCrossIgnoreNonfiniteInactiveLanesWithoutI
         const VectorDouble lhs3 = VectorDouble(2.0, 3.0, 4.0, lhsInactive[index]);
         const VectorDouble rhs3 = VectorDouble(5.0, 7.0, 11.0, rhsInactive[index]);
         EXPECT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
-        VectorDouble dot3 = VectorDouble(0.0, 0.0, 0.0, 0.0);
-        native(in lhs3, in rhs3, mut dot3){
-            dot3 = VectorDouble3Dot(lhs3, rhs3);
-        }
+        const VectorDouble dot3 = EvalLaneVectorDouble3Dot(lhs3, rhs3);
         EXPECT_EQ(TestFloatingPointExceptions(s_FeInvalid), 0);
         for(usize lane = 0u; lane < 4u; ++lane)
             EXPECT_EQ(GetDoubleLaneFloat(dot3, lane), 75.0);
@@ -437,10 +455,7 @@ void VerifyMath_DoublePartialLaneDotAndCrossIgnoreNonfiniteInactiveLanesWithoutI
 void VerifyMath_SingleLog2KeepsSubnormalExponentsAndZeroInfinityNaNDomains(){
     for(u32 bitIndex = 0u; bitIndex < 23u; ++bitIndex){
         const VectorSingle input = MakeVolatileSingleBits(1u << bitIndex, 0x007fffffu, 0x00800000u, 0x3f800000u);
-        VectorSingle logarithm = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-        native(in input, mut logarithm){
-            logarithm = VectorLog2(input);
-        }
+        const VectorSingle logarithm = Log2(input);
         EXPECT_EQ(logarithm.x, cast<f32>(cast<i32>(bitIndex) - 149));
         EXPECT_NEAR(logarithm.y, -126.0f, 0.00004f);
         EXPECT_EQ(logarithm.z, -126.0f);
@@ -448,10 +463,7 @@ void VerifyMath_SingleLog2KeepsSubnormalExponentsAndZeroInfinityNaNDomains(){
     }
 
     const VectorSingle specialIn = MakeVolatileSingleBits(0x80000000u, 0x7f800000u, 0xbf800000u, 0x7fc01234u);
-    VectorSingle special = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-    native(in specialIn, mut special){
-        special = VectorLog2(specialIn);
-    }
+    const VectorSingle special = Log2(specialIn);
     EXPECT_EQ(GetSingleLaneBits(special, 0u), 0xff800000u);
     EXPECT_EQ(GetSingleLaneBits(special, 1u), 0x7f800000u);
     EXPECT_TRUE(IsNaN(special.z));
@@ -470,9 +482,7 @@ void VerifyMath_DoubleTranscendentalsHandleLargeArgumentsNonfiniteDomainsAndSign
     const VectorDouble angles = VectorDouble(pow40, negPow100, pow900, -0.0);
     VectorDouble sine = VectorDouble(0.0, 0.0, 0.0, 0.0);
     VectorDouble cosine = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    native(in angles, mut sine, mut cosine){
-        VectorDoubleSinCos(sine, cosine, angles);
-    }
+    VectorDoubleSinCos(sine, cosine, angles);
     for(usize lane = 0u; lane < 4u; ++lane){
         const f64 angleLane = GetDoubleLaneFloat(angles, lane);
         EXPECT_NEAR(GetDoubleLaneFloat(sine, lane), Sin(angleLane), 2.0e-15);
@@ -489,14 +499,9 @@ void VerifyMath_DoubleTranscendentalsHandleLargeArgumentsNonfiniteDomainsAndSign
     const VectorDouble logIn = VectorDouble(-1.0, 0.0, subMin, posInf);
     const VectorDouble expIn = VectorDouble(1024.0, -1074.0, -1075.0, qnan);
     const VectorDouble tanhIn = VectorDouble(posInf, negInf, -0.0, 0.0);
-    VectorDouble logarithm = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    VectorDouble exponential = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    VectorDouble tangent = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    native(in logIn, in expIn, in tanhIn, mut logarithm, mut exponential, mut tangent){
-        logarithm = VectorDoubleLog2(logIn);
-        exponential = VectorDoubleExp2(expIn);
-        tangent = VectorDoubleTanH(tanhIn);
-    }
+    const VectorDouble logarithm = Log2(logIn);
+    const VectorDouble exponential = Exp2(expIn);
+    const VectorDouble tangent = EvalLaneVectorDoubleTanH(tanhIn);
     EXPECT_TRUE(IsNaN(logarithm.x));
     EXPECT_EQ(logarithm.y, negInf);
     EXPECT_EQ(logarithm.z, -1074.0);
@@ -573,31 +578,16 @@ void VerifyMathNativeMask_PartialAndFullComparisonsPreserveSignalingLaneExceptio
     for(in i32 roundingMode : s_FloatingPointRoundingModes){
         ASSERT_TRUE(SetFloatingPointRoundingMode(roundingMode).has_value());
         for(usize poisonLane = 0u; poisonLane < 4u; ++poisonLane){
-            VectorSingle single = referenceSingle;
-            VectorDouble value = referenceDouble;
-            native(in referenceSingle, in referenceDouble, in poisonLane, mut single, mut value){
-                single = VectorSetIntByIndex(referenceSingle, 0x7F801234u, poisonLane);
-                value = VectorDoubleSetIntByIndex(referenceDouble, 0x7FF0000000001234ull, poisonLane);
-            }
-
-            b8 cmpSingleFloat = true;
-            b8 cmpSingleInt = false;
-            b8 cmpDouble3Float = false;
-            b8 cmpDouble4Float = true;
-            b8 cmpDouble3Int = false;
-            b8 cmpDouble4Int = false;
+            const VectorSingle single = EvalLaneVectorSetIntByIndex(referenceSingle, 0x7F801234u, poisonLane);
+            const VectorDouble value = EvalLaneVectorDoubleSetIntByIndex(referenceDouble, cast<u64>(0x7FF0000000001234u), poisonLane);
 
             ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
-            native(in single, in referenceSingle, mut cmpSingleFloat){
-                cmpSingleFloat = CompareSingle<false>(single, referenceSingle);
-            }
+            const b8 cmpSingleFloat = CompareSingle<false>(single, referenceSingle);
             EXPECT_FALSE(cmpSingleFloat);
             EXPECT_EQ(TestFloatingPointExceptions(s_FeAllExcept), s_FeInvalid);
 
             ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
-            native(in single, mut cmpSingleInt){
-                cmpSingleInt = CompareSingle<true>(single, single);
-            }
+            const b8 cmpSingleInt = CompareSingle<true>(single, single);
             EXPECT_TRUE(cmpSingleInt);
             EXPECT_EQ(TestFloatingPointExceptions(s_FeAllExcept), 0);
 
@@ -609,9 +599,7 @@ void VerifyMathNativeMask_PartialAndFullComparisonsPreserveSignalingLaneExceptio
                 EXPECT_EQ(baselinePartialFlags, s_FeInvalid);
 
             ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
-            native(in value, in referenceDouble, mut cmpDouble3Float){
-                cmpDouble3Float = CompareDouble<false, 3u>(value, referenceDouble);
-            }
+            const b8 cmpDouble3Float = CompareDouble<false, 3u>(value, referenceDouble);
             const i32 actualPartialFlags = TestFloatingPointExceptions(s_FeAllExcept);
             EXPECT_EQ(cmpDouble3Float, baselinePartial);
             EXPECT_EQ(actualPartialFlags, baselinePartialFlags);
@@ -619,23 +607,17 @@ void VerifyMathNativeMask_PartialAndFullComparisonsPreserveSignalingLaneExceptio
                 EXPECT_EQ(actualPartialFlags, s_FeInvalid);
 
             ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
-            native(in value, in referenceDouble, mut cmpDouble4Float){
-                cmpDouble4Float = CompareDouble<false, 4u>(value, referenceDouble);
-            }
+            const b8 cmpDouble4Float = CompareDouble<false, 4u>(value, referenceDouble);
             EXPECT_FALSE(cmpDouble4Float);
             EXPECT_EQ(TestFloatingPointExceptions(s_FeAllExcept), s_FeInvalid);
 
             ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
-            native(in value, mut cmpDouble3Int){
-                cmpDouble3Int = CompareDouble<true, 3u>(value, value);
-            }
+            const b8 cmpDouble3Int = CompareDouble<true, 3u>(value, value);
             EXPECT_TRUE(cmpDouble3Int);
             EXPECT_EQ(TestFloatingPointExceptions(s_FeAllExcept), 0);
 
             ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
-            native(in value, mut cmpDouble4Int){
-                cmpDouble4Int = CompareDouble<true, 4u>(value, value);
-            }
+            const b8 cmpDouble4Int = CompareDouble<true, 4u>(value, value);
             EXPECT_TRUE(cmpDouble4Int);
             EXPECT_EQ(TestFloatingPointExceptions(s_FeAllExcept), 0);
         }
@@ -814,6 +796,24 @@ PackedDot3ForkResult RunPackedDot3InvalidPriorityForkChild()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if defined(NWB_PLATFORM_LINUX) && defined(NWB_HAS_AVX2)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(MathNativeReduction, PackedDot3KeepsInvalidPriorityWhenAnotherActiveLaneOverflows){ NWB::Tests::MathCases::VerifyMathNativeReduction_PackedDot3KeepsInvalidPriorityWhenAnotherActiveLaneOverflows(); }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 
@@ -835,37 +835,6 @@ NWB_ADHD_GTEST(MathNativeMask, RawSignBitsIgnoreLowWordSignAndNoncanonicalNaNPay
 NWB_ADHD_GTEST(MathNativeMask, PartialAndFullComparisonsPreserveSignalingLaneExceptions, VerifyMathNativeMask_PartialAndFullComparisonsPreserveSignalingLaneExceptions)
 NWB_ADHD_GTEST(MathNativeReduction, MultipleNaNsInactiveSignalingLanesAndOrderedCancellationPreserveBitsAndExceptions, VerifyMathNativeReduction_MultipleNaNsInactiveSignalingLanesAndOrderedCancellationPreserveBitsAndExceptions)
 NWB_ADHD_GTEST(MathNativeReduction, ReciprocalLengthsPreserveZeroDivisionSubnormalSquaresAndNonfiniteInactiveLanes, VerifyMathNativeReduction_ReciprocalLengthsPreserveZeroDivisionSubnormalSquaresAndNonfiniteInactiveLanes)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_PLATFORM_LINUX) && defined(NWB_HAS_AVX2)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TEST(MathNativeReduction, PackedDot3KeepsInvalidPriorityWhenAnotherActiveLaneOverflows){ VerifyMathNativeReduction_PackedDot3KeepsInvalidPriorityWhenAnotherActiveLaneOverflows(); }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -18,6 +18,14 @@ b8 ValidateNonEmptySubsystemAssetRefName(in Name assetName){
     return false;
 }
 
+b8 ValidateSubsystemPayloadStoreCapacity(in b8 canStore, in StringView payloadLabel){
+    if(canStore)
+        return true;
+
+    error("ISubsystem::loadBinary failed: malformed '{}' payload", payloadLabel);
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -128,18 +136,12 @@ b8 LoadBinary(const Span<const u8> binary, ISubsystem& outSubsystem){
     const SubsystemBinaryCodec codec;
     if(!codec.readCounts(binary, outSubsystem.assetType(), expectedFieldCount, cursor, subsystemCount, fieldCount, assetCount))
         return false;
-    if(!CanStoreValueCount(subsystemHashes, subsystemCount)){
-        NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::loadBinary failed: malformed 'subsystems' payload"));
+    if(!ValidateSubsystemPayloadStoreCapacity(CanStoreValueCount(subsystemHashes, subsystemCount), "subsystems"))
         return false;
-    }
-    if(!CanStoreValueCount(fieldCounts, fieldCount)){
-        NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::loadBinary failed: malformed 'field counts' payload"));
+    if(!ValidateSubsystemPayloadStoreCapacity(CanStoreValueCount(fieldCounts, fieldCount), "field counts"))
         return false;
-    }
-    if(!CanStoreValueCount(assetHashes, assetCount)){
-        NWB_LOGGER_ERROR(NWB_TEXT("ISubsystem::loadBinary failed: malformed 'assets' payload"));
+    if(!ValidateSubsystemPayloadStoreCapacity(CanStoreValueCount(assetHashes, assetCount), "assets"))
         return false;
-    }
     subsystemHashes.resize(subsystemCount);
     fieldCounts.resize(fieldCount);
     assetHashes.resize(assetCount);

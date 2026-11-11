@@ -155,6 +155,7 @@ using CreatedFilesystem = Tests::FilesystemTest::CreatedFilesystem;
 using FilesystemVolumeTest = Tests::FilesystemTest::FilesystemVolumeTest;
 using ThrowingPublishLogger = Tests::FilesystemTest::ThrowingPublishLogger;
 using BlockingRestoreLogger = Tests::FilesystemTest::BlockingRestoreLogger;
+static_assert(IsNothrowDestructible_V<VolumeFileSystem>);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -214,19 +215,26 @@ void VerifyFilesystemVolumeTest_SegmentProbePreservesInspectionErrors(mut Filesy
 void VerifyFilesystemVolumeTest_SegmentCreatedAfterMountIsNotTruncated(mut FilesystemVolumeTest self){
     VolumeFileSystem filesystem(self.m_arena);
     ASSERT_TRUE(filesystem.mount(self.m_desc));
-    ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
 
-    native(mut self, mut filesystem, mut scratchArena){
-        const DiskPath unexpected = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 1u);
-        const Array<u8, 4u> sentinel{ 7u, 8u, 9u, 10u };
-        ASSERT_TRUE(WriteBinaryFile(unexpected, sentinel));
-        Vector<u8, ScratchArena> payload(5000u, 5u, scratchArena);
-        EXPECT_FALSE(filesystem.writeFile(s_FilesystemNameProjectTestsPayload, payload));
-        Vector<u8, ScratchArena> loaded(scratchArena);
-        ASSERT_TRUE(ReadBinaryFile(unexpected, loaded));
-        ASSERT_EQ(loaded.size(), sentinel.size());
-        EXPECT_EQ(NWB_MEMCMP(loaded.data(), sentinel.data(), sentinel.size()), 0);
-    }
+    const DiskPath unexpected = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 1u);
+    Array<u8, 4> sentinel = Array<u8, 4>();
+    sentinel[0u] = 7u;
+    sentinel[1u] = 8u;
+    sentinel[2u] = 9u;
+    sentinel[3u] = 10u;
+    ASSERT_TRUE(WriteBinaryFile(unexpected, sentinel));
+
+    Vector<u8> payload;
+    payload.resize(5000u);
+    for(usize i = 0u; i < payload.size(); ++i)
+        payload[i] = 5u;
+    EXPECT_FALSE(filesystem.writeFile(s_FilesystemNameProjectTestsPayload, payload));
+
+    Vector<u8> loaded;
+    ASSERT_TRUE(ReadBinaryFile(unexpected, loaded).has_value());
+    ASSERT_EQ(loaded.size(), sentinel.size());
+    for(usize i = 0u; i < sentinel.size(); ++i)
+        EXPECT_EQ(loaded[i], sentinel[i]);
 
     EXPECT_FALSE(filesystem.fileExists(s_FilesystemNameProjectTestsPayload));
     ASSERT_TRUE(filesystem.unmount());
@@ -235,32 +243,44 @@ void VerifyFilesystemVolumeTest_SegmentCreatedAfterMountIsNotTruncated(mut Files
 void VerifyFilesystemVolumeTest_FailedMultiSegmentGrowthKeepsTrimmedVolumeMountable(mut FilesystemVolumeTest self){
     VolumeFileSystem filesystem(self.m_arena);
     ASSERT_TRUE(filesystem.mount(self.m_desc));
-    ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
 
-    native(mut self, mut filesystem, mut scratchArena){
-        const Array<u8, 3u> payload{ 1u, 2u, 3u };
-        ASSERT_TRUE(filesystem.writeFile(s_FilesystemNameProjectTestsPayload, payload));
-        ASSERT_TRUE(filesystem.flush());
-        const DiskPath first = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
-        const auto trimmedSize = FileSize(first);
-        ASSERT_TRUE(trimmedSize);
-        ASSERT_LT(*trimmedSize, self.m_desc.segmentSize);
-        const DiskPath collision = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 2u);
-        const Array<u8, 2u> sentinel{ 7u, 8u };
-        ASSERT_TRUE(WriteBinaryFile(collision, sentinel));
-        Vector<u8, ScratchArena> large(9000u, 5u, scratchArena);
-        EXPECT_FALSE(filesystem.writeFile(s_FilesystemNameProjectTestsLargeGrowth, large));
-        Vector<u8, ScratchArena> loaded(scratchArena);
-        ASSERT_TRUE(ReadBinaryFile(collision, loaded));
-        ASSERT_EQ(loaded.size(), sentinel.size());
-        EXPECT_EQ(NWB_MEMCMP(loaded.data(), sentinel.data(), sentinel.size()), 0);
-        ASSERT_TRUE(RemoveFile(collision));
-        ASSERT_TRUE(filesystem.unmount());
-        ASSERT_TRUE(filesystem.mount(self.m_desc));
-        ASSERT_TRUE(filesystem.readFile(s_FilesystemNameProjectTestsPayload, loaded));
-        ASSERT_EQ(loaded.size(), payload.size());
-        EXPECT_EQ(NWB_MEMCMP(loaded.data(), payload.data(), payload.size()), 0);
-    }
+    Array<u8, 3> payload = Array<u8, 3>();
+    payload[0u] = 1u;
+    payload[1u] = 2u;
+    payload[2u] = 3u;
+    ASSERT_TRUE(filesystem.writeFile(s_FilesystemNameProjectTestsPayload, payload));
+    ASSERT_TRUE(filesystem.flush());
+
+    const DiskPath first = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
+    const Expected<u64, ErrorCode> trimmedSize = FileSize(first);
+    ASSERT_TRUE(trimmedSize.has_value());
+    ASSERT_LT(trimmedSize.value(), self.m_desc.segmentSize);
+
+    const DiskPath collision = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 2u);
+    Array<u8, 2> sentinel = Array<u8, 2>();
+    sentinel[0u] = 7u;
+    sentinel[1u] = 8u;
+    ASSERT_TRUE(WriteBinaryFile(collision, sentinel));
+
+    Vector<u8> large;
+    large.resize(9000u);
+    for(usize i = 0u; i < large.size(); ++i)
+        large[i] = 5u;
+    EXPECT_FALSE(filesystem.writeFile(s_FilesystemNameProjectTestsLargeGrowth, large));
+
+    Vector<u8> loaded;
+    ASSERT_TRUE(ReadBinaryFile(collision, loaded).has_value());
+    ASSERT_EQ(loaded.size(), sentinel.size());
+    for(usize i = 0u; i < sentinel.size(); ++i)
+        EXPECT_EQ(loaded[i], sentinel[i]);
+
+    ASSERT_TRUE(RemoveFile(collision).has_value());
+    ASSERT_TRUE(filesystem.unmount());
+    ASSERT_TRUE(filesystem.mount(self.m_desc));
+    ASSERT_TRUE(filesystem.readFile(s_FilesystemNameProjectTestsPayload, loaded));
+    ASSERT_EQ(loaded.size(), payload.size());
+    for(usize i = 0u; i < payload.size(); ++i)
+        EXPECT_EQ(loaded[i], payload[i]);
 
     EXPECT_FALSE(filesystem.fileExists(s_FilesystemNameProjectTestsLargeGrowth));
     ASSERT_TRUE(filesystem.unmount());
@@ -269,20 +289,25 @@ void VerifyFilesystemVolumeTest_FailedMultiSegmentGrowthKeepsTrimmedVolumeMounta
 void VerifyFilesystemVolumeTest_GrowthDoesNotPadOverExternallyTruncatedLiveData(mut FilesystemVolumeTest self){
     VolumeFileSystem filesystem(self.m_arena);
     ASSERT_TRUE(filesystem.mount(self.m_desc));
-    ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
     const u64 truncatedSize = self.m_desc.metadataSize + 1u;
 
-    native(in truncatedSize, mut self, mut filesystem, mut scratchArena){
-        const Array<u8, 8u> payload{ 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u };
-        ASSERT_TRUE(filesystem.writeFile(s_FilesystemNameProjectTestsPayload, payload));
-        const DiskPath first = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
-        ASSERT_TRUE(ResizeFile(first, truncatedSize));
-        Vector<u8, ScratchArena> large(5000u, 5u, scratchArena);
-        EXPECT_FALSE(filesystem.writeFile(s_FilesystemInputNameProjectTestsNewGrowth, large));
-        const auto size = FileSize(first);
-        ASSERT_TRUE(size);
-        EXPECT_EQ(*size, truncatedSize);
-    }
+    Array<u8, 8> payload = Array<u8, 8>();
+    for(usize i = 0u; i < payload.size(); ++i)
+        payload[i] = cast<u8>(i + 1u);
+    ASSERT_TRUE(filesystem.writeFile(s_FilesystemNameProjectTestsPayload, payload));
+
+    const DiskPath first = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
+    ASSERT_TRUE(ResizeFile(first, truncatedSize).has_value());
+
+    Vector<u8> large;
+    large.resize(5000u);
+    for(usize i = 0u; i < large.size(); ++i)
+        large[i] = 5u;
+    EXPECT_FALSE(filesystem.writeFile(s_FilesystemInputNameProjectTestsNewGrowth, large));
+
+    const Expected<u64, ErrorCode> size = FileSize(first);
+    ASSERT_TRUE(size.has_value());
+    EXPECT_EQ(size.value(), truncatedSize);
 
     ASSERT_TRUE(filesystem.unmount());
 }
@@ -291,21 +316,27 @@ void VerifyFilesystemVolumeTest_GrowthAtSegmentLimitDoesNotExpandTrimmedFile(mut
     self.m_desc.maxSegments = 1u;
     VolumeFileSystem filesystem(self.m_arena);
     ASSERT_TRUE(filesystem.mount(self.m_desc));
-    ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
 
-    native(mut self, mut filesystem, mut scratchArena){
-        const Array<u8, 3u> payload{ 1u, 2u, 3u };
-        ASSERT_TRUE(filesystem.writeFile(s_FilesystemNameProjectTestsPayload, payload));
-        ASSERT_TRUE(filesystem.flush());
-        const DiskPath first = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
-        const auto before = FileSize(first);
-        ASSERT_TRUE(before);
-        Vector<u8, ScratchArena> large(5000u, 5u, scratchArena);
-        EXPECT_FALSE(filesystem.writeFile(s_FilesystemInputNameProjectTestsLimitedGrowth, large));
-        const auto after = FileSize(first);
-        ASSERT_TRUE(after);
-        EXPECT_EQ(*after, *before);
-    }
+    Array<u8, 3> payload = Array<u8, 3>();
+    payload[0u] = 1u;
+    payload[1u] = 2u;
+    payload[2u] = 3u;
+    ASSERT_TRUE(filesystem.writeFile(s_FilesystemNameProjectTestsPayload, payload));
+    ASSERT_TRUE(filesystem.flush());
+
+    const DiskPath first = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
+    const Expected<u64, ErrorCode> before = FileSize(first);
+    ASSERT_TRUE(before.has_value());
+
+    Vector<u8> large;
+    large.resize(5000u);
+    for(usize i = 0u; i < large.size(); ++i)
+        large[i] = 5u;
+    EXPECT_FALSE(filesystem.writeFile(s_FilesystemInputNameProjectTestsLimitedGrowth, large));
+
+    const Expected<u64, ErrorCode> after = FileSize(first);
+    ASSERT_TRUE(after.has_value());
+    EXPECT_EQ(after.value(), before.value());
 
     ASSERT_TRUE(filesystem.unmount());
 }
@@ -400,11 +431,9 @@ void VerifyFilesystemVolumeTest_DeferredWritesSurviveUnmountAndReadOnlyMount(mut
 }
 
 void VerifyFilesystemVolumeTest_FailedUnmountRetainsPendingWritesForExplicitRetry(mut FilesystemVolumeTest self){
-    DiskPath relocated(self.m_arena);
-    native(mut self, mut relocated){
-        self.m_desc.mountDirectory = self.m_directory / s_MountedDirectory;
-        relocated = self.m_directory / s_RelocatedDirectory;
-    }
+    const Path baseDirectory = self.m_directory;
+    self.m_desc.mountDirectory = baseDirectory / s_MountedDirectory;
+    const Path relocated = baseDirectory / s_RelocatedDirectory;
 
     CreatedFilesystem filesystem(self.m_arena, self.m_desc);
     ASSERT_TRUE(filesystem.valid());
@@ -440,12 +469,9 @@ void VerifyFilesystemVolumeTest_FailedUnmountRetainsPendingWritesForExplicitRetr
 }
 
 void VerifyFilesystemVolumeTest_ExplicitFlushSurvivesResourceOnlyDestructionWithoutPersistenceRetry(mut FilesystemVolumeTest self){
-    DiskPath relocated(self.m_arena);
-    native(mut self, mut relocated){
-        static_assert(IsNothrowDestructible_V<VolumeFileSystem>);
-        self.m_desc.mountDirectory = self.m_directory / s_MountedDirectory;
-        relocated = self.m_directory / s_RelocatedDirectory;
-    }
+    const Path baseDirectory = self.m_directory;
+    self.m_desc.mountDirectory = baseDirectory / s_MountedDirectory;
+    const Path relocated = baseDirectory / s_RelocatedDirectory;
 
     CreatedFilesystem filesystem(self.m_arena, self.m_desc);
     ASSERT_TRUE(filesystem.valid());
@@ -536,32 +562,46 @@ void VerifyFilesystemVolumeTest_ReplacesRemovesAndReadsEmptyFiles(mut Filesystem
     ASSERT_TRUE(filesystem.get().unmount());
 }
 
+StagedDirectoryPaths BuildStagedVolumePathsForTest(in Path outputDirectory, in StringView volumeName, mut ScratchArena scratchArena){
+    return FilesystemVolumeStagingDetail::BuildStagedVolumePaths(outputDirectory, volumeName, scratchArena);
+}
+
 void VerifyFilesystemVolumeTest_CompactionPreservesExistingRecoveryDirectories(mut FilesystemVolumeTest self){
     VolumeFileSystem filesystem(self.m_arena);
     ASSERT_TRUE(filesystem.mount(self.m_desc));
     ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
 
-    native(mut self, mut filesystem, mut scratchArena){
-        const Array<u8, 4u> payload{ 1u, 2u, 3u, 4u };
-        ASSERT_TRUE(filesystem.writeFile(s_FilesystemNameProjectTestsRecoveryGap, payload));
-        ASSERT_TRUE(filesystem.writeFile(s_FilesystemNameProjectTestsPayload, payload));
-        ASSERT_TRUE(filesystem.removeFile(s_FilesystemNameProjectTestsRecoveryGap));
-        const auto paths = FilesystemVolumeStagingDetail::BuildStagedVolumePaths(self.m_directory, self.m_desc.volumeName.view(), scratchArena);
-        ASSERT_TRUE(EnsureDirectories(paths.backupDirectory));
-        ASSERT_TRUE(EnsureDirectories(paths.stageDirectory));
-        const DiskPath backupEvidence = paths.backupDirectory / "recovery";
-        const DiskPath stageEvidence = paths.stageDirectory / "recovery";
-        ASSERT_TRUE(WriteBinaryFile(backupEvidence, payload));
-        ASSERT_TRUE(WriteBinaryFile(stageEvidence, payload));
-        EXPECT_FALSE(filesystem.compact(false));
-        Vector<u8, ScratchArena> loaded(scratchArena);
-        ASSERT_TRUE(ReadBinaryFile(backupEvidence, loaded));
-        ASSERT_EQ(loaded.size(), payload.size());
-        EXPECT_EQ(NWB_MEMCMP(loaded.data(), payload.data(), payload.size()), 0);
-        ASSERT_TRUE(ReadBinaryFile(stageEvidence, loaded));
-        ASSERT_EQ(loaded.size(), payload.size());
-        EXPECT_EQ(NWB_MEMCMP(loaded.data(), payload.data(), payload.size()), 0);
-    }
+    Array<u8, 4> payload = Array<u8, 4>();
+    payload[0u] = 1u;
+    payload[1u] = 2u;
+    payload[2u] = 3u;
+    payload[3u] = 4u;
+    ASSERT_TRUE(filesystem.writeFile(s_FilesystemNameProjectTestsRecoveryGap, payload));
+    ASSERT_TRUE(filesystem.writeFile(s_FilesystemNameProjectTestsPayload, payload));
+    ASSERT_TRUE(filesystem.removeFile(s_FilesystemNameProjectTestsRecoveryGap));
+
+    const StagedDirectoryPaths paths = BuildStagedVolumePathsForTest(self.m_directory, self.m_desc.volumeName.view(), scratchArena);
+    const Path backupDirectory = paths.backupDirectory;
+    const Path stageDirectory = paths.stageDirectory;
+    ASSERT_TRUE(EnsureDirectories(backupDirectory).has_value());
+    ASSERT_TRUE(EnsureDirectories(stageDirectory).has_value());
+
+    const Path backupEvidence = backupDirectory / "recovery";
+    const Path stageEvidence = stageDirectory / "recovery";
+    ASSERT_TRUE(WriteBinaryFile(backupEvidence, payload));
+    ASSERT_TRUE(WriteBinaryFile(stageEvidence, payload));
+    EXPECT_FALSE(filesystem.compact(false));
+
+    Vector<u8> loaded;
+    ASSERT_TRUE(ReadBinaryFile(backupEvidence, loaded).has_value());
+    ASSERT_EQ(loaded.size(), payload.size());
+    for(usize i = 0u; i < payload.size(); ++i)
+        EXPECT_EQ(loaded[i], payload[i]);
+
+    ASSERT_TRUE(ReadBinaryFile(stageEvidence, loaded).has_value());
+    ASSERT_EQ(loaded.size(), payload.size());
+    for(usize i = 0u; i < payload.size(); ++i)
+        EXPECT_EQ(loaded[i], payload[i]);
 
     ASSERT_TRUE(filesystem.unmount());
 }
@@ -768,35 +808,47 @@ void VerifyFilesystemVolumeTest_ImmediateMutationUnwindPreservesIndexedPayloadsA
 void VerifyFilesystemVolumeTest_CompactionPreservesCapacityUntilRequestedTrimAndRetainsCursorIdentity(mut FilesystemVolumeTest self){
     VolumeFileSystem filesystem(self.m_arena);
     ASSERT_TRUE(filesystem.mount(self.m_desc));
-    ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
 
-    native(mut self, mut filesystem, mut scratchArena){
-        Vector<u8, ScratchArena> abandoned(5000u, 19u, scratchArena);
-        const Array<u8, 3u> payload{ 4u, 5u, 6u };
-        ASSERT_TRUE(filesystem.writeFile(s_FilesystemNameProjectTestsPayload, abandoned));
-        ASSERT_TRUE(filesystem.writeFile(s_FilesystemNameProjectTestsPayload, payload));
-        const usize originalSegments = filesystem.segmentCount();
-        ASSERT_GT(originalSegments, 1u);
-        const auto opened = filesystem.openFile(s_FilesystemNameProjectTestsPayload);
-        ASSERT_TRUE(opened);
-        FileCursor cursor = *opened;
-        ASSERT_TRUE(filesystem.compact(false));
-        EXPECT_EQ(filesystem.segmentCount(), originalSegments);
-        ASSERT_TRUE(filesystem.wastedBytes());
-        EXPECT_EQ(*filesystem.wastedBytes(), 0u);
-        Array<u8, 3u> loaded{};
-        const auto read = filesystem.readFile(cursor, loaded.data(), loaded.size());
-        ASSERT_TRUE(read);
-        EXPECT_EQ(*read, payload.size());
-        EXPECT_EQ(loaded, payload);
-        ASSERT_TRUE(filesystem.compact(true));
-        EXPECT_EQ(filesystem.segmentCount(), 1u);
-        const ::Path<ScratchArena> directory(scratchArena, self.m_directory);
-        const auto firstSegment = MakeVolumeSegmentPath(directory, self.m_desc.volumeName.view(), 0u);
-        const auto lastSegmentBytes = FileSize(firstSegment);
-        ASSERT_TRUE(lastSegmentBytes);
-        EXPECT_EQ(*lastSegmentBytes, self.m_desc.metadataSize + payload.size());
+    Vector<u8> abandoned;
+    abandoned.resize(5000u);
+    for(usize i = 0u; i < abandoned.size(); ++i)
+        abandoned[i] = 19u;
+
+    Array<u8, 3> payload = Array<u8, 3>();
+    payload[0u] = 4u;
+    payload[1u] = 5u;
+    payload[2u] = 6u;
+    ASSERT_TRUE(filesystem.writeFile(s_FilesystemNameProjectTestsPayload, abandoned));
+    ASSERT_TRUE(filesystem.writeFile(s_FilesystemNameProjectTestsPayload, payload));
+
+    const usize originalSegments = filesystem.segmentCount();
+    ASSERT_GT(originalSegments, 1u);
+    const Expected<FileCursor> opened = filesystem.openFile(s_FilesystemNameProjectTestsPayload);
+    ASSERT_TRUE(opened.has_value());
+    FileCursor cursor = opened.value();
+
+    ASSERT_TRUE(filesystem.compact(false));
+    EXPECT_EQ(filesystem.segmentCount(), originalSegments);
+    const Expected<u64> wasted = filesystem.wastedBytes();
+    ASSERT_TRUE(wasted.has_value());
+    EXPECT_EQ(wasted.value(), 0u);
+
+    Array<u8, 3> loaded = Array<u8, 3>();
+    Expected<usize> read = MakeUnexpected(Failure());
+    native(mut filesystem, mut cursor, mut loaded, mut read){
+        read = filesystem.readFile(cursor, loaded.data(), loaded.size());
     }
+    ASSERT_TRUE(read.has_value());
+    EXPECT_EQ(read.value(), payload.size());
+    for(usize i = 0u; i < payload.size(); ++i)
+        EXPECT_EQ(loaded[i], payload[i]);
+
+    ASSERT_TRUE(filesystem.compact(true));
+    EXPECT_EQ(filesystem.segmentCount(), 1u);
+    const DiskPath firstSegment = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
+    const Expected<u64, ErrorCode> lastSegmentBytes = FileSize(firstSegment);
+    ASSERT_TRUE(lastSegmentBytes.has_value());
+    EXPECT_EQ(lastSegmentBytes.value(), self.m_desc.metadataSize + payload.size());
 
     ASSERT_TRUE(filesystem.unmount());
 }
@@ -937,19 +989,18 @@ void VerifyFilesystem_VolumeNamesRejectEmptySeparatorsAndWhitespace(){
 
 void VerifyFilesystemVolumeTest_EarlyPublicationFailureCleansOwnedWorkDirectories(mut FilesystemVolumeTest self){
     ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
+    const Path baseDirectory = self.m_directory;
     StagedDirectoryPaths paths = StagedDirectoryPaths();
-    b8 published = true;
+    paths.stageDirectory = baseDirectory / s_FilesystemStageDirectory;
+    paths.backupDirectory = baseDirectory / s_FilesystemBackupDirectory;
+    ASSERT_TRUE(EnsureDirectories(paths.stageDirectory).has_value());
+    ASSERT_TRUE(EnsureDirectories(paths.backupDirectory).has_value());
 
-    native(mut self, mut scratchArena, mut paths, mut published){
-        paths.stageDirectory = self.m_directory / s_FilesystemStageDirectory;
-        paths.backupDirectory = self.m_directory / s_FilesystemBackupDirectory;
-        ASSERT_TRUE(EnsureDirectories(paths.stageDirectory));
-        ASSERT_TRUE(EnsureDirectories(paths.backupDirectory));
-        {
-            StagedDirectoryCleanupGuard stageCleanup(paths.stageDirectory, "test");
-            StagedDirectoryCleanupGuard backupCleanup(paths.backupDirectory, "test", s_BackupDirectoryLabel);
-            published = PublishStagedVolume(paths, self.m_directory, self.m_desc.volumeName.view(), 0u, scratchArena, {}, &stageCleanup, &backupCleanup);
-        }
+    b8 published = true;
+    native(in paths, mut self, mut scratchArena, mut published){
+        StagedDirectoryCleanupGuard stageCleanup(paths.stageDirectory, "test");
+        StagedDirectoryCleanupGuard backupCleanup(paths.backupDirectory, "test", s_BackupDirectoryLabel);
+        published = PublishStagedVolume(paths, self.m_directory, self.m_desc.volumeName.view(), 0u, scratchArena, {}, &stageCleanup, &backupCleanup);
     }
 
     EXPECT_FALSE(published);
@@ -1039,11 +1090,10 @@ void VerifyFilesystemVolumeTest_ThrowingDiagnosticStillRetainsIncompleteRollback
 
 void VerifyFilesystemVolumeTest_FailedLaterSegmentPromotionRestoresPublishedBytes(mut FilesystemVolumeTest self){
     ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
+    const Path baseDirectory = self.m_directory;
     StagedDirectoryPaths stagedPaths = StagedDirectoryPaths();
-    native(mut self, mut stagedPaths){
-        stagedPaths.stageDirectory = self.m_directory / s_FilesystemStageDirectory;
-        stagedPaths.backupDirectory = self.m_directory / s_FilesystemBackupDirectory;
-    }
+    stagedPaths.stageDirectory = baseDirectory / s_FilesystemStageDirectory;
+    stagedPaths.backupDirectory = baseDirectory / s_FilesystemBackupDirectory;
     ASSERT_TRUE(EnsureDirectories(stagedPaths.stageDirectory).has_value());
 
     const DiskPath firstOutput = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
@@ -1092,11 +1142,10 @@ void VerifyFilesystemVolumeTest_FailedLaterSegmentPromotionRestoresPublishedByte
 
 void VerifyFilesystemVolumeTest_ThrowingPromotionDiagnosticRestoresPublishedBytesDuringUnwind(mut FilesystemVolumeTest self){
     ScratchArena scratchArena(s_FilesystemNameTestsFilesystem);
+    const Path baseDirectory = self.m_directory;
     StagedDirectoryPaths stagedPaths = StagedDirectoryPaths();
-    native(mut self, mut stagedPaths){
-        stagedPaths.stageDirectory = self.m_directory / s_FilesystemStageDirectory;
-        stagedPaths.backupDirectory = self.m_directory / s_FilesystemBackupDirectory;
-    }
+    stagedPaths.stageDirectory = baseDirectory / s_FilesystemStageDirectory;
+    stagedPaths.backupDirectory = baseDirectory / s_FilesystemBackupDirectory;
     ASSERT_TRUE(EnsureDirectories(stagedPaths.stageDirectory).has_value());
 
     const DiskPath firstOutput = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
@@ -1212,36 +1261,6 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ADHD_GTEST_F(FilesystemVolumeTest, SegmentProbePreservesInspectionErrors, VerifyFilesystemVolumeTest_SegmentProbePreservesInspectionErrors)
-NWB_ADHD_GTEST_F(FilesystemVolumeTest, SegmentCreatedAfterMountIsNotTruncated, VerifyFilesystemVolumeTest_SegmentCreatedAfterMountIsNotTruncated)
-NWB_ADHD_GTEST_F(FilesystemVolumeTest, FailedMultiSegmentGrowthKeepsTrimmedVolumeMountable, VerifyFilesystemVolumeTest_FailedMultiSegmentGrowthKeepsTrimmedVolumeMountable)
-NWB_ADHD_GTEST_F(FilesystemVolumeTest, GrowthDoesNotPadOverExternallyTruncatedLiveData, VerifyFilesystemVolumeTest_GrowthDoesNotPadOverExternallyTruncatedLiveData)
-NWB_ADHD_GTEST_F(FilesystemVolumeTest, GrowthAtSegmentLimitDoesNotExpandTrimmedFile, VerifyFilesystemVolumeTest_GrowthAtSegmentLimitDoesNotExpandTrimmedFile)
-NWB_ADHD_GTEST_F(FilesystemVolumeTest, ReadsAcrossSegmentsAndSeeksAtBoundaries, VerifyFilesystemVolumeTest_ReadsAcrossSegmentsAndSeeksAtBoundaries)
-NWB_ADHD_GTEST_F(FilesystemVolumeTest, DeferredWritesSurviveUnmountAndReadOnlyMount, VerifyFilesystemVolumeTest_DeferredWritesSurviveUnmountAndReadOnlyMount)
-NWB_ADHD_GTEST_F(FilesystemVolumeTest, FailedUnmountRetainsPendingWritesForExplicitRetry, VerifyFilesystemVolumeTest_FailedUnmountRetainsPendingWritesForExplicitRetry)
-NWB_ADHD_GTEST_F(FilesystemVolumeTest, ExplicitFlushSurvivesResourceOnlyDestructionWithoutPersistenceRetry, VerifyFilesystemVolumeTest_ExplicitFlushSurvivesResourceOnlyDestructionWithoutPersistenceRetry)
-NWB_ADHD_GTEST_F(FilesystemVolumeTest, RemountFlushesPendingMetadata, VerifyFilesystemVolumeTest_RemountFlushesPendingMetadata)
-NWB_ADHD_GTEST_F(FilesystemVolumeTest, ReplacesRemovesAndReadsEmptyFiles, VerifyFilesystemVolumeTest_ReplacesRemovesAndReadsEmptyFiles)
-NWB_ADHD_GTEST_F(FilesystemVolumeTest, CompactionPreservesExistingRecoveryDirectories, VerifyFilesystemVolumeTest_CompactionPreservesExistingRecoveryDirectories)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 #if defined(NWB_PLATFORM_WINDOWS)
 
 
@@ -1255,25 +1274,6 @@ TEST_F(FilesystemVolumeTest, IncompleteCompactionRollbackUnmountsTheVolume){ Ver
 
 
 #endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ADHD_GTEST_F(FilesystemVolumeTest, FailedCompactionPreservesOverlappingSourcePayloadBytes, VerifyFilesystemVolumeTest_FailedCompactionPreservesOverlappingSourcePayloadBytes)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1303,6 +1303,19 @@ TEST_F(FilesystemVolumeTest, ImmediateMutationUnwindPreservesIndexedPayloadsAndM
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+NWB_ADHD_GTEST_F(FilesystemVolumeTest, SegmentProbePreservesInspectionErrors, VerifyFilesystemVolumeTest_SegmentProbePreservesInspectionErrors)
+NWB_ADHD_GTEST_F(FilesystemVolumeTest, SegmentCreatedAfterMountIsNotTruncated, VerifyFilesystemVolumeTest_SegmentCreatedAfterMountIsNotTruncated)
+NWB_ADHD_GTEST_F(FilesystemVolumeTest, FailedMultiSegmentGrowthKeepsTrimmedVolumeMountable, VerifyFilesystemVolumeTest_FailedMultiSegmentGrowthKeepsTrimmedVolumeMountable)
+NWB_ADHD_GTEST_F(FilesystemVolumeTest, GrowthDoesNotPadOverExternallyTruncatedLiveData, VerifyFilesystemVolumeTest_GrowthDoesNotPadOverExternallyTruncatedLiveData)
+NWB_ADHD_GTEST_F(FilesystemVolumeTest, GrowthAtSegmentLimitDoesNotExpandTrimmedFile, VerifyFilesystemVolumeTest_GrowthAtSegmentLimitDoesNotExpandTrimmedFile)
+NWB_ADHD_GTEST_F(FilesystemVolumeTest, ReadsAcrossSegmentsAndSeeksAtBoundaries, VerifyFilesystemVolumeTest_ReadsAcrossSegmentsAndSeeksAtBoundaries)
+NWB_ADHD_GTEST_F(FilesystemVolumeTest, DeferredWritesSurviveUnmountAndReadOnlyMount, VerifyFilesystemVolumeTest_DeferredWritesSurviveUnmountAndReadOnlyMount)
+NWB_ADHD_GTEST_F(FilesystemVolumeTest, FailedUnmountRetainsPendingWritesForExplicitRetry, VerifyFilesystemVolumeTest_FailedUnmountRetainsPendingWritesForExplicitRetry)
+NWB_ADHD_GTEST_F(FilesystemVolumeTest, ExplicitFlushSurvivesResourceOnlyDestructionWithoutPersistenceRetry, VerifyFilesystemVolumeTest_ExplicitFlushSurvivesResourceOnlyDestructionWithoutPersistenceRetry)
+NWB_ADHD_GTEST_F(FilesystemVolumeTest, RemountFlushesPendingMetadata, VerifyFilesystemVolumeTest_RemountFlushesPendingMetadata)
+NWB_ADHD_GTEST_F(FilesystemVolumeTest, ReplacesRemovesAndReadsEmptyFiles, VerifyFilesystemVolumeTest_ReplacesRemovesAndReadsEmptyFiles)
+NWB_ADHD_GTEST_F(FilesystemVolumeTest, CompactionPreservesExistingRecoveryDirectories, VerifyFilesystemVolumeTest_CompactionPreservesExistingRecoveryDirectories)
+NWB_ADHD_GTEST_F(FilesystemVolumeTest, FailedCompactionPreservesOverlappingSourcePayloadBytes, VerifyFilesystemVolumeTest_FailedCompactionPreservesOverlappingSourcePayloadBytes)
 NWB_ADHD_GTEST_F(FilesystemVolumeTest, CompactionPreservesCapacityUntilRequestedTrimAndRetainsCursorIdentity, VerifyFilesystemVolumeTest_CompactionPreservesCapacityUntilRequestedTrimAndRetainsCursorIdentity)
 NWB_ADHD_GTEST_F(FilesystemVolumeTest, RejectsInvalidPathHashFromMetadataIndex, VerifyFilesystemVolumeTest_RejectsInvalidPathHashFromMetadataIndex)
 NWB_ADHD_GTEST_F(FilesystemVolumeTest, MetadataImagePreservesCompleteHashesAndClearsRemovedRecords, VerifyFilesystemVolumeTest_MetadataImagePreservesCompleteHashesAndClearsRemovedRecords)

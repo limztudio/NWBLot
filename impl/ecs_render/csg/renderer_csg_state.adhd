@@ -2,81 +2,73 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_csg/frame_types.adhd>
+#include <impl/ecs_render/csg/work_region.adhd>
+#include <impl/ecs_render/kernel/renderer_format_private.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/ecs_csg/frame_state.adhd.h>
-#include <impl/ecs_render/csg/work_region.adhd.h>
-
-#include <core/graphics/rhi/gpu_descriptor_heap.h>
-#include <core/graphics/rhi/pipeline.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererCsgState final : NoCopy{
-public:
-    RendererCsgState()noexcept = default;
-
-
-public:
-    void invalidateResources()noexcept;
-
-
-public:
+class RendererCsgState : NoCopy{
     // CSG layouts are push-only; resources use the global heap.
-    Core::BindingLayoutHandle m_clipBindingLayout;
-    Core::BindingLayoutHandle m_intervalPeelBindingLayout;
-    Core::BindingLayoutHandle m_receiverSpanBuildBindingLayout;
-    Core::BindingLayoutHandle m_intervalCombineBindingLayout;
-    Core::ShaderHandle m_intervalPeelComputeShader;
-    Core::ShaderHandle m_receiverSpanBuildComputeShader;
-    Core::ShaderHandle m_intervalCombineComputeShader;
-    Core::ShaderHandle m_intervalCapFillPixelShader;
-    Core::ShaderHandle m_refractionCapFillPixelShader;
-    Core::ComputePipelineHandle m_intervalPeelPipeline;
-    Core::ComputePipelineHandle m_receiverSpanBuildPipeline;
-    Core::ComputePipelineHandle m_intervalCombinePipeline;
-    Core::GraphicsPipelineHandle m_intervalCapFillPipeline;
-    Core::GraphicsPipelineHandle m_refractionCapFillPipeline;
-    Core::BufferHandle m_receiverRangeBuffer;
-    Core::BufferHandle m_cutterBuffer;
-    Core::BufferHandle m_clipContextSlotsBuffer;
-    Core::BufferHandle m_intervalSampleStateBuffer;
-    CsgFrameStateCacheSignature m_frameStateCacheSignature;
-    CsgFrameState m_frameStateCache;
-    usize m_receiverRangeBufferCapacity = 0u;
-    usize m_cutterBufferCapacity = 0u;
-    Core::GpuDescriptorHandle m_receiverRangeBufferHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuDescriptorHandle m_cutterBufferHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuDescriptorHandle m_clipContextSlotsHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuDescriptorHandle m_intervalSampleStateHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    b8 m_frameStateCacheValid = false;
-};
-static_assert(sizeof(RendererCsgState) == s_RendererCsgStateByteSize, "RendererCsgState should keep its compact CPU-only layout");
+    public KernelBindingLayoutHandle m_clipBindingLayout = KernelBindingLayoutHandle();
+    public KernelBindingLayoutHandle m_intervalPeelBindingLayout = KernelBindingLayoutHandle();
+    public KernelBindingLayoutHandle m_receiverSpanBuildBindingLayout = KernelBindingLayoutHandle();
+    public KernelBindingLayoutHandle m_intervalCombineBindingLayout = KernelBindingLayoutHandle();
+    public KernelShaderHandle m_intervalPeelComputeShader = KernelShaderHandle();
+    public KernelShaderHandle m_receiverSpanBuildComputeShader = KernelShaderHandle();
+    public KernelShaderHandle m_intervalCombineComputeShader = KernelShaderHandle();
+    public KernelShaderHandle m_intervalCapFillPixelShader = KernelShaderHandle();
+    public KernelShaderHandle m_refractionCapFillPixelShader = KernelShaderHandle();
+    public KernelComputePipelineHandle m_intervalPeelPipeline = KernelComputePipelineHandle();
+    public KernelComputePipelineHandle m_receiverSpanBuildPipeline = KernelComputePipelineHandle();
+    public KernelComputePipelineHandle m_intervalCombinePipeline = KernelComputePipelineHandle();
+    public KernelGraphicsPipelineHandle m_intervalCapFillPipeline = KernelGraphicsPipelineHandle();
+    public KernelGraphicsPipelineHandle m_refractionCapFillPipeline = KernelGraphicsPipelineHandle();
+    public KernelBufferHandle m_receiverRangeBuffer = KernelBufferHandle();
+    public KernelBufferHandle m_cutterBuffer = KernelBufferHandle();
+    public KernelBufferHandle m_clipContextSlotsBuffer = KernelBufferHandle();
+    public KernelBufferHandle m_intervalSampleStateBuffer = KernelBufferHandle();
+    public CsgFrameStateCacheSignature m_frameStateCacheSignature = CsgFrameStateCacheSignature();
+    public CsgFrameState m_frameStateCache = CsgFrameState();
+    public usize m_receiverRangeBufferCapacity = 0u;
+    public usize m_cutterBufferCapacity = 0u;
+    public KernelGpuDescriptorHandle m_receiverRangeBufferHeapHandle = KernelGpuDescriptorHandle();
+    public KernelGpuDescriptorHandle m_cutterBufferHeapHandle = KernelGpuDescriptorHandle();
+    public KernelGpuDescriptorHandle m_clipContextSlotsHeapHandle = KernelGpuDescriptorHandle();
+    public KernelGpuDescriptorHandle m_intervalSampleStateHeapHandle = KernelGpuDescriptorHandle();
+    public b8 m_frameStateCacheValid = false;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public void invalidateResources(){
+        this.m_clipBindingLayout.reset();
+        this.m_intervalPeelBindingLayout.reset();
+        this.m_receiverSpanBuildBindingLayout.reset();
+        this.m_intervalCombineBindingLayout.reset();
+        this.m_intervalPeelComputeShader.reset();
+        this.m_receiverSpanBuildComputeShader.reset();
+        this.m_intervalCombineComputeShader.reset();
+        this.m_intervalCapFillPixelShader.reset();
+        this.m_refractionCapFillPixelShader.reset();
+        this.m_intervalPeelPipeline.reset();
+        this.m_receiverSpanBuildPipeline.reset();
+        this.m_intervalCombinePipeline.reset();
+        this.m_intervalCapFillPipeline.reset();
+        this.m_refractionCapFillPipeline.reset();
+        this.m_receiverRangeBuffer.reset();
+        this.m_cutterBuffer.reset();
+        this.m_clipContextSlotsBuffer.reset();
+        this.m_receiverRangeBufferHeapHandle = KernelGpuDescriptorHandle();
+        this.m_cutterBufferHeapHandle = KernelGpuDescriptorHandle();
+        this.m_clipContextSlotsHeapHandle = KernelGpuDescriptorHandle();
+        this.m_intervalSampleStateBuffer.reset();
+        this.m_intervalSampleStateHeapHandle = KernelGpuDescriptorHandle();
+        this.m_frameStateCacheSignature = CsgFrameStateCacheSignature();
+        this.m_frameStateCache = CsgFrameState();
+        this.m_receiverRangeBufferCapacity = 0u;
+        this.m_cutterBufferCapacity = 0u;
+        this.m_frameStateCacheValid = false;
+    }
 }
 
 

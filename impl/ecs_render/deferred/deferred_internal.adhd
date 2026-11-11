@@ -10,8 +10,11 @@ native{
 
 
 #include <impl/global.adhd.h>
+#include <impl/assets/graphics/scene/binding_slots.h>
 #include <impl/ecs_render/deferred/deferred_frame_targets.adhd.h>
+#include <impl/ecs_render/deferred/renderer_deferred_state.adhd.h>
 #include <impl/ecs_render/kernel/task_graph_queue_lookup.adhd.h>
+#include <impl/ecs_render/material/renderer_draw_types.adhd.h>
 #include <impl/ecs_render/raytrace/raytracing_system.adhd.h>
 
 #include <core/common/log.h>
@@ -23,6 +26,44 @@ native{
 
 
 NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static_assert(s_DeferredSceneShadingGpuByteCount == sizeof(f32) * NWB_SCENE_SHADING_BUFFER_FLOAT_COUNT, "RendererDeferredState scene shading cache size drifted");
+static_assert(s_DeferredLightGpuByteCount == sizeof(f32) * NWB_SCENE_LIGHT_RECORD_FLOAT_COUNT * NWB_SCENE_MAX_LIGHTS, "RendererDeferredState light cache size drifted");
+
+class RendererMaterialSystem;
+
+using DeferredRendererMaterialSystem = RendererMaterialSystem;
+using DeferredRendererMaterialSystemConstPtr = const RendererMaterialSystem*;
+using DeferredMaterialPassDrawItemPartitions = MaterialPassDrawItemPartitions;
+
+[[nodiscard]] NWB_INLINE constexpr DeferredRendererMaterialSystemConstPtr NullDeferredRendererMaterialSystemConstPtr()noexcept{
+    return nullptr;
+}
+
+[[nodiscard]] NWB_INLINE DeferredRendererMaterialSystemConstPtr AddressOfDeferredRendererMaterialSystem(const RendererMaterialSystem& system)noexcept{
+    return &system;
+}
+
+[[nodiscard]] NWB_INLINE b8 HasOpaquePartitionMaterialGeometry(const MaterialPassDrawItemPartitions& drawItems)noexcept{
+    return !drawItems.regular.empty() || !drawItems.csgReceiverSurface.empty();
+}
+
+[[nodiscard]] Expected<Core::GpuGraphResourceSetId> GatherOpaqueGbufferGeometrySet(
+    Core::GpuTaskGraph* graph,
+    Core::Alloc::ScratchArena* scratchArena,
+    const MaterialPassDrawItemPartitions& drawItems
+);
+
+[[nodiscard]] Expected<Core::GpuGraphResourceSetId> GatherOpaqueGbufferSampledTextureSet(
+    Core::GpuTaskGraph* graph,
+    const RendererMaterialSystem* materialSystem,
+    Core::Alloc::ScratchArena* scratchArena,
+    const MaterialPassDrawItemPartitions& drawItems
+);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

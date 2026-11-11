@@ -10,6 +10,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const StringView s_TelemetryEventKindTextLog = "textLog";
+const StringView s_TelemetryEventKindDiagnostic = "diagnostic";
+const StringView s_TelemetryEventKindPerfFrame = "perfFrame";
+const StringView s_TelemetryEventKindFrameGraphFrame = "frameGraphFrame";
+const StringView s_TelemetryEventKindMemoryFrame = "memoryFrame";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 usize ComputeTelemetryGraphJsonReserveBytes(
     in usize nodeCount,
     in usize edgeCount,
@@ -27,6 +37,23 @@ usize ComputeTelemetryGraphJsonReserveBytes(
         + packetSubmissionCount * s_LogTelemetryReportJsonJsonReportPacketSubmissionStatisticsBytes;
 }
 
+StringView SelectTelemetryEventKindText(in usize kindIndex){
+    switch(kindIndex){
+    case 1u:
+        return s_TelemetryEventKindTextLog;
+    case 2u:
+        return s_TelemetryEventKindDiagnostic;
+    case 3u:
+        return s_TelemetryEventKindPerfFrame;
+    case 4u:
+        return s_TelemetryEventKindFrameGraphFrame;
+    case 5u:
+        return s_TelemetryEventKindMemoryFrame;
+    default:
+        return s_LogTelemetryReportDotUnknownReportField;
+    }
+}
+
 StringView SelectJsonTrailingComma(in b8 isFinalItem){
     if(isFinalItem)
         return "";
@@ -39,505 +66,80 @@ StringView SelectJsonFieldTerminator(in b8 isFinalField){
     return s_LogTelemetryReportJsonJsonFieldEnd;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <global/binary.h>
-#include <global/json_text.h>
-#include <global/name_hash_text.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_LOG_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace TelemetryReportDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] usize EstimateJsonReportReserve(const Span<const FrameGraphReportRecord> graphs)noexcept{
-    usize reserveBytes = s_LogTelemetryReportJsonJsonReportReserveBytes;
-    for(const FrameGraphReportRecord& graph : graphs){
-        usize labelBytes = 0u;
-        usize runtimeStatisticsNodes = 0u;
-        for(const Core::Telemetry::FrameGraphNodePayload& node : graph.payload.nodes){
-            labelBytes += node.label.size();
-            if(node.runtimeStatistics.present)
-                ++runtimeStatisticsNodes;
-        }
-        reserveBytes += ComputeTelemetryGraphJsonReserveBytes(
-            graph.payload.nodes.size(),
-            graph.payload.edges.size(),
-            labelBytes,
-            runtimeStatisticsNodes,
-            graph.payload.physicalQueueRuntimeStatistics.size(),
-            graph.payload.packetSubmissionStatistics.size()
-        );
-    }
-    return reserveBytes;
+StringView SelectJsonBoolLiteral(in b8 flagValue){
+    if(flagValue)
+        return "true";
+    return "false";
 }
 
-
-void AppendFrameGraphPhysicalQueueJson(const Core::Telemetry::FrameGraphPhysicalQueueId& queue, AString<Core::Telemetry::TelemetryArena>& out){
-    if(!queue.valid()){
-        out += s_JsonNullText;
+void AppendPhysicalQueueJsonText(in b8 valid, in u32 index, in u32 deviceGeneration, mut String out){
+    if(!valid){
+        out.append(s_LogTelemetryMemoryReportJsonNullText);
         return;
     }
-
-    StringAppendFormat(out, s_LogTelemetryReportJsonJsonQueueIndexFormat, queue.index, queue.deviceGeneration);
+    StringAppendFormat(out, s_LogTelemetryReportJsonJsonQueueIndexFormat, index, deviceGeneration);
 }
 
-void AppendFrameGraphQueueAssignmentJson(const Core::Telemetry::FrameGraphQueueAssignment& assignment, AString<Core::Telemetry::TelemetryArena>& out){
-    if(!assignment.present){
-        out += s_JsonNullText;
+void AppendCompiledTaskJsonText(in b8 present, in u64 planGeneration, in u32 packetIndex, in u32 decisionIndex, mut String out){
+    if(!present){
+        out.append(s_LogTelemetryMemoryReportJsonNullText);
         return;
     }
-
-    out += s_LogTelemetryReportJsonJsonInitialQueueKey;
-    AppendFrameGraphPhysicalQueueJson(assignment.initialQueue, out);
-    out += s_LogTelemetryReportJsonJsonPlannedQueueKey;
-    AppendFrameGraphPhysicalQueueJson(assignment.plannedQueue, out);
-    out += s_LogTelemetryReportJsonJsonAcceptedQueueKey;
-    AppendFrameGraphPhysicalQueueJson(assignment.acceptedQueue, out);
-    out += s_LogTelemetryReportJsonJsonPreviousAcceptedQueueKey;
-    AppendFrameGraphPhysicalQueueJson(assignment.previousAcceptedQueue, out);
-    out += s_LogTelemetryReportJsonJsonQueueClassKey;
-    AppendJsonQuotedText(out, AStringView(FrameGraphQueueClassText(assignment.queueClass)));
-    out += s_LogTelemetryReportJsonJsonReasonKey;
-    AppendJsonQuotedText(out, AStringView(FrameGraphQueueAssignmentReasonText(assignment.reason)));
-    StringAppendFormat(out, ", \"modifierMask\": {}", static_cast<u32>(assignment.modifiers));
-    out += s_LogTelemetryReportJsonJsonAcceptanceKey;
-    AppendJsonQuotedText(out, AStringView(FrameGraphQueueAssignmentAcceptanceText(assignment.acceptance)));
-    StringAppendFormat(out, ", \"dedicated\": {}", assignment.dedicated ? s_TrueText : s_FalseText);
-    StringAppendFormat(
-        out,
-        ", \"score\": {{\"overlap\": {}, \"queueLoad\": {}, \"incomingCrossings\": {}, "
-        "\"outgoingCrossings\": {}, \"ownershipTransfers\": {}, \"total\": {}}}}}",
-        assignment.score.overlap,
-        assignment.score.queueLoad,
-        assignment.score.incomingCrossings,
-        assignment.score.outgoingCrossings,
-        assignment.score.ownershipTransfers,
-        assignment.score.total
-    );
+    StringAppendFormat(out, "{{\"planGeneration\": {}, \"packetIndex\": {}, \"packetizationDecision\": ", planGeneration, packetIndex);
+    AppendJsonQuotedText(out, SelectFrameGraphTaskPacketizationDecisionText(decisionIndex));
+    out.append("}");
 }
 
-void AppendFrameGraphCompiledTaskJson(const Core::Telemetry::FrameGraphCompiledTask& compiledTask, AString<Core::Telemetry::TelemetryArena>& out){
-    if(!compiledTask.present){
-        out += s_JsonNullText;
-        return;
-    }
-
-    StringAppendFormat(out, "{{\"planGeneration\": {}, \"packetIndex\": {}, \"packetizationDecision\": ", compiledTask.planGeneration, compiledTask.packetIndex);
-    AppendJsonQuotedText(out, AStringView(FrameGraphTaskPacketizationDecisionText(compiledTask.packetizationDecision)));
-    out += '}';
-}
-
-void AppendFrameGraphCompileRuntimeStatisticsJson(const Core::Telemetry::FrameGraphCompileRuntimeStatistics& statistics, AString<Core::Telemetry::TelemetryArena>& out){
-    StringAppendFormat(out, "{{\"taskCount\": {}, \"resourceCount\": {}, \"resourceVersionCount\": ", statistics.taskCount, statistics.resourceCount);
-    StringAppendFormat(out, "{}, \"resourceVersionEdgeCount\": {}", statistics.resourceVersionCount, statistics.resourceVersionEdgeCount);
-    StringAppendFormat(
-        out,
-        ", \"resourceUseCount\": {}, \"explicitDependencyCount\": {}, "
-        "\"inferredDependencyCount\": {}, \"packetCount\": {}, \"packetDependencyCount\": {}, \"mergedTaskCount\": {}",
-        statistics.resourceUseCount,
-        statistics.explicitDependencyCount,
-        statistics.inferredDependencyCount,
-        statistics.packetCount,
-        statistics.packetDependencyCount,
-        statistics.mergedTaskCount
-    );
-    StringAppendFormat(
-        out,
-        ", \"transitionBarrierCount\": {}, \"uavBarrierCount\": {}, \"ownershipReleaseBarrierCount\": {}, "
-        "\"ownershipAcquireBarrierCount\": {}, \"stateExportBarrierCount\": {}",
-        statistics.transitionBarrierCount,
-        statistics.uavBarrierCount,
-        statistics.ownershipReleaseBarrierCount,
-        statistics.ownershipAcquireBarrierCount,
-        statistics.stateExportBarrierCount
-    );
-    StringAppendFormat(
-        out,
-        ", \"logicalOwnershipTransferCount\": {}, \"logicalOwnershipTransferSignatureCount\": {}, "
-        "\"repeatedOwnershipTransferSignatureCount\": {}, \"concurrentSharingCouldAvoidTransferCount\": {}, "
-        "\"concurrentSharingAdviceResourceCount\": {}, \"logicalOwnershipTransferInternalCount\": {}, "
-        "\"logicalOwnershipTransferExternalImportCount\": {}, \"logicalOwnershipTransferExternalExportCount\": {}",
-        statistics.logicalOwnershipTransferCount,
-        statistics.logicalOwnershipTransferSignatureCount,
-        statistics.repeatedOwnershipTransferSignatureCount,
-        statistics.concurrentSharingCouldAvoidTransferCount,
-        statistics.concurrentSharingAdviceResourceCount,
-        statistics.logicalOwnershipTransferInternalCount,
-        statistics.logicalOwnershipTransferExternalImportCount,
-        statistics.logicalOwnershipTransferExternalExportCount
-    );
-    StringAppendFormat(
-        out,
-        ", \"resourceSetCount\": {}, \"resourceSetMemberCount\": {}, \"directResourceUseCount\": {}, "
-        "\"declaredResourceSetUseCount\": {}, \"expandedResourceSetMemberUseCount\": {}, \"payloadObjectCount\": {}, "
-        "\"payloadObjectBytes\": {}, \"uploadBlobCount\": {}, \"uploadBlobBytes\": {}",
-        statistics.resourceSetCount,
-        statistics.resourceSetMemberCount,
-        statistics.directResourceUseCount,
-        statistics.declaredResourceSetUseCount,
-        statistics.expandedResourceSetMemberUseCount,
-        statistics.payloadObjectCount,
-        statistics.payloadObjectBytes,
-        statistics.uploadBlobCount,
-        statistics.uploadBlobBytes
-    );
-    StringAppendFormat(
-        out,
-        ", \"declarationSeconds\": {:.9}, \"analysisSeconds\": {:.9}, \"validationSeconds\": {:.9}, "
-        "\"dependencyAnalysisSeconds\": {:.9}, \"hazardAnalysisSeconds\": {:.9}, \"topologicalOrderSeconds\": {:.9}",
-        statistics.declarationSeconds,
-        statistics.analysisSeconds,
-        statistics.validationSeconds,
-        statistics.dependencyAnalysisSeconds,
-        statistics.hazardAnalysisSeconds,
-        statistics.topologicalOrderSeconds
-    );
-    StringAppendFormat(
-        out,
-        ", \"queueAssignmentSeconds\": {:.9}, \"planningSeconds\": {:.9}, \"packetizationSeconds\": {:.9}, "
-        "\"resourceStatePlanningSeconds\": {:.9}, \"packetDependencyPlanningSeconds\": {:.9}, \"totalSeconds\": {:.9}}}",
-        statistics.queueAssignmentSeconds,
-        statistics.planningSeconds,
-        statistics.packetizationSeconds,
-        statistics.resourceStatePlanningSeconds,
-        statistics.packetDependencyPlanningSeconds,
-        statistics.totalSeconds
-    );
-}
-
-void AppendFrameGraphRecordingRuntimeStatisticsJson(const Core::Telemetry::FrameGraphRecordingRuntimeStatistics& statistics, AString<Core::Telemetry::TelemetryArena>& out){
-    StringAppendFormat(out, s_LogTelemetryReportJsonJsonRecordingCountsFormat, statistics.packetCount, statistics.taskCount, statistics.commandListCount, statistics.barrierCount);
-    StringAppendFormat(out, "\"workerRoutedPacketCount\": {}, \"parallelPacketCount\": {}", statistics.workerRoutedPacketCount, statistics.parallelPacketCount);
-    StringAppendFormat(
-        out,
-        ", \"commandListAcquisitionSeconds\": {:.9}, \"graphBarrierRecordingSeconds\": {:.9}, "
-        "\"taskRecordSeconds\": {:.9}, \"recordingSeconds\": {:.9}, \"recordingElapsedSeconds\": {:.9}, "
-        "\"readyFrontierElapsedSeconds\": {:.9}, \"readyFrontierWorkerBusySeconds\": {:.9}, "
-        "\"readyFrontierWorkerCapacitySeconds\": {:.9}}}",
-        statistics.commandListAcquisitionSeconds,
-        statistics.graphBarrierRecordingSeconds,
-        statistics.taskRecordSeconds,
-        statistics.recordingSeconds,
-        statistics.recordingElapsedSeconds,
-        statistics.readyFrontierElapsedSeconds,
-        statistics.readyFrontierWorkerBusySeconds,
-        statistics.readyFrontierWorkerCapacitySeconds
-    );
-}
-
-template<typename Statistics>
-void AppendSubmissionRuntimeStatisticsJson(const Statistics& statistics, AString<Core::Telemetry::TelemetryArena>& out){
-    StringAppendFormat(
-        out,
-        "{{\"acceptedPacketCount\": {}, \"acceptedTaskCount\": {}, \"rejectedPacketCount\": {}, "
-        "\"rejectedTaskCount\": {}, \"nativeSubmissionCount\": {}, \"rejectedSubmissionCount\": {}, "
-        "\"nativeCommandListCount\": {}, \"plannedWaitTokenCount\": {}, \"sameQueueWaitElisionCount\": {}, "
-        "\"timelineWaitCount\": {}, \"mergedTimelineWaitCount\": {}, \"acceptedFrontierSubmissionCount\": {}",
-        statistics.acceptedPacketCount,
-        statistics.acceptedTaskCount,
-        statistics.rejectedPacketCount,
-        statistics.rejectedTaskCount,
-        statistics.nativeSubmissionCount,
-        statistics.rejectedSubmissionCount,
-        statistics.nativeCommandListCount,
-        statistics.plannedWaitTokenCount,
-        statistics.sameQueueWaitElisionCount,
-        statistics.timelineWaitCount,
-        statistics.mergedTimelineWaitCount,
-        statistics.acceptedFrontierSubmissionCount
-    );
-    StringAppendFormat(out, s_LogTelemetryReportJsonJsonInheritedTimelineWaitElisionCountFormat, statistics.inheritedTimelineWaitElisionCount);
-    StringAppendFormat(out, ", \"recoverySubmissionCount\": {}", statistics.recoverySubmissionCount);
-    StringAppendFormat(out, ", \"submissionSeconds\": {:.9}}}", statistics.submissionSeconds);
-}
-
-void AppendFrameGraphPhysicalQueueCompileRuntimeStatisticsJson(const Core::Telemetry::FrameGraphPhysicalQueueCompileRuntimeStatistics& statistics, AString<Core::Telemetry::TelemetryArena>& out){
-    StringAppendFormat(
-        out,
-        "{{\"taskCount\": {}, \"packetCount\": {}, \"mergedTaskCount\": {}, "
-        "\"prologueBarrierCount\": {}, \"epilogueBarrierCount\": {}, "
-        "\"ownershipReleaseBarrierCount\": {}, \"ownershipAcquireBarrierCount\": {}",
-        statistics.taskCount,
-        statistics.packetCount,
-        statistics.mergedTaskCount,
-        statistics.prologueBarrierCount,
-        statistics.epilogueBarrierCount,
-        statistics.ownershipReleaseBarrierCount,
-        statistics.ownershipAcquireBarrierCount
-    );
-    StringAppendFormat(
-        out,
-        ", \"incomingLogicalOwnershipTransferCount\": {}, \"outgoingLogicalOwnershipTransferCount\": {}, "
-        "\"incomingLogicalOwnershipTransferSignatureCount\": {}, "
-        "\"outgoingLogicalOwnershipTransferSignatureCount\": {}, "
-        "\"incomingRepeatedOwnershipTransferSignatureCount\": {}, "
-        "\"outgoingRepeatedOwnershipTransferSignatureCount\": {}, "
-        "\"concurrentSharingAdviceResourceCount\": {}}}",
-        statistics.incomingLogicalOwnershipTransferCount,
-        statistics.outgoingLogicalOwnershipTransferCount,
-        statistics.incomingLogicalOwnershipTransferSignatureCount,
-        statistics.outgoingLogicalOwnershipTransferSignatureCount,
-        statistics.incomingRepeatedOwnershipTransferSignatureCount,
-        statistics.outgoingRepeatedOwnershipTransferSignatureCount,
-        statistics.concurrentSharingAdviceResourceCount
-    );
-}
-
-void AppendFrameGraphPhysicalQueueRecordingRuntimeStatisticsJson(const Core::Telemetry::FrameGraphPhysicalQueueRecordingRuntimeStatistics& statistics, AString<Core::Telemetry::TelemetryArena>& out){
-    StringAppendFormat(out, s_LogTelemetryReportJsonJsonRecordingCountsFormat, statistics.packetCount, statistics.taskCount, statistics.commandListCount, statistics.barrierCount);
-    StringAppendFormat(
-        out,
-        "\"workerRoutedPacketCount\": {}, \"parallelPacketCount\": {}, "
-        "\"commandListAcquisitionSeconds\": {:.9}, \"graphBarrierRecordingSeconds\": {:.9}, "
-        "\"taskRecordSeconds\": {:.9}, \"recordingSeconds\": {:.9}}}",
-        statistics.workerRoutedPacketCount,
-        statistics.parallelPacketCount,
-        statistics.commandListAcquisitionSeconds,
-        statistics.graphBarrierRecordingSeconds,
-        statistics.taskRecordSeconds,
-        statistics.recordingSeconds
-    );
-}
-
-void AppendFrameGraphPhysicalQueueRuntimeStatisticsJson(const Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& statistics, AString<Core::Telemetry::TelemetryArena>& out){
-    out += "{\"queue\": ";
-    AppendFrameGraphPhysicalQueueJson(statistics.queue, out);
-    out += s_LogTelemetryReportJsonJsonQueueClassKey;
-    AppendJsonQuotedText(out, AStringView(FrameGraphQueueClassText(statistics.queueClass)));
-    out += ", \"compile\": ";
-    AppendFrameGraphPhysicalQueueCompileRuntimeStatisticsJson(statistics.compile, out);
-    out += s_LogTelemetryReportJsonJsonRecordingKey;
-    AppendFrameGraphPhysicalQueueRecordingRuntimeStatisticsJson(statistics.recording, out);
-    out += s_LogTelemetryReportJsonJsonSubmissionKey;
-    AppendSubmissionRuntimeStatisticsJson(statistics.submission, out);
-    out += '}';
-}
-
-void AppendFrameGraphPacketSubmissionStatisticsJson(const Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord& statistics, AString<Core::Telemetry::TelemetryArena>& out){
-    StringAppendFormat(out, "{{\"packet\": {{\"index\": {}, \"generation\": {}}}, \"queue\": ", statistics.packetIndex, statistics.packetGeneration);
-    AppendFrameGraphPhysicalQueueJson(statistics.queue, out);
-    out += s_LogTelemetryReportJsonJsonQueueClassKey;
-    AppendJsonQuotedText(out, AStringView(FrameGraphQueueClassText(statistics.queueClass)));
-    StringAppendFormat(
-        out,
-        ", \"taskCount\": {}, \"commandListCount\": {}, \"plannedWaitTokenCount\": {}, "
-        "\"sameQueueWaitElisionCount\": {}, \"timelineWaitCount\": {}, \"mergedTimelineWaitCount\": {}",
-        statistics.taskCount,
-        statistics.commandListCount,
-        statistics.plannedWaitTokenCount,
-        statistics.sameQueueWaitElisionCount,
-        statistics.timelineWaitCount,
-        statistics.mergedTimelineWaitCount
-    );
-    StringAppendFormat(out, s_LogTelemetryReportJsonJsonInheritedTimelineWaitElisionCountFormat, statistics.inheritedTimelineWaitElisionCount);
-    StringAppendFormat(
-        out,
-        ", \"joinsAcceptedQueueFrontier\": {}, \"recoverySubmission\": {}, \"submissionSeconds\": {:.9}}}",
-        statistics.joinsAcceptedQueueFrontier ? s_TrueText : s_FalseText,
-        statistics.recoverySubmission ? s_TrueText : s_FalseText,
-        statistics.submissionSeconds
-    );
-}
-
-void AppendFrameGraphRuntimeStatisticsJson(
-    const Core::Telemetry::FrameGraphRuntimeStatistics& statistics,
-    const Span<const Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics,
-    const Span<const Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord> packetSubmissionStatistics,
-    const FrameGraphOwnerStatisticsRange& ownerRange,
-    const b8 physicalQueueRuntimeStatisticsPresent,
-    const b8 packetSubmissionStatisticsPresent,
-    AString<Core::Telemetry::TelemetryArena>& out
-){
-    if(!statistics.present){
-        out += s_JsonNullText;
-        return;
-    }
-
-    StringAppendFormat(
-        out,
-        "{{\"graphGeneration\": {}, \"planGeneration\": {}, \"recordingAttemptGeneration\": {}, "
-        "\"deviceGeneration\": {}, \"compile\": ",
-        statistics.graphGeneration,
-        statistics.planGeneration,
-        statistics.recordingAttemptGeneration,
-        statistics.deviceGeneration
-    );
-    AppendFrameGraphCompileRuntimeStatisticsJson(statistics.compile, out);
-    out += s_LogTelemetryReportJsonJsonRecordingKey;
-    AppendFrameGraphRecordingRuntimeStatisticsJson(statistics.recording, out);
-    out += s_LogTelemetryReportJsonJsonSubmissionKey;
-    AppendSubmissionRuntimeStatisticsJson(statistics.submission, out);
-    out += ", \"physicalQueues\": ";
-    if(!physicalQueueRuntimeStatisticsPresent)
-        out += s_JsonNullText;
-    else{
-        out += '[';
-        for(usize index = ownerRange.physicalQueueBegin; index < ownerRange.physicalQueueEnd; ++index){
-            if(index != ownerRange.physicalQueueBegin)
-                out += ", ";
-            const Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord& record = physicalQueueRuntimeStatistics[index];
-            AppendFrameGraphPhysicalQueueRuntimeStatisticsJson(record.statistics, out);
-        }
-        out += ']';
-    }
-
-    out += ", \"packetSubmissions\": ";
-    if(!packetSubmissionStatisticsPresent)
-        out += s_JsonNullText;
-    else{
-        out += '[';
-        for(usize index = ownerRange.packetSubmissionBegin; index < ownerRange.packetSubmissionEnd; ++index){
-            if(index != ownerRange.packetSubmissionBegin)
-                out += ", ";
-            AppendFrameGraphPacketSubmissionStatisticsJson(packetSubmissionStatistics[index], out);
-        }
-        out += ']';
-    }
-    out += '}';
-}
-
-
-void AppendFrameGraphJson(const FrameGraphReportRecord& record, const usize graphIndex, const b8 finalGraph, AString<Core::Telemetry::TelemetryArena>& out){
-    const Core::Telemetry::FrameGraphPayload& graph = record.payload;
-    out += "      {\n";
-    StringAppendFormat(out, "        \"captureIndex\": {},\n", graphIndex);
-    StringAppendFormat(out, "        \"frameIndex\": {},\n", graph.frameIndex);
-    StringAppendFormat(out, "        \"streamId\": {},\n", record.streamId);
-    out += "        \"nodes\": [\n";
-    FrameGraphOwnerStatisticsRange ownerRange;
-    for(usize nodeIndex = 0u; nodeIndex < graph.nodes.size(); ++nodeIndex){
-        const Core::Telemetry::FrameGraphNodePayload& node = graph.nodes[nodeIndex];
-        Array<char, NameHashTextCodec::s_TextLength + 1u> identityText;
-        const AStringView identity = FormatNameIdentityText(node.name, identityText);
-
-        StringAppendFormat(out, "          {{\"index\": {}, \"identity\": ", nodeIndex);
-        AppendJsonQuotedText(out, identity);
-        out += ", \"label\": ";
-        AppendJsonQuotedText(out, node.label);
-        out += ", \"kind\": ";
-        AppendJsonQuotedText(out, AStringView(FrameGraphNodeKindText(node.kind)));
-        StringAppendFormat(out, ", \"flags\": {}, \"queueAssignment\": ", static_cast<u32>(node.flags));
-        AppendFrameGraphQueueAssignmentJson(node.queueAssignment, out);
-        out += ", \"compiledTask\": ";
-        AppendFrameGraphCompiledTaskJson(node.compiledTask, out);
-        out += ", \"runtimeStatistics\": ";
-        ownerRange.advance(graph, static_cast<u32>(nodeIndex));
-        const usize physicalQueueRuntimeStatisticsCount = ownerRange.physicalQueueEnd - ownerRange.physicalQueueBegin;
-        AppendFrameGraphRuntimeStatisticsJson(node.runtimeStatistics, graph.physicalQueueRuntimeStatistics, graph.packetSubmissionStatistics, ownerRange, physicalQueueRuntimeStatisticsCount != 0u, graph.packetSubmissionStatisticsPresent, out);
-        StringAppendFormat(out, "}}{}\n", SelectJsonTrailingComma(nodeIndex + 1u == graph.nodes.size()));
-    }
-    out += "        ],\n";
-    out += "        \"edges\": [\n";
-    for(usize edgeIndex = 0u; edgeIndex < graph.edges.size(); ++edgeIndex){
-        const Core::Telemetry::FrameGraphEdgePayload& edge = graph.edges[edgeIndex];
-        StringAppendFormat(out, "          {{\"from\": {}, \"to\": {}, \"kind\": ", edge.fromNodeIndex, edge.toNodeIndex);
-        AppendJsonQuotedText(out, AStringView(FrameGraphEdgeLabel(edge.kind)));
-        StringAppendFormat(out, ", \"flags\": {}}}{}\n", static_cast<u32>(edge.flags), SelectJsonTrailingComma(edgeIndex + 1u == graph.edges.size()));
-    }
-    out += "        ]\n";
-    StringAppendFormat(out, "      }}{}\n", SelectJsonTrailingComma(finalGraph));
-}
-
-void BuildJson(const TelemetryReportSummary& summary, const Span<const FrameGraphReportRecord> graphs, const AStringView memoryRecords, AString<Core::Telemetry::TelemetryArena>& out){
-    out.clear();
-    usize reserveBytes = EstimateJsonReportReserve(graphs);
-    if(!AddBinaryReserveBytes(reserveBytes, memoryRecords.size()))
-        reserveBytes = Max(reserveBytes, memoryRecords.size());
-    out.reserve(reserveBytes);
-    out += s_LogTelemetryReportJsonJsonDocumentOpen;
+void AppendTelemetrySummaryJsonPrefix(in TelemetryReportSummary summary, in StringView memoryRecords, mut String out){
+    out.append(s_LogTelemetryReportJsonJsonDocumentOpen);
     StringAppendFormat(out, "  \"eventCount\": {},\n", summary.eventCount);
-    out += "  \"frameRange\": {";
-    StringAppendFormat(out, "\"present\": {}", summary.hasFrameRange ? s_TrueText : s_FalseText);
+    out.append("  \"frameRange\": {");
+    StringAppendFormat(out, "\"present\": {}", SelectJsonBoolLiteral(summary.hasFrameRange));
     if(summary.hasFrameRange)
         StringAppendFormat(out, ", \"min\": {}, \"max\": {}", summary.minFrameIndex, summary.maxFrameIndex);
-    out += "},\n";
+    out.append("},\n");
 
-    out += "  \"events\": {\n";
+    out.append("  \"events\": {\n");
     for(usize i = 0u; i < s_TelemetryReportEventKindCount; ++i){
-        out += "    ";
-        AppendJsonQuotedText(out, EventKindText(static_cast<Core::Telemetry::EventKind::Enum>(i)));
+        out.append("    ");
+        AppendJsonQuotedText(out, SelectTelemetryEventKindText(i));
         StringAppendFormat(out, ": {}{}", summary.eventKindCounts[i], SelectJsonFieldTerminator(i + 1u == s_TelemetryReportEventKindCount));
     }
-    out += s_LogTelemetryReportJsonJsonSectionClose;
+    out.append(s_LogTelemetryReportJsonJsonSectionClose);
 
-    out += "  \"perf\": {\n";
+    out.append("  \"perf\": {\n");
     StringAppendFormat(out, "    \"cpuTimingEvents\": {},\n", summary.cpuTimingEventCount);
     StringAppendFormat(out, "    \"cpuTimingSamples\": {},\n", summary.cpuTimingSampleCount);
-    out += "    \"cpuTimingSeconds\": ";
+    out.append("    \"cpuTimingSeconds\": ");
     if(summary.cpuTimingSecondsValid)
         StringAppendFormat(out, s_LogTelemetryReportJsonJsonSecondsFormat, summary.cpuTimingSeconds);
     else
-        out += s_JsonNullText;
-    out += s_LogTelemetryReportJsonJsonFieldEnd;
+        out.append(s_LogTelemetryMemoryReportJsonNullText);
+    out.append(s_LogTelemetryReportJsonJsonFieldEnd);
     StringAppendFormat(out, "    \"maxCpuTimingSeconds\": {:.9},\n", summary.maxCpuTimingSeconds);
     StringAppendFormat(out, "    \"gpuTimingEvents\": {},\n", summary.gpuTimingEventCount);
     StringAppendFormat(out, "    \"gpuTimingSamples\": {},\n", summary.gpuTimingSampleCount);
-    out += "    \"gpuTimingSeconds\": ";
+    out.append("    \"gpuTimingSeconds\": ");
     if(summary.gpuTimingSecondsValid)
         StringAppendFormat(out, s_LogTelemetryReportJsonJsonSecondsFormat, summary.gpuTimingSeconds);
     else
-        out += s_JsonNullText;
-    out += s_LogTelemetryReportJsonJsonFieldEnd;
+        out.append(s_LogTelemetryMemoryReportJsonNullText);
+    out.append(s_LogTelemetryReportJsonJsonFieldEnd);
     StringAppendFormat(out, "    \"maxGpuTimingSeconds\": {:.9},\n", summary.maxGpuTimingSeconds);
     StringAppendFormat(out, "    \"memoryEvents\": {},\n", summary.memoryEventCount);
-    AppendTelemetryMemorySourcesJson(summary, out);
-    out += "    \"memoryRecords\": [\n";
-    out.append(memoryRecords.data(), memoryRecords.size());
-    out += "\n    ]\n";
-    out += s_LogTelemetryReportJsonJsonSectionClose;
+    AppendTelemetryMemorySourcesJsonText(summary, out);
+    out.append("    \"memoryRecords\": [\n");
+    out.append(memoryRecords);
+    out.append("\n    ]\n");
+    out.append(s_LogTelemetryReportJsonJsonSectionClose);
 
-    out += "  \"frameGraph\": {\n";
+    out.append("  \"frameGraph\": {\n");
     StringAppendFormat(out, "    \"frames\": {},\n", summary.frameGraphFrameCount);
     StringAppendFormat(out, "    \"nodes\": {},\n", summary.frameGraphNodeCount);
     StringAppendFormat(out, "    \"edges\": {},\n", summary.frameGraphEdgeCount);
     StringAppendFormat(out, "    \"maxNodes\": {},\n", summary.maxFrameGraphNodeCount);
     StringAppendFormat(out, "    \"maxEdges\": {},\n", summary.maxFrameGraphEdgeCount);
-    out += "    \"records\": [\n";
-    for(usize graphIndex = 0u; graphIndex < graphs.size(); ++graphIndex)
-        AppendFrameGraphJson(graphs[graphIndex], graphIndex, graphIndex + 1u == graphs.size(), out);
-    out += "    ]\n";
-    out += s_LogTelemetryReportJsonJsonSectionClose;
-    StringAppendFormat(out, "  \"parseFailures\": {}\n", summary.parseFailureCount);
-    out += s_LogTelemetryReportJsonJsonDocumentClose;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_LOG_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    out.append("    \"records\": [\n");
 }
 
 

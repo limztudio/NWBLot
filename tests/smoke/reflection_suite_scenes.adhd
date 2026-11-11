@@ -8,39 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <loader/project_entry.adhd.h>
-
-#include <impl/assets_skeleton/asset.adhd.h>
-
-#include <core/assets/manager.h>
-#include <core/common/log.h>
-
-#include <global/assert.h>
-#include <global/simd/constant.h>
-#include <global/simd/convert.h>
-#include <global/simd/frame.h>
-
-namespace NWB::Tests::Smoke{
-inline constexpr ModelObjectKindEnum s_ReflectionModelObjectSkeleton = Impl::ModelObjectKind::Skeleton;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const SmokeMeshRef s_ReflectionSuitePlaneMesh = "project/meshes/shadow_plane";
 const SmokeMeshRef s_ReflectionSuiteSphereMesh = "project/meshes/caustic_sphere";
 const SmokeMaterialRef s_ReflectionSuiteOpaqueMaterial = "project/smoke/reflection/materials/opaque";
@@ -56,11 +23,7 @@ const f32 s_ReflectionSuiteGlassF0 = ((s_ReflectionSuiteGlassIor - 1.0f) * (s_Re
 
 
 class ReflectionFeedbackScene{
-    public ReflectionFeedbackScene(mut World world){
-        this.m_world = world;
-    }
-
-    public b8 create(in StringView caseName, in b8 finalState){
+    public b8 create(in StringView caseName, in b8 finalState, mut World world){
         if(caseName == "feedback_mutation")
             this.m_case = ReflectionFeedbackCase::Mutation;
         else if(caseName == "feedback_long_miss")
@@ -69,39 +32,38 @@ class ReflectionFeedbackScene{
             return false;
 
         if(this.m_case == ReflectionFeedbackCase::LongMiss){
-            if(!this.createPanel(VectorSingle(0.12f, 0.12f, 0.12f, 1.0f), VectorSingle(0.0f, 1.4f, 8.0f, 0.0f), VectorSingle(6.0f, 1.0f, 6.0f, 0.0f)).valid())
+            if(!this.createPanel(VectorSingle(0.12f, 0.12f, 0.12f, 1.0f), VectorSingle(0.0f, 1.4f, 8.0f, 0.0f), VectorSingle(6.0f, 1.0f, 6.0f, 0.0f), world).valid())
                 return false;
-            if(!this.createPanel(VectorSingle(0.008f, 0.008f, 0.008f, 1.0f), VectorSingle(0.0f, 0.0f, 2.0f, 0.0f), VectorSingle(4.0f, 1.0f, 6.0f, 0.0f), 0.95f, true).valid())
+            if(!this.createPanel(VectorSingle(0.008f, 0.008f, 0.008f, 1.0f), VectorSingle(0.0f, 0.0f, 2.0f, 0.0f), VectorSingle(4.0f, 1.0f, 6.0f, 0.0f), 0.95f, true, world).valid())
                 return false;
-            const EntityID red = this.createPanel(VectorSingle(1.0f, 0.01f, 0.01f, 1.0f), VectorSingle(-1.7f, 3.6f, 6.0f, 0.0f), VectorSingle(0.3f, 1.0f, 0.35f, 0.0f));
-            this.m_green = this.createPanel(VectorSingle(0.01f, 1.0f, 0.01f, 1.0f), VectorSingle(1.7f, 3.6f, 6.0f, 0.0f), VectorSingle(0.3f, 1.0f, 0.35f, 0.0f));
+            const EntityID red = this.createPanel(VectorSingle(1.0f, 0.01f, 0.01f, 1.0f), VectorSingle(-1.7f, 3.6f, 6.0f, 0.0f), VectorSingle(0.3f, 1.0f, 0.35f, 0.0f), world);
+            this.m_green = this.createPanel(VectorSingle(0.01f, 1.0f, 0.01f, 1.0f), VectorSingle(1.7f, 3.6f, 6.0f, 0.0f), VectorSingle(0.3f, 1.0f, 0.35f, 0.0f), world);
             return red.valid() && this.m_green.valid() && !finalState;
         }
 
-        if(!this.createPanel(VectorSingle(0.12f, 0.12f, 0.12f, 1.0f), VectorSingle(0.0f, 1.4f, 2.0f, 0.0f), VectorSingle(6.0f, 1.0f, 4.5f, 0.0f)).valid())
+        if(!this.createPanel(VectorSingle(0.12f, 0.12f, 0.12f, 1.0f), VectorSingle(0.0f, 1.4f, 2.0f, 0.0f), VectorSingle(6.0f, 1.0f, 4.5f, 0.0f), world).valid())
             return false;
-        if(!this.createPanel(VectorSingle(0.008f, 0.008f, 0.008f, 1.0f), VectorSingle(0.0f, 1.4f, 0.0f, 0.0f), VectorSingle(2.8f, 1.0f, 1.8f, 0.0f), 0.95f, false).valid())
+        if(!this.createPanel(VectorSingle(0.008f, 0.008f, 0.008f, 1.0f), VectorSingle(0.0f, 1.4f, 0.0f, 0.0f), VectorSingle(2.8f, 1.0f, 1.8f, 0.0f), 0.95f, false, world).valid())
             return false;
-        const EntityID red = this.createPanel(VectorSingle(1.0f, 0.01f, 0.01f, 1.0f), VectorSingle(-1.7f, 1.0f, -3.0f, 0.0f), VectorSingle(0.3f, 1.0f, 0.25f, 0.0f));
+        const EntityID red = this.createPanel(VectorSingle(1.0f, 0.01f, 0.01f, 1.0f), VectorSingle(-1.7f, 1.0f, -3.0f, 0.0f), VectorSingle(0.3f, 1.0f, 0.25f, 0.0f), world);
         // Move the off-screen green panel into view to trigger provisional SSR feedback.
-        this.m_green = this.createPanel(VectorSingle(0.01f, 1.0f, 0.01f, 1.0f), VectorSingle(3.0f, 2.0f, -3.0f, 0.0f), VectorSingle(0.3f, 1.0f, 0.35f, 0.0f));
+        this.m_green = this.createPanel(VectorSingle(0.01f, 1.0f, 0.01f, 1.0f), VectorSingle(3.0f, 2.0f, -3.0f, 0.0f), VectorSingle(0.3f, 1.0f, 0.35f, 0.0f), world);
         if(!red.valid() || !this.m_green.valid())
             return false;
-        return !finalState || this.applyMutation();
+        return !finalState || this.applyMutation(world);
     }
 
     public b8 mutationCase()const{
         return IsReflectionFeedbackMutationCase(this.m_case);
     }
 
-    public b8 applyMutation(){
+    public b8 applyMutation(mut World world){
         if(this.m_case != ReflectionFeedbackCase::Mutation)
             return false;
         if(this.m_finalState)
             return true;
-        native(in green = this.m_green, mut world = this.m_world){
-            world.entity(green).getComponent<Impl::Scene::TransformComponent>().position.x = 1.7f;
-        }
+        if(!SetSmokeEntityPositionX(this.m_green, 1.7f, world))
+            return false;
         this.m_finalState = true;
         return true;
     }
@@ -111,7 +73,8 @@ class ReflectionFeedbackScene{
         in VectorSingle position,
         in VectorSingle scale,
         in f32 f0,
-        in b8 horizontal
+        in b8 horizontal,
+        mut World world
     ){
         const EntityID entity = CreateTintedStaticMeshEntity(
             s_ReflectionSuitePlaneMesh,
@@ -120,26 +83,24 @@ class ReflectionFeedbackScene{
             color,
             position,
             scale,
-            this.m_world
+            world
         );
         if(!entity.valid())
             return entity;
         if(!horizontal){
             const f32x4 verticalRot = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_ReflectionHalfPi, 0.0f, 0.0f, 0.0f)));
-            native(in entity, in verticalRot, mut world = this.m_world){
-                world.entity(entity).getComponent<Impl::Scene::TransformComponent>().rotation = verticalRot;
-            }
+            if(!SetSmokeEntityRotation(entity, verticalRot, world))
+                return s_InvalidEntityId;
         }
-        if(!ApplyReflectionSurfaceParameters(entity, f0, 0.0f, this.m_world))
+        if(!ApplyReflectionSurfaceParameters(entity, f0, 0.0f, world))
             return s_InvalidEntityId;
         return entity;
     }
 
-    private EntityID createPanel(in VectorSingle color, in VectorSingle position, in VectorSingle scale){
-        return this.createPanel(color, position, scale, 0.0f, false);
+    private EntityID createPanel(in VectorSingle color, in VectorSingle position, in VectorSingle scale, mut World world){
+        return this.createPanel(color, position, scale, 0.0f, false, world);
     }
 
-    private mut World m_world;
     private EntityID m_green = s_InvalidEntityId;
     private ReflectionFeedbackCase m_case = ReflectionFeedbackCase::Boundary;
     private b8 m_finalState = false;
@@ -176,7 +137,7 @@ class ReflectionReferenceScene{
             VectorSingle(1.6f + shift, 2.0f, -8.0f, 0.0f),
             VectorSingle(0.65f, 0.65f, 0.65f, 0.0f)
         );
-        [essential] assert(red.valid() && green.valid(), "ReflectionSmokeProjectImpl: offscreen markers failed");
+        [essential] assert(red.valid() && green.valid(), "ReflectionSmokeProject: offscreen markers failed");
     }
 
     public void createOnscreenMirrorScene(in b8 moved, in b8 boundary){
@@ -204,7 +165,7 @@ class ReflectionReferenceScene{
             VectorSingle(4.0f, 1.0f, 4.0f, 0.0f),
             0.95f
         );
-        [essential] assert(floor.valid(), "ReflectionSmokeProjectImpl: floor mirror creation failed");
+        [essential] assert(floor.valid(), "ReflectionSmokeProject: floor mirror creation failed");
         // Reflection through y=0 places virtual marker centers at y=-2.
         this.createPanel(s_ReflectionSuiteOpaqueMaterial, VectorSingle(1.0f, 0.01f, 0.01f, 1.0f), VectorSingle(-1.7f, 2.0f, 3.0f, 0.0f), VectorSingle(0.3f, 1.0f, 0.25f, 0.0f));
         this.createPanel(s_ReflectionSuiteOpaqueMaterial, VectorSingle(0.01f, 1.0f, 0.01f, 1.0f), VectorSingle(1.7f, 2.0f, 3.0f, 0.0f), VectorSingle(0.3f, 1.0f, 0.35f, 0.0f));
@@ -234,10 +195,9 @@ class ReflectionReferenceScene{
             VectorSingle(0.95f, 0.95f, 0.95f, 0.0f),
             s_ReflectionSuiteGlassF0
         );
-        [essential] assert(opaque.valid() && glass.valid(), "ReflectionSmokeProjectImpl: opaque/glass spheres failed");
-        native(in glass, mut world = this.m_world){
-            world.entity(glass).getComponent<Impl::RendererComponent>().opticalBoundaryMode = Impl::OpticalBoundaryMode::ClosedNested;
-        }
+        [essential] assert(opaque.valid() && glass.valid(), "ReflectionSmokeProject: opaque/glass spheres failed");
+        const b8 boundaryConfigured = SetSmokeOpticalBoundaryMode(glass, OpticalBoundaryMode::ClosedNested, this.m_world);
+        [essential] assert(boundaryConfigured, "ReflectionSmokeProject: glass boundary mode failed");
         this.createPanel(s_ReflectionSuiteOpaqueMaterial, VectorSingle(1.0f, 0.01f, 0.01f, 1.0f), VectorSingle(-4.0f, 1.4f, -8.0f, 0.0f), VectorSingle(4.0f, 1.0f, 4.0f, 0.0f));
         this.createPanel(s_ReflectionSuiteOpaqueMaterial, VectorSingle(0.01f, 1.0f, 0.01f, 1.0f), VectorSingle(4.0f, 1.4f, -8.0f, 0.0f), VectorSingle(4.0f, 1.0f, 4.0f, 0.0f));
         this.createPanel(s_ReflectionSuiteTransparentMaterial, VectorSingle(0.015f, 0.025f, 1.0f, 0.90f), VectorSingle(0.0f, 0.85f, -1.7f, 0.0f), VectorSingle(2.0f, 1.0f, 0.08f, 0.0f));
@@ -260,35 +220,12 @@ class ReflectionReferenceScene{
             scale,
             this.m_world
         );
-        [essential] assert(entity.valid(), "ReflectionSmokeProjectImpl: mesh creation failed");
+        [essential] assert(entity.valid(), "ReflectionSmokeProject: mesh creation failed");
         f32 roughness = 0.0f;
         if(this.m_glassRoughnessCase && specularF0 == s_ReflectionSuiteGlassF0)
             roughness = this.m_authoredRoughness;
-        b8 f0Ok = false;
-        b8 roughnessOk = false;
-        native(in entity, in specularF0, in roughness, mut world = this.m_world, mut f0Ok, mut roughnessOk){
-            const Name materialInterface(s_SmokeSurfaceMaterialInterface);
-            const Half4U f0 = MakeHalf4U(specularF0, specularF0, specularF0, 0.0f);
-            const Half packedRoughness = ConvertFloatToHalf(roughness);
-            f0Ok = Impl::SetMaterialMutableParameter(
-                world,
-                entity,
-                materialInterface,
-                "runtime.specular_f0",
-                Impl::MaterialLayoutFieldType::f16x3,
-                Impl::PackMaterialInstanceBytes(Span<const Half>(f0.raw, 3u))
-            );
-            roughnessOk = Impl::SetMaterialMutableParameter(
-                world,
-                entity,
-                materialInterface,
-                "runtime.perceptual_roughness",
-                Impl::MaterialLayoutFieldType::f16,
-                Impl::PackMaterialInstanceValue(packedRoughness)
-            );
-        }
-        [essential] assert(f0Ok, "ReflectionSmokeProjectImpl: F0 override failed");
-        [essential] assert(roughnessOk, "ReflectionSmokeProjectImpl: roughness override failed");
+        const b8 surfaceConfigured = ApplyReflectionSurfaceParameters(entity, specularF0, roughness, this.m_world);
+        [essential] assert(surfaceConfigured, "ReflectionSmokeProject: F0/roughness override failed");
         return entity;
     }
 
@@ -311,9 +248,8 @@ class ReflectionReferenceScene{
     ){
         const EntityID entity = this.createMesh(s_ReflectionSuitePlaneMesh, material, color, position, scale, specularF0);
         const f32x4 verticalRot = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_ReflectionHalfPi, 0.0f, 0.0f, 0.0f)));
-        native(in entity, in verticalRot, mut world = this.m_world){
-            world.entity(entity).getComponent<Impl::Scene::TransformComponent>().rotation = verticalRot;
-        }
+        const b8 rotated = SetSmokeEntityRotation(entity, verticalRot, this.m_world);
+        [essential] assert(rotated, "ReflectionSmokeProject: panel rotation failed");
     }
 
     private void createPanel(
@@ -340,21 +276,17 @@ class ReflectionReferenceScene{
 
 
 class ReflectionRoughnessScene{
-    public ReflectionRoughnessScene(
-        in EntityID camera,
-        in EntityID light,
-        in f32 roughness,
-        mut ProjectRuntimeContext context,
-        mut World world
-    ){
+    public ReflectionRoughnessScene(mut ProjectRuntimeContext context){
         this.m_context = context;
-        this.m_world = world;
+    }
+
+    public void configure(in EntityID camera, in EntityID light, in f32 roughness){
         this.m_camera = camera;
         this.m_light = light;
         this.m_roughness = roughness;
     }
 
-    public b8 create(in StringView caseName, in b8 finalState){
+    public b8 create(in StringView caseName, in b8 finalState, mut World world){
         if(caseName == "rough_furnace")
             this.m_case = ReflectionRoughnessCase::Furnace;
         else if(caseName == "temporal_camera")
@@ -376,7 +308,8 @@ class ReflectionRoughnessScene{
             s_ReflectionSuiteOpaqueMaterial,
             VectorSingle(0.12f, 0.12f, 0.12f, 1.0f),
             VectorSingle(0.0f, 1.4f, 2.0f, 0.0f),
-            VectorSingle(6.0f, 1.0f, 4.5f, 0.0f)
+            VectorSingle(6.0f, 1.0f, 4.5f, 0.0f),
+            world
         );
         f32 mirrorF0 = 0.95f;
         if(this.m_case == ReflectionRoughnessCase::Furnace)
@@ -387,7 +320,8 @@ class ReflectionRoughnessScene{
             VectorSingle(0.0f, 1.4f, 0.0f, 0.0f),
             VectorSingle(2.8f, 1.0f, 1.8f, 0.0f),
             mirrorF0,
-            this.m_roughness
+            this.m_roughness,
+            world
         );
         if(!backdrop.valid() || !mirror.valid())
             return false;
@@ -398,12 +332,13 @@ class ReflectionRoughnessScene{
             s_ReflectionSuiteOpaqueMaterial,
             VectorSingle(0.0f, 1.0f, 0.0f, 1.0f),
             VectorSingle(1.6f, 1.4f, -8.0f, 0.0f),
-            VectorSingle(0.75f, 1.0f, 0.75f, 0.0f)
+            VectorSingle(0.75f, 1.0f, 0.75f, 0.0f),
+            world
         );
         if(!green.valid())
             return false;
         if(this.deforming()){
-            if(!this.createDeformingSource())
+            if(!this.createDeformingSource(world))
                 return false;
         }
         else{
@@ -414,12 +349,13 @@ class ReflectionRoughnessScene{
                 redMaterial,
                 VectorSingle(1.0f, 0.0f, 0.0f, 1.0f),
                 VectorSingle(-1.6f, 1.4f, -8.0f, 0.0f),
-                VectorSingle(0.75f, 1.0f, 0.75f, 0.0f)
+                VectorSingle(0.75f, 1.0f, 0.75f, 0.0f),
+                world
             );
             if(!this.m_red.valid())
                 return false;
         }
-        return !finalState || this.applyMutation();
+        return !finalState || this.applyMutation(world);
     }
 
     public b8 mutationCase()const{
@@ -430,44 +366,38 @@ class ReflectionRoughnessScene{
         return IsReflectionRoughnessDeformingCase(this.m_case);
     }
 
-    public b8 applyMutation(){
+    public b8 applyMutation(mut World world){
         if(this.m_finalState)
             return true;
 
-        b8 mutated = true;
+        b8 mutated = false;
         if(this.m_case == ReflectionRoughnessCase::Camera){
-            native(in cam = this.m_camera, mut world = this.m_world){
-                world.entity(cam).getComponent<Impl::Scene::TransformComponent>().position.x = 0.6f;
-            }
+            mutated = SetSmokeEntityPositionX(this.m_camera, 0.6f, world);
         }
         else if(this.m_case == ReflectionRoughnessCase::Transform){
-            native(in red = this.m_red, mut world = this.m_world){
-                world.entity(red).getComponent<Impl::Scene::TransformComponent>().position.z = -150.0f;
-            }
+            mutated = SetSmokeEntityPositionZ(this.m_red, -150.0f, world);
         }
         else if(this.m_case == ReflectionRoughnessCase::Material){
-            native(in red = this.m_red, mut world = this.m_world, mut mutated){
-                mutated = Impl::SetMaterialMutableHalf4(world, red, Name(s_SmokeSurfaceMaterialInterface), "runtime.color_tint", Float4(0.0f, 0.0f, 0.0f, 1.0f));
-            }
+            mutated = SetSmokeMaterialHalf4(this.m_red, s_ReflectionSurfaceInterfaceName, "runtime.color_tint", f32x4(0.0f, 0.0f, 0.0f, 1.0f), world);
         }
         else if(this.m_case == ReflectionRoughnessCase::Light){
             // Keep a positive-intensity authored light present so scene gathering does not insert its default light.
-            native(in light = this.m_light, mut world = this.m_world){
-                world.entity(light).getComponent<Impl::Scene::LightComponent>().setColor(VectorZero());
-            }
+            mutated = SetSmokeLightColor(this.m_light, VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), world);
         }
         else if(this.m_case == ReflectionRoughnessCase::Deform){
-            native(in skel = this.m_skeleton, in bindJoints = this.m_bindJoints, mut world = this.m_world, mut mutated){
-                auto& pose = world.entity(skel).getComponent<Impl::SkeletonPoseComponent>();
-                if(pose.localJoints.size() != bindJoints.size()){
-                    mutated = false;
+            if(!this.m_bindJoints.empty()){
+                Vector<f32x3x4> posedJoints;
+                posedJoints.reserve(this.m_bindJoints.size());
+                posedJoints.push_back(this.m_bindJoints[0u]);
+                for(usize joint = 1u; joint < this.m_bindJoints.size(); ++joint){
+                    f32 angle = -0.32f;
+                    if((joint & 1u) != 0u)
+                        angle = 0.32f;
+                    const MatrixSingle rotation = MatrixRotationRollPitchYawFromVector(VectorSingle(0.15f, angle, 0.12f, 0.0f));
+                    const MatrixSingle posed = Mul(MatrixSingle(this.m_bindJoints[joint]), rotation);
+                    posedJoints.push_back(f32x3x4(posed));
                 }
-                else{
-                    for(u32 joint = 1u; joint < pose.localJoints.size(); ++joint){
-                        const f32 angle = (joint & 1u) != 0u ? 0.32f : -0.32f;
-                        StoreFloat(MatrixMultiply(LoadFloat(bindJoints[joint]), MatrixRotationRollPitchYaw(0.15f, angle, 0.12f)), pose.localJoints[joint]);
-                    }
-                }
+                mutated = SetSmokeSkeletonLocalJoints(this.m_skeleton, posedJoints, world);
             }
         }
         else{
@@ -486,7 +416,8 @@ class ReflectionRoughnessScene{
         in VectorSingle position,
         in VectorSingle scale,
         in f32 f0,
-        in f32 roughness
+        in f32 roughness,
+        mut World world
     ){
         const EntityID entity = CreateTintedStaticMeshEntity(
             s_ReflectionSuitePlaneMesh,
@@ -495,15 +426,14 @@ class ReflectionRoughnessScene{
             color,
             position,
             scale,
-            this.m_world
+            world
         );
         if(!entity.valid())
             return entity;
         const f32x4 verticalRot = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(-s_ReflectionHalfPi, 0.0f, 0.0f, 0.0f)));
-        native(in entity, in verticalRot, mut world = this.m_world){
-            world.entity(entity).getComponent<Impl::Scene::TransformComponent>().rotation = verticalRot;
-        }
-        if(!ApplyReflectionSurfaceParameters(entity, f0, roughness, this.m_world))
+        if(!SetSmokeEntityRotation(entity, verticalRot, world))
+            return s_InvalidEntityId;
+        if(!ApplyReflectionSurfaceParameters(entity, f0, roughness, world))
             return s_InvalidEntityId;
         return entity;
     }
@@ -512,36 +442,23 @@ class ReflectionRoughnessScene{
         in SmokeMaterialRef material,
         in VectorSingle color,
         in VectorSingle position,
-        in VectorSingle scale
+        in VectorSingle scale,
+        mut World world
     ){
-        return this.createPanel(material, color, position, scale, 0.0f, 0.0f);
+        return this.createPanel(material, color, position, scale, 0.0f, 0.0f, world);
     }
 
-    private b8 createDeformingSource(){
-        b8 loadedJoints = false;
-        native(mut ctx = this.m_context, mut bindJoints = this.m_bindJoints, mut loadedJoints){
-            const auto modelAsset = ctx.assetManager.loadSync(Impl::Model::AssetTypeName(), s_ReflectionSuiteBodyModel.name());
-            if(modelAsset){
-                NWB_ASSERT(*modelAsset);
-                const Impl::Model* modelPtr = Core::Assets::CastAsset<Impl::Model>(modelAsset->get());
-                if(modelPtr && !modelPtr->skeletonObjects().empty()){
-                    const auto skeletonAsset = ctx.assetManager.loadSync(Impl::Skeleton::AssetTypeName(), modelPtr->skeletonObjects().front().skeleton.name());
-                    if(skeletonAsset){
-                        NWB_ASSERT(*skeletonAsset);
-                        const Impl::Skeleton* skeletonPtr = Core::Assets::CastAsset<Impl::Skeleton>(skeletonAsset->get());
-                        if(skeletonPtr && skeletonPtr->joints().size() >= 2u){
-                            bindJoints.clear();
-                            bindJoints.reserve(skeletonPtr->joints().size());
-                            for(const Impl::SkeletonJoint& joint : skeletonPtr->joints())
-                                bindJoints.push_back(joint.localBindPose);
-                            loadedJoints = true;
-                        }
-                    }
-                }
-            }
-        }
-        if(!loadedJoints)
+    private b8 createDeformingSource(mut World world){
+        const Expected<SkeletonJointMatrixVector> bindJoints = LoadSmokeSkeletonBindJoints(
+            s_ReflectionSuiteBodyModel,
+            s_NameNone,
+            false,
+            this.m_context.objectArena,
+            this.m_context.assetManager
+        );
+        if(!bindJoints.has_value() || bindJoints.value().size() < 2u)
             return false;
+        this.m_bindJoints = bindJoints.value();
 
         const SmokeTintedModelEntityResult redModel = CreateTintedModelEntity(
             s_ReflectionSuiteBodyModel,
@@ -550,24 +467,23 @@ class ReflectionRoughnessScene{
             VectorSingle(1.0f, 0.0f, 0.0f, 1.0f),
             VectorSingle(-1.6f, 0.55f, -8.0f, 0.0f),
             VectorSingle(0.85f, 0.85f, 0.85f, 0.0f),
-            this.m_world
+            world
         );
         this.m_red = redModel.entity;
         if(!this.m_red.valid() || !redModel.tintApplied)
             return false;
-        SyncSmokeModelRuntimes(this.m_world);
-        this.m_skeleton = FindSpawnedModelObject(this.m_red, s_SmokeNameSkeleton, s_ReflectionModelObjectSkeleton, this.m_world);
+        SyncSmokeModelRuntimes(world);
+        this.m_skeleton = FindSpawnedModelObject(this.m_red, s_SmokeNameSkeleton, ModelObjectKind::Skeleton, world);
         return this.m_skeleton.valid();
     }
 
     private Vector<f32x3x4> m_bindJoints;
     private mut ProjectRuntimeContext m_context;
-    private mut World m_world;
-    private EntityID m_camera;
-    private EntityID m_light;
+    private EntityID m_camera = s_InvalidEntityId;
+    private EntityID m_light = s_InvalidEntityId;
     private EntityID m_red = s_InvalidEntityId;
     private EntityID m_skeleton = s_InvalidEntityId;
-    private f32 m_roughness;
+    private f32 m_roughness = 0.0f;
     private ReflectionRoughnessCase m_case = ReflectionRoughnessCase::Static;
     private b8 m_finalState = false;
 }

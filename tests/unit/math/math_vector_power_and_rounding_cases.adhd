@@ -157,7 +157,7 @@ inline constexpr Array<u32, 1u> s_OrderedClampModes = { 0u };
 #endif
 }
 
-[[nodiscard]] inline b8 ConfigurePowerDenormalMode([[maybe_unused]] const u32 denormalMode, [[maybe_unused]] const b8 unmaskInvalid)noexcept{
+[[nodiscard]] NWB_INLINE b8 ConfigurePowerDenormalMode([[maybe_unused]] const u32 denormalMode, [[maybe_unused]] const b8 unmaskInvalid)noexcept{
 #if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
     u32 control = 0u;
     if(_controlfp_s(&control, denormalMode, _MCW_DN) != 0)
@@ -220,6 +220,58 @@ using MathPowerRoundingDetail::DoubleMultiplyThenAdd;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+VectorSingle EvalPowerSetInt(in u32 x, in u32 y, in u32 z, in u32 w){
+    return VectorSetInt(x, y, z, w);
+}
+
+VectorSingle EvalPowerVectorMultiplyAddExpression(in VectorSingle lhs, in VectorSingle rhs, in VectorSingle addend){
+    return VectorMultiplyAddExpression(lhs, rhs, addend);
+}
+
+VectorSingle EvalPowerVectorNegativeMultiplySubtractExpression(in VectorSingle lhs, in VectorSingle rhs, in VectorSingle minuend){
+    return VectorNegativeMultiplySubtractExpression(lhs, rhs, minuend);
+}
+
+VectorDouble EvalPowerVectorDoubleClampOrdered(in VectorDouble value, in VectorDouble minVal, in VectorDouble maxVal){
+    return VectorDoubleClampOrdered(value, minVal, maxVal);
+}
+
+VectorDouble EvalPowerDoubleMultiplyAddExpression(in VectorDouble first, in VectorDouble second, in VectorDouble addend){
+    return DoubleMultiplyAddExpression(first, second, addend);
+}
+
+VectorDouble EvalPowerDoubleMultiplyThenAdd(in VectorDouble first, in VectorDouble second, in VectorDouble addend){
+    return DoubleMultiplyThenAdd(first, second, addend);
+}
+
+VectorDouble EvalPowerVectorDoubleMultiplyAddExpression(in VectorDouble first, in VectorDouble second, in VectorDouble addend){
+    return VectorDoubleMultiplyAddExpression(first, second, addend);
+}
+
+VectorDouble EvalPowerVectorDoubleMultiplySubtract(in VectorDouble first, in VectorDouble second, in VectorDouble subtrahend){
+    return VectorDoubleMultiplySubtract(first, second, subtrahend);
+}
+
+VectorDouble EvalPowerVectorDoubleMultiplyAdd(in VectorDouble first, in VectorDouble second, in VectorDouble addend){
+    return VectorDoubleMultiplyAdd(first, second, addend);
+}
+
+VectorDouble EvalPowerVectorDoubleNegativeMultiplySubtract(in VectorDouble first, in VectorDouble second, in VectorDouble minuend){
+    return VectorDoubleNegativeMultiplySubtract(first, second, minuend);
+}
+
+VectorSingle EvalPowerVectorMultiplySubtract(in VectorSingle first, in VectorSingle second, in VectorSingle subtrahend){
+    return VectorMultiplySubtract(first, second, subtrahend);
+}
+
+VectorSingle EvalPowerVectorTruncate(in VectorSingle value){
+    return VectorTruncate(value);
+}
+
+VectorDouble EvalPowerVectorDoubleTruncate(in VectorDouble value){
+    return VectorDoubleTruncate(value);
+}
+
 void CheckPowerObservationPair(in VectorSingle x, in VectorSingle y, in i32 seed, in u64 nativeSeed){
     const Expected<PowerObservation> expected = ObserveFrozenPower(x, y, seed, nativeSeed);
     const Expected<PowerObservation> actual = ObserveCurrentPower(x, y, seed, nativeSeed);
@@ -231,10 +283,8 @@ void CheckPowerObservationPair(in VectorSingle x, in VectorSingle y, in i32 seed
     EXPECT_EQ(actual.value().rawNativeStatus, expected.value().rawNativeStatus);
     u32x4 expectedBits = u32x4(0u, 0u, 0u, 0u);
     u32x4 actualBits = u32x4(0u, 0u, 0u, 0u);
-    native(in expected, in actual, mut expectedBits, mut actualBits){
-        StoreInt(expected->value, expectedBits);
-        StoreInt(actual->value, actualBits);
-    }
+    StoreInt(expected.value().value, expectedBits);
+    StoreInt(actual.value().value, actualBits);
     EXPECT_EQ(actualBits.x, expectedBits.x);
     EXPECT_EQ(actualBits.y, expectedBits.y);
     EXPECT_EQ(actualBits.z, expectedBits.z);
@@ -275,14 +325,10 @@ void VerifyMath_VectorPowerPreservesMixedSpecialsAndAdjacentSrgbRoundingWithSeed
                 for(in i32 seed : s_PowerInitialFlags){
                     for(usize index = 0u; index < 8u; ++index){
                         ScopedTestTrace trace(index);
-                        VectorSingle x = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-                        VectorSingle y = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-                        const u32x4 xWords = casesX[index];
-                        const u32x4 yWords = casesY[index];
-                        native(in xWords, in yWords, mut x, mut y){
-                            x = LoadInt(xWords);
-                            y = LoadInt(yWords);
-                        }
+                        const u32x4 cx = casesX[index];
+                        const u32x4 cy = casesY[index];
+                        const VectorSingle x = EvalPowerSetInt(cx.x, cx.y, cx.z, cx.w);
+                        const VectorSingle y = EvalPowerSetInt(cy.x, cy.y, cy.z, cy.w);
                         CheckPowerObservationPair(x, y, seed, nativeSeed);
                     }
                 }
@@ -324,12 +370,8 @@ void VerifyMath_MultiplyExpressionsPreserveCompilerRoundingPolicyAndSignedZero()
     const VectorSingle addendVec = MakeVolatileSingleFloats(addend[0u], addend[1u], addend[2u], addend[3u]);
     const VectorSingle diffVec = MakeVolatileSingleFloats(difference[0u], difference[1u], difference[2u], difference[3u]);
 
-    VectorSingle sum = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-    VectorSingle subtraction = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-    native(in lhs, in rhs, in addendVec, in diffVec, mut sum, mut subtraction){
-        sum = VectorMultiplyAddExpression(lhs, rhs, addendVec);
-        subtraction = VectorNegativeMultiplySubtractExpression(lhs, rhs, diffVec);
-    }
+    const VectorSingle sum = EvalPowerVectorMultiplyAddExpression(lhs, rhs, addendVec);
+    const VectorSingle subtraction = EvalPowerVectorNegativeMultiplySubtractExpression(lhs, rhs, diffVec);
 
     for(usize lane = 0u; lane < 4u; ++lane){
         ScopedTestTrace trace(lane);
@@ -358,10 +400,7 @@ void VerifyMath_OrderedDoubleClampPreservesZeroNanAndSubnormalPayloads(){
         envGuard.applyMode(mode);
         for(usize row = 0u; row < 2u; ++row){
             const VectorDouble input = MakeVolatileDoubleBits(inputBits[row][0u], inputBits[row][1u], inputBits[row][2u], inputBits[row][3u]);
-            VectorDouble result = VectorDouble(0.0, 0.0, 0.0, 0.0);
-            native(in input, in clampMin, in clampMax, mut result){
-                result = VectorDoubleClampOrdered(input, clampMin, clampMax);
-            }
+            const VectorDouble result = EvalPowerVectorDoubleClampOrdered(input, clampMin, clampMax);
             for(usize lane = 0u; lane < 4u; ++lane){
                 ScopedTestTrace trace(lane);
                 EXPECT_EQ(GetDoubleLaneBits(result, lane), expected[row][lane]);
@@ -374,10 +413,7 @@ void VerifyMath_OrderedDoubleClampPreservesZeroNanAndSubnormalPayloads(){
     const VectorDouble tieInput = VectorDouble(-0.0, 0.0, negInf, posInf);
     const VectorDouble posZeroBounds = VectorDouble(0.0, 0.0, 0.0, 0.0);
     const VectorDouble negZeroBounds = VectorDouble(-0.0, -0.0, -0.0, -0.0);
-    VectorDouble zeroTies = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    native(in tieInput, in posZeroBounds, in negZeroBounds, mut zeroTies){
-        zeroTies = VectorDoubleClampOrdered(tieInput, posZeroBounds, negZeroBounds);
-    }
+    const VectorDouble zeroTies = EvalPowerVectorDoubleClampOrdered(tieInput, posZeroBounds, negZeroBounds);
     EXPECT_EQ(GetDoubleLaneBits(zeroTies, 0u), 0x8000000000000000u);
     EXPECT_EQ(GetDoubleLaneBits(zeroTies, 1u), 0u);
     EXPECT_EQ(GetDoubleLaneBits(zeroTies, 2u), 0u);
@@ -487,14 +523,9 @@ void VerifyMath_DoubleVectorRetainsPrecisionCancellationSubnormalsAndSignedZero(
     const VectorDouble second = MakeVolatileDoubleFloats(row1[0u], row1[1u], row1[2u], row1[3u]);
     const VectorDouble addend = MakeVolatileDoubleFloats(row2[0u], row2[1u], row2[2u], row2[3u]);
 
-    VectorDouble expression = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    VectorDouble separate = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    VectorDouble namedExpression = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    native(in first, in second, in addend, mut expression, mut separate, mut namedExpression){
-        expression = DoubleMultiplyAddExpression(first, second, addend);
-        separate = DoubleMultiplyThenAdd(first, second, addend);
-        namedExpression = VectorDoubleMultiplyAddExpression(first, second, addend);
-    }
+    const VectorDouble expression = EvalPowerDoubleMultiplyAddExpression(first, second, addend);
+    const VectorDouble separate = EvalPowerDoubleMultiplyThenAdd(first, second, addend);
+    const VectorDouble namedExpression = EvalPowerVectorDoubleMultiplyAddExpression(first, second, addend);
 
     for(usize lane = 0u; lane < 4u; ++lane){
         ScopedTestTrace trace(lane);
@@ -533,14 +564,9 @@ void VerifyMath_MultiplySubtractRetainsCancellationDirectionAndSignedZero(){
     const VectorDouble second = MakeVolatileDoubleFloats(bit_cast<f64>(cast<u64>(0x3feffffffc000000u)), bit_cast<f64>(cast<u64>(0x3feffffffc000000u)), 1.0, 1.0);
     const VectorDouble difference = MakeVolatileDoubleFloats(1.0, -1.0, 1.0, 0.0);
 
-    VectorDouble productMinusDifference = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    VectorDouble productPlusNegativeDifference = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    VectorDouble differenceMinusProduct = VectorDouble(0.0, 0.0, 0.0, 0.0);
-    native(in first, in second, in difference, mut productMinusDifference, mut productPlusNegativeDifference, mut differenceMinusProduct){
-        productMinusDifference = VectorDoubleMultiplySubtract(first, second, difference);
-        productPlusNegativeDifference = VectorDoubleMultiplyAdd(first, second, VectorDoubleNegate(difference));
-        differenceMinusProduct = VectorDoubleNegativeMultiplySubtract(first, second, difference);
-    }
+    const VectorDouble productMinusDifference = EvalPowerVectorDoubleMultiplySubtract(first, second, difference);
+    const VectorDouble productPlusNegativeDifference = EvalPowerVectorDoubleMultiplyAdd(first, second, -difference);
+    const VectorDouble differenceMinusProduct = EvalPowerVectorDoubleNegativeMultiplySubtract(first, second, difference);
 
     u64 negativeDoubleResidual = 0u;
     u64 positiveDoubleResidual = 0u;
@@ -564,10 +590,7 @@ void VerifyMath_MultiplySubtractRetainsCancellationDirectionAndSignedZero(){
     const VectorSingle singleFirst = MakeVolatileSingleFloats(bit_cast<f32>(0x3f800400u), bit_cast<f32>(0xbf800400u), 1.0f, -0.0f);
     const VectorSingle singleSecond = MakeVolatileSingleFloats(bit_cast<f32>(0x3f7ff800u), bit_cast<f32>(0x3f7ff800u), 1.0f, 1.0f);
     const VectorSingle singleDifference = MakeVolatileSingleFloats(1.0f, -1.0f, 1.0f, 0.0f);
-    VectorSingle singleResult = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-    native(in singleFirst, in singleSecond, in singleDifference, mut singleResult){
-        singleResult = VectorMultiplySubtract(singleFirst, singleSecond, singleDifference);
-    }
+    const VectorSingle singleResult = EvalPowerVectorMultiplySubtract(singleFirst, singleSecond, singleDifference);
 
     u32 negativeSingleResidual = 0u;
     u32 positiveSingleResidual = 0u;
@@ -621,11 +644,7 @@ void VerifyMath_SingleFixedRoundingPreservesTiesSignedZeroAndSpecialValuesAcross
             const VectorSingle input = MakeVolatileSingleFloats(r.x, r.y, r.z, r.w);
             Array<f32x4, 4> results = Array<f32x4, 4>();
             results[0u] = f32x4(Round(input));
-            VectorSingle truncVec = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-            native(in input, mut truncVec){
-                truncVec = VectorTruncate(input);
-            }
-            results[1u] = f32x4(truncVec);
+            results[1u] = f32x4(EvalPowerVectorTruncate(input));
             results[2u] = f32x4(Floor(input));
             results[3u] = f32x4(Ceil(input));
             for(usize operation = 0u; operation < 4u; ++operation){
@@ -640,11 +659,7 @@ void VerifyMath_SingleFixedRoundingPreservesTiesSignedZeroAndSpecialValuesAcross
         ASSERT_TRUE(ClearFloatingPointExceptions(s_FeAllExcept).has_value());
         Array<f32x4, 4> specialResults = Array<f32x4, 4>();
         specialResults[0u] = f32x4(Round(special));
-        VectorSingle specialTrunc = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-        native(in special, mut specialTrunc){
-            specialTrunc = VectorTruncate(special);
-        }
-        specialResults[1u] = f32x4(specialTrunc);
+        specialResults[1u] = f32x4(EvalPowerVectorTruncate(special));
         specialResults[2u] = f32x4(Floor(special));
         specialResults[3u] = f32x4(Ceil(special));
         const i32 invalid = TestFloatingPointExceptions(s_FeInvalid);
@@ -691,11 +706,7 @@ void VerifyMath_DoubleFixedRoundingIgnoresAmbientDirectedModesAndKeepsNearestTie
             const VectorDouble input = MakeVolatileDoubleFloats(r.x, r.y, r.z, r.w);
             Array<f64x4, 4> results = Array<f64x4, 4>();
             results[0u] = f64x4(Round(input));
-            VectorDouble truncVec = VectorDouble(0.0, 0.0, 0.0, 0.0);
-            native(in input, mut truncVec){
-                truncVec = VectorDoubleTruncate(input);
-            }
-            results[1u] = f64x4(truncVec);
+            results[1u] = f64x4(EvalPowerVectorDoubleTruncate(input));
             results[2u] = f64x4(Floor(input));
             results[3u] = f64x4(Ceil(input));
             for(usize operation = 0u; operation < 4u; ++operation){
@@ -814,32 +825,13 @@ NWB_NOINLINE SIMDVectorDouble DoubleMultiplyThenAdd(const SIMDVectorDouble first
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ADHD_GTEST(Math, VectorPowerPreservesMixedSpecialsAndAdjacentSrgbRoundingWithSeededState, VerifyMath_VectorPowerPreservesMixedSpecialsAndAdjacentSrgbRoundingWithSeededState)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 #if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(Math, VectorPowerKeepsDenormalInputStatusWithInvalidTrapEnabled){ VerifyMath_VectorPowerKeepsDenormalInputStatusWithInvalidTrapEnabled(); }
+TEST(Math, VectorPowerKeepsDenormalInputStatusWithInvalidTrapEnabled){ NWB::Tests::MathCases::VerifyMath_VectorPowerKeepsDenormalInputStatusWithInvalidTrapEnabled(); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -857,6 +849,7 @@ TEST(Math, VectorPowerKeepsDenormalInputStatusWithInvalidTrapEnabled){ VerifyMat
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+NWB_ADHD_GTEST(Math, VectorPowerPreservesMixedSpecialsAndAdjacentSrgbRoundingWithSeededState, VerifyMath_VectorPowerPreservesMixedSpecialsAndAdjacentSrgbRoundingWithSeededState)
 NWB_ADHD_GTEST(Math, MultiplyExpressionsPreserveCompilerRoundingPolicyAndSignedZero, VerifyMath_MultiplyExpressionsPreserveCompilerRoundingPolicyAndSignedZero)
 NWB_ADHD_GTEST(Math, OrderedDoubleClampPreservesZeroNanAndSubnormalPayloads, VerifyMath_OrderedDoubleClampPreservesZeroNanAndSubnormalPayloads)
 NWB_ADHD_GTEST(Math, MinMaxReturnSecondOperandForSignedZeroAndUnorderedLanes, VerifyMath_MinMaxReturnSecondOperandForSignedZeroAndUnorderedLanes)

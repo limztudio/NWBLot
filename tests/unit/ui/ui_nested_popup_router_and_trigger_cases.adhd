@@ -603,7 +603,7 @@ using namespace NWB;
 using namespace NWB::Impl::Ui;
 
 
-[[nodiscard]] inline HitTarget BaseHitTarget()noexcept{
+[[nodiscard]] NWB_INLINE HitTarget BaseHitTarget()noexcept{
     HitTarget target;
     target.id = { 1u };
     target.rectangle = { 4.0f, 4.0f, 20.0f, 18.0f };
@@ -613,7 +613,7 @@ using namespace NWB::Impl::Ui;
     return target;
 }
 
-[[nodiscard]] inline PopupScope Scope(const u64 widget, const u32 layer, const PopupToken& parent = {})noexcept{
+[[nodiscard]] NWB_INLINE PopupScope Scope(const u64 widget, const u32 layer, const PopupToken& parent = {})noexcept{
     PopupScope scope;
     scope.token = { { widget }, 10u, 20u, 1u };
     scope.bounds = widget == 100u ? Rect{ 30.0f, 30.0f, 110.0f, 70.0f } : widget == 200u ? Rect{ 170.0f, 120.0f, 100.0f, 80.0f } : widget == 300u ? Rect{ 280.0f, 200.0f, 100.0f, 70.0f } : Rect{ 250.0f, 30.0f, 120.0f, 70.0f };
@@ -623,7 +623,7 @@ using namespace NWB::Impl::Ui;
     return scope;
 }
 
-[[nodiscard]] inline HitTarget Barrier(const PopupScope& scope, const u32 order)noexcept{
+[[nodiscard]] NWB_INLINE HitTarget Barrier(const PopupScope& scope, const u32 order)noexcept{
     HitTarget target;
     target.id = scope.token.widget;
     target.declarationGeneration = scope.token.declarationGeneration;
@@ -635,7 +635,7 @@ using namespace NWB::Impl::Ui;
     return target;
 }
 
-[[nodiscard]] inline HitTarget Child(const PopupScope& scope, const u64 offset, const u32 order, const b8 navigation)noexcept{
+[[nodiscard]] NWB_INLINE HitTarget Child(const PopupScope& scope, const u64 offset, const u32 order, const b8 navigation)noexcept{
     HitTarget target;
     target.id = { scope.token.widget.value + offset };
     target.declarationGeneration = 10u;
@@ -873,19 +873,19 @@ using InputEventTypeEnum = ::NWB::Impl::Ui::InputEventType::Enum;
 namespace PopupDismissReason = ::NWB::Impl::Ui::PopupDismissReason;
 using PopupDismissReasonEnum = ::NWB::Impl::Ui::PopupDismissReason::Enum;
 
-[[nodiscard]] inline ComboOptions MakeUiNestedPopupRouterComboOptions()noexcept{
+[[nodiscard]] NWB_INLINE ComboOptions MakeUiNestedPopupRouterComboOptions()noexcept{
     return ::NWB::UiComboTests::Options();
 }
-[[nodiscard]] inline HitTarget MakeUiNestedPopupRouterBaseHitTarget()noexcept{
+[[nodiscard]] NWB_INLINE HitTarget MakeUiNestedPopupRouterBaseHitTarget()noexcept{
     return __hidden_ui_nested_popup_router_tests::BaseHitTarget();
 }
-[[nodiscard]] inline PopupScope MakeUiNestedPopupRouterScope(const u64 widget, const u32 layer, const PopupToken& parent = {})noexcept{
+[[nodiscard]] NWB_INLINE PopupScope MakeUiNestedPopupRouterScope(const u64 widget, const u32 layer, const PopupToken& parent = {})noexcept{
     return __hidden_ui_nested_popup_router_tests::Scope(widget, layer, parent);
 }
-[[nodiscard]] inline HitTarget MakeUiNestedPopupRouterBarrier(const PopupScope& scope, const u32 order)noexcept{
+[[nodiscard]] NWB_INLINE HitTarget MakeUiNestedPopupRouterBarrier(const PopupScope& scope, const u32 order)noexcept{
     return __hidden_ui_nested_popup_router_tests::Barrier(scope, order);
 }
-[[nodiscard]] inline HitTarget MakeUiNestedPopupRouterChild(const PopupScope& scope, const u64 offset, const u32 order, const b8 navigation)noexcept{
+[[nodiscard]] NWB_INLINE HitTarget MakeUiNestedPopupRouterChild(const PopupScope& scope, const u64 offset, const u32 order, const b8 navigation)noexcept{
     return __hidden_ui_nested_popup_router_tests::Child(scope, offset, order, navigation);
 }
 };

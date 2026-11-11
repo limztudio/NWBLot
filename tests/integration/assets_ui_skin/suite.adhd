@@ -37,16 +37,22 @@ namespace NWB::Tests::UiSkinCases{
 using DefaultTestArena = TestArena<>;
 
 struct ToolkitSkinArenaTag{};
-using ToolkitSkinArena = TestArena<ToolkitSkinArenaTag>;
+struct ToolkitSkinArena : TestArena<ToolkitSkinArenaTag>{
+    Core::Alloc::ScratchArena scratchArena{ s_OneOffNameTestsIntegrationAssetsUiSkinToolkitContract };
+};
 
 struct UiSkinTestArenaTag{};
-using SkinTestArena = TestArena<UiSkinTestArenaTag>;
+struct SkinTestArena : TestArena<UiSkinTestArenaTag>{
+    Core::Alloc::ScratchArena scratchArena{ s_OneOffNameTestsIntegrationAssetsUiSkinCook };
+};
 
 using AssetArena = Core::Assets::AssetArena;
 using AssetBytes = Core::Assets::AssetBytes;
-using ScratchArena = Core::Alloc::ScratchArena;
 using LoggerRegistrationGuard = Core::Common::LoggerRegistrationGuard;
 using MetascriptDocument = Core::Metascript::Document;
+using MetascriptValue = Core::Metascript::Value;
+using MipLevelVector = Impl::Texture::MipLevelVector;
+using TextureDimensionEnum = TextureDimension::Enum;
 using Impl::Texture;
 using Impl::UiSkin;
 using Impl::UiSkinAssetCodec;
@@ -73,19 +79,15 @@ inline constexpr usize s_UiSkinHeaderBinarySize = sizeof(UiSkinHeaderBinary);
 inline constexpr usize s_UiSkinRegionBinarySize = sizeof(UiSkinRegionBinary);
 inline constexpr usize s_UiSkinColorSize = sizeof(UiSkinColor);
 inline constexpr usize s_UiSkinTypographySize = sizeof(UiSkinTypography);
+inline constexpr usize s_NameHashByteSize = sizeof(NameHash);
 inline constexpr f32 s_QuietNaNF32 = Limit<f32>::s_QuietNaN;
 inline constexpr f32 s_InfinityF32 = Limit<f32>::s_Infinity;
-
-inline constexpr TStringView s_ErrDuplicateRegion = NWB_TEXT("duplicate region");
-inline constexpr TStringView s_ErrMissingWindowNormal = NWB_TEXT("missing required region 'window.normal'");
-inline constexpr TStringView s_ErrRecookRequired = NWB_TEXT("recook required");
-inline constexpr TStringView s_ErrTrailingBytes = NWB_TEXT("trailing bytes");
-inline constexpr TStringView s_ErrLoadRegionLimit = NWB_TEXT("UiSkin::loadBinary failed: region count 4097 exceeds schema limit 4096");
-inline constexpr TStringView s_ErrCookRegionLimit = NWB_TEXT("regions exceed schema limit 4096");
-inline constexpr TStringView s_ErrValidateRegionLimit = NWB_TEXT("UiSkin::validatePayload failed: region count 4097 exceeds schema limit 4096");
-inline constexpr TStringView s_ErrUnsupportedField = NWB_TEXT("unsupported asset field");
-inline constexpr TStringView s_ErrToolkitContractWidgets = NWB_TEXT("toolkit_contract must be 'widgets'");
-inline constexpr TStringView s_ErrUnsupportedSliceField = NWB_TEXT("unsupported asset field 'slice'");
+inline constexpr AStringView s_RepoRoot = NWB_REPO_ROOT;
+inline constexpr auto s_Texture2D = TextureDimension::Texture2D;
+inline constexpr auto s_TextureCube = TextureDimension::TextureCube;
+inline constexpr auto s_PayloadUastcLdr4x4 = TexturePayloadFormat::UastcLdr4x4;
+inline constexpr auto s_AlphaEmbeddedLdr = TextureAlphaMode::EmbeddedLdr;
+inline constexpr u8 s_OpaqueAlphaUnorm8 = TextureFormat::s_OpaqueAlphaUnorm8;
 
 inline constexpr AStringView s_BaseMetadata =
     "ui_skin asset;\r\n"
@@ -182,6 +184,17 @@ const StringView s_SkinAssetRoot = "C:/ui_skin_tests/assets";
 const StringView s_TexturePath = "project/ui/texture";
 const StringView s_AtlasPath = "project/ui/atlas";
 
+const StringView s_ErrDuplicateRegion = "duplicate region";
+const StringView s_ErrMissingWindowNormal = "missing required region 'window.normal'";
+const StringView s_ErrRecookRequired = "recook required";
+const StringView s_ErrTrailingBytes = "trailing bytes";
+const StringView s_ErrLoadRegionLimit = "UiSkin::loadBinary failed: region count 4097 exceeds schema limit 4096";
+const StringView s_ErrCookRegionLimit = "regions exceed schema limit 4096";
+const StringView s_ErrValidateRegionLimit = "UiSkin::validatePayload failed: region count 4097 exceeds schema limit 4096";
+const StringView s_ErrUnsupportedField = "unsupported asset field";
+const StringView s_ErrToolkitContractWidgets = "toolkit_contract must be 'widgets'";
+const StringView s_ErrUnsupportedSliceField = "unsupported asset field 'slice'";
+
 UiSkinRegion MakeRegion(in Name name, in u32 ordinal){
     UiSkinRegion region = UiSkinRegion();
     region.name = name;
@@ -220,27 +233,39 @@ usize RegionElementAddress(in UiSkin skin, in usize index){
     return address;
 }
 
-b8 LoadAuthoredSkin(in Path assetRoot, in Path atlasPath, in StringView virtualRoot, mut ToolkitSkinArena testArena, mut UiSkin outSkin, mut b8 outComplete){
+b8 RepeatFirstDocumentAssetRegion(mut MetascriptDocument document, in u32 count){
     b8 ok = false;
-    native(in assetRoot, in atlasPath, in virtualRoot, mut testArena, mut outSkin, mut outComplete, mut ok){
-        Core::Assets::AssetString metadata(testArena.arena);
-        if(!ReadTextFile(atlasPath, metadata))
-            return false;
-        Core::Metascript::Document document(testArena.arena);
-        if(!document.parse(metadata))
-            return false;
-        Core::Alloc::ScratchArena scratchArena(s_OneOffNameTestsIntegrationAssetsUiSkinToolkitContract);
-        auto entryResult = ParseUiSkinCookMetadata(assetRoot, virtualRoot, atlasPath, document, testArena.arena, scratchArena);
-        if(!entryResult)
-            return false;
-        auto skinResult = BuildUiSkinAsset(*entryResult, testArena.arena);
-        if(!skinResult)
-            return false;
-        outSkin = Move(*skinResult);
-        outComplete = entryResult->completeToolkitSkin;
-        ok = true;
+    native(in count, mut document, mut ok){
+        if(MetascriptValue* const asset = document.findVariable("asset")){
+            MetascriptValue& regions = asset->field("regions");
+            const MetascriptValue regionTemplate(regions.asList().front());
+            regions.asList().clear();
+            regions.asList().reserve(count);
+            for(u32 index = 0u; index < count; ++index)
+                regions.asList().push_back(regionTemplate);
+            ok = true;
+        }
     }
     return ok;
+}
+
+b8 LoadAuthoredSkin(in Path assetRoot, in Path atlasPath, in StringView virtualRoot, mut ToolkitSkinArena testArena, mut UiSkin outSkin, mut b8 outComplete){
+    String metadata = "";
+    if(!ReadTextFile(atlasPath, metadata).has_value())
+        return false;
+    MetascriptDocument document(testArena.arena);
+    if(!document.parse(metadata))
+        return false;
+    Expected<UiSkinCookEntry> entryResult = ParseUiSkinCookMetadata(assetRoot, virtualRoot, atlasPath, document, testArena.arena, testArena.scratchArena);
+    if(!entryResult.has_value())
+        return false;
+    const UiSkinCookEntry entry = entryResult.value();
+    Expected<UiSkin> skinResult = BuildUiSkinAsset(entry, testArena.arena);
+    if(!skinResult.has_value())
+        return false;
+    outSkin = skinResult.value();
+    outComplete = entry.completeToolkitSkin;
+    return true;
 }
 
 void CopyWithoutRegion(in UiSkin source, in Name removed, mut ToolkitSkinArena testArena, mut UiSkin outSkin){
@@ -254,17 +279,12 @@ void CopyWithoutRegion(in UiSkin source, in Name removed, mut ToolkitSkinArena t
 }
 
 b8 CanParseMetadata(in StringView metadata, mut SkinTestArena testArena){
-    b8 ok = false;
-    native(in metadata, mut testArena, mut ok){
-        Core::Metascript::Document document(testArena.arena);
-        if(!document.parse(metadata))
-            return false;
-        const Path assetRoot(testArena.arena, s_SkinAssetRoot);
-        const Path metadataPath = assetRoot / s_UiDirectory / s_AtlasMetadataFilename;
-        Core::Alloc::ScratchArena scratchArena(s_OneOffNameTestsIntegrationAssetsUiSkinCook);
-        ok = ParseUiSkinCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena).has_value();
-    }
-    return ok;
+    MetascriptDocument document(testArena.arena);
+    if(!document.parse(metadata))
+        return false;
+    const Path assetRoot = Path(s_SkinAssetRoot);
+    const Path metadataPath = assetRoot / s_UiDirectory / s_AtlasMetadataFilename;
+    return ParseUiSkinCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, testArena.scratchArena).has_value();
 }
 
 AssetBytes MakeBinary(in UiSkinHeaderBinary header, in UiSkinRegionBinary region, mut SkinTestArena testArena){
@@ -306,8 +326,8 @@ UiSkinRegionBinary ValidRegion(){
     return region;
 }
 
-TestAString PaletteMetadata(in u32 variant, in b8 includeTypography){
-    TestAString metadata(s_BaseMetadata);
+String PaletteMetadata(in u32 variant, in b8 includeTypography){
+    String metadata = String(s_BaseMetadata);
     if(includeTypography)
         metadata.append("asset.typography = {\"default_font_size\": 16.0};\r\n");
     if(variant == 1u)
@@ -339,8 +359,8 @@ TestAString PaletteMetadata(in u32 variant, in b8 includeTypography){
     return metadata;
 }
 
-TestAString TypographyMetadata(in StringView typography){
-    TestAString metadata = PaletteMetadata(0u, false);
+String TypographyMetadata(in StringView typography){
+    String metadata = PaletteMetadata(0u, false);
     if(!typography.empty()){
         metadata.append("asset.typography = ");
         metadata.append(typography);
@@ -396,7 +416,7 @@ void VerifyAssetsUiSkinRegionIndex_CanonicalDuplicateKeepsFirstAuthoredMatchAndF
     SetRegions(skin, regions);
     EXPECT_EQ(FindRegionAddress(skin, Name("BUTTON/NORMAL")), RegionElementAddress(skin, 0u));
     EXPECT_FALSE(skin.validatePayload());
-    EXPECT_TRUE(logger.sawErrorContaining(s_ErrDuplicateRegion));
+    EXPECT_TRUE(SawCapturedError(logger, s_ErrDuplicateRegion));
 }
 
 void VerifyAssetsUiSkinRegionIndex_EqualLeadingHashLanesStillResolveDistinctNames(){
@@ -484,11 +504,10 @@ void VerifyAssetsUiSkinRegionIndex_FailedBinaryLoadPreservesLookupAndAuthoredOrd
     ASSERT_TRUE(loaded.loadBinary(binary));
     ASSERT_EQ(FindRegionAddress(loaded, s_UiLookupNameFirst), RegionElementAddress(loaded, 1u));
     const usize retained = FindRegionAddress(loaded, Name(s_LastRegionName));
-    native(mut binary){
-        const usize firstHash = sizeof(UiSkinHeaderBinary);
-        const usize secondHash = firstHash + sizeof(UiSkinRegionBinary);
-        NWB_MEMCPY(binary.data() + secondHash, sizeof(NameHash), binary.data() + firstHash, sizeof(NameHash));
-    }
+    const usize firstHash = s_UiSkinHeaderBinarySize;
+    const usize secondHash = firstHash + s_UiSkinRegionBinarySize;
+    for(usize byteIndex = 0u; byteIndex < s_NameHashByteSize; ++byteIndex)
+        binary[secondHash + byteIndex] = binary[firstHash + byteIndex];
     EXPECT_FALSE(loaded.loadBinary(binary));
     EXPECT_EQ(FindRegionAddress(loaded, Name(s_LastRegionName)), retained);
     EXPECT_EQ(FindRegionAddress(loaded, s_UiLookupNameFirst), RegionElementAddress(loaded, 1u));
@@ -514,12 +533,8 @@ void VerifyAssetsUiSkinToolkitContract_RejectsMissingBasePartsButAcceptsDeclared
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
     ToolkitSkinArena testArena = ToolkitSkinArena();
-    Path assetRoot = Path();
-    Path atlasPath = Path();
-    native(mut testArena, mut assetRoot, mut atlasPath){
-        assetRoot = Path(testArena.arena, NWB_REPO_ROOT) / s_EngineDirectory / s_AssetsDirectory;
-        atlasPath = assetRoot / s_UiDirectory / s_SkinsDirectory / s_DefaultSkinDirectory / s_AtlasMetadataFilename;
-    }
+    const Path assetRoot = Path(s_RepoRoot) / s_EngineDirectory / s_AssetsDirectory;
+    const Path atlasPath = assetRoot / s_UiDirectory / s_SkinsDirectory / s_DefaultSkinDirectory / s_AtlasMetadataFilename;
     UiSkin source(testArena.arena);
     b8 complete = false;
     ASSERT_TRUE(LoadAuthoredSkin(assetRoot, atlasPath, "engine", testArena, source, complete));
@@ -563,12 +578,11 @@ void VerifyAssetsUiSkinToolkitContract_RejectsMissingBasePartsButAcceptsDeclared
     for(usize index = 0u; index < noResize.regions().size(); ++index)
         regions.push_back(noResize.regions()[index]);
     UiSkin explicitResize(testArena.arena, source.virtualPath());
-    native(in source, mut regions, mut explicitResize){
-        UiSkinRegion resize = *source.findRegion(Name(s_WhiteRegionName));
-        resize.name = s_UiTestWindowResize;
-        regions.push_back(resize);
-        explicitResize.setAtlas(source.texture(), source.atlasWidth(), source.atlasHeight(), source.referenceDensity(), Move(regions));
-    }
+    UiSkinRegion resize = UiSkinRegion();
+    ASSERT_TRUE(source.tryFindRegion(Name(s_WhiteRegionName), resize));
+    resize.name = s_UiTestWindowResize;
+    regions.push_back(resize);
+    explicitResize.setAtlas(source.texture(), source.atlasWidth(), source.atlasHeight(), source.referenceDensity(), regions);
     EXPECT_TRUE(ValidateUiSkinToolkitContract(explicitResize));
 }
 
@@ -576,53 +590,34 @@ void VerifyAssetsUiSkinToolkitContract_CookOptInRejectsIncompleteMetadataWhileGe
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
     ToolkitSkinArena testArena = ToolkitSkinArena();
-    TestAString genericMetadata = TestAString();
-    Path assetRoot("C:/ui_skin_contract_tests/assets");
-    Path atlasPath = Path();
-    b8 readDefault = false;
-    native(in assetRoot, mut testArena, mut atlasPath, mut genericMetadata, mut readDefault){
-        atlasPath = assetRoot / s_UiDirectory / s_AtlasMetadataFilename;
-        const Path defaultAtlasPath = Path(testArena.arena, NWB_REPO_ROOT) / s_EngineDirectory / s_AssetsDirectory / s_UiDirectory / s_SkinsDirectory / s_DefaultSkinDirectory / s_AtlasMetadataFilename;
-        readDefault = static_cast<b8>(ReadTextFile(defaultAtlasPath, genericMetadata));
-    }
-    ASSERT_TRUE(readDefault);
+    String genericMetadata = "";
+    const Path assetRoot = Path("C:/ui_skin_contract_tests/assets");
+    const Path atlasPath = assetRoot / s_UiDirectory / s_AtlasMetadataFilename;
+    const Path defaultAtlasPath = Path(s_RepoRoot) / s_EngineDirectory / s_AssetsDirectory / s_UiDirectory / s_SkinsDirectory / s_DefaultSkinDirectory / s_AtlasMetadataFilename;
+    ASSERT_TRUE(ReadTextFile(defaultAtlasPath, genericMetadata).has_value());
     const StringView contractField = "asset.toolkit_contract = \"widgets\";";
     const usize contractOffset = genericMetadata.find(contractField);
     ASSERT_LT(contractOffset, genericMetadata.size());
     genericMetadata.erase(contractOffset, contractField.size());
     genericMetadata.append("asset.regions = [{ \"name\": \"panel.normal\", \"rect\": [0, 0, 16, 16] }];\r\n");
-    TestAString completeMetadata(genericMetadata);
+    String completeMetadata = genericMetadata;
     completeMetadata.append(contractField);
 
     MetascriptDocument genericDocument(testArena.arena);
     ASSERT_TRUE(genericDocument.parse(genericMetadata));
-    ScratchArena scratchArena(s_OneOffNameTestsIntegrationAssetsUiSkinToolkitContract);
-    UiSkin genericSkin(testArena.arena);
-    b8 genericComplete = true;
-    b8 builtGeneric = false;
-    native(in assetRoot, in atlasPath, in genericDocument, mut testArena, mut scratchArena, mut genericSkin, mut genericComplete, mut builtGeneric){
-        auto entryResult = ParseUiSkinCookMetadata(assetRoot, "project", atlasPath, genericDocument, testArena.arena, scratchArena);
-        if(entryResult){
-            genericComplete = entryResult->completeToolkitSkin;
-            auto buildResult = BuildUiSkinAsset(*entryResult, entryResult->arena);
-            if(buildResult){
-                genericSkin = Move(*buildResult);
-                builtGeneric = true;
-            }
-        }
-    }
-    ASSERT_TRUE(builtGeneric);
-    EXPECT_FALSE(genericComplete);
+    Expected<UiSkinCookEntry> genericEntryResult = ParseUiSkinCookMetadata(assetRoot, "project", atlasPath, genericDocument, testArena.arena, testArena.scratchArena);
+    ASSERT_TRUE(genericEntryResult.has_value());
+    const UiSkinCookEntry genericEntry = genericEntryResult.value();
+    Expected<UiSkin> genericBuildResult = BuildUiSkinAsset(genericEntry, testArena.arena);
+    ASSERT_TRUE(genericBuildResult.has_value());
+    const UiSkin genericSkin = genericBuildResult.value();
+    EXPECT_FALSE(genericEntry.completeToolkitSkin);
     EXPECT_FALSE(ValidateUiSkinToolkitContract(genericSkin));
 
     MetascriptDocument completeDocument(testArena.arena);
     ASSERT_TRUE(completeDocument.parse(completeMetadata));
-    b8 parsedComplete = true;
-    native(in assetRoot, in atlasPath, in completeDocument, mut testArena, mut scratchArena, mut parsedComplete){
-        parsedComplete = ParseUiSkinCookMetadata(assetRoot, "project", atlasPath, completeDocument, testArena.arena, scratchArena).has_value();
-    }
-    EXPECT_FALSE(parsedComplete);
-    EXPECT_TRUE(logger.sawErrorContaining(s_ErrMissingWindowNormal));
+    EXPECT_FALSE(ParseUiSkinCookMetadata(assetRoot, "project", atlasPath, completeDocument, testArena.arena, testArena.scratchArena).has_value());
+    EXPECT_TRUE(SawCapturedError(logger, s_ErrMissingWindowNormal));
 }
 
 void VerifyAssetsUiSkin_TypographyRejectsMalformedFooterWithoutReplacingSkin(){
@@ -729,7 +724,7 @@ void VerifyAssetsUiSkin_RejectsObsoleteBinaryVersionsWithoutReplacingCurrentSkin
         EXPECT_EQ(skin.regions().size(), 1u);
         EXPECT_FLOAT_EQ(skin.typography().defaultFontSize, 16.0f);
     }
-    EXPECT_TRUE(logger.sawErrorContaining(s_ErrRecookRequired));
+    EXPECT_TRUE(SawCapturedError(logger, s_ErrRecookRequired));
 }
 
 void VerifyAssetsUiSkin_LoadRejectsMalformedHeaderAndCountWithoutReplacingSkin(){
@@ -771,7 +766,7 @@ void VerifyAssetsUiSkin_LoadRejectsMalformedHeaderAndCountWithoutReplacingSkin()
     binary = MakeBinary(validHeader, validRegion, testArena);
     binary.push_back(0u);
     EXPECT_FALSE(skin.loadBinary(binary));
-    EXPECT_TRUE(logger.sawErrorContaining(s_ErrTrailingBytes));
+    EXPECT_TRUE(SawCapturedError(logger, s_ErrTrailingBytes));
 }
 
 void VerifyAssetsUiSkin_LoadRejectsInvalidRegionBoundsMetricsAndFlags(){
@@ -818,28 +813,18 @@ void VerifyAssetsUiSkin_RejectsOverLimitCountsBeforeReadingOrCopyingRegions(){
     binary.reserve(sizeof(header));
     AppendPOD(binary, header);
     EXPECT_FALSE(skin.loadBinary(binary));
-    EXPECT_TRUE(logger.sawErrorContaining(s_ErrLoadRegionLimit));
+    EXPECT_TRUE(SawCapturedError(logger, s_ErrLoadRegionLimit));
     ASSERT_EQ(skin.regions().size(), 1u);
     EXPECT_EQ(skin.regions().front().name, s_UiTestPanelNormal);
 
-    const TestAString paletteMeta = PaletteMetadata(0u, true);
-    native(in paletteMeta, mut testArena){
-        Core::Metascript::Document document(testArena.arena);
-        ASSERT_TRUE(document.parse(paletteMeta));
-        Core::Metascript::Value* const asset = document.findVariable("asset");
-        ASSERT_NE(asset, nullptr);
-        Core::Metascript::Value& regions = asset->field("regions");
-        const Core::Metascript::Value regionTemplate(regions.asList().front());
-        regions.asList().clear();
-        regions.asList().reserve(s_UiSkinMaxRegionCount + 1u);
-        for(u32 index = 0u; index <= s_UiSkinMaxRegionCount; ++index)
-            regions.asList().push_back(regionTemplate);
-        const Path assetRoot(testArena.arena, s_SkinAssetRoot);
-        const Path metadataPath = assetRoot / s_UiDirectory / s_AtlasMetadataFilename;
-        Core::Alloc::ScratchArena scratchArena(s_OneOffNameTestsIntegrationAssetsUiSkinCook);
-        EXPECT_FALSE(ParseUiSkinCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena));
-    }
-    EXPECT_TRUE(logger.sawErrorContaining(s_ErrCookRegionLimit));
+    const String paletteMeta = PaletteMetadata(0u, true);
+    MetascriptDocument document(testArena.arena);
+    ASSERT_TRUE(document.parse(paletteMeta));
+    ASSERT_TRUE(RepeatFirstDocumentAssetRegion(document, s_UiSkinMaxRegionCount + 1u));
+    const Path assetRoot = Path(s_SkinAssetRoot);
+    const Path metadataPath = assetRoot / s_UiDirectory / s_AtlasMetadataFilename;
+    EXPECT_FALSE(ParseUiSkinCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, testArena.scratchArena).has_value());
+    EXPECT_TRUE(SawCapturedError(logger, s_ErrCookRegionLimit));
 
     RegionVector oversized(testArena.arena);
     oversized.reserve(s_UiSkinMaxRegionCount + 1u);
@@ -848,7 +833,7 @@ void VerifyAssetsUiSkin_RejectsOverLimitCountsBeforeReadingOrCopyingRegions(){
     UiSkin constructed(testArena.arena, skin.virtualPath());
     constructed.setAtlas(skin.texture(), skin.atlasWidth(), skin.atlasHeight(), skin.referenceDensity(), oversized);
     EXPECT_FALSE(constructed.validatePayload());
-    EXPECT_TRUE(logger.sawErrorContaining(s_ErrValidateRegionLimit));
+    EXPECT_TRUE(SawCapturedError(logger, s_ErrValidateRegionLimit));
 }
 
 void VerifyAssetsUiSkin_CookRejectsObsoleteMetadataUnknownFieldsAndMalformedArrays(){
@@ -858,12 +843,12 @@ void VerifyAssetsUiSkin_CookRejectsObsoleteMetadataUnknownFieldsAndMalformedArra
     for(usize index = 0u; index < s_InvalidCookOverrides.size(); ++index){
         const StringView overrideText = s_InvalidCookOverrides[index];
         const ScopedTestTrace trace(overrideText);
-        TestAString metadata = PaletteMetadata(0u, true);
+        String metadata = PaletteMetadata(0u, true);
         metadata.append(overrideText);
         EXPECT_FALSE(CanParseMetadata(metadata, testArena));
     }
-    EXPECT_TRUE(logger.sawErrorContaining(s_ErrUnsupportedField));
-    EXPECT_TRUE(logger.sawErrorContaining(s_ErrToolkitContractWidgets));
+    EXPECT_TRUE(SawCapturedError(logger, s_ErrUnsupportedField));
+    EXPECT_TRUE(SawCapturedError(logger, s_ErrToolkitContractWidgets));
 }
 
 void VerifyAssetsUiSkin_RetiredSpriteSliceFieldsAreRejected(){
@@ -872,31 +857,21 @@ void VerifyAssetsUiSkin_RetiredSpriteSliceFieldsAreRejected(){
     SkinTestArena testArena = SkinTestArena();
     ASSERT_TRUE(CanParseMetadata(PaletteMetadata(0u, true), testArena));
     for(usize index = 0u; index < s_RetiredSpriteSliceOverrides.size(); ++index){
-        TestAString metadata = PaletteMetadata(0u, true);
+        String metadata = PaletteMetadata(0u, true);
         metadata.append("asset.texture = \"project/other_texture\";\r\n");
         metadata.append(s_RetiredSpriteSliceOverrides[index]);
         EXPECT_FALSE(CanParseMetadata(metadata, testArena));
     }
-    EXPECT_TRUE(logger.sawErrorContaining(s_ErrUnsupportedSliceField));
-    TestAString spriteMetadata = PaletteMetadata(0u, true);
+    EXPECT_TRUE(SawCapturedError(logger, s_ErrUnsupportedSliceField));
+    String spriteMetadata = PaletteMetadata(0u, true);
     spriteMetadata.append("asset.regions = [{ \"name\": \"sprite\", \"rect\": [0, 0, 4, 4], \"draw_mode\": \"sprite\" }];\r\n");
-    usize spriteRegionCount = 0u;
-    b8 parsedSprite = false;
-    native(in spriteMetadata, mut testArena, mut spriteRegionCount, mut parsedSprite){
-        Core::Metascript::Document document(testArena.arena);
-        if(document.parse(spriteMetadata)){
-            const Path assetRoot(testArena.arena, s_SkinAssetRoot);
-            const Path metadataPath = assetRoot / s_UiDirectory / s_AtlasMetadataFilename;
-            Core::Alloc::ScratchArena scratchArena(s_OneOffNameTestsIntegrationAssetsUiSkinCook);
-            auto entryResult = ParseUiSkinCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena);
-            if(entryResult){
-                spriteRegionCount = entryResult->regions.size();
-                parsedSprite = true;
-            }
-        }
-    }
-    ASSERT_TRUE(parsedSprite);
-    ASSERT_EQ(spriteRegionCount, 1u);
+    MetascriptDocument document(testArena.arena);
+    ASSERT_TRUE(document.parse(spriteMetadata));
+    const Path assetRoot = Path(s_SkinAssetRoot);
+    const Path metadataPath = assetRoot / s_UiDirectory / s_AtlasMetadataFilename;
+    const Expected<UiSkinCookEntry> entryResult = ParseUiSkinCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, testArena.scratchArena);
+    ASSERT_TRUE(entryResult.has_value());
+    ASSERT_EQ(entryResult.value().regions.size(), 1u);
 }
 
 void VerifyAssetsUiSkin_CookRejectsDuplicateNamesAndAtlasOrSliceOverflow(){
@@ -906,11 +881,11 @@ void VerifyAssetsUiSkin_CookRejectsDuplicateNamesAndAtlasOrSliceOverflow(){
     for(usize index = 0u; index < s_DuplicateAndOverflowOverrides.size(); ++index){
         const StringView overrideText = s_DuplicateAndOverflowOverrides[index];
         const ScopedTestTrace trace(overrideText);
-        TestAString metadata = PaletteMetadata(0u, true);
+        String metadata = PaletteMetadata(0u, true);
         metadata.append(overrideText);
         EXPECT_FALSE(CanParseMetadata(metadata, testArena));
     }
-    EXPECT_TRUE(logger.sawErrorContaining(s_ErrDuplicateRegion));
+    EXPECT_TRUE(SawCapturedError(logger, s_ErrDuplicateRegion));
 }
 
 void VerifyAssetsUiSkin_TextureValidationRejectsIdentityDimensionAndExtentMismatch(){
@@ -924,22 +899,29 @@ void VerifyAssetsUiSkin_TextureValidationRejectsIdentityDimensionAndExtentMismat
         Name texName = Name(s_TexturePath);
         if(variant == 0u)
             texName = s_UiTestProjectOther;
+        u32 width = 64u;
+        if(variant == 1u)
+            width = 63u;
+        u32 height = 32u;
+        if(variant == 2u)
+            height = 31u;
+        TextureDimensionEnum dimension = s_Texture2D;
+        if(variant == 3u)
+            dimension = s_TextureCube;
         Texture texture(testArena.arena, texName);
-        native(in variant, mut testArena, mut texture){
-            Texture::MipLevelVector mips(testArena.arena);
-            Core::Assets::AssetBytes payload(testArena.arena);
-            texture.setPayload(
-                variant == 1u ? 63u : 64u,
-                variant == 2u ? 31u : 32u,
-                Move(mips),
-                Move(payload),
-                variant == 3u ? TextureDimension::TextureCube : TextureDimension::Texture2D,
-                1u,
-                TexturePayloadFormat::UastcLdr4x4,
-                TextureAlphaMode::EmbeddedLdr,
-                TextureFormat::s_OpaqueAlphaUnorm8
-            );
-        }
+        MipLevelVector mips(testArena.arena);
+        AssetBytes payload(testArena.arena);
+        texture.setPayload(
+            width,
+            height,
+            mips,
+            payload,
+            dimension,
+            1u,
+            s_PayloadUastcLdr4x4,
+            s_AlphaEmbeddedLdr,
+            s_OpaqueAlphaUnorm8
+        );
         EXPECT_FALSE(skin.validateTexture(texture));
     }
 }

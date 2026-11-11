@@ -17,298 +17,273 @@ void VerifyCpuTaskMpmcTests_OwnerExternalAndWorkerProducersShareQueuesWithoutLos
     const u32 expectedWorkerMask = (1u << workerCount) - 1u;
     const usize expectedVisitSlots = cast<usize>(producerCount * tasksPerProducer * 4u);
     const TestSchedulerConfig config = HomogeneousWorkers(workerCount);
-    b8 readyReached = false;
-    u32 observedWorkerMask = 0u;
-    b8 expired = true;
-    b8 rejected = true;
-    b8 invalidOrder = true;
-    u32 consumedPrefixMask = 0u;
-    Vector<u32> visitCounts = Vector<u32>();
-    visitCounts.reserve(expectedVisitSlots);
-    u64 completedTasks = 0u;
-    usize outstandingTasks = 1u;
-    native(
-        in config,
-        in workerCount,
-        in externalProducerCount,
-        in producerCount,
-        mut readyReached,
-        mut observedWorkerMask,
-        mut expired,
-        mut rejected,
-        mut invalidOrder,
-        mut consumedPrefixMask,
-        mut visitCounts,
-        mut completedTasks,
-        mut outstandingTasks
-    ){
-        using namespace CpuTaskMpmcTestSupport;
-        DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
-        ProducerState state;
-        CpuTaskScheduler scheduler(config);
-        CpuTaskScope scope(scheduler);
-        Array<JoiningThread, s_ExternalProducerCount> producers;
-        ScopeExit stopProducers([&]()noexcept {
-            state.start.store(true, MemoryOrder::release);
-            for(auto& producer : producers){
-                if(producer.joinable())
-                    producer.join();
-            }
-            scheduler.drain();
-        });
-
-        for(u32 producer = 0u; producer < workerCount; ++producer){
-            const auto cpuTaskAdmission = scope.submit([&, producer]() {
-                const usize worker = scheduler.currentWorkerIndex();
-                if(worker >= 1u && worker <= workerCount)
-                    state.workerMask.fetch_or(1u << (worker - 1u), MemoryOrder::release);
-                state.ready.fetch_add(1u, MemoryOrder::release);
-                Produce(scheduler, scope, state, 1u + externalProducerCount + producer);
-            }, { .cost = CpuTaskCost::Any });
-            EXPECT_TRUE(cpuTaskAdmission);
-            if(cpuTaskAdmission)
-                EXPECT_TRUE(cpuTaskAdmission->valid());
-        }
-        for(u32 producer = 0u; producer < externalProducerCount; ++producer){
-            producers[producer] = JoiningThread([&, producer]() {
-                state.ready.fetch_add(1u, MemoryOrder::release);
-                Produce(scheduler, scope, state, 1u + producer);
-            });
-        }
-        readyReached = WaitUntil([&]()noexcept { return state.ready.load(MemoryOrder::acquire) == producerCount - 1u; });
-        observedWorkerMask = state.workerMask.load(MemoryOrder::acquire);
+    DeadlineGuard deadline(false, s_MpmcWatchdogTimeoutMS);
+    ProducerState state = ProducerState();
+    CpuTaskScheduler scheduler(config);
+    CpuTaskScope scope(scheduler);
+    Array<JoiningThread, 4> producers = Array<JoiningThread, 4>();
+    ScopeExit stopProducers(lambda[mut state, mut producers, mut scheduler]() -> void{
         state.start.store(true, MemoryOrder::release);
-        Produce(scheduler, scope, state, 0u);
-        for(auto& producer : producers)
-            producer.join();
-        scope.wait();
-        scheduler.wait();
-        stopProducers.release();
+        for(usize index = 0u; index < producers.size(); ++index){
+            if(producers[index].joinable()){
+                producers[index].join();
+            }
+        }
+        scheduler.drain();
+    });
 
-        expired = state.expired.load(MemoryOrder::acquire);
-        rejected = state.rejected.load(MemoryOrder::acquire);
-        invalidOrder = state.invalidOrder.load(MemoryOrder::acquire);
-        consumedPrefixMask = state.consumedPrefixMask.load(MemoryOrder::acquire);
-        for(const auto& visits : state.visits)
-            visitCounts.push_back(visits.load(MemoryOrder::acquire));
-        completedTasks = scheduler.statistics().completedTasks;
-        outstandingTasks = scheduler.statistics().outstandingTasks;
+    CpuTaskOptions anyCostOptions = CpuTaskOptions();
+    anyCostOptions.cost = CpuTaskCost::Any;
+    for(u32 producer = 0u; producer < workerCount; ++producer){
+        const auto cpuTaskAdmission = scope.submit(lambda[mut scheduler, mut scope, mut state, in producer]() -> void{
+            const usize worker = scheduler.currentWorkerIndex();
+            if(worker >= 1u && worker <= cast<usize>(s_MpmcWorkerCount)){
+                state.workerMask.fetch_or(1u << cast<u32>(worker - 1u), MemoryOrder::release);
+            }
+            state.ready.fetch_add(1u, MemoryOrder::release);
+            Produce(scheduler, scope, state, 1u + s_MpmcExternalProducerCount + producer);
+        }, anyCostOptions);
+        EXPECT_TRUE(cpuTaskAdmission.has_value());
+        if(cpuTaskAdmission.has_value()){
+            EXPECT_TRUE(cpuTaskAdmission.value().valid());
+        }
     }
+    for(u32 producer = 0u; producer < externalProducerCount; ++producer){
+        producers[producer] = JoiningThread(lambda[mut scheduler, mut scope, mut state, in producer]() -> void{
+            state.ready.fetch_add(1u, MemoryOrder::release);
+            Produce(scheduler, scope, state, 1u + producer);
+        });
+    }
+    const b8 readyReached = WaitUntilCount(state.ready, producerCount - 1u, s_MpmcGateTimeoutMS);
+    const u32 observedWorkerMask = state.workerMask.load(MemoryOrder::acquire);
+    state.start.store(true, MemoryOrder::release);
+    Produce(scheduler, scope, state, 0u);
+    for(usize index = 0u; index < producers.size(); ++index){
+        producers[index].join();
+    }
+    scope.wait();
+    scheduler.wait();
+    stopProducers.release();
+
     EXPECT_TRUE(readyReached);
     EXPECT_EQ(observedWorkerMask, expectedWorkerMask);
-    EXPECT_FALSE(expired);
-    EXPECT_FALSE(rejected);
-    EXPECT_FALSE(invalidOrder);
-    EXPECT_EQ(consumedPrefixMask, expectedWorkerMask);
-    ASSERT_EQ(visitCounts.size(), expectedVisitSlots);
-    for(in u32 count : visitCounts)
-        EXPECT_EQ(count, 1u);
-    EXPECT_EQ(completedTasks, cast<u64>(workerCount + producerCount * tasksPerProducer * 4u));
-    EXPECT_EQ(outstandingTasks, 0u);
+    EXPECT_FALSE(state.expired.load(MemoryOrder::acquire));
+    EXPECT_FALSE(state.rejected.load(MemoryOrder::acquire));
+    EXPECT_FALSE(state.invalidOrder.load(MemoryOrder::acquire));
+    EXPECT_EQ(state.consumedPrefixMask.load(MemoryOrder::acquire), expectedWorkerMask);
+    ASSERT_EQ(state.visits.size(), expectedVisitSlots);
+    for(usize index = 0u; index < expectedVisitSlots; ++index){
+        EXPECT_EQ(state.visits[index].load(MemoryOrder::acquire), 1u);
+    }
+    const auto stats = scheduler.statistics();
+    EXPECT_EQ(stats.completedTasks, cast<u64>(workerCount + producerCount * tasksPerProducer * 4u));
+    EXPECT_EQ(stats.outstandingTasks, 0u);
 }
 
 void VerifyCpuTaskMpmcTests_ExternalProducersCanWaitForMainThreadTasksWhileTheOwnerPumps(){
     const u32 workerCount = s_MpmcWorkerCount;
     const u32 externalProducerCount = s_MpmcExternalProducerCount;
     const u32 tasksPerProducer = s_MpmcTasksPerProducer;
-    const u32 joinKinds = 3u;
+    u32 joinKinds = 3u;
     const usize expectedVisitSlots = cast<usize>(externalProducerCount * tasksPerProducer);
     const TestSchedulerConfig config = HomogeneousWorkers(workerCount);
-    b8 readyReached = false;
-    b8 firstPublishedReached = false;
-    u32 invokedBeforePump = 1u;
-    b8 expired = true;
-    b8 rejected = true;
-    b8 wrongThread = true;
-    u32 totalInvoked = 0u;
-    Vector<u32> visitCounts = Vector<u32>();
-    visitCounts.reserve(expectedVisitSlots);
-    usize outstandingTasks = 1u;
-    native(
-        in config,
-        in externalProducerCount,
-        in tasksPerProducer,
-        in joinKinds,
-        mut readyReached,
-        mut firstPublishedReached,
-        mut invokedBeforePump,
-        mut expired,
-        mut rejected,
-        mut wrongThread,
-        mut totalInvoked,
-        mut visitCounts,
-        mut outstandingTasks
-    ){
-        using namespace CpuTaskMpmcTestSupport;
-        DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
-        const ThreadId owner = QueryCurrentThreadId();
-        Atomic<u32> ready{ 0u };
-        Atomic<u32> firstPublished{ 0u };
-        Atomic<u32> finished{ 0u };
-        Atomic<u32> invoked{ 0u };
-        Atomic<b8> start{ false };
-        Atomic<b8> localExpired{ false };
-        Atomic<b8> localRejected{ false };
-        Atomic<b8> localWrongThread{ false };
-        Array<Atomic<u32>, s_ExternalProducerCount * s_TasksPerProducer> visits{};
-        CpuTaskScheduler scheduler(config);
-        CpuTaskScope scope(scheduler);
-        Array<JoiningThread, s_ExternalProducerCount> producers;
-        ScopeExit stopProducers([&]()noexcept {
-            start.store(true, MemoryOrder::release);
-            scheduler.drain();
-            for(auto& producer : producers){
-                if(producer.joinable())
-                    producer.join();
+    DeadlineGuard deadline(false, s_MpmcWatchdogTimeoutMS);
+    const ThreadId owner = QueryCurrentThreadId();
+    Atomic<u32> ready(0u);
+    Atomic<u32> firstPublished(0u);
+    Atomic<u32> finished(0u);
+    Atomic<u32> invoked(0u);
+    Atomic<b8> start(false);
+    Atomic<b8> localExpired(false);
+    Atomic<b8> localRejected(false);
+    Atomic<b8> localWrongThread(false);
+    Array<Atomic<u32>, 512> visits = Array<Atomic<u32>, 512>();
+    CpuTaskScheduler scheduler(config);
+    CpuTaskScope scope(scheduler);
+    Array<JoiningThread, 4> producers = Array<JoiningThread, 4>();
+    ScopeExit stopProducers(lambda[mut start, mut scheduler, mut producers]() -> void{
+        start.store(true, MemoryOrder::release);
+        scheduler.drain();
+        for(usize index = 0u; index < producers.size(); ++index){
+            if(producers[index].joinable()){
+                producers[index].join();
             }
-        });
+        }
+    });
 
-        for(u32 producer = 0u; producer < externalProducerCount; ++producer){
-            producers[producer] = JoiningThread([&, producer]() {
-                ScopeExit finish([&]()noexcept { finished.fetch_add(1u, MemoryOrder::release); });
-                ready.fetch_add(1u, MemoryOrder::release);
-                if(!WaitUntil([&]()noexcept { return start.load(MemoryOrder::acquire); })){
-                    localExpired.store(true, MemoryOrder::release);
+    for(u32 producer = 0u; producer < externalProducerCount; ++producer){
+        producers[producer] = JoiningThread(lambda[
+            mut finished,
+            mut ready,
+            mut start,
+            mut localExpired,
+            mut localRejected,
+            mut localWrongThread,
+            mut visits,
+            mut invoked,
+            mut firstPublished,
+            mut scheduler,
+            mut scope,
+            in owner,
+            in joinKinds,
+            in producer
+        ]() -> void{
+            ScopeExit finish(lambda[mut finished]() -> void{
+                finished.fetch_add(1u, MemoryOrder::release);
+            });
+            ready.fetch_add(1u, MemoryOrder::release);
+            if(!WaitUntil(start, s_MpmcGateTimeoutMS)){
+                localExpired.store(true, MemoryOrder::release);
+                return;
+            }
+            CpuTaskOptions options = CpuTaskOptions();
+            options.cost = CpuTaskCost::Light;
+            options.target = CpuTaskTarget::MainThread;
+            for(u32 task = 0u; task < s_MpmcTasksPerProducer; ++task){
+                const u32 slot = producer * s_MpmcTasksPerProducer + task;
+                auto callback = lambda[in owner, mut scheduler, mut localWrongThread, mut visits, mut invoked, in slot]() -> void{
+                    if(QueryCurrentThreadId() != owner || scheduler.currentWorkerIndex() != 0u){
+                        localWrongThread.store(true, MemoryOrder::release);
+                    }
+                    visits[slot].fetch_add(1u, MemoryOrder::relaxed);
+                    invoked.fetch_add(1u, MemoryOrder::release);
+                };
+                const u32 joinKind = task % joinKinds;
+                Expected<CpuTaskHandle, CpuTaskAdmissionErrorEnum> cpuTaskAdmission = MakeUnexpected(CpuTaskAdmissionError::Aborting);
+                if(task % 2u == 0u || joinKind == 1u){
+                    cpuTaskAdmission = scope.submit(callback, options);
+                }
+                else{
+                    cpuTaskAdmission = scheduler.submit(callback, options);
+                }
+                if(!cpuTaskAdmission.has_value()){
+                    localRejected.store(true, MemoryOrder::release);
                     return;
                 }
-                for(u32 task = 0u; task < tasksPerProducer; ++task){
-                    const u32 slot = producer * tasksPerProducer + task;
-                    auto callback = [&, slot]()noexcept {
-                        if(QueryCurrentThreadId() != owner || scheduler.currentWorkerIndex() != 0u)
-                            localWrongThread.store(true, MemoryOrder::release);
-                        visits[slot].fetch_add(1u, MemoryOrder::relaxed);
-                        invoked.fetch_add(1u, MemoryOrder::release);
-                    };
-                    const CpuTaskOptions options{ .cost = CpuTaskCost::Light, .target = CpuTaskTarget::MainThread };
-                    const u32 joinKind = task % joinKinds;
-                    const auto cpuTaskAdmission = task % 2u == 0u || joinKind == 1u ? scope.submit(Move(callback), options) : scheduler.submit(Move(callback), options);
-                    if(!cpuTaskAdmission){
-                        localRejected.store(true, MemoryOrder::release);
-                        return;
-                    }
-                    const CpuTaskHandle handle = *cpuTaskAdmission;
-                    if(!handle.valid()){
-                        localRejected.store(true, MemoryOrder::release);
-                        return;
-                    }
-                    if(task == 0u)
-                        firstPublished.fetch_add(1u, MemoryOrder::release);
-                    if(joinKind == 0u)
-                        scheduler.wait(handle);
-                    else if(joinKind == 1u)
-                        scope.wait();
-                    else
-                        scheduler.wait();
+                const CpuTaskHandle handle = cpuTaskAdmission.value();
+                if(!handle.valid()){
+                    localRejected.store(true, MemoryOrder::release);
+                    return;
                 }
-            });
-        }
-        readyReached = WaitUntil([&]()noexcept { return ready.load(MemoryOrder::acquire) == externalProducerCount; });
-        start.store(true, MemoryOrder::release);
-        firstPublishedReached = WaitUntil([&]()noexcept { return firstPublished.load(MemoryOrder::acquire) == externalProducerCount; });
-        invokedBeforePump = invoked.load(MemoryOrder::acquire);
-        const Timer begin = TimerNow();
-        while(finished.load(MemoryOrder::acquire) != externalProducerCount){
-            if(DurationInMS<u64>(TimerNow(), begin) >= s_GateTimeoutMS){
-                localExpired.store(true, MemoryOrder::release);
-                scheduler.drain();
-                break;
+                if(task == 0u){
+                    firstPublished.fetch_add(1u, MemoryOrder::release);
+                }
+                if(joinKind == 0u){
+                    scheduler.wait(handle);
+                }
+                else if(joinKind == 1u){
+                    scope.wait();
+                }
+                else{
+                    scheduler.wait();
+                }
             }
-            scheduler.pumpMainThread();
-            // Yield lets dependent producers publish the next batch without pacing every handoff to a timer tick.
-            YieldThread();
-        }
-        for(auto& producer : producers)
-            producer.join();
-        scope.wait();
-        scheduler.wait();
-        stopProducers.release();
-
-        expired = localExpired.load(MemoryOrder::acquire);
-        rejected = localRejected.load(MemoryOrder::acquire);
-        wrongThread = localWrongThread.load(MemoryOrder::acquire);
-        totalInvoked = invoked.load(MemoryOrder::acquire);
-        for(const auto& count : visits)
-            visitCounts.push_back(count.load(MemoryOrder::acquire));
-        outstandingTasks = scheduler.statistics().outstandingTasks;
+        });
     }
+    const b8 readyReached = WaitUntilCount(ready, externalProducerCount, s_MpmcGateTimeoutMS);
+    start.store(true, MemoryOrder::release);
+    const b8 firstPublishedReached = WaitUntilCount(firstPublished, externalProducerCount, s_MpmcGateTimeoutMS);
+    const u32 invokedBeforePump = invoked.load(MemoryOrder::acquire);
+    const Timer begin = TimerNow();
+    while(finished.load(MemoryOrder::acquire) != externalProducerCount){
+        if(DurationInMS<u64>(TimerNow(), begin) >= cast<u64>(s_MpmcGateTimeoutMS)){
+            localExpired.store(true, MemoryOrder::release);
+            scheduler.drain();
+            break;
+        }
+        scheduler.pumpMainThread();
+        // Yield lets dependent producers publish the next batch without pacing every handoff to a timer tick.
+        YieldThread();
+    }
+    for(usize index = 0u; index < producers.size(); ++index){
+        producers[index].join();
+    }
+    scope.wait();
+    scheduler.wait();
+    stopProducers.release();
+
     EXPECT_TRUE(readyReached);
     EXPECT_TRUE(firstPublishedReached);
     EXPECT_EQ(invokedBeforePump, 0u);
-    EXPECT_FALSE(expired);
-    EXPECT_FALSE(rejected);
-    EXPECT_FALSE(wrongThread);
-    EXPECT_EQ(totalInvoked, externalProducerCount * tasksPerProducer);
-    ASSERT_EQ(visitCounts.size(), expectedVisitSlots);
-    for(in u32 count : visitCounts)
-        EXPECT_EQ(count, 1u);
-    EXPECT_EQ(outstandingTasks, 0u);
+    EXPECT_FALSE(localExpired.load(MemoryOrder::acquire));
+    EXPECT_FALSE(localRejected.load(MemoryOrder::acquire));
+    EXPECT_FALSE(localWrongThread.load(MemoryOrder::acquire));
+    EXPECT_EQ(invoked.load(MemoryOrder::acquire), externalProducerCount * tasksPerProducer);
+    ASSERT_EQ(visits.size(), expectedVisitSlots);
+    for(usize index = 0u; index < expectedVisitSlots; ++index){
+        EXPECT_EQ(visits[index].load(MemoryOrder::acquire), 1u);
+    }
+    EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
 
 void VerifyCpuTaskMpmcTests_CanceledCompletionCannotLoseConcurrentHandleScopeOrSchedulerJoins(){
+    DeadlineGuard deadline(false, s_MpmcWatchdogTimeoutMS);
+    const u32 joinKinds = 3u;
+    const u32 rounds = 32u;
     u32 callbacks = 0u;
-    usize outstandingTasks = 0u;
-    native(mut callbacks, mut outstandingTasks){
-        using namespace CpuTaskMpmcTestSupport;
-        DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
-        constexpr u32 s_JoinKinds = 3u;
-        constexpr u32 s_Rounds = 32u;
-        CpuTaskScheduler scheduler(0u);
-        for(u32 round = 0u; round < s_Rounds; ++round){
-            CpuTaskScope scope(scheduler);
-            const auto handleTaskAdmission = scope.submit([&]()noexcept { ++callbacks; }, { .target = CpuTaskTarget::MainThread });
-            ASSERT_TRUE(handleTaskAdmission);
-            const auto handle = *handleTaskAdmission;
-            ASSERT_TRUE(handle.valid());
-            Atomic<b8> start{ false };
-            Atomic<b8> expired{ false };
-            Atomic<u32> entered{ 0u };
-            Atomic<u32> finished{ 0u };
-            Array<JoiningThread, s_JoinKinds> waiters;
-            ScopeExit finishWaiters([&]()noexcept {
-                start.store(true, MemoryOrder::release);
-                scope.cancel();
-                scheduler.pumpMainThread();
-                for(auto& waiter : waiters){
-                    if(waiter.joinable())
-                        waiter.join();
-                }
-            });
-            for(u32 kind = 0u; kind < s_JoinKinds; ++kind){
-                waiters[kind] = JoiningThread([&, kind]() {
-                    if(!WaitUntil([&]()noexcept { return start.load(MemoryOrder::acquire); })){
-                        expired.store(true, MemoryOrder::release);
-                        return;
-                    }
-                    entered.fetch_add(1u, MemoryOrder::release);
-                    if(kind == 0u)
-                        scheduler.wait(handle);
-                    else if(kind == 1u)
-                        scope.wait();
-                    else
-                        scheduler.wait();
-                    finished.fetch_add(1u, MemoryOrder::release);
-                });
-            }
-            if(round % 2u == 0u){
-                start.store(true, MemoryOrder::release);
-                ASSERT_TRUE(WaitUntil([&]()noexcept { return entered.load(MemoryOrder::acquire) == s_JoinKinds; }));
-            }
-            // Alternate retirement racing wait registration with retirement completed before any join starts.
+    CpuTaskOptions mainOptions = CpuTaskOptions();
+    mainOptions.target = CpuTaskTarget::MainThread;
+    CpuTaskScheduler scheduler(0u);
+    for(u32 round = 0u; round < rounds; ++round){
+        CpuTaskScope scope(scheduler);
+        const auto handleTaskAdmission = scope.submit(lambda[mut callbacks]() -> void{
+            ++callbacks;
+        }, mainOptions);
+        ASSERT_TRUE(handleTaskAdmission.has_value());
+        const CpuTaskHandle handle = handleTaskAdmission.value();
+        ASSERT_TRUE(handle.valid());
+        Atomic<b8> start(false);
+        Atomic<b8> expired(false);
+        Atomic<u32> entered(0u);
+        Atomic<u32> finished(0u);
+        Array<JoiningThread, 3> waiters = Array<JoiningThread, 3>();
+        ScopeExit finishWaiters(lambda[mut start, mut scope, mut scheduler, mut waiters]() -> void{
+            start.store(true, MemoryOrder::release);
             scope.cancel();
             scheduler.pumpMainThread();
-            start.store(true, MemoryOrder::release);
-            for(auto& waiter : waiters)
-                waiter.join();
-            finishWaiters.release();
-            EXPECT_FALSE(expired.load(MemoryOrder::acquire));
-            EXPECT_EQ(finished.load(MemoryOrder::acquire), s_JoinKinds);
+            for(usize index = 0u; index < waiters.size(); ++index){
+                if(waiters[index].joinable()){
+                    waiters[index].join();
+                }
+            }
+        });
+        for(u32 kind = 0u; kind < joinKinds; ++kind){
+            waiters[kind] = JoiningThread(lambda[mut start, mut expired, mut entered, mut finished, mut scheduler, mut scope, in handle, in kind]() -> void{
+                if(!WaitUntil(start, s_MpmcGateTimeoutMS)){
+                    expired.store(true, MemoryOrder::release);
+                    return;
+                }
+                entered.fetch_add(1u, MemoryOrder::release);
+                if(kind == 0u){
+                    scheduler.wait(handle);
+                }
+                else if(kind == 1u){
+                    scope.wait();
+                }
+                else{
+                    scheduler.wait();
+                }
+                finished.fetch_add(1u, MemoryOrder::release);
+            });
         }
-        outstandingTasks = scheduler.statistics().outstandingTasks;
+        if(round % 2u == 0u){
+            start.store(true, MemoryOrder::release);
+            ASSERT_TRUE(WaitUntilCount(entered, joinKinds, s_MpmcGateTimeoutMS));
+        }
+        // Alternate retirement racing wait registration with retirement completed before any join starts.
+        scope.cancel();
+        scheduler.pumpMainThread();
+        start.store(true, MemoryOrder::release);
+        for(usize index = 0u; index < waiters.size(); ++index){
+            waiters[index].join();
+        }
+        finishWaiters.release();
+        EXPECT_FALSE(expired.load(MemoryOrder::acquire));
+        EXPECT_EQ(finished.load(MemoryOrder::acquire), joinKinds);
     }
     EXPECT_EQ(callbacks, 0u);
-    EXPECT_EQ(outstandingTasks, 0u);
+    EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -317,64 +292,71 @@ void VerifyCpuTaskMpmcTests_CanceledCompletionCannotLoseConcurrentHandleScopeOrS
 void VerifyCpuTaskProgressTests_ScopeJoinWakesForANewlyReadyUnscopedMainThreadPrerequisite(){
     const u32 rounds = 16u;
     const u32 timeoutMS = 30000u;
-    native(in rounds, in timeoutMS){
-        using CpuTaskSchedulerTestSupport::DeadlineGuard;
-        using CpuTaskSchedulerTestSupport::s_PollIntervalMS;
-        DeadlineGuard deadline(false, timeoutMS);
-        CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
-        constexpr CpuTaskOptions s_MainThread{ .target = CpuTaskTarget::MainThread };
-        constexpr u32 s_CallbackCount = 2u;
-        constexpr u32 s_ReleaseSchedules = 2u;
-        for(u32 round = 0u; round < rounds; ++round){
-            Atomic<b8> release{ false };
-            Atomic<b8> joining{ false };
-            Atomic<b8> workerEntered{ false };
-            u32 callbacks = 0u;
-            CpuTaskScope scope(scheduler);
-            JoiningThread releaser;
-            ScopeExit finish([&]()noexcept {
-                joining.store(true, MemoryOrder::release);
-                joining.notify_all();
-                release.store(true, MemoryOrder::release);
-                release.notify_all();
-                scheduler.drain();
-                if(releaser.joinable())
-                    releaser.join();
-            });
-            const auto cpuTaskAdmission = scheduler.submit([&]()noexcept {
-                workerEntered.store(true, MemoryOrder::release);
-                workerEntered.notify_one();
-                release.wait(false, MemoryOrder::acquire);
-            });
-            ASSERT_TRUE(cpuTaskAdmission);
-            const auto gate = *cpuTaskAdmission;
-            ASSERT_TRUE(gate.valid());
-            workerEntered.wait(false, MemoryOrder::acquire);
-            const auto prerequisiteTaskAdmission = scheduler.submit([&]()noexcept { ++callbacks; }, s_MainThread, &gate, 1u);
-            ASSERT_TRUE(prerequisiteTaskAdmission);
-            const auto prerequisite = *prerequisiteTaskAdmission;
-            ASSERT_TRUE(prerequisite.valid());
-            const auto secondCpuTaskAdmission = scope.submit([&]()noexcept { ++callbacks; }, s_MainThread, &prerequisite, 1u);
-            ASSERT_TRUE(secondCpuTaskAdmission);
-            if(secondCpuTaskAdmission)
-                ASSERT_TRUE(secondCpuTaskAdmission->valid());
-            releaser = JoiningThread([&]()noexcept {
-                joining.wait(false, MemoryOrder::acquire);
-                if(round % s_ReleaseSchedules == 0u)
-                    SleepMS(s_PollIntervalMS);
-                release.store(true, MemoryOrder::release);
-                release.notify_one();
-            });
-            // No handle waiter or completed scope can provide the prerequisite's readiness notification.
+    const u32 callbackCount = 2u;
+    u32 releaseSchedules = 2u;
+    DeadlineGuard deadline(false, timeoutMS);
+    const TestSchedulerConfig config = HomogeneousWorkers(1u);
+    CpuTaskScheduler scheduler(config);
+    CpuTaskOptions mainThread = CpuTaskOptions();
+    mainThread.target = CpuTaskTarget::MainThread;
+    for(u32 round = 0u; round < rounds; ++round){
+        Atomic<b8> release(false);
+        Atomic<b8> joining(false);
+        Atomic<b8> workerEntered(false);
+        u32 callbacks = 0u;
+        CpuTaskScope scope(scheduler);
+        JoiningThread releaser = JoiningThread();
+        ScopeExit finish(lambda[mut joining, mut release, mut scheduler, mut releaser]() -> void{
             joining.store(true, MemoryOrder::release);
-            joining.notify_one();
-            scope.wait();
-            releaser.join();
-            scheduler.wait();
-            finish.release();
-            EXPECT_EQ(callbacks, s_CallbackCount);
-            EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
-        }
+            joining.notify_all();
+            release.store(true, MemoryOrder::release);
+            release.notify_all();
+            scheduler.drain();
+            if(releaser.joinable()){
+                releaser.join();
+            }
+        });
+        const auto cpuTaskAdmission = scheduler.submit(lambda[mut workerEntered, mut release]() -> void{
+            workerEntered.store(true, MemoryOrder::release);
+            workerEntered.notify_one();
+            release.wait(false, MemoryOrder::acquire);
+        });
+        ASSERT_TRUE(cpuTaskAdmission.has_value());
+        const CpuTaskHandle gate = cpuTaskAdmission.value();
+        ASSERT_TRUE(gate.valid());
+        workerEntered.wait(false, MemoryOrder::acquire);
+        Array<CpuTaskHandle, 1> gateDeps = Array<CpuTaskHandle, 1>();
+        gateDeps[0u] = gate;
+        const auto prerequisiteTaskAdmission = scheduler.submit(lambda[mut callbacks]() -> void{
+            ++callbacks;
+        }, mainThread, gateDeps.data(), 1u);
+        ASSERT_TRUE(prerequisiteTaskAdmission.has_value());
+        const CpuTaskHandle prerequisite = prerequisiteTaskAdmission.value();
+        ASSERT_TRUE(prerequisite.valid());
+        Array<CpuTaskHandle, 1> prerequisiteDeps = Array<CpuTaskHandle, 1>();
+        prerequisiteDeps[0u] = prerequisite;
+        const auto secondCpuTaskAdmission = scope.submit(lambda[mut callbacks]() -> void{
+            ++callbacks;
+        }, mainThread, prerequisiteDeps.data(), 1u);
+        ASSERT_TRUE(secondCpuTaskAdmission.has_value());
+        ASSERT_TRUE(secondCpuTaskAdmission.value().valid());
+        releaser = JoiningThread(lambda[mut joining, mut release, in round, in releaseSchedules]() -> void{
+            joining.wait(false, MemoryOrder::acquire);
+            if(round % releaseSchedules == 0u){
+                SleepMS(s_PollIntervalMS);
+            }
+            release.store(true, MemoryOrder::release);
+            release.notify_one();
+        });
+        // No handle waiter or completed scope can provide the prerequisite's readiness notification.
+        joining.store(true, MemoryOrder::release);
+        joining.notify_one();
+        scope.wait();
+        releaser.join();
+        scheduler.wait();
+        finish.release();
+        EXPECT_EQ(callbacks, callbackCount);
+        EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
     }
 }
 
@@ -382,80 +364,88 @@ void VerifyCpuTaskProgressTests_ConcurrentSameScopeJoinsRetainLatePublishedDesce
     const u32 rounds = 16u;
     const u32 workers = 2u;
     const u32 timeoutMS = 30000u;
-    native(in rounds, in workers, in timeoutMS){
-        using CpuTaskSchedulerTestSupport::DeadlineGuard;
-        constexpr u32 s_RootCount = 32u;
-        DeadlineGuard deadline(false, timeoutMS);
-        CpuTaskScheduler scheduler(HomogeneousWorkers(workers));
-        for(u32 round = 0u; round < rounds; ++round){
-            Atomic<b8> start{ false };
-            Atomic<u32> entered{ 0u };
-            Atomic<u32> visits{ 0u };
-            Atomic<u32> joined{ 0u };
-            CpuTaskScope scope(scheduler);
-            Array<CpuTaskHandle, s_RootCount> roots{};
-            ScopeExit finish([&]()noexcept {
-                start.store(true, MemoryOrder::release);
-                start.notify_all();
-                scheduler.drain();
-            });
-            for(u32 waiter = 0u; waiter < workers; ++waiter){
-                const auto cpuTaskAdmission = scheduler.submit([&]() {
-                    entered.fetch_add(1u, MemoryOrder::release);
-                    entered.notify_one();
-                    start.wait(false, MemoryOrder::acquire);
-                    scope.wait();
-                    joined.fetch_add(1u, MemoryOrder::release);
-                });
-                ASSERT_TRUE(cpuTaskAdmission);
-                if(cpuTaskAdmission)
-                    ASSERT_TRUE(cpuTaskAdmission->valid());
-            }
-            for(u32 count = entered.load(MemoryOrder::acquire); count != workers; count = entered.load(MemoryOrder::acquire))
-                entered.wait(count, MemoryOrder::acquire);
-            for(auto& root : roots){
-                const auto rootTaskAdmission = scheduler.submit([&]()noexcept { visits.fetch_add(1u, MemoryOrder::relaxed); });
-                ASSERT_TRUE(rootTaskAdmission);
-                root = *rootTaskAdmission;
-                ASSERT_TRUE(root.valid());
-            }
-            const auto secondCpuTaskAdmission = scope.submit([&]() {
-                const auto thirdCpuTaskAdmission = scheduler.submit([&]() {
-                    const auto fourthCpuTaskAdmission = scheduler.submit([&]()noexcept { visits.fetch_add(1u, MemoryOrder::relaxed); });
-                    EXPECT_TRUE(fourthCpuTaskAdmission);
-                    if(fourthCpuTaskAdmission)
-                        EXPECT_TRUE(fourthCpuTaskAdmission->valid());
-                });
-                EXPECT_TRUE(thirdCpuTaskAdmission);
-                if(thirdCpuTaskAdmission)
-                    EXPECT_TRUE(thirdCpuTaskAdmission->valid());
-            }, {}, roots.data(), s_RootCount);
-            ASSERT_TRUE(secondCpuTaskAdmission);
-            if(secondCpuTaskAdmission)
-                ASSERT_TRUE(secondCpuTaskAdmission->valid());
+    const u32 rootCount = 32u;
+    DeadlineGuard deadline(false, timeoutMS);
+    const TestSchedulerConfig config = HomogeneousWorkers(workers);
+    CpuTaskScheduler scheduler(config);
+    const CpuTaskOptions defaultOptions = CpuTaskOptions();
+    for(u32 round = 0u; round < rounds; ++round){
+        Atomic<b8> start(false);
+        Atomic<u32> entered(0u);
+        Atomic<u32> visits(0u);
+        Atomic<u32> joined(0u);
+        CpuTaskScope scope(scheduler);
+        Array<CpuTaskHandle, 32> roots = Array<CpuTaskHandle, 32>();
+        ScopeExit finish(lambda[mut start, mut scheduler]() -> void{
             start.store(true, MemoryOrder::release);
             start.notify_all();
-            scheduler.wait();
-            EXPECT_EQ(joined.load(MemoryOrder::acquire), workers);
-            EXPECT_EQ(visits.load(MemoryOrder::acquire), s_RootCount + 1u);
-            // This scope keeps its identity after completion, while publication invalidates its old contribution proofs.
-            const auto laterTaskAdmission = scheduler.submit([&]()noexcept { visits.fetch_add(1u, MemoryOrder::relaxed); });
-            ASSERT_TRUE(laterTaskAdmission);
-            const auto later = *laterTaskAdmission;
-            ASSERT_TRUE(later.valid());
-            const auto fifthCpuTaskAdmission = scope.submit([&]()noexcept { visits.fetch_add(1u, MemoryOrder::relaxed); }, later);
-            ASSERT_TRUE(fifthCpuTaskAdmission);
-            if(fifthCpuTaskAdmission)
-                ASSERT_TRUE(fifthCpuTaskAdmission->valid());
-            scope.wait();
-            scheduler.wait();
-            finish.release();
-            EXPECT_EQ(visits.load(MemoryOrder::acquire), s_RootCount + 3u);
-            EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
+            scheduler.drain();
+        });
+        for(u32 waiter = 0u; waiter < workers; ++waiter){
+            const auto cpuTaskAdmission = scheduler.submit(lambda[mut entered, mut start, mut scope, mut joined]() -> void{
+                entered.fetch_add(1u, MemoryOrder::release);
+                entered.notify_one();
+                start.wait(false, MemoryOrder::acquire);
+                scope.wait();
+                joined.fetch_add(1u, MemoryOrder::release);
+            });
+            ASSERT_TRUE(cpuTaskAdmission.has_value());
+            ASSERT_TRUE(cpuTaskAdmission.value().valid());
         }
+        u32 count = entered.load(MemoryOrder::acquire);
+        while(count != workers){
+            entered.wait(count, MemoryOrder::acquire);
+            count = entered.load(MemoryOrder::acquire);
+        }
+        for(usize index = 0u; index < roots.size(); ++index){
+            const auto rootTaskAdmission = scheduler.submit(lambda[mut visits]() -> void{
+                visits.fetch_add(1u, MemoryOrder::relaxed);
+            });
+            ASSERT_TRUE(rootTaskAdmission.has_value());
+            roots[index] = rootTaskAdmission.value();
+            ASSERT_TRUE(roots[index].valid());
+        }
+        const auto secondCpuTaskAdmission = scope.submit(lambda[mut scheduler, mut visits]() -> void{
+            const auto thirdCpuTaskAdmission = scheduler.submit(lambda[mut scheduler, mut visits]() -> void{
+                const auto fourthCpuTaskAdmission = scheduler.submit(lambda[mut visits]() -> void{
+                    visits.fetch_add(1u, MemoryOrder::relaxed);
+                });
+                EXPECT_TRUE(fourthCpuTaskAdmission.has_value());
+                if(fourthCpuTaskAdmission.has_value()){
+                    EXPECT_TRUE(fourthCpuTaskAdmission.value().valid());
+                }
+            });
+            EXPECT_TRUE(thirdCpuTaskAdmission.has_value());
+            if(thirdCpuTaskAdmission.has_value()){
+                EXPECT_TRUE(thirdCpuTaskAdmission.value().valid());
+            }
+        }, defaultOptions, roots.data(), cast<usize>(rootCount));
+        ASSERT_TRUE(secondCpuTaskAdmission.has_value());
+        ASSERT_TRUE(secondCpuTaskAdmission.value().valid());
+        start.store(true, MemoryOrder::release);
+        start.notify_all();
+        scheduler.wait();
+        EXPECT_EQ(joined.load(MemoryOrder::acquire), workers);
+        EXPECT_EQ(visits.load(MemoryOrder::acquire), rootCount + 1u);
+        // This scope keeps its identity after completion, while publication invalidates its old contribution proofs.
+        const auto laterTaskAdmission = scheduler.submit(lambda[mut visits]() -> void{
+            visits.fetch_add(1u, MemoryOrder::relaxed);
+        });
+        ASSERT_TRUE(laterTaskAdmission.has_value());
+        const CpuTaskHandle later = laterTaskAdmission.value();
+        ASSERT_TRUE(later.valid());
+        const auto fifthCpuTaskAdmission = scope.submit(lambda[mut visits]() -> void{
+            visits.fetch_add(1u, MemoryOrder::relaxed);
+        }, later);
+        ASSERT_TRUE(fifthCpuTaskAdmission.has_value());
+        ASSERT_TRUE(fifthCpuTaskAdmission.value().valid());
+        scope.wait();
+        scheduler.wait();
+        finish.release();
+        EXPECT_EQ(visits.load(MemoryOrder::acquire), rootCount + 3u);
+        EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
     }
 }
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -464,7 +454,6 @@ void VerifyCpuTaskProgressTests_ConcurrentSameScopeJoinsRetainLatePublishedDesce
 NWB_ADHD_GTEST(CpuTaskMpmcTests, OwnerExternalAndWorkerProducersShareQueuesWithoutLosingOrRepeatingTasks, VerifyCpuTaskMpmcTests_OwnerExternalAndWorkerProducersShareQueuesWithoutLosingOrRepeatingTasks)
 NWB_ADHD_GTEST(CpuTaskMpmcTests, ExternalProducersCanWaitForMainThreadTasksWhileTheOwnerPumps, VerifyCpuTaskMpmcTests_ExternalProducersCanWaitForMainThreadTasksWhileTheOwnerPumps)
 NWB_ADHD_GTEST(CpuTaskMpmcTests, CanceledCompletionCannotLoseConcurrentHandleScopeOrSchedulerJoins, VerifyCpuTaskMpmcTests_CanceledCompletionCannotLoseConcurrentHandleScopeOrSchedulerJoins)
-
 
 NWB_ADHD_GTEST(CpuTaskProgressTests, ScopeJoinWakesForANewlyReadyUnscopedMainThreadPrerequisite, VerifyCpuTaskProgressTests_ScopeJoinWakesForANewlyReadyUnscopedMainThreadPrerequisite)
 NWB_ADHD_GTEST(CpuTaskProgressTests, ConcurrentSameScopeJoinsRetainLatePublishedDescendantsAcrossScopeReuse, VerifyCpuTaskProgressTests_ConcurrentSameScopeJoinsRetainLatePublishedDescendantsAcrossScopeReuse)

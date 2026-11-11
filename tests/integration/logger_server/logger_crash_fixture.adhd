@@ -23,6 +23,7 @@ native{
 
 #include <gtest/gtest.h>
 
+#include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/crash/module.h>
 #include <core/crash/package_archive.h>
@@ -34,19 +35,35 @@ native{
 #include <global/environment.h>
 #include <global/error_code.h>
 #include <global/filesystem/directory_iterator.h>
+#include <global/filesystem/exclusive_publication.h>
+#include <global/filesystem/executable_paths.h>
 #include <global/filesystem/operations.h>
+#include <global/filesystem/utility.h>
 #include <global/process.h>
 #include <global/process_execution.h>
 #include <global/scope_exit.h>
 #include <global/sync.h>
+#include <global/termination.h>
 #include <global/thread.h>
 #include <global/timer.h>
 
 #include <logger/client/module.h>
 #include <logger/common.h>
+#include <logger/message_payload_codec.h>
+#include <logger/processed_message_file.h>
+#include <logger/server/crash_auth.adhd.h>
 #include <logger/server/crash_ingest.adhd.h>
 #include <logger/server/crash_paths.adhd.h>
 #include <logger/server/crash_report_composer.adhd.h>
+
+#if defined(NWB_PLATFORM_WINDOWS)
+#include <logger/server/clipboard_text.adhd.h>
+#include <logger/server/crash_symbolicate.adhd.h>
+#include <logger/server/log_row_painter.adhd.h>
+
+#include <windows.h>
+#include <dbghelp.h>
+#endif
 
 #include <microhttpd.h>
 
@@ -71,20 +88,30 @@ namespace NWB::Tests::LoggerCrashCases{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] NWB_INLINE AStringView ErrorCodeCategoryName(const ErrorCode& code)noexcept{
+    return AStringView(code.category().name());
+}
+
+
 struct LoggerServerTestsTag{};
 using LoggerTestArena = TestArena<LoggerServerTestsTag>;
 using GlobalArena = Core::Alloc::GlobalArena;
 using ScratchArena = Core::Alloc::ScratchArena;
 using PersistentArena = Core::Alloc::PersistentArena;
 using CrashTestText = AString<Core::Alloc::GlobalArena>;
-using CrashTestPath = CrashTestPaths::CrashTestPath;
+using CrashTestPath = ::Path<Core::Alloc::GlobalArena>;
 using CrashIngestConfig = Log::CrashIngestConfig;
 using CrashIngestResult = Log::CrashIngestResult;
+using CrashPackageSummary = Log::CrashPackageSummary;
+using CrashReportComposer = Log::LoggerCrashSymbolicateDetail::CrashReportComposer;
 using LogClient = Log::Client;
+using LogBytes = Log::LogBytes;
+using ProcessedMessageFile = Log::ProcessedMessageFile;
 using CrashTestPaths::TestCaseDirectory;
 using CrashTestPaths::SpoolDirectory;
 using CrashTestPaths::RemoveTestArtifacts;
 using Log::ProcessCrashUpload;
+using Log::CrashUploadAuthorizationMatches;
 
 namespace CrashNames = Core::Crash::PackageNames;
 
@@ -96,10 +123,26 @@ namespace ManifestEventField{
 };
 using ManifestEventFieldEnum = ManifestEventField::Enum;
 
+#if defined(NWB_PLATFORM_WINDOWS)
+inline constexpr b8 s_IsWindowsLoggerPlatform = true;
+#else
+inline constexpr b8 s_IsWindowsLoggerPlatform = false;
+#endif
+
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+inline constexpr b8 s_IsDesktopLinuxLoggerPlatform = true;
+#else
+inline constexpr b8 s_IsDesktopLinuxLoggerPlatform = false;
+#endif
+
 inline constexpr ManifestEventFieldEnum s_IncludeEventField = ManifestEventField::Include;
 inline constexpr ManifestEventFieldEnum s_OmitEventField = ManifestEventField::Omit;
 inline constexpr AStringView s_ArchiveHeaderText = CrashNames::s_ArchiveHeaderText;
+inline constexpr AStringView s_ArchiveFileHeaderPrefix = CrashNames::s_ArchiveFileHeaderPrefix;
+inline constexpr AStringView s_ArchiveEntryEndText = CrashNames::s_ArchiveEntryEndText;
+inline constexpr AStringView s_ManifestFormatValue = CrashNames::s_ManifestFormatValue;
 inline constexpr AStringView s_ManifestFileName = CrashNames::s_ManifestFileName;
+inline constexpr AStringView s_ProcessDumpFileName = CrashNames::s_ProcessDumpFileName;
 inline constexpr AStringView s_CpuContextFileName = CrashNames::s_CpuContextFileName;
 inline constexpr AStringView s_CallstackFileName = CrashNames::s_CallstackFileName;
 inline constexpr AStringView s_ProcMapsFileName = CrashNames::s_ProcMapsFileName;
@@ -111,6 +154,7 @@ inline constexpr AStringView s_CrashExtractedDirectoryName = Log::s_CrashExtract
 inline constexpr AStringView s_CrashRawDirectoryName = Log::s_CrashRawDirectoryName;
 inline constexpr AStringView s_CrashInvalidDirectoryName = Log::s_CrashInvalidDirectoryName;
 inline constexpr AStringView s_ServerSymbolicationFileName = Log::s_ServerSymbolicationFileName;
+inline constexpr auto s_LogTypeInfo = Core::Common::LogType::Info;
 inline constexpr auto s_LogTypeAssert = Core::Common::LogType::Assert;
 inline constexpr auto s_LogTypeError = Core::Common::LogType::Error;
 inline constexpr auto s_LogTypeWarning = Core::Common::LogType::Warning;
@@ -130,11 +174,40 @@ struct ManifestTriggerFields{
     u64 line = 0u;
 };
 
+struct ComposerScratchHolder{
+    ScratchArena scratch{ Name(s_LoggerCrashReportComposerScratch) };
+};
+
+struct LogClientHolder{
+    LogClient client;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<CrashTestText, ErrorCode> ReadServerSymbolication(GlobalArena& arena, AStringView testGroup, AStringView stem);
+NWB_INLINE void EnqueueClientAscii(LogClient& client, const AStringView text){
+    Core::Common::LoggerDetail::EnqueueMessage(client, s_LogTypeInfo, text);
+}
+
+[[nodiscard]] NWB_INLINE b8 EnqueueClientTelemetry(LogClient& client, const Span<const u8> bytes){
+    return client.enqueueTelemetry(bytes.data(), bytes.size());
+}
+
+template<typename ArenaT>
+[[nodiscard]] NWB_INLINE FilePublicationResult PublishDurableBytes(const ::Path<ArenaT>& destination, const Span<const u8> bytes){
+    return PublishNewFileDurable(destination, BinaryByteView{ bytes.data(), bytes.size() });
+}
+
+[[nodiscard]] NWB_INLINE b8 CrashIngestMessageContains(const CrashIngestResult& result, const AStringView asciiNeedle){
+    ScratchArena scratch{Name(s_LoggerCrashTestNameTestsIntegrationLoggerServerArchiveScratch)};
+    return Contains(result.message, ConvertString(scratch, asciiNeedle));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] Expected<CrashTestPath, ErrorCode> WaitForTriggerPackage(GlobalArena& arena, const CrashTestPath& pendingDirectory, AStringView category, AStringView expression, AStringView message, AStringView file);
 void PreserveObservedReport(GlobalArena& arena, AStringView report, AStringView suffix);
 
@@ -156,8 +229,8 @@ public:
 public:
     [[nodiscard]] b8 start(u16& outPort)noexcept;
 
-    [[nodiscard]] inline u32 requestCount()const noexcept{ return m_requestCount.load(MemoryOrder::acquire); }
-    [[nodiscard]] inline b8 processingFirstRequest()const noexcept{ return m_delayedFirstRequest.load(MemoryOrder::acquire); }
+    [[nodiscard]] NWB_INLINE u32 requestCount()const noexcept{ return m_requestCount.load(MemoryOrder::acquire); }
+    [[nodiscard]] NWB_INLINE b8 processingFirstRequest()const noexcept{ return m_delayedFirstRequest.load(MemoryOrder::acquire); }
     void releaseFirstRequest()noexcept{ m_releaseFirstRequest.store(true, MemoryOrder::release); }
     [[nodiscard]] b8 requestWasTelemetry(const u32 index)const noexcept{ return m_telemetryRequests[index]; }
     [[nodiscard]] usize firstPayloadSize()const noexcept{ return m_payloadOverflow ? 0u : m_payloadSizes[0]; }
@@ -181,6 +254,25 @@ private:
     Atomic<b8> m_releaseFirstRequest = false;
 };
 
+class ServerFirstRequestReleaseGuard final : NoCopy{
+public:
+    explicit ServerFirstRequestReleaseGuard(ShutdownCaptureServer& server)noexcept
+        : m_server(&server)
+    {}
+    ~ServerFirstRequestReleaseGuard()noexcept{
+        if(m_server)
+            m_server->releaseFirstRequest();
+    }
+
+
+public:
+    void release()noexcept{ m_server = nullptr; }
+
+
+private:
+    ShutdownCaptureServer* m_server = nullptr;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -198,6 +290,100 @@ private:
     Core::Common::LoggerRegistrationGuard m_loggerRegistration;
 };
 
+class LoggerProtocolTests : public ::testing::Test{
+public:
+    LoggerProtocolTests()
+        : m_loggerRegistration(m_logger)
+    {}
+
+
+
+private:
+    CapturingLogger m_logger;
+    Core::Common::LoggerRegistrationGuard m_loggerRegistration;
+};
+
+class LoggerTelemetryPublication : public ::testing::Test{
+public:
+    LoggerTelemetryPublication()
+        : m_loggerRegistration(m_logger)
+    {}
+
+
+
+private:
+    CapturingLogger m_logger;
+    Core::Common::LoggerRegistrationGuard m_loggerRegistration;
+};
+
+class LoggerProducerContracts : public ::testing::Test{
+public:
+    LoggerProducerContracts()
+        : m_registration(m_logger, Core::Common::LoggerBreakPolicy::ReportOnly)
+    {}
+
+
+
+private:
+    CapturingLogger m_logger;
+    Core::Common::LoggerRegistrationGuard m_registration;
+};
+
+#if defined(NWB_PLATFORM_WINDOWS)
+using DumpBytes = Vector<u8, Core::Alloc::GlobalArena>;
+
+template<typename T>
+NWB_INLINE void StoreDumpRecord(const usize offset, const T& record, const Span<u8> bytes)noexcept{
+    NWB_ASSERT(offset <= bytes.size() && sizeof(T) <= bytes.size() - offset);
+    NWB_MEMCPY(bytes.data() + offset, bytes.size() - offset, &record, sizeof(T));
+}
+
+[[nodiscard]] DumpBytes ExceptionDump(Core::Alloc::GlobalArena& arena, MINIDUMP_STREAM_TYPE secondStream, ULONG secondStreamBytes);
+
+class MinidumpBoundaryTests : public ::testing::Test{
+public:
+    MinidumpBoundaryTests()
+        : m_directory(m_testArena.arena, "logserver_minidump_boundary_tests")
+        , m_loggerGuard(m_logger, Core::Common::LoggerBreakPolicy::ReportOnly)
+    {}
+
+
+
+protected:
+    virtual void SetUp()override{
+        ASSERT_TRUE(EnsureEmptyDirectory(m_directory));
+    }
+
+    virtual void TearDown()override{
+        EXPECT_TRUE(RemoveAllIfExists(m_directory));
+    }
+
+
+public:
+    [[nodiscard]] Expected<Log::CrashReportText> report(const Span<const u8> bytes){
+        if(!WriteBinaryFile(m_directory / Core::Crash::PackageNames::s_ProcessDumpFileName, bytes))
+            return MakeUnexpected(Failure{});
+        Log::CrashPackageSummary summary(m_testArena.arena);
+        summary.platform = "windows";
+        summary.threadId = 1u;
+        Log::CrashSymbolicationConfig config(m_testArena.arena);
+        const Log::CrashScratchPath scratchDirectory(m_scratchArena, m_directory);
+        return Log::BuildCrashSymbolicationReport(scratchDirectory, summary, config, m_testArena.arena, m_scratchArena);
+    }
+
+
+public:
+    LoggerTestArena m_testArena;
+    Core::Alloc::ScratchArena m_scratchArena{ Name(s_LoggerCrashFixtureNameTestsMinidumpBoundaryScratch) };
+    CrashTestPath m_directory;
+    CapturingLogger m_logger;
+    Core::Common::LoggerRegistrationGuard m_loggerGuard;
+};
+#else
+class MinidumpBoundaryTests : public ::testing::Test{
+public:
+};
+#endif
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 void AppendDecimalText(u64 value, CrashTestText& outText);
@@ -205,6 +391,7 @@ void AppendDecimalText(u64 value, CrashTestText& outText);
 void LinuxSilenceExpectedCrashChildConsole();
 [[nodiscard]] b8 PendingDirectoryContainsManifestTexts(GlobalArena& arena, const CrashTestPath& pendingDirectory, AStringView firstNeedle, AStringView secondNeedle);
 [[nodiscard]] AStringView LinuxObservableAssertCategory()noexcept;
+NWB_NOINLINE void LinuxForceAssertFalseForCrashObservation();
 #endif
 
 #if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
@@ -249,134 +436,84 @@ const Name s_AssertChildInstallArena = s_LoggerCrashTestNameTestsIntegrationLogg
 const Name s_RecoverableErrorInstallArena = s_LoggerCrashTestNameTestsIntegrationLoggerServerRecoverableErrorInstall;
 
 b8 IsWindowsLoggerCrashPlatform(){
-    b8 isWindows = false;
-    native(mut isWindows){
-#if defined(NWB_PLATFORM_WINDOWS)
-        isWindows = true;
-#endif
-    }
-    return isWindows;
+    return s_IsWindowsLoggerPlatform;
 }
 
 b8 IsDesktopLinuxLoggerCrashPlatform(){
-    b8 isDesktopLinux = false;
-    native(mut isDesktopLinux){
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-        isDesktopLinux = true;
-#endif
-    }
-    return isDesktopLinux;
+    return s_IsDesktopLinuxLoggerPlatform;
 }
 
 b8 IsDesktopLoggerCrashPlatform(){
     return IsWindowsLoggerCrashPlatform() || IsDesktopLinuxLoggerCrashPlatform();
 }
 
-CrashTestPath StorageDirectory(mut GlobalArena arena, in StringView testGroup){
-    return TestCaseDirectory(arena, testGroup) / "storage";
+Path StorageDirectory(in StringView testGroup){
+    return TestCaseDirectory(testGroup) / "storage";
 }
 
-CrashTestPath ArchiveInputDirectory(mut GlobalArena arena, in StringView testGroup){
-    return TestCaseDirectory(arena, testGroup) / "input";
+Path ArchiveInputDirectory(in StringView testGroup){
+    return TestCaseDirectory(testGroup) / "input";
 }
 
-CrashTestPath ArchiveFileName(mut GlobalArena arena, in StringView stem){
-    CrashTestPath fileName = CrashTestPath(arena, stem);
+Path ArchiveFileName(in StringView stem){
+    Path fileName = Path(stem);
     fileName.replaceExtension(s_CrashUploadArchiveFileExtension);
     return fileName;
 }
 
-CrashTestPath ArchivePath(mut GlobalArena arena, in StringView testGroup, in StringView stem){
-    return ArchiveInputDirectory(arena, testGroup) / ArchiveFileName(arena, stem);
+Path ArchivePath(in StringView testGroup, in StringView stem){
+    return ArchiveInputDirectory(testGroup) / ArchiveFileName(stem);
 }
 
-CrashTestPath ExtractedPackageDirectory(mut GlobalArena arena, in StringView testGroup, in StringView stem){
-    return StorageDirectory(arena, testGroup) / s_CrashExtractedDirectoryName / stem;
+Path ExtractedPackageDirectory(in StringView testGroup, in StringView stem){
+    return StorageDirectory(testGroup) / s_CrashExtractedDirectoryName / stem;
 }
 
-CrashTestPath RawArchivePath(mut GlobalArena arena, in StringView testGroup, in StringView stem){
-    return StorageDirectory(arena, testGroup) / s_CrashRawDirectoryName / ArchiveFileName(arena, stem);
+Path RawArchivePath(in StringView testGroup, in StringView stem){
+    return StorageDirectory(testGroup) / s_CrashRawDirectoryName / ArchiveFileName(stem);
 }
 
-CrashTestPath InvalidArchivePath(mut GlobalArena arena, in StringView testGroup, in StringView stem){
-    return StorageDirectory(arena, testGroup) / s_CrashInvalidDirectoryName / ArchiveFileName(arena, stem);
+Path InvalidArchivePath(in StringView testGroup, in StringView stem){
+    return StorageDirectory(testGroup) / s_CrashInvalidDirectoryName / ArchiveFileName(stem);
 }
 
-void AppendArchiveFile(in StringView relativePath, in StringView content, mut CrashTestText archive){
-    native(in relativePath, in content, mut archive){
-        Array<char, 32u> sizeBuffer = {};
-        archive += CrashNames::s_ArchiveFileHeaderPrefix;
-        archive += relativePath;
-        archive += " ";
-        archive += FormatDecimal(content.size(), sizeBuffer);
-        archive += "\n";
-        archive += content;
-        archive += CrashNames::s_ArchiveEntryEndText;
-    }
+void AppendArchiveFile(in StringView relativePath, in StringView content, mut String archive){
+    archive.append(s_ArchiveFileHeaderPrefix);
+    archive.append(relativePath);
+    archive.append(StringFormat(" {}\n", content.size()));
+    archive.append(content);
+    archive.append(s_ArchiveEntryEndText);
 }
 
-CrashTestText BuildManifest(
+String BuildManifest(
     in StringView crashId,
     in StringView platform,
     in StringView event,
     in StringView reasonKind,
     in u64 reasonCode,
     in ManifestEventFieldEnum eventField,
-    in ManifestTriggerFields trigger,
-    mut GlobalArena arena
+    in ManifestTriggerFields trigger
 ){
-    CrashTestText manifest = CrashTestText(arena);
-    native(in crashId, in platform, in event, in reasonKind, in reasonCode, in eventField, in trigger, mut manifest){
-        Array<char, 32u> reasonCodeBuffer = {};
-        Array<char, 32u> triggerLineBuffer = {};
-        manifest += "{\n";
-        manifest += "  \"format\": \"";
-        manifest += CrashNames::s_ManifestFormatValue;
-        manifest += "\",\n";
-        manifest += "  \"crash_id\": \"";
-        manifest += crashId;
-        manifest += "\",\n  \"application\": \"logger_server_test\",\n";
-        manifest += "  \"version\": \"1\",\n";
-        manifest += "  \"build_id\": \"unit-test\",\n";
-        manifest += "  \"abi\": \"test-abi\",\n";
-        manifest += "  \"platform\": \"";
-        manifest += platform;
-        manifest += "\",\n  \"reason_kind\": \"";
-        manifest += reasonKind;
-        manifest += "\",\n  \"reason_code\": ";
-        manifest += FormatDecimal(static_cast<usize>(reasonCode), reasonCodeBuffer);
-        manifest += ",\n  \"process_id\": 1,\n";
-        manifest += "  \"thread_id\": 7,\n";
-        manifest += "  \"has_exception_context\": false,\n";
-        manifest += "  \"fault_address\": 0,\n";
-        manifest += "  \"instruction_pointer\": 0,\n";
-        manifest += "  \"stack_pointer\": 0,\n";
-        manifest += "  \"frame_pointer\": 0,\n";
-        if(eventField == ManifestEventField::Include){
-            manifest += "  \"event\": \"";
-            manifest += event;
-            manifest += "\",\n";
-        }
-        manifest += "  \"trigger_category\": \"";
-        manifest += trigger.category;
-        manifest += "\",\n";
-        manifest += "  \"trigger_expression\": \"";
-        manifest += trigger.expression;
-        manifest += "\",\n";
-        manifest += "  \"trigger_message\": \"";
-        manifest += trigger.message;
-        manifest += "\",\n";
-        manifest += "  \"trigger_file\": \"";
-        manifest += trigger.file;
-        manifest += "\",\n";
-        manifest += "  \"trigger_line\": ";
-        manifest += FormatDecimal(static_cast<usize>(trigger.line), triggerLineBuffer);
-        manifest += ",\n";
-        manifest += "  \"dump_detail_mode\": \"small\",\n";
-        manifest += "  \"artifact_strategy\": \"unit_test\",\n";
-        manifest += "  \"handler_lifetime\": \"unit_test\"\n";
-        manifest += "}\n";
-    }
+    String manifest = "{\n";
+    manifest.append(StringFormat(
+        "  \"format\": \"{}\",\n  \"crash_id\": \"{}\",\n  \"application\": \"logger_server_test\",\n  \"version\": \"1\",\n  \"build_id\": \"unit-test\",\n  \"abi\": \"test-abi\",\n  \"platform\": \"{}\",\n  \"reason_kind\": \"{}\",\n  \"reason_code\": {},\n  \"process_id\": 1,\n  \"thread_id\": 7,\n  \"has_exception_context\": false,\n  \"fault_address\": 0,\n  \"instruction_pointer\": 0,\n  \"stack_pointer\": 0,\n  \"frame_pointer\": 0,\n",
+        s_ManifestFormatValue,
+        crashId,
+        platform,
+        reasonKind,
+        reasonCode
+    ));
+    if(eventField == s_IncludeEventField)
+        manifest.append(StringFormat("  \"event\": \"{}\",\n", event));
+    manifest.append(StringFormat(
+        "  \"trigger_category\": \"{}\",\n  \"trigger_expression\": \"{}\",\n  \"trigger_message\": \"{}\",\n  \"trigger_file\": \"{}\",\n  \"trigger_line\": {},\n  \"dump_detail_mode\": \"small\",\n  \"artifact_strategy\": \"unit_test\",\n  \"handler_lifetime\": \"unit_test\"\n",
+        trigger.category,
+        trigger.expression,
+        trigger.message,
+        trigger.file,
+        trigger.line
+    ));
+    manifest.append("}\n");
     return manifest;
 }
 
@@ -388,41 +525,36 @@ void BeginArchiveWithManifest(
     in u64 reasonCode,
     in ManifestEventFieldEnum eventField,
     in ManifestTriggerFields trigger,
-    mut GlobalArena arena,
-    mut CrashTestText archive
+    mut String archive
 ){
-    archive += s_ArchiveHeaderText;
-    const CrashTestText manifest = BuildManifest(crashId, platform, event, reasonKind, reasonCode, eventField, trigger, arena);
-    AppendArchiveFile(s_ManifestFileName, StringView(manifest.data(), manifest.size()), archive);
+    archive.append(s_ArchiveHeaderText);
+    const String manifest = BuildManifest(crashId, platform, event, reasonKind, reasonCode, eventField, trigger);
+    AppendArchiveFile(s_ManifestFileName, StringView(manifest), archive);
 }
 
-b8 WriteArchive(mut GlobalArena arena, in StringView testGroup, in StringView stem, in StringView archive){
-    b8 ok = false;
-    const CrashTestPath inputDir = ArchiveInputDirectory(arena, testGroup);
-    const CrashTestPath archivePath = ArchivePath(arena, testGroup, stem);
-    native(in inputDir, in archivePath, in archive, mut ok){
-        if(EnsureDirectories(inputDir))
-            ok = WriteTextFile(archivePath, archive);
-    }
-    return ok;
+b8 WriteArchive(in StringView testGroup, in StringView stem, in StringView archive){
+    const Path inputDir = ArchiveInputDirectory(testGroup);
+    if(!EnsureDirectories(inputDir).has_value())
+        return false;
+    return WriteTextFile(ArchivePath(testGroup, stem), archive);
 }
 
 CrashIngestConfig MakeIngestConfig(mut GlobalArena arena, in StringView testGroup){
     CrashIngestConfig config = CrashIngestConfig(arena);
-    config.storageDirectory = StorageDirectory(arena, testGroup);
+    config.storageDirectory = StorageDirectory(testGroup);
     return config;
 }
 
-void BuildLinuxCrashArchive(in StringView crashId, mut GlobalArena arena, mut CrashTestText archive){
-    BeginArchiveWithManifest(crashId, s_Linux, s_Crash, s_Signal, 11u, s_IncludeEventField, ManifestTriggerFields(), arena, archive);
+void BuildLinuxCrashArchive(in StringView crashId, mut String archive){
+    BeginArchiveWithManifest(crashId, s_Linux, s_Crash, s_Signal, 11u, s_IncludeEventField, ManifestTriggerFields(), archive);
     AppendArchiveFile(s_CpuContextFileName, "fault_address=0\ninstruction_pointer=4198964\nstack_pointer=0\nframe_pointer=0\n", archive);
     AppendArchiveFile(s_CallstackFileName, "#0 0x0000000000401234\n#1 0x0000000000401240\n", archive);
     AppendArchiveFile(s_ProcMapsFileName, "00400000-00452000 r-xp 00000000 08:01 123 /tmp/nwb_loader\n", archive);
 }
 
 CrashIngestResult ProcessCrashArchive(mut GlobalArena arena, in StringView testGroup, in StringView stem, in StringView archive, in CrashIngestConfig config){
-    EXPECT_TRUE(WriteArchive(arena, testGroup, stem, archive));
-    return ProcessCrashUpload(arena, ArchivePath(arena, testGroup, stem), config);
+    EXPECT_TRUE(WriteArchive(testGroup, stem, archive));
+    return ProcessCrashUpload(arena, ArchivePath(testGroup, stem), config);
 }
 
 CrashIngestResult ProcessCrashArchive(mut GlobalArena arena, in StringView testGroup, in StringView stem, in StringView archive){
@@ -430,40 +562,26 @@ CrashIngestResult ProcessCrashArchive(mut GlobalArena arena, in StringView testG
     return ProcessCrashArchive(arena, testGroup, stem, archive, config);
 }
 
-b8 ReadServerSymbolicationText(mut GlobalArena arena, in StringView testGroup, in StringView stem, mut CrashTestText outReport){
-    b8 ok = false;
-    native(mut arena, in testGroup, in stem, mut outReport, mut ok){
-        auto result = ReadServerSymbolication(arena, testGroup, stem);
-        if(result){
-            outReport = Move(*result);
-            ok = true;
-        }
-    }
-    return ok;
+b8 ReadServerSymbolicationText(in StringView testGroup, in StringView stem, mut String outReport){
+    return ReadTextFile(ExtractedPackageDirectory(testGroup, stem) / s_ServerSymbolicationFileName, outReport).has_value();
 }
 
-void ExpectPathExists(in CrashTestPath path, in b8 expected){
-    native(in path, in expected){
-        const auto query = FileExists(path);
-        ASSERT_TRUE(query);
-        EXPECT_EQ(*query, expected);
-    }
+void ExpectPathExists(in Path path, in b8 expected){
+    const Expected<b8, ErrorCode> query = FileExists(path);
+    ASSERT_TRUE(query.has_value());
+    EXPECT_EQ(query.value(), expected);
 }
 
-void ExpectIsDirectory(in CrashTestPath path, in b8 expected){
-    native(in path, in expected){
-        const auto query = IsDirectory(path);
-        ASSERT_TRUE(query);
-        EXPECT_EQ(*query, expected);
-    }
+void ExpectIsDirectory(in Path path, in b8 expected){
+    const Expected<b8, ErrorCode> query = IsDirectory(path);
+    ASSERT_TRUE(query.has_value());
+    EXPECT_EQ(query.value(), expected);
 }
 
-void ExpectIsRegularFile(in CrashTestPath path, in b8 expected){
-    native(in path, in expected){
-        const auto query = IsRegularFile(path);
-        ASSERT_TRUE(query);
-        EXPECT_EQ(*query, expected);
-    }
+void ExpectIsRegularFile(in Path path, in b8 expected){
+    const Expected<b8, ErrorCode> query = IsRegularFile(path);
+    ASSERT_TRUE(query.has_value());
+    EXPECT_EQ(query.value(), expected);
 }
 
 
@@ -478,14 +596,6 @@ native{
 
 
 namespace NWB::Tests::LoggerCrashCases{
-
-Expected<CrashTestText, ErrorCode> ReadServerSymbolication(GlobalArena& arena, const AStringView testGroup, const AStringView stem){
-    CrashTestText report(arena);
-    const auto result = ReadTextFile(ExtractedPackageDirectory(arena, testGroup, stem) / s_ServerSymbolicationFileName, report);
-    if(!result)
-        return MakeUnexpected(result.error());
-    return report;
-}
 
 static b8 ManifestContainsStringValue(GlobalArena& arena, const AStringView manifest, const AStringView key, const AStringView value){
     if(value.empty())

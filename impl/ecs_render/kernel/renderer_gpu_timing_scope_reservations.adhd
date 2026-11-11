@@ -2,156 +2,89 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/ecs_render/kernel/renderer_format_private.adhd>
+#include <impl/ecs_render/shared/frame_push_constants.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <core/graphics/runtime/runtime.h>
+b8 ReserveGpuTimingScope(mut KernelGraphicsRuntime graphics, in Name scope, in u32 queryCount){
+    if(PrepareKernelGpuTimingScopeQueries(graphics, scope, queryCount))
+        return true;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-class RendererGpuTimingScopeReservations final{
-public:
-    [[nodiscard]] static b8 Prepare(Core::GraphicsRuntime& graphics);
-};
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    warning("RendererSystem: failed to prepare GPU timing scope '{}'", scope.resolvedText());
+    return false;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_render/kernel/timing_names.adhd.h>
-#include <impl/ecs_render/shared/frame_types.adhd.h>
-
-#include <core/common/log.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 RendererGpuTimingScopeReservations::Prepare(Core::GraphicsRuntime& graphics){
-    auto& device = graphics.getDevice();
-
-    struct ScopeReservation{
-        const Core::GpuTimingScopeDefinition& scope;
-        u32 queryCount;
-    };
-    const Array<ScopeReservation, 63u> scopeReservations = {{
-        { RendererGpuTimingScope::s_MeshDispatch, s_GpuTimingHighFrequencyScopeQueryBudget },
-        { RendererGpuTimingScope::s_Raster, s_GpuTimingHighFrequencyScopeQueryBudget },
-        { RendererGpuTimingScope::s_Frame, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_AsyncPrefix, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_AsyncShadow, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_AsyncSurfelGi, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_AsyncFinal, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_DeferredClear, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_ShadowVisibility, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_LightSpaceShadowViews, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_LightSpaceShadowCull, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_LightSpaceShadowOpaqueCapture, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_LightSpaceShadowTransparentCapture, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_LightSpaceShadowShade, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_LightSpaceShadowMapOpaque, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_LightSpaceShadowMapTransparent, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_LightSpaceShadowFallbackOpaque, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_LightSpaceShadowFallbackTransparent, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_ShadowOpaqueTrace, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_ShadowGeometryDownsample, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_ShadowOpaqueTemporal, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_ShadowCombinedTemporal, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_ShadowOpaqueResolve, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_ShadowTransparentTrace, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_ShadowTransparentGather, s_GpuTimingHighFrequencyScopeQueryBudget },
-        { RendererGpuTimingScope::s_ShadowTransparentEvaluate, s_GpuTimingHighFrequencyScopeQueryBudget },
-        { RendererGpuTimingScope::s_ShadowTransparentContinuation, s_GpuTimingHighFrequencyScopeQueryBudget },
-        { RendererGpuTimingScope::s_ShadowTransparentTemporal, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_ShadowTransparentResolve, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_SwBvhSort, s_GpuTimingQueriesPerTwoRangeScope },
-        { RendererGpuTimingScope::s_CausticPhotons, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_CausticResolve, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_RefractionClassifyTiles, s_GpuTimingRefractionTileScopeQueryBudget },
-        { RendererGpuTimingScope::s_RefractionClearTileArguments, s_GpuTimingRefractionTileScopeQueryBudget },
-        { RendererGpuTimingScope::s_RefractionResolve, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_OpticalBoundsFinalize, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_DeferredLighting, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_DeferredComposite, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_DeferredPresent, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_MaterialUpload, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_OpaqueRegular, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_OpaqueCsgReceiverSurface, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_OpaqueCsg, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_CsgUpload, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_CsgSampleStateUpload, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_CsgIntervalClear, s_GpuTimingQueriesPerTwoRangeScope },
-        { RendererGpuTimingScope::s_CsgIntervalPeel, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_CsgReceiverSpanBuild, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_CsgIntervalCombine, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_CsgCapFill, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_TransparentCsgIntervals, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_AvboitClear, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_AvboitOccupancy, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_AvboitDepthWarp, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_AvboitExtinction, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_AvboitIntegration, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_AvboitAccumulate, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_SurfelSpawn, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_SurfelAgeFree, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_SurfelHashBuild, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_SurfelTrace, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_SurfelResolve, s_GpuTimingQueriesPerRange },
-        { RendererGpuTimingScope::s_SurfelUpsample, s_GpuTimingQueriesPerRange },
-    }};
-
-    for(const ScopeReservation& reservation : scopeReservations){
-        if(!graphics.gpuTiming().prepareScopeQueries(reservation.scope.identity, device, reservation.queryCount)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to prepare GPU timing scope '{}'"), ConvertString(reservation.scope.identity.resolvedText()));
-            return false;
-        }
+class RendererGpuTimingScopeReservations{
+    public b8 prepare(mut KernelGraphicsRuntime graphics)const{
+        return
+            ReserveGpuTimingScope(graphics, Name("render.mesh_dispatch"), s_GpuTimingHighFrequencyScopeQueryBudget)
+            && ReserveGpuTimingScope(graphics, Name("render.raster"), s_GpuTimingHighFrequencyScopeQueryBudget)
+            && ReserveGpuTimingScope(graphics, Name("render.frame"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.async_prefix"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.async_shadow"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.async_surfel_gi"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.async_final"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.deferred_clear"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.shadow_visibility"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.shadow.light_space_views"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.shadow.light_space_cull"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.shadow.light_space_opaque_capture"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.shadow.light_space_transparent_capture"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.shadow.light_space_shade"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.shadow.light_space_map_opaque"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.shadow.light_space_map_transparent"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.shadow.light_space_fallback_opaque"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.shadow.light_space_fallback_transparent"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.shadow_opaque_trace"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.shadow_geometry_downsample"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.shadow_opaque_temporal"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.shadow_combined_temporal"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.shadow_opaque_resolve"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.shadow_transparent_trace"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.shadow_transparent_gather"), s_GpuTimingHighFrequencyScopeQueryBudget)
+            && ReserveGpuTimingScope(graphics, Name("render.shadow_transparent_evaluate"), s_GpuTimingHighFrequencyScopeQueryBudget)
+            && ReserveGpuTimingScope(graphics, Name("render.shadow_transparent_continuation"), s_GpuTimingHighFrequencyScopeQueryBudget)
+            && ReserveGpuTimingScope(graphics, Name("render.shadow_transparent_temporal"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.shadow_transparent_resolve"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.sw_bvh_sort"), s_GpuTimingQueriesPerTwoRangeScope)
+            && ReserveGpuTimingScope(graphics, Name("render.caustic_photons"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.caustic_resolve"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.avboit.refraction_classify_tiles"), s_GpuTimingRefractionTileScopeQueryBudget)
+            && ReserveGpuTimingScope(graphics, Name("render.avboit.refraction_tile_arguments_clear"), s_GpuTimingRefractionTileScopeQueryBudget)
+            && ReserveGpuTimingScope(graphics, Name("render.avboit.refraction_resolve"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.raytrace.optical_bounds_finalize"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.deferred_lighting"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.deferred_composite"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.deferred_present"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.material_upload"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.opaque_regular"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.opaque_csg_receiver_surface"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.opaque_csg"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.csg_upload"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.csg_sample_state_upload"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.csg_interval_clear"), s_GpuTimingQueriesPerTwoRangeScope)
+            && ReserveGpuTimingScope(graphics, Name("render.csg_interval_peel"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.csg_receiver_span_build"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.csg_interval_combine"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.csg_cap_fill"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.transparent_csg_intervals"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.avboit_clear"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.avboit_occupancy"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.avboit_depth_warp"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.avboit_extinction"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.avboit_integration"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.avboit_accumulate"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.surfel_spawn"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.surfel_age_free"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.surfel_hash_build"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.surfel_trace"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.surfel_resolve"), s_GpuTimingQueriesPerRange)
+            && ReserveGpuTimingScope(graphics, Name("render.surfel_upsample"), s_GpuTimingQueriesPerRange)
+        ;
     }
-
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 }
 
 

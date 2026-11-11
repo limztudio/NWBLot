@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_ui_skin/palette_types.adhd>
+#include <impl/assets_ui_skin/validation.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -117,6 +117,97 @@ b8 IsValidUiSkinToolkitContractOption(in b8 hasToolkitContract, in StringView to
     return !hasToolkitContract || toolkitContract == s_UiSkinWidgetsContract;
 }
 
+Expected<u32> ValidateUiSkinU32FieldValue(in Path path, in StringView fieldName, in b8 isInteger, in i64 rawValue){
+    if(isInteger && FitsU32(rawValue))
+        return cast<u32>(rawValue);
+
+    error("{} '{}': field '{}' must contain integers in the u32 range", s_UiSkinDiagnosticPrefix, PathToString(path), fieldName);
+    return MakeUnexpected(Failure());
+}
+
+b8 ValidateUiSkinComponentListLength(
+    in Path path,
+    in StringView fieldName,
+    in b8 isList,
+    in usize listSize,
+    in usize expectedCount,
+    in StringView kindLabel
+){
+    if(isList && listSize == expectedCount)
+        return true;
+
+    error("{} '{}': field '{}' must be a {}-component {} list", s_UiSkinDiagnosticPrefix, PathToString(path), fieldName, expectedCount, kindLabel);
+    return false;
+}
+
+b8 ValidateUiSkinPaletteRoleCount(in Path path, in usize count){
+    if(count == cast<usize>(UiSkinColorRole::kCount))
+        return true;
+
+    error("{} '{}': colors must contain exactly {} named RGBA roles", s_UiSkinDiagnosticPrefix, PathToString(path), cast<u32>(UiSkinColorRole::kCount));
+    return false;
+}
+
+b8 ValidateUiSkinNewPaletteRole(in Path path, in StringView name, in usize role, in b8 alreadySeen){
+    if(IsValidNewUiSkinPaletteRole(role, alreadySeen))
+        return true;
+
+    error("{} '{}': unknown or duplicate palette role '{}'", s_UiSkinDiagnosticPrefix, PathToString(path), name);
+    return false;
+}
+
+b8 ValidateUiSkinPaletteChannelList(in Path path, in StringView name, in b8 isValidList){
+    if(isValidList)
+        return true;
+
+    error("{} '{}': palette role '{}' needs four RGBA components", s_UiSkinDiagnosticPrefix, PathToString(path), name);
+    return false;
+}
+
+b8 ValidateUiSkinPaletteChannel(in Path path, in StringView name, in f32 value, in u64 index){
+    if(IsValidUiSkinPaletteChannelValue(value, index))
+        return true;
+
+    error("{} '{}': palette role '{}' needs RGB in [0, 16] and alpha in [0, 1]", s_UiSkinDiagnosticPrefix, PathToString(path), name);
+    return false;
+}
+
+b8 ValidateUiSkinTypographyPresent(in Path path, in b8 present){
+    if(present)
+        return true;
+
+    error("{} '{}': skins require typography.default_font_size", s_UiSkinDiagnosticPrefix, PathToString(path));
+    return false;
+}
+
+b8 ValidateUiSkinDefaultFontSizeValue(in Path path, in f32 defaultFontSize){
+    if(IsValidUiSkinDefaultFontSize(defaultFontSize))
+        return true;
+
+    error("{} '{}': typography.default_font_size must be in [1/64, 2048]", s_UiSkinDiagnosticPrefix, PathToString(path));
+    return false;
+}
+
+b8 ValidateUiSkinToolkitContractValue(in Path path, in b8 hasToolkitContract, in StringView toolkitContract){
+    if(IsValidUiSkinToolkitContractOption(hasToolkitContract, toolkitContract))
+        return true;
+
+    error("{} '{}': toolkit_contract must be 'widgets'", s_UiSkinDiagnosticPrefix, PathToString(path));
+    return false;
+}
+
+b8 ValidateUiSkinRegionsListCount(in Path path, in usize count){
+    if(count > cast<usize>(s_UiSkinMaxRegionCount)){
+        error("{} '{}': regions exceed schema limit {}", s_UiSkinDiagnosticPrefix, PathToString(path), s_UiSkinMaxRegionCount);
+        return false;
+    }
+    if(count == 0u){
+        error("{} '{}': regions must be nonempty and fit the supported count", s_UiSkinDiagnosticPrefix, PathToString(path));
+        return false;
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -134,7 +225,6 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_ui_skin/validation.adhd.h>
 #include <impl/assets_ui_skin/ui_skin_binary_codec.adhd.h>
 
 #include <core/assets/cook_metadata.h>
@@ -170,11 +260,8 @@ static constexpr Array<::NamedEnumCase<UiSkinDrawMode::Enum>, 2u> s_DrawModeCase
 
 
 [[nodiscard]] static Expected<u32> ReadU32Value(const Path& path, const Value& value, const AStringView fieldName){
-    if(!value.isInteger() || !FitsU32(value.asInteger())){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must contain integers in the u32 range"), ConvertString(s_UiSkinDiagnosticPrefix), PathToString<tchar>(path), ConvertString(fieldName));
-        return MakeUnexpected(Failure{});
-    }
-    return static_cast<u32>(value.asInteger());
+    const b8 isInteger = value.isInteger();
+    return ValidateUiSkinU32FieldValue(path, fieldName, isInteger, isInteger ? value.asInteger() : 0);
 }
 
 template<usize Count>
@@ -184,10 +271,9 @@ template<usize Count>
     const Value* field = object.findField(fieldName);
     if(!field && !required)
         return values;
-    if(!field || !field->isList() || field->asList().size() != Count){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a {}-component integer list"), ConvertString(s_UiSkinDiagnosticPrefix), PathToString<tchar>(path), ConvertString(fieldName), Count);
+    const b8 isList = field != nullptr && field->isList();
+    if(!ValidateUiSkinComponentListLength(path, fieldName, isList, isList ? field->asList().size() : 0u, Count, "integer"))
         return MakeUnexpected(Failure{});
-    }
     for(usize index = 0u; index < Count; ++index){
         auto valueResult = ReadU32Value(path, field->asList()[index], fieldName);
         if(!valueResult)
@@ -204,10 +290,9 @@ template<usize Count>
     const Value* field = object.findField(fieldName);
     if(!field)
         return values;
-    if(!field->isList() || field->asList().size() != Count){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a {}-component numeric list"), ConvertString(s_UiSkinDiagnosticPrefix), PathToString<tchar>(path), ConvertString(fieldName), Count);
+    const b8 isList = field->isList();
+    if(!ValidateUiSkinComponentListLength(path, fieldName, isList, isList ? field->asList().size() : 0u, Count, "numeric"))
         return MakeUnexpected(Failure{});
-    }
     for(usize index = 0u; index < Count; ++index){
         auto indexResult = Core::Assets::ReadMetadataFiniteF32Value(path, field->asList()[index], s_UiSkinDiagnosticPrefix, fieldName);
         if(!indexResult)
@@ -259,10 +344,8 @@ template<usize Count>
     const auto colors = Core::Assets::FindMetadataListField(path, asset, s_UiSkinDiagnosticPrefix, s_UiSkinColorsField);
     if(!colors)
         return MakeUnexpected(colors.error());
-    if((*colors)->asList().size() != UiSkinColorRole::kCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': colors must contain exactly {} named RGBA roles"), ConvertString(s_UiSkinDiagnosticPrefix), PathToString<tchar>(path), static_cast<u32>(UiSkinColorRole::kCount));
+    if(!ValidateUiSkinPaletteRoleCount(path, (*colors)->asList().size()))
         return MakeUnexpected(Failure{});
-    }
 
     Array<b8, UiSkinColorRole::kCount> seen{};
     for(const Value& value : (*colors)->asList()){
@@ -273,25 +356,19 @@ template<usize Count>
             return MakeUnexpected(Failure{});
         const AStringView name = nameResultValue->text;
         const usize role = ResolveUiSkinColorRole(name);
-        if(!IsValidNewUiSkinPaletteRole(role, role < UiSkinColorRole::kCount ? seen[role] : true)){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': unknown or duplicate palette role '{}'"), ConvertString(s_UiSkinDiagnosticPrefix), PathToString<tchar>(path), ConvertString(name));
+        if(!ValidateUiSkinNewPaletteRole(path, name, role, role < UiSkinColorRole::kCount ? seen[role] : true))
             return MakeUnexpected(Failure{});
-        }
         const Value* rgba = value.findField(s_UiSkinRgbaField);
-        if(!rgba || !rgba->isList() || rgba->asList().size() != s_UiSkinRgbaComponentCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': palette role '{}' needs four RGBA components"), ConvertString(s_UiSkinDiagnosticPrefix), PathToString<tchar>(path), ConvertString(name));
+        if(!ValidateUiSkinPaletteChannelList(path, name, rgba != nullptr && rgba->isList() && rgba->asList().size() == s_UiSkinRgbaComponentCount))
             return MakeUnexpected(Failure{});
-        }
         Array<f32, s_UiSkinRgbaComponentCount> components{};
         for(usize index = 0u; index < s_UiSkinRgbaComponentCount; ++index){
             auto indexResultValue = Core::Assets::ReadMetadataFiniteF32Value(path, rgba->asList()[index], s_UiSkinDiagnosticPrefix, s_UiSkinRgbaField);
             if(!indexResultValue)
                 return MakeUnexpected(Failure{});
             components[index] = *indexResultValue;
-            if(!IsValidUiSkinPaletteChannelValue(components[index], index)){
-                NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': palette role '{}' needs RGB in [0, 16] and alpha in [0, 1]"), ConvertString(s_UiSkinDiagnosticPrefix), PathToString<tchar>(path), ConvertString(name));
+            if(!ValidateUiSkinPaletteChannel(path, name, components[index], index))
                 return MakeUnexpected(Failure{});
-            }
         }
         palette.colors[role] = BuildParsedUiSkinPaletteColor(components);
         seen[role] = true;
@@ -303,20 +380,16 @@ template<usize Count>
     UiSkinTypography typographyResult{};
 
     const Value* typography = asset.findField(s_UiSkinTypographyField);
-    if(!typography){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': skins require typography.default_font_size"), ConvertString(s_UiSkinDiagnosticPrefix), PathToString<tchar>(path));
+    if(!ValidateUiSkinTypographyPresent(path, typography != nullptr))
         return MakeUnexpected(Failure{});
-    }
     if(!Core::Assets::CheckMetadataAssetMap(path, *typography, s_UiSkinDiagnosticPrefix) || !Core::Assets::ValidateMetadataAssetFields(path, *typography, s_UiSkinDiagnosticPrefix, &IsAllowedUiSkinTypographyField))
         return MakeUnexpected(Failure{});
     auto defaultFontSizeResult = Core::Assets::ReadMetadataFiniteF32Field(path, *typography, s_UiSkinDiagnosticPrefix, s_UiSkinDefaultFontSizeField, true);
     if(!defaultFontSizeResult)
         return MakeUnexpected(Failure{});
     typographyResult.defaultFontSize = *defaultFontSizeResult;
-    if(!IsValidUiSkinDefaultFontSize(typographyResult.defaultFontSize)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': typography.default_font_size must be in [1/64, 2048]"), ConvertString(s_UiSkinDiagnosticPrefix), PathToString<tchar>(path));
+    if(!ValidateUiSkinDefaultFontSizeValue(path, typographyResult.defaultFontSize))
         return MakeUnexpected(Failure{});
-    }
     return typographyResult;
 }
 
@@ -409,23 +482,15 @@ Expected<UiSkinCookEntry> ParseUiSkinCookMetadata(const Name virtualPath, const 
         return MakeUnexpected(Failure{});
     const AStringView toolkitContract = toolkitContractResult->text;
     const b8 hasToolkitContract = toolkitContractResult->present;
-    if(!IsValidUiSkinToolkitContractOption(hasToolkitContract, toolkitContract)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': toolkit_contract must be 'widgets'"), ConvertString(s_UiSkinDiagnosticPrefix), PathToString<tchar>(nwbFilePath));
+    if(!ValidateUiSkinToolkitContractValue(nwbFilePath, hasToolkitContract, toolkitContract))
         return MakeUnexpected(Failure{});
-    }
     parsed.completeToolkitSkin = hasToolkitContract;
 
     const auto regions = Core::Assets::FindMetadataListField(nwbFilePath, asset, s_UiSkinDiagnosticPrefix, s_UiSkinRegionsField);
     if(!regions)
         return MakeUnexpected(regions.error());
-    if((*regions)->asList().size() > s_UiSkinMaxRegionCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': regions exceed schema limit {}"), ConvertString(s_UiSkinDiagnosticPrefix), PathToString<tchar>(nwbFilePath), s_UiSkinMaxRegionCount);
+    if(!ValidateUiSkinRegionsListCount(nwbFilePath, (*regions)->asList().size()))
         return MakeUnexpected(Failure{});
-    }
-    if((*regions)->asList().empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': regions must be nonempty and fit the supported count"), ConvertString(s_UiSkinDiagnosticPrefix), PathToString<tchar>(nwbFilePath));
-        return MakeUnexpected(Failure{});
-    }
     parsed.regions.reserve((*regions)->asList().size());
     for(const Value& value : (*regions)->asList()){
         auto regionResult = ParseRegion(nwbFilePath, value);

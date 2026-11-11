@@ -15,6 +15,7 @@ native{
 #include <impl/ecs_render/shared/renderer_frame_bindings.adhd.h>
 
 #include <core/graphics/gpu_timing.h>
+#include <core/graphics/rhi/gpu_descriptor_heap.h>
 #include <core/graphics/runtime/runtime.h>
 #include <core/task/gpu/task_graph.h>
 
@@ -33,6 +34,20 @@ class RendererShaderSystem;
 
 struct DeferredFrameTargets;
 struct RtCausticState;
+
+NWB_INLINE void AssertCausticEmissionTargetStorageDescriptor(const Core::GpuDescriptorHandle& handle)noexcept{
+    NWB_ASSERT(handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer);
+}
+
+[[nodiscard]] b8 EnsureCausticEmissionTargetBufferStorage(
+    Core::GraphicsRuntime& graphics,
+    usize targetCount,
+    Core::BufferHandle& inoutBuffer,
+    Core::GpuDescriptorHandle& inoutHeapHandle,
+    usize& inoutCapacity
+);
+
+void FreeCausticEmissionTargetDescriptor(Core::GraphicsRuntime& graphics, const Core::GpuDescriptorHandle& heapHandle);
 
 // Shared prepare plus five-wavelet plus upsample plus timing-close resolve declaration.
 using CausticsResolveStageUses = Span<const Core::GpuTaskResourceUse>;

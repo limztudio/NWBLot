@@ -81,13 +81,60 @@ public:
     }
 };
 
-[[nodiscard]] inline auto ResolveImplicitOpacityMicromapIndexFormat(){
+struct BlasOpacityMicromapAttachmentCheck{
+    b8 absentGeometrySkipped = false;
+    b8 emptyUsageGeometryBound = false;
+    b8 emptyUsagePointerNull = false;
+    b8 populatedGeometryBound = false;
+    b8 populatedUsagePointerMatches = false;
+};
+
+struct CalibratedTimestampProbeResult{
+    b8 supported = false;
+    u32 countCalls = 0u;
+    u32 listCalls = 0u;
+    u32 timestampCalls = 0u;
+};
+
+struct ClusterOperationCopyInspection{
+    b8 builtOk = false;
+    u32 maxAccelerationStructureCount = 0u;
+    usize activeInputAddress = 0u;
+    usize moveFieldAddress = 1u;
+    usize blasFieldAddress = 1u;
+    usize clusterFieldAddress = 1u;
+};
+
+struct EmbeddedNullMarkerHashes{
+    usize outerHash = 0u;
+    usize nestedHash = 0u;
+};
+
+[[nodiscard]] NWB_INLINE auto ResolveImplicitOpacityMicromapIndexFormat(){
     return Core::GraphicsBackend::VulkanDetail::BlasOpacityMicromapPolicy::ResolveOpacityMicromapIndexFormat(Core::Format::UNKNOWN, {});
 }
 
-[[nodiscard]] inline auto ValidateDefaultTextureCreateDesc(const Core::TextureDesc& desc){
+[[nodiscard]] NWB_INLINE auto ValidateDefaultTextureCreateDesc(const Core::TextureDesc& desc){
     return Core::GraphicsBackend::VulkanTextureDetail::TextureImagePolicy::ValidateTextureCreateDesc(desc, {}, false);
 }
+
+[[nodiscard]] NWB_INLINE b8 IsConcurrentTextureImageConsistent(
+    const Core::TextureDesc& desc,
+    VkImageCreateInfo imageInfo,
+    const Span<const u32> families,
+    const VkImageCreateFlags extraFlags
+)noexcept{
+    imageInfo.queueFamilyIndexCount = static_cast<u32>(families.size());
+    imageInfo.pQueueFamilyIndices = families.data();
+    imageInfo.flags |= extraFlags;
+    return Core::GraphicsBackend::VulkanTextureDetail::TextureImagePolicy::IsTextureImageInfoConsistent(desc, imageInfo);
+}
+
+[[nodiscard]] BlasOpacityMicromapAttachmentCheck RunBlasOpacityMicromapAttachmentCheck();
+[[nodiscard]] CalibratedTimestampProbeResult RunCalibratedTimestampProbe(b8 retryFirstCount, b8 hasDeviceDomain);
+[[nodiscard]] ClusterOperationCopyInspection InspectClusterOperationCopy(const Core::RayTracingClusterOperationParams& params);
+[[nodiscard]] EmbeddedNullMarkerHashes PushTruncatedAndEmbeddedNullMarkers(Core::GpuCrashMarkerTracker& commandListTracker);
+[[nodiscard]] b8 MatchesEmbeddedNullNestedMarker(AStringView actual)noexcept;
 
 [[nodiscard]] b8 RunConcurrentCrashMarkerGrowthCheck(
     Core::GpuCrashTracker& crashTracker,
@@ -96,17 +143,6 @@ public:
     const Core::ResolvedMarker& retained,
     AStringView retainedLabel
 );
-
-#if defined(NWB_GRAPHICS_BACKEND_VULKAN) && NWB_GRAPHICS_BACKEND_VULKAN
-struct CalibratedTimestampProbeResult{
-    b8 supported = false;
-    u32 countCalls = 0u;
-    u32 listCalls = 0u;
-    u32 timestampCalls = 0u;
-};
-
-[[nodiscard]] CalibratedTimestampProbeResult RunCalibratedTimestampProbe(b8 retryFirstCount, b8 hasDeviceDomain);
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -127,11 +163,22 @@ namespace Tests::GraphicsTimingCases{
 using DefaultResourceTestArena = Tests::GraphicsResourceSuiteDetail::DefaultResourceTestArena;
 using GpuCrashMarkerTestArena = Tests::GraphicsResourceSuiteDetail::GpuCrashMarkerTestArena;
 using DescriptorBufferAllocationHarness = Tests::GraphicsResourceSuiteDetail::DescriptorBufferAllocationHarness;
+using BlasOpacityMicromapAttachmentCheck = Tests::GraphicsResourceSuiteDetail::BlasOpacityMicromapAttachmentCheck;
+using CalibratedTimestampProbeResult = Tests::GraphicsResourceSuiteDetail::CalibratedTimestampProbeResult;
+using ClusterOperationCopyInspection = Tests::GraphicsResourceSuiteDetail::ClusterOperationCopyInspection;
+using EmbeddedNullMarkerHashes = Tests::GraphicsResourceSuiteDetail::EmbeddedNullMarkerHashes;
 using DescriptorBufferSegment = Core::GraphicsBackend::DescriptorBufferSegment;
 namespace DescriptorBufferSegmentKind = Core::GraphicsBackend::DescriptorBufferSegmentKind;
 using DescriptorBufferSegmentKindEnum = Core::GraphicsBackend::DescriptorBufferSegmentKind::Enum;
 using Tests::GraphicsResourceSuiteDetail::ResolveImplicitOpacityMicromapIndexFormat;
 using Tests::GraphicsResourceSuiteDetail::ValidateDefaultTextureCreateDesc;
+using Tests::GraphicsResourceSuiteDetail::IsConcurrentTextureImageConsistent;
+using Tests::GraphicsResourceSuiteDetail::RunBlasOpacityMicromapAttachmentCheck;
+using Tests::GraphicsResourceSuiteDetail::RunCalibratedTimestampProbe;
+using Tests::GraphicsResourceSuiteDetail::InspectClusterOperationCopy;
+using Tests::GraphicsResourceSuiteDetail::PushTruncatedAndEmbeddedNullMarkers;
+using Tests::GraphicsResourceSuiteDetail::MatchesEmbeddedNullNestedMarker;
+using Tests::GraphicsResourceSuiteDetail::RunConcurrentCrashMarkerGrowthCheck;
 
 using QueueBarrierScopePolicy = Core::GraphicsBackend::QueueBarrierScopePolicy;
 namespace GpuQueueCapability = Core::GpuQueueCapability;
@@ -165,6 +212,10 @@ namespace CommandQueue = Core::CommandQueue;
 
 using StandaloneGraphWorkspacePool = Core::GraphicsModuleDetail::StandaloneGraphWorkspacePool;
 using StandaloneGraphWorkspaceLease = Core::GraphicsModuleDetail::StandaloneGraphWorkspacePool::Lease;
+
+[[nodiscard]] NWB_INLINE usize WorkspaceAddress(const StandaloneGraphWorkspaceLease& lease)noexcept{
+    return reinterpret_cast<usize>(lease.workspace());
+}
 
 using TextureImagePolicy = Core::GraphicsBackend::VulkanTextureDetail::TextureImagePolicy;
 using TextureCreateMetadata = decltype(Core::GraphicsBackend::VulkanTextureDetail::TextureImagePolicy::ValidateTextureCreateDesc(Core::TextureDesc{}, {}, false))::value_type;
@@ -208,12 +259,18 @@ const StringView s_RetainedMarkerLabel = "Retained marker view";
 const StringView s_DuplicateRootLabel = "Duplicate root";
 const StringView s_DuplicateLeafLabel = "Duplicate leaf";
 
-usize WorkspaceAddress(in StandaloneGraphWorkspaceLease lease){
-    usize address = 0u;
-    native(in lease, mut address){
-        address = reinterpret_cast<usize>(lease.workspace());
-    }
-    return address;
+EmbeddedNullMarkerHashes PushTruncatedAndEmbeddedNullEvents(mut GpuCrashMarkerTracker commandListTracker){
+    return PushTruncatedAndEmbeddedNullMarkers(commandListTracker);
+}
+
+b8 CheckConcurrentCrashMarkerGrowth(
+    mut GpuCrashTracker crashTracker,
+    mut GpuCrashMarkerTestArena testArena,
+    in usize retainedHash,
+    in ResolvedMarker retained,
+    in StringView retainedLabel
+){
+    return RunConcurrentCrashMarkerGrowthCheck(crashTracker, testArena.arena, retainedHash, retained, retainedLabel);
 }
 
 void VerifyQueueBarrierScopePolicy_TransferQueueRemovesUnsupportedShaderAccess(){
@@ -231,29 +288,13 @@ void VerifyQueueBarrierScopePolicy_TransferQueueRemovesUnsupportedShaderAccess()
 }
 
 void VerifyGpuBlasOpacityMicromapPolicyTests_AttachmentSkipsAbsentAndHandlesEmptyUsageCounts(){
-    native{
-        using namespace NWB::Core;
-        using namespace NWB::Core::GraphicsBackend::VulkanDetail;
-        Alloc::ScratchArena arena(NWB::Tests::s_TestArena);
-        RayTracingGeometryDesc geometries[3];
-        geometries[2].geometryData.triangles.numOmmUsageCounts = 2u;
-        OpacityMicromapUsageOffsetVector offsets(arena);
-        offsets.resize(3u);
-        offsets[0] = Limit<usize>::s_Max;
-        offsets[1] = offsets[2] = 0u;
-        OpacityMicromapUsageVector usages(arena);
-        usages.resize(2u);
-        OpacityMicromapGeometryVector micromaps(arena);
-        micromaps.resize(3u);
-        BlasGeometryScratch scratch(arena);
-        scratch.resizeForSizeQuery(3u);
-        BlasOpacityMicromapPolicy::AttachBlasOpacityMicromapGeometries(geometries, 3u, offsets, usages, micromaps, scratch);
-        EXPECT_EQ(scratch.geometries[0].geometry.triangles.pNext, nullptr);
-        EXPECT_EQ(scratch.geometries[1].geometry.triangles.pNext, &micromaps[1]);
-        EXPECT_EQ(micromaps[1].pUsageCounts, nullptr);
-        EXPECT_EQ(scratch.geometries[2].geometry.triangles.pNext, &micromaps[2]);
-        EXPECT_EQ(micromaps[2].pUsageCounts, usages.data());
-    }
+    const BlasOpacityMicromapAttachmentCheck attachment = RunBlasOpacityMicromapAttachmentCheck();
+    EXPECT_TRUE(attachment.absentGeometrySkipped);
+    EXPECT_TRUE(attachment.emptyUsageGeometryBound);
+    EXPECT_TRUE(attachment.emptyUsagePointerNull);
+    EXPECT_TRUE(attachment.populatedGeometryBound);
+    EXPECT_TRUE(attachment.populatedUsagePointerMatches);
+
     const Expected<OpacityMicromapIndexFormat> implicitFormat = ResolveImplicitOpacityMicromapIndexFormat();
     ASSERT_TRUE(implicitFormat.has_value());
     EXPECT_EQ(implicitFormat.value().indexType, VK_INDEX_TYPE_NONE_KHR);
@@ -261,43 +302,19 @@ void VerifyGpuBlasOpacityMicromapPolicyTests_AttachmentSkipsAbsentAndHandlesEmpt
 }
 
 void VerifyCalibratedTimestampProbe_RetriesIncompleteEnumerationBeforeDeviceQuery(){
-    b8 supported = false;
-    u32 countCalls = 0u;
-    u32 listCalls = 0u;
-    u32 timestampCalls = 0u;
-    native(mut supported, mut countCalls, mut listCalls, mut timestampCalls){
-#if defined(NWB_GRAPHICS_BACKEND_VULKAN) && NWB_GRAPHICS_BACKEND_VULKAN
-        const auto probe = NWB::Tests::GraphicsResourceSuiteDetail::RunCalibratedTimestampProbe(true, true);
-        supported = probe.supported;
-        countCalls = probe.countCalls;
-        listCalls = probe.listCalls;
-        timestampCalls = probe.timestampCalls;
-#endif
-    }
-    EXPECT_TRUE(supported);
-    EXPECT_EQ(countCalls, 2u);
-    EXPECT_EQ(listCalls, 1u);
-    EXPECT_EQ(timestampCalls, 1u);
+    const CalibratedTimestampProbeResult probe = RunCalibratedTimestampProbe(true, true);
+    EXPECT_TRUE(probe.supported);
+    EXPECT_EQ(probe.countCalls, 2u);
+    EXPECT_EQ(probe.listCalls, 1u);
+    EXPECT_EQ(probe.timestampCalls, 1u);
 }
 
 void VerifyCalibratedTimestampProbe_MissingDeviceDomainDoesNotQueryTimestamps(){
-    b8 supported = true;
-    u32 countCalls = 0u;
-    u32 listCalls = 0u;
-    u32 timestampCalls = 0u;
-    native(mut supported, mut countCalls, mut listCalls, mut timestampCalls){
-#if defined(NWB_GRAPHICS_BACKEND_VULKAN) && NWB_GRAPHICS_BACKEND_VULKAN
-        const auto probe = NWB::Tests::GraphicsResourceSuiteDetail::RunCalibratedTimestampProbe(false, false);
-        supported = probe.supported;
-        countCalls = probe.countCalls;
-        listCalls = probe.listCalls;
-        timestampCalls = probe.timestampCalls;
-#endif
-    }
-    EXPECT_FALSE(supported);
-    EXPECT_EQ(countCalls, 1u);
-    EXPECT_EQ(listCalls, 1u);
-    EXPECT_EQ(timestampCalls, 0u);
+    const CalibratedTimestampProbeResult probe = RunCalibratedTimestampProbe(false, false);
+    EXPECT_FALSE(probe.supported);
+    EXPECT_EQ(probe.countCalls, 1u);
+    EXPECT_EQ(probe.listCalls, 1u);
+    EXPECT_EQ(probe.timestampCalls, 0u);
 }
 
 void VerifyGpuClusterOperation_NativeInputRebindsUnionPointersAfterCopy(){
@@ -311,40 +328,15 @@ void VerifyGpuClusterOperation_NativeInputRebindsUnionPointersAfterCopy(){
         RayTracingClusterOperationParams params = RayTracingClusterOperationParams();
         params.type = opType;
         params.maxArgCount = 7u;
-        b8 builtOk = false;
-        u32 maxAccelerationStructureCount = 0u;
-        usize activeInputAddress = 0u;
-        usize moveFieldAddress = 1u;
-        usize blasFieldAddress = 1u;
-        usize clusterFieldAddress = 1u;
-        native(in params, mut builtOk, mut maxAccelerationStructureCount, mut activeInputAddress, mut moveFieldAddress, mut blasFieldAddress, mut clusterFieldAddress){
-#if defined(NWB_GRAPHICS_BACKEND_VULKAN) && NWB_GRAPHICS_BACKEND_VULKAN
-            const auto built = Core::GraphicsBackend::VulkanDetail::ClusterOperationInput::Build(params, NWB_TEXT("test cluster input"));
-            builtOk = built.has_value();
-            if(built){
-                auto copied = *built;
-                const auto nativeInfo = copied.nativeInfo();
-                maxAccelerationStructureCount = nativeInfo.maxAccelerationStructureCount;
-                if(params.type == Core::RayTracingClusterOperationType::Move)
-                    activeInputAddress = reinterpret_cast<usize>(nativeInfo.opInput.pMoveObjects);
-                else if(params.type == Core::RayTracingClusterOperationType::BlasBuild)
-                    activeInputAddress = reinterpret_cast<usize>(nativeInfo.opInput.pClustersBottomLevel);
-                else
-                    activeInputAddress = reinterpret_cast<usize>(nativeInfo.opInput.pTriangleClusters);
-                moveFieldAddress = reinterpret_cast<usize>(&copied.move);
-                blasFieldAddress = reinterpret_cast<usize>(&copied.blas);
-                clusterFieldAddress = reinterpret_cast<usize>(&copied.cluster);
-            }
-#endif
-        }
-        ASSERT_TRUE(builtOk);
-        EXPECT_EQ(maxAccelerationStructureCount, 7u);
+        const ClusterOperationCopyInspection inspection = InspectClusterOperationCopy(params);
+        ASSERT_TRUE(inspection.builtOk);
+        EXPECT_EQ(inspection.maxAccelerationStructureCount, 7u);
         if(opType == RayTracingClusterOperationType::Move)
-            EXPECT_EQ(activeInputAddress, moveFieldAddress);
+            EXPECT_EQ(inspection.activeInputAddress, inspection.moveFieldAddress);
         else if(opType == RayTracingClusterOperationType::BlasBuild)
-            EXPECT_EQ(activeInputAddress, blasFieldAddress);
+            EXPECT_EQ(inspection.activeInputAddress, inspection.blasFieldAddress);
         else
-            EXPECT_EQ(activeInputAddress, clusterFieldAddress);
+            EXPECT_EQ(inspection.activeInputAddress, inspection.clusterFieldAddress);
     }
 }
 
@@ -352,24 +344,13 @@ void VerifyGpuCrashMarkerTracker_CopiesExactNonTerminatedViewAndEmbeddedNullByte
     GpuCrashMarkerTestArena testArena = GpuCrashMarkerTestArena();
     GpuCrashTracker crashTracker = GpuCrashTracker(testArena.arena);
     GpuCrashMarkerTracker commandListTracker = GpuCrashMarkerTracker(crashTracker, testArena.arena);
-    usize outerHash = 0u;
-    usize nestedHash = 0u;
-    native(mut commandListTracker, mut outerHash, mut nestedHash){
-        Array<char, 6u> label = { 'O', 'u', 't', 'e', 'r', 'X' };
-        outerHash = commandListTracker.pushEvent(AStringView(label.data(), 5u));
-        label[0] = 'x';
-        const Array<char, 3u> nestedLabel = { 'I', '\0', 'n' };
-        nestedHash = commandListTracker.pushEvent(AStringView(nestedLabel.data(), nestedLabel.size()));
-    }
-    const ResolvedMarker outer = crashTracker.resolveMarker(outerHash);
-    const ResolvedMarker nested = crashTracker.resolveMarker(nestedHash);
+    const EmbeddedNullMarkerHashes hashes = PushTruncatedAndEmbeddedNullEvents(commandListTracker);
+    const ResolvedMarker outer = crashTracker.resolveMarker(hashes.outerHash);
+    const ResolvedMarker nested = crashTracker.resolveMarker(hashes.nestedHash);
     ASSERT_TRUE(outer.first());
     ASSERT_TRUE(nested.first());
     EXPECT_EQ(outer.second(), StringView("Outer"));
-    native(in nested){
-        constexpr Array<char, 9u> s_Expected = { 'O', 'u', 't', 'e', 'r', '/', 'I', '\0', 'n' };
-        EXPECT_EQ(nested.second(), AStringView(s_Expected.data(), s_Expected.size()));
-    }
+    EXPECT_TRUE(MatchesEmbeddedNullNestedMarker(nested.second()));
 }
 
 void VerifyGpuCrashMarkerTracker_SharedDeviceTrackerPreservesHistoryAcrossCommandListTrackerReset(){
@@ -445,16 +426,13 @@ void VerifyGpuCrashMarkerTracker_RetainedResolvedViewSurvivesConcurrentHistoryGr
     ASSERT_TRUE(retained.first());
     ASSERT_EQ(retained.second(), StringView("Retained marker view"));
 
-    b8 invalidObservation = false;
-    native(mut crashTracker, mut testArena, in retainedHash, in retained, in s_RetainedMarkerLabel, mut invalidObservation){
-        invalidObservation = NWB::Tests::GraphicsResourceSuiteDetail::RunConcurrentCrashMarkerGrowthCheck(
-            crashTracker,
-            testArena.arena,
-            retainedHash,
-            retained,
-            s_RetainedMarkerLabel
-        );
-    }
+    const b8 invalidObservation = CheckConcurrentCrashMarkerGrowth(
+        crashTracker,
+        testArena,
+        retainedHash,
+        retained,
+        s_RetainedMarkerLabel
+    );
 
     EXPECT_FALSE(invalidObservation);
     EXPECT_EQ(retained.second(), StringView("Retained marker view"));
@@ -620,14 +598,11 @@ void VerifyGpuTextureImagePolicyTests_ImageSharingRequiresCompleteQueueFamilyPro
     imageInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
     imageInfo.queueFamilyIndexCount = 1u;
     EXPECT_FALSE(TextureImagePolicy::IsTextureImageInfoConsistent(desc, imageInfo));
-    native(in desc, mut imageInfo){
-        const uint32_t families[] = { 0u, 1u };
-        imageInfo.queueFamilyIndexCount = 2u;
-        imageInfo.pQueueFamilyIndices = families;
-        EXPECT_TRUE(TextureImagePolicy::IsTextureImageInfoConsistent(desc, imageInfo));
-        imageInfo.flags |= VK_IMAGE_CREATE_PROTECTED_BIT;
-        EXPECT_FALSE(TextureImagePolicy::IsTextureImageInfoConsistent(desc, imageInfo));
-    }
+    Array<u32, 2> families = Array<u32, 2>();
+    families[0u] = 0u;
+    families[1u] = 1u;
+    EXPECT_TRUE(IsConcurrentTextureImageConsistent(desc, imageInfo, families, 0u));
+    EXPECT_FALSE(IsConcurrentTextureImageConsistent(desc, imageInfo, families, VK_IMAGE_CREATE_PROTECTED_BIT));
 }
 
 void VerifyGpuTextureShapePolicyTests_CubeArraysRequireWholeCubesAndSquareFaces(){
@@ -697,6 +672,49 @@ namespace Tests::GraphicsResourceSuiteDetail{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+BlasOpacityMicromapAttachmentCheck RunBlasOpacityMicromapAttachmentCheck(){
+    using namespace NWB::Core;
+    using namespace NWB::Core::GraphicsBackend::VulkanDetail;
+    Alloc::ScratchArena arena(NWB::Tests::s_TestArena);
+    RayTracingGeometryDesc geometries[3];
+    geometries[2].geometryData.triangles.numOmmUsageCounts = 2u;
+    OpacityMicromapUsageOffsetVector offsets(arena);
+    offsets.resize(3u);
+    offsets[0] = Limit<usize>::s_Max;
+    offsets[1] = offsets[2] = 0u;
+    OpacityMicromapUsageVector usages(arena);
+    usages.resize(2u);
+    OpacityMicromapGeometryVector micromaps(arena);
+    micromaps.resize(3u);
+    BlasGeometryScratch scratch(arena);
+    scratch.resizeForSizeQuery(3u);
+    BlasOpacityMicromapPolicy::AttachBlasOpacityMicromapGeometries(geometries, 3u, offsets, usages, micromaps, scratch);
+    return BlasOpacityMicromapAttachmentCheck{
+        .absentGeometrySkipped = scratch.geometries[0].geometry.triangles.pNext == nullptr,
+        .emptyUsageGeometryBound = scratch.geometries[1].geometry.triangles.pNext == &micromaps[1],
+        .emptyUsagePointerNull = micromaps[1].pUsageCounts == nullptr,
+        .populatedGeometryBound = scratch.geometries[2].geometry.triangles.pNext == &micromaps[2],
+        .populatedUsagePointerMatches = micromaps[2].pUsageCounts == usages.data(),
+    };
+}
+
+EmbeddedNullMarkerHashes PushTruncatedAndEmbeddedNullMarkers(Core::GpuCrashMarkerTracker& commandListTracker){
+    Array<char, 6u> label = { 'O', 'u', 't', 'e', 'r', 'X' };
+    const usize outerHash = commandListTracker.pushEvent(AStringView(label.data(), 5u));
+    label[0] = 'x';
+    const Array<char, 3u> nestedLabel = { 'I', '\0', 'n' };
+    const usize nestedHash = commandListTracker.pushEvent(AStringView(nestedLabel.data(), nestedLabel.size()));
+    return EmbeddedNullMarkerHashes{
+        .outerHash = outerHash,
+        .nestedHash = nestedHash,
+    };
+}
+
+b8 MatchesEmbeddedNullNestedMarker(const AStringView actual)noexcept{
+    constexpr Array<char, 9u> s_Expected = { 'O', 'u', 't', 'e', 'r', '/', 'I', '\0', 'n' };
+    return actual == AStringView(s_Expected.data(), s_Expected.size());
+}
 
 b8 RunConcurrentCrashMarkerGrowthCheck(
     Core::GpuCrashTracker& crashTracker,
@@ -822,6 +840,35 @@ CalibratedTimestampProbeResult RunCalibratedTimestampProbe(const b8 retryFirstCo
         .timestampCalls = s_TimestampCalls,
     };
 }
+
+ClusterOperationCopyInspection InspectClusterOperationCopy(const Core::RayTracingClusterOperationParams& params){
+    ClusterOperationCopyInspection result{};
+    const auto built = Core::GraphicsBackend::VulkanDetail::ClusterOperationInput::Build(params, NWB_TEXT("test cluster input"));
+    result.builtOk = built.has_value();
+    if(built){
+        auto copied = *built;
+        const auto nativeInfo = copied.nativeInfo();
+        result.maxAccelerationStructureCount = nativeInfo.maxAccelerationStructureCount;
+        if(params.type == Core::RayTracingClusterOperationType::Move)
+            result.activeInputAddress = reinterpret_cast<usize>(nativeInfo.opInput.pMoveObjects);
+        else if(params.type == Core::RayTracingClusterOperationType::BlasBuild)
+            result.activeInputAddress = reinterpret_cast<usize>(nativeInfo.opInput.pClustersBottomLevel);
+        else
+            result.activeInputAddress = reinterpret_cast<usize>(nativeInfo.opInput.pTriangleClusters);
+        result.moveFieldAddress = reinterpret_cast<usize>(&copied.move);
+        result.blasFieldAddress = reinterpret_cast<usize>(&copied.blas);
+        result.clusterFieldAddress = reinterpret_cast<usize>(&copied.cluster);
+    }
+    return result;
+}
+#else
+CalibratedTimestampProbeResult RunCalibratedTimestampProbe([[maybe_unused]] const b8 retryFirstCount, [[maybe_unused]] const b8 hasDeviceDomain){
+    return CalibratedTimestampProbeResult{};
+}
+
+ClusterOperationCopyInspection InspectClusterOperationCopy([[maybe_unused]] const Core::RayTracingClusterOperationParams& params){
+    return ClusterOperationCopyInspection{};
+}
 #endif
 
 
@@ -835,26 +882,6 @@ CalibratedTimestampProbeResult RunCalibratedTimestampProbe(const b8 retryFirstCo
 
 
 NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ADHD_GTEST(QueueBarrierScopePolicy, TransferQueueRemovesUnsupportedShaderAccess, VerifyQueueBarrierScopePolicy_TransferQueueRemovesUnsupportedShaderAccess)
-NWB_ADHD_GTEST(GpuBlasOpacityMicromapPolicyTests, AttachmentSkipsAbsentAndHandlesEmptyUsageCounts, VerifyGpuBlasOpacityMicromapPolicyTests_AttachmentSkipsAbsentAndHandlesEmptyUsageCounts)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -886,6 +913,8 @@ TEST(GpuClusterOperation, NativeInputRebindsUnionPointersAfterCopy){ VerifyGpuCl
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+NWB_ADHD_GTEST(QueueBarrierScopePolicy, TransferQueueRemovesUnsupportedShaderAccess, VerifyQueueBarrierScopePolicy_TransferQueueRemovesUnsupportedShaderAccess)
+NWB_ADHD_GTEST(GpuBlasOpacityMicromapPolicyTests, AttachmentSkipsAbsentAndHandlesEmptyUsageCounts, VerifyGpuBlasOpacityMicromapPolicyTests_AttachmentSkipsAbsentAndHandlesEmptyUsageCounts)
 NWB_ADHD_GTEST(GpuCrashMarkerTracker, CopiesExactNonTerminatedViewAndEmbeddedNullBytes, VerifyGpuCrashMarkerTracker_CopiesExactNonTerminatedViewAndEmbeddedNullBytes)
 NWB_ADHD_GTEST(GpuCrashMarkerTracker, SharedDeviceTrackerPreservesHistoryAcrossCommandListTrackerReset, VerifyGpuCrashMarkerTracker_SharedDeviceTrackerPreservesHistoryAcrossCommandListTrackerReset)
 NWB_ADHD_GTEST(GpuCrashMarkerTracker, DestroyedCommandListTrackersLeaveAllDeviceHistoryResolvable, VerifyGpuCrashMarkerTracker_DestroyedCommandListTrackersLeaveAllDeviceHistoryResolvable)

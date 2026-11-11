@@ -8,64 +8,24 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/alloc/scratch.h>
-#include <core/alloc/general.h>
-#include <core/common/log.h>
-
-#include <global/environment.h>
-#include <global/name.h>
-#include <global/text_utils.h>
-#include <global/type.h>
-
-namespace NWB::Tests::Smoke{
-inline constexpr Name s_SmokeEnvironmentArena = NWB::Tests::Smoke::s_SmokeNameSmokeEnvironment;
-
-using SmokeEnvironmentString = AString<Core::Alloc::GlobalArena>;
-
-template<typename ArenaT>
-[[nodiscard]] inline Expected<AString<ArenaT>, ErrorCode> ReadSmokeEnvironmentText(ArenaT& arena, const AStringView variableName){
-    auto value = ReadEnvironmentVariable(arena, variableName);
-    if(!value){
-        NWB_LOGGER_ERROR(NWB_TEXT("Smoke: failed to read environment '{}': {}"), ConvertString(variableName), ConvertString(value.error().message()));
-        return MakeUnexpected(value.error());
+Expected<Optional<String>> ReadSmokeOptionalEnvironmentString(in StringView variableName){
+    const Expected<Optional<String>, ErrorCode> value = ReadEnvironmentVariable(variableName);
+    if(!value.has_value()){
+        const String errorText = StringFormat("{}", value.error().message());
+        error("Smoke: failed to read environment '{}': {}", variableName, errorText);
+        return MakeUnexpected(Failure());
     }
-    if(!*value || (*value)->empty())
-        return MakeUnexpected(MakeErrorCode(ErrorCondition::no_such_file_or_directory));
-    return Move(**value);
+    return value.value();
 }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 Expected<String> ReadSmokeEnvironmentString(in StringView variableName){
-    b8 found = false;
-    String text;
-    native(in variableName, mut found, mut text){
-        Core::Alloc::ScratchArena arena(s_SmokeEnvironmentArena);
-        const auto value = ReadSmokeEnvironmentText(arena, variableName);
-        if(value){
-            text.assign(value->data(), value->size());
-            found = true;
-        }
-    }
-    if(!found)
+    const Expected<Optional<String>> value = ReadSmokeOptionalEnvironmentString(variableName);
+    if(!value.has_value())
         return MakeUnexpected(Failure());
-    return text;
+    const Optional<String> candidate = value.value();
+    if(!candidate.has_value() || candidate.value().empty())
+        return MakeUnexpected(Failure());
+    return candidate.value();
 }
 
 Expected<f32> ReadSmokeEnvironmentF32(in StringView variableName){

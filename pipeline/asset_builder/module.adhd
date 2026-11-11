@@ -25,7 +25,6 @@ native{
 #include <core/task/cpu/scheduler.h>
 #include <core/common/log.h>
 
-#include <global/cpu_topology.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -82,8 +81,7 @@ int RunPipelineTool(const int argc, char** argv){
     Core::Assets::ScratchArena scratchArena(AssetBuilder::s_AssetBuilderArena);
     PipelineCommandLine commandLine(PipelineTool::AssetBuilder);
     return commandLine.run(argc, argv, [&](PipelineOptions& options){
-        const u32 cores = QueryCpuCoreCount(CpuAffinity::Any);
-        Core::CpuTaskScheduler cpuScheduler(AssetBuilder::ComputeWorkerCoreCount(cores));
+        Core::CpuTaskScheduler cpuScheduler(AssetBuilder::QueryAssetBuilderWorkerCoreCount());
         AssetBuilder::AssetBuildOptions buildOptions(arena, cpuScheduler);
         buildOptions.outputDirectory = Path(arena, options.outputPath);
         buildOptions.configuration = options.configuration;

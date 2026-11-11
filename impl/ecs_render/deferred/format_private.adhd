@@ -2,56 +2,37 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_render/kernel/renderer_format_private.adhd.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ECSRenderDetail{
+#include <impl/ecs_render/kernel/renderer_format_private.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // G-buffer sentinels; keep creation and clears in lockstep.
-inline constexpr Core::Color s_GBufferNormalClearColor = Core::Color(0.5f, 0.5f, 1.f, 1.f);
-inline constexpr Core::Color s_GBufferWorldPositionClearColor = Core::Color(0.f, 0.f, 0.f, 1.f);
-inline constexpr Core::Color s_GBufferSpecularRoughnessClearColor = Core::Color(0.f, 0.f, 0.f, 1.f);
+const KernelColor s_GBufferNormalClearColor = MakeKernelColor(0.5f, 0.5f, 1.0f, 1.0f);
+const KernelColor s_GBufferWorldPositionClearColor = MakeKernelColor(0.0f, 0.0f, 0.0f, 1.0f);
+const KernelColor s_GBufferSpecularRoughnessClearColor = MakeKernelColor(0.0f, 0.0f, 0.0f, 1.0f);
 
-[[nodiscard]] Core::Format::Enum SelectGBufferAlbedoFormat(Core::Device& device)noexcept;
-[[nodiscard]] Core::Format::Enum SelectDeferredOpaqueColorFormat(Core::Device& device)noexcept;
-[[nodiscard]] Core::Format::Enum SelectGBufferDepthFormat(Core::Device& device)noexcept;
+KernelFormat SelectGBufferAlbedoFormat(mut KernelDevice device){
+    Array<KernelFormat, 1u> candidates;
+    candidates[0u] = s_KernelFormatRGBA16Float;
+    const KernelFormatSupportMask requiredSupport = s_KernelFormatSupportTexture | s_KernelFormatSupportRenderTarget;
+    return SelectKernelSupportedFormat(device, candidates, requiredSupport);
+}
 
+KernelFormat SelectDeferredOpaqueColorFormat(mut KernelDevice device){
+    Array<KernelFormat, 1u> candidates;
+    candidates[0u] = s_KernelFormatRGBA16Float;
+    const KernelFormatSupportMask requiredSupport = s_KernelFormatSupportTexture | s_KernelFormatSupportShaderUavStore;
+    return SelectKernelSupportedFormat(device, candidates, requiredSupport);
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+KernelFormat SelectGBufferDepthFormat(mut KernelDevice device){
+    Array<KernelFormat, 3u> candidates;
+    candidates[0u] = s_KernelFormatD32;
+    candidates[1u] = s_KernelFormatD24S8;
+    candidates[2u] = s_KernelFormatD16;
+    return SelectKernelSupportedFormat(device, candidates, s_KernelFormatSupportDepthStencil);
 }
 
 

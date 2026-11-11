@@ -9,298 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_material/cook_private.adhd.h>
-#include <impl/assets_material/cook_types.adhd.h>
-#include <impl/assets_mesh/meshlet_ref_decoding.adhd.h>
-#include <impl/assets_mesh/meshlet_triangle_indices.adhd.h>
-
-#include <global/not_null.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Tests::AssetsGraphicsFixture{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr AStringView s_MaterialPixelShaderPath = "project/shaders/material_ps";
-#if defined(NWB_FINAL)
-inline constexpr AStringView s_GeneratedAvboitAccumulatePsProjectM = "generated/avboit_accumulate_ps/project/materials/test_material";
-inline constexpr AStringView s_GeneratedAvboitOccupancyPsProjectMa = "generated/avboit_occupancy_ps/project/materials/test_material";
-inline constexpr AStringView s_GeneratedAvboitExtinctionPsProjectM = "generated/avboit_extinction_ps/project/materials/test_material";
-using CookSingleMetaFn = decltype(&CookSingleMeshMeta);
-#endif
-
-// These declarations check throw paths without calling them.
-struct ThrowingConstIdentifierAppend{
-    ThrowingConstIdentifierAppend& operator+=(char&&)noexcept;
-    ThrowingConstIdentifierAppend& operator+=(const char&);
-    ThrowingConstIdentifierAppend& operator+=(const char*)noexcept;
-
-
-public:
-    [[nodiscard]] usize size()const noexcept;
-};
-
-struct ThrowingImplicitIdentifierSize{
-    explicit operator usize()const noexcept;
-    operator u16()const;
-};
-
-[[nodiscard]] b8 operator==(const ThrowingImplicitIdentifierSize&, const usize&)noexcept;
-
-struct ThrowingIdentifierSizeAppend{
-    ThrowingIdentifierSizeAppend& operator+=(char)noexcept;
-    ThrowingIdentifierSizeAppend& operator+=(const char*)noexcept;
-
-
-public:
-    [[nodiscard]] ThrowingImplicitIdentifierSize size()const noexcept;
-};
-
-static_assert(noexcept(AppendAsciiUpperIdentifier({}, "VALUE", DeclVal<ThrowingConstIdentifierAppend&>())));
-static_assert(!noexcept(AppendUnderscoreSeparatedPascalIdentifier({}, "Value", DeclVal<ThrowingConstIdentifierAppend&>())));
-static_assert(!noexcept(AppendAsciiUpperIdentifier({}, "VALUE", DeclVal<ThrowingIdentifierSizeAppend&>())));
-static_assert(!noexcept(AppendUnderscoreSeparatedPascalIdentifier({}, "Value", DeclVal<ThrowingIdentifierSizeAppend&>())));
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static Expected<NWB::Impl::MaterialCookEntry> ParseMaterialEntryFromMetaText(const AStringView metaText, TestArena& testArena, NWB::Core::Alloc::ScratchArena& scratchArena){
-    NWB::Core::Metascript::Document doc(testArena.arena);
-    if(!doc.parse(metaText))
-        return MakeUnexpected(Failure{});
-
-    const Path assetRoot = AssetsGraphicsTestCaseRoot(testArena, "material_meta") / s_AssetsDirectory;
-    const Path nwbFilePath = assetRoot / s_MaterialsDirectory / "test_material.nwb";
-    return NWB::Impl::ParseMaterialCookMetadata(assetRoot, s_ProjectVirtualRoot, nwbFilePath, doc, testArena.arena, scratchArena);
-}
-
-static Expected<NWB::Impl::Material> BuildMaterialFromBindAndMeta(const AStringView bindText, const AStringView materialText, const AStringView caseName, TestArena& testArena, NWB::Core::Alloc::ScratchArena& scratchArena){
-    auto materialEntryResult = ParseMaterialEntryFromMetaText(materialText, testArena, scratchArena);
-    if(!materialEntryResult)
-        return MakeUnexpected(Failure{});
-
-    auto bindRootResult = PrepareAssetsGraphicsCaseRoot(testArena, caseName);
-    if(!bindRootResult)
-        return MakeUnexpected(bindRootResult.error());
-    Path bindRoot = Move(*bindRootResult);
-    Expected<NWB::Impl::Material> built = MakeUnexpected(Failure{});
-    auto bindEntryResult = MaterialBindFixture::ParseMaterialBindFromText(bindText, bindRoot, testArena, scratchArena);
-    if(bindEntryResult){
-        NWB::Impl::MaterialBindEntry& bindEntry = *bindEntryResult;
-        bindEntry.virtualPath = s_ProjectMaterialInterfacesTestSurface;
-
-        NWB::Impl::ShaderCook::CookVector<NWB::Impl::MaterialBindEntry> bindEntries(testArena.arena);
-        bindEntries.push_back(Move(bindEntry));
-        NWB::Impl::ShaderCook::CookVector<NWB::Impl::MaterialCookEntry> materialEntries(testArena.arena);
-        materialEntries.push_back(Move(*materialEntryResult));
-        if(NWB::Impl::ValidateMaterialCookInterfaces(bindEntries, materialEntries, scratchArena))
-            built = NWB::Impl::BuildMaterialAsset(materialEntries[0u], testArena.arena);
-    }
-
-    if(!bindRoot.empty()){
-        if(!RemoveAllIfExists(bindRoot))
-            return MakeUnexpected(Failure{});
-    }
-    return built;
-}
-
-#if defined(NWB_FINAL)
-static Expected<UniquePtr<NWB::Core::Assets::IAsset>> RoundTripMaterialAssetCodec(const NWB::Impl::Material& material, TestArena& testArena, NWB::Impl::MaterialAssetCodec& codec){
-    NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
-    const b8 serialized = codec.serialize(material, binary);
-    EXPECT_TRUE(serialized);
-    EXPECT_FALSE(binary.empty());
-    if(!serialized || binary.empty())
-        return MakeUnexpected(Failure{});
-
-    auto deserialized = codec.deserialize(material.virtualPath(), binary, testArena.arena);
-    EXPECT_TRUE(deserialized);
-    return deserialized;
-}
-
-static void SetGeneratedMaterialAvboitPixelShaders(NWB::Impl::Material& material){
-    NWB::Core::Assets::AssetRef<NWB::Impl::PixelShader> accumulatePixelShader;
-    accumulatePixelShader.virtualPath = Name(s_GeneratedAvboitAccumulatePsProjectM);
-    material.setAvboitAccumulatePixelShader(accumulatePixelShader);
-
-    NWB::Core::Assets::AssetRef<NWB::Impl::PixelShader> occupancyPixelShader;
-    occupancyPixelShader.virtualPath = Name(s_GeneratedAvboitOccupancyPsProjectMa);
-    material.setAvboitOccupancyPixelShader(occupancyPixelShader);
-
-    NWB::Core::Assets::AssetRef<NWB::Impl::PixelShader> extinctionPixelShader;
-    extinctionPixelShader.virtualPath = Name(s_GeneratedAvboitExtinctionPsProjectM);
-    material.setAvboitExtinctionPixelShader(extinctionPixelShader);
-}
-#endif
-
-template<typename MeshT>
-static Expected<NWB::Impl::MeshletPositionStreamRef> TestDecodeMeshletPositionRef(const MeshT& mesh, const NWB::Impl::MeshletDesc& meshlet, const u32 localPositionIndex)noexcept(noexcept(
-    NWB::Impl::TryDecodeMeshletPositionRef(mesh.meshletPositionRefDeltas(), meshlet, localPositionIndex, false)
-)){
-    return NWB::Impl::TryDecodeMeshletPositionRef(mesh.meshletPositionRefDeltas(), meshlet, localPositionIndex, false);
-}
-
-template<typename MeshT>
-static Expected<NWB::Impl::MeshletAttributeStreamRef> TestDecodeMeshletAttributeRef(const MeshT& mesh, const NWB::Impl::MeshletDesc& meshlet, const u32 localAttributeIndex)noexcept(noexcept(
-    NWB::Impl::TryDecodeMeshletAttributeRef(mesh.meshletAttributeRefDeltas(), meshlet, localAttributeIndex)
-)){
-    return NWB::Impl::TryDecodeMeshletAttributeRef(mesh.meshletAttributeRefDeltas(), meshlet, localAttributeIndex);
-}
-
-template<
-    typename MeshT,
-    typename PositionStreamT,
-    typename NormalStreamT,
-    typename LocalRefVectorT
->
-static b8 TestMeshletHasPositionNormalValue(
-    const MeshT& mesh,
-    const NWB::Impl::MeshletDesc& meshlet,
-    const PositionStreamT& positions,
-    const NormalStreamT& normals,
-    const LocalRefVectorT& localRefs,
-    const Float3U& expectedPosition,
-    const Float4U& expectedNormal
-)noexcept(noexcept(DeclVal<void(*)(const NWB::Impl::MeshletLocalVertexRef&)noexcept>()(localRefs[DeclVal<u32>()]))
-    && noexcept(TestDecodeMeshletPositionRef(mesh, meshlet, DeclVal<u32>()))
-    && noexcept(TestDecodeMeshletAttributeRef(mesh, meshlet, DeclVal<u32>()))
-    && noexcept(DeclVal<void(*)(const Float3U&)noexcept>()(positions[DeclVal<u32>()]))
-    && noexcept(LoadHalf4U(normals[DeclVal<u32>()]))
-){
-    for(u32 localVertexIndex = 0u; localVertexIndex < NWB::Impl::MeshletVertexCount(meshlet); ++localVertexIndex){
-        const NWB::Impl::MeshletLocalVertexRef& localRef = localRefs[meshlet.localVertexOffset + localVertexIndex];
-        const auto positionRef = TestDecodeMeshletPositionRef(mesh, meshlet, localRef.localDeformedPosition);
-        const auto attributeRef = TestDecodeMeshletAttributeRef(mesh, meshlet, localRef.localAttribute);
-        if(!positionRef || !attributeRef)
-            return false;
-
-        const Float3U& position = positions[positionRef->position];
-        const Float4U normal = LoadHalf4U(normals[attributeRef->normal]);
-        if(position.x == expectedPosition.x && position.y == expectedPosition.y && position.z == expectedPosition.z && normal.x == expectedNormal.x && normal.y == expectedNormal.y && normal.z == expectedNormal.z && normal.w == expectedNormal.w)
-            return true;
-    }
-
-    return false;
-}
-
-template<typename MeshT>
-[[nodiscard]] static usize TestMeshletLogicalPositionRefCount(const MeshT& mesh)noexcept([]()constexpr noexcept{
-    using Range = RemoveReference_T<decltype(DeclVal<const MeshT&>().meshlets())>;
-    if constexpr(IsArray_V<Range>)
-        return noexcept(DeclVal<void(*)(const NWB::Impl::MeshletDesc&)noexcept>()(DeclVal<RemoveExtent_T<Range>&>()));
-    else if constexpr(requires(Range& values){ values.begin(); values.end(); }){
-        using Iterator = RemoveCVRef_T<decltype(DeclVal<Range&>().begin())>;
-        using Sentinel = RemoveCVRef_T<decltype(DeclVal<Range&>().end())>;
-        return
-            noexcept(DeclVal<void(*)(Iterator)noexcept>()(DeclVal<Range&>().begin()))
-            && noexcept(DeclVal<void(*)(Sentinel)noexcept>()(DeclVal<Range&>().end()))
-            && IsNothrowDestructible_V<Iterator>
-            && IsNothrowDestructible_V<Sentinel>
-            && noexcept(static_cast<b8>(DeclVal<Iterator&>() != DeclVal<Sentinel&>()))
-            && noexcept(++DeclVal<Iterator&>())
-            && noexcept(DeclVal<void(*)(const NWB::Impl::MeshletDesc&)noexcept>()(*DeclVal<Iterator&>()))
-        ;
-    }
-    else
-        return false;
-}() && noexcept(mesh.meshlets())){
-    usize count = 0u;
-    for(const NWB::Impl::MeshletDesc& meshlet : mesh.meshlets())
-        count += NWB::Impl::MeshletPositionCount(meshlet);
-    return count;
-}
-
-template<typename MeshT>
-[[nodiscard]] static usize TestMeshletLogicalAttributeRefCount(const MeshT& mesh)noexcept([]()constexpr noexcept{
-    using Range = RemoveReference_T<decltype(DeclVal<const MeshT&>().meshlets())>;
-    if constexpr(IsArray_V<Range>)
-        return noexcept(DeclVal<void(*)(const NWB::Impl::MeshletDesc&)noexcept>()(DeclVal<RemoveExtent_T<Range>&>()));
-    else if constexpr(requires(Range& values){ values.begin(); values.end(); }){
-        using Iterator = RemoveCVRef_T<decltype(DeclVal<Range&>().begin())>;
-        using Sentinel = RemoveCVRef_T<decltype(DeclVal<Range&>().end())>;
-        return
-            noexcept(DeclVal<void(*)(Iterator)noexcept>()(DeclVal<Range&>().begin()))
-            && noexcept(DeclVal<void(*)(Sentinel)noexcept>()(DeclVal<Range&>().end()))
-            && IsNothrowDestructible_V<Iterator>
-            && IsNothrowDestructible_V<Sentinel>
-            && noexcept(static_cast<b8>(DeclVal<Iterator&>() != DeclVal<Sentinel&>()))
-            && noexcept(++DeclVal<Iterator&>())
-            && noexcept(DeclVal<void(*)(const NWB::Impl::MeshletDesc&)noexcept>()(*DeclVal<Iterator&>()))
-        ;
-    }
-    else
-        return false;
-}() && noexcept(mesh.meshlets())){
-    usize count = 0u;
-    for(const NWB::Impl::MeshletDesc& meshlet : mesh.meshlets())
-        count += NWB::Impl::MeshletAttributeCount(meshlet);
-    return count;
-}
-
-static Expected<UniquePtr<NWB::Core::Assets::IAsset>> CookAndLoadSmokeMesh(const AStringView assetFilename, const Name assetName, const CookCase& cookCase, TestArena& testArena){
-    const b8 cooked = CookSmokeAssetMeta("meshes", assetFilename, cookCase, testArena);
-    EXPECT_TRUE(cooked);
-    if(!cooked)
-        return MakeUnexpected(Failure{});
-    return LoadCookedAsset<NWB::Impl::MeshAssetCodec>(cookCase.outputDirectory, assetName, 1u, testArena);
-}
-
-static TestAString BuildMeshIndexMeta(const AStringView indexList){
-    static constexpr usize s_IndexFieldOffset = s_MinimalMeshMeta.find("asset.indices");
-    static_assert(s_IndexFieldOffset != AStringView::npos);
-    TestAString meta(s_MinimalMeshMeta.data(), s_IndexFieldOffset);
-    meta += "asset.indices = ";
-    AppendTestMeta(indexList, meta);
-    meta += ";\n";
-    return meta;
-}
-
-#if defined(NWB_FINAL)
-static void ExpectCookFailure(const NotNull<CookSingleMetaFn> cookSingleMeta, const AStringView metaText, const AStringView caseName, TestArena& testArena){
-    auto cookCase = PrepareAssetsGraphicsCookCase(testArena, caseName);
-    ASSERT_TRUE(cookCase);
-    EXPECT_FALSE(cookSingleMeta.get()(metaText, *cookCase, testArena));
-
-    EXPECT_TRUE(RemoveAllIfExists(cookCase->root));
-}
-#endif
-
-using MaterialAsset = Impl::Material;
-using MeshAsset = Impl::Mesh;
-using Impl::IsMaterialResourceParameterCandidate;
-using Impl::MeshletConeEnabled;
-using Impl::MeshletPrimitiveCount;
-using Impl::s_MeshMaxMeshletTriangles;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class MaterialPolicyRejectionCase{
     public StringView m_metaText;
     public StringView m_diagnostic;
@@ -321,24 +29,61 @@ class MeshIndexDiagnosticCase{
     }
 }
 
-b8 CanParseMaterialMeta(in StringView metaText, mut TestArena testArena, mut ScratchArena scratchArena){
-    b8 accepted = false;
-    native(in metaText, mut testArena, mut scratchArena, mut accepted){
-        accepted = ParseMaterialEntryFromMetaText(metaText, testArena, scratchArena).has_value();
+class ObjectGeometryCase{
+    public StringView m_shaderType;
+    public StringView m_fields;
+    public b8 m_accepted;
+
+    public ObjectGeometryCase(in StringView shaderType, in StringView fields, in b8 accepted){
+        this.m_shaderType = shaderType;
+        this.m_fields = fields;
+        this.m_accepted = accepted;
     }
-    return accepted;
 }
 
 b8 CookAndLoadSmokeMeshInto(in StringView assetFilename, in Name assetName, in CookCase cookCase, mut TestArena testArena, mut MeshAsset outMesh){
-    b8 loaded = false;
-    native(in assetFilename, in assetName, in cookCase, mut testArena, mut outMesh, mut loaded){
-        auto loadedAssetResult = CookAndLoadSmokeMesh(assetFilename, assetName, cookCase, testArena);
-        if(loadedAssetResult){
-            outMesh = Move(static_cast<NWB::Impl::Mesh&>(**loadedAssetResult));
-            loaded = true;
-        }
+    const b8 cooked = CookSmokeAssetMeta("meshes", assetFilename, cookCase, testArena);
+    EXPECT_TRUE(cooked);
+    if(!cooked)
+        return false;
+    Expected<MeshAsset> loaded = LoadCookedMeshAsset(testArena, cookCase.outputDirectory, assetName, 1u);
+    if(!loaded.has_value())
+        return false;
+    outMesh = loaded.value();
+    return true;
+}
+
+TestAString BuildMeshIndexMeta(in StringView indexList){
+    const usize indexFieldOffset = s_MinimalMeshMeta.find("asset.indices");
+    TestAString meta = TestAString();
+    meta.append(s_MinimalMeshMeta.substr(0u, indexFieldOffset));
+    meta.append("asset.indices = ");
+    AppendTestMeta(indexList, meta);
+    meta.append(";\n");
+    return meta;
+}
+
+void ExpectMeshCookFailure(in StringView metaText, in StringView caseName, mut TestArena testArena){
+    const Expected<CookCase> cookCase = PrepareCookCase(testArena, caseName);
+    ASSERT_TRUE(cookCase.has_value());
+    const CookCase prepared = cookCase.value();
+    EXPECT_FALSE(CookSingleMeshMeta(metaText, prepared, testArena));
+    EXPECT_TRUE(RemoveAllIfExists(prepared.root));
+}
+
+void ExpectMaterialBindParseFailure(in StringView bindText, in StringView caseName, in StringView expectedError, mut TestArena testArena, mut ScratchArena scratchArena){
+    const ScopedTestTrace trace(caseName);
+    const Expected<GraphicsTestPath> invalidRootResult = PrepareCaseRoot(testArena, caseName);
+    ASSERT_TRUE(invalidRootResult.has_value());
+    const GraphicsTestPath invalidRoot = invalidRootResult.value();
+    {
+        CapturingLogger failureLogger = CapturingLogger();
+        LoggerRegistrationGuard failureLoggerGuard(failureLogger, s_ReportOnly);
+
+        EXPECT_FALSE(ParseTestMaterialBindFromText(bindText, invalidRoot, testArena, scratchArena).has_value());
+        EXPECT_TRUE(SawCapturedError(failureLogger, expectedError));
     }
-    return loaded;
+    EXPECT_TRUE(RemoveAllIfExists(invalidRoot));
 }
 
 void VerifyAssetsGraphics_ResourceParameterCandidateRejectsExpressionsButPreservesBytes(){
@@ -346,37 +91,32 @@ void VerifyAssetsGraphics_ResourceParameterCandidateRejectsExpressionsButPreserv
     EXPECT_FALSE(IsMaterialResourceParameterCandidate("project/value("));
     EXPECT_FALSE(IsMaterialResourceParameterCandidate("project/value)"));
     EXPECT_TRUE(IsMaterialResourceParameterCandidate("project/value"));
-    b8 embeddedNulAccepted = false;
-    native(mut embeddedNulAccepted){
-        embeddedNulAccepted = NWB::Impl::IsMaterialResourceParameterCandidate(AStringView("project/\0value", 14u));
-    }
-    EXPECT_TRUE(embeddedNulAccepted);
+    EXPECT_TRUE(IsMaterialResourceParameterCandidate(EmbeddedNulMaterialResourceCandidate()));
 }
 
 void VerifyAssetsGraphics_MaterialCookAdmissionRejectsMissingInputsAndCountOverflow(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
-    native(in logger){
-        EXPECT_FALSE(Impl::ValidateMaterialBindIncludePath("", "source.bind"));
-        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("virtual path is empty for 'source.bind'")));
-        EXPECT_FALSE(Impl::ValidateDeferredBxdfSource("project/material", ""));
-        EXPECT_TRUE(Impl::ValidateDeferredBxdfCount(static_cast<usize>(Limit<u32>::s_Max)));
-        EXPECT_TRUE(Impl::ValidateMaterialSurfaceCount(static_cast<usize>(Limit<u32>::s_Max)));
-        u32 expectedErrors = 4u;
-        if constexpr(sizeof(usize) > sizeof(u32)){
-            EXPECT_FALSE(Impl::ValidateDeferredBxdfCount(static_cast<usize>(Limit<u32>::s_Max) + 1u));
-            EXPECT_FALSE(Impl::ValidateMaterialSurfaceCount(static_cast<usize>(Limit<u32>::s_Max) + 1u));
-            expectedErrors += 2u;
-        }
-        EXPECT_TRUE(Impl::ValidateGeneratedMaterialMeshShader(0u, s_NameNone));
-        EXPECT_FALSE(Impl::ValidateGeneratedMaterialMeshShader(1u, s_NameNone));
-        EXPECT_FALSE(Impl::ValidateTransparentMaterialInterface("project/material", "", "occupancy"));
-        EXPECT_FALSE(Impl::IsMaterialOpticalStageCombinationValid(true, false, true, false));
-        EXPECT_FALSE(Impl::IsMaterialOpticalStageCombinationValid(true, false, false, true));
-        EXPECT_TRUE(Impl::IsMaterialOpticalStageCombinationValid(true, false, false, false));
-        EXPECT_TRUE(Impl::IsMaterialOpticalStageCombinationValid(false, false, true, true));
-        EXPECT_EQ(logger.errorCount(), expectedErrors);
+    EXPECT_FALSE(ValidateMaterialBindIncludePath("", "source.bind"));
+    EXPECT_TRUE(SawCapturedError(logger, "virtual path is empty for 'source.bind'"));
+    EXPECT_FALSE(ValidateDeferredBxdfSource("project/material", ""));
+    const usize maxU32 = cast<usize>(u32.max);
+    EXPECT_TRUE(ValidateDeferredBxdfCount(maxU32));
+    EXPECT_TRUE(ValidateMaterialSurfaceCount(maxU32));
+    u32 expectedErrors = 4u;
+    if(usize.max > maxU32){
+        EXPECT_FALSE(ValidateDeferredBxdfCount(maxU32 + 1u));
+        EXPECT_FALSE(ValidateMaterialSurfaceCount(maxU32 + 1u));
+        expectedErrors += 2u;
     }
+    EXPECT_TRUE(ValidateGeneratedMaterialMeshShader(0u, s_NameNone));
+    EXPECT_FALSE(ValidateGeneratedMaterialMeshShader(1u, s_NameNone));
+    EXPECT_FALSE(ValidateTransparentMaterialInterface("project/material", "", "occupancy"));
+    EXPECT_FALSE(IsMaterialOpticalStageCombinationValid(true, false, true, false));
+    EXPECT_FALSE(IsMaterialOpticalStageCombinationValid(true, false, false, true));
+    EXPECT_TRUE(IsMaterialOpticalStageCombinationValid(true, false, false, false));
+    EXPECT_TRUE(IsMaterialOpticalStageCombinationValid(false, false, true, true));
+    EXPECT_EQ(logger.errorCount(), expectedErrors);
 }
 
 void VerifyAssetsGraphics_MaterialKeyHashPreservesHighBytesAndPathSeparators(){
@@ -384,15 +124,8 @@ void VerifyAssetsGraphics_MaterialKeyHashPreservesHighBytesAndPathSeparators(){
     const StringView slashKey = "Ab/C/\xC3\xA9";
     EXPECT_EQ(ComputeFnv64AsciiLowerText(backslashKey), 0xff4be59fee952354ull);
     EXPECT_EQ(ComputeFnv64AsciiLowerText(slashKey), 0x6c9a1f221edbde7dull);
-    u32x4 packed = u32x4(0u, 0u, 0u, 0u);
-    u32 expectedValueType = 0u;
-    native(in backslashKey, mut packed, mut expectedValueType){
-        NWB::Impl::MaterialParameterType type{};
-        type.valueType = NWB::Impl::MaterialParameterValueType::f32;
-        type.componentCount = 3u;
-        packed = NWB::Impl::PackMaterialTypedValueMeta(backslashKey, type);
-        expectedValueType = static_cast<u32>(type.valueType);
-    }
+    const u32x4 packed = PackF32x3MaterialTypedValueMeta(backslashKey);
+    const u32 expectedValueType = MaterialParamF32ValueTypeId();
     EXPECT_EQ(packed.x, 0xee952354u);
     EXPECT_EQ(packed.y, 0xff4be59fu);
     EXPECT_EQ(packed.z, expectedValueType);
@@ -404,24 +137,19 @@ void VerifyAssetsGraphics_DuplicateMaterialBindIdentityIsRejectedBeforeMaterialM
     LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
     TestArena testArena = TestArena();
     ScratchArena scratchArena(s_MaterialScratchArena);
-    native(in logger, mut testArena, mut scratchArena){
-        NWB::Impl::ShaderCook::CookVector<NWB::Impl::MaterialBindEntry> bindEntries(testArena.arena);
-        for(usize index = 0u; index < 2u; ++index){
-            auto& bind = bindEntries.emplace_back(testArena.arena);
-            bind.virtualPath = s_ProjectMaterialInterfacesTestSurface;
-        }
-        NWB::Impl::ShaderCook::CookVector<NWB::Impl::MaterialCookEntry> materialEntries(testArena.arena);
-        auto& material = materialEntries.emplace_back(testArena.arena);
-        material.materialInterface = s_ProjectMaterialInterfacesTestSurface;
-        material.typedLayoutHash = 0xF091u;
-        material.typedBlockBytes.push_back(0x2Au);
 
-        EXPECT_FALSE(NWB::Impl::ValidateMaterialCookInterfaces(bindEntries, materialEntries, scratchArena));
-        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("Material bind interface 'project/material_interfaces/test_surface' is duplicated")));
-        EXPECT_EQ(material.typedLayoutHash, 0xF091u);
-        ASSERT_EQ(material.typedBlockBytes.size(), 1u);
-        EXPECT_EQ(material.typedBlockBytes[0u], 0x2Au);
-    }
+    MaterialBindEntryVector bindEntries(testArena.arena);
+    for(usize index = 0u; index < 2u; ++index)
+        AppendDuplicateBindTestEntry(testArena, s_ProjectMaterialInterfacesTestSurface, bindEntries);
+
+    MaterialShaderCookEntryVector materialEntries(testArena.arena);
+    AppendMaterialInterfaceTestEntry(testArena, s_ProjectMaterialInterfacesTestSurface, 0xF091u, 0x2Au, materialEntries);
+
+    EXPECT_FALSE(ValidateTestMaterialCookInterfaces(bindEntries, materialEntries, scratchArena));
+    EXPECT_TRUE(SawCapturedError(logger, "Material bind interface 'project/material_interfaces/test_surface' is duplicated"));
+    EXPECT_EQ(materialEntries[0u].typedLayoutHash, 0xF091u);
+    ASSERT_EQ(materialEntries[0u].typedBlockBytes.size(), 1u);
+    EXPECT_EQ(materialEntries[0u].typedBlockBytes[0u], 0x2Au);
 }
 
 void VerifyAssetsGraphics_MaterialBindSchemaValidation(){
@@ -429,103 +157,101 @@ void VerifyAssetsGraphics_MaterialBindSchemaValidation(){
     LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
     TestArena testArena = TestArena();
     ScratchArena scratchArena(s_MaterialScratchArena);
-    native(in logger, mut testArena, mut scratchArena){
-        auto expectParseFailure = [&](const AStringView bindText, const AStringView caseName, const TStringView expectedError){
-            SCOPED_TRACE(caseName.data());
 
-            auto invalidRootResult = PrepareAssetsGraphicsCaseRoot(testArena, caseName);
-            ASSERT_TRUE(invalidRootResult);
-            Path invalidRoot = Move(*invalidRootResult);
-            {
-                CapturingLogger failureLogger;
-                NWB::Core::Common::LoggerRegistrationGuard failureLoggerRegistrationGuard(failureLogger, NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
+    ExpectMaterialBindParseFailure(s_UnknownBlockClassMaterialBindSource, "material_bind_unknown_block_class", "unsupported attribute 'material_project'", testArena, scratchArena);
+    ExpectMaterialBindParseFailure(s_UnsupportedFieldTypeMaterialBindSource, "material_bind_unsupported_field_type", "unsupported type 'double'", testArena, scratchArena);
+    ExpectMaterialBindParseFailure(s_InvalidDefaultMaterialBindSource, "material_bind_invalid_default", "attribute 'default' requires one non-empty string argument", testArena, scratchArena);
+    ExpectMaterialBindParseFailure(s_MissingDefaultMaterialBindSource, "material_bind_missing_default", "must declare a default attribute", testArena, scratchArena);
+    ExpectMaterialBindParseFailure(s_ResourceAttributeMaterialBindSource, "material_bind_resource_attribute", "has unsupported attribute 'texture_asset'", testArena, scratchArena);
 
-                EXPECT_FALSE(MaterialBindFixture::ParseMaterialBindFromText(bindText, invalidRoot, testArena, scratchArena));
-                EXPECT_TRUE(failureLogger.sawErrorContaining(expectedError));
-            }
-
-            EXPECT_TRUE(RemoveAllIfExists(invalidRoot));
-        };
-
-        expectParseFailure(s_UnknownBlockClassMaterialBindSource, "material_bind_unknown_block_class", NWB_TEXT("unsupported attribute 'material_project'"));
-        expectParseFailure(s_UnsupportedFieldTypeMaterialBindSource, "material_bind_unsupported_field_type", NWB_TEXT("unsupported type 'double'"));
-        expectParseFailure(s_InvalidDefaultMaterialBindSource, "material_bind_invalid_default", NWB_TEXT("attribute 'default' requires one non-empty string argument"));
-        expectParseFailure(s_MissingDefaultMaterialBindSource, "material_bind_missing_default", NWB_TEXT("must declare a default attribute"));
-        expectParseFailure(s_ResourceAttributeMaterialBindSource, "material_bind_resource_attribute", NWB_TEXT("has unsupported attribute 'texture_asset'"));
-        for(const AStringView resourceType : { AStringView("texture2d"), AStringView("sampler") }){
-            const auto retiredFixtureBind = StringFormat(testArena.arena, "[material_constant] struct NwbResourceMaterial{{ [fixture(\"builtin/material_fixture/checker_rgba8\")] {} resource; }}; NwbResourceMaterial surface;", resourceType);
-            expectParseFailure(retiredFixtureBind, resourceType, NWB_TEXT("has unsupported attribute 'fixture'"));
-        }
-        expectParseFailure(s_DuplicateInstanceMaterialBindSource, "material_bind_duplicate_instance", NWB_TEXT("duplicate variable declaration"));
-        expectParseFailure(s_InitializedInstanceMaterialBindSource, "material_bind_initialized_instance", NWB_TEXT("instance 'surface' must not have an initializer or assignments"));
-        constexpr AStringView s_ValidStruct = "[material_constant] struct Surface { [default(\"float(0.5)\")] float roughness; };\n";
-        expectParseFailure(s_ValidStruct, "material_bind_missing_instance", NWB_TEXT("instance declarations must not be empty"));
-        const auto unknownInstance = StringFormat(testArena.arena, "{}Unknown surface;", s_ValidStruct);
-        expectParseFailure(unknownInstance, "material_bind_unknown_instance_type", NWB_TEXT("instance 'surface' references unknown struct type 'Unknown'"));
-        const auto assignedInstance = StringFormat(testArena.arena, "{}Surface surface; surface.roughness = 0.5;", s_ValidStruct);
-        expectParseFailure(assignedInstance, "material_bind_assigned_instance", NWB_TEXT("instance 'surface' must not have an initializer or assignments"));
-
-        auto float1DefaultRootResult = PrepareAssetsGraphicsCaseRoot(testArena, "material_bind_float1_default");
-        ASSERT_TRUE(float1DefaultRootResult);
-        Path float1DefaultRoot = Move(*float1DefaultRootResult);
-        auto float1DefaultEntryResult = MaterialBindFixture::ParseMaterialBindFromText(s_Float1DefaultMaterialBindSource, float1DefaultRoot, testArena, scratchArena);
-        ASSERT_TRUE(float1DefaultEntryResult);
-        NWB::Impl::MaterialBindEntry& float1DefaultEntry = *float1DefaultEntryResult;
-        float1DefaultEntry.virtualPath = s_ProjectMaterialInterfacesTestSurface;
-        {
-            SCOPED_TRACE("material_bind_float1_default_include");
-
-            CapturingLogger failureLogger;
-            NWB::Core::Common::LoggerRegistrationGuard failureLoggerRegistrationGuard(failureLogger, NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
-
-            EXPECT_FALSE(NWB::Impl::BuildMaterialBindIncludeSource(float1DefaultEntry, testArena.arena, scratchArena));
-            EXPECT_TRUE(failureLogger.sawErrorContaining(NWB_TEXT("default 'float1(1.0)'")));
-        }
-
-        const Name cacheInterface(s_ProjectMaterialInterfacesTestSurface);
-        NWB::Impl::MaterialBindTypedLayoutCache layoutCache(testArena.arena);
-        {
-            SCOPED_TRACE("material_bind_float1_default_cache");
-
-            CapturingLogger failureLogger;
-            NWB::Core::Common::LoggerRegistrationGuard failureLoggerRegistrationGuard(failureLogger, NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
-
-            EXPECT_FALSE(NWB::Impl::FindOrBuildMaterialBindTypedLayout(cacheInterface, float1DefaultEntry, scratchArena, layoutCache));
-            EXPECT_TRUE(failureLogger.sawErrorContaining(NWB_TEXT("default 'float1(1.0)'")));
-        }
-        EXPECT_TRUE(layoutCache.entries.empty());
-        EXPECT_TRUE(layoutCache.lookup.empty());
-
-        auto validCacheRootResult = PrepareAssetsGraphicsCaseRoot(testArena, "material_bind_cache_valid_after_failed_layout");
-        ASSERT_TRUE(validCacheRootResult);
-        Path validCacheRoot = Move(*validCacheRootResult);
-        auto validCacheEntryResult = MaterialBindFixture::ParseMaterialBindFromText(s_MinimalMaterialBindSource, validCacheRoot, testArena, scratchArena);
-        ASSERT_TRUE(validCacheEntryResult);
-        NWB::Impl::MaterialBindEntry& validCacheEntry = *validCacheEntryResult;
-        validCacheEntry.virtualPath = s_ProjectMaterialInterfacesTestSurface;
-        const auto cachedLayout = NWB::Impl::FindOrBuildMaterialBindTypedLayout(cacheInterface, validCacheEntry, scratchArena, layoutCache);
-        ASSERT_TRUE(cachedLayout);
-        EXPECT_EQ(layoutCache.entries.size(), 1u);
-        EXPECT_EQ(layoutCache.lookup.size(), 1u);
-        EXPECT_EQ(logger.errorCount(), 0u);
-
-        EXPECT_TRUE(RemoveAllIfExists(float1DefaultRoot));
-        EXPECT_TRUE(RemoveAllIfExists(validCacheRoot));
+    Vector<StringView> resourceTypes = Vector<StringView>();
+    resourceTypes.reserve(2u);
+    resourceTypes.push_back("texture2d");
+    resourceTypes.push_back("sampler");
+    for(in StringView resourceType : resourceTypes){
+        TestAString retiredFixtureBind = TestAString();
+        retiredFixtureBind.append("[material_constant] struct NwbResourceMaterial{ [fixture(\"builtin/material_fixture/checker_rgba8\")] ");
+        retiredFixtureBind.append(resourceType);
+        retiredFixtureBind.append(" resource; }; NwbResourceMaterial surface;");
+        ExpectMaterialBindParseFailure(ViewTestString(retiredFixtureBind), resourceType, "has unsupported attribute 'fixture'", testArena, scratchArena);
     }
+
+    ExpectMaterialBindParseFailure(s_DuplicateInstanceMaterialBindSource, "material_bind_duplicate_instance", "duplicate variable declaration", testArena, scratchArena);
+    ExpectMaterialBindParseFailure(s_InitializedInstanceMaterialBindSource, "material_bind_initialized_instance", "instance 'surface' must not have an initializer or assignments", testArena, scratchArena);
+
+    const StringView validStruct = "[material_constant] struct Surface { [default(\"float(0.5)\")] float roughness; };\n";
+    ExpectMaterialBindParseFailure(validStruct, "material_bind_missing_instance", "instance declarations must not be empty", testArena, scratchArena);
+
+    TestAString unknownInstance = TestAString();
+    unknownInstance.append(validStruct);
+    unknownInstance.append("Unknown surface;");
+    ExpectMaterialBindParseFailure(ViewTestString(unknownInstance), "material_bind_unknown_instance_type", "instance 'surface' references unknown struct type 'Unknown'", testArena, scratchArena);
+
+    TestAString assignedInstance = TestAString();
+    assignedInstance.append(validStruct);
+    assignedInstance.append("Surface surface; surface.roughness = 0.5;");
+    ExpectMaterialBindParseFailure(ViewTestString(assignedInstance), "material_bind_assigned_instance", "instance 'surface' must not have an initializer or assignments", testArena, scratchArena);
+
+    const Expected<GraphicsTestPath> float1DefaultRootResult = PrepareCaseRoot(testArena, "material_bind_float1_default");
+    ASSERT_TRUE(float1DefaultRootResult.has_value());
+    const GraphicsTestPath float1DefaultRoot = float1DefaultRootResult.value();
+    MaterialBindEntry float1DefaultEntry(testArena.arena);
+    {
+        Expected<MaterialBindEntry> parsedFloat1 = ParseTestMaterialBindFromText(s_Float1DefaultMaterialBindSource, float1DefaultRoot, testArena, scratchArena);
+        ASSERT_TRUE(parsedFloat1.has_value());
+        float1DefaultEntry = parsedFloat1.value();
+    }
+    SetMaterialBindEntryVirtualPath(float1DefaultEntry, s_ProjectMaterialInterfacesTestSurface);
+    {
+        const ScopedTestTrace trace("material_bind_float1_default_include");
+        CapturingLogger failureLogger = CapturingLogger();
+        LoggerRegistrationGuard failureLoggerGuard(failureLogger, s_ReportOnly);
+
+        EXPECT_FALSE(CanBuildMaterialBindIncludeSource(float1DefaultEntry, testArena, scratchArena));
+        EXPECT_TRUE(SawCapturedError(failureLogger, "default 'float1(1.0)'"));
+    }
+
+    const Name cacheInterface(s_ProjectMaterialInterfacesTestSurface);
+    MaterialBindTypedLayoutCache layoutCache(testArena.arena);
+    {
+        const ScopedTestTrace trace("material_bind_float1_default_cache");
+        CapturingLogger failureLogger = CapturingLogger();
+        LoggerRegistrationGuard failureLoggerGuard(failureLogger, s_ReportOnly);
+
+        EXPECT_FALSE(CanFindOrBuildMaterialBindTypedLayout(cacheInterface, float1DefaultEntry, scratchArena, layoutCache));
+        EXPECT_TRUE(SawCapturedError(failureLogger, "default 'float1(1.0)'"));
+    }
+    EXPECT_TRUE(layoutCache.entries.empty());
+    EXPECT_TRUE(layoutCache.lookup.empty());
+
+    const Expected<GraphicsTestPath> validCacheRootResult = PrepareCaseRoot(testArena, "material_bind_cache_valid_after_failed_layout");
+    ASSERT_TRUE(validCacheRootResult.has_value());
+    const GraphicsTestPath validCacheRoot = validCacheRootResult.value();
+    MaterialBindEntry validCacheEntry(testArena.arena);
+    {
+        Expected<MaterialBindEntry> parsedValid = ParseTestMaterialBindFromText(s_MinimalMaterialBindSource, validCacheRoot, testArena, scratchArena);
+        ASSERT_TRUE(parsedValid.has_value());
+        validCacheEntry = parsedValid.value();
+    }
+    SetMaterialBindEntryVirtualPath(validCacheEntry, s_ProjectMaterialInterfacesTestSurface);
+    ASSERT_TRUE(CanFindOrBuildMaterialBindTypedLayout(cacheInterface, validCacheEntry, scratchArena, layoutCache));
+    EXPECT_EQ(layoutCache.entries.size(), 1u);
+    EXPECT_EQ(layoutCache.lookup.size(), 1u);
+    EXPECT_EQ(logger.errorCount(), 0u);
+
+    EXPECT_TRUE(RemoveAllIfExists(float1DefaultRoot));
+    EXPECT_TRUE(RemoveAllIfExists(validCacheRoot));
 }
 
 void VerifyAssetsGraphics_MaterialBindEngineAndProjectResourceValidation(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
-    native(in logger){
-        EXPECT_FALSE(NWB::Impl::IsSupportedMaterialResourceReference(NWB::Impl::MaterialResourceKind::SampledImage2D, "builtin/textures/checker"));
-        EXPECT_FALSE(NWB::Impl::IsSupportedMaterialResourceReference(NWB::Impl::MaterialResourceKind::Sampler, "project/samplers/../linear_clamp"));
-        EXPECT_FALSE(NWB::Impl::IsSupportedMaterialResourceReference(NWB::Impl::MaterialResourceKind::Sampler, "engine/samplers/../linear_clamp"));
-        EXPECT_TRUE(NWB::Impl::IsSupportedMaterialResourceReference(NWB::Impl::MaterialResourceKind::Sampler, "project/samplers/linear_clamp"));
-        EXPECT_TRUE(NWB::Impl::IsSupportedMaterialResourceReference(NWB::Impl::MaterialResourceKind::Sampler, s_EngineSamplersLinearClampPath));
-
-        EXPECT_EQ(logger.errorCount(), 0u);
-    }
+    EXPECT_FALSE(IsSupportedMaterialResourceReference(s_MaterialResourceSampledImage2D, "builtin/textures/checker"));
+    EXPECT_FALSE(IsSupportedMaterialResourceReference(s_MaterialResourceSampler, "project/samplers/../linear_clamp"));
+    EXPECT_FALSE(IsSupportedMaterialResourceReference(s_MaterialResourceSampler, "engine/samplers/../linear_clamp"));
+    EXPECT_TRUE(IsSupportedMaterialResourceReference(s_MaterialResourceSampler, "project/samplers/linear_clamp"));
+    EXPECT_TRUE(IsSupportedMaterialResourceReference(s_MaterialResourceSampler, s_EngineSamplersLinearClampPath));
+    EXPECT_EQ(logger.errorCount(), 0u);
 }
 
 void VerifyAssetsGraphics_MaterialBindCookRejectsMalformedParametersAndInterfaceMismatch(){
@@ -555,77 +281,60 @@ void VerifyAssetsGraphics_MaterialBindCookRejectsMalformedParametersAndInterface
     integrationDiagnostics.push_back("typed parameter 'runtime.fade_alpha' is not declared by interface");
 
     for(usize caseIndex = 0u; caseIndex < integrationCaseNames.size(); ++caseIndex){
-        const Expected<CookCase> cookCase = PrepareAssetsGraphicsCookCase(testArena, integrationCaseNames[caseIndex]);
+        const Expected<CookCase> cookCase = PrepareCookCase(testArena, integrationCaseNames[caseIndex]);
         ASSERT_TRUE(cookCase.has_value());
         const CookCase prepared = cookCase.value();
-        b8 cooked = true;
-        native(in caseIndex, in prepared, mut testArena, mut cooked){
-#if defined(NWB_FINAL)
-            AStringView bindSource = s_MinimalMaterialBindSource;
-            AStringView materialMeta = s_UnknownInterfaceParameterMaterialMeta;
-            switch(caseIndex){
-            case 0u: materialMeta = s_UnknownInterfaceParameterMaterialMeta; break;
-            case 1u: materialMeta = s_FlatInterfaceParameterMaterialMeta; break;
-            case 2u: materialMeta = s_UntypedMaterialParameterMeta; break;
-            case 3u: materialMeta = s_VectorAliasMaterialParameterMeta; break;
-            case 4u: materialMeta = s_UnsupportedMaterialFieldMeta; break;
-            case 5u:
-                bindSource = s_SurfaceOnlyMaterialBindSource;
-                materialMeta = s_BlockScopedMaterialMeta;
-                break;
-            default: break;
-            }
-            cooked = MaterialBindFixture::CookMaterialBindMaterialIntegration(bindSource, materialMeta, prepared, testArena);
-#endif
+
+        StringView bindSource = s_MinimalMaterialBindSource;
+        StringView materialMeta = s_UnknownInterfaceParameterMaterialMeta;
+        switch(caseIndex){
+        case 0u: materialMeta = s_UnknownInterfaceParameterMaterialMeta; break;
+        case 1u: materialMeta = s_FlatInterfaceParameterMaterialMeta; break;
+        case 2u: materialMeta = s_UntypedMaterialParameterMeta; break;
+        case 3u: materialMeta = s_VectorAliasMaterialParameterMeta; break;
+        case 4u: materialMeta = s_UnsupportedMaterialFieldMeta; break;
+        case 5u:
+            bindSource = s_SurfaceOnlyMaterialBindSource;
+            materialMeta = s_BlockScopedMaterialMeta;
+            break;
+        default: break;
         }
+        const b8 cooked = CookMaterialBindIntegration(bindSource, materialMeta, prepared, testArena);
         EXPECT_FALSE(cooked);
         EXPECT_TRUE(SawCapturedError(logger, integrationDiagnostics[caseIndex]));
         EXPECT_TRUE(RemoveAllIfExists(prepared.root));
     }
 
-    const Expected<CookCase> interfaceShaderMismatchCookCase = PrepareAssetsGraphicsCookCase(testArena, "material_bind_interface_without_bind_shader");
+    const Expected<CookCase> interfaceShaderMismatchCookCase = PrepareCookCase(testArena, "material_bind_interface_without_bind_shader");
     ASSERT_TRUE(interfaceShaderMismatchCookCase.has_value());
     const CookCase shaderMismatchCase = interfaceShaderMismatchCookCase.value();
-    b8 wroteUnboundAssets = false;
-    b8 cookedUnbound = true;
-    native(in shaderMismatchCase, mut testArena, mut wroteUnboundAssets, mut cookedUnbound){
-#if defined(NWB_FINAL)
-        const Path assetRoot = shaderMismatchCase.root / s_AssetsDirectory;
-        wroteUnboundAssets = MaterialBindFixture::WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(
-            testArena,
-            assetRoot,
-            s_MinimalMaterialBindSource,
-            s_BlockScopedMaterialMeta,
-            s_UnboundMaterialShaderProbeSource
-        );
-        cookedUnbound = CookPreparedGraphicsAssetRoots(testArena, shaderMismatchCase.root, shaderMismatchCase.outputDirectory, { assetRoot });
-#endif
-    }
+    const GraphicsTestPath shaderMismatchAssetRoot = JoinGraphicsPath(shaderMismatchCase.root, s_AssetsDirectory);
+    const b8 wroteUnboundAssets = WriteMaterialBindIntegrationAssetsWithPixel(
+        testArena,
+        shaderMismatchAssetRoot,
+        s_MinimalMaterialBindSource,
+        s_BlockScopedMaterialMeta,
+        UnboundMaterialShaderProbeText()
+    );
+    const b8 cookedUnbound = CookSingleAssetRoot(testArena, shaderMismatchCase.root, shaderMismatchCase.outputDirectory, shaderMismatchAssetRoot);
     EXPECT_TRUE(wroteUnboundAssets);
     EXPECT_FALSE(cookedUnbound);
     EXPECT_TRUE(SawCapturedError(logger, "does not include a generated material bind"));
     EXPECT_TRUE(RemoveAllIfExists(shaderMismatchCase.root));
 
-    const Expected<CookCase> interfaceIdentityMismatchCookCase = PrepareAssetsGraphicsCookCase(testArena, "material_bind_interface_identity_mismatch");
+    const Expected<CookCase> interfaceIdentityMismatchCookCase = PrepareCookCase(testArena, "material_bind_interface_identity_mismatch");
     ASSERT_TRUE(interfaceIdentityMismatchCookCase.has_value());
     const CookCase identityMismatchCase = interfaceIdentityMismatchCookCase.value();
-    b8 wroteIdentityAssets = false;
-    b8 wroteOtherBind = false;
-    b8 cookedIdentity = true;
-    native(in identityMismatchCase, mut testArena, mut wroteIdentityAssets, mut wroteOtherBind, mut cookedIdentity){
-#if defined(NWB_FINAL)
-        const Path assetRoot = identityMismatchCase.root / s_AssetsDirectory;
-        wroteIdentityAssets = MaterialBindFixture::WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(
-            testArena,
-            assetRoot,
-            s_MinimalMaterialBindSource,
-            s_BlockScopedMaterialMeta,
-            s_OtherMaterialBindShaderProbeSource
-        );
-        wroteOtherBind = WriteTextFile(assetRoot / s_MaterialInterfacesDirectory / "other_surface.bind", s_MinimalMaterialBindSource);
-        cookedIdentity = CookPreparedGraphicsAssetRoots(testArena, identityMismatchCase.root, identityMismatchCase.outputDirectory, { assetRoot });
-#endif
-    }
+    const GraphicsTestPath identityAssetRoot = JoinGraphicsPath(identityMismatchCase.root, s_AssetsDirectory);
+    const b8 wroteIdentityAssets = WriteMaterialBindIntegrationAssetsWithPixel(
+        testArena,
+        identityAssetRoot,
+        s_MinimalMaterialBindSource,
+        s_BlockScopedMaterialMeta,
+        s_OtherMaterialBindShaderProbeSource
+    );
+    const b8 wroteOtherBind = WriteTextFile(JoinGraphicsPath2(identityAssetRoot, s_MaterialInterfacesDirectory, "other_surface.bind"), s_MinimalMaterialBindSource);
+    const b8 cookedIdentity = CookSingleAssetRoot(testArena, identityMismatchCase.root, identityMismatchCase.outputDirectory, identityAssetRoot);
     EXPECT_TRUE(wroteIdentityAssets);
     EXPECT_TRUE(wroteOtherBind);
     EXPECT_FALSE(cookedIdentity);
@@ -637,32 +346,28 @@ void VerifyAssetsGraphics_ShadowSurfaceDispatchIsolatesOverlappingBindApis(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
     TestArena testArena = TestArena();
-    native(in logger, mut testArena){
-        auto cookCase = PrepareAssetsGraphicsCookCase(testArena, "shadow_transmittance_dispatch_overlapping_bind_apis");
-        ASSERT_TRUE(cookCase);
-        Path& root = cookCase->root;
-        Path& outputDirectory = cookCase->outputDirectory;
+    const Expected<CookCase> cookCase = PrepareCookCase(testArena, "shadow_transmittance_dispatch_overlapping_bind_apis");
+    ASSERT_TRUE(cookCase.has_value());
+    const CookCase prepared = cookCase.value();
 
-        const Path assetRoot = root / s_AssetsDirectory;
-        const b8 assetsWritten =
-            WriteTextFile(assetRoot / s_MaterialInterfacesDirectory / "shadow_dispatch_first.bind", s_ShadowDispatchFirstMaterialBindSource)
-            && WriteTextFile(assetRoot / s_MaterialInterfacesDirectory / "shadow_dispatch_second.bind", s_ShadowDispatchSecondMaterialBindSource)
-            && WriteTextFile(assetRoot / s_ShadersDirectory / "shadow_dispatch_shared_surface_helper.slangi", s_ShadowDispatchSharedSurfaceHelperSource)
-            && WriteTextFile(assetRoot / s_ShadersDirectory / "shadow_dispatch_first.surface", s_ShadowDispatchFirstMaterialSurfaceSource)
-            && WriteTextFile(assetRoot / s_ShadersDirectory / "shadow_dispatch_second.surface", s_ShadowDispatchSecondMaterialSurfaceSource)
-            && WriteTextFile(assetRoot / s_ShadersDirectory / "shadow_dispatch.bxdf", s_MaterialBindBxdfSource)
-            && WriteTextFile(assetRoot / s_MaterialsDirectory / "shadow_dispatch_first.nwb", s_ShadowDispatchFirstMaterialMeta)
-            && WriteTextFile(assetRoot / s_MaterialsDirectory / "shadow_dispatch_second.nwb", s_ShadowDispatchSecondMaterialMeta)
-        ;
-        ASSERT_TRUE(assetsWritten);
+    const GraphicsTestPath assetRoot = JoinGraphicsPath(prepared.root, s_AssetsDirectory);
+    const b8 assetsWritten =
+        WriteTextFile(JoinGraphicsPath2(assetRoot, s_MaterialInterfacesDirectory, "shadow_dispatch_first.bind"), s_ShadowDispatchFirstMaterialBindSource)
+        && WriteTextFile(JoinGraphicsPath2(assetRoot, s_MaterialInterfacesDirectory, "shadow_dispatch_second.bind"), s_ShadowDispatchSecondMaterialBindSource)
+        && WriteTextFile(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, "shadow_dispatch_shared_surface_helper.slangi"), s_ShadowDispatchSharedSurfaceHelperSource)
+        && WriteTextFile(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, "shadow_dispatch_first.surface"), s_ShadowDispatchFirstMaterialSurfaceSource)
+        && WriteTextFile(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, "shadow_dispatch_second.surface"), s_ShadowDispatchSecondMaterialSurfaceSource)
+        && WriteTextFile(JoinGraphicsPath2(assetRoot, s_ShadersDirectory, "shadow_dispatch.bxdf"), s_MaterialBindBxdfSource)
+        && WriteTextFile(JoinGraphicsPath2(assetRoot, s_MaterialsDirectory, "shadow_dispatch_first.nwb"), s_ShadowDispatchFirstMaterialMeta)
+        && WriteTextFile(JoinGraphicsPath2(assetRoot, s_MaterialsDirectory, "shadow_dispatch_second.nwb"), s_ShadowDispatchSecondMaterialMeta)
+    ;
+    ASSERT_TRUE(assetsWritten);
 
-        const Path engineAssetRoot = AssetsGraphicsTestRepoRoot(testArena) / "impl" / s_AssetsDirectory;
-        const b8 cooked = CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { engineAssetRoot, assetRoot });
-        EXPECT_TRUE(cooked);
-        EXPECT_EQ(logger.errorCount(), 0u);
-
-        EXPECT_TRUE(RemoveAllIfExists(root));
-    }
+    const GraphicsTestPath engineAssetRoot = JoinGraphicsPath2(GetGraphicsTestRepoRoot(testArena), "impl", s_AssetsDirectory);
+    const b8 cooked = CookTwoAssetRoots(testArena, prepared.root, prepared.outputDirectory, engineAssetRoot, assetRoot);
+    EXPECT_TRUE(cooked);
+    EXPECT_EQ(logger.errorCount(), 0u);
+    EXPECT_TRUE(RemoveAllIfExists(prepared.root));
 }
 
 void VerifyAssetsGraphics_MaterialRejectsMissingInterfaceCookIntegration(){
@@ -672,25 +377,19 @@ void VerifyAssetsGraphics_MaterialRejectsMissingInterfaceCookIntegration(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
     TestArena testArena = TestArena();
-    const Expected<CookCase> cookCase = PrepareAssetsGraphicsCookCase(testArena, "material_missing_interface_rejection");
+    const Expected<CookCase> cookCase = PrepareCookCase(testArena, "material_missing_interface_rejection");
     ASSERT_TRUE(cookCase.has_value());
     const CookCase prepared = cookCase.value();
 
-    b8 wroteAssets = false;
-    b8 cooked = true;
-    native(in prepared, mut testArena, mut wroteAssets, mut cooked){
-#if defined(NWB_FINAL)
-        const Path assetRoot = prepared.root / s_AssetsDirectory;
-        wroteAssets = MaterialBindFixture::WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(
-            testArena,
-            assetRoot,
-            s_MinimalMaterialBindSource,
-            s_MissingInterfaceMaterialMeta,
-            s_UnboundMaterialShaderProbeSource
-        );
-        cooked = CookPreparedGraphicsAssetRoots(testArena, prepared.root, prepared.outputDirectory, { assetRoot });
-#endif
-    }
+    const GraphicsTestPath assetRoot = JoinGraphicsPath(prepared.root, s_AssetsDirectory);
+    const b8 wroteAssets = WriteMaterialBindIntegrationAssetsWithPixel(
+        testArena,
+        assetRoot,
+        s_MinimalMaterialBindSource,
+        s_MissingInterfaceMaterialMeta,
+        UnboundMaterialShaderProbeText()
+    );
+    const b8 cooked = CookSingleAssetRoot(testArena, prepared.root, prepared.outputDirectory, assetRoot);
     EXPECT_TRUE(wroteAssets);
     EXPECT_FALSE(cooked);
     EXPECT_TRUE(SawCapturedError(logger, "interface is required"));
@@ -701,105 +400,102 @@ void VerifyAssetsGraphics_MaterialBindDependencyInvalidation(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
     TestArena testArena = TestArena();
-    native(in logger, mut testArena){
-        auto cookCase = PrepareAssetsGraphicsCookCase(testArena, "material_bind_dependency_invalidation");
-        ASSERT_TRUE(cookCase);
-        Path& root = cookCase->root;
-        Path& outputDirectory = cookCase->outputDirectory;
+    const Expected<CookCase> cookCase = PrepareCookCase(testArena, "material_bind_dependency_invalidation");
+    ASSERT_TRUE(cookCase.has_value());
+    const CookCase prepared = cookCase.value();
 
-        const Path assetRoot = root / s_AssetsDirectory;
-        ASSERT_TRUE(MaterialBindFixture::WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(
-            testArena, assetRoot, s_MinimalMaterialBindSource, s_BlockScopedMaterialMeta, s_MaterialBindShaderProbeSource
-        ));
+    const GraphicsTestPath assetRoot = JoinGraphicsPath(prepared.root, s_AssetsDirectory);
+    ASSERT_TRUE(WriteMaterialBindIntegrationAssetsWithPixel(
+        testArena,
+        assetRoot,
+        s_MinimalMaterialBindSource,
+        s_BlockScopedMaterialMeta,
+        s_MaterialBindShaderProbeSource
+    ));
 
-        EXPECT_TRUE(CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
+    EXPECT_TRUE(CookSingleAssetRoot(testArena, prepared.root, prepared.outputDirectory, assetRoot));
 
-        UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-        auto loadedAssetLoadResult = LoadCookedMaterial(testArena, outputDirectory, Name(s_ProjectMaterialsTestMaterial));
-        ASSERT_TRUE(loadedAssetLoadResult);
-        loadedAsset = Move(*loadedAssetLoadResult);
-        if(!loadedAsset)
-            return;
-
-        const NWB::Impl::Material& material = static_cast<const NWB::Impl::Material&>(*loadedAsset);
-        const u64 initialLayoutHash = material.typedLayoutHash();
-
-        NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record> records(testArena.arena);
-        auto recordsLoadResult = ShaderArchiveFixture::LoadCookedShaderArchiveRecords(testArena, outputDirectory);
-        ASSERT_TRUE(recordsLoadResult);
-        records = Move(*recordsLoadResult);
-        u64 initialPixelSourceChecksum = 0u;
-        auto initialPixelSourceChecksumLoadResult = ShaderArchiveFixture::FindShaderArchiveSourceChecksum(records, Name(s_MaterialPixelShaderPath), Name(s_ShaderStagePs));
-        ASSERT_TRUE(initialPixelSourceChecksumLoadResult);
-        initialPixelSourceChecksum = *initialPixelSourceChecksumLoadResult;
-
-        EXPECT_TRUE(WriteTextFile(assetRoot / s_MaterialInterfacesDirectory / s_SurfaceBindFilename, s_UpdatedDefaultMaterialBindSource));
-        EXPECT_TRUE(CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
-
-        loadedAsset.reset();
-        auto loadedAssetLoadResult2 = LoadCookedMaterial(testArena, outputDirectory, Name(s_ProjectMaterialsTestMaterial));
-        ASSERT_TRUE(loadedAssetLoadResult2);
-        loadedAsset = Move(*loadedAssetLoadResult2);
-        if(loadedAsset){
-            const NWB::Impl::Material& updatedMaterial = static_cast<const NWB::Impl::Material&>(*loadedAsset);
-            EXPECT_NE(updatedMaterial.typedLayoutHash(), initialLayoutHash);
-        }
-
-        records.clear();
-        auto recordsLoadResult2 = ShaderArchiveFixture::LoadCookedShaderArchiveRecords(testArena, outputDirectory);
-        ASSERT_TRUE(recordsLoadResult2);
-        records = Move(*recordsLoadResult2);
-        u64 updatedPixelSourceChecksum = 0u;
-        auto updatedPixelSourceChecksumLoadResult = ShaderArchiveFixture::FindShaderArchiveSourceChecksum(records, Name(s_MaterialPixelShaderPath), Name(s_ShaderStagePs));
-        ASSERT_TRUE(updatedPixelSourceChecksumLoadResult);
-        updatedPixelSourceChecksum = *updatedPixelSourceChecksumLoadResult;
-        EXPECT_NE(updatedPixelSourceChecksum, initialPixelSourceChecksum);
-        EXPECT_EQ(logger.errorCount(), 0u);
-
-        EXPECT_TRUE(RemoveAllIfExists(root));
+    MaterialAsset initialMaterial(testArena.arena);
+    {
+        Expected<MaterialAsset> loadedMaterial = LoadCookedMaterialAsset(testArena, prepared.outputDirectory, Name(s_ProjectMaterialsTestMaterial));
+        ASSERT_TRUE(loadedMaterial.has_value());
+        initialMaterial = loadedMaterial.value();
     }
+    const u64 initialLayoutHash = initialMaterial.typedLayoutHash();
+
+    ShaderArchiveRecordVector records(testArena.arena);
+    {
+        Expected<ShaderArchiveRecordVector> loadedRecords = LoadShaderArchiveRecords(testArena, prepared.outputDirectory);
+        ASSERT_TRUE(loadedRecords.has_value());
+        records = loadedRecords.value();
+    }
+    const Expected<u64> initialChecksumResult = FindTestShaderSourceChecksum(records, Name(s_MaterialPixelShaderPath), Name(s_ShaderStagePs));
+    ASSERT_TRUE(initialChecksumResult.has_value());
+    const u64 initialPixelSourceChecksum = initialChecksumResult.value();
+
+    EXPECT_TRUE(WriteTextFile(JoinGraphicsPath2(assetRoot, s_MaterialInterfacesDirectory, s_SurfaceBindFilename), s_UpdatedDefaultMaterialBindSource));
+    EXPECT_TRUE(CookSingleAssetRoot(testArena, prepared.root, prepared.outputDirectory, assetRoot));
+
+    MaterialAsset updatedMaterial(testArena.arena);
+    {
+        Expected<MaterialAsset> loadedMaterial2 = LoadCookedMaterialAsset(testArena, prepared.outputDirectory, Name(s_ProjectMaterialsTestMaterial));
+        ASSERT_TRUE(loadedMaterial2.has_value());
+        updatedMaterial = loadedMaterial2.value();
+    }
+    EXPECT_NE(updatedMaterial.typedLayoutHash(), initialLayoutHash);
+
+    ShaderArchiveRecordVector updatedRecords(testArena.arena);
+    {
+        Expected<ShaderArchiveRecordVector> loadedRecords2 = LoadShaderArchiveRecords(testArena, prepared.outputDirectory);
+        ASSERT_TRUE(loadedRecords2.has_value());
+        updatedRecords = loadedRecords2.value();
+    }
+    const Expected<u64> updatedChecksumResult = FindTestShaderSourceChecksum(updatedRecords, Name(s_MaterialPixelShaderPath), Name(s_ShaderStagePs));
+    ASSERT_TRUE(updatedChecksumResult.has_value());
+    EXPECT_NE(updatedChecksumResult.value(), initialPixelSourceChecksum);
+    EXPECT_EQ(logger.errorCount(), 0u);
+
+    EXPECT_TRUE(RemoveAllIfExists(prepared.root));
 }
 
 void VerifyAssetsGraphics_MaterialBindDiscoveryValidation(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistrationGuard(logger, s_BreakOnFatal);
     TestArena testArena = TestArena();
-    native(in logger, mut testArena){
-        auto cookCase = PrepareAssetsGraphicsCookCase(testArena, "material_bind_valid");
-        ASSERT_TRUE(cookCase);
-        Path& root = cookCase->root;
-        Path& outputDirectory = cookCase->outputDirectory;
-        EXPECT_TRUE(MaterialBindFixture::CookMinimalMeshWithMaterialBind(s_MinimalMaterialBindSource, *cookCase, testArena));
+    const Expected<CookCase> cookCase = PrepareCookCase(testArena, "material_bind_valid");
+    ASSERT_TRUE(cookCase.has_value());
+    const CookCase prepared = cookCase.value();
+    EXPECT_TRUE(CookMinimalMeshWithMaterialBind(s_MinimalMaterialBindSource, prepared, testArena));
 
-        const Path generatedIncludePath = root / s_CacheDirectory / s_TestsConfiguration / s_MaterialBindIncludesDirectory / s_ProjectVirtualRoot / s_MaterialInterfacesDirectory / s_SurfaceBindFilename;
-        // Removing the last bind source must clear its generated include on a recook with the same cache.
-        const Path assetRoot = root / s_AssetsDirectory;
-        const auto removedBind = RemoveFile(assetRoot / s_MaterialInterfacesDirectory / s_SurfaceBindFilename);
-        ASSERT_TRUE(removedBind);
-        ASSERT_TRUE(*removedBind);
-        ASSERT_TRUE(CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
-        const auto generatedIncludeExists = FileExists(generatedIncludePath);
-        ASSERT_TRUE(generatedIncludeExists);
-        EXPECT_FALSE(*generatedIncludeExists);
-        EXPECT_EQ(logger.errorCount(), 0u);
-        EXPECT_TRUE(RemoveAllIfExists(root));
-#if defined(NWB_FINAL)
-        auto duplicateIncludeCookCase = PrepareAssetsGraphicsCookCase(testArena, "material_bind_duplicate_include_path");
-        ASSERT_TRUE(duplicateIncludeCookCase);
-        Path& duplicateIncludeRoot = duplicateIncludeCookCase->root;
-        EXPECT_FALSE(MaterialBindFixture::EmitDuplicateGeneratedMaterialBindIncludePath(testArena, *duplicateIncludeCookCase));
-        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("duplicate material bind include path 'project/material_interfaces/test_surface.bind'")));
+    const GraphicsTestPath cacheSubdir = JoinGraphicsPath3(prepared.root, s_CacheDirectory, s_TestsConfiguration, s_MaterialBindIncludesDirectory);
+    const GraphicsTestPath generatedIncludePath = JoinGraphicsPath3(cacheSubdir, s_ProjectVirtualRoot, s_MaterialInterfacesDirectory, s_SurfaceBindFilename);
 
-        EXPECT_TRUE(RemoveAllIfExists(duplicateIncludeRoot));
+    // Removing the last bind source clears its generated include on recook.
+    const GraphicsTestPath assetRoot = JoinGraphicsPath(prepared.root, s_AssetsDirectory);
+    const Expected<b8, ErrorCode> removedBind = RemoveFile(JoinGraphicsPath2(assetRoot, s_MaterialInterfacesDirectory, s_SurfaceBindFilename));
+    ASSERT_TRUE(removedBind.has_value());
+    ASSERT_TRUE(removedBind.value());
+    ASSERT_TRUE(CookSingleAssetRoot(testArena, prepared.root, prepared.outputDirectory, assetRoot));
+    const Expected<b8, ErrorCode> generatedIncludeExists = FileExists(generatedIncludePath);
+    ASSERT_TRUE(generatedIncludeExists.has_value());
+    EXPECT_FALSE(generatedIncludeExists.value());
+    EXPECT_EQ(logger.errorCount(), 0u);
+    EXPECT_TRUE(RemoveAllIfExists(prepared.root));
 
-        auto invalidCookCase = PrepareAssetsGraphicsCookCase(testArena, "material_bind_duplicate_field");
-        ASSERT_TRUE(invalidCookCase);
-        Path& invalidRoot = invalidCookCase->root;
-        EXPECT_FALSE(MaterialBindFixture::CookMinimalMeshWithMaterialBind(s_DuplicateFieldMaterialBindSource, *invalidCookCase, testArena));
-        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("duplicate struct field declaration")));
+    if(AssetsGraphicsTestConfigurationName() == "fin"){
+        const Expected<CookCase> duplicateIncludeCookCase = PrepareCookCase(testArena, "material_bind_duplicate_include_path");
+        ASSERT_TRUE(duplicateIncludeCookCase.has_value());
+        const CookCase duplicateCase = duplicateIncludeCookCase.value();
+        EXPECT_FALSE(CanEmitDuplicateMaterialBindIncludePath(testArena, duplicateCase));
+        EXPECT_TRUE(SawCapturedError(logger, "duplicate material bind include path 'project/material_interfaces/test_surface.bind'"));
+        EXPECT_TRUE(RemoveAllIfExists(duplicateCase.root));
 
-        EXPECT_TRUE(RemoveAllIfExists(invalidRoot));
-#endif
+        const Expected<CookCase> invalidCookCase = PrepareCookCase(testArena, "material_bind_duplicate_field");
+        ASSERT_TRUE(invalidCookCase.has_value());
+        const CookCase invalidCase = invalidCookCase.value();
+        EXPECT_FALSE(CookMinimalMeshWithMaterialBind(s_DuplicateFieldMaterialBindSource, invalidCase, testArena));
+        EXPECT_TRUE(SawCapturedError(logger, "duplicate struct field declaration"));
+        EXPECT_TRUE(RemoveAllIfExists(invalidCase.root));
     }
 }
 
@@ -811,14 +507,8 @@ void VerifyAssetsGraphics_MaterialCookRejectsMissingAvboitPixelShaders(){
     LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
     TestArena testArena = TestArena();
     ScratchArena scratchArena(s_MaterialScratchArena);
-    b8 transparentBuilt = true;
-    b8 refractiveBuilt = true;
-    native(mut testArena, mut scratchArena, mut transparentBuilt, mut refractiveBuilt){
-#if defined(NWB_FINAL)
-        transparentBuilt = BuildMaterialFromBindAndMeta(s_MinimalMaterialBindSource, s_TransparentMaterialMeta, "material_cook_missing_avboit_transparent", testArena, scratchArena).has_value();
-        refractiveBuilt = BuildMaterialFromBindAndMeta(s_MinimalMaterialBindSource, s_RefractiveMaterialMeta, "material_cook_missing_avboit_refractive", testArena, scratchArena).has_value();
-#endif
-    }
+    const b8 transparentBuilt = BuildTestMaterialFromBindAndMeta(s_MinimalMaterialBindSource, s_TransparentMaterialMeta, "material_cook_missing_avboit_transparent", testArena, scratchArena).has_value();
+    const b8 refractiveBuilt = BuildTestMaterialFromBindAndMeta(s_MinimalMaterialBindSource, s_RefractiveMaterialMeta, "material_cook_missing_avboit_refractive", testArena, scratchArena).has_value();
     EXPECT_FALSE(transparentBuilt);
     EXPECT_FALSE(refractiveBuilt);
     EXPECT_EQ(logger.errorCount(), 2u);
@@ -860,12 +550,9 @@ void VerifyAssetsGraphics_MaterialMetadataRejectsExplicitOpticalStages(){
     for(u32 opticalIndex = 0u; opticalIndex < 2u; ++opticalIndex){
         CapturingLogger logger = CapturingLogger();
         LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
-        StringView metaText = "";
-        native(in opticalIndex, mut metaText){
-#if defined(NWB_FINAL)
-            metaText = opticalIndex == 0u ? s_ExplicitTransparentMaterialMeta : s_ExplicitRefractiveMaterialMeta;
-#endif
-        }
+        StringView metaText = s_ExplicitRefractiveMaterialMeta;
+        if(opticalIndex == 0u)
+            metaText = s_ExplicitTransparentMaterialMeta;
         EXPECT_FALSE(CanParseMaterialMeta(metaText, testArena, scratchArena));
         EXPECT_TRUE(SawCapturedError(logger, "explicit 'shaders' cannot be used with transparent/refractive materials"));
     }
@@ -917,26 +604,19 @@ void VerifyAssetsGraphics_MaterialCodecTypedLayoutBoundary(){
     {
         CapturingLogger logger = CapturingLogger();
         LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
-        b8 builtOk = false;
-        native(mut testArena, mut scratchArena, mut material, mut builtOk){
-#if defined(NWB_FINAL)
-            auto built = BuildMaterialFromBindAndMeta(s_MinimalMaterialBindSource, s_BlockScopedMaterialMeta, "material_codec_typed_layout_boundary", testArena, scratchArena);
-            EXPECT_TRUE(built);
-            if(built){
-                material = Move(*built);
-                builtOk = true;
-                NWB::Impl::MaterialAssetCodec codec;
-                material.setTransparent(true);
-                NWB::Core::Assets::AssetBytes invalidBinary = MakeAssetBytes(testArena);
-                EXPECT_FALSE(codec.serialize(material, invalidBinary));
-                EXPECT_TRUE(invalidBinary.empty());
-                SetGeneratedMaterialAvboitPixelShaders(material);
-                ASSERT_TRUE(RoundTripMaterialAssetCodec(material, testArena, codec));
-            }
-#endif
-        }
-        if(!builtOk)
+        Expected<MaterialAsset> built = BuildTestMaterialFromBindAndMeta(s_MinimalMaterialBindSource, s_BlockScopedMaterialMeta, "material_codec_typed_layout_boundary", testArena, scratchArena);
+        EXPECT_TRUE(built.has_value());
+        if(!built.has_value())
             return;
+        material = built.value();
+
+        MaterialAssetCodec codec = MaterialAssetCodec();
+        material.setTransparent(true);
+        AssetBytes invalidBinary = MakeAssetBytes(testArena);
+        EXPECT_FALSE(SerializeMaterialAsset(codec, material, invalidBinary));
+        EXPECT_TRUE(invalidBinary.empty());
+        SetGeneratedMaterialAvboitPixelShaders(material);
+        ASSERT_TRUE(CanRoundTripMaterialAssetCodec(material, testArena, codec));
         EXPECT_TRUE(SawCapturedError(logger, "AVBOIT pixel shaders must be present if and only if the material is transparent"));
         EXPECT_EQ(logger.errorCount(), 1u);
     }
@@ -944,40 +624,42 @@ void VerifyAssetsGraphics_MaterialCodecTypedLayoutBoundary(){
     {
         CapturingLogger logger = CapturingLogger();
         LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
-        native(in material, mut testArena){
-#if defined(NWB_FINAL)
-            NWB::Impl::MaterialAssetCodec codec;
-            NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
-            EXPECT_TRUE(codec.serialize(material, binary));
+        MaterialAssetCodec codec = MaterialAssetCodec();
+        AssetBytes binary = MakeAssetBytes(testArena);
+        EXPECT_TRUE(SerializeMaterialAsset(codec, material, binary));
 
-            const auto typedLayoutOffsets = FindMaterialBinaryTypedLayoutOffsets(binary);
-            ASSERT_TRUE(typedLayoutOffsets);
-            const usize layoutHashOffset = typedLayoutOffsets->layoutHashOffset;
-            const usize blockByteCountOffset = typedLayoutOffsets->blockByteCountOffset;
+        const Expected<MaterialBinaryTypedLayoutOffsets> typedLayoutOffsets = FindTestMaterialBinaryTypedLayoutOffsets(binary);
+        ASSERT_TRUE(typedLayoutOffsets.has_value());
+        const usize layoutHashOffset = typedLayoutOffsets.value().layoutHashOffset;
+        const usize blockByteCountOffset = typedLayoutOffsets.value().blockByteCountOffset;
 
-            NWB::Core::Assets::AssetBytes retiredFixtureLayoutBinary = binary;
-            EXPECT_TRUE(OverwritePOD(0u, u32{ 0x4D544C39u }, retiredFixtureLayoutBinary));
-            CheckCodecRejectsBinary(codec, material.virtualPath(), retiredFixtureLayoutBinary, testArena);
+        AssetBytes retiredFixtureLayoutBinary = MakeAssetBytes(testArena);
+        CopyAssetBytes(binary, retiredFixtureLayoutBinary);
+        EXPECT_TRUE(OverwriteU32InAssetBytes(0u, 0x4D544C39u, retiredFixtureLayoutBinary));
+        RejectMaterialCodecBinary(codec, material.virtualPath(), retiredFixtureLayoutBinary, testArena);
 
-            NWB::Core::Assets::AssetBytes hashMismatchBinary = binary;
-            const u64 invalidLayoutHash = material.typedLayoutHash() == Limit<u64>::s_Max ? material.typedLayoutHash() - 1u : material.typedLayoutHash() + 1u;
-            EXPECT_TRUE(OverwritePOD(layoutHashOffset, invalidLayoutHash, hashMismatchBinary));
-            CheckCodecRejectsBinary(codec, material.virtualPath(), hashMismatchBinary, testArena);
+        AssetBytes hashMismatchBinary = MakeAssetBytes(testArena);
+        CopyAssetBytes(binary, hashMismatchBinary);
+        u64 invalidLayoutHash = material.typedLayoutHash() + 1u;
+        if(material.typedLayoutHash() == u64.max)
+            invalidLayoutHash = material.typedLayoutHash() - 1u;
+        EXPECT_TRUE(OverwriteU64InAssetBytes(layoutHashOffset, invalidLayoutHash, hashMismatchBinary));
+        RejectMaterialCodecBinary(codec, material.virtualPath(), hashMismatchBinary, testArena);
 
-            NWB::Core::Assets::AssetBytes byteSizeMismatchBinary = binary;
-            EXPECT_FALSE(material.typedBlockBytes().empty());
-            EXPECT_TRUE(OverwritePOD(blockByteCountOffset, static_cast<u32>(material.typedBlockBytes().size() - 1u), byteSizeMismatchBinary));
-            CheckCodecRejectsBinary(codec, material.virtualPath(), byteSizeMismatchBinary, testArena);
+        AssetBytes byteSizeMismatchBinary = MakeAssetBytes(testArena);
+        CopyAssetBytes(binary, byteSizeMismatchBinary);
+        EXPECT_FALSE(material.typedBlockBytes().empty());
+        EXPECT_TRUE(OverwriteU32InAssetBytes(blockByteCountOffset, cast<u32>(material.typedBlockBytes().size() - 1u), byteSizeMismatchBinary));
+        RejectMaterialCodecBinary(codec, material.virtualPath(), byteSizeMismatchBinary, testArena);
 
-            constexpr usize s_AvboitPixelShaderBinaryBytes = sizeof(u32) + sizeof(NameHash);
-            ASSERT_GE(binary.size(), s_AvboitPixelShaderBinaryBytes * 3u);
-            const usize occupancyPresenceOffset = binary.size() - s_AvboitPixelShaderBinaryBytes * 2u;
-            NWB::Core::Assets::AssetBytes missingOccupancyBinary = binary;
-            EXPECT_TRUE(OverwritePOD(occupancyPresenceOffset, static_cast<u32>(0u), missingOccupancyBinary));
-            missingOccupancyBinary.erase(missingOccupancyBinary.begin() + occupancyPresenceOffset + sizeof(u32), missingOccupancyBinary.begin() + occupancyPresenceOffset + s_AvboitPixelShaderBinaryBytes);
-            CheckCodecRejectsBinary(codec, material.virtualPath(), missingOccupancyBinary, testArena);
-#endif
-        }
+        ASSERT_GE(binary.size(), s_AvboitPixelShaderEntryBytes * 3u);
+        const usize occupancyPresenceOffset = binary.size() - s_AvboitPixelShaderEntryBytes * 2u;
+        AssetBytes missingOccupancyBinary = MakeAssetBytes(testArena);
+        CopyAssetBytes(binary, missingOccupancyBinary);
+        EXPECT_TRUE(OverwriteU32InAssetBytes(occupancyPresenceOffset, 0u, missingOccupancyBinary));
+        EraseAssetByteRange(missingOccupancyBinary, occupancyPresenceOffset + 4u, occupancyPresenceOffset + s_AvboitPixelShaderEntryBytes);
+        RejectMaterialCodecBinary(codec, material.virtualPath(), missingOccupancyBinary, testArena);
+
         EXPECT_EQ(logger.errorCount(), 4u);
         EXPECT_TRUE(SawCapturedError(logger, "typed layout hash mismatch"));
         EXPECT_TRUE(SawCapturedError(logger, "typed block byte count does not match typed layout"));
@@ -990,81 +672,84 @@ void VerifyAssetsGraphics_MaterialFailedReloadPreservesTypedLayoutStagesFlagsAnd
     LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
     TestArena testArena = TestArena();
     ScratchArena scratchArena(s_MaterialScratchArena);
-    native(in logger, mut testArena, mut scratchArena){
-        auto built = BuildMaterialFromBindAndMeta(s_MinimalMaterialBindSource, s_BlockScopedMaterialMeta, "material_reload_admission", testArena, scratchArena);
-        ASSERT_TRUE(built);
-        NWB::Impl::Material material = Move(*built);
-        material.setTransparent(true);
-        material.setTwoSided(true);
-        material.setAvboitAccumulatePixelShader(NWB::Core::Assets::AssetRef<NWB::Impl::PixelShader>("project/shaders/reload_accumulate"));
-        material.setAvboitOccupancyPixelShader(NWB::Core::Assets::AssetRef<NWB::Impl::PixelShader>("project/shaders/reload_occupancy"));
-        material.setAvboitExtinctionPixelShader(NWB::Core::Assets::AssetRef<NWB::Impl::PixelShader>("project/shaders/reload_extinction"));
-        NWB::Impl::MaterialAssetCodec codec;
-        NWB::Core::Assets::AssetBytes binary(testArena.arena);
-        ASSERT_TRUE(codec.serialize(material, binary));
-        ASSERT_TRUE(material.loadBinary(binary));
-        for(usize prefix = 0u; prefix < binary.size(); ++prefix){
-            NWB::Core::Assets::AssetBytes malformed(binary);
-            malformed.resize(prefix);
-            EXPECT_FALSE(material.loadBinary(malformed)) << prefix;
-            NWB::Core::Assets::AssetBytes retained(testArena.arena);
-            ASSERT_TRUE(codec.serialize(material, retained));
-            EXPECT_EQ(retained, binary) << prefix;
-        }
-        const auto layoutOffsets = FindMaterialBinaryTypedLayoutOffsets(binary);
-        ASSERT_TRUE(layoutOffsets);
-        // The first stage entry follows the block bytes, resource references, and stage count.
-        const usize firstStageOffset = layoutOffsets->blockByteCountOffset + sizeof(u32) + material.typedBlockBytes().size() + sizeof(u32) + material.resourceReferences().size() * NWB::Impl::s_MaterialResourceReferenceBytes + sizeof(u32);
-        for(u32 invalidCase = 0u; invalidCase < 5u; ++invalidCase){
-            NWB::Core::Assets::AssetBytes malformed(binary);
-            switch(invalidCase){
-            case 0u:
-                ASSERT_TRUE(OverwritePOD(0u, u32{ 0u }, malformed));
-                break;
-            case 1u:
-                ASSERT_TRUE(OverwritePOD(layoutOffsets->layoutHashOffset, u64{ 0u }, malformed));
-                break;
-            case 2u:
-                ASSERT_TRUE(OverwritePOD(binary.size() - sizeof(NameHash) - sizeof(u32), u32{ 2u }, malformed));
-                break;
-            case 3u:
-                malformed.push_back(0u);
-                break;
-            case 4u:
-                // A vertex stage is a real shader stage, but materials only hold mesh and pixel.
-                ASSERT_TRUE(OverwritePOD(firstStageOffset, NWB::Core::ShaderType::VertexStage, malformed));
-                break;
-            }
-            EXPECT_FALSE(material.loadBinary(malformed)) << invalidCase;
-            NWB::Core::Assets::AssetBytes retained(testArena.arena);
-            ASSERT_TRUE(codec.serialize(material, retained));
-            EXPECT_EQ(retained, binary) << invalidCase;
-        }
-        EXPECT_EQ(logger.errorCount(), binary.size() + 5u);
-        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("is not a material stage")));
+
+    MaterialAsset material(testArena.arena);
+    {
+        Expected<MaterialAsset> built = BuildTestMaterialFromBindAndMeta(s_MinimalMaterialBindSource, s_BlockScopedMaterialMeta, "material_reload_admission", testArena, scratchArena);
+        ASSERT_TRUE(built.has_value());
+        material = built.value();
     }
+    material.setTransparent(true);
+    material.setTwoSided(true);
+    SetReloadMaterialAvboitPixelShaders(material);
+
+    MaterialAssetCodec codec = MaterialAssetCodec();
+    AssetBytes binary = MakeAssetBytes(testArena);
+    ASSERT_TRUE(SerializeMaterialAsset(codec, material, binary));
+    ASSERT_TRUE(LoadMaterialAssetBinary(material, binary));
+
+    for(usize prefix = 0u; prefix < binary.size(); ++prefix){
+        const ScopedTestTrace trace(prefix);
+        AssetBytes malformed = MakeAssetBytes(testArena);
+        CopyAssetBytes(binary, malformed);
+        malformed.resize(prefix);
+        EXPECT_FALSE(LoadMaterialAssetBinary(material, malformed));
+        AssetBytes retained = MakeAssetBytes(testArena);
+        ASSERT_TRUE(SerializeMaterialAsset(codec, material, retained));
+        EXPECT_EQ(retained, binary);
+    }
+
+    const Expected<MaterialBinaryTypedLayoutOffsets> layoutOffsets = FindTestMaterialBinaryTypedLayoutOffsets(binary);
+    ASSERT_TRUE(layoutOffsets.has_value());
+
+    // First stage entry follows block bytes, resource references, and stage count.
+    const usize firstStageOffset = layoutOffsets.value().blockByteCountOffset + 4u + material.typedBlockBytes().size() + 4u + material.resourceReferences().size() * s_MaterialResourceReferenceBytes + 4u;
+    for(u32 invalidCase = 0u; invalidCase < 5u; ++invalidCase){
+        const ScopedTestTrace trace(invalidCase);
+        AssetBytes malformed = MakeAssetBytes(testArena);
+        CopyAssetBytes(binary, malformed);
+        switch(invalidCase){
+        case 0u:
+            ASSERT_TRUE(OverwriteU32InAssetBytes(0u, 0u, malformed));
+            break;
+        case 1u:
+            ASSERT_TRUE(OverwriteU64InAssetBytes(layoutOffsets.value().layoutHashOffset, 0ull, malformed));
+            break;
+        case 2u:
+            ASSERT_TRUE(OverwriteU32InAssetBytes(binary.size() - s_AvboitPixelShaderEntryBytes, 2u, malformed));
+            break;
+        case 3u:
+            malformed.push_back(0u);
+            break;
+        case 4u:
+            // Materials only hold mesh and pixel stages.
+            ASSERT_TRUE(OverwriteVertexStageInMaterialBytes(firstStageOffset, malformed));
+            break;
+        default: break;
+        }
+        EXPECT_FALSE(LoadMaterialAssetBinary(material, malformed));
+        AssetBytes retained = MakeAssetBytes(testArena);
+        ASSERT_TRUE(SerializeMaterialAsset(codec, material, retained));
+        EXPECT_EQ(retained, binary);
+    }
+    EXPECT_EQ(logger.errorCount(), binary.size() + 5u);
+    EXPECT_TRUE(SawCapturedError(logger, "is not a material stage"));
 }
 
 void VerifyAssetsGraphics_MeshAcceptanceHardEdgeCubeZippedRefs(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
     TestArena testArena = TestArena();
-    const Expected<CookCase> cookCase = PrepareAssetsGraphicsCookCase(testArena, "hard_edge_cube");
+    const Expected<CookCase> cookCase = PrepareCookCase(testArena, "hard_edge_cube");
     ASSERT_TRUE(cookCase.has_value());
     const CookCase prepared = cookCase.value();
 
     MeshAsset loadedMesh(testArena.arena);
     if(CookAndLoadSmokeMeshInto("cube_hard_edges.nwb", s_AssetCaseProjectMeshesCubeHardEdges, prepared, testArena, loadedMesh)){
         ASSERT_EQ(loadedMesh.meshlets().size(), 1u);
-        native(in loadedMesh){
-            const NWB::Impl::MeshletDesc& meshlet = loadedMesh.meshlets()[0];
-            const auto& localRefs = loadedMesh.meshletLocalVertexRefs();
-            const auto& positions = loadedMesh.positionStream();
-            const auto& normals = loadedMesh.normalStream();
-            EXPECT_TRUE(TestMeshletHasPositionNormalValue(loadedMesh, meshlet, positions, normals, localRefs, Float3U(-0.5f, -0.5f, -0.5f), Float4U(0.0f, 0.0f, -1.0f, 0.0f)));
-            EXPECT_TRUE(TestMeshletHasPositionNormalValue(loadedMesh, meshlet, positions, normals, localRefs, Float3U(-0.5f, -0.5f, -0.5f), Float4U(0.0f, -1.0f, 0.0f, 0.0f)));
-            EXPECT_TRUE(TestMeshletHasPositionNormalValue(loadedMesh, meshlet, positions, normals, localRefs, Float3U(-0.5f, -0.5f, -0.5f), Float4U(-1.0f, 0.0f, 0.0f, 0.0f)));
-        }
+        EXPECT_TRUE(MeshAssetHasPositionNormal(loadedMesh, 0u, -0.5f, -0.5f, -0.5f, 0.0f, 0.0f, -1.0f, 0.0f));
+        EXPECT_TRUE(MeshAssetHasPositionNormal(loadedMesh, 0u, -0.5f, -0.5f, -0.5f, 0.0f, -1.0f, 0.0f, 0.0f));
+        EXPECT_TRUE(MeshAssetHasPositionNormal(loadedMesh, 0u, -0.5f, -0.5f, -0.5f, -1.0f, 0.0f, 0.0f, 0.0f));
     }
     EXPECT_EQ(logger.errorCount(), 0u);
     EXPECT_TRUE(RemoveAllIfExists(prepared.root));
@@ -1074,7 +759,7 @@ void VerifyAssetsGraphics_OpposedSphereNormalsDisableMeshletCone(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
     TestArena testArena = TestArena();
-    const Expected<CookCase> cookCase = PrepareAssetsGraphicsCookCase(testArena, "sphere_smooth");
+    const Expected<CookCase> cookCase = PrepareCookCase(testArena, "sphere_smooth");
     ASSERT_TRUE(cookCase.has_value());
     const CookCase prepared = cookCase.value();
 
@@ -1091,7 +776,7 @@ void VerifyAssetsGraphics_MeshAcceptanceUvSeamQuad(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
     TestArena testArena = TestArena();
-    const Expected<CookCase> cookCase = PrepareAssetsGraphicsCookCase(testArena, "uv_seam_quad");
+    const Expected<CookCase> cookCase = PrepareCookCase(testArena, "uv_seam_quad");
     ASSERT_TRUE(cookCase.has_value());
     const CookCase prepared = cookCase.value();
 
@@ -1103,26 +788,24 @@ void VerifyAssetsGraphics_MeshAcceptanceUvSeamQuad(){
         EXPECT_EQ(loadedMesh.meshletLocalVertexRefs()[2u].localDeformedPosition, loadedMesh.meshletLocalVertexRefs()[4u].localDeformedPosition);
         EXPECT_NE(loadedMesh.meshletLocalVertexRefs()[0u].localAttribute, loadedMesh.meshletLocalVertexRefs()[3u].localAttribute);
         EXPECT_NE(loadedMesh.meshletLocalVertexRefs()[2u].localAttribute, loadedMesh.meshletLocalVertexRefs()[4u].localAttribute);
-        native(in loadedMesh){
-            const NWB::Impl::MeshletDesc& meshlet = loadedMesh.meshlets()[0u];
-            const auto& localRefs = loadedMesh.meshletLocalVertexRefs();
-            const auto attributeRef0 = TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[0u].localAttribute);
-            const auto attributeRef2 = TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[2u].localAttribute);
-            const auto attributeRef3 = TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[3u].localAttribute);
-            const auto attributeRef4 = TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[4u].localAttribute);
-            ASSERT_TRUE(attributeRef0);
-            ASSERT_TRUE(attributeRef2);
-            ASSERT_TRUE(attributeRef3);
-            ASSERT_TRUE(attributeRef4);
-            EXPECT_EQ(attributeRef0->uv0, 0u);
-            EXPECT_EQ(attributeRef2->uv0, 2u);
-            EXPECT_EQ(attributeRef3->uv0, 1u);
-            EXPECT_EQ(attributeRef4->uv0, 3u);
-            EXPECT_EQ(attributeRef0->tangent, 0u);
-            EXPECT_EQ(attributeRef2->tangent, 0u);
-            EXPECT_EQ(attributeRef3->tangent, 1u);
-            EXPECT_EQ(attributeRef4->tangent, 1u);
-        }
+
+        const MeshletDesc meshlet = loadedMesh.meshlets()[0u];
+        const Expected<MeshletAttributeStreamRef> attributeRef0 = DecodeMeshAssetAttributeRef(loadedMesh, meshlet, loadedMesh.meshletLocalVertexRefs()[0u].localAttribute);
+        const Expected<MeshletAttributeStreamRef> attributeRef2 = DecodeMeshAssetAttributeRef(loadedMesh, meshlet, loadedMesh.meshletLocalVertexRefs()[2u].localAttribute);
+        const Expected<MeshletAttributeStreamRef> attributeRef3 = DecodeMeshAssetAttributeRef(loadedMesh, meshlet, loadedMesh.meshletLocalVertexRefs()[3u].localAttribute);
+        const Expected<MeshletAttributeStreamRef> attributeRef4 = DecodeMeshAssetAttributeRef(loadedMesh, meshlet, loadedMesh.meshletLocalVertexRefs()[4u].localAttribute);
+        ASSERT_TRUE(attributeRef0.has_value());
+        ASSERT_TRUE(attributeRef2.has_value());
+        ASSERT_TRUE(attributeRef3.has_value());
+        ASSERT_TRUE(attributeRef4.has_value());
+        EXPECT_EQ(attributeRef0.value().uv0, 0u);
+        EXPECT_EQ(attributeRef2.value().uv0, 2u);
+        EXPECT_EQ(attributeRef3.value().uv0, 1u);
+        EXPECT_EQ(attributeRef4.value().uv0, 3u);
+        EXPECT_EQ(attributeRef0.value().tangent, 0u);
+        EXPECT_EQ(attributeRef2.value().tangent, 0u);
+        EXPECT_EQ(attributeRef3.value().tangent, 1u);
+        EXPECT_EQ(attributeRef4.value().tangent, 1u);
     }
     EXPECT_EQ(logger.errorCount(), 0u);
     EXPECT_TRUE(RemoveAllIfExists(prepared.root));
@@ -1132,26 +815,23 @@ void VerifyAssetsGraphics_MeshAcceptanceMirroredUvQuad(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
     TestArena testArena = TestArena();
-    const Expected<CookCase> cookCase = PrepareAssetsGraphicsCookCase(testArena, "mirrored_uv_quad");
+    const Expected<CookCase> cookCase = PrepareCookCase(testArena, "mirrored_uv_quad");
     ASSERT_TRUE(cookCase.has_value());
     const CookCase prepared = cookCase.value();
 
     MeshAsset loadedMesh(testArena.arena);
     if(CookAndLoadSmokeMeshInto("mirrored_uv_quad.nwb", s_AssetCaseProjectMeshesMirroredUvQuad, prepared, testArena, loadedMesh)){
-        EXPECT_EQ(loadedMesh.tangentStream().size(), 2u);
-        native(in loadedMesh){
-            EXPECT_EQ(LoadHalf4U(loadedMesh.tangentStream()[0u]).w, 1.0f);
-            EXPECT_EQ(LoadHalf4U(loadedMesh.tangentStream()[1u]).w, -1.0f);
+        ASSERT_EQ(loadedMesh.tangentStream().size(), 2u);
+        EXPECT_EQ(LoadHalf4U(loadedMesh.tangentStream()[0u]).w, 1.0f);
+        EXPECT_EQ(LoadHalf4U(loadedMesh.tangentStream()[1u]).w, -1.0f);
 
-            const NWB::Impl::MeshletDesc& meshlet = loadedMesh.meshlets()[0u];
-            const auto& localRefs = loadedMesh.meshletLocalVertexRefs();
-            const auto attributeRef0 = TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[0u].localAttribute);
-            const auto attributeRef3 = TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[3u].localAttribute);
-            ASSERT_TRUE(attributeRef0);
-            ASSERT_TRUE(attributeRef3);
-            EXPECT_EQ(attributeRef0->tangent, 0u);
-            EXPECT_EQ(attributeRef3->tangent, 1u);
-        }
+        const MeshletDesc meshlet = loadedMesh.meshlets()[0u];
+        const Expected<MeshletAttributeStreamRef> attributeRef0 = DecodeMeshAssetAttributeRef(loadedMesh, meshlet, loadedMesh.meshletLocalVertexRefs()[0u].localAttribute);
+        const Expected<MeshletAttributeStreamRef> attributeRef3 = DecodeMeshAssetAttributeRef(loadedMesh, meshlet, loadedMesh.meshletLocalVertexRefs()[3u].localAttribute);
+        ASSERT_TRUE(attributeRef0.has_value());
+        ASSERT_TRUE(attributeRef3.has_value());
+        EXPECT_EQ(attributeRef0.value().tangent, 0u);
+        EXPECT_EQ(attributeRef3.value().tangent, 1u);
     }
     EXPECT_EQ(logger.errorCount(), 0u);
     EXPECT_TRUE(RemoveAllIfExists(prepared.root));
@@ -1161,7 +841,7 @@ void VerifyAssetsGraphics_MeshAcceptanceTwoSidedPlane(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
     TestArena testArena = TestArena();
-    const Expected<CookCase> cookCase = PrepareAssetsGraphicsCookCase(testArena, "two_sided_plane");
+    const Expected<CookCase> cookCase = PrepareCookCase(testArena, "two_sided_plane");
     ASSERT_TRUE(cookCase.has_value());
     const CookCase prepared = cookCase.value();
 
@@ -1169,9 +849,9 @@ void VerifyAssetsGraphics_MeshAcceptanceTwoSidedPlane(){
     if(CookAndLoadSmokeMeshInto("two_sided_plane.nwb", s_AssetCaseProjectMeshesTwoSidedPlane, prepared, testArena, loadedMesh)){
         usize positionRefCount = 0u;
         usize attributeRefCount = 0u;
-        native(in loadedMesh, mut positionRefCount, mut attributeRefCount){
-            positionRefCount = TestMeshletLogicalPositionRefCount(loadedMesh);
-            attributeRefCount = TestMeshletLogicalAttributeRefCount(loadedMesh);
+        for(in MeshletDesc meshlet : loadedMesh.meshlets()){
+            positionRefCount += cast<usize>(MeshletPositionCount(meshlet));
+            attributeRefCount += cast<usize>(MeshletAttributeCount(meshlet));
         }
         EXPECT_EQ(positionRefCount, 3u);
         EXPECT_EQ(attributeRefCount, 6u);
@@ -1185,7 +865,7 @@ void VerifyAssetsGraphics_MeshAcceptanceLargeManyMeshlets(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
     TestArena testArena = TestArena();
-    const Expected<CookCase> cookCase = PrepareAssetsGraphicsCookCase(testArena, "large_mesh_many_meshlets");
+    const Expected<CookCase> cookCase = PrepareCookCase(testArena, "large_mesh_many_meshlets");
     ASSERT_TRUE(cookCase.has_value());
     const CookCase prepared = cookCase.value();
 
@@ -1208,34 +888,36 @@ void VerifyAssetsGraphics_MeshFailedReloadPreservesEveryPreviouslyPublishedStrea
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
     TestArena testArena = TestArena();
-    native(mut testArena){
-        auto cookCase = PrepareAssetsGraphicsCookCase(testArena, "mesh_failed_reload");
-        ASSERT_TRUE(cookCase);
-        auto result = CookAndLoadSmokeMesh("uv_seam_quad.nwb", Name(s_AssetCaseProjectMeshesUvSeamQuad), *cookCase, testArena);
-        ASSERT_TRUE(result);
-        auto& mesh = static_cast<Impl::Mesh&>(**result);
-        Impl::MeshAssetCodec codec;
-        Core::Assets::AssetBytes original(testArena.arena);
-        ASSERT_TRUE(codec.serialize(mesh, original));
-        for(u32 invalidCase = 0u; invalidCase < 4u; ++invalidCase){
-            Core::Assets::AssetBytes malformed(original);
-            if(invalidCase == 0u)
-                malformed[0u] ^= 1u;
-            else if(invalidCase == 1u)
-                malformed.pop_back();
-            else if(invalidCase == 2u)
-                malformed.push_back(0u);
-            else{
-                constexpr u32 s_OldMeshMagic = 0x4D534837u;
-                ASSERT_TRUE(OverwritePOD(0u, s_OldMeshMagic, malformed));
-            }
-            EXPECT_FALSE(mesh.loadBinary(malformed)) << invalidCase;
-            Core::Assets::AssetBytes retained(testArena.arena);
-            ASSERT_TRUE(codec.serialize(mesh, retained));
-            EXPECT_EQ(retained, original) << invalidCase;
-        }
-        EXPECT_TRUE(RemoveAllIfExists(cookCase->root));
+    const Expected<CookCase> cookCase = PrepareCookCase(testArena, "mesh_failed_reload");
+    ASSERT_TRUE(cookCase.has_value());
+    const CookCase prepared = cookCase.value();
+
+    MeshAsset mesh(testArena.arena);
+    ASSERT_TRUE(CookAndLoadSmokeMeshInto("uv_seam_quad.nwb", Name(s_AssetCaseProjectMeshesUvSeamQuad), prepared, testArena, mesh));
+
+    MeshAssetCodec codec = MeshAssetCodec();
+    AssetBytes original = MakeAssetBytes(testArena);
+    ASSERT_TRUE(SerializeMeshAsset(codec, mesh, original));
+
+    for(u32 invalidCase = 0u; invalidCase < 4u; ++invalidCase){
+        const ScopedTestTrace trace(invalidCase);
+        AssetBytes malformed = MakeAssetBytes(testArena);
+        CopyAssetBytes(original, malformed);
+        if(invalidCase == 0u)
+            malformed[0u] = malformed[0u] ^ 1u;
+        else if(invalidCase == 1u)
+            malformed.pop_back();
+        else if(invalidCase == 2u)
+            malformed.push_back(0u);
+        else
+            ASSERT_TRUE(OverwriteU32InAssetBytes(0u, 0x4D534837u, malformed));
+
+        EXPECT_FALSE(LoadMeshAssetBinary(mesh, malformed));
+        AssetBytes retained = MakeAssetBytes(testArena);
+        ASSERT_TRUE(SerializeMeshAsset(codec, mesh, retained));
+        EXPECT_EQ(retained, original);
     }
+    EXPECT_TRUE(RemoveAllIfExists(prepared.root));
 }
 
 void VerifyAssetsGraphics_MeshCookerPreservesFlatAndNestedIndexCornerOrder(){
@@ -1255,31 +937,30 @@ void VerifyAssetsGraphics_MeshCookerPreservesFlatAndNestedIndexCornerOrder(){
         CapturingLogger logger = CapturingLogger();
         LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
         TestArena testArena = TestArena();
-        const Expected<CookCase> cookCase = PrepareAssetsGraphicsCookCase(testArena, "mesh_index_corner_order");
+        const Expected<CookCase> cookCase = PrepareCookCase(testArena, "mesh_index_corner_order");
         ASSERT_TRUE(cookCase.has_value());
         const CookCase prepared = cookCase.value();
 
         const TestAString meta = BuildMeshIndexMeta(indexList);
-        b8 cooked = false;
-        native(in meta, in prepared, mut testArena, mut cooked){
-            cooked = CookSingleMeshMeta(AStringView(meta.data(), meta.size()), prepared, testArena);
-        }
-        ASSERT_TRUE(cooked);
+        ASSERT_TRUE(CookSingleMeshMeta(ViewTestString(meta), prepared, testArena));
 
         ScratchArena scratchArena(s_AssetCaseTestsIntegrationAssetsGraphicsMeshIndexCornerOrder);
+        MeshAsset mesh(testArena.arena);
+        {
+            Expected<MeshAsset> loadedMesh = LoadCookedMeshAsset(testArena, prepared.outputDirectory, Name(s_AssetCaseProjectMeshesMinimalMesh), 1u);
+            ASSERT_TRUE(loadedMesh.has_value());
+            mesh = loadedMesh.value();
+        }
+        const Expected<ScratchU32Vector> triangleIndices = BuildTestMeshletTriangleIndices(mesh, scratchArena);
+        ASSERT_TRUE(triangleIndices.has_value());
+        ASSERT_EQ(triangleIndices.value().size(), 3u);
+
         Vector<f32x3u> actualPositions = Vector<f32x3u>();
         actualPositions.reserve(3u);
-        native(in prepared, mut testArena, mut scratchArena, mut actualPositions){
-            auto loadedAsset = LoadCookedAsset<Impl::MeshAssetCodec>(prepared.outputDirectory, Name(s_AssetCaseProjectMeshesMinimalMesh), 1u, testArena);
-            ASSERT_TRUE(loadedAsset);
-            const auto& mesh = static_cast<const Impl::Mesh&>(**loadedAsset);
-            const auto triangleIndices = Impl::BuildMeshletTriangleIndices(mesh, scratchArena);
-            ASSERT_TRUE(triangleIndices);
-            ASSERT_EQ(triangleIndices->size(), 3u);
-            for(usize corner = 0u; corner < 3u; ++corner){
-                ASSERT_LT((*triangleIndices)[corner], mesh.positionStream().size());
-                actualPositions.push_back(mesh.positionStream()[(*triangleIndices)[corner]]);
-            }
+        for(usize corner = 0u; corner < 3u; ++corner){
+            const u32 posIndex = triangleIndices.value()[corner];
+            ASSERT_LT(cast<usize>(posIndex), mesh.positionStream().size());
+            actualPositions.push_back(mesh.positionStream()[posIndex]);
         }
         ASSERT_EQ(actualPositions.size(), 3u);
         for(usize corner = 0u; corner < 3u; ++corner){
@@ -1307,14 +988,11 @@ void VerifyAssetsGraphics_MeshCookerReportsFirstInvalidNestedIndex(){
         CapturingLogger logger = CapturingLogger();
         LoggerRegistrationGuard loggerGuard(logger, s_ReportOnly);
         TestArena testArena = TestArena();
-        const Expected<CookCase> cookCase = PrepareAssetsGraphicsCookCase(testArena, "invalid_nested_mesh_index");
+        const Expected<CookCase> cookCase = PrepareCookCase(testArena, "invalid_nested_mesh_index");
         ASSERT_TRUE(cookCase.has_value());
         const CookCase prepared = cookCase.value();
         const TestAString meta = BuildMeshIndexMeta(testCase.m_indices);
-        b8 cooked = true;
-        native(in meta, in prepared, mut testArena, mut cooked){
-            cooked = CookSingleMeshMeta(AStringView(meta.data(), meta.size()), prepared, testArena);
-        }
+        const b8 cooked = CookSingleMeshMeta(ViewTestString(meta), prepared, testArena);
         EXPECT_FALSE(cooked);
         EXPECT_TRUE(RemoveAllIfExists(prepared.root));
         EXPECT_TRUE(SawCapturedError(logger, testCase.m_diagnostic));
@@ -1330,60 +1008,18 @@ void VerifyAssetsGraphics_MeshCookerValidationFailures(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerRegistrationGuard(logger, s_ReportOnly);
     TestArena testArena = TestArena();
-    native(mut testArena){
-#if defined(NWB_FINAL)
-        ExpectCookFailure(MakeNotNull<CookSingleMetaFn>(CookSingleMeshMeta), s_UnsupportedMeshFieldsMeta, "unsupported_mesh_fields", testArena);
-        ExpectCookFailure(MakeNotNull<CookSingleMetaFn>(CookSingleMeshMeta), s_MismatchedMeshMeta, "mismatched_mesh_streams", testArena);
-        ExpectCookFailure(
-            MakeNotNull<CookSingleMetaFn>(CookSingleMeshMeta),
-            BuildMeshTriangleMeta("", NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS, NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_VERTEX_REFS),
-            "missing_mesh_normal_field",
-            testArena
-        );
-        ExpectCookFailure(
-            MakeNotNull<CookSingleMetaFn>(CookSingleMeshMeta),
-            BuildMeshTriangleMeta(NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS, NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS, NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_MISSING_NORMAL_VERTEX_REFS),
-            "missing_mesh_normal_vertex_ref",
-            testArena
-        );
-        ExpectCookFailure(
-            MakeNotNull<CookSingleMetaFn>(CookSingleMeshMeta),
-            BuildMeshTriangleMeta(s_EmptyNormalListField, NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS, NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_VERTEX_REFS),
-            "empty_list_mesh_normal",
-            testArena
-        );
-        ExpectCookFailure(
-            MakeNotNull<CookSingleMetaFn>(CookSingleMeshMeta),
-            BuildMeshTriangleMeta(s_EmptyNormalMapField, NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS, NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_VERTEX_REFS),
-            "empty_map_mesh_normal",
-            testArena
-        );
-        ExpectCookFailure(
-            MakeNotNull<CookSingleMetaFn>(CookSingleMeshMeta),
-            BuildMeshTriangleMeta(NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS, "", NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_VERTEX_REFS),
-            "missing_mesh_tangent_field",
-            testArena
-        );
-        ExpectCookFailure(
-            MakeNotNull<CookSingleMetaFn>(CookSingleMeshMeta),
-            BuildMeshTriangleMeta(NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS, NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS, NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_MISSING_TANGENT_VERTEX_REFS),
-            "missing_mesh_tangent_vertex_ref",
-            testArena
-        );
-        ExpectCookFailure(
-            MakeNotNull<CookSingleMetaFn>(CookSingleMeshMeta),
-            BuildMeshTriangleMeta(NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS, s_EmptyTangentListField, NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_VERTEX_REFS),
-            "empty_list_mesh_tangent",
-            testArena
-        );
-        ExpectCookFailure(
-            MakeNotNull<CookSingleMetaFn>(CookSingleMeshMeta),
-            BuildMeshTriangleMeta(NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS, s_EmptyTangentMapField, NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_VERTEX_REFS),
-            "empty_map_mesh_tangent",
-            testArena
-        );
-#endif
-    }
+
+    ExpectMeshCookFailure(s_UnsupportedMeshFieldsMeta, "unsupported_mesh_fields", testArena);
+    ExpectMeshCookFailure(s_MismatchedMeshMeta, "mismatched_mesh_streams", testArena);
+    ExpectMeshCookFailure(ViewTestString(BuildMeshTriangleMeta("", s_TriangleTangentsField, s_TriangleVertexRefsField)), "missing_mesh_normal_field", testArena);
+    ExpectMeshCookFailure(ViewTestString(BuildMeshTriangleMeta(s_TriangleNormalsField, s_TriangleTangentsField, s_TriangleMissingNormalVertexRefsField)), "missing_mesh_normal_vertex_ref", testArena);
+    ExpectMeshCookFailure(ViewTestString(BuildMeshTriangleMeta(s_EmptyNormalListField, s_TriangleTangentsField, s_TriangleVertexRefsField)), "empty_list_mesh_normal", testArena);
+    ExpectMeshCookFailure(ViewTestString(BuildMeshTriangleMeta(s_EmptyNormalMapField, s_TriangleTangentsField, s_TriangleVertexRefsField)), "empty_map_mesh_normal", testArena);
+    ExpectMeshCookFailure(ViewTestString(BuildMeshTriangleMeta(s_TriangleNormalsField, "", s_TriangleVertexRefsField)), "missing_mesh_tangent_field", testArena);
+    ExpectMeshCookFailure(ViewTestString(BuildMeshTriangleMeta(s_TriangleNormalsField, s_TriangleTangentsField, s_TriangleMissingTangentVertexRefsField)), "missing_mesh_tangent_vertex_ref", testArena);
+    ExpectMeshCookFailure(ViewTestString(BuildMeshTriangleMeta(s_TriangleNormalsField, s_EmptyTangentListField, s_TriangleVertexRefsField)), "empty_list_mesh_tangent", testArena);
+    ExpectMeshCookFailure(ViewTestString(BuildMeshTriangleMeta(s_TriangleNormalsField, s_EmptyTangentMapField, s_TriangleVertexRefsField)), "empty_map_mesh_tangent", testArena);
+
     EXPECT_GE(logger.errorCount(), 10u);
     EXPECT_TRUE(SawCapturedError(logger, "unsupported asset field"));
     EXPECT_TRUE(SawCapturedError(logger, "'uv0' must be a list"));
@@ -1400,40 +1036,41 @@ void VerifyAssetsGraphics_ObjectGeometryMetadataRejectsRetiredVertexSourceSelect
     LoggerRegistrationGuard loggerGuard(logger, s_BreakOnFatal);
     TestArena testArena = TestArena();
     ScratchArena scratchArena(s_ShaderScratchArena);
-    native(in logger, mut testArena, mut scratchArena){
-        auto rootResult = PrepareAssetsGraphicsCaseRoot(testArena, "object_geometry_metadata");
-        ASSERT_TRUE(rootResult);
-        Path root = Move(*rootResult);
+    const Expected<GraphicsTestPath> rootResult = PrepareCaseRoot(testArena, "object_geometry_metadata");
+    ASSERT_TRUE(rootResult.has_value());
+    const GraphicsTestPath root = rootResult.value();
 
-        const Path metadataPath = root / "shader.nwb";
-        ASSERT_TRUE(WriteTextFile(root / "shader.slang", "void main(){}\n"));
-        constexpr Array<ShaderMetadataCase, 8u> s_Cases = {{
-            { .shaderAssetType = "mesh_shader", .fields = "", .accepted = true },
-            { .shaderAssetType = "pixel_shader", .fields = "", .accepted = true },
-            { .shaderAssetType = "mesh_shader", .fields = "asset.mesh_object_vertex = \"object_vs.slang\";\n", .accepted = false },
-            { .shaderAssetType = "mesh_shader", .fields = "asset.mesh_object_vertex = \"\";\n", .accepted = false },
-            { .shaderAssetType = "compute_shader", .fields = "asset.mesh_object_vertex = \"object_vs.slang\";\n", .accepted = false },
-            { .shaderAssetType = "vertex_shader", .fields = "asset.mesh_object_vertex = \"object_vs.slang\";\n", .accepted = false },
-            { .shaderAssetType = "pixel_shader", .fields = "asset.mesh_object_vertex = \"object_vs.slang\";\n", .accepted = false },
-            { .shaderAssetType = "mesh_shader", .fields = "asset.mesh_object_cull = \"object_cull_cs.slang\";\n", .accepted = false },
-        }};
-        Impl::ShaderCook shaderCook(testArena.arena);
-        for(const ShaderMetadataCase& testCase : s_Cases){
-            SCOPED_TRACE(testCase.shaderAssetType);
-            SCOPED_TRACE(testCase.fields);
-            Impl::ShaderCook::CookString metadata(testCase.shaderAssetType, testArena.arena);
-            metadata.append(" asset;\nasset.entry_point = \"main\";\n");
-            metadata.append(testCase.fields.data(), testCase.fields.size());
-            ASSERT_TRUE(WriteTextFile(metadataPath, AStringView(metadata.data(), metadata.size())));
-            const u32 priorErrors = logger.errorCount();
-            EXPECT_EQ(ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(metadataPath, testArena, scratchArena, shaderCook).has_value(), testCase.accepted);
-            if(testCase.accepted)
-                EXPECT_EQ(logger.errorCount(), priorErrors);
-            else
-                EXPECT_GT(logger.errorCount(), priorErrors);
-        }
-        EXPECT_TRUE(RemoveAllIfExists(root));
+    const GraphicsTestPath metadataPath = JoinGraphicsPath(root, "shader.nwb");
+    ASSERT_TRUE(WriteTextFile(JoinGraphicsPath(root, "shader.slang"), "void main(){}\n"));
+
+    Vector<ObjectGeometryCase> cases = Vector<ObjectGeometryCase>();
+    cases.reserve(8u);
+    cases.push_back(ObjectGeometryCase("mesh_shader", "", true));
+    cases.push_back(ObjectGeometryCase("pixel_shader", "", true));
+    cases.push_back(ObjectGeometryCase("mesh_shader", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false));
+    cases.push_back(ObjectGeometryCase("mesh_shader", "asset.mesh_object_vertex = \"\";\n", false));
+    cases.push_back(ObjectGeometryCase("compute_shader", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false));
+    cases.push_back(ObjectGeometryCase("vertex_shader", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false));
+    cases.push_back(ObjectGeometryCase("pixel_shader", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false));
+    cases.push_back(ObjectGeometryCase("mesh_shader", "asset.mesh_object_cull = \"object_cull_cs.slang\";\n", false));
+
+    ShaderCook shaderCook(testArena.arena);
+    for(in ObjectGeometryCase testCase : cases){
+        const ScopedTestTrace traceType(testCase.m_shaderType);
+        const ScopedTestTrace traceFields(testCase.m_fields);
+        TestAString metadata = TestAString();
+        metadata.append(testCase.m_shaderType);
+        metadata.append(" asset;\nasset.entry_point = \"main\";\n");
+        metadata.append(testCase.m_fields);
+        ASSERT_TRUE(WriteTextFile(metadataPath, ViewTestString(metadata)));
+        const u32 priorErrors = logger.errorCount();
+        EXPECT_EQ(CanParseShaderEntryFile(metadataPath, testArena, scratchArena, shaderCook), testCase.m_accepted);
+        if(testCase.m_accepted)
+            EXPECT_EQ(logger.errorCount(), priorErrors);
+        else
+            EXPECT_GT(logger.errorCount(), priorErrors);
     }
+    EXPECT_TRUE(RemoveAllIfExists(root));
 }
 
 

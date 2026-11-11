@@ -2,43 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <logger/server/crash_ingest_failure.adhd>
-#include <logger/server/crash_paths.adhd>
 #include <logger/server/crash_values.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_LOG_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class CrashArchiveExtractor final{
-public:
-    [[nodiscard]] static Expected<void, CrashIngestFailure> Extract(Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& archivePath, const CrashScratchPath& packageDirectory);
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_LOG_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -75,138 +39,14 @@ Expected<ParsedCrashArchiveFileHeader> ParseCrashArchiveFileHeaderBody(in String
     return header;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <global/binary.h>
-#include <global/filesystem/archive.h>
-#include <global/text_utils.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_LOG_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_crash_archive_extractor{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using CrashBytes = Vector<u8, Core::Alloc::ScratchArena>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static Expected<ParsedCrashArchiveFileHeader> ParseFileHeader(const AStringView line)noexcept{
-    const auto parsed = ParseCrashArchiveFileHeaderBody(line, Core::Crash::PackageNames::s_ArchiveFileHeaderPrefix);
-    if(!parsed || !IsSafeArchiveRelativePath(parsed->relativePath))
-        return MakeUnexpected(Failure{});
-    return *parsed;
+b8 IsCrashArchivePayloadWithinBounds(in usize archiveByteCount, in usize cursor, in usize fileSize){
+    if(cursor > archiveByteCount)
+        return false;
+    return fileSize <= archiveByteCount - cursor;
 }
 
-[[nodiscard]] static Expected<void, ErrorCode> WriteExtractedFile(Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& packageDirectory, const AStringView relativePath, const BinaryByteView fileBytes){
-    const ::Path<Core::Alloc::ScratchArena> outputPath = ::Path<Core::Alloc::ScratchArena>(scratchArena, packageDirectory) / relativePath;
-    const auto outputDirectory = outputPath.parentPath();
-    if(!outputDirectory.empty()){
-        const auto ensured = EnsureDirectories(outputDirectory);
-        if(!ensured)
-            return MakeUnexpected(ensured.error());
-    }
-
-    if(!CanRepresentStreamSize(static_cast<u64>(fileBytes.size())))
-        return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
-    if(!WriteBinaryFile(outputPath, fileBytes))
-        return MakeUnexpected(MakeErrorCode(ErrorCondition::io_error));
-    return {};
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<void, CrashIngestFailure> CrashArchiveExtractor::Extract(Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& archivePath, const CrashScratchPath& packageDirectory){
-    using namespace __hidden_crash_archive_extractor;
-    CrashBytes archiveBytes{scratchArena};
-    const auto read = ReadBinaryFile(archivePath, archiveBytes);
-    if(!read)
-        return MakeUnexpected(MakeCrashIngestCodeFailure("failed to read crash archive", read.error()));
-
-    usize cursor = 0u;
-    auto line = NextLfByteLine(archiveBytes, cursor);
-    if(!line || *line != Core::Crash::PackageNames::s_ArchiveHeaderLine)
-        return MakeUnexpected(MakeCrashIngestFailure("invalid crash archive header"));
-
-    const auto emptied = EnsureEmptyDirectory(packageDirectory);
-    if(!emptied)
-        return MakeUnexpected(MakeCrashIngestCodeFailure("failed to create extracted crash package directory", emptied.error()));
-
-    usize fileCount = 0u;
-    while(cursor < archiveBytes.size()){
-        line = NextLfByteLine(archiveBytes, cursor);
-        if(!line)
-            return MakeUnexpected(MakeCrashIngestFailure("truncated crash archive file header"));
-
-        const auto header = ParseFileHeader(*line);
-        if(!header)
-            return MakeUnexpected(MakeCrashIngestFailure("malformed crash archive file header"));
-
-        const usize fileSize = header->fileSize;
-        if(cursor > archiveBytes.size() || fileSize > archiveBytes.size() - cursor)
-            return MakeUnexpected(MakeCrashIngestFailure("truncated crash archive file payload"));
-
-        const auto written = WriteExtractedFile(scratchArena, packageDirectory, header->relativePath, BinaryByteView{ archiveBytes.data() + cursor, fileSize });
-        if(!written)
-            return MakeUnexpected(MakeCrashIngestCodeFailure("failed to write extracted crash package file", written.error()));
-        cursor += fileSize;
-
-        const auto separator = NextLfByteLine(archiveBytes, cursor);
-        if(!separator || !separator->empty())
-            return MakeUnexpected(MakeCrashIngestFailure(s_CrashIngestMalformedFileFooterDetail));
-
-        const auto endMarker = NextLfByteLine(archiveBytes, cursor);
-        if(!endMarker || *endMarker != Core::Crash::PackageNames::s_ArchiveEntryEndLine)
-            return MakeUnexpected(MakeCrashIngestFailure(s_CrashIngestMalformedFileFooterDetail));
-
-        ++fileCount;
-    }
-
-    if(fileCount == 0u)
-        return MakeUnexpected(MakeCrashIngestFailure("crash archive contained no files"));
-
-    return {};
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_LOG_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+b8 IsValidCrashArchiveFooter(in StringView separator, in StringView endMarker, in StringView expectedEndMarker){
+    return separator.empty() && endMarker == expectedEndMarker;
 }
 
 

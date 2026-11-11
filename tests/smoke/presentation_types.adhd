@@ -2,31 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <core/common/global.h>
-#include <core/common/log.h>
-#include <global/algorithm.h>
-#include <global/simd/vector.h>
-#include <global/simplemath.h>
-#include <global/timer.h>
-#include <global/type.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const Name s_SmokeScratchNameTestsSmokeReflectionFrameGraph = "tests/smoke/reflection_frame_graph";
 const Name s_SmokeNameDepthWarpProbeCoverage = "DepthWarpProbeCoverage";
 const Name s_SmokeNameDepthWarpProbeWarp = "DepthWarpProbeWarp";
@@ -150,6 +125,22 @@ class RendererGatherBenchmarkSceneCounts{
     public u32 transparentRenderers = 0u;
 }
 
+void SortPresentationSamples(mut Array<f64, 4096u> values, in usize count){
+    usize gap = count / 2u;
+    while(gap > 0u){
+        for(usize i = gap; i < count; ++i){
+            const f64 current = values[i];
+            usize j = i;
+            while(j >= gap && values[j - gap] > current){
+                values[j] = values[j - gap];
+                j -= gap;
+            }
+            values[j] = current;
+        }
+        gap /= 2u;
+    }
+}
+
 class PresentationPacingRing{
     private Array<PresentationPacingSample, 4096u> m_samples = Array<PresentationPacingSample, 4096u>();
     private usize m_count = 0u;
@@ -180,16 +171,11 @@ class PresentationPacingRing{
             this.m_previousPresentationTime = now;
             return;
         }
-        b8 regressedTime = false;
-        f64 wallIntervalMs = 0.0;
-        native(in now, in prevObs = this.m_previousObservationTime, in prevPres = this.m_previousPresentationTime, mut regressedTime, mut wallIntervalMs){
-            regressedTime = now < prevObs;
-            wallIntervalMs = DurationInSeconds<f64>(now, prevPres) * s_PresentationPacingMsPerSecond;
-        }
-        if(regressedTime || successfulPresentations < this.m_previousCount){
+        if(DurationInNS<i64>(now, this.m_previousObservationTime) < 0 || successfulPresentations < this.m_previousCount){
             this.reset();
             return;
         }
+        const f64 wallIntervalMs = DurationInSeconds<f64>(now, this.m_previousPresentationTime) * s_PresentationPacingMsPerSecond;
         this.m_previousObservationTime = now;
         const u64 advanced = successfulPresentations - this.m_previousCount;
         if(advanced == 0u){
@@ -219,9 +205,7 @@ class PresentationPacingRing{
         Array<f64, 4096u> sorted;
         for(usize i = 0u; i < this.m_count; ++i)
             sorted[i] = this.m_samples[(this.m_head + s_PresentationPacingRingCapacity - this.m_count + i) % s_PresentationPacingRingCapacity].wallMsPerPresentation;
-        native(in count = this.m_count, mut sorted){
-            Sort(sorted.begin(), sorted.begin() + count);
-        }
+        SortPresentationSamples(sorted, this.m_count);
         summary.samples = this.m_count;
         usize p50Index = (this.m_count * 50u) / 100u;
         if(p50Index >= this.m_count)
@@ -322,11 +306,7 @@ class PresentationFpsProbe{
             this.m_previousObservation = now;
             this.m_previousPresentationCount = successfulPresentations;
         }
-        b8 regressedTime = false;
-        native(in now, in prevObs = this.m_previousObservation, mut regressedTime){
-            regressedTime = now < prevObs;
-        }
-        if(regressedTime || successfulPresentations < this.m_previousPresentationCount){
+        if(DurationInNS<i64>(now, this.m_previousObservation) < 0 || successfulPresentations < this.m_previousPresentationCount){
             this.m_invalid = true;
             return PresentationFpsStatus::Invalid;
         }
@@ -334,10 +314,7 @@ class PresentationFpsProbe{
         this.m_previousPresentationCount = successfulPresentations;
 
         if(!this.m_measuring){
-            f64 warmupElapsed = 0.0;
-            native(in now, in warmupBegin = this.m_warmupBegin, mut warmupElapsed){
-                warmupElapsed = DurationInSeconds<f64>(now, warmupBegin);
-            }
+            const f64 warmupElapsed = DurationInSeconds<f64>(now, this.m_warmupBegin);
             if(warmupElapsed < this.m_warmupSeconds)
                 return PresentationFpsStatus::Waiting;
             this.m_measuring = true;
@@ -350,12 +327,8 @@ class PresentationFpsProbe{
         }
 
         this.m_total.lastPresentationCount = successfulPresentations;
-        f64 totalWallSeconds = 0.0;
-        f64 intervalSeconds = 0.0;
-        native(in now, in measBegin = this.m_measurementBegin, in intBegin = this.m_intervalBegin, mut totalWallSeconds, mut intervalSeconds){
-            totalWallSeconds = DurationInSeconds<f64>(now, measBegin);
-            intervalSeconds = DurationInSeconds<f64>(now, intBegin);
-        }
+        const f64 totalWallSeconds = DurationInSeconds<f64>(now, this.m_measurementBegin);
+        const f64 intervalSeconds = DurationInSeconds<f64>(now, this.m_intervalBegin);
         this.m_total.wallSeconds = totalWallSeconds;
         this.m_complete = this.m_measurementSeconds > 0.0 && this.m_total.wallSeconds >= this.m_measurementSeconds;
         if(!this.m_complete && intervalSeconds < 0.5)
@@ -385,7 +358,7 @@ class PresentationFpsProbe{
 }
 
 class FpsProbe{
-    private TStringView m_label;
+    private StringView m_label;
     private f64 m_elapsedSeconds;
     private f64 m_intervalSeconds;
     private f64 m_minFrameSeconds;
@@ -393,7 +366,17 @@ class FpsProbe{
     private u32 m_intervalFrames;
     private b8 m_samplingStarted;
 
-    public FpsProbe(in TStringView label){
+    public FpsProbe(){
+        this.m_label = "";
+        this.m_elapsedSeconds = 0.0;
+        this.m_intervalSeconds = 0.0;
+        this.m_minFrameSeconds = 0.0;
+        this.m_maxFrameSeconds = 0.0;
+        this.m_intervalFrames = 0u;
+        this.m_samplingStarted = false;
+    }
+
+    public FpsProbe(in StringView label){
         this.m_label = label;
         this.m_elapsedSeconds = 0.0;
         this.m_intervalSeconds = 0.0;
@@ -441,7 +424,7 @@ class FpsProbe{
         const f64 averageFps = 1.0 / averageFrameSeconds;
         const VectorDouble frameMs = VectorDouble(averageFrameSeconds, this.m_minFrameSeconds, this.m_maxFrameSeconds, 0.0) * 1000.0;
         [essential] info(
-            "{}: fps avg={} frame_ms avg={} min={} max={} frames={} seconds=",
+            "{}: fps avg={} frame_ms avg={} min={} max={} frames={} seconds={}",
             this.m_label,
             averageFps,
             frameMs.x,

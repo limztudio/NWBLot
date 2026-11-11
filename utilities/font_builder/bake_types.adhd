@@ -2,42 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_font_atlas/types.adhd>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::FontBuilderUtility{
-using NWB::Impl::s_FontAtlasMinBakePpem;
-using NWB::Impl::s_FontAtlasMaxBakePpem;
-using NWB::Impl::s_FontAtlasMinSpreadPixels;
-using NWB::Impl::s_FontAtlasMaxSpreadPixels;
-using NWB::Impl::s_FontAtlasMaxExtent;
-using NWB::Impl::s_FontAtlasMaxGroupCount;
-using NWB::Impl::s_FontAtlasMaxChannelCount;
-using NWB::Impl::s_FontAtlasMaxGlyphCount;
-using NWB::Impl::s_FontAtlasMaxPixelBytes;
-using NWB::Impl::s_FontAtlasRasterModeBitmap;
-using NWB::Impl::s_FontAtlasRasterModeOutline;
-using NWB::Impl::ComputeFontAtlasGlyphPlaneBounds;
-using NWB::Impl::FontAtlasGlyph;
-using NWB::Impl::FontAtlasGroupCompactBounds;
-namespace FontAtlasRasterMode = NWB::Impl::FontAtlasRasterMode;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
+#include <utilities/font_builder/global.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -45,6 +10,7 @@ namespace FontAtlasRasterMode = NWB::Impl::FontAtlasRasterMode;
 
 const StringView s_TrueTypeExtension = ".ttf";
 const StringView s_OpenTypeExtension = ".otf";
+const StringView s_NwbAssetExtension = ".nwb";
 // One guard pixel on each side keeps neighbouring glyphs from bleeding into each other.
 const u32 s_GlyphGuardExtent = 2u;
 const u32 s_DefaultBakeExtent = 1024u;
@@ -62,9 +28,6 @@ const StringView s_ExtentOptionFlag = "--extent";
 const StringView s_MaxGroupsOptionFlag = "--max-groups";
 const StringView s_RendererOptionFlag = "--renderer";
 const StringView s_OverwriteOptionFlag = "--overwrite";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -94,6 +57,33 @@ b8 ValidateBakeInitialOptions(in u32 ppem, in u32 spread, in u32 extent, in u32 
         return false;
     }
     return true;
+}
+
+b8 ValidateBakePaths(in Path source, in Path output){
+    if(PathToGenericString(output.extension()) != s_NwbAssetExtension){
+        error("font_builder: --output must name a .nwb font asset bunch");
+        return false;
+    }
+    const String stem = PathToGenericString(output.stem());
+    if(stem.empty() || stem == "." || stem == ".."){
+        error("font_builder: output must have a nonempty asset stem");
+        return false;
+    }
+    Array<StringView, 3u> sourceExtensions;
+    sourceExtensions[0u] = s_TrueTypeExtension;
+    sourceExtensions[1u] = s_OpenTypeExtension;
+    sourceExtensions[2u] = s_PreparedFontExtension;
+    if(!PathHasListedExtension(source, sourceExtensions)){
+        error("font_builder: --font must name a .ttf, .otf, or prepared .font source");
+        return false;
+    }
+    return true;
+}
+
+b8 ValidateBakeOptionsFields(in u32 ppem, in u32 spread, in u32 extent, in u32 maxGroups, in Path source, in Path output){
+    if(!ValidateBakeInitialOptions(ppem, spread, extent, maxGroups, !source.empty(), !output.empty()))
+        return false;
+    return ValidateBakePaths(source, output);
 }
 
 Expected<b8> TryParseBakeRendererOutline(in StringView rendererArgument){

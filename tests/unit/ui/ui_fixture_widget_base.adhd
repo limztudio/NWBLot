@@ -46,6 +46,30 @@ namespace UiFixtureSupport{
 
 void PopulateBakedFontTables(Span<const u8> bytes, Core::Alloc::GlobalArena& arena, Impl::FontAtlasPayload& payload);
 [[nodiscard]] Expected<Impl::Ui::SharedImageSource> MakeSeededImage(StringView path, u8 seed, u32 width, u32 height, Core::Alloc::GlobalArena& arena);
+[[nodiscard]] NWB_INLINE const Core::Assets::AssetRef<Impl::Texture>& ImageSourceIdentity(const Impl::Ui::SharedImageSource& source)noexcept{ return source->identity(); }
+[[nodiscard]] NWB_INLINE u64 ImageSourceGeneration(const Impl::Ui::SharedImageSource& source)noexcept{ return source->generation(); }
+[[nodiscard]] NWB_INLINE const Impl::Texture& ImageSourceTexture(const Impl::Ui::SharedImageSource& source)noexcept{ return source->texture(); }
+[[nodiscard]] NWB_INLINE const Impl::Ui::GlyphPageBinding& GlyphPageBindingOf(const Impl::Ui::SharedGlyphPage& page)noexcept{ return page->binding(); }
+[[nodiscard]] NWB_INLINE Span<const u8> GlyphPagePixelsOf(const Impl::Ui::SharedGlyphPage& page)noexcept{ return page->pixels(); }
+[[nodiscard]] NWB_INLINE const Impl::Ui::SdfAtlasPageBinding& SdfPageBindingOf(const Impl::Ui::SharedSdfAtlasPage& page)noexcept{ return page->binding(); }
+[[nodiscard]] NWB_INLINE Span<const u8> SdfPagePixelsOf(const Impl::Ui::SharedSdfAtlasPage& page)noexcept{ return page->pixels(); }
+[[nodiscard]] NWB_INLINE Name FontFaceIdentityName(const Impl::Ui::SharedFontFace& face)noexcept{ return face->identity().name(); }
+[[nodiscard]] NWB_INLINE u64 FontFaceGeneration(const Impl::Ui::SharedFontFace& face)noexcept{ return face->generation(); }
+[[nodiscard]] NWB_INLINE b8 FontFaceValid(const Impl::Ui::SharedFontFace& face)noexcept{ return face->valid(); }
+[[nodiscard]] NWB_INLINE b8 FontFaceCoverageInkReliable(const Impl::Ui::SharedFontFace& face)noexcept{ return face->coverageInkReliable(); }
+[[nodiscard]] NWB_INLINE b8 FontFaceHasBakedAtlas(const Impl::Ui::SharedFontFace& face)noexcept{ return static_cast<b8>(face->bakedAtlas()); }
+[[nodiscard]] NWB_INLINE const Impl::Ui::SharedBakedFontAtlas& FontFaceBakedAtlas(const Impl::Ui::SharedFontFace& face)noexcept{ return face->bakedAtlas(); }
+[[nodiscard]] NWB_INLINE u32 FontFaceBakedUnitsPerEm(const Impl::Ui::SharedFontFace& face)noexcept{ return face->bakedAtlas()->unitsPerEm(); }
+[[nodiscard]] NWB_INLINE Impl::FontAtlasGlyph FontFaceBakedGlyph(const Impl::Ui::SharedFontFace& face, const u32 glyphId)noexcept{ return *face->bakedAtlas()->glyph(glyphId); }
+[[nodiscard]] NWB_INLINE const Impl::Ui::SharedSdfAtlasPage& FontFaceBakedPage(const Impl::Ui::SharedFontFace& face, const u32 group)noexcept{ return face->bakedAtlas()->page(group); }
+[[nodiscard]] NWB_INLINE b8 FontFaceRasterize(const Impl::Ui::SharedFontFace& face, const u32 glyphId, const u32 pixelSize, Impl::Ui::GlyphBitmap& bitmap){ return face->rasterize(glyphId, pixelSize, bitmap); }
+[[nodiscard]] NWB_INLINE Expected<Impl::Ui::Rect> FontFaceRasterBounds(const Impl::Ui::SharedFontFace& face, const u32 glyphId, const u32 pixelSize){ return face->rasterBounds(glyphId, pixelSize); }
+[[nodiscard]] NWB_INLINE b8 HasAtlasGlyph(const Impl::Ui::GlyphAtlas& atlas, const Impl::Ui::SharedFontFace& face, const u32 glyphId, const u32 size)noexcept{ return atlas.find(face, glyphId, size) != nullptr; }
+[[nodiscard]] NWB_INLINE usize AtlasGlyphSlotId(const Impl::Ui::GlyphAtlas& atlas, const Impl::Ui::SharedFontFace& face, const u32 glyphId, const u32 size)noexcept{ return reinterpret_cast<usize>(atlas.find(face, glyphId, size)); }
+[[nodiscard]] NWB_INLINE Expected<Impl::Ui::AtlasGlyph> TryFindAtlasGlyph(const Impl::Ui::GlyphAtlas& atlas, const Impl::Ui::SharedFontFace& face, const u32 glyphId, const u32 size)noexcept{
+    const Impl::Ui::AtlasGlyph* found = atlas.find(face, glyphId, size);
+    return found ? Expected<Impl::Ui::AtlasGlyph>(*found) : MakeUnexpected(Failure{});
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -230,6 +254,13 @@ public:
     [[nodiscard]] WidgetId childId()const{ return UiTestSupport::RequireWidgetId(parentId(), s_ChildPopupKey); }
     [[nodiscard]] WidgetId id(const AStringView child, const AStringView parent = "window")const{ return UiTestSupport::RequireWidgetId(UiTestSupport::RequireWidgetId(UiTestSupport::RequireRootId(m_root), parent), child); }
     [[nodiscard]] const HitTarget* target(const WidgetId widget)const noexcept{ return UiTestSupport::FindHitTarget(m_context.input().targets(), widget); }
+    [[nodiscard]] b8 hasTarget(const WidgetId widget)const noexcept{ return target(widget) != nullptr; }
+    [[nodiscard]] Expected<HitTarget> tryTarget(const WidgetId widget)const noexcept{
+        const HitTarget* found = target(widget);
+        return found ? Expected<HitTarget>(*found) : MakeUnexpected(Failure{});
+    }
+    void setEditHost(IEditBoxHost& host)noexcept{ m_builder.setEditHost(&host); }
+    void clearEditHost()noexcept{ m_builder.setEditHost(nullptr); }
     [[nodiscard]] InputRoutingResult send(const InputEvent& event);
     void click(const Point& point);
     void drag(const Point& origin, const Point& destination);
@@ -263,10 +294,138 @@ public:
 
 NWB_END
 
+namespace __hidden_ui_glyph_sdf_tests{
+using WidgetFixture = ::NWB::UiWidgetTests::WidgetFixture;
+using ::NWB::UiFixtureSupport::ImageSourceIdentity;
+using ::NWB::UiFixtureSupport::ImageSourceGeneration;
+using ::NWB::UiFixtureSupport::ImageSourceTexture;
+using ::NWB::UiFixtureSupport::GlyphPageBindingOf;
+using ::NWB::UiFixtureSupport::GlyphPagePixelsOf;
+using ::NWB::UiFixtureSupport::SdfPageBindingOf;
+using ::NWB::UiFixtureSupport::SdfPagePixelsOf;
+using ::NWB::UiFixtureSupport::FontFaceIdentityName;
+using ::NWB::UiFixtureSupport::FontFaceGeneration;
+using ::NWB::UiFixtureSupport::FontFaceValid;
+using ::NWB::UiFixtureSupport::FontFaceCoverageInkReliable;
+using ::NWB::UiFixtureSupport::FontFaceHasBakedAtlas;
+using ::NWB::UiFixtureSupport::FontFaceBakedAtlas;
+using ::NWB::UiFixtureSupport::FontFaceBakedUnitsPerEm;
+using ::NWB::UiFixtureSupport::FontFaceBakedGlyph;
+using ::NWB::UiFixtureSupport::FontFaceBakedPage;
+using ::NWB::UiFixtureSupport::FontFaceRasterize;
+using ::NWB::UiFixtureSupport::FontFaceRasterBounds;
+using ::NWB::UiFixtureSupport::HasAtlasGlyph;
+using ::NWB::UiFixtureSupport::AtlasGlyphSlotId;
+using ::NWB::UiFixtureSupport::TryFindAtlasGlyph;
+using ::NWB::UiWidgetTests::s_TestSkinPath;
+using ::NWB::UiWidgetTests::s_TestLatinFontPath;
+using ::NWB::UiWidgetTests::s_TestKoreanFontPath;
+using ::NWB::UiWidgetTests::s_FontScratchArenaName;
+using ::UiTestSupport::NativeInput;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void ExpectUiSamePaintSnapshots(in DrawSnapshot actual, in DrawSnapshot expected){
+    ASSERT_EQ(actual.glyphPages().size(), expected.glyphPages().size());
+    ASSERT_EQ(actual.sdfPages().size(), expected.sdfPages().size());
+    ASSERT_EQ(actual.vertices().size(), expected.vertices().size());
+    ASSERT_EQ(actual.commands().size(), expected.commands().size());
+    const Span<u32> actualIndices = actual.indices();
+    const Span<u32> expectedIndices = expected.indices();
+    ASSERT_EQ(actualIndices.size(), expectedIndices.size());
+    for(usize index = 0u; index < actualIndices.size(); ++index)
+        EXPECT_EQ(actualIndices[index], expectedIndices[index]);
+    for(usize index = 0u; index < actual.glyphPages().size(); ++index){
+        const SharedGlyphPage actualPage = actual.glyphPages()[index];
+        const SharedGlyphPage expectedPage = expected.glyphPages()[index];
+        ASSERT_TRUE(cast<b8>(actualPage));
+        ASSERT_TRUE(cast<b8>(expectedPage));
+        EXPECT_EQ(actualPage, expectedPage);
+        EXPECT_EQ(GlyphPageBindingOf(actualPage), GlyphPageBindingOf(expectedPage));
+        const Span<u8> actualPixels = GlyphPagePixelsOf(actualPage);
+        const Span<u8> expectedPixels = GlyphPagePixelsOf(expectedPage);
+        ASSERT_EQ(actualPixels.size(), expectedPixels.size());
+        for(usize pixelIndex = 0u; pixelIndex < actualPixels.size(); ++pixelIndex)
+            EXPECT_EQ(actualPixels[pixelIndex], expectedPixels[pixelIndex]);
+    }
+    for(usize index = 0u; index < actual.sdfPages().size(); ++index){
+        const SharedSdfAtlasPage actualPage = actual.sdfPages()[index];
+        const SharedSdfAtlasPage expectedPage = expected.sdfPages()[index];
+        ASSERT_TRUE(cast<b8>(actualPage));
+        ASSERT_TRUE(cast<b8>(expectedPage));
+        EXPECT_EQ(actualPage, expectedPage);
+        EXPECT_EQ(SdfPageBindingOf(actualPage), SdfPageBindingOf(expectedPage));
+        const Span<u8> actualPixels = SdfPagePixelsOf(actualPage);
+        const Span<u8> expectedPixels = SdfPagePixelsOf(expectedPage);
+        ASSERT_EQ(actualPixels.size(), expectedPixels.size());
+        for(usize pixelIndex = 0u; pixelIndex < actualPixels.size(); ++pixelIndex)
+            EXPECT_EQ(actualPixels[pixelIndex], expectedPixels[pixelIndex]);
+    }
+    ExpectUiSameVertices(actual, expected);
+    ExpectUiSameDrawCommands(actual, expected);
+}
+
+b8 BeginWidgetFixtureFrame(mut WidgetFixture self, in u64 generation, in DisplayMetrics display){
+    if(!self.m_context.beginFrame(generation))
+        return false;
+    self.m_paint.begin(display, generation, self.m_skinGeneration, MakeUiSkinAssetRef(s_TestSkinPath), self.m_skin);
+    return self.m_context.beginRoot(self.m_root);
+}
+
+InputRoutingResult SendWidgetFixtureEvent(mut WidgetFixture self, in InputEvent event){
+    const b8 queued = self.m_context.input().queue(NativeInput(event)).has_value();
+    EXPECT_TRUE(queued);
+    if(!queued)
+        return InputRoutingResult();
+    return self.m_context.input().process();
+}
+
+void ClickWidgetFixturePoint(mut WidgetFixture self, in Point point){
+    InputEvent down = InputEvent();
+    down.position = point;
+    down.type = InputEventType::PrimaryDown;
+    EXPECT_TRUE(self.send(down).pointerConsumed);
+    InputEvent up = InputEvent();
+    up.position = point;
+    up.type = InputEventType::PrimaryUp;
+    EXPECT_TRUE(self.send(up).pointerConsumed);
+}
+
+void DragWidgetFixturePoints(mut WidgetFixture self, in Point origin, in Point destination){
+    InputEvent down = InputEvent();
+    down.position = origin;
+    down.type = InputEventType::PrimaryDown;
+    EXPECT_TRUE(self.send(down).pointerConsumed);
+    InputEvent move = InputEvent();
+    move.position = destination;
+    move.type = InputEventType::PointerMove;
+    EXPECT_TRUE(self.send(move).pointerConsumed);
+    InputEvent up = InputEvent();
+    up.position = destination;
+    up.type = InputEventType::PrimaryUp;
+    EXPECT_TRUE(self.send(up).pointerConsumed);
+}
+
+void PressWidgetFixtureKey(mut WidgetFixture self, in KeyEnum value, in b8 repeat, in b8 shift){
+    InputEvent event = InputEvent();
+    event.type = InputEventType::KeyDown;
+    event.key = value;
+    event.repeat = repeat;
+    event.shift = shift;
+    EXPECT_TRUE(self.send(event).commandConsumed);
+    if(!repeat){
+        event.type = InputEventType::KeyUp;
+        EXPECT_TRUE(self.send(event).commandConsumed);
+    }
 }
 
 
@@ -392,27 +551,7 @@ void ExpectSameCommandFields(const Impl::Ui::DrawCommand& actual, const Impl::Ui
 }
 
 void ExpectSamePaint(const Impl::Ui::DrawSnapshot& actual, const Impl::Ui::DrawSnapshot& expected){
-    ASSERT_EQ(actual.glyphPages().size(), expected.glyphPages().size());
-    ASSERT_EQ(actual.sdfPages().size(), expected.sdfPages().size());
-    ASSERT_EQ(actual.vertices().size(), expected.vertices().size());
-    ASSERT_EQ(actual.commands().size(), expected.commands().size());
-    EXPECT_EQ(actual.indices(), expected.indices());
-    for(usize index = 0u; index < actual.glyphPages().size(); ++index){
-        ASSERT_TRUE(actual.glyphPages()[index]);
-        ASSERT_TRUE(expected.glyphPages()[index]);
-        EXPECT_EQ(actual.glyphPages()[index].get(), expected.glyphPages()[index].get());
-        EXPECT_EQ(actual.glyphPages()[index]->binding(), expected.glyphPages()[index]->binding());
-        EXPECT_EQ(actual.glyphPages()[index]->pixels(), expected.glyphPages()[index]->pixels());
-    }
-    for(usize index = 0u; index < actual.sdfPages().size(); ++index){
-        ASSERT_TRUE(actual.sdfPages()[index]);
-        ASSERT_TRUE(expected.sdfPages()[index]);
-        EXPECT_EQ(actual.sdfPages()[index].get(), expected.sdfPages()[index].get());
-        EXPECT_EQ(actual.sdfPages()[index]->binding(), expected.sdfPages()[index]->binding());
-        EXPECT_EQ(actual.sdfPages()[index]->pixels(), expected.sdfPages()[index]->pixels());
-    }
-    ExpectSameVertices(actual, expected);
-    ::__hidden_ui_glyph_sdf_tests::ExpectUiSameDrawCommands(actual, expected);
+    ::__hidden_ui_glyph_sdf_tests::ExpectUiSamePaintSnapshots(actual, expected);
 }
 
 
@@ -591,42 +730,23 @@ void WidgetFixture::configureSkin(const AStringView omitted){
 }
 
 b8 WidgetFixture::begin(const u64 generation, const DisplayMetrics& display){
-    if(!m_context.beginFrame(generation))
-        return false;
-    m_paint.begin(display, generation, m_skinGeneration, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
-    return m_context.beginRoot(m_root);
+    return ::__hidden_ui_glyph_sdf_tests::BeginWidgetFixtureFrame(*this, generation, display);
 }
 
 InputRoutingResult WidgetFixture::send(const InputEvent& event){
-    if(!m_context.input().queue(UiTestSupport::NativeInput(event))){
-        ADD_FAILURE() << "input admission failed";
-        return {};
-    }
-    return m_context.input().process();
+    return ::__hidden_ui_glyph_sdf_tests::SendWidgetFixtureEvent(*this, event);
 }
 
 void WidgetFixture::click(const Point& point){
-    EXPECT_TRUE(send({ .position = point, .type = InputEventType::PrimaryDown }).pointerConsumed);
-    EXPECT_TRUE(send({ .position = point, .type = InputEventType::PrimaryUp }).pointerConsumed);
+    ::__hidden_ui_glyph_sdf_tests::ClickWidgetFixturePoint(*this, point);
 }
 
 void WidgetFixture::drag(const Point& origin, const Point& destination){
-    EXPECT_TRUE(send({ .position = origin, .type = InputEventType::PrimaryDown }).pointerConsumed);
-    EXPECT_TRUE(send({ .position = destination, .type = InputEventType::PointerMove }).pointerConsumed);
-    EXPECT_TRUE(send({ .position = destination, .type = InputEventType::PrimaryUp }).pointerConsumed);
+    ::__hidden_ui_glyph_sdf_tests::DragWidgetFixturePoints(*this, origin, destination);
 }
 
 void WidgetFixture::press(const Core::Key::Enum value, const b8 repeat, const b8 shift){
-    InputEvent event;
-    event.type = InputEventType::KeyDown;
-    event.key = value;
-    event.repeat = repeat;
-    event.shift = shift;
-    EXPECT_TRUE(send(event).commandConsumed);
-    if(!repeat){
-        event.type = InputEventType::KeyUp;
-        EXPECT_TRUE(send(event).commandConsumed);
-    }
+    ::__hidden_ui_glyph_sdf_tests::PressWidgetFixtureKey(*this, value, repeat, shift);
 }
 
 Expected<SkinPaintSample> WidgetFixture::sampleSkinPaint(const DrawSnapshot& snapshot, const Name& name)const noexcept{

@@ -61,6 +61,10 @@ StringView SelectRefractionCaptureDrawMarkerLabel(in b8 generate){
     return s_RefractionCaptureRasterLabel;
 }
 
+Expected<Name> FormatRefractionCaptureDrawIdentity(in usize drawTaskIndex){
+    return ParseName(StringFormat("render.refraction.capture.draw_{}", drawTaskIndex));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -552,13 +556,12 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
             uses.push_back(ReadWriteUse(instance, Core::ResourceStates::RenderTarget));
             uses.push_back(ReadWriteUse(specularRoughness, Core::ResourceStates::RenderTarget));
         }
-        const auto identityText = StringFormat(scratchArena, "render.refraction.capture.draw_{}", drawTaskIndex++);
-        const auto identity = ToName(identityText);
+        const Expected<Name> identity = FormatRefractionCaptureDrawIdentity(drawTaskIndex++);
         if(!identity || !*identity){
             dependency = {};
             return false;
         }
-        Core::GpuTaskDesc desc = TaskDesc(**identity, SelectRefractionCaptureDrawMarkerLabel(generate), dependency);
+        Core::GpuTaskDesc desc = TaskDesc(*identity, SelectRefractionCaptureDrawMarkerLabel(generate), dependency);
         desc.setResourceUses(uses).setResourceSetUses({ setUses.data(), setUseCount });
         CaptureDrawTask::Payload payload{arena, materialSystem};
         payload.avboitTargets = targets.avboit;

@@ -36,7 +36,7 @@ namespace ECSRenderDetail{
 
 
 template<usize SlotCount>
-[[nodiscard]] inline Expected<Array<Core::BufferHandle, SlotCount>> CreateStatisticsReadbackBuffers(
+[[nodiscard]] NWB_INLINE Expected<Array<Core::BufferHandle, SlotCount>> CreateStatisticsReadbackBuffers(
     const usize counterByteSize,
     const Array<Name, SlotCount>& names,
     Core::GraphicsRuntime& graphics
@@ -54,7 +54,7 @@ template<usize SlotCount>
 }
 
 template<usize CounterByteSize, usize SlotCount, typename ControlT>
-[[nodiscard]] inline b8 PrepareStatisticsReadbackControlAndBuffers(
+[[nodiscard]] NWB_INLINE b8 PrepareStatisticsReadbackControlAndBuffers(
     const Array<Name, SlotCount>& names,
     const TStringView controlErrorMessage,
     Core::Alloc::GlobalArena& arena,
@@ -81,7 +81,7 @@ template<usize CounterByteSize, usize SlotCount, typename ControlT>
 }
 
 template<usize CounterByteSize, usize SlotCount, typename ControlHandleT>
-inline void PollCompletedStatisticsReadback(
+NWB_INLINE void PollCompletedStatisticsReadback(
     const Array<Core::BufferHandle, SlotCount>& buffers,
     const TStringView mapErrorMessage,
     ControlHandleT& control,

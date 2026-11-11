@@ -22,7 +22,7 @@ inline constexpr u32 s_DepthWarpControlWords = NWB_AVBOIT_CONTROL_WORD_COUNT + s
 inline constexpr u32 s_DepthWarpResultWords = s_DepthWarpWords + s_DepthWarpControlWords;
 inline constexpr u32 s_DepthWarpSentinel = 0xa5f07c39u;
 
-[[nodiscard]] inline Impl::RendererAvboitPushConstants BuildAvboitDepthWarpPush(const AvboitDepthWarpCase& probe, const u32 ordinal, const u32 slots)noexcept{
+[[nodiscard]] NWB_INLINE Impl::RendererAvboitPushConstants BuildAvboitDepthWarpPush(const AvboitDepthWarpCase& probe, const u32 ordinal, const u32 slots)noexcept{
     Impl::RendererAvboitPushConstants push;
     push.frame[0] = 1000u + ordinal % 997u;
     push.frame[1] = 300u + ordinal % 251u;
@@ -102,7 +102,7 @@ public:
     }
 };
 
-[[nodiscard]] inline Expected<Core::GpuTaskId> DeclareDepthWarpBatch(void* userData, Core::GpuTaskGraph& graph){
+[[nodiscard]] NWB_INLINE Expected<Core::GpuTaskId> DeclareDepthWarpBatch(void* userData, Core::GpuTaskGraph& graph){
     const auto& payload = *MakeNotNull(static_cast<const DepthWarpProbeBatchTask::Payload*>(userData));
     const Name probeName = Name(s_SmokeNameAvboitDepthWarpProbe);
     const auto importBuf = [&graph](const Core::BufferHandle& buffer, const AStringView label, const Core::ResourceStates::Mask state){
@@ -161,6 +161,18 @@ public:
     explicit DepthWarpUnfocusedPass(Core::GraphicsRuntime& graphics)noexcept : Core::IRenderPass(graphics){}
     virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
 };
+
+[[nodiscard]] NWB_INLINE Expected<Core::BufferHandle> CreateDepthWarpProbeBuffer(const Name name, const u32 words, const b8 readback, Core::GraphicsRuntime& graphics){
+    Core::BufferDesc desc;
+    desc.setDebugName(name)
+        .setByteSize(words * sizeof(u32))
+        .setStructStride(sizeof(u32))
+        .setCanHaveUAVs(!readback)
+        .setCpuAccess(readback ? Core::CpuAccessMode::Read : Core::CpuAccessMode::None)
+        .enableAutomaticStateTracking(Core::ResourceStates::CopyDest)
+    ;
+    return graphics.createBuffer(desc);
+}
 };
 
 
@@ -217,22 +229,6 @@ b8 VerifyDepthWarpProbeCaseWords(in AvboitDepthWarpCase probe, in u32 ordinal, i
         }
     }
     return true;
-}
-
-Expected<BufferHandle> CreateDepthWarpProbeBuffer(in Name name, in u32 words, in b8 readback, mut GraphicsRuntime graphics){
-    Expected<BufferHandle> result = MakeUnexpected(Failure());
-    native(in name, in words, in readback, mut graphics, mut result){
-        Core::BufferDesc desc;
-        desc.setDebugName(name)
-            .setByteSize(words * sizeof(u32))
-            .setStructStride(sizeof(u32))
-            .setCanHaveUAVs(!readback)
-            .setCpuAccess(readback ? Core::CpuAccessMode::Read : Core::CpuAccessMode::None)
-            .enableAutomaticStateTracking(Core::ResourceStates::CopyDest)
-        ;
-        result = graphics.createBuffer(desc);
-    }
-    return result;
 }
 
 b8 InitializeDepthWarpProbeProject(

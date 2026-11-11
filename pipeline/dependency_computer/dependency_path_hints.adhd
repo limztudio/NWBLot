@@ -8,55 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <engine_namespace.h>
-
-#include <core/global.h>
-#include <core/assets/global.h>
-#include <core/metascript/parser.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#define NWB_DEPENDENCY_COMPUTER_BEGIN NWB_BEGIN namespace Pipeline{ namespace DependencyComputer{
-#define NWB_DEPENDENCY_COMPUTER_END }; }; NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_DEPENDENCY_COMPUTER_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using MetascriptDocument = Core::Metascript::Document;
-using MetascriptValue = Core::Metascript::Value;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_DEPENDENCY_COMPUTER_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class DependencyPathHints{
     private HashMap<Name, String> m_texts;
 
@@ -77,39 +28,6 @@ class DependencyPathHints{
         const Name key = parsedName.value();
         if(!this.m_texts.contains(key))
             this.m_texts.try_emplace(key, String(trimmedText));
-    }
-
-    public void collectValue(in MetascriptValue value){
-        if(value.isString()){
-            this.record(value.asString());
-            return;
-        }
-        if(value.isList()){
-            const usize itemCount = value.asList().size();
-            for(usize i = 0u; i < itemCount; ++i)
-                this.collectValue(value.asList()[i]);
-            return;
-        }
-        if(!value.isMap())
-            return;
-        native(mut texts = this.m_texts, in value){
-            (void)texts;
-            for(const auto& [key, fieldValue] : value.asMap()){
-                this->record(AStringView(key.data(), key.size()));
-                this->collectValue(fieldValue);
-            }
-        }
-    }
-
-    public void collectDocument(in MetascriptDocument doc){
-        native(mut texts = this.m_texts, in doc){
-            (void)texts;
-            for(const Core::Metascript::Document::Declaration& declaration : doc.declarations()){
-                const Core::Metascript::MStringView varView(declaration.variable.data(), declaration.variable.size());
-                if(const Core::Metascript::Value* value = doc.findVariable(varView))
-                    this->collectValue(*value);
-            }
-        }
     }
 
     public StringView lookup(in Name virtualPath)const{

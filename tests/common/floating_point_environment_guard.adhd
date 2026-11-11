@@ -2,52 +2,24 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+class FloatingPointEnvironmentGuard{
+    private FloatingPointEnvironment m_environment;
+    private b8 m_active = true;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <engine_namespace.h>
-
-#include <global/assert.h>
-#include <global/floating_point_environment.h>
-#include <global/generic.h>
-
-NWB_BEGIN
-
-namespace Tests{
-
-class FloatingPointEnvironmentGuard final : NoCopy{
-public:
-    explicit FloatingPointEnvironmentGuard(const FloatingPointEnvironment& environment)noexcept
-        : m_environment(environment)
-    {}
-    FloatingPointEnvironmentGuard(FloatingPointEnvironmentGuard&&) = delete;
-    ~FloatingPointEnvironmentGuard()noexcept{
-        if(m_active && !SetFloatingPointEnvironment(m_environment))
-            NWB_ASSERT(false);
+    public FloatingPointEnvironmentGuard(in FloatingPointEnvironment environment){
+        this.m_environment = environment;
     }
 
+    public ~FloatingPointEnvironmentGuard(){
+        if(this.m_active){
+            const auto restored = SetFloatingPointEnvironment(this.m_environment);
+            assert(restored.has_value(), "Failed to restore floating-point environment");
+        }
+    }
 
-public:
-    void release()noexcept{ m_active = false; }
-
-
-private:
-    FloatingPointEnvironment m_environment{};
-    b8 m_active = true;
-};
-
-};
-
-NWB_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public void release(){
+        this.m_active = false;
+    }
 }
 
 

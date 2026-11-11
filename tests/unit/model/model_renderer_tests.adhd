@@ -38,6 +38,10 @@ using RendererComponent = Impl::RendererComponent;
 using MaterialInstanceComponent = Impl::MaterialInstanceComponent;
 using MaterialInstanceParameter = Impl::MaterialInstanceParameter;
 
+[[nodiscard]] NWB_INLINE usize MaterialInstanceComponentAddress(const World& world, const Core::ECS::EntityID entity)noexcept{
+    return reinterpret_cast<usize>(world.tryGetComponent<MaterialInstanceComponent>(entity));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -53,14 +57,6 @@ using MaterialInstanceParameter = Impl::MaterialInstanceParameter;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-usize MaterialInstanceComponentAddress(in World world, in EntityID entity){
-    usize address = 0u;
-    native(in world, in entity, mut address){
-        address = reinterpret_cast<usize>(world.tryGetComponent<MaterialInstanceComponent>(entity));
-    }
-    return address;
-}
 
 void VerifyModelRendererOwnerOverridesSurvivePoolGrowth(){
     EcsTestWorld context = EcsTestWorld();

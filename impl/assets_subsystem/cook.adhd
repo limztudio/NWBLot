@@ -177,6 +177,64 @@ b8 IsSelfSubsystemReference(in Name subsystemVirtualPath, in Name referencedName
     return referencedName == subsystemVirtualPath;
 }
 
+b8 ValidateSubsystemSubsystemsFieldIsList(in Path nwbFilePath, in b8 isList){
+    if(isList)
+        return true;
+
+    error("{} '{}': '{}' must be a list of strings", s_SubsystemDiagnosticPrefix, PathToString(nwbFilePath), s_SubsystemSubsystemsFieldName);
+    return false;
+}
+
+b8 ValidateNotSelfSubsystemReference(in Path nwbFilePath, in Name subsystemVirtualPath, in Name referencedName){
+    if(!IsSelfSubsystemReference(subsystemVirtualPath, referencedName))
+        return true;
+
+    error(
+        "{} '{}': '{}' cannot reference subsystem '{}' itself",
+        s_SubsystemDiagnosticPrefix,
+        PathToString(nwbFilePath),
+        s_SubsystemSubsystemsFieldName,
+        subsystemVirtualPath.resolvedText()
+    );
+    return false;
+}
+
+b8 ValidateRequiredSubsystemFieldPresent(in Path nwbFilePath, in StringView fieldName, in Name assetType, in b8 present){
+    if(present)
+        return true;
+
+    error(
+        "{} '{}': required field '{}' is missing for '{}'",
+        s_SubsystemDiagnosticPrefix,
+        PathToString(nwbFilePath),
+        fieldName,
+        assetType.resolvedText()
+    );
+    return false;
+}
+
+b8 ValidateNonEmptySubsystemArrayField(in Path nwbFilePath, in StringView fieldName, in b8 validList){
+    if(validList)
+        return true;
+
+    error("{} '{}': '{}' must be a non-empty list of strings", s_SubsystemDiagnosticPrefix, PathToString(nwbFilePath), fieldName);
+    return false;
+}
+
+b8 ValidateUniqueSubsystemArrayFieldEntry(in Path nwbFilePath, in StringView fieldName, in Name entryName, in b8 isDuplicate){
+    if(!isDuplicate)
+        return true;
+
+    error(
+        "{} '{}': '{}' contains duplicate entry '{}'",
+        s_SubsystemDiagnosticPrefix,
+        PathToString(nwbFilePath),
+        fieldName,
+        entryName.resolvedText()
+    );
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -294,25 +352,15 @@ b8 AssetsSubsystemCook::ParseSubsystemCookMetadata(const Path& nwbFilePath, cons
 
     outSubsystem.subsystems.clear();
     if(const Core::Metascript::Value* const subsystemsValue = asset.findField(s_SubsystemSubsystemsFieldName)){
-        if(!subsystemsValue->isList()){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' must be a list of strings"), ConvertString(s_SubsystemDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_SubsystemSubsystemsFieldName));
+        if(!ValidateSubsystemSubsystemsFieldIsList(nwbFilePath, subsystemsValue->isList()))
             return false;
-        }
         outSubsystem.subsystems.reserve(subsystemsValue->asList().size());
         for(const Core::Metascript::Value& itemValue : subsystemsValue->asList()){
             const auto parsedRef = Core::Assets::ReservedAssetRefParser::ParseValue<ISubsystem>(nwbFilePath, s_SubsystemDiagnosticPrefix, s_SubsystemSubsystemsFieldName, itemValue, s_SubsystemStringValueRequirement, scratchArena);
             if(!parsedRef)
                 return false;
-            if(IsSelfSubsystemReference(outSubsystem.virtualPath(), parsedRef->name())){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("{} '{}': '{}' cannot reference subsystem '{}' itself")
-                    , ConvertString(s_SubsystemDiagnosticPrefix)
-                    , PathToString<tchar>(nwbFilePath)
-                    , ConvertString(s_SubsystemSubsystemsFieldName)
-                    , ConvertString(outSubsystem.virtualPath().resolvedText())
-                );
+            if(!ValidateNotSelfSubsystemReference(nwbFilePath, outSubsystem.virtualPath(), parsedRef->name()))
                 return false;
-            }
             outSubsystem.subsystems.push_back(*parsedRef);
         }
         DeduplicateSubsystemRefs(outSubsystem.subsystems);
@@ -322,39 +370,26 @@ b8 AssetsSubsystemCook::ParseSubsystemCookMetadata(const Path& nwbFilePath, cons
     for(usize i = 0u; i < count; ++i){
         const SubsystemFieldValueDescriptor descriptor = outSubsystem.fieldDescriptor(i);
         const Core::Metascript::Value* const fieldValue = asset.findField(descriptor.fieldName);
-        if(!fieldValue){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("{} '{}': required field '{}' is missing for '{}'")
-                , ConvertString(s_SubsystemDiagnosticPrefix)
-                , PathToString<tchar>(nwbFilePath)
-                , ConvertString(descriptor.fieldName)
-                , ConvertString(outSubsystem.assetType().resolvedText())
-            );
+        if(!ValidateRequiredSubsystemFieldPresent(nwbFilePath, descriptor.fieldName, outSubsystem.assetType(), fieldValue != nullptr))
             return false;
-        }
         outSubsystem.clearFieldValues(i);
         if(descriptor.isArray){
-            if(!fieldValue->isList() || fieldValue->asList().empty()){
-                NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' must be a non-empty list of strings"), ConvertString(s_SubsystemDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(descriptor.fieldName));
+            if(!ValidateNonEmptySubsystemArrayField(nwbFilePath, descriptor.fieldName, fieldValue->isList() && !fieldValue->asList().empty()))
                 return false;
-            }
             for(const Core::Metascript::Value& itemValue : fieldValue->asList()){
                 const auto parsedRef = Core::Assets::ReservedAssetRefParser::ParseValue<Core::Assets::IAsset>(nwbFilePath, s_SubsystemDiagnosticPrefix, descriptor.fieldName, itemValue, s_SubsystemStringValueRequirement, scratchArena);
                 if(!parsedRef)
                     return false;
                 const usize existingCount = outSubsystem.fieldValueCount(i);
+                b8 isDuplicate = false;
                 for(usize prevIndex = 0u; prevIndex < existingCount; ++prevIndex){
                     if(outSubsystem.fieldValue(i, prevIndex) == parsedRef->name()){
-                        NWB_LOGGER_ERROR(
-                            NWB_TEXT("{} '{}': '{}' contains duplicate entry '{}'")
-                            , ConvertString(s_SubsystemDiagnosticPrefix)
-                            , PathToString<tchar>(nwbFilePath)
-                            , ConvertString(descriptor.fieldName)
-                            , ConvertString(parsedRef->name().resolvedText())
-                        );
-                        return false;
+                        isDuplicate = true;
+                        break;
                     }
                 }
+                if(!ValidateUniqueSubsystemArrayFieldEntry(nwbFilePath, descriptor.fieldName, parsedRef->name(), isDuplicate))
+                    return false;
                 outSubsystem.appendFieldValue(i, parsedRef->name());
             }
         }

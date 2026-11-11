@@ -12,6 +12,9 @@
 NWB_ADHD_BEGIN
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void SimdEmissionFragments::EmitSimdMatrixBinaryRowInitSuffix(MString& out, const MStringView matRegType, const MStringView fnPrefix){
     out.append("; return ");
     out.append(matRegType.data(), matRegType.size());
@@ -54,6 +57,7 @@ void SimdEmissionFragments::EmitSimdIntTwosComplementNegateSuffix(MString& out, 
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_ADHD_END

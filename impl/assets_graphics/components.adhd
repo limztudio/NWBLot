@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_scene/components.adhd>
 #include <impl/ecs_mesh/components.adhd>
 #include <impl/ecs_model/components.adhd>
 #include <impl/ecs_render/components.adhd>
@@ -11,19 +12,43 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[component_asset("model_component")]
-class ModelComponentAsset{
+[arena, asset("model_component")]
+class ModelComponentAsset : IComponent{
     public ModelComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        entity.addComponent<ModelComponent>() = this.component;
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
 }
 
-[component_asset("mesh_component")]
-class MeshComponentAsset{
+[arena, asset("mesh_component")]
+class MeshComponentAsset : IComponent{
     public MeshComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        entity.addComponent<MeshComponent>() = this.component;
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
 }
 
-[component_asset("renderer_component")]
-class RendererComponentAsset{
+[arena, asset("renderer_component")]
+class RendererComponentAsset : IComponent{
     public RendererComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        entity.addComponent<RendererComponent>() = this.component;
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
 }
 
 [serialize]

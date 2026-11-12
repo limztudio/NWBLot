@@ -533,7 +533,7 @@ b8 PreparedSceneSwBvhTraversal::record(){
         || !RayTracingDetail::IsHeapHandle(state.m_shadowInstanceHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
         || !RayTracingDetail::IsHeapHandle(state.m_shadowMaterialTypedHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
     ){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software scene traversal no longer matches preflight storage"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: frozen software scene traversal no longer matches preflight storage"));
         return rejectPreparedTraversal();
     }
     if(
@@ -541,7 +541,7 @@ b8 PreparedSceneSwBvhTraversal::record(){
         || m_owner.m_world.componentMutationVersion<NWB::Impl::Scene::TransformComponent>() != m_preparedSceneSwBvhTransformMutationVersion
         || m_owner.m_world.componentMutationVersion<MaterialInstanceComponent>() != m_preparedSceneSwBvhMaterialMutationVersion
     ){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software scene inputs changed after graph preflight"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: frozen software scene inputs changed after graph preflight"));
         return rejectPreparedTraversal();
     }
 
@@ -578,7 +578,7 @@ b8 PreparedSceneSwBvhTraversal::record(){
     for(const PreparedSceneSwBvhMesh& prepared : m_preparedSceneSwBvhMeshes){
         auto meshResult = m_owner.m_meshSystem.findRayTracingResourceSnapshot(prepared.meshName);
         if(!meshResult || !matchesMesh((*meshResult), prepared)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software scene lost mesh '{}'"), ConvertString(prepared.meshName.resolvedText()));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: frozen software scene lost mesh '{}'"), ConvertString(prepared.meshName.resolvedText()));
             return rejectPreparedTraversal();
         }
     }
@@ -597,7 +597,7 @@ b8 PreparedSceneSwBvhTraversal::record(){
         state.m_swShadowMeshIndexHandles.size(),
         state.m_swShadowMeshAttributeHandles.size()
     )){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software scene traversal table changed after graph preflight"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: frozen software scene traversal table changed after graph preflight"));
         return rejectPreparedTraversal();
     }
     for(usize index = 0u; index < m_preparedSceneSwBvhMeshes.size(); ++index){
@@ -612,7 +612,7 @@ b8 PreparedSceneSwBvhTraversal::record(){
             || state.m_swShadowMeshIndexHandles[index] != prepared.triangleIndexHeapHandle
             || state.m_swShadowMeshAttributeHandles[index] != prepared.attributeHeapHandle
         ){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software scene traversal table no longer matches preflight"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: frozen software scene traversal table no longer matches preflight"));
             return rejectPreparedTraversal();
         }
     }

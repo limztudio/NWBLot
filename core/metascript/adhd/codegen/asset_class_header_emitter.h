@@ -19,13 +19,11 @@ NWB_ADHD_BEGIN
 
 class AssetClassHeaderEmitter final{
 public:
-    AssetClassHeaderEmitter(const SymbolTable& symbols, const CppTypeEmitter& typeEmitter)noexcept : m_symbols(symbols), m_typeEmitter(typeEmitter){}
+    explicit AssetClassHeaderEmitter(const SymbolTable& symbols)noexcept : m_symbols(symbols){}
     void emitSubsystem(MString& out, const ClassDecl& decl)const;
-    void emitComponent(MString& out, const ClassDecl& decl)const;
 
 private:
     const SymbolTable& m_symbols;
-    const CppTypeEmitter& m_typeEmitter;
 };
 
 

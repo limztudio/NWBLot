@@ -15,7 +15,7 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -79,7 +79,7 @@ struct ClipboardTextFailure{
     Optional<ClipboardText> memory{};
 };
 
-[[nodiscard]] NWB_INLINE Expected<usize, ErrorCode> ClipboardByteCount(const usize characterCount)noexcept{
+[[nodiscard]] inline Expected<usize, ErrorCode> ClipboardByteCount(const usize characterCount)noexcept{
     if(characterCount > (Limit<usize>::s_Max / sizeof(tchar)) - 1u)
         return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
     return (characterCount + 1u) * sizeof(tchar);
@@ -132,7 +132,7 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -187,7 +187,7 @@ Expected<ClipboardText, ClipboardTextFailure> BuildClipboardText(const MessageDe
     for(const auto& message : messages){
         const LogString& text = message.first();
         const usize textBytes = text.size() * sizeof(tchar);
-        NWB_MEMCPY(destination + cursor, *byteSize - cursor * sizeof(tchar), text.data(), textBytes);
+        FOUNDATION_MEMCPY(destination + cursor, *byteSize - cursor * sizeof(tchar), text.data(), textBytes);
         cursor += text.size();
         destination[cursor++] = static_cast<tchar>('\r');
         destination[cursor++] = static_cast<tchar>('\n');

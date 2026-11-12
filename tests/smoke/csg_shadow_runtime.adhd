@@ -31,20 +31,20 @@ native{
 #include <global/simdmath.h>
 
 namespace NWB::Tests::Smoke{
-[[nodiscard]] NWB_INLINE AStringView CsgShadowProjectName()noexcept{
+[[nodiscard]] FOUNDATION_INLINE AStringView CsgShadowProjectName()noexcept{
     return "CsgShadowSmokeProject";
 }
 
-[[nodiscard]] NWB_INLINE NotNullUniquePtr<World> CreateCsgShadowWorldOrDie(ProjectRuntimeContext& context){
+[[nodiscard]] FOUNDATION_INLINE NotNullUniquePtr<World> CreateCsgShadowWorldOrDie(ProjectRuntimeContext& context){
     auto world = CreateSmokeWorldOrDie(CsgShadowProjectName(), context);
     auto& renderer = AddSmokeRenderSystems(*world, context);
     Impl::ReflectionSettings reflection;
     reflection.traceMode = Impl::ReflectionTraceMode::Disabled;
-    NWB_FATAL_ASSERT_MSG(renderer.setReflectionSettings(reflection), NWB_TEXT("Invalid CSG shadow reflection settings"));
+    FOUNDATION_FATAL_ASSERT_MSG(renderer.setReflectionSettings(reflection), FOUNDATION_TEXT("Invalid CSG shadow reflection settings"));
     renderer.setRefractionEnabled(false);
     Impl::PresentationSettings presentation;
     presentation.toneMap = Impl::PresentationToneMap::LinearClamp;
-    NWB_FATAL_ASSERT_MSG(renderer.setPresentationSettings(presentation), NWB_TEXT("Invalid CSG shadow presentation settings"));
+    FOUNDATION_FATAL_ASSERT_MSG(renderer.setPresentationSettings(presentation), FOUNDATION_TEXT("Invalid CSG shadow presentation settings"));
     return world;
 }
 };
@@ -116,7 +116,7 @@ class CsgShadowSmokeProjectImpl : IProjectEntryCallbacks{
             mut hardware
         ){
             const auto camera = CreateSmokeCamera(0.0f, -s_ShadowSmokeCameraDepth, 0.0f, *world);
-            NWB_FATAL_ASSERT_MSG(camera.valid(), NWB_TEXT("CsgShadowSmokeProject: camera creation failed"));
+            FOUNDATION_FATAL_ASSERT_MSG(camera.valid(), FOUNDATION_TEXT("CsgShadowSmokeProject: camera creation failed"));
             auto& cameraTransform = *MakeNotNull(world->tryGetComponent<Impl::Scene::TransformComponent>(camera));
             cameraTransform.position.x = cameraX;
 
@@ -129,14 +129,14 @@ class CsgShadowSmokeProjectImpl : IProjectEntryCallbacks{
                 VectorSet(4.0f, 1.0f, 3.0f, 0.0f),
                 *world
             );
-            NWB_FATAL_ASSERT_MSG(receiver.valid(), NWB_TEXT("CsgShadowSmokeProject: camera/receiver creation failed"));
+            FOUNDATION_FATAL_ASSERT_MSG(receiver.valid(), FOUNDATION_TEXT("CsgShadowSmokeProject: camera/receiver creation failed"));
             auto& receiverTransform = *MakeNotNull(world->tryGetComponent<Impl::Scene::TransformComponent>(receiver));
             StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), receiverTransform.rotation);
 
             const auto light = pointLight
                 ? Impl::Scene::CreatePointLightEntity(*world, Float4(0.0f, 0.0f, -12.0f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f, 30.0f)
                 : Impl::Scene::CreateDirectionalLightEntity(*world, 0.0f, 0.0f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f);
-            NWB_FATAL_ASSERT_MSG(light.valid(), NWB_TEXT("CsgShadowSmokeProject: light creation failed"));
+            FOUNDATION_FATAL_ASSERT_MSG(light.valid(), FOUNDATION_TEXT("CsgShadowSmokeProject: light creation failed"));
             auto& lightComponent = *MakeNotNull(world->tryGetComponent<Impl::Scene::LightComponent>(light));
             lightComponent.angularRadius = angularRadius;
             lightComponent.sourceRadius = sourceRadius;
@@ -144,7 +144,7 @@ class CsgShadowSmokeProjectImpl : IProjectEntryCallbacks{
 
             const AStringView sourceLabel = mode.finiteLightSource ? s_ShadowSmokeFinite : s_ShadowSmokeHard;
             NWB_LOGGER_ESSENTIAL_INFO(
-                NWB_TEXT("CsgShadowSmokeProject: light_source={} angular_radius={:.3f} source_radius={:.3f}"),
+                FOUNDATION_TEXT("CsgShadowSmokeProject: light_source={} angular_radius={:.3f} source_radius={:.3f}"),
                 ConvertString(sourceLabel),
                 static_cast<f64>(angularRadius),
                 static_cast<f64>(sourceRadius)
@@ -345,7 +345,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{
-    return NWB_TEXT("NWB CSG Shadow Smoke");
+    return FOUNDATION_TEXT("NWB CSG Shadow Smoke");
 }
 
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){

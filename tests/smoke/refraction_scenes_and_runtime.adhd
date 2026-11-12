@@ -20,17 +20,17 @@ native{
 namespace NWB::Tests::Smoke{
 using Impl::RefractionStatistics;
 
-[[nodiscard]] NWB_INLINE AStringView RefractionSmokeProjectName()noexcept{
+[[nodiscard]] FOUNDATION_INLINE AStringView RefractionSmokeProjectName()noexcept{
     return "RefractionSmokeProject";
 }
 
-NWB_INLINE void LogRefractionQueryDiagnosticsCounters(
+FOUNDATION_INLINE void LogRefractionQueryDiagnosticsCounters(
     const Impl::RefractionStatistics& statistics,
     const u64 currentFrame,
     const u64 targetStart
 ){
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionQueryDiagnostics: sequence={} generation={} graphics_frame={} observed_frame={} target_start_frame={} completed_target_frames={} frame_index={} width={} height={}")
-        NWB_TEXT(" hardware_requested={} hardware_available={} hardware_ready={} csg_enabled={} token_valid={} physical_valid={} token_queue={} token_value={} physical_queue={} device_generation={}")
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("RefractionQueryDiagnostics: sequence={} generation={} graphics_frame={} observed_frame={} target_start_frame={} completed_target_frames={} frame_index={} width={} height={}")
+        FOUNDATION_TEXT(" hardware_requested={} hardware_available={} hardware_ready={} csg_enabled={} token_valid={} physical_valid={} token_queue={} token_value={} physical_queue={} device_generation={}")
         , statistics.sequence
         , statistics.generation
         , statistics.graphicsFrameIndex
@@ -52,13 +52,13 @@ NWB_INLINE void LogRefractionQueryDiagnosticsCounters(
         , statistics.acceptedToken.deviceGeneration
     );
 #define NWB_SMOKE_REFRACTION_LOG_COUNTER(name, offset) \
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionQueryCounter: sequence={} generation={} name={} value={}"), statistics.sequence, statistics.generation, NWB_TEXT(#name), statistics.name);
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("RefractionQueryCounter: sequence={} generation={} name={} value={}"), statistics.sequence, statistics.generation, FOUNDATION_TEXT(#name), statistics.name);
     NWB_REFRACTION_DIAGNOSTIC_COUNTER_FIELDS(NWB_SMOKE_REFRACTION_LOG_COUNTER)
 #undef NWB_SMOKE_REFRACTION_LOG_COUNTER
 #define NWB_SMOKE_REFRACTION_COUNT_COUNTER(name, offset) + 1u
     constexpr u32 s_CounterCount = 0u NWB_REFRACTION_DIAGNOSTIC_COUNTER_FIELDS(NWB_SMOKE_REFRACTION_COUNT_COUNTER);
 #undef NWB_SMOKE_REFRACTION_COUNT_COUNTER
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionQueryDiagnostics: complete sequence={} generation={} counters={}"), statistics.sequence, statistics.generation, s_CounterCount);
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("RefractionQueryDiagnostics: complete sequence={} generation={} counters={}"), statistics.sequence, statistics.generation, s_CounterCount);
 }
 };
 
@@ -819,7 +819,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{
-    return NWB_TEXT("NWB Refraction Smoke");
+    return FOUNDATION_TEXT("NWB Refraction Smoke");
 }
 
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){

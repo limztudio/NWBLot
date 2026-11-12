@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[subsystem("gi_subsystem")]
+[arena, subsystem("gi_subsystem")]
 class GiSubsystem{
     public AssetRef<ComputeShader> surfelAgeFreeCs;
     public AssetRef<ComputeShader> surfelHashBuildCs;

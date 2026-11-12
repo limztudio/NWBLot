@@ -385,10 +385,10 @@ b8 RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameTar
         LogDeferredBindlessHeapMissing();
         return false;
     }
-    NWB_ASSERT(m_deferredState.m_sampler);
-    NWB_ASSERT(m_deferredState.m_sceneShadingBuffer);
-    NWB_ASSERT(m_deferredState.m_lightBuffer);
-    NWB_ASSERT(targets.csgIntervalTargetsValid());
+    FOUNDATION_ASSERT(m_deferredState.m_sampler);
+    FOUNDATION_ASSERT(m_deferredState.m_sceneShadingBuffer);
+    FOUNDATION_ASSERT(m_deferredState.m_lightBuffer);
+    FOUNDATION_ASSERT(targets.csgIntervalTargetsValid());
 
     DeferredBindlessFrameResources& bindless = targets.bindless;
     const DeferredBindlessDescriptorSources sources{

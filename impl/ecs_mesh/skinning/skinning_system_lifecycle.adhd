@@ -96,7 +96,7 @@ namespace __hidden_skinning_system_lifecycle{
 [[nodiscard]] static b8 LoadComputeShader(
     Core::GraphicsRuntime& graphics,
     Core::Assets::AssetManager& assetManager,
-    MeshSkinningSystem::ShaderPathResolveCallback& shaderPathResolver,
+    MeshSkinningShaderPathResolveCallback& shaderPathResolver,
     const ActiveSceneSubsystems* const activeSceneSubsystems,
     const Core::Assets::AssetRef<ComputeShader> SkinningSubsystem::* const member,
     const Name& debugName,
@@ -110,7 +110,7 @@ namespace __hidden_skinning_system_lifecycle{
     const Core::Assets::AssetRef<ComputeShader>& resolved = skinningSubsystem->*member;
     if(!resolved.valid())
         return false;
-    return ShaderAssetLoader::Load<ComputeShader>(resolved.name(), Core::ShaderArchive::s_DefaultVariant, debugName, NWB_TEXT("MeshSkinningSystem"), graphics, assetManager, shaderPathResolver, nullptr, shader);
+    return ShaderAssetLoader::Load<ComputeShader>(resolved.name(), Core::ShaderArchive::s_DefaultVariant, debugName, FOUNDATION_TEXT("MeshSkinningSystem"), graphics, assetManager, shaderPathResolver, nullptr, shader);
 }
 
 [[nodiscard]] static b8 EnsurePushConstantBindingLayout(
@@ -141,7 +141,7 @@ namespace __hidden_skinning_system_lifecycle{
 [[nodiscard]] static b8 EnsureComputePipeline(
     Core::GraphicsRuntime& graphics,
     Core::Assets::AssetManager& assetManager,
-    MeshSkinningSystem::ShaderPathResolveCallback& shaderPathResolver,
+    MeshSkinningShaderPathResolveCallback& shaderPathResolver,
     const ActiveSceneSubsystems* const activeSceneSubsystems,
     const Core::Assets::AssetRef<ComputeShader> SkinningSubsystem::* const member,
     const Name& debugName,
@@ -175,7 +175,7 @@ template<typename PushConstantsT>
     Core::Alloc::GlobalArena& arena,
     Core::GraphicsRuntime& graphics,
     Core::Assets::AssetManager& assetManager,
-    MeshSkinningSystem::ShaderPathResolveCallback& shaderPathResolver,
+    MeshSkinningShaderPathResolveCallback& shaderPathResolver,
     const ActiveSceneSubsystems* const activeSceneSubsystems,
     const Core::Assets::AssetRef<ComputeShader> SkinningSubsystem::* const member,
     const Name& debugName,
@@ -206,7 +206,7 @@ template<typename PushConstantsT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 MeshSkinningSystem::RuntimeResources::hasPersistentHeapDescriptors(const b8 hasActiveSkin, const b8 hasAttributeBuffer)const noexcept{
+b8 MeshSkinningRuntimeResources::hasPersistentHeapDescriptors(const b8 hasActiveSkin, const b8 hasAttributeBuffer)const noexcept{
     const auto storageHandle = [this](const RuntimeStorageDescriptorSlot::Enum slot)noexcept{
         const Core::GpuDescriptorHandle handle = bindlessHeapHandles.storageBuffers[static_cast<usize>(slot)];
         return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
@@ -222,35 +222,44 @@ b8 MeshSkinningSystem::RuntimeResources::hasPersistentHeapDescriptors(const b8 h
     return (!hasActiveSkin || (storageHandle(RuntimeStorageDescriptorSlot::SkinInfluences) && storageHandle(RuntimeStorageDescriptorSlot::JointPalette))) && (!hasAttributeBuffer || storageHandle(RuntimeStorageDescriptorSlot::AttributeBuffer));
 }
 
-MeshSkinningSystem::MeshSkinningSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, IRuntimeMeshRegistry& runtimeMeshRegistry, ShaderPathResolveCallback shaderPathResolver)
-    : Core::ECS::ISystem(arena)
+MeshSkinningSystem::MeshSkinningSystem(
+    ::ArenaBase& __adhd_mother_arena,
+    Core::ECS::World& world,
+    Core::GraphicsRuntime& graphics,
+    Core::Assets::AssetManager& assetManager,
+    IRuntimeMeshRegistry& runtimeMeshRegistry,
+    const MeshSkinningShaderPathResolveCallback& shaderPathResolver
+)noexcept
+    : Core::ECS::ISystem(__adhd_mother_arena)
     , Core::IRenderPass(graphics)
-    , m_arena(arena)
-    , m_world(world)
-    , m_graphics(graphics)
-    , m_assetManager(assetManager)
-    , m_runtimeMeshRegistry(runtimeMeshRegistry)
-    , m_shaderPathResolver(Move(shaderPathResolver))
-    , m_runtimeMeshCache(arena, graphics, assetManager)
-    , m_defaultSceneSubsystems(arena)
-    , m_runtimeResources(0, Hasher<u64>(), EqualTo<u64>(), arena)
-    , m_frameDispatchPlans(arena)
-    , m_frameDeformationPlans(arena)
-    , m_frameLocalBoundsDispatches(arena)
-    , m_frameLiveBuffers(arena)
-    , m_frameTaskGraph(arena)
-    , m_frameTaskGraphAnalysis(arena)
-    , m_frameTaskGraphQueueAssignments(arena)
-    , m_frameCompiledGraph(arena)
-    , m_frameRecordedGraph(arena)
-    , m_frameSubmissionTransaction(arena)
-    , m_acceptedSkinningState(arena)
+    , __adhd_arena(::MakeNotNull(&__adhd_mother_arena))
+    , m_frameTaskGraph(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena))
+    , m_frameCompiledGraph(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena))
+    , m_frameTaskGraphAnalysis(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena))
+    , m_frameSubmissionTransaction(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena))
+    , m_acceptedSkinningState(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena))
+    , m_frameTaskGraphQueueAssignments(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena))
+    , m_frameRecordedGraph(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena))
+    , m_arena(::MakeNotNull(&static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena)))
+    , m_world(::MakeNotNull(&world))
+    , m_graphics(::MakeNotNull(&graphics))
+    , m_assetManager(::MakeNotNull(&assetManager))
+    , m_runtimeMeshRegistry(::MakeNotNull(&runtimeMeshRegistry))
+    , m_shaderPathResolver(shaderPathResolver)
+    , m_runtimeMeshCache(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena), graphics, assetManager)
+    , m_defaultSceneSubsystems(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena))
+    , m_activeSceneSubsystems(nullptr)
+    , m_runtimeResources(0, Hasher<u64>(), EqualTo<u64>(), static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena))
+    , m_frameDispatchPlans(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena))
+    , m_frameDeformationPlans(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena))
+    , m_frameLocalBoundsDispatches(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena))
+    , m_frameLiveBuffers(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena))
 {
     writeAccess<SkinnedMeshBindingComponent>();
     readAccess<SkeletonJointPaletteComponent>();
     readAccess<SkeletonPoseComponent>();
 
-    m_runtimeMeshRegistry.registerRuntimeMeshProvider(*this);
+    m_runtimeMeshRegistry->registerRuntimeMeshProvider(*this);
 }
 
 MeshSkinningSystem::~MeshSkinningSystem()noexcept{
@@ -260,10 +269,10 @@ MeshSkinningSystem::~MeshSkinningSystem()noexcept{
         resolveFrameTaskGraphAttempt(planAccess);
     }
     m_frameTaskGraph.reset();
-    m_runtimeMeshRegistry.unregisterRuntimeMeshProvider(*this);
+    m_runtimeMeshRegistry->unregisterRuntimeMeshProvider(*this);
 }
 
-void MeshSkinningSystem::prepare([[maybe_unused]] Core::ECS::World& world){
+void MeshSkinningSystem::prepare([[maybe_unused]] Core::ECS::World& world)noexcept{
     m_runtimeSetupReady = false;
     if(!ensureActiveSceneSubsystems())
         return;
@@ -274,10 +283,10 @@ void MeshSkinningSystem::prepare([[maybe_unused]] Core::ECS::World& world){
     if(!m_skinningComputePipeline || !m_boundsComputePipeline || !m_localBoundsComputePipeline || !m_repackComputePipeline)
         return;
     Core::Alloc::ScratchArena scratchArena(s_PrepareRuntimeArena);
-    m_runtimeMeshCache.prepareResources(m_world, scratchArena);
+    m_runtimeMeshCache.prepareResources(*m_world, scratchArena);
     pruneRuntimeResources();
     b8 ready = true;
-    m_world.view<SkinnedMeshBindingComponent>().each([&](Core::ECS::EntityID, SkinnedMeshBindingComponent& binding){
+    m_world->view<SkinnedMeshBindingComponent>().each([&](Core::ECS::EntityID, SkinnedMeshBindingComponent& binding){
         if(!ready)
             return;
         if(!binding.runtimeMesh.valid())
@@ -286,7 +295,7 @@ void MeshSkinningSystem::prepare([[maybe_unused]] Core::ECS::World& world){
         MeshSkinningRuntimeInstance* instance = m_runtimeMeshCache.findInstance(binding.runtimeMesh);
         if(!instance)
             return;
-        NWB_ASSERT(instance->valid());
+        FOUNDATION_ASSERT(instance->valid());
 
         ready = prepareRuntimeMeshResources(*instance, scratchArena);
     });
@@ -294,7 +303,7 @@ void MeshSkinningSystem::prepare([[maybe_unused]] Core::ECS::World& world){
     m_runtimeSetupReady = ready;
 }
 
-b8 MeshSkinningSystem::validateResources(const u32 width, const u32 height, [[maybe_unused]] const u32 sampleCount){
+b8 MeshSkinningSystem::validateResources(const u32 width, const u32 height, [[maybe_unused]] const u32 sampleCount)noexcept{
     if(width == 0 || height == 0)
         return true;
     if(!ensureActiveSceneSubsystems())
@@ -302,48 +311,48 @@ b8 MeshSkinningSystem::validateResources(const u32 width, const u32 height, [[ma
     if(!isSkinningFeatureEnabled())
         return true;
 
-    auto& device = m_graphics.getDevice();
+    auto& device = m_graphics->getDevice();
 
     const b8 timingReady =
-        m_graphics.gpuTiming().prepareScopeQueries(MeshSkinningGpuTimingScope::s_Skinning.identity, device, s_PerRuntimeMeshTimingQueries)
-        && m_graphics.gpuTiming().prepareScopeQueries(MeshSkinningGpuTimingScope::s_MeshletBounds.identity, device, s_PerRuntimeMeshTimingQueries)
-        && m_graphics.gpuTiming().prepareScopeQueries(MeshSkinningGpuTimingScope::s_LocalBounds.identity, device, s_PerRuntimeMeshTimingQueries)
-        && m_graphics.gpuTiming().prepareScopeQueries(MeshSkinningGpuTimingScope::s_RepackNormals.identity, device, s_PerRuntimeMeshTimingQueries)
+        m_graphics->gpuTiming().prepareScopeQueries(MeshSkinningGpuTimingScope::s_Skinning.identity, device, s_PerRuntimeMeshTimingQueries)
+        && m_graphics->gpuTiming().prepareScopeQueries(MeshSkinningGpuTimingScope::s_MeshletBounds.identity, device, s_PerRuntimeMeshTimingQueries)
+        && m_graphics->gpuTiming().prepareScopeQueries(MeshSkinningGpuTimingScope::s_LocalBounds.identity, device, s_PerRuntimeMeshTimingQueries)
+        && m_graphics->gpuTiming().prepareScopeQueries(MeshSkinningGpuTimingScope::s_RepackNormals.identity, device, s_PerRuntimeMeshTimingQueries)
     ;
     if(!timingReady)
-        NWB_LOGGER_WARNING(NWB_TEXT("MeshSkinningSystem: GPU timing scope preparation failed; timing samples may be skipped"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("MeshSkinningSystem: GPU timing scope preparation failed; timing samples may be skipped"));
 
     // Pipeline creation lives in resource validation, never in the per-frame prepare path below; prepare only consumes the handles created here.
     if(!ensureSkinningPipeline() || !ensureBoundsPipeline() || !ensureLocalBoundsPipeline() || !ensureRepackPipeline()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create skinning pipelines during resource validation"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to create skinning pipelines during resource validation"));
         return false;
     }
     return true;
 }
 
-b8 MeshSkinningSystem::prepareResources([[maybe_unused]] Core::Framebuffer* framebuffer){
+b8 MeshSkinningSystem::prepareResources([[maybe_unused]] Core::Framebuffer* framebuffer)noexcept{
     Core::Alloc::ScratchArena scratchArena(s_PrepareRuntimeArena);
     // Frames may lack native submissions; filter retired buffers so handles pin nothing.
     if(m_acceptedSkinningState.valid() && !replaceAcceptedSkinningState(*m_acceptedSkinningState.source(), scratchArena)){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to prune the accepted skinning state handoff"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to prune the accepted skinning state handoff"));
         return false;
     }
 
     return m_runtimeSetupReady;
 }
 
-void MeshSkinningSystem::render([[maybe_unused]] Core::Framebuffer* framebuffer){
+void MeshSkinningSystem::render([[maybe_unused]] Core::Framebuffer* framebuffer)noexcept{
     if(!isSkinningFeatureEnabled())
         return;
 
     if(!submitFrameSkinningGraph())
-        NWB_LOGGER_WARNING(NWB_TEXT("MeshSkinningSystem: skipped skinning because graph-owned work was not accepted"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("MeshSkinningSystem: skipped skinning because graph-owned work was not accepted"));
 }
 
-void MeshSkinningSystem::invalidateResources(){
+void MeshSkinningSystem::invalidateResources()noexcept{
     m_runtimeSetupReady = false;
     resetFrameTaskGraph();
-    NWB_FATAL_ASSERT_MSG(m_frameRecordedGraph.releaseCommandListCache(), "skinning invalidation requires joined graph recording before device-bound cache release");
+    FOUNDATION_FATAL_ASSERT_MSG(m_frameRecordedGraph.releaseCommandListCache(), "skinning invalidation requires joined graph recording before device-bound cache release");
     m_acceptedSkinningState.reset();
     for(auto it = m_runtimeResources.begin(); it != m_runtimeResources.end(); ++it)
         releaseRuntimeResourceBindlessHeapHandles(it.value());
@@ -363,18 +372,22 @@ void MeshSkinningSystem::invalidateResources(){
     m_repackComputePipeline.reset();
 }
 
-Expected<RuntimeMeshDesc> MeshSkinningSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity){
+Expected<RuntimeMeshDesc> MeshSkinningSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity)noexcept{
     RuntimeMeshHandle runtimeMesh;
-    if(const SkinnedMeshBindingComponent* binding = m_world.tryGetComponent<SkinnedMeshBindingComponent>(entity))
+    if(const SkinnedMeshBindingComponent* binding = m_world->tryGetComponent<SkinnedMeshBindingComponent>(entity))
         runtimeMesh = binding->runtimeMesh;
     const MeshSkinningRuntimeInstance* const instance = runtimeMesh.valid() ? m_runtimeMeshCache.findInstance(runtimeMesh) : nullptr;
     return BuildSkinnedRuntimeMeshDesc(entity, runtimeMesh, instance, s_RuntimeSkinningMeshletFrustumCullingEnabled, s_RuntimeSkinningMeshletConeCullingEnabled);
 }
 
-void MeshSkinningSystem::markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests){
+b8 MeshSkinningSystem::hasRuntimeMeshBinding(const Core::ECS::EntityID entity)const noexcept{
+    return m_world->tryGetComponent<SkinnedMeshBindingComponent>(entity) != nullptr;
+}
+
+void MeshSkinningSystem::markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests)noexcept{
     if(requests.complete())
         return;
-    for(auto&& [entity, binding] : m_world.view<SkinnedMeshBindingComponent>()){
+    for(auto&& [entity, binding] : m_world->view<SkinnedMeshBindingComponent>()){
         const MeshSkinningRuntimeInstance* const instance = binding.runtimeMesh.valid() ? m_runtimeMeshCache.findInstance(binding.runtimeMesh) : nullptr;
         if(const auto identity = ResolveSkinnedRuntimeMeshIdentity(entity, binding.runtimeMesh, instance))
             requests.markLive(identity->meshKey, identity->version);
@@ -383,20 +396,28 @@ void MeshSkinningSystem::markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests){
     }
 }
 
-b8 MeshSkinningSystem::ensureActiveSceneSubsystems(){
+void MeshSkinningSystem::setActiveSceneSubsystems(const ActiveSceneSubsystems* const subsystems)noexcept{
+    m_activeSceneSubsystems = subsystems;
+}
+
+b8 MeshSkinningSystem::isSkinningFeatureEnabled()const noexcept{
+    return m_activeSceneSubsystems && m_activeSceneSubsystems->hasSubsystem<SkinningSubsystem>();
+}
+
+b8 MeshSkinningSystem::ensureActiveSceneSubsystems()noexcept{
     if(m_activeSceneSubsystems)
         return true;
-    if(!m_defaultSceneSubsystems.loadProjectStartScene(m_assetManager))
+    if(!m_defaultSceneSubsystems.loadProjectStartScene(*m_assetManager))
         return false;
     m_activeSceneSubsystems = &m_defaultSceneSubsystems;
     return true;
 }
 
-b8 MeshSkinningSystem::ensureSkinningPipeline(){
+b8 MeshSkinningSystem::ensureSkinningPipeline()noexcept{
     return __hidden_skinning_system_lifecycle::EnsurePushConstantComputePipeline<MeshSkinningPushConstants>(
-        m_arena,
-        m_graphics,
-        m_assetManager,
+        *m_arena,
+        *m_graphics,
+        *m_assetManager,
         m_shaderPathResolver,
         m_activeSceneSubsystems,
         &SkinningSubsystem::skinningCs,
@@ -409,11 +430,11 @@ b8 MeshSkinningSystem::ensureSkinningPipeline(){
     );
 }
 
-b8 MeshSkinningSystem::ensureBoundsPipeline(){
+b8 MeshSkinningSystem::ensureBoundsPipeline()noexcept{
     return __hidden_skinning_system_lifecycle::EnsurePushConstantComputePipeline<MeshletBoundsPushConstants>(
-        m_arena,
-        m_graphics,
-        m_assetManager,
+        *m_arena,
+        *m_graphics,
+        *m_assetManager,
         m_shaderPathResolver,
         m_activeSceneSubsystems,
         &SkinningSubsystem::meshletBoundsCs,
@@ -426,14 +447,14 @@ b8 MeshSkinningSystem::ensureBoundsPipeline(){
     );
 }
 
-b8 MeshSkinningSystem::ensureLocalBoundsPipeline(){
+b8 MeshSkinningSystem::ensureLocalBoundsPipeline()noexcept{
     if(m_localBoundsComputePipeline)
         return true;
     if(!ensureBoundsPipeline())
         return false;
     return __hidden_skinning_system_lifecycle::EnsureComputePipeline(
-        m_graphics,
-        m_assetManager,
+        *m_graphics,
+        *m_assetManager,
         m_shaderPathResolver,
         m_activeSceneSubsystems,
         &SkinningSubsystem::localBoundsCs,
@@ -445,11 +466,11 @@ b8 MeshSkinningSystem::ensureLocalBoundsPipeline(){
     );
 }
 
-b8 MeshSkinningSystem::ensureRepackPipeline(){
+b8 MeshSkinningSystem::ensureRepackPipeline()noexcept{
     return __hidden_skinning_system_lifecycle::EnsurePushConstantComputePipeline<MeshletBoundsPushConstants>(
-        m_arena,
-        m_graphics,
-        m_assetManager,
+        *m_arena,
+        *m_graphics,
+        *m_assetManager,
         m_shaderPathResolver,
         m_activeSceneSubsystems,
         &SkinningSubsystem::repackNormalsCs,
@@ -462,7 +483,19 @@ b8 MeshSkinningSystem::ensureRepackPipeline(){
     );
 }
 
-b8 MeshSkinningSystem::prepareRuntimeMeshResources(MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena){
+b8 MeshSkinningSystem::skinningPipelineReady()const noexcept{
+    return m_skinningBindingLayout && m_skinningComputePipeline;
+}
+
+b8 MeshSkinningSystem::boundsPipelinesReady()const noexcept{
+    return m_boundsBindingLayout && m_boundsComputePipeline && m_localBoundsComputePipeline;
+}
+
+b8 MeshSkinningSystem::repackPipelineReady()const noexcept{
+    return m_repackBindingLayout && m_repackComputePipeline;
+}
+
+b8 MeshSkinningSystem::prepareRuntimeMeshResources(MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena)noexcept{
     instance.deformationState.invalidateCurrent();
     if(instance.meshlets.empty())
         return true;
@@ -480,9 +513,9 @@ b8 MeshSkinningSystem::prepareRuntimeMeshResources(MeshSkinningRuntimeInstance& 
     return true;
 }
 
-void MeshSkinningSystem::collectLiveSkinningStateBuffers(Core::Alloc::ScratchArena& scratchArena, Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outBuffers)const{
+void MeshSkinningSystem::collectLiveSkinningStateBuffers(Core::Alloc::ScratchArena& scratchArena, Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outBuffers)const noexcept{
     MeshSkinningStateBufferCollector collector(scratchArena, outBuffers);
-    m_world.view<SkinnedMeshBindingComponent>().each([&](Core::ECS::EntityID, const SkinnedMeshBindingComponent& binding){
+    m_world->view<SkinnedMeshBindingComponent>().each([&](Core::ECS::EntityID, const SkinnedMeshBindingComponent& binding){
         if(!binding.runtimeMesh.valid())
             return;
 
@@ -504,7 +537,7 @@ void MeshSkinningSystem::collectLiveSkinningStateBuffers(Core::Alloc::ScratchAre
     });
 }
 
-b8 MeshSkinningSystem::replaceAcceptedSkinningState(const Core::CommandListResourceStateHandoff& state, Core::Alloc::ScratchArena& scratchArena){
+b8 MeshSkinningSystem::replaceAcceptedSkinningState(const Core::CommandListResourceStateHandoff& state, Core::Alloc::ScratchArena& scratchArena)noexcept{
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& liveBuffers = m_frameLiveBuffers;
     ScopeExit releaseLiveBuffers([&]()noexcept{ liveBuffers.clear(); });
 
@@ -512,12 +545,12 @@ b8 MeshSkinningSystem::replaceAcceptedSkinningState(const Core::CommandListResou
     return m_acceptedSkinningState.replaceBufferSubset(state, Span<const Core::BufferHandle>(liveBuffers), scratchArena);
 }
 
-void MeshSkinningSystem::pruneRuntimeResources(){
+void MeshSkinningSystem::pruneRuntimeResources()noexcept{
     if(m_runtimeResources.empty())
         return;
 
     for(auto it = m_runtimeResources.begin(); it != m_runtimeResources.end();){
-        RuntimeResources& resources = it.value();
+        MeshSkinningRuntimeResources& resources = it.value();
         const MeshSkinningRuntimeInstance* instance = m_runtimeMeshCache.findInstance(resources.handle);
         if(CanRetainPreparedRuntimeResources(instance != nullptr && instance->valid(), instance ? instance->editRevision : 0u, resources.editRevision)){
             ++it;

@@ -361,7 +361,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE b8 Navigate(const ComboSource& source, const ControlActionKind::Enum kind, ComboState& state)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 Navigate(const ComboSource& source, const ControlActionKind::Enum kind, ComboState& state)noexcept{
     ListState& preview = ComboBehavior::Preview(state);
     if(!ListBehavior::Reconcile(preview, source))
         return false;
@@ -469,46 +469,46 @@ using ::NWB::Tests::UiCases::s_UiCaseButtonHover;
 using ::NWB::Tests::UiCases::s_UiCaseNameButtonNormal;
 using ::NWB::Tests::UiCases::s_UiCaseTestsUiReplacementSkin;
 
-[[nodiscard]] NWB_INLINE u32 MakeUiBuilderHangScriptTag()noexcept{ return ::PackFourCharTag('H', 'a', 'n', 'g'); }
-[[nodiscard]] NWB_INLINE u32 MakeUiBuilderLatnScriptTag()noexcept{ return ::PackFourCharTag('L', 'a', 't', 'n'); }
-[[nodiscard]] NWB_INLINE f64 UiCaretClockInfinity()noexcept{ return ::Limit<f64>::s_Infinity; }
-[[nodiscard]] NWB_INLINE f64 UiCaretClockQuietNaN()noexcept{ return ::Limit<f64>::s_QuietNaN; }
-[[nodiscard]] NWB_INLINE ComboOptions MakeUiComboBuilderDefaultOptions()noexcept{ return ::NWB::UiComboTests::Options(); }
+[[nodiscard]] FOUNDATION_INLINE u32 MakeUiBuilderHangScriptTag()noexcept{ return ::PackFourCharTag('H', 'a', 'n', 'g'); }
+[[nodiscard]] FOUNDATION_INLINE u32 MakeUiBuilderLatnScriptTag()noexcept{ return ::PackFourCharTag('L', 'a', 't', 'n'); }
+[[nodiscard]] FOUNDATION_INLINE f64 UiCaretClockInfinity()noexcept{ return ::Limit<f64>::s_Infinity; }
+[[nodiscard]] FOUNDATION_INLINE f64 UiCaretClockQuietNaN()noexcept{ return ::Limit<f64>::s_QuietNaN; }
+[[nodiscard]] FOUNDATION_INLINE ComboOptions MakeUiComboBuilderDefaultOptions()noexcept{ return ::NWB::UiComboTests::Options(); }
 
-[[nodiscard]] NWB_INLINE b8 UiComboBehaviorBind(ComboState& state, const WidgetId owner, const u64 declarationGeneration)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 UiComboBehaviorBind(ComboState& state, const WidgetId owner, const u64 declarationGeneration)noexcept{
     return ::NWB::Impl::Ui::ComboBehavior::Bind(state, owner, declarationGeneration);
 }
-[[nodiscard]] NWB_INLINE b8 UiComboBehaviorReconcile(ComboState& state, const ::NWB::Impl::Ui::IListDataSource& source){
+[[nodiscard]] FOUNDATION_INLINE b8 UiComboBehaviorReconcile(ComboState& state, const ::NWB::Impl::Ui::IListDataSource& source){
     return ::NWB::Impl::Ui::ComboBehavior::Reconcile(state, source);
 }
-NWB_INLINE void UiComboBehaviorOpen(ComboState& state)noexcept{
+FOUNDATION_INLINE void UiComboBehaviorOpen(ComboState& state)noexcept{
     ::NWB::Impl::Ui::ComboBehavior::Open(state);
 }
-NWB_INLINE void UiComboBehaviorClose(ComboState& state)noexcept{
+FOUNDATION_INLINE void UiComboBehaviorClose(ComboState& state)noexcept{
     ::NWB::Impl::Ui::ComboBehavior::Close(state);
 }
-[[nodiscard]] NWB_INLINE b8 UiComboBehaviorCommit(ComboState& state, const ::NWB::Impl::Ui::IListDataSource& source, const u64 key){
+[[nodiscard]] FOUNDATION_INLINE b8 UiComboBehaviorCommit(ComboState& state, const ::NWB::Impl::Ui::IListDataSource& source, const u64 key){
     return ::NWB::Impl::Ui::ComboBehavior::Commit(state, source, key);
 }
-[[nodiscard]] NWB_INLINE b8 UiComboBehaviorNavigate(const UiComboBehaviorSource& source, const ControlActionKindEnum kind, ComboState& state)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 UiComboBehaviorNavigate(const UiComboBehaviorSource& source, const ControlActionKindEnum kind, ComboState& state)noexcept{
     return __hidden_ui_combo_behavior_tests::Navigate(source, kind, state);
 }
-[[nodiscard]] NWB_INLINE b8 UiComboBehaviorReconcilePreview(ComboState& state, const ::NWB::Impl::Ui::IListDataSource& source){
+[[nodiscard]] FOUNDATION_INLINE b8 UiComboBehaviorReconcilePreview(ComboState& state, const ::NWB::Impl::Ui::IListDataSource& source){
     return ::NWB::Impl::Ui::ListBehavior::Reconcile(::NWB::Impl::Ui::ComboBehavior::Preview(state), source);
 }
-[[nodiscard]] NWB_INLINE b8 UiComboBehaviorScrollPreviewTo(ComboState& state, const f64 offset)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 UiComboBehaviorScrollPreviewTo(ComboState& state, const f64 offset)noexcept{
     return ::NWB::Impl::Ui::ComboBehavior::Preview(state).scrollTo(offset);
 }
 
-[[nodiscard]] NWB_INLINE Sha256Digest ComputeUiBuilderFirstGlyphPageHash(const DrawSnapshot& snapshot)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Sha256Digest ComputeUiBuilderFirstGlyphPageHash(const DrawSnapshot& snapshot)noexcept{
     const auto& page = snapshot.glyphPages().front();
     return ::ComputeSha256({ page->pixels().data(), page->pixels().size() });
 }
-[[nodiscard]] NWB_INLINE u64 ReadUiBuilderFirstGlyphPageFontGeneration(const DrawSnapshot& snapshot)noexcept{
+[[nodiscard]] FOUNDATION_INLINE u64 ReadUiBuilderFirstGlyphPageFontGeneration(const DrawSnapshot& snapshot)noexcept{
     return snapshot.glyphPages().front()->binding().fontGeneration;
 }
-[[nodiscard]] NWB_INLINE b8 EqualUiBuilderVertexBytes(const Span<const Vertex> lhs, const Span<const Vertex> rhs)noexcept{
-    return lhs.size() == rhs.size() && NWB_MEMCMP(lhs.data(), rhs.data(), lhs.size() * sizeof(Vertex)) == 0;
+[[nodiscard]] FOUNDATION_INLINE b8 EqualUiBuilderVertexBytes(const Span<const Vertex> lhs, const Span<const Vertex> rhs)noexcept{
+    return lhs.size() == rhs.size() && FOUNDATION_MEMCMP(lhs.data(), rhs.data(), lhs.size() * sizeof(Vertex)) == 0;
 }
 };
 

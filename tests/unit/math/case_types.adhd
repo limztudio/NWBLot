@@ -43,7 +43,7 @@ public:
     ScopedHeldFloatingPointEnvironment(ScopedHeldFloatingPointEnvironment&&) = delete;
     ~ScopedHeldFloatingPointEnvironment()noexcept{
         if(m_active && m_original && !SetFloatingPointEnvironment(*m_original))
-            NWB_ASSERT(false);
+            FOUNDATION_ASSERT(false);
     }
 
 

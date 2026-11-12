@@ -92,7 +92,7 @@ struct ThrowingByteSizeComparison{
 public:
     explicit operator b8()const{ throw RuntimeException("byte size comparison failure"); }
 };
-[[nodiscard]] NWB_INLINE ThrowingByteSizeComparison operator>(const usize, const ThrowingByteSize)noexcept{ return {}; }
+[[nodiscard]] FOUNDATION_INLINE ThrowingByteSizeComparison operator>(const usize, const ThrowingByteSize)noexcept{ return {}; }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -173,7 +173,7 @@ public:
 
 struct StatefulPlacementCallable{
 public:
-    static NWB_INLINE u32 s_Allocations = 0u;
+    static FOUNDATION_INLINE u32 s_Allocations = 0u;
     u32& calls;
 
 
@@ -282,13 +282,13 @@ public:
     explicit operator b8()const noexcept{ return target != nullptr; }
 };
 
-[[nodiscard]] NWB_INLINE b8 operator==(const ThrowingFancyPointer& lhs, const ThrowingFancyPointer& rhs)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 operator==(const ThrowingFancyPointer& lhs, const ThrowingFancyPointer& rhs)noexcept{
     return lhs.target == rhs.target;
 }
 
-NWB_INLINE u32 RefCountAddReference(ThrowingFancyPointer)noexcept{ return 1u; }
+FOUNDATION_INLINE u32 RefCountAddReference(ThrowingFancyPointer)noexcept{ return 1u; }
 
-NWB_INLINE u32 RefCountRelease(ThrowingFancyPointer)noexcept{ return 1u; }
+FOUNDATION_INLINE u32 RefCountRelease(ThrowingFancyPointer)noexcept{ return 1u; }
 
 struct FancyPointerDeleter{
 public:
@@ -326,21 +326,21 @@ public:
 using UniqueComparisonOwner = UniquePtr<int, ComparisonProxyDeleter<int>>;
 using ReferenceComparisonOwner = RefCountPtr<ComparisonReferenceTarget, ComparisonProxyDeleter<ComparisonReferenceTarget>>;
 
-[[nodiscard]] NWB_INLINE ThrowingComparisonResult operator<(const UniqueComparisonOwner&, const UniqueComparisonOwner&)noexcept{ return {}; }
+[[nodiscard]] FOUNDATION_INLINE ThrowingComparisonResult operator<(const UniqueComparisonOwner&, const UniqueComparisonOwner&)noexcept{ return {}; }
 
-[[nodiscard]] NWB_INLINE ThrowingComparisonResult operator<(const UniqueComparisonOwner&, decltype(nullptr))noexcept{ return {}; }
+[[nodiscard]] FOUNDATION_INLINE ThrowingComparisonResult operator<(const UniqueComparisonOwner&, decltype(nullptr))noexcept{ return {}; }
 
-[[nodiscard]] NWB_INLINE ThrowingComparisonResult operator<(decltype(nullptr), const UniqueComparisonOwner&)noexcept{ return {}; }
+[[nodiscard]] FOUNDATION_INLINE ThrowingComparisonResult operator<(decltype(nullptr), const UniqueComparisonOwner&)noexcept{ return {}; }
 
-[[nodiscard]] NWB_INLINE ThrowingComparisonResult operator<(const ReferenceComparisonOwner&, const ReferenceComparisonOwner&)noexcept{ return {}; }
+[[nodiscard]] FOUNDATION_INLINE ThrowingComparisonResult operator<(const ReferenceComparisonOwner&, const ReferenceComparisonOwner&)noexcept{ return {}; }
 
-[[nodiscard]] NWB_INLINE ThrowingComparisonResult operator<(const ReferenceComparisonOwner&, decltype(nullptr))noexcept{ return {}; }
+[[nodiscard]] FOUNDATION_INLINE ThrowingComparisonResult operator<(const ReferenceComparisonOwner&, decltype(nullptr))noexcept{ return {}; }
 
-[[nodiscard]] NWB_INLINE ThrowingComparisonResult operator<(decltype(nullptr), const ReferenceComparisonOwner&)noexcept{ return {}; }
+[[nodiscard]] FOUNDATION_INLINE ThrowingComparisonResult operator<(decltype(nullptr), const ReferenceComparisonOwner&)noexcept{ return {}; }
 
-[[nodiscard]] NWB_INLINE ThrowingComparisonResult operator!(const UniqueComparisonOwner&)noexcept{ return {}; }
+[[nodiscard]] FOUNDATION_INLINE ThrowingComparisonResult operator!(const UniqueComparisonOwner&)noexcept{ return {}; }
 
-[[nodiscard]] NWB_INLINE ThrowingComparisonResult operator!(const ReferenceComparisonOwner&)noexcept{ return {}; }
+[[nodiscard]] FOUNDATION_INLINE ThrowingComparisonResult operator!(const ReferenceComparisonOwner&)noexcept{ return {}; }
 
 template<typename OwnerT>
 void VerifyComparisonResultConversions(u32& outWrapperChecks, b8& outFirstNull, b8& outSecondNull){
@@ -376,7 +376,7 @@ void VerifyComparisonResultConversions(u32& outWrapperChecks, b8& outFirstNull, 
 
 struct ObservationPointer{
 public:
-    static NWB_INLINE b8 s_FailCopy = false;
+    static FOUNDATION_INLINE b8 s_FailCopy = false;
     RefCountTarget* target = nullptr;
 
 
@@ -407,11 +407,11 @@ public:
     explicit operator b8()const noexcept{ return target != nullptr; }
 };
 
-[[nodiscard]] NWB_INLINE b8 operator==(const ObservationPointer& first, const ObservationPointer& second)noexcept{ return first.target == second.target; }
+[[nodiscard]] FOUNDATION_INLINE b8 operator==(const ObservationPointer& first, const ObservationPointer& second)noexcept{ return first.target == second.target; }
 
-NWB_INLINE u32 RefCountAddReference(ObservationPointer)noexcept{ return 1u; }
+FOUNDATION_INLINE u32 RefCountAddReference(ObservationPointer)noexcept{ return 1u; }
 
-NWB_INLINE u32 RefCountRelease(ObservationPointer)noexcept{ return 1u; }
+FOUNDATION_INLINE u32 RefCountRelease(ObservationPointer)noexcept{ return 1u; }
 
 struct ObservationDeleter{
 public:
@@ -445,9 +445,9 @@ public:
     }
 };
 
-[[nodiscard]] NWB_INLINE ThrowingHexCapacityPredicate operator>(HexCapacityValue, HexCapacityValue)noexcept{ return {}; }
+[[nodiscard]] FOUNDATION_INLINE ThrowingHexCapacityPredicate operator>(HexCapacityValue, HexCapacityValue)noexcept{ return {}; }
 
-[[nodiscard]] NWB_INLINE usize operator-(const HexCapacityValue lhs, const HexCapacityValue rhs)noexcept{ return lhs.value - rhs.value; }
+[[nodiscard]] FOUNDATION_INLINE usize operator-(const HexCapacityValue lhs, const HexCapacityValue rhs)noexcept{ return lhs.value - rhs.value; }
 
 struct ThrowingHexCapacityString{
 public:
@@ -582,7 +582,7 @@ public:
     FixedVectorNonAssignable& operator=(FixedVectorNonAssignable&&) = delete;
 };
 
-NWB_INLINE void swap([[maybe_unused]] ThrowingFixedVectorSwap& lhs, [[maybe_unused]] ThrowingFixedVectorSwap& rhs){
+FOUNDATION_INLINE void swap([[maybe_unused]] ThrowingFixedVectorSwap& lhs, [[maybe_unused]] ThrowingFixedVectorSwap& rhs){
     throw s_ElementSwapFailure;
 }
 

@@ -36,18 +36,18 @@ using Entity = Core::ECS::Entity;
 
 void ApplyModelObjectRenderer(Core::ECS::EntityID owner, const Core::Assets::AssetRef<Material>& material, World& world, Entity& entity)noexcept;
 
-[[nodiscard]] NWB_INLINE Optional<RendererComponent> TryGetOwnerRendererComponent(const World& world, const Core::ECS::EntityID owner)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Optional<RendererComponent> TryGetOwnerRendererComponent(const World& world, const Core::ECS::EntityID owner)noexcept{
     if(const RendererComponent* const ownerRenderer = world.tryGetComponent<RendererComponent>(owner))
         return *ownerRenderer;
     return {};
 }
 
-NWB_INLINE void CopyOwnerMaterialInstanceIfPresent(const World& world, const Core::ECS::EntityID owner, MaterialInstanceComponent& outMaterialInstance){
+FOUNDATION_INLINE void CopyOwnerMaterialInstanceIfPresent(const World& world, const Core::ECS::EntityID owner, MaterialInstanceComponent& outMaterialInstance){
     if(const MaterialInstanceComponent* const ownerMaterialInstance = world.tryGetComponent<MaterialInstanceComponent>(owner))
         CopyModelObjectMaterialInstance(*ownerMaterialInstance, outMaterialInstance);
 }
 
-[[nodiscard]] NWB_INLINE ModelObjectRendererHooks CreateModelObjectRendererHooks()noexcept{
+[[nodiscard]] FOUNDATION_INLINE ModelObjectRendererHooks CreateModelObjectRendererHooks()noexcept{
     static const Array<Core::ECS::ComponentAccess, 2> s_Accesses = {{
         { Core::ECS::ComponentType<RendererComponent>(), Core::ECS::AccessMode::Write },
         { Core::ECS::ComponentType<MaterialInstanceComponent>(), Core::ECS::AccessMode::Write },

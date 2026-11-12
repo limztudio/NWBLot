@@ -74,7 +74,7 @@ void VerifyAssetsGraphics_SamplerCodecRejectsUnsupportedReductionAndFixedBorderC
         for(const NWB::Core::SamplerReductionType::Enum reduction : { NWB::Core::SamplerReductionType::Minimum, NWB::Core::SamplerReductionType::Maximum }){
             binary = validBinary;
             const u32 reductionValue = static_cast<u32>(reduction);
-            NWB_MEMCPY(binary.data() + offsetof(NWB::Impl::SamplerBinaryHeader, reductionType), sizeof(reductionValue), &reductionValue, sizeof(reductionValue));
+            FOUNDATION_MEMCPY(binary.data() + offsetof(NWB::Impl::SamplerBinaryHeader, reductionType), sizeof(reductionValue), &reductionValue, sizeof(reductionValue));
             EXPECT_FALSE(codec.deserialize(sampler.virtualPath(), binary, testArena.arena));
 
             description.reductionType = reduction;
@@ -90,7 +90,7 @@ void VerifyAssetsGraphics_SamplerCodecRejectsUnsupportedReductionAndFixedBorderC
         }){
             binary = validBinary;
             const f32 nonblack = 1.0f;
-            NWB_MEMCPY(binary.data() + borderOffset, sizeof(nonblack), &nonblack, sizeof(nonblack));
+            FOUNDATION_MEMCPY(binary.data() + borderOffset, sizeof(nonblack), &nonblack, sizeof(nonblack));
             EXPECT_FALSE(codec.deserialize(sampler.virtualPath(), binary, testArena.arena));
         }
 
@@ -108,7 +108,7 @@ void VerifyAssetsGraphics_SamplerCodecRejectsUnsupportedReductionAndFixedBorderC
         ASSERT_TRUE(recoveredResult);
         recoveredAsset = Move(*recoveredResult);
         ASSERT_NE(recoveredAsset.get(), nullptr);
-        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("sampler description is invalid")));
+        EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("sampler description is invalid")));
     }
 }
 
@@ -139,7 +139,7 @@ void VerifyAssetsGraphics_SamplerFailedReloadPreservesDescriptionAcrossEveryPref
         }
         for(u32 invalidCase = 0u; invalidCase < 7u; ++invalidCase){
             NWB::Impl::SamplerBinaryHeader header;
-            NWB_MEMCPY(&header, sizeof(header), binary.data(), binary.size());
+            FOUNDATION_MEMCPY(&header, sizeof(header), binary.data(), binary.size());
             switch(invalidCase){
             case 0u: header.magic = 0u; break;
             case 1u: ++header.version; break;
@@ -187,7 +187,7 @@ void VerifyAssetsGraphics_SamplerCodecRejectsWideEnumAliasesBeforeNarrowingAndPr
         }){
             for(const u32 rawValue : { 0x100u, 0x101u }){
                 NWB::Core::Assets::AssetBytes malformed(binary);
-                NWB_MEMCPY(malformed.data() + offset, sizeof(rawValue), &rawValue, sizeof(rawValue));
+                FOUNDATION_MEMCPY(malformed.data() + offset, sizeof(rawValue), &rawValue, sizeof(rawValue));
                 EXPECT_FALSE(sampler.loadBinary(malformed)) << offset << ":" << rawValue;
                 NWB::Core::Assets::AssetBytes retained(testArena.arena);
                 ASSERT_TRUE(codec.serialize(sampler, retained));
@@ -315,7 +315,7 @@ void VerifyAssetsGraphics_ShaderArchiveRejectsNullAndTruncatedByteViewsWhileAdmi
         alignas(u32) Array<u8, 2048u> unalignedStorage = {};
         ASSERT_LT(encoded->size(), unalignedStorage.size());
         u8* const unalignedBytes = unalignedStorage.data() + 1u;
-        NWB_MEMCPY(unalignedBytes, unalignedStorage.size() - 1u, encoded->data(), encoded->size());
+        FOUNDATION_MEMCPY(unalignedBytes, unalignedStorage.size() - 1u, encoded->data(), encoded->size());
         const auto admitted = Core::ShaderArchive::DeserializeIndex(testArena.arena, { unalignedBytes, encoded->size() });
         ASSERT_TRUE(admitted);
         ASSERT_EQ(admitted->size(), 1u);
@@ -324,7 +324,7 @@ void VerifyAssetsGraphics_ShaderArchiveRejectsNullAndTruncatedByteViewsWhileAdmi
         EXPECT_FALSE(Core::ShaderArchive::DeserializeIndex(testArena.arena, { nullptr, encoded->size() }));
         EXPECT_FALSE(Core::ShaderArchive::DeserializeIndex(testArena.arena, { unalignedBytes, encoded->size() - 1u }));
         EXPECT_EQ(logger.errorCount(), 2u);
-        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("nonempty byte view has no data")));
+        EXPECT_TRUE(logger.sawErrorContaining(FOUNDATION_TEXT("nonempty byte view has no data")));
         EXPECT_EQ(admitted->front().sourceChecksum, records.front().sourceChecksum);
     }
 }
@@ -444,7 +444,7 @@ void VerifyAssetsGraphics_SpirvEntryPointViewsRebindCopiedWordsAndRejectMalforme
 
         Core::Assets::AssetBytes unalignedBytes(testArena.arena);
         unalignedBytes.resize(1u + copiedWords.size() * sizeof(u32));
-        NWB_MEMCPY(unalignedBytes.data() + 1u, unalignedBytes.size() - 1u, copiedWords.data(), copiedWords.size() * sizeof(u32));
+        FOUNDATION_MEMCPY(unalignedBytes.data() + 1u, unalignedBytes.size() - 1u, copiedWords.data(), copiedWords.size() * sizeof(u32));
         const BinaryByteView unalignedModule{ unalignedBytes.data() + 1u, unalignedBytes.size() - 1u };
         AStringView byteEntryPoint;
         const auto entryPointResult7 = Core::ResolveSpirvEntryPointName(unalignedModule, requestedName, Core::ShaderType::Pixel);

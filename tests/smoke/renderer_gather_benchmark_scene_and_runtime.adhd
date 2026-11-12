@@ -29,7 +29,7 @@ native{
 #include <global/simd/vector.h>
 
 namespace NWB::Tests::Smoke{
-[[nodiscard]] NWB_INLINE AStringView GatherBenchmarkProjectName()noexcept{
+[[nodiscard]] FOUNDATION_INLINE AStringView GatherBenchmarkProjectName()noexcept{
     return "RendererGatherBenchmark";
 }
 
@@ -471,7 +471,7 @@ native{
 
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){ return { 960u, 720u }; }
 
-TStringView NWB::QueryProjectWindowTitle()noexcept{ return NWB_TEXT("NWB Renderer Gather Benchmark"); }
+TStringView NWB::QueryProjectWindowTitle()noexcept{ return FOUNDATION_TEXT("NWB Renderer Gather Benchmark"); }
 
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<NWB::Tests::Smoke::RendererGatherBenchmarkProjectImpl>(context);

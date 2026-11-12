@@ -22,20 +22,20 @@ inline constexpr Array<b8, 21> s_ProductionCandidate = {
     true, true, true, true, true, true, true, true, true, false, false, false, true, true, true, false, false, false, false, false, false,
 };
 
-NWB_INLINE SIMDVectorDouble ReplicatedACos(const SIMDVectorDouble value)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble ReplicatedACos(const SIMDVectorDouble value)noexcept{
     return VectorDoubleReplicate(ACos(VectorDoubleGetX(value)));
 }
 
-NWB_INLINE SIMDVectorDouble ReplicatedSin(const SIMDVectorDouble value)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble ReplicatedSin(const SIMDVectorDouble value)noexcept{
     return VectorDoubleReplicate(Sin(VectorDoubleGetX(value)));
 }
 
-NWB_INLINE SIMDVectorDouble ReplicatedATan2(const SIMDVectorDouble y, const SIMDVectorDouble x)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble ReplicatedATan2(const SIMDVectorDouble y, const SIMDVectorDouble x)noexcept{
     return VectorDoubleReplicate(ATan2(VectorDoubleGetX(y), VectorDoubleGetX(x)));
 }
 
 template<u32 Dimension>
-NWB_INLINE SIMDVectorDouble Dot(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble Dot(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
     if constexpr(Dimension == 2u)
         return VectorDouble2Dot(lhs, rhs);
     else if constexpr(Dimension == 3u)
@@ -45,12 +45,12 @@ NWB_INLINE SIMDVectorDouble Dot(const SIMDVectorDouble lhs, const SIMDVectorDoub
 }
 
 template<u32 Dimension>
-NWB_INLINE SIMDVectorDouble ReciprocalLength(const SIMDVectorDouble value)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble ReciprocalLength(const SIMDVectorDouble value)noexcept{
     return VectorDoubleReciprocalSqrt(Dot<Dimension>(value, value));
 }
 
 template<u32 Dimension, b8 Vectors, b8 Candidate>
-NWB_INLINE SIMDVectorDouble Angle(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble Angle(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
     SIMDVectorDouble cosine = Dot<Dimension>(lhs, rhs);
     if constexpr(Vectors)
         cosine = VectorDoubleMultiply(cosine, VectorDoubleMultiply(ReciprocalLength<Dimension>(lhs), ReciprocalLength<Dimension>(rhs)));
@@ -62,7 +62,7 @@ NWB_INLINE SIMDVectorDouble Angle(const SIMDVectorDouble lhs, const SIMDVectorDo
 }
 
 template<b8 Candidate>
-NWB_INLINE SIMDVectorDouble QuaternionLn(const SIMDVectorDouble value)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble QuaternionLn(const SIMDVectorDouble value)noexcept{
     const SIMDVectorDouble bound = VectorDoubleReplicate(1.0 - SIMDQuaternionDoubleDetail::s_DoubleQuaternionInterpolationEpsilon);
     const SIMDVectorDouble w = VectorDoubleSplatW(value), xyz = VectorDoubleAndInt(value, s_DoubleSIMDMask3);
     const SIMDVectorDouble control = VectorDoubleInBounds(w, bound);
@@ -72,7 +72,7 @@ NWB_INLINE SIMDVectorDouble QuaternionLn(const SIMDVectorDouble value)noexcept{
 }
 
 template<b8 Candidate>
-NWB_INLINE SIMDVectorDouble QuaternionExp(const SIMDVectorDouble value)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble QuaternionExp(const SIMDVectorDouble value)noexcept{
     const SIMDVectorDouble theta = VectorDouble3Length(value);
     SIMDVectorDouble sine{}, cosine{};
     if constexpr(Candidate)
@@ -86,7 +86,7 @@ NWB_INLINE SIMDVectorDouble QuaternionExp(const SIMDVectorDouble value)noexcept{
 }
 
 template<b8 Candidate>
-NWB_INLINE SIMDVectorDouble QuaternionSlerp(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble QuaternionSlerp(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
     const SIMDVectorDouble t = VectorDoubleReplicate(0.375);
     const SIMDVectorDouble bound = VectorDoubleReplicate(1.0 - SIMDQuaternionDoubleDetail::s_DoubleQuaternionInterpolationEpsilon);
     SIMDVectorDouble cosine = QuaternionDoubleDot(lhs, rhs);
@@ -112,8 +112,8 @@ NWB_INLINE SIMDVectorDouble QuaternionSlerp(const SIMDVectorDouble lhs, const SI
 }
 
 template<u32 Dimension, b8 Reciprocal, b8 Candidate>
-NWB_INLINE SIMDVectorDouble Length(const SIMDVectorDouble value)noexcept{
-#if defined(NWB_HAS_SSE2)
+FOUNDATION_INLINE SIMDVectorDouble Length(const SIMDVectorDouble value)noexcept{
+#if defined(FOUNDATION_HAS_SSE2)
     if constexpr(Candidate){
         const __m128d input = SIMDVectorDoubleDetail::GetLow(Dot<Dimension>(value, value));
         __m128d root = _mm_sqrt_sd(input, input);
@@ -137,10 +137,10 @@ NWB_INLINE SIMDVectorDouble Length(const SIMDVectorDouble value)noexcept{
 }
 
 template<u32 Dimension, b8 Clamp, b8 Candidate>
-NWB_INLINE SIMDVectorDouble ControlledLength(const SIMDVectorDouble value, const SIMDVectorDouble fallback)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble ControlledLength(const SIMDVectorDouble value, const SIMDVectorDouble fallback)noexcept{
     const SIMDVectorDouble lengthSquared = Dot<Dimension>(value, value);
     const auto reciprocalLength = [&]()noexcept{
-#if defined(NWB_HAS_SSE2) && !defined(NWB_HAS_AVX)
+#if defined(FOUNDATION_HAS_SSE2) && !defined(FOUNDATION_HAS_AVX)
         if constexpr(Candidate)
             return SIMDVectorDoubleDetail::ReciprocalSqrtReplicated(lengthSquared);
         else
@@ -173,7 +173,7 @@ NWB_INLINE SIMDVectorDouble ControlledLength(const SIMDVectorDouble value, const
 }
 
 template<u32 KindIndex, b8 Estimate = false>
-NWB_INLINE SIMDVectorDouble ProductionValue(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble ProductionValue(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
     if constexpr(KindIndex == 0u)
         return QuaternionDoubleLn(lhs);
     else if constexpr(KindIndex == 1u)
@@ -231,13 +231,13 @@ NWB_INLINE SIMDVectorDouble ProductionValue(const SIMDVectorDouble lhs, const SI
 }
 
 template<u32 KindIndex, b8 Estimate = false>
-NWB_NOINLINE SIMDVectorDouble Production(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+FOUNDATION_NOINLINE SIMDVectorDouble Production(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
 #pragma STDC FENV_ACCESS ON
     return ProductionValue<KindIndex, Estimate>(lhs, rhs);
 }
 
 template<u32 KindIndex, b8 Candidate>
-NWB_INLINE SIMDVectorDouble Reduce(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble Reduce(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
     if constexpr(Candidate && s_ProductionCandidate[KindIndex])
         return ProductionValue<KindIndex>(lhs, rhs);
     else if constexpr(KindIndex == 0u)
@@ -285,7 +285,7 @@ NWB_INLINE SIMDVectorDouble Reduce(const SIMDVectorDouble lhs, const SIMDVectorD
 }
 
 template<u32 KindIndex, b8 Candidate>
-NWB_NOINLINE SIMDVectorDouble Evaluate(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+FOUNDATION_NOINLINE SIMDVectorDouble Evaluate(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
 #pragma STDC FENV_ACCESS ON
     if constexpr(Candidate && s_ProductionCandidate[KindIndex])
         return Production<KindIndex>(lhs, rhs);
@@ -294,7 +294,7 @@ NWB_NOINLINE SIMDVectorDouble Evaluate(const SIMDVectorDouble lhs, const SIMDVec
 }
 
 template<u32 KindIndex, b8 Candidate, typename DatasetT>
-NWB_NOINLINE SIMDVectorDouble RunWorkload(const DatasetT& data, const usize dataCount, const usize iterations)noexcept{
+FOUNDATION_NOINLINE SIMDVectorDouble RunWorkload(const DatasetT& data, const usize dataCount, const usize iterations)noexcept{
     return ThroughputWorkload<4u>(
         data, dataCount, iterations,
         [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{ return Reduce<KindIndex, Candidate>(lhs, rhs); });
@@ -305,7 +305,7 @@ NWB_NOINLINE SIMDVectorDouble RunWorkload(const DatasetT& data, const usize data
 namespace ReplicatedKernels{
 
 template<b8 Candidate, u32 Index = 0u>
-[[nodiscard]] NWB_INLINE SIMDVectorDouble DispatchEvaluate(const u32 kindIndex, const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+[[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble DispatchEvaluate(const u32 kindIndex, const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
     if(kindIndex == Index)
         return Evaluate<Index, Candidate>(lhs, rhs);
     if constexpr(Index + 1u < 21u)
@@ -315,7 +315,7 @@ template<b8 Candidate, u32 Index = 0u>
 }
 
 template<b8 Estimate, u32 Index = 0u>
-[[nodiscard]] NWB_INLINE SIMDVectorDouble DispatchProduction(const u32 kindIndex, const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+[[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble DispatchProduction(const u32 kindIndex, const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
     if(kindIndex == Index)
         return Production<Index, Estimate>(lhs, rhs);
     if constexpr(Index + 1u < 21u)
@@ -325,7 +325,7 @@ template<b8 Estimate, u32 Index = 0u>
 }
 
 template<b8 Candidate, typename DatasetT, u32 Index = 0u>
-[[nodiscard]] NWB_INLINE SIMDVectorDouble DispatchWorkload(const u32 kindIndex, const DatasetT& data, const usize dataCount, const usize iterations)noexcept{
+[[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble DispatchWorkload(const u32 kindIndex, const DatasetT& data, const usize dataCount, const usize iterations)noexcept{
     if(kindIndex == Index)
         return RunWorkload<Index, Candidate>(data, dataCount, iterations);
     if constexpr(Index + 1u < 21u)
@@ -336,14 +336,14 @@ template<b8 Candidate, typename DatasetT, u32 Index = 0u>
 
 }
 
-NWB_INLINE void EvaluateReplicatedKernel(const u32 kindIndex, const b8 candidate, const SIMDVectorDouble lhs, const SIMDVectorDouble rhs, UInt64x4& outBits)noexcept{
+FOUNDATION_INLINE void EvaluateReplicatedKernel(const u32 kindIndex, const b8 candidate, const SIMDVectorDouble lhs, const SIMDVectorDouble rhs, UInt64x4& outBits)noexcept{
     const SIMDVectorDouble result = candidate
         ? ReplicatedKernels::DispatchEvaluate<true>(kindIndex, lhs, rhs)
         : ReplicatedKernels::DispatchEvaluate<false>(kindIndex, lhs, rhs);
     StoreDoubleInt(result, outBits);
 }
 
-NWB_INLINE void EvaluateReplicatedProductionKernel(const u32 kindIndex, const b8 estimate, const SIMDVectorDouble lhs, const SIMDVectorDouble rhs, UInt64x4& outBits)noexcept{
+FOUNDATION_INLINE void EvaluateReplicatedProductionKernel(const u32 kindIndex, const b8 estimate, const SIMDVectorDouble lhs, const SIMDVectorDouble rhs, UInt64x4& outBits)noexcept{
     const SIMDVectorDouble result = estimate
         ? ReplicatedKernels::DispatchProduction<true>(kindIndex, lhs, rhs)
         : ReplicatedKernels::DispatchProduction<false>(kindIndex, lhs, rhs);
@@ -351,7 +351,7 @@ NWB_INLINE void EvaluateReplicatedProductionKernel(const u32 kindIndex, const b8
 }
 
 template<typename DatasetT>
-NWB_INLINE void RunReplicatedWorkloadKernel(const u32 kindIndex, const b8 candidate, const DatasetT& data, const usize dataCount, const usize iterations, UInt64x4& outBits)noexcept{
+FOUNDATION_INLINE void RunReplicatedWorkloadKernel(const u32 kindIndex, const b8 candidate, const DatasetT& data, const usize dataCount, const usize iterations, UInt64x4& outBits)noexcept{
     const SIMDVectorDouble result = candidate
         ? ReplicatedKernels::DispatchWorkload<true>(kindIndex, data, dataCount, iterations)
         : ReplicatedKernels::DispatchWorkload<false>(kindIndex, data, dataCount, iterations);

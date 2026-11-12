@@ -31,7 +31,7 @@ namespace TextGlyphVisibility{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE const BakedFontAtlas* SelectAtlas(const PlacedGlyph& glyph, const f32 physicalSize)noexcept{
+[[nodiscard]] FOUNDATION_INLINE const BakedFontAtlas* SelectAtlas(const PlacedGlyph& glyph, const f32 physicalSize)noexcept{
     if(!glyph.face || !glyph.face->valid())
         return nullptr;
     const SharedBakedFontAtlas& atlas = glyph.face->bakedAtlas();
@@ -40,7 +40,7 @@ namespace TextGlyphVisibility{
     return atlas.get();
 }
 
-[[nodiscard]] NWB_INLINE Expected<SIMDVectorDoubleResult> LoadAtlasRectangle(const PlacedGlyph& glyph, const BakedFontAtlas& atlas, const f32 fontSize, const Point& topLeft)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Expected<SIMDVectorDoubleResult> LoadAtlasRectangle(const PlacedGlyph& glyph, const BakedFontAtlas& atlas, const f32 fontSize, const Point& topLeft)noexcept{
     if(!atlas.valid())
         return MakeUnexpected(Failure{});
     const FontAtlasGlyph* record = atlas.glyph(glyph.glyphId);
@@ -49,7 +49,7 @@ namespace TextGlyphVisibility{
     return TryLoadGlyphAtlasRectangle(glyph.position, topLeft, fontSize, atlas.unitsPerEm(), *record);
 }
 
-[[nodiscard]] NWB_INLINE Expected<Rect> AtlasRectangle(const PlacedGlyph& glyph, const BakedFontAtlas& atlas, const f32 fontSize, const Point& topLeft)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Expected<Rect> AtlasRectangle(const PlacedGlyph& glyph, const BakedFontAtlas& atlas, const f32 fontSize, const Point& topLeft)noexcept{
     const auto rectangle = LoadAtlasRectangle(glyph, atlas, fontSize, topLeft);
     if(!rectangle)
         return MakeUnexpected(rectangle.error());
@@ -57,7 +57,7 @@ namespace TextGlyphVisibility{
 }
 
 // Coverage needs explicit bounds or a valid native face; untrusted native bounds retain conservative preparation.
-[[nodiscard]] NWB_INLINE TextGlyphIntersection::Enum Candidate(const PlacedGlyph& glyph, const BakedFontAtlas* const selectedAtlas, const f32 fontSize, const f32 physicalSize, const Point& topLeft, const Rect& clip, const Point pixelScale = { 1.0f, 1.0f })noexcept{
+[[nodiscard]] FOUNDATION_INLINE TextGlyphIntersection::Enum Candidate(const PlacedGlyph& glyph, const BakedFontAtlas* const selectedAtlas, const f32 fontSize, const f32 physicalSize, const Point& topLeft, const Rect& clip, const Point pixelScale = { 1.0f, 1.0f })noexcept{
     const TextGlyphIntersection::Enum inputStatus = ValidateTextGlyphCandidateInputs(glyph.position, topLeft, fontSize, physicalSize, clip, pixelScale);
     if(inputStatus != TextGlyphIntersection::Visible)
         return inputStatus;
@@ -73,7 +73,7 @@ namespace TextGlyphVisibility{
     return EvaluateUnselectedAtlasGlyphCandidate(glyph.position, topLeft, glyph.ink, glyph.coverage, hasValidFace, coverageInkReliable, faceUnitsPerEm, fontSize, physicalSize, clip, pixelScale);
 }
 
-[[nodiscard]] NWB_INLINE Expected<Rect> CoverageRectangle(const PlacedGlyph& glyph, const AtlasGlyph& record, const f32 rasterScale, const Point& topLeft, const Point pixelScale = { 1.0f, 1.0f })noexcept{
+[[nodiscard]] FOUNDATION_INLINE Expected<Rect> CoverageRectangle(const PlacedGlyph& glyph, const AtlasGlyph& record, const f32 rasterScale, const Point& topLeft, const Point pixelScale = { 1.0f, 1.0f })noexcept{
     return TryResolveGlyphCoverageRectangle(glyph.position, record.pageIndex, record.pixels, record.bearingX, record.bearingY, rasterScale, topLeft, pixelScale);
 }
 

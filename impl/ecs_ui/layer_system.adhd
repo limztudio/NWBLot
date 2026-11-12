@@ -39,116 +39,24 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_UiLayerSystemOwnerName = NWB_TEXT("UiLayerSystem");
+inline constexpr TStringView s_UiLayerSystemOwnerName = FOUNDATION_TEXT("UiLayerSystem");
 
-// ECS owns callback execution; the independent GPU renderer receives only frozen paint snapshots.
-class UiLayerSystem final
-    : public Core::ECS::ISystem
-    , public Core::IRenderPass
-    , public Core::IInputEventHandler
-{
-public:
-    using ShaderPathResolveCallback = Function<Expected<Name>(const Name&, AStringView, const Name&)>;
-
-
-public:
-    UiLayerSystem(
-        Core::Alloc::GlobalArena& arena,
-        Core::ECS::World& world,
-        Core::GraphicsRuntime& graphics,
-        Core::InputDispatcher& input,
-        Core::IClipboardService& clipboard,
-        Core::ITextInputService& textInput,
-        Core::Assets::AssetManager& assetManager,
-        ShaderPathResolveCallback shaderPathResolver,
-        const Core::Assets::AssetRef<UiSkin>& skin,
-        UiLayerPresentation::Enum presentation
-    );
-    virtual ~UiLayerSystem()noexcept override;
-
-
-public:
-    void setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept;
-    void setGpuCommandRecordingMode(const Ui::GpuCommandRecordingMode::Enum mode)noexcept{ m_renderer.setCommandRecordingMode(mode); }
-
-    [[nodiscard]] virtual Core::CpuTaskOptions taskOptions()const noexcept override{
-        return { .cost = Core::CpuTaskCost::Light, .target = Core::CpuTaskTarget::MainThread };
-    }
-    virtual void prepare([[maybe_unused]] Core::ECS::World& world)override{
-        synchronizeInput();
-    }
-    [[nodiscard]] virtual Expected<void, Core::CpuTaskAdmissionError::Enum> update(Core::ECS::World& world, f32 delta)override;
-    virtual b8 validateResources(u32 width, u32 height, u32 sampleCount)override;
-    virtual void invalidateResources()override;
-    virtual b8 prepareResources(Core::Framebuffer* framebuffer)override;
-    virtual void render(Core::Framebuffer* framebuffer)override;
-    virtual void displayScaleChanged(f32 scaleX, f32 scaleY)override;
-
-
-public:
-    // Main-thread profile replacement copies bindings; an empty profile disables every default shortcut.
-    [[nodiscard]] b8 setInputBindings(Span<const Ui::InputKeyBinding> bindings);
-    virtual ::NWB::Core::KeyboardInputResult keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
-    virtual b8 keyboardCharInput(u32 unicode, i32 mods)override;
-    virtual b8 mousePosUpdate(f64 xpos, f64 ypos)override;
-    virtual b8 mouseButtonUpdate(i32 button, i32 action, i32 mods)override;
-    virtual b8 mouseScrollUpdate(f64 xoffset, f64 yoffset)override;
-    virtual void windowFocusUpdate(b8 focused)override;
-    virtual void pointerLeave()override;
-    virtual void pointerCaptureLost()override;
-    [[nodiscard]] b8 wantsKeyboard()const noexcept{ return m_resourcesReady && m_context.input().wantsCommands(); }
-    [[nodiscard]] b8 wantsPointer()const noexcept;
-
-
-private:
-    void collectRoots();
-    void synchronizeInput();
-    void routeInput(const Ui::InputEvent& event, b8* blockText = nullptr);
-    void routePointerInput(const Ui::PointerInput& input, b8* consumed = nullptr);
-    void synchronizeNativeInput();
-    void abandonPendingFrame(b8 resetUi = false)noexcept;
-    void resetNormalizedInput();
-    void resetNativeInputState()noexcept;
-    [[nodiscard]] b8 loadFonts(Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] Core::Assets::AssetRef<UiSkin> basicSkin()const noexcept;
-    [[nodiscard]] Core::Assets::AssetRef<UiSkin> resolveSkin(const Core::Assets::AssetRef<UiSkin>& ref)const noexcept;
-
-
-private:
-    Core::ECS::World& m_world;
-    Core::GraphicsRuntime& m_graphics;
-    Core::InputDispatcher& m_input;
-    Core::IClipboardService& m_clipboard;
-    Core::ITextInputService& m_textInput;
-    Core::Assets::AssetManager& m_assetManager;
-    ActiveSceneSubsystems m_defaultSceneSubsystems;
-    const ActiveSceneSubsystems* m_activeSceneSubsystems = nullptr;
-    UiSkinSelectionState m_skinSelection;
-    UniquePtr<Core::Assets::IAsset> m_skinAsset;
-    Ui::PaintBuilder m_paint;
-    Ui::TextService m_text;
-    Ui::Context m_context;
-    UiEditBoxHost m_editHost;
-    Ui::Builder m_ui;
-    Ui::PaintVector<UiLiveRoot> m_liveRoots;
-    Ui::PaintVector<Ui::WidgetRoot> m_rootIdentities;
-    Ui::GpuRenderer m_renderer;
-    UiFrameDelta m_frameDelta;
-    Ui::DisplayMetrics m_display;
-    Ui::Point m_pointer;
-    // Native-key ownership survives focus transfer; the CPU router retains each resolved held intention.
-    Array<u8, s_UiNativeKeySlotCount> m_nativeKeyOwners{};
-    u32 m_pressedButtons = 0u;
-    UiLayerPresentation::Enum m_presentation;
-    u8 m_pointerOwner = 0u;
-    b8 m_blockNativeChars = false;
-    b8 m_blockCommandChars = false;
-    u64 m_frameGeneration = 0u;
-    u32 m_width = 0u;
-    u32 m_height = 0u;
-    b8 m_resourcesReady = false;
-    b8 m_fontsReady = false;
-};
+using ActiveSceneSubsystemsConstPtr = const ActiveSceneSubsystems*;
+using UiLayerShaderPathResolveCallback = Function<Expected<Name>(const Name&, AStringView, const Name&)>;
+using UiInputKeyBinding = Ui::InputKeyBinding;
+using UiPaintBuilder = Ui::PaintBuilder;
+using UiTextService = Ui::TextService;
+using UiContext = Ui::Context;
+using UiBuilder = Ui::Builder;
+using UiLiveRootVector = Ui::PaintVector<UiLiveRoot>;
+using UiWidgetRootVector = Ui::PaintVector<Ui::WidgetRoot>;
+using UiGpuRenderer = Ui::GpuRenderer;
+using UiDisplayMetrics = Ui::DisplayMetrics;
+using UiPoint = Ui::Point;
+using UiInputEvent = Ui::InputEvent;
+using UiPointerInput = Ui::PointerInput;
+using UiGpuCommandRecordingMode = Ui::GpuCommandRecordingMode::Enum;
+using BoolPtr = b8*;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -160,6 +68,101 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// ECS owns callback execution; the independent GPU renderer receives only frozen paint snapshots.
+[arena, system("ui_layer")]
+class UiLayerSystem : IRenderPass, IInputEventHandler{
+    private mut World m_world;
+    private mut GraphicsRuntime m_graphics;
+    private mut InputDispatcher m_input;
+    private mut IClipboardService m_clipboard;
+    private mut ITextInputService m_textInput;
+    private mut AssetManager m_assetManager;
+    private ActiveSceneSubsystems m_defaultSceneSubsystems;
+    private ActiveSceneSubsystemsConstPtr m_activeSceneSubsystems;
+    private UiSkinSelectionState m_skinSelection;
+    private UniquePtr<IAsset> m_skinAsset;
+    private UiPaintBuilder m_paint;
+    private UiTextService m_text;
+    private UiContext m_context;
+    private UiEditBoxHost m_editHost;
+    private UiBuilder m_ui;
+    private UiLiveRootVector m_liveRoots;
+    private UiWidgetRootVector m_rootIdentities;
+    private UiGpuRenderer m_renderer;
+    private UiDisplayMetrics m_display;
+    private UiPoint m_pointer;
+    private u64 m_frameGeneration = 0u;
+    private UiFrameDelta m_frameDelta;
+    private u32 m_pressedButtons = 0u;
+    private u32 m_width = 0u;
+    private u32 m_height = 0u;
+    // Native-key ownership survives focus transfer; the CPU router retains each resolved held intention.
+    private Array<u8, s_UiNativeKeySlotCount> m_nativeKeyOwners;
+    private UiLayerPresentation m_presentation = UiLayerPresentation::Scene;
+    private u8 m_pointerOwner = 0u;
+    private b8 m_blockNativeChars = false;
+    private b8 m_blockCommandChars = false;
+    private b8 m_resourcesReady = false;
+    private b8 m_fontsReady = false;
+
+    public UiLayerSystem(
+        mut World world,
+        mut GraphicsRuntime graphics,
+        mut InputDispatcher input,
+        mut IClipboardService clipboard,
+        mut ITextInputService textInput,
+        mut AssetManager assetManager,
+        in UiLayerShaderPathResolveCallback shaderPathResolver,
+        in AssetRef<UiSkin> skin,
+        in UiLayerPresentation presentation
+    );
+    public ~UiLayerSystem();
+
+    public void setActiveSceneSubsystems(in ActiveSceneSubsystemsConstPtr subsystems);
+    public void setGpuCommandRecordingMode(in UiGpuCommandRecordingMode mode);
+
+    public CpuTaskOptions taskOptions()const override;
+    public void prepare(mut World world)override;
+    public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta)override;
+    public b8 validateResources(in u32 width, in u32 height, in u32 sampleCount)override;
+    public void invalidateResources()override;
+    public b8 prepareResources(in FramebufferPtr framebuffer)override;
+    public void render(in FramebufferPtr framebuffer)override;
+    public void displayScaleChanged(in f32 scaleX, in f32 scaleY)override;
+
+    // Main-thread profile replacement copies bindings; an empty profile disables every default shortcut.
+    public b8 setInputBindings(in Span<UiInputKeyBinding> bindings);
+    public KeyboardInputResult keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods)override;
+    public b8 keyboardCharInput(in u32 unicode, in i32 mods)override;
+    public b8 mousePosUpdate(in f64 xpos, in f64 ypos)override;
+    public b8 mouseButtonUpdate(in i32 button, in i32 action, in i32 mods)override;
+    public b8 mouseScrollUpdate(in f64 xoffset, in f64 yoffset)override;
+    public void windowFocusUpdate(in b8 focused)override;
+    public void pointerLeave()override;
+    public void pointerCaptureLost()override;
+    public b8 wantsKeyboard()const;
+    public b8 wantsPointer()const;
+
+    private void collectRoots();
+    private void synchronizeInput();
+    private void routeInput(in UiInputEvent event);
+    private void routeInput(in UiInputEvent event, in BoolPtr blockText);
+    private void routePointerInput(in UiPointerInput input);
+    private void routePointerInput(in UiPointerInput input, in BoolPtr consumed);
+    private void synchronizeNativeInput();
+    private void abandonPendingFrame();
+    private void abandonPendingFrame(in b8 resetUi);
+    private void resetNormalizedInput();
+    private void resetNativeInputState();
+    private b8 loadFonts(mut ScratchArena scratchArena);
+    private AssetRef<UiSkin> basicSkin()const;
+    private AssetRef<UiSkin> resolveSkin(in AssetRef<UiSkin> ref)const;
 }
 
 
@@ -228,51 +231,53 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 UiLayerSystem::UiLayerSystem(
-    Core::Alloc::GlobalArena& arena,
+    ::ArenaBase& __adhd_mother_arena,
     Core::ECS::World& world,
     Core::GraphicsRuntime& graphics,
     Core::InputDispatcher& input,
     Core::IClipboardService& clipboard,
     Core::ITextInputService& textInput,
     Core::Assets::AssetManager& assetManager,
-    ShaderPathResolveCallback shaderPathResolver,
+    const UiLayerShaderPathResolveCallback& shaderPathResolver,
     const Core::Assets::AssetRef<UiSkin>& skin,
     const UiLayerPresentation::Enum presentation
-)
-    : Core::ECS::ISystem(arena)
+)noexcept
+    : Core::ECS::ISystem(__adhd_mother_arena)
     , Core::IRenderPass(graphics)
-    , m_world(world)
-    , m_graphics(graphics)
-    , m_input(input)
-    , m_clipboard(clipboard)
-    , m_textInput(textInput)
-    , m_assetManager(assetManager)
-    , m_defaultSceneSubsystems(arena)
+    , __adhd_arena(::MakeNotNull(&__adhd_mother_arena))
+    , m_world(::MakeNotNull(&world))
+    , m_graphics(::MakeNotNull(&graphics))
+    , m_input(::MakeNotNull(&input))
+    , m_clipboard(::MakeNotNull(&clipboard))
+    , m_textInput(::MakeNotNull(&textInput))
+    , m_assetManager(::MakeNotNull(&assetManager))
+    , m_defaultSceneSubsystems(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena))
+    , m_activeSceneSubsystems(nullptr)
     , m_skinSelection(MakeUiSkinSelectionState(skin))
-    , m_paint(arena)
-    , m_text(arena)
-    , m_context(arena)
-    , m_editHost(arena, m_context, textInput, clipboard)
-    , m_ui(arena, m_context, m_paint, m_text)
-    , m_liveRoots(arena)
-    , m_rootIdentities(arena)
-    , m_renderer(arena, graphics, assetManager, Move(shaderPathResolver))
+    , m_paint(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena))
+    , m_text(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena))
+    , m_context(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena))
+    , m_editHost(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena), m_context, textInput, clipboard)
+    , m_ui(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena), m_context, m_paint, m_text)
+    , m_liveRoots(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena))
+    , m_rootIdentities(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena))
+    , m_renderer(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena), graphics, assetManager, shaderPathResolver)
     , m_presentation(presentation)
 {
     writeAccess<UiPaintComponent>();
     m_ui.setEditHost(&m_editHost);
     m_liveRoots.reserve(Ui::s_InputMaxTargets);
     m_rootIdentities.reserve(Ui::s_InputMaxTargets);
-    m_input.addHandlerToBack(*this);
-    if(!m_input.windowFocused())
+    m_input->addHandlerToBack(*this);
+    if(!m_input->windowFocused())
         windowFocusUpdate(false);
     if(m_presentation == UiLayerPresentation::Scene)
-        m_graphics.setTaskGraphOutputLayerContributor(&m_renderer);
+        m_graphics->setTaskGraphOutputLayerContributor(&m_renderer);
 }
 
 UiLayerSystem::~UiLayerSystem()noexcept{
-    m_input.removeHandler(*this);
-    m_graphics.clearTaskGraphOutputLayerContributor(m_renderer);
+    m_input->removeHandler(*this);
+    m_graphics->clearTaskGraphOutputLayerContributor(m_renderer);
 }
 
 void UiLayerSystem::setActiveSceneSubsystems(const ActiveSceneSubsystems* const subsystems)noexcept{
@@ -280,7 +285,19 @@ void UiLayerSystem::setActiveSceneSubsystems(const ActiveSceneSubsystems* const 
     m_renderer.setActiveSceneSubsystems(subsystems);
 }
 
-b8 UiLayerSystem::validateResources(const u32 width, const u32 height, [[maybe_unused]] const u32 sampleCount){
+void UiLayerSystem::setGpuCommandRecordingMode(const UiGpuCommandRecordingMode& mode)noexcept{
+    m_renderer.setCommandRecordingMode(mode);
+}
+
+Core::CpuTaskOptions UiLayerSystem::taskOptions()const noexcept{
+    return { .cost = Core::CpuTaskCost::Light, .target = Core::CpuTaskTarget::MainThread };
+}
+
+void UiLayerSystem::prepare([[maybe_unused]] Core::ECS::World& world)noexcept{
+    synchronizeInput();
+}
+
+b8 UiLayerSystem::validateResources(const u32 width, const u32 height, [[maybe_unused]] const u32 sampleCount)noexcept{
     m_resourcesReady = false;
     m_width = width;
     m_height = height;
@@ -288,13 +305,13 @@ b8 UiLayerSystem::validateResources(const u32 width, const u32 height, [[maybe_u
         return true;
 
     if(!m_activeSceneSubsystems){
-        if(!m_defaultSceneSubsystems.loadProjectStartScene(m_assetManager))
+        if(!m_defaultSceneSubsystems.loadProjectStartScene(*m_assetManager))
             return false;
         m_activeSceneSubsystems = &m_defaultSceneSubsystems;
         m_renderer.setActiveSceneSubsystems(m_activeSceneSubsystems);
     }
     if(!m_activeSceneSubsystems->hasSubsystem<UiSubsystem>()){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: active scene does not include required subsystem '{}'"), ConvertString(UiSubsystem::s_AssetTypeText));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSystem: active scene does not include required subsystem '{}'"), ConvertString(UiSubsystem::s_AssetTypeText));
         return false;
     }
 
@@ -312,7 +329,7 @@ b8 UiLayerSystem::validateResources(const u32 width, const u32 height, [[maybe_u
             const UiSkin* skin = Core::Assets::CastAsset<UiSkin>(m_skinAsset.get());
             return skin && ValidateUiSkinToolkitContract(*skin) && m_renderer.setSkin(resolvedRef, *skin, m_skinSelection.generation);
         }
-        auto candidateAsset = m_assetManager.loadTypedSync<UiSkin>(resolvedRef.name(), s_UiLayerSystemOwnerName);
+        auto candidateAsset = m_assetManager->loadTypedSync<UiSkin>(resolvedRef.name(), s_UiLayerSystemOwnerName);
         const UiSkin* skin = candidateAsset ? candidateAsset->get() : nullptr;
         if(!skin || !ValidateUiSkinToolkitContract(*skin) || !m_renderer.setSkin(resolvedRef, *skin, m_skinSelection.generation))
             return false;
@@ -322,18 +339,18 @@ b8 UiLayerSystem::validateResources(const u32 width, const u32 height, [[maybe_u
     if(selection == UiSkinSelectionResult::Failed)
         return false;
     if(selection == UiSkinSelectionResult::DefaultFallback){
-        NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: custom UI skin '{}' is unavailable; using engine default"), ConvertString(m_skinSelection.requested.name().resolvedText()));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("UiLayerSystem: custom UI skin '{}' is unavailable; using engine default"), ConvertString(m_skinSelection.requested.name().resolvedText()));
     }
 
     f32 scaleX = 1.0f;
     f32 scaleY = 1.0f;
-    m_graphics.getDPIScaleInfo(scaleX, scaleY);
+    m_graphics->getDPIScaleInfo(scaleX, scaleY);
     displayScaleChanged(scaleX, scaleY);
     m_resourcesReady = true;
     return true;
 }
 
-void UiLayerSystem::invalidateResources(){
+void UiLayerSystem::invalidateResources()noexcept{
     m_resourcesReady = false;
     m_frameDelta.clear();
     abandonPendingFrame(true);
@@ -341,39 +358,39 @@ void UiLayerSystem::invalidateResources(){
     m_renderer.invalidateResources();
 }
 
-b8 UiLayerSystem::prepareResources(Core::Framebuffer* framebuffer){
+b8 UiLayerSystem::prepareResources(Core::Framebuffer* framebuffer)noexcept{
     if(!framebuffer || !m_resourcesReady)
         return false;
-    const b8 prepared = m_renderer.prepareTaskGraphOutputLayer(m_graphics.acquiredPresentationFrame());
+    const b8 prepared = m_renderer.prepareTaskGraphOutputLayer(m_graphics->acquiredPresentationFrame());
     if(!prepared && m_presentation == UiLayerPresentation::Standalone)
-        m_graphics.requestDeviceRecreation();
+        m_graphics->requestDeviceRecreation();
     return prepared;
 }
 
-void UiLayerSystem::render(Core::Framebuffer* framebuffer){
+void UiLayerSystem::render(Core::Framebuffer* framebuffer)noexcept{
     // The project chooses the final-output owner explicitly; optional layer failures cannot replace scene output.
     if(!framebuffer || !m_resourcesReady || m_presentation == UiLayerPresentation::Scene)
         return;
-    if(!m_renderer.renderStandalone(m_graphics.acquiredPresentationFrame())){
+    if(!m_renderer.renderStandalone(m_graphics->acquiredPresentationFrame())){
         // The void render-pass API cannot abort presentation; recreation prevents presenting an unwritten acquired image.
-        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: standalone UI presentation failed"));
-        m_graphics.requestDeviceRecreation();
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSystem: standalone UI presentation failed"));
+        m_graphics->requestDeviceRecreation();
     }
 }
 
-void UiLayerSystem::displayScaleChanged(const f32 scaleX, const f32 scaleY){
-    NWB_ASSERT(IsValidUiDisplayScale(scaleX, scaleY));
+void UiLayerSystem::displayScaleChanged(const f32 scaleX, const f32 scaleY)noexcept{
+    FOUNDATION_ASSERT(IsValidUiDisplayScale(scaleX, scaleY));
     m_frameDelta.clear();
     abandonPendingFrame(true);
     m_display = { static_cast<f32>(m_width) / scaleX, static_cast<f32>(m_height) / scaleY, scaleX, scaleY };
 }
 
-b8 UiLayerSystem::setInputBindings(const Span<const Ui::InputKeyBinding> bindings){
+b8 UiLayerSystem::setInputBindings(const Span<const Ui::InputKeyBinding> bindings)noexcept{
     synchronizeNativeInput();
     return m_context.input().setBindings(bindings);
 }
 
-b8 UiLayerSystem::loadFonts(Core::Alloc::ScratchArena& scratchArena){
+b8 UiLayerSystem::loadFonts(Core::Alloc::ScratchArena& scratchArena)noexcept{
     if(m_fontsReady)
         return true;
     const UiSubsystem* const uiSubsystem = m_activeSceneSubsystems ? m_activeSceneSubsystems->findSubsystem<UiSubsystem>() : nullptr;
@@ -388,13 +405,13 @@ b8 UiLayerSystem::loadFonts(Core::Alloc::ScratchArena& scratchArena){
     sources.reserve(fontCount);
     for(usize index = 0u; index < fontCount; ++index){
         const Core::Assets::AssetRef<FontAtlas>& atlasRef = uiSubsystem->basicFonts[index];
-        auto loadedAtlas = m_assetManager.loadTypedSync<FontAtlas>(atlasRef.name(), s_UiLayerSystemOwnerName);
+        auto loadedAtlas = m_assetManager->loadTypedSync<FontAtlas>(atlasRef.name(), s_UiLayerSystemOwnerName);
         if(!loadedAtlas)
             return false;
         atlasAssets[index] = Move(*loadedAtlas);
         const FontAtlas& atlas = *atlasAssets[index];
         const Core::Assets::AssetRef<Font>& fontRef = atlas.payload().font;
-        auto font = m_assetManager.loadTypedSync<Font>(fontRef.name(), s_UiLayerSystemOwnerName);
+        auto font = m_assetManager->loadTypedSync<Font>(fontRef.name(), s_UiLayerSystemOwnerName);
         if(!font)
             return false;
         assets[index] = Move(*font);
@@ -405,6 +422,10 @@ b8 UiLayerSystem::loadFonts(Core::Alloc::ScratchArena& scratchArena){
     return m_fontsReady;
 }
 
+void UiLayerSystem::abandonPendingFrame()noexcept{
+    abandonPendingFrame(false);
+}
+
 void UiLayerSystem::abandonPendingFrame(const b8 resetUi)noexcept{
     m_blockCommandChars = false;
     m_context.abandonFrame();
@@ -413,7 +434,7 @@ void UiLayerSystem::abandonPendingFrame(const b8 resetUi)noexcept{
         m_ui.reset();
 }
 
-void UiLayerSystem::resetNormalizedInput(){
+void UiLayerSystem::resetNormalizedInput()noexcept{
     m_blockCommandChars = false;
     m_context.resetInput();
     m_editHost.reset();
@@ -448,7 +469,7 @@ Core::Assets::AssetRef<UiSkin> UiLayerSystem::resolveSkin(const Core::Assets::As
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-::NWB::Core::KeyboardInputResult UiLayerSystem::keyboardUpdate(const i32 key, [[maybe_unused]] const i32 scancode, const i32 action, const i32 mods){
+::NWB::Core::KeyboardInputResult UiLayerSystem::keyboardUpdate(const i32 key, [[maybe_unused]] const i32 scancode, const i32 action, const i32 mods)noexcept{
     if(!Ui::IsValidInputKeyCode(key) || action < Core::InputAction::Release || action > Core::InputAction::Repeat)
         return false;
     synchronizeNativeInput();
@@ -477,7 +498,7 @@ Core::Assets::AssetRef<UiSkin> UiLayerSystem::resolveSkin(const Core::Assets::As
     return { consumed, m_blockCommandChars };
 }
 
-b8 UiLayerSystem::keyboardCharInput(const u32 unicode, const i32 mods){
+b8 UiLayerSystem::keyboardCharInput(const u32 unicode, const i32 mods)noexcept{
     synchronizeNativeInput();
     m_editHost.collectNative();
     if(m_editHost.hasTextFocus()){
@@ -490,7 +511,7 @@ b8 UiLayerSystem::keyboardCharInput(const u32 unicode, const i32 mods){
     return false;
 }
 
-b8 UiLayerSystem::mousePosUpdate(const f64 xpos, const f64 ypos){
+b8 UiLayerSystem::mousePosUpdate(const f64 xpos, const f64 ypos)noexcept{
     if(!ValidUiMouseCoordinate(xpos, ypos))
         return false;
     synchronizeNativeInput();
@@ -510,7 +531,7 @@ b8 UiLayerSystem::mousePosUpdate(const f64 xpos, const f64 ypos){
     return consumed || (m_pressedButtons != 0u && m_pointerOwner == UiInputOwner::Custom);
 }
 
-b8 UiLayerSystem::mouseButtonUpdate(const i32 button, const i32 action, const i32 mods){
+b8 UiLayerSystem::mouseButtonUpdate(const i32 button, const i32 action, const i32 mods)noexcept{
     if(button < Core::MouseButton::Left || button > Core::MouseButton::Button8 || (action != Core::InputAction::Press && action != Core::InputAction::Release))
         return false;
     synchronizeNativeInput();
@@ -565,7 +586,7 @@ b8 UiLayerSystem::mouseButtonUpdate(const i32 button, const i32 action, const i3
     return owner != UiInputOwner::Scene;
 }
 
-b8 UiLayerSystem::mouseScrollUpdate(const f64 xoffset, const f64 yoffset){
+b8 UiLayerSystem::mouseScrollUpdate(const f64 xoffset, const f64 yoffset)noexcept{
     if(!ValidUiMouseScroll(xoffset, yoffset))
         return false;
     synchronizeNativeInput();
@@ -583,7 +604,7 @@ b8 UiLayerSystem::mouseScrollUpdate(const f64 xoffset, const f64 yoffset){
     return consumed || m_pointerOwner == UiInputOwner::Custom;
 }
 
-void UiLayerSystem::windowFocusUpdate(const b8 focused){
+void UiLayerSystem::windowFocusUpdate(const b8 focused)noexcept{
     Ui::InputEvent event;
     event.type = focused ? Ui::InputEventType::FocusGained : Ui::InputEventType::FocusLost;
     routeInput(event);
@@ -591,7 +612,7 @@ void UiLayerSystem::windowFocusUpdate(const b8 focused){
         resetNativeInputState();
 }
 
-void UiLayerSystem::pointerLeave(){
+void UiLayerSystem::pointerLeave()noexcept{
     Ui::PointerInput event;
     event.source = Ui::s_NativePointerSource;
     event.phase = Ui::PointerPhase::Leave;
@@ -600,7 +621,7 @@ void UiLayerSystem::pointerLeave(){
     routePointerInput(event);
 }
 
-void UiLayerSystem::pointerCaptureLost(){
+void UiLayerSystem::pointerCaptureLost()noexcept{
     if(m_pressedButtons == 0u)
         return;
     Ui::PointerInput event;
@@ -613,20 +634,28 @@ void UiLayerSystem::pointerCaptureLost(){
     m_pointerOwner = UiInputOwner::Scene;
 }
 
+b8 UiLayerSystem::wantsKeyboard()const noexcept{
+    return m_resourcesReady && m_context.input().wantsCommands();
+}
+
 b8 UiLayerSystem::wantsPointer()const noexcept{
     if(m_pressedButtons != 0u)
         return m_pointerOwner != UiInputOwner::Scene;
     return m_resourcesReady && m_context.input().wantsPointer();
 }
 
-void UiLayerSystem::routeInput(const Ui::InputEvent& event, b8* blockText){
+void UiLayerSystem::routeInput(const Ui::InputEvent& event)noexcept{
+    routeInput(event, nullptr);
+}
+
+void UiLayerSystem::routeInput(const Ui::InputEvent& event, const BoolPtr& blockText)noexcept{
     if(blockText)
         *blockText = false;
     m_editHost.collectNative();
     const Ui::WidgetId previousCapture = m_context.input().capture();
     const auto normalized = m_context.input().queue(event);
     if(!normalized){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: invalid or overflowing normalized input"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSystem: invalid or overflowing normalized input"));
         resetNormalizedInput();
         return;
     }
@@ -640,14 +669,18 @@ void UiLayerSystem::routeInput(const Ui::InputEvent& event, b8* blockText){
     LogUiInputRoutingOverflows(result.activationOverflow, result.gestureOverflow);
 }
 
-void UiLayerSystem::routePointerInput(const Ui::PointerInput& input, b8* consumed){
+void UiLayerSystem::routePointerInput(const Ui::PointerInput& input)noexcept{
+    routePointerInput(input, nullptr);
+}
+
+void UiLayerSystem::routePointerInput(const Ui::PointerInput& input, const BoolPtr& consumed)noexcept{
     if(consumed)
         *consumed = false;
     m_editHost.collectNative();
     const Ui::WidgetId previousCapture = m_context.input().capture();
     const auto normalized = m_context.input().queuePointer(input);
     if(!normalized){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: invalid or overflowing pointer input"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSystem: invalid or overflowing pointer input"));
         resetNormalizedInput();
         return;
     }
@@ -659,9 +692,9 @@ void UiLayerSystem::routePointerInput(const Ui::PointerInput& input, b8* consume
         *consumed = result.pointerConsumed;
 }
 
-void UiLayerSystem::synchronizeNativeInput(){
+void UiLayerSystem::synchronizeNativeInput()noexcept{
     // Native dispatch occurs outside world system execution; use its joined boundary before reading host roots.
-    m_world.taskScope().wait();
+    m_world->taskScope().wait();
     synchronizeInput();
 }
 
@@ -669,7 +702,7 @@ void UiLayerSystem::synchronizeNativeInput(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<void, Core::CpuTaskAdmissionError::Enum> UiLayerSystem::update([[maybe_unused]] Core::ECS::World& world, const f32 delta){
+Expected<void, Core::CpuTaskAdmissionError::Enum> UiLayerSystem::update([[maybe_unused]] Core::ECS::World& world, const f32 delta)noexcept{
     m_frameDelta.add(delta);
     synchronizeInput();
     if(!CanBeginUiLayerPaintFrame(m_resourcesReady, m_renderer.hasPendingFrame(), m_context.ready()))
@@ -682,17 +715,17 @@ Expected<void, Core::CpuTaskAdmissionError::Enum> UiLayerSystem::update([[maybe_
     const f32 frameDelta = m_frameDelta.consume();
     m_editHost.beginFrame(m_frameGeneration, m_display);
     if(m_editHost.takeClipboardFailure())
-        NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: clipboard publication failed"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("UiLayerSystem: clipboard publication failed"));
     m_ui.reset();
     m_ui.setSkin(skin);
     m_paint.begin(m_display, m_frameGeneration, m_skinSelection.generation, Core::Assets::AssetRef<UiSkin>(skin.virtualPath()), skin);
     m_paint.reserve(s_UiLayerPaintReserveQuads);
     m_ui.setDeltaSeconds(frameDelta);
     m_ui.setPointerBusy(m_pressedButtons != 0u || m_context.input().primaryDown() || m_context.input().secondaryDown());
-    UiPaintContext context{ m_world, m_clipboard, m_textInput, m_paint, m_text, m_display, m_ui, Core::ECS::s_InvalidEntityId, frameDelta };
+    UiPaintContext context{ *m_world, *m_clipboard, *m_textInput, m_paint, m_text, m_display, m_ui, Core::ECS::s_InvalidEntityId, frameDelta };
     Sort(m_liveRoots.begin(), m_liveRoots.end(), &IsUiLiveRootOrderedBefore);
     for(const auto& root : m_liveRoots){
-        UiPaintComponent* component = m_world.tryGetComponent<UiPaintComponent>(root.entity);
+        UiPaintComponent* component = m_world->tryGetComponent<UiPaintComponent>(root.entity);
         if(!component || !component->visible || !component->paint)
             continue;
         if(!m_context.beginRoot({ root.entity.id, 1u }))
@@ -705,12 +738,12 @@ Expected<void, Core::CpuTaskAdmissionError::Enum> UiLayerSystem::update([[maybe_
             break;
     }
     if(!m_context.finishFrame()){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: rejected unbalanced or invalid UI declarations"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSystem: rejected unbalanced or invalid UI declarations"));
         return {};
     }
     m_editHost.finishFrame();
     if(!m_renderer.submit(m_paint.freeze())){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: GPU renderer rejected a new paint snapshot"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSystem: GPU renderer rejected a new paint snapshot"));
         abandonPendingFrame();
         abandon.release();
         return {};
@@ -719,10 +752,10 @@ Expected<void, Core::CpuTaskAdmissionError::Enum> UiLayerSystem::update([[maybe_
     return {};
 }
 
-void UiLayerSystem::collectRoots(){
+void UiLayerSystem::collectRoots()noexcept{
     m_liveRoots.clear();
     m_rootIdentities.clear();
-    m_world.view<UiPaintComponent>().each([this](const Core::ECS::EntityID entity, UiPaintComponent& component){
+    m_world->view<UiPaintComponent>().each([this](const Core::ECS::EntityID entity, UiPaintComponent& component){
         if(!component.visible || !component.paint.present())
             return;
         m_liveRoots.push_back({ entity, component.order });
@@ -730,14 +763,14 @@ void UiLayerSystem::collectRoots(){
     });
 }
 
-void UiLayerSystem::synchronizeInput(){
+void UiLayerSystem::synchronizeInput()noexcept{
     collectRoots();
     m_context.retainRoots(m_rootIdentities);
     if(m_context.ready() && m_renderer.lastAcceptedGeneration() == m_context.readyGeneration()){
         const auto status = m_renderer.lastAcceptedPresentationStatus();
         if(status == Core::PresentationReceiptStatus::Accepted){
             const b8 committed = m_context.commitFrame(m_renderer.lastAcceptedGeneration());
-            NWB_FATAL_ASSERT(committed);
+            FOUNDATION_FATAL_ASSERT(committed);
             m_editHost.commitFrame(m_renderer.lastAcceptedGeneration());
         }
         else if(status == Core::PresentationReceiptStatus::Rejected)

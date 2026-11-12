@@ -803,24 +803,24 @@ b8 AcceptTextAreaLoanBaseline(TextAreaLoanFixture& self)noexcept;
 
 NWB_BEGIN
 namespace UiRadioGroupTests{
-NWB_INLINE Expected<u64> RadioSource::indexOf(const u64 value)const noexcept{
+FOUNDATION_INLINE Expected<u64> RadioSource::indexOf(const u64 value)const noexcept{
     callback(RadioCallbackSite::None);
     return ::__hidden_ui_glyph_sdf_tests::FindRadioFixtureIndexOf(m_count, m_removed, m_reverse, m_duplicate, value);
 }
-NWB_INLINE Expected<u64> RadioSource::findEnabled(const u64 start, const b8 reverse)const noexcept{
+FOUNDATION_INLINE Expected<u64> RadioSource::findEnabled(const u64 start, const b8 reverse)const noexcept{
     callback(RadioCallbackSite::None);
     return ::__hidden_ui_glyph_sdf_tests::FindRadioFixtureEnabledIndex(m_count, m_removed, m_reverse, m_duplicate, m_allDisabled, m_disabled, start, reverse);
 }
-NWB_INLINE StringView RadioSource::text(const u64 index)const{
+FOUNDATION_INLINE StringView RadioSource::text(const u64 index)const{
     callback(RadioCallbackSite::Text);
     return ::__hidden_ui_glyph_sdf_tests::FormatRadioSourceLabel(const_cast<RadioSource&>(*this), index);
 }
-NWB_INLINE void RadioSource::resetCounters()const noexcept{ ::__hidden_ui_glyph_sdf_tests::ResetRadioSourceCounters(const_cast<RadioSource&>(*this)); }
-NWB_INLINE u64 RadioSource::rawCount()const noexcept{ return ::__hidden_ui_glyph_sdf_tests::ComputeRadioFixtureRawCount(m_count, m_removed); }
-NWB_INLINE u64 RadioSource::rawKey(const u64 index)const noexcept{
+FOUNDATION_INLINE void RadioSource::resetCounters()const noexcept{ ::__hidden_ui_glyph_sdf_tests::ResetRadioSourceCounters(const_cast<RadioSource&>(*this)); }
+FOUNDATION_INLINE u64 RadioSource::rawCount()const noexcept{ return ::__hidden_ui_glyph_sdf_tests::ComputeRadioFixtureRawCount(m_count, m_removed); }
+FOUNDATION_INLINE u64 RadioSource::rawKey(const u64 index)const noexcept{
     return ::__hidden_ui_glyph_sdf_tests::ComputeRadioFixtureRawKey(m_count, m_removed, m_reverse, m_duplicate, index);
 }
-NWB_INLINE void RadioSource::callback(const RadioCallbackSite::Enum site)const{
+FOUNDATION_INLINE void RadioSource::callback(const RadioCallbackSite::Enum site)const{
     ++m_calls;
     m_label.fill('?');
     if(m_mutations != 0u)
@@ -840,36 +840,36 @@ NWB_INLINE void RadioSource::callback(const RadioCallbackSite::Enum site)const{
     else if(m_mutation == RadioMutation::ClosePopup)
         m_popup->close();
 }
-NWB_INLINE void RadioGroupFixture::SetUp(){ ::__hidden_ui_glyph_sdf_tests::SetUpRadioGroupFixture(*this); }
-NWB_INLINE b8 RadioGroupFixture::declare(const u64 generation, const RadioGroupOptions& options, const Rect& bounds){
+FOUNDATION_INLINE void RadioGroupFixture::SetUp(){ ::__hidden_ui_glyph_sdf_tests::SetUpRadioGroupFixture(*this); }
+FOUNDATION_INLINE b8 RadioGroupFixture::declare(const u64 generation, const RadioGroupOptions& options, const Rect& bounds){
     return ::__hidden_ui_glyph_sdf_tests::DeclareRadioGroupFixture(*this, generation, options, bounds);
 }
-NWB_INLINE b8 RadioGroupFixture::declareSource(const u64 generation, const IListDataSource& source, RadioGroupState& state, const RadioGroupOptions& options, const Rect& bounds){
+FOUNDATION_INLINE b8 RadioGroupFixture::declareSource(const u64 generation, const IListDataSource& source, RadioGroupState& state, const RadioGroupOptions& options, const Rect& bounds){
     return ::__hidden_ui_glyph_sdf_tests::DeclareRadioGroupFixtureSource(*this, generation, source, state, options, bounds);
 }
-NWB_INLINE b8 RadioGroupFixture::prepare(const u64 generation, const RadioGroupOptions& options, const Rect& bounds){
+FOUNDATION_INLINE b8 RadioGroupFixture::prepare(const u64 generation, const RadioGroupOptions& options, const Rect& bounds){
     return ::__hidden_ui_glyph_sdf_tests::PrepareRadioGroupFixture(*this, generation, options, bounds);
 }
-NWB_INLINE b8 RadioGroupFixture::accept(const u64 generation, const RadioGroupOptions& options, const Rect& bounds){
+FOUNDATION_INLINE b8 RadioGroupFixture::accept(const u64 generation, const RadioGroupOptions& options, const Rect& bounds){
     return ::__hidden_ui_glyph_sdf_tests::AcceptRadioGroupFixture(*this, generation, options, bounds);
 }
-NWB_INLINE WidgetId RadioGroupFixture::host()const{ return ::__hidden_ui_glyph_sdf_tests::RadioGroupFixtureHost(*this); }
-NWB_INLINE Expected<RadioGroupChoicePlacement> RadioGroupFixture::tryChoice(const u64 keyValue, const RadioGroupState& state)const noexcept{
+FOUNDATION_INLINE WidgetId RadioGroupFixture::host()const{ return ::__hidden_ui_glyph_sdf_tests::RadioGroupFixtureHost(*this); }
+FOUNDATION_INLINE Expected<RadioGroupChoicePlacement> RadioGroupFixture::tryChoice(const u64 keyValue, const RadioGroupState& state)const noexcept{
     return ::__hidden_ui_glyph_sdf_tests::TryFindRadioGroupChoice(keyValue, state);
 }
-NWB_INLINE Point RadioGroupFixture::choicePoint(const u64 keyValue)const noexcept{
+FOUNDATION_INLINE Point RadioGroupFixture::choicePoint(const u64 keyValue)const noexcept{
     return ::__hidden_ui_glyph_sdf_tests::ComputeRadioGroupChoicePoint(keyValue, m_state);
 }
-NWB_INLINE usize RadioGroupFixture::regionQuads(const DrawSnapshot& snapshot, const Name& name)const noexcept{
+FOUNDATION_INLINE usize RadioGroupFixture::regionQuads(const DrawSnapshot& snapshot, const Name& name)const noexcept{
     UiSkinRegion region{};
     return m_skin.tryFindRegion(name, region) ? ::__hidden_ui_glyph_sdf_tests::CountUiSkinRegionQuads(region, m_skin.atlasWidth(), snapshot) : 0u;
 }
 };
 namespace UiSearchComboTests{
-NWB_INLINE u64 FilterView::rowCount()const noexcept{ return ::__hidden_ui_glyph_sdf_tests::ComputeSearchFilterRowCount(mode, full->count); }
-NWB_INLINE u64 FilterView::key(const u64 index)const noexcept{ return ::__hidden_ui_glyph_sdf_tests::ComputeSearchFilterRowKey(mode, index); }
-NWB_INLINE Expected<u64> FilterView::indexOf(const u64 value)const noexcept{ return ::__hidden_ui_glyph_sdf_tests::FindSearchFilterRowIndex(mode, full->count, value); }
-NWB_INLINE b8 SearchSource::filter(const AStringView query){
+FOUNDATION_INLINE u64 FilterView::rowCount()const noexcept{ return ::__hidden_ui_glyph_sdf_tests::ComputeSearchFilterRowCount(mode, full->count); }
+FOUNDATION_INLINE u64 FilterView::key(const u64 index)const noexcept{ return ::__hidden_ui_glyph_sdf_tests::ComputeSearchFilterRowKey(mode, index); }
+FOUNDATION_INLINE Expected<u64> FilterView::indexOf(const u64 value)const noexcept{ return ::__hidden_ui_glyph_sdf_tests::FindSearchFilterRowIndex(mode, full->count, value); }
+FOUNDATION_INLINE b8 SearchSource::filter(const AStringView query){
     ++filterCalls;
     if(filterMutation){
         EditModel& model = *MakeNotNull(Exchange(filterMutation, nullptr));
@@ -884,17 +884,17 @@ NWB_INLINE b8 SearchSource::filter(const AStringView query){
     view.mode = ::__hidden_ui_glyph_sdf_tests::ResolveSearchFilterMode(query, s_SecondHalfQuery, s_EmptyResultQuery);
     return true;
 }
-NWB_INLINE EditBoxResult SearchEditHost::editInPopup(const WidgetState& widget, const EditBoxOptions& options, const PopupToken& popup, EditModel& model){
+FOUNDATION_INLINE EditBoxResult SearchEditHost::editInPopup(const WidgetState& widget, const EditBoxOptions& options, const PopupToken& popup, EditModel& model){
     return ::__hidden_ui_glyph_sdf_tests::EditSearchHostInPopup(*this, widget, options, popup, model);
 }
-NWB_INLINE void SearchEditHost::text(const AStringView value)noexcept{ ::__hidden_ui_glyph_sdf_tests::SetSearchHostNextText(*this, value); }
-NWB_INLINE SearchComboOptions SearchFixture::Options()noexcept{ return ::__hidden_ui_glyph_sdf_tests::MakeSearchComboFixtureOptions(); }
-NWB_INLINE void SearchFixture::SetUp(){ ::__hidden_ui_glyph_sdf_tests::SetUpSearchFixture(*this); }
-NWB_INLINE b8 SearchFixture::declareSearch(const u64 generation){ return ::__hidden_ui_glyph_sdf_tests::DeclareSearchFixture(*this, generation); }
-NWB_INLINE b8 SearchFixture::openSearch(const u64 generation){ return ::__hidden_ui_glyph_sdf_tests::OpenSearchFixture(*this, generation); }
+FOUNDATION_INLINE void SearchEditHost::text(const AStringView value)noexcept{ ::__hidden_ui_glyph_sdf_tests::SetSearchHostNextText(*this, value); }
+FOUNDATION_INLINE SearchComboOptions SearchFixture::Options()noexcept{ return ::__hidden_ui_glyph_sdf_tests::MakeSearchComboFixtureOptions(); }
+FOUNDATION_INLINE void SearchFixture::SetUp(){ ::__hidden_ui_glyph_sdf_tests::SetUpSearchFixture(*this); }
+FOUNDATION_INLINE b8 SearchFixture::declareSearch(const u64 generation){ return ::__hidden_ui_glyph_sdf_tests::DeclareSearchFixture(*this, generation); }
+FOUNDATION_INLINE b8 SearchFixture::openSearch(const u64 generation){ return ::__hidden_ui_glyph_sdf_tests::OpenSearchFixture(*this, generation); }
 };
 namespace UiSliderTests{
-NWB_INLINE StringView SliderCallbackSource::text(const u64)const{
+FOUNDATION_INLINE StringView SliderCallbackSource::text(const u64)const{
     ++m_calls;
     if(m_mutation == SliderCallbackMutation::None)
         return s_LaterCallbackText;
@@ -909,30 +909,30 @@ NWB_INLINE StringView SliderCallbackSource::text(const u64)const{
         m_popup->close();
     return s_LaterCallbackText;
 }
-NWB_INLINE void SliderCallbackSource::clearCounters()const noexcept{ ::__hidden_ui_glyph_sdf_tests::ClearSliderCallbackCounters(const_cast<SliderCallbackSource&>(*this)); }
-NWB_INLINE SliderOptions SliderFixture::Options()noexcept{ return ::__hidden_ui_glyph_sdf_tests::MakeSliderFixtureOptions(); }
-NWB_INLINE ListOptions SliderFixture::SiblingOptions()noexcept{ return ::__hidden_ui_glyph_sdf_tests::MakeSliderSiblingListOptions(); }
-NWB_INLINE void SliderFixture::SetUp(){ ::__hidden_ui_glyph_sdf_tests::SetUpSliderFixture(*this); }
-NWB_INLINE b8 SliderFixture::declare(const u64 generation, const SliderOptions& settings, const Rect& bounds){
+FOUNDATION_INLINE void SliderCallbackSource::clearCounters()const noexcept{ ::__hidden_ui_glyph_sdf_tests::ClearSliderCallbackCounters(const_cast<SliderCallbackSource&>(*this)); }
+FOUNDATION_INLINE SliderOptions SliderFixture::Options()noexcept{ return ::__hidden_ui_glyph_sdf_tests::MakeSliderFixtureOptions(); }
+FOUNDATION_INLINE ListOptions SliderFixture::SiblingOptions()noexcept{ return ::__hidden_ui_glyph_sdf_tests::MakeSliderSiblingListOptions(); }
+FOUNDATION_INLINE void SliderFixture::SetUp(){ ::__hidden_ui_glyph_sdf_tests::SetUpSliderFixture(*this); }
+FOUNDATION_INLINE b8 SliderFixture::declare(const u64 generation, const SliderOptions& settings, const Rect& bounds){
     return ::__hidden_ui_glyph_sdf_tests::DeclareSliderFixture(*this, generation, settings, bounds);
 }
-NWB_INLINE b8 SliderFixture::prepare(const u64 generation, const SliderOptions& settings, const Rect& bounds){
+FOUNDATION_INLINE b8 SliderFixture::prepare(const u64 generation, const SliderOptions& settings, const Rect& bounds){
     return ::__hidden_ui_glyph_sdf_tests::PrepareSliderFixture(*this, generation, settings, bounds);
 }
-NWB_INLINE b8 SliderFixture::accept(const u64 generation, const SliderOptions& settings, const Rect& bounds){
+FOUNDATION_INLINE b8 SliderFixture::accept(const u64 generation, const SliderOptions& settings, const Rect& bounds){
     return ::__hidden_ui_glyph_sdf_tests::AcceptSliderFixture(*this, generation, settings, bounds);
 }
-NWB_INLINE b8 SliderFixture::sibling(const AStringView key){ return ::__hidden_ui_glyph_sdf_tests::DeclareSliderSibling(*this, key); }
-NWB_INLINE WidgetId SliderFixture::host()const{ return ::__hidden_ui_glyph_sdf_tests::SliderFixtureHost(*this); }
-NWB_INLINE WidgetId SliderFixture::track()const{ return ::__hidden_ui_glyph_sdf_tests::SliderFixtureTrack(*this); }
-NWB_INLINE WidgetId SliderFixture::thumb()const{ return ::__hidden_ui_glyph_sdf_tests::SliderFixtureThumb(*this); }
-NWB_INLINE Point SliderFixture::trackPoint(const f64 normalized, const SliderState& state)const noexcept{
+FOUNDATION_INLINE b8 SliderFixture::sibling(const AStringView key){ return ::__hidden_ui_glyph_sdf_tests::DeclareSliderSibling(*this, key); }
+FOUNDATION_INLINE WidgetId SliderFixture::host()const{ return ::__hidden_ui_glyph_sdf_tests::SliderFixtureHost(*this); }
+FOUNDATION_INLINE WidgetId SliderFixture::track()const{ return ::__hidden_ui_glyph_sdf_tests::SliderFixtureTrack(*this); }
+FOUNDATION_INLINE WidgetId SliderFixture::thumb()const{ return ::__hidden_ui_glyph_sdf_tests::SliderFixtureThumb(*this); }
+FOUNDATION_INLINE Point SliderFixture::trackPoint(const f64 normalized, const SliderState& state)const noexcept{
     return ::__hidden_ui_glyph_sdf_tests::ComputeSliderTrackPoint(state.placement(), normalized);
 }
-NWB_INLINE Point SliderFixture::thumbPoint()const noexcept{ return ::__hidden_ui_glyph_sdf_tests::ComputeSliderFixtureThumbPoint(*this); }
+FOUNDATION_INLINE Point SliderFixture::thumbPoint()const noexcept{ return ::__hidden_ui_glyph_sdf_tests::ComputeSliderFixtureThumbPoint(*this); }
 };
 namespace UiTextAreaTests{
-NWB_INLINE EditBoxResult TextAreaHost::editNavigated(
+FOUNDATION_INLINE EditBoxResult TextAreaHost::editNavigated(
     const WidgetState& widget,
     const EditBoxOptions& options,
     const PopupToken& popup,
@@ -1004,7 +1004,7 @@ NWB_INLINE EditBoxResult TextAreaHost::editNavigated(
     result.selectionChanged = model.anchor() != anchor || model.caret() != caret;
     return result;
 }
-NWB_INLINE b8 TextAreaHost::applyAction(const EditAction::Enum action, const b8 readOnly, EditModel& model, EditNavigationState& navigation, IEditActionSink& sink, EditBoxResult& result){
+FOUNDATION_INLINE b8 TextAreaHost::applyAction(const EditAction::Enum action, const b8 readOnly, EditModel& model, EditNavigationState& navigation, IEditActionSink& sink, EditBoxResult& result){
     actionTexts.emplace_back(m_arena);
     actionTexts.back().assign(model.text().data(), model.text().size());
     if(!sink.apply(model, action, readOnly))
@@ -1012,11 +1012,11 @@ NWB_INLINE b8 TextAreaHost::applyAction(const EditAction::Enum action, const b8 
     ::__hidden_ui_glyph_sdf_tests::ApplyTextAreaHostActionFlags(action, navigation, result);
     return !m_context.failed();
 }
-NWB_INLINE b8 TextAreaFixture::frameArea(const u64 generation, const TextAreaOptions& options, const Rect& bounds){
+FOUNDATION_INLINE b8 TextAreaFixture::frameArea(const u64 generation, const TextAreaOptions& options, const Rect& bounds){
     return ::__hidden_ui_glyph_sdf_tests::FrameTextAreaFixture(*this, generation, options, bounds);
 }
-NWB_INLINE TextAreaOptions TextAreaLoanFixture::AreaOptions()noexcept{ return ::__hidden_ui_glyph_sdf_tests::MakeTextAreaLoanFixtureOptions(); }
-NWB_INLINE b8 TextAreaLoanFixture::acceptBaseline(){ return ::__hidden_ui_glyph_sdf_tests::AcceptTextAreaLoanBaseline(*this); }
+FOUNDATION_INLINE TextAreaOptions TextAreaLoanFixture::AreaOptions()noexcept{ return ::__hidden_ui_glyph_sdf_tests::MakeTextAreaLoanFixtureOptions(); }
+FOUNDATION_INLINE b8 TextAreaLoanFixture::acceptBaseline(){ return ::__hidden_ui_glyph_sdf_tests::AcceptTextAreaLoanBaseline(*this); }
 };
 NWB_END
 

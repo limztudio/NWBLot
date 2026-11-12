@@ -51,7 +51,7 @@ namespace NameSymbols = Core::Common::NameSymbols;
 using Arena = Core::Alloc::GlobalArena;
 
 template<typename CharT>
-[[nodiscard]] NWB_INLINE BasicString<CharT, Arena> CopyAsciiText(Arena& arena, const AStringView source){
+[[nodiscard]] FOUNDATION_INLINE BasicString<CharT, Arena> CopyAsciiText(Arena& arena, const AStringView source){
     BasicString<CharT, Arena> text(arena);
     text.reserve(source.size());
     for(const char ch : source)
@@ -269,7 +269,7 @@ void VerifyNameSymbolDecodeTests_UnknownAndBoundaryNarrowTokensDoNotAllocate(){
 void VerifyNameSymbolDecodeTests_UnknownAndBoundaryWideTokensDoNotAllocate(){
     b8 unicodeEnabled = false;
     native(mut unicodeEnabled){
-#if defined(NWB_UNICODE)
+#if defined(FOUNDATION_UNICODE)
         unicodeEnabled = true;
         NameSymbols::InstallRuntimeRegistry();
         NameSymbols::ClearRuntimeSymbols();
@@ -289,7 +289,7 @@ void VerifyNameSymbolDecodeTests_UnknownAndBoundaryWideTokensDoNotAllocate(){
     ArenaMemoryStats before = arena.memoryStats();
     ArenaMemoryStats after = arena.memoryStats();
     native(in sourceView, mut arena, mut textMatchesExpected, mut dataPointerUnchanged, mut before, mut after){
-#if defined(NWB_UNICODE)
+#if defined(FOUNDATION_UNICODE)
         const WString<GlobalArena> expected = CommonTestsDetail::CopyAsciiText<wchar>(arena, sourceView);
         WString<GlobalArena> text(expected);
         const wchar* const originalData = text.data();
@@ -340,7 +340,7 @@ void VerifyNameSymbolDecodeTests_ResolvesNarrowSpansWithoutChangingUnresolvedTex
 void VerifyNameSymbolDecodeTests_ResolvesWideSpansWithoutChangingUnresolvedText(){
     b8 unicodeEnabled = false;
     native(mut unicodeEnabled){
-#if defined(NWB_UNICODE)
+#if defined(FOUNDATION_UNICODE)
         unicodeEnabled = true;
         NameSymbols::InstallRuntimeRegistry();
         NameSymbols::ClearRuntimeSymbols();
@@ -362,7 +362,7 @@ void VerifyNameSymbolDecodeTests_ResolvesWideSpansWithoutChangingUnresolvedText(
     b8 decodedMatchesExpected = false;
     usize decodedLength = 0u;
     native(in sourceView, in expectedView, mut arena, mut decodedMatchesExpected, mut decodedLength){
-#if defined(NWB_UNICODE)
+#if defined(FOUNDATION_UNICODE)
         WString<GlobalArena> text = CommonTestsDetail::CopyAsciiText<wchar>(arena, sourceView);
         const WString<GlobalArena> expected = CommonTestsDetail::CopyAsciiText<wchar>(arena, expectedView);
         NameSymbols::DecodeHashTokens(arena, text);
@@ -609,7 +609,7 @@ void VerifyNameSymbolDecodeTests_NameSymbolsCollectArenaOwnersWithoutPerformance
         ASSERT_TRUE(executableDirectory);
         ASSERT_TRUE(executableName);
         ::Path<GlobalArena> namesymPath = *executableDirectory / *executableName;
-        namesymPath.replaceExtension(NWB_TEXT(".namesym"));
+        namesymPath.replaceExtension(FOUNDATION_TEXT(".namesym"));
         // The application exception path exports after its scoped runtime callbacks have already detached.
         NameSymbols::UninstallRuntimeRegistry();
         wroteDefaultFile = NameSymbols::WriteDefaultFile();
@@ -755,7 +755,7 @@ void VerifyCommonLoggingBoundaries_LoggerMacrosBehaveAsSingleStatements(){
     b8 elseBranchRan = false;
     native(mut elseBranchRan){
         if(false)
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("unreachable"));
+            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("unreachable"));
         else
             elseBranchRan = true;
     }
@@ -775,7 +775,7 @@ void VerifyCommonLoggingBoundaries_CapturingLoggerSerializesConcurrentWritersAnd
     u32 observedErrorTotal = 0u;
 
     native(mut logger, mut sawInvalidObservation, mut observedMessageTotal, mut observedErrorTotal){
-        static constexpr TStringView s_ParallelLoggerMessage = NWB_TEXT("parallel logger message");
+        static constexpr TStringView s_ParallelLoggerMessage = FOUNDATION_TEXT("parallel logger message");
         Latch startGate(threadCount + 2u);
         Atomic<u32> activeWriters{ threadCount };
         Atomic<u32> observedMessages{ 0u };
@@ -873,10 +873,10 @@ void VerifyCommonLoggingBoundaries_GuardTeardownInsideEnqueueWaitsForOtherReader
         nestedGuard.emplace(callbackLogger, LoggerBreakPolicy::ReportOnly);
 
         Thread selfUnregisterThread([](){
-            NWB_LOGGER_ERROR(NWB_TEXT("self-unregister"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("self-unregister"));
         });
         Thread peerReaderThread([](){
-            NWB_LOGGER_ERROR(NWB_TEXT("peer-reader"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("peer-reader"));
         });
 
         selfUnregisterThread.join();
@@ -923,7 +923,7 @@ void VerifyFrameData_CopiesIndependentWindowState(){
         mut sourceActive,
         mut copyActive
     ){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         platformTested = true;
         Core::Common::WinFrame source;
         source.width() = expectedWidth;
@@ -943,7 +943,7 @@ void VerifyFrameData_CopiesIndependentWindowState(){
         copiedAux = copy.windowClass();
         sourceActive = source.isActive();
         copyActive = copy.isActive();
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(FOUNDATION_PLATFORM_LINUX)
         platformTested = true;
         Core::Common::LinuxFrame source;
         source.width() = expectedWidth;
@@ -1017,13 +1017,13 @@ namespace CommonTestsDetail{
 void CallbackUnregisterLogger::handle(const TStringView text, const Core::Common::LogType::Enum){
     m_callbackCount.fetch_add(1u, MemoryOrder::relaxed);
     m_bothEnteredGate.arrive_and_wait();
-    if(text == NWB_TEXT("self-unregister")){
+    if(text == FOUNDATION_TEXT("self-unregister")){
         m_unregistrationStarted.testAndSet(MemoryOrder::release);
         m_unregistrationStarted.notifyAll();
         m_guardSlot.reset();
         if(m_peerStillInCallback.load(MemoryOrder::acquire))
             m_unregistrationReturnedWhilePeerActive.store(true, MemoryOrder::relaxed);
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("routed-to-base-after-self-unregister"));
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("routed-to-base-after-self-unregister"));
         return;
     }
 
@@ -1050,7 +1050,7 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_UNICODE)
+#if defined(FOUNDATION_UNICODE)
 TEST(NameSymbolDecodeTests, UnknownAndBoundaryWideTokensDoNotAllocate){ VerifyNameSymbolDecodeTests_UnknownAndBoundaryWideTokensDoNotAllocate(); }
 TEST(NameSymbolDecodeTests, ResolvesWideSpansWithoutChangingUnresolvedText){ VerifyNameSymbolDecodeTests_ResolvesWideSpansWithoutChangingUnresolvedText(); }
 #endif

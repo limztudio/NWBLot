@@ -24,7 +24,7 @@ type AssetMap = HashMap<Name, SceneAssetRef>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[asset("entity")]
+[arena, asset("entity")]
 class EntityAsset{
     private ComponentRefVector m_components;
 
@@ -47,7 +47,7 @@ class EntityAsset{
     }
 }
 
-[asset("project")]
+[arena, asset("project")]
 class ProjectAsset{
     private SceneRef m_startScene;
 
@@ -63,7 +63,7 @@ class ProjectAsset{
     }
 }
 
-[asset("scene")]
+[arena, asset("scene")]
 class SceneAsset{
     private SubsystemRefVector m_subsystems;
     private EntityRefVector m_entities;
@@ -251,6 +251,8 @@ private:
     LoadedSubsystemVector m_loadedSubsystems;
     LoadedEntityVector m_loadedEntities;
 };
+
+using ActiveSceneSubsystemsConstPtr = const ActiveSceneSubsystems*;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -369,7 +369,7 @@ Expected<Mesh> BuildMeshAsset(MeshCookEntry& meshEntry, Core::Assets::AssetArena
     ))
         return MakeUnexpected(Failure{});
     if(!EncodeMeshletRefDeltas(meshEntry.meshletPositionStreamRefs, meshEntry.meshletAttributeStreamRefs, false, [&](const usize meshletIndex, const TStringView reason){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet {} {}"), s_MeshMetaKind, ConvertString(meshEntry.virtualPath.resolvedText()), meshletIndex, reason);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} meta '{}': meshlet {} {}"), s_MeshMetaKind, ConvertString(meshEntry.virtualPath.resolvedText()), meshletIndex, reason);
         return false;
     }, meshEntry.meshlets, meshEntry.meshletPositionRefDeltas, meshEntry.meshletAttributeRefDeltas))
         return MakeUnexpected(Failure{});
@@ -486,7 +486,7 @@ Expected<SkinCookEntry> ParseSkinCookMetadata(const Name virtualPath, const Path
     if(!skeletonResult)
         return MakeUnexpected(Failure{});
     entry.skeleton = *skeletonResult;
-    if(!SkinInfluenceMetadataParser::Parse(nwbFilePath, asset, NWB_TEXT("Skin"), {}, true, entry.influences))
+    if(!SkinInfluenceMetadataParser::Parse(nwbFilePath, asset, FOUNDATION_TEXT("Skin"), {}, true, entry.influences))
         return MakeUnexpected(Failure{});
 
     const Core::Assets::AssetString nwbFilePathText = PathToString(arena, nwbFilePath);

@@ -235,10 +235,10 @@ void MaterialPassGatherer::gather(
     }
 
     auto appendDrawForMesh = [&](const Core::ECS::EntityID entity, const NotNull<MaterialSurfaceInfo*> materialInfo, MeshResources& mesh, const CsgReceiverDrawState& csgReceiverState) -> b8{
-        NWB_ASSERT(mesh.valid());
+        FOUNDATION_ASSERT(mesh.valid());
         // Mesh creation establishes source-stream descriptors before draw gathering.
-        NWB_ASSERT(RendererMeshSystem::GeometryHeapHandlesReady(mesh.geometryHeapHandles));
-        NWB_ASSERT(materialInfo->transparent == transparent);
+        FOUNDATION_ASSERT(RendererMeshSystem::GeometryHeapHandlesReady(mesh.geometryHeapHandles));
+        FOUNDATION_ASSERT(materialInfo->transparent == transparent);
 
         const NWB::Impl::Scene::TransformComponent* transform = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
 
@@ -263,7 +263,7 @@ void MaterialPassGatherer::gather(
         );
 
         auto appendInstance = [&]() -> Expected<MaterialInstanceAppend>{
-            NWB_ASSERT(instanceData.size() < static_cast<usize>(Limit<u32>::s_Max));
+            FOUNDATION_ASSERT(instanceData.size() < static_cast<usize>(Limit<u32>::s_Max));
 
             const auto constantRange = typedStager.constant(*materialInfo);
             if(!constantRange)
@@ -273,8 +273,8 @@ void MaterialPassGatherer::gather(
                 return MakeUnexpected(Failure{});
             const MaterialTypedInstanceRanges typedRanges{ *constantRange, *mutableRange };
 
-            NWB_ASSERT(MaterialTypedByteRangeEmptyOffsetValid(typedRanges.constantRange));
-            NWB_ASSERT(MaterialTypedByteRangeEmptyOffsetValid(typedRanges.mutableRange));
+            FOUNDATION_ASSERT(MaterialTypedByteRangeEmptyOffsetValid(typedRanges.constantRange));
+            FOUNDATION_ASSERT(MaterialTypedByteRangeEmptyOffsetValid(typedRanges.mutableRange));
             const u32 instanceIndex = static_cast<u32>(instanceData.size());
             const NWB::Impl::Scene::TransformComponent defaultTransform;
             const NWB::Impl::Scene::TransformComponent& resolvedTransform = transform ? *transform : defaultTransform;
@@ -371,7 +371,7 @@ void MaterialPassGatherer::gather(
                 break;
             }
             default:
-                NWB_ASSERT(false);
+                FOUNDATION_ASSERT(false);
                 break;
             }
         };
@@ -391,7 +391,7 @@ void MaterialPassGatherer::gather(
             csgRange->surfaceDispatchId = materialInfo->surfaceDispatchId;
             csgRange->materialConstantByteOffset = typedRanges.constantRange.byteOffset;
             csgRange->meshInstanceIndex = instanceIndex;
-            NWB_ASSERT(instanceIndex < csgFrameData.receiverRanges.size());
+            FOUNDATION_ASSERT(instanceIndex < csgFrameData.receiverRanges.size());
             csgFrameData.receiverRanges[instanceIndex] = *csgRange;
         }
 
@@ -474,7 +474,7 @@ void MaterialPassGatherer::gather(
 Expected<Core::BindingLayoutHandle> RendererMaterialSystem::prepareMaterialPassBindingLayout(){
     // Every material pass uses this push-only layout; transparent consumes the full payload.
     if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, m_graphics.getDevice(), sizeof(TransparentDrawPushConstants), Core::ShaderType::All, m_materialState.m_materialPassBindingLayout)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create the shared material-pass push-constant layout"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create the shared material-pass push-constant layout"));
         return MakeUnexpected(Failure{});
     }
     return m_materialState.m_materialPassBindingLayout;
@@ -483,7 +483,7 @@ Expected<Core::BindingLayoutHandle> RendererMaterialSystem::prepareMaterialPassB
 b8 RendererMaterialSystem::prepareMeshComputeBindingLayout(){
     // The unified UAV keeps its existing heap selector; only the compute tail adds the generated-index byte offset.
     if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, m_graphics.getDevice(), sizeof(MeshComputePushConstants), Core::ShaderType::Compute, m_materialState.m_computeBindingLayout)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation binding layout"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create compute-emulation binding layout"));
         return false;
     }
 
@@ -515,7 +515,7 @@ b8 RendererMaterialSystem::createComputeEmulationResources(){
         else
             m_materialState.m_emulationInputLayout.reset();
         if(!emulationInputLayoutResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation input layout"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create compute-emulation input layout"));
             return false;
         }
     }
@@ -526,7 +526,7 @@ b8 RendererMaterialSystem::createComputeEmulationResources(){
 b8 RendererMaterialSystem::reserveInstanceBufferCapacity(const usize instanceCount){
     if(instanceCount == 0)
         return true;
-    NWB_ASSERT(instanceCount <= static_cast<usize>(Limit<u32>::s_Max));
+    FOUNDATION_ASSERT(instanceCount <= static_cast<usize>(Limit<u32>::s_Max));
     if(m_materialState.m_instanceBuffer && m_materialState.m_instanceBufferCapacity >= instanceCount)
         return true;
 
@@ -546,7 +546,7 @@ b8 RendererMaterialSystem::reserveInstanceBufferCapacity(const usize instanceCou
     ;
     auto instanceBufferResult = m_graphics.createBuffer(instanceBufferDesc);
     if(!instanceBufferResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create instance data buffer"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create instance data buffer"));
         return false;
     }
     Core::BufferHandle instanceBuffer = Move(*instanceBufferResult);
@@ -579,7 +579,7 @@ b8 RendererMaterialSystem::reserveMaterialTypedBufferCapacity(const usize byteCo
     ;
     auto materialTypedBufferResult = m_graphics.createBuffer(materialTypedBufferDesc);
     if(!materialTypedBufferResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create material typed buffer"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create material typed buffer"));
         return false;
     }
     Core::BufferHandle materialTypedBuffer = Move(*materialTypedBufferResult);

@@ -68,7 +68,7 @@ using TestVector = DefaultVector<T, Core::Alloc::GlobalArena, TestDetail::Arena>
 using TestAString = DefaultAString<Core::Alloc::GlobalArena, TestDetail::Arena>;
 
 template<typename ArenaT>
-[[nodiscard]] NWB_INLINE ::Path<ArenaT> RepoRootOf(ArenaT& arena, const AStringView sourceFile){
+[[nodiscard]] FOUNDATION_INLINE ::Path<ArenaT> RepoRootOf(ArenaT& arena, const AStringView sourceFile){
     ::Path<ArenaT> current = ::Path<ArenaT>(arena, sourceFile).lexicallyNormal().parentPath();
     for(usize depth = 0u; depth < 16u && !current.empty(); ++depth){
         const auto marker = IsRegularFile(current / "engine_namespace.h");

@@ -29,12 +29,12 @@ private:
     using CStrFn = const PathValue*(*)(const void*)noexcept;
 
     template<typename ArenaT>
-    [[nodiscard]] static NWB_INLINE BasicStringView<PathValue> ReadNativeView(const void* const ptr)noexcept{
+    [[nodiscard]] static FOUNDATION_INLINE BasicStringView<PathValue> ReadNativeView(const void* const ptr)noexcept{
         return static_cast<const ::Path<ArenaT>*>(ptr)->native();
     }
 
     template<typename ArenaT>
-    [[nodiscard]] static NWB_INLINE const PathValue* ReadCStr(const void* const ptr)noexcept{
+    [[nodiscard]] static FOUNDATION_INLINE const PathValue* ReadCStr(const void* const ptr)noexcept{
         return static_cast<const ::Path<ArenaT>*>(ptr)->c_str();
     }
 
@@ -82,7 +82,7 @@ template<typename StagedArenaT, typename OutArenaT>
         (!IsSame_V<StagedArenaT, Alloc::GlobalArena> || !IsSame_V<OutArenaT, Alloc::GlobalArena>)
         && (!IsSame_V<StagedArenaT, Alloc::ScratchArena> || !IsSame_V<OutArenaT, Alloc::ScratchArena>)
     )
-NWB_INLINE b8 PublishStagedVolume(const ::StagedDirectoryPaths<StagedArenaT>& stagedPaths, const ::Path<OutArenaT>& outputDirectory, const AStringView volumeName, const usize segmentCount, Alloc::ScratchArena& scratchArena, const VolumePublicationObserver observer = {}, StagedDirectoryCleanupGuard* const stageCleanup = nullptr, StagedDirectoryCleanupGuard* const backupCleanup = nullptr){
+FOUNDATION_INLINE b8 PublishStagedVolume(const ::StagedDirectoryPaths<StagedArenaT>& stagedPaths, const ::Path<OutArenaT>& outputDirectory, const AStringView volumeName, const usize segmentCount, Alloc::ScratchArena& scratchArena, const VolumePublicationObserver observer = {}, StagedDirectoryCleanupGuard* const stageCleanup = nullptr, StagedDirectoryCleanupGuard* const backupCleanup = nullptr){
     const ::StagedDirectoryPaths<Alloc::ScratchArena> scratchStaged(scratchArena, stagedPaths);
     const ::Path<Alloc::ScratchArena> scratchOutput(scratchArena, outputDirectory);
     return PublishStagedVolume(scratchStaged, scratchOutput, volumeName, segmentCount, scratchArena, observer, stageCleanup, backupCleanup);

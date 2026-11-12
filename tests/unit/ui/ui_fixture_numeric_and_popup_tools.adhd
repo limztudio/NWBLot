@@ -368,7 +368,7 @@ b8 OpenPopupToolsBySecondary(PopupToolsFixture& self, u64 generation)noexcept;
 
 NWB_BEGIN
 namespace UiNumericEditTests{
-NWB_INLINE EditBoxResult NumericHost::editActions(const WidgetState&, const EditBoxOptions& options, const PopupToken& popup, EditModel& draft, IEditActionSink& sink){
+FOUNDATION_INLINE EditBoxResult NumericHost::editActions(const WidgetState&, const EditBoxOptions& options, const PopupToken& popup, EditModel& draft, IEditActionSink& sink){
     ++loans;
     lastPopup = popup;
     EditBoxResult result;
@@ -392,12 +392,12 @@ NWB_INLINE EditBoxResult NumericHost::editActions(const WidgetState&, const Edit
 }
 };
 namespace UiNumericTests{
-NWB_INLINE void ExpectRejected(const NumericEditResult& result, const b8 restored){
+FOUNDATION_INLINE void ExpectRejected(const NumericEditResult& result, const b8 restored){
     ::__hidden_ui_glyph_sdf_tests::ExpectNumericEditRejected(result, restored);
 }
 };
 namespace UiPopupToolsTests{
-NWB_INLINE StringView PopupToolsSource::text(const u64 index)const noexcept{
+FOUNDATION_INLINE StringView PopupToolsSource::text(const u64 index)const noexcept{
     if(changeRevisionOnText){
         changeRevisionOnText = false;
         ++contentRevision;
@@ -416,14 +416,14 @@ NWB_INLINE StringView PopupToolsSource::text(const u64 index)const noexcept{
     }
     return ::__hidden_ui_glyph_sdf_tests::FormatPopupToolsRowLabel(count, index);
 }
-NWB_INLINE void PopupToolsFixture::SetUp(){ ::__hidden_ui_glyph_sdf_tests::SetUpPopupToolsFixture(*this); }
-NWB_INLINE b8 PopupToolsFixture::declareTools(const u64 generation, const b8 tooltip, const b8 menu, const Rect& bounds){
+FOUNDATION_INLINE void PopupToolsFixture::SetUp(){ ::__hidden_ui_glyph_sdf_tests::SetUpPopupToolsFixture(*this); }
+FOUNDATION_INLINE b8 PopupToolsFixture::declareTools(const u64 generation, const b8 tooltip, const b8 menu, const Rect& bounds){
     return ::__hidden_ui_glyph_sdf_tests::DeclarePopupToolsFixture(*this, generation, tooltip, menu, bounds);
 }
-NWB_INLINE b8 PopupToolsFixture::acceptPopupTooltip(const u64 generation){ return ::__hidden_ui_glyph_sdf_tests::AcceptPopupTooltipFixture(*this, generation); }
-NWB_INLINE b8 PopupToolsFixture::moveToAnchor(const AStringView parent){ return ::__hidden_ui_glyph_sdf_tests::MovePopupToolsToAnchor(*this, parent); }
-NWB_INLINE void PopupToolsFixture::secondaryClick(const Point& point){ ::__hidden_ui_glyph_sdf_tests::SecondaryClickPopupTools(*this, point); }
-NWB_INLINE b8 PopupToolsFixture::openBySecondary(const u64 generation){ return ::__hidden_ui_glyph_sdf_tests::OpenPopupToolsBySecondary(*this, generation); }
+FOUNDATION_INLINE b8 PopupToolsFixture::acceptPopupTooltip(const u64 generation){ return ::__hidden_ui_glyph_sdf_tests::AcceptPopupTooltipFixture(*this, generation); }
+FOUNDATION_INLINE b8 PopupToolsFixture::moveToAnchor(const AStringView parent){ return ::__hidden_ui_glyph_sdf_tests::MovePopupToolsToAnchor(*this, parent); }
+FOUNDATION_INLINE void PopupToolsFixture::secondaryClick(const Point& point){ ::__hidden_ui_glyph_sdf_tests::SecondaryClickPopupTools(*this, point); }
+FOUNDATION_INLINE b8 PopupToolsFixture::openBySecondary(const u64 generation){ return ::__hidden_ui_glyph_sdf_tests::OpenPopupToolsBySecondary(*this, generation); }
 };
 NWB_END
 

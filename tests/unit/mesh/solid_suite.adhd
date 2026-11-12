@@ -84,31 +84,31 @@ inline constexpr u64 s_UnaddressableMeshBoundsCount = static_cast<u64>(Limit<u32
 static_assert((s_UnaddressableMeshBoundsCount - 1u) * Impl::s_MeshletBoundsStride <= Limit<u32>::s_Max);
 static_assert(s_UnaddressableMeshBoundsCount * Impl::s_MeshletBoundsStride > Limit<u32>::s_Max);
 
-NWB_INLINE void OverwritePodU32(Core::Assets::AssetBytes& bytes, const usize offset, const u32 value)noexcept{
-    NWB_MEMCPY(bytes.data() + offset, sizeof(value), &value, sizeof(value));
+FOUNDATION_INLINE void OverwritePodU32(Core::Assets::AssetBytes& bytes, const usize offset, const u32 value)noexcept{
+    FOUNDATION_MEMCPY(bytes.data() + offset, sizeof(value), &value, sizeof(value));
 }
 
-NWB_INLINE void OverwritePodU64(Core::Assets::AssetBytes& bytes, const usize offset, const u64 value)noexcept{
-    NWB_MEMCPY(bytes.data() + offset, sizeof(value), &value, sizeof(value));
+FOUNDATION_INLINE void OverwritePodU64(Core::Assets::AssetBytes& bytes, const usize offset, const u64 value)noexcept{
+    FOUNDATION_MEMCPY(bytes.data() + offset, sizeof(value), &value, sizeof(value));
 }
 
-[[nodiscard]] NWB_INLINE b8 AppendCompactBoundsPayload(
+[[nodiscard]] FOUNDATION_INLINE b8 AppendCompactBoundsPayload(
     const Core::Assets::AssetVector<Impl::MeshletBounds>& bounds,
     Core::Assets::AssetBytes& outBinary
 ){
-    return Core::Assets::AppendVectorPayload(bounds, NWB_TEXT("compact bounds"), NWB_TEXT("bounds"), outBinary);
+    return Core::Assets::AppendVectorPayload(bounds, FOUNDATION_TEXT("compact bounds"), FOUNDATION_TEXT("bounds"), outBinary);
 }
 
-[[nodiscard]] NWB_INLINE b8 ReadCompactBoundsPayload(
+[[nodiscard]] FOUNDATION_INLINE b8 ReadCompactBoundsPayload(
     const Span<const u8> binary,
     const usize count,
     usize& inOutCursor,
     Core::Assets::AssetVector<Impl::MeshletBounds>& outBounds
 ){
-    return Core::Assets::ReadVectorPayload(binary, count, NWB_TEXT("compact bounds"), NWB_TEXT("bounds"), inOutCursor, outBounds);
+    return Core::Assets::ReadVectorPayload(binary, count, FOUNDATION_TEXT("compact bounds"), FOUNDATION_TEXT("bounds"), inOutCursor, outBounds);
 }
 
-[[nodiscard]] NWB_INLINE Expected<u32> ReadPayloadWordAt(const Span<const u8> binary, usize& inOutCursor)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Expected<u32> ReadPayloadWordAt(const Span<const u8> binary, usize& inOutCursor)noexcept{
     return ReadPOD<u32>(binary, inOutCursor);
 }
 

@@ -33,7 +33,7 @@ void VerifyCrash_SpoolAdmissionPreservesFilesystemCategoryAndCodeAfterUnlock(){
     b8 matchedCategory = false;
     b8 matchedCode = false;
     native(in spoolDirectory, in pendingDirectory, mut installAccepted, mut installed, mut handlerStarted, mut restorePending, mut nativeDiagnostics, mut unlockedDiagnostics, mut matchedOperation, mut matchedCategory, mut matchedCode){
-#if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
+#if defined(FOUNDATION_PLATFORM_WINDOWS) || (defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID))
         const auto expectedFailure = EnsureDirectories(pendingDirectory);
         ASSERT_FALSE(expectedFailure);
         Array<char, 64u> expectedCategory = {};
@@ -97,9 +97,9 @@ void VerifyCrash_FailedExecutableAdmissionReleasesResourcesAndObservesFailureAft
     u32 unlockedDiagnostics = 0u;
     b8 diagnosticHasCode = false;
     native(in invalidExecutable, in spoolDirectory, mut testArena, mut beforeCount, mut afterCount, mut nativeDiagnostics, mut unlockedDiagnostics, mut diagnosticHasCode){
-#if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
+#if defined(FOUNDATION_PLATFORM_WINDOWS) || (defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID))
         auto& arena = testArena.arena;
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
         ASSERT_EQ(chmod(invalidExecutable.c_str(), 0700), 0);
 #endif
         const auto previousCallback = DiagnosticDetail::g_EventCallback.exchange(ObserveNativeLifecycle, MemoryOrder::acq_rel);
@@ -113,7 +113,7 @@ void VerifyCrash_FailedExecutableAdmissionReleasesResourcesAndObservesFailureAft
         config.spoolDirectory = spoolDirectory;
         config.handlerExecutablePath = AStringView(executableText);
         EXPECT_FALSE(Core::Crash::InstallCrashHandler(config));
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         DWORD before = 0u;
         ASSERT_TRUE(GetProcessHandleCount(GetCurrentProcess(), &before));
         beforeCount = static_cast<usize>(before);
@@ -129,7 +129,7 @@ void VerifyCrash_FailedExecutableAdmissionReleasesResourcesAndObservesFailureAft
             EXPECT_FALSE(Core::Crash::CrashDetail::g_State.handlerStarted);
             EXPECT_FALSE(Core::Crash::CrashDetail::g_State.platformRestorePending);
         }
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         DWORD after = 0u;
         ASSERT_TRUE(GetProcessHandleCount(GetCurrentProcess(), &after));
         afterCount = static_cast<usize>(after);
@@ -165,7 +165,7 @@ void VerifyCrash_UninstallRestoresDisabledAlternateStackAndPriorSignalAndTermina
     b8 terminateOwnerRestored = false;
     b8 restorePending = true;
     native(in spoolDirectory, mut stackDisabledRestored, mut signalOwnerRestored, mut terminateOwnerRestored, mut restorePending){
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
         stack_t originalStack = {};
         struct sigaction originalAction = {};
         ASSERT_EQ(sigaltstack(nullptr, &originalStack), 0);
@@ -222,7 +222,7 @@ void VerifyCrash_UninstallPreservesNewerForeignNativeHookOwners(){
     b8 foreignTerminateRetained = false;
     b8 restorePending = true;
     native(in spoolDirectory, mut foreignStackRetained, mut foreignSignalRetained, mut foreignTerminateRetained, mut restorePending){
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
         stack_t originalStack = {};
         struct sigaction originalAction = {};
         ASSERT_EQ(sigaltstack(nullptr, &originalStack), 0);
@@ -519,7 +519,7 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 namespace NWB::Tests::CrashCases{
 alignas(MaxAlign) Array<u8, 256u * 1024u> g_ForeignSignalStack = {};
 void OriginalSignalOwner(const int)noexcept{}
@@ -529,12 +529,12 @@ void ForeignSignalOwner(const int)noexcept{}
 };
 #endif
 
-#if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
+#if defined(FOUNDATION_PLATFORM_WINDOWS) || (defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID))
 TEST(Crash, SpoolAdmissionPreservesFilesystemCategoryAndCodeAfterUnlock){ NWB::Tests::CrashCases::VerifyCrash_SpoolAdmissionPreservesFilesystemCategoryAndCodeAfterUnlock(); }
 TEST(Crash, FailedExecutableAdmissionReleasesResourcesAndObservesFailureAfterUnlock){ NWB::Tests::CrashCases::VerifyCrash_FailedExecutableAdmissionReleasesResourcesAndObservesFailureAfterUnlock(); }
 #endif
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 TEST(Crash, UninstallRestoresDisabledAlternateStackAndPriorSignalAndTerminateOwners){ NWB::Tests::CrashCases::VerifyCrash_UninstallRestoresDisabledAlternateStackAndPriorSignalAndTerminateOwners(); }
 TEST(Crash, UninstallPreservesNewerForeignNativeHookOwners){ NWB::Tests::CrashCases::VerifyCrash_UninstallPreservesNewerForeignNativeHookOwners(); }
 #endif

@@ -181,12 +181,12 @@ public:
     }
 
     [[nodiscard]] b8 promoteIndex(){
-        NWB_ASSERT(!m_index && m_count == InlineCapacity);
+        FOUNDATION_ASSERT(!m_index && m_count == InlineCapacity);
         Index index(ComputePromotedSkinningResourceUseCapacity(InlineCapacity, s_SkinningPromotedIndexCapacityFactor), Core::GpuGraphResourceIdHasher{}, EqualTo<Core::GpuGraphResourceId>{}, m_scratchArena);
         for(const ResourceUseEntry& entry : m_inline){
             const auto [found, inserted] = index.emplace(entry.resource, entry.info);
             if(!inserted){
-                NWB_ASSERT(false);
+                FOUNDATION_ASSERT(false);
                 return false;
             }
         }

@@ -310,7 +310,7 @@ Expected<CsgShapeCookEntry> ParseCsgShapeCookMetadata(const Path& nwbFilePath, c
         const AString<ScratchArena> safeModuleName = BuildCanonicalSafeCacheName(scratchArena, entry.shaderModule.resolvedText());
         auto generatedInclude = CsgShapeModuleSource().buildDefaultPath(scratchArena, entry.shaderModule, AStringView(safeModuleName));
         if(!generatedInclude){
-            NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': failed to build generated module include for '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(entry.shaderModule.resolvedText()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("CSG shape meta '{}': failed to build generated module include for '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(entry.shaderModule.resolvedText()));
             return MakeUnexpected(Failure{});
         }
         entry.moduleInclude.assign(AStringView(*generatedInclude));
@@ -338,7 +338,7 @@ b8 AssignCsgShapeCookIds(const Span<CsgShapeCookEntry> csgShapeEntries, ScratchA
     });
 
     CookArena shapeIdArena{Name(NWB::Impl::s_CsgShapeCookIdArenaName)};
-    HashMap<CsgShapeTypeId, Name> shapeIdNames(shapeIdArena);
+    HashMap<CsgShapeTypeId, Name, CookArena> shapeIdNames(0, Hasher<CsgShapeTypeId>(), EqualTo<CsgShapeTypeId>(), shapeIdArena);
     shapeIdNames.reserve(csgShapeEntries.size());
 
     for(usize index = 0u; index < csgShapeEntries.size(); ++index){

@@ -171,15 +171,30 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
             targetOwnerCls = ownerClass;
             targetCallable = m_symbols.findClassMethod(*ownerClass, expr.lhs->text, &callArgCount, isConstThis, false, argTypeHints, argIsMutHints);
             if(!targetCallable){
-                if(!ownerClass->assetTypeName.empty() || !ownerClass->subsystemTypeName.empty() || !ownerClass->componentAssetTypeName.empty()){
-                    if(const BuiltinReceiverMethodInfo* assetRecvInfo = FindBuiltinReceiverMethod("IAsset", expr.lhs->text)){
-                        recordBuiltinTypeHeader(assetRecvInfo->returnTypeName);
-                        recordBuiltinTypeHeader(assetRecvInfo->returnTypeArgName);
-                        recordBuiltinTypeHeader(assetRecvInfo->returnErrorTypeName);
-                        if(isConstThis && assetRecvInfo->isMutating){
-                            reportError(errors, expr.span, "cannot call non-'const' method on 'this' inside a 'const' method or 'in this' lambda");
-                            ok = false;
+                const BuiltinReceiverMethodInfo* inheritedRecvInfo = nullptr;
+                if(!ownerClass->assetTypeName.empty() || !ownerClass->subsystemTypeName.empty())
+                    inheritedRecvInfo = FindBuiltinReceiverMethod("IAsset", expr.lhs->text);
+                else if(!ownerClass->systemTypeName.empty())
+                    inheritedRecvInfo = FindBuiltinReceiverMethod("ISystem", expr.lhs->text);
+                if(!inheritedRecvInfo){
+                    for(const TypeRef* iface : ownerClass->implementedInterfaces){
+                        if(!iface)
+                            continue;
+                        const MStringView ifaceName = m_symbols.resolveBaseTypeName(iface->name);
+                        if(!m_symbols.findInterface(ifaceName)){
+                            inheritedRecvInfo = FindBuiltinReceiverMethod(ifaceName, expr.lhs->text);
+                            if(inheritedRecvInfo)
+                                break;
                         }
+                    }
+                }
+                if(inheritedRecvInfo){
+                    recordBuiltinTypeHeader(inheritedRecvInfo->returnTypeName);
+                    recordBuiltinTypeHeader(inheritedRecvInfo->returnTypeArgName);
+                    recordBuiltinTypeHeader(inheritedRecvInfo->returnErrorTypeName);
+                    if(isConstThis && inheritedRecvInfo->isMutating){
+                        reportError(errors, expr.span, "cannot call non-'const' method on 'this' inside a 'const' method or 'in this' lambda");
+                        ok = false;
                     }
                 }
                 if(const FieldDecl* field = SymbolTable::FindClassField(*ownerClass, expr.lhs->text)){
@@ -201,17 +216,46 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
             calledMemberName = mName;
             const b8 recvIsConst = isReceiverConst(ownerClass, method, *expr.lhs->lhs, scope);
             const ClassDecl* targetCls = m_symbols.findClass(objType);
-            const b8 isAssetClassObj = targetCls && (!targetCls->assetTypeName.empty() || !targetCls->subsystemTypeName.empty() || !targetCls->componentAssetTypeName.empty());
+            const InterfaceDecl* targetIface = m_symbols.findInterface(objType);
+            const b8 isAssetClassObj = (targetCls && (!targetCls->assetTypeName.empty() || !targetCls->subsystemTypeName.empty()))
+                || (targetIface && !targetIface->assetTypeName.empty());
+            const b8 isSystemClassObj = targetCls && !targetCls->systemTypeName.empty();
             const b8 isUserObjType = m_symbols.hasTypeSymbol(objType) || FindTemplateParam(ownerClass, &method, objType) != nullptr;
             const BuiltinReceiverMethodInfo* builtinRecvInfo = !isUserObjType
                 ? FindBuiltinReceiverMethod(objType, mName)
-                : (isAssetClassObj ? FindBuiltinReceiverMethod("IAsset", mName) : nullptr);
+                : (isAssetClassObj
+                    ? FindBuiltinReceiverMethod("IAsset", mName)
+                    : (isSystemClassObj ? FindBuiltinReceiverMethod("ISystem", mName) : nullptr));
+            if(!builtinRecvInfo && targetCls){
+                for(const TypeRef* iface : targetCls->implementedInterfaces){
+                    if(!iface)
+                        continue;
+                    const MStringView ifaceName = m_symbols.resolveBaseTypeName(iface->name);
+                    if(!m_symbols.findInterface(ifaceName)){
+                        builtinRecvInfo = FindBuiltinReceiverMethod(ifaceName, mName);
+                        if(builtinRecvInfo)
+                            break;
+                    }
+                }
+            }
             const BuiltinMemberMethodInfo* builtinMemberInfo = isUserObjType ? nullptr : FindBuiltinMemberMethod(mName);
             const b8 isMutatingContainerOp = builtinRecvInfo ? builtinRecvInfo->isMutating : (builtinMemberInfo && builtinMemberInfo->isMutating);
             if(builtinRecvInfo){
                 recordBuiltinTypeHeader(builtinRecvInfo->returnTypeName);
                 recordBuiltinTypeHeader(builtinRecvInfo->returnTypeArgName);
                 recordBuiltinTypeHeader(builtinRecvInfo->returnErrorTypeName);
+            }
+            if(
+                !targetCls
+                && (mName == "addSystem" || (mName == "addComponent" && callArgCount > 0u))
+                && !expr.callTemplateArgs.empty()
+                && expr.callTemplateArgs[0].type
+            ){
+                const MStringView emplacedTypeName = m_symbols.resolveBaseTypeName(expr.callTemplateArgs[0].type->name);
+                if(const ClassDecl* emplacedCls = m_symbols.findClass(emplacedTypeName)){
+                    targetOwnerCls = emplacedCls;
+                    targetCallable = m_symbols.findClassConstructor(*emplacedCls, callArgCount, ownerClass != emplacedCls, argTypeHints, argIsMutHints);
+                }
             }
             if(targetCls){
                 targetOwnerCls = targetCls;
@@ -235,13 +279,13 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                     }
                 }
             }
-            else if(recvTypeRef && m_symbols.findInterface(objType)){
+            else if(recvTypeRef && targetIface){
                 targetCallable = m_symbols.findInterfaceMethod(*recvTypeRef, mName, &callArgCount, 0u, argTypeHints, argIsMutHints);
-                if(!targetCallable){
+                if(!targetCallable && !builtinRecvInfo){
                     reportError(errors, expr.span, "unknown method on interface");
                     ok = false;
                 }
-                else if(recvIsConst && !targetCallable->isConst){
+                else if(recvIsConst && ((targetCallable && !targetCallable->isConst) || (builtinRecvInfo && builtinRecvInfo->isMutating))){
                     reportError(errors, expr.span, "cannot call non-'const' method on 'in' or 'const' interface receiver");
                     ok = false;
                 }
@@ -314,7 +358,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                 }
             }
 
-            if((targetCallable && !targetCallable->isConst) || isMutatingContainerOp || expr.isStringByteMutRef){
+            if((targetCallable && !targetCallable->isConst) || isMutatingContainerOp || expr.isStringByteMutRef || (isMutationTarget && builtinRecvInfo && builtinRecvInfo->returnTypeName.empty())){
                 const b8 savedDeref = expr.lhs->lhs->derefNotNull;
                 if(!checkExpr(ownerClass, scope, true, method, *expr.lhs->lhs, errors))
                     ok = false;
@@ -397,7 +441,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
     const ParamPassingMode::Enum callRetRefMode = m_symbols.resolveRefMode(callReturnType);
 
     if(isMutationTarget){
-        const b8 isCtorOrTypeConstruction = (targetCallable && targetCallable->isConstructor)
+        const b8 isCtorOrTypeConstruction = (targetCallable && targetCallable->isConstructor && expr.lhs && expr.lhs->kind == ExprKind::Identifier)
             || (!targetCallable && !localCallable && expr.lhs && expr.lhs->kind == ExprKind::Identifier
                 && isConstructibleTypeName(expr.lhs->text, m_symbols.resolveBaseTypeName(expr.lhs->text)));
         if(isCtorOrTypeConstruction || expr.isBuiltinCall){
@@ -432,7 +476,13 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
             }
         }
     }
-    if(!checkTemplateArgTypes(expr.callTemplateArgs, ownerClass, &method, expr.span, errors))
+    b8 allowFirstVoidCallArg = false;
+    if(!targetCallable && !localCallable && expr.lhs && expr.lhs->kind == ExprKind::Identifier){
+        const MStringView baseCallee = m_symbols.resolveBaseTypeName(expr.lhs->text);
+        if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(baseCallee); genericInfo && genericInfo->inlineLayoutKind == InlineLayoutKind::Expected)
+            allowFirstVoidCallArg = true;
+    }
+    if(!checkTemplateArgTypes(expr.callTemplateArgs, ownerClass, &method, expr.span, errors, allowFirstVoidCallArg))
         ok = false;
 
     if(!CallableArgumentChecker(*this).check(

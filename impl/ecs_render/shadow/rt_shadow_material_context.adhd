@@ -83,7 +83,7 @@ b8 RayTraceMaterialResources::ensureShadowInstanceMaterialBuffer(usize instanceC
     ;
     auto materialBufferResult = m_graphics.createBuffer(materialBufferDesc);
     if(!materialBufferResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow instance material buffer"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create shadow instance material buffer"));
         return false;
     }
     Core::BufferHandle materialBuffer = Move(*materialBufferResult);
@@ -112,7 +112,7 @@ b8 RayTraceMaterialResources::ensureShadowInstanceContextBuffer(usize instanceCo
     ;
     auto instanceBufferResult = m_graphics.createBuffer(instanceBufferDesc);
     if(!instanceBufferResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow instance context buffer"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create shadow instance context buffer"));
         return false;
     }
     Core::BufferHandle instanceBuffer = Move(*instanceBufferResult);
@@ -140,7 +140,7 @@ b8 RayTraceMaterialResources::ensureShadowMaterialTypedBuffer(usize byteCount){
     ;
     auto materialTypedBufferResult = m_graphics.createBuffer(materialTypedBufferDesc);
     if(!materialTypedBufferResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow material typed buffer"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create shadow material typed buffer"));
         return false;
     }
     Core::BufferHandle materialTypedBuffer = Move(*materialTypedBufferResult);

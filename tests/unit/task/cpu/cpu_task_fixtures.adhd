@@ -50,7 +50,7 @@ namespace CpuTaskSchedulerTestSupport{
 using namespace NWB::Core;
 
 
-[[noreturn]] NWB_INLINE void ExitTestProcess(const u32 code)noexcept{
+[[noreturn]] FOUNDATION_INLINE void ExitTestProcess(const u32 code)noexcept{
     std::_Exit(static_cast<int>(code));
 }
 
@@ -143,7 +143,7 @@ using CpuTaskSchedulerTestSupport::s_CpuProfilingNameTestsCpuEmptyScope;
 using CpuTaskSchedulerTestSupport::s_CpuProfilingNameTestsCpuCompletedScope;
 using CpuTaskSchedulerTestSupport::s_CpuProfilingNameTestsCpuCanceledScope;
 
-[[nodiscard]] NWB_INLINE usize ReadNullProfileEvents(CpuTaskScheduler& scheduler, const usize capacity)noexcept{
+[[nodiscard]] FOUNDATION_INLINE usize ReadNullProfileEvents(CpuTaskScheduler& scheduler, const usize capacity)noexcept{
     return scheduler.readProfileEvents(nullptr, capacity);
 }
 

@@ -316,18 +316,6 @@ static b8 ExtractRendererComponentDependencies(const Core::Assets::CookDependenc
 
 };
 
-b8 ModelComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
-    return GraphicsComponentBinaryCodec{}.serializeAssetRef(component.model.name(), outPayload);
-}
-
-b8 MeshComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
-    return GraphicsComponentBinaryCodec{}.serializeAssetRef(component.mesh.name(), outPayload);
-}
-
-b8 RendererComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
-    return GraphicsComponentBinaryCodec{}.serializeRenderer(component, outPayload);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

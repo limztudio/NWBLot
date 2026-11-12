@@ -314,36 +314,36 @@ public:
     [[nodiscard]] b8 open(const BakeOptions& options, Core::Alloc::ScratchArena& scratch, Impl::FontAtlasPayload& payload){
         auto bytes = ReadFontSourceInput(options.source, m_bytes.get_allocator().arena());
         if(!bytes){
-            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: source admission failed: {}"), ConvertString(bytes.error()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: source admission failed: {}"), ConvertString(bytes.error()));
             return false;
         }
         m_bytes = Move(*bytes);
         if(!m_freeType.openAndValidate(m_bytes, 0u)){
-            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: source admission failed"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: source admission failed"));
             return false;
         }
         const FT_Library library = m_freeType.library();
         const FT_Face face = m_freeType.face();
         if(!IsValidBakeFontFaceMetrics(face->num_glyphs, face->units_per_EM)){
-            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: unsupported glyph count or units per em"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: unsupported glyph count or units per em"));
             return false;
         }
         u32 spread = options.spread;
         const AStringView module = ResolveBakeFreeTypeSdfModule(options.outline);
         const FT_Error spreadSet = FT_Property_Set(library, module.data(), "spread", &spread);
         if(spreadSet != 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: FreeType rejected SDF spread, error {}"), spreadSet);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: FreeType rejected SDF spread, error {}"), spreadSet);
             return false;
         }
         const FT_Error sizeSet = FT_Set_Pixel_Sizes(face, 0u, options.ppem);
         if(sizeSet != 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: FreeType rejected bake size, error {}"), sizeSet);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: FreeType rejected bake size, error {}"), sizeSet);
             return false;
         }
         const auto stem = PathToGenericString(scratch, options.output.stemView());
         const auto fontReference = Core::Assets::AssetRef<Impl::Font>::FromText(AStringView(stem));
         if(!fontReference){
-            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: output asset stem contains an embedded null"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: output asset stem contains an embedded null"));
             return false;
         }
         payload.font = *fontReference;
@@ -387,12 +387,12 @@ private:
         glyph.record.glyphId = glyphId;
         const FT_Error loaded = FT_Load_Glyph(face, glyphId, FT_LOAD_NO_SCALE | FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP);
         if(loaded != 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: design metrics failed for glyph {}, FreeType error {}"), glyphId, loaded);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: design metrics failed for glyph {}, FreeType error {}"), glyphId, loaded);
             return MakeUnexpected(Failure{});
         }
         glyph.record.advanceUnits = static_cast<f32>(face->glyph->advance.x);
         if(face->glyph->format != FT_GLYPH_FORMAT_OUTLINE){
-            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: glyph {} is not a supported scalable outline"), glyphId);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: glyph {} is not a supported scalable outline"), glyphId);
             return MakeUnexpected(Failure{});
         }
         if(face->glyph->outline.n_points == 0){
@@ -420,12 +420,12 @@ private:
         const i32 pitch = bitmap.pitch;
         const usize absolutePitch = ComputeAbsoluteGlyphBitmapPitch(pitch);
         if(!bitmap.buffer || absolutePitch < bitmap.width){
-            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: invalid native bitmap for glyph {}"), glyphId);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: invalid native bitmap for glyph {}"), glyphId);
             return MakeUnexpected(Failure{});
         }
         for(u32 y = 0u; y < bitmap.rows; ++y){
             const u32 sourceY = ComputeGlyphBitmapSourceRow(pitch, bitmap.rows, y);
-            NWB_MEMCPY(glyph.pixels.data() + static_cast<usize>(y) * bitmap.width, bitmap.width, bitmap.buffer + static_cast<usize>(sourceY) * absolutePitch, bitmap.width);
+            FOUNDATION_MEMCPY(glyph.pixels.data() + static_cast<usize>(y) * bitmap.width, bitmap.width, bitmap.buffer + static_cast<usize>(sourceY) * absolutePitch, bitmap.width);
         }
         PopulateBakeGlyphRecord(bitmap.width, bitmap.rows, face->glyph->bitmap_left, face->glyph->bitmap_top, designPerPixel, glyph.record);
         glyphs.push_back(Move(glyph));
@@ -462,7 +462,7 @@ Expected<Core::Assets::AssetBytes, AStringView> ReadFontSourceInput(const Path& 
         if(!prepared)
             return MakeUnexpected(prepared.error());
         if(!IsValidPreparedFontFaceIndex(prepared->faceIndex)){
-            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: malformed prepared .font input"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: malformed prepared .font input"));
             return MakeUnexpected(AStringView("prepared font face index must be zero"));
         }
         return Move(prepared->fontBytes);
@@ -472,7 +472,7 @@ Expected<Core::Assets::AssetBytes, AStringView> ReadFontSourceInput(const Path& 
         return MakeUnexpected(AStringView("failed to open font source"));
     const StreamOffset sourceSize = stream.tellg();
     if(!IsValidFontSourceByteCount(static_cast<b8>(stream), static_cast<i64>(sourceSize), Impl::s_FontMaxSourceBytes) || !CanRepresentStreamSize(static_cast<u64>(sourceSize))){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: source size is invalid or unreadable"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: source size is invalid or unreadable"));
         return MakeUnexpected(AStringView("source size is invalid or unreadable"));
     }
     stream.seekg(0, InputFileStream::beg);
@@ -541,7 +541,7 @@ Expected<Impl::FontAtlasPayload> Bake(const BakeOptions& options, Core::Assets::
 Expected<Core::Assets::AssetBytes, AStringView> BuildPreparedFont(const Span<const u8> sourceFontBytes, const Impl::FontAtlasPayload& atlas, Core::Alloc::ScratchArena& scratch){
     Core::Assets::AssetArena& arena = atlas.glyphs.get_allocator().arena();
     if(ComputeSha256({ sourceFontBytes.data(), sourceFontBytes.size() }) != atlas.fontSha256){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: source changed during bake"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: source changed during bake"));
         return MakeUnexpected(AStringView("source changed during bake"));
     }
 
@@ -557,7 +557,7 @@ b8 WriteOutputs(const BakeOptions& options, const Span<const u8> sourceFontBytes
     auto fontBinary = BuildPreparedFont(sourceFontBytes, payload, scratch);
     MetadataString metadata(scratch);
     if(!fontBinary){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: prepared font failed: {}"), ConvertString(fontBinary.error()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: prepared font failed: {}"), ConvertString(fontBinary.error()));
         return false;
     }
     BuildFontMetadata(payload, metadata);
@@ -581,7 +581,7 @@ b8 WriteOutputs(const BakeOptions& options, const Span<const u8> sourceFontBytes
     if(!directory.empty()){
         const auto ensured = EnsureDirectories(directory);
         if(!ensured){
-            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: failed to prepare output directory '{}': {}"), PathToString<tchar>(directory), ConvertString(ensured.error().message()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: failed to prepare output directory '{}': {}"), PathToString<tchar>(directory), ConvertString(ensured.error().message()));
             return false;
         }
     }
@@ -603,9 +603,9 @@ b8 WriteOutputs(const BakeOptions& options, const Span<const u8> sourceFontBytes
     if(!published){
         for(u32 index = 0u; index < s_StagedFilePairCount; ++index){
             if(published.removalErrors[index])
-                NWB_LOGGER_ERROR(NWB_TEXT("font_builder: could not remove failed new '{}': {}"), PathToString<tchar>(*outputs[index]), ConvertString(published.removalErrors[index].message()));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: could not remove failed new '{}': {}"), PathToString<tchar>(*outputs[index]), ConvertString(published.removalErrors[index].message()));
             if(published.restorationErrors[index])
-                NWB_LOGGER_ERROR(NWB_TEXT("font_builder: could not restore previous '{}': {}"), PathToString<tchar>(*outputs[index]), ConvertString(published.restorationErrors[index].message()));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: could not restore previous '{}': {}"), PathToString<tchar>(*outputs[index]), ConvertString(published.restorationErrors[index].message()));
         }
         const AInteropString errMsg = published.error.message();
         LogFontBuilderPublishFailure(static_cast<u8>(published.failureStage), AStringView(errMsg));
@@ -614,9 +614,9 @@ b8 WriteOutputs(const BakeOptions& options, const Span<const u8> sourceFontBytes
 
     for(u32 index = 0u; index < s_StagedFilePairCount; ++index){
         if(published.backupCleanupErrors[index])
-            NWB_LOGGER_WARNING(NWB_TEXT("font_builder: published pair but could not remove backup '{}': {}"), PathToString<tchar>(*backups[index]), ConvertString(published.backupCleanupErrors[index].message()));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("font_builder: published pair but could not remove backup '{}': {}"), PathToString<tchar>(*backups[index]), ConvertString(published.backupCleanupErrors[index].message()));
         else if(published.backupCleanupMissing[index])
-            NWB_LOGGER_WARNING(NWB_TEXT("font_builder: published pair but previous backup was already absent: '{}'"), PathToString<tchar>(*backups[index]));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("font_builder: published pair but previous backup was already absent: '{}'"), PathToString<tchar>(*backups[index]));
     }
     return true;
 }

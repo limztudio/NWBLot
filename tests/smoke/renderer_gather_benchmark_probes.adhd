@@ -34,7 +34,7 @@ using PerfMemorySnapshot = Core::Perf::MemorySnapshot;
 namespace MemorySource = Core::Perf::MemorySource;
 using NameTextErrorEnum = NameTextError::Enum;
 
-[[nodiscard]] NWB_INLINE Expected<Name, NameTextError::Enum> SmokeNameFromText(const AStringView text){
+[[nodiscard]] FOUNDATION_INLINE Expected<Name, NameTextError::Enum> SmokeNameFromText(const AStringView text){
     return Name::FromText(text);
 }
 using Core::Perf::TimingStats;

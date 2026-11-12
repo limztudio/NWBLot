@@ -22,7 +22,7 @@ enum<u8> OpticalBoundaryMode{
     ClosedPriority
 }
 
-[reflect]
+[arena, component("renderer")]
 class RendererComponent{
     public AssetRef<Material> material;
     public b8 visible = true;
@@ -44,7 +44,7 @@ class MaterialInstanceParameter{
     public u32x4u value;
 }
 
-[arena, reflect]
+[arena, component("material_instance")]
 class MaterialInstanceComponent{
     public MaterialInstanceComponent(){}
 

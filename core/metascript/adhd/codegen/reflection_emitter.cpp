@@ -48,16 +48,6 @@ void CountReflectedFields(const Span<const FieldDecl* const> fields, const Symbo
     return methodCount;
 }
 
-void EmitAssetTypeNameDecl(MString& out, const MStringView assetTypeName, const MStringView prefix = "    "){
-    if(assetTypeName.empty())
-        return;
-
-    out.append(prefix.data(), prefix.size());
-    out.append("inline static constexpr AStringView s_AssetTypeName = \"");
-    out.append(assetTypeName.data(), assetTypeName.size());
-    out.append("\";\r\n");
-}
-
 void EmitReflectedCountMethod(MString& out, const MStringView methodName, const usize count){
     out.append("    [[nodiscard]] static constexpr usize ");
     out.append(methodName.data(), methodName.size());
@@ -138,7 +128,6 @@ void EmitContainerAssetDependencyLoop(MString& out, const MStringView fieldName,
 void ReflectionEmitter::emitInterfaceReflectionDeclarations(const InterfaceDecl& decl, MetaArena& arena, MString& out)const{
     using namespace __hidden_adhd_reflection_emitter;
 
-    EmitAssetTypeNameDecl(out, decl.assetTypeName, "\r\n    ");
     MVector<MethodDecl*> allMethods(arena);
     TypeRef selfIfaceRef(arena);
     selfIfaceRef.name = decl.name;

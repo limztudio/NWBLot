@@ -87,19 +87,19 @@ public:
 };
 static_assert(sizeof(AvboitFrameTargets) == 232u + 8u * sizeof(Core::TextureHandle) + sizeof(Core::FramebufferHandle) + 2u * sizeof(Core::BufferHandle) + 2u * sizeof(Core::GpuDescriptorHandle), "AvboitFrameTargets should keep its compact CPU-only layout");
 
-NWB_INLINE void ValidateAvboitPushConstantTargets(const AvboitFrameTargets& targets)noexcept{
-    NWB_ASSERT(targets.deferredSlotsBufferDescriptor.valid());
-    NWB_ASSERT(targets.deferredSlotsBufferDescriptor.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer);
+FOUNDATION_INLINE void ValidateAvboitPushConstantTargets(const AvboitFrameTargets& targets)noexcept{
+    FOUNDATION_ASSERT(targets.deferredSlotsBufferDescriptor.valid());
+    FOUNDATION_ASSERT(targets.deferredSlotsBufferDescriptor.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer);
 }
 
-[[nodiscard]] NWB_INLINE u32 AvboitTargetsFullWidth(const AvboitFrameTargets& targets)noexcept{ return targets.fullWidth; }
-[[nodiscard]] NWB_INLINE u32 AvboitTargetsFullHeight(const AvboitFrameTargets& targets)noexcept{ return targets.fullHeight; }
-[[nodiscard]] NWB_INLINE u32 AvboitTargetsLowWidth(const AvboitFrameTargets& targets)noexcept{ return targets.lowWidth; }
-[[nodiscard]] NWB_INLINE u32 AvboitTargetsLowHeight(const AvboitFrameTargets& targets)noexcept{ return targets.lowHeight; }
-[[nodiscard]] NWB_INLINE u32 AvboitTargetsVirtualSliceCount(const AvboitFrameTargets& targets)noexcept{ return targets.virtualSliceCount; }
-[[nodiscard]] NWB_INLINE u32 AvboitTargetsPhysicalSliceCount(const AvboitFrameTargets& targets)noexcept{ return targets.physicalSliceCount; }
-[[nodiscard]] NWB_INLINE b8 AvboitTargetsHasRefractionFramebuffer(const AvboitFrameTargets& targets)noexcept{ return targets.refractionFramebuffer != nullptr; }
-[[nodiscard]] NWB_INLINE u32 AvboitTargetsDeferredSlotsBufferSlot(const AvboitFrameTargets& targets)noexcept{ return targets.deferredSlotsBufferDescriptor.slot(); }
+[[nodiscard]] FOUNDATION_INLINE u32 AvboitTargetsFullWidth(const AvboitFrameTargets& targets)noexcept{ return targets.fullWidth; }
+[[nodiscard]] FOUNDATION_INLINE u32 AvboitTargetsFullHeight(const AvboitFrameTargets& targets)noexcept{ return targets.fullHeight; }
+[[nodiscard]] FOUNDATION_INLINE u32 AvboitTargetsLowWidth(const AvboitFrameTargets& targets)noexcept{ return targets.lowWidth; }
+[[nodiscard]] FOUNDATION_INLINE u32 AvboitTargetsLowHeight(const AvboitFrameTargets& targets)noexcept{ return targets.lowHeight; }
+[[nodiscard]] FOUNDATION_INLINE u32 AvboitTargetsVirtualSliceCount(const AvboitFrameTargets& targets)noexcept{ return targets.virtualSliceCount; }
+[[nodiscard]] FOUNDATION_INLINE u32 AvboitTargetsPhysicalSliceCount(const AvboitFrameTargets& targets)noexcept{ return targets.physicalSliceCount; }
+[[nodiscard]] FOUNDATION_INLINE b8 AvboitTargetsHasRefractionFramebuffer(const AvboitFrameTargets& targets)noexcept{ return targets.refractionFramebuffer != nullptr; }
+[[nodiscard]] FOUNDATION_INLINE u32 AvboitTargetsDeferredSlotsBufferSlot(const AvboitFrameTargets& targets)noexcept{ return targets.deferredSlotsBufferDescriptor.slot(); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

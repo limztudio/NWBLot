@@ -37,7 +37,7 @@ static_assert(alignof(Expected<CsgShapeBounds>) >= alignof(CsgShapeBounds));
 using CsgShapeBoundsCallback = Expected<CsgShapeBounds>(*)(const SIMDMatrix& shapeToWorld, Span<const u8> parameterBytes)noexcept;
 using CsgShapeSignedDistanceCallback = Expected<f32>(*)(SIMDVectorSingle shapePosition, const CsgShapeInlineParameters& parameters)noexcept;
 
-[[nodiscard]] NWB_INLINE Expected<CsgShapeBounds> BuildCsgShapeWorldBoundsFromLocal(const SIMDMatrix& shapeToWorld, const CsgShapeLocalBounds& localBounds)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Expected<CsgShapeBounds> BuildCsgShapeWorldBoundsFromLocal(const SIMDMatrix& shapeToWorld, const CsgShapeLocalBounds& localBounds)noexcept{
     const Expected<CsgShapeLocalBounds> worldBounds = TryTransformCsgShapeLocalBounds(shapeToWorld, localBounds);
     if(!worldBounds)
         return MakeUnexpected(Failure{});
@@ -182,7 +182,7 @@ public:
 
             const CsgShapeTypeId existingId = found.value();
             const auto foundIndex = m_shapeTypeIndices.find(existingId);
-            NWB_ASSERT(ValidCsgShapeTypeId(existingId) && existingId == canonicalId && foundIndex != m_shapeTypeIndices.end());
+            FOUNDATION_ASSERT(ValidCsgShapeTypeId(existingId) && existingId == canonicalId && foundIndex != m_shapeTypeIndices.end());
 
             CsgShapeTypeInfo& shapeType = m_shapeTypes[foundIndex.value()];
             shapeType.desc = desc;
@@ -204,12 +204,12 @@ public:
         ScopeExit discardShapeType([&]()noexcept{ m_shapeTypes.pop_back(); });
         const auto [nameEntry, nameInserted] = m_shapeTypeIds.emplace(desc.name, id);
         if(!nameInserted){
-            NWB_ASSERT(false);
+            FOUNDATION_ASSERT(false);
             return MakeUnexpected(Failure{});
         }
         ScopeExit discardNameEntry([&]()noexcept{ m_shapeTypeIds.erase(nameEntry); });
         if(!m_shapeTypeIndices.emplace(id, m_shapeTypes.size() - 1u).second){
-            NWB_ASSERT(false);
+            FOUNDATION_ASSERT(false);
             return MakeUnexpected(Failure{});
         }
         discardNameEntry.release();
@@ -352,7 +352,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE b8 RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry){
+FOUNDATION_INLINE b8 RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry){
     b8 result = true;
 
     result = static_cast<b8>(registry.registerShape<CsgBoxShape>(true)) && result;

@@ -204,11 +204,11 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     const LightSpaceShadowSnapshot* const lightSpace
 ){
     u32 producedFrameIndex = 0u;
-    NWB_ASSERT(!splitOpaqueSoftResolve || splitSoftTransparentFold);
+    FOUNDATION_ASSERT(!splitOpaqueSoftResolve || splitSoftTransparentFold);
     if(!targets.shadowVisibility)
         return MakeUnexpected(Failure{});
-    NWB_ASSERT(targets.bindless.valid());
-    NWB_ASSERT(deferredLightingResources.valid());
+    FOUNDATION_ASSERT(targets.bindless.valid());
+    FOUNDATION_ASSERT(deferredLightingResources.valid());
     if(!m_rayTracingState.m_sceneBvhNodeBuffer || m_rayTracingState.m_sceneBvhInstanceCount == 0u)
         return MakeUnexpected(Failure{});
     if(!m_rayTracingState.m_swShadowOpaquePrepassPipeline || m_rayTracingState.m_swShadowMeshCount == 0u)
@@ -228,7 +228,7 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
         || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_swShadowEdgeListHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
         || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_swShadowIndirectArgsHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software-shadow heap resources are incomplete"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: software-shadow heap resources are incomplete"));
         return MakeUnexpected(Failure{});
     }
 
@@ -308,7 +308,7 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
                 softTracePush
             );
             if(lightSpace && lightSpace->ready){
-                NWB_ASSERT(splitSoftTransparentFold);
+                FOUNDATION_ASSERT(splitSoftTransparentFold);
                 if(!RecordLightSpaceResolve(*lightSpace, frameIndex, softTracePush.softSampleCount, targets.bindless.shadowSoftHalfAStorage.slot(), false, commandList, heap, m_graphics.gpuTiming(), *targets.shadowSoftHalfA))
                     return MakeUnexpected(Failure{});
                 LightSpaceShadowLogReporter{}.reportCsgDispatch(

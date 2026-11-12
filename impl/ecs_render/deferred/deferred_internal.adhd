@@ -40,15 +40,15 @@ using DeferredRendererMaterialSystem = RendererMaterialSystem;
 using DeferredRendererMaterialSystemConstPtr = const RendererMaterialSystem*;
 using DeferredMaterialPassDrawItemPartitions = MaterialPassDrawItemPartitions;
 
-[[nodiscard]] NWB_INLINE constexpr DeferredRendererMaterialSystemConstPtr NullDeferredRendererMaterialSystemConstPtr()noexcept{
+[[nodiscard]] FOUNDATION_INLINE constexpr DeferredRendererMaterialSystemConstPtr NullDeferredRendererMaterialSystemConstPtr()noexcept{
     return nullptr;
 }
 
-[[nodiscard]] NWB_INLINE DeferredRendererMaterialSystemConstPtr AddressOfDeferredRendererMaterialSystem(const RendererMaterialSystem& system)noexcept{
+[[nodiscard]] FOUNDATION_INLINE DeferredRendererMaterialSystemConstPtr AddressOfDeferredRendererMaterialSystem(const RendererMaterialSystem& system)noexcept{
     return &system;
 }
 
-[[nodiscard]] NWB_INLINE b8 HasOpaquePartitionMaterialGeometry(const MaterialPassDrawItemPartitions& drawItems)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasOpaquePartitionMaterialGeometry(const MaterialPassDrawItemPartitions& drawItems)noexcept{
     return !drawItems.regular.empty() || !drawItems.csgReceiverSurface.empty();
 }
 
@@ -278,7 +278,7 @@ public:
 
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
         if(payload.armed && payload.retiresFrameTiming && !payload.frameTimingTransaction.confirmEndSubmission(token, false)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to retire frame recovery timing query"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: failed to retire frame recovery timing query"));
             payload.frameTimingTransaction.discard();
         }
         payload.armed = false;

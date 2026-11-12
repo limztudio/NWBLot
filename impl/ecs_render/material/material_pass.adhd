@@ -94,7 +94,7 @@ inline constexpr Core::GpuTimingScopeDefinition s_NoneGpuTimingScope;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE const Core::GpuTimingScopeDefinition& MaterialPassGpuTimingScope(const MaterialPipelinePass::Enum pass)noexcept{
+[[nodiscard]] FOUNDATION_INLINE const Core::GpuTimingScopeDefinition& MaterialPassGpuTimingScope(const MaterialPipelinePass::Enum pass)noexcept{
     switch(pass){
     case MaterialPipelinePass::AvboitOccupancy: return RendererGpuTimingScope::s_AvboitOccupancy;
     case MaterialPipelinePass::AvboitExtinction: return RendererGpuTimingScope::s_AvboitExtinction;
@@ -294,7 +294,7 @@ void MaterialPassDrawRecorder::setMaterialPassCommonBufferStates(const MaterialP
         });
     }
     if(!context.materialFrameStatesGraphOwned){
-        NWB_ASSERT(context.frameBindings.bindingValid());
+        FOUNDATION_ASSERT(context.frameBindings.bindingValid());
         context.commandList.setBufferState(context.frameBindings.instanceBuffer.get(), Core::ResourceStates::ShaderResource);
         context.commandList.setBufferState(context.frameBindings.meshView.buffer.get(), Core::ResourceStates::ConstantBuffer);
         context.commandList.setBufferState(context.frameBindings.materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
@@ -318,7 +318,7 @@ b8 MaterialPassDrawRecorder::setMaterialPassDrawPushConstants(const MaterialPass
         if(!context.csgResources)
             return false;
         const auto resolvedClipContext = context.csgResources->findClipContextHeapSlot();
-        NWB_ASSERT(resolvedClipContext);
+        FOUNDATION_ASSERT(resolvedClipContext);
         if(!resolvedClipContext)
             return false;
         csgContextHeapSlot = *resolvedClipContext;
@@ -375,10 +375,10 @@ void MaterialPassDrawRecorder::dispatchComputeMaterialPassDrawItem(const Materia
         )
     );
     if(context.conservativeGeometryScissor)
-        NWB_ASSERT(pipelineResources.sharedGeometryComputeProgram);
+        FOUNDATION_ASSERT(pipelineResources.sharedGeometryComputeProgram);
     pushConstants.dispatchFlags = ApplyConservativeGeometryScissorFlag(pushConstants.dispatchFlags, context.conservativeGeometryScissor);
     if(pipelineResources.indexedGeometryOutput){
-        NWB_ASSERT(mesh.emulationIndexByteOffset != 0u);
+        FOUNDATION_ASSERT(mesh.emulationIndexByteOffset != 0u);
         const MeshComputePushConstants computePush{ .mesh = pushConstants, .generatedIndexByteOffset = mesh.emulationIndexByteOffset, };
         context.commandList.setPushConstants(&computePush, sizeof(computePush));
     }
@@ -398,7 +398,7 @@ void MaterialPassDrawRecorder::drawComputeMaterialPassDrawItem(const MaterialPas
     graphicsState.setViewport(context.viewportState);
     graphicsState.addVertexBuffer(Core::VertexBufferBinding().setBuffer(mesh.emulationVertexBuffer.get()).setSlot(NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX).setOffset(0));
     if(pipelineResources.indexedGeometryOutput){
-        NWB_ASSERT(mesh.emulationIndexByteOffset != 0u);
+        FOUNDATION_ASSERT(mesh.emulationIndexByteOffset != 0u);
         graphicsState.setIndexBuffer(Core::IndexBufferBinding().setBuffer(mesh.emulationVertexBuffer.get()).setFormat(Core::Format::R32_UINT).setOffset(mesh.emulationIndexByteOffset));
     }
 
@@ -433,8 +433,8 @@ void MaterialPassDrawRecorder::renderMeshMaterialPassDrawItems(const MaterialPas
     for(const MaterialPassDrawItem& drawItem : drawItems){
         const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
         const MaterialPassPipelineResourceSnapshot& pipelineResources = drawItem.pipelineResources;
-        NWB_ASSERT(materialPassDrawResourcesReady(mesh, context.frameBindings));
-        NWB_ASSERT(pipelineResources.meshletPipeline);
+        FOUNDATION_ASSERT(materialPassDrawResourcesReady(mesh, context.frameBindings));
+        FOUNDATION_ASSERT(pipelineResources.meshletPipeline);
         setMaterialPassCommonBufferStates(context, mesh);
 
         Core::MeshletState meshletState;
@@ -460,16 +460,16 @@ void MaterialPassDrawRecorder::generateComputeMaterialPassDrawItems(const Materi
     if(drawItems.empty())
         return;
     // No local output transition here. A graph producer must have declared every selected buffer as a UAV first.
-    NWB_ASSERT(context.emulationOutputEntryStateGraphOwned);
-    NWB_ASSERT(context.frameBindings.meshView.buffer);
+    FOUNDATION_ASSERT(context.emulationOutputEntryStateGraphOwned);
+    FOUNDATION_ASSERT(context.frameBindings.meshView.buffer);
 
     for(const MaterialPassDrawItem& drawItem : drawItems){
         const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
         const MaterialPassPipelineResourceSnapshot& pipelineResources = drawItem.pipelineResources;
-        NWB_ASSERT(materialPassDrawResourcesReady(mesh, context.frameBindings));
-        NWB_ASSERT(pipelineResources.computePipeline);
-        NWB_ASSERT(mesh.emulationVertexHeapHandle.valid());
-        NWB_ASSERT(mesh.emulationVertexBuffer);
+        FOUNDATION_ASSERT(materialPassDrawResourcesReady(mesh, context.frameBindings));
+        FOUNDATION_ASSERT(pipelineResources.computePipeline);
+        FOUNDATION_ASSERT(mesh.emulationVertexHeapHandle.valid());
+        FOUNDATION_ASSERT(mesh.emulationVertexBuffer);
         setMaterialPassCommonBufferStates(context, mesh);
         dispatchComputeMaterialPassDrawItem(context, drawItem, mesh, pipelineResources);
     }
@@ -479,15 +479,15 @@ void MaterialPassDrawRecorder::renderComputeMaterialPassDrawItemsRasterOnly(cons
     if(drawItems.empty())
         return;
     // This half has no local output transition. The graph declares each unified generated buffer for vertex and index reads.
-    NWB_ASSERT(context.emulationOutputEntryStateGraphOwned);
-    NWB_ASSERT(context.frameBindings.meshView.buffer);
+    FOUNDATION_ASSERT(context.emulationOutputEntryStateGraphOwned);
+    FOUNDATION_ASSERT(context.frameBindings.meshView.buffer);
 
     for(const MaterialPassDrawItem& drawItem : drawItems){
         const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
         const MaterialPassPipelineResourceSnapshot& pipelineResources = drawItem.pipelineResources;
-        NWB_ASSERT(materialPassDrawResourcesReady(mesh, context.frameBindings));
-        NWB_ASSERT(pipelineResources.emulationPipeline);
-        NWB_ASSERT(mesh.emulationVertexBuffer);
+        FOUNDATION_ASSERT(materialPassDrawResourcesReady(mesh, context.frameBindings));
+        FOUNDATION_ASSERT(pipelineResources.emulationPipeline);
+        FOUNDATION_ASSERT(mesh.emulationVertexBuffer);
         setMaterialPassCommonBufferStates(context, mesh);
         drawComputeMaterialPassDrawItem(context, drawItem, mesh, pipelineResources);
     }
@@ -496,17 +496,17 @@ void MaterialPassDrawRecorder::renderComputeMaterialPassDrawItemsRasterOnly(cons
 void MaterialPassDrawRecorder::renderComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const Span<const MaterialPassDrawItem> drawItems){
     if(drawItems.empty())
         return;
-    NWB_ASSERT(!context.emulationOutputEntryStateGraphOwned);
-    NWB_ASSERT(context.frameBindings.meshView.buffer);
+    FOUNDATION_ASSERT(!context.emulationOutputEntryStateGraphOwned);
+    FOUNDATION_ASSERT(context.frameBindings.meshView.buffer);
 
     for(const MaterialPassDrawItem& drawItem : drawItems){
         const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
         const MaterialPassPipelineResourceSnapshot& pipelineResources = drawItem.pipelineResources;
-        NWB_ASSERT(materialPassDrawResourcesReady(mesh, context.frameBindings));
-        NWB_ASSERT(pipelineResources.computePipeline);
-        NWB_ASSERT(pipelineResources.emulationPipeline);
-        NWB_ASSERT(mesh.emulationVertexHeapHandle.valid());
-        NWB_ASSERT(mesh.emulationVertexBuffer);
+        FOUNDATION_ASSERT(materialPassDrawResourcesReady(mesh, context.frameBindings));
+        FOUNDATION_ASSERT(pipelineResources.computePipeline);
+        FOUNDATION_ASSERT(pipelineResources.emulationPipeline);
+        FOUNDATION_ASSERT(mesh.emulationVertexHeapHandle.valid());
+        FOUNDATION_ASSERT(mesh.emulationVertexBuffer);
 
         setMaterialPassCommonBufferStates(context, mesh);
         context.commandList.setBufferState(mesh.emulationVertexBuffer.get(), Core::ResourceStates::UnorderedAccess);
@@ -530,8 +530,8 @@ b8 MaterialPassDrawRecorder::prepareIndexedMaterialPassResourceBindings(const Sp
 void MaterialPassDrawRecorder::renderIndexedMaterialPassDrawItems(const MaterialPassDrawContext& context, const Span<const MaterialPassDrawItem> drawItems){
     if(drawItems.empty())
         return;
-    NWB_ASSERT(context.materialGeometryStatesGraphOwned);
-    NWB_ASSERT(indexedMaterialPassDrawResourcesReady(drawItems, context.frameBindings));
+    FOUNDATION_ASSERT(context.materialGeometryStatesGraphOwned);
+    FOUNDATION_ASSERT(indexedMaterialPassDrawResourcesReady(drawItems, context.frameBindings));
     for(const MaterialPassDrawItem& drawItem : drawItems){
         const auto& mesh = drawItem.meshResources;
         const auto& cache = mesh.objectGeometryCache;

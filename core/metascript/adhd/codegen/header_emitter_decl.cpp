@@ -173,6 +173,7 @@ void HeaderEmitter::emitTypeAliasDecl(MString& out, const TypeAliasDecl& decl)co
 }
 
 void HeaderEmitter::emitInterfaceDecl(MString& out, const InterfaceDecl& decl)const{
+    const b8 isAssetInterface = !decl.assetTypeName.empty();
     m_typeEmitter.emitTemplateHeaderCpp(out, decl.templateParams);
     out.append("class ");
     out.append(decl.name.data(), decl.name.size());
@@ -186,10 +187,50 @@ void HeaderEmitter::emitInterfaceDecl(MString& out, const InterfaceDecl& decl)co
                 m_typeEmitter.emitTypeCpp(out, *decl.baseInterfaces[i]);
         }
     }
+    else if(isAssetInterface){
+        out.append(" : public ::NWB::Core::Assets::IAsset");
+    }
     out.append("{\r\npublic:\r\n");
-    out.append("    virtual ~");
-    out.append(decl.name.data(), decl.name.size());
-    out.append("() = default;\r\n\r\n");
+    if(isAssetInterface){
+        out.append("    NWB_DEFINE_ASSET_TYPE(\"");
+        out.append(decl.assetTypeName.data(), decl.assetTypeName.size());
+        out.append("\")\r\n\r\n");
+        out.append("protected:\r\n");
+        out.append("    explicit ");
+        out.append(decl.name.data(), decl.name.size());
+        out.append("(const ::Name& assetType, const ::Name& virtualPath = ::s_NameNone)noexcept\r\n");
+        out.append("        : ::NWB::Core::Assets::IAsset(assetType, virtualPath)\r\n");
+        out.append("    {}\r\n");
+        out.append("    ");
+        out.append(decl.name.data(), decl.name.size());
+        out.append("(const ");
+        out.append(decl.name.data(), decl.name.size());
+        out.append("&) = default;\r\n");
+        out.append("    ");
+        out.append(decl.name.data(), decl.name.size());
+        out.append("(");
+        out.append(decl.name.data(), decl.name.size());
+        out.append("&&)noexcept = default;\r\n");
+        out.append("    ");
+        out.append(decl.name.data(), decl.name.size());
+        out.append("& operator=(const ");
+        out.append(decl.name.data(), decl.name.size());
+        out.append("&) = default;\r\n");
+        out.append("    ");
+        out.append(decl.name.data(), decl.name.size());
+        out.append("& operator=(");
+        out.append(decl.name.data(), decl.name.size());
+        out.append("&&)noexcept = default;\r\n\r\n");
+        out.append("public:\r\n");
+        out.append("    virtual ~");
+        out.append(decl.name.data(), decl.name.size());
+        out.append("()noexcept override = default;\r\n\r\n");
+    }
+    else{
+        out.append("    virtual ~");
+        out.append(decl.name.data(), decl.name.size());
+        out.append("() = default;\r\n\r\n");
+    }
 
     for(const MethodDecl* method : decl.methods){
         if(!method)

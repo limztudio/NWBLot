@@ -10,16 +10,19 @@ const usize s_EcsTestNestedOuterCount = 4u;
 const usize s_EcsTestDependentQueryEntityCount = 512u;
 const Name s_EcsTestParallelArenaName = "tests/ecs_parallel";
 
+[arena, component("position")]
 class PositionComponent{
     public i32 x = 0;
     public i32 y = 0;
 }
 
+[arena, component("velocity")]
 class VelocityComponent{
     public i32 x = 0;
     public i32 y = 0;
 }
 
+[arena, component("pool_slot")]
 class PoolSlotComponent<const usize I>{
     public usize value = I;
 }

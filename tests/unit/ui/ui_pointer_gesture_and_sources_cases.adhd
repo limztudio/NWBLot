@@ -260,46 +260,46 @@ void CancelUiPointerSourceCommand(UiPointerSourceTests& self)noexcept;
 };
 
 namespace __hidden_ui_pointer_gesture_tests{
-NWB_INLINE InputRoutingResult UiPointerGestureTests::sendToContext(const InputEvent& event){
+FOUNDATION_INLINE InputRoutingResult UiPointerGestureTests::sendToContext(const InputEvent& event){
     return ::__hidden_ui_glyph_sdf_tests::SendUiPointerGestureToContext(*this, event);
 }
-NWB_INLINE void UiPointerGestureTests::complete(const Point& position){
+FOUNDATION_INLINE void UiPointerGestureTests::complete(const Point& position){
     ::__hidden_ui_glyph_sdf_tests::CompleteUiPointerGesture(*this, position);
 }
-NWB_INLINE Expected<WidgetState> UiPointerGestureTests::prepare(const u64 generation, const WidgetRoot& root){
+FOUNDATION_INLINE Expected<WidgetState> UiPointerGestureTests::prepare(const u64 generation, const WidgetRoot& root){
     return ::__hidden_ui_glyph_sdf_tests::PrepareUiPointerGesture(*this, generation, root);
 }
 };
 
 namespace __hidden_ui_pointer_gesture_value_tests{
-NWB_INLINE UiPointerGestureValueTests::UiPointerGestureValueTests()
+FOUNDATION_INLINE UiPointerGestureValueTests::UiPointerGestureValueTests()
     : RouterTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiPointerGestureValue))
 {
     ::__hidden_ui_glyph_sdf_tests::InitUiPointerGestureValueTargets(m_targets);
 }
-NWB_INLINE b8 UiPointerGestureValueTests::publish(const usize count){
+FOUNDATION_INLINE b8 UiPointerGestureValueTests::publish(const usize count){
     return ::__hidden_ui_glyph_sdf_tests::PublishUiPointerGestureValueTargets(*this, count);
 }
-NWB_INLINE Expected<PointerGesture> UiPointerGestureValueTests::take()noexcept{
+FOUNDATION_INLINE Expected<PointerGesture> UiPointerGestureValueTests::take()noexcept{
     return ::__hidden_ui_glyph_sdf_tests::TakeUiPointerGestureValue(*this);
 }
-NWB_INLINE Expected<ControlAction> UiPointerGestureValueTests::takeControl()noexcept{
+FOUNDATION_INLINE Expected<ControlAction> UiPointerGestureValueTests::takeControl()noexcept{
     return ::__hidden_ui_glyph_sdf_tests::TakeUiPointerGestureValueControl(*this);
 }
-NWB_INLINE void UiPointerGestureValueTests::focusHost(){
+FOUNDATION_INLINE void UiPointerGestureValueTests::focusHost(){
     ::__hidden_ui_glyph_sdf_tests::FocusUiPointerGestureValueHost(*this);
 }
 };
 
 namespace __hidden_ui_pointer_sources_tests{
-NWB_INLINE UiPointerSourceTests::UiPointerSourceTests()
+FOUNDATION_INLINE UiPointerSourceTests::UiPointerSourceTests()
     : RouterTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiPointerSources))
     , m_targets{
         ::__hidden_ui_glyph_sdf_tests::MakeUiPointerSourceTarget(1u, 10.0f),
         ::__hidden_ui_glyph_sdf_tests::MakeUiPointerSourceTarget(2u, 110.0f)
     }
 {}
-NWB_INLINE void UiPointerSourceTests::cancelCommand(){
+FOUNDATION_INLINE void UiPointerSourceTests::cancelCommand(){
     ::__hidden_ui_glyph_sdf_tests::CancelUiPointerSourceCommand(*this);
 }
 };

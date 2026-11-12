@@ -137,7 +137,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
 
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     if(!heap.isInitialized() || !heap.hasAccelStructLayout()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: hardware TLAS build requires the descriptor-buffer TLAS heap layout"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: hardware TLAS build requires the descriptor-buffer TLAS heap layout"));
         return false;
     }
     MeshHeapHandleGather meshHeapHandles(heap, m_rayTracingState.m_hwMeshHeapHandleCache);
@@ -189,19 +189,19 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
             const auto indexHandle = meshHeapHandles.acquire(meshResult->meshResources.triangleIndexBuffer);
             if(!indexHandle){
                 meshHeapHandles.sweep();
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register HW scene mesh buffers in the global descriptor heap"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register HW scene mesh buffers in the global descriptor heap"));
                 return false;
             }
             const auto attributeHandle = meshHeapHandles.acquire(meshResult->meshResources.attributeBuffer);
             if(!attributeHandle){
                 meshHeapHandles.sweep();
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register HW scene mesh buffers in the global descriptor heap"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register HW scene mesh buffers in the global descriptor heap"));
                 return false;
             }
             const auto positionHandle = meshHeapHandles.acquire(meshResult->meshResources.positionBuffer);
             if(!positionHandle){
                 meshHeapHandles.sweep();
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register HW scene mesh buffers in the global descriptor heap"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register HW scene mesh buffers in the global descriptor heap"));
                 return false;
             }
 
@@ -213,7 +213,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
             m_rayTracingState.m_shadowMeshAttributeHandles.push_back(*attributeHandle);
             m_rayTracingState.m_shadowMeshPositionHandles.push_back(*positionHandle);
             if(!meshSlotLookup.emplace(meshIndexBuffer, meshSlot).second){
-                NWB_ASSERT(false);
+                FOUNDATION_ASSERT(false);
                 meshHeapHandles.sweep();
                 return false;
             }
@@ -331,7 +331,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
         auto& device = m_graphics.getDevice();
         auto tlasResult = device.createAccelStruct(accelStructDesc);
         if(!tlasResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create scene TLAS (capacity {})"), static_cast<u64>(capacity));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create scene TLAS (capacity {})"), static_cast<u64>(capacity));
             return false;
         }
         Core::RayTracingAccelStructHandle tlas = Move(*tlasResult);
@@ -345,7 +345,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
     if(!RayTracingDetail::IsHeapHandle(m_rayTracingState.m_tlasHeapHandle, Core::GpuDescriptorClass::AccelStruct)){
         RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_tlasHeapHandle);
         if(!RendererDescriptorRegisterDetail::AssignDescriptor(heap, Core::GpuDescriptorClass::AccelStruct, Core::DescriptorWriteItem::RayTracingAccelStruct(0u, m_rayTracingState.m_tlas.get()), m_rayTracingState.m_tlasHeapHandle)){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register scene TLAS in the descriptor-buffer heap"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register scene TLAS in the descriptor-buffer heap"));
             return false;
         }
     }
@@ -359,7 +359,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
     // Freeze the selected hardware instance stream before recording; accepted preparation publishes its cache identity.
     if(!canReuseTlas){
         if(!m_preparedSceneTlas.capture(m_rayTracingState, staticScene, tlasStaticSceneHash, instances, instanceBlases)){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: could not freeze scene TLAS build after preflight"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: could not freeze scene TLAS build after preflight"));
             return false;
         }
     }
@@ -423,7 +423,7 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAren
 
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software scene BVH requires the initialized global descriptor heap"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: software scene BVH requires the initialized global descriptor heap"));
         return false;
     }
     MeshHeapHandleGather meshHeapHandles(heap, m_rayTracingState.m_swMeshHeapHandleCache);
@@ -484,14 +484,14 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAren
             const Core::GpuDescriptorHandle indexHandle = meshResult->meshResources.swBvhTriangleIndexHeapHandle;
             if(!positionHandle.valid() || positionHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer || !indexHandle.valid() || indexHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer){
                 meshHeapHandles.sweep();
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register SW scene mesh buffers in the global descriptor heap"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register SW scene mesh buffers in the global descriptor heap"));
                 return false;
             }
 
             const auto attributeHandle = meshHeapHandles.acquire(meshResult->meshResources.attributeBuffer);
             if(!attributeHandle){
                 meshHeapHandles.sweep();
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register SW scene mesh buffers in the global descriptor heap"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register SW scene mesh buffers in the global descriptor heap"));
                 return false;
             }
 
@@ -529,7 +529,7 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAren
             m_rayTracingState.m_swShadowMeshIndexHandles.push_back(indexHandle);
             m_rayTracingState.m_swShadowMeshAttributeHandles.push_back(*attributeHandle);
             if(!meshSlotLookup.emplace(meshNodeBuffer, meshSlot).second){
-                NWB_ASSERT(false);
+                FOUNDATION_ASSERT(false);
                 meshHeapHandles.sweep();
                 return false;
             }
@@ -666,7 +666,7 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAren
     const b8 frozenGraphScene = readinessPolicy.isFrozenSoftwareSceneReady(m_preparedSceneBvh.ready(), m_preparedShadowMaterialContext.ready(), m_preparedShadowMaterialContext.route());
     if(frozenGraphScene){
         if(!m_preparedSceneSwBvhTraversal.capture(preparedMeshes, instanceCount)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze software scene traversal"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not freeze software scene traversal"));
             clearPreparedSceneBvh();
             clearPreparedShadowMaterialContext();
             return false;

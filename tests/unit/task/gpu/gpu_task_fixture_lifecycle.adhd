@@ -57,28 +57,28 @@ inline constexpr usize s_CommandIrClearTextureOffset = s_CommandIrClearBufferOff
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE BinaryByteView MakeBinaryByteView(const Span<const u8> bytes)noexcept{
+[[nodiscard]] FOUNDATION_INLINE BinaryByteView MakeBinaryByteView(const Span<const u8> bytes)noexcept{
     return BinaryByteView{ bytes.data(), bytes.size() };
 }
 
-[[nodiscard]] NWB_INLINE BinaryByteView MakeGraphicsByteView(const Core::GraphicsBytes& bytes)noexcept{
+[[nodiscard]] FOUNDATION_INLINE BinaryByteView MakeGraphicsByteView(const Core::GraphicsBytes& bytes)noexcept{
     return BinaryByteView{ bytes.data(), bytes.size() };
 }
 
-[[nodiscard]] NWB_INLINE BinaryByteView MakeNullBinaryByteView(const usize size)noexcept{
+[[nodiscard]] FOUNDATION_INLINE BinaryByteView MakeNullBinaryByteView(const usize size)noexcept{
     return BinaryByteView{ nullptr, size };
 }
 
-[[nodiscard]] NWB_INLINE BinaryByteView SubBinaryByteView(const BinaryByteView source, const usize offset, const usize count)noexcept{
+[[nodiscard]] FOUNDATION_INLINE BinaryByteView SubBinaryByteView(const BinaryByteView source, const usize offset, const usize count)noexcept{
     return BinaryByteView{ source.data() + offset, count };
 }
 
-[[nodiscard]] NWB_INLINE Span<const u8> ByteViewSpan(const BinaryByteView source)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Span<const u8> ByteViewSpan(const BinaryByteView source)noexcept{
     return source.data() ? Span<const u8>(source.data(), source.size()) : Span<const u8>{};
 }
 
 template<typename PodT>
-[[nodiscard]] NWB_INLINE Optional<PodT> ReadCommandIrPodAt(const BinaryByteView bytes, const usize offset = 0u)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Optional<PodT> ReadCommandIrPodAt(const BinaryByteView bytes, const usize offset = 0u)noexcept{
     usize cursor = offset;
     if(const auto parsed = ReadPOD<PodT>(bytes, cursor))
         return *parsed;
@@ -86,29 +86,29 @@ template<typename PodT>
 }
 
 template<typename PodT>
-NWB_INLINE void WriteCommandIrPod(const usize byteOffset, const PodT& value, const Span<u8> bytes)noexcept(noexcept(NWB_MEMCPY(bytes.data() + byteOffset, bytes.size() - byteOffset, &value, sizeof(value)))){
-    NWB_ASSERT(byteOffset <= bytes.size());
-    NWB_ASSERT(bytes.size() - byteOffset >= sizeof(PodT));
-    NWB_MEMCPY(bytes.data() + byteOffset, bytes.size() - byteOffset, &value, sizeof(value));
+FOUNDATION_INLINE void WriteCommandIrPod(const usize byteOffset, const PodT& value, const Span<u8> bytes)noexcept(noexcept(FOUNDATION_MEMCPY(bytes.data() + byteOffset, bytes.size() - byteOffset, &value, sizeof(value)))){
+    FOUNDATION_ASSERT(byteOffset <= bytes.size());
+    FOUNDATION_ASSERT(bytes.size() - byteOffset >= sizeof(PodT));
+    FOUNDATION_MEMCPY(bytes.data() + byteOffset, bytes.size() - byteOffset, &value, sizeof(value));
 }
 
-NWB_INLINE void WriteCommandIrU8(const usize offset, const u8 value, Core::GraphicsBytes& bytes)noexcept{
+FOUNDATION_INLINE void WriteCommandIrU8(const usize offset, const u8 value, Core::GraphicsBytes& bytes)noexcept{
     WriteCommandIrPod(offset, value, bytes);
 }
 
-NWB_INLINE void WriteCommandIrU16(const usize offset, const u16 value, Core::GraphicsBytes& bytes)noexcept{
+FOUNDATION_INLINE void WriteCommandIrU16(const usize offset, const u16 value, Core::GraphicsBytes& bytes)noexcept{
     WriteCommandIrPod(offset, value, bytes);
 }
 
-NWB_INLINE void WriteCommandIrU32(const usize offset, const u32 value, Core::GraphicsBytes& bytes)noexcept{
+FOUNDATION_INLINE void WriteCommandIrU32(const usize offset, const u32 value, Core::GraphicsBytes& bytes)noexcept{
     WriteCommandIrPod(offset, value, bytes);
 }
 
-NWB_INLINE void WriteCommandIrU64(const usize offset, const u64 value, Core::GraphicsBytes& bytes)noexcept{
+FOUNDATION_INLINE void WriteCommandIrU64(const usize offset, const u64 value, Core::GraphicsBytes& bytes)noexcept{
     WriteCommandIrPod(offset, value, bytes);
 }
 
-NWB_INLINE void WriteCommandIrF32(const usize offset, const f32 value, Core::GraphicsBytes& bytes)noexcept{
+FOUNDATION_INLINE void WriteCommandIrF32(const usize offset, const f32 value, Core::GraphicsBytes& bytes)noexcept{
     WriteCommandIrPod(offset, value, bytes);
 }
 

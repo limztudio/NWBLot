@@ -69,7 +69,7 @@ namespace MeshSkinningPayload{
 
 
 // Encode mesh-owned data only when creating its GPU buffer.
-[[nodiscard]] NWB_INLINE Expected<Vector<MeshSkinningInfluenceGpu, Core::Alloc::ScratchArena>> BuildSkinInfluences(const MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& arena){
+[[nodiscard]] FOUNDATION_INLINE Expected<Vector<MeshSkinningInfluenceGpu, Core::Alloc::ScratchArena>> BuildSkinInfluences(const MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& arena){
     Vector<MeshSkinningInfluenceGpu, Core::Alloc::ScratchArena> influences(arena);
     if(!ValidateMeshSkinningInfluenceStream(instance.handle.value, instance.skeletonJointCount, instance.skin))
         return MakeUnexpected(Failure{});
@@ -83,14 +83,14 @@ namespace MeshSkinningPayload{
 }
 
 // Source validation and deformation snapshots keep every row; GPU reads only joints referenced by this Skin.
-[[nodiscard]] NWB_INLINE Expected<Span<const SkeletonJointMatrix>> ResolveGpuJointPalette(const MeshSkinningRuntimeInstance& instance, const RuntimeSkinPayloadScratch& payload)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Expected<Span<const SkeletonJointMatrix>> ResolveGpuJointPalette(const MeshSkinningRuntimeInstance& instance, const RuntimeSkinPayloadScratch& payload)noexcept{
     const usize jointCount = instance.skeletonJointCount;
     if(!CanResolveGpuJointPalette(payload.hasActiveSkin(), payload.skinInfluenceCount, instance.skin.size(), jointCount, payload.jointMatrices.size()))
         return MakeUnexpected(Failure{});
     return Span<const SkeletonJointMatrix>(payload.jointMatrices.data(), jointCount);
 }
 
-[[nodiscard]] NWB_INLINE b8 BuildSkinJointPalette(
+[[nodiscard]] FOUNDATION_INLINE b8 BuildSkinJointPalette(
     const MeshSkinningRuntimeInstance& instance,
     const Span<const SkeletonJointMatrix> sourceJoints,
     const u32 skinningMode,
@@ -107,7 +107,7 @@ namespace MeshSkinningPayload{
     );
 }
 
-[[nodiscard]] NWB_INLINE b8 BuildSkinJointPalette(
+[[nodiscard]] FOUNDATION_INLINE b8 BuildSkinJointPalette(
     const MeshSkinningRuntimeInstance& instance,
     const Span<const SkeletonJointMatrix> sourceJoints,
     const u32 skinningMode,
@@ -144,7 +144,7 @@ namespace MeshSkinningPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE b8 BuildRuntimeSkinPayload(const MeshSkinningRuntimeInstance& instance, const SkeletonJointPaletteComponent* jointPalette, const SkeletonPoseComponent* skeletonPose, RuntimeSkinPayloadScratch& payload){
+[[nodiscard]] FOUNDATION_INLINE b8 BuildRuntimeSkinPayload(const MeshSkinningRuntimeInstance& instance, const SkeletonJointPaletteComponent* jointPalette, const SkeletonPoseComponent* skeletonPose, RuntimeSkinPayloadScratch& payload){
     payload.skinInfluenceCount = 0u;
     payload.jointMatrices.clear();
     payload.poseJoints.clear();

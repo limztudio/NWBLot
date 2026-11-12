@@ -136,7 +136,7 @@ public:
     [[nodiscard]] b8 drawGlyph(const SharedGlyphPage& page, const Rect& rectangle, const Rect& uv, const Color& tint = {});
     [[nodiscard]] b8 prepareSdfPages(const Span<const SharedSdfAtlasPage> pages){ return prepareImages({}, pages); }
     [[nodiscard]] b8 prepareImages(const Span<const SharedGlyphPage> glyphPages, const Span<const SharedSdfAtlasPage> sdfPages, const Span<const SharedImageSource> textureImages = {}){
-        NWB_ASSERT(m_recording);
+        FOUNDATION_ASSERT(m_recording);
         return m_snapshot.m_images.prepare(glyphPages, sdfPages, textureImages);
     }
     [[nodiscard]] b8 drawSdfGlyph(const SharedSdfAtlasPage& page, u32 channel, const Rect& rectangle, const Rect& uv, const Color& tint = {});
@@ -146,7 +146,7 @@ public:
     [[nodiscard]] DrawSnapshot freeze();
     [[nodiscard]] const DisplayMetrics& displayMetrics()const noexcept{ return m_snapshot.displayMetrics(); }
     [[nodiscard]] Rect currentClip()const noexcept{
-        NWB_ASSERT(m_recording);
+        FOUNDATION_ASSERT(m_recording);
         return m_clips.back();
     }
 
@@ -232,7 +232,7 @@ NWB_IMPL_UI_BEGIN
 
 void PaintBuilder::begin(const DisplayMetrics& metrics, const u64 generation, const u64 skinGeneration, const Core::Assets::AssetRef<UiSkin>& skinRef, const UiSkin& skin){
     const SkinBinding binding = MakePaintSkinBinding<UiSkin, Texture>(skinRef, skin.texture(), skinGeneration, skin.atlasWidth(), skin.atlasHeight(), skin.referenceDensity());
-    NWB_ASSERT(IsValidPaintSkinBinding(binding, skin.virtualPath()));
+    FOUNDATION_ASSERT(IsValidPaintSkinBinding(binding, skin.virtualPath()));
     m_snapshot.m_generation = generation;
     m_snapshot.m_displayMetrics = metrics;
     m_snapshot.m_skinBinding = binding;
@@ -253,7 +253,7 @@ void PaintBuilder::begin(const DisplayMetrics& metrics, const u64 generation, co
 }
 
 b8 PaintBuilder::drawRegion(const Name& regionName, const Rect& rectangle, const Color& tint){
-    NWB_ASSERT(m_recording);
+    FOUNDATION_ASSERT(m_recording);
     return DrawPaintSkinRegion(
         m_recording,
         m_clips.back(),
@@ -273,7 +273,7 @@ b8 PaintBuilder::drawRegion(const Name& regionName, const Rect& rectangle, const
 }
 
 b8 PaintBuilder::drawGlyph(const SharedGlyphPage& page, const Rect& rectangle, const Rect& uv, const Color& tint){
-    NWB_ASSERT(m_recording);
+    FOUNDATION_ASSERT(m_recording);
     if(!page || !IsValidPaintUvRect(uv))
         return false;
     u32 index = 0u;
@@ -290,7 +290,7 @@ b8 PaintBuilder::drawGlyph(const SharedGlyphPage& page, const Rect& rectangle, c
 }
 
 b8 PaintBuilder::drawSdfGlyph(const SharedSdfAtlasPage& page, const u32 channel, const Rect& rectangle, const Rect& uv, const Color& tint){
-    NWB_ASSERT(m_recording);
+    FOUNDATION_ASSERT(m_recording);
     if(!page || !IsValidPaintSdfGlyphRequest(channel, page->binding().channelCount, uv))
         return false;
     u32 index = 0u;
@@ -307,7 +307,7 @@ b8 PaintBuilder::drawSdfGlyph(const SharedSdfAtlasPage& page, const u32 channel,
 }
 
 b8 PaintBuilder::drawImage(const SharedImageSource& source, const Rect& rectangle, const Rect& uv, const Color& tint){
-    NWB_ASSERT(m_recording);
+    FOUNDATION_ASSERT(m_recording);
     if(!source || !IsValidPaintImageDrawRequest(rectangle, uv, tint))
         return false;
     const Rect clip = m_clips.back();
@@ -332,7 +332,7 @@ DrawSnapshot PaintBuilder::freeze(){
 }
 
 void PaintBuilder::emitQuad(const Rect& rectangle, const Rect& uv, const Color& color, const PaintMaterial::Enum material, const u32 glyphPageIndex, const u32 sdfPageIndex, const u32 sdfChannel, const u32 textureImageIndex){
-    NWB_ASSERT(m_recording);
+    FOUNDATION_ASSERT(m_recording);
     EmitPaintQuad(
         m_recording,
         m_clips.back(),

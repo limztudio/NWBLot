@@ -599,20 +599,20 @@ using ::NWB::Impl::Ui::s_PaintMaxImages;
 using ::NWB::Impl::Ui::s_GlyphAtlasMaxGlyphs;
 using ::NWB::Tests::UiCases::s_UiCaseWindowTitle;
 
-[[nodiscard]] NWB_INLINE Expected<f64> UiTextRegionGlyphCoverageArea(const ::NWB::Impl::Ui::DrawSnapshot& snapshot)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Expected<f64> UiTextRegionGlyphCoverageArea(const ::NWB::Impl::Ui::DrawSnapshot& snapshot)noexcept{
     return ::__hidden_ui_text_region_tests::GlyphCoverageArea(snapshot);
 }
 
-[[nodiscard]] NWB_INLINE Expected<Rect> UiTextVisibleAtlasRect(const ::NWB::Impl::Ui::PlacedGlyph& glyph, const ::NWB::Impl::Ui::SharedBakedFontAtlas& atlas, const f32 fontSize, const ::NWB::Impl::Ui::Point& origin)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Expected<Rect> UiTextVisibleAtlasRect(const ::NWB::Impl::Ui::PlacedGlyph& glyph, const ::NWB::Impl::Ui::SharedBakedFontAtlas& atlas, const f32 fontSize, const ::NWB::Impl::Ui::Point& origin)noexcept{
     return ::NWB::Impl::Ui::TextGlyphVisibility::AtlasRectangle(glyph, *atlas, fontSize, origin);
 }
 
-[[nodiscard]] NWB_INLINE f32 SampleUiMeasuredSdfDistance(const ::NWB::Impl::Ui::SharedSdfAtlasPage& page, const u32 channel, const SIMDVectorSingle texel)noexcept{
+[[nodiscard]] FOUNDATION_INLINE f32 SampleUiMeasuredSdfDistance(const ::NWB::Impl::Ui::SharedSdfAtlasPage& page, const u32 channel, const SIMDVectorSingle texel)noexcept{
     return ::__hidden_ui_text_visible_coverage_tests::SampleSdfDistance(*page, channel, texel);
 }
 
 template<typename StringT>
-[[nodiscard]] NWB_INLINE b8 AppendUiUtf8CodePoint(StringT& out, const u32 codePoint){
+[[nodiscard]] FOUNDATION_INLINE b8 AppendUiUtf8CodePoint(StringT& out, const u32 codePoint){
     Array<char, s_Utf8MaxSequenceBytes> encoded{};
     const auto encodedLength = EncodeUtf8CodePoint(codePoint, encoded);
     if(!encodedLength)
@@ -622,11 +622,11 @@ template<typename StringT>
 }
 
 template<typename VectorT>
-NWB_INLINE void SortUiGlyphIds(VectorT& ids)noexcept{
+FOUNDATION_INLINE void SortUiGlyphIds(VectorT& ids)noexcept{
     Sort(ids.begin(), ids.end());
 }
 
-NWB_INLINE void ExpectUiTextVisibleSamePaint(const ::NWB::Impl::Ui::DrawSnapshot& actual, const ::NWB::Impl::Ui::DrawSnapshot& expected){
+FOUNDATION_INLINE void ExpectUiTextVisibleSamePaint(const ::NWB::Impl::Ui::DrawSnapshot& actual, const ::NWB::Impl::Ui::DrawSnapshot& expected){
     ::NWB::UiPaintAssertions::ExpectSamePaint(actual, expected);
 }
 
@@ -635,10 +635,10 @@ Expected<Rect> ComputeUiTextVisibleRasterRect(TextVisibleCoverageTests& self, co
 };
 
 namespace __hidden_ui_text_visible_coverage_tests{
-NWB_INLINE b8 TextVisibleCoverageTests::paintClipped(const TextLayout& layout, const Rect& clip, const Point origin){
+FOUNDATION_INLINE b8 TextVisibleCoverageTests::paintClipped(const TextLayout& layout, const Rect& clip, const Point origin){
     return ::__hidden_ui_glyph_sdf_tests::PaintUiTextVisibleClipped(*this, layout, clip, origin);
 }
-NWB_INLINE Expected<Rect> TextVisibleCoverageTests::rasterRectangle(const PlacedGlyph& glyph, const f32 fontSize, const DisplayMetrics& display, const Point origin){
+FOUNDATION_INLINE Expected<Rect> TextVisibleCoverageTests::rasterRectangle(const PlacedGlyph& glyph, const f32 fontSize, const DisplayMetrics& display, const Point origin){
     return ::__hidden_ui_glyph_sdf_tests::ComputeUiTextVisibleRasterRect(*this, glyph, fontSize, display, origin);
 }
 };

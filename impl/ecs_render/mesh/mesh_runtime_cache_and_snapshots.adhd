@@ -135,14 +135,14 @@ template<typename PayloadT>
 Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, Core::Alloc::ScratchArena& scratchArena){
     const Name meshPath = meshAsset.name();
     if(!meshPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: renderer mesh is empty"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: renderer mesh is empty"));
         return MakeUnexpected(Failure{});
     }
 
     const auto foundMesh = m_meshState.m_meshes.find(meshPath);
     if(foundMesh != m_meshState.m_meshes.end()){
-        NWB_ASSERT(meshRenderBindingsReady(foundMesh.value()));
-        NWB_ASSERT(foundMesh.value().valid());
+        FOUNDATION_ASSERT(meshRenderBindingsReady(foundMesh.value()));
+        FOUNDATION_ASSERT(foundMesh.value().valid());
         return MakeNotNull(&foundMesh.value());
     }
 
@@ -152,9 +152,9 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const 
 
     const Mesh& mesh = **loadedAsset;
     // Mesh::loadBinary already ran the full payload validation (including u32 stream limits).
-    NWB_ASSERT(mesh.validatePayload(scratchArena));
-    NWB_ASSERT(mesh.meshlets().size() <= static_cast<usize>(Limit<u32>::s_Max));
-    NWB_ASSERT(mesh.meshletPrimitiveIndices().size() <= static_cast<usize>(Limit<u32>::s_Max));
+    FOUNDATION_ASSERT(mesh.validatePayload(scratchArena));
+    FOUNDATION_ASSERT(mesh.meshlets().size() <= static_cast<usize>(Limit<u32>::s_Max));
+    FOUNDATION_ASSERT(mesh.meshletPrimitiveIndices().size() <= static_cast<usize>(Limit<u32>::s_Max));
 
     MeshResources createdMesh;
     createdMesh.meshName = meshPath;
@@ -164,10 +164,10 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const 
     if(!createdMesh.solidTriangleWords)
         return MakeUnexpected(Failure{});
     const usize solidByteCount = ComputeSolidTriangleWordByteSize(mesh.solidTriangleWords().size(), sizeof(u32));
-    NWB_MEMCPY(createdMesh.solidTriangleWords.get(), solidByteCount, mesh.solidTriangleWords().data(), solidByteCount);
+    FOUNDATION_MEMCPY(createdMesh.solidTriangleWords.get(), solidByteCount, mesh.solidTriangleWords().data(), solidByteCount);
     const Expected<CsgReceiverCpuBounds> csgLocalBounds = NWB::Impl::BuildPositionStreamBounds(mesh.positionStream());
     if(!csgLocalBounds){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has invalid CSG receiver bounds"), ConvertString(meshPath.resolvedText()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: mesh '{}' has invalid CSG receiver bounds"), ConvertString(meshPath.resolvedText()));
         return MakeUnexpected(Failure{});
     }
     createdMesh.csgLocalBounds = *csgLocalBounds;
@@ -250,13 +250,13 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const 
     {
         const auto triangleIndices = BuildMeshletTriangleIndices(mesh, scratchArena);
         if(!triangleIndices){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to reconstruct shadow trace triangle indices for mesh '{}'"), ConvertString(meshPath.resolvedText()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to reconstruct shadow trace triangle indices for mesh '{}'"), ConvertString(meshPath.resolvedText()));
             return MakeUnexpected(Failure{});
         }
 
         const auto indexBufferName = DeriveName(meshPath, s_RtTriangleIndicesBufferName);
         if(!indexBufferName){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive shadow trace index buffer name for mesh '{}'"), ConvertString(meshPath.resolvedText()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to derive shadow trace index buffer name for mesh '{}'"), ConvertString(meshPath.resolvedText()));
             return MakeUnexpected(Failure{});
         }
 
@@ -268,7 +268,7 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const 
         indexFlags.queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute;
         auto indexBuffer = RuntimeMeshBufferUpload::SetupRequiredBuffer<u32>(m_graphics, *indexBufferName, *triangleIndices, indexFlags);
         if(!indexBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow trace index buffer for mesh '{}'"), ConvertString(meshPath.resolvedText()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create shadow trace index buffer for mesh '{}'"), ConvertString(meshPath.resolvedText()));
             return MakeUnexpected(Failure{});
         }
 
@@ -280,13 +280,13 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const 
     {
         const auto triangleAttributes = BuildMeshletTriangleAttributes(mesh, scratchArena);
         if(!triangleAttributes){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to reconstruct shadow trace triangle attributes for mesh '{}'"), ConvertString(meshPath.resolvedText()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to reconstruct shadow trace triangle attributes for mesh '{}'"), ConvertString(meshPath.resolvedText()));
             return MakeUnexpected(Failure{});
         }
 
         const auto attributeBufferName = DeriveName(meshPath, s_RtTriangleAttributesBufferName);
         if(!attributeBufferName){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive shadow trace attribute buffer name for mesh '{}'"), ConvertString(meshPath.resolvedText()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to derive shadow trace attribute buffer name for mesh '{}'"), ConvertString(meshPath.resolvedText()));
             return MakeUnexpected(Failure{});
         }
 
@@ -296,13 +296,13 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const 
         attributeFlags.queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute;
         auto attributeBuffer = RuntimeMeshBufferUpload::SetupRequiredBuffer<AttribGpu>(m_graphics, *attributeBufferName, *triangleAttributes, attributeFlags);
         if(!attributeBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow trace triangle attribute buffer for mesh '{}'"), ConvertString(meshPath.resolvedText()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create shadow trace triangle attribute buffer for mesh '{}'"), ConvertString(meshPath.resolvedText()));
             return MakeUnexpected(Failure{});
         }
         createdMesh.attributeBuffer = Move(*attributeBuffer);
     }
 
-    NWB_ASSERT(createdMesh.valid());
+    FOUNDATION_ASSERT(createdMesh.valid());
     MeshDescriptorTransaction retireUnpublished(*this, createdMesh);
     if(!createMeshRenderBindings(createdMesh))
         return MakeUnexpected(Failure{});
@@ -312,7 +312,7 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const 
         retireUnpublished.release();
     auto it = result.first;
 
-    NWB_ASSERT(it.value().valid());
+    FOUNDATION_ASSERT(it.value().valid());
     return MakeNotNull(&it.value());
 }
 
@@ -324,8 +324,8 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::findMeshResources(const Na
     if(foundMesh == m_meshState.m_meshes.end())
         return MakeUnexpected(Failure{});
 
-    NWB_ASSERT(meshRenderBindingsReady(foundMesh.value()));
-    NWB_ASSERT(foundMesh.value().valid());
+    FOUNDATION_ASSERT(meshRenderBindingsReady(foundMesh.value()));
+    FOUNDATION_ASSERT(foundMesh.value().valid());
     return MakeNotNull(&foundMesh.value());
 }
 
@@ -381,12 +381,12 @@ static void RefreshRuntimeMeshContent(MeshResources& mesh, const RuntimeMeshDesc
 
 
 Expected<NotNull<MeshResources*>> RuntimeMeshResourceCache::create(const RuntimeMeshDesc& desc){
-    NWB_ASSERT(desc.valid());
+    FOUNDATION_ASSERT(desc.valid());
 
     const auto foundMesh = m_system.m_meshState.m_meshes.find(desc.meshKey);
     if(foundMesh != m_system.m_meshState.m_meshes.end()){
         if(!foundMesh.value().runtimeMesh){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime mesh '{}' collides with a static mesh resource"), ConvertString(desc.meshKey.resolvedText()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: runtime mesh '{}' collides with a static mesh resource"), ConvertString(desc.meshKey.resolvedText()));
             return MakeUnexpected(Failure{});
         }
         if(!__hidden_runtime_mesh_resource_cache::RuntimeMeshSourceMatches(foundMesh.value(), desc)){
@@ -394,10 +394,10 @@ Expected<NotNull<MeshResources*>> RuntimeMeshResourceCache::create(const Runtime
             m_system.m_meshState.m_meshes.erase(foundMesh);
         }
         else{
-            NWB_ASSERT(m_system.meshRenderBindingsReady(foundMesh.value()));
+            FOUNDATION_ASSERT(m_system.meshRenderBindingsReady(foundMesh.value()));
             MeshResources& mesh = foundMesh.value();
             __hidden_runtime_mesh_resource_cache::RefreshRuntimeMeshContent(mesh, desc);
-            NWB_ASSERT(mesh.valid());
+            FOUNDATION_ASSERT(mesh.valid());
             return MakeNotNull(&mesh);
         }
     }
@@ -408,7 +408,7 @@ Expected<NotNull<MeshResources*>> RuntimeMeshResourceCache::create(const Runtime
     if(!createdMesh.solidTriangleWords)
         return MakeUnexpected(Failure{});
     const usize solidByteCount = desc.solidTriangleWords.size_bytes();
-    NWB_MEMCPY(createdMesh.solidTriangleWords.get(), solidByteCount, desc.solidTriangleWords.data(), solidByteCount);
+    FOUNDATION_MEMCPY(createdMesh.solidTriangleWords.get(), solidByteCount, desc.solidTriangleWords.data(), solidByteCount);
     createdMesh.positionBuffer = desc.positionBuffer;
     createdMesh.normalBuffer = desc.normalBuffer;
     createdMesh.tangentBuffer = desc.tangentBuffer;
@@ -429,13 +429,13 @@ Expected<NotNull<MeshResources*>> RuntimeMeshResourceCache::create(const Runtime
     createdMesh.meshletPrimitiveIndexCount = desc.meshletPrimitiveIndexCount;
     createdMesh.runtimeMesh = true;
     createdMesh.runtimeMeshVersion = desc.version;
-    NWB_ASSERT(desc.localBounds.valid());
+    FOUNDATION_ASSERT(desc.localBounds.valid());
     __hidden_runtime_mesh_resource_cache::RefreshRuntimeMeshContent(createdMesh, desc);
     if(!ValidateRuntimeMeshPrimitiveIndexCount(createdMesh.meshName, createdMesh.meshletPrimitiveIndexCount, s_MeshletTriangleIndexCount))
         return MakeUnexpected(Failure{});
     if(!__hidden_runtime_mesh_resource_cache::ValidateRawBufferLogicalByteCount(createdMesh.meshletPrimitiveIndexBuffer, createdMesh.meshletPrimitiveIndexCount, createdMesh.meshName, s_MeshletPrimitiveIndexBufferLabel))
         return MakeUnexpected(Failure{});
-    NWB_ASSERT(createdMesh.valid());
+    FOUNDATION_ASSERT(createdMesh.valid());
     MeshDescriptorTransaction retireUnpublished(m_system, createdMesh);
     if(!m_system.createMeshRenderBindings(createdMesh))
         return MakeUnexpected(Failure{});
@@ -445,12 +445,12 @@ Expected<NotNull<MeshResources*>> RuntimeMeshResourceCache::create(const Runtime
         retireUnpublished.release();
     auto it = result.first;
 
-    NWB_ASSERT(it.value().valid());
+    FOUNDATION_ASSERT(it.value().valid());
     return MakeNotNull(&it.value());
 }
 
 Expected<NotNull<MeshResources*>> RuntimeMeshResourceCache::find(const RuntimeMeshDesc& desc)noexcept{
-    NWB_ASSERT(desc.valid());
+    FOUNDATION_ASSERT(desc.valid());
 
     const auto foundMesh = m_system.m_meshState.m_meshes.find(desc.meshKey);
     if(foundMesh == m_system.m_meshState.m_meshes.end())
@@ -460,9 +460,9 @@ Expected<NotNull<MeshResources*>> RuntimeMeshResourceCache::find(const RuntimeMe
     if(!mesh.runtimeMesh || !__hidden_runtime_mesh_resource_cache::RuntimeMeshSourceMatches(mesh, desc))
         return MakeUnexpected(Failure{});
 
-    NWB_ASSERT(m_system.meshRenderBindingsReady(mesh));
+    FOUNDATION_ASSERT(m_system.meshRenderBindingsReady(mesh));
     __hidden_runtime_mesh_resource_cache::RefreshRuntimeMeshContent(mesh, desc);
-    NWB_ASSERT(mesh.valid());
+    FOUNDATION_ASSERT(mesh.valid());
     return MakeNotNull(&mesh);
 }
 

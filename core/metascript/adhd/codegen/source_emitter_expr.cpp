@@ -66,6 +66,15 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
         return;
     }
 
+    if(expr.wrapInNotNull){
+        out.append("::MakeNotNull(&(");
+        Expr unwrapped = expr;
+        unwrapped.wrapInNotNull = false;
+        emitExpr(out, unwrapped);
+        out.append("))");
+        return;
+    }
+
     if(expr.wrapInFuncType && expr.kind == ExprKind::Lambda){
         TypeRef valueFuncType = *expr.wrapInFuncType;
         valueFuncType.refMode = ParamPassingMode::None;
@@ -120,7 +129,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
     }
     case ExprKind::StringLiteral:{
         if(expr.adaptToTChar){
-            out.append("NWB_TEXT(\"");
+            out.append("FOUNDATION_TEXT(\"");
             out.append(expr.text.data(), expr.text.size());
             out.append("\")");
         }

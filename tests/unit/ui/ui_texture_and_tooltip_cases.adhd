@@ -129,7 +129,7 @@ namespace UiTextureKey = ::NWB::Core::Key;
 using ::NWB::Impl::Ui::PlaceImage;
 using ::NWB::Impl::Ui::s_PaintMaxImages;
 
-[[nodiscard]] NWB_INLINE Expected<::NWB::Impl::Ui::SharedImageSource> MakeUiTextureSeededImage(
+[[nodiscard]] FOUNDATION_INLINE Expected<::NWB::Impl::Ui::SharedImageSource> MakeUiTextureSeededImage(
     const StringView path,
     const u8 seed,
     const u32 width,
@@ -139,27 +139,27 @@ using ::NWB::Impl::Ui::s_PaintMaxImages;
     return ::NWB::UiFixtureSupport::MakeSeededImage(path, seed, width, height, arena);
 }
 
-[[nodiscard]] NWB_INLINE ::NWB::Impl::Ui::ImageOptions MakeUiTextureFixedOptions(const f32 width = 96.0f, const f32 height = 40.0f)noexcept{
+[[nodiscard]] FOUNDATION_INLINE ::NWB::Impl::Ui::ImageOptions MakeUiTextureFixedOptions(const f32 width = 96.0f, const f32 height = 40.0f)noexcept{
     return ::NWB::UiWidgetTests::WidgetFixture::Fixed(width, height);
 }
 
-[[nodiscard]] NWB_INLINE b8 UiTextureImageMatchesGeneration(const ::NWB::Impl::Ui::SharedImageSource& source, const u64 generation)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 UiTextureImageMatchesGeneration(const ::NWB::Impl::Ui::SharedImageSource& source, const u64 generation)noexcept{
     return static_cast<b8>(source) && source->generation() == generation;
 }
 
-[[nodiscard]] NWB_INLINE u64 UiTextureImageGeneration(const ::NWB::Impl::Ui::SharedImageSource& source)noexcept{
+[[nodiscard]] FOUNDATION_INLINE u64 UiTextureImageGeneration(const ::NWB::Impl::Ui::SharedImageSource& source)noexcept{
     return source->generation();
 }
 
-[[nodiscard]] NWB_INLINE u32 UiTextureImageWidth(const ::NWB::Impl::Ui::SharedImageSource& source)noexcept{
+[[nodiscard]] FOUNDATION_INLINE u32 UiTextureImageWidth(const ::NWB::Impl::Ui::SharedImageSource& source)noexcept{
     return source->texture().width();
 }
 
-[[nodiscard]] NWB_INLINE u8 UiTextureImageFirstByte(const ::NWB::Impl::Ui::SharedImageSource& source)noexcept{
+[[nodiscard]] FOUNDATION_INLINE u8 UiTextureImageFirstByte(const ::NWB::Impl::Ui::SharedImageSource& source)noexcept{
     return source->texture().payloadBytes()[0u];
 }
 
-[[nodiscard]] NWB_INLINE Expected<::NWB::Impl::Ui::ImageMetrics> UiMeasureTextureImage(
+[[nodiscard]] FOUNDATION_INLINE Expected<::NWB::Impl::Ui::ImageMetrics> UiMeasureTextureImage(
     const ::NWB::Impl::Ui::ImageOptions& options,
     const ::NWB::Impl::Ui::SharedImageSource& source
 )noexcept{

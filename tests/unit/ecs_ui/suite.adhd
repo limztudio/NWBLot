@@ -127,23 +127,23 @@ usize CountEcsUiNavigationActions(const AcceptingNavigationActions& self, const 
 b8 PrepareEcsUiNavigationModel(UiEditNavigationHostTests& self, UiEditModel& model, UiEditNavigationState& navigation, const UiEditBoxOptions& options, const UiRect& bounds, const UiPoint& previousScroll)noexcept;
 b8 CommitEcsUiNavigationText(UiEditNavigationHostTests& self, AStringView text)noexcept;
 
-NWB_INLINE Expected<Ui::EditNavigationResult> RecordingNavigationResolver::resolve(const Ui::EditModel& model, const Ui::EditNavigationDirection::Enum direction, const Ui::EditNavigationSnapshot& navigation, const f32 viewportHeight){
+FOUNDATION_INLINE Expected<Ui::EditNavigationResult> RecordingNavigationResolver::resolve(const Ui::EditModel& model, const Ui::EditNavigationDirection::Enum direction, const Ui::EditNavigationSnapshot& navigation, const f32 viewportHeight){
     return ResolveEcsUiEditViewNavigation(*this, model, direction, navigation, viewportHeight);
 }
 
-NWB_INLINE b8 AcceptingNavigationActions::apply(Ui::EditModel& model, const Ui::EditAction::Enum action, const b8){
+FOUNDATION_INLINE b8 AcceptingNavigationActions::apply(Ui::EditModel& model, const Ui::EditAction::Enum action, const b8){
     return ApplyEcsUiAcceptingNavigationAction(*this, model, action);
 }
 
-NWB_INLINE usize AcceptingNavigationActions::count(const Ui::EditAction::Enum action)const noexcept{
+FOUNDATION_INLINE usize AcceptingNavigationActions::count(const Ui::EditAction::Enum action)const noexcept{
     return CountEcsUiNavigationActions(*this, action);
 }
 
-NWB_INLINE b8 UiEditNavigationHostTests::prepareNavigationModel(Ui::EditModel& model, Ui::EditNavigationState& navigation, const Ui::EditBoxOptions& options, const Ui::Rect& bounds, const Ui::Point previousScroll){
+FOUNDATION_INLINE b8 UiEditNavigationHostTests::prepareNavigationModel(Ui::EditModel& model, Ui::EditNavigationState& navigation, const Ui::EditBoxOptions& options, const Ui::Rect& bounds, const Ui::Point previousScroll){
     return PrepareEcsUiNavigationModel(*this, model, navigation, options, bounds, previousScroll);
 }
 
-NWB_INLINE b8 UiEditNavigationHostTests::commitNative(const AStringView text){
+FOUNDATION_INLINE b8 UiEditNavigationHostTests::commitNative(const AStringView text){
     return CommitEcsUiNavigationText(*this, text);
 }
 

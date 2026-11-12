@@ -304,7 +304,7 @@ public:
 
 // The interval producer wrote these aliases; the graph lowers their same-UAV handoff.
 template<typename UseVector>
-NWB_INLINE void AppendCsgRemovedIntervalUses(
+FOUNDATION_INLINE void AppendCsgRemovedIntervalUses(
     const Core::GpuGraphResourceId removedIntervalDepth,
     const Core::GpuGraphResourceId removedIntervalCapNormal,
     const Core::GpuGraphResourceId removedIntervalData,
@@ -364,7 +364,7 @@ protected:
 };
 
 template<typename ComputeEmulationTaskT, typename SharedComputeEmulationTaskT, typename RasterTaskT>
-[[nodiscard]] NWB_INLINE b8 DeclareAvboitRasterRecordPhase(
+[[nodiscard]] FOUNDATION_INLINE b8 DeclareAvboitRasterRecordPhase(
     Core::GpuTaskGraph& graph,
     Core::GraphicsRuntime& graphics,
     RendererMaterialSystem& materialSystem,
@@ -391,7 +391,7 @@ template<typename ComputeEmulationTaskT, typename SharedComputeEmulationTaskT, t
 
     const b8 streamsUploaded = inputs.streamsUploaded || rasterPayload.streamsUploaded;
     const b8 hasCsgIntervalReads = inputs.csgStreamsUploaded;
-    NWB_ASSERT(!hasCsgIntervalReads || (rasterPayload.phasePrepared && rasterPayload.snapshot.captured));
+    FOUNDATION_ASSERT(!hasCsgIntervalReads || (rasterPayload.phasePrepared && rasterPayload.snapshot.captured));
     rasterPayload.materialFrameStatesGraphOwned = streamsUploaded;
     rasterPayload.materialGeometryStatesGraphOwned = streamsUploaded && rasterPayload.materialGeometryStatesGraphOwned;
 
@@ -526,7 +526,7 @@ template<typename ComputeEmulationTaskT, typename SharedComputeEmulationTaskT, t
         const auto computeEmulationTaskResult = graph.addTask<ComputeEmulationTaskT>(computeEmulationDesc, Move(computeEmulationPayload));
         if(!computeEmulationTaskResult){
             stageOutputs.computeEmulationTask = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT compute-emulation producer"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare AVBOIT compute-emulation producer"));
             return false;
         }
         stageOutputs.computeEmulationTask = *computeEmulationTaskResult;
@@ -549,10 +549,10 @@ template<typename ComputeEmulationTaskT, typename SharedComputeEmulationTaskT, t
         sharedRasterResourceUses.push_back(ReadUse(sharedComputeEmulationOutput, ECSRenderDetail::s_ObjectGeometryRasterState));
 
         const usize sharedPhaseCount = SharedComputeEmulationPhaseCountForDrawCount(inputs.sharedComputeEmulationPlan.drawCount);
-        NWB_ASSERT(IsSupportedSharedComputeEmulationDrawCount(inputs.sharedComputeEmulationPlan.drawCount));
-        NWB_ASSERT(sharedPhaseCount <= phaseDesc.sharedPhaseIdentities.size());
-        NWB_ASSERT(sharedPhaseCount <= phaseDesc.sharedPhaseLabels.size());
-        NWB_ASSERT(sharedPhaseCount <= stageOutputs.sharedComputeEmulationTasks.size());
+        FOUNDATION_ASSERT(IsSupportedSharedComputeEmulationDrawCount(inputs.sharedComputeEmulationPlan.drawCount));
+        FOUNDATION_ASSERT(sharedPhaseCount <= phaseDesc.sharedPhaseIdentities.size());
+        FOUNDATION_ASSERT(sharedPhaseCount <= phaseDesc.sharedPhaseLabels.size());
+        FOUNDATION_ASSERT(sharedPhaseCount <= stageOutputs.sharedComputeEmulationTasks.size());
         Core::GpuTaskId sharedDependency = rasterDependency;
         const Span<const Core::GpuTaskResourceSetUse> materialResourceSetUseSpan(materialResourceSetUses.data(), materialResourceSetUseCount);
         for(usize phaseIndex = 0u; phaseIndex < sharedPhaseCount; ++phaseIndex){
@@ -587,7 +587,7 @@ template<typename ComputeEmulationTaskT, typename SharedComputeEmulationTaskT, t
             const auto sharedTaskResult = graph.addTask<SharedComputeEmulationTaskT>(desc, Move(payload));
             if(!sharedTaskResult){
                 stageOutputs.sharedComputeEmulationTasks[phaseIndex] = {};
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT shared compute-emulation phase"));
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare AVBOIT shared compute-emulation phase"));
                 return false;
             }
             stageOutputs.sharedComputeEmulationTasks[phaseIndex] = *sharedTaskResult;
@@ -612,7 +612,7 @@ template<typename ComputeEmulationTaskT, typename SharedComputeEmulationTaskT, t
     const auto rasterTaskResult = graph.addTask<RasterTaskT>(rasterDesc, Move(rasterPayload));
     if(!rasterTaskResult){
         stageOutputs.rasterTask = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT raster graph task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred AVBOIT raster graph task"));
         return false;
     }
     stageOutputs.rasterTask = *rasterTaskResult;

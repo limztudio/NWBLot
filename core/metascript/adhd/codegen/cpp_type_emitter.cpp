@@ -355,13 +355,12 @@ void CppTypeEmitter::emitMethodSignature(MString& out, const ClassDecl* ownerCla
 }
 
 void CppTypeEmitter::emitMethodSignature(MString& out, const ClassDecl* ownerClass, const MethodDecl& method, const b8 isDeclarationInClass, const b8 ownerNeedsMotherArena)const{
-    const b8 isOverrideDestructor = method.isDestructor && ownerClass && (!ownerClass->implementedInterfaces.empty() || !ownerClass->assetTypeName.empty());
+    const b8 isOverrideDestructor = method.isDestructor && ownerClass && (!ownerClass->implementedInterfaces.empty() || !ownerClass->assetTypeName.empty() || !ownerClass->systemTypeName.empty());
     const b8 prependMotherArena = method.isConstructor
         && ownerClass
-        && !ownerClass->isArenaOwner
+        && !ownerClass->usesStaticClassArena()
         && !ownerClass->isSerialize
         && ownerClass->subsystemTypeName.empty()
-        && ownerClass->componentAssetTypeName.empty()
         && ownerNeedsMotherArena;
     const b8 prependCallerArena = !method.isConstructor && !method.isDestructor && method.injectsCallerArena;
 

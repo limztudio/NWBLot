@@ -56,7 +56,7 @@ native{
 #include <logger/server/crash_paths.adhd.h>
 #include <logger/server/crash_report_composer.adhd.h>
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <logger/server/clipboard_text.adhd.h>
 #include <logger/server/crash_symbolicate.adhd.h>
 #include <logger/server/log_row_painter.adhd.h>
@@ -67,12 +67,12 @@ native{
 
 #include <microhttpd.h>
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #endif
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 #include <fcntl.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -88,7 +88,7 @@ namespace NWB::Tests::LoggerCrashCases{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE AStringView ErrorCodeCategoryName(const ErrorCode& code)noexcept{
+[[nodiscard]] FOUNDATION_INLINE AStringView ErrorCodeCategoryName(const ErrorCode& code)noexcept{
     return AStringView(code.category().name());
 }
 
@@ -123,13 +123,13 @@ namespace ManifestEventField{
 };
 using ManifestEventFieldEnum = ManifestEventField::Enum;
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 inline constexpr b8 s_IsWindowsLoggerPlatform = true;
 #else
 inline constexpr b8 s_IsWindowsLoggerPlatform = false;
 #endif
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 inline constexpr b8 s_IsDesktopLinuxLoggerPlatform = true;
 #else
 inline constexpr b8 s_IsDesktopLinuxLoggerPlatform = false;
@@ -186,20 +186,20 @@ struct LogClientHolder{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE void EnqueueClientAscii(LogClient& client, const AStringView text){
+FOUNDATION_INLINE void EnqueueClientAscii(LogClient& client, const AStringView text){
     Core::Common::LoggerDetail::EnqueueMessage(client, s_LogTypeInfo, text);
 }
 
-[[nodiscard]] NWB_INLINE b8 EnqueueClientTelemetry(LogClient& client, const Span<const u8> bytes){
+[[nodiscard]] FOUNDATION_INLINE b8 EnqueueClientTelemetry(LogClient& client, const Span<const u8> bytes){
     return client.enqueueTelemetry(bytes.data(), bytes.size());
 }
 
 template<typename ArenaT>
-[[nodiscard]] NWB_INLINE FilePublicationResult PublishDurableBytes(const ::Path<ArenaT>& destination, const Span<const u8> bytes){
+[[nodiscard]] FOUNDATION_INLINE FilePublicationResult PublishDurableBytes(const ::Path<ArenaT>& destination, const Span<const u8> bytes){
     return PublishNewFileDurable(destination, BinaryByteView{ bytes.data(), bytes.size() });
 }
 
-[[nodiscard]] NWB_INLINE b8 CrashIngestMessageContains(const CrashIngestResult& result, const AStringView asciiNeedle){
+[[nodiscard]] FOUNDATION_INLINE b8 CrashIngestMessageContains(const CrashIngestResult& result, const AStringView asciiNeedle){
     ScratchArena scratch{Name(s_LoggerCrashTestNameTestsIntegrationLoggerServerArchiveScratch)};
     return Contains(result.message, ConvertString(scratch, asciiNeedle));
 }
@@ -212,7 +212,7 @@ template<typename ArenaT>
 
 template<typename DirArenaT>
     requires (!IsSame_V<DirArenaT, GlobalArena>)
-[[nodiscard]] NWB_INLINE Expected<CrashTestPath, ErrorCode> WaitForTriggerPackage(GlobalArena& arena, const ::Path<DirArenaT>& pendingDirectory, const AStringView category, const AStringView expression, const AStringView message, const AStringView file){
+[[nodiscard]] FOUNDATION_INLINE Expected<CrashTestPath, ErrorCode> WaitForTriggerPackage(GlobalArena& arena, const ::Path<DirArenaT>& pendingDirectory, const AStringView category, const AStringView expression, const AStringView message, const AStringView file){
     return WaitForTriggerPackage(arena, CrashTestPath(arena, pendingDirectory), category, expression, message, file);
 }
 void PreserveObservedReport(GlobalArena& arena, AStringView report, AStringView suffix);
@@ -235,14 +235,14 @@ public:
 public:
     [[nodiscard]] b8 start(u16& outPort)noexcept;
 
-    [[nodiscard]] NWB_INLINE u32 requestCount()const noexcept{ return m_requestCount.load(MemoryOrder::acquire); }
-    [[nodiscard]] NWB_INLINE b8 processingFirstRequest()const noexcept{ return m_delayedFirstRequest.load(MemoryOrder::acquire); }
+    [[nodiscard]] FOUNDATION_INLINE u32 requestCount()const noexcept{ return m_requestCount.load(MemoryOrder::acquire); }
+    [[nodiscard]] FOUNDATION_INLINE b8 processingFirstRequest()const noexcept{ return m_delayedFirstRequest.load(MemoryOrder::acquire); }
     void releaseFirstRequest()noexcept{ m_releaseFirstRequest.store(true, MemoryOrder::release); }
     [[nodiscard]] b8 requestWasTelemetry(const u32 index)const noexcept{ return m_telemetryRequests[index]; }
     [[nodiscard]] usize firstPayloadSize()const noexcept{ return m_payloadOverflow ? 0u : m_payloadSizes[0]; }
     [[nodiscard]] b8 firstPayloadRetried()const noexcept{
         return !m_payloadOverflow && m_payloadSizes[0] != 0u && m_payloadSizes[0] == m_payloadSizes[1]
-            && NWB_MEMCMP(m_payloads[0].data(), m_payloads[1].data(), m_payloadSizes[0]) == 0;
+            && FOUNDATION_MEMCMP(m_payloads[0].data(), m_payloads[1].data(), m_payloadSizes[0]) == 0;
     }
 
 
@@ -335,13 +335,13 @@ private:
     Core::Common::LoggerRegistrationGuard m_registration;
 };
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 using DumpBytes = Vector<u8, Core::Alloc::GlobalArena>;
 
 template<typename T>
-NWB_INLINE void StoreDumpRecord(const usize offset, const T& record, const Span<u8> bytes)noexcept{
-    NWB_ASSERT(offset <= bytes.size() && sizeof(T) <= bytes.size() - offset);
-    NWB_MEMCPY(bytes.data() + offset, bytes.size() - offset, &record, sizeof(T));
+FOUNDATION_INLINE void StoreDumpRecord(const usize offset, const T& record, const Span<u8> bytes)noexcept{
+    FOUNDATION_ASSERT(offset <= bytes.size() && sizeof(T) <= bytes.size() - offset);
+    FOUNDATION_MEMCPY(bytes.data() + offset, bytes.size() - offset, &record, sizeof(T));
 }
 
 [[nodiscard]] DumpBytes ExceptionDump(Core::Alloc::GlobalArena& arena, MINIDUMP_STREAM_TYPE secondStream, ULONG secondStreamBytes);
@@ -391,7 +391,7 @@ public:
 };
 #endif
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 void AppendDecimalText(u64 value, CrashTestText& outText);
 [[nodiscard]] Expected<b8, ErrorCode> LinuxExternalSymbolizerAvailable(GlobalArena& arena);
 void LinuxSilenceExpectedCrashChildConsole();
@@ -399,15 +399,15 @@ void LinuxSilenceExpectedCrashChildConsole();
 
 template<typename DirArenaT>
     requires (!IsSame_V<DirArenaT, GlobalArena>)
-[[nodiscard]] NWB_INLINE b8 PendingDirectoryContainsManifestTexts(GlobalArena& arena, const ::Path<DirArenaT>& pendingDirectory, const AStringView firstNeedle, const AStringView secondNeedle){
+[[nodiscard]] FOUNDATION_INLINE b8 PendingDirectoryContainsManifestTexts(GlobalArena& arena, const ::Path<DirArenaT>& pendingDirectory, const AStringView firstNeedle, const AStringView secondNeedle){
     return PendingDirectoryContainsManifestTexts(arena, CrashTestPath(arena, pendingDirectory), firstNeedle, secondNeedle);
 }
 [[nodiscard]] AStringView LinuxObservableAssertCategory()noexcept;
-NWB_NOINLINE void LinuxForceAssertFalseForCrashObservation();
+FOUNDATION_NOINLINE void LinuxForceAssertFalseForCrashObservation();
 #endif
 
-#if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
-NWB_NOINLINE void CaptureRecoverableErrorForCrashObservation(AStringView message)noexcept;
+#if defined(FOUNDATION_PLATFORM_WINDOWS) || (defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID))
+FOUNDATION_NOINLINE void CaptureRecoverableErrorForCrashObservation(AStringView message)noexcept;
 #endif
 
 
@@ -715,7 +715,7 @@ MHD_Result ShutdownCaptureServer::RequestCallback(
 )noexcept{
     if(!serverContext || !connection || !method || !uploadDataSize || !connectionContext)
         return MHD_NO;
-    if(NWB_STRCMP(method, "POST") != 0)
+    if(FOUNDATION_STRCMP(method, "POST") != 0)
         return MHD_NO;
 
     if(!*connectionContext){
@@ -730,7 +730,7 @@ MHD_Result ShutdownCaptureServer::RequestCallback(
             if(*uploadDataSize > server.m_payloads[requestIndex].size() - length)
                 server.m_payloadOverflow = true;
             else{
-                NWB_MEMCPY(server.m_payloads[requestIndex].data() + length, server.m_payloads[requestIndex].size() - length, uploadData, *uploadDataSize);
+                FOUNDATION_MEMCPY(server.m_payloads[requestIndex].data() + length, server.m_payloads[requestIndex].size() - length, uploadData, *uploadDataSize);
                 length += *uploadDataSize;
             }
         }
@@ -748,7 +748,7 @@ MHD_Result ShutdownCaptureServer::RequestCallback(
     }
     const u32 requestIndex = server.m_requestCount.load(MemoryOrder::relaxed);
     if(requestIndex < server.m_telemetryRequests.size())
-        server.m_telemetryRequests[requestIndex] = url && NWB_STRCMP(url, "/telemetry") == 0;
+        server.m_telemetryRequests[requestIndex] = url && FOUNDATION_STRCMP(url, "/telemetry") == 0;
     server.m_requestCount.fetch_add(1u, MemoryOrder::release);
 
     static Array<char, 1u> s_EmptyResponse = {};
@@ -801,7 +801,7 @@ b8 ShutdownCaptureServer::start(u16& outPort)noexcept{
     return true;
 }
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 void AppendDecimalText(const u64 value, CrashTestText& outText){
     Array<char, 32u> buffer = {};
     outText += FormatDecimal(static_cast<usize>(value), buffer);
@@ -861,7 +861,7 @@ b8 PendingDirectoryContainsManifestTexts(GlobalArena& arena, const CrashTestPath
 }
 
 AStringView LinuxObservableAssertCategory()noexcept{
-#if NWB_OCCUR_ASSERT
+#if FOUNDATION_OCCUR_ASSERT
     return DiagnosticEventCategory::s_Assert;
 #else
     return DiagnosticEventCategory::s_FatalAssert;
@@ -870,8 +870,8 @@ AStringView LinuxObservableAssertCategory()noexcept{
 #endif
 
 // Guard this helper on Android where its caller test is disabled.
-#if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
-NWB_NOINLINE void CaptureRecoverableErrorForCrashObservation(const AStringView message)noexcept{
+#if defined(FOUNDATION_PLATFORM_WINDOWS) || (defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID))
+FOUNDATION_NOINLINE void CaptureRecoverableErrorForCrashObservation(const AStringView message)noexcept{
     CaptureDiagnosticEvent(DiagnosticEventRecord{
         .event = DiagnosticEventName::s_Error,
         .category = Core::Common::LoggerDetail::s_DiagnosticEventCategoryError,

@@ -41,7 +41,7 @@ using CsgDeformTriangleVector = Vector<CsgDeformTriangle, ArenaT>;
 // Preview and commit share split-at-zero rebuilds, unwelded seams, epsilon, edge-cache and cap rules.
 
 // Preview rebuild into scratch storage. Same code path as commit.
-[[nodiscard]] NWB_INLINE Expected<CsgDeformStats, CsgDeformFailure> PreviewCsgDeformCuts(
+[[nodiscard]] FOUNDATION_INLINE Expected<CsgDeformStats, CsgDeformFailure> PreviewCsgDeformCuts(
     Core::Alloc::ScratchArena& scratchArena,
     const Span<const CsgDeformVertex> inputVertices,
     const Span<const CsgDeformTriangle> inputTriangles,
@@ -69,8 +69,8 @@ using CsgDeformTriangleVector = Vector<CsgDeformTriangle, ArenaT>;
     }
 
     static Core::Alloc::GlobalArena s_PreviewWorkArena(Name("ExecuteCsgDeformPreviewWork"));
-    Vector<CsgDeformVertex> workVertices(s_PreviewWorkArena);
-    Vector<CsgDeformTriangle> workTriangles(s_PreviewWorkArena);
+    Vector<CsgDeformVertex, ::ArenaBase> workVertices(s_PreviewWorkArena);
+    Vector<CsgDeformTriangle, ::ArenaBase> workTriangles(s_PreviewWorkArena);
     const auto result = ExecuteCsgDeformPreview(
         inputVertices,
         inputTriangles,
@@ -91,7 +91,7 @@ using CsgDeformTriangleVector = Vector<CsgDeformTriangle, ArenaT>;
 }
 
 // Shared viability classifier used by both preview and commit.
-[[nodiscard]] NWB_INLINE CsgDeformViability CheckCsgDeformCutsViability(
+[[nodiscard]] FOUNDATION_INLINE CsgDeformViability CheckCsgDeformCutsViability(
     Core::Alloc::ScratchArena& scratchArena,
     const Span<const CsgDeformVertex> inputVertices,
     const Span<const CsgDeformTriangle> inputTriangles,
@@ -106,7 +106,7 @@ using CsgDeformTriangleVector = Vector<CsgDeformTriangle, ArenaT>;
 }
 
 // Rebuild in scratch, then copy into the commit arena; viability matches preview.
-[[nodiscard]] NWB_INLINE Expected<CsgDeformStats, CsgDeformFailure> CommitCsgDeformCuts(
+[[nodiscard]] FOUNDATION_INLINE Expected<CsgDeformStats, CsgDeformFailure> CommitCsgDeformCuts(
     Core::Alloc::ScratchArena& scratchArena,
     Core::Alloc::GlobalArena& commitArena,
     const Span<const CsgDeformVertex> inputVertices,

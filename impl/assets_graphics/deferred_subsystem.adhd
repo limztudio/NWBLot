@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[subsystem("deferred_subsystem")]
+[arena, subsystem("deferred_subsystem")]
 class DeferredSubsystem{
     public AssetRef<ComputeShader> compositeCs;
     public AssetRef<PixelShader> compositePs;

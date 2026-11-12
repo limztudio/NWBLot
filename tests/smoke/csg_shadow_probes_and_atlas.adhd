@@ -58,7 +58,7 @@ inline constexpr SmokeMaterialRef s_CsgShadowGlassMaterial{"project/smoke/csg_sh
 inline constexpr SmokeMaterialRef s_CsgShadowOpaqueMaterial{"project/smoke/csg_shadow/materials/opaque"};
 #endif
 
-[[nodiscard]] NWB_INLINE AStringView CsgCausticProbeOwnerLabel()noexcept{
+[[nodiscard]] FOUNDATION_INLINE AStringView CsgCausticProbeOwnerLabel()noexcept{
     return "csg_caustic";
 }
 };

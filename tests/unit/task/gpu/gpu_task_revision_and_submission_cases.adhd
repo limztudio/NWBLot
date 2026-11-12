@@ -43,20 +43,20 @@ using GpuSubmissionUseIndex = Core::GpuTaskGraphCompilerDetail::TaskResourceUseI
 using Core::GpuTaskGraphCompilerDetail::CollectResourceFirstUseRangesWithinTask;
 using Core::GpuPacketRuntimeDetail::CountPacketWaitStatistics;
 
-[[nodiscard]] NWB_INLINE Expected<Core::GpuUploadBlobId> CopyGpuSubmissionUploadBytes(Core::GpuTaskGraph& graph, const Span<const u8> bytes, const usize alignment){
+[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuUploadBlobId> CopyGpuSubmissionUploadBytes(Core::GpuTaskGraph& graph, const Span<const u8> bytes, const usize alignment){
     return graph.copyUploadData(bytes.data(), bytes.size(), alignment);
 }
 
-[[nodiscard]] NWB_INLINE Expected<Core::GpuUploadBlobId> CopyGpuSubmissionUploadU64Pair(Core::GpuTaskGraph& graph, const u64 first, const u64 second){
+[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuUploadBlobId> CopyGpuSubmissionUploadU64Pair(Core::GpuTaskGraph& graph, const u64 first, const u64 second){
     const Array<u64, 2u> words = { first, second };
     return graph.copyUploadData(words.data(), sizeof(words), alignof(u64));
 }
 
-[[nodiscard]] NWB_INLINE b8 CopyGpuSubmissionNullUpload(Core::GpuTaskGraph& graph, const usize byteCount, const usize alignment){
+[[nodiscard]] FOUNDATION_INLINE b8 CopyGpuSubmissionNullUpload(Core::GpuTaskGraph& graph, const usize byteCount, const usize alignment){
     return graph.copyUploadData(nullptr, byteCount, alignment).has_value();
 }
 
-[[nodiscard]] NWB_INLINE b8 MatchesGpuSubmissionUploadU64Pair(
+[[nodiscard]] FOUNDATION_INLINE b8 MatchesGpuSubmissionUploadU64Pair(
     const Core::GpuTaskGraph::DeclarationReadView& declarations,
     const Core::GpuUploadBlobId uploadId,
     const u64 first,
@@ -66,7 +66,7 @@ using Core::GpuPacketRuntimeDetail::CountPacketWaitStatistics;
     const Array<u64, 2u> expectedBytes = { first, second };
     return storedBytes.has_value()
         && storedBytes->size() == sizeof(expectedBytes)
-        && NWB_MEMCMP(storedBytes->data(), expectedBytes.data(), sizeof(expectedBytes)) == 0
+        && FOUNDATION_MEMCMP(storedBytes->data(), expectedBytes.data(), sizeof(expectedBytes)) == 0
     ;
 }
 
@@ -168,11 +168,11 @@ public:
     }
 };
 
-[[nodiscard]] NWB_INLINE b8 ValidateNullOwnedTimingTicket(const GpuSubmissionBindings& resolved, const Core::GpuSubmissionPacketId packet)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 ValidateNullOwnedTimingTicket(const GpuSubmissionBindings& resolved, const Core::GpuSubmissionPacketId packet)noexcept{
     return resolved.validateOwnedTimingTicket(packet, nullptr);
 }
 
-[[nodiscard]] NWB_INLINE Optional<Core::QueueSubmissionPreSubmitHook> CollectSubmissionPacketHook(
+[[nodiscard]] FOUNDATION_INLINE Optional<Core::QueueSubmissionPreSubmitHook> CollectSubmissionPacketHook(
     const GpuSubmissionBindings& resolved,
     const Core::GpuSubmissionPacketId packet,
     GpuSubmissionPacketTickets& packetTickets
@@ -182,19 +182,19 @@ public:
     return {};
 }
 
-[[nodiscard]] NWB_INLINE Span<const Core::GpuTaskGraphTaskTimingTicket> MakeNullTimingBindingSpan(const usize count)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuTaskGraphTaskTimingTicket> MakeNullTimingBindingSpan(const usize count)noexcept{
     return Span<const Core::GpuTaskGraphTaskTimingTicket>(static_cast<const Core::GpuTaskGraphTaskTimingTicket*>(nullptr), count);
 }
 
-[[nodiscard]] NWB_INLINE Span<const Core::GpuTaskGraphTaskSubmissionHook> MakeNullHookBindingSpan(const usize count)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuTaskGraphTaskSubmissionHook> MakeNullHookBindingSpan(const usize count)noexcept{
     return Span<const Core::GpuTaskGraphTaskSubmissionHook>(static_cast<const Core::GpuTaskGraphTaskSubmissionHook*>(nullptr), count);
 }
 
-[[nodiscard]] NWB_INLINE b8 TokensBytewiseEqual(
+[[nodiscard]] FOUNDATION_INLINE b8 TokensBytewiseEqual(
     const Span<const Core::QueueSubmissionToken> lhs,
     const Span<const Core::QueueSubmissionToken> rhs
 )noexcept{
-    return lhs.size() == rhs.size() && (lhs.empty() || NWB_MEMCMP(lhs.data(), rhs.data(), lhs.size() * sizeof(Core::QueueSubmissionToken)) == 0);
+    return lhs.size() == rhs.size() && (lhs.empty() || FOUNDATION_MEMCMP(lhs.data(), rhs.data(), lhs.size() * sizeof(Core::QueueSubmissionToken)) == 0);
 }
 
 struct GpuSubmissionUseIndexScope{
@@ -212,7 +212,7 @@ public:
     {}
 };
 
-[[nodiscard]] NWB_INLINE Core::GpuTaskGraphTaskView MakeGpuSubmissionTaskView(
+[[nodiscard]] FOUNDATION_INLINE Core::GpuTaskGraphTaskView MakeGpuSubmissionTaskView(
     const Span<const Core::GpuTaskResourceUse> uses,
     const u64 generation = 1u,
     const u32 taskIndex = 0u
@@ -224,11 +224,11 @@ public:
     return view;
 }
 
-NWB_INLINE void SetGpuSubmissionTaskViewUses(Core::GpuTaskGraphTaskView& view, const Span<const Core::GpuTaskResourceUse> uses)noexcept{
+FOUNDATION_INLINE void SetGpuSubmissionTaskViewUses(Core::GpuTaskGraphTaskView& view, const Span<const Core::GpuTaskResourceUse> uses)noexcept{
     view.resourceUses = uses.data();
 }
 
-NWB_INLINE void ClearGpuSubmissionTaskViewUses(Core::GpuTaskGraphTaskView& view)noexcept{
+FOUNDATION_INLINE void ClearGpuSubmissionTaskViewUses(Core::GpuTaskGraphTaskView& view)noexcept{
     view.resourceUses = nullptr;
 }
 

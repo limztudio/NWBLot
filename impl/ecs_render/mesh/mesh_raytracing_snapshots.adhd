@@ -407,7 +407,7 @@ Expected<ECSRenderDetail::MeshSoftwareBvhParentBuildStateVector> RendererMeshSys
         if(pairState == MeshSwBvhBufferPairState::Unused)
             continue;
         if(pairState != MeshSwBvhBufferPairState::Complete){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererMeshSystem: incomplete software BVH state for a live mesh"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererMeshSystem: incomplete software BVH state for a live mesh"));
             return MakeUnexpected(Failure{});
         }
         const auto identity = DeriveName(mesh.meshName, s_MeshShadowTraceSwParentSuffix);

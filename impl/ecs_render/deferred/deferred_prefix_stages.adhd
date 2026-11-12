@@ -248,7 +248,7 @@ Expected<PrefixSceneUploadResult> PrefixSceneUploadBuilder::declare(const Prefix
     Core::GpuTaskDesc sceneShadingSetupDesc;
     sceneShadingSetupDesc.setIdentity(Name(s_RenderNameRenderGraphicsPrefixSceneShadingSetup)).setMarkerLabel("Scene Shading Setup").setScheduling(sceneShadingSetupScheduling).setDependencies({ &sceneUploadTask, 1u });
     ECSRenderDetail::SceneShadingSetupGraphTask::Payload sceneShadingSetupPayload{ .deferredSystem = m_deferredSystem, .timingTicket = inputs.sceneShadingSetupTimingTicket, .ready = inputs.sceneShadingSetupReady, .sceneShadingState = sceneShadingState, };
-    NWB_SIMD_MEMCPY(sceneShadingSetupPayload.lightData.data(), sizeof(sceneShadingSetupPayload.lightData), sceneLightData.data(), sizeof(sceneLightData));
+    FOUNDATION_SIMD_MEMCPY(sceneShadingSetupPayload.lightData.data(), sizeof(sceneShadingSetupPayload.lightData), sceneLightData.data(), sizeof(sceneLightData));
     sceneShadingSetupPayload.lightCount = sceneLightCount;
     sceneShadingSetupPayload.lightUploadRequired = sceneLightUploadRequired;
     sceneShadingSetupPayload.sceneShadingUploadRequired = sceneShadingUploadRequired;
@@ -259,7 +259,7 @@ Expected<PrefixSceneUploadResult> PrefixSceneUploadBuilder::declare(const Prefix
     }
     result.sceneShadingSetupTask = *sceneShadingSetupTaskResult;
     result.lightingClassification = rayTracingLightingClassification;
-    NWB_SIMD_MEMCPY(result.lightData.data(), sizeof(result.lightData), sceneLightData.data(), sizeof(sceneLightData));
+    FOUNDATION_SIMD_MEMCPY(result.lightData.data(), sizeof(result.lightData), sceneLightData.data(), sizeof(sceneLightData));
     result.lightCount = sceneLightCount;
     return result;
 }
@@ -296,7 +296,7 @@ Expected<OpaqueUploadChainResult> OpaqueUploadChainBuilder::declare(const Opaque
 #if defined(NWB_DEBUG)
         if(!ValidateAddressableUploadElementCount(instanceData.size(), sizeof(InstanceGpuData)))
             return MakeUnexpected(Failure{});
-        NWB_ASSERT(instanceData.size() == inputs.materialTypedRanges.size());
+        FOUNDATION_ASSERT(instanceData.size() == inputs.materialTypedRanges.size());
         ValidateMaterialTypedUploadRanges(inputs.materialTypedRanges, materialTypedBytes);
 #endif
 

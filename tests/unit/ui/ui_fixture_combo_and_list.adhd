@@ -412,33 +412,33 @@ b8 SendUiListFixtureWheel(UiListBuilderTests& self, f64 delta)noexcept;
 
 NWB_BEGIN
 namespace UiComboTests{
-NWB_INLINE void ComboSource::resetCounters()const noexcept{ ::__hidden_ui_glyph_sdf_tests::ResetComboSourceCounters(const_cast<ComboSource&>(*this)); }
-NWB_INLINE ComboOptions Options()noexcept{ return ::__hidden_ui_glyph_sdf_tests::MakeComboFixtureOptions(); }
-NWB_INLINE b8 ComboFixture::declareSource(const u64 generation, const IListDataSource& source, ComboState& state, const ComboOptions& options, const Rect& bounds){
+FOUNDATION_INLINE void ComboSource::resetCounters()const noexcept{ ::__hidden_ui_glyph_sdf_tests::ResetComboSourceCounters(const_cast<ComboSource&>(*this)); }
+FOUNDATION_INLINE ComboOptions Options()noexcept{ return ::__hidden_ui_glyph_sdf_tests::MakeComboFixtureOptions(); }
+FOUNDATION_INLINE b8 ComboFixture::declareSource(const u64 generation, const IListDataSource& source, ComboState& state, const ComboOptions& options, const Rect& bounds){
     return ::__hidden_ui_glyph_sdf_tests::DeclareComboFixtureSource(*this, generation, source, state, options, bounds);
 }
-NWB_INLINE b8 ComboFixture::openByPointer(const u64 generation){ return ::__hidden_ui_glyph_sdf_tests::OpenComboFixtureByPointer(*this, generation); }
+FOUNDATION_INLINE b8 ComboFixture::openByPointer(const u64 generation){ return ::__hidden_ui_glyph_sdf_tests::OpenComboFixtureByPointer(*this, generation); }
 };
 namespace UiListTests{
-NWB_INLINE StringView ArithmeticSource::text(const u64 index)const noexcept{ return ::__hidden_ui_glyph_sdf_tests::FormatArithmeticSourceText(const_cast<ArithmeticSource&>(*this), index); }
-NWB_INLINE ListOptions Options()noexcept{ return ::__hidden_ui_glyph_sdf_tests::MakeListFixtureOptions(); }
-NWB_INLINE b8 UiListBuilderTests::prepareSource(const u64 generation, const IListDataSource& source, ListState& state, const ListOptions& options, const DisplayMetrics& display){
+FOUNDATION_INLINE StringView ArithmeticSource::text(const u64 index)const noexcept{ return ::__hidden_ui_glyph_sdf_tests::FormatArithmeticSourceText(const_cast<ArithmeticSource&>(*this), index); }
+FOUNDATION_INLINE ListOptions Options()noexcept{ return ::__hidden_ui_glyph_sdf_tests::MakeListFixtureOptions(); }
+FOUNDATION_INLINE b8 UiListBuilderTests::prepareSource(const u64 generation, const IListDataSource& source, ListState& state, const ListOptions& options, const DisplayMetrics& display){
     return ::__hidden_ui_glyph_sdf_tests::PrepareUiListFixtureSource(*this, generation, source, state, options, display);
 }
-NWB_INLINE b8 UiListBuilderTests::preparePopups(const u64 generation, PopupState& lowerPopup, ListState& lowerState, PopupState* upperPopup, ListState* upperState){
+FOUNDATION_INLINE b8 UiListBuilderTests::preparePopups(const u64 generation, PopupState& lowerPopup, ListState& lowerState, PopupState* upperPopup, ListState* upperState){
     if(upperPopup && upperState)
         return ::__hidden_ui_glyph_sdf_tests::PrepareUiListFixtureTwoPopups(*this, generation, lowerPopup, lowerState, *upperPopup, *upperState);
     return ::__hidden_ui_glyph_sdf_tests::PrepareUiListFixtureLowerPopup(*this, generation, lowerPopup, lowerState);
 }
-NWB_INLINE b8 UiListBuilderTests::wheel(const f64 delta){ return ::__hidden_ui_glyph_sdf_tests::SendUiListFixtureWheel(*this, delta); }
+FOUNDATION_INLINE b8 UiListBuilderTests::wheel(const f64 delta){ return ::__hidden_ui_glyph_sdf_tests::SendUiListFixtureWheel(*this, delta); }
 };
 NWB_END
 
 namespace UiListBehaviorTestSupport{
-NWB_INLINE ControlAction Action(const ListState& state, const RangeSource& source, const ControlActionKind::Enum kind)noexcept{
+FOUNDATION_INLINE ControlAction Action(const ListState& state, const RangeSource& source, const ControlActionKind::Enum kind)noexcept{
     return ::__hidden_ui_glyph_sdf_tests::MakeUiListControlAction(state.inputGeneration(), source.instanceGeneration(), source.revision(), kind);
 }
-NWB_INLINE void ExpectResult(const ListResult& actual, const ListResult& expected){
+FOUNDATION_INLINE void ExpectResult(const ListResult& actual, const ListResult& expected){
     ::__hidden_ui_glyph_sdf_tests::ExpectUiListResult(actual, expected);
 }
 };

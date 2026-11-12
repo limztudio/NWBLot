@@ -43,7 +43,7 @@ void ForEachMeshSourceBindingSlot(BindingHandler&& handler)noexcept(noexcept(han
     handler(NWB_MESH_BINDING_MESHLET_PRIMITIVE_INDICES, true);
 }
 
-[[nodiscard]] NWB_INLINE b8 GeometryHeapHandlesReady(const Array<Core::GpuDescriptorHandle, NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT>& geometryHeapHandles)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 GeometryHeapHandlesReady(const Array<Core::GpuDescriptorHandle, NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT>& geometryHeapHandles)noexcept{
     b8 ready = true;
     ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const b8)noexcept{
         const Core::GpuDescriptorHandle handle = geometryHeapHandles[bindingSlot];

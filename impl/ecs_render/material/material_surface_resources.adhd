@@ -118,8 +118,8 @@ Expected<NotNull<MaterialSurfaceInfo*>> RendererMaterialSystem::createMaterialSu
 
     MaterialSurfaceInfo createdInfo(m_arena);
     // Material::loadBinary already rejected empty shader variants and missing material interfaces.
-    NWB_ASSERT(!material.shaderVariant().empty());
-    NWB_ASSERT(material.materialInterface());
+    FOUNDATION_ASSERT(!material.shaderVariant().empty());
+    FOUNDATION_ASSERT(material.materialInterface());
 
     const auto pixelShader = material.findPixelShader();
     const auto meshShader = material.findMeshShader();
@@ -134,10 +134,10 @@ Expected<NotNull<MaterialSurfaceInfo*>> RendererMaterialSystem::createMaterialSu
     createdInfo.avboitExtinctionPixelShader = material.avboitExtinctionPixelShader();
 
     // Material::loadBinary already validated the typed layout (hash, blocks, fields, bytes).
-    NWB_ASSERT(material.typedLayoutHash() != 0u && !material.typedBlockBytes().empty());
-    NWB_ASSERT(material.typedLayoutBlocks().size() <= static_cast<usize>(Limit<u32>::s_Max));
-    NWB_ASSERT(material.typedLayoutFields().size() <= static_cast<usize>(Limit<u32>::s_Max));
-    NWB_ASSERT(material.typedBlockBytes().size() <= static_cast<usize>(Limit<u32>::s_Max));
+    FOUNDATION_ASSERT(material.typedLayoutHash() != 0u && !material.typedBlockBytes().empty());
+    FOUNDATION_ASSERT(material.typedLayoutBlocks().size() <= static_cast<usize>(Limit<u32>::s_Max));
+    FOUNDATION_ASSERT(material.typedLayoutFields().size() <= static_cast<usize>(Limit<u32>::s_Max));
+    FOUNDATION_ASSERT(material.typedBlockBytes().size() <= static_cast<usize>(Limit<u32>::s_Max));
     if(!MaterialSurfaceBuilder().populate(
         materialPath,
         AStringView(material.shaderVariant()),
@@ -284,8 +284,8 @@ Expected<ShadowOccluderMaterialContext> RendererMaterialSystem::appendShadowOccl
     if(!mutableRange)
         return MakeUnexpected(Failure{});
 
-    NWB_ASSERT(MaterialTypedByteRangeEmptyOffsetValid(*constantRange));
-    NWB_ASSERT(MaterialTypedByteRangeEmptyOffsetValid(*mutableRange));
+    FOUNDATION_ASSERT(MaterialTypedByteRangeEmptyOffsetValid(*constantRange));
+    FOUNDATION_ASSERT(MaterialTypedByteRangeEmptyOffsetValid(*mutableRange));
     const NWB::Impl::Scene::TransformComponent defaultTransform;
     const NWB::Impl::Scene::TransformComponent& resolvedTransform = transform ? *transform : defaultTransform;
     ShadowOccluderMaterialContext context;
@@ -324,7 +324,7 @@ static void ReleaseAssetCache(CacheT& cache, ReleaseFn&& releaseItem)noexcept(
             && IsNothrowDestructible_V<Iterator>
             && noexcept(static_cast<b8>(DeclVal<Iterator&>() != DeclVal<CacheT&>().end()))
             && noexcept(++DeclVal<Iterator&>())
-#if NWB_OCCUR_ASSERT
+#if FOUNDATION_OCCUR_ASSERT
             && noexcept(static_cast<b8>(!DeclVal<Iterator&>().value()))
 #endif
             && noexcept(DeclVal<ReleaseFn&>()(*DeclVal<Iterator&>().value()))
@@ -333,7 +333,7 @@ static void ReleaseAssetCache(CacheT& cache, ReleaseFn&& releaseItem)noexcept(
     }()
 ){
     for(auto it = cache.begin(); it != cache.end(); ++it){
-        NWB_ASSERT(it.value());
+        FOUNDATION_ASSERT(it.value());
         releaseItem(*it.value());
     }
     cache.clear();
@@ -354,7 +354,7 @@ static void ReleaseMaterialResourceState(Core::GraphicsRuntime& graphics, Render
 
 template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
 [[nodiscard]] static Expected<NotNull<ResourceT*>> FindOrCreateCachedAsset(CacheT& cache, const Core::Assets::AssetRef<AssetT>& assetRef, Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle ResourceT::* descriptorMember, LoadFn&& loadResource){
-    NWB_ASSERT(assetRef.valid());
+    FOUNDATION_ASSERT(assetRef.valid());
     const Name& assetPath = assetRef.name();
     auto assetIt = cache.find(assetPath);
     if(assetIt == cache.end()){
@@ -370,7 +370,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
         if(insertResult.second)
             retireUnpublished.release();
     }
-    NWB_ASSERT(assetIt.value());
+    FOUNDATION_ASSERT(assetIt.value());
     return MakeNotNull(assetIt.value().get());
 }
 
@@ -392,7 +392,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
     if(!textureResourceResult)
         return MakeUnexpected(textureResourceResult.error());
     const NotNull<TextureGpuResource*> textureResource = *textureResourceResult;
-    NWB_ASSERT(textureResource->valid() && textureResource->sampledImageHeapHandle.descriptorClass() == Core::GpuDescriptorClass::SampledImage);
+    FOUNDATION_ASSERT(textureResource->valid() && textureResource->sampledImageHeapHandle.descriptorClass() == Core::GpuDescriptorClass::SampledImage);
     return textureResource->sampledImageHeapHandle.slot();
 }
 
@@ -408,7 +408,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn>
     if(!samplerResourceResult)
         return MakeUnexpected(samplerResourceResult.error());
     const NotNull<SamplerGpuResource*> samplerResource = *samplerResourceResult;
-    NWB_ASSERT(samplerResource->valid() && samplerResource->samplerHeapHandle.descriptorClass() == Core::GpuDescriptorClass::Sampler);
+    FOUNDATION_ASSERT(samplerResource->valid() && samplerResource->samplerHeapHandle.descriptorClass() == Core::GpuDescriptorClass::Sampler);
     return samplerResource->samplerHeapHandle.slot();
 }
 
@@ -456,7 +456,7 @@ b8 RendererMaterialResourceResolver::Resolve(MaterialSurfaceInfo& materialInfo, 
             }
             break;
         default:
-            NWB_ASSERT(false);
+            FOUNDATION_ASSERT(false);
             return false;
         }
 
@@ -559,12 +559,12 @@ b8 AppendPreparedMaterialSurfaceSampledTextures(const MaterialSurfaceInfo& mater
         switch(resourceReference.resourceKind){
         case MaterialResourceKind::SampledImage2D:{
             // Resolved references own valid 2D cache entries until release clears the flag.
-            NWB_ASSERT(resourceReference.textureAsset.valid());
+            FOUNDATION_ASSERT(resourceReference.textureAsset.valid());
             const auto foundTexture = resources.textureAssetCache.find(resourceReference.textureAsset.name());
-            NWB_ASSERT(foundTexture != resources.textureAssetCache.end() && foundTexture.value());
+            FOUNDATION_ASSERT(foundTexture != resources.textureAssetCache.end() && foundTexture.value());
 
             const TextureGpuResource& textureResource = *foundTexture.value();
-            NWB_ASSERT(textureResource.valid() && textureResource.sampledImageHeapHandle.descriptorClass() == Core::GpuDescriptorClass::SampledImage);
+            FOUNDATION_ASSERT(textureResource.valid() && textureResource.sampledImageHeapHandle.descriptorClass() == Core::GpuDescriptorClass::SampledImage);
 
             collector.append(textureResource.texture);
             break;
@@ -572,7 +572,7 @@ b8 AppendPreparedMaterialSurfaceSampledTextures(const MaterialSurfaceInfo& mater
         case MaterialResourceKind::Sampler:
             break;
         default:
-            NWB_ASSERT(false);
+            FOUNDATION_ASSERT(false);
             return false;
         }
     }

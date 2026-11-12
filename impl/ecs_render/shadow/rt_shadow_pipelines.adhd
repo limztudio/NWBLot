@@ -77,7 +77,7 @@ namespace __hidden_rt_shadow_pipelines{
             !shaderSystem.loadShader<ComputeShader>(member, stage.m_variant, s_SoftShadowResolveShaderScope, stage.m_state.m_shader)
             || !RendererComputePipelineDetail::CreateHeapComputePipeline(device, stage.m_state.m_shader, bindingLayout, false, stage.m_state.m_pipeline)
         ){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create specialized shadow resolve pipeline"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create specialized shadow resolve pipeline"));
             channel.m_failed = true;
             return false;
         }
@@ -108,7 +108,7 @@ b8 ShadowPipelineSet::ensureShadowPipeline(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || !heap.hasAccelStructLayout()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: RayQuery shadows require the descriptor-buffer TLAS heap layout"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: RayQuery shadows require the descriptor-buffer TLAS heap layout"));
         m_shadow.m_shadowPipelineFailed = true;
         return false;
     }
@@ -116,7 +116,7 @@ b8 ShadowPipelineSet::ensureShadowPipeline(){
     // Trace layouts are push-only; resources come from the global heap.
     static_assert(sizeof(ShadowRqSoftPushConstants) >= sizeof(ShadowRqPushConstants), "shadow-trace push-constant range must cover both the hard and soft trace push structs");
     if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(ShadowRqSoftPushConstants), Core::ShaderType::Compute, m_shadow.m_shadowBindingLayout)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow binding layout"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create shadow binding layout"));
         m_shadow.m_shadowPipelineFailed = true;
         return false;
     }
@@ -125,12 +125,12 @@ b8 ShadowPipelineSet::ensureShadowPipeline(){
         !m_shaderSystem.loadShader<ComputeShader>(&ShadowSubsystem::shadowRayqueryCs, Core::ShaderArchive::s_DefaultVariant, s_ShadowRayQueryShaderDebugName, m_shadow.m_shadowShader)
         || !RendererComputePipelineDetail::CreateHeapComputePipeline(device, m_shadow.m_shadowShader, m_shadow.m_shadowBindingLayout, true, m_shadow.m_shadowPipeline)
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create RayQuery shadow compute pipeline"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create RayQuery shadow compute pipeline"));
         m_shadow.m_shadowPipelineFailed = true;
         return false;
     }
 
-    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created RayQuery shadow compute pipeline"));
+    NWB_LOGGER_INFO(FOUNDATION_TEXT("RendererSystem: created RayQuery shadow compute pipeline"));
     return true;
 }
 
@@ -147,14 +147,14 @@ b8 ShadowPipelineSet::ensureShadowSoftPipeline(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || !heap.hasAccelStructLayout()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: soft RayQuery shadows require the descriptor-buffer TLAS heap layout"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: soft RayQuery shadows require the descriptor-buffer TLAS heap layout"));
         m_softShadow.m_shadowSoftPipelineFailed = true;
         return false;
     }
 
     // Soft and hard traces share their push-only layout.
     if(!m_shadow.m_shadowBindingLayout){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: shadow binding layout missing for the soft RayQuery pipeline"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: shadow binding layout missing for the soft RayQuery pipeline"));
         m_softShadow.m_shadowSoftPipelineFailed = true;
         return false;
     }
@@ -163,12 +163,12 @@ b8 ShadowPipelineSet::ensureShadowSoftPipeline(){
         !m_shaderSystem.loadShader<ComputeShader>(&ShadowSubsystem::shadowRayquerySoftCs, Core::ShaderArchive::s_DefaultVariant, s_ShadowRayQuerySoftShaderDebugName, m_softShadow.m_shadowSoftShader)
         || !RendererComputePipelineDetail::CreateHeapComputePipeline(device, m_softShadow.m_shadowSoftShader, m_shadow.m_shadowBindingLayout, true, m_softShadow.m_shadowSoftPipeline)
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create RayQuery soft shadow compute pipeline"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create RayQuery soft shadow compute pipeline"));
         m_softShadow.m_shadowSoftPipelineFailed = true;
         return false;
     }
 
-    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created RayQuery soft shadow compute pipeline"));
+    NWB_LOGGER_INFO(FOUNDATION_TEXT("RendererSystem: created RayQuery soft shadow compute pipeline"));
     return true;
 }
 
@@ -179,14 +179,14 @@ b8 ShadowPipelineSet::ensureSwShadowPipeline(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software shadows require the initialized global descriptor heap"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: software shadows require the initialized global descriptor heap"));
         m_shadow.m_swShadowPipelineFailed = true;
         return false;
     }
 
     if(!m_shadow.m_swShadowBindingLayout){
         if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(SwShadowHeapPushConstants), Core::ShaderType::Compute, m_shadow.m_swShadowBindingLayout)){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software shadow binding layout"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create software shadow binding layout"));
             m_shadow.m_swShadowPipelineFailed = true;
             return false;
         }
@@ -207,7 +207,7 @@ b8 ShadowPipelineSet::ensureSwShadowPipeline(){
         else
             m_shadow.m_swShadowEdgeCounterBuffer.reset();
         if(!swShadowEdgeCounterBufferResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create SW shadow edge-counter buffer"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create SW shadow edge-counter buffer"));
             m_shadow.m_swShadowPipelineFailed = true;
             return false;
         }
@@ -228,7 +228,7 @@ b8 ShadowPipelineSet::ensureSwShadowPipeline(){
         else
             m_shadow.m_swShadowIndirectArgsBuffer.reset();
         if(!swShadowIndirectArgsBufferResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create SW shadow indirect-args buffer"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create SW shadow indirect-args buffer"));
             m_shadow.m_swShadowPipelineFailed = true;
             return false;
         }
@@ -239,7 +239,7 @@ b8 ShadowPipelineSet::ensureSwShadowPipeline(){
         && RayTracingDetail::EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, true, heap, *m_shadow.m_swShadowIndirectArgsBuffer.get(), m_shadow.m_swShadowIndirectArgsHeapHandle)
     ;
     if(!heapResourcesReady){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register software-shadow work buffers in the descriptor heap"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register software-shadow work buffers in the descriptor heap"));
         m_shadow.m_swShadowPipelineFailed = true;
         return false;
     }
@@ -360,7 +360,7 @@ b8 ShadowPipelineSet::ensureSwShadowPassPipeline(Core::ShaderHandle& shader, Cor
     if(!m_shaderSystem.loadShader<ComputeShader>(shaderMember, Core::ShaderArchive::s_DefaultVariant, Name(debugLabel), shader))
         return false;
     if(!RendererComputePipelineDetail::CreateHeapComputePipeline(m_graphics.getDevice(), shader, m_shadow.m_swShadowBindingLayout, false, pipeline)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software shadow compute pipeline"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create software shadow compute pipeline"));
         return false;
     }
     return true;

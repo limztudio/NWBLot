@@ -57,135 +57,46 @@ using PublicationVelocityComponent = ::__hidden_publication_failure_tests::Publi
 
 extern thread_local b8 s_EcsCallerThread;
 
-NWB_INLINE void SetCallerThreadFlag(const b8 value)noexcept{
+FOUNDATION_INLINE void SetCallerThreadFlag(const b8 value)noexcept{
     s_EcsCallerThread = value;
 }
 
-[[nodiscard]] NWB_INLINE b8 IsCallerThreadFlagSet()noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 IsCallerThreadFlagSet()noexcept{
     return s_EcsCallerThread;
 }
 
-[[nodiscard]] NWB_INLINE CpuTaskOptions MainThreadTaskOptions()noexcept{
+[[nodiscard]] FOUNDATION_INLINE CpuTaskOptions MainThreadTaskOptions()noexcept{
     return CpuTaskOptions{ .target = ::NWB::Core::CpuTaskTarget::MainThread };
 }
 
+[[nodiscard]] FOUNDATION_INLINE CpuTaskOptions InvalidTargetTaskOptions()noexcept{
+    return CpuTaskOptions{ .target = static_cast<::NWB::Core::CpuTaskTarget::Enum>(::NWB::Core::CpuTaskTarget::MainThread + 1u) };
+}
+
 template<typename T>
-[[nodiscard]] NWB_INLINE usize ComponentAddress(const T& component)noexcept{
+[[nodiscard]] FOUNDATION_INLINE usize ComponentAddress(const T& component)noexcept{
     return reinterpret_cast<usize>(AddressOf(component));
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE b8 HasTryComponent(World& world, const ::NWB::Core::ECS::EntityID entityId)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasTryComponent(World& world, const ::NWB::Core::ECS::EntityID entityId)noexcept{
     return world.tryGetComponent<T>(entityId) != nullptr;
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE b8 HasConstTryComponent(const World& world, const ::NWB::Core::ECS::EntityID entityId)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasConstTryComponent(const World& world, const ::NWB::Core::ECS::EntityID entityId)noexcept{
     return world.tryGetComponent<T>(entityId) != nullptr;
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE b8 TryComponentMatches(World& world, const ::NWB::Core::ECS::EntityID entityId, const T& expected)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 TryComponentMatches(World& world, const ::NWB::Core::ECS::EntityID entityId, const T& expected)noexcept{
     return world.tryGetComponent<T>(entityId) == AddressOf(expected);
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE b8 ConstTryComponentMatches(const World& world, const ::NWB::Core::ECS::EntityID entityId, const T& expected)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 ConstTryComponentMatches(const World& world, const ::NWB::Core::ECS::EntityID entityId, const T& expected)noexcept{
     return world.tryGetComponent<T>(entityId) == AddressOf(expected);
 }
-
-class CountingSystem final : public NWB::Core::ECS::ISystem{
-public:
-    explicit CountingSystem(NWB::Core::Alloc::GlobalArena& arena)
-        : NWB::Core::ECS::ISystem(arena)
-    {
-        writeAccess<PositionComponent>();
-    }
-
-
-public:
-    virtual void prepare(NWB::Core::ECS::World& world)noexcept override;
-    [[nodiscard]] virtual Expected<void, NWB::Core::CpuTaskAdmissionError::Enum> update(NWB::Core::ECS::World& world, f32 delta)noexcept override;
-
-
-public:
-    u32 prepares = 0u;
-    u32 updates = 0u;
-    f32 lastDelta = 0.0f;
-};
-
-class ScheduledSystem final : public NWB::Core::ECS::ISystem{
-public:
-    ScheduledSystem(NWB::Core::Alloc::GlobalArena& arena, InitializerList<NWB::Core::ECS::ComponentAccess> accesses, Function<void()> update, NWB::Core::CpuTaskOptions options = {})
-        : NWB::Core::ECS::ISystem(arena)
-        , m_update(Move(update))
-        , m_options(options)
-    {
-        for(const auto& access : accesses)
-            registerAccess(access.typeId, access.mode);
-    }
-    ScheduledSystem(NWB::Core::Alloc::GlobalArena& arena, Function<void()> update, NWB::Core::CpuTaskOptions options = {})
-        : NWB::Core::ECS::ISystem(arena)
-        , m_update(Move(update))
-        , m_options(options)
-    {}
-    ScheduledSystem(
-        NWB::Core::Alloc::GlobalArena& arena,
-        const NWB::Core::ECS::ComponentTypeId typeId,
-        const NWB::Core::ECS::AccessMode::Enum mode,
-        Function<void()> update,
-        NWB::Core::CpuTaskOptions options = {}
-    )
-        : NWB::Core::ECS::ISystem(arena)
-        , m_update(Move(update))
-        , m_options(options)
-    {
-        registerAccess(typeId, mode);
-    }
-    ScheduledSystem(
-        NWB::Core::Alloc::GlobalArena& arena,
-        const NWB::Core::ECS::ComponentTypeId firstTypeId,
-        const NWB::Core::ECS::AccessMode::Enum firstMode,
-        const NWB::Core::ECS::ComponentTypeId secondTypeId,
-        const NWB::Core::ECS::AccessMode::Enum secondMode,
-        Function<void()> update,
-        NWB::Core::CpuTaskOptions options = {}
-    )
-        : NWB::Core::ECS::ISystem(arena)
-        , m_update(Move(update))
-        , m_options(options)
-    {
-        registerAccess(firstTypeId, firstMode);
-        registerAccess(secondTypeId, secondMode);
-    }
-
-
-public:
-    [[nodiscard]] virtual Expected<void, NWB::Core::CpuTaskAdmissionError::Enum> update(NWB::Core::ECS::World& world, f32 delta)override;
-    [[nodiscard]] virtual NWB::Core::CpuTaskOptions taskOptions()const noexcept override{ return m_options; }
-
-
-private:
-    Function<void()> m_update;
-    NWB::Core::CpuTaskOptions m_options;
-};
-
-class RejectingRangeSystem final : public NWB::Core::ECS::ISystem{
-public:
-    explicit RejectingRangeSystem(NWB::Core::Alloc::GlobalArena& arena)
-        : NWB::Core::ECS::ISystem(arena)
-    {
-        writeAccess<PositionComponent>();
-    }
-
-
-public:
-    [[nodiscard]] virtual Expected<void, NWB::Core::CpuTaskAdmissionError::Enum> update(NWB::Core::ECS::World& world, f32 delta)override;
-
-
-public:
-    u32 callbacks = 0u;
-};
 
 struct AddressTrapComponent{
 public:
@@ -204,11 +115,11 @@ struct alignas(32) OverAlignedComponent{
 inline constexpr usize s_OverAlignedComponentAlignment = alignof(OverAlignedComponent);
 
 template<usize... Is>
-NWB_INLINE Array<usize, sizeof...(Is)> RegisterPoolSlotTypes(IndexSequence<Is...>)noexcept{
+FOUNDATION_INLINE Array<usize, sizeof...(Is)> RegisterPoolSlotTypes(IndexSequence<Is...>)noexcept{
     return { NWB::Core::ECS::ComponentType<PoolSlotComponent<Is>>()... };
 }
 
-[[nodiscard]] NWB_INLINE Array<usize, 64> RegisterPoolSlotTypes64()noexcept{
+[[nodiscard]] FOUNDATION_INLINE Array<usize, 64> RegisterPoolSlotTypes64()noexcept{
     return RegisterPoolSlotTypes(IndexSequence<
         0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u, 14u, 15u,
         16u, 17u, 18u, 19u, 20u, 21u, 22u, 23u, 24u, 25u, 26u, 27u, 28u, 29u, 30u, 31u,
@@ -314,35 +225,6 @@ public:
     ThrowingMoveMessage& operator=(ThrowingMoveMessage&&) = delete;
 };
 
-template<b8 IsProvider>
-class LifetimeSystem final : public NWB::Core::ECS::ISystem{
-public:
-    LifetimeSystem(NWB::Core::Alloc::GlobalArena& arena, SystemLifetimeState& state)noexcept
-        : NWB::Core::ECS::ISystem(arena)
-        , m_state(state)
-    {
-        if constexpr(IsProvider)
-            m_state.providerAlive = true;
-    }
-    virtual ~LifetimeSystem()noexcept override{
-        if constexpr(IsProvider)
-            m_state.providerAlive = false;
-        else
-            m_state.borrowerObservedProvider = m_state.providerAlive;
-        m_state.destructionOrder[m_state.destructionCount++] = IsProvider ? 1u : 2u;
-    }
-
-
-public:
-    [[nodiscard]] virtual Expected<void, NWB::Core::CpuTaskAdmissionError::Enum> update([[maybe_unused]] NWB::Core::ECS::World& world, [[maybe_unused]] f32 delta)noexcept override{
-        return {};
-    }
-
-
-private:
-    SystemLifetimeState& m_state;
-};
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -358,6 +240,132 @@ private:
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+[arena, system("counting")]
+class CountingSystem{
+    public u32 prepares = 0u;
+    public u32 updates = 0u;
+    public f32 lastDelta = 0.0f;
+
+    public CountingSystem(){
+        this.writeAccess<PositionComponent>();
+    }
+
+    public void prepare(mut World world){
+        ++this.prepares;
+    }
+
+    public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta){
+        ++this.updates;
+        this.lastDelta = delta;
+
+        world.view<PositionComponent>().each(
+            lambda[](in EntityID entityId, mut PositionComponent position) -> void{
+                if(!entityId.valid() && position.x == i32.min)
+                    return;
+                ++position.x;
+            }
+        );
+        return Expected<void, CpuTaskAdmissionError>();
+    }
+}
+
+[arena, system("scheduled")]
+class ScheduledSystem{
+    private Func<void()> m_update;
+    private CpuTaskOptions m_options;
+
+    public ScheduledSystem(in Func<void()> update){
+        this.m_update = update;
+        this.m_options = CpuTaskOptions();
+    }
+
+    public ScheduledSystem(in ComponentTypeId typeId, in AccessMode mode, in Func<void()> update){
+        this.m_update = update;
+        this.m_options = CpuTaskOptions();
+        this.registerAccess(typeId, mode);
+    }
+
+    public ScheduledSystem(in ComponentTypeId typeId, in AccessMode mode, in Func<void()> update, in CpuTaskOptions options){
+        this.m_update = update;
+        this.m_options = options;
+        this.registerAccess(typeId, mode);
+    }
+
+    public ScheduledSystem(
+        in ComponentTypeId firstTypeId,
+        in AccessMode firstMode,
+        in ComponentTypeId secondTypeId,
+        in AccessMode secondMode,
+        in Func<void()> update
+    ){
+        this.m_update = update;
+        this.m_options = CpuTaskOptions();
+        this.registerAccess(firstTypeId, firstMode);
+        this.registerAccess(secondTypeId, secondMode);
+    }
+
+    public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta){
+        this.m_update();
+        return Expected<void, CpuTaskAdmissionError>();
+    }
+
+    public CpuTaskOptions taskOptions()const{
+        return this.m_options;
+    }
+}
+
+[arena, system("rejecting_range")]
+class RejectingRangeSystem{
+    public u32 callbacks = 0u;
+
+    public RejectingRangeSystem(){
+        this.writeAccess<PositionComponent>();
+    }
+
+    public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta){
+        return world.taskScope().parallelFor(
+            cast<usize>(0u),
+            cast<usize>(1u),
+            1u,
+            lambda[mut this](in usize index) -> void{
+                if(index == usize.max)
+                    return;
+                ++this.callbacks;
+            },
+            InvalidTargetTaskOptions()
+        );
+    }
+}
+
+[arena, system("lifetime")]
+class LifetimeSystem{
+    private mut SystemLifetimeState m_state;
+    private b8 m_isProvider;
+
+    public LifetimeSystem(mut SystemLifetimeState state, in b8 isProvider){
+        this.m_state = state;
+        this.m_isProvider = isProvider;
+        if(this.m_isProvider)
+            this.m_state.providerAlive = true;
+    }
+
+    public ~LifetimeSystem(){
+        if(this.m_isProvider){
+            this.m_state.providerAlive = false;
+            this.m_state.destructionOrder[this.m_state.destructionCount] = 1u;
+        }
+        else{
+            this.m_state.borrowerObservedProvider = this.m_state.providerAlive;
+            this.m_state.destructionOrder[this.m_state.destructionCount] = 2u;
+        }
+        ++this.m_state.destructionCount;
+    }
+
+    public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta){
+        return Expected<void, CpuTaskAdmissionError>();
+    }
+}
 
 b8 HasTryPositionComponent(mut World world, in EntityID entityId){
     return HasTryComponent<PositionComponent>(world, entityId);
@@ -412,7 +420,10 @@ void VerifyEcs_DuplicateSchedulerAddIsStable(){
     mut PositionComponent position = testWorld.world.entity(entity).addComponent<PositionComponent>();
     position.x = 1;
 
-    CountingSystem system(testWorld.arena);
+    CountingSystem system = CountingSystem();
+    EXPECT_EQ(CountingSystem::SystemTypeName(), Name("counting"));
+    EXPECT_EQ(CountingSystem::s_SystemTypeName, Name("counting"));
+    EXPECT_EQ(system.systemType(), Name("counting"));
     SystemScheduler scheduler(testWorld.arena);
     scheduler.addSystem(system);
     scheduler.addSystem(system);
@@ -456,13 +467,11 @@ void VerifyEcs_SystemDependenciesPreserveRegistrationOrderAcrossComponents(){
     const ComponentTypeId velocityType = ComponentType<VelocityComponent>();
 
     ScheduledSystem writer(
-        testWorld.arena,
         positionType,
         AccessMode::Write,
         lambda[mut position]() -> void{ position = 17; }
     );
     ScheduledSystem transfer(
-        testWorld.arena,
         positionType,
         AccessMode::Read,
         velocityType,
@@ -470,7 +479,6 @@ void VerifyEcs_SystemDependenciesPreserveRegistrationOrderAcrossComponents(){
         lambda[mut position, mut velocity]() -> void{ velocity = position + 1; }
     );
     ScheduledSystem reader(
-        testWorld.arena,
         velocityType,
         AccessMode::Read,
         lambda[mut velocity, mut observed]() -> void{ observed = velocity; }
@@ -507,13 +515,11 @@ void VerifyEcs_SystemDependentsProceedWithoutWaitingForUnrelatedWork(){
     i32 value = 0;
 
     ScheduledSystem writer(
-        arena,
         positionType,
         AccessMode::Write,
         lambda[mut value]() -> void{ value = 5; }
     );
     ScheduledSystem independent(
-        arena,
         lambda[mut dependentCompleted, mut independentObservedCompletion]() -> void{
             const Timer begin = TimerNow();
             while(!dependentCompleted.load(MemoryOrder::acquire) && DurationInMS<u64>(TimerNow(), begin) < s_EcsTestSystemCompletionTimeoutMS)
@@ -522,7 +528,6 @@ void VerifyEcs_SystemDependentsProceedWithoutWaitingForUnrelatedWork(){
         }
     );
     ScheduledSystem dependent(
-        arena,
         positionType,
         AccessMode::Read,
         lambda[mut value, mut dependentCompleted]() -> void{
@@ -552,13 +557,11 @@ void VerifyEcs_MainThreadSystemRespectsWorkerDependencies(){
     i32 value = 0;
 
     ScheduledSystem worker(
-        arena,
         positionType,
         AccessMode::Write,
         lambda[mut value]() -> void{ value = 23; }
     );
     ScheduledSystem caller(
-        arena,
         positionType,
         AccessMode::Write,
         lambda[mut executedOnCaller, mut value]() -> void{
@@ -569,7 +572,6 @@ void VerifyEcs_MainThreadSystemRespectsWorkerDependencies(){
         MainThreadTaskOptions()
     );
     ScheduledSystem consumer(
-        arena,
         positionType,
         AccessMode::Read,
         lambda[mut value]() -> void{ EXPECT_EQ(value, 29); }
@@ -596,7 +598,6 @@ void VerifyEcs_DependentSystemObservesAllNestedQueryTasks(){
     const ComponentTypeId positionType = ComponentType<PositionComponent>();
 
     ScheduledSystem writer(
-        arena,
         positionType,
         AccessMode::Write,
         lambda[mut world]() -> void{
@@ -613,7 +614,6 @@ void VerifyEcs_DependentSystemObservesAllNestedQueryTasks(){
         }
     );
     ScheduledSystem reader(
-        arena,
         positionType,
         AccessMode::Read,
         lambda[mut world, mut observed]() -> void{
@@ -646,7 +646,6 @@ void VerifyEcs_SystemCompletionIncludesAsynchronousDescendants(){
     Atomic<i32> value(0);
 
     ScheduledSystem writer(
-        arena,
         positionType,
         AccessMode::Write,
         lambda[mut world, mut value]() -> void{
@@ -665,7 +664,6 @@ void VerifyEcs_SystemCompletionIncludesAsynchronousDescendants(){
         }
     );
     ScheduledSystem reader(
-        arena,
         positionType,
         AccessMode::Read,
         lambda[mut value, mut observed]() -> void{
@@ -1142,8 +1140,8 @@ void VerifyEcs_FailedWorldTaskJoinStillRetiresBorrowingSystemsInOrder(){
     native(mut state){
         const auto failDuringWorldWait = [&](){
             EcsTestWorld testWorld;
-            testWorld.world.addSystem<LifetimeSystem<true>>(state);
-            testWorld.world.addSystem<LifetimeSystem<false>>(state);
+            testWorld.world.addSystem<LifetimeSystem>(state, true);
+            testWorld.world.addSystem<LifetimeSystem>(state, false);
             const auto admitted = testWorld.world.taskScope().submit([](){ throw static_cast<i32>(-83); });
             ASSERT_TRUE(admitted);
         };
@@ -1161,8 +1159,8 @@ void VerifyEcs_WorldClearAndDestructionRetireBorrowersBeforeEarlierSystems(){
         SystemLifetimeState state = SystemLifetimeState();
         {
             EcsTestWorld testWorld = EcsTestWorld();
-            testWorld.world.addSystem<LifetimeSystem<true>>(state);
-            testWorld.world.addSystem<LifetimeSystem<false>>(state);
+            testWorld.world.addSystem<LifetimeSystem>(state, true);
+            testWorld.world.addSystem<LifetimeSystem>(state, false);
             if(round == 0u)
                 testWorld.world.clear();
         }
@@ -1192,31 +1190,6 @@ namespace __hidden_ecs_tests{
 
 
 thread_local b8 s_EcsCallerThread = false;
-
-void CountingSystem::prepare([[maybe_unused]] NWB::Core::ECS::World& world)noexcept{
-    ++prepares;
-}
-
-Expected<void, NWB::Core::CpuTaskAdmissionError::Enum> CountingSystem::update(NWB::Core::ECS::World& world, const f32 delta)noexcept{
-    ++updates;
-    lastDelta = delta;
-
-    world.view<PositionComponent>().each([](NWB::Core::ECS::EntityID, PositionComponent& position)noexcept{
-        ++position.x;
-    });
-    return {};
-}
-
-Expected<void, NWB::Core::CpuTaskAdmissionError::Enum> ScheduledSystem::update([[maybe_unused]] NWB::Core::ECS::World& world, [[maybe_unused]] const f32 delta){
-    m_update();
-    return {};
-}
-
-Expected<void, NWB::Core::CpuTaskAdmissionError::Enum> RejectingRangeSystem::update(NWB::Core::ECS::World& world, [[maybe_unused]] const f32 delta){
-    NWB::Core::CpuTaskOptions options;
-    options.target = static_cast<NWB::Core::CpuTaskTarget::Enum>(NWB::Core::CpuTaskTarget::MainThread + 1u);
-    return world.taskScope().parallelFor(0u, 1u, 1u, [this](usize)noexcept{ ++callbacks; }, options);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

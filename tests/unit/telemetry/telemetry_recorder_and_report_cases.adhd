@@ -238,7 +238,7 @@ StringView RecorderReport_SeedAliasedText(in StringView text, mut TelemetryBytes
         payload.clear();
         payload.reserve(512u);
         payload.resize(text.size());
-        NWB_MEMCPY(payload.data(), payload.size(), text.data(), text.size());
+        FOUNDATION_MEMCPY(payload.data(), payload.size(), text.data(), text.size());
         aliased = AStringView(reinterpret_cast<const char*>(payload.data()), payload.size());
     }
     return aliased;
@@ -764,7 +764,7 @@ void VerifyTelemetry_EventCodecPreservesAliasedPayloadAcrossCapacityGrowthAndSub
                 event.header.kind = EventKind::PerfFrame;
                 event.header.payloadBytes = sizeof(s_Expected);
                 event.payload.resize(prefix + sizeof(s_Expected));
-                NWB_MEMCPY(event.payload.data() + prefix, sizeof(s_Expected), s_Expected.data(), sizeof(s_Expected));
+                FOUNDATION_MEMCPY(event.payload.data() + prefix, sizeof(s_Expected), s_Expected.data(), sizeof(s_Expected));
                 if(spareCapacity)
                     event.payload.reserve(event.payload.size() + s_EncodedEventHeaderByteSize);
                 if(prefix == 0u){
@@ -778,7 +778,7 @@ void VerifyTelemetry_EventCodecPreservesAliasedPayloadAcrossCapacityGrowthAndSub
                 const auto decoded = DecodeEvent(testArena.arena, event.payload.data(), event.payload.size());
                 ASSERT_TRUE(decoded.has_value());
                 ASSERT_EQ(decoded.value().event.payload.size(), sizeof(s_Expected));
-                EXPECT_EQ(NWB_MEMCMP(decoded.value().event.payload.data(), s_Expected.data(), sizeof(s_Expected)), 0);
+                EXPECT_EQ(FOUNDATION_MEMCMP(decoded.value().event.payload.data(), s_Expected.data(), sizeof(s_Expected)), 0);
             }
         }
     }
@@ -817,7 +817,7 @@ void VerifyTelemetry_EventStreamCanDecodeBytesBorrowedFromDestinationRecorder(){
     native(mut testArena, in second, in encoded){
         TelemetryBytes wrapped(testArena.arena);
         wrapped.resize(encoded.size() + 3u);
-        NWB_MEMCPY(wrapped.data() + 3u, encoded.size(), encoded.data(), encoded.size());
+        FOUNDATION_MEMCPY(wrapped.data() + 3u, encoded.size(), encoded.data(), encoded.size());
         for(const b8 captureEnabled : { false, true }){
             ScopedTestTrace trace(captureEnabled);
             TelemetryRecorder destination(testArena.arena);
@@ -900,9 +900,9 @@ void VerifyTelemetry_EventCodecRejectsNonCurrentVersionsAndRecovers(){
             EXPECT_EQ(recorder.eventCount(), 0u);
 
             EncodedEventHeader encodedHeader;
-            NWB_MEMCPY(&encodedHeader, sizeof(encodedHeader), current.data(), sizeof(encodedHeader));
+            FOUNDATION_MEMCPY(&encodedHeader, sizeof(encodedHeader), current.data(), sizeof(encodedHeader));
             encodedHeader.version = version;
-            NWB_MEMCPY(encoded.data(), encoded.size(), &encodedHeader, sizeof(encodedHeader));
+            FOUNDATION_MEMCPY(encoded.data(), encoded.size(), &encodedHeader, sizeof(encodedHeader));
             auto decoded = DecodeEvent(testArena.arena, encoded.data(), encoded.size());
             ASSERT_FALSE(decoded.has_value());
             EXPECT_EQ(decoded.error().status, DecodeStatus::InvalidHeader);
@@ -1009,7 +1009,7 @@ void VerifyTelemetry_RecorderAcceptsConcurrentRecords(){
         for(u32 threadIndex = 0u; threadIndex < kThreads; ++threadIndex){
             threads[threadIndex] = Thread([&recorder, threadIndex](){
                 for(u32 eventIndex = 0u; eventIndex < kEventsPerThread; ++eventIndex){
-                    if(!RecordTextLog(recorder, LogType::Info, NWB_TEXT("concurrent telemetry record"), eventIndex, threadIndex))
+                    if(!RecordTextLog(recorder, LogType::Info, FOUNDATION_TEXT("concurrent telemetry record"), eventIndex, threadIndex))
                         return;
                 }
             });
@@ -1075,7 +1075,7 @@ void VerifyTelemetry_RecorderBuilderCanClearAndReenterWhileItsPayloadIsLeased(){
         EXPECT_NE(nested->payload.data(), outer->payload.data());
         ASSERT_EQ(nested->payload.size(), 128u);
         ASSERT_EQ(outer->payload.size(), 128u);
-        EXPECT_EQ(NWB_MEMCMP(nested->payload.data(), outer->payload.data(), 128u), 0);
+        EXPECT_EQ(FOUNDATION_MEMCMP(nested->payload.data(), outer->payload.data(), 128u), 0);
     }
 }
 
@@ -1185,7 +1185,7 @@ void VerifyTelemetry_RecorderActiveEventAliasesRemainStableAcrossStorageGrowth()
             const auto* event = recorder.view().eventAt(index);
             ASSERT_NE(event, nullptr);
             ASSERT_EQ(event->payload.size(), sizeof(bytes));
-            EXPECT_EQ(NWB_MEMCMP(event->payload.data(), bytes.data(), sizeof(bytes)), 0);
+            EXPECT_EQ(FOUNDATION_MEMCMP(event->payload.data(), bytes.data(), sizeof(bytes)), 0);
         }
     }
 }
@@ -1635,8 +1635,8 @@ void VerifyTelemetry_TextLogPayloadPreservesUnicodeAndEmbeddedNullBytes(){
     b8 built = false;
     native(mut testArena, mut payload, mut built){
         constexpr TStringView s_Message(
-            NWB_TEXT("A\u00e9\ud55c\U0001f642\0Z"),
-            sizeof(NWB_TEXT("A\u00e9\ud55c\U0001f642\0Z")) / sizeof(tchar) - 1u
+            FOUNDATION_TEXT("A\u00e9\ud55c\U0001f642\0Z"),
+            sizeof(FOUNDATION_TEXT("A\u00e9\ud55c\U0001f642\0Z")) / sizeof(tchar) - 1u
         );
         built = BuildTextLogPayload(LogType::Warning, s_Message, testArena.scratchArena, payload);
     }
@@ -1663,7 +1663,7 @@ void VerifyTelemetry_TextLogPayloadRetainsPlatformInvalidUnicodeConversion(){
     Array<u8, 3> expected = Array<u8, 3>();
     b8 built = false;
     native(mut testArena, mut payload, mut expected, mut built){
-#if defined(NWB_UNICODE)
+#if defined(FOUNDATION_UNICODE)
 #if WCHAR_MAX <= 0xffffu
         constexpr Array<tchar, 3> s_Message = { static_cast<tchar>(0xd800u), static_cast<tchar>('X'), static_cast<tchar>(0xdc00u) };
 #else
@@ -1686,11 +1686,11 @@ void VerifyTelemetry_TextLogPayloadPreservesAliasedInputBeforeHeaderWrite(){
     TelemetryBytes payload = TelemetryBytes(testArena.arena);
     b8 built = false;
     native(mut testArena, mut payload, mut built){
-        constexpr TStringView s_Message = NWB_TEXT("captured \ud55c\U0001f642");
+        constexpr TStringView s_Message = FOUNDATION_TEXT("captured \ud55c\U0001f642");
         constexpr usize s_Offset = sizeof(tchar);
         constexpr usize s_MessageBytes = s_Message.size() * sizeof(tchar);
         payload.resize(s_Offset + s_MessageBytes);
-        NWB_MEMCPY(payload.data() + s_Offset, s_MessageBytes, s_Message.data(), s_MessageBytes);
+        FOUNDATION_MEMCPY(payload.data() + s_Offset, s_MessageBytes, s_Message.data(), s_MessageBytes);
         const TStringView aliased(reinterpret_cast<const tchar*>(payload.data() + s_Offset), s_Message.size());
         built = BuildTextLogPayload(LogType::Error, aliased, testArena.scratchArena, payload);
     }

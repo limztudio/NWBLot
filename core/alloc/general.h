@@ -38,13 +38,13 @@ public:
 
 
 public:
-    [[nodiscard]] NWB_INLINE void* allocate(usize align, usize size)override{
+    [[nodiscard]] FOUNDATION_INLINE void* allocate(usize align, usize size)override{
         size = Alignment(align, size);
 
         return (align <= 1) ? CoreAlloc(size, &m_memoryStats) : CoreAllocAligned(size, align, &m_memoryStats);
     }
 
-    [[nodiscard]] NWB_INLINE void* reallocate(void* p, usize align, usize size)override{
+    [[nodiscard]] FOUNDATION_INLINE void* reallocate(void* p, usize align, usize size)override{
         size = Alignment(align, size);
 
         if(!p && size == 0u)
@@ -53,7 +53,7 @@ public:
         return (align <= 1) ? CoreRealloc(p, size, &m_memoryStats) : CoreReallocAligned(p, size, align, &m_memoryStats);
     }
 
-    NWB_INLINE void deallocate(void* p, usize align, [[maybe_unused]] usize size)noexcept override{
+    FOUNDATION_INLINE void deallocate(void* p, usize align, [[maybe_unused]] usize size)noexcept override{
         if(align <= 1)
             CoreFree(p, &m_memoryStats);
         else

@@ -344,7 +344,7 @@ b8 RefractionStatisticsReadback::prepareResources(){
     Core::GpuDescriptorRetirementGuard retireDescriptor(heap, *descriptor);
     if(!ECSRenderDetail::PrepareStatisticsReadbackControlAndBuffers<NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE>(
         s_Names,
-        NWB_TEXT("Refraction statistics: failed to allocate readback control"),
+        FOUNDATION_TEXT("Refraction statistics: failed to allocate readback control"),
         m_arena,
         m_graphics,
         m_control,
@@ -358,7 +358,7 @@ b8 RefractionStatisticsReadback::prepareResources(){
 }
 
 void RefractionStatisticsReadback::pollCompleted(){
-    ECSRenderDetail::PollCompletedStatisticsReadback<NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE>(m_buffers, NWB_TEXT("Refraction statistics: failed to map a completed readback"), m_control, m_graphics);
+    ECSRenderDetail::PollCompletedStatisticsReadback<NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE>(m_buffers, FOUNDATION_TEXT("Refraction statistics: failed to map a completed readback"), m_control, m_graphics);
 }
 
 RefractionStatisticsReadbackSnapshot RefractionStatisticsReadback::snapshot(const RefractionStatistics& metadata)const noexcept{

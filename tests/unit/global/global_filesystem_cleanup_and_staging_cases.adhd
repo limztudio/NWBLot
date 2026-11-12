@@ -32,7 +32,7 @@ native{
 #include <global/termination.h>
 #include <global/thread.h>
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 #include <unistd.h>
 #endif
 
@@ -148,7 +148,7 @@ void VerifyGlobalFilesystemCleanup_DirectoryAndRootLinksWithTrailingSeparatorsDo
         ASSERT_TRUE(EnsureDirectories(tree));
         ASSERT_TRUE(EnsureDirectories(outside));
         ASSERT_TRUE(WriteTextFile(outside / "payload", "retained"));
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         const auto absoluteOutside = AbsolutePath(outside);
         ASSERT_TRUE(absoluteOutside);
         if(!CreateSymbolicLinkW(link.c_str(), absoluteOutside->c_str(), SYMBOLIC_LINK_FLAG_DIRECTORY | SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE)){
@@ -201,7 +201,7 @@ void VerifyGlobalFilesystemCleanup_RemoveAllIfExistsRemovesDanglingLinkWithoutTo
         const TestPath root(arena.arena, "global_test_artifacts/cleanup_dangling_link");
         ASSERT_TRUE(EnsureEmptyDirectory(root));
         const TestPath link = root / "dangling";
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         if(!CreateSymbolicLinkW(link.c_str(), L"missing", SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE)){
             const DWORD error = GetLastError();
             ASSERT_TRUE(RemoveAllForCleanup(root));
@@ -238,7 +238,7 @@ void VerifyGlobalFilesystemCleanup_DosDeviceDrivePathRemovesItsOwnedTree(){
     b8 repeatedDeviceRemove = false;
 
     native(mut windowsSupported, mut removedDevice, mut existsAfter, mut repeatedDeviceRemove){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         windowsSupported = true;
         using TestPath = ::Path<NWB::Core::Alloc::GlobalArena>;
         NWB::Tests::TestArena<> arena;
@@ -276,7 +276,7 @@ void VerifyGlobalFilesystemCleanup_SharingViolationIsReturnedAndCleanupCanBeRetr
     b8 retryAfterCloseSucceeded = false;
 
     native(mut windowsSupported, mut blockedCleanupFailed, mut matchedSharingViolation, mut retryAfterCloseSucceeded){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         windowsSupported = true;
         using TestPath = ::Path<NWB::Core::Alloc::GlobalArena>;
         NWB::Tests::TestArena<> arena;
@@ -317,7 +317,7 @@ void VerifyGlobalFilesystemCleanup_ParentLinkLoopReturnsItsNativeErrorWithoutRem
     b8 removedRoot = false;
 
     native(mut posixSupported, mut loopCleanupFailed, mut matchedLoopError, mut readRetainedOk, mut retainedText, mut removedRoot){
-#if !defined(NWB_PLATFORM_WINDOWS)
+#if !defined(FOUNDATION_PLATFORM_WINDOWS)
         posixSupported = true;
         using TestPath = ::Path<NWB::Core::Alloc::GlobalArena>;
         using TestString = NWB::Tests::TestAString;
@@ -355,7 +355,7 @@ void VerifyGlobalFilesystemCleanup_RootAndChildrenBeyondPathMaxUseRelativeDescri
     b8 removedRoot = false;
 
     native(mut posixSupported, mut deepPathSize, mut hostPathMax, mut removedDeep, mut removedRoot){
-#if !defined(NWB_PLATFORM_WINDOWS)
+#if !defined(FOUNDATION_PLATFORM_WINDOWS)
         posixSupported = true;
         hostPathMax = static_cast<usize>(PATH_MAX);
         using TestPath = ::Path<NWB::Core::Alloc::GlobalArena>;
@@ -672,7 +672,7 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 TEST(GlobalFilesystemCleanup, DosDeviceDrivePathRemovesItsOwnedTree){
     VerifyGlobalFilesystemCleanup_DosDeviceDrivePathRemovesItsOwnedTree();
 }

@@ -18,7 +18,7 @@ type JointIndexMap = HashMap<Name, u32>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[asset("skeleton")]
+[arena, asset("skeleton")]
 class Skeleton{
     private JointVector m_joints;
     private JointIndexMap m_jointIndices;

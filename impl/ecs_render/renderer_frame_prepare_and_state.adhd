@@ -82,10 +82,11 @@ static constexpr Array<Name, 2> s_DeferredTaskTimingFeedbackScopes = { RendererG
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererSystem::RendererSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, RendererShaderPathResolveCallback shaderPathResolver)
-    : Core::ECS::ISystem(arena)
+RendererSystem::RendererSystem(::ArenaBase& __adhd_mother_arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, const RendererShaderPathResolveCallback& shaderPathResolver)noexcept
+    : Core::ECS::ISystem(__adhd_mother_arena)
     , Core::IRenderPass(graphics)
-    , m_pipeline(MakeNotNullUnique(Core::MakeGlobalUnique<RendererFramePipeline>(arena, arena, world, graphics, assetManager, Move(shaderPathResolver))))
+    , __adhd_arena(::MakeNotNull(&__adhd_mother_arena))
+    , m_pipeline(MakeNotNullUnique(Core::MakeGlobalUnique<RendererFramePipeline>(static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena), static_cast<Core::Alloc::GlobalArena&>(__adhd_mother_arena), world, graphics, assetManager, shaderPathResolver)))
 {
     readAccess<NWB::Impl::Scene::ActiveCameraComponent>();
     readAccess<NWB::Impl::Scene::TransformComponent>();
@@ -100,11 +101,11 @@ RendererSystem::RendererSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World
 
 RendererSystem::~RendererSystem()noexcept = default;
 
-b8 RendererSystem::validateResources(const u32 width, const u32 height, const u32 sampleCount){
+b8 RendererSystem::validateResources(const u32 width, const u32 height, const u32 sampleCount)noexcept{
     return m_pipeline->validateResources(width, height, sampleCount);
 }
 
-void RendererSystem::invalidateResources(){
+void RendererSystem::invalidateResources()noexcept{
     m_pipeline->invalidateResources();
 }
 
@@ -113,15 +114,15 @@ Expected<void, Core::CpuTaskAdmissionError::Enum> RendererSystem::update(Core::E
     return {};
 }
 
-b8 RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
+b8 RendererSystem::prepareResources(Core::Framebuffer* framebuffer)noexcept{
     return m_pipeline->prepareResources(framebuffer);
 }
 
-void RendererSystem::render(Core::Framebuffer* framebuffer){
+void RendererSystem::render(Core::Framebuffer* framebuffer)noexcept{
     m_pipeline->render(framebuffer);
 }
 
-b8 RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder){
+b8 RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder)noexcept{
     return m_pipeline->appendFrameGraph(builder);
 }
 
@@ -225,7 +226,7 @@ RendererFramePipeline::RendererFramePipeline(Core::Alloc::GlobalArena& arena, Co
     , m_deferredLightingSubmissionTransaction(arena)
 {
     if(!RegisterBuiltInCsgShapeTypes(m_csgShapeRegistry))
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register built-in CSG shape types"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register built-in CSG shape types"));
 
     m_deferredTaskTimingFeedback.activate();
 }
@@ -248,7 +249,7 @@ b8 RendererFramePipeline::validateResources(const u32 width, const u32 height, c
         m_shaderSystem.setActiveSceneSubsystems(m_activeSceneSubsystems);
     }
     if(!m_activeSceneSubsystems->hasSubsystem<RendererSubsystem>()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: active scene does not include required subsystem '{}'"), ConvertString(RendererSubsystem::s_AssetTypeText));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: active scene does not include required subsystem '{}'"), ConvertString(RendererSubsystem::s_AssetTypeText));
         return false;
     }
 
@@ -262,7 +263,7 @@ b8 RendererFramePipeline::validateResources(const u32 width, const u32 height, c
     }
 
     if(!RendererGpuTimingScopeReservations{}.prepare(m_graphics))
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU timing scope preparation failed; timing samples may be skipped"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: GPU timing scope preparation failed; timing samples may be skipped"));
 
     DeferredFrameTargets* deferredTargets = m_frameTargets.valid() ? &m_frameTargets : nullptr;
     b8 targetsReady = AreDeferredFrameTargetDimensionsCurrent(deferredTargets != nullptr, deferredTargets ? deferredTargets->width : 0u, deferredTargets ? deferredTargets->height : 0u, deferredTargets ? deferredTargets->surfelResolveFactor : 0u, deferredTargets ? deferredTargets->shadowReceiverFactor : 0u, width, height, surfelResolveFactor, shadowReceiverFactor);
@@ -331,7 +332,7 @@ void RendererFramePipeline::invalidateResources(){
     m_preparedTaskGraphPresentationContributor = nullptr;
     m_preparedTaskGraphOutputLayerContributor = nullptr;
     resetFrameTaskState();
-    NWB_FATAL_ASSERT_MSG(m_deferredLightingRecordedGraph.releaseCommandListCache(), "renderer resource invalidation requires idle command-list caches");
+    FOUNDATION_FATAL_ASSERT_MSG(m_deferredLightingRecordedGraph.releaseCommandListCache(), "renderer resource invalidation requires idle command-list caches");
     resetInvalidatedResourceStateHandoffs();
     resetLaggedLightingHistoryTracking();
     m_frameRenderRecoveryFailed = false;
@@ -364,7 +365,7 @@ b8 RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     const Core::AcquiredPresentationFrame& presentationFrame = m_graphics.acquiredPresentationFrame();
     const Core::FramebufferDesc& presentationFramebufferDesc = framebuffer->getDescription();
     if(!presentationFrame.valid() || presentationFrame.framebuffer.get() != framebuffer || presentationFramebufferDesc.colorAttachments.size() != 1u || presentationFramebufferDesc.colorAttachments[0].texture != presentationFrame.backBuffer.texture.get()){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: presentation preparation did not match the acquired frame; requesting recreation"));
+        NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("RendererSystem: presentation preparation did not match the acquired frame; requesting recreation"));
         m_graphics.requestDeviceRecreation();
         return false;
     }
@@ -456,22 +457,22 @@ b8 RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
         if(contributor->prepareTaskGraphOutputLayer(presentationFrame))
             m_preparedTaskGraphOutputLayerContributor = contributor;
         else if(m_graphics.isDeviceRecreationRequested()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: output layer requested recreation during preparation"));
+            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("RendererSystem: output layer requested recreation during preparation"));
             return false;
         }
         else
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: output layer preparation failed; rendering scene output without its layer"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: output layer preparation failed; rendering scene output without its layer"));
     }
 
     if(Core::IGpuTaskGraphPresentationContributor* const contributor = m_graphics.taskGraphPresentationContributor()){
         if(contributor->prepareTaskGraphPresentation(presentationFrame))
             m_preparedTaskGraphPresentationContributor = contributor;
         else if(m_graphics.isDeviceRecreationRequested()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: presentation contributor requested recreation during preparation"));
+            NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("RendererSystem: presentation contributor requested recreation during preparation"));
             return false;
         }
         else
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: presentation contributor preparation failed; rendering scene output without its overlay"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: presentation contributor preparation failed; rendering scene output without its overlay"));
     }
 
     return true;
@@ -557,7 +558,7 @@ void RendererFramePipeline::resetDeferredTaskGraphRuntime(){
         if(planAccess.valid()){
             const u64 recordingAttemptGeneration = m_deferredLightingRecordedGraph.recordingAttemptGeneration();
             if(recordingAttemptGeneration != 0u && !m_deferredLightingSubmissionTransaction.discardUnaccepted(m_deferredLightingTaskGraph, m_deferredLightingCompiledGraph, recordingAttemptGeneration))
-                NWB_FATAL_ASSERT_MSG(false, "renderer task-graph reset must resolve every unaccepted packet");
+                FOUNDATION_FATAL_ASSERT_MSG(false, "renderer task-graph reset must resolve every unaccepted packet");
             m_deferredLightingSubmissionTransaction.reset(m_deferredLightingCompiledGraph);
             m_deferredLightingRecordedGraph.reset(m_deferredLightingCompiledGraph);
         }

@@ -100,28 +100,28 @@ public:
 
     void invalidateResources()noexcept{ m_deferredCompositeVertexShader.reset(); }
     template<typename TShader, typename SubsystemT>
-        requires(IsBaseOf_V<IShader, TShader> && requires{ TShader::s_Stage; })
+        requires(IsBaseOf_V<IShader, TShader> && Core::ShaderType::IsValid(ShaderAssetTypes::s_StageForShader<TShader>))
     [[nodiscard]] b8 loadShader(const Core::Assets::AssetRef<TShader> SubsystemT::* member, const AStringView variantName, const Name& debugName, Core::ShaderHandle& outShader){
         return loadShader<TShader>(member, variantName, debugName, nullptr, outShader);
     }
     template<typename TShader, typename SubsystemT>
-        requires(IsBaseOf_V<IShader, TShader> && requires{ TShader::s_Stage; })
+        requires(IsBaseOf_V<IShader, TShader> && Core::ShaderType::IsValid(ShaderAssetTypes::s_StageForShader<TShader>))
     [[nodiscard]] b8 loadShader(const Core::Assets::AssetRef<TShader> SubsystemT::* member, const AStringView variantName, const Name& debugName, const Name* archiveStageName, Core::ShaderHandle& outShader){
-        static_assert(Core::ShaderType::IsValid(TShader::s_Stage));
+        static_assert(Core::ShaderType::IsValid(ShaderAssetTypes::s_StageForShader<TShader>));
         const Name resolvedShaderName = resolveSubsystemAsset<SubsystemT>(member);
         if(!resolvedShaderName)
             return false;
         return loadShader<TShader>(resolvedShaderName, variantName, debugName, archiveStageName, outShader);
     }
     template<typename TShader>
-        requires(IsBaseOf_V<IShader, TShader> && requires{ TShader::s_Stage; })
+        requires(IsBaseOf_V<IShader, TShader> && Core::ShaderType::IsValid(ShaderAssetTypes::s_StageForShader<TShader>))
     [[nodiscard]] b8 loadShader(const Name& shaderAssetName, const AStringView variantName, const Name& debugName, Core::ShaderHandle& outShader){
         return loadShader<TShader>(shaderAssetName, variantName, debugName, nullptr, outShader);
     }
     template<typename TShader>
-        requires(IsBaseOf_V<IShader, TShader> && requires{ TShader::s_Stage; })
+        requires(IsBaseOf_V<IShader, TShader> && Core::ShaderType::IsValid(ShaderAssetTypes::s_StageForShader<TShader>))
     [[nodiscard]] b8 loadShader(const Name& shaderAssetName, const AStringView variantName, const Name& debugName, const Name* archiveStageName, Core::ShaderHandle& outShader){
-        static_assert(Core::ShaderType::IsValid(TShader::s_Stage));
+        static_assert(Core::ShaderType::IsValid(ShaderAssetTypes::s_StageForShader<TShader>));
         return ShaderAssetLoader::Load<TShader>(shaderAssetName, variantName, debugName, s_RendererAssetOwnerName, m_graphics, m_assetManager, m_shaderPathResolver, archiveStageName, outShader);
     }
 

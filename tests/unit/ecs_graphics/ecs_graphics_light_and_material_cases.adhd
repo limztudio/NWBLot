@@ -63,7 +63,7 @@ using NWB::Tests::s_TriangleIndices;
 
 inline constexpr Name s_ScratchArena = NWB::Tests::EcsGraphicsCases::s_EcsGraphicsNameTestsEcsGraphicsScratch;
 
-[[nodiscard]] NWB_INLINE SkeletonJointMatrix MakeTranslationJointMatrix(const f32 x, const f32 y, const f32 z)noexcept{
+[[nodiscard]] FOUNDATION_INLINE SkeletonJointMatrix MakeTranslationJointMatrix(const f32 x, const f32 y, const f32 z)noexcept{
     SkeletonJointMatrix joint = ::MatrixIdentity<Float34>();
     joint.rows[0].w = x;
     joint.rows[1].w = y;
@@ -71,25 +71,25 @@ inline constexpr Name s_ScratchArena = NWB::Tests::EcsGraphicsCases::s_EcsGraphi
     return joint;
 }
 
-[[nodiscard]] NWB_INLINE SkeletonJointMatrix MakeNonUniformScaleJointMatrix()noexcept{
+[[nodiscard]] FOUNDATION_INLINE SkeletonJointMatrix MakeNonUniformScaleJointMatrix()noexcept{
     SkeletonJointMatrix joint = ::MatrixIdentity<Float34>();
     joint.rows[0] = Float4(2.0f, 0.0f, 0.0f, 0.0f);
     return joint;
 }
 
-[[nodiscard]] NWB_INLINE SkinInfluence4 MakeSingleJointSkin(const u16 joint)noexcept{
+[[nodiscard]] FOUNDATION_INLINE SkinInfluence4 MakeSingleJointSkin(const u16 joint)noexcept{
     SkinInfluence4 skin{};
     skin.joint[0] = joint;
     skin.weight.x = 1.0f;
     return skin;
 }
 
-NWB_INLINE void AssignSingleJointSkin(const u16 joint, MeshSkinningRuntimeInstance& instance){
+FOUNDATION_INLINE void AssignSingleJointSkin(const u16 joint, MeshSkinningRuntimeInstance& instance){
     instance.skin.assign(instance.restPositions.size(), MakeSingleJointSkin(joint));
     instance.skeletonJointCount = Max(instance.skeletonJointCount, static_cast<u32>(joint) + 1u);
 }
 
-NWB_INLINE void AppendRuntimeVertex(const Float3U& position, const f32 u, MeshSkinningRuntimeInstance& instance){
+FOUNDATION_INLINE void AppendRuntimeVertex(const Float3U& position, const f32 u, MeshSkinningRuntimeInstance& instance){
     instance.restPositions.push_back(position);
     instance.restNormals.push_back(MakeHalf4U(0.0f, 0.0f, 1.0f, 0.0f));
     instance.restTangents.push_back(MakeHalf4U(1.0f, 0.0f, 0.0f, 1.0f));
@@ -97,7 +97,7 @@ NWB_INLINE void AppendRuntimeVertex(const Float3U& position, const f32 u, MeshSk
     instance.colors.push_back(MakeHalf4U(1.0f, 1.0f, 1.0f, 1.0f));
 }
 
-[[nodiscard]] NWB_INLINE MeshSkinningRuntimeInstance MakeTriangleInstance(Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] FOUNDATION_INLINE MeshSkinningRuntimeInstance MakeTriangleInstance(Core::Alloc::ScratchArena& scratchArena){
     MeshSkinningRuntimeInstance instance(NWB::Tests::TestDetail::Arena());
     instance.entity = Core::ECS::EntityID(1u, 0u);
     instance.handle.value = 42u;
@@ -131,18 +131,18 @@ NWB_INLINE void AppendRuntimeVertex(const Float3U& position, const f32 u, MeshSk
         instance.meshletPositionRefDeltas,
         instance.meshletAttributeRefDeltas
     );
-    NWB_FATAL_ASSERT(meshletRefsEncoded);
+    FOUNDATION_FATAL_ASSERT(meshletRefsEncoded);
     instance.meshletPositionRefCount = static_cast<u32>(meshletPositionStreamRefs.size());
     instance.meshletAttributeRefCount = static_cast<u32>(meshletAttributeStreamRefs.size());
 
     return instance;
 }
 
-[[nodiscard]] NWB_INLINE SkeletonJointMatrix MakeIdentityJointMatrix()noexcept{
+[[nodiscard]] FOUNDATION_INLINE SkeletonJointMatrix MakeIdentityJointMatrix()noexcept{
     return MakeTranslationJointMatrix(0.0f, 0.0f, 0.0f);
 }
 
-[[nodiscard]] NWB_INLINE SkeletonPoseComponent MakeTwoJointSkeletonPose(const SkeletonJointMatrix& rootJoint, const SkeletonJointMatrix& childJoint){
+[[nodiscard]] FOUNDATION_INLINE SkeletonPoseComponent MakeTwoJointSkeletonPose(const SkeletonJointMatrix& rootJoint, const SkeletonJointMatrix& childJoint){
     SkeletonPoseComponent pose;
     pose.parentJoints.push_back(s_SkeletonInvalidJointIndex);
     pose.parentJoints.push_back(0u);
@@ -162,7 +162,7 @@ struct PhysicalQueueRuntimeSnapshots{
     Core::GpuTaskGraphPhysicalQueueSubmissionStatistics submission;
 };
 
-[[nodiscard]] NWB_INLINE PhysicalQueueRuntimeSnapshots MakeValidPhysicalQueueRuntimeSnapshots()noexcept{
+[[nodiscard]] FOUNDATION_INLINE PhysicalQueueRuntimeSnapshots MakeValidPhysicalQueueRuntimeSnapshots()noexcept{
     PhysicalQueueRuntimeSnapshots snapshots;
     snapshots.compile.graphGeneration = 11u;
     snapshots.compile.planGeneration = 12u;
@@ -217,7 +217,7 @@ struct PhysicalQueueRuntimeSnapshots{
     return snapshots;
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuTaskGraphRuntimeStatistics MakeValidRuntimeStatistics()noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::GpuTaskGraphRuntimeStatistics MakeValidRuntimeStatistics()noexcept{
     Core::GpuTaskGraphRuntimeStatistics statistics;
     statistics.compile.graphGeneration = 11u;
     statistics.compile.planGeneration = 12u;
@@ -253,7 +253,7 @@ struct PhysicalQueueRuntimeSnapshots{
     return statistics;
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuTaskGraphPacketSubmissionStatistics MakeValidPacketSubmissionStatistics()noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::GpuTaskGraphPacketSubmissionStatistics MakeValidPacketSubmissionStatistics()noexcept{
     return Core::GpuTaskGraphPacketSubmissionStatistics{
         .graphGeneration = 11u,
         .planGeneration = 12u,
@@ -274,19 +274,19 @@ struct PhysicalQueueRuntimeSnapshots{
     };
 }
 
-[[nodiscard]] NWB_INLINE LightSpaceCaptureIdentity MakeCaptureIdentity(const u64 scene, const u64 light, const u64 view, const b8 trusted)noexcept{
+[[nodiscard]] FOUNDATION_INLINE LightSpaceCaptureIdentity MakeCaptureIdentity(const u64 scene, const u64 light, const u64 view, const b8 trusted)noexcept{
     return LightSpaceCaptureIdentity{ scene, light, view, trusted };
 }
 
-[[nodiscard]] NWB_INLINE LightSpaceLightRequest MakeLightRequest(const u32 lightIndex = 0u, const u32 shadowSlot = 0u, const Scene::LightType::Enum type = Scene::LightType::Directional, const b8 castsShadows = true)noexcept{
+[[nodiscard]] FOUNDATION_INLINE LightSpaceLightRequest MakeLightRequest(const u32 lightIndex = 0u, const u32 shadowSlot = 0u, const Scene::LightType::Enum type = Scene::LightType::Directional, const b8 castsShadows = true)noexcept{
     return LightSpaceLightRequest{ lightIndex, shadowSlot, type, castsShadows };
 }
 
-[[nodiscard]] NWB_INLINE LightSpaceShadowStorageCapacity MakeStorageCapacity(const LightSpacePlan& plan)noexcept{
+[[nodiscard]] FOUNDATION_INLINE LightSpaceShadowStorageCapacity MakeStorageCapacity(const LightSpacePlan& plan)noexcept{
     return LightSpaceShadowStorageCapacity{ plan.countByteSize, plan.eventByteSize, plan.viewByteSize, plan.drawArgumentByteSize, plan.textureResolution, plan.viewCount };
 }
 
-[[nodiscard]] NWB_INLINE b8 HasRefractionFramebuffer(const AvboitFrameTargets& targets)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasRefractionFramebuffer(const AvboitFrameTargets& targets)noexcept{
     return targets.refractionFramebuffer != nullptr;
 }
 
@@ -325,7 +325,7 @@ struct MaterialPipelineCacheContext{
     Tests::TestArena<EcsGraphicsSuiteDetail::ComputeEmulationOutputTag> testArena;
     CsgShapeRegistry registry{ testArena.arena };
     PipelineMap pipelines{ 0u, PipelineMap::hasher(), PipelineMap::key_equal(), testArena.arena };
-    Optional<AString<>> lastInclude;
+    Optional<AString<Core::Alloc::GlobalArena>> lastInclude;
 
 
 public:
@@ -447,7 +447,7 @@ public:
     }
 };
 
-[[nodiscard]] NWB_INLINE Expected<Span<const u8>> FindMutableCacheWithInstance(
+[[nodiscard]] FOUNDATION_INLINE Expected<Span<const u8>> FindMutableCacheWithInstance(
     const MaterialInstanceMutableCache& cache,
     const Core::ECS::EntityID entity,
     const MaterialSurfaceInfo& surface,
@@ -456,7 +456,7 @@ public:
     return cache.find(entity, surface, &instance);
 }
 
-[[nodiscard]] NWB_INLINE Expected<Span<const u8>> FindMutableCacheWithoutInstance(
+[[nodiscard]] FOUNDATION_INLINE Expected<Span<const u8>> FindMutableCacheWithoutInstance(
     const MaterialInstanceMutableCache& cache,
     const Core::ECS::EntityID entity,
     const MaterialSurfaceInfo& surface
@@ -464,7 +464,7 @@ public:
     return cache.find(entity, surface, nullptr);
 }
 
-[[nodiscard]] NWB_INLINE Expected<Span<const u8>> PrepareMutableCacheWithInstance(
+[[nodiscard]] FOUNDATION_INLINE Expected<Span<const u8>> PrepareMutableCacheWithInstance(
     MaterialInstanceMutableCache& cache,
     Tests::EcsTestWorld& context,
     const Core::ECS::EntityID entity,
@@ -474,7 +474,7 @@ public:
     return cache.prepare(context.world, entity, surface, &instance);
 }
 
-[[nodiscard]] NWB_INLINE b8 ApplyMaterialInstanceOverridesToPrefix(
+[[nodiscard]] FOUNDATION_INLINE b8 ApplyMaterialInstanceOverridesToPrefix(
     const MaterialInstanceOverrideApplier& applier,
     const u32 entityId,
     const Name materialName,
@@ -518,7 +518,7 @@ public:
             EXPECT_TRUE(key.materialName == material || key.materialName == otherMaterial);
             ASSERT_EQ(range.byteCount, constants.size());
             ASSERT_LE(static_cast<usize>(range.byteOffset) + static_cast<usize>(range.byteCount), uploadBytes.size());
-            EXPECT_EQ(NWB_MEMCMP(uploadBytes.data() + range.byteOffset, constants.data(), constants.size()), 0);
+            EXPECT_EQ(FOUNDATION_MEMCMP(uploadBytes.data() + range.byteOffset, constants.data(), constants.size()), 0);
         }
     }
 };
@@ -583,7 +583,7 @@ public:
     [[nodiscard]] b8 rangeMatchesUpload(const ByteRange& range, const Span<const u8> expected)const noexcept{
         if(static_cast<usize>(range.byteOffset) + expected.size() > uploadBytes.size())
             return false;
-        return NWB_MEMCMP(uploadBytes.data() + range.byteOffset, expected.data(), expected.size()) == 0;
+        return FOUNDATION_MEMCMP(uploadBytes.data() + range.byteOffset, expected.data(), expected.size()) == 0;
     }
 
     void invertUploadPrefix(const usize count)noexcept{
@@ -646,7 +646,7 @@ using Impl::s_SkeletonRigidJointEpsilon;
 using EcsGraphicsLightMaterialDetail::MakeTranslationJointMatrix;
 using EcsGraphicsLightMaterialDetail::MakeNonUniformScaleJointMatrix;
 using EcsGraphicsLightMaterialDetail::MakeTwoJointSkeletonPose;
-NWB_INLINE b8 BuildStoredJointPaletteFromSkeletonPose(const SkeletonPoseComponent& pose, SkeletonPoseScratch& scratch){
+FOUNDATION_INLINE b8 BuildStoredJointPaletteFromSkeletonPose(const SkeletonPoseComponent& pose, SkeletonPoseScratch& scratch){
     return Impl::SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(pose, scratch.resolvedJoints).has_value();
 }
 

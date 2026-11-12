@@ -23,7 +23,7 @@ native{
 #include <global/simd/matrix_decompose.h>
 
 namespace NWB::Tests::Smoke{
-[[nodiscard]] NWB_INLINE AStringView SkinnedCausticProjectName()noexcept{
+[[nodiscard]] FOUNDATION_INLINE AStringView SkinnedCausticProjectName()noexcept{
     return "SkinnedCausticSmokeProject";
 }
 
@@ -31,7 +31,7 @@ inline constexpr f32 s_SkinnedCausticAffineEpsilon = Impl::s_SkeletonAffineEpsil
 inline constexpr f32 s_SkinnedCausticDeterminantEpsilon = Impl::s_SkeletonJointDeterminantEpsilon;
 using ::MatrixIsInvertibleAffine;
 
-[[nodiscard]] NWB_INLINE NotNullUniquePtr<Core::ECS::World> CreateSkinnedCausticWorldOrDie(ProjectRuntimeContext& context){
+[[nodiscard]] FOUNDATION_INLINE NotNullUniquePtr<Core::ECS::World> CreateSkinnedCausticWorldOrDie(ProjectRuntimeContext& context){
     auto world = CreateSmokeSkinnedRenderWorldOrDie(SkinnedCausticProjectName(), SmokeRenderQualitySettings(), context);
     if(ReadSmokeEnvironmentFlag(s_SkinnedCausticCsgTransitionEnvironment)){
         auto& renderer = *MakeNotNull(world->getSystem<Impl::RendererSystem>());
@@ -259,7 +259,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{
-    return NWB_TEXT("NWB Skinned Caustic Smoke");
+    return FOUNDATION_TEXT("NWB Skinned Caustic Smoke");
 }
 
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){

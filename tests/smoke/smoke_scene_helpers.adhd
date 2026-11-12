@@ -43,11 +43,11 @@ using SmokeMeshRef = Core::Assets::AssetRef<Impl::Mesh>;
 using NameTextAscii = NameText<char>;
 using NameTextErrorEnum = NameTextError::Enum;
 
-[[nodiscard]] NWB_INLINE Expected<SmokeMeshRef, NameTextError::Enum> SmokeMeshRefFromText(const AStringView path){
+[[nodiscard]] FOUNDATION_INLINE Expected<SmokeMeshRef, NameTextError::Enum> SmokeMeshRefFromText(const AStringView path){
     return SmokeMeshRef::FromText(path);
 }
 
-[[nodiscard]] NWB_INLINE Expected<SmokeMaterialRef, NameTextError::Enum> SmokeMaterialRefFromText(const AStringView path){
+[[nodiscard]] FOUNDATION_INLINE Expected<SmokeMaterialRef, NameTextError::Enum> SmokeMaterialRefFromText(const AStringView path){
     return SmokeMaterialRef::FromText(path);
 }
 namespace Feature = Core::Feature;
@@ -73,15 +73,15 @@ using Impl::ReflectionStatistics;
 using Impl::RendererSystem;
 using Impl::MeshSystem;
 
-[[nodiscard]] NWB_INLINE Impl::RendererSystem& SmokeRendererSystemRef(Core::ECS::World& world)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Impl::RendererSystem& SmokeRendererSystemRef(Core::ECS::World& world)noexcept{
     return *MakeNotNull(world.getSystem<Impl::RendererSystem>());
 }
 
-[[nodiscard]] NWB_INLINE Impl::MeshSystem& SmokeMeshSystemRef(Core::ECS::World& world)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Impl::MeshSystem& SmokeMeshSystemRef(Core::ECS::World& world)noexcept{
     return *MakeNotNull(world.getSystem<Impl::MeshSystem>());
 }
 
-[[nodiscard]] NWB_INLINE b8 SetSmokeEntityRotation(const Core::ECS::EntityID entity, const Float4& rotation, Core::ECS::World& world)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 SetSmokeEntityRotation(const Core::ECS::EntityID entity, const Float4& rotation, Core::ECS::World& world)noexcept{
     if(auto* const transform = world.tryGetComponent<Impl::Scene::TransformComponent>(entity)){
         transform->rotation = rotation;
         return true;
@@ -89,7 +89,7 @@ using Impl::MeshSystem;
     return false;
 }
 
-[[nodiscard]] NWB_INLINE b8 SetSmokeEntityTransform(const Core::ECS::EntityID entity, const Float4& position, const Float4& rotation, Core::ECS::World& world)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 SetSmokeEntityTransform(const Core::ECS::EntityID entity, const Float4& position, const Float4& rotation, Core::ECS::World& world)noexcept{
     if(auto* const transform = world.tryGetComponent<Impl::Scene::TransformComponent>(entity)){
         transform->position = position;
         transform->rotation = rotation;
@@ -98,7 +98,7 @@ using Impl::MeshSystem;
     return false;
 }
 
-[[nodiscard]] NWB_INLINE b8 SetSmokeEntityPosition(const Core::ECS::EntityID entity, const Float4& position, Core::ECS::World& world)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 SetSmokeEntityPosition(const Core::ECS::EntityID entity, const Float4& position, Core::ECS::World& world)noexcept{
     if(auto* const transform = world.tryGetComponent<Impl::Scene::TransformComponent>(entity)){
         transform->position = position;
         return true;
@@ -106,7 +106,7 @@ using Impl::MeshSystem;
     return false;
 }
 
-[[nodiscard]] NWB_INLINE b8 SetSmokeEntityPositionX(const Core::ECS::EntityID entity, const f32 x, Core::ECS::World& world)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 SetSmokeEntityPositionX(const Core::ECS::EntityID entity, const f32 x, Core::ECS::World& world)noexcept{
     if(auto* const transform = world.tryGetComponent<Impl::Scene::TransformComponent>(entity)){
         transform->position.x = x;
         return true;
@@ -114,7 +114,7 @@ using Impl::MeshSystem;
     return false;
 }
 
-[[nodiscard]] NWB_INLINE b8 SetSmokeEntityPositionZ(const Core::ECS::EntityID entity, const f32 z, Core::ECS::World& world)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 SetSmokeEntityPositionZ(const Core::ECS::EntityID entity, const f32 z, Core::ECS::World& world)noexcept{
     if(auto* const transform = world.tryGetComponent<Impl::Scene::TransformComponent>(entity)){
         transform->position.z = z;
         return true;
@@ -122,7 +122,7 @@ using Impl::MeshSystem;
     return false;
 }
 
-[[nodiscard]] NWB_INLINE b8 SetSmokeEntityScaleX(const Core::ECS::EntityID entity, const f32 scaleX, Core::ECS::World& world)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 SetSmokeEntityScaleX(const Core::ECS::EntityID entity, const f32 scaleX, Core::ECS::World& world)noexcept{
     if(auto* const transform = world.tryGetComponent<Impl::Scene::TransformComponent>(entity)){
         transform->scale.x = scaleX;
         return true;
@@ -130,7 +130,7 @@ using Impl::MeshSystem;
     return false;
 }
 
-[[nodiscard]] NWB_INLINE b8 SetSmokeEntityVisible(const Core::ECS::EntityID entity, const b8 visible, Core::ECS::World& world)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 SetSmokeEntityVisible(const Core::ECS::EntityID entity, const b8 visible, Core::ECS::World& world)noexcept{
     if(auto* const renderer = world.tryGetComponent<Impl::RendererComponent>(entity)){
         renderer->visible = visible;
         return true;
@@ -138,7 +138,7 @@ using Impl::MeshSystem;
     return false;
 }
 
-[[nodiscard]] NWB_INLINE b8 SetSmokeOpticalBoundaryMode(const Core::ECS::EntityID entity, const Impl::OpticalBoundaryMode::Enum mode, Core::ECS::World& world)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 SetSmokeOpticalBoundaryMode(const Core::ECS::EntityID entity, const Impl::OpticalBoundaryMode::Enum mode, Core::ECS::World& world)noexcept{
     if(auto* const renderer = world.tryGetComponent<Impl::RendererComponent>(entity)){
         renderer->opticalBoundaryMode = mode;
         return true;
@@ -146,7 +146,7 @@ using Impl::MeshSystem;
     return false;
 }
 
-[[nodiscard]] NWB_INLINE b8 ConfigureSmokeOpticalBoundary(
+[[nodiscard]] FOUNDATION_INLINE b8 ConfigureSmokeOpticalBoundary(
     const Core::ECS::EntityID entity,
     const Impl::OpticalBoundaryMode::Enum mode,
     const i32 priority,
@@ -160,7 +160,7 @@ using Impl::MeshSystem;
     return false;
 }
 
-[[nodiscard]] NWB_INLINE b8 ConfigureSmokeOpticalVolume(
+[[nodiscard]] FOUNDATION_INLINE b8 ConfigureSmokeOpticalVolume(
     const Core::ECS::EntityID entity,
     const Name& group,
     const i32 priority,
@@ -176,7 +176,7 @@ using Impl::MeshSystem;
     return false;
 }
 
-[[nodiscard]] NWB_INLINE b8 SetSmokeMaterialHalf4(
+[[nodiscard]] FOUNDATION_INLINE b8 SetSmokeMaterialHalf4(
     const Core::ECS::EntityID entity,
     const Name& materialInterface,
     const AStringView parameterPath,
@@ -186,7 +186,7 @@ using Impl::MeshSystem;
     return Impl::SetMaterialMutableHalf4(world, entity, materialInterface, parameterPath, value);
 }
 
-[[nodiscard]] NWB_INLINE b8 SetSmokeSurfaceRoughnessF0(
+[[nodiscard]] FOUNDATION_INLINE b8 SetSmokeSurfaceRoughnessF0(
     const Core::ECS::EntityID entity,
     const Name& materialInterface,
     const AStringView f0Path,
@@ -214,7 +214,7 @@ using Impl::MeshSystem;
     );
 }
 
-[[nodiscard]] NWB_INLINE b8 SetSmokeOpticalMaterialParameters(
+[[nodiscard]] FOUNDATION_INLINE b8 SetSmokeOpticalMaterialParameters(
     const Core::ECS::EntityID entity,
     const Name& materialInterface,
     const f32 ior,
@@ -240,7 +240,7 @@ using Impl::MeshSystem;
     );
 }
 
-[[nodiscard]] NWB_INLINE b8 SetSmokeLightColor(const Core::ECS::EntityID entity, const SIMDVectorSingle color, Core::ECS::World& world)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 SetSmokeLightColor(const Core::ECS::EntityID entity, const SIMDVectorSingle color, Core::ECS::World& world)noexcept{
     if(auto* const light = world.tryGetComponent<Impl::Scene::LightComponent>(entity)){
         light->setColor(color);
         return true;
@@ -248,7 +248,7 @@ using Impl::MeshSystem;
     return false;
 }
 
-[[nodiscard]] NWB_INLINE b8 SetSmokeCameraVerticalFov(const Core::ECS::EntityID entity, const f32 verticalFov, Core::ECS::World& world)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 SetSmokeCameraVerticalFov(const Core::ECS::EntityID entity, const f32 verticalFov, Core::ECS::World& world)noexcept{
     if(auto* const camera = world.tryGetComponent<Impl::Scene::CameraComponent>(entity)){
         camera->setVerticalFovRadians(verticalFov);
         return true;
@@ -256,7 +256,7 @@ using Impl::MeshSystem;
     return false;
 }
 
-[[nodiscard]] NWB_INLINE b8 SetSmokeCameraProjection(const Core::ECS::EntityID entity, const f32 verticalFov, const f32 aspectRatio, Core::ECS::World& world)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 SetSmokeCameraProjection(const Core::ECS::EntityID entity, const f32 verticalFov, const f32 aspectRatio, Core::ECS::World& world)noexcept{
     if(auto* const camera = world.tryGetComponent<Impl::Scene::CameraComponent>(entity)){
         camera->setVerticalFovRadians(verticalFov);
         camera->setAspectRatio(aspectRatio);
@@ -265,7 +265,7 @@ using Impl::MeshSystem;
     return false;
 }
 
-[[nodiscard]] NWB_INLINE b8 SetSmokeCameraNearPlane(const Core::ECS::EntityID entity, const f32 nearPlane, Core::ECS::World& world)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 SetSmokeCameraNearPlane(const Core::ECS::EntityID entity, const f32 nearPlane, Core::ECS::World& world)noexcept{
     if(auto* const camera = world.tryGetComponent<Impl::Scene::CameraComponent>(entity)){
         camera->setNearPlane(nearPlane);
         return true;
@@ -273,7 +273,7 @@ using Impl::MeshSystem;
     return false;
 }
 
-[[nodiscard]] NWB_INLINE b8 TryReadSmokeCameraProjection(
+[[nodiscard]] FOUNDATION_INLINE b8 TryReadSmokeCameraProjection(
     const Core::ECS::EntityID entity,
     Core::ECS::World& world,
     f32& outVerticalFov,
@@ -291,7 +291,7 @@ using Impl::MeshSystem;
     return false;
 }
 
-[[nodiscard]] NWB_INLINE Core::ECS::EntityID CreateSmokePointLight(
+[[nodiscard]] FOUNDATION_INLINE Core::ECS::EntityID CreateSmokePointLight(
     const Float4& position,
     const Float4& color,
     const f32 intensity,
@@ -301,7 +301,7 @@ using Impl::MeshSystem;
     return Impl::Scene::CreatePointLightEntity(world, position, color, intensity, range);
 }
 
-[[nodiscard]] NWB_INLINE b8 RecycleSmokeEntityGenerations(const u32 count, Core::ECS::World& world){
+[[nodiscard]] FOUNDATION_INLINE b8 RecycleSmokeEntityGenerations(const u32 count, Core::ECS::World& world){
     for(u32 generation = 0u; generation < count; ++generation){
         const auto recycled = world.createEntity();
         if(!recycled.id().valid())
@@ -311,11 +311,11 @@ using Impl::MeshSystem;
     return true;
 }
 
-[[nodiscard]] NWB_INLINE u32 SmokeEntityRawId(const Core::ECS::EntityID entity)noexcept{
+[[nodiscard]] FOUNDATION_INLINE u32 SmokeEntityRawId(const Core::ECS::EntityID entity)noexcept{
     return entity.id;
 }
 
-[[nodiscard]] NWB_INLINE Core::ECS::EntityID CreateSmokeDirectionalLight(
+[[nodiscard]] FOUNDATION_INLINE Core::ECS::EntityID CreateSmokeDirectionalLight(
     const f32 pitch,
     const f32 yaw,
     const f32 roll,
@@ -326,7 +326,7 @@ using Impl::MeshSystem;
     return Impl::Scene::CreateDirectionalLightEntity(world, pitch, yaw, roll, color, intensity);
 }
 
-[[nodiscard]] NWB_INLINE Core::ECS::EntityID CreateSmokeDirectionalLight(
+[[nodiscard]] FOUNDATION_INLINE Core::ECS::EntityID CreateSmokeDirectionalLight(
     const f32 pitch,
     const f32 yaw,
     const f32 roll,
@@ -341,7 +341,7 @@ using Impl::MeshSystem;
     return light;
 }
 
-[[nodiscard]] NWB_INLINE Core::ECS::EntityID CreateSmokePointLight(
+[[nodiscard]] FOUNDATION_INLINE Core::ECS::EntityID CreateSmokePointLight(
     const Float4& position,
     const Float4& color,
     const f32 intensity,
@@ -676,10 +676,10 @@ SmokeRenderSystems CreateSmokeRenderSystems(mut World world, mut ProjectRuntimeC
     native(mut world, mut context, in baseSettings){
         auto& meshSystem = world.addSystem<Impl::MeshSystem>(world);
         auto& rendererSystem = world.addSystem<Impl::RendererSystem>(world, context.graphics, context.assetManager, context.shaderPathResolver);
-        NWB_FATAL_ASSERT_MSG(ApplyCausticQualitySmokeSettings(rendererSystem, baseSettings.caustic), NWB_TEXT("Invalid caustic quality smoke settings"));
-        NWB_FATAL_ASSERT_MSG(ApplySurfelGiQualitySmokeSettings(rendererSystem, baseSettings.surfelGi), NWB_TEXT("Invalid surfel GI quality smoke settings"));
-        NWB_FATAL_ASSERT_MSG(ApplySoftwareShadowSmokeSettings(rendererSystem, baseSettings.softwareShadow), NWB_TEXT("Invalid software shadow smoke settings"));
-        NWB_FATAL_ASSERT_MSG(ApplyShadowQualitySmokeSettings(rendererSystem, baseSettings.shadow), NWB_TEXT("Invalid shadow quality smoke settings"));
+        FOUNDATION_FATAL_ASSERT_MSG(ApplyCausticQualitySmokeSettings(rendererSystem, baseSettings.caustic), FOUNDATION_TEXT("Invalid caustic quality smoke settings"));
+        FOUNDATION_FATAL_ASSERT_MSG(ApplySurfelGiQualitySmokeSettings(rendererSystem, baseSettings.surfelGi), FOUNDATION_TEXT("Invalid surfel GI quality smoke settings"));
+        FOUNDATION_FATAL_ASSERT_MSG(ApplySoftwareShadowSmokeSettings(rendererSystem, baseSettings.softwareShadow), FOUNDATION_TEXT("Invalid software shadow smoke settings"));
+        FOUNDATION_FATAL_ASSERT_MSG(ApplyShadowQualitySmokeSettings(rendererSystem, baseSettings.shadow), FOUNDATION_TEXT("Invalid shadow quality smoke settings"));
         return SmokeRenderSystems{ meshSystem, rendererSystem };
     }
 }

@@ -46,27 +46,27 @@ namespace UiFixtureSupport{
 
 void PopulateBakedFontTables(Span<const u8> bytes, Core::Alloc::GlobalArena& arena, Impl::FontAtlasPayload& payload);
 [[nodiscard]] Expected<Impl::Ui::SharedImageSource> MakeSeededImage(StringView path, u8 seed, u32 width, u32 height, Core::Alloc::GlobalArena& arena);
-[[nodiscard]] NWB_INLINE const Core::Assets::AssetRef<Impl::Texture>& ImageSourceIdentity(const Impl::Ui::SharedImageSource& source)noexcept{ return source->identity(); }
-[[nodiscard]] NWB_INLINE u64 ImageSourceGeneration(const Impl::Ui::SharedImageSource& source)noexcept{ return source->generation(); }
-[[nodiscard]] NWB_INLINE const Impl::Texture& ImageSourceTexture(const Impl::Ui::SharedImageSource& source)noexcept{ return source->texture(); }
-[[nodiscard]] NWB_INLINE const Impl::Ui::GlyphPageBinding& GlyphPageBindingOf(const Impl::Ui::SharedGlyphPage& page)noexcept{ return page->binding(); }
-[[nodiscard]] NWB_INLINE Span<const u8> GlyphPagePixelsOf(const Impl::Ui::SharedGlyphPage& page)noexcept{ return page->pixels(); }
-[[nodiscard]] NWB_INLINE const Impl::Ui::SdfAtlasPageBinding& SdfPageBindingOf(const Impl::Ui::SharedSdfAtlasPage& page)noexcept{ return page->binding(); }
-[[nodiscard]] NWB_INLINE Span<const u8> SdfPagePixelsOf(const Impl::Ui::SharedSdfAtlasPage& page)noexcept{ return page->pixels(); }
-[[nodiscard]] NWB_INLINE Name FontFaceIdentityName(const Impl::Ui::SharedFontFace& face)noexcept{ return face->identity().name(); }
-[[nodiscard]] NWB_INLINE u64 FontFaceGeneration(const Impl::Ui::SharedFontFace& face)noexcept{ return face->generation(); }
-[[nodiscard]] NWB_INLINE b8 FontFaceValid(const Impl::Ui::SharedFontFace& face)noexcept{ return face->valid(); }
-[[nodiscard]] NWB_INLINE b8 FontFaceCoverageInkReliable(const Impl::Ui::SharedFontFace& face)noexcept{ return face->coverageInkReliable(); }
-[[nodiscard]] NWB_INLINE b8 FontFaceHasBakedAtlas(const Impl::Ui::SharedFontFace& face)noexcept{ return static_cast<b8>(face->bakedAtlas()); }
-[[nodiscard]] NWB_INLINE const Impl::Ui::SharedBakedFontAtlas& FontFaceBakedAtlas(const Impl::Ui::SharedFontFace& face)noexcept{ return face->bakedAtlas(); }
-[[nodiscard]] NWB_INLINE u32 FontFaceBakedUnitsPerEm(const Impl::Ui::SharedFontFace& face)noexcept{ return face->bakedAtlas()->unitsPerEm(); }
-[[nodiscard]] NWB_INLINE Impl::FontAtlasGlyph FontFaceBakedGlyph(const Impl::Ui::SharedFontFace& face, const u32 glyphId)noexcept{ return *face->bakedAtlas()->glyph(glyphId); }
-[[nodiscard]] NWB_INLINE const Impl::Ui::SharedSdfAtlasPage& FontFaceBakedPage(const Impl::Ui::SharedFontFace& face, const u32 group)noexcept{ return face->bakedAtlas()->page(group); }
-[[nodiscard]] NWB_INLINE b8 FontFaceRasterize(const Impl::Ui::SharedFontFace& face, const u32 glyphId, const u32 pixelSize, Impl::Ui::GlyphBitmap& bitmap){ return face->rasterize(glyphId, pixelSize, bitmap); }
-[[nodiscard]] NWB_INLINE Expected<Impl::Ui::Rect> FontFaceRasterBounds(const Impl::Ui::SharedFontFace& face, const u32 glyphId, const u32 pixelSize){ return face->rasterBounds(glyphId, pixelSize); }
-[[nodiscard]] NWB_INLINE b8 HasAtlasGlyph(const Impl::Ui::GlyphAtlas& atlas, const Impl::Ui::SharedFontFace& face, const u32 glyphId, const u32 size)noexcept{ return atlas.find(face, glyphId, size) != nullptr; }
-[[nodiscard]] NWB_INLINE usize AtlasGlyphSlotId(const Impl::Ui::GlyphAtlas& atlas, const Impl::Ui::SharedFontFace& face, const u32 glyphId, const u32 size)noexcept{ return reinterpret_cast<usize>(atlas.find(face, glyphId, size)); }
-[[nodiscard]] NWB_INLINE Expected<Impl::Ui::AtlasGlyph> TryFindAtlasGlyph(const Impl::Ui::GlyphAtlas& atlas, const Impl::Ui::SharedFontFace& face, const u32 glyphId, const u32 size)noexcept{
+[[nodiscard]] FOUNDATION_INLINE const Core::Assets::AssetRef<Impl::Texture>& ImageSourceIdentity(const Impl::Ui::SharedImageSource& source)noexcept{ return source->identity(); }
+[[nodiscard]] FOUNDATION_INLINE u64 ImageSourceGeneration(const Impl::Ui::SharedImageSource& source)noexcept{ return source->generation(); }
+[[nodiscard]] FOUNDATION_INLINE const Impl::Texture& ImageSourceTexture(const Impl::Ui::SharedImageSource& source)noexcept{ return source->texture(); }
+[[nodiscard]] FOUNDATION_INLINE const Impl::Ui::GlyphPageBinding& GlyphPageBindingOf(const Impl::Ui::SharedGlyphPage& page)noexcept{ return page->binding(); }
+[[nodiscard]] FOUNDATION_INLINE Span<const u8> GlyphPagePixelsOf(const Impl::Ui::SharedGlyphPage& page)noexcept{ return page->pixels(); }
+[[nodiscard]] FOUNDATION_INLINE const Impl::Ui::SdfAtlasPageBinding& SdfPageBindingOf(const Impl::Ui::SharedSdfAtlasPage& page)noexcept{ return page->binding(); }
+[[nodiscard]] FOUNDATION_INLINE Span<const u8> SdfPagePixelsOf(const Impl::Ui::SharedSdfAtlasPage& page)noexcept{ return page->pixels(); }
+[[nodiscard]] FOUNDATION_INLINE Name FontFaceIdentityName(const Impl::Ui::SharedFontFace& face)noexcept{ return face->identity().name(); }
+[[nodiscard]] FOUNDATION_INLINE u64 FontFaceGeneration(const Impl::Ui::SharedFontFace& face)noexcept{ return face->generation(); }
+[[nodiscard]] FOUNDATION_INLINE b8 FontFaceValid(const Impl::Ui::SharedFontFace& face)noexcept{ return face->valid(); }
+[[nodiscard]] FOUNDATION_INLINE b8 FontFaceCoverageInkReliable(const Impl::Ui::SharedFontFace& face)noexcept{ return face->coverageInkReliable(); }
+[[nodiscard]] FOUNDATION_INLINE b8 FontFaceHasBakedAtlas(const Impl::Ui::SharedFontFace& face)noexcept{ return static_cast<b8>(face->bakedAtlas()); }
+[[nodiscard]] FOUNDATION_INLINE const Impl::Ui::SharedBakedFontAtlas& FontFaceBakedAtlas(const Impl::Ui::SharedFontFace& face)noexcept{ return face->bakedAtlas(); }
+[[nodiscard]] FOUNDATION_INLINE u32 FontFaceBakedUnitsPerEm(const Impl::Ui::SharedFontFace& face)noexcept{ return face->bakedAtlas()->unitsPerEm(); }
+[[nodiscard]] FOUNDATION_INLINE Impl::FontAtlasGlyph FontFaceBakedGlyph(const Impl::Ui::SharedFontFace& face, const u32 glyphId)noexcept{ return *face->bakedAtlas()->glyph(glyphId); }
+[[nodiscard]] FOUNDATION_INLINE const Impl::Ui::SharedSdfAtlasPage& FontFaceBakedPage(const Impl::Ui::SharedFontFace& face, const u32 group)noexcept{ return face->bakedAtlas()->page(group); }
+[[nodiscard]] FOUNDATION_INLINE b8 FontFaceRasterize(const Impl::Ui::SharedFontFace& face, const u32 glyphId, const u32 pixelSize, Impl::Ui::GlyphBitmap& bitmap){ return face->rasterize(glyphId, pixelSize, bitmap); }
+[[nodiscard]] FOUNDATION_INLINE Expected<Impl::Ui::Rect> FontFaceRasterBounds(const Impl::Ui::SharedFontFace& face, const u32 glyphId, const u32 pixelSize){ return face->rasterBounds(glyphId, pixelSize); }
+[[nodiscard]] FOUNDATION_INLINE b8 HasAtlasGlyph(const Impl::Ui::GlyphAtlas& atlas, const Impl::Ui::SharedFontFace& face, const u32 glyphId, const u32 size)noexcept{ return atlas.find(face, glyphId, size) != nullptr; }
+[[nodiscard]] FOUNDATION_INLINE usize AtlasGlyphSlotId(const Impl::Ui::GlyphAtlas& atlas, const Impl::Ui::SharedFontFace& face, const u32 glyphId, const u32 size)noexcept{ return reinterpret_cast<usize>(atlas.find(face, glyphId, size)); }
+[[nodiscard]] FOUNDATION_INLINE Expected<Impl::Ui::AtlasGlyph> TryFindAtlasGlyph(const Impl::Ui::GlyphAtlas& atlas, const Impl::Ui::SharedFontFace& face, const u32 glyphId, const u32 size)noexcept{
     const Impl::Ui::AtlasGlyph* found = atlas.find(face, glyphId, size);
     return found ? Expected<Impl::Ui::AtlasGlyph>(*found) : MakeUnexpected(Failure{});
 }

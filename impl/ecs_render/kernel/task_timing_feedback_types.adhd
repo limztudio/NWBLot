@@ -48,7 +48,7 @@ public:
 
 
 public:
-    [[nodiscard]] NWB_INLINE b8 trackSample(
+    [[nodiscard]] FOUNDATION_INLINE b8 trackSample(
         const Core::GpuTimingSampleAttribution attribution,
         const Name& scopeName,
         const Core::GpuTaskTimingKey& key,
@@ -59,23 +59,23 @@ public:
         return TrackRendererTaskTimingSample(attribution, scopeName, key, expectedQueue, sourceFrameIndex, recordsNonCommittingTimingSample, m_pendingSamples);
     }
 
-    NWB_INLINE void acceptSubmission(const Core::GpuTimingSampleAttribution attribution, const Core::QueueSubmissionToken& token, const b8 feedbackActive)noexcept{
+    FOUNDATION_INLINE void acceptSubmission(const Core::GpuTimingSampleAttribution attribution, const Core::QueueSubmissionToken& token, const b8 feedbackActive)noexcept{
         AcceptRendererTaskTimingSubmission(attribution, token, feedbackActive, true, m_pendingSamples);
     }
 
-    NWB_INLINE void discardRecording(const Core::GpuTimingSampleAttribution attribution)noexcept{
+    FOUNDATION_INLINE void discardRecording(const Core::GpuTimingSampleAttribution attribution)noexcept{
         DiscardRendererTaskTimingRecording(attribution, m_pendingSamples);
     }
 
-    NWB_INLINE void completeSample(const Core::GpuTimingSample& sample, const b8 feedbackActive)noexcept{
+    FOUNDATION_INLINE void completeSample(const Core::GpuTimingSample& sample, const b8 feedbackActive)noexcept{
         CompleteRendererTaskTimingSample(sample, feedbackActive, m_pendingSamples);
     }
 
-    [[nodiscard]] NWB_INLINE RendererTaskTimingFeedbackDrainResult drain(Core::GpuTaskTimingHistoryStore& history, const u16 deviceGeneration){
+    [[nodiscard]] FOUNDATION_INLINE RendererTaskTimingFeedbackDrainResult drain(Core::GpuTaskTimingHistoryStore& history, const u16 deviceGeneration){
         return DrainRendererTaskTimingPendingSamples(history, deviceGeneration, m_pendingSamples);
     }
 
-    NWB_INLINE void reset()noexcept{ m_pendingSamples.clear(); }
+    FOUNDATION_INLINE void reset()noexcept{ m_pendingSamples.clear(); }
 
 
 private:

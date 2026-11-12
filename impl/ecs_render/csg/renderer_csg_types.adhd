@@ -59,7 +59,7 @@ namespace ECSRenderDetail{
     using CutterVector = Vector<CsgCutterGpuData, Core::Alloc::GlobalArena>;
 };
 
-[[nodiscard]] NWB_INLINE Core::Rect ToCoreRect(const CsgWorkRect& rect)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::Rect ToCoreRect(const CsgWorkRect& rect)noexcept{
     return Core::Rect(rect.minX, rect.maxX, rect.minY, rect.maxY);
 }
 

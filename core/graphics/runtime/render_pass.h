@@ -18,6 +18,7 @@ NWB_CORE_BEGIN
 
 
 class GraphicsRuntime;
+using FramebufferPtr = Framebuffer*;
 
 class IRenderPass{
 public:

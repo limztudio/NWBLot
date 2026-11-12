@@ -17,7 +17,7 @@ native{
 
 #include <global/numeric_text.h>
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <excpt.h>
 #pragma push_macro("interface")
 #undef interface
@@ -34,19 +34,19 @@ using UInt64x4 = u64 __attribute__((ext_vector_type(4)));
 using Int64x4 = i64 __attribute__((ext_vector_type(4)));
 using Evaluate = SIMDVectorSingle(*)(SIMDVectorSingle, SIMDVectorSingle)noexcept;
 
-NWB_NOINLINE inline SIMDVectorSingle Reference(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
+FOUNDATION_NOINLINE inline SIMDVectorSingle Reference(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
     return VectorSet(Pow(VectorGetX(x), VectorGetX(y)), Pow(VectorGetY(x), VectorGetY(y)), Pow(VectorGetZ(x), VectorGetZ(y)), Pow(VectorGetW(x), VectorGetW(y)));
 }
 
-NWB_NOINLINE inline SIMDVectorSingle Production(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
+FOUNDATION_NOINLINE inline SIMDVectorSingle Production(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
     return VectorPow(x, y);
 }
 
-NWB_NOINLINE inline SIMDVectorSingle PackedSingle(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
+FOUNDATION_NOINLINE inline SIMDVectorSingle PackedSingle(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
     return VectorExp2(VectorMultiply(VectorLog2(x), y));
 }
 
-NWB_NOINLINE inline SIMDVectorSingle PackedDouble(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
+FOUNDATION_NOINLINE inline SIMDVectorSingle PackedDouble(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
 #pragma STDC FENV_ACCESS ON
     const UInt4 xBits = BitCast<UInt4>(x), yBits = BitCast<UInt4>(y);
     const UInt4 magnitude = xBits & 0x7fffffffu, yMagnitude = yBits & 0x7fffffffu;
@@ -135,7 +135,7 @@ NWB_NOINLINE inline SIMDVectorSingle PackedDouble(const SIMDVectorSingle x, cons
     return BitCast<SIMDVectorSingle>(result);
 }
 
-[[nodiscard]] NWB_INLINE NotNull<Evaluate> SelectEvaluator(const u8 variantCode, const b8 useReference)noexcept{
+[[nodiscard]] FOUNDATION_INLINE NotNull<Evaluate> SelectEvaluator(const u8 variantCode, const b8 useReference)noexcept{
     if(useReference)
         return MakeNotNull<Evaluate>(Reference);
     if(variantCode == 0u)
@@ -145,8 +145,8 @@ NWB_NOINLINE inline SIMDVectorSingle PackedDouble(const SIMDVectorSingle x, cons
     return MakeNotNull<Evaluate>(PackedDouble);
 }
 
-#if defined(NWB_PLATFORM_WINDOWS)
-[[nodiscard]] NWB_INLINE u32 ObserveTrap(const NotNull<Evaluate> evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y){
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
+[[nodiscard]] FOUNDATION_INLINE u32 ObserveTrap(const NotNull<Evaluate> evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y){
     u32 initial{}, control{}, exception{};
     if(_controlfp_s(&initial, 0u, 0u) != 0)
         return 1u;
@@ -165,7 +165,7 @@ NWB_NOINLINE inline SIMDVectorSingle PackedDouble(const SIMDVectorSingle x, cons
     const u32 raisedFlags = _clearfp();
     if(_controlfp_s(&control, initial, _MCW_EM) != 0)
         return 3u;
-    NWB_COUT << "trap exception=0x" << StreamHex << exception << " flags=0x" << raisedFlags << " mask=0x" << (control & _MCW_EM) << StreamDec << '\n';
+    FOUNDATION_COUT << "trap exception=0x" << StreamHex << exception << " flags=0x" << raisedFlags << " mask=0x" << (control & _MCW_EM) << StreamDec << '\n';
     return exception;
 }
 
@@ -181,13 +181,13 @@ struct TrapEdgeObservation{
     friend b8 operator==(const TrapEdgeObservation&, const TrapEdgeObservation&)noexcept = default;
 };
 
-[[nodiscard]] NWB_INLINE Expected<TrapEdgeObservation> ObserveTrapEdge(const NotNull<Evaluate> evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y, const u32 enabled)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Expected<TrapEdgeObservation> ObserveTrapEdge(const NotNull<Evaluate> evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y, const u32 enabled)noexcept{
     u32 initial{}, control{}, exception{}, valueBits{};
     if(_controlfp_s(&initial, 0u, 0u) != 0)
         return MakeUnexpected(Failure{});
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return MakeUnexpected(Failure{});
-#if defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+#if defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
     u64 initialNativeControl{};
     __asm__ __volatile__("mrs %0, fpcr" : "=r"(initialNativeControl));
     const u64 clearNativeStatus = 0u;
@@ -206,7 +206,7 @@ struct TrapEdgeObservation{
     }
     const i32 observedError = errno;
     u64 nativeStatus{}, nativeControl{};
-#if defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+#if defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
     __asm__ __volatile__("mrs %0, fpsr" : "=r"(nativeStatus));
     __asm__ __volatile__("mrs %0, fpcr" : "=r"(nativeControl));
 #endif
@@ -216,15 +216,15 @@ struct TrapEdgeObservation{
     const u32 flags = _clearfp();
     if(_controlfp_s(&control, initial, _MCW_EM) != 0)
         return MakeUnexpected(Failure{});
-#if defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+#if defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
     __asm__ __volatile__("msr fpcr, %0" : : "r"(initialNativeControl));
 #endif
     return TrapEdgeObservation{ exception, flags, observedControl, valueBits, observedError, nativeStatus, nativeControl };
 }
 #endif
 
-[[nodiscard]] NWB_INLINE i32 VerifyTrapsImpl([[maybe_unused]] const NotNull<Evaluate> evaluate){
-#if defined(NWB_PLATFORM_WINDOWS)
+[[nodiscard]] FOUNDATION_INLINE i32 VerifyTrapsImpl([[maybe_unused]] const NotNull<Evaluate> evaluate){
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     alignas(SIMDVectorSingle) const Array<SIMDVectorSingle, 5> x = {
         VectorSet(-1.0f, 1.0f, 1.0f, 1.0f),
         VectorSet(0x1.fffffep127f, 1.0f, 1.0f, 1.0f),
@@ -243,25 +243,25 @@ struct TrapEdgeObservation{
     constexpr Array<u32, 3> s_ReferenceCategories = { EXCEPTION_FLT_INVALID_OPERATION, EXCEPTION_FLT_OVERFLOW, EXCEPTION_FLT_DIVIDE_BY_ZERO };
     b8 delivered = true;
     for(usize index = 0u; index < x.size(); ++index){
-        NWB_COUT << "trap case=" << index << " reference\n";
+        FOUNDATION_COUT << "trap case=" << index << " reference\n";
         const u32 expected = ObserveTrap(MakeNotNull<Evaluate>(Reference), x[index], y[index]);
-        NWB_COUT << "trap case=" << index << " candidate\n";
+        FOUNDATION_COUT << "trap case=" << index << " candidate\n";
         const u32 actual = ObserveTrap(evaluate, x[index], y[index]);
         delivered = delivered && (index < s_ReferenceCategories.size() ? expected == s_ReferenceCategories[index] : (expected == EXCEPTION_FLT_INVALID_OPERATION || expected == EXCEPTION_FLT_OVERFLOW));
         failures += expected != actual;
     }
-    NWB_COUT << "trap differences=" << failures << " distinguishable=" << delivered << '\n';
+    FOUNDATION_COUT << "trap differences=" << failures << " distinguishable=" << delivered << '\n';
     return delivered ? (failures == 0u ? 0 : 1) : 2;
 #else
-    NWB_COUT << "trap qualification unavailable on this platform\n";
+    FOUNDATION_COUT << "trap qualification unavailable on this platform\n";
     return 2;
 #endif
 }
 
-[[nodiscard]] NWB_INLINE i32 VerifyTrapEdgesImpl([[maybe_unused]] const NotNull<Evaluate> evaluate){
-#if defined(NWB_PLATFORM_WINDOWS)
+[[nodiscard]] FOUNDATION_INLINE i32 VerifyTrapEdgesImpl([[maybe_unused]] const NotNull<Evaluate> evaluate){
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     const i32 savedError = errno;
-#if defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+#if defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
     u64 savedNativeStatus{}, savedNativeControl{};
     __asm__ __volatile__("mrs %0, fpsr" : "=r"(savedNativeStatus));
     __asm__ __volatile__("mrs %0, fpcr" : "=r"(savedNativeControl));
@@ -272,14 +272,14 @@ struct TrapEdgeObservation{
     ScopeExit restore([&]()noexcept{
         if(!SetFloatingPointEnvironment(*environment))
             __builtin_trap();
-#if defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+#if defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
         __asm__ __volatile__("msr fpsr, %0" : : "r"(savedNativeStatus));
         __asm__ __volatile__("msr fpcr, %0" : : "r"(savedNativeControl));
 #endif
         errno = savedError;
     });
     constexpr Array<i32, 4> s_Modes = { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
-#if defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+#if defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
     constexpr Array<u32, 2> s_DenormalModes = { _DN_SAVE, _DN_FLUSH };
 #else
     constexpr Array<u32, 1> s_DenormalModes = { _DN_SAVE };
@@ -313,7 +313,7 @@ struct TrapEdgeObservation{
                     const b8 different = *expected != *actual;
                     differences += different;
                     ++cases;
-                    NWB_COUT << "trap_edge DN=" << denormalMode << " rounding=" << mode << " enabled=" << enabled << " case=" << index
+                    FOUNDATION_COUT << "trap_edge DN=" << denormalMode << " rounding=" << mode << " enabled=" << enabled << " case=" << index
                              << " expected=" << expected->code << '/' << expected->flags << '/' << expected->control << '/' << expected->error << '/' << expected->nativeStatus << '/' << expected->nativeControl << '/' << expected->valueBits
                              << " actual=" << actual->code << '/' << actual->flags << '/' << actual->control << '/' << actual->error << '/' << actual->nativeStatus << '/' << actual->nativeControl << '/' << actual->valueBits
                              << " differs=" << different << '\n';
@@ -321,7 +321,7 @@ struct TrapEdgeObservation{
             }
         }
     }
-    NWB_COUT << "trap edge cases=" << cases << " differences=" << differences << " distinguishable=" << delivered << '\n';
+    FOUNDATION_COUT << "trap edge cases=" << cases << " differences=" << differences << " distinguishable=" << delivered << '\n';
     return delivered ? (differences == 0u ? 0 : 1) : 2;
 #else
     return 2;
@@ -330,7 +330,7 @@ struct TrapEdgeObservation{
 
 }
 
-[[nodiscard]] NWB_INLINE b8 ObservePowKernel(
+[[nodiscard]] FOUNDATION_INLINE b8 ObservePowKernel(
     const u8 variantCode,
     const b8 useReference,
     const SIMDVectorSingle x,
@@ -342,11 +342,11 @@ struct TrapEdgeObservation{
     i32& outError
 )noexcept{
 #pragma STDC FENV_ACCESS ON
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
     const u64 clearNativeStatus = 0u;
     __asm__ __volatile__("msr fpsr, %0" : : "r"(clearNativeStatus));
 #endif
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     _clearfp();
 #endif
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
@@ -357,11 +357,11 @@ struct TrapEdgeObservation{
     outError = errno;
     outStandardFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
     u32 mappedStatus = 0u;
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     mappedStatus = _statusfp();
 #endif
     u64 nativeStatus = 0u;
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
     __asm__ __volatile__("mrs %0, fpsr" : "=r"(nativeStatus));
 #endif
     outMappedFlags = mappedStatus;
@@ -371,20 +371,20 @@ struct TrapEdgeObservation{
     return true;
 }
 
-NWB_INLINE void EvaluatePowKernel(const u8 variantCode, const b8 useReference, const SIMDVectorSingle x, const SIMDVectorSingle y, UInt4& outBits)noexcept{
+FOUNDATION_INLINE void EvaluatePowKernel(const u8 variantCode, const b8 useReference, const SIMDVectorSingle x, const SIMDVectorSingle y, UInt4& outBits)noexcept{
     const auto evaluate = PowKernels::SelectEvaluator(variantCode, useReference);
     StoreInt(evaluate.get()(x, y), outBits);
 }
 
-NWB_INLINE void NWB_SIMD_CALL SelectPowSrgbLinearBranch(const SIMDVectorSingle nonlinear, const SIMDVectorSingle linearBranch, const SIMDVectorSingle clamped, const f32 cutoff, UInt4& outBits)noexcept{
+FOUNDATION_INLINE void FOUNDATION_SIMD_CALL SelectPowSrgbLinearBranch(const SIMDVectorSingle nonlinear, const SIMDVectorSingle linearBranch, const SIMDVectorSingle clamped, const f32 cutoff, UInt4& outBits)noexcept{
     StoreInt(VectorSelect(nonlinear, linearBranch, VectorLessOrEqual(clamped, VectorReplicate(cutoff))), outBits);
 }
 
-[[nodiscard]] NWB_INLINE i32 VerifyPowTrapsKernel(const u8 variantCode){
+[[nodiscard]] FOUNDATION_INLINE i32 VerifyPowTrapsKernel(const u8 variantCode){
     return PowKernels::VerifyTrapsImpl(PowKernels::SelectEvaluator(variantCode, false));
 }
 
-[[nodiscard]] NWB_INLINE i32 VerifyPowTrapEdgesKernel(const u8 variantCode){
+[[nodiscard]] FOUNDATION_INLINE i32 VerifyPowTrapEdgesKernel(const u8 variantCode){
     return PowKernels::VerifyTrapEdgesImpl(PowKernels::SelectEvaluator(variantCode, false));
 }
 
@@ -394,7 +394,7 @@ public:
         : m_originalError(errno)
         , m_environment(HoldFloatingPointExceptions())
     {
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
         __asm__ __volatile__("mrs %0, fpsr" : "=r"(m_originalNativeStatus));
 #endif
     }
@@ -404,7 +404,7 @@ public:
             return;
         if(!SetFloatingPointEnvironment(*m_environment))
             __builtin_trap();
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
         __asm__ __volatile__("msr fpsr, %0" : : "r"(m_originalNativeStatus));
 #endif
         errno = m_originalError;
@@ -420,7 +420,7 @@ public:
 
 private:
     i32 m_originalError;
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
     u64 m_originalNativeStatus = 0u;
 #endif
     Expected<FloatingPointEnvironment> m_environment;

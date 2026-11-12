@@ -149,7 +149,7 @@ b8 RendererMeshSystem::prepareObjectGeometryCache(MeshResources& mesh, const Cor
         else
             cache.buffer.reset();
         if(!bufferResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create object geometry cache for mesh '{}'"), ConvertString(mesh.meshName.resolvedText()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create object geometry cache for mesh '{}'"), ConvertString(mesh.meshName.resolvedText()));
             return false;
         }
         cache.indexByteOffset = layout.indexByteOffset;
@@ -238,7 +238,7 @@ const Core::BufferHandle& RendererMeshSystem::MeshSourceBuffer(const MeshResourc
     case NWB_MESH_BINDING_MESHLET_LOCAL_VERTEX_REFS: return mesh.meshletLocalVertexRefBuffer;
     case NWB_MESH_BINDING_MESHLET_PRIMITIVE_INDICES: return mesh.meshletPrimitiveIndexBuffer;
     default:
-        NWB_ASSERT(false);
+        FOUNDATION_ASSERT(false);
         return mesh.positionBuffer;
     }
 }
@@ -263,7 +263,7 @@ b8 RendererMeshSystem::createMeshViewBuffer(){
     ;
     auto meshViewBufferResult = m_graphics.createBuffer(meshViewBufferDesc);
     if(!meshViewBufferResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create mesh view buffer"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create mesh view buffer"));
         return false;
     }
     Core::BufferHandle meshViewBuffer = Move(*meshViewBufferResult);
@@ -285,7 +285,7 @@ Expected<Float44> RendererMeshSystem::snapshotAcceptedMeshViewWorldToClip()const
 }
 
 MeshViewBufferUpload RendererMeshSystem::prepareMeshViewBufferUpload(const f32 fallbackAspectRatio)const noexcept{
-    NWB_ASSERT(m_meshState.m_meshViewBuffer);
+    FOUNDATION_ASSERT(m_meshState.m_meshViewBuffer);
 
     MeshViewBufferUpload upload;
     upload.viewState = ECSRenderDetail::ResolveMeshViewState(fallbackAspectRatio, m_world);

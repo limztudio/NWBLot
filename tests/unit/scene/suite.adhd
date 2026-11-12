@@ -57,22 +57,22 @@ using namespace Core::Assets;
 using namespace Impl;
 
 template<typename CodecT>
-[[nodiscard]] NWB_INLINE b8 RegisterTestCodec(AssetRegistry& registry){
+[[nodiscard]] FOUNDATION_INLINE b8 RegisterTestCodec(AssetRegistry& registry){
     return registry.registerCodec(MakeUnique<CodecT>());
 }
 
 template<typename SubsystemT>
-[[nodiscard]] NWB_INLINE b8 HasActiveSubsystem(const ActiveSceneSubsystems& active)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasActiveSubsystem(const ActiveSceneSubsystems& active)noexcept{
     return active.findSubsystem<SubsystemT>() != nullptr;
 }
 
 template<typename SubsystemT>
-[[nodiscard]] NWB_INLINE const SubsystemT& RequireActiveSubsystem(const ActiveSceneSubsystems& active)noexcept{
+[[nodiscard]] FOUNDATION_INLINE const SubsystemT& RequireActiveSubsystem(const ActiveSceneSubsystems& active)noexcept{
     return *MakeNotNull(active.findSubsystem<SubsystemT>());
 }
 
 template<typename ComponentT, typename PayloadT>
-[[nodiscard]] NWB_INLINE AssetBytes MakeComponentBinary(const PayloadT& payload, AssetArena& arena){
+[[nodiscard]] FOUNDATION_INLINE AssetBytes MakeComponentBinary(const PayloadT& payload, AssetArena& arena){
     ComponentHeaderBinary header;
     header.componentTypeHash = ComponentT::AssetTypeName().hash();
     header.payloadByteCount = sizeof(PayloadT);
@@ -85,7 +85,7 @@ template<typename ComponentT, typename PayloadT>
 }
 
 template<typename SubsystemT>
-NWB_INLINE void PopulateRequiredSubsystemFields(SubsystemT& subsystem){
+FOUNDATION_INLINE void PopulateRequiredSubsystemFields(SubsystemT& subsystem){
     const usize count = subsystem.fieldCount();
     for(usize i = 0u; i < count; ++i){
         const SubsystemFieldValueDescriptor descriptor = subsystem.fieldDescriptor(i);
@@ -99,7 +99,7 @@ NWB_INLINE void PopulateRequiredSubsystemFields(SubsystemT& subsystem){
 }
 
 template<typename SubsystemT>
-[[nodiscard]] NWB_INLINE AssetBytes MakeSubsystemBinary(const SubsystemT& subsystem, AssetArena& arena){
+[[nodiscard]] FOUNDATION_INLINE AssetBytes MakeSubsystemBinary(const SubsystemT& subsystem, AssetArena& arena){
     const usize subsystemCount = subsystem.subsystems.size();
     const usize fieldCount = subsystem.fieldCount();
     u64 totalAssetCount = 0u;

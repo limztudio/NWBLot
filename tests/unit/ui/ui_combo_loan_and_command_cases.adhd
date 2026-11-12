@@ -251,7 +251,7 @@ namespace __hidden_ui_command_owner_tests{
 using namespace NWB;
 using namespace NWB::Impl::Ui;
 
-[[nodiscard]] NWB_INLINE HitTarget MakeEditor()noexcept{
+[[nodiscard]] FOUNDATION_INLINE HitTarget MakeEditor()noexcept{
     HitTarget target;
     target.id = { 1u };
     target.declarationGeneration = 7u;
@@ -263,7 +263,7 @@ using namespace NWB::Impl::Ui;
     return target;
 }
 
-[[nodiscard]] NWB_INLINE HitTarget MakeList(const u64 id = 2u, const f32 x = 0.0f)noexcept{
+[[nodiscard]] FOUNDATION_INLINE HitTarget MakeList(const u64 id = 2u, const f32 x = 0.0f)noexcept{
     HitTarget target;
     target.id = { id };
     target.declarationGeneration = 11u;
@@ -439,9 +439,9 @@ using ::NWB::Impl::Ui::s_InputMaxEvents;
 using ::NWB::Impl::Ui::s_InputMaxSources;
 using ::NWB::Impl::Ui::s_InputMaxTargets;
 
-[[nodiscard]] NWB_INLINE ComboOptions MakeUiComboLoanDefaultOptions()noexcept{ return ::NWB::UiComboTests::Options(); }
-[[nodiscard]] NWB_INLINE InputCommandEnum MakeUiInvalidInputCommand()noexcept{ return static_cast<InputCommandEnum>(255u); }
-[[nodiscard]] NWB_INLINE InputEvent MakeUiCommandOwnerKeyEvent(const InputEventTypeEnum type, const ::NWB::Core::Key::Enum key, const b8 repeat = false)noexcept{
+[[nodiscard]] FOUNDATION_INLINE ComboOptions MakeUiComboLoanDefaultOptions()noexcept{ return ::NWB::UiComboTests::Options(); }
+[[nodiscard]] FOUNDATION_INLINE InputCommandEnum MakeUiInvalidInputCommand()noexcept{ return static_cast<InputCommandEnum>(255u); }
+[[nodiscard]] FOUNDATION_INLINE InputEvent MakeUiCommandOwnerKeyEvent(const InputEventTypeEnum type, const ::NWB::Core::Key::Enum key, const b8 repeat = false)noexcept{
     return ::UiTestSupport::Key(type, key, repeat);
 }
 };

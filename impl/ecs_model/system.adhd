@@ -66,77 +66,13 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static_assert(IsStandardLayout_V<ModelComponent>, "ModelComponent must stay layout-stable for ECS storage");
-static_assert(IsTriviallyCopyable_V<ModelComponent>, "ModelComponent must stay cheap to move in dense ECS storage");
-static_assert(IsStandardLayout_V<ModelRuntimeComponent>, "ModelRuntimeComponent must stay layout-stable for ECS storage");
-static_assert(IsTriviallyCopyable_V<ModelRuntimeComponent>, "ModelRuntimeComponent must stay cheap to move in dense ECS storage");
-static_assert(IsStandardLayout_V<ModelObjectComponent>, "ModelObjectComponent must stay layout-stable for ECS storage");
-static_assert(IsTriviallyCopyable_V<ModelObjectComponent>, "ModelObjectComponent must stay cheap to move in dense ECS storage");
-static_assert(IsStandardLayout_V<ModelSkeletonComponent>, "ModelSkeletonComponent must stay layout-stable for ECS storage");
-static_assert(IsTriviallyCopyable_V<ModelSkeletonComponent>, "ModelSkeletonComponent must stay cheap to move in dense ECS storage");
-static_assert(IsStandardLayout_V<ModelStaticMeshAttachmentComponent>, "ModelStaticMeshAttachmentComponent must stay layout-stable for ECS storage");
-static_assert(IsTriviallyCopyable_V<ModelStaticMeshAttachmentComponent>, "ModelStaticMeshAttachmentComponent must stay cheap to move in dense ECS storage");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class Material;
 class Model;
 class ModelSkeletonObject;
 class ModelStaticMeshObject;
 class ModelSkinnedMeshObject;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 using ModelObjectRendererCallback = Function<void(Core::ECS::EntityID owner, const Core::Assets::AssetRef<Material>& material, Core::ECS::World& world, Core::ECS::Entity& entity)>;
-
-struct ModelObjectRendererHooks{
-    ModelObjectRendererCallback apply;
-    Span<const Core::ECS::ComponentAccess> accesses;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class ModelSystem final : public Core::ECS::ISystem{
-public:
-    ModelSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::Assets::AssetManager& assetManager, ModelObjectRendererHooks rendererHooks = {});
-    virtual ~ModelSystem()noexcept override = default;
-
-
-public:
-    virtual void prepare([[maybe_unused]] Core::ECS::World& world)override{ syncModelRuntimes(); }
-    [[nodiscard]] virtual Expected<void, Core::CpuTaskAdmissionError::Enum> update(Core::ECS::World& world, f32 delta)override;
-    void syncModelRuntimes();
-
-
-private:
-    void clearInactiveModelRuntimes(Core::Alloc::ScratchArena& scratchArena);
-    void ensureModelRuntime(Core::ECS::EntityID entity, const ModelComponent& component, Core::Alloc::ScratchArena& scratchArena);
-    void clearModelRuntime(Core::ECS::EntityID entity, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] b8 expandModel(Core::ECS::EntityID owner, const Model& model, ModelRuntimeComponent& runtime);
-    [[nodiscard]] b8 spawnSkeletonObject(Core::ECS::EntityID owner, const ModelSkeletonObject& object);
-    [[nodiscard]] b8 spawnStaticMeshObject(Core::ECS::EntityID owner, const ModelStaticMeshObject& object);
-    [[nodiscard]] b8 spawnSkinnedMeshObject(Core::ECS::EntityID owner, const ModelSkinnedMeshObject& object);
-    [[nodiscard]] Core::ECS::Entity createSpawnedObjectEntity(Core::ECS::EntityID owner, Name objectName, const SkeletonJointMatrix& localTransform, ModelObjectKind::Enum kind);
-    [[nodiscard]] Core::ECS::EntityID findSpawnedObject(Core::ECS::EntityID owner, Name objectName)const noexcept;
-    [[nodiscard]] Expected<void, Core::CpuTaskAdmissionError::Enum> updateModelObjectTransforms();
-    void updateStaticMeshAttachments();
-
-
-private:
-    Core::ECS::World& m_world;
-    Core::Assets::AssetManager& m_assetManager;
-    ModelObjectRendererCallback m_applyRenderer;
-    Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena> m_scratchJoints;
-    // Reused across updateStaticMeshAttachments() calls so per-frame updates perform no allocations.
-    Vector<ModelAttachmentJointQuery, Core::Alloc::GlobalArena> m_attachmentJointQueries;
-    Vector<usize, Core::Alloc::GlobalArena> m_attachmentParentOrder;
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -153,6 +89,20 @@ NWB_IMPL_END
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+class ModelObjectRendererHooks{
+    public ModelObjectRendererCallback apply;
+    public Span<ComponentAccess> accesses;
+
+    public ModelObjectRendererHooks(){
+        this.apply = ModelObjectRendererCallback();
+    }
+
+    public ModelObjectRendererHooks(in ModelObjectRendererCallback inApply, in Span<ComponentAccess> inAccesses){
+        this.apply = inApply;
+        this.accesses = inAccesses;
+    }
+}
 
 void ResetModelRuntimeState(mut ModelRuntimeComponent outRuntime){
     outRuntime.model = s_NameNone;
@@ -173,6 +123,61 @@ MatrixSingle ComputeModelJointAttachmentWorldMatrix(
     in MatrixSingle localMatrix
 ){
     return Mul(Mul(parentMatrix, jointMatrix), localMatrix);
+}
+
+[arena, system("model")]
+class ModelSystem{
+    private mut World m_world;
+    private mut AssetManager m_assetManager;
+    private ModelObjectRendererCallback m_applyRenderer;
+    private Vector<SkeletonJointMatrix> m_scratchJoints;
+    // Reused across updateStaticMeshAttachments() calls so per-frame updates perform no allocations.
+    private Vector<ModelAttachmentJointQuery> m_attachmentJointQueries;
+    private Vector<usize> m_attachmentParentOrder;
+
+    public ModelSystem(mut World world, mut AssetManager assetManager){
+        this.m_world = world;
+        this.m_assetManager = assetManager;
+        this.m_applyRenderer = ModelObjectRendererCallback();
+        this.registerDefaultAccesses();
+    }
+
+    public ModelSystem(mut World world, mut AssetManager assetManager, in ModelObjectRendererHooks rendererHooks){
+        this.m_world = world;
+        this.m_assetManager = assetManager;
+        this.m_applyRenderer = rendererHooks.apply;
+        this.registerDefaultAccesses();
+
+        for(usize i = 0u; i < rendererHooks.accesses.size(); ++i)
+            this.registerAccess(rendererHooks.accesses[i].typeId, rendererHooks.accesses[i].mode);
+    }
+
+    public void prepare(mut World world)override{
+        this.syncModelRuntimes();
+    }
+
+    public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta)override{
+        const Expected<void, CpuTaskAdmissionError> transformed = this.updateModelObjectTransforms();
+        if(!transformed.has_value())
+            return MakeUnexpected(transformed.error());
+        this.updateStaticMeshAttachments();
+        return Expected<void, CpuTaskAdmissionError>();
+    }
+
+    public void syncModelRuntimes();
+
+    private void registerDefaultAccesses();
+    private void clearInactiveModelRuntimes(mut ScratchArena scratchArena);
+    private void ensureModelRuntime(in EntityID entity, in ModelComponent component, mut ScratchArena scratchArena);
+    private void clearModelRuntime(in EntityID entity, mut ScratchArena scratchArena);
+    private b8 expandModel(in EntityID owner, in Model model, mut ModelRuntimeComponent runtime);
+    private b8 spawnSkeletonObject(in EntityID owner, in ModelSkeletonObject object);
+    private b8 spawnStaticMeshObject(in EntityID owner, in ModelStaticMeshObject object);
+    private b8 spawnSkinnedMeshObject(in EntityID owner, in ModelSkinnedMeshObject object);
+    private Entity createSpawnedObjectEntity(in EntityID owner, in Name objectName, in MatrixSingle localMatrix, in ModelObjectKind kind);
+    private EntityID findSpawnedObject(in EntityID owner, in Name objectName)const;
+    private Expected<void, CpuTaskAdmissionError> updateModelObjectTransforms();
+    private void updateStaticMeshAttachments();
 }
 
 
@@ -215,7 +220,7 @@ namespace __hidden_model_system{
 
 static constexpr TStringView s_AssetLoadContext = FOUNDATION_TEXT("ModelSystem");
 
-static void ResolveAttachmentJointQueries(const Span<const usize> parentOrder, Core::ECS::World& world, Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena>& jointPalette, Vector<ModelAttachmentJointQuery, Core::Alloc::GlobalArena>& queries){
+static void ResolveAttachmentJointQueries(const Span<const usize> parentOrder, Core::ECS::World& world, Vector<SkeletonJointMatrix, ::ArenaBase>& jointPalette, Vector<ModelAttachmentJointQuery, ::ArenaBase>& queries){
     const usize queryCount = queries.size();
     const Span<const ModelAttachmentJointQuery> constQueries(queries.data(), queryCount);
     usize groupBegin = 0u;
@@ -240,15 +245,7 @@ static void ResolveAttachmentJointQueries(const Span<const usize> parentOrder, C
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ModelSystem::ModelSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::Assets::AssetManager& assetManager, ModelObjectRendererHooks rendererHooks)
-    : Core::ECS::ISystem(arena)
-    , m_world(world)
-    , m_assetManager(assetManager)
-    , m_applyRenderer(Move(rendererHooks.apply))
-    , m_scratchJoints(arena)
-    , m_attachmentJointQueries(arena)
-    , m_attachmentParentOrder(arena)
-{
+void ModelSystem::registerDefaultAccesses()noexcept{
     readAccess<ModelComponent>();
     writeAccess<ModelRuntimeComponent>();
     writeAccess<ModelObjectComponent>();
@@ -258,33 +255,22 @@ ModelSystem::ModelSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& worl
     writeAccess<SkinnedMeshBindingComponent>();
     writeAccess<Scene::TransformComponent>();
     writeAccess<SkeletonPoseComponent>();
-
-    for(const Core::ECS::ComponentAccess& access : rendererHooks.accesses)
-        registerAccess(access.typeId, access.mode);
 }
 
-Expected<void, Core::CpuTaskAdmissionError::Enum> ModelSystem::update([[maybe_unused]] Core::ECS::World& world, [[maybe_unused]] const f32 delta){
-    const auto transformed = updateModelObjectTransforms();
-    if(!transformed)
-        return MakeUnexpected(transformed.error());
-    updateStaticMeshAttachments();
-    return {};
-}
-
-void ModelSystem::syncModelRuntimes(){
+void ModelSystem::syncModelRuntimes()noexcept{
     Core::Alloc::ScratchArena scratchArena(s_ModelSyncRuntimeArena);
     clearInactiveModelRuntimes(scratchArena);
 
-    m_world.view<ModelComponent>().each([&](const Core::ECS::EntityID entity, ModelComponent& component){
+    m_world->view<ModelComponent>().each([&](const Core::ECS::EntityID entity, ModelComponent& component){
         ensureModelRuntime(entity, component, scratchArena);
     });
 }
 
-void ModelSystem::clearInactiveModelRuntimes(Core::Alloc::ScratchArena& scratchArena){
-    const auto objects = m_world.view<ModelObjectComponent>();
-    const auto runtimes = m_world.view<ModelRuntimeComponent>();
+void ModelSystem::clearInactiveModelRuntimes(Core::Alloc::ScratchArena& scratchArena)noexcept{
+    const auto objects = m_world->view<ModelObjectComponent>();
+    const auto runtimes = m_world->view<ModelRuntimeComponent>();
     const auto objectIsInactive = [&](const ModelObjectComponent& object)noexcept{
-        return !m_world.tryGetComponent<ModelRuntimeComponent>(object.owner) || !m_world.tryGetComponent<ModelComponent>(object.owner);
+        return !m_world->tryGetComponent<ModelRuntimeComponent>(object.owner) || !m_world->tryGetComponent<ModelComponent>(object.owner);
     };
     usize inactiveObjectCount = 0u;
     objects.each([&]([[maybe_unused]] const Core::ECS::EntityID entity, const ModelObjectComponent& object)noexcept{
@@ -293,7 +279,7 @@ void ModelSystem::clearInactiveModelRuntimes(Core::Alloc::ScratchArena& scratchA
     });
     usize inactiveRuntimeCount = 0u;
     runtimes.each([&](const Core::ECS::EntityID entity, [[maybe_unused]] const ModelRuntimeComponent& runtime)noexcept{
-        if(!m_world.tryGetComponent<ModelComponent>(entity))
+        if(!m_world->tryGetComponent<ModelComponent>(entity))
             ++inactiveRuntimeCount;
     });
     if(inactiveObjectCount == 0u && inactiveRuntimeCount == 0u)
@@ -307,37 +293,37 @@ void ModelSystem::clearInactiveModelRuntimes(Core::Alloc::ScratchArena& scratchA
                 inactiveEntities.push_back(entity);
         });
         for(const Core::ECS::EntityID entity : inactiveEntities)
-            m_world.destroyEntity(entity);
+            m_world->destroyEntity(entity);
     }
 
     if(inactiveRuntimeCount != 0u){
         // Destroying objects can also remove runtime components, so take a fresh view after that batch completes.
         inactiveEntities.clear();
-        m_world.view<ModelRuntimeComponent>().each([&](const Core::ECS::EntityID entity, [[maybe_unused]] const ModelRuntimeComponent& runtime)noexcept{
-            if(!m_world.tryGetComponent<ModelComponent>(entity))
+        m_world->view<ModelRuntimeComponent>().each([&](const Core::ECS::EntityID entity, [[maybe_unused]] const ModelRuntimeComponent& runtime)noexcept{
+            if(!m_world->tryGetComponent<ModelComponent>(entity))
                 inactiveEntities.push_back(entity);
         });
         for(const Core::ECS::EntityID entity : inactiveEntities)
-            m_world.entity(entity).removeComponent<ModelRuntimeComponent>();
+            m_world->entity(entity).removeComponent<ModelRuntimeComponent>();
     }
 }
 
-void ModelSystem::ensureModelRuntime(const Core::ECS::EntityID entity, const ModelComponent& component, Core::Alloc::ScratchArena& scratchArena){
+void ModelSystem::ensureModelRuntime(const Core::ECS::EntityID entity, const ModelComponent& component, Core::Alloc::ScratchArena& scratchArena)noexcept{
     if(!component.model.valid()){
         clearModelRuntime(entity, scratchArena);
-        m_world.entity(entity).removeComponent<ModelRuntimeComponent>();
+        m_world->entity(entity).removeComponent<ModelRuntimeComponent>();
         return;
     }
 
-    ModelRuntimeComponent* const existing = m_world.tryGetComponent<ModelRuntimeComponent>(entity);
+    ModelRuntimeComponent* const existing = m_world->tryGetComponent<ModelRuntimeComponent>(entity);
     if(existing && existing->model == component.model.name())
         return;
-    auto& runtime = existing ? *existing : m_world.entity(entity).addComponent<ModelRuntimeComponent>();
+    auto& runtime = existing ? *existing : m_world->entity(entity).addComponent<ModelRuntimeComponent>();
 
     clearModelRuntime(entity, scratchArena);
 
     const Name modelName = component.model.name();
-    auto loadedModel = m_assetManager.loadTypedSync<Model>(modelName, __hidden_model_system::s_AssetLoadContext);
+    auto loadedModel = m_assetManager->loadTypedSync<Model>(modelName, __hidden_model_system::s_AssetLoadContext);
     if(!loadedModel){
         ResetModelRuntimeState(runtime);
         return;
@@ -348,8 +334,8 @@ void ModelSystem::ensureModelRuntime(const Core::ECS::EntityID entity, const Mod
         clearModelRuntime(entity, scratchArena);
 }
 
-void ModelSystem::clearModelRuntime(const Core::ECS::EntityID entity, Core::Alloc::ScratchArena& scratchArena){
-    const auto objects = m_world.view<ModelObjectComponent>();
+void ModelSystem::clearModelRuntime(const Core::ECS::EntityID entity, Core::Alloc::ScratchArena& scratchArena)noexcept{
+    const auto objects = m_world->view<ModelObjectComponent>();
     usize ownedCount = 0u;
     objects.each([&]([[maybe_unused]] const Core::ECS::EntityID objectEntity, const ModelObjectComponent& object)noexcept{
         if(object.owner == entity)
@@ -363,14 +349,14 @@ void ModelSystem::clearModelRuntime(const Core::ECS::EntityID entity, Core::Allo
                 ownedEntities.push_back(objectEntity);
         });
         for(const Core::ECS::EntityID objectEntity : ownedEntities)
-            m_world.destroyEntity(objectEntity);
+            m_world->destroyEntity(objectEntity);
     }
 
-    if(auto* runtime = m_world.tryGetComponent<ModelRuntimeComponent>(entity))
+    if(auto* runtime = m_world->tryGetComponent<ModelRuntimeComponent>(entity))
         ResetModelRuntimeState(*runtime);
 }
 
-b8 ModelSystem::expandModel(const Core::ECS::EntityID owner, const Model& model, ModelRuntimeComponent& runtime){
+b8 ModelSystem::expandModel(const Core::ECS::EntityID owner, const Model& model, ModelRuntimeComponent& runtime)noexcept{
     runtime.model = model.virtualPath();
     runtime.objectCount = 0u;
 
@@ -397,15 +383,15 @@ b8 ModelSystem::expandModel(const Core::ECS::EntityID owner, const Model& model,
     return complete;
 }
 
-b8 ModelSystem::spawnSkeletonObject(const Core::ECS::EntityID owner, const ModelSkeletonObject& object){
+b8 ModelSystem::spawnSkeletonObject(const Core::ECS::EntityID owner, const ModelSkeletonObject& object)noexcept{
     const Name skeletonName = object.skeleton.name();
     FOUNDATION_ASSERT(skeletonName);
-    auto skeletonAsset = m_assetManager.loadTypedSync<Skeleton>(skeletonName, __hidden_model_system::s_AssetLoadContext);
+    auto skeletonAsset = m_assetManager->loadTypedSync<Skeleton>(skeletonName, __hidden_model_system::s_AssetLoadContext);
     if(!skeletonAsset)
         return false;
     const Skeleton& skeleton = **skeletonAsset;
 
-    Core::ECS::Entity entity = createSpawnedObjectEntity(owner, object.name, object.transform, ModelObjectKind::Skeleton);
+    Core::ECS::Entity entity = createSpawnedObjectEntity(owner, object.name, LoadFloat(object.transform), ModelObjectKind::Skeleton);
 
     auto& pose = entity.addComponent<SkeletonPoseComponent>();
     InitializeSkeletonPoseFromJoints(skeleton.joints(), pose);
@@ -416,10 +402,10 @@ b8 ModelSystem::spawnSkeletonObject(const Core::ECS::EntityID owner, const Model
     return true;
 }
 
-b8 ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const ModelStaticMeshObject& object){
-    Core::ECS::Entity entity = createSpawnedObjectEntity(owner, object.name, object.transform, ModelObjectKind::StaticMesh);
+b8 ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const ModelStaticMeshObject& object)noexcept{
+    Core::ECS::Entity entity = createSpawnedObjectEntity(owner, object.name, LoadFloat(object.transform), ModelObjectKind::StaticMesh);
     if(m_applyRenderer)
-        m_applyRenderer(owner, object.material, m_world, entity);
+        m_applyRenderer(owner, object.material, *m_world, entity);
 
     auto& mesh = entity.addComponent<MeshComponent>();
     mesh.mesh = object.mesh;
@@ -431,7 +417,7 @@ b8 ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const Mod
     if(object.parentObject){
         attachment.parentEntity = findSpawnedObject(owner, object.parentObject);
         const ModelSkeletonComponent* skeletonComponent = attachment.parentEntity.valid()
-            ? m_world.tryGetComponent<ModelSkeletonComponent>(attachment.parentEntity)
+            ? m_world->tryGetComponent<ModelSkeletonComponent>(attachment.parentEntity)
             : nullptr;
         if(!ValidateModelStaticMeshParentEntity(object.name, object.parentObject, attachment.parentEntity.valid(), skeletonComponent != nullptr))
             return false;
@@ -440,7 +426,7 @@ b8 ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const Mod
             const Name skeletonName = skeletonComponent->skeleton.name();
             if(!skeletonName)
                 return false;
-            auto skeletonAsset = m_assetManager.loadTypedSync<Skeleton>(skeletonName, __hidden_model_system::s_AssetLoadContext);
+            auto skeletonAsset = m_assetManager->loadTypedSync<Skeleton>(skeletonName, __hidden_model_system::s_AssetLoadContext);
             if(!skeletonAsset)
                 return false;
             const Skeleton& skeleton = **skeletonAsset;
@@ -454,14 +440,14 @@ b8 ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const Mod
     return true;
 }
 
-b8 ModelSystem::spawnSkinnedMeshObject(const Core::ECS::EntityID owner, const ModelSkinnedMeshObject& object){
+b8 ModelSystem::spawnSkinnedMeshObject(const Core::ECS::EntityID owner, const ModelSkinnedMeshObject& object)noexcept{
     const Core::ECS::EntityID skeletonEntity = findSpawnedObject(owner, object.skeletonObject);
     if(!ValidateModelSkinnedMeshSkeletonEntity(object.name, skeletonEntity.valid()))
         return false;
 
-    Core::ECS::Entity entity = createSpawnedObjectEntity(owner, object.name, object.transform, ModelObjectKind::SkinnedMesh);
+    Core::ECS::Entity entity = createSpawnedObjectEntity(owner, object.name, LoadFloat(object.transform), ModelObjectKind::SkinnedMesh);
     if(m_applyRenderer)
-        m_applyRenderer(owner, object.material, m_world, entity);
+        m_applyRenderer(owner, object.material, *m_world, entity);
 
     auto& binding = entity.addComponent<SkinnedMeshBindingComponent>();
     binding.skin = object.skin;
@@ -469,17 +455,16 @@ b8 ModelSystem::spawnSkinnedMeshObject(const Core::ECS::EntityID owner, const Mo
     return true;
 }
 
-Core::ECS::Entity ModelSystem::createSpawnedObjectEntity(const Core::ECS::EntityID owner, const Name objectName, const SkeletonJointMatrix& localTransform, const ModelObjectKind::Enum kind){
-    Core::ECS::Entity entity = m_world.createEntity();
-    const SIMDMatrix localMatrix = LoadFloat(localTransform);
-    entity.addComponent<ModelObjectComponent>() = MakeModelObjectComponent(owner, m_world.entity(owner).getComponent<ModelRuntimeComponent>().model, objectName, localMatrix, kind);
+Core::ECS::Entity ModelSystem::createSpawnedObjectEntity(const Core::ECS::EntityID owner, const Name objectName, const SIMDMatrix& localMatrix, const ModelObjectKind::Enum kind)noexcept{
+    Core::ECS::Entity entity = m_world->createEntity();
+    entity.addComponent<ModelObjectComponent>() = MakeModelObjectComponent(owner, m_world->entity(owner).getComponent<ModelRuntimeComponent>().model, objectName, localMatrix, kind);
     auto& transform = entity.addComponent<Scene::TransformComponent>();
-    (void)Scene::TryDecomposeAndAssignTransformComponent(ComputeModelObjectWorldMatrix(Scene::LoadEntityTransformMatrix(m_world, owner), localMatrix), transform);
+    (void)Scene::TryDecomposeAndAssignTransformComponent(ComputeModelObjectWorldMatrix(Scene::LoadEntityTransformMatrix(*m_world, owner), localMatrix), transform);
     return entity;
 }
 
 Core::ECS::EntityID ModelSystem::findSpawnedObject(const Core::ECS::EntityID owner, const Name objectName)const noexcept{
-    const auto objects = m_world.view<ModelObjectComponent>();
+    const auto objects = m_world->view<ModelObjectComponent>();
     for(auto it = objects.begin(); it != objects.end(); ++it){
         auto&& [entity, object] = *it;
         if(MatchesModelObjectIdentity(object, owner, objectName))
@@ -488,20 +473,20 @@ Core::ECS::EntityID ModelSystem::findSpawnedObject(const Core::ECS::EntityID own
     return Core::ECS::s_InvalidEntityId;
 }
 
-Expected<void, Core::CpuTaskAdmissionError::Enum> ModelSystem::updateModelObjectTransforms(){
-    return m_world.view<ModelObjectComponent, Scene::TransformComponent>().parallelEach(
-        m_world.taskScope(),
+Expected<void, Core::CpuTaskAdmissionError::Enum> ModelSystem::updateModelObjectTransforms()noexcept{
+    return m_world->view<ModelObjectComponent, Scene::TransformComponent>().parallelEach(
+        m_world->taskScope(),
         s_ParallelModelObjectTransformGrainSize,
         [&]([[maybe_unused]] const Core::ECS::EntityID entity, ModelObjectComponent& object, Scene::TransformComponent& transform)noexcept{
             if(object.kind == ModelObjectKind::StaticMesh)
                 return;
 
-            (void)Scene::TryDecomposeAndAssignTransformComponent(ComputeModelObjectWorldMatrix(Scene::LoadEntityTransformMatrix(m_world, object.owner), LoadFloat(object.localTransform)), transform);
+            (void)Scene::TryDecomposeAndAssignTransformComponent(ComputeModelObjectWorldMatrix(Scene::LoadEntityTransformMatrix(*m_world, object.owner), LoadFloat(object.localTransform)), transform);
         });
 }
 
-void ModelSystem::updateStaticMeshAttachments(){
-    const auto attachments = m_world.view<ModelObjectComponent, ModelStaticMeshAttachmentComponent, Scene::TransformComponent>();
+void ModelSystem::updateStaticMeshAttachments()noexcept{
+    const auto attachments = m_world->view<ModelObjectComponent, ModelStaticMeshAttachmentComponent, Scene::TransformComponent>();
     usize queryCount = 0u;
     if(attachments.candidateCount() > 1u){
         attachments.each([&]([[maybe_unused]] const Core::ECS::EntityID entity, [[maybe_unused]] const ModelObjectComponent& object, const ModelStaticMeshAttachmentComponent& attachment, [[maybe_unused]] const Scene::TransformComponent& transform)noexcept{
@@ -512,7 +497,7 @@ void ModelSystem::updateStaticMeshAttachments(){
 
     // Attachment grouping storage is reused member state; zero or one joint query needs neither an index nor scratch.
     // Only capacity growth may allocate, never per-frame creation.
-    Vector<ModelAttachmentJointQuery, Core::Alloc::GlobalArena>& jointQueries = m_attachmentJointQueries;
+    Vector<ModelAttachmentJointQuery, ::ArenaBase>& jointQueries = m_attachmentJointQueries;
     jointQueries.clear();
     if(queryCount > 1u){
         jointQueries.reserve(queryCount);
@@ -526,18 +511,18 @@ void ModelSystem::updateStaticMeshAttachments(){
         });
         const Span<const ModelAttachmentJointQuery> queries(jointQueries.data(), jointQueries.size());
         if(sharedParent)
-            __hidden_model_system::ResolveAttachmentJointQueries({}, m_world, m_scratchJoints, jointQueries);
+            __hidden_model_system::ResolveAttachmentJointQueries({}, *m_world, m_scratchJoints, jointQueries);
         else{
-            Vector<usize, Core::Alloc::GlobalArena>& parentOrder = m_attachmentParentOrder;
+            Vector<usize, ::ArenaBase>& parentOrder = m_attachmentParentOrder;
             BuildSortedModelAttachmentParentOrder(queries, parentOrder);
-            __hidden_model_system::ResolveAttachmentJointQueries(Span<const usize>(parentOrder.data(), parentOrder.size()), m_world, m_scratchJoints, jointQueries);
+            __hidden_model_system::ResolveAttachmentJointQueries(Span<const usize>(parentOrder.data(), parentOrder.size()), *m_world, m_scratchJoints, jointQueries);
         }
     }
 
     usize nextQuery = 0u;
     attachments.each([&]([[maybe_unused]] const Core::ECS::EntityID entity, ModelObjectComponent& object, ModelStaticMeshAttachmentComponent& attachment, Scene::TransformComponent& transform){
-        const Scene::TransformComponent* ownerTransform = m_world.tryGetComponent<Scene::TransformComponent>(object.owner);
-        const Scene::TransformComponent* parentTransform = attachment.parentEntity.valid() ? m_world.tryGetComponent<Scene::TransformComponent>(attachment.parentEntity) : ownerTransform;
+        const Scene::TransformComponent* ownerTransform = m_world->tryGetComponent<Scene::TransformComponent>(object.owner);
+        const Scene::TransformComponent* parentTransform = attachment.parentEntity.valid() ? m_world->tryGetComponent<Scene::TransformComponent>(attachment.parentEntity) : ownerTransform;
         const Scene::TransformComponent* basisTransform = parentTransform ? parentTransform : ownerTransform;
         const SIMDMatrix parentMatrix = basisTransform ? Scene::LoadTransformMatrix(*basisTransform) : MatrixIdentity();
         const SIMDMatrix localMatrix = LoadFloat(attachment.localTransform);
@@ -554,7 +539,7 @@ void ModelSystem::updateStaticMeshAttachments(){
                 jointMatrix = LoadFloat(query.jointMatrix);
             }
             else{
-                const SkeletonPoseComponent* const pose = m_world.tryGetComponent<SkeletonPoseComponent>(attachment.parentEntity);
+                const SkeletonPoseComponent* const pose = m_world->tryGetComponent<SkeletonPoseComponent>(attachment.parentEntity);
                 if(!pose)
                     return;
                 const auto resolvedJointMatrix = TryEvaluateSkeletonPoseJointMatrix(*pose, attachment.parentJointIndex);
@@ -583,4 +568,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

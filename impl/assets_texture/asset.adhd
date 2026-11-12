@@ -17,7 +17,7 @@ type MipLevelVector = Vector<TextureMipLevel>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[asset("texture")]
+[arena, asset("texture")]
 class Texture{
     private u32 m_width = 0u;
     private u32 m_height = 0u;

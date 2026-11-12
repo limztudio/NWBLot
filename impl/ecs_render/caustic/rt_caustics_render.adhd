@@ -127,9 +127,9 @@ void DispatchCausticResolvePass(
     const u32 groupsY,
     const CausticResolveActivitySnapshot& activity
 ){
-    NWB_ASSERT(input.texture);
-    NWB_ASSERT(output.texture);
-    NWB_ASSERT(input.texture != output.texture);
+    FOUNDATION_ASSERT(input.texture);
+    FOUNDATION_ASSERT(output.texture);
+    FOUNDATION_ASSERT(input.texture != output.texture);
     // Sequence indices match the graph: prepare, five wavelets, then upsample.
     const CausticResolveActivitySlots activitySlots = ResolveCausticActivitySlots(
         stage,
@@ -326,7 +326,7 @@ b8 RendererRayTracingSystem::dispatchCausticAccumulatorDecay(Core::CommandList& 
     decayState.setPipeline(m_rayTracingState.m_causticAccumulatorDecayPipeline.get());
     commandList.setComputeState(decayState);
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    NWB_ASSERT(heap.isInitialized());
+    FOUNDATION_ASSERT(heap.isInitialized());
     heap.bindCompute(commandList, *m_rayTracingState.m_causticAccumulatorDecayPipeline.get());
     commandList.setPushConstants(&decayPush, sizeof(decayPush));
     commandList.dispatch(ComputeCausticFullDispatchGroups(targets.width), ComputeCausticFullDispatchGroups(targets.height), 1u);
@@ -349,8 +349,8 @@ b8 RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandList
     // Software photon producer runs before deferred lighting.
     if(!hasCausticWork(meshView))
         return false;
-    NWB_ASSERT(meshView.bindingValid());
-    NWB_ASSERT(targets.bindless.valid());
+    FOUNDATION_ASSERT(meshView.bindingValid());
+    FOUNDATION_ASSERT(targets.bindless.valid());
     const auto& pipeline = m_lightSpaceShadow.m_csg.snapshot.hasCsg ? m_rayTracingState.m_swCausticCsgPipeline : m_rayTracingState.m_swCausticPipeline;
     if(!pipeline || !m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid() || !causticResolveResourcesReady(targets))
         return false;
@@ -380,7 +380,7 @@ b8 RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandList
             computeState.setPipeline(pipeline.get());
             commandList.setComputeState(computeState);
             Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-            NWB_ASSERT(heap.isInitialized());
+            FOUNDATION_ASSERT(heap.isInitialized());
             heap.bindCompute(commandList, *pipeline.get());
             commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
             commandList.dispatch(ComputeCausticSwDispatchGroups(photonBudget, static_cast<u32>(NWB_CAUSTIC_SW_GROUP_SIZE)), 1u, 1u);
@@ -392,11 +392,11 @@ b8 RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, co
     // Hardware photons share the accumulator and resolve with the software reference.
     if(!hasHwCausticWork(meshView))
         return false;
-    NWB_ASSERT(meshView.bindingValid());
-    NWB_ASSERT(targets.bindless.valid());
+    FOUNDATION_ASSERT(meshView.bindingValid());
+    FOUNDATION_ASSERT(targets.bindless.valid());
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     if(!heap.isInitialized() || !m_rayTracingState.m_tlasHeapHandle.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cannot dispatch caustics without the descriptor-buffer TLAS heap handle"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: cannot dispatch caustics without the descriptor-buffer TLAS heap handle"));
         return false;
     }
     const b8 csg = m_lightSpaceShadow.m_csg.snapshot.hasCsg;
@@ -441,9 +441,9 @@ b8 RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, co
 }
 
 void RendererRayTracingSystem::dispatchCausticGeometryDownsample(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    NWB_ASSERT(targets.bindless.valid());
+    FOUNDATION_ASSERT(targets.bindless.valid());
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    NWB_ASSERT(heap.isInitialized());
+    FOUNDATION_ASSERT(heap.isInitialized());
 
     // The graph declares the writable geometry cache and its later sampled handoff.
     commandList.setEnableUavBarriersForTexture(targets.causticResolveGeometry.get(), true);
@@ -471,9 +471,9 @@ void RendererRayTracingSystem::dispatchCausticGeometryDownsample(Core::CommandLi
 }
 
 void RendererRayTracingSystem::dispatchCausticResolvePrepare(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    NWB_ASSERT(targets.bindless.valid());
+    FOUNDATION_ASSERT(targets.bindless.valid());
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    NWB_ASSERT(heap.isInitialized());
+    FOUNDATION_ASSERT(heap.isInitialized());
 
     // Prepare reads accumulated photons and resolve geometry, then writes the parity-selected half-resolution target.
     RayTracingCausticsTaskDetail::EnableCausticResolveBarriers(commandList, targets);
@@ -499,10 +499,10 @@ void RendererRayTracingSystem::dispatchCausticResolvePrepare(Core::CommandList& 
 }
 
 void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(Core::CommandList& commandList, DeferredFrameTargets& targets, const u32 passIndex){
-    NWB_ASSERT(passIndex < static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT));
-    NWB_ASSERT(targets.bindless.valid());
+    FOUNDATION_ASSERT(passIndex < static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT));
+    FOUNDATION_ASSERT(targets.bindless.valid());
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    NWB_ASSERT(heap.isInitialized());
+    FOUNDATION_ASSERT(heap.isInitialized());
 
     RayTracingCausticsTaskDetail::EnableCausticResolveBarriers(commandList, targets);
     const RayTracingDispatchGroups groups = ResolveRayTracingDispatchGroups(targets.width, targets.height, s_CausticResolveDownscaleFactor, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
@@ -519,7 +519,7 @@ void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(Core::CommandLi
         : waveletKind == CausticWaveletVariantKind::StepTwo ? resolve.m_waveletStepTwo
         : waveletKind == CausticWaveletVariantKind::Direct ? resolve.m_waveletDirect
         : resolve.m_wavelet;
-    NWB_ASSERT(wavelet.m_pipeline);
+    FOUNDATION_ASSERT(wavelet.m_pipeline);
     RayTracingCausticsTaskDetail::DispatchCausticResolvePass(
         commandList,
         heap,
@@ -537,9 +537,9 @@ void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(Core::CommandLi
 }
 
 void RendererRayTracingSystem::dispatchCausticResolveUpsample(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    NWB_ASSERT(targets.bindless.valid());
+    FOUNDATION_ASSERT(targets.bindless.valid());
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    NWB_ASSERT(heap.isInitialized());
+    FOUNDATION_ASSERT(heap.isInitialized());
 
     // The graph-owned five wavelet passes have completed. Only the fixed half-B upsample remains in this callback.
     RayTracingCausticsTaskDetail::EnableCausticResolveBarriers(commandList, targets);

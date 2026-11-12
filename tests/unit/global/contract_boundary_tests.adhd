@@ -31,7 +31,7 @@ native{
 #include <global/refcount_ptr.h>
 #include <global/utf8_text.h>
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 #include <unistd.h>
 #endif
 
@@ -45,7 +45,7 @@ namespace __hidden_contract_boundary_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 [[noreturn]] void VerifyRedirectedFileWithClosedDescriptors(u32 mask, AStringView outputPath);
 [[noreturn]] void VerifyCapturedOutputWithClosedDescriptors(u32 mask);
 #endif
@@ -309,7 +309,7 @@ void VerifyGlobalContractBoundaries_FixedIndexMapCollisionWrapAndCapacityFailure
 void VerifyGlobalContractBoundaries_RedirectedProcessPreservesCombinedOutputAndExitStatusWithClosedStandardDescriptors(){
     b8 supported = false;
     native(mut supported){
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
         supported = true;
 #endif
     }
@@ -325,7 +325,7 @@ void VerifyGlobalContractBoundaries_RedirectedProcessPreservesCombinedOutputAndE
     for(u32 mask = 1u; mask < 8u; ++mask){
         ScopedTestTrace trace(mask);
         native(in mask, in outputPathView){
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
             ASSERT_EXIT(__hidden_contract_boundary_tests::VerifyRedirectedFileWithClosedDescriptors(mask, outputPathView), testing::ExitedWithCode(0), "");
 #else
             static_cast<void>(mask);
@@ -343,7 +343,7 @@ void VerifyGlobalContractBoundaries_CapturedProcessPreservesStdoutAndFailureStat
     for(u32 mask = 1u; mask < 8u; ++mask){
         ScopedTestTrace trace(mask);
         native(in mask, mut supported, mut checkedMasks){
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
             supported = true;
             ASSERT_EXIT(__hidden_contract_boundary_tests::VerifyCapturedOutputWithClosedDescriptors(mask), testing::ExitedWithCode(0), "");
             ++checkedMasks;
@@ -429,7 +429,7 @@ namespace __hidden_contract_boundary_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 void VerifyRedirectedFileWithClosedDescriptors(const u32 mask, const AStringView outputPath){
     NWB::Tests::TestArena<> testArena;
     for(int descriptor = 0; descriptor < 3; ++descriptor){
@@ -478,7 +478,7 @@ void VerifyCapturedOutputWithClosedDescriptors(const u32 mask){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

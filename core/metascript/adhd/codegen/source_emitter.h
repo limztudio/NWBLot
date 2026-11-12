@@ -56,7 +56,7 @@ public:
     [[nodiscard]] const ClassDecl* activeOwnerClass()const noexcept{ return m_activeOwnerClass; }
     [[nodiscard]] b8 activeOwnerNeedsArena()const noexcept{ return m_activeOwnerNeedsArena; }
     [[nodiscard]] MStringView activeClassArenaExpr()const noexcept{
-        return (m_activeOwnerClass && m_activeOwnerClass->isArenaOwner)
+        return (m_activeOwnerClass && m_activeOwnerClass->usesStaticClassArena())
             ? MStringView("static_cast<::ArenaBase&>(s_ClassArena)")
             : MStringView("(*this->__adhd_arena)");
     }

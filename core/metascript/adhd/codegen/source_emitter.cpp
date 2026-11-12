@@ -329,6 +329,13 @@ MString SourceEmitter::emitSource(const TranslationUnit& unit, const MStringView
     const auto needsAutoCodecRegistrar = [&](const ClassDecl& classDecl)noexcept -> b8{
         if(classDecl.assetTypeName.empty())
             return false;
+        for(const TypeRef* ifaceRef : classDecl.implementedInterfaces){
+            if(!ifaceRef)
+                continue;
+            const InterfaceDecl* ifaceDecl = m_symbols.findInterface(m_symbols.resolveBaseTypeName(ifaceRef->name));
+            if(ifaceDecl && !ifaceDecl->assetTypeName.empty())
+                return false;
+        }
         b8 hasLocalLoadBinaryDef = false;
         for(const MethodDecl* method : classDecl.methods){
             if(method && !method->isImported && method->hasBody && !method->isConstructor && !method->isDestructor && !method->isOperator && method->name == "loadBinary" && method->params.size() == 1u){
@@ -575,16 +582,37 @@ void SourceEmitter::emitConstructorNotNullInitializers(MString& out, const Span<
 
     MVector<const Expr*>* skipped = AllocateAstNode<MVector<const Expr*>>(m_arena);
     b8 firstInit = true;
+    if(m_activeOwnerClass && !m_activeOwnerClass->systemTypeName.empty()){
+        out.append(" : ::NWB::Core::ECS::ISystem(__adhd_mother_arena)");
+        firstInit = false;
+    }
+    if(m_activeOwnerClass){
+        for(const TypeRef* iface : m_activeOwnerClass->implementedInterfaces){
+            if(!iface || m_symbols.resolveBaseTypeName(iface->name) != "IRenderPass")
+                continue;
+            for(const ParamDecl& param : ctor.params){
+                if(param.type && !param.name.empty() && m_symbols.resolveBaseTypeName(param.type->name) == "GraphicsRuntime"){
+                    out.append(firstInit ? " : " : ", ");
+                    firstInit = false;
+                    out.append("::NWB::Core::IRenderPass(");
+                    out.append(param.name.data(), param.name.size());
+                    out.push_back(')');
+                    break;
+                }
+            }
+            break;
+        }
+    }
     if(
         m_activeOwnerClass
-        && !m_activeOwnerClass->isArenaOwner
+        && !m_activeOwnerClass->usesStaticClassArena()
         && !m_activeOwnerClass->isSerialize
         && m_activeOwnerClass->subsystemTypeName.empty()
-        && m_activeOwnerClass->componentAssetTypeName.empty()
         && m_activeOwnerNeedsArena
     ){
-        out.append(" : __adhd_arena(::MakeNotNull(&__adhd_mother_arena))");
+        out.append(firstInit ? " : " : ", ");
         firstInit = false;
+        out.append("__adhd_arena(::MakeNotNull(&__adhd_mother_arena))");
     }
     for(const FieldDecl* field : orderedFields){
         if(!field || !field->type || field->defaultExpr || field->hasCtorInit)

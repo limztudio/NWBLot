@@ -18,9 +18,9 @@ native{
 namespace SimdOptimizationBenchmark{
 namespace BoxNormalKernels{
 
-NWB_INLINE volatile u64 s_ChecksumSink = 0u;
+FOUNDATION_INLINE volatile u64 s_ChecksumSink = 0u;
 
-[[nodiscard]] NWB_NOINLINE SIMDVectorSingle NWB_SIMD_CALL OriginalSingle(const SIMDVectorSingle position, const SIMDVectorSingle halfExtents, const SIMDVectorSingle fallback, const f32 minLengthSquared)noexcept{
+[[nodiscard]] FOUNDATION_NOINLINE SIMDVectorSingle FOUNDATION_SIMD_CALL OriginalSingle(const SIMDVectorSingle position, const SIMDVectorSingle halfExtents, const SIMDVectorSingle fallback, const f32 minLengthSquared)noexcept{
     const SIMDVectorSingle q = VectorSubtract(VectorAbs(position), halfExtents);
     const SIMDVectorSingle outside = VectorMax(q, VectorZero());
     const SIMDVectorSingle signedOutside = VectorSelect(VectorNegate(outside), outside, VectorGreaterOrEqual(position, VectorZero()));
@@ -40,7 +40,7 @@ NWB_INLINE volatile u64 s_ChecksumSink = 0u;
     return VectorSelect(faceNormal, outsideNormal, useOutside);
 }
 
-[[nodiscard]] NWB_NOINLINE SIMDVectorDouble NWB_SIMD_CALL OriginalDouble(const SIMDVectorDouble position, const SIMDVectorDouble halfExtents, const SIMDVectorDouble fallback, const f64 minLengthSquared)noexcept{
+[[nodiscard]] FOUNDATION_NOINLINE SIMDVectorDouble FOUNDATION_SIMD_CALL OriginalDouble(const SIMDVectorDouble position, const SIMDVectorDouble halfExtents, const SIMDVectorDouble fallback, const f64 minLengthSquared)noexcept{
     const SIMDVectorDouble q = VectorDoubleSubtract(VectorDoubleAbs(position), halfExtents);
     const SIMDVectorDouble outside = VectorDoubleMax(q, VectorDoubleZero());
     const SIMDVectorDouble signedOutside = VectorDoubleSelect(VectorDoubleNegate(outside), outside, VectorDoubleGreaterOrEqual(position, VectorDoubleZero()));
@@ -60,16 +60,16 @@ NWB_INLINE volatile u64 s_ChecksumSink = 0u;
     return VectorDoubleSelect(faceNormal, outsideNormal, useOutside);
 }
 
-[[nodiscard]] NWB_NOINLINE SIMDVectorSingle NWB_SIMD_CALL CandidateSingle(const SIMDVectorSingle position, const SIMDVectorSingle halfExtents, const SIMDVectorSingle fallback, const f32 minLengthSquared)noexcept{
+[[nodiscard]] FOUNDATION_NOINLINE SIMDVectorSingle FOUNDATION_SIMD_CALL CandidateSingle(const SIMDVectorSingle position, const SIMDVectorSingle halfExtents, const SIMDVectorSingle fallback, const f32 minLengthSquared)noexcept{
     return SdfTests::BoxNormal(position, halfExtents, fallback, minLengthSquared);
 }
 
-[[nodiscard]] NWB_NOINLINE SIMDVectorDouble NWB_SIMD_CALL CandidateDouble(const SIMDVectorDouble position, const SIMDVectorDouble halfExtents, const SIMDVectorDouble fallback, const f64 minLengthSquared)noexcept{
+[[nodiscard]] FOUNDATION_NOINLINE SIMDVectorDouble FOUNDATION_SIMD_CALL CandidateDouble(const SIMDVectorDouble position, const SIMDVectorDouble halfExtents, const SIMDVectorDouble fallback, const f64 minLengthSquared)noexcept{
     return SdfDoubleTests::BoxNormal(position, halfExtents, fallback, minLengthSquared);
 }
 
 template<b8 Candidate, typename CaseT>
-[[nodiscard]] NWB_NOINLINE SIMDVectorSingle RunSingle(const CaseT& input)noexcept{
+[[nodiscard]] FOUNDATION_NOINLINE SIMDVectorSingle RunSingle(const CaseT& input)noexcept{
     const SIMDVectorSingle position = LoadFloat(input.position);
     const SIMDVectorSingle extents = LoadFloat(input.extents);
     const SIMDVectorSingle fallback = LoadFloat(input.fallback);
@@ -80,7 +80,7 @@ template<b8 Candidate, typename CaseT>
 }
 
 template<b8 Candidate, typename CaseT>
-[[nodiscard]] NWB_NOINLINE SIMDVectorDouble RunDouble(const CaseT& input)noexcept{
+[[nodiscard]] FOUNDATION_NOINLINE SIMDVectorDouble RunDouble(const CaseT& input)noexcept{
     const SIMDVectorDouble position = LoadDouble(input.position);
     const SIMDVectorDouble extents = LoadDouble(input.extents);
     const SIMDVectorDouble fallback = LoadDouble(input.fallback);
@@ -91,7 +91,7 @@ template<b8 Candidate, typename CaseT>
 }
 
 template<b8 Candidate, b8 Latency, typename CaseT, usize DataCount>
-[[nodiscard]] NWB_NOINLINE u64 WorkloadSingle(const Array<CaseT, DataCount>& data, const usize iterations)noexcept{
+[[nodiscard]] FOUNDATION_NOINLINE u64 WorkloadSingle(const Array<CaseT, DataCount>& data, const usize iterations)noexcept{
     alignas(SIMDVectorSingle) Array<SIMDVectorSingle, 8> accumulators = {};
     for(auto& accumulator : accumulators)
         accumulator = LoadFloat(data[0].position);
@@ -116,7 +116,7 @@ template<b8 Candidate, b8 Latency, typename CaseT, usize DataCount>
 }
 
 template<b8 Candidate, b8 Latency, typename CaseT, usize DataCount>
-[[nodiscard]] NWB_NOINLINE u64 WorkloadDouble(const Array<CaseT, DataCount>& data, const usize iterations)noexcept{
+[[nodiscard]] FOUNDATION_NOINLINE u64 WorkloadDouble(const Array<CaseT, DataCount>& data, const usize iterations)noexcept{
     alignas(SIMDVectorDouble) Array<SIMDVectorDouble, 8> accumulators = {};
     for(auto& accumulator : accumulators)
         accumulator = LoadDouble(data[0].position);
@@ -143,7 +143,7 @@ template<b8 Candidate, b8 Latency, typename CaseT, usize DataCount>
 }
 
 template<typename CaseT>
-[[nodiscard]] NWB_INLINE b8 CompareBoxNormalSingleKernel(const CaseT& input, b8& outEqual, i32& outOriginalFlags, i32& outCandidateFlags, i32& outOriginalErrno, i32& outCandidateErrno)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 CompareBoxNormalSingleKernel(const CaseT& input, b8& outEqual, i32& outOriginalFlags, i32& outCandidateFlags, i32& outOriginalErrno, i32& outCandidateErrno)noexcept{
 #pragma STDC FENV_ACCESS ON
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
@@ -165,7 +165,7 @@ template<typename CaseT>
 }
 
 template<typename CaseT>
-[[nodiscard]] NWB_INLINE b8 CompareBoxNormalDoubleKernel(const CaseT& input, b8& outEqual, i32& outOriginalFlags, i32& outCandidateFlags, i32& outOriginalErrno, i32& outCandidateErrno)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 CompareBoxNormalDoubleKernel(const CaseT& input, b8& outEqual, i32& outOriginalFlags, i32& outCandidateFlags, i32& outOriginalErrno, i32& outCandidateErrno)noexcept{
 #pragma STDC FENV_ACCESS ON
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
@@ -187,14 +187,14 @@ template<typename CaseT>
 }
 
 template<typename CaseT, usize DataCount>
-[[nodiscard]] NWB_INLINE u64 DispatchBoxNormalSingleWorkload(const Array<CaseT, DataCount>& data, const b8 candidate, const b8 latency, const usize iterations)noexcept{
+[[nodiscard]] FOUNDATION_INLINE u64 DispatchBoxNormalSingleWorkload(const Array<CaseT, DataCount>& data, const b8 candidate, const b8 latency, const usize iterations)noexcept{
     if(latency)
         return candidate ? BoxNormalKernels::WorkloadSingle<true, true>(data, iterations) : BoxNormalKernels::WorkloadSingle<false, true>(data, iterations);
     return candidate ? BoxNormalKernels::WorkloadSingle<true, false>(data, iterations) : BoxNormalKernels::WorkloadSingle<false, false>(data, iterations);
 }
 
 template<typename CaseT, usize DataCount>
-[[nodiscard]] NWB_INLINE u64 DispatchBoxNormalDoubleWorkload(const Array<CaseT, DataCount>& data, const b8 candidate, const b8 latency, const usize iterations)noexcept{
+[[nodiscard]] FOUNDATION_INLINE u64 DispatchBoxNormalDoubleWorkload(const Array<CaseT, DataCount>& data, const b8 candidate, const b8 latency, const usize iterations)noexcept{
     if(latency)
         return candidate ? BoxNormalKernels::WorkloadDouble<true, true>(data, iterations) : BoxNormalKernels::WorkloadDouble<false, true>(data, iterations);
     return candidate ? BoxNormalKernels::WorkloadDouble<true, false>(data, iterations) : BoxNormalKernels::WorkloadDouble<false, false>(data, iterations);

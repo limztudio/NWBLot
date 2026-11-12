@@ -226,7 +226,7 @@ namespace Assets = Core::Assets;
 
 b8 DependencyProviderCatalog::discover(const PipelineOptions& options, Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_dependency_provider_catalog;
-    auto resolvedRepoRoot = ResolvePipelineRepoRoot(AStringView(options.repoRoot), NWB_TEXT("DependencyComputer"), m_arena);
+    auto resolvedRepoRoot = ResolvePipelineRepoRoot(AStringView(options.repoRoot), FOUNDATION_TEXT("DependencyComputer"), m_arena);
     if(!resolvedRepoRoot)
         return false;
     Path repoRoot = Move(*resolvedRepoRoot);
@@ -235,8 +235,8 @@ b8 DependencyProviderCatalog::discover(const PipelineOptions& options, Core::All
         options.inputs,
         options.assetRoots,
         Assets::AssetRootDuplicatePolicy::HostFilesystem,
-        NWB_TEXT("DependencyComputer"),
-        NWB_TEXT("no asset roots available for dependency resolution"),
+        FOUNDATION_TEXT("DependencyComputer"),
+        FOUNDATION_TEXT("no asset roots available for dependency resolution"),
         scratchArena
     );
     if(!roots)
@@ -293,7 +293,7 @@ Expected<DependencyInputSelection> DependencyProviderCatalog::selectInputs(
 
     const auto selectionResult = Assets::CookInputSelector::Select(m_repoRoot, m_roots, m_files, options.inputs, true, scratchArena, selected, &order);
     if(!selectionResult){
-        LogCookInputSelectionFailure(selectionResult.error(), NWB_TEXT("DependencyComputer"));
+        LogCookInputSelectionFailure(selectionResult.error(), FOUNDATION_TEXT("DependencyComputer"));
         return MakeUnexpected(Failure{});
     }
     return selection;
@@ -301,7 +301,7 @@ Expected<DependencyInputSelection> DependencyProviderCatalog::selectInputs(
 
 Expected<Core::Metascript::Document> DependencyProviderCatalog::read(const usize index, Core::Alloc::ScratchArena& scratchArena)const{
     using namespace __hidden_dependency_provider_catalog;
-    NWB_ASSERT(index < m_files.size());
+    FOUNDATION_ASSERT(index < m_files.size());
     Assets::ScratchString text(scratchArena);
     Core::Metascript::Document document(m_arena);
     if(!Assets::ParseMetadataDocumentText(m_files[index].filePath, s_DiagnosticPrefix, [&](const AStringView source){ return document.parse(source); }, text, document))

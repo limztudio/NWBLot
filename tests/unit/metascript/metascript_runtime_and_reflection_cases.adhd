@@ -66,7 +66,7 @@ using ReaderArena = Tests::TestArena<MetaRuntimeReaderArenaTag>;
 using Document = Core::Metascript::Document;
 using Value = Core::Metascript::Value;
 using ScopedTestTrace = Tests::ScopedTestTrace;
-[[nodiscard]] NWB_INLINE b8 TryDecodeCharLiteral(const MStringView text, i64& outValue)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 TryDecodeCharLiteral(const MStringView text, i64& outValue)noexcept{
     return Core::Metascript::LiteralDecoder::TryDecodeCharLiteral(text, outValue);
 }
 
@@ -132,51 +132,51 @@ struct LerpMoveOnlyOperand{
     LerpMoveOnlyOperand operator+(LerpMoveOnlyOperand&& rhs)&&{ return LerpMoveOnlyOperand(value + rhs.value + 100); }
 };
 
-[[nodiscard]] NWB_INLINE b8 HasVariable(const Document& doc, const MStringView name)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasVariable(const Document& doc, const MStringView name)noexcept{
     return doc.findVariable(name) != nullptr;
 }
 
-[[nodiscard]] NWB_INLINE const Value& RequireVariable(const Document& doc, const MStringView name)noexcept{
+[[nodiscard]] FOUNDATION_INLINE const Value& RequireVariable(const Document& doc, const MStringView name)noexcept{
     return *doc.findVariable(name);
 }
 
-[[nodiscard]] NWB_INLINE b8 HasDeclaration(const Document& doc, const MStringView name)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasDeclaration(const Document& doc, const MStringView name)noexcept{
     return doc.findDeclaration(name) != nullptr;
 }
 
-[[nodiscard]] NWB_INLINE MStringView DeclarationType(const Document& doc, const MStringView name)noexcept{
+[[nodiscard]] FOUNDATION_INLINE MStringView DeclarationType(const Document& doc, const MStringView name)noexcept{
     return doc.findDeclaration(name)->type;
 }
 
-[[nodiscard]] NWB_INLINE MStringView DeclarationVariable(const Document& doc, const MStringView name)noexcept{
+[[nodiscard]] FOUNDATION_INLINE MStringView DeclarationVariable(const Document& doc, const MStringView name)noexcept{
     return doc.findDeclaration(name)->variable;
 }
 
-[[nodiscard]] NWB_INLINE b8 HasStruct(const Document& doc, const MStringView name)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasStruct(const Document& doc, const MStringView name)noexcept{
     return doc.structs().find(name) != doc.structs().end();
 }
 
-[[nodiscard]] NWB_INLINE const Value& StructMetadata(const Document& doc, const MStringView name)noexcept{
+[[nodiscard]] FOUNDATION_INLINE const Value& StructMetadata(const Document& doc, const MStringView name)noexcept{
     return doc.structs().find(name).value();
 }
 
-[[nodiscard]] NWB_INLINE b8 HasValueField(const Value& value, const MStringView name)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasValueField(const Value& value, const MStringView name)noexcept{
     return value.findField(name) != nullptr;
 }
 
-[[nodiscard]] NWB_INLINE const Value& RequireValueField(const Value& value, const MStringView name)noexcept{
+[[nodiscard]] FOUNDATION_INLINE const Value& RequireValueField(const Value& value, const MStringView name)noexcept{
     return *value.findField(name);
 }
 
-[[nodiscard]] NWB_INLINE MStringView DocumentErrorMessage(const Document& doc, const usize index)noexcept{
+[[nodiscard]] FOUNDATION_INLINE MStringView DocumentErrorMessage(const Document& doc, const usize index)noexcept{
     return MStringView(doc.errors()[index].message);
 }
 
-[[nodiscard]] NWB_INLINE Tests::TestAString MakeRepeatedCharString(const usize count, const char ch){
+[[nodiscard]] FOUNDATION_INLINE Tests::TestAString MakeRepeatedCharString(const usize count, const char ch){
     return Tests::TestAString(count, ch);
 }
 
-[[nodiscard]] NWB_INLINE Tests::TestAString BuildStructGrowthDocumentSource(){
+[[nodiscard]] FOUNDATION_INLINE Tests::TestAString BuildStructGrowthDocumentSource(){
     Tests::TestAString source("struct Description{ float value; }; Description runtime;\n");
     for(usize index = 0u; index < 128u; ++index){
         Array<char, s_DecimalTextBufferBytes> indexText = {};
@@ -220,7 +220,7 @@ public:
     ScopedHeldFloatingPointEnvironment(ScopedHeldFloatingPointEnvironment&&) = delete;
     ~ScopedHeldFloatingPointEnvironment()noexcept{
         if(m_original && !SetFloatingPointEnvironment(*m_original))
-            NWB_ASSERT(false);
+            FOUNDATION_ASSERT(false);
     }
 
 
@@ -236,11 +236,11 @@ inline constexpr Array<i32, 4u> s_FloatingPointRoundingModes = { FE_TONEAREST, F
 inline constexpr i32 s_FeAllExcept = FE_ALL_EXCEPT;
 inline constexpr i32 s_FeInvalid = FE_INVALID;
 
-[[nodiscard]] NWB_INLINE i32 RunGeneratedLerpMoveOnly(LerpMoveOnlyOperand& operand){
+[[nodiscard]] FOUNDATION_INLINE i32 RunGeneratedLerpMoveOnly(LerpMoveOnlyOperand& operand){
     return Tests::LerpMoveOnly(operand).value;
 }
 
-[[nodiscard]] NWB_INLINE i32 RunGeneratedLerpTemporary(){
+[[nodiscard]] FOUNDATION_INLINE i32 RunGeneratedLerpTemporary(){
     return Tests::LerpTemporary<LerpMoveOnlyOperand>().value;
 }
 

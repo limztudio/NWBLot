@@ -269,7 +269,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
     else
         createdTargets.albedo.reset();
     if(!albedoResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred albedo target"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create deferred albedo target"));
         return MakeUnexpected(Failure{});
     }
 
@@ -289,7 +289,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
     else
         createdTargets.normal.reset();
     if(!normalResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred normal target"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create deferred normal target"));
         return MakeUnexpected(Failure{});
     }
 
@@ -309,7 +309,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
     else
         createdTargets.worldPosition.reset();
     if(!worldPositionResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred world-position target"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create deferred world-position target"));
         return MakeUnexpected(Failure{});
     }
 
@@ -329,7 +329,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
     else
         createdTargets.specularRoughness.reset();
     if(!specularRoughnessResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred specular/roughness target"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create deferred specular/roughness target"));
         return MakeUnexpected(Failure{});
     }
 
@@ -351,7 +351,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
     else
         createdTargets.opaqueColor.reset();
     if(!opaqueColorResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred opaque color target"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create deferred opaque color target"));
         return MakeUnexpected(Failure{});
     }
 
@@ -373,7 +373,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
     else
         createdTargets.compositeColor.reset();
     if(!compositeColorResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite color target"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create deferred composite color target"));
         return MakeUnexpected(Failure{});
     }
 
@@ -385,7 +385,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
     else
         createdTargets.depth.reset();
     if(!depthResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred depth target"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create deferred depth target"));
         return MakeUnexpected(Failure{});
     }
 
@@ -404,7 +404,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
     else
         createdTargets.framebuffer.reset();
     if(!framebufferResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred framebuffer"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create deferred framebuffer"));
         return MakeUnexpected(Failure{});
     }
 
@@ -459,10 +459,10 @@ b8 RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameTar
     if(history.valid())
         return true;
 
-    NWB_ASSERT(targets.bindless.valid());
-    NWB_ASSERT(targets.shadowVisibility);
-    NWB_ASSERT(targets.causticIrradiance);
-    NWB_ASSERT(targets.surfelIrradiance);
+    FOUNDATION_ASSERT(targets.bindless.valid());
+    FOUNDATION_ASSERT(targets.shadowVisibility);
+    FOUNDATION_ASSERT(targets.causticIrradiance);
+    FOUNDATION_ASSERT(targets.surfelIrradiance);
 
     resetLaggedLightingHistoryResources(targets);
 
@@ -491,7 +491,7 @@ b8 RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameTar
     else
         history.shadowVisibility.reset();
     if(!shadowVisibilityResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create lagged shadow-visibility history"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create lagged shadow-visibility history"));
         resetLaggedLightingHistoryResources(targets);
         return false;
     }
@@ -512,7 +512,7 @@ b8 RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameTar
     else
         history.causticIrradiance.reset();
     if(!causticIrradianceResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create lagged caustic-irradiance history"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create lagged caustic-irradiance history"));
         resetLaggedLightingHistoryResources(targets);
         return false;
     }
@@ -524,7 +524,7 @@ b8 RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameTar
     else
         history.surfelIrradiance.reset();
     if(!surfelIrradianceResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create lagged surfel-irradiance history"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create lagged surfel-irradiance history"));
         resetLaggedLightingHistoryResources(targets);
         return false;
     }
@@ -558,7 +558,7 @@ b8 RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameTar
             history.surfelIrradianceDescriptor
         )
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register lagged lighting-history images in the descriptor heap"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register lagged lighting-history images in the descriptor heap"));
         resetLaggedLightingHistoryResources(targets);
         return false;
     }
@@ -584,7 +584,7 @@ b8 RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameTar
     else
         history.slotsBuffer.reset();
     if(!slotsBufferResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create lagged lighting-history slot buffer"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create lagged lighting-history slot buffer"));
         resetLaggedLightingHistoryResources(targets);
         return false;
     }
@@ -592,7 +592,7 @@ b8 RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameTar
     const Expected<Core::GpuDescriptorHandle> slotsBufferDescriptor = RendererDescriptorRegisterDetail::RegisterConstantBuffer(heap, history.slotsBuffer);
     history.slotsBufferDescriptor = slotsBufferDescriptor ? *slotsBufferDescriptor : Core::GpuDescriptorHandle::Invalid();
     if(!slotsBufferDescriptor){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register lagged lighting-history slot buffer in the descriptor heap"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register lagged lighting-history slot buffer in the descriptor heap"));
         resetLaggedLightingHistoryResources(targets);
         return false;
     }

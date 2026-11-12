@@ -328,59 +328,59 @@ Expected<DrawSnapshot> PaintMultilineViewFixture(MultilineViewFixture& self, con
 
 NWB_BEGIN
 namespace UiEditCaretTests{
-NWB_INLINE Expected<ShapedRun, TextLayoutStatus::Enum> CaretShaper::shape(const ShapeRequest& request){
+FOUNDATION_INLINE Expected<ShapedRun, TextLayoutStatus::Enum> CaretShaper::shape(const ShapeRequest& request){
     ShapedRun run(m_arena);
     ::__hidden_ui_glyph_sdf_tests::PopulateCaretShapedRun(*this, request, run);
     return run;
 }
-NWB_INLINE void EditCaretFixture::expectCaret(const usize byte, const f32 x, const f32 y, const f32 height)const{
+FOUNDATION_INLINE void EditCaretFixture::expectCaret(const usize byte, const f32 x, const f32 y, const f32 height)const{
     ::__hidden_ui_glyph_sdf_tests::ExpectEditCaretFixtureCaret(*this, byte, x, y, height);
 }
-NWB_INLINE void EditCaretFixture::expectRange(const EditBoxRange range, const u32 line, const Rect expected, const f32 cap)const{
+FOUNDATION_INLINE void EditCaretFixture::expectRange(const EditBoxRange range, const u32 line, const Rect expected, const f32 cap)const{
     ::__hidden_ui_glyph_sdf_tests::ExpectEditCaretFixtureRange(*this, range, line, expected, cap);
 }
 };
 namespace UiHorizontalNavigationTests{
-NWB_INLINE HitTarget Part(const HitTarget& host)noexcept{ return ::__hidden_ui_glyph_sdf_tests::MakeHorizontalNavigationPart(host); }
-NWB_INLINE PopupScope Popup(const HitTarget& owner, const u64 openGeneration)noexcept{ return ::__hidden_ui_glyph_sdf_tests::MakeHorizontalNavigationPopup(owner, openGeneration); }
-NWB_INLINE HorizontalNavigationFixture::HorizontalNavigationFixture()
+FOUNDATION_INLINE HitTarget Part(const HitTarget& host)noexcept{ return ::__hidden_ui_glyph_sdf_tests::MakeHorizontalNavigationPart(host); }
+FOUNDATION_INLINE PopupScope Popup(const HitTarget& owner, const u64 openGeneration)noexcept{ return ::__hidden_ui_glyph_sdf_tests::MakeHorizontalNavigationPopup(owner, openGeneration); }
+FOUNDATION_INLINE HorizontalNavigationFixture::HorizontalNavigationFixture()
     : RouterTestFixture(Name(NWB::Tests::UiCases::s_UiCaseTestsUiHorizontalNavigation))
 {
     ::__hidden_ui_glyph_sdf_tests::InitHorizontalNavigationTargets(m_targets);
 }
-NWB_INLINE InputRoutingResult HorizontalNavigationFixture::keyDown(const Core::Key::Enum key, const b8 repeat){
+FOUNDATION_INLINE InputRoutingResult HorizontalNavigationFixture::keyDown(const Core::Key::Enum key, const b8 repeat){
     return ::__hidden_ui_glyph_sdf_tests::SendHorizontalNavigationKeyDown(*this, key, repeat);
 }
-NWB_INLINE InputRoutingResult HorizontalNavigationFixture::keyUp(const Core::Key::Enum key){
+FOUNDATION_INLINE InputRoutingResult HorizontalNavigationFixture::keyUp(const Core::Key::Enum key){
     return ::__hidden_ui_glyph_sdf_tests::SendHorizontalNavigationKeyUp(*this, key);
 }
-NWB_INLINE void HorizontalNavigationFixture::press(const Core::Key::Enum key){
+FOUNDATION_INLINE void HorizontalNavigationFixture::press(const Core::Key::Enum key){
     ::__hidden_ui_glyph_sdf_tests::PressHorizontalNavigationKey(*this, key);
 }
-NWB_INLINE void HorizontalNavigationFixture::focusTarget(const usize index){
+FOUNDATION_INLINE void HorizontalNavigationFixture::focusTarget(const usize index){
     ::__hidden_ui_glyph_sdf_tests::FocusHorizontalNavigationTarget(*this, index);
 }
-NWB_INLINE b8 HorizontalNavigationFixture::publish(const usize count, const Span<const PopupScope> popups){
+FOUNDATION_INLINE b8 HorizontalNavigationFixture::publish(const usize count, const Span<const PopupScope> popups){
     return ::__hidden_ui_glyph_sdf_tests::PublishHorizontalNavigationTargets(*this, count, popups);
 }
-NWB_INLINE Expected<ControlAction> HorizontalNavigationFixture::take(const usize index)noexcept{
+FOUNDATION_INLINE Expected<ControlAction> HorizontalNavigationFixture::take(const usize index)noexcept{
     return ::__hidden_ui_glyph_sdf_tests::TakeHorizontalNavigationAction(*this, index);
 }
-NWB_INLINE void HorizontalNavigationFixture::bindEditor(const usize hostIndex)noexcept{
+FOUNDATION_INLINE void HorizontalNavigationFixture::bindEditor(const usize hostIndex)noexcept{
     ::__hidden_ui_glyph_sdf_tests::BindHorizontalNavigationEditor(*this, hostIndex);
 }
 };
 namespace UiMultilineViewTests{
-NWB_INLINE void ExpectPlacement(const EditBoxPlacement& actual, const EditBoxPlacement& expected){
+FOUNDATION_INLINE void ExpectPlacement(const EditBoxPlacement& actual, const EditBoxPlacement& expected){
     ::__hidden_ui_glyph_sdf_tests::ExpectUiEditBoxPlacement(actual, expected);
 }
-NWB_INLINE void CollectSolidRects(const DrawSnapshot& snapshot, const Color& color, PaintVector<Rect>& output){
+FOUNDATION_INLINE void CollectSolidRects(const DrawSnapshot& snapshot, const Color& color, PaintVector<Rect>& output){
     ::__hidden_ui_glyph_sdf_tests::CollectUiSolidRects(snapshot, color, output);
 }
-NWB_INLINE b8 MultilineViewFixture::place(const f32 width, const f32 height, const Point previousScroll)noexcept{
+FOUNDATION_INLINE b8 MultilineViewFixture::place(const f32 width, const f32 height, const Point previousScroll)noexcept{
     return ::__hidden_ui_glyph_sdf_tests::PlaceMultilineViewFixture(*this, width, height, previousScroll);
 }
-NWB_INLINE Expected<DrawSnapshot> MultilineViewFixture::paintView(const EditBoxStyle& style, const EditBoxPaintFlags& flags){
+FOUNDATION_INLINE Expected<DrawSnapshot> MultilineViewFixture::paintView(const EditBoxStyle& style, const EditBoxPaintFlags& flags){
     return ::__hidden_ui_glyph_sdf_tests::PaintMultilineViewFixture(*this, style, flags);
 }
 };

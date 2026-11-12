@@ -87,7 +87,7 @@ namespace SubsystemAssetRuntime{
 
 
 b8 ValidatePayload(const ISubsystem& subsystem){
-    if(!subsystem.checkVirtualPath(NWB_TEXT("ISubsystem::validatePayload")))
+    if(!subsystem.checkVirtualPath(FOUNDATION_TEXT("ISubsystem::validatePayload")))
         return false;
 
     for(usize i = 0u; i < subsystem.subsystems.size(); ++i){
@@ -190,7 +190,7 @@ Expected<UniquePtr<Core::Assets::IAsset>> SubsystemAssetCodec::deserialize(const
         s_SubsystemMagic,
         s_SubsystemLoadBinaryContext,
         s_SubsystemAssetKindLabel,
-        NWB_TEXT("SubsystemAssetCodec::deserialize"),
+        FOUNDATION_TEXT("SubsystemAssetCodec::deserialize"),
         arena
     );
 }

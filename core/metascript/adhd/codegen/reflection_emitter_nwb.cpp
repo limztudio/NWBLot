@@ -557,9 +557,9 @@ void NwbReflectionEmitter::emitDeserializeNwbMethod(MString& out, const ClassDec
     out.append("    [[nodiscard]] b8 deserializeNwb(const NwbValue& inMap)noexcept{\r\n");
     out.append("        if(!inMap.isMap())\r\n");
     out.append("            return false;\r\n");
-    if(!decl.isSerialize && (decl.isArenaOwner || classNeedsArena)){
+    if(!decl.isSerialize && (decl.usesStaticClassArena() || classNeedsArena)){
         out.append("        [[maybe_unused]] ::ArenaBase& __adhd_nwb_arena = ");
-        out.append(decl.isArenaOwner ? "static_cast<::ArenaBase&>(s_ClassArena);\r\n" : "(*this->__adhd_arena);\r\n");
+        out.append(decl.usesStaticClassArena() ? "static_cast<::ArenaBase&>(s_ClassArena);\r\n" : "(*this->__adhd_arena);\r\n");
     }
     for(const FieldDecl* field : fields){
         if(!field || !IsFieldReflected(*field) || !field->type)

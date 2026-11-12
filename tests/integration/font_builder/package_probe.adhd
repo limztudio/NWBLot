@@ -191,17 +191,17 @@ namespace __hidden_font_builder_package_probe{
 int Run(const int argc, char** argv){
     using namespace NWB::Tests::FontPackageCases;
     NWB::Log::ClientStandalone logger;
-    if(!logger.init(NWB_TEXT("font_builder_package_probe"))){
-        NWB_TCERR << NWB_TEXT("[font_builder_package_probe] logger.init() failed\n");
+    if(!logger.init(FOUNDATION_TEXT("font_builder_package_probe"))){
+        FOUNDATION_TCERR << FOUNDATION_TEXT("[font_builder_package_probe] logger.init() failed\n");
         return s_EntryFailure;
     }
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
     if(argc != 3){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder_package_probe: expected source .nwb and decoded output directory"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder_package_probe: expected source .nwb and decoded output directory"));
         return s_EntryFailure;
     }
     if(!DecodePackage(argv[1], argv[2])){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder_package_probe: cannot cook or export font pair"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder_package_probe: cannot cook or export font pair"));
         return s_EntryFailure;
     }
     return 0;

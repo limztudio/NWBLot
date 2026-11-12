@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[subsystem("bvh_subsystem")]
+[arena, subsystem("bvh_subsystem")]
 class BvhSubsystem{
     public AssetRef<ComputeShader> bitonicSortCs;
     public AssetRef<ComputeShader> fitCs;

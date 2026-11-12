@@ -189,7 +189,7 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(const Opaq
     const auto receiverSpanTaskResult = m_graph.addTask< ECSRenderDetail::CsgReceiverSpanBuildGraphTask >(csgReceiverSpanDesc, Move(m_receiverSpanPayload));
     if(!receiverSpanTaskResult){
         tasks.receiverSpanTask = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque CSG receiver-span task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare opaque CSG receiver-span task"));
         return MakeUnexpected(Failure{});
     }
     tasks.receiverSpanTask = *receiverSpanTaskResult;
@@ -210,7 +210,7 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(const Opaq
     const auto intervalCombineTaskResult = m_graph.addTask< ECSRenderDetail::CsgIntervalCombineGraphTask >(csgIntervalCombineDesc, Move(m_intervalCombinePayload));
     if(!intervalCombineTaskResult){
         tasks.intervalCombineTask = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque CSG interval-combine task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare opaque CSG interval-combine task"));
         return MakeUnexpected(Failure{});
     }
     tasks.intervalCombineTask = *intervalCombineTaskResult;
@@ -234,7 +234,7 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(const Opaq
             csgIntervalSampleMaterialGeometrySet = *csgIntervalSampleMaterialGeometrySetResult;
     }
     if(csgIntervalSampleUsesMaterialGeometry && !m_intervalSamplePayload.materialGeometryStatesGraphOwned){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared opaque CSG material geometry states"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare prepared opaque CSG material geometry states"));
         return MakeUnexpected(Failure{});
     }
     b8 csgIntervalSampleMaterialSampledTexturesCollected = false;
@@ -252,7 +252,7 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(const Opaq
             csgIntervalSampleMaterialSampledTextureSet = *csgIntervalSampleMaterialSampledTextureSetResult;
     }
     if(csgIntervalSampleUsesMaterialGeometry && !csgIntervalSampleMaterialSampledTexturesCollected){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared opaque CSG material sampled textures"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare prepared opaque CSG material sampled textures"));
         return MakeUnexpected(Failure{});
     }
 
@@ -278,7 +278,7 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(const Opaq
             opaqueCsgIntervalSampleComputeEmulationOutputSet = *opaqueCsgIntervalSampleComputeEmulationOutputSetResult;
     }
     if(opaqueCsgIntervalSampleComputeEmulationPlanCaptured && !opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned)
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned opaque CSG interval-sample compute-emulation outputs"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare graph-owned opaque CSG interval-sample compute-emulation outputs"));
     m_intervalSamplePayload.csgComputeEmulationOutputStatesGraphOwned = opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned;
     m_intervalSamplePayload.opaqueCsgComputeEmulationTiming = opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned ? &m_intervalSampleComputeEmulationTiming : nullptr;
     // Material instance and typed-material reads.
@@ -389,7 +389,7 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(const Opaq
         const auto intervalSampleComputeEmulationTaskResult = m_graph.addTask< ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphTask >(opaqueCsgIntervalSampleComputeEmulationDesc, Move(m_intervalSampleComputeEmulationPayload));
         if(!intervalSampleComputeEmulationTaskResult){
             tasks.intervalSampleComputeEmulationTask = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque CSG interval-sample compute-emulation producer"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare opaque CSG interval-sample compute-emulation producer"));
             return MakeUnexpected(Failure{});
         }
         tasks.intervalSampleComputeEmulationTask = *intervalSampleComputeEmulationTaskResult;
@@ -414,7 +414,7 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(const Opaq
     const auto intervalSampleTaskResult = m_graph.addTask< ECSRenderDetail::CsgIntervalSampleGraphTask >(csgIntervalSampleDesc, Move(m_intervalSamplePayload));
     if(!intervalSampleTaskResult){
         tasks.intervalSampleTask = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque CSG interval-sample task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare opaque CSG interval-sample task"));
         return MakeUnexpected(Failure{});
     }
     tasks.intervalSampleTask = *intervalSampleTaskResult;
@@ -481,10 +481,10 @@ Expected<OpaqueCsgIntervalClearResult> OpaqueCsgIntervalClearBuilder::declare(co
     const CsgIntervalRectClearDesc clearDesc{
         .intervalClearIdentity = Name(s_RenderNameRenderGraphicsPrefixCsgIntervalClear),
         .intervalClearMarkerLabel = "CSG Interval Id Clear",
-        .intervalClearWarningMessage = NWB_TEXT("RendererSystem: could not declare graph-owned opaque CSG interval-id clear"),
+        .intervalClearWarningMessage = FOUNDATION_TEXT("RendererSystem: could not declare graph-owned opaque CSG interval-id clear"),
         .receiverEventClearIdentity = Name(s_RenderNameRenderGraphicsPrefixCsgReceiverEventCountClear),
         .receiverEventClearMarkerLabel = "CSG Receiver Event Count Clear",
-        .receiverEventClearWarningMessage = NWB_TEXT("RendererSystem: could not declare graph-owned opaque CSG receiver-event clear"),
+        .receiverEventClearWarningMessage = FOUNDATION_TEXT("RendererSystem: could not declare graph-owned opaque CSG receiver-event clear"),
         .csgIntervalId = inputs.csgIntervalId,
         .csgReceiverEventCount = inputs.csgReceiverEventCount,
         .csgPeelSubresources = inputs.csgPeelSubresources,
@@ -520,7 +520,7 @@ struct OpaqueIntervalReadiness{
     OpaqueCsgIntervalReadinessState state;
 };
 
-[[nodiscard]] NWB_INLINE OpaqueIntervalReadiness ResolveOpaqueIntervalReadiness(const CsgOpaqueIntervalRecordInputs& payload, RendererMaterialSystem& materialSystem)noexcept{
+[[nodiscard]] FOUNDATION_INLINE OpaqueIntervalReadiness ResolveOpaqueIntervalReadiness(const CsgOpaqueIntervalRecordInputs& payload, RendererMaterialSystem& materialSystem)noexcept{
     OpaqueIntervalReadiness readiness{};
     const b8 frameSetupReady = FrameSetupReady(payload.meshViewSetupReady, payload.sceneShadingSetupReady);
     if(frameSetupReady){
@@ -548,7 +548,7 @@ struct OpaqueIntervalReadiness{
 }
 
 template<typename Dispatch>
-[[nodiscard]] NWB_INLINE b8 RecordOpaqueInterval(const CsgOpaqueIntervalRecordInputs& payload, Core::CommandList& commandList, Dispatch dispatch){
+[[nodiscard]] FOUNDATION_INLINE b8 RecordOpaqueInterval(const CsgOpaqueIntervalRecordInputs& payload, Core::CommandList& commandList, Dispatch dispatch){
     if(!payload.opaqueDrawSnapshot.captured)
         return false;
 

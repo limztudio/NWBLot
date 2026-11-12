@@ -2,138 +2,99 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/assets_mesh/asset.adhd>
+#include <impl/ecs_mesh/components.adhd>
+#include <impl/ecs_mesh/runtime/mesh.adhd>
+#include <impl/ecs_mesh/runtime/mesh_requests.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_mesh/components.adhd.h>
+[arena, system("mesh")]
+class MeshSystem : IRuntimeMeshRegistry{
+    private mut World m_world;
+    private Vector<mut IRuntimeMeshProvider> m_runtimeMeshProviders;
 
-#include <impl/ecs_mesh/runtime/mesh.adhd.h>
-#include <impl/ecs_mesh/runtime/mesh_requests.adhd.h>
-
-#include <core/ecs/system.h>
-#include <core/ecs/world.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(IsStandardLayout_V<MeshComponent>, "MeshComponent must stay layout-stable for ECS storage");
-static_assert(IsTriviallyCopyable_V<MeshComponent>, "MeshComponent must stay cheap to move in dense ECS storage");
-static_assert(IsStandardLayout_V<SkinnedMeshBindingComponent>, "SkinnedMeshBindingComponent must stay layout-stable for ECS storage");
-static_assert(IsTriviallyCopyable_V<SkinnedMeshBindingComponent>, "SkinnedMeshBindingComponent must stay cheap to move in dense ECS storage");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class MeshSystem final : public Core::ECS::ISystem, public IRuntimeMeshRegistry{
-public:
-    MeshSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world)
-        : Core::ECS::ISystem(arena)
-        , m_world(world)
-        , m_runtimeMeshProviders(arena)
-    {
-        readAccess<MeshComponent>();
-        readAccess<SkinnedMeshBindingComponent>();
+    public MeshSystem(mut World world){
+        this.m_world = world;
+        this.readAccess<MeshComponent>();
+        this.readAccess<SkinnedMeshBindingComponent>();
     }
-    virtual ~MeshSystem()noexcept override = default;
 
-
-public:
-    [[nodiscard]] virtual Expected<void, Core::CpuTaskAdmissionError::Enum> update([[maybe_unused]] Core::ECS::World& world, [[maybe_unused]] f32 delta)noexcept override{ return {}; }
-
-
-public:
-    [[nodiscard]] const MeshComponent* findMesh(Core::ECS::EntityID entity)const noexcept{ return m_world.tryGetComponent<MeshComponent>(entity); }
-    [[nodiscard]] Expected<Core::Assets::AssetRef<Mesh>> resolveMesh(const Core::ECS::EntityID entity)const noexcept{
-        const MeshComponent* mesh = findMesh(entity);
-        if(!mesh || !mesh->mesh.valid())
-            return MakeUnexpected(Failure{});
-
-        return mesh->mesh;
+    public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta)override{
+        return Expected<void, CpuTaskAdmissionError>();
     }
+
+    public Expected<AssetRef<Mesh>> resolveMesh(in EntityID entity)const{
+        if(!this.m_world.hasComponent<MeshComponent>(entity))
+            return MakeUnexpected(Failure());
+
+        const MeshComponent mesh = this.m_world.getComponent<MeshComponent>(entity);
+        if(!mesh.mesh.valid())
+            return MakeUnexpected(Failure());
+
+        return mesh.mesh;
+    }
+
     // Distinguish non-rendering owners from temporarily unavailable meshes.
-    [[nodiscard]] Expected<RenderableMeshDesc, RenderableMeshResolution::Enum> resolveRenderableMeshStatus(const Core::ECS::EntityID entity)const{
+    public Expected<RenderableMeshDesc, RenderableMeshResolution> resolveRenderableMeshStatus(in EntityID entity)const{
         RenderableMeshDesc mesh;
 
-        for(const NotNull<IRuntimeMeshProvider*> provider : m_runtimeMeshProviders){
-            const auto runtimeMesh = provider->resolveRuntimeMesh(entity);
-            if(runtimeMesh && runtimeMesh->valid()){
-                mesh.runtimeMesh = *runtimeMesh;
+        for(usize i = 0u; i < this.m_runtimeMeshProviders.size(); ++i){
+            const Expected<RuntimeMeshDesc> runtimeMesh = this.m_runtimeMeshProviders[i].resolveRuntimeMesh(entity);
+            if(runtimeMesh.has_value() && runtimeMesh.value().valid()){
+                mesh.runtimeMesh = runtimeMesh.value();
                 mesh.runtime = true;
                 return mesh;
             }
         }
 
-        const auto meshAsset = resolveMesh(entity);
-        if(!meshAsset)
-            return MakeUnexpected(ClassifyRenderableMeshFailure(findMesh(entity) != nullptr, hasRuntimeMeshBinding(entity)));
+        const Expected<AssetRef<Mesh>> meshAsset = this.resolveMesh(entity);
+        if(!meshAsset.has_value())
+            return MakeUnexpected(ClassifyRenderableMeshFailure(this.m_world.hasComponent<MeshComponent>(entity), this.hasRuntimeMeshBinding(entity)));
 
-        mesh.mesh = *meshAsset;
+        mesh.mesh = meshAsset.value();
         return mesh;
     }
-    [[nodiscard]] b8 hasRuntimeMeshBinding(const Core::ECS::EntityID entity)const{
-        if(m_world.tryGetComponent<SkinnedMeshBindingComponent>(entity))
+
+    public b8 hasRuntimeMeshBinding(in EntityID entity)const{
+        if(this.m_world.hasComponent<SkinnedMeshBindingComponent>(entity))
             return true;
-        for(const NotNull<IRuntimeMeshProvider*> provider : m_runtimeMeshProviders){
-            if(provider->hasRuntimeMeshBinding(entity))
+        for(usize i = 0u; i < this.m_runtimeMeshProviders.size(); ++i){
+            if(this.m_runtimeMeshProviders[i].hasRuntimeMeshBinding(entity))
                 return true;
         }
         return false;
     }
-    void markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests)const{
-        for(const NotNull<IRuntimeMeshProvider*> provider : m_runtimeMeshProviders){
+
+    public void markLiveRuntimeMeshes(mut RuntimeMeshRequestSet requests)const{
+        for(usize i = 0u; i < this.m_runtimeMeshProviders.size(); ++i){
             if(requests.complete())
                 return;
 
-            provider->markLiveRuntimeMeshes(requests);
+            this.m_runtimeMeshProviders[i].markLiveRuntimeMeshes(requests);
         }
     }
 
+    public void registerRuntimeMeshProvider(mut IRuntimeMeshProvider provider)override{
+        for(usize i = 0u; i < this.m_runtimeMeshProviders.size(); ++i){
+            if(SameAddress(this.m_runtimeMeshProviders[i], provider))
+                return;
+        }
 
-public:
-    virtual void registerRuntimeMeshProvider(IRuntimeMeshProvider& provider)override{
-        if(FindIf(m_runtimeMeshProviders.begin(), m_runtimeMeshProviders.end(), [&provider](const NotNull<IRuntimeMeshProvider*> item)noexcept{ return item.get() == &provider; }) != m_runtimeMeshProviders.end())
-            return;
-
-        m_runtimeMeshProviders.push_back(MakeNotNull(&provider));
-    }
-    virtual void unregisterRuntimeMeshProvider(IRuntimeMeshProvider& provider)noexcept override{
-        const auto found = FindIf(m_runtimeMeshProviders.begin(), m_runtimeMeshProviders.end(), [&provider](const NotNull<IRuntimeMeshProvider*> item)noexcept{ return item.get() == &provider; });
-        if(found == m_runtimeMeshProviders.end())
-            return;
-
-        m_runtimeMeshProviders.erase(found);
+        this.m_runtimeMeshProviders.push_back(provider);
     }
 
-
-private:
-    Core::ECS::World& m_world;
-    Vector<NotNull<IRuntimeMeshProvider*>, Core::Alloc::GlobalArena> m_runtimeMeshProviders;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public void unregisterRuntimeMeshProvider(mut IRuntimeMeshProvider provider)override{
+        for(usize i = 0u; i < this.m_runtimeMeshProviders.size(); ++i){
+            if(SameAddress(this.m_runtimeMeshProviders[i], provider)){
+                this.m_runtimeMeshProviders.erase(this.m_runtimeMeshProviders.begin() + i);
+                return;
+            }
+        }
+    }
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

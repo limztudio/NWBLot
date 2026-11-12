@@ -90,7 +90,7 @@ u64 BuildLightSpaceCsgCaptureIdentity(
     const Span<const u8> materialBytes,
     const Span<const Core::TextureHandle> textures
 )noexcept{
-    NWB_ASSERT(materials.size() == instances.size());
+    FOUNDATION_ASSERT(materials.size() == instances.size());
     u64 identity = LightSpaceCaptureIdentityBuilder().buildCsgBaseIdentity(
         state.captureGeometryIdentity,
         state.snapshot.contentIdentity,

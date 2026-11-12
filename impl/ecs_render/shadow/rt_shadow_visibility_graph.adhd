@@ -334,7 +334,7 @@ b8 ShadowVisibilityGraphCoordinator::declareDeferredShadowVisibilityTask(
             const auto deferredShadowVisibilityAdaptiveCounterClearTaskResult = context.graph.addClearBufferTask(counterClearDesc, Core::GpuClearBufferTaskDesc{ .destination = adaptiveEdgeCounter, .clearValue = 0u });
             if(!deferredShadowVisibilityAdaptiveCounterClearTaskResult){
                 m_deferredShadowVisibilityAdaptiveCounterClearTask = {};
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned adaptive shadow counter clear"));
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare graph-owned adaptive shadow counter clear"));
                 return false;
             }
             m_deferredShadowVisibilityAdaptiveCounterClearTask = *deferredShadowVisibilityAdaptiveCounterClearTaskResult;
@@ -369,7 +369,7 @@ b8 ShadowVisibilityGraphCoordinator::declareDeferredShadowVisibilityTask(
     );
     if(!deferredShadowVisibilityAllLitClearTaskResult){
         m_deferredShadowVisibilityAllLitClearTask = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned all-lit shadow-visibility clear"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare graph-owned all-lit shadow-visibility clear"));
         return false;
     }
     m_deferredShadowVisibilityAllLitClearTask = *deferredShadowVisibilityAllLitClearTaskResult;
@@ -395,7 +395,7 @@ b8 ShadowVisibilityGraphCoordinator::declareDeferredShadowVisibilityTask(
     const auto deferredShadowVisibilityTaskResult = context.rayTracing.declareShadowVisibilityTask(context.graph, desc, deferredLightingResources, context.shadowPrepared, hardwareShadowSupported, graphOwnedAdaptivePlan, deferredTargets, timingTicket);
     if(!deferredShadowVisibilityTaskResult){
         m_deferredShadowVisibilityTask = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred shadow-visibility graph task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred shadow-visibility graph task"));
         return false;
     }
     m_deferredShadowVisibilityTask = *deferredShadowVisibilityTaskResult;
@@ -494,7 +494,7 @@ b8 ShadowVisibilityResourcePlanner::prepare(const ShadowVisibilityResourceInputs
 
     const auto sceneGeometryDomainResult = m_graph.importHazardDomain(HazardDomainDesc(Name(s_ShadowPassSceneGeometry), s_SceneGeometryDomainLabel));
     if(!sceneGeometryDomainResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred shadow-visibility graph resources"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import deferred shadow-visibility graph resources"));
         return false;
     }
     sceneGeometryDomain = *sceneGeometryDomainResult;
@@ -624,14 +624,14 @@ b8 ShadowVisibilityResourcePlanner::prepare(const ShadowVisibilityResourceInputs
             resourceUses.push_back(use);
     }
     if(!optionalResourcesImported){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import a deferred shadow-visibility dynamic resource"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import a deferred shadow-visibility dynamic resource"));
         return false;
     }
     if(adaptiveCompact){
         const auto adaptiveEdgeCounterResult = ImportExternalBuffer(m_graph, rayTracingShadowResources.swShadowEdgeCounterBuffer, Name(s_ShadowEdgeCounterName), s_ShadowEdgeCounterLabel);
         if(!adaptiveEdgeCounterResult){
             adaptiveEdgeCounter = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import graph-owned adaptive shadow counter resource"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import graph-owned adaptive shadow counter resource"));
             return false;
         }
         adaptiveEdgeCounter = *adaptiveEdgeCounterResult;

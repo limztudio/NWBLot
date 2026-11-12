@@ -38,14 +38,14 @@ namespace AssetsBunchCook{
 
 template<typename RootArenaT, typename FileArenaT>
     requires (!IsSame_V<RootArenaT, Alloc::GlobalArena> || !IsSame_V<FileArenaT, Alloc::GlobalArena>)
-[[nodiscard]] NWB_INLINE Expected<ExpandedAssetMetadataVector> ExpandAssetBunch(const ::Path<RootArenaT>& assetRoot, const AStringView virtualRoot, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Document& doc, Alloc::ScratchArena& scratchArena){
+[[nodiscard]] FOUNDATION_INLINE Expected<ExpandedAssetMetadataVector> ExpandAssetBunch(const ::Path<RootArenaT>& assetRoot, const AStringView virtualRoot, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Document& doc, Alloc::ScratchArena& scratchArena){
     Alloc::GlobalArena pathArena(scratchArena.allocationLog());
     return ExpandAssetBunch(Path(pathArena, assetRoot), virtualRoot, Path(pathArena, nwbFilePath), doc, scratchArena);
 }
 
 template<typename RootArenaT, typename FileArenaT>
     requires (!IsSame_V<RootArenaT, Alloc::GlobalArena> || !IsSame_V<FileArenaT, Alloc::GlobalArena>)
-[[nodiscard]] NWB_INLINE Expected<ExpandedAssetMetadataVector> ExpandCompositeAsset(const ::Path<RootArenaT>& assetRoot, const AStringView virtualRoot, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Document& doc, Alloc::ScratchArena& scratchArena){
+[[nodiscard]] FOUNDATION_INLINE Expected<ExpandedAssetMetadataVector> ExpandCompositeAsset(const ::Path<RootArenaT>& assetRoot, const AStringView virtualRoot, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Document& doc, Alloc::ScratchArena& scratchArena){
     Alloc::GlobalArena pathArena(scratchArena.allocationLog());
     return ExpandCompositeAsset(Path(pathArena, assetRoot), virtualRoot, Path(pathArena, nwbFilePath), doc, scratchArena);
 }

@@ -59,18 +59,18 @@ struct GpuBarrierCallbackContext{
 
 inline constexpr u64 s_GpuBarrierAcceptedTokenValue = 7u;
 
-NWB_INLINE void GpuBarrierRecordInvocation(GpuBarrierCallbackContext& context){
+FOUNDATION_INLINE void GpuBarrierRecordInvocation(GpuBarrierCallbackContext& context){
     ++context.state.count;
     if(context.state.order)
         context.state.order->push_back(context.taskIndex);
 }
 
-NWB_INLINE b8 GpuBarrierInvokeRecorded(void* const context, const Core::CommandListResourceStateHandoff*){
+FOUNDATION_INLINE b8 GpuBarrierInvokeRecorded(void* const context, const Core::CommandListResourceStateHandoff*){
     GpuBarrierRecordInvocation(*MakeNotNull(static_cast<GpuBarrierCallbackContext*>(context)));
     return true;
 }
 
-NWB_INLINE b8 GpuBarrierInvokeAccepted(void* const context, const Core::QueueSubmissionToken& token){
+FOUNDATION_INLINE b8 GpuBarrierInvokeAccepted(void* const context, const Core::QueueSubmissionToken& token){
     if(token.value != s_GpuBarrierAcceptedTokenValue)
         return false;
     GpuBarrierRecordInvocation(*MakeNotNull(static_cast<GpuBarrierCallbackContext*>(context)));
@@ -78,7 +78,7 @@ NWB_INLINE b8 GpuBarrierInvokeAccepted(void* const context, const Core::QueueSub
 }
 
 template<typename Callback>
-[[nodiscard]] NWB_INLINE Callback GpuBarrierMakeCallback(const Core::GpuTaskId task, GpuBarrierCallbackContext& context){
+[[nodiscard]] FOUNDATION_INLINE Callback GpuBarrierMakeCallback(const Core::GpuTaskId task, GpuBarrierCallbackContext& context){
     if constexpr(IsSame_V<Callback, Core::GpuTaskGraphTaskRecordedCallback>)
         return Callback{ .task = task, .context = &context, .invoke = GpuBarrierInvokeRecorded };
     else
@@ -86,7 +86,7 @@ template<typename Callback>
 }
 
 template<typename Callback>
-[[nodiscard]] NWB_INLINE b8 GpuBarrierInvokeBoundCallback(const Callback& callback){
+[[nodiscard]] FOUNDATION_INLINE b8 GpuBarrierInvokeBoundCallback(const Callback& callback){
     if constexpr(IsSame_V<Callback, Core::GpuTaskGraphTaskRecordedCallback>)
         return callback.invoke(callback.context, nullptr);
     else{
@@ -95,7 +95,7 @@ template<typename Callback>
     }
 }
 
-NWB_INLINE void CheckReorderedCallbackBindings(
+FOUNDATION_INLINE void CheckReorderedCallbackBindings(
     const Core::GpuTaskGraph::DeclarationReadView& declarations,
     const Core::GpuCompiledGraph::ReadView& plan,
     Span<const Core::GpuTaskId> tasks,
@@ -140,7 +140,7 @@ NWB_INLINE void CheckReorderedCallbackBindings(
         runForType.template operator()<Core::GpuTaskGraphTaskAcceptedCallback>();
 }
 
-NWB_INLINE void CheckInvalidCallbackBindings(
+FOUNDATION_INLINE void CheckInvalidCallbackBindings(
     const Core::GpuTaskGraph::DeclarationReadView& declarations,
     const Core::GpuCompiledGraph::ReadView& plan,
     const Core::GpuSubmissionPacketRange& range,

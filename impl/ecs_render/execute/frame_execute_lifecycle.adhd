@@ -114,7 +114,7 @@ public:
 
 
 public:
-    [[nodiscard]] static NWB_INLINE b8 PrepareShadowPrepareTask(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
+    [[nodiscard]] static FOUNDATION_INLINE b8 PrepareShadowPrepareTask(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
         ShadowPrepareStateLifecycleContext* const context = static_cast<ShadowPrepareStateLifecycleContext*>(rawContext);
         if(!context || !finalState)
             return false;
@@ -123,7 +123,7 @@ public:
         return context->statePrepared;
     }
 
-    [[nodiscard]] static NWB_INLINE b8 AcceptShadowPrepareTask(void* const rawContext, [[maybe_unused]] const Core::QueueSubmissionToken& token){
+    [[nodiscard]] static FOUNDATION_INLINE b8 AcceptShadowPrepareTask(void* const rawContext, [[maybe_unused]] const Core::QueueSubmissionToken& token){
         ShadowPrepareStateLifecycleContext* const context = static_cast<ShadowPrepareStateLifecycleContext*>(rawContext);
         if(!context || !context->statePrepared)
             return false;
@@ -146,7 +146,7 @@ public:
         return true;
     }
 
-    [[nodiscard]] static NWB_INLINE b8 PrepareShadowVisibilityTask(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
+    [[nodiscard]] static FOUNDATION_INLINE b8 PrepareShadowVisibilityTask(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
         ShadowVisibilityStateLifecycleContext* const context = static_cast<ShadowVisibilityStateLifecycleContext*>(rawContext);
         if(!context || context->returnTextures.empty() || context->scratchTextures.empty() || context->scratchBuffers.empty() || !finalState)
             return false;
@@ -164,7 +164,7 @@ public:
         return context->statePrepared;
     }
 
-    [[nodiscard]] static NWB_INLINE b8 AcceptShadowVisibilityTask(void* const rawContext, [[maybe_unused]] const Core::QueueSubmissionToken& token){
+    [[nodiscard]] static FOUNDATION_INLINE b8 AcceptShadowVisibilityTask(void* const rawContext, [[maybe_unused]] const Core::QueueSubmissionToken& token){
         ShadowVisibilityStateLifecycleContext* const context = static_cast<ShadowVisibilityStateLifecycleContext*>(rawContext);
         if(!context || !context->statePrepared)
             return false;
@@ -178,7 +178,7 @@ public:
         return context->stateReady;
     }
 
-    [[nodiscard]] static NWB_INLINE b8 PrepareSoftwareCausticsTask(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
+    [[nodiscard]] static FOUNDATION_INLINE b8 PrepareSoftwareCausticsTask(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
         SoftwareCausticsStateLifecycleContext* const context = static_cast<SoftwareCausticsStateLifecycleContext*>(rawContext);
         if(!context || context->irradianceTextures.empty() || context->scratchTextures.empty() || !finalState)
             return false;
@@ -189,7 +189,7 @@ public:
         return context->statePrepared;
     }
 
-    [[nodiscard]] static NWB_INLINE b8 AcceptSoftwareCausticsTask(void* const rawContext, [[maybe_unused]] const Core::QueueSubmissionToken& token)noexcept{
+    [[nodiscard]] static FOUNDATION_INLINE b8 AcceptSoftwareCausticsTask(void* const rawContext, [[maybe_unused]] const Core::QueueSubmissionToken& token)noexcept{
         SoftwareCausticsStateLifecycleContext* const context = static_cast<SoftwareCausticsStateLifecycleContext*>(rawContext);
         if(!context || !context->statePrepared)
             return false;
@@ -200,7 +200,7 @@ public:
         return context->stateReady;
     }
 
-    [[nodiscard]] static NWB_INLINE b8 PrepareSurfelGiTask(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
+    [[nodiscard]] static FOUNDATION_INLINE b8 PrepareSurfelGiTask(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
         SurfelGiStateLifecycleContext* const context = static_cast<SurfelGiStateLifecycleContext*>(rawContext);
         if(!context || context->returnTextures.empty() || context->counterBuffers.empty() || context->computeTextures.empty() || context->computeBuffers.empty() || !finalState)
             return false;
@@ -218,7 +218,7 @@ public:
         return context->statePrepared;
     }
 
-    [[nodiscard]] static NWB_INLINE b8 AcceptSurfelGiTask(void* const rawContext, const Core::QueueSubmissionToken& token)noexcept{
+    [[nodiscard]] static FOUNDATION_INLINE b8 AcceptSurfelGiTask(void* const rawContext, const Core::QueueSubmissionToken& token)noexcept{
         SurfelGiStateLifecycleContext* const context = static_cast<SurfelGiStateLifecycleContext*>(rawContext);
         if(!context || !context->statePrepared)
             return false;
@@ -233,7 +233,7 @@ public:
         return context->stateReady;
     }
 
-    [[nodiscard]] static NWB_INLINE b8 PrepareHardwareCausticsTask(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
+    [[nodiscard]] static FOUNDATION_INLINE b8 PrepareHardwareCausticsTask(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
         HardwareCausticsStateLifecycleContext* const context = static_cast<HardwareCausticsStateLifecycleContext*>(rawContext);
         if(!context || context->accumulatorTextures.empty() || !finalState)
             return false;
@@ -243,7 +243,7 @@ public:
         return context->statePrepared;
     }
 
-    [[nodiscard]] static NWB_INLINE b8 AcceptHardwareCausticsTask(void* const rawContext, [[maybe_unused]] const Core::QueueSubmissionToken& token)noexcept{
+    [[nodiscard]] static FOUNDATION_INLINE b8 AcceptHardwareCausticsTask(void* const rawContext, [[maybe_unused]] const Core::QueueSubmissionToken& token)noexcept{
         HardwareCausticsStateLifecycleContext* const context = static_cast<HardwareCausticsStateLifecycleContext*>(rawContext);
         if(!context || !context->statePrepared)
             return false;
@@ -253,7 +253,7 @@ public:
         return context->stateReady;
     }
 
-    [[nodiscard]] static NWB_INLINE b8 PrepareDeferredLightingTask(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
+    [[nodiscard]] static FOUNDATION_INLINE b8 PrepareDeferredLightingTask(void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState){
         DeferredLightingStateLifecycleContext* const context = static_cast<DeferredLightingStateLifecycleContext*>(rawContext);
         if(!context || context->shadowReturnTextures.empty() || context->causticReturnTextures.empty() || context->surfelReturnTextures.empty() || !finalState)
             return false;
@@ -270,7 +270,7 @@ public:
         return context->statePrepared;
     }
 
-    [[nodiscard]] static NWB_INLINE b8 AcceptDeferredLightingTask(void* const rawContext, [[maybe_unused]] const Core::QueueSubmissionToken& token){
+    [[nodiscard]] static FOUNDATION_INLINE b8 AcceptDeferredLightingTask(void* const rawContext, [[maybe_unused]] const Core::QueueSubmissionToken& token){
         DeferredLightingStateLifecycleContext* const context = static_cast<DeferredLightingStateLifecycleContext*>(rawContext);
         if(!context || !context->statePrepared)
             return false;

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[subsystem("refractive_subsystem")]
+[arena, subsystem("refractive_subsystem")]
 class RefractiveSubsystem{
     public AssetRef<ComputeShader> causticAccumulatorDecayCs;
     public AssetRef<ComputeShader> causticGeometryDownsampleCs;

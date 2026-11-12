@@ -52,13 +52,13 @@ public:
 
 template<typename RootArenaT, typename FileArenaT>
     requires (!IsSame_V<RootArenaT, Core::Alloc::GlobalArena> || !IsSame_V<FileArenaT, Core::Alloc::GlobalArena>)
-[[nodiscard]] NWB_INLINE Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadata(const ::Path<RootArenaT>& assetRoot, const AStringView virtualRoot, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] FOUNDATION_INLINE Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadata(const ::Path<RootArenaT>& assetRoot, const AStringView virtualRoot, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     return ParseFontAtlasCookMetadata(Path(arena, assetRoot), virtualRoot, Path(arena, nwbFilePath), doc, arena, scratchArena);
 }
 
 template<typename FileArenaT>
     requires (!IsSame_V<FileArenaT, Core::Alloc::GlobalArena>)
-[[nodiscard]] NWB_INLINE Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(const Name virtualPath, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] FOUNDATION_INLINE Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(const Name virtualPath, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     return ParseFontAtlasCookMetadataValue(virtualPath, Path(arena, nwbFilePath), asset, arena, scratchArena);
 }
 [[nodiscard]] Expected<FontAtlas> BuildFontAtlasAsset(const FontAtlasCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
@@ -329,7 +329,7 @@ static void CopySourceGroups(PreparedFontSource& source, FontAtlasPayload& paylo
 
 
 b8 FontAtlasAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, NWB_TEXT("FontAtlasAssetCodec::serialize")))
+    if(!checkSerializeAssetType(asset, FOUNDATION_TEXT("FontAtlasAssetCodec::serialize")))
         return false;
     const FontAtlas& atlas = *MakeNotNull(checked_cast<const FontAtlas*>(&asset));
     if(!atlas.checkVirtualPath(s_FontAtlasValidatePayloadContext))

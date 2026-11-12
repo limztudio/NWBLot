@@ -81,7 +81,7 @@ public:
 
 public:
     [[nodiscard]] b8 checkVirtualPath(TStringView failureContext)const;
-#if defined(NWB_UNICODE)
+#if defined(FOUNDATION_UNICODE)
     [[nodiscard]] b8 checkVirtualPath(const AStringView failureContext)const{
         return checkVirtualPath(ConvertString(failureContext));
     }
@@ -98,14 +98,14 @@ template<typename ArenaT>
     return asset.virtualPath() ? ConvertString(arena, asset.virtualPath().resolvedText()) : TString<ArenaT>(s_UnnamedAssetPathText, arena);
 }
 
-template<typename AssetT>
-class TypedAsset : public IAsset{
+template<typename AssetT, typename BaseAssetT = IAsset>
+class TypedAsset : public BaseAssetT{
 protected:
     TypedAsset()noexcept(noexcept(DeclVal<void(*)(const Name&)noexcept>()(AssetT::AssetTypeName())))
-        : IAsset(AssetT::AssetTypeName())
+        : BaseAssetT(AssetT::AssetTypeName())
     {}
     explicit TypedAsset(const Name& virtualPath)noexcept(noexcept(DeclVal<void(*)(const Name&)noexcept>()(AssetT::AssetTypeName())))
-        : IAsset(AssetT::AssetTypeName(), virtualPath)
+        : BaseAssetT(AssetT::AssetTypeName(), virtualPath)
     {}
 };
 

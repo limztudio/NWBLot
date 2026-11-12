@@ -299,16 +299,16 @@ using Core::Common::NameSymbols::LoadFromMemory;
 using Core::Common::NameSymbols::s_FileHeader;
 
 template<typename PodT>
-NWB_INLINE void ReadTelemetryPod(const TelemetryBytes& payload, const usize byteOffset, PodT& outValue)noexcept{
-    NWB_MEMCPY(&outValue, sizeof(outValue), payload.data() + byteOffset, sizeof(outValue));
+FOUNDATION_INLINE void ReadTelemetryPod(const TelemetryBytes& payload, const usize byteOffset, PodT& outValue)noexcept{
+    FOUNDATION_MEMCPY(&outValue, sizeof(outValue), payload.data() + byteOffset, sizeof(outValue));
 }
 
 template<typename PodT>
-NWB_INLINE void WriteTelemetryPod(TelemetryBytes& payload, const usize byteOffset, const PodT& value)noexcept{
-    NWB_MEMCPY(payload.data() + byteOffset, payload.size() - byteOffset, &value, sizeof(value));
+FOUNDATION_INLINE void WriteTelemetryPod(TelemetryBytes& payload, const usize byteOffset, const PodT& value)noexcept{
+    FOUNDATION_MEMCPY(payload.data() + byteOffset, payload.size() - byteOffset, &value, sizeof(value));
 }
 
-[[nodiscard]] NWB_INLINE b8 RecordBinarySpan(
+[[nodiscard]] FOUNDATION_INLINE b8 RecordBinarySpan(
     TelemetryRecorder& recorder,
     const EventKindEnum kind,
     const u64 frameIndex,
@@ -319,7 +319,7 @@ NWB_INLINE void WriteTelemetryPod(TelemetryBytes& payload, const usize byteOffse
     return recorder.recordBinary(kind, frameIndex, payload.data(), byteCount, streamId);
 }
 
-[[nodiscard]] NWB_INLINE b8 RecordMovedPayloadImpl(
+[[nodiscard]] FOUNDATION_INLINE b8 RecordMovedPayloadImpl(
     TelemetryRecorder& recorder,
     const EventKindEnum kind,
     const u64 frameIndex,
@@ -329,47 +329,47 @@ NWB_INLINE void WriteTelemetryPod(TelemetryBytes& payload, const usize byteOffse
     return recorder.recordPayload(kind, frameIndex, Move(payload), streamId);
 }
 
-[[nodiscard]] NWB_INLINE Optional<EventHeader> EventHeaderAtOpt(const EventView& events, const usize eventIndex)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Optional<EventHeader> EventHeaderAtOpt(const EventView& events, const usize eventIndex)noexcept{
     if(const EventRecord* const event = events.eventAt(eventIndex))
         return event->header;
     return {};
 }
 
-[[nodiscard]] NWB_INLINE usize EventRecordAddressAtValue(const EventView& events, const usize eventIndex)noexcept{
+[[nodiscard]] FOUNDATION_INLINE usize EventRecordAddressAtValue(const EventView& events, const usize eventIndex)noexcept{
     if(const EventRecord* const event = events.eventAt(eventIndex))
         return reinterpret_cast<usize>(event);
     return 0u;
 }
 
-[[nodiscard]] NWB_INLINE Optional<usize> EventPayloadCapacityAtOpt(const EventView& events, const usize eventIndex)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Optional<usize> EventPayloadCapacityAtOpt(const EventView& events, const usize eventIndex)noexcept{
     if(const EventRecord* const event = events.eventAt(eventIndex))
         return event->payload.capacity();
     return {};
 }
 
-[[nodiscard]] NWB_INLINE Optional<Span<const u8>> EventPayloadSpanAtOpt(const EventView& events, const usize eventIndex)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Optional<Span<const u8>> EventPayloadSpanAtOpt(const EventView& events, const usize eventIndex)noexcept{
     if(const EventRecord* const event = events.eventAt(eventIndex))
         return Span<const u8>(event->payload.data(), event->payload.size());
     return {};
 }
 
-[[nodiscard]] NWB_INLINE Expected<PerfMemoryPayload> ParsePerfMemorySpan(const Span<const u8> payload, const usize byteCount){
+[[nodiscard]] FOUNDATION_INLINE Expected<PerfMemoryPayload> ParsePerfMemorySpan(const Span<const u8> payload, const usize byteCount){
     return ParsePerfMemoryPayload(payload.data(), byteCount);
 }
 
-[[nodiscard]] NWB_INLINE Expected<PerfTimingPayload> ParsePerfTimingSpan(const Span<const u8> payload, const usize byteCount){
+[[nodiscard]] FOUNDATION_INLINE Expected<PerfTimingPayload> ParsePerfTimingSpan(const Span<const u8> payload, const usize byteCount){
     return ParsePerfTimingPayload(payload.data(), byteCount);
 }
 
-[[nodiscard]] NWB_INLINE Expected<DiagnosticPayload> ParseDiagnosticSpan(const Span<const u8> payload, const usize byteCount){
+[[nodiscard]] FOUNDATION_INLINE Expected<DiagnosticPayload> ParseDiagnosticSpan(const Span<const u8> payload, const usize byteCount){
     return ParseDiagnosticPayload(payload.data(), byteCount);
 }
 
-[[nodiscard]] NWB_INLINE Expected<TextLogPayload> ParseTextLogSpan(const Span<const u8> payload, const usize byteCount){
+[[nodiscard]] FOUNDATION_INLINE Expected<TextLogPayload> ParseTextLogSpan(const Span<const u8> payload, const usize byteCount){
     return ParseTextLogPayload(payload.data(), byteCount);
 }
 
-[[nodiscard]] NWB_INLINE Expected<FrameGraphPayload> ParseFrameGraphSpan(
+[[nodiscard]] FOUNDATION_INLINE Expected<FrameGraphPayload> ParseFrameGraphSpan(
     TelemetryArena& arena,
     ScratchArena& scratchArena,
     const Span<const u8> payload,
@@ -378,7 +378,7 @@ NWB_INLINE void WriteTelemetryPod(TelemetryBytes& payload, const usize byteOffse
     return ParseFrameGraphPayload(arena, scratchArena, payload.data(), byteCount);
 }
 
-[[nodiscard]] NWB_INLINE Expected<DecodedEvent, DecodeResult> DecodeEventSpan(
+[[nodiscard]] FOUNDATION_INLINE Expected<DecodedEvent, DecodeResult> DecodeEventSpan(
     TelemetryArena& arena,
     const Span<const u8> bytes,
     const usize byteCount
@@ -386,7 +386,7 @@ NWB_INLINE void WriteTelemetryPod(TelemetryBytes& payload, const usize byteOffse
     return DecodeEvent(arena, bytes.data(), byteCount);
 }
 
-[[nodiscard]] NWB_INLINE Expected<usize, DecodeResult> DecodeEventStreamSpan(
+[[nodiscard]] FOUNDATION_INLINE Expected<usize, DecodeResult> DecodeEventStreamSpan(
     const Span<const u8> bytes,
     const usize byteCount,
     TelemetryArena& arena,
@@ -395,7 +395,7 @@ NWB_INLINE void WriteTelemetryPod(TelemetryBytes& payload, const usize byteOffse
     return DecodeEventStream(bytes.data(), byteCount, arena, recorder);
 }
 
-[[nodiscard]] NWB_INLINE b8 ScratchAllocateNonNull(ScratchArena& arena, const usize alignment, const usize bytes){
+[[nodiscard]] FOUNDATION_INLINE b8 ScratchAllocateNonNull(ScratchArena& arena, const usize alignment, const usize bytes){
     return arena.allocate(alignment, bytes) != nullptr;
 }
 

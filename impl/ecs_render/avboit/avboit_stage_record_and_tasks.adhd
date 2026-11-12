@@ -119,7 +119,7 @@ Expected<AvboitDepthWarpStageResult> AvboitComputeEffectChainBuilder::declareDep
             AvboitDepthWarpGraphTask::Payload{ .avboitSystem = m_avboitSystem, .targets = inputs.targets, .timingTicket = inputs.depthWarpTimingTicket, .timingFeedback = &inputs.timingFeedback, .timingScope = &RendererGpuTimingScope::s_AvboitDepthWarp, });
         if(!depthWarpTaskResult){
             m_avboitSystem.taskGraphStage().m_depthWarpTask = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT depth-warp graph task"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred AVBOIT depth-warp graph task"));
             return MakeUnexpected(Failure{});
         }
         m_avboitSystem.taskGraphStage().m_depthWarpTask = *depthWarpTaskResult;
@@ -168,7 +168,7 @@ b8 AvboitComputeEffectChainBuilder::declareIntegration(const AvboitIntegrationSt
         AvboitIntegrationGraphTask::Payload{ .avboitSystem = m_avboitSystem, .targets = inputs.targets, .timingTicket = inputs.integrationTimingTicket, .timingFeedback = &inputs.timingFeedback, .timingScope = &RendererGpuTimingScope::s_AvboitIntegration, });
     if(!integrationTaskResult){
         m_avboitSystem.taskGraphStage().m_integrationTask = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT integration graph task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred AVBOIT integration graph task"));
         return false;
     }
     m_avboitSystem.taskGraphStage().m_integrationTask = *integrationTaskResult;
@@ -378,7 +378,7 @@ b8 AvboitAccumulationRecordBuilder::declare(
     const auto accumulationFinalizeTaskResult = m_graph.addTask<AvboitAccumulationFinalizeGraphTask>(accumulationFinalizeDesc, AvboitAccumulationFinalizeGraphTask::Payload{});
     if(!accumulationFinalizeTaskResult){
         stage.m_accumulationFinalizeTask = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT accumulation finalizer graph task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare AVBOIT accumulation finalizer graph task"));
         return false;
     }
     stage.m_accumulationFinalizeTask = *accumulationFinalizeTaskResult;

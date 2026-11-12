@@ -38,9 +38,9 @@ b8 TypeLayoutAnalyzer::isNonRootMotherArenaType(const TypeRef& type, const u32 d
     if(!unwrapped || unwrapped->refMode != ParamPassingMode::None || unwrapped->isFuncType)
         return false;
     const ClassDecl* cls = m_symbols.findClass(unwrapped->name);
-    if(!cls || cls->isArenaOwner || cls->isSerialize || !cls->subsystemTypeName.empty() || !cls->componentAssetTypeName.empty())
+    if(!cls || cls->usesStaticClassArena() || cls->isSerialize || !cls->subsystemTypeName.empty())
         return false;
-    if(cls->needsClassArena)
+    if(cls->needsClassArena || !cls->systemTypeName.empty())
         return true;
     if(!cls->templateParams.empty() && !unwrapped->templateArgs.empty()){
         for(const FieldDecl* f : cls->fields){
@@ -112,7 +112,7 @@ b8 TypeLayoutAnalyzer::isTypeConstructible(const TypeRef& type, const b8 require
         return true;
     const MStringView name = unwrapped->name;
     if(const ClassDecl* cls = m_symbols.findClass(name)){
-        if(!cls->subsystemTypeName.empty())
+        if(!cls->subsystemTypeName.empty() || !cls->systemTypeName.empty())
             return false;
         if(!cls->templateParams.empty() && !unwrapped->templateArgs.empty()){
             for(const TypeRef* implIface : cls->implementedInterfaces){
@@ -191,7 +191,7 @@ b8 TypeLayoutAnalyzer::isTypeAssignable(const TypeRef& type, const b8 requireCop
 }
 
 b8 TypeLayoutAnalyzer::isClassConstructible(const ClassDecl& decl, const Span<const FieldDecl* const> fields, const b8 requireCopy, const u32 depth)const noexcept{
-    if(depth >= 8u || !decl.subsystemTypeName.empty())
+    if(depth >= 8u || !decl.subsystemTypeName.empty() || !decl.systemTypeName.empty())
         return false;
     for(const TypeRef* implIface : decl.implementedInterfaces){
         if(implIface && interfaceInheritsNoCopy(*implIface))

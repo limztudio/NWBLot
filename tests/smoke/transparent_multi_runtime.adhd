@@ -16,15 +16,15 @@ native{
 
 
 namespace NWB::Tests::Smoke{
-[[nodiscard]] NWB_INLINE AStringView TransparentMultiProjectName()noexcept{
+[[nodiscard]] FOUNDATION_INLINE AStringView TransparentMultiProjectName()noexcept{
     return "TransparentMultiSmokeProject";
 }
 
-[[nodiscard]] NWB_INLINE AStringView CausticSphereProjectName()noexcept{
+[[nodiscard]] FOUNDATION_INLINE AStringView CausticSphereProjectName()noexcept{
     return "CausticSphereSmokeProject";
 }
 
-[[nodiscard]] NWB_INLINE AStringView TransparentMultiFpsLabel()noexcept{
+[[nodiscard]] FOUNDATION_INLINE AStringView TransparentMultiFpsLabel()noexcept{
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
     return "FrameLaggedAsyncLightingSmokeProject";
 #elif defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
@@ -329,13 +329,13 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
-    return NWB_TEXT("NWB Frame Lagged Async Lighting Smoke");
+    return FOUNDATION_TEXT("NWB Frame Lagged Async Lighting Smoke");
 #elif defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
-    return NWB_TEXT("NWB Transparent CSG Smoke");
+    return FOUNDATION_TEXT("NWB Transparent CSG Smoke");
 #elif defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
-    return NWB_TEXT("NWB Caustic Sphere Smoke");
+    return FOUNDATION_TEXT("NWB Caustic Sphere Smoke");
 #else
-    return NWB_TEXT("NWB Transparent Multi Smoke");
+    return FOUNDATION_TEXT("NWB Transparent Multi Smoke");
 #endif
 }
 

@@ -196,13 +196,13 @@ struct FormattedNumericBuffer{
     }
 };
 
-[[nodiscard]] NWB_INLINE FormattedNumericBuffer FormatIntegerBuffer(const i64 value)noexcept{
+[[nodiscard]] FOUNDATION_INLINE FormattedNumericBuffer FormatIntegerBuffer(const i64 value)noexcept{
     FormattedNumericBuffer out;
     out.result = FormatI64(value, out.storage);
     return out;
 }
 
-[[nodiscard]] NWB_INLINE FormattedNumericBuffer FormatFloatBuffer(const f64 value)noexcept{
+[[nodiscard]] FOUNDATION_INLINE FormattedNumericBuffer FormatFloatBuffer(const f64 value)noexcept{
     FormattedNumericBuffer out;
     out.result = FormatF64(value, out.storage);
     return out;
@@ -441,41 +441,41 @@ using ::NWB::Tests::UiCases::s_UiInputNameSprite;
 
 inline constexpr AStringView s_UiNumericParseEmbeddedNulDigits = __hidden_ui_numeric_parse_tests::s_EmbeddedNulDigits;
 
-[[nodiscard]] NWB_INLINE UiNumericFormatBuffer FormatUiNumericI64(const i64 value)noexcept{
+[[nodiscard]] FOUNDATION_INLINE UiNumericFormatBuffer FormatUiNumericI64(const i64 value)noexcept{
     return __hidden_ui_numeric_format_tests::FormatIntegerBuffer(value);
 }
-[[nodiscard]] NWB_INLINE UiNumericFormatBuffer FormatUiNumericF64(const f64 value)noexcept{
+[[nodiscard]] FOUNDATION_INLINE UiNumericFormatBuffer FormatUiNumericF64(const f64 value)noexcept{
     return __hidden_ui_numeric_format_tests::FormatFloatBuffer(value);
 }
-[[nodiscard]] NWB_INLINE ::ErrorCode MakeUiNumericValueTooLargeError()noexcept{
+[[nodiscard]] FOUNDATION_INLINE ::ErrorCode MakeUiNumericValueTooLargeError()noexcept{
     return ::MakeErrorCode(::ErrorCondition::value_too_large);
 }
-[[nodiscard]] NWB_INLINE ::ErrorCode MakeUiNumericInvalidArgumentError()noexcept{
+[[nodiscard]] FOUNDATION_INLINE ::ErrorCode MakeUiNumericInvalidArgumentError()noexcept{
     return ::MakeErrorCode(::ErrorCondition::invalid_argument);
 }
-[[nodiscard]] NWB_INLINE f64 UiNumericInfinityF64()noexcept{
+[[nodiscard]] FOUNDATION_INLINE f64 UiNumericInfinityF64()noexcept{
     return ::Limit<f64>::s_Infinity;
 }
-[[nodiscard]] NWB_INLINE f64 UiNumericQuietNaNF64()noexcept{
+[[nodiscard]] FOUNDATION_INLINE f64 UiNumericQuietNaNF64()noexcept{
     return ::Limit<f64>::s_QuietNaN;
 }
 
-[[nodiscard]] NWB_INLINE b8 UiPaintGlyphHasPage(const SharedGlyphPage& page)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 UiPaintGlyphHasPage(const SharedGlyphPage& page)noexcept{
     return static_cast<b8>(page != nullptr);
 }
-[[nodiscard]] NWB_INLINE usize UiPaintGlyphPageAddress(const SharedGlyphPage& page)noexcept{
+[[nodiscard]] FOUNDATION_INLINE usize UiPaintGlyphPageAddress(const SharedGlyphPage& page)noexcept{
     return reinterpret_cast<usize>(page.get());
 }
-[[nodiscard]] NWB_INLINE u64 UiPaintGlyphPageGeneration(const SharedGlyphPage& page)noexcept{
+[[nodiscard]] FOUNDATION_INLINE u64 UiPaintGlyphPageGeneration(const SharedGlyphPage& page)noexcept{
     return page->binding().generation;
 }
-[[nodiscard]] NWB_INLINE u8 UiPaintGlyphPagePixel(const SharedGlyphPage& page, const usize index)noexcept{
+[[nodiscard]] FOUNDATION_INLINE u8 UiPaintGlyphPagePixel(const SharedGlyphPage& page, const usize index)noexcept{
     return page->pixels()[index];
 }
-NWB_INLINE void TakeUiPaintGlyphPage(SharedGlyphPage& dst, ::Expected<SharedGlyphPage>& src)noexcept{
+FOUNDATION_INLINE void TakeUiPaintGlyphPage(SharedGlyphPage& dst, ::Expected<SharedGlyphPage>& src)noexcept{
     dst = ::Move(*src);
 }
-NWB_INLINE void TakeUiPaintGlyphPage(SharedGlyphPage& dst, ::Expected<SharedGlyphPage>&& src)noexcept{
+FOUNDATION_INLINE void TakeUiPaintGlyphPage(SharedGlyphPage& dst, ::Expected<SharedGlyphPage>&& src)noexcept{
     dst = ::Move(*src);
 }
 
@@ -483,7 +483,7 @@ b8 MutateUiNumericSelectionEpochDraft(const UiNumericSelectionEpochMutationEnum&
 };
 
 namespace __hidden_ui_numeric_selection_epoch_tests{
-NWB_INLINE b8 SelectionEpochSource::mutate(EditModel& draft)const{
+FOUNDATION_INLINE b8 SelectionEpochSource::mutate(EditModel& draft)const{
     return ::__hidden_ui_glyph_sdf_tests::MutateUiNumericSelectionEpochDraft(mutation, draft);
 }
 };

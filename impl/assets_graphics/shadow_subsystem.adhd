@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[subsystem("shadow_subsystem")]
+[arena, subsystem("shadow_subsystem")]
 class ShadowSubsystem{
     public AssetRef<ComputeShader> hardwareTransparentEvaluateCs;
     public AssetRef<ComputeShader> hardwareTransparentGatherCs;

@@ -35,7 +35,7 @@ NWB_IMPL_BEGIN
 
 
 void ShadowPrepareGeometryResources::prepareStorage(const b8 blasInputStatesGraphOwned){
-    NWB_ASSERT(!m_storagePrepared);
+    FOUNDATION_ASSERT(!m_storagePrepared);
     if(blasInputStatesGraphOwned){
         for(const PreparedMeshBlasBuild& build : m_inputs.blasBuilds){
             addRequest(build.positionBuffer);
@@ -49,7 +49,7 @@ void ShadowPrepareGeometryResources::prepareStorage(const b8 blasInputStatesGrap
 }
 
 b8 ShadowPrepareGeometryResources::gatherBuildInputs(const Core::GpuTaskGraph& graph){
-    NWB_ASSERT(m_storagePrepared && !m_inputsGathered);
+    FOUNDATION_ASSERT(m_storagePrepared && !m_inputsGathered);
     if(!resolveRequests(graph)){
         clearBuildInputs();
         m_inputsGathered = true;
@@ -69,7 +69,7 @@ b8 ShadowPrepareGeometryResources::gatherBuildInputs(const Core::GpuTaskGraph& g
 }
 
 b8 ShadowPrepareGeometryResources::gatherRemainingTraceResources()noexcept{
-    NWB_ASSERT(m_inputsGathered);
+    FOUNDATION_ASSERT(m_inputsGathered);
     const b8 hasBlasInputs = !m_blasBuildInputs.empty();
     for(const Core::GpuGraphResourceId resource : m_inputs.traceResources){
         if(!resource.valid())
@@ -319,7 +319,7 @@ b8 ShadowPrepareResourcePlanner::prepare(const ShadowPrepareResourceInputs& inpu
 
     b8 resourcesImported = true;
     if(!geometryResources.gatherBuildInputs(m_graph)){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen BLAS geometry inputs are missing graph resources"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: frozen BLAS geometry inputs are missing graph resources"));
         return false;
     }
     if(meshBlasBuildsGraphOwned){
@@ -456,7 +456,7 @@ b8 ShadowPrepareResourcePlanner::prepare(const ShadowPrepareResourceInputs& inpu
         }
     }
     if(!resourcesImported){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import preflighted shadow-preparation resources"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import preflighted shadow-preparation resources"));
         return false;
     }
 

@@ -124,47 +124,6 @@ void AssetClassHeaderEmitter::emitSubsystem(MString& out, const ClassDecl& decl)
 
 }
 
-void AssetClassHeaderEmitter::emitComponent(MString& out, const ClassDecl& decl)const{
-    out.append("class ");
-    out.append(decl.name.data(), decl.name.size());
-    out.append(" final : public ::NWB::Impl::TypedComponent<");
-    out.append(decl.name.data(), decl.name.size());
-    out.append(">{\r\n");
-    out.append("public:\r\n");
-    out.append("    NWB_DEFINE_ASSET_TYPE(\"");
-    out.append(decl.componentAssetTypeName.data(), decl.componentAssetTypeName.size());
-    out.append("\")\r\n\r\n");
-    out.append("public:\r\n");
-    out.append("    using ::NWB::Impl::TypedComponent<");
-    out.append(decl.name.data(), decl.name.size());
-    out.append(">::TypedComponent;\r\n\r\n");
-    out.append("public:\r\n");
-    out.append("    [[nodiscard]] virtual b8 loadComponentPayload(Span<const u8> payload)override;\r\n");
-    out.append("    [[nodiscard]] virtual b8 validatePayload()const override;\r\n");
-    out.append("    virtual void applyToEntity(::NWB::Core::ECS::Entity& entity)const override{\r\n");
-    out.append("        entity.addComponent<");
-    if(!decl.fields.empty() && decl.fields[0] && decl.fields[0]->type)
-        m_typeEmitter.emitTypeCpp(out, *decl.fields[0]->type);
-    out.append(">() = ");
-    if(!decl.fields.empty() && decl.fields[0] && !decl.fields[0]->name.empty())
-        out.append(decl.fields[0]->name.data(), decl.fields[0]->name.size());
-    else
-        out.append("component");
-    out.append(";\r\n");
-    out.append("    }\r\n");
-    out.append("#if defined(NWB_COOK)\r\n");
-    out.append("    [[nodiscard]] virtual b8 serializeComponentPayload(::NWB::Core::Assets::AssetBytes& outPayload)const override;\r\n");
-    out.append("#endif\r\n\r\n");
-    out.append("public:\r\n    ");
-    if(!decl.fields.empty() && decl.fields[0] && decl.fields[0]->type){
-        m_typeEmitter.emitTypeCpp(out, *decl.fields[0]->type);
-        out.push_back(' ');
-        out.append(decl.fields[0]->name.data(), decl.fields[0]->name.size());
-        out.append(";\r\n");
-    }
-    out.append("};\r\n\r\n");
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

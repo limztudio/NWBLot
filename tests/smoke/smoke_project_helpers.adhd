@@ -39,14 +39,14 @@ using Core::KeyboardInputResult;
 namespace InputAction = Core::InputAction;
 namespace Key = Core::Key;
 
-[[nodiscard]] NWB_INLINE NotNullUniquePtr<Core::ECS::World> CreateSmokeWorldOrDie(const AStringView projectName, ProjectRuntimeContext& context){
+[[nodiscard]] FOUNDATION_INLINE NotNullUniquePtr<Core::ECS::World> CreateSmokeWorldOrDie(const AStringView projectName, ProjectRuntimeContext& context){
     auto world = MakeUnique<Core::ECS::World>(context.objectArena, context.cpuTasks);
     if(!world){
-        NWB_LOGGER_FATAL(NWB_TEXT("{}: ECS world allocation failed"), ConvertString(projectName));
+        NWB_LOGGER_FATAL(FOUNDATION_TEXT("{}: ECS world allocation failed"), ConvertString(projectName));
         throw RuntimeException("Smoke project initialization failed");
     }
     if(!context.shaderPathResolver){
-        NWB_LOGGER_FATAL(NWB_TEXT("{} initialization failed: shader path resolver callback is null"), ConvertString(projectName));
+        NWB_LOGGER_FATAL(FOUNDATION_TEXT("{} initialization failed: shader path resolver callback is null"), ConvertString(projectName));
         throw RuntimeException("Smoke project initialization failed");
     }
 
@@ -59,42 +59,42 @@ using ::s_PIDIV2;
 using PerfCaptureOptions = Core::Perf::CaptureOptions;
 using TelemetryCaptureOptions = Core::Telemetry::CaptureOptions;
 
-[[nodiscard]] NWB_INLINE Core::Perf::CaptureOptions SmokePerfGpuTimingOnly()noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::Perf::CaptureOptions SmokePerfGpuTimingOnly()noexcept{
     return Core::Perf::CaptureOptions::GpuTimingOnly();
 }
 
-[[nodiscard]] NWB_INLINE Core::Telemetry::CaptureOptions SmokeTelemetryPerfOnly()noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::Telemetry::CaptureOptions SmokeTelemetryPerfOnly()noexcept{
     return Core::Telemetry::CaptureOptions::PerfOnly();
 }
 
 using NWB::ProjectFrameClientSize;
 
-[[nodiscard]] NWB_INLINE ProjectFrameClientSize QuerySmokeFrameClientSize(){
+[[nodiscard]] FOUNDATION_INLINE ProjectFrameClientSize QuerySmokeFrameClientSize(){
     return NWB::QueryProjectFrameClientSize();
 }
 
-[[nodiscard]] NWB_INLINE b8 SmokeContextHasQuitCallback(const ProjectRuntimeContext& context)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 SmokeContextHasQuitCallback(const ProjectRuntimeContext& context)noexcept{
     return static_cast<b8>(context.requestQuit);
 }
 
-NWB_INLINE void RequestSmokeQuit(ProjectRuntimeContext& context){
+FOUNDATION_INLINE void RequestSmokeQuit(ProjectRuntimeContext& context){
     if(context.requestQuit)
         context.requestQuit();
 }
 
-[[nodiscard]] NWB_INLINE NotNullUniquePtr<Core::ECS::World> TakeSmokeWorld(NotNullUniquePtr<Core::ECS::World>& world)noexcept{
+[[nodiscard]] FOUNDATION_INLINE NotNullUniquePtr<Core::ECS::World> TakeSmokeWorld(NotNullUniquePtr<Core::ECS::World>& world)noexcept{
     return Move(world);
 }
 
-[[nodiscard]] NWB_INLINE NotNullUniquePtr<Core::ECS::World> TakeSmokeWorld(NotNullUniquePtr<Core::ECS::World>&& world)noexcept{
+[[nodiscard]] FOUNDATION_INLINE NotNullUniquePtr<Core::ECS::World> TakeSmokeWorld(NotNullUniquePtr<Core::ECS::World>&& world)noexcept{
     return Move(world);
 }
 
-[[nodiscard]] NWB_INLINE Core::ECS::World& SmokeWorldRef(NotNullUniquePtr<Core::ECS::World>& world)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::ECS::World& SmokeWorldRef(NotNullUniquePtr<Core::ECS::World>& world)noexcept{
     return *world;
 }
 
-[[nodiscard]] NWB_INLINE const Core::ECS::World& SmokeWorldRef(const NotNullUniquePtr<Core::ECS::World>& world)noexcept{
+[[nodiscard]] FOUNDATION_INLINE const Core::ECS::World& SmokeWorldRef(const NotNullUniquePtr<Core::ECS::World>& world)noexcept{
     return *world;
 }
 };
@@ -238,15 +238,15 @@ void SetSmokeYawWindowTitle(in f32 yaw, in b8 manualControl, in f32 twoPi, mut P
     native(in radians, in degrees, in manualControl, mut context){
         constexpr usize s_TitleCapacity = 192u;
         Array<tchar, s_TitleCapacity> title{};
-        NWB_TSPRINTF(
+        FOUNDATION_TSPRINTF(
             title.data(),
             s_TitleCapacity,
-            NWB_TEXT("%.*s  |  yaw %.4f rad (%.2f deg)%s"),
+            FOUNDATION_TEXT("%.*s  |  yaw %.4f rad (%.2f deg)%s"),
             static_cast<i32>(QueryProjectWindowTitle().size()),
             QueryProjectWindowTitle().data(),
             radians,
             degrees,
-            manualControl ? NWB_TEXT("  [manual: <- ->]") : NWB_TEXT("")
+            manualControl ? FOUNDATION_TEXT("  [manual: <- ->]") : FOUNDATION_TEXT("")
         );
         context.graphics.setWindowTitle(TStringView(title.data()));
     }

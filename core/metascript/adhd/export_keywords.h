@@ -215,9 +215,10 @@ NWB_ADHD_EXPORT_CLASS_FLAG_ATTRIBUTE("serialize", isSerialize)
 NWB_ADHD_EXPORT_CLASS_FLAG_ATTRIBUTE("reflect",   isReflect)
 NWB_ADHD_EXPORT_CLASS_FLAG_ATTRIBUTE("arena",     isArenaOwner)
 
-NWB_ADHD_EXPORT_CLASS_STRING_ATTRIBUTE("asset",           assetTypeName,          true,  "'[asset(\"...\")]' requires a single string literal argument")
-NWB_ADHD_EXPORT_CLASS_STRING_ATTRIBUTE("subsystem",       subsystemTypeName,      false, "'[subsystem(\"...\")]' requires a single string literal argument")
-NWB_ADHD_EXPORT_CLASS_STRING_ATTRIBUTE("component_asset", componentAssetTypeName, false, "'[component_asset(\"...\")]' requires a single string literal argument")
+NWB_ADHD_EXPORT_CLASS_STRING_ATTRIBUTE("asset",     assetTypeName,     true,  "'[asset(\"...\")]' requires a single string literal argument")
+NWB_ADHD_EXPORT_CLASS_STRING_ATTRIBUTE("system",    systemTypeName,    false, "'[system(\"...\")]' requires a single string literal argument")
+NWB_ADHD_EXPORT_CLASS_STRING_ATTRIBUTE("subsystem", subsystemTypeName, false, "'[subsystem(\"...\")]' requires a single string literal argument")
+NWB_ADHD_EXPORT_CLASS_STRING_ATTRIBUTE("component", componentTypeName, true,  "'[component(\"...\")]' requires a single string literal argument")
 
 NWB_ADHD_EXPORT_FIELD_ATTRIBUTE("transient", isTransient, false)
 NWB_ADHD_EXPORT_FIELD_ATTRIBUTE("reflect",   isReflect,   true)

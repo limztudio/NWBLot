@@ -208,11 +208,11 @@ b8 RendererRayTracingSystem::preparePendingMeshBlasResources(Core::Alloc::Scratc
             continue;
         const ECSRenderDetail::MeshRayTracingResourceSnapshot expected = meshResources;
         if(!prepareMeshBlasResources(meshResources)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: BLAS resource preflight failed for mesh '{}'"), ConvertString(meshResources.meshName.resolvedText()));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: BLAS resource preflight failed for mesh '{}'"), ConvertString(meshResources.meshName.resolvedText()));
             allResourcesReady = false;
         }
         else if(!m_meshSystem.commitRayTracingResourceSnapshot(expected, meshResources)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: BLAS resource preflight lost mesh '{}'"), ConvertString(meshResources.meshName.resolvedText()));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: BLAS resource preflight lost mesh '{}'"), ConvertString(meshResources.meshName.resolvedText()));
             allResourcesReady = false;
         }
     }
@@ -236,7 +236,7 @@ b8 RendererRayTracingSystem::capturePreparedMeshBlasBuilds(Core::Alloc::ScratchA
 
         auto build = PreparedMeshBlasBuilder::Resolve(meshResources);
         if(!build){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze BLAS build for mesh '{}'"), ConvertString(meshResources.meshName.resolvedText()));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not freeze BLAS build for mesh '{}'"), ConvertString(meshResources.meshName.resolvedText()));
             clearPreparedMeshBlasBuilds();
             return false;
         }
@@ -253,13 +253,13 @@ b8 RendererRayTracingSystem::recordPreparedMeshBlasBuilds(Core::CommandList& com
     for(const PreparedMeshBlasBuild& build : m_preparedMeshBlasBuilds){
         auto meshResourcesResult = m_meshSystem.findRayTracingResourceSnapshot(build.meshName);
         if(!meshResourcesResult || !PreparedMeshBlasBuilder::Matches((*meshResourcesResult), build)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen BLAS build no longer matches mesh '{}'"), ConvertString(build.meshName.resolvedText()));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: frozen BLAS build no longer matches mesh '{}'"), ConvertString(build.meshName.resolvedText()));
             return false;
         }
     }
     for(const PreparedMeshBlasBuild& build : m_preparedMeshBlasBuilds){
         if(!PreparedMeshBlasBuilder::Record(build, meshBlasGeometryBuildInputStatesGraphOwned, commandList)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record frozen BLAS build for mesh '{}'"), ConvertString(build.meshName.resolvedText()));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: failed to record frozen BLAS build for mesh '{}'"), ConvertString(build.meshName.resolvedText()));
             return false;
         }
     }
@@ -298,13 +298,13 @@ b8 RendererRayTracingSystem::prepareMeshBlasResources(ECSRenderDetail::MeshRayTr
     accelStructDesc.setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
     const auto blasName = DeriveName(meshResources.meshName, s_BlasNameSuffix);
     if(!blasName){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BLAS for mesh '{}'"), ConvertString(meshResources.meshName.resolvedText()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create BLAS for mesh '{}'"), ConvertString(meshResources.meshName.resolvedText()));
         return false;
     }
     accelStructDesc.setDebugName(*blasName);
     auto blasResult = m_graphics.getDevice().createAccelStruct(accelStructDesc);
     if(!blasResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BLAS for mesh '{}'"), ConvertString(meshResources.meshName.resolvedText()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create BLAS for mesh '{}'"), ConvertString(meshResources.meshName.resolvedText()));
         return false;
     }
     Core::RayTracingAccelStructHandle blas = Move(*blasResult);
@@ -471,12 +471,12 @@ b8 PreparedSceneTlasBuild::capture(const RendererRayTracingState& state, const b
 
 b8 PreparedSceneTlasBuild::record(RendererRayTracingState& state, Core::CommandList& commandList){
     if(!m_ready || m_instances.empty() || m_instances.size() != m_blases.size() || !storageMatches(state) || !StorageReady(state, m_instances.size())){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen scene TLAS build no longer matches preflight storage"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: frozen scene TLAS build no longer matches preflight storage"));
         return false;
     }
     for(usize index = 0u; index < m_instances.size(); ++index){
         if(!m_blases[index] || m_instances[index].bottomLevelAS != m_blases[index].get()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen scene TLAS build lost a referenced BLAS"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: frozen scene TLAS build lost a referenced BLAS"));
             return false;
         }
     }
@@ -551,7 +551,7 @@ Expected<Core::GpuDescriptorHandle> MeshHeapHandleGather::acquire(const Core::Bu
     const NotNull<const Core::Buffer*> bufferKey(&buffer);
     auto found = m_cache.find(bufferKey);
     if(found != m_cache.end()){
-        NWB_ASSERT(found.value().handle.valid());
+        FOUNDATION_ASSERT(found.value().handle.valid());
         found.value().seenThisFrame = true;
         return found.value().handle;
     }
@@ -566,7 +566,7 @@ Expected<Core::GpuDescriptorHandle> MeshHeapHandleGather::acquire(const Core::Bu
     entry.handle = *handle;
     entry.seenThisFrame = true;
     if(!m_cache.insert({bufferKey, Move(entry)}).second){
-        NWB_ASSERT(false);
+        FOUNDATION_ASSERT(false);
         return MakeUnexpected(Failure{});
     }
     descriptorRetirement.release();

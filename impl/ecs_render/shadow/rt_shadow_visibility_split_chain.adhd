@@ -116,7 +116,7 @@ b8 SoftShadowSplitResourceUseBuilder::build(const SoftShadowSplitResourceInputs&
         || (hardwareTransparentTrace ? !inputs.sceneTlas.valid() : (!sceneBvhNodesResult || !sceneInstancesResult))
         || !shadowInstanceMaterialsResult || !shadowTypedMaterialsResult || !shadowInstancesResult
     ){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import prepared soft-transparent shadow-fold resources"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import prepared soft-transparent shadow-fold resources"));
         return false;
     }
     const Core::GpuGraphResourceId sceneInstances = *sceneInstancesResult;
@@ -361,7 +361,7 @@ Expected<SoftShadowSplitTaskChainBuilder::LightSpaceShadowMaps> SoftShadowSplitT
         const Core::GpuGraphResourceId receiverCapData = declarations.findImportedTexture(inputs.targets.csgRemovedIntervalData);
         const Core::GpuGraphResourceId receiverCapCount = declarations.findImportedTexture(inputs.targets.csgRemovedIntervalCount);
         if(!receiverView.valid() || !receiverCapState.valid() || !receiverCapDepth.valid() || !receiverCapData.valid() || !receiverCapCount.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not find the current light-space shadow receiver cap resources"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not find the current light-space shadow receiver cap resources"));
             return MakeUnexpected(Failure{});
         }
         const Core::TextureSubresourceSet layers(0u, 1u, 0u, inputs.targets.csgRemovedIntervalLayerCount);
@@ -400,13 +400,13 @@ Expected<SoftShadowSplitTaskChainBuilder::LightSpaceShadowMaps> SoftShadowSplitT
         if(!resource.valid()){
             const auto importedResource = ImportExternalBuffer(m_graph, buffer, buffer->getCreationDescription().debugName, s_CsgShadowDynamicBoundsLabel);
             if(!importedResource){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import CSG shadow dynamic bounds"));
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import CSG shadow dynamic bounds"));
                 return MakeUnexpected(Failure{});
             }
             resource = *importedResource;
         }
         if(!resource.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import CSG shadow dynamic bounds"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import CSG shadow dynamic bounds"));
             return MakeUnexpected(Failure{});
         }
         if(FindIf(csgBoundsResources.begin(), csgBoundsResources.end(), [&](const auto existing)noexcept{ return existing == resource; }) != csgBoundsResources.end())
@@ -425,7 +425,7 @@ Expected<SoftShadowSplitTaskChainBuilder::LightSpaceShadowMaps> SoftShadowSplitT
         m_graph
     );
     if(!mapsResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare light-space shadow maps"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare light-space shadow maps"));
         return MakeUnexpected(Failure{});
     }
     const LightSpaceShadowGraph maps = Move(*mapsResult);
@@ -488,7 +488,7 @@ b8 SoftShadowSplitTaskChainBuilder::declareOpaqueTasks(
     );
     if(!opaqueTaskResult){
         tasks.opaque = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred opaque shadow-visibility graph task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred opaque shadow-visibility graph task"));
         return false;
     }
     tasks.opaque = *opaqueTaskResult;
@@ -512,7 +512,7 @@ b8 SoftShadowSplitTaskChainBuilder::declareOpaqueTasks(
         );
         if(!opaqueFirstWaveletTaskResult){
             tasks.opaqueFirstWavelet = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred opaque soft-shadow first-wavelet graph task"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred opaque soft-shadow first-wavelet graph task"));
             return false;
         }
         tasks.opaqueFirstWavelet = *opaqueFirstWaveletTaskResult;
@@ -534,7 +534,7 @@ b8 SoftShadowSplitTaskChainBuilder::declareOpaqueTasks(
         );
         if(!opaqueResolveTaskResult){
             tasks.opaqueResolve = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred opaque soft-shadow resolve-tail graph task"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred opaque soft-shadow resolve-tail graph task"));
             return false;
         }
         tasks.opaqueResolve = *opaqueResolveTaskResult;
@@ -570,7 +570,7 @@ b8 SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
     );
     if(!transparentTraceTaskResult){
         tasks.transparentTrace = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred transparent soft-shadow trace graph task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred transparent soft-shadow trace graph task"));
         return false;
     }
     tasks.transparentTrace = *transparentTraceTaskResult;
@@ -594,7 +594,7 @@ b8 SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
         );
         if(!transparentTemporalMergeTaskResult){
             tasks.transparentTemporalMerge = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred transparent soft-shadow temporal-merge graph task"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred transparent soft-shadow temporal-merge graph task"));
             return false;
         }
         tasks.transparentTemporalMerge = *transparentTemporalMergeTaskResult;
@@ -617,7 +617,7 @@ b8 SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
     );
     if(!transparentFirstWaveletTaskResult){
         tasks.transparentFirstWavelet = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred transparent soft-shadow first-wavelet graph task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred transparent soft-shadow first-wavelet graph task"));
         return false;
     }
     tasks.transparentFirstWavelet = *transparentFirstWaveletTaskResult;
@@ -639,7 +639,7 @@ b8 SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
     );
     if(!foldTaskResult){
         tasks.fold = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred soft-transparent shadow-fold graph task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred soft-transparent shadow-fold graph task"));
         return false;
     }
     tasks.fold = *foldTaskResult;
@@ -654,7 +654,7 @@ b8 SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
         );
         if(!diagnosticsTaskResult){
             tasks.diagnostics = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare CSG shadow diagnostics readback"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare CSG shadow diagnostics readback"));
             return false;
         }
         tasks.diagnostics = *diagnosticsTaskResult;

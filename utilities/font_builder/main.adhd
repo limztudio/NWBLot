@@ -69,7 +69,7 @@ static i32 Run(const i32 argc, char** argv){
             LogFontBuilderPublishedSummary(options.output, payload->glyphs.size(), payload->groups.size());
             return s_FontBuilderExitSuccess;
         },
-        [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); },
+        [&](const CLI::ParseError& error){ return app.exit(error, FOUNDATION_COUT, FOUNDATION_CERR); },
         []()noexcept{ return s_FontBuilderEntryFailure; }
     );
 }
@@ -84,7 +84,7 @@ NWB_FONT_BUILDER_UTILITY_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_DEFINE_CONSOLE_TOOL_ENTRY_POINT(NWB::Log::ClientStandalone, NWB_TEXT("font_builder"), NWB::FontBuilderUtility::s_FontBuilderEntryFailure, NWB::FontBuilderUtility::Run)
+NWB_DEFINE_CONSOLE_TOOL_ENTRY_POINT(NWB::Log::ClientStandalone, FOUNDATION_TEXT("font_builder"), NWB::FontBuilderUtility::s_FontBuilderEntryFailure, NWB::FontBuilderUtility::Run)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

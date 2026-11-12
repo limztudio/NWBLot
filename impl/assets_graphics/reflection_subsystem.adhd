@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[subsystem("reflection_subsystem")]
+[arena, subsystem("reflection_subsystem")]
 class ReflectionSubsystem{
     public AssetRef<ComputeShader> buildArgsCs;
     public AssetRef<ComputeShader> classifyCs;

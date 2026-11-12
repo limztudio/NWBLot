@@ -40,11 +40,11 @@ struct GraphClearTimingRecordState{
 };
 
 
-[[nodiscard]] NWB_INLINE Core::GpuTimingSubmissionTicket* ResolveGraphClearTimingTicket(const GraphClearTimingRecordState& state)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::GpuTimingSubmissionTicket* ResolveGraphClearTimingTicket(const GraphClearTimingRecordState& state)noexcept{
     return state.rebindableTimingTicket ? *state.rebindableTimingTicket : state.timingTicket;
 }
 
-[[nodiscard]] NWB_INLINE b8 BeginGraphClearTiming(
+[[nodiscard]] FOUNDATION_INLINE b8 BeginGraphClearTiming(
     Core::GraphicsRuntime* const graphics,
     Optional<Core::GpuTimingMeasure>* const timing,
     Core::GpuTimingSubmissionTicket* const timingTicket,
@@ -59,7 +59,7 @@ struct GraphClearTimingRecordState{
     return Core::FinishSplitGpuTimingMarker(timing);
 }
 
-[[nodiscard]] NWB_INLINE b8 EndGraphClearTiming(Optional<Core::GpuTimingMeasure>* const timing, Core::GpuTimingSubmissionTicket* const timingTicket, Core::CommandList& commandList){
+[[nodiscard]] FOUNDATION_INLINE b8 EndGraphClearTiming(Optional<Core::GpuTimingMeasure>* const timing, Core::GpuTimingSubmissionTicket* const timingTicket, Core::CommandList& commandList){
     if(!CanEndGraphClearTimingState(timing != nullptr, timing && timing->has_value(), timingTicket != nullptr))
         return false;
 
@@ -69,21 +69,21 @@ struct GraphClearTimingRecordState{
     return true;
 }
 
-[[nodiscard]] NWB_INLINE b8 BeginGraphClearTimingRecord(void* const rawState, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
+[[nodiscard]] FOUNDATION_INLINE b8 BeginGraphClearTimingRecord(void* const rawState, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
     GraphClearTimingRecordState* const state = static_cast<GraphClearTimingRecordState*>(rawState);
     if(!state)
         return false;
     return BeginGraphClearTiming(state->graphics, state->timing, ResolveGraphClearTimingTicket(*state), state->scope, commandList);
 }
 
-[[nodiscard]] NWB_INLINE b8 EndGraphClearTimingRecord(void* const rawState, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
+[[nodiscard]] FOUNDATION_INLINE b8 EndGraphClearTimingRecord(void* const rawState, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
     GraphClearTimingRecordState* const state = static_cast<GraphClearTimingRecordState*>(rawState);
     if(!state)
         return false;
     return EndGraphClearTiming(state->timing, ResolveGraphClearTimingTicket(*state), commandList);
 }
 
-NWB_INLINE void DiscardGraphClearTimingRecord(void* const rawState){
+FOUNDATION_INLINE void DiscardGraphClearTimingRecord(void* const rawState){
     GraphClearTimingRecordState* const state = static_cast<GraphClearTimingRecordState*>(rawState);
     if(!state)
         return;

@@ -176,24 +176,24 @@ inline constexpr Core::TextureSubresourceSet s_GpuAllSubresources = Core::s_AllS
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE Span<const T> PrefixSpan(const Span<const T> items, const usize count)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Span<const T> PrefixSpan(const Span<const T> items, const usize count)noexcept{
     return Span<const T>(items.data(), count);
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE Span<const T> SubSpan(const Span<const T> items, const usize offset, const usize count)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Span<const T> SubSpan(const Span<const T> items, const usize offset, const usize count)noexcept{
     return Span<const T>(items.data() + offset, count);
 }
 
-[[nodiscard]] NWB_INLINE Span<const Core::GpuTaskId> MakeNullTaskSpan(const usize count)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuTaskId> MakeNullTaskSpan(const usize count)noexcept{
     return Span<const Core::GpuTaskId>(static_cast<const Core::GpuTaskId*>(nullptr), count);
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuDescriptorHandle MakeSampledImageDescriptor(const u32 index)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::GpuDescriptorHandle MakeSampledImageDescriptor(const u32 index)noexcept{
     return Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::SampledImage, index);
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuTaskGraphQueueAssignmentOptions MakeQueueAssignmentOptionsWithLoads(
+[[nodiscard]] FOUNDATION_INLINE Core::GpuTaskGraphQueueAssignmentOptions MakeQueueAssignmentOptionsWithLoads(
     const Span<const Core::GpuTaskQueueLoad> loads
 )noexcept{
     Core::GpuTaskGraphQueueAssignmentOptions options{};
@@ -202,7 +202,7 @@ template<typename T>
     return options;
 }
 
-[[nodiscard]] NWB_INLINE b8 TryBuildResourceVersionDependencyEdges(
+[[nodiscard]] FOUNDATION_INLINE b8 TryBuildResourceVersionDependencyEdges(
     const Core::GpuTaskGraph::DeclarationReadView& declarations,
     Core::Alloc::ScratchArena& scratchArena,
     Vector<Core::GpuTaskDependencyEdge, Core::Alloc::ScratchArena>& outEdges
@@ -215,35 +215,35 @@ template<typename T>
     return true;
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuPhysicalQueueTopology MakeTopology(const Span<const Core::GpuPhysicalQueueInfo> queues)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::GpuPhysicalQueueTopology MakeTopology(const Span<const Core::GpuPhysicalQueueInfo> queues)noexcept{
     return Core::GpuPhysicalQueueTopology{ .queues = queues.data(), .queueCount = queues.size() };
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuPhysicalQueueTopology MakeTopologyPrefix(const Span<const Core::GpuPhysicalQueueInfo> queues, const usize count)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::GpuPhysicalQueueTopology MakeTopologyPrefix(const Span<const Core::GpuPhysicalQueueInfo> queues, const usize count)noexcept{
     return Core::GpuPhysicalQueueTopology{ .queues = queues.data(), .queueCount = count };
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuPhysicalQueueTopology MakeNullTopology(const usize queueCount)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::GpuPhysicalQueueTopology MakeNullTopology(const usize queueCount)noexcept{
     return Core::GpuPhysicalQueueTopology{ .queues = nullptr, .queueCount = queueCount };
 }
 
-[[nodiscard]] NWB_INLINE b8 HasTopologyQueuesPtr(const Core::GpuPhysicalQueueTopology& topology)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasTopologyQueuesPtr(const Core::GpuPhysicalQueueTopology& topology)noexcept{
     return topology.queues != nullptr;
 }
 
-[[nodiscard]] NWB_INLINE Span<const Core::GpuPhysicalQueueInfo> TopologyQueues(const Core::GpuPhysicalQueueTopology& topology)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuPhysicalQueueInfo> TopologyQueues(const Core::GpuPhysicalQueueTopology& topology)noexcept{
     return topology.queues ? Span<const Core::GpuPhysicalQueueInfo>(topology.queues, topology.queueCount) : Span<const Core::GpuPhysicalQueueInfo>{};
 }
 
-[[nodiscard]] NWB_INLINE b8 TestHasFatalFailure()noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 TestHasFatalFailure()noexcept{
     return ::testing::Test::HasFatalFailure();
 }
 
-[[nodiscard]] NWB_INLINE b8 HasQueueAssignment(const Core::GpuTaskGraphQueueAssignments& assignments, const Core::GpuTaskId& task)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasQueueAssignment(const Core::GpuTaskGraphQueueAssignments& assignments, const Core::GpuTaskId& task)noexcept{
     return assignments.find(task) != nullptr;
 }
 
-[[nodiscard]] NWB_INLINE Optional<Core::GpuTaskQueueAssignment> FindQueueAssignment(
+[[nodiscard]] FOUNDATION_INLINE Optional<Core::GpuTaskQueueAssignment> FindQueueAssignment(
     const Core::GpuTaskGraphQueueAssignments& assignments,
     const Core::GpuTaskId& task
 )noexcept{
@@ -252,118 +252,118 @@ template<typename T>
     return {};
 }
 
-[[nodiscard]] NWB_INLINE b8 HasTaskPlan(const Core::GpuCompiledTaskView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasTaskPlan(const Core::GpuCompiledTaskView& view)noexcept{
     return view.plan != nullptr;
 }
 
-[[nodiscard]] NWB_INLINE Optional<Core::GpuCompiledTask> TaskPlan(const Core::GpuCompiledTaskView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Optional<Core::GpuCompiledTask> TaskPlan(const Core::GpuCompiledTaskView& view)noexcept{
     if(view.plan)
         return *view.plan;
     return {};
 }
 
-[[nodiscard]] NWB_INLINE b8 HasPrologueStateSeedsPtr(const Core::GpuCompiledTaskView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasPrologueStateSeedsPtr(const Core::GpuCompiledTaskView& view)noexcept{
     return view.prologueStateSeeds != nullptr;
 }
 
-[[nodiscard]] NWB_INLINE b8 HasPrologueBarriersPtr(const Core::GpuCompiledTaskView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasPrologueBarriersPtr(const Core::GpuCompiledTaskView& view)noexcept{
     return view.prologueBarriers != nullptr;
 }
 
-[[nodiscard]] NWB_INLINE b8 HasEpilogueBarriersPtr(const Core::GpuCompiledTaskView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasEpilogueBarriersPtr(const Core::GpuCompiledTaskView& view)noexcept{
     return view.epilogueBarriers != nullptr;
 }
 
-[[nodiscard]] NWB_INLINE Span<const Core::GpuPacketStateSeed> PrologueStateSeeds(const Core::GpuCompiledTaskView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuPacketStateSeed> PrologueStateSeeds(const Core::GpuCompiledTaskView& view)noexcept{
     return (view.plan && view.prologueStateSeeds)
         ? Span<const Core::GpuPacketStateSeed>(view.prologueStateSeeds, view.plan->prologueStateSeedCount)
         : Span<const Core::GpuPacketStateSeed>{};
 }
 
-[[nodiscard]] NWB_INLINE Span<const Core::GpuCompiledBarrier> PrologueBarriers(const Core::GpuCompiledTaskView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuCompiledBarrier> PrologueBarriers(const Core::GpuCompiledTaskView& view)noexcept{
     return (view.plan && view.prologueBarriers)
         ? Span<const Core::GpuCompiledBarrier>(view.prologueBarriers, view.plan->prologueBarrierCount)
         : Span<const Core::GpuCompiledBarrier>{};
 }
 
-[[nodiscard]] NWB_INLINE Span<const Core::GpuCompiledBarrier> EpilogueBarriers(const Core::GpuCompiledTaskView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuCompiledBarrier> EpilogueBarriers(const Core::GpuCompiledTaskView& view)noexcept{
     return (view.plan && view.epilogueBarriers)
         ? Span<const Core::GpuCompiledBarrier>(view.epilogueBarriers, view.plan->epilogueBarrierCount)
         : Span<const Core::GpuCompiledBarrier>{};
 }
 
-[[nodiscard]] NWB_INLINE b8 HasPacketPlan(const Core::GpuCompiledPacketView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasPacketPlan(const Core::GpuCompiledPacketView& view)noexcept{
     return view.plan != nullptr;
 }
 
-[[nodiscard]] NWB_INLINE Optional<Core::GpuSubmissionPacket> PacketPlan(const Core::GpuCompiledPacketView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Optional<Core::GpuSubmissionPacket> PacketPlan(const Core::GpuCompiledPacketView& view)noexcept{
     if(view.plan)
         return *view.plan;
     return {};
 }
 
-[[nodiscard]] NWB_INLINE b8 HasPacketTasksPtr(const Core::GpuCompiledPacketView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasPacketTasksPtr(const Core::GpuCompiledPacketView& view)noexcept{
     return view.tasks != nullptr;
 }
 
-[[nodiscard]] NWB_INLINE b8 HasPacketDependenciesPtr(const Core::GpuCompiledPacketView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasPacketDependenciesPtr(const Core::GpuCompiledPacketView& view)noexcept{
     return view.dependencies != nullptr;
 }
 
-[[nodiscard]] NWB_INLINE b8 HasPacketExternalDependenciesPtr(const Core::GpuCompiledPacketView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasPacketExternalDependenciesPtr(const Core::GpuCompiledPacketView& view)noexcept{
     return view.externalDependencies != nullptr;
 }
 
-[[nodiscard]] NWB_INLINE Span<const Core::GpuTaskId> PacketTasks(const Core::GpuCompiledPacketView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuTaskId> PacketTasks(const Core::GpuCompiledPacketView& view)noexcept{
     return (view.plan && view.tasks)
         ? Span<const Core::GpuTaskId>(view.tasks, view.plan->taskCount)
         : Span<const Core::GpuTaskId>{};
 }
 
-[[nodiscard]] NWB_INLINE Span<const Core::GpuPacketDependency> PacketDependencies(const Core::GpuCompiledPacketView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuPacketDependency> PacketDependencies(const Core::GpuCompiledPacketView& view)noexcept{
     return (view.plan && view.dependencies)
         ? Span<const Core::GpuPacketDependency>(view.dependencies, view.plan->dependencyCount)
         : Span<const Core::GpuPacketDependency>{};
 }
 
-[[nodiscard]] NWB_INLINE Span<const Core::GpuExternalCompletionId> PacketExternalDependencies(const Core::GpuCompiledPacketView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuExternalCompletionId> PacketExternalDependencies(const Core::GpuCompiledPacketView& view)noexcept{
     return (view.plan && view.externalDependencies)
         ? Span<const Core::GpuExternalCompletionId>(view.externalDependencies, view.plan->externalDependencyCount)
         : Span<const Core::GpuExternalCompletionId>{};
 }
 
-[[nodiscard]] NWB_INLINE b8 HasExportPlan(const Core::GpuCompiledExternalResourceExportView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasExportPlan(const Core::GpuCompiledExternalResourceExportView& view)noexcept{
     return view.plan != nullptr;
 }
 
-[[nodiscard]] NWB_INLINE Optional<Core::GpuCompiledExternalResourceExport> ExportPlan(const Core::GpuCompiledExternalResourceExportView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Optional<Core::GpuCompiledExternalResourceExport> ExportPlan(const Core::GpuCompiledExternalResourceExportView& view)noexcept{
     if(view.plan)
         return *view.plan;
     return {};
 }
 
-[[nodiscard]] NWB_INLINE b8 HasExportSourcesPtr(const Core::GpuCompiledExternalResourceExportView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasExportSourcesPtr(const Core::GpuCompiledExternalResourceExportView& view)noexcept{
     return view.sources != nullptr;
 }
 
-[[nodiscard]] NWB_INLINE Span<const Core::GpuCompiledExternalResourceExportSource> ExportSources(const Core::GpuCompiledExternalResourceExportView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuCompiledExternalResourceExportSource> ExportSources(const Core::GpuCompiledExternalResourceExportView& view)noexcept{
     return (view.plan && view.sources)
         ? Span<const Core::GpuCompiledExternalResourceExportSource>(view.sources, view.plan->sourceCount)
         : Span<const Core::GpuCompiledExternalResourceExportSource>{};
 }
 
-[[nodiscard]] NWB_INLINE b8 HasLogicalOwnershipTransfersPtr(const Core::GpuCompiledGraph::ReadView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasLogicalOwnershipTransfersPtr(const Core::GpuCompiledGraph::ReadView& view)noexcept{
     return view.logicalOwnershipTransfers() != nullptr;
 }
 
-[[nodiscard]] NWB_INLINE Span<const Core::GpuCompiledOwnershipTransfer> LogicalOwnershipTransfers(const Core::GpuCompiledGraph::ReadView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuCompiledOwnershipTransfer> LogicalOwnershipTransfers(const Core::GpuCompiledGraph::ReadView& view)noexcept{
     const Core::GpuCompiledOwnershipTransfer* const ptr = view.logicalOwnershipTransfers();
     return ptr
         ? Span<const Core::GpuCompiledOwnershipTransfer>(ptr, view.logicalOwnershipTransferCount())
         : Span<const Core::GpuCompiledOwnershipTransfer>{};
 }
 
-[[nodiscard]] NWB_INLINE Optional<Core::GpuCompiledOwnershipTransfer> LogicalOwnershipTransferAtValue(
+[[nodiscard]] FOUNDATION_INLINE Optional<Core::GpuCompiledOwnershipTransfer> LogicalOwnershipTransferAtValue(
     const Core::GpuCompiledGraph::ReadView& view,
     const usize index
 )noexcept{
@@ -372,13 +372,13 @@ template<typename T>
     return {};
 }
 
-[[nodiscard]] NWB_INLINE Optional<Core::GpuCompiledPresentEndpoint> CompiledPresentEndpointValue(const Core::GpuCompiledGraph::ReadView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Optional<Core::GpuCompiledPresentEndpoint> CompiledPresentEndpointValue(const Core::GpuCompiledGraph::ReadView& view)noexcept{
     if(const Core::GpuCompiledPresentEndpoint* const ptr = view.presentEndpoint())
         return *ptr;
     return {};
 }
 
-[[nodiscard]] NWB_INLINE Optional<Core::GpuPhysicalQueueInfo> QueueInfoForTaskValue(
+[[nodiscard]] FOUNDATION_INLINE Optional<Core::GpuPhysicalQueueInfo> QueueInfoForTaskValue(
     const Core::GpuCompiledGraph::ReadView& view,
     const Core::GpuTaskId& task
 )noexcept{
@@ -387,7 +387,7 @@ template<typename T>
     return {};
 }
 
-[[nodiscard]] NWB_INLINE Optional<Core::GpuPhysicalQueueInfo> QueueInfoValue(
+[[nodiscard]] FOUNDATION_INLINE Optional<Core::GpuPhysicalQueueInfo> QueueInfoValue(
     const Core::GpuCompiledGraph::ReadView& view,
     const Core::GpuPhysicalQueueId& queue
 )noexcept{
@@ -396,7 +396,7 @@ template<typename T>
     return {};
 }
 
-[[nodiscard]] NWB_INLINE Optional<Core::QueueSubmissionToken> ExternalCompletionTokenValue(
+[[nodiscard]] FOUNDATION_INLINE Optional<Core::QueueSubmissionToken> ExternalCompletionTokenValue(
     const Core::GpuTaskGraph::DeclarationReadView& declarations,
     const Core::GpuExternalCompletionId& completion
 )noexcept{
@@ -405,7 +405,7 @@ template<typename T>
     return {};
 }
 
-[[nodiscard]] NWB_INLINE Optional<Core::GpuPresentEndpoint> DeclaredPresentEndpointValue(
+[[nodiscard]] FOUNDATION_INLINE Optional<Core::GpuPresentEndpoint> DeclaredPresentEndpointValue(
     const Core::GpuTaskGraph::DeclarationReadView& declarations
 )noexcept{
     if(const Core::GpuPresentEndpoint* const ptr = declarations.presentEndpoint())
@@ -413,59 +413,59 @@ template<typename T>
     return {};
 }
 
-[[nodiscard]] NWB_INLINE b8 HasTaskDependenciesPtr(const Core::GpuTaskGraphTaskView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasTaskDependenciesPtr(const Core::GpuTaskGraphTaskView& view)noexcept{
     return view.dependencies != nullptr;
 }
 
-[[nodiscard]] NWB_INLINE Span<const Core::GpuTaskId> TaskDependenciesSpan(const Core::GpuTaskGraphTaskView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuTaskId> TaskDependenciesSpan(const Core::GpuTaskGraphTaskView& view)noexcept{
     return view.dependencies ? Span<const Core::GpuTaskId>(view.dependencies, view.dependencyCount) : Span<const Core::GpuTaskId>{};
 }
 
-[[nodiscard]] NWB_INLINE b8 HasTaskExternalDependenciesPtr(const Core::GpuTaskGraphTaskView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasTaskExternalDependenciesPtr(const Core::GpuTaskGraphTaskView& view)noexcept{
     return view.externalDependencies != nullptr;
 }
 
-[[nodiscard]] NWB_INLINE Span<const Core::GpuExternalCompletionId> TaskExternalDependenciesSpan(const Core::GpuTaskGraphTaskView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuExternalCompletionId> TaskExternalDependenciesSpan(const Core::GpuTaskGraphTaskView& view)noexcept{
     return view.externalDependencies
         ? Span<const Core::GpuExternalCompletionId>(view.externalDependencies, view.externalDependencyCount)
         : Span<const Core::GpuExternalCompletionId>{};
 }
 
-[[nodiscard]] NWB_INLINE b8 HasTaskExternalStateSourcesPtr(const Core::GpuTaskGraphTaskView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasTaskExternalStateSourcesPtr(const Core::GpuTaskGraphTaskView& view)noexcept{
     return view.externalStateSources != nullptr;
 }
 
-[[nodiscard]] NWB_INLINE Span<const Core::GpuTaskExternalStateSource> TaskExternalStateSourcesSpan(const Core::GpuTaskGraphTaskView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuTaskExternalStateSource> TaskExternalStateSourcesSpan(const Core::GpuTaskGraphTaskView& view)noexcept{
     return view.externalStateSources
         ? Span<const Core::GpuTaskExternalStateSource>(view.externalStateSources, view.externalStateSourceCount)
         : Span<const Core::GpuTaskExternalStateSource>{};
 }
 
-[[nodiscard]] NWB_INLINE b8 HasTaskResourceUsesPtr(const Core::GpuTaskGraphTaskView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasTaskResourceUsesPtr(const Core::GpuTaskGraphTaskView& view)noexcept{
     return view.resourceUses != nullptr;
 }
 
-[[nodiscard]] NWB_INLINE Span<const Core::GpuTaskResourceUse> TaskResourceUsesSpan(const Core::GpuTaskGraphTaskView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuTaskResourceUse> TaskResourceUsesSpan(const Core::GpuTaskGraphTaskView& view)noexcept{
     return view.resourceUses
         ? Span<const Core::GpuTaskResourceUse>(view.resourceUses, view.resourceUseCount)
         : Span<const Core::GpuTaskResourceUse>{};
 }
 
-[[nodiscard]] NWB_INLINE b8 HasTaskResourceVersionUsesPtr(const Core::GpuTaskGraphTaskView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasTaskResourceVersionUsesPtr(const Core::GpuTaskGraphTaskView& view)noexcept{
     return view.resourceVersionUses != nullptr;
 }
 
-[[nodiscard]] NWB_INLINE Span<const Core::GpuTaskResourceVersionUse> TaskResourceVersionUsesSpan(const Core::GpuTaskGraphTaskView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuTaskResourceVersionUse> TaskResourceVersionUsesSpan(const Core::GpuTaskGraphTaskView& view)noexcept{
     return view.resourceVersionUses
         ? Span<const Core::GpuTaskResourceVersionUse>(view.resourceVersionUses, view.resourceVersionUseCount)
         : Span<const Core::GpuTaskResourceVersionUse>{};
 }
 
-[[nodiscard]] NWB_INLINE b8 HasResourceInitialOwnerHandoffSourcesPtr(const Core::GpuTaskGraphResourceView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasResourceInitialOwnerHandoffSourcesPtr(const Core::GpuTaskGraphResourceView& view)noexcept{
     return view.initialOwnerHandoffSources != nullptr;
 }
 
-[[nodiscard]] NWB_INLINE Span<const Core::GpuTaskGraphInitialOwnerHandoffSourceView> ResourceInitialOwnerHandoffSourcesSpan(
+[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuTaskGraphInitialOwnerHandoffSourceView> ResourceInitialOwnerHandoffSourcesSpan(
     const Core::GpuTaskGraphResourceView& view
 )noexcept{
     return view.initialOwnerHandoffSources
@@ -473,26 +473,26 @@ template<typename T>
         : Span<const Core::GpuTaskGraphInitialOwnerHandoffSourceView>{};
 }
 
-[[nodiscard]] NWB_INLINE b8 HasResourceSetMembersPtr(const Core::GpuTaskGraphResourceSetView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasResourceSetMembersPtr(const Core::GpuTaskGraphResourceSetView& view)noexcept{
     return view.members != nullptr;
 }
 
-[[nodiscard]] NWB_INLINE Span<const Core::GpuGraphResourceId> ResourceSetMembersSpan(const Core::GpuTaskGraphResourceSetView& view)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Span<const Core::GpuGraphResourceId> ResourceSetMembersSpan(const Core::GpuTaskGraphResourceSetView& view)noexcept{
     return view.members ? Span<const Core::GpuGraphResourceId>(view.members, view.memberCount) : Span<const Core::GpuGraphResourceId>{};
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuTaskGraphTelemetryOptions MakeTelemetryOptions(const Core::GpuTaskGraphQueueAssignments& assignments)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::GpuTaskGraphTelemetryOptions MakeTelemetryOptions(const Core::GpuTaskGraphQueueAssignments& assignments)noexcept{
     return Core::GpuTaskGraphTelemetryOptions{ .queueAssignments = &assignments };
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuTaskGraphTelemetryOptions MakeTelemetryOptions(
+[[nodiscard]] FOUNDATION_INLINE Core::GpuTaskGraphTelemetryOptions MakeTelemetryOptions(
     const Core::GpuTaskGraphQueueAssignments& assignments,
     const Core::GpuCompiledGraph::ReadView& compiledPlan
 )noexcept{
     return Core::GpuTaskGraphTelemetryOptions{ .queueAssignments = &assignments, .compiledPlan = &compiledPlan };
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuTaskGraphTelemetryOptions MakeTelemetryOptions(
+[[nodiscard]] FOUNDATION_INLINE Core::GpuTaskGraphTelemetryOptions MakeTelemetryOptions(
     const Core::GpuTaskGraphQueueAssignments& assignments,
     const Core::GpuCompiledGraph::ReadView& compiledPlan,
     const Core::GpuTaskGraphQueueAssignmentTelemetryTracker& tracker

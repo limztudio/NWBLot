@@ -93,7 +93,7 @@ namespace Key = NWB::Core::Key;
 namespace MouseButton = NWB::Core::MouseButton;
 namespace UiLayerPresentation = NWB::Impl::UiLayerPresentation;
 
-inline constexpr TStringView s_WindowTitle = NWB_TEXT("NWB Testbed");
+inline constexpr TStringView s_WindowTitle = FOUNDATION_TEXT("NWB Testbed");
 
 // C++ interface adapter required because ISearchableListDataSource::filtered() returns const IListDataSource&.
 template<typename StateT>
@@ -163,7 +163,7 @@ void ApplyFlyCameraInputToMainCamera(
 [[nodiscard]] StringView FormatVirtualListRowLabel(u64 rowKey, const Array<u8, 32u>& labelStorage)noexcept;
 
 template<typename ProjectT>
-NWB_INLINE void AttachProjectUiPaintEntity(NotNullUniquePtr<World>& world, ProjectT& project){
+FOUNDATION_INLINE void AttachProjectUiPaintEntity(NotNullUniquePtr<World>& world, ProjectT& project){
     auto uiEntity = world->createEntity();
     auto& customUi = uiEntity.addComponent<UiPaintComponent>();
     customUi.paint = [&project](UiPaintContext& context)noexcept{
@@ -258,8 +258,8 @@ native{
 #include "project.adhd.h"
 
 Expected<UniquePtr<Testbed::World>> Testbed::CreateInitialProjectWorld(ProjectRuntimeContext& context){
-    static constexpr TStringView s_WorldAllocFailed = NWB_TEXT("CreateInitialProjectWorld failed: ECS world allocation failed");
-    static constexpr TStringView s_ResolverNull = NWB_TEXT("CreateInitialProjectWorld failed: shader path resolver callback is null");
+    static constexpr TStringView s_WorldAllocFailed = FOUNDATION_TEXT("CreateInitialProjectWorld failed: ECS world allocation failed");
+    static constexpr TStringView s_ResolverNull = FOUNDATION_TEXT("CreateInitialProjectWorld failed: shader path resolver callback is null");
 
     UniquePtr<World> world = MakeUnique<World>(context.objectArena, context.cpuTasks);
     if(!world){
@@ -296,7 +296,7 @@ Expected<UniquePtr<Testbed::World>> Testbed::CreateInitialProjectWorld(ProjectRu
 NotNullUniquePtr<Testbed::World> Testbed::CreateInitialWorldOrDie(ProjectRuntimeContext& context){
     auto world = CreateInitialProjectWorld(context);
     if(!world){
-        NWB_LOGGER_FATAL(NWB_TEXT("ProjectTestbed initialization failed: CreateInitialProjectWorld returned false"));
+        NWB_LOGGER_FATAL(FOUNDATION_TEXT("ProjectTestbed initialization failed: CreateInitialProjectWorld returned false"));
         throw RuntimeException(s_InitWorldFailedNarrow.data());
     }
     return MakeNotNullUnique(Move(*world));
@@ -317,7 +317,7 @@ void Testbed::DestroyInitialProjectWorld(ProjectRuntimeContext& context, NotNull
     context.graphics.removeRenderPass(uiLayerSystem);
 
     const b8 deviceIdle = context.graphics.waitForIdle();
-    NWB_FATAL_ASSERT_MSG(deviceIdle || context.graphics.isDeviceLost(), NWB_TEXT("Project-world destruction requires either a completed device join or terminal device loss"));
+    FOUNDATION_FATAL_ASSERT_MSG(deviceIdle || context.graphics.isDeviceLost(), FOUNDATION_TEXT("Project-world destruction requires either a completed device join or terminal device loss"));
 
     world->clear();
     world.reset();
@@ -375,7 +375,7 @@ b8 Testbed::InstantiateSceneSubsystemsEntities(const ActiveSceneSubsystems& scen
 Testbed::AssetRef<Testbed::Texture> Testbed::ResolveUiGallerySkinTextureRef(const AssetManager& assets, const ActiveSceneSubsystems& sceneSubsystems){
     const UiSubsystem* const uiSubsystem = sceneSubsystems.findSubsystem<UiSubsystem>();
     if(uiSubsystem && uiSubsystem->basicSkin.valid()){
-        auto skin = assets.loadTypedSync<UiSkin>(uiSubsystem->basicSkin.name(), NWB_TEXT("UiImageGallery"));
+        auto skin = assets.loadTypedSync<UiSkin>(uiSubsystem->basicSkin.name(), FOUNDATION_TEXT("UiImageGallery"));
         if(skin)
             return (*skin)->texture();
     }

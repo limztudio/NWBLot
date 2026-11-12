@@ -39,10 +39,10 @@ native{
 #include <global/termination.h>
 #include <global/thread.h>
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <dbghelp.h>
 #include <windows.h>
-#elif defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#elif defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -111,14 +111,14 @@ inline constexpr u32 s_MaxCrashBreadcrumbs = static_cast<u32>(Core::Crash::Crash
 inline constexpr u32 s_MaxCrashCallstackFrames = static_cast<u32>(Core::Crash::CrashDetail::s_MaxCallstackFrames);
 inline constexpr auto s_WindowsCrashPlatform = Core::Crash::CrashDetail::PlatformKind::Windows;
 inline constexpr auto s_ManualDumpCrashReasonKind = Core::Crash::CrashDetail::CrashReasonKind::ManualDump;
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 inline constexpr b8 s_IsDesktopLinuxCrashPlatform = true;
 #else
 inline constexpr b8 s_IsDesktopLinuxCrashPlatform = false;
 #endif
 
 template<usize N>
-NWB_INLINE void BuildCrashIdForProcess(const u32 processId, const u64 sequence, Array<char, N>& outCrashId)noexcept{
+FOUNDATION_INLINE void BuildCrashIdForProcess(const u32 processId, const u64 sequence, Array<char, N>& outCrashId)noexcept{
     CopyFixedBuffer(outCrashId, AStringView(CrashNames::s_CrashIdPrefix));
     AppendUnsignedToFixedBuffer(outCrashId, static_cast<u64>(processId));
     AppendFixedBuffer(outCrashId, "-");
@@ -127,7 +127,7 @@ NWB_INLINE void BuildCrashIdForProcess(const u32 processId, const u64 sequence, 
 
 [[nodiscard]] Core::Crash::CrashDetail::PlatformKind::Enum CurrentCrashPlatformKind()noexcept;
 
-#if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
+#if defined(FOUNDATION_PLATFORM_WINDOWS) || (defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID))
 extern u32 s_NativeLifecycleDiagnostics;
 extern u32 s_UnlockedLifecycleDiagnostics;
 extern Array<char, 192u> s_LastLifecycleDiagnostic;
@@ -136,7 +136,7 @@ extern Array<char, 32u> s_LastLifecycleOperation;
 void ObserveNativeLifecycle(const DiagnosticEventRecord& record)noexcept;
 #endif
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 extern Array<u8, 256u * 1024u> g_ForeignSignalStack;
 void OriginalSignalOwner(int)noexcept;
 void ForeignSignalOwner(int)noexcept;
@@ -426,7 +426,7 @@ void VerifyCrash_InstallRejectsUnrepresentableConfigurationBeforeCreatingSpool()
         const Path spool = SpoolDirectory(group);
         b8 installed = true;
         native(in caseIndex, in spool, mut installed){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
             PersistentArena installArena(s_InstallArena, PersistentArena::StructureAlignedSize(64u * 1024u));
             Core::Crash::CrashConfig config(installArena);
             config.applicationName = s_CrashTests;
@@ -470,7 +470,7 @@ void VerifyCrash_AttachmentFailureDoesNotClaimTheHandlerAcceptedARequest(){
     b8 attachmentRejected = false;
     b8 handlerAcceptedFailure = false;
     native(in groupView, in spool, mut testArena, mut attachmentRejected, mut handlerAcceptedFailure){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         PersistentArena installArena(s_InstallArena, PersistentArena::StructureAlignedSize(64u * 1024u));
         Core::Crash::CrashConfig config(installArena);
         config.applicationName = s_CrashTests;
@@ -552,7 +552,7 @@ void VerifyCrash_ConcurrentManualCaptureDoesNotClaimAnUnsentRequestWasQueued(){
     u32 suppressedAfter = 0u;
     b8 consumedSuppressed = false;
     native(in spool, mut active, mut firstWritten, mut secondRejected, mut suppressedBefore, mut suppressedWhileBusy, mut suppressedAfter, mut consumedSuppressed){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         PersistentArena installArena(s_InstallArena, PersistentArena::StructureAlignedSize(64u * 1024u));
         Core::Crash::CrashConfig config(installArena);
         config.applicationName = s_CrashTests;
@@ -611,7 +611,7 @@ void VerifyCrash_ManualContextTimeoutRetainsOwnedDumpAndReusableHandlerAfterSour
     String crashIdText = String();
     b8 reusableAfterTimeout = false;
     native(in spool, mut testArena, mut crashIdText, mut reusableAfterTimeout){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         CrashRequest request = {};
         PersistentArena installArena(s_InstallArena, PersistentArena::StructureAlignedSize(64u * 1024u));
         Core::Crash::CrashConfig config(installArena);
@@ -629,7 +629,7 @@ void VerifyCrash_ManualContextTimeoutRetainsOwnedDumpAndReusableHandlerAfterSour
             capturedContextFlags = storage.context.ContextFlags & ~Core::Crash::CrashDetail::s_WindowsExtendedContextFlag;
             capturedInstructionPointer = options.instructionPointer;
             auto sourceRequest = Core::Crash::CrashDetail::BuildCrashDumpRequest(Core::Crash::CrashDetail::CrashReasonKind::ManualDump, 0u, options);
-            NWB_MEMCPY(&request, sizeof(request), &sourceRequest, sizeof(sourceRequest));
+            FOUNDATION_MEMCPY(&request, sizeof(request), &sourceRequest, sizeof(sourceRequest));
             sourceRequest = CrashRequest{};
             storage.context = CONTEXT{};
             storage.exceptionRecord = EXCEPTION_RECORD{};
@@ -678,14 +678,14 @@ void VerifyCrash_ManualContextTimeoutRetainsOwnedDumpAndReusableHandlerAfterSour
         ASSERT_LE(streamOffset, dumpBytes.size());
         ASSERT_LE(sizeof(MINIDUMP_EXCEPTION_STREAM), dumpBytes.size() - streamOffset);
         MINIDUMP_EXCEPTION_STREAM exceptionStream = {};
-        NWB_MEMCPY(&exceptionStream, sizeof(exceptionStream), dumpBytes.data() + streamOffset, sizeof(exceptionStream));
+        FOUNDATION_MEMCPY(&exceptionStream, sizeof(exceptionStream), dumpBytes.data() + streamOffset, sizeof(exceptionStream));
         EXPECT_EQ(exceptionStream.ThreadId, request.threadId);
         EXPECT_EQ(exceptionStream.ExceptionRecord.ExceptionCode, Core::Crash::CrashDetail::s_ManualDumpExceptionCode);
         EXPECT_EQ(exceptionStream.ExceptionRecord.ExceptionAddress, capturedInstructionPointer);
         ASSERT_GE(exceptionStream.ThreadContext.DataSize, sizeof(CONTEXT));
         ASSERT_LE(static_cast<u64>(exceptionStream.ThreadContext.Rva) + sizeof(CONTEXT), dumpBytes.size());
         CONTEXT dumpedContext = {};
-        NWB_MEMCPY(&dumpedContext, sizeof(dumpedContext), dumpBytes.data() + exceptionStream.ThreadContext.Rva, sizeof(dumpedContext));
+        FOUNDATION_MEMCPY(&dumpedContext, sizeof(dumpedContext), dumpBytes.data() + exceptionStream.ThreadContext.Rva, sizeof(dumpedContext));
 #if defined(_M_X64) || defined(__x86_64__)
         EXPECT_EQ(dumpedContext.Rip, capturedInstructionPointer);
 #elif defined(_M_IX86) || defined(__i386__)
@@ -711,7 +711,7 @@ void VerifyCrash_ManualNativeContextAdmissionRejectsWrongVersionSizeArchitecture
 
     CrashRequest request = CrashRequest();
     native(mut request){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         Core::Crash::CrashDetail::ManualDumpContextStorage storage;
         Core::Crash::CrashDetail::CrashDumpRequestOptions options;
         Core::Crash::CrashDetail::CaptureManualDumpContext(options, storage);
@@ -753,7 +753,7 @@ void VerifyCrash_DesktopHandlerDoesNotRetainUnrelatedInheritableHandles(){
     b8 closedSentinel = false;
     b8 deletedSentinel = false;
     native(in sentinelPath, in spool, mut installed, mut closedSentinel, mut deletedSentinel){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         SECURITY_ATTRIBUTES securityAttributes = {};
         securityAttributes.nLength = sizeof(securityAttributes);
         securityAttributes.bInheritHandle = TRUE;
@@ -789,7 +789,7 @@ void VerifyCrash_LinuxManualDumpUnwindsBeyondTheLeafWithoutFramePointers(){
     const Path spool = SpoolDirectory(group);
     String crashIdText = String();
     native(in spool, mut crashIdText){
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
         PersistentArena installArena(s_InstallArena, PersistentArena::StructureAlignedSize(64u * 1024u));
         Core::Crash::CrashConfigT<PersistentArena> config(installArena);
         config.applicationName = AStringView(s_CrashTests);
@@ -839,7 +839,7 @@ void VerifyCrash_DesktopInstalledHandlerWritesGpuCrashTextOnlyPackage(){
     const Path spool = SpoolDirectory(group);
     String crashIdText = String();
     native(in spool, mut crashIdText){
-#if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
+#if defined(FOUNDATION_PLATFORM_WINDOWS) || (defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID))
         PersistentArena installArena(s_InstallArena, PersistentArena::StructureAlignedSize(64u * 1024u));
         Core::Crash::CrashConfigT<PersistentArena> config(installArena);
         config.applicationName = AStringView(s_CrashTests);
@@ -892,7 +892,7 @@ void VerifyCrash_LinuxSignalHandlerWritesCrashPackage(){
     b8 signaledBySegv = false;
     String crashIdText = String();
     native(in spoolDirectory, mut childSpawned, mut signaledBySegv, mut crashIdText){
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
         const pid_t childPid = fork();
         ASSERT_GE(childPid, 0);
         if(childPid == 0){
@@ -968,18 +968,18 @@ native{
 namespace NWB::Tests::CrashCases{
 
 Core::Crash::CrashDetail::PlatformKind::Enum CurrentCrashPlatformKind()noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     return Core::Crash::CrashDetail::PlatformKind::Windows;
-#elif defined(NWB_PLATFORM_ANDROID)
+#elif defined(FOUNDATION_PLATFORM_ANDROID)
     return Core::Crash::CrashDetail::PlatformKind::Android;
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(FOUNDATION_PLATFORM_LINUX)
     return Core::Crash::CrashDetail::PlatformKind::Linux;
 #else
     return Core::Crash::CrashDetail::PlatformKind::Unknown;
 #endif
 }
 
-#if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
+#if defined(FOUNDATION_PLATFORM_WINDOWS) || (defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID))
 u32 s_NativeLifecycleDiagnostics = 0u;
 u32 s_UnlockedLifecycleDiagnostics = 0u;
 Array<char, 192u> s_LastLifecycleDiagnostic = {};
@@ -1032,7 +1032,7 @@ void CrashArchiveUpload::TearDown(){
 
 };
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 TEST(Crash, InstallRejectsUnrepresentableConfigurationBeforeCreatingSpool){ NWB::Tests::CrashCases::VerifyCrash_InstallRejectsUnrepresentableConfigurationBeforeCreatingSpool(); }
 TEST(Crash, AttachmentFailureDoesNotClaimTheHandlerAcceptedARequest){ NWB::Tests::CrashCases::VerifyCrash_AttachmentFailureDoesNotClaimTheHandlerAcceptedARequest(); }
 TEST(Crash, ConcurrentManualCaptureDoesNotClaimAnUnsentRequestWasQueued){ NWB::Tests::CrashCases::VerifyCrash_ConcurrentManualCaptureDoesNotClaimAnUnsentRequestWasQueued(); }
@@ -1041,14 +1041,14 @@ TEST(Crash, ManualNativeContextAdmissionRejectsWrongVersionSizeArchitectureAndLi
 TEST(Crash, DesktopHandlerDoesNotRetainUnrelatedInheritableHandles){ NWB::Tests::CrashCases::VerifyCrash_DesktopHandlerDoesNotRetainUnrelatedInheritableHandles(); }
 #endif
 
-#if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_WINDOWS) || (defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID))
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 TEST(Crash, LinuxManualDumpUnwindsBeyondTheLeafWithoutFramePointers){ NWB::Tests::CrashCases::VerifyCrash_LinuxManualDumpUnwindsBeyondTheLeafWithoutFramePointers(); }
 #endif
 TEST(Crash, DesktopInstalledHandlerWritesGpuCrashTextOnlyPackage){ NWB::Tests::CrashCases::VerifyCrash_DesktopInstalledHandlerWritesGpuCrashTextOnlyPackage(); }
 #endif
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 TEST(Crash, LinuxSignalHandlerWritesCrashPackage){ NWB::Tests::CrashCases::VerifyCrash_LinuxSignalHandlerWritesCrashPackage(); }
 #endif
 

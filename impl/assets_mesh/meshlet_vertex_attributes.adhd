@@ -40,7 +40,7 @@ static_assert(sizeof(AttribGpu) == s_AttribGpuByteSize, "AttribGpu must stay 16 
     Span<const Float2U> uv0Stream,
     Core::Alloc::ScratchArena& scratchArena
 );
-[[nodiscard]] NWB_INLINE Expected<Vector<AttribGpu, Core::Alloc::ScratchArena>> BuildMeshletTriangleAttributes(const Mesh& payload, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] FOUNDATION_INLINE Expected<Vector<AttribGpu, Core::Alloc::ScratchArena>> BuildMeshletTriangleAttributes(const Mesh& payload, Core::Alloc::ScratchArena& scratchArena){
     return BuildMeshletTriangleAttributes(payload.meshlets(), payload.meshletLocalVertexRefs(), payload.meshletAttributeRefDeltas(), payload.meshletPrimitiveIndices(), payload.normalStream(), payload.uv0Stream(), scratchArena);
 }
 

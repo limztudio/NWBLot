@@ -28,15 +28,15 @@ public:
     }
 };
 
-[[nodiscard]] NWB_INLINE NotNullUniquePtr<Core::ECS::World> TakeUiLayerSmokeWorld(NotNullUniquePtr<Core::ECS::World>& world)noexcept{
+[[nodiscard]] FOUNDATION_INLINE NotNullUniquePtr<Core::ECS::World> TakeUiLayerSmokeWorld(NotNullUniquePtr<Core::ECS::World>& world)noexcept{
     return Move(world);
 }
 
-[[nodiscard]] NWB_INLINE NotNullUniquePtr<Core::ECS::World> TakeUiLayerSmokeWorld(NotNullUniquePtr<Core::ECS::World>&& world)noexcept{
+[[nodiscard]] FOUNDATION_INLINE NotNullUniquePtr<Core::ECS::World> TakeUiLayerSmokeWorld(NotNullUniquePtr<Core::ECS::World>&& world)noexcept{
     return Move(world);
 }
 
-[[nodiscard]] NWB_INLINE Expected<NotNullUniquePtr<Core::ECS::World>> FinalizeUiLayerSmokeWorld(UniquePtr<Core::ECS::World> world)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Expected<NotNullUniquePtr<Core::ECS::World>> FinalizeUiLayerSmokeWorld(UniquePtr<Core::ECS::World> world)noexcept{
     if(!world)
         return MakeUnexpected(Failure{});
     return MakeNotNullUnique(Move(world));
@@ -268,12 +268,12 @@ void SpawnManySmokeRootsIfEnabled(mut World world){
         auto lastRoot = world.createEntity();
         lastRoot.addComponent<Impl::UiPaintComponent>().paint = [](Impl::UiPaintContext& paintContext){
             const Core::ECS::EntityID id = paintContext.entity;
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiLayerSmokeProject: root beyond target limit painted"));
+            NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiLayerSmokeProject: root beyond target limit painted"));
             paintContext.world.destroyEntity(id);
             if(paintContext.world.entity(id).alive())
-                NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: root removal during paint failed"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: root removal during paint failed"));
             else
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiLayerSmokeProject: root removed during paint"));
+                NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("UiLayerSmokeProject: root removed during paint"));
         };
     }
 }
@@ -286,119 +286,119 @@ void AttachUiLayerSmokeScene(mut ProjectRuntimeContext context, mut World world,
             const auto scene = CreateSmokeInputSceneBox<UiTextureImageSmokeScene>(context.objectArena, context.input, context.objectArena, context.assetManager);
             paint.paint = [scene](Impl::UiPaintContext& paintContext){
                 if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: texture-image UI paint failed"));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: texture-image UI paint failed"));
             };
         }
         else if(modes.imageSmoke){
             const auto scene = CreateSmokeInputSceneBox<UiImageSmokeScene>(context.objectArena, context.input);
             paint.paint = [scene](Impl::UiPaintContext& paintContext){
                 if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: image UI paint failed"));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: image UI paint failed"));
             };
         }
         else if(modes.progressSmoke){
             const auto scene = CreateSmokeInputSceneBox<UiProgressSmokeScene>(context.objectArena, context.input);
             paint.paint = [scene](Impl::UiPaintContext& paintContext){
                 if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: progress UI paint failed"));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: progress UI paint failed"));
             };
         }
         else if(modes.sliderSmoke){
             const auto scene = CreateSmokeInputSceneBox<UiSliderSmokeScene>(context.objectArena, context.input);
             paint.paint = [scene](Impl::UiPaintContext& paintContext){
                 if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: slider UI paint failed"));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: slider UI paint failed"));
             };
         }
         else if(modes.radioGroupSmoke){
             const auto scene = CreateSmokeInputSceneBox<UiRadioGroupSmokeScene>(context.objectArena, context.input);
             paint.paint = [scene](Impl::UiPaintContext& paintContext){
                 if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: radio group UI paint failed"));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: radio group UI paint failed"));
             };
         }
         else if(modes.textAreaSmoke){
             const auto scene = CreateSmokeSceneBox<UiTextAreaSmokeScene>(context.objectArena, context.objectArena, context.clipboard);
             paint.paint = [scene](Impl::UiPaintContext& paintContext){
                 if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: text area UI paint failed"));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: text area UI paint failed"));
             };
         }
         else if(modes.numericEditSmoke){
             const auto scene = CreateSmokeInputSceneBox<UiNumericEditSmokeScene>(context.objectArena, context.input, context.objectArena);
             paint.paint = [scene](Impl::UiPaintContext& paintContext){
                 if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: numeric editor UI paint failed"));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: numeric editor UI paint failed"));
             };
         }
         else if(modes.nestedPopupSmoke){
             const auto scene = CreateSmokeInputSceneBox<UiNestedPopupSmokeScene>(context.objectArena, context.input, context.objectArena);
             paint.paint = [scene](Impl::UiPaintContext& paintContext){
                 if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: nested popup UI paint failed"));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: nested popup UI paint failed"));
             };
         }
         else if(modes.popupToolsSmoke){
             const auto scene = CreateSmokeInputSceneBox<UiPopupToolsSmokeScene>(context.objectArena, context.input, context.objectArena);
             paint.paint = [scene](Impl::UiPaintContext& paintContext){
                 if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: tooltip/context menu UI paint failed"));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: tooltip/context menu UI paint failed"));
             };
         }
         else if(modes.searchComboSmoke){
             const auto scene = CreateSmokeInputSceneBox<UiSearchComboSmokeScene>(context.objectArena, context.input, context.objectArena);
             paint.paint = [scene](Impl::UiPaintContext& paintContext){
                 if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: searchable combo UI paint failed"));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: searchable combo UI paint failed"));
             };
         }
         else if(modes.comboSmoke){
             const auto scene = CreateSmokeInputSceneBox<UiComboSmokeScene>(context.objectArena, context.input);
             paint.paint = [scene](Impl::UiPaintContext& paintContext){
                 if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: combo UI paint failed"));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: combo UI paint failed"));
             };
         }
         else if(modes.listSmoke){
             const auto scene = CreateSmokeInputSceneBox<UiListSmokeScene>(context.objectArena, context.input);
             paint.paint = [scene](Impl::UiPaintContext& paintContext){
                 if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: virtual list paint failed"));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: virtual list paint failed"));
             };
         }
         else if(modes.popupSmoke){
             const auto scene = CreateSmokeInputSceneBox<UiPopupSmokeScene>(context.objectArena, context.input, context.objectArena);
             paint.paint = [scene](Impl::UiPaintContext& paintContext){
                 if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: popup UI paint failed"));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: popup UI paint failed"));
             };
             auto laterEntity = world.createEntity();
             auto& laterPaint = laterEntity.addComponent<Impl::UiPaintComponent>();
             laterPaint.order = 100;
             laterPaint.paint = [scene](Impl::UiPaintContext& paintContext){
                 if(!scene->scene.paintLaterRoot(paintContext))
-                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: later popup root paint failed"));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: later popup root paint failed"));
             };
         }
         else if(modes.editSmoke){
             const auto scene = CreateSmokeInputSceneBox<UiEditSmokeScene>(context.objectArena, context.input, context.objectArena);
             paint.paint = [scene](Impl::UiPaintContext& paintContext){
                 if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: edit UI paint failed"));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: edit UI paint failed"));
             };
         }
         else if(modes.windowSmoke){
             const auto scene = CreateSmokeSceneBox<UiWindowSmokeScene>(context.objectArena);
             paint.paint = [scene](Impl::UiPaintContext& paintContext){
                 if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: window UI paint failed"));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: window UI paint failed"));
             };
         }
         else if(modes.interactionSmoke){
             const auto scene = CreateSmokeSceneBox<UiInteractiveSmokeScene>(context.objectArena);
             paint.paint = [scene](Impl::UiPaintContext& paintContext){
                 if(!scene->paint(paintContext))
-                    NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: interactive UI paint failed"));
+                    NWB_LOGGER_ERROR(FOUNDATION_TEXT("UiLayerSmokeProject: interactive UI paint failed"));
             };
         }
         else{

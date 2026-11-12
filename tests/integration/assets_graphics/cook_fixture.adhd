@@ -25,6 +25,7 @@ native{
 #include <impl/assets_csg/cook.adhd.h>
 #include <impl/assets_csg/shape_module_writer.adhd.h>
 #include <impl/assets_graphics/components.adhd.h>
+#include <impl/assets_scene/component_binary.adhd.h>
 #include <impl/assets_graphics/cook_types.adhd.h>
 #include <impl/assets_graphics/csg_shader_variants.adhd.h>
 #include <impl/assets_graphics/gather.adhd.h>
@@ -149,7 +150,7 @@ inline constexpr AStringView s_AssetsGraphicsTestConfigurationName = "fin";
 inline constexpr AStringView s_AssetsGraphicsTestConfigurationName = "opt";
 #endif
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 inline constexpr b8 s_AssetsGraphicsIsWindowsHost = true;
 #else
 inline constexpr b8 s_AssetsGraphicsIsWindowsHost = false;
@@ -184,7 +185,7 @@ struct CookCase{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE b8 WriteGlobalTextFile(const Path& filePath, const AStringView text){
+FOUNDATION_INLINE b8 WriteGlobalTextFile(const Path& filePath, const AStringView text){
     return ::WriteTextFile(filePath, text);
 }
 
@@ -192,7 +193,7 @@ NWB_INLINE b8 WriteGlobalTextFile(const Path& filePath, const AStringView text){
     return AStringView(text.data(), text.size());
 }
 
-[[nodiscard]] NWB_INLINE Path JoinGraphicsPathImpl(const Path& base, const AStringView child){
+[[nodiscard]] FOUNDATION_INLINE Path JoinGraphicsPathImpl(const Path& base, const AStringView child){
     return base / child;
 }
 
@@ -201,7 +202,7 @@ NWB::Core::Assets::AssetVector<T> MakeAssetVector(TestArena& testArena)noexcept(
     return NWB::Core::Assets::AssetVector<T>(testArena.arena);
 }
 
-NWB_INLINE NWB::Core::Assets::AssetBytes MakeAssetBytesImpl(TestArena& testArena)noexcept(noexcept(NWB::Core::Assets::AssetBytes(testArena.arena))){
+FOUNDATION_INLINE NWB::Core::Assets::AssetBytes MakeAssetBytesImpl(TestArena& testArena)noexcept(noexcept(NWB::Core::Assets::AssetBytes(testArena.arena))){
     return NWB::Core::Assets::AssetBytes(testArena.arena);
 }
 
@@ -214,15 +215,15 @@ b8 BuildPreparedGraphicsAssetRoots(TestArena& testArena, const Path& root, const
 b8 CookPreparedGraphicsAssetRoots(TestArena& testArena, const Path& root, const Path& outputDirectory, const InitializerList<Path> assetRoots, const u32 workerThreadCount = 0u);
 Expected<TestAString> ReadSmokeAssetMeta(TestArena& testArena, AStringView assetDirectory, AStringView assetFilename);
 
-NWB_INLINE b8 BuildSingleGraphicsAssetRoot(TestArena& testArena, const Path& root, const Path& outputDirectory, const Path& assetRoot, const u32 workerThreadCount = 0u){
+FOUNDATION_INLINE b8 BuildSingleGraphicsAssetRoot(TestArena& testArena, const Path& root, const Path& outputDirectory, const Path& assetRoot, const u32 workerThreadCount = 0u){
     return BuildPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, workerThreadCount);
 }
 
-NWB_INLINE b8 CookSingleGraphicsAssetRoot(TestArena& testArena, const Path& root, const Path& outputDirectory, const Path& assetRoot, const u32 workerThreadCount = 0u){
+FOUNDATION_INLINE b8 CookSingleGraphicsAssetRoot(TestArena& testArena, const Path& root, const Path& outputDirectory, const Path& assetRoot, const u32 workerThreadCount = 0u){
     return CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, workerThreadCount);
 }
 
-NWB_INLINE b8 CookTwoGraphicsAssetRoots(TestArena& testArena, const Path& root, const Path& outputDirectory, const Path& firstAssetRoot, const Path& secondAssetRoot, const u32 workerThreadCount = 0u){
+FOUNDATION_INLINE b8 CookTwoGraphicsAssetRoots(TestArena& testArena, const Path& root, const Path& outputDirectory, const Path& firstAssetRoot, const Path& secondAssetRoot, const u32 workerThreadCount = 0u){
     return CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { firstAssetRoot, secondAssetRoot }, workerThreadCount);
 }
 
@@ -288,16 +289,16 @@ Expected<UniquePtr<NWB::Core::Assets::IAsset>> LoadCookedAsset(const Path& outpu
     EXPECT_TRUE(deserialized);
     return deserialized;
 }
-NWB_INLINE Expected<UniquePtr<NWB::Core::Assets::IAsset>> LoadCookedMaterial(TestArena& testArena, const Path& outputDirectory, const Name assetName){
+FOUNDATION_INLINE Expected<UniquePtr<NWB::Core::Assets::IAsset>> LoadCookedMaterial(TestArena& testArena, const Path& outputDirectory, const Name assetName){
     return LoadCookedAsset<NWB::Impl::MaterialAssetCodec>(outputDirectory, assetName, 0u, testArena);
 }
 
 template<typename T>
-b8 OverwritePOD(const usize offset, const T value, const Span<u8> binary)noexcept(noexcept(NWB_MEMCPY(binary.data() + offset, sizeof(value), &value, sizeof(value))) && IsNothrowDestructible_V<T>){
+b8 OverwritePOD(const usize offset, const T value, const Span<u8> binary)noexcept(noexcept(FOUNDATION_MEMCPY(binary.data() + offset, sizeof(value), &value, sizeof(value))) && IsNothrowDestructible_V<T>){
     if(offset > binary.size() || sizeof(value) > binary.size() - offset)
         return false;
 
-    NWB_MEMCPY(binary.data() + offset, sizeof(value), &value, sizeof(value));
+    FOUNDATION_MEMCPY(binary.data() + offset, sizeof(value), &value, sizeof(value));
     return true;
 }
 
@@ -375,46 +376,46 @@ struct BunchFixture{
     const NWB::Path filePath{ outputArena, "tests/asset_bunch/assets/fixtures/bundle.nwb" };
 };
 
-[[nodiscard]] NWB_INLINE b8 HasMetaField(const Core::Metascript::Value& parent, const AStringView name)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasMetaField(const Core::Metascript::Value& parent, const AStringView name)noexcept{
     return parent.findField(name) != nullptr;
 }
 
-[[nodiscard]] NWB_INLINE const Core::Metascript::Value& GetMetaField(const Core::Metascript::Value& parent, const AStringView name)noexcept{
+[[nodiscard]] FOUNDATION_INLINE const Core::Metascript::Value& GetMetaField(const Core::Metascript::Value& parent, const AStringView name)noexcept{
     return *parent.findField(name);
 }
 
-[[nodiscard]] NWB_INLINE b8 HasMetaVariable(const Core::Metascript::Document& document, const AStringView name)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasMetaVariable(const Core::Metascript::Document& document, const AStringView name)noexcept{
     return document.findVariable(name) != nullptr;
 }
 
-[[nodiscard]] NWB_INLINE const Core::Metascript::Value& GetMetaVariable(const Core::Metascript::Document& document, const AStringView name)noexcept{
+[[nodiscard]] FOUNDATION_INLINE const Core::Metascript::Value& GetMetaVariable(const Core::Metascript::Document& document, const AStringView name)noexcept{
     return *document.findVariable(name);
 }
 
-[[nodiscard]] NWB_INLINE b8 HasMetaDeclaration(const Core::Metascript::Document& document, const AStringView name)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasMetaDeclaration(const Core::Metascript::Document& document, const AStringView name)noexcept{
     return document.findDeclaration(name) != nullptr;
 }
 
-[[nodiscard]] NWB_INLINE AStringView GetMetaDeclarationVariable(const Core::Metascript::Document& document, const AStringView name)noexcept{
+[[nodiscard]] FOUNDATION_INLINE AStringView GetMetaDeclarationVariable(const Core::Metascript::Document& document, const AStringView name)noexcept{
     const auto* decl = document.findDeclaration(name);
     return decl != nullptr ? AStringView(decl->variable) : AStringView();
 }
 
-[[nodiscard]] NWB_INLINE AStringView GetMetaDeclarationType(const Core::Metascript::Document& document, const AStringView name)noexcept{
+[[nodiscard]] FOUNDATION_INLINE AStringView GetMetaDeclarationType(const Core::Metascript::Document& document, const AStringView name)noexcept{
     const auto* decl = document.findDeclaration(name);
     return decl != nullptr ? AStringView(decl->type) : AStringView();
 }
 
-[[nodiscard]] NWB_INLINE b8 IsFirstMetaDeclaration(const Core::Metascript::Document& document, const AStringView name)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 IsFirstMetaDeclaration(const Core::Metascript::Document& document, const AStringView name)noexcept{
     const auto* decl = document.findDeclaration(name);
     return decl != nullptr && !document.declarations().empty() && decl == &document.declarations().front();
 }
 
-[[nodiscard]] NWB_INLINE Core::Assets::ExpandedAssetMetadataVector MoveExpandedBunchVector(Core::Assets::ExpandedAssetMetadataVector&& source)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::Assets::ExpandedAssetMetadataVector MoveExpandedBunchVector(Core::Assets::ExpandedAssetMetadataVector&& source)noexcept{
     return Move(source);
 }
 
-NWB_INLINE void VerifyOwnedBunchOutput(const Core::Assets::ExpandedAssetMetadataVector& output, const Core::Metascript::Document& document){
+FOUNDATION_INLINE void VerifyOwnedBunchOutput(const Core::Assets::ExpandedAssetMetadataVector& output, const Core::Metascript::Document& document){
     using Core::Metascript::Value;
     ASSERT_EQ(output.size(), 2u);
     EXPECT_EQ(output[0u].virtualPath, Name("project/fixtures/bundle/second"));
@@ -441,7 +442,7 @@ NWB_INLINE void VerifyOwnedBunchOutput(const Core::Assets::ExpandedAssetMetadata
     EXPECT_EQ(sourceLocal->asReference(), s_BunchLocal);
 }
 
-[[nodiscard]] NWB_INLINE b8 ParseBunchLookupFixture(const AStringView metadata, const usize unusedDeclarations, BunchFixture& fixture){
+[[nodiscard]] FOUNDATION_INLINE b8 ParseBunchLookupFixture(const AStringView metadata, const usize unusedDeclarations, BunchFixture& fixture){
     AString<Core::Alloc::ScratchArena> source(fixture.scratchArena);
     source.reserve(unusedDeclarations * 32u + metadata.size());
     for(usize index = 0u; index < unusedDeclarations; ++index)
@@ -492,12 +493,12 @@ public:
 };
 
 template<typename BytesT>
-[[nodiscard]] NWB_INLINE Expected<NwbAssetCacheFileHeader> ReadNwbCacheFileHeader(const BytesT& bytes)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Expected<NwbAssetCacheFileHeader> ReadNwbCacheFileHeader(const BytesT& bytes)noexcept{
     usize cursor = 0u;
     return ReadPOD<NwbAssetCacheFileHeader>(Span<const u8>(bytes.data(), bytes.size()), cursor);
 }
 
-[[nodiscard]] NWB_INLINE b8 BuildAndGatherWithExplicitRepoRoot(TestArena& testArena, const Path& root, const Path& assetRoot, const Path& builtDir, const Path& outDir){
+[[nodiscard]] FOUNDATION_INLINE b8 BuildAndGatherWithExplicitRepoRoot(TestArena& testArena, const Path& root, const Path& assetRoot, const Path& builtDir, const Path& outDir){
     NWB::Core::CpuTaskScheduler cookCpuTaskScheduler(0u);
     NWB::Core::Alloc::ScratchArena scratchArena(s_CodecScratchArena);
     NWB::Pipeline::AssetBuilder::AssetBuildOptions buildOptions(testArena.arena, cookCpuTaskScheduler);
@@ -516,7 +517,7 @@ template<typename BytesT>
     return NWB::Pipeline::AssetGatherer::GatherAssets(gatherOptions, scratchArena);
 }
 
-[[nodiscard]] NWB_INLINE b8 GatherBuiltDirectoryToOutput(TestArena& testArena, const Path& builtDir, const Path& outDir, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] FOUNDATION_INLINE b8 GatherBuiltDirectoryToOutput(TestArena& testArena, const Path& builtDir, const Path& outDir, Core::Alloc::ScratchArena& scratchArena){
     NWB::Pipeline::AssetGatherer::AssetGatherOptions options(testArena.arena);
     options.inputs.emplace_back(PathToString(testArena.arena, builtDir));
     options.outputDirectory = PathToString(testArena.arena, outDir);
@@ -524,14 +525,14 @@ template<typename BytesT>
     return NWB::Pipeline::AssetGatherer::GatherAssets(options, scratchArena);
 }
 
-[[nodiscard]] NWB_INLINE Expected<SamplerAsset> LoadCookedSamplerAsset(const Path& outputDirectory, const Name assetName, const usize expectedVolumeFileCount, TestArena& testArena){
+[[nodiscard]] FOUNDATION_INLINE Expected<SamplerAsset> LoadCookedSamplerAsset(const Path& outputDirectory, const Name assetName, const usize expectedVolumeFileCount, TestArena& testArena){
     auto loaded = LoadCookedAsset<NWB::Impl::SamplerAssetCodec>(outputDirectory, assetName, expectedVolumeFileCount, testArena);
     if(!loaded)
         return MakeUnexpected(loaded.error());
     return Move(static_cast<NWB::Impl::Sampler&>(**loaded));
 }
 
-NWB_INLINE void CorruptManifestLastPayloadHash(AssetVolumePackManifest& manifest)noexcept{
+FOUNDATION_INLINE void CorruptManifestLastPayloadHash(AssetVolumePackManifest& manifest)noexcept{
     manifest.entries.back().identity.payloadHash ^= 1u;
 }
 
@@ -617,11 +618,7 @@ public:
     virtual b8 serialize(const Core::Assets::IAsset&, Core::Assets::AssetBytes&)const noexcept override{ return false; }
 };
 
-class ImplicitNameShader final : public Impl::TypedShader<ImplicitNameShader>{
-public:
-    static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::ComputeStage;
-
-
+class ImplicitNameShader final : public Core::Assets::TypedAsset<ImplicitNameShader, Impl::IShader>{
 public:
     [[nodiscard]] static ThrowingImplicitAssetName& AssetTypeName()noexcept{
         static ThrowingImplicitAssetName s_Value;
@@ -630,7 +627,24 @@ public:
 
 
 public:
-    using Impl::TypedShader<ImplicitNameShader>::TypedShader;
+    explicit ImplicitNameShader(AssetArena& arena)noexcept(noexcept(DeclVal<void(*)(const Name&)noexcept>()(ImplicitNameShader::AssetTypeName())))
+        : Core::Assets::TypedAsset<ImplicitNameShader, Impl::IShader>()
+        , m_entryPoint(arena)
+        , m_bytecode(arena)
+    {}
+    ImplicitNameShader(AssetArena& arena, const Name& virtualPath)noexcept(noexcept(DeclVal<void(*)(const Name&)noexcept>()(ImplicitNameShader::AssetTypeName())))
+        : Core::Assets::TypedAsset<ImplicitNameShader, Impl::IShader>(virtualPath)
+        , m_entryPoint(arena)
+        , m_bytecode(arena)
+    {}
+    virtual const AString<::ArenaBase>& entryPoint()const noexcept override{ return m_entryPoint; }
+    virtual const Vector<u8, ::ArenaBase>& bytecode()const noexcept override{ return m_bytecode; }
+    virtual b8 loadBinary(Span<const u8>)noexcept override{ return false; }
+
+
+private:
+    AString<::ArenaBase> m_entryPoint;
+    Vector<u8, ::ArenaBase> m_bytecode;
 };
 
 static_assert(noexcept(Name(ImplicitNameAsset::AssetTypeName())));
@@ -647,7 +661,7 @@ struct ThrowingComparisonAnswer{
 
 struct AssetComparisonTag{};
 
-[[nodiscard]] NWB_INLINE ThrowingComparisonAnswer operator!=(const Name&, const AssetComparisonTag&)noexcept{ return {}; }
+[[nodiscard]] FOUNDATION_INLINE ThrowingComparisonAnswer operator!=(const Name&, const AssetComparisonTag&)noexcept{ return {}; }
 
 class ContextualComparisonAsset final : public Core::Assets::IAsset{
 public:
@@ -679,7 +693,7 @@ struct RelativeCase{
     b8 accepted;
 };
 
-NWB_INLINE void PrepareAssetPathWorkload(const usize directoryCount, const AStringView directoryToken, const usize tokenRepeats, PathFixture& fixture){
+FOUNDATION_INLINE void PrepareAssetPathWorkload(const usize directoryCount, const AStringView directoryToken, const usize tokenRepeats, PathFixture& fixture){
     const usize directoryBytes = directoryToken.size() * tokenRepeats;
     fixture.relativeText.reserve(directoryCount * (directoryBytes + 1u) + 32u);
     for(usize directory = 0u; directory < directoryCount; ++directory){
@@ -697,7 +711,7 @@ NWB_INLINE void PrepareAssetPathWorkload(const usize directoryCount, const AStri
     fixture.expectedDerived.append(fixture.expectedRelative.data(), fixture.expectedRelative.size() - 4u);
 }
 
-[[nodiscard]] NWB_INLINE b8 BuildAndVerifyDerivedAssetPath(const PathFixture& fixture, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] FOUNDATION_INLINE b8 BuildAndVerifyDerivedAssetPath(const PathFixture& fixture, Core::Alloc::ScratchArena& scratchArena){
     const auto output = Core::Assets::AssetPathsDetail::BuildDerivedAssetVirtualPathText(fixture.assetRoot, AStringView("project"), fixture.sourcePath, scratchArena, scratchArena);
     return output && AStringView(*output) == AStringView(fixture.expectedDerived);
 }
@@ -708,12 +722,12 @@ template<typename StringT>
 }
 
 template<typename StringT>
-[[nodiscard]] NWB_INLINE b8 HasTrailingNullTerminator(const StringT& text)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasTrailingNullTerminator(const StringT& text)noexcept{
     return text.c_str()[text.size()] == '\0';
 }
 
 template<typename StringT>
-NWB_INLINE void AppendRepeatedAsciiByte(StringT& text, const usize count, const u8 byte){
+FOUNDATION_INLINE void AppendRepeatedAsciiByte(StringT& text, const usize count, const u8 byte){
     text.append(count, static_cast<char>(byte));
 }
 
@@ -838,7 +852,7 @@ public:
     Pipeline::AssetBuilder::AssetBuildOptions m_options{ m_testArena.arena, m_cpuScheduler };
 };
 
-NWB_INLINE void AppendCsgShapeCookEntry(const Name shapeName, const Name shaderModule, const AStringView moduleInclude, NWB::Impl::AssetsCsgCook::CookArena& arena, NWB::Impl::AssetsCsgCook::CsgShapeCookEntryVector& outEntries){
+FOUNDATION_INLINE void AppendCsgShapeCookEntry(const Name shapeName, const Name shaderModule, const AStringView moduleInclude, NWB::Impl::AssetsCsgCook::CookArena& arena, NWB::Impl::AssetsCsgCook::CsgShapeCookEntryVector& outEntries){
     NWB::Impl::AssetsCsgCook::CsgShapeCookEntry entry(arena);
     entry.shapeName = shapeName;
     entry.shaderModule = shaderModule;
@@ -847,7 +861,7 @@ NWB_INLINE void AppendCsgShapeCookEntry(const Name shapeName, const Name shaderM
     outEntries.push_back(Move(entry));
 }
 
-[[nodiscard]] NWB_INLINE NWB::Impl::CsgShapeTypeId FindCookedCsgShapeTypeId(const NWB::Impl::AssetsCsgCook::CsgShapeCookEntryVector& entries, const Name shapeName)noexcept{
+[[nodiscard]] FOUNDATION_INLINE NWB::Impl::CsgShapeTypeId FindCookedCsgShapeTypeId(const NWB::Impl::AssetsCsgCook::CsgShapeCookEntryVector& entries, const Name shapeName)noexcept{
     for(const NWB::Impl::AssetsCsgCook::CsgShapeCookEntry& entry : entries){
         if(entry.shapeName == shapeName)
             return entry.shapeTypeId;
@@ -855,11 +869,11 @@ NWB_INLINE void AppendCsgShapeCookEntry(const Name shapeName, const Name shaderM
     return NWB::Impl::s_InvalidCsgShapeTypeId;
 }
 
-NWB_INLINE Expected<NWB::Impl::CsgShapeBounds> CsgCookTestBounds(const SIMDMatrix&, const Span<const u8>)noexcept{
+FOUNDATION_INLINE Expected<NWB::Impl::CsgShapeBounds> CsgCookTestBounds(const SIMDMatrix&, const Span<const u8>)noexcept{
     return NWB::Impl::CsgShapeBounds{ VectorSet(-1.0f, -1.0f, -1.0f, 0.0f), VectorSet(1.0f, 1.0f, 1.0f, 0.0f), true };
 }
 
-[[nodiscard]] NWB_INLINE NWB::Impl::CsgShapeTypeDesc CsgCookTestShapeDesc(const Name shapeName, const Name shaderModule, const AStringView moduleInclude, Core::Alloc::GlobalArena& arena){
+[[nodiscard]] FOUNDATION_INLINE NWB::Impl::CsgShapeTypeDesc CsgCookTestShapeDesc(const Name shapeName, const Name shaderModule, const AStringView moduleInclude, Core::Alloc::GlobalArena& arena){
     NWB::Impl::CsgShapeTypeDesc desc(arena);
     desc.name = shapeName;
     desc.shaderModule = shaderModule;
@@ -868,13 +882,13 @@ NWB_INLINE Expected<NWB::Impl::CsgShapeBounds> CsgCookTestBounds(const SIMDMatri
     return desc;
 }
 
-[[nodiscard]] NWB_INLINE b8 MergeGatheredTestBytes(const Name&, const Span<const u8> incoming, NWB::Core::Alloc::ScratchArena&, Core::Assets::AssetBytes& existing){
+[[nodiscard]] FOUNDATION_INLINE b8 MergeGatheredTestBytes(const Name&, const Span<const u8> incoming, NWB::Core::Alloc::ScratchArena&, Core::Assets::AssetBytes& existing){
     ++s_GatherMergeCalls;
     existing.insert(existing.end(), incoming.begin(), incoming.end());
     return true;
 }
 
-[[nodiscard]] NWB_INLINE Expected<Name> GatherInputAssetName(const usize index){
+[[nodiscard]] FOUNDATION_INLINE Expected<Name> GatherInputAssetName(const usize index){
     Array<char, 32u> text = {};
     return DeriveName(Name(s_AssetCaseProjectGather), FormatDecimal(index, text));
 }
@@ -1025,12 +1039,12 @@ using Core::Assets::AssetsVolumeCookDetail::s_AssetVolumeName;
 using Core::Assets::EncodeAssetInputList;
 using Core::Assets::ResolveAssetRoots;
 template<typename WordsT>
-[[nodiscard]] NWB_INLINE b8 IsValidSpirvModuleWords(const WordsT& words)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 IsValidSpirvModuleWords(const WordsT& words)noexcept{
     return Core::IsValidSpirvModuleWords(Span<const u32>(words.data(), words.size()));
 }
 
 template<typename WordsT>
-[[nodiscard]] NWB_INLINE Expected<AStringView, SpirvLookupError> ResolveSpirvEntryPointName(const WordsT& words, const AStringView entryName, const ShaderStageMask shaderType)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Expected<AStringView, SpirvLookupError> ResolveSpirvEntryPointName(const WordsT& words, const AStringView entryName, const ShaderStageMask shaderType)noexcept{
     return Core::ResolveSpirvEntryPointName(Span<const u32>(words.data(), words.size()), entryName, shaderType);
 }
 using Core::ShaderArchive::BuildVirtualPathName;
@@ -1128,7 +1142,7 @@ NwbExactEntryPointPixelOutput MainCase(){
     return static_cast<u32>(static_cast<u8>(a)) | (static_cast<u32>(static_cast<u8>(b)) << 8u) | (static_cast<u32>(static_cast<u8>(c)) << 16u) | (static_cast<u32>(static_cast<u8>(d)) << 24u);
 }
 
-NWB_INLINE void ExpectNoShaderCompilerWorkDirectories(const Path& cacheDirectory){
+FOUNDATION_INLINE void ExpectNoShaderCompilerWorkDirectories(const Path& cacheDirectory){
     const auto entries = RecursiveDirectoryIterator<Path::Arena>::Create(cacheDirectory);
     ASSERT_TRUE(entries);
     for(const auto& entry : *entries){
@@ -1137,7 +1151,7 @@ NWB_INLINE void ExpectNoShaderCompilerWorkDirectories(const Path& cacheDirectory
     }
 }
 
-[[nodiscard]] NWB_INLINE Expected<Path> FindSingleShaderBytecodeCachePath(const Path& cacheDirectory, TestArena& testArena){
+[[nodiscard]] FOUNDATION_INLINE Expected<Path> FindSingleShaderBytecodeCachePath(const Path& cacheDirectory, TestArena& testArena){
     Path path(testArena.arena);
 
     const auto cacheEntries = RecursiveDirectoryIterator<Path::Arena>::Create(cacheDirectory);
@@ -1168,11 +1182,11 @@ NWB_INLINE void ExpectNoShaderCompilerWorkDirectories(const Path& cacheDirectory
     return path;
 }
 
-[[nodiscard]] NWB_INLINE b8 HasNonZeroErrorCode(const ErrorCode& error)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasNonZeroErrorCode(const ErrorCode& error)noexcept{
     return static_cast<b8>(error);
 }
 
-[[nodiscard]] NWB_INLINE Expected<Impl::RendererComponent> LoadCookedRendererComponentImpl(TestArena& testArena, const Path& outputDirectory, const Name& virtualPath, const usize expectedVolumeFileCount){
+[[nodiscard]] FOUNDATION_INLINE Expected<Impl::RendererComponent> LoadCookedRendererComponentImpl(TestArena& testArena, const Path& outputDirectory, const Name& virtualPath, const usize expectedVolumeFileCount){
     const auto loadedAsset = LoadCookedAsset<NWB::Impl::ComponentAssetCodec>(outputDirectory, virtualPath, expectedVolumeFileCount, testArena);
     if(!loadedAsset || loadedAsset->get() == nullptr)
         return MakeUnexpected(Failure{});
@@ -1182,33 +1196,33 @@ NWB_INLINE void ExpectNoShaderCompilerWorkDirectories(const Path& cacheDirectory
     return static_cast<const NWB::Impl::RendererComponentAsset*>(loadedAsset->get())->component;
 }
 
-NWB_INLINE void InsertEvaluatorDefineImpl(TestArena& testArena, NWB::Impl::ShaderCook::CookMap<NWB::Impl::ShaderCook::CookString, NWB::Impl::ShaderCook::DefineEntry>& defines, const AStringView name, const InitializerList<AStringView> values){
+FOUNDATION_INLINE void InsertEvaluatorDefineImpl(TestArena& testArena, NWB::Impl::ShaderCook::CookMap<NWB::Impl::ShaderCook::CookString, NWB::Impl::ShaderCook::DefineEntry>& defines, const AStringView name, const InitializerList<AStringView> values){
     NWB::Impl::ShaderCook::DefineEntry definition(testArena.arena);
     for(const AStringView value : values)
         definition.values.emplace_back(value, testArena.arena);
     ASSERT_TRUE(defines.emplace(NWB::Impl::ShaderCook::CookString(name, testArena.arena), Move(definition)).second);
 }
 
-NWB_INLINE void InsertEvaluatorIncludeMetadataImpl(TestArena& testArena, const Path& path, const AStringView option, const InitializerList<AStringView> values, const AStringView authoredDefine, IncludeMetadataMap& includeMetadata){
+FOUNDATION_INLINE void InsertEvaluatorIncludeMetadataImpl(TestArena& testArena, const Path& path, const AStringView option, const InitializerList<AStringView> values, const AStringView authoredDefine, IncludeMetadataMap& includeMetadata){
     NWB::Impl::ShaderCook::IncludeEntry entry(testArena.arena);
     InsertEvaluatorDefineImpl(testArena, entry.defineValues, option, values);
     InsertEvaluatorDefineImpl(testArena, entry.defineValues, authoredDefine, { "inherited" });
     auto key = PathToString(testArena.arena, path);
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     CanonicalizeTextInPlace(key);
 #endif
     ASSERT_TRUE(includeMetadata.emplace(Move(key), Move(entry)).second);
 }
 
-NWB_INLINE void InsertEvaluatorIncludeMetadata1Impl(TestArena& testArena, const Path& path, const AStringView option, const AStringView val0, const AStringView authoredDefine, IncludeMetadataMap& includeMetadata){
+FOUNDATION_INLINE void InsertEvaluatorIncludeMetadata1Impl(TestArena& testArena, const Path& path, const AStringView option, const AStringView val0, const AStringView authoredDefine, IncludeMetadataMap& includeMetadata){
     InsertEvaluatorIncludeMetadataImpl(testArena, path, option, { val0 }, authoredDefine, includeMetadata);
 }
 
-NWB_INLINE void InsertEvaluatorIncludeMetadata2Impl(TestArena& testArena, const Path& path, const AStringView option, const AStringView val0, const AStringView val1, const AStringView authoredDefine, IncludeMetadataMap& includeMetadata){
+FOUNDATION_INLINE void InsertEvaluatorIncludeMetadata2Impl(TestArena& testArena, const Path& path, const AStringView option, const AStringView val0, const AStringView val1, const AStringView authoredDefine, IncludeMetadataMap& includeMetadata){
     InsertEvaluatorIncludeMetadataImpl(testArena, path, option, { val0, val1 }, authoredDefine, includeMetadata);
 }
 
-[[nodiscard]] NWB_INLINE Expected<PreparedShaderPlan> PrepareEvaluatorShaderPlanImpl(
+[[nodiscard]] FOUNDATION_INLINE Expected<PreparedShaderPlan> PrepareEvaluatorShaderPlanImpl(
     TestArena& testArena,
     ScratchArena& scratchArena,
     const ResolvedCookPaths& paths,
@@ -1238,33 +1252,33 @@ NWB_INLINE void InsertEvaluatorIncludeMetadata2Impl(TestArena& testArena, const 
     return Plan::PrepareShaderEntriesForCook(paths, bindRoot, csgRoot, emptyPath, emptyPath, includeMetadata, materialBinds, materials, testArena.arena, scratchArena, entries);
 }
 
-[[nodiscard]] NWB_INLINE b8 HasPreparedShaderDefine(const PreparedShaderEntry& entry, const AStringView name)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasPreparedShaderDefine(const PreparedShaderEntry& entry, const AStringView name)noexcept{
     return entry.entry.defineValues.find(name) != entry.entry.defineValues.end();
 }
 
-[[nodiscard]] NWB_INLINE const NWB::Impl::ShaderCook::CookVector<NWB::Impl::ShaderCook::CookString>& GetPreparedShaderDefineValues(const PreparedShaderEntry& entry, const AStringView name)noexcept{
+[[nodiscard]] FOUNDATION_INLINE const NWB::Impl::ShaderCook::CookVector<NWB::Impl::ShaderCook::CookString>& GetPreparedShaderDefineValues(const PreparedShaderEntry& entry, const AStringView name)noexcept{
     return entry.entry.defineValues.find(name).value().values;
 }
 
 template<typename StringT>
-[[nodiscard]] NWB_INLINE b8 UsesTestArenaAllocator(const StringT& text, const TestArena& testArena)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 UsesTestArenaAllocator(const StringT& text, const TestArena& testArena)noexcept{
     return text.get_allocator().arenaPtr() == &testArena.arena;
 }
 
-[[nodiscard]] NWB_INLINE Expected<Name> DeriveIndexedTestName(const Name& baseName, const u32 index){
+[[nodiscard]] FOUNDATION_INLINE Expected<Name> DeriveIndexedTestName(const Name& baseName, const u32 index){
     Array<char, 32u> indexText = {};
     return DeriveName(baseName, FormatDecimal(index, indexText));
 }
 
-NWB_INLINE void AppendByteToShapeModuleIncludeImpl(CsgShapeTypeDesc& desc, const u8 byte){
+FOUNDATION_INLINE void AppendByteToShapeModuleIncludeImpl(CsgShapeTypeDesc& desc, const u8 byte){
     desc.shaderModuleInclude.push_back(static_cast<char>(byte));
 }
 
-[[nodiscard]] NWB_INLINE Expected<ShaderArchiveRecordVector> DeserializeShaderIndexFromBytes(TestArena& testArena, const GraphicsBytes& encoded){
+[[nodiscard]] FOUNDATION_INLINE Expected<ShaderArchiveRecordVector> DeserializeShaderIndexFromBytes(TestArena& testArena, const GraphicsBytes& encoded){
     return Core::ShaderArchive::DeserializeIndex(testArena.arena, BinaryByteView{ encoded.data(), encoded.size() });
 }
 
-NWB_INLINE void ZeroFillGraphicsBytesImpl(GraphicsBytes& bytes)noexcept{
+FOUNDATION_INLINE void ZeroFillGraphicsBytesImpl(GraphicsBytes& bytes)noexcept{
     bytes.assign(bytes.size(), 0u);
 }
 
@@ -1272,77 +1286,78 @@ NWB_INLINE void ZeroFillGraphicsBytesImpl(GraphicsBytes& bytes)noexcept{
     return AStringView("nul\0byte", 8u);
 }
 
-[[nodiscard]] NWB_INLINE Expected<PixelShaderAsset> LoadCookedPixelShaderImpl(TestArena& testArena, const Path& outputDirectory, const Name& virtualPath, const usize expectedVolumeFileCount){
+[[nodiscard]] FOUNDATION_INLINE Expected<PixelShaderAsset> LoadCookedPixelShaderImpl(TestArena& testArena, const Path& outputDirectory, const Name& virtualPath, const usize expectedVolumeFileCount){
     auto loaded = LoadCookedAsset<PixelShaderAssetCodec>(outputDirectory, virtualPath, expectedVolumeFileCount, testArena);
     if(!loaded || loaded->get() == nullptr)
         return MakeUnexpected(Failure{});
     return Move(static_cast<PixelShaderAsset&>(**loaded));
 }
 
-[[nodiscard]] NWB_INLINE Expected<ComputeShaderAsset> LoadCookedComputeShaderImpl(TestArena& testArena, const Path& outputDirectory, const Name& virtualPath, const usize expectedVolumeFileCount){
+[[nodiscard]] FOUNDATION_INLINE Expected<ComputeShaderAsset> LoadCookedComputeShaderImpl(TestArena& testArena, const Path& outputDirectory, const Name& virtualPath, const usize expectedVolumeFileCount){
     auto loaded = LoadCookedAsset<ComputeShaderAssetCodec>(outputDirectory, virtualPath, expectedVolumeFileCount, testArena);
     if(!loaded || loaded->get() == nullptr)
         return MakeUnexpected(Failure{});
     return Move(static_cast<ComputeShaderAsset&>(**loaded));
 }
 
-[[nodiscard]] NWB_INLINE usize ByteBufferAddress(const AssetBytes& bytes)noexcept{
+[[nodiscard]] FOUNDATION_INLINE usize ByteBufferAddress(const Span<const u8> bytes)noexcept{
     return reinterpret_cast<usize>(bytes.data());
 }
 
-[[nodiscard]] NWB_INLINE usize StringDataAddress(const AssetString& text)noexcept{
+template<typename ArenaT>
+[[nodiscard]] FOUNDATION_INLINE usize StringDataAddress(const AString<ArenaT>& text)noexcept{
     return reinterpret_cast<usize>(text.data());
 }
 
-NWB_INLINE void AppendZeroU32ToAssetBytesImpl(AssetBytes& bytes){
+FOUNDATION_INLINE void AppendZeroU32ToAssetBytesImpl(AssetBytes& bytes){
     AppendPOD(bytes, 0u);
 }
 
-NWB_INLINE void EnableGraphicsGatherMergeImpl(AssetGatherOptions& options)noexcept{
+FOUNDATION_INLINE void EnableGraphicsGatherMergeImpl(AssetGatherOptions& options)noexcept{
     options.mergePayloads = &NWB::Impl::MergeGatheredGraphicsAsset;
 }
 
-NWB_INLINE void AppendGatherInputPathImpl(TestArena& testArena, const Path& inputPath, AssetGatherOptions& options){
+FOUNDATION_INLINE void AppendGatherInputPathImpl(TestArena& testArena, const Path& inputPath, AssetGatherOptions& options){
     options.inputs.emplace_back(PathToString(testArena.arena, inputPath));
 }
 
-NWB_INLINE void SetGatherOutputPathImpl(TestArena& testArena, const Path& outputDirectory, AssetGatherOptions& options){
+FOUNDATION_INLINE void SetGatherOutputPathImpl(TestArena& testArena, const Path& outputDirectory, AssetGatherOptions& options){
     options.outputDirectory = PathToString(testArena.arena, outputDirectory);
 }
 
-[[nodiscard]] NWB_INLINE Core::Assets::AssetString FormatShaderIncludeRootsMetadataImpl(TestArena& testArena, const AStringView head, const AStringView entryLine, const Path& includeRoot){
+[[nodiscard]] FOUNDATION_INLINE Core::Assets::AssetString FormatShaderIncludeRootsMetadataImpl(TestArena& testArena, const AStringView head, const AStringView entryLine, const Path& includeRoot){
     const auto includeRootText = PathToString(testArena.arena, includeRoot);
     return StringFormat(testArena.arena, "{}{}asset.include_roots = [\"{}\"];\n", head, entryLine, includeRootText);
 }
 
-[[nodiscard]] NWB_INLINE Core::Assets::AssetString FormatBomAbsoluteIncludeSourceImpl(TestArena& testArena, const Path& includeFilePath){
+[[nodiscard]] FOUNDATION_INLINE Core::Assets::AssetString FormatBomAbsoluteIncludeSourceImpl(TestArena& testArena, const Path& includeFilePath){
     const auto absoluteInclude = PathToGenericString(testArena.arena, includeFilePath);
     const usize includeLineEnd = s_BomCompilerProbeSource.find('\n');
     return StringFormat(testArena.arena, "\xEF\xBB\xBF#include \"{}\"{}", absoluteInclude, s_BomCompilerProbeSource.substr(includeLineEnd));
 }
 
-[[nodiscard]] NWB_INLINE GraphicsWordVector CopyBytecodeToWordsImpl(TestArena& testArena, const AssetBytes& bytecode){
+[[nodiscard]] FOUNDATION_INLINE GraphicsWordVector CopyBytecodeToWordsImpl(TestArena& testArena, const Span<const u8> bytecode){
     GraphicsWordVector words(testArena.arena);
     words.resize(bytecode.size() / sizeof(u32));
     if(!words.empty())
-        NWB_MEMCPY(words.data(), bytecode.size(), bytecode.data(), bytecode.size());
+        FOUNDATION_MEMCPY(words.data(), bytecode.size(), bytecode.data(), bytecode.size());
     return words;
 }
 
-[[nodiscard]] NWB_INLINE Expected<AStringView, SpirvLookupError> ResolveSpirvBytesEntryPointImpl(const AssetBytes& bytes, const AStringView entryPoint, const ShaderStageMask stage)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Expected<AStringView, SpirvLookupError> ResolveSpirvBytesEntryPointImpl(const AssetBytes& bytes, const AStringView entryPoint, const ShaderStageMask stage)noexcept{
     return Core::ResolveSpirvEntryPointName(BinaryByteView{ bytes.data(), bytes.size() }, entryPoint, stage);
 }
 
-NWB_INLINE void CorruptBytecodeMagicImpl(AssetBytes& bytes){
+FOUNDATION_INLINE void CorruptBytecodeMagicImpl(AssetBytes& bytes){
     bytes.assign({ 'B', 'A', 'D', '!' });
 }
 
-NWB_INLINE void CorruptBytecodeTailZeroWordsImpl(const AssetBytes& originalBytes, AssetBytes& corrupted){
+FOUNDATION_INLINE void CorruptBytecodeTailZeroWordsImpl(const AssetBytes& originalBytes, AssetBytes& corrupted){
     corrupted.assign(originalBytes.begin(), originalBytes.end());
     corrupted.resize(originalBytes.size() + sizeof(u32), 0u);
 }
 
-NWB_INLINE void CopyAssetBytesImpl(const AssetBytes& source, AssetBytes& dest){
+FOUNDATION_INLINE void CopyAssetBytesImpl(const Span<const u8> source, AssetBytes& dest){
     dest.assign(source.begin(), source.end());
 }
 
@@ -1488,7 +1503,7 @@ inline constexpr FormatEnum s_FormatRgba16Float = NWB::Core::Format::RGBA16_FLOA
     return s_UnboundMaterialShaderProbeSource;
 }
 
-[[nodiscard]] NWB_INLINE UInt4 PackF32x3MaterialTypedValueMetaImpl(const AStringView key)noexcept{
+[[nodiscard]] FOUNDATION_INLINE UInt4 PackF32x3MaterialTypedValueMetaImpl(const AStringView key)noexcept{
     NWB::Impl::MaterialParameterType type{};
     type.valueType = NWB::Impl::MaterialParameterValueType::f32;
     type.componentCount = 3u;
@@ -1499,7 +1514,7 @@ inline constexpr FormatEnum s_FormatRgba16Float = NWB::Core::Format::RGBA16_FLOA
     return static_cast<u32>(NWB::Impl::MaterialParameterValueType::f32);
 }
 
-[[nodiscard]] NWB_INLINE Expected<NWB::Impl::MaterialCookEntry> ParseMaterialEntryFromMetaText(const AStringView metaText, TestArena& testArena, NWB::Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] FOUNDATION_INLINE Expected<NWB::Impl::MaterialCookEntry> ParseMaterialEntryFromMetaText(const AStringView metaText, TestArena& testArena, NWB::Core::Alloc::ScratchArena& scratchArena){
     NWB::Core::Metascript::Document doc(testArena.arena);
     if(!doc.parse(metaText))
         return MakeUnexpected(Failure{});
@@ -1509,7 +1524,7 @@ inline constexpr FormatEnum s_FormatRgba16Float = NWB::Core::Format::RGBA16_FLOA
     return NWB::Impl::ParseMaterialCookMetadata(assetRoot, s_ProjectVirtualRoot, nwbFilePath, doc, testArena.arena, scratchArena);
 }
 
-[[nodiscard]] NWB_INLINE Expected<NWB::Impl::Material> BuildMaterialFromBindAndMeta(const AStringView bindText, const AStringView materialText, const AStringView caseName, TestArena& testArena, NWB::Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] FOUNDATION_INLINE Expected<NWB::Impl::Material> BuildMaterialFromBindAndMeta(const AStringView bindText, const AStringView materialText, const AStringView caseName, TestArena& testArena, NWB::Core::Alloc::ScratchArena& scratchArena){
     auto materialEntryResult = ParseMaterialEntryFromMetaText(materialText, testArena, scratchArena);
     if(!materialEntryResult)
         return MakeUnexpected(Failure{});
@@ -1539,7 +1554,7 @@ inline constexpr FormatEnum s_FormatRgba16Float = NWB::Core::Format::RGBA16_FLOA
     return built;
 }
 
-[[nodiscard]] NWB_INLINE b8 CanRoundTripMaterialAssetCodecImpl(const NWB::Impl::Material& material, TestArena& testArena, NWB::Impl::MaterialAssetCodec& codec){
+[[nodiscard]] FOUNDATION_INLINE b8 CanRoundTripMaterialAssetCodecImpl(const NWB::Impl::Material& material, TestArena& testArena, NWB::Impl::MaterialAssetCodec& codec){
     NWB::Core::Assets::AssetBytes binary = MakeAssetBytesImpl(testArena);
     const b8 serialized = codec.serialize(material, binary);
     EXPECT_TRUE(serialized);
@@ -1552,7 +1567,7 @@ inline constexpr FormatEnum s_FormatRgba16Float = NWB::Core::Format::RGBA16_FLOA
     return deserialized.has_value();
 }
 
-NWB_INLINE void SetGeneratedMaterialAvboitPixelShadersImpl(NWB::Impl::Material& material){
+FOUNDATION_INLINE void SetGeneratedMaterialAvboitPixelShadersImpl(NWB::Impl::Material& material){
     NWB::Core::Assets::AssetRef<NWB::Impl::PixelShader> accumulatePixelShader;
     accumulatePixelShader.virtualPath = Name(s_GeneratedAvboitAccumulatePsProjectM);
     material.setAvboitAccumulatePixelShader(accumulatePixelShader);
@@ -1566,47 +1581,47 @@ NWB_INLINE void SetGeneratedMaterialAvboitPixelShadersImpl(NWB::Impl::Material& 
     material.setAvboitExtinctionPixelShader(extinctionPixelShader);
 }
 
-NWB_INLINE void SetReloadMaterialAvboitPixelShadersImpl(NWB::Impl::Material& material){
+FOUNDATION_INLINE void SetReloadMaterialAvboitPixelShadersImpl(NWB::Impl::Material& material){
     material.setAvboitAccumulatePixelShader(NWB::Core::Assets::AssetRef<NWB::Impl::PixelShader>("project/shaders/reload_accumulate"));
     material.setAvboitOccupancyPixelShader(NWB::Core::Assets::AssetRef<NWB::Impl::PixelShader>("project/shaders/reload_occupancy"));
     material.setAvboitExtinctionPixelShader(NWB::Core::Assets::AssetRef<NWB::Impl::PixelShader>("project/shaders/reload_extinction"));
 }
 
-NWB_INLINE void AppendDuplicateBindTestEntryImpl(TestArena& testArena, const AStringView virtualPath, MaterialBindEntryVector& outEntries){
+FOUNDATION_INLINE void AppendDuplicateBindTestEntryImpl(TestArena& testArena, const AStringView virtualPath, MaterialBindEntryVector& outEntries){
     auto& bind = outEntries.emplace_back(testArena.arena);
     bind.virtualPath = virtualPath;
 }
 
-NWB_INLINE void AppendMaterialInterfaceTestEntryImpl(TestArena& testArena, const AStringView materialInterface, const u64 layoutHash, const u8 blockByte, MaterialShaderCookEntryVector& outEntries){
+FOUNDATION_INLINE void AppendMaterialInterfaceTestEntryImpl(TestArena& testArena, const AStringView materialInterface, const u64 layoutHash, const u8 blockByte, MaterialShaderCookEntryVector& outEntries){
     auto& material = outEntries.emplace_back(testArena.arena);
     material.materialInterface = materialInterface;
     material.typedLayoutHash = layoutHash;
     material.typedBlockBytes.push_back(blockByte);
 }
 
-NWB_INLINE void SetMaterialBindEntryVirtualPathImpl(MaterialBindEntry& entry, const AStringView virtualPath){
+FOUNDATION_INLINE void SetMaterialBindEntryVirtualPathImpl(MaterialBindEntry& entry, const AStringView virtualPath){
     entry.virtualPath = virtualPath;
 }
 
-[[nodiscard]] NWB_INLINE Expected<MaterialAsset> LoadCookedMaterialAssetImpl(TestArena& testArena, const Path& outputDirectory, const Name& assetName){
+[[nodiscard]] FOUNDATION_INLINE Expected<MaterialAsset> LoadCookedMaterialAssetImpl(TestArena& testArena, const Path& outputDirectory, const Name& assetName){
     auto loaded = LoadCookedMaterial(testArena, outputDirectory, assetName);
     if(!loaded || loaded->get() == nullptr)
         return MakeUnexpected(Failure{});
     return Move(static_cast<MaterialAsset&>(**loaded));
 }
 
-[[nodiscard]] NWB_INLINE Expected<MeshAsset> LoadCookedMeshAssetImpl(TestArena& testArena, const Path& outputDirectory, const Name& assetName, const usize expectedVolumeFileCount){
+[[nodiscard]] FOUNDATION_INLINE Expected<MeshAsset> LoadCookedMeshAssetImpl(TestArena& testArena, const Path& outputDirectory, const Name& assetName, const usize expectedVolumeFileCount){
     auto loaded = LoadCookedAsset<MeshAssetCodec>(outputDirectory, assetName, expectedVolumeFileCount, testArena);
     if(!loaded || loaded->get() == nullptr)
         return MakeUnexpected(Failure{});
     return Move(static_cast<MeshAsset&>(**loaded));
 }
 
-NWB_INLINE void EraseAssetByteRangeImpl(AssetBytes& bytes, const usize beginOffset, const usize endOffset){
+FOUNDATION_INLINE void EraseAssetByteRangeImpl(AssetBytes& bytes, const usize beginOffset, const usize endOffset){
     bytes.erase(bytes.begin() + beginOffset, bytes.begin() + endOffset);
 }
 
-[[nodiscard]] NWB_INLINE b8 OverwriteVertexStageInMaterialBytesImpl(const usize offset, AssetBytes& bytes)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 OverwriteVertexStageInMaterialBytesImpl(const usize offset, AssetBytes& bytes)noexcept{
     return OverwritePOD(offset, NWB::Core::ShaderType::VertexStage, bytes);
 }
 
@@ -1660,7 +1675,7 @@ template<
     return false;
 }
 
-[[nodiscard]] NWB_INLINE b8 MeshAssetHasPositionNormalImpl(const MeshAsset& mesh, const usize meshletIndex, const f32 posX, const f32 posY, const f32 posZ, const f32 normX, const f32 normY, const f32 normZ, const f32 normW){
+[[nodiscard]] FOUNDATION_INLINE b8 MeshAssetHasPositionNormalImpl(const MeshAsset& mesh, const usize meshletIndex, const f32 posX, const f32 posY, const f32 posZ, const f32 normX, const f32 normY, const f32 normZ, const f32 normW){
     const NWB::Impl::MeshletDesc& meshlet = mesh.meshlets()[meshletIndex];
     return TestMeshletHasPositionNormalValue(mesh, meshlet, mesh.positionStream(), mesh.normalStream(), mesh.meshletLocalVertexRefs(), Float3U(posX, posY, posZ), Float4U(normX, normY, normZ, normW));
 }
@@ -1725,7 +1740,7 @@ inline constexpr u32 s_Oct16YShift = 8u;
 inline constexpr f32 s_Oct16UnormScale = 1.0f / 255.0f;
 inline constexpr f32 s_Oct16SignedScale = 2.0f;
 
-[[nodiscard]] NWB_INLINE SIMDVectorSingle ScalarOct16Reference(const u32 packed)noexcept{
+[[nodiscard]] FOUNDATION_INLINE SIMDVectorSingle ScalarOct16Reference(const u32 packed)noexcept{
     const f32 unormX = static_cast<f32>(packed & s_Oct16ChannelMask) * s_Oct16UnormScale;
     const f32 unormY = static_cast<f32>((packed >> s_Oct16YShift) & s_Oct16ChannelMask) * s_Oct16UnormScale;
     f32 x = unormX * s_Oct16SignedScale - 1.0f;
@@ -1739,21 +1754,21 @@ inline constexpr f32 s_Oct16SignedScale = 2.0f;
     return Vector3NormalizeOr(VectorSet(x, y, z, 0.0f), VectorSet(0.0f, 0.0f, 1.0f, 0.0f), NWB::Impl::s_MeshletConeAxisLengthSquaredEpsilon);
 }
 
-[[nodiscard]] NWB_INLINE b8 MatchesScalarOct16ReferenceImpl(const u32 packed)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 MatchesScalarOct16ReferenceImpl(const u32 packed)noexcept{
     const SIMDVectorSingle reference = ScalarOct16Reference(packed);
     const SIMDVectorSingle decoded = NWB::Impl::UnpackMeshletConeOct16Axis(packed);
     return Vector4EqualInt(decoded, reference);
 }
 
-NWB_INLINE void AppendMeshletDescImpl(const u32 localVertOffset, const u32 primOffset, const u32 posRefByteOffset, const u32 attrRefByteOffset, const u32 counts, MeshletDescVector& outMeshlets){
+FOUNDATION_INLINE void AppendMeshletDescImpl(const u32 localVertOffset, const u32 primOffset, const u32 posRefByteOffset, const u32 attrRefByteOffset, const u32 counts, MeshletDescVector& outMeshlets){
     outMeshlets.push_back(NWB::Impl::MeshletDesc{ localVertOffset, primOffset, posRefByteOffset, attrRefByteOffset, counts });
 }
 
-NWB_INLINE void AppendMeshletPositionRefImpl(const u32 position, const u32 skin, MeshletPositionRefVector& outRefs){
+FOUNDATION_INLINE void AppendMeshletPositionRefImpl(const u32 position, const u32 skin, MeshletPositionRefVector& outRefs){
     outRefs.push_back(NWB::Impl::MeshletPositionStreamRef{ position, skin });
 }
 
-NWB_INLINE void AppendMeshletAttributeRefImpl(const u32 normal, const u32 tangent, const u32 uv0, const u32 color, MeshletAttributeRefVector& outRefs){
+FOUNDATION_INLINE void AppendMeshletAttributeRefImpl(const u32 normal, const u32 tangent, const u32 uv0, const u32 color, MeshletAttributeRefVector& outRefs){
     outRefs.push_back(NWB::Impl::MeshletAttributeStreamRef{ normal, tangent, uv0, color });
 }
 
@@ -1895,8 +1910,8 @@ public:
     virtual b8 writeCookedAssets(Core::Assets::CookEntryWriteContext&)noexcept override{ return false; }
 };
 
-[[nodiscard]] NWB_INLINE NWB::Path BuildUninspectableTestRootImpl(AssetArena& arena, const NWB::Path& repo){
-#if defined(NWB_PLATFORM_WINDOWS)
+[[nodiscard]] FOUNDATION_INLINE NWB::Path BuildUninspectableTestRootImpl(AssetArena& arena, const NWB::Path& repo){
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     (void)arena;
     return repo / "invalid|root";
 #else
@@ -1906,7 +1921,7 @@ public:
 #endif
 }
 
-NWB_INLINE void AppendResolvedAssetRootImpl(AssetArena& arena, const NWB::Path& root, const AStringView virtualRoot, ResolvedAssetRootVector& outRoots){
+FOUNDATION_INLINE void AppendResolvedAssetRootImpl(AssetArena& arena, const NWB::Path& root, const AStringView virtualRoot, ResolvedAssetRootVector& outRoots){
     outRoots.emplace_back(NWB::Path(arena, root), virtualRoot);
 }
 
@@ -1946,11 +1961,11 @@ public:
     [[nodiscard]] usize size()const noexcept{ return seen.size(); }
 };
 
-[[nodiscard]] NWB_INLINE ScratchString MakeScratchStringImpl(const AStringView text, ScratchArena& scratchArena){
+[[nodiscard]] FOUNDATION_INLINE ScratchString MakeScratchStringImpl(const AStringView text, ScratchArena& scratchArena){
     return ScratchString(text, scratchArena);
 }
 
-[[nodiscard]] NWB_INLINE DiscoveredPathCollisionProbe MakeDiscoveredPathCollisionProbeImpl(ScratchArena& scratchArena){
+[[nodiscard]] FOUNDATION_INLINE DiscoveredPathCollisionProbe MakeDiscoveredPathCollisionProbeImpl(ScratchArena& scratchArena){
     return DiscoveredPathCollisionProbe(scratchArena);
 }
 
@@ -1958,7 +1973,7 @@ public:
     return static_cast<b8>(name);
 }
 
-[[nodiscard]] NWB_INLINE b8 RunGraphicsParserFailureIterationImpl(AssetArena& ownerArena, const DiscoveredNwbFile& file, const MetaDocument& document, ScratchArena& scratchArena){
+[[nodiscard]] FOUNDATION_INLINE b8 RunGraphicsParserFailureIterationImpl(AssetArena& ownerArena, const DiscoveredNwbFile& file, const MetaDocument& document, ScratchArena& scratchArena){
     using namespace NWB::Core::Assets;
     ParsedAssetMetadata metadata(ownerArena);
     AssetDocumentMetadataParseContext context{ ownerArena, file, Impl::ComputeShader::AssetTypeName(), document, metadata, scratchArena };
@@ -1968,7 +1983,7 @@ public:
     return errored;
 }
 
-NWB_INLINE void AppendMetadataRegistrySamplerFileImpl(AssetArena& fixtureArena, const NWB::Path& root, const AStringView samplerFields, const usize identity, DiscoveredNwbFileVector& outFiles){
+FOUNDATION_INLINE void AppendMetadataRegistrySamplerFileImpl(AssetArena& fixtureArena, const NWB::Path& root, const AStringView samplerFields, const usize identity, DiscoveredNwbFileVector& outFiles){
     const AssetString filename = StringFormat(fixtureArena, "sampler_{:03}.nwb", identity);
     const NWB::Path path = root / filename;
     AssetString source(samplerFields, fixtureArena);
@@ -1978,7 +1993,7 @@ NWB_INLINE void AppendMetadataRegistrySamplerFileImpl(AssetArena& fixtureArena, 
     outFiles.emplace_back(fixtureArena, root, path, normalized, s_ProjectVirtualRoot);
 }
 
-NWB_INLINE void VerifyMetadataRegistryStoragePassImpl(AssetArena& fixtureArena, AssetArena& parseArena, const NWB::Path& root, const DiscoveredNwbFileVector& files, CpuTaskScheduler& cpuScheduler, const usize samplerCount, const b8 rejectDuplicate){
+FOUNDATION_INLINE void VerifyMetadataRegistryStoragePassImpl(AssetArena& fixtureArena, AssetArena& parseArena, const NWB::Path& root, const DiscoveredNwbFileVector& files, CpuTaskScheduler& cpuScheduler, const usize samplerCount, const b8 rejectDuplicate){
     using namespace NWB::Core::Assets;
     ScratchArena scratchArena{ Name(s_AssetCaseTestsMetadataRegistryScratch) };
     ParsedAssetMetadata metadata(parseArena);
@@ -2004,23 +2019,23 @@ NWB_INLINE void VerifyMetadataRegistryStoragePassImpl(AssetArena& fixtureArena, 
     }
 }
 
-[[nodiscard]] NWB_INLINE b8 TryRegisterNullAllocatedBucketImpl(CookEntryRegistry& registry, const Name& type){
+[[nodiscard]] FOUNDATION_INLINE b8 TryRegisterNullAllocatedBucketImpl(CookEntryRegistry& registry, const Name& type){
     return registry.registerCustomType<NullAllocatedBucket>(type);
 }
 
-[[nodiscard]] NWB_INLINE b8 HasCookEntryRegistryBucketImpl(const CookEntryRegistry& registry, const Name& type)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasCookEntryRegistryBucketImpl(const CookEntryRegistry& registry, const Name& type)noexcept{
     return registry.find(type) != nullptr;
 }
 
-[[nodiscard]] NWB_INLINE CookDependencyRegistry MoveCookDependencyRegistryImpl(CookDependencyRegistry& source)noexcept{
+[[nodiscard]] FOUNDATION_INLINE CookDependencyRegistry MoveCookDependencyRegistryImpl(CookDependencyRegistry& source)noexcept{
     return Move(source);
 }
 
-NWB_INLINE void RegisterMetadataPairedSidecarExtensionImpl(const AStringView extension){
+FOUNDATION_INLINE void RegisterMetadataPairedSidecarExtensionImpl(const AStringView extension){
     NWB::Core::Assets::RegisterAssetPairedSidecarRule(NWB::Core::Assets::AssetPairedSidecarRule{ extension });
 }
 
-[[nodiscard]] NWB_INLINE b8 HasRegisteredPairedSidecarExtensionImpl(ScratchArena& scratchArena, const AStringView extension){
+[[nodiscard]] FOUNDATION_INLINE b8 HasRegisteredPairedSidecarExtensionImpl(ScratchArena& scratchArena, const AStringView extension){
     Vector<NWB::Core::Assets::AssetPairedSidecarRule, ScratchArena> rules(scratchArena);
     NWB::Core::Assets::CookMetadataDetail::CopyPairedSidecarRules(rules);
     for(const NWB::Core::Assets::AssetPairedSidecarRule& rule : rules){
@@ -2039,7 +2054,7 @@ inline constexpr AStringView s_ModelMetaMeshField = "mesh";
 inline constexpr AStringView s_ModelMetaSkeletonField = "skeleton";
 inline constexpr AStringView s_ModelMetaSkinnedMeshesField = "skinned_meshes";
 inline constexpr AStringView s_ModelMetaMeshVirtualPath = "tests/model_cook_metadata/mesh";
-inline constexpr TStringView s_TargetsAMissingSkeletonObject = NWB_TEXT("targets a missing skeleton object");
+inline constexpr TStringView s_TargetsAMissingSkeletonObject = FOUNDATION_TEXT("targets a missing skeleton object");
 inline constexpr AStringView s_ModelMetaRigA = "rig_a";
 inline constexpr AStringView s_ModelMetaRigB = "rig_b";
 inline constexpr AStringView s_ModelPayloadProp = "prop";
@@ -2148,7 +2163,7 @@ public:
     }
 };
 
-NWB_INLINE void AddIndexedModelObjects(const usize skeletonCount, const usize meshCount, ModelMetadata& metadata){
+FOUNDATION_INLINE void AddIndexedModelObjects(const usize skeletonCount, const usize meshCount, ModelMetadata& metadata){
     for(usize index = 0u; index < skeletonCount; ++index){
         const auto objectName = StringFormat(metadata.metadataArena, "rig_{}", index);
         const auto assetName = StringFormat(metadata.metadataArena, "tests/model_cook_metadata/skeleton_{}", index);
@@ -2199,11 +2214,11 @@ public:
     }
 };
 
-[[nodiscard]] NWB_INLINE AssetBytes MakeModelInputsBytesImpl(ModelInputs& inputs){
+[[nodiscard]] FOUNDATION_INLINE AssetBytes MakeModelInputsBytesImpl(ModelInputs& inputs){
     return AssetBytes(inputs.arena);
 }
 
-[[nodiscard]] NWB_INLINE ModelAsset MakeLoadedModelFromInputsImpl(ModelInputs& inputs){
+[[nodiscard]] FOUNDATION_INLINE ModelAsset MakeLoadedModelFromInputsImpl(ModelInputs& inputs){
     return ModelAsset(inputs.arena, inputs.model.virtualPath());
 }
 
@@ -2211,23 +2226,23 @@ public:
     return sizeof(NWB::Impl::ModelHeaderBinary) + sizeof(NWB::Impl::ModelSkeletonObjectBinary) + sizeof(NWB::Impl::ModelStaticMeshObjectBinary) + sizeof(NWB::Impl::ModelSkinnedMeshObjectBinary);
 }
 
-NWB_INLINE void CorruptModelBinarySkinnedNameImpl(const Name& duplicateName, AssetBytes& malformed){
+FOUNDATION_INLINE void CorruptModelBinarySkinnedNameImpl(const Name& duplicateName, AssetBytes& malformed){
     using namespace NWB::Impl;
     const usize staticOffset = sizeof(ModelHeaderBinary) + sizeof(ModelSkeletonObjectBinary);
     const usize skinnedOffset = staticOffset + sizeof(ModelStaticMeshObjectBinary);
     ModelSkinnedMeshObjectBinary skinnedObject;
-    NWB_MEMCPY(&skinnedObject, sizeof(skinnedObject), malformed.data() + skinnedOffset, sizeof(skinnedObject));
+    FOUNDATION_MEMCPY(&skinnedObject, sizeof(skinnedObject), malformed.data() + skinnedOffset, sizeof(skinnedObject));
     skinnedObject.nameHash = duplicateName.hash();
-    NWB_MEMCPY(malformed.data() + skinnedOffset, malformed.size() - skinnedOffset, &skinnedObject, sizeof(skinnedObject));
+    FOUNDATION_MEMCPY(malformed.data() + skinnedOffset, malformed.size() - skinnedOffset, &skinnedObject, sizeof(skinnedObject));
 }
 
-NWB_INLINE void CorruptModelBinaryStaticParentImpl(const Name& wrongParentName, AssetBytes& malformed){
+FOUNDATION_INLINE void CorruptModelBinaryStaticParentImpl(const Name& wrongParentName, AssetBytes& malformed){
     using namespace NWB::Impl;
     const usize staticOffset = sizeof(ModelHeaderBinary) + sizeof(ModelSkeletonObjectBinary);
     ModelStaticMeshObjectBinary staticObject;
-    NWB_MEMCPY(&staticObject, sizeof(staticObject), malformed.data() + staticOffset, sizeof(staticObject));
+    FOUNDATION_MEMCPY(&staticObject, sizeof(staticObject), malformed.data() + staticOffset, sizeof(staticObject));
     staticObject.parentObjectNameHash = wrongParentName.hash();
-    NWB_MEMCPY(malformed.data() + staticOffset, malformed.size() - staticOffset, &staticObject, sizeof(staticObject));
+    FOUNDATION_MEMCPY(malformed.data() + staticOffset, malformed.size() - staticOffset, &staticObject, sizeof(staticObject));
 }
 
 // Shader & Texture helpers
@@ -2281,7 +2296,7 @@ public:
     }
 };
 
-[[nodiscard]] NWB_INLINE AssetBytes MakeSkeletonInputsBytesImpl(SkeletonInputs& inputs){
+[[nodiscard]] FOUNDATION_INLINE AssetBytes MakeSkeletonInputsBytesImpl(SkeletonInputs& inputs){
     return AssetBytes(inputs.arena);
 }
 
@@ -2301,7 +2316,7 @@ inline constexpr usize s_TextureMipSliceCountOffset = offsetof(::TextureBinaryPa
 inline constexpr usize s_TextureMipOffsetBytesOffset = offsetof(::TextureBinaryPayload::MipLevelBinary, offsetBytes);
 inline constexpr usize s_TextureMipSizeBytesOffset = offsetof(::TextureBinaryPayload::MipLevelBinary, sizeBytes);
 
-[[nodiscard]] NWB_INLINE Core::Assets::AssetBytes BuildPartialBlockTextureBinary(TestArena& testArena){
+[[nodiscard]] FOUNDATION_INLINE Core::Assets::AssetBytes BuildPartialBlockTextureBinary(TestArena& testArena){
     Core::Assets::AssetBytes binary(testArena.arena);
     binary.reserve(sizeof(::TextureBinaryPayload::HeaderBinary) + s_TextureMipTableBytes + s_TexturePrimaryPayloadBytes);
     ::TextureBinaryPayload::HeaderBinary header;
@@ -2326,7 +2341,7 @@ inline constexpr usize s_TextureMipSizeBytesOffset = offsetof(::TextureBinaryPay
     return binary;
 }
 
-[[nodiscard]] NWB_INLINE NWB::Core::Assets::AssetBytes MakeTextureTestUastcPayload(TestArena& testArena){
+[[nodiscard]] FOUNDATION_INLINE NWB::Core::Assets::AssetBytes MakeTextureTestUastcPayload(TestArena& testArena){
     NWB::Core::Assets::AssetBytes bytes = MakeAssetBytesImpl(testArena);
     bytes.resize(96u);
     for(usize index = 0u; index < bytes.size(); ++index)
@@ -2334,7 +2349,7 @@ inline constexpr usize s_TextureMipSizeBytesOffset = offsetof(::TextureBinaryPay
     return bytes;
 }
 
-[[nodiscard]] NWB_INLINE NWB::Impl::Texture::MipLevelVector MakeTextureTestMipLevels(TestArena& testArena){
+[[nodiscard]] FOUNDATION_INLINE NWB::Impl::Texture::MipLevelVector MakeTextureTestMipLevels(TestArena& testArena){
     NWB::Impl::Texture::MipLevelVector mipLevels(testArena.arena);
     mipLevels.reserve(3u);
     mipLevels.push_back(NWB::Impl::TextureMipLevel{ .offsetBytes = 0u, .sizeBytes = 64u, .width = 7u, .height = 5u, .blockCountX = 2u, .blockCountY = 2u });
@@ -2343,7 +2358,7 @@ inline constexpr usize s_TextureMipSizeBytesOffset = offsetof(::TextureBinaryPay
     return mipLevels;
 }
 
-[[nodiscard]] NWB_INLINE Expected<Core::Assets::AssetBytes> MakeTextureTestRuntimeBinary(TestArena& testArena){
+[[nodiscard]] FOUNDATION_INLINE Expected<Core::Assets::AssetBytes> MakeTextureTestRuntimeBinary(TestArena& testArena){
     Impl::Texture texture(testArena.arena, Name(s_AssetCaseProjectTexturesPrepared));
     texture.setPayload(7u, 5u, MakeTextureTestMipLevels(testArena), MakeTextureTestUastcPayload(testArena), TextureDimension::Texture2D, 1u, TexturePayloadFormat::UastcLdr4x4, TextureAlphaMode::EmbeddedLdr, TextureFormat::s_OpaqueAlphaUnorm8);
     Impl::TextureAssetCodec codec;
@@ -2353,44 +2368,44 @@ inline constexpr usize s_TextureMipSizeBytesOffset = offsetof(::TextureBinaryPay
     return bytes;
 }
 
-NWB_INLINE void SetStandardTestTexturePayloadImpl(TestArena& testArena, const TextureAlphaModeEnum alphaMode, const u8 alphaConstant, TextureAsset& outTexture){
+FOUNDATION_INLINE void SetStandardTestTexturePayloadImpl(TestArena& testArena, const TextureAlphaModeEnum alphaMode, const u8 alphaConstant, TextureAsset& outTexture){
     outTexture.setPayload(7u, 5u, MakeTextureTestMipLevels(testArena), MakeTextureTestUastcPayload(testArena), TextureDimension::Texture2D, 1u, TexturePayloadFormat::UastcLdr4x4, alphaMode, alphaConstant);
 }
 
-[[nodiscard]] NWB_INLINE AssetBytes CopyAssetBytesPrefixImpl(const AssetBytes& source, const usize count, TestArena& testArena){
+[[nodiscard]] FOUNDATION_INLINE AssetBytes CopyAssetBytesPrefixImpl(const AssetBytes& source, const usize count, TestArena& testArena){
     return AssetBytes(source.begin(), source.begin() + count, testArena.arena);
 }
 
-NWB_INLINE void AssignAssetBytesPrefixImpl(const AssetBytes& source, const usize count, AssetBytes& dest){
+FOUNDATION_INLINE void AssignAssetBytesPrefixImpl(const AssetBytes& source, const usize count, AssetBytes& dest){
     dest.assign(source.begin(), source.begin() + count);
 }
 
-NWB_INLINE void AppendAssetBytesImpl(const AssetBytes& extra, AssetBytes& dest){
+FOUNDATION_INLINE void AppendAssetBytesImpl(const AssetBytes& extra, AssetBytes& dest){
     dest.insert(dest.end(), extra.begin(), extra.end());
 }
 
-[[nodiscard]] NWB_INLINE b8 AssetByteRangeEqualsImpl(const AssetBytes& haystack, const usize offset, const AssetBytes& needle)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 AssetByteRangeEqualsImpl(const AssetBytes& haystack, const usize offset, const AssetBytes& needle)noexcept{
     if(offset > haystack.size() || needle.size() > haystack.size() - offset)
         return false;
-    return NWB_MEMCMP(haystack.data() + offset, needle.data(), needle.size()) == 0;
+    return FOUNDATION_MEMCMP(haystack.data() + offset, needle.data(), needle.size()) == 0;
 }
 
-[[nodiscard]] NWB_INLINE b8 GatherShaderDependenciesImpl(const Path& sourcePath, const ShaderCookPathVector& includeDirectories, ScratchArena& scratchArena, ShaderCookPathVector& outDependencies){
+[[nodiscard]] FOUNDATION_INLINE b8 GatherShaderDependenciesImpl(const Path& sourcePath, const ShaderCookPathVector& includeDirectories, ScratchArena& scratchArena, ShaderCookPathVector& outDependencies){
     return Impl::ShaderSourceDependencies::Gather(sourcePath, includeDirectories, {}, scratchArena, outDependencies);
 }
 
-[[nodiscard]] NWB_INLINE Expected<u64> ComputeSingleAliasShaderDependencyChecksumImpl(const ShaderCookPathVector& dependencies, const ShaderCookPathVector& includeDirectories, const Path& aliasRoot, const AStringView aliasName, ScratchArena& scratchArena){
+[[nodiscard]] FOUNDATION_INLINE Expected<u64> ComputeSingleAliasShaderDependencyChecksumImpl(const ShaderCookPathVector& dependencies, const ShaderCookPathVector& includeDirectories, const Path& aliasRoot, const AStringView aliasName, ScratchArena& scratchArena){
     const auto result = Impl::ShaderCook::ComputeDependencyChecksum(dependencies, includeDirectories, { { aliasRoot, aliasName } }, scratchArena);
     if(!result)
         return MakeUnexpected(Failure{});
     return result->checksum;
 }
 
-[[nodiscard]] NWB_INLINE b8 PathVectorContainsImpl(const ShaderCookPathVector& paths, const Path& target)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 PathVectorContainsImpl(const ShaderCookPathVector& paths, const Path& target)noexcept{
     return FindIf(paths.begin(), paths.end(), [&target](const Path& path)noexcept{ return path == target; }) != paths.end();
 }
 
-[[nodiscard]] NWB_INLINE b8 ReadTextFileMatchesImpl(const Path& path, const AStringView expected, ScratchArena& scratchArena, b8& outMatches){
+[[nodiscard]] FOUNDATION_INLINE b8 ReadTextFileMatchesImpl(const Path& path, const AStringView expected, ScratchArena& scratchArena, b8& outMatches){
     ScratchString contents(scratchArena);
     if(!::ReadTextFile(path, contents)){
         outMatches = false;
@@ -2400,11 +2415,11 @@ NWB_INLINE void AppendAssetBytesImpl(const AssetBytes& extra, AssetBytes& dest){
     return true;
 }
 
-[[nodiscard]] NWB_INLINE b8 ValidateShaderEntryVariantSignatureImpl(const AStringView assetName, const AStringView signature, const ShaderCookShaderEntry& entry, ScratchArena& scratchArena){
+[[nodiscard]] FOUNDATION_INLINE b8 ValidateShaderEntryVariantSignatureImpl(const AStringView assetName, const AStringView signature, const ShaderCookShaderEntry& entry, ScratchArena& scratchArena){
     return Impl::ShaderCook::ValidateVariantSignature(assetName, signature, entry.defineValues, scratchArena);
 }
 
-[[nodiscard]] NWB_INLINE b8 ValidateIncludeEntryVariantSignatureImpl(const AStringView assetName, const AStringView signature, const ShaderCookIncludeEntry& entry, ScratchArena& scratchArena){
+[[nodiscard]] FOUNDATION_INLINE b8 ValidateIncludeEntryVariantSignatureImpl(const AStringView assetName, const AStringView signature, const ShaderCookIncludeEntry& entry, ScratchArena& scratchArena){
     return Impl::ShaderCook::ValidateVariantSignature(assetName, signature, entry.defineValues, scratchArena);
 }
 
@@ -2640,7 +2655,7 @@ Expected<ComputeShaderAsset> LoadCookedComputeShader(mut TestArena testArena, in
     return LoadCookedComputeShaderImpl(testArena, outputDirectory, virtualPath, expectedVolumeFileCount);
 }
 
-AssetPayloadEncodeFailureEnum EncodeTestShaderPayload(in StringView entryPoint, in AssetBytes bytecode, mut AssetBytes outPayload){
+AssetPayloadEncodeFailureEnum EncodeTestShaderPayload(in StringView entryPoint, in Span<u8> bytecode, mut AssetBytes outPayload){
     return EncodeAssetPayload(entryPoint, bytecode, outPayload);
 }
 
@@ -2676,7 +2691,7 @@ AssetString FormatBomAbsoluteIncludeSource(mut TestArena testArena, in GraphicsT
     return FormatBomAbsoluteIncludeSourceImpl(testArena, includeFilePath);
 }
 
-GraphicsWordVector CopyBytecodeToWords(mut TestArena testArena, in AssetBytes bytecode){
+GraphicsWordVector CopyBytecodeToWords(mut TestArena testArena, in Span<u8> bytecode){
     return CopyBytecodeToWordsImpl(testArena, bytecode);
 }
 
@@ -2704,7 +2719,7 @@ void CorruptBytecodeTailZeroWords(in AssetBytes originalBytes, mut AssetBytes co
     CorruptBytecodeTailZeroWordsImpl(originalBytes, corrupted);
 }
 
-void CopyAssetBytes(in AssetBytes source, mut AssetBytes dest){
+void CopyAssetBytes(in Span<u8> source, mut AssetBytes dest){
     CopyAssetBytesImpl(source, dest);
 }
 

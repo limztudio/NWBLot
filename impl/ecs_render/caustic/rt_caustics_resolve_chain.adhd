@@ -174,7 +174,7 @@ b8 CausticsGraphCoordinator::declareDeferredSoftwareCausticsTask(
         && RendererFramePipelineDetail::AppendRayTracingSceneShadowBuffers(rayTracingResources, context.graph, photonResourceUses)
         && RendererFramePipelineDetail::AppendCurrentCsgRayGeometry(rayTracingResources.csgTraceContextBuffer, rayTracingResources.csgTraceBoundsBuffers, context.graph, photonResourceUses);
     if(!optionalResourcesImported){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import a deferred software-caustics dynamic resource"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import a deferred software-caustics dynamic resource"));
         return false;
     }
     photonResourceUses.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
@@ -254,7 +254,7 @@ b8 CausticsGraphCoordinator::declareDeferredSoftwareCausticsTask(
     );
     if(!deferredCausticPhotonTaskResult){
         m_deferredCausticPhotonTask = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred software-caustics photon graph task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred software-caustics photon graph task"));
         return false;
     }
     m_deferredCausticPhotonTask = *deferredCausticPhotonTaskResult;
@@ -343,7 +343,7 @@ Expected<CausticsStageTargets> CausticsResolveChainBuilder::importStageTargets(c
                 s_CausticsNameRenderHardwareCausticsResolveGeometry,
                 s_CausticsNameRenderHardwareCausticsSceneGeometry,
                 s_SceneGeometryDomainLabel,
-                NWB_TEXT("RendererSystem: could not import hardware-caustics graph resources")
+                FOUNDATION_TEXT("RendererSystem: could not import hardware-caustics graph resources")
             );
         }
         return CausticsStageTargetNaming(
@@ -353,7 +353,7 @@ Expected<CausticsStageTargets> CausticsResolveChainBuilder::importStageTargets(c
             s_CausticsNameRenderSoftwareCausticsResolveGeometry,
             s_CausticsNameRenderSoftwareCausticsSceneGeometry,
             "Software BVH Scene Geometry",
-            NWB_TEXT("RendererSystem: could not import deferred software-caustics graph resources")
+            FOUNDATION_TEXT("RendererSystem: could not import deferred software-caustics graph resources")
         );
     }();
 
@@ -398,8 +398,8 @@ Expected<CausticsStagePrefixResult> CausticsResolveChainBuilder::declarePrefixTa
     if(!irradianceClearTaskResult){
         NWB_LOGGER_WARNING(
             inputs.hardwareCaustics
-                ? NWB_TEXT("RendererSystem: could not declare graph-owned deferred hardware-caustics irradiance clear")
-                : NWB_TEXT("RendererSystem: could not declare graph-owned deferred software-caustics irradiance clear")
+                ? FOUNDATION_TEXT("RendererSystem: could not declare graph-owned deferred hardware-caustics irradiance clear")
+                : FOUNDATION_TEXT("RendererSystem: could not declare graph-owned deferred software-caustics irradiance clear")
         );
         return MakeUnexpected(Failure{});
     }
@@ -433,8 +433,8 @@ Expected<CausticsStagePrefixResult> CausticsResolveChainBuilder::declarePrefixTa
         if(!accumulatorBootstrapClearTaskResult){
             NWB_LOGGER_WARNING(
                 inputs.hardwareCaustics
-                    ? NWB_TEXT("RendererSystem: could not declare graph-owned deferred hardware-caustics accumulator bootstrap clear")
-                    : NWB_TEXT("RendererSystem: could not declare graph-owned deferred software-caustics accumulator bootstrap clear")
+                    ? FOUNDATION_TEXT("RendererSystem: could not declare graph-owned deferred hardware-caustics accumulator bootstrap clear")
+                    : FOUNDATION_TEXT("RendererSystem: could not declare graph-owned deferred software-caustics accumulator bootstrap clear")
             );
             return MakeUnexpected(Failure{});
         }
@@ -474,8 +474,8 @@ Expected<CausticsStagePrefixResult> CausticsResolveChainBuilder::declarePrefixTa
         if(!accumulatorDecayTaskResult){
             NWB_LOGGER_WARNING(
                 inputs.hardwareCaustics
-                    ? NWB_TEXT("RendererSystem: could not declare graph-owned deferred hardware-caustics accumulator decay")
-                    : NWB_TEXT("RendererSystem: could not declare graph-owned deferred software-caustics accumulator decay")
+                    ? FOUNDATION_TEXT("RendererSystem: could not declare graph-owned deferred hardware-caustics accumulator decay")
+                    : FOUNDATION_TEXT("RendererSystem: could not declare graph-owned deferred software-caustics accumulator decay")
             );
             return MakeUnexpected(Failure{});
         }
@@ -535,8 +535,8 @@ Expected<CausticsGeometryAndResolveResult> CausticsResolveChainBuilder::declareG
     if(!causticGeometryTaskResult){
         NWB_LOGGER_WARNING(
             inputs.hardwareCaustics
-                ? NWB_TEXT("RendererSystem: could not declare hardware-caustics geometry graph task")
-                : NWB_TEXT("RendererSystem: could not declare deferred software-caustics geometry graph task")
+                ? FOUNDATION_TEXT("RendererSystem: could not declare hardware-caustics geometry graph task")
+                : FOUNDATION_TEXT("RendererSystem: could not declare deferred software-caustics geometry graph task")
         );
         return MakeUnexpected(Failure{});
     }
@@ -554,8 +554,8 @@ Expected<CausticsGeometryAndResolveResult> CausticsResolveChainBuilder::declareG
     if(!resolveChainResult){
         NWB_LOGGER_WARNING(
             inputs.hardwareCaustics
-                ? NWB_TEXT("RendererSystem: could not declare hardware-caustics resolve chain")
-                : NWB_TEXT("RendererSystem: could not declare deferred software-caustics resolve chain")
+                ? FOUNDATION_TEXT("RendererSystem: could not declare hardware-caustics resolve chain")
+                : FOUNDATION_TEXT("RendererSystem: could not declare deferred software-caustics resolve chain")
         );
         return MakeUnexpected(Failure{});
     }
@@ -642,32 +642,32 @@ Expected<CausticsResolveChainResult> CausticsResolveChainBuilder::declare(const 
 
 Expected<CausticsResolveChainResult> CausticsResolveChainBuilder::declareHardware(const CausticsResolveChainInputs& inputs){
     const CausticsResolveChainNaming naming{
-        .prepare = { Name(s_CausticsNameRenderHardwareCausticsResolvePrepare), "Hardware Caustics Resolve Prepare", NWB_TEXT("RendererSystem: could not declare hardware-caustics resolve-prepare graph task") },
+        .prepare = { Name(s_CausticsNameRenderHardwareCausticsResolvePrepare), "Hardware Caustics Resolve Prepare", FOUNDATION_TEXT("RendererSystem: could not declare hardware-caustics resolve-prepare graph task") },
         .wavelets = {{
-            { Name(s_CausticsNameRenderHardwareCausticsResolveWavelet), "Hardware Caustics Resolve Wavelet", NWB_TEXT("RendererSystem: could not declare hardware-caustics first-wavelet graph task") },
-            { Name(s_CausticsNameRenderHardwareCausticsResolveSecondWavelet), "Hardware Caustics Resolve Second Wavelet", NWB_TEXT("RendererSystem: could not declare hardware-caustics second-wavelet graph task") },
-            { Name(s_CausticsNameRenderHardwareCausticsResolveThirdWavelet), "Hardware Caustics Resolve Third Wavelet", NWB_TEXT("RendererSystem: could not declare hardware-caustics third-wavelet graph task") },
-            { Name(s_CausticsNameRenderHardwareCausticsResolveFourthWavelet), "Hardware Caustics Resolve Fourth Wavelet", NWB_TEXT("RendererSystem: could not declare hardware-caustics fourth-wavelet graph task") },
-            { Name(s_CausticsNameRenderHardwareCausticsResolveFifthWavelet), "Hardware Caustics Resolve Fifth Wavelet", NWB_TEXT("RendererSystem: could not declare hardware-caustics fifth-wavelet graph task") },
+            { Name(s_CausticsNameRenderHardwareCausticsResolveWavelet), "Hardware Caustics Resolve Wavelet", FOUNDATION_TEXT("RendererSystem: could not declare hardware-caustics first-wavelet graph task") },
+            { Name(s_CausticsNameRenderHardwareCausticsResolveSecondWavelet), "Hardware Caustics Resolve Second Wavelet", FOUNDATION_TEXT("RendererSystem: could not declare hardware-caustics second-wavelet graph task") },
+            { Name(s_CausticsNameRenderHardwareCausticsResolveThirdWavelet), "Hardware Caustics Resolve Third Wavelet", FOUNDATION_TEXT("RendererSystem: could not declare hardware-caustics third-wavelet graph task") },
+            { Name(s_CausticsNameRenderHardwareCausticsResolveFourthWavelet), "Hardware Caustics Resolve Fourth Wavelet", FOUNDATION_TEXT("RendererSystem: could not declare hardware-caustics fourth-wavelet graph task") },
+            { Name(s_CausticsNameRenderHardwareCausticsResolveFifthWavelet), "Hardware Caustics Resolve Fifth Wavelet", FOUNDATION_TEXT("RendererSystem: could not declare hardware-caustics fifth-wavelet graph task") },
         }},
-        .upsample = { Name(s_CausticsNameRenderHardwareCausticsResolveUpsample), "Hardware Caustics Resolve Upsample", NWB_TEXT("RendererSystem: could not declare hardware-caustics resolve-upsample graph task") },
-        .timingClose = { Name(s_CausticsNameRenderHardwareCausticsResolveTimingClose), "Hardware Caustics Resolve Timing Close", NWB_TEXT("RendererSystem: could not declare hardware-caustics resolve graph task") },
+        .upsample = { Name(s_CausticsNameRenderHardwareCausticsResolveUpsample), "Hardware Caustics Resolve Upsample", FOUNDATION_TEXT("RendererSystem: could not declare hardware-caustics resolve-upsample graph task") },
+        .timingClose = { Name(s_CausticsNameRenderHardwareCausticsResolveTimingClose), "Hardware Caustics Resolve Timing Close", FOUNDATION_TEXT("RendererSystem: could not declare hardware-caustics resolve graph task") },
     };
     return declare(inputs, naming);
 }
 
 Expected<CausticsResolveChainResult> CausticsResolveChainBuilder::declareSoftware(const CausticsResolveChainInputs& inputs){
     const CausticsResolveChainNaming naming{
-        .prepare = { Name(s_CausticsNameRenderSoftwareCausticsResolvePrepare), "Software Caustics Resolve Prepare", NWB_TEXT("RendererSystem: could not declare deferred software-caustics resolve-prepare graph task") },
+        .prepare = { Name(s_CausticsNameRenderSoftwareCausticsResolvePrepare), "Software Caustics Resolve Prepare", FOUNDATION_TEXT("RendererSystem: could not declare deferred software-caustics resolve-prepare graph task") },
         .wavelets = {{
-            { Name(s_CausticsNameRenderSoftwareCausticsResolveWavelet), "Software Caustics Resolve Wavelet", NWB_TEXT("RendererSystem: could not declare deferred software-caustics first-wavelet graph task") },
-            { Name(s_CausticsNameRenderSoftwareCausticsResolveSecondWavelet), "Software Caustics Resolve Second Wavelet", NWB_TEXT("RendererSystem: could not declare deferred software-caustics second-wavelet graph task") },
-            { Name(s_CausticsNameRenderSoftwareCausticsResolveThirdWavelet), "Software Caustics Resolve Third Wavelet", NWB_TEXT("RendererSystem: could not declare deferred software-caustics third-wavelet graph task") },
-            { Name(s_CausticsNameRenderSoftwareCausticsResolveFourthWavelet), "Software Caustics Resolve Fourth Wavelet", NWB_TEXT("RendererSystem: could not declare deferred software-caustics fourth-wavelet graph task") },
-            { Name(s_CausticsNameRenderSoftwareCausticsResolveFifthWavelet), "Software Caustics Resolve Fifth Wavelet", NWB_TEXT("RendererSystem: could not declare deferred software-caustics fifth-wavelet graph task") },
+            { Name(s_CausticsNameRenderSoftwareCausticsResolveWavelet), "Software Caustics Resolve Wavelet", FOUNDATION_TEXT("RendererSystem: could not declare deferred software-caustics first-wavelet graph task") },
+            { Name(s_CausticsNameRenderSoftwareCausticsResolveSecondWavelet), "Software Caustics Resolve Second Wavelet", FOUNDATION_TEXT("RendererSystem: could not declare deferred software-caustics second-wavelet graph task") },
+            { Name(s_CausticsNameRenderSoftwareCausticsResolveThirdWavelet), "Software Caustics Resolve Third Wavelet", FOUNDATION_TEXT("RendererSystem: could not declare deferred software-caustics third-wavelet graph task") },
+            { Name(s_CausticsNameRenderSoftwareCausticsResolveFourthWavelet), "Software Caustics Resolve Fourth Wavelet", FOUNDATION_TEXT("RendererSystem: could not declare deferred software-caustics fourth-wavelet graph task") },
+            { Name(s_CausticsNameRenderSoftwareCausticsResolveFifthWavelet), "Software Caustics Resolve Fifth Wavelet", FOUNDATION_TEXT("RendererSystem: could not declare deferred software-caustics fifth-wavelet graph task") },
         }},
-        .upsample = { Name(s_CausticsNameRenderSoftwareCausticsResolveUpsample), "Software Caustics Resolve Upsample", NWB_TEXT("RendererSystem: could not declare deferred software-caustics resolve-upsample graph task") },
-        .timingClose = { Name(s_CausticsNameRenderSoftwareCausticsResolveTimingClose), "Software Caustics Resolve Timing Close", NWB_TEXT("RendererSystem: could not declare deferred software-caustics resolve graph task") },
+        .upsample = { Name(s_CausticsNameRenderSoftwareCausticsResolveUpsample), "Software Caustics Resolve Upsample", FOUNDATION_TEXT("RendererSystem: could not declare deferred software-caustics resolve-upsample graph task") },
+        .timingClose = { Name(s_CausticsNameRenderSoftwareCausticsResolveTimingClose), "Software Caustics Resolve Timing Close", FOUNDATION_TEXT("RendererSystem: could not declare deferred software-caustics resolve graph task") },
     };
     return declare(inputs, naming);
 }

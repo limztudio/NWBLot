@@ -34,11 +34,11 @@ namespace TaskGraphTestUtils{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE void SetGpuScoringTimingHistory(Core::GpuTaskGraphQueueAssignmentOptions& options, const Core::GpuTaskTimingHistorySnapshot& snapshot)noexcept{
+FOUNDATION_INLINE void SetGpuScoringTimingHistory(Core::GpuTaskGraphQueueAssignmentOptions& options, const Core::GpuTaskTimingHistorySnapshot& snapshot)noexcept{
     options.timingHistory = &snapshot;
 }
 
-[[nodiscard]] NWB_INLINE Optional<Core::GpuTaskTimingAssignmentState> FindTimingAssignmentStateValue(
+[[nodiscard]] FOUNDATION_INLINE Optional<Core::GpuTaskTimingAssignmentState> FindTimingAssignmentStateValue(
     const Core::GpuTaskTimingHistoryStore& store,
     const Core::GpuTaskTimingAssignmentKey& key
 )noexcept{
@@ -47,7 +47,7 @@ NWB_INLINE void SetGpuScoringTimingHistory(Core::GpuTaskGraphQueueAssignmentOpti
     return {};
 }
 
-[[nodiscard]] NWB_INLINE b8 CollectGpuScoringLatestFragments(
+[[nodiscard]] FOUNDATION_INLINE b8 CollectGpuScoringLatestFragments(
     const ScratchTrackedStates& states,
     const TrackedResourceStateHistory& history,
     const Core::GpuTaskGraphResourceView& resource,
@@ -58,7 +58,7 @@ NWB_INLINE void SetGpuScoringTimingHistory(Core::GpuTaskGraphQueueAssignmentOpti
     return Core::GpuTaskGraphCompilerDetail::CollectLatestResourceStateFragments(states, history, resource, requested, scratchArena, fragments);
 }
 
-[[nodiscard]] NWB_INLINE b8 CollectGpuScoringTerminalFragments(
+[[nodiscard]] FOUNDATION_INLINE b8 CollectGpuScoringTerminalFragments(
     const ScratchTrackedStates& states,
     const TrackedResourceStateHistory& history,
     const Core::GpuTaskGraphResourceView& resource,
@@ -68,11 +68,11 @@ NWB_INLINE void SetGpuScoringTimingHistory(Core::GpuTaskGraphQueueAssignmentOpti
     return Core::GpuTaskGraphCompilerDetail::CollectTerminalResourceStateFragments(states, history, resource, scratchArena, fragments);
 }
 
-[[nodiscard]] NWB_INLINE b8 FragmentHasNullState(const TrackedResourceStateFragment& fragment)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 FragmentHasNullState(const TrackedResourceStateFragment& fragment)noexcept{
     return fragment.state == nullptr;
 }
 
-[[nodiscard]] NWB_INLINE b8 FragmentMatchesTrackedState(
+[[nodiscard]] FOUNDATION_INLINE b8 FragmentMatchesTrackedState(
     const TrackedResourceStateFragment& fragment,
     const ScratchTrackedStates& states,
     const usize index
@@ -80,7 +80,7 @@ NWB_INLINE void SetGpuScoringTimingHistory(Core::GpuTaskGraphQueueAssignmentOpti
     return index < states.size() && fragment.state == &states[index];
 }
 
-NWB_INLINE void SeedFragmentWithFirstState(const ScratchTrackedStates& states, ScratchStateFragments& fragments){
+FOUNDATION_INLINE void SeedFragmentWithFirstState(const ScratchTrackedStates& states, ScratchStateFragments& fragments){
     TrackedResourceStateFragment seed{};
     seed.state = &states[0u];
     seed.stateIndex = 0u;

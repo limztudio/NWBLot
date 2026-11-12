@@ -183,7 +183,7 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
     if(pureSoftwareMeshSwBvhBuildsGraphOwned){
         auto resources = ResolvePreparedSoftwareBvhGraphResources(context.graph, preparedMeshSwBvhBuilds, scratchArena);
         if(!resources){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software BVH build is missing graph resources"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: frozen software BVH build is missing graph resources"));
             return false;
         }
         pureSoftwareMeshSwBvhGraphResources = Move(*resources);
@@ -249,7 +249,7 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
         });
     if(!deferredShadowPrepareTaskResult){
         m_deferredShadowPrepareTask = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shared shadow-preparation task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare shared shadow-preparation task"));
         return false;
     }
     m_deferredShadowPrepareTask = *deferredShadowPrepareTaskResult;
@@ -361,7 +361,7 @@ b8 ShadowAccelerationFinalizeBuilder::declare(
     );
     if(!deferredShadowPrepareAccelStructFinalizeTaskResult){
         outTask = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare acceleration-structure final-state task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare acceleration-structure final-state task"));
         return false;
     }
     outTask = *deferredShadowPrepareAccelStructFinalizeTaskResult;
@@ -464,12 +464,12 @@ b8 ShadowSoftwareBvhBuildChain::declare(
             if(!appendPureSoftwareBvhClear(addPureSoftwareBvhClear(DeriveShadowPrepareSwBvhKeysClearIdentity(build.meshName), "Shadow Prepare SW-BVH Sort-Key Clear", resources.sortKeys, BvhNodeIndex::Invalid))
                 || !appendPureSoftwareBvhClear(addPureSoftwareBvhClear(DeriveShadowPrepareSwBvhParentClearIdentity(build.meshName), "Shadow Prepare SW-BVH Parent Clear", resources.parent, BvhNodeIndex::Invalid))
             ){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare pure software BVH sentinel clears"));
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare pure software BVH sentinel clears"));
                 return false;
             }
         }
         if(!appendPureSoftwareBvhClear(addPureSoftwareBvhClear(DeriveShadowPrepareSwBvhCounterClearIdentity(build.meshName), "Shadow Prepare SW-BVH Counter Clear", resources.visitCounter, 0u))){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare pure software BVH counter clear"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare pure software BVH counter clear"));
             return false;
         }
 
@@ -484,7 +484,7 @@ b8 ShadowSoftwareBvhBuildChain::declare(
         };
         const auto buildIdentity = DeriveShadowPrepareSwBvhBuildIdentity(build.meshName);
         if(!buildIdentity){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare pure software BVH build callback"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare pure software BVH build callback"));
             return false;
         }
         Core::GpuTaskDesc buildDesc;
@@ -494,7 +494,7 @@ b8 ShadowSoftwareBvhBuildChain::declare(
             ECSRenderDetail::ShadowPrepareSoftwareBvhBuildGraphTask::Payload{ .raytracingSystem = m_raytracingSystem, .timingTicket = timingTicket, .build = build }
         );
         if(!buildTaskResult){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare pure software BVH build callback"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare pure software BVH build callback"));
             return false;
         }
         const Core::GpuTaskId buildTask = *buildTaskResult;
@@ -502,7 +502,7 @@ b8 ShadowSoftwareBvhBuildChain::declare(
         lastTask = buildTask;
     }
     if(!firstTask.valid() || !lastTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: pure software BVH graph chain has no task bounds"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: pure software BVH graph chain has no task bounds"));
         return false;
     }
     shadowPrepareDependency = buildDependency;

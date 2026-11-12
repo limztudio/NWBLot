@@ -215,27 +215,27 @@ using UiSliderAcceptedInput64 = ::NWB::UiWidgetTests::AcceptedInputState<64u>;
 using ::NWB::Impl::Ui::MeasureSlider;
 using ::NWB::Impl::Ui::PlaceSlider;
 
-[[nodiscard]] NWB_INLINE b8 UiSliderAdmit(::NWB::Impl::Ui::SliderState& state, const ::NWB::Impl::Ui::SliderOptions& options, const ::NWB::Impl::Ui::SliderPlacement& placement)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 UiSliderAdmit(::NWB::Impl::Ui::SliderState& state, const ::NWB::Impl::Ui::SliderOptions& options, const ::NWB::Impl::Ui::SliderPlacement& placement)noexcept{
     return ::NWB::Impl::Ui::SliderBehavior::Admit(state, options, placement);
 }
 
-[[nodiscard]] NWB_INLINE b8 UiSliderApply(const ::NWB::Impl::Ui::SliderOptions& options, const ::NWB::Impl::Ui::ControlAction& action, ::NWB::Impl::Ui::SliderState& state, ::NWB::Impl::Ui::SliderResult& result)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 UiSliderApply(const ::NWB::Impl::Ui::SliderOptions& options, const ::NWB::Impl::Ui::ControlAction& action, ::NWB::Impl::Ui::SliderState& state, ::NWB::Impl::Ui::SliderResult& result)noexcept{
     return ::NWB::Impl::Ui::SliderBehavior::Apply(options, action, state, result);
 }
 
-[[nodiscard]] NWB_INLINE b8 UiSliderSeek(const ::NWB::Impl::Ui::SliderOptions& options, const ::NWB::Impl::Ui::PointerGesture& gesture, ::NWB::Impl::Ui::SliderState& state, ::NWB::Impl::Ui::SliderResult& result)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 UiSliderSeek(const ::NWB::Impl::Ui::SliderOptions& options, const ::NWB::Impl::Ui::PointerGesture& gesture, ::NWB::Impl::Ui::SliderState& state, ::NWB::Impl::Ui::SliderResult& result)noexcept{
     return ::NWB::Impl::Ui::SliderBehavior::Seek(options, gesture, state, result);
 }
 
-[[nodiscard]] NWB_INLINE b8 UiSliderDrag(const ::NWB::Impl::Ui::SliderOptions& options, const ::NWB::Impl::Ui::PointerGesture& gesture, ::NWB::Impl::Ui::SliderState& state, ::NWB::Impl::Ui::SliderResult& result)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 UiSliderDrag(const ::NWB::Impl::Ui::SliderOptions& options, const ::NWB::Impl::Ui::PointerGesture& gesture, ::NWB::Impl::Ui::SliderState& state, ::NWB::Impl::Ui::SliderResult& result)noexcept{
     return ::NWB::Impl::Ui::SliderBehavior::Drag(options, gesture, state, result);
 }
 
-[[nodiscard]] NWB_INLINE Expected<f64> UiSliderNormalize(const f64 minimum, const f64 maximum, const f64 value)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Expected<f64> UiSliderNormalize(const f64 minimum, const f64 maximum, const f64 value)noexcept{
     return ::NWB::Impl::Ui::SliderBehavior::Normalize(minimum, maximum, value);
 }
 
-[[nodiscard]] NWB_INLINE Expected<f64> UiSliderInterpolate(const f64 minimum, const f64 maximum, const f64 normalized)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Expected<f64> UiSliderInterpolate(const f64 minimum, const f64 maximum, const f64 normalized)noexcept{
     return ::NWB::Impl::Ui::SliderBehavior::Interpolate(minimum, maximum, normalized);
 }
 
@@ -252,35 +252,35 @@ b8 AcceptUiSliderPopupFamily(UiSliderPopupTests& self, u64 generation)noexcept;
 
 NWB_BEGIN
 namespace __hidden_ui_slider_behavior_tests{
-NWB_INLINE b8 UiSliderBehaviorTests::refresh()noexcept{
+FOUNDATION_INLINE b8 UiSliderBehaviorTests::refresh()noexcept{
     return ::__hidden_ui_glyph_sdf_tests::RefreshUiSliderBehaviorFixture(*this);
 }
-NWB_INLINE b8 UiSliderBehaviorTests::set(const f64 value)noexcept{
+FOUNDATION_INLINE b8 UiSliderBehaviorTests::set(const f64 value)noexcept{
     return ::__hidden_ui_glyph_sdf_tests::SetUiSliderBehaviorFixtureValue(*this, value);
 }
-NWB_INLINE ControlAction UiSliderBehaviorTests::key(const ControlActionKind::Enum kind, const u64 sequence)const noexcept{
+FOUNDATION_INLINE ControlAction UiSliderBehaviorTests::key(const ControlActionKind::Enum kind, const u64 sequence)const noexcept{
     return ::__hidden_ui_glyph_sdf_tests::MakeUiSliderBehaviorKeyAction(*this, kind, sequence);
 }
-NWB_INLINE PointerGesture UiSliderBehaviorTests::gesture(const b8 thumb)const noexcept{
+FOUNDATION_INLINE PointerGesture UiSliderBehaviorTests::gesture(const b8 thumb)const noexcept{
     return ::__hidden_ui_glyph_sdf_tests::MakeUiSliderBehaviorGesture(*this, thumb);
 }
 };
 NWB_END
 
 namespace __hidden_ui_slider_popup_tests{
-NWB_INLINE b8 UiSliderPopupTests::beginParent(const u64 generation){
+FOUNDATION_INLINE b8 UiSliderPopupTests::beginParent(const u64 generation){
     return ::__hidden_ui_glyph_sdf_tests::BeginUiSliderPopupParent(*this, generation);
 }
-NWB_INLINE b8 UiSliderPopupTests::beginChild(){
+FOUNDATION_INLINE b8 UiSliderPopupTests::beginChild(){
     return ::__hidden_ui_glyph_sdf_tests::BeginUiSliderPopupChild(*this);
 }
-NWB_INLINE b8 UiSliderPopupTests::declareFamily(const u64 generation){
+FOUNDATION_INLINE b8 UiSliderPopupTests::declareFamily(const u64 generation){
     return ::__hidden_ui_glyph_sdf_tests::DeclareUiSliderPopupFamily(*this, generation);
 }
-NWB_INLINE b8 UiSliderPopupTests::finishParent(){
+FOUNDATION_INLINE b8 UiSliderPopupTests::finishParent(){
     return ::__hidden_ui_glyph_sdf_tests::FinishUiSliderPopupParent(*this);
 }
-NWB_INLINE b8 UiSliderPopupTests::acceptFamily(const u64 generation){
+FOUNDATION_INLINE b8 UiSliderPopupTests::acceptFamily(const u64 generation){
     return ::__hidden_ui_glyph_sdf_tests::AcceptUiSliderPopupFamily(*this, generation);
 }
 };

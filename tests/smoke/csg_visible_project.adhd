@@ -42,7 +42,7 @@ namespace NWB::Tests::Smoke{
 using CsgVisibleMaterialRef = SmokeMaterialRef;
 using Core::Perf::CaptureOptions;
 
-[[nodiscard]] NWB_INLINE FramebufferCaptureOptions MakeCsgTemporalCaptureOptions(u64& nextCaptureFrame)noexcept{
+[[nodiscard]] FOUNDATION_INLINE FramebufferCaptureOptions MakeCsgTemporalCaptureOptions(u64& nextCaptureFrame)noexcept{
     return FramebufferCaptureOptions{
         .shouldCapture = +[](void* const ctx, const u64 frame)noexcept -> b8{
             return frame >= *MakeNotNull(static_cast<const u64*>(ctx));
@@ -78,23 +78,23 @@ inline constexpr u64 s_TemporalMinimumFrame = 360u;
 inline constexpr f64 s_TemporalWarmupSeconds = 30.0;
 inline constexpr u64 s_TemporalFrameInterval = 8u;
 
-[[nodiscard]] NWB_INLINE AStringView CsgVisibleFpsLabel()noexcept{
+[[nodiscard]] FOUNDATION_INLINE AStringView CsgVisibleFpsLabel()noexcept{
     return "CsgVisibleSmokeProject";
 }
 
-[[nodiscard]] NWB_INLINE NotNullUniquePtr<World> CreateCsgVisibleWorldOrDie(ProjectRuntimeContext& context){
+[[nodiscard]] FOUNDATION_INLINE NotNullUniquePtr<World> CreateCsgVisibleWorldOrDie(ProjectRuntimeContext& context){
     auto world = CreateSmokeWorldOrDie(CsgVisibleFpsLabel(), context);
 
     if(context.graphics.queryFeatureSupport(Core::Feature::Meshlets))
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: natural native mesh-shader route selected"));
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgVisibleSmokeProject: natural native mesh-shader route selected"));
     else
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: natural indexed route selected because Meshlets are unavailable"));
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("CsgVisibleSmokeProject: natural indexed route selected because Meshlets are unavailable"));
 
     auto& renderer = AddSmokeRenderSystems(*world, context);
     if(ReadSmokeEnvironmentFlag(s_GiTemporalEnvironment)){
         Impl::ReflectionSettings reflection;
         reflection.traceMode = Impl::ReflectionTraceMode::Disabled;
-        NWB_FATAL_ASSERT_MSG(renderer.setReflectionSettings(reflection), NWB_TEXT("Invalid temporal reflection settings"));
+        FOUNDATION_FATAL_ASSERT_MSG(renderer.setReflectionSettings(reflection), FOUNDATION_TEXT("Invalid temporal reflection settings"));
         renderer.setFrameLaggedAsyncLightingEnabled(ReadSmokeEnvironmentFlag("NWB_CSG_GI_TEMPORAL_LAGGED"));
     }
 
@@ -332,7 +332,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{
-    return NWB_TEXT("NWB CSG Visible Smoke");
+    return FOUNDATION_TEXT("NWB CSG Visible Smoke");
 }
 
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){

@@ -136,19 +136,19 @@ public:
     }
 };
 
-[[nodiscard]] NWB_INLINE Core::GpuTaskId MakeGpuTaskId(const u32 generation, const u32 index)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::GpuTaskId MakeGpuTaskId(const u32 generation, const u32 index)noexcept{
     return Core::GpuTaskId{ .generation = generation, .index = index };
 }
 
-[[nodiscard]] NWB_INLINE Impl::RayTracingSceneContentStamp MakeRtSceneStamp(const u64 geometry, const u64 material, const b8 trusted)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Impl::RayTracingSceneContentStamp MakeRtSceneStamp(const u64 geometry, const u64 material, const b8 trusted)noexcept{
     return Impl::RayTracingSceneContentStamp{ geometry, material, trusted };
 }
 
-[[nodiscard]] NWB_INLINE Core::QueueSubmissionToken MakeQueueToken(const u64 value, const u16 physicalQueueIndex, const u16 deviceGeneration, const Core::CommandQueue::Enum queue)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::QueueSubmissionToken MakeQueueToken(const u64 value, const u16 physicalQueueIndex, const u16 deviceGeneration, const Core::CommandQueue::Enum queue)noexcept{
     return Core::QueueSubmissionToken{ .value = value, .physicalQueueIndex = physicalQueueIndex, .deviceGeneration = deviceGeneration, .queue = queue };
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuTaskTimingFeedbackPolicy MakeFeedbackPolicy(
+[[nodiscard]] FOUNDATION_INLINE Core::GpuTaskTimingFeedbackPolicy MakeFeedbackPolicy(
     const f64 minimumAbsoluteBenefitSeconds,
     const f64 minimumRelativeBenefit,
     const u32 minimumFramesBetweenSwitches,
@@ -204,12 +204,12 @@ public:
     ShaderFloat4(const ShaderFloat3 rgb, const f32 alpha)noexcept : x(rgb.x), y(rgb.y), z(rgb.z), w(alpha){}
 };
 
-[[nodiscard]] NWB_INLINE ShaderFloat3 operator/(const ShaderFloat3 value, const f32 divisor)noexcept{
+[[nodiscard]] FOUNDATION_INLINE ShaderFloat3 operator/(const ShaderFloat3 value, const f32 divisor)noexcept{
     const SIMDVectorSingle quotient = VectorDivide(VectorSet(value.x, value.y, value.z, 0.0f), VectorSet(divisor, divisor, divisor, 1.0f));
     return ShaderFloat3(VectorGetX(quotient), VectorGetY(quotient), VectorGetZ(quotient));
 }
 
-[[nodiscard]] NWB_INLINE f32 exp(const f32 value)noexcept{ return ::Exp(value); }
+[[nodiscard]] FOUNDATION_INLINE f32 exp(const f32 value)noexcept{ return ::Exp(value); }
 
 [[nodiscard]] f32 nwbSurfelGatherCoverage(f32 totalWeight);
 [[nodiscard]] b8 nwbSurfelUpsampleNormalCompatible(f32 normalDot);
@@ -253,21 +253,21 @@ public:
     {}
 };
 
-[[nodiscard]] NWB_INLINE Float3U operator/(const Float3U value, const f32 divisor)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Float3U operator/(const Float3U value, const f32 divisor)noexcept{
     return Float3U(value.x / divisor, value.y / divisor, value.z / divisor);
 }
 
-[[nodiscard]] NWB_INLINE b8 operator==(const ShaderInt3 first, const ShaderInt3 second)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 operator==(const ShaderInt3 first, const ShaderInt3 second)noexcept{
     return first.x == second.x && first.y == second.y && first.z == second.z;
 }
 
-[[nodiscard]] NWB_INLINE Float3U FloorShaderVector(const Float3U value)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Float3U FloorShaderVector(const Float3U value)noexcept{
     Float3U floored;
     StoreFloat(VectorFloor(LoadFloat(value)), floored);
     return floored;
 }
 
-[[nodiscard]] NWB_INLINE b8 AllShaderLanes(const b8 value)noexcept{ return value; }
+[[nodiscard]] FOUNDATION_INLINE b8 AllShaderLanes(const b8 value)noexcept{ return value; }
 
 [[nodiscard]] ShaderInt3 nwbSurfelCellCoord(Float3U worldPosition, f32 cellSize);
 [[nodiscard]] b8 nwbSurfelSameCell(ShaderInt3 ownerCell, ShaderInt3 visitedCell);

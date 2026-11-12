@@ -3,6 +3,111 @@
 
 
 #include <impl/assets_shader/shader_types.adhd>
+#include <impl/assets_shader/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 ValidateResolvedSpirvEntryPoint(
+    in b8 resolved,
+    in StringView entryPoint,
+    in Name assetType
+){
+    if(resolved)
+        return true;
+
+    error(
+        "IShader::loadBinaryForStage failed: entry point '{}' does not match asset type '{}' or SPIR-V is malformed",
+        entryPoint,
+        assetType.resolvedText()
+    );
+    return false;
+}
+
+b8 LoadShaderBinaryForStage(
+    in IShader shaderAsset,
+    in Span<u8> binary,
+    in ShaderType shaderType,
+    mut String outEntryPoint,
+    mut Vector<u8> outBytecode
+){
+    if(!shaderAsset.checkVirtualPath("IShader::loadBinaryForStage"))
+        return false;
+
+    const Expected<AssetPayloadView, AssetPayloadDecodeFailure> payload = DecodeAssetPayload(binary);
+    if(!payload.has_value()){
+        ReportShaderAssetPayloadDecodeFailure(payload.error());
+        return false;
+    }
+
+    const Expected<StringView, SpirvEntryPointLookupResult> lookupResult = ResolveSpirvEntryPointName(
+        payload.value().bytecode,
+        payload.value().entryPoint,
+        ShaderType::ToMask(shaderType)
+    );
+    if(!ValidateResolvedSpirvEntryPoint(lookupResult.has_value(), payload.value().entryPoint, shaderAsset.assetType()))
+        return false;
+
+    CommitDecodedShaderAssetPayload(payload.value().entryPoint, payload.value().bytecode, outEntryPoint, outBytecode);
+    return true;
+}
+
+b8 VertexShader::loadBinary(in Span<u8> binary){
+    return LoadShaderBinaryForStage(this, binary, ShaderType::VertexStage, this.m_entryPoint, this.m_bytecode);
+}
+
+b8 HullShader::loadBinary(in Span<u8> binary){
+    return LoadShaderBinaryForStage(this, binary, ShaderType::HullStage, this.m_entryPoint, this.m_bytecode);
+}
+
+b8 DomainShader::loadBinary(in Span<u8> binary){
+    return LoadShaderBinaryForStage(this, binary, ShaderType::DomainStage, this.m_entryPoint, this.m_bytecode);
+}
+
+b8 GeometryShader::loadBinary(in Span<u8> binary){
+    return LoadShaderBinaryForStage(this, binary, ShaderType::GeometryStage, this.m_entryPoint, this.m_bytecode);
+}
+
+b8 PixelShader::loadBinary(in Span<u8> binary){
+    return LoadShaderBinaryForStage(this, binary, ShaderType::PixelStage, this.m_entryPoint, this.m_bytecode);
+}
+
+b8 ComputeShader::loadBinary(in Span<u8> binary){
+    return LoadShaderBinaryForStage(this, binary, ShaderType::ComputeStage, this.m_entryPoint, this.m_bytecode);
+}
+
+b8 AmplificationShader::loadBinary(in Span<u8> binary){
+    return LoadShaderBinaryForStage(this, binary, ShaderType::AmplificationStage, this.m_entryPoint, this.m_bytecode);
+}
+
+b8 MeshShader::loadBinary(in Span<u8> binary){
+    return LoadShaderBinaryForStage(this, binary, ShaderType::MeshStage, this.m_entryPoint, this.m_bytecode);
+}
+
+b8 RayGenerationShader::loadBinary(in Span<u8> binary){
+    return LoadShaderBinaryForStage(this, binary, ShaderType::RayGenerationStage, this.m_entryPoint, this.m_bytecode);
+}
+
+b8 AnyHitShader::loadBinary(in Span<u8> binary){
+    return LoadShaderBinaryForStage(this, binary, ShaderType::AnyHitStage, this.m_entryPoint, this.m_bytecode);
+}
+
+b8 ClosestHitShader::loadBinary(in Span<u8> binary){
+    return LoadShaderBinaryForStage(this, binary, ShaderType::ClosestHitStage, this.m_entryPoint, this.m_bytecode);
+}
+
+b8 MissShader::loadBinary(in Span<u8> binary){
+    return LoadShaderBinaryForStage(this, binary, ShaderType::MissStage, this.m_entryPoint, this.m_bytecode);
+}
+
+b8 IntersectionShader::loadBinary(in Span<u8> binary){
+    return LoadShaderBinaryForStage(this, binary, ShaderType::IntersectionStage, this.m_entryPoint, this.m_bytecode);
+}
+
+b8 CallableShader::loadBinary(in Span<u8> binary){
+    return LoadShaderBinaryForStage(this, binary, ShaderType::CallableStage, this.m_entryPoint, this.m_bytecode);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -17,8 +122,6 @@ native{
 
 #include <impl/assets_shader/asset.adhd.h>
 
-#include <core/common/log.h>
-#include <core/graphics/spirv_entry_point.h>
 #include <core/assets/auto_registration.h>
 
 
@@ -51,43 +154,15 @@ NWB_SHADER_ASSET_TYPE_ENTRIES(NWB_REGISTER_SHADER_ASSET_CODEC)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ValidateResolvedSpirvEntryPoint(b8 resolved, AStringView entryPoint, Name assetType)noexcept;
-
-
-IShader::~IShader()noexcept = default;
-
-
-b8 IShader::loadBinaryForStage(const Span<const u8> binary, const Core::ShaderType::Enum shaderType){
-    if(!checkVirtualPath(NWB_TEXT("IShader::loadBinaryForStage")))
-        return false;
-
-    const auto payload = ShaderBinaryPayload::DecodeAssetPayload(binary);
-    if(!payload){
-        ShaderBinaryPayload::ReportShaderAssetPayloadDecodeFailure(payload.error());
-        return false;
-    }
-
-    const auto lookupResult = Core::ResolveSpirvEntryPointName(BinaryByteView{ payload->bytecode.data(), payload->bytecode.size() }, payload->entryPoint, Core::ShaderType::ToMask(shaderType));
-    if(!ValidateResolvedSpirvEntryPoint(lookupResult.has_value(), payload->entryPoint, assetType()))
-        return false;
-
-    ShaderBinaryPayload::CommitDecodedShaderAssetPayload(payload->entryPoint, payload->bytecode, m_entryPoint, m_bytecode);
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 Core::ShaderType::Enum ShaderAssetTypes::ShaderTypeFromAssetType(const Name& assetType)noexcept{
-#define NWB_SHADER_ASSET_TYPE_MATCH(Type) if(assetType == Type::AssetTypeName()) return Type::s_Stage;
+#define NWB_SHADER_ASSET_TYPE_MATCH(Type) if(assetType == Type::AssetTypeName()) return s_StageForShader<Type>;
     NWB_SHADER_ASSET_TYPE_ENTRIES(NWB_SHADER_ASSET_TYPE_MATCH)
 #undef NWB_SHADER_ASSET_TYPE_MATCH
     return Core::ShaderType::Invalid;
 }
 
 Core::ShaderType::Enum ShaderAssetTypes::ShaderTypeFromAssetTypeText(const AStringView assetType)noexcept{
-#define NWB_SHADER_ASSET_TYPE_TEXT_MATCH(Type) if(assetType == Type::s_AssetTypeText) return Type::s_Stage;
+#define NWB_SHADER_ASSET_TYPE_TEXT_MATCH(Type) if(assetType == Type::s_AssetTypeText) return s_StageForShader<Type>;
     NWB_SHADER_ASSET_TYPE_ENTRIES(NWB_SHADER_ASSET_TYPE_TEXT_MATCH)
 #undef NWB_SHADER_ASSET_TYPE_TEXT_MATCH
     return Core::ShaderType::Invalid;
@@ -95,7 +170,7 @@ Core::ShaderType::Enum ShaderAssetTypes::ShaderTypeFromAssetTypeText(const AStri
 
 const Name& ShaderAssetTypes::AssetTypeNameFromShaderType(const Core::ShaderType::Enum shaderType)noexcept{
     switch(shaderType){
-#define NWB_SHADER_ASSET_TYPE_CASE(Type) case Type::s_Stage: return Type::AssetTypeName();
+#define NWB_SHADER_ASSET_TYPE_CASE(Type) case s_StageForShader<Type>: return Type::AssetTypeName();
         NWB_SHADER_ASSET_TYPE_ENTRIES(NWB_SHADER_ASSET_TYPE_CASE)
 #undef NWB_SHADER_ASSET_TYPE_CASE
         default: return s_NameNone;
@@ -116,24 +191,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ValidateResolvedSpirvEntryPoint(
-    in b8 resolved,
-    in StringView entryPoint,
-    in Name assetType
-){
-    if(resolved)
-        return true;
-
-    error(
-        "IShader::loadBinaryForStage failed: entry point '{}' does not match asset type '{}' or SPIR-V is malformed",
-        entryPoint,
-        assetType.resolvedText()
-    );
-    return false;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

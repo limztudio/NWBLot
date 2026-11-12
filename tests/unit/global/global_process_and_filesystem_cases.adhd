@@ -37,7 +37,7 @@ native{
 #include <global/process_memory_map.h>
 #include <global/shared_library.h>
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 #include <sys/wait.h>
 #include <unistd.h>
 #endif
@@ -84,7 +84,7 @@ namespace __hidden_process_execution_boundary_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 struct ThrowingCaptureOutput{
 public:
     Array<char, 64u> bytes{};
@@ -105,7 +105,7 @@ public:
     void append(const char* data, const usize length){
         if(length > bytes.size() - byteCount)
             throw RuntimeException("child PID output exceeded the bounded fixture buffer");
-        NWB_MEMCPY(bytes.data() + byteCount, bytes.size() - byteCount, data, length);
+        FOUNDATION_MEMCPY(bytes.data() + byteCount, bytes.size() - byteCount, data, length);
         byteCount += length;
         const AStringView output(bytes.data(), byteCount);
         const usize lineEnd = output.find('\n');
@@ -260,7 +260,7 @@ void VerifyGlobal_FileWritesRejectBufferedDeviceFailure(){
     payload[2u] = 3u;
 
     native(in payload, mut linuxSupported, mut textWriteSucceeded, mut binaryWriteSucceeded){
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
         linuxSupported = true;
         NWB::Tests::TestArena<> testArena;
         const ::Path<NWB::Core::Alloc::GlobalArena> fullDevice(testArena.arena, "/dev/full");
@@ -286,12 +286,12 @@ void VerifyGlobal_PathNativeComponentsMatchOwningIterationAndRemainValidAfterAdv
 
     native(mut componentCount, mut allComponentsMatched, mut incrementedPastEndStaysAtEnd, mut emptyPathBeginEqualsEnd){
         NWB::Tests::TestArena<> testArena;
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         const ::Path<NWB::Core::Alloc::GlobalArena> path(testArena.arena, "C:\\Root//./\xED\x95\x9C\xEA\xB8\x80/File.TXT/");
-        constexpr Array<TStringView, 5u> s_Expected = { NWB_TEXT("C:\\"), NWB_TEXT("Root"), NWB_TEXT("."), NWB_TEXT("\xED\x95\x9C\xEA\xB8\x80"), NWB_TEXT("File.TXT") };
+        constexpr Array<TStringView, 5u> s_Expected = { FOUNDATION_TEXT("C:\\"), FOUNDATION_TEXT("Root"), FOUNDATION_TEXT("."), FOUNDATION_TEXT("\xED\x95\x9C\xEA\xB8\x80"), FOUNDATION_TEXT("File.TXT") };
 #else
         const ::Path<NWB::Core::Alloc::GlobalArena> path(testArena.arena, "/Root//./\xED\x95\x9C\xEA\xB8\x80/File.TXT/");
-        constexpr Array<TStringView, 5u> s_Expected = { NWB_TEXT("/"), NWB_TEXT("Root"), NWB_TEXT("."), NWB_TEXT("\xED\x95\x9C\xEA\xB8\x80"), NWB_TEXT("File.TXT") };
+        constexpr Array<TStringView, 5u> s_Expected = { FOUNDATION_TEXT("/"), FOUNDATION_TEXT("Root"), FOUNDATION_TEXT("."), FOUNDATION_TEXT("\xED\x95\x9C\xEA\xB8\x80"), FOUNDATION_TEXT("File.TXT") };
 #endif
         auto componentIt = path.begin();
         const TStringView first = componentIt.nativeComponent();
@@ -357,7 +357,7 @@ void VerifyGlobal_PathNativeComponentViewsBorrowSourceStorageWithoutAllocating()
             ++componentIt;
             secondDiffersFromFirst = componentIt.nativeComponent().data() != retained.data();
         }
-        retainedMatchesFirstComponent = retained == TStringView(NWB_TEXT("First_component_long_enough_to_require_owning_storage"));
+        retainedMatchesFirstComponent = retained == TStringView(FOUNDATION_TEXT("First_component_long_enough_to_require_owning_storage"));
         after = arena.memoryStats();
     }
 
@@ -408,9 +408,9 @@ void VerifyGlobal_PathViewAccessorsAndSelfAliasingMutationsPreserveBoundariesWit
     native(mut viewAccessorsMatched, mut multiDotListed, mut hiddenListed, mut baselineUsedBytes, mut afterViewsUsedBytes, mut selfAliasingMutationsMatched){
         NWB::Tests::TestArena<> testArena;
         const ::Path<NWB::Core::Alloc::GlobalArena> emptyPath(testArena.arena);
-        const ::Path<NWB::Core::Alloc::GlobalArena> rootSlash(testArena.arena, NWB_TEXT("///"));
-        const ::Path<NWB::Core::Alloc::GlobalArena> hiddenPath(testArena.arena, NWB_TEXT("dir/.hidden///"));
-        const ::Path<NWB::Core::Alloc::GlobalArena> multiDotPath(testArena.arena, NWB_TEXT("alpha/beta/archive.tar.NWB"));
+        const ::Path<NWB::Core::Alloc::GlobalArena> rootSlash(testArena.arena, FOUNDATION_TEXT("///"));
+        const ::Path<NWB::Core::Alloc::GlobalArena> hiddenPath(testArena.arena, FOUNDATION_TEXT("dir/.hidden///"));
+        const ::Path<NWB::Core::Alloc::GlobalArena> multiDotPath(testArena.arena, FOUNDATION_TEXT("alpha/beta/archive.tar.NWB"));
         baselineUsedBytes = testArena.arena.memoryStats().usedBytes;
 
         viewAccessorsMatched =
@@ -418,16 +418,16 @@ void VerifyGlobal_PathViewAccessorsAndSelfAliasingMutationsPreserveBoundariesWit
             && emptyPath.filenameView().empty()
             && emptyPath.stemView().empty()
             && emptyPath.extensionView().empty()
-            && rootSlash.parentPathView() == TStringView(NWB_TEXT("/"))
+            && rootSlash.parentPathView() == TStringView(FOUNDATION_TEXT("/"))
             && rootSlash.filenameView().empty()
-            && hiddenPath.parentPathView() == TStringView(NWB_TEXT("dir"))
-            && hiddenPath.filenameView() == TStringView(NWB_TEXT(".hidden"))
-            && hiddenPath.stemView() == TStringView(NWB_TEXT(".hidden"))
+            && hiddenPath.parentPathView() == TStringView(FOUNDATION_TEXT("dir"))
+            && hiddenPath.filenameView() == TStringView(FOUNDATION_TEXT(".hidden"))
+            && hiddenPath.stemView() == TStringView(FOUNDATION_TEXT(".hidden"))
             && hiddenPath.extensionView().empty()
-            && multiDotPath.parentPathView() == TStringView(NWB_TEXT("alpha/beta"))
-            && multiDotPath.filenameView() == TStringView(NWB_TEXT("archive.tar.NWB"))
-            && multiDotPath.stemView() == TStringView(NWB_TEXT("archive.tar"))
-            && multiDotPath.extensionView() == TStringView(NWB_TEXT(".NWB"))
+            && multiDotPath.parentPathView() == TStringView(FOUNDATION_TEXT("alpha/beta"))
+            && multiDotPath.filenameView() == TStringView(FOUNDATION_TEXT("archive.tar.NWB"))
+            && multiDotPath.stemView() == TStringView(FOUNDATION_TEXT("archive.tar"))
+            && multiDotPath.extensionView() == TStringView(FOUNDATION_TEXT(".NWB"))
         ;
 
         constexpr Array<AStringView, 2u> s_AllowedExtensions = { ".nwb", ".slang" };
@@ -437,29 +437,29 @@ void VerifyGlobal_PathViewAccessorsAndSelfAliasingMutationsPreserveBoundariesWit
 
         ::Path<NWB::Core::Alloc::GlobalArena> aliased(
             testArena.arena,
-            NWB_TEXT("alpha_segment_0123456789/beta_segment_0123456789/gamma_segment_0123456789/delta.ext")
+            FOUNDATION_TEXT("alpha_segment_0123456789/beta_segment_0123456789/gamma_segment_0123456789/delta.ext")
         );
         aliased += aliased.extensionView();
-        const b8 step1 = aliased.filenameView() == TStringView(NWB_TEXT("delta.ext.ext"));
+        const b8 step1 = aliased.filenameView() == TStringView(FOUNDATION_TEXT("delta.ext.ext"));
         aliased.replaceExtension(aliased.stemView());
-        const b8 step2 = aliased.filenameView() == TStringView(NWB_TEXT("delta.ext.delta.ext"));
+        const b8 step2 = aliased.filenameView() == TStringView(FOUNDATION_TEXT("delta.ext.delta.ext"));
         aliased /= aliased.parentPathView();
-        const b8 step3 = aliased.filenameView() == TStringView(NWB_TEXT("gamma_segment_0123456789"));
+        const b8 step3 = aliased.filenameView() == TStringView(FOUNDATION_TEXT("gamma_segment_0123456789"));
 
-        ::Path<NWB::Core::Alloc::GlobalArena> extension(testArena.arena, NWB_TEXT("name.ext"));
+        ::Path<NWB::Core::Alloc::GlobalArena> extension(testArena.arena, FOUNDATION_TEXT("name.ext"));
         extension.replaceExtension(extension.extensionView());
-        ::Path<NWB::Core::Alloc::GlobalArena> filename(testArena.arena, NWB_TEXT("name.ext"));
+        ::Path<NWB::Core::Alloc::GlobalArena> filename(testArena.arena, FOUNDATION_TEXT("name.ext"));
         filename.replaceExtension(filename.filenameView());
-        ::Path<NWB::Core::Alloc::GlobalArena> self(testArena.arena, NWB_TEXT("name.ext"));
+        ::Path<NWB::Core::Alloc::GlobalArena> self(testArena.arena, FOUNDATION_TEXT("name.ext"));
         self.replaceExtension(self);
 
         selfAliasingMutationsMatched =
             step1
             && step2
             && step3
-            && extension.native() == TStringView(NWB_TEXT("name.ext"))
-            && filename.native() == TStringView(NWB_TEXT("name.name.ext"))
-            && self.native() == TStringView(NWB_TEXT("name.name.ext"))
+            && extension.native() == TStringView(FOUNDATION_TEXT("name.ext"))
+            && filename.native() == TStringView(FOUNDATION_TEXT("name.name.ext"))
+            && self.native() == TStringView(FOUNDATION_TEXT("name.name.ext"))
         ;
     }
 
@@ -513,7 +513,7 @@ void VerifyGlobal_AreSameExistingPathAndAtomicWriteHandleHardLinksAndRejectDirec
         sameDistinct = PathIdentity(firstFile, secondFile).sameExisting();
         sameMissing = PathIdentity(firstFile, missingFile).sameExisting();
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         hardLinkCreated = CreateHardLink(hardLinkFile.c_str(), firstFile.c_str(), nullptr) != 0;
 #else
         hardLinkCreated = ::link(firstFile.c_str(), hardLinkFile.c_str()) == 0;
@@ -560,7 +560,7 @@ void VerifyGlobal_RecursiveDirectoryIteratorDoesNotFollowDirectorySymlinks(){
     b8 removedRoot = false;
 
     native(mut linuxSupported, mut followed, mut noFollow, mut iteratorCreated, mut entryCount, mut allEntriesNonEmpty, mut removedRoot){
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
         linuxSupported = true;
         NWB::Tests::TestArena<> testArena;
         const ::Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/recursive_directory_iterator_links");
@@ -643,7 +643,7 @@ void VerifyGlobal_WindowsProcessInputsSupportBoundedViews(){
     b8 removedRoot = false;
 
     native(in trailingSuffix, in combinedFilename, mut windowsSupported, mut executableAvailable, mut runSucceeded, mut exitCodeValue, mut readOutputOk, mut outputText, mut removedRoot){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         windowsSupported = true;
         NWB::Tests::TestArena<> testArena;
         auto executableResult = ReadEnvironmentVariable(testArena.arena, "ComSpec");
@@ -707,7 +707,7 @@ void VerifyGlobal_CaptureProcessOutputAdmitsEmptySuccessAndPreservesExitFailure(
     String retainedChildStdout = "";
 
     native(in binSh, in cFlag, mut linuxSupported, mut invalidRejected, mut emptyCaptureSucceeded, mut emptyOutputWasEmpty, mut failedChildRejected, mut failedExitCode, mut retainedChildStdout){
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
         linuxSupported = true;
         NWB::Tests::TestArena<> testArena;
         NWB::Tests::TestAString output(testArena.arena);
@@ -750,7 +750,7 @@ void VerifyGlobal_CaptureProcessOutputAppendFailureClosesPipeAndReapsChildBefore
     b8 waitReportedNoChild = false;
 
     native(in binSh, in cFlag, in captureTimeoutMS, mut linuxSupported, mut childPidValue, mut waitResultValue, mut waitReportedNoChild){
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
         using namespace __hidden_process_execution_boundary_tests;
         linuxSupported = true;
         const Array<AStringView, 3u> argv = { binSh, cFlag, "printf '%s\\n' \"$$\"; exec 1>&-; while :; do :; done" };
@@ -794,7 +794,7 @@ void VerifyGlobal_CaptureProcessOutputReapsTruncatedChild(){
     u64 pidMaxLimit = 0u;
 
     native(in binSh, in cFlag, in captureTimeoutMS, mut linuxSupported, mut truncatedFailed, mut outputMarkedTruncated, mut capturedPrefix, mut pidMaxLimit){
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
         linuxSupported = true;
         pidMaxLimit = static_cast<u64>(Limit<pid_t>::s_Max);
         const Array<AStringView, 3u> argv = { binSh, cFlag, "printf '%s\\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' \"$$\"; exec 1>&-; while :; do :; done" };
@@ -829,7 +829,7 @@ void VerifyGlobal_CaptureProcessOutputReapsTruncatedChild(){
     i64 waitResultValue = 0;
     b8 waitReportedNoChild = false;
     native(in parsedPid, mut waitResultValue, mut waitReportedNoChild){
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
         const pid_t childPid = static_cast<pid_t>(parsedPid);
         int status = 0;
         errno = 0;
@@ -860,7 +860,7 @@ void VerifyGlobal_CaptureProcessOutputTimesOutWithContinuousOutput(){
     u64 finishMS = 0u;
 
     native(in binSh, in cFlag, in continuousTimeoutMS, mut linuxSupported, mut haveTimestamps, mut timedOutMatched, mut startMS, mut finishMS){
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
         linuxSupported = true;
         const Array<AStringView, 3u> argv = { binSh, cFlag, "while :; do printf x; done" };
         NWB::Tests::TestArena<> testArena;
@@ -905,7 +905,7 @@ void VerifyGlobal_RedirectedNonzeroExitAndInvalidArgumentsPreserveCapturedStream
     b8 removedRoot = false;
 
     native(in binSh, in cFlag, in combinedFilename, in boundedScript, mut linuxSupported, mut runSucceeded, mut exitCodeValue, mut emptyRedirectAccepted, mut readBackOk, mut capturedCombined, mut removedRoot){
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
         linuxSupported = true;
         NWB::Tests::TestArena<> testArena;
         const ::Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/redirected_process");
@@ -953,11 +953,11 @@ void VerifyGlobal_SharedLibraryAcceptsBoundedNamesAndRejectsInvalidSymbols(){
     b8 remainedOpen = false;
 
     native(mut windowsSupported, mut openedKernel, mut resolvedPidMatches, mut invalidSymbolRejected, mut missingSymbolRejected, mut remainedOpen){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         windowsSupported = true;
         NWB::Tests::TestArena<> testArena;
         SharedLibrary library;
-        constexpr TStringView s_LibraryName = NWB_TEXT("kernel32.dll.trailing");
+        constexpr TStringView s_LibraryName = FOUNDATION_TEXT("kernel32.dll.trailing");
         openedKernel = library.open(testArena.arena, s_LibraryName.substr(0u, 12u)).has_value();
         if(openedKernel){
             using CurrentProcessIdFn = DWORD(WINAPI*)();
@@ -998,11 +998,11 @@ void VerifyGlobal_SharedLibraryInvalidNamePreservesNativeFailureStatusWithoutOpe
         const auto invalid = library.open(testArena.arena, TStringView{});
         emptyNameRejected = !invalid && invalid.error().code == MakeErrorCode(ErrorCondition::invalid_argument);
         openAfterEmpty = library.isOpen();
-        const auto missing = library.open(testArena.arena, NWB_TEXT("nwb_contract_missing_library_6ee251a68fe246b0"));
+        const auto missing = library.open(testArena.arena, FOUNDATION_TEXT("nwb_contract_missing_library_6ee251a68fe246b0"));
         missingLibraryFailed = !missing.has_value();
         if(!missing){
             missingErrorCode = missing.error().code.value();
-#if !defined(NWB_PLATFORM_WINDOWS)
+#if !defined(FOUNDATION_PLATFORM_WINDOWS)
             nonWindowsBuild = true;
             missingDetailView = missing.error().detail.view();
 #endif
@@ -1075,7 +1075,7 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 TEST(Global, FileWritesRejectBufferedDeviceFailure){
     VerifyGlobal_FileWritesRejectBufferedDeviceFailure();
 }
@@ -1101,13 +1101,13 @@ TEST(Global, RedirectedNonzeroExitAndInvalidArgumentsPreserveCapturedStreams){
 }
 #endif
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 TEST(Global, RecursiveDirectoryIteratorDoesNotFollowDirectorySymlinks){
     VerifyGlobal_RecursiveDirectoryIteratorDoesNotFollowDirectorySymlinks();
 }
 #endif
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 TEST(Global, WindowsProcessInputsSupportBoundedViews){
     VerifyGlobal_WindowsProcessInputsSupportBoundedViews();
 }

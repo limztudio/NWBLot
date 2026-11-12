@@ -49,7 +49,7 @@ inline constexpr Array<Core::Color, 4> s_SRGBClearEdgeColors = {{
     { -0.25f, 1.25f, 0.0f, -0.5f },
 }};
 
-[[nodiscard]] NWB_INLINE u8 ExpectedSRGBClearByte(const f32 value, const b8 srgb)noexcept{
+[[nodiscard]] FOUNDATION_INLINE u8 ExpectedSRGBClearByte(const f32 value, const b8 srgb)noexcept{
     const f32 clamped = Clamp(value, 0.0f, 1.0f);
     f32 encoded = clamped;
     if(srgb){
@@ -100,7 +100,7 @@ struct SRGBClearEdgeInputs{
     Core::StagingTextureHandle readback;
 };
 
-[[nodiscard]] NWB_INLINE Expected<Core::GpuTaskId> DeclareSRGBClearEdges(void* const userData, Core::GpuTaskGraph& graph){
+[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuTaskId> DeclareSRGBClearEdges(void* const userData, Core::GpuTaskGraph& graph){
     using namespace Core;
     const auto& inputs = *MakeNotNull(static_cast<const SRGBClearEdgeInputs*>(userData));
     const auto texture = graph.importTexture(inputs.texture, GpuGraphResourceDesc{}.setIdentity(Name(s_SmokeNameTestsSmokeTextureSrgbEdges))
@@ -255,26 +255,26 @@ b8 VerifyTextureSrgbClear(mut GraphicsRuntime graphics){
             const auto texture = graphics.createTexture(description);
             const auto readback = device.createStagingTexture(description, CpuAccessMode::Read);
             if(!texture || !readback){
-                NWB_LOGGER_ERROR(NWB_TEXT("TextureSmokeProject: failed to allocate the sRGB clear edge resources"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("TextureSmokeProject: failed to allocate the sRGB clear edge resources"));
                 ok = false;
                 break;
             }
             SRGBClearEdgeInputs inputs{ *texture, *readback };
             const auto token = graphics.standaloneGraph().submitStandaloneTaskGraph(&inputs, DeclareSRGBClearEdges);
             if(!token || !device.waitForSubmissionToken(*token)){
-                NWB_LOGGER_ERROR(NWB_TEXT("TextureSmokeProject: sRGB clear edge graph did not complete"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("TextureSmokeProject: sRGB clear edge graph did not complete"));
                 ok = false;
                 break;
             }
             const auto mapping = device.mapStagingTexture(**readback, TextureSlice{}, CpuAccessMode::Read);
             if(!mapping){
-                NWB_LOGGER_ERROR(NWB_TEXT("TextureSmokeProject: failed to map the sRGB clear edge readback"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("TextureSmokeProject: failed to map the sRGB clear edge readback"));
                 ok = false;
                 break;
             }
             ScopeExit unmap([&]()noexcept{ device.unmapStagingTexture(**readback); });
             if(!mapping->data || mapping->rowPitch < s_SRGBClearEdgeWidth * s_SRGBClearEdgeBytesPerPixel){
-                NWB_LOGGER_ERROR(NWB_TEXT("TextureSmokeProject: sRGB clear edge mapping has an invalid extent"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("TextureSmokeProject: sRGB clear edge mapping has an invalid extent"));
                 ok = false;
                 break;
             }
@@ -383,7 +383,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{
-    return NWB_TEXT("NWB Texture Smoke");
+    return FOUNDATION_TEXT("NWB Texture Smoke");
 }
 
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){

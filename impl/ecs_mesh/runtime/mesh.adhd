@@ -2,14 +2,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_mesh/runtime/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-#include <impl/ecs_mesh/runtime/types.adhd.h>
 
 #include <impl/assets_mesh/payload_types.adhd.h>
 
@@ -123,42 +127,6 @@ public:
     }
 };
 
-interface IRuntimeMeshProvider{
-    virtual ~IRuntimeMeshProvider()noexcept = default;
-
-
-public:
-    [[nodiscard]] virtual Expected<RuntimeMeshDesc> resolveRuntimeMesh(Core::ECS::EntityID entity) = 0;
-    // Attachment identity remains available when buffers or an evaluated pose are not ready yet.
-    [[nodiscard]] virtual b8 hasRuntimeMeshBinding(Core::ECS::EntityID entity)const = 0;
-    virtual void markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests) = 0;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct RenderableMeshDesc{
-    Core::Assets::AssetRef<Mesh> mesh;
-    RuntimeMeshDesc runtimeMesh;
-    b8 runtime = false;
-
-
-public:
-    [[nodiscard]] b8 valid()const noexcept{
-        return runtime ? runtimeMesh.valid() : mesh.valid();
-    }
-};
-
-interface IRuntimeMeshRegistry{
-    virtual ~IRuntimeMeshRegistry()noexcept = default;
-
-
-public:
-    virtual void registerRuntimeMeshProvider(IRuntimeMeshProvider& provider) = 0;
-    virtual void unregisterRuntimeMeshProvider(IRuntimeMeshProvider& provider) = 0;
-};
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -174,3 +142,30 @@ NWB_IMPL_END
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+interface IRuntimeMeshProvider{
+    Expected<RuntimeMeshDesc> resolveRuntimeMesh(in EntityID entity);
+    // Attachment identity remains available when buffers or an evaluated pose are not ready yet.
+    b8 hasRuntimeMeshBinding(in EntityID entity)const;
+    void markLiveRuntimeMeshes(mut RuntimeMeshRequestSet requests);
+}
+
+class RenderableMeshDesc{
+    public AssetRef<Mesh> mesh;
+    public RuntimeMeshDesc runtimeMesh = RuntimeMeshDesc();
+    public b8 runtime = false;
+
+    public b8 valid()const{
+        if(this.runtime)
+            return this.runtimeMesh.valid();
+        return this.mesh.valid();
+    }
+}
+
+interface IRuntimeMeshRegistry{
+    void registerRuntimeMeshProvider(mut IRuntimeMeshProvider provider);
+    void unregisterRuntimeMeshProvider(mut IRuntimeMeshProvider provider);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

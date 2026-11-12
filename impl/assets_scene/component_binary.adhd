@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_scene/components.adhd>
 #include <impl/ecs_scene/components.adhd>
 
 
@@ -10,6 +11,13 @@
 
 [header]
 native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <core/assets/auto_registration.h>
+#include <core/assets/module.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -24,6 +32,53 @@ using Scene::LightComponent;
 using Scene::TryBuildCameraProjection;
 using Scene::s_CameraFallbackAspectRatio;
 using Scene::IsValidLightCone;
+
+inline constexpr TStringView s_ComponentAssetKindLabel = FOUNDATION_TEXT("component");
+
+using ComponentTypeAutoRegistrar = Core::Assets::PolymorphicAssetTypeAutoRegistrar<IComponent>;
+
+class ComponentAssetCodec final : public Core::Assets::IAssetCodec{
+public:
+    ComponentAssetCodec()noexcept
+        : Core::Assets::IAssetCodec(IComponent::AssetTypeName())
+    {}
+
+
+public:
+    [[nodiscard]] virtual Expected<UniquePtr<Core::Assets::IAsset>> deserialize(const Name& virtualPath, Span<const u8> binary, Core::Assets::AssetArena& arena)const override;
+#if defined(NWB_COOK)
+    virtual b8 serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override;
+#endif
+};
+
+#if defined(NWB_COOK)
+namespace ComponentAssetSerialization{
+[[nodiscard]] b8 Serialize(const IComponent& component, Core::Assets::AssetBytes& outBinary);
+};
+#endif
+
+template<typename ComponentT>
+class TypedComponentAssetCodec final : public Core::Assets::AssetCodec<ComponentT>{
+public:
+    TypedComponentAssetCodec()noexcept(noexcept(DeclVal<void(*)(const Name&)noexcept>()(ComponentT::AssetTypeName()))) = default;
+
+
+#if defined(NWB_COOK)
+public:
+    virtual b8 serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override{
+        if(!this->checkSerializeAssetType(asset, FOUNDATION_TEXT("TypedComponentAssetCodec::serialize")))
+            return false;
+
+        return ComponentAssetSerialization::Serialize(*MakeNotNull(checked_cast<const ComponentT*>(&asset)), outBinary);
+    }
+#endif
+};
+
+template<typename ComponentT>
+using TypedComponentAutoRegistrar = Core::Assets::TypedPolymorphicAssetAutoRegistrar<IComponent, ComponentT, TypedComponentAssetCodec<ComponentT>>;
+
+#define NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(registrarVariable, componentType) \
+    TypedComponentAutoRegistrar<componentType> registrarVariable
 NWB_IMPL_END
 
 
@@ -141,19 +196,43 @@ class LightComponentPayloadBinary{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[component_asset("transform_component")]
-class TransformComponentAsset{
+[arena, asset("transform_component")]
+class TransformComponentAsset : IComponent{
     public TransformComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        entity.addComponent<TransformComponent>() = this.component;
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
 }
 
-[component_asset("camera_component")]
-class CameraComponentAsset{
+[arena, asset("camera_component")]
+class CameraComponentAsset : IComponent{
     public CameraComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        entity.addComponent<CameraComponent>() = this.component;
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
 }
 
-[component_asset("light_component")]
-class LightComponentAsset{
+[arena, asset("light_component")]
+class LightComponentAsset : IComponent{
     public LightComponent component;
+
+    public b8 loadBinary(in Span<u8> binary)override;
+    public b8 loadComponentPayload(in Span<u8> payload)override;
+    public b8 validatePayload()const override;
+    public void applyToEntity(mut Entity entity)const override{
+        entity.addComponent<LightComponent>() = this.component;
+    }
+    public b8 serializeComponentPayload(mut Vector<u8> outPayload)const override;
 }
 
 

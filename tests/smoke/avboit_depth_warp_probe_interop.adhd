@@ -22,7 +22,7 @@ inline constexpr u32 s_DepthWarpControlWords = NWB_AVBOIT_CONTROL_WORD_COUNT + s
 inline constexpr u32 s_DepthWarpResultWords = s_DepthWarpWords + s_DepthWarpControlWords;
 inline constexpr u32 s_DepthWarpSentinel = 0xa5f07c39u;
 
-[[nodiscard]] NWB_INLINE Impl::RendererAvboitPushConstants BuildAvboitDepthWarpPush(const AvboitDepthWarpCase& probe, const u32 ordinal, const u32 slots)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Impl::RendererAvboitPushConstants BuildAvboitDepthWarpPush(const AvboitDepthWarpCase& probe, const u32 ordinal, const u32 slots)noexcept{
     Impl::RendererAvboitPushConstants push;
     push.frame[0] = 1000u + ordinal % 997u;
     push.frame[1] = 300u + ordinal % 251u;
@@ -65,7 +65,7 @@ public:
             commandList.setBufferState(payload.control.get(), Core::ResourceStates::CopyDest);
             commandList.commitBarriers();
             if(!commandList.tryWriteBuffer(*payload.coverage, probe.coverage.data(), sizeof(probe.coverage))){
-                NWB_LOGGER_ERROR(NWB_TEXT("AvboitDepthWarpProbe: coverage upload failed at case {}"), payload.firstCase + index);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("AvboitDepthWarpProbe: coverage upload failed at case {}"), payload.firstCase + index);
                 return false;
             }
             commandList.clearBufferUInt(*payload.warp, s_DepthWarpSentinel);
@@ -90,7 +90,7 @@ public:
             commandList.copyBuffer(*payload.readback, offset, *payload.warp, 0u, s_DepthWarpWords * sizeof(u32));
             commandList.copyBuffer(*payload.readback, offset + s_DepthWarpWords * sizeof(u32), *payload.control, 0u, s_DepthWarpControlWords * sizeof(u32));
             if(commandList.commandRecordingFailed()){
-                NWB_LOGGER_ERROR(NWB_TEXT("AvboitDepthWarpProbe: command recording failed at case {}"), payload.firstCase + index);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("AvboitDepthWarpProbe: command recording failed at case {}"), payload.firstCase + index);
                 return false;
             }
         }
@@ -102,7 +102,7 @@ public:
     }
 };
 
-[[nodiscard]] NWB_INLINE Expected<Core::GpuTaskId> DeclareDepthWarpBatch(void* userData, Core::GpuTaskGraph& graph){
+[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuTaskId> DeclareDepthWarpBatch(void* userData, Core::GpuTaskGraph& graph){
     const auto& payload = *MakeNotNull(static_cast<const DepthWarpProbeBatchTask::Payload*>(userData));
     const Name probeName = Name(s_SmokeNameAvboitDepthWarpProbe);
     const auto importBuf = [&graph](const Core::BufferHandle& buffer, const AStringView label, const Core::ResourceStates::Mask state){
@@ -119,7 +119,7 @@ public:
     };
     for(u32 index = 0u; index < imported.size(); ++index){
         if(!imported[index]){
-            NWB_LOGGER_ERROR(NWB_TEXT("AvboitDepthWarpProbe: graph buffer import failed at index {}"), index);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AvboitDepthWarpProbe: graph buffer import failed at index {}"), index);
             return MakeUnexpected(Failure{});
         }
     }
@@ -133,7 +133,7 @@ public:
     };
     for(u32 index = 0u; index < uses.size(); ++index){
         if(!uses[index].resource.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("AvboitDepthWarpProbe: graph buffer import failed at index {}"), index);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AvboitDepthWarpProbe: graph buffer import failed at index {}"), index);
             return MakeUnexpected(Failure{});
         }
     }
@@ -141,7 +141,7 @@ public:
     desc.setIdentity(probeName).setMarkerLabel("AVBOIT depth warp boundary probe").setResourceUses(uses);
     const auto taskResult = graph.addTask<DepthWarpProbeBatchTask>(desc, DepthWarpProbeBatchTask::Payload(payload));
     if(!taskResult || !taskResult->valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("AvboitDepthWarpProbe: graph task declaration failed at case {}"), payload.firstCase);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AvboitDepthWarpProbe: graph task declaration failed at case {}"), payload.firstCase);
         return MakeUnexpected(Failure{});
     }
     return *taskResult;
@@ -162,7 +162,7 @@ public:
     virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
 };
 
-[[nodiscard]] NWB_INLINE Expected<Core::BufferHandle> CreateDepthWarpProbeBuffer(const Name name, const u32 words, const b8 readback, Core::GraphicsRuntime& graphics){
+[[nodiscard]] FOUNDATION_INLINE Expected<Core::BufferHandle> CreateDepthWarpProbeBuffer(const Name name, const u32 words, const b8 readback, Core::GraphicsRuntime& graphics){
     Core::BufferDesc desc;
     desc.setDebugName(name)
         .setByteSize(words * sizeof(u32))
@@ -277,7 +277,7 @@ b8 InitializeDepthWarpProbeProject(
         auto& device = graphics.getDevice();
         auto& heap = device.getDescriptorHeap();
         if(!heap.isInitialized()){
-            NWB_LOGGER_ERROR(NWB_TEXT("AvboitDepthWarpProbe: bindless heap is unavailable"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AvboitDepthWarpProbe: bindless heap is unavailable"));
             return false;
         }
         if(!sceneSubsystems.loadProjectStartScene(context.assetManager))
@@ -290,7 +290,7 @@ b8 InitializeDepthWarpProbeProject(
             depthWarpShaderRef.name(),
             Core::ShaderArchive::s_DefaultVariant,
             Name(s_SmokeNameAvboitDepthWarpProbe),
-            NWB_TEXT("AvboitDepthWarpProbe"),
+            FOUNDATION_TEXT("AvboitDepthWarpProbe"),
             graphics,
             context.assetManager,
             context.shaderPathResolver,
@@ -303,7 +303,7 @@ b8 InitializeDepthWarpProbeProject(
         auto pushLayoutResult = device.createBindingLayout(layoutDesc);
         if(!pushLayoutResult){
             outPushLayout.reset();
-            NWB_LOGGER_ERROR(NWB_TEXT("AvboitDepthWarpProbe: push layout creation failed"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AvboitDepthWarpProbe: push layout creation failed"));
             return false;
         }
         outPushLayout = Move(*pushLayoutResult);
@@ -320,7 +320,7 @@ b8 InitializeDepthWarpProbeProject(
         auto readbackResult = CreateDepthWarpProbeBuffer(Name(s_SmokeNameDepthWarpProbeReadback), s_AvboitDepthWarpBatchSize * s_AvboitDepthWarpResultWords, true, graphics);
         outReadback = readbackResult ? Move(*readbackResult) : Core::BufferHandle{};
         if(!pipelineResult || !coverageResult || !warpResult || !controlResult || !readbackResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("AvboitDepthWarpProbe: pipeline or buffer creation failed"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AvboitDepthWarpProbe: pipeline or buffer creation failed"));
             return false;
         }
         const Array<Core::BufferHandle, 3u> buffers{ outCoverage, outWarp, outControl };
@@ -329,7 +329,7 @@ b8 InitializeDepthWarpProbeProject(
             if(descriptor)
                 outDescriptors[index] = *descriptor;
             if(!descriptor || !heap.write(outDescriptors[index], Core::DescriptorWriteItem::StructuredBufferUav(0u, buffers[index].get()))){
-                NWB_LOGGER_ERROR(NWB_TEXT("AvboitDepthWarpProbe: storage descriptor setup failed at index {}"), index);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("AvboitDepthWarpProbe: storage descriptor setup failed at index {}"), index);
                 return false;
             }
         }
@@ -348,7 +348,7 @@ b8 InitializeDepthWarpProbeProject(
         if(slotsDescriptor)
             outDescriptors[3] = *slotsDescriptor;
         if(!slotsResult || !slotsDescriptor || !heap.write(outDescriptors[3], Core::DescriptorWriteItem::ConstantBuffer(0u, outSlots.get()))){
-            NWB_LOGGER_ERROR(NWB_TEXT("AvboitDepthWarpProbe: slot payload setup failed"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AvboitDepthWarpProbe: slot payload setup failed"));
             return false;
         }
         context.graphics.addRenderPassToBack(unfocusedPass);
@@ -374,7 +374,7 @@ b8 CompareDepthWarpProbeBatch(mut ProjectRuntimeContext context, in BufferHandle
         auto& device = context.graphics.getDevice();
         const Expected<void*> mappedResult = device.mapBuffer(*readback, Core::CpuAccessMode::Read);
         if(!mappedResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("AvboitDepthWarpProbe: readback mapping failed at case {}"), payload.firstCase);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AvboitDepthWarpProbe: readback mapping failed at case {}"), payload.firstCase);
             return false;
         }
         ScopeExit unmap([&]()noexcept{ device.unmapBuffer(*readback); });
@@ -420,11 +420,11 @@ b8 RunDepthWarpProbeProjectUpdate(
             payload.caseCount = Min(s_AvboitDepthWarpBatchSize, static_cast<u32>(cases.size()) - firstCase);
             const auto token = context.graphics.standaloneGraph().submitStandaloneTaskGraph(&payload, DeclareDepthWarpBatch);
             if(!token){
-                NWB_LOGGER_ERROR(NWB_TEXT("AvboitDepthWarpProbe: batch submission failed at case {}"), firstCase);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("AvboitDepthWarpProbe: batch submission failed at case {}"), firstCase);
                 return false;
             }
             if(!context.graphics.getDevice().waitForSubmissionToken(*token)){
-                NWB_LOGGER_ERROR(NWB_TEXT("AvboitDepthWarpProbe: batch completion wait failed at case {}"), firstCase);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("AvboitDepthWarpProbe: batch completion wait failed at case {}"), firstCase);
                 return false;
             }
             if(!CompareDepthWarpProbeBatch(context, readback, payload))

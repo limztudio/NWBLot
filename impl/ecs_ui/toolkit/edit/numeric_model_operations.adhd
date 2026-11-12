@@ -105,7 +105,7 @@ template<typename Canonicalize>
     return result;
 }
 
-[[nodiscard]] NWB_INLINE Expected<b8, ErrorCode> CanonicalizeDraft(const Expected<AStringView, ErrorCode>& formatted, EditModel& inOutDraft, AString<Core::Alloc::GlobalArena>& outAcceptedDraft){
+[[nodiscard]] FOUNDATION_INLINE Expected<b8, ErrorCode> CanonicalizeDraft(const Expected<AStringView, ErrorCode>& formatted, EditModel& inOutDraft, AString<Core::Alloc::GlobalArena>& outAcceptedDraft){
     if(!formatted)
         return MakeUnexpected(formatted.error());
     const b8 changed = HasCanonicalDraftChanged(*formatted, inOutDraft.text());
@@ -114,17 +114,17 @@ template<typename Canonicalize>
 }
 
 template<typename Value, typename Formatter>
-[[nodiscard]] NWB_INLINE Expected<b8, ErrorCode> FormatCanonicalDraft(const Value value, Formatter formatter, EditModel& inOutDraft, AString<Core::Alloc::GlobalArena>& outAcceptedDraft){
+[[nodiscard]] FOUNDATION_INLINE Expected<b8, ErrorCode> FormatCanonicalDraft(const Value value, Formatter formatter, EditModel& inOutDraft, AString<Core::Alloc::GlobalArena>& outAcceptedDraft){
     Array<char, s_NumericEditMaxBytes> buffer{};
     return CanonicalizeDraft(formatter(value, buffer), inOutDraft, outAcceptedDraft);
 }
 
-[[nodiscard]] NWB_INLINE b8 SetDraftText(const AStringView text, EditModel& inOutDraft, u64& inOutRevision){
+[[nodiscard]] FOUNDATION_INLINE b8 SetDraftText(const AStringView text, EditModel& inOutDraft, u64& inOutRevision){
     return FinalizeNumericDraftTextUpdate(inOutDraft.setText(text), inOutRevision);
 }
 
 template<typename Canonicalize>
-[[nodiscard]] NWB_INLINE NumericEditResult RestoreModelDraft(Canonicalize canonicalize, const b8 cancelled, u64& inOutRevision)noexcept(noexcept(RestoreDraft(Move(canonicalize), cancelled))){
+[[nodiscard]] FOUNDATION_INLINE NumericEditResult RestoreModelDraft(Canonicalize canonicalize, const b8 cancelled, u64& inOutRevision)noexcept(noexcept(RestoreDraft(Move(canonicalize), cancelled))){
     NumericEditResult result = RestoreDraft(Move(canonicalize), cancelled);
     if(result.valid)
         AdvanceNonWrappingRevision(inOutRevision);

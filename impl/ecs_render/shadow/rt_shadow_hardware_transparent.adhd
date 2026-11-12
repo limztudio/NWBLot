@@ -78,7 +78,7 @@ b8 HardwareTransparentShadowResources::prepareHardwareTransparentShadowResources
     if(!heap.isInitialized() || !heap.hasAccelStructLayout())
         return false;
     if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(HardwareTransparentShadowPushConstants), Core::ShaderType::Compute, state.m_bindingLayout)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create hardware transparent-shadow binding layout"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create hardware transparent-shadow binding layout"));
         state.m_pipelineFailed = true;
         return false;
     }
@@ -95,7 +95,7 @@ b8 HardwareTransparentShadowResources::prepareHardwareTransparentShadowResources
             return false;
         }
         if(!RendererComputePipelineDetail::CreateHeapComputePipeline(device, state.m_shaders[i], state.m_bindingLayout, true, state.m_pipelines[i])){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create hardware transparent-shadow pipeline {}"), i);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create hardware transparent-shadow pipeline {}"), i);
             state.m_pipelineFailed = true;
             return false;
         }
@@ -135,12 +135,12 @@ b8 HardwareTransparentShadowResources::prepareHardwareTransparentShadowResources
             else
                 buffers[i].reset();
             if(!buffersResult){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create hardware transparent-shadow scratch {}"), i);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create hardware transparent-shadow scratch {}"), i);
                 return false;
             }
             const auto descriptor = RayTracingDetail::RegisterHeapBuffer(heap, *buffers[i], Core::GpuDescriptorClass::StorageBuffer, true);
             if(!descriptor){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create hardware transparent-shadow scratch {}"), i);
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create hardware transparent-shadow scratch {}"), i);
                 return false;
             }
             descriptors[i] = *descriptor;
@@ -181,7 +181,7 @@ b8 RendererRayTracingSystem::hardwareTransparentShadowReady()const noexcept{
 
 void RendererRayTracingSystem::dispatchHardwareTransparentShadow(Core::CommandList& commandList, DeferredFrameTargets& targets, const u32 frameIndex){
     auto& state = m_rayTracingState.m_hardwareTransparentShadow;
-    NWB_ASSERT(state.m_ready);
+    FOUNDATION_ASSERT(state.m_ready);
     auto& device = m_graphics.getDevice();
     auto& heap = device.getDescriptorHeap();
     const ShadowHardwareTransparentGrid2D dispatchGrid = ResolveHardwareTransparentDispatchGrid(
@@ -213,7 +213,7 @@ void RendererRayTracingSystem::dispatchHardwareTransparentShadow(Core::CommandLi
             PopulateHardwareTransparentSlotSamplePush(slot, sample, push);
             const Array<u32, NWB_HW_TRANSPARENT_OVERFLOW_ARGS_WORDS> emptyArgs = MakeEmptyHardwareTransparentOverflowArgs();
             if(!commandList.tryWriteBuffer(*state.m_overflowArgsBuffer, emptyArgs.data(), sizeof(emptyArgs))){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to reset hardware transparent-shadow continuation arguments"));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to reset hardware transparent-shadow continuation arguments"));
                 return;
             }
             commandList.setBufferState(state.m_crossingsBuffer.get(), Core::ResourceStates::UnorderedAccess, true);

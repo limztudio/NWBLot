@@ -439,7 +439,7 @@ using ::NWB::Impl::Ui::s_GlyphAtlasNoPage;
 using ::NWB::Impl::Ui::s_GlyphAtlasMaxPages;
 using ::NWB::Impl::Ui::s_GlyphAtlasPageExtent;
 
-[[nodiscard]] NWB_INLINE Expected<Rect> UiTextGlyphCoverageRect(
+[[nodiscard]] FOUNDATION_INLINE Expected<Rect> UiTextGlyphCoverageRect(
     const ::NWB::Impl::Ui::PlacedGlyph& glyph,
     const ::NWB::Impl::Ui::AtlasGlyph& record,
     const f32 scale,
@@ -449,7 +449,7 @@ using ::NWB::Impl::Ui::s_GlyphAtlasPageExtent;
     return ::NWB::Impl::Ui::TextGlyphVisibility::CoverageRectangle(glyph, record, scale, origin, pixelScale);
 }
 
-[[nodiscard]] NWB_INLINE TextGlyphIntersectionEnum UiTextGlyphCandidateNoAtlas(
+[[nodiscard]] FOUNDATION_INLINE TextGlyphIntersectionEnum UiTextGlyphCandidateNoAtlas(
     const ::NWB::Impl::Ui::PlacedGlyph& glyph,
     const f32 fontSize,
     const f32 physicalSize,
@@ -460,7 +460,7 @@ using ::NWB::Impl::Ui::s_GlyphAtlasPageExtent;
     return ::NWB::Impl::Ui::TextGlyphVisibility::Candidate(glyph, nullptr, fontSize, physicalSize, origin, clip, pixelScale);
 }
 
-[[nodiscard]] NWB_INLINE TextGlyphIntersectionEnum UiTextGlyphCandidateWithAtlas(
+[[nodiscard]] FOUNDATION_INLINE TextGlyphIntersectionEnum UiTextGlyphCandidateWithAtlas(
     const ::NWB::Impl::Ui::PlacedGlyph& glyph,
     const ::NWB::Impl::Ui::SharedBakedFontAtlas& atlas,
     const f32 fontSize,
@@ -471,7 +471,7 @@ using ::NWB::Impl::Ui::s_GlyphAtlasPageExtent;
     return ::NWB::Impl::Ui::TextGlyphVisibility::Candidate(glyph, atlas.get(), fontSize, physicalSize, origin, clip);
 }
 
-[[nodiscard]] NWB_INLINE Expected<Rect> UiTextGlyphAtlasRect(
+[[nodiscard]] FOUNDATION_INLINE Expected<Rect> UiTextGlyphAtlasRect(
     const ::NWB::Impl::Ui::PlacedGlyph& glyph,
     const ::NWB::Impl::Ui::SharedBakedFontAtlas& atlas,
     const f32 fontSize,
@@ -480,7 +480,7 @@ using ::NWB::Impl::Ui::s_GlyphAtlasPageExtent;
     return ::NWB::Impl::Ui::TextGlyphVisibility::AtlasRectangle(glyph, *atlas, fontSize, origin);
 }
 
-[[nodiscard]] NWB_INLINE StringView MakeUiTextLayoutNullByteView()noexcept{
+[[nodiscard]] FOUNDATION_INLINE StringView MakeUiTextLayoutNullByteView()noexcept{
     return StringView("\0", 1u);
 }
 };

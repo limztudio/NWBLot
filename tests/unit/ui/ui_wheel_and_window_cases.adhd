@@ -44,16 +44,16 @@ using ShaderFloat4 = ::__hidden_ui_glyph_sdf_tests::ShaderFloat4;
 using float4 = ShaderFloat4;
 using uint = u32;
 
-[[nodiscard]] NWB_INLINE ShaderFloat4 operator*(const ShaderFloat4 value, const f32 scale)noexcept{
+[[nodiscard]] FOUNDATION_INLINE ShaderFloat4 operator*(const ShaderFloat4 value, const f32 scale)noexcept{
     const SIMDVectorSingle scaled = VectorScale(VectorSet(value.x, value.y, value.z, value.w), scale);
     return { .x = VectorGetX(scaled), .y = VectorGetY(scaled), .z = VectorGetZ(scaled), .w = VectorGetW(scaled) };
 }
 
-[[nodiscard]] NWB_INLINE f32 saturate(const f32 value)noexcept{
+[[nodiscard]] FOUNDATION_INLINE f32 saturate(const f32 value)noexcept{
     return value > 0.0f ? Min(1.0f, value) : 0.0f;
 }
 
-[[nodiscard]] NWB_INLINE f32 max(const f32 first, const f32 second)noexcept{
+[[nodiscard]] FOUNDATION_INLINE f32 max(const f32 first, const f32 second)noexcept{
     return Max(first, second);
 }
 
@@ -226,11 +226,11 @@ using ::NWB::Impl::Ui::TryInitializeWindow;
 using ::NWB::Impl::Ui::TryApplyWindowMove;
 using ::NWB::Impl::Ui::TryApplyWindowResize;
 
-[[nodiscard]] NWB_INLINE f32 UiGlyphSdfDistance(const f32 encoded, const u32 spreadPixels)noexcept{
+[[nodiscard]] FOUNDATION_INLINE f32 UiGlyphSdfDistance(const f32 encoded, const u32 spreadPixels)noexcept{
     return ::__hidden_ui_glyph_sdf_slang_tests::nwbUiSdfDistance(encoded, spreadPixels);
 }
 
-[[nodiscard]] NWB_INLINE f32 UiGlyphSdfCoverage(const f32 distance, const f32 pixelWidth)noexcept{
+[[nodiscard]] FOUNDATION_INLINE f32 UiGlyphSdfCoverage(const f32 distance, const f32 pixelWidth)noexcept{
     return ::__hidden_ui_glyph_sdf_slang_tests::nwbUiSdfCoverage(distance, pixelWidth);
 }
 
@@ -239,10 +239,10 @@ b8 QueueUiWheelPointer(UiWheelInputTests& self, const ::NWB::Impl::Ui::Point& po
 };
 
 namespace __hidden_ui_wheel_input_tests{
-NWB_INLINE InputRoutingResult UiWheelInputTests::wheel(const f64 deltaX, const f64 deltaY, const Point position){
+FOUNDATION_INLINE InputRoutingResult UiWheelInputTests::wheel(const f64 deltaX, const f64 deltaY, const Point position){
     return ::__hidden_ui_glyph_sdf_tests::SendUiWheelInput(*this, deltaX, deltaY, position);
 }
-NWB_INLINE b8 UiWheelInputTests::queuePointer(const Point& position, const InputEventType::Enum type){
+FOUNDATION_INLINE b8 UiWheelInputTests::queuePointer(const Point& position, const InputEventType::Enum type){
     return ::__hidden_ui_glyph_sdf_tests::QueueUiWheelPointer(*this, position, type);
 }
 };

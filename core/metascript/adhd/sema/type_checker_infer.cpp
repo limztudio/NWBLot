@@ -79,8 +79,11 @@ MStringView TypeChecker::inferExprTypeName(const ClassDecl* ownerClass, const Me
             const MStringView recvBase = inferExprTypeName(ownerClass, method, *expr.lhs->lhs, scope);
             const MStringView mName = expr.lhs->text;
             if(!m_symbols.hasTypeSymbol(recvBase) && !FindTemplateParam(ownerClass, method, recvBase)){
-                if(const BuiltinReceiverMethodInfo* recvMethod = FindBuiltinReceiverMethod(recvBase, mName))
+                if(const BuiltinReceiverMethodInfo* recvMethod = FindBuiltinReceiverMethod(recvBase, mName)){
+                    if(recvMethod->returnTypeName.empty() && !expr.callTemplateArgs.empty() && expr.callTemplateArgs[0].type)
+                        return m_symbols.resolveBaseTypeName(expr.callTemplateArgs[0].type->name);
                     return recvMethod->returnTypeName;
+                }
                 if(const BuiltinMemberMethodInfo* memberInfo = FindBuiltinMemberMethod(mName)){
                     if(memberInfo->returnRule == BuiltinMemberReturnRule::FixedType)
                         return memberInfo->returnTypeName;
@@ -97,9 +100,22 @@ MStringView TypeChecker::inferExprTypeName(const ClassDecl* ownerClass, const Me
             && expr.lhs->scopeChain.size() == 2u
             && !FindScopedVar(scope, expr.lhs->scopeChain[0])
             && !m_symbols.findGlobalConstant(expr.lhs->scopeChain[0])
-            && !m_symbols.hasTypeSymbol(expr.lhs->scopeChain[0])
-        )
-            fnInfo = FindBuiltinScopedFunction(expr.lhs->scopeChain[0], expr.lhs->scopeChain[1]);
+        ){
+            if(const ClassDecl* scopedCls = m_symbols.findClass(m_symbols.resolveBaseTypeName(expr.lhs->scopeChain[0]))){
+                if(
+                    (!scopedCls->assetTypeName.empty() && expr.lhs->scopeChain[1] == "AssetTypeName")
+                    || (!scopedCls->systemTypeName.empty() && expr.lhs->scopeChain[1] == "SystemTypeName")
+                    || (!scopedCls->componentTypeName.empty() && expr.lhs->scopeChain[1] == "ComponentTypeName")
+                )
+                    return "Name";
+            }
+            if(const InterfaceDecl* scopedIface = m_symbols.findInterface(m_symbols.resolveBaseTypeName(expr.lhs->scopeChain[0]))){
+                if(!scopedIface->assetTypeName.empty() && expr.lhs->scopeChain[1] == "AssetTypeName")
+                    return "Name";
+            }
+            if(!m_symbols.hasTypeSymbol(expr.lhs->scopeChain[0]))
+                fnInfo = FindBuiltinScopedFunction(expr.lhs->scopeChain[0], expr.lhs->scopeChain[1]);
+        }
         if(fnInfo){
             if(fnInfo->returnRule == BuiltinFunctionReturnRule::FixedType)
                 return fnInfo->returnTypeName;
@@ -154,11 +170,31 @@ MStringView TypeChecker::inferExprTypeName(const ClassDecl* ownerClass, const Me
             && expr.scopeChain.size() == 2u
             && !FindScopedVar(scope, expr.scopeChain[0])
             && !m_symbols.findGlobalConstant(expr.scopeChain[0])
-            && !m_symbols.hasTypeSymbol(expr.scopeChain[0])
-            && !HasBuiltinEnumEntry(expr.scopeChain[0], expr.scopeChain[1])
         ){
-            if(const BuiltinGlobalConstantInfo* scopedConst = FindBuiltinScopedConstant(expr.scopeChain[0], expr.scopeChain[1]))
-                return scopedConst->adhdTypeName;
+            if(const ClassDecl* scopedCls = m_symbols.findClass(m_symbols.resolveBaseTypeName(expr.scopeChain[0]))){
+                if(
+                    (!scopedCls->assetTypeName.empty() && expr.scopeChain[1] == "s_AssetTypeName")
+                    || (!scopedCls->systemTypeName.empty() && expr.scopeChain[1] == "s_SystemTypeName")
+                    || (!scopedCls->componentTypeName.empty() && expr.scopeChain[1] == "s_ComponentTypeName")
+                )
+                    return "Name";
+                if(
+                    (!scopedCls->assetTypeName.empty() && expr.scopeChain[1] == "s_AssetTypeText")
+                    || (!scopedCls->systemTypeName.empty() && expr.scopeChain[1] == "s_SystemTypeText")
+                    || (!scopedCls->componentTypeName.empty() && expr.scopeChain[1] == "s_ComponentTypeText")
+                )
+                    return "StringView";
+            }
+            if(const InterfaceDecl* scopedIface = m_symbols.findInterface(m_symbols.resolveBaseTypeName(expr.scopeChain[0]))){
+                if(!scopedIface->assetTypeName.empty() && expr.scopeChain[1] == "s_AssetTypeName")
+                    return "Name";
+                if(!scopedIface->assetTypeName.empty() && expr.scopeChain[1] == "s_AssetTypeText")
+                    return "StringView";
+            }
+            if(!m_symbols.hasTypeSymbol(expr.scopeChain[0]) && !HasBuiltinEnumEntry(expr.scopeChain[0], expr.scopeChain[1])){
+                if(const BuiltinGlobalConstantInfo* scopedConst = FindBuiltinScopedConstant(expr.scopeChain[0], expr.scopeChain[1]))
+                    return scopedConst->adhdTypeName;
+            }
         }
         return resolveScopeAccessEnumTypeName(ownerClass, method, expr, scope);
     }
@@ -435,12 +471,41 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
                 if(const TypeRef* ft = m_symbols.unwrapTypeAlias(field->type); ft && ft->isFuncType && ft->funcReturnType)
                     return m_symbols.unwrapTypeAlias(ft->funcReturnType);
             }
-            if(!ownerClass->assetTypeName.empty() || !ownerClass->subsystemTypeName.empty() || !ownerClass->componentAssetTypeName.empty()){
-                if(const BuiltinReceiverMethodInfo* recvMethod = FindBuiltinReceiverMethod("IAsset", expr.lhs->text); recvMethod && !recvMethod->returnTypeName.empty()){
-                    TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
-                    synth->name = recvMethod->returnTypeName;
-                    return synth;
+            const BuiltinReceiverMethodInfo* inheritedRecv = nullptr;
+            if(!ownerClass->assetTypeName.empty() || !ownerClass->subsystemTypeName.empty())
+                inheritedRecv = FindBuiltinReceiverMethod("IAsset", expr.lhs->text);
+            else if(!ownerClass->systemTypeName.empty())
+                inheritedRecv = FindBuiltinReceiverMethod("ISystem", expr.lhs->text);
+            if(!inheritedRecv){
+                for(const TypeRef* iface : ownerClass->implementedInterfaces){
+                    if(!iface)
+                        continue;
+                    const MStringView ifaceName = m_symbols.resolveBaseTypeName(iface->name);
+                    if(!m_symbols.findInterface(ifaceName)){
+                        inheritedRecv = FindBuiltinReceiverMethod(ifaceName, expr.lhs->text);
+                        if(inheritedRecv)
+                            break;
+                    }
                 }
+            }
+            if(inheritedRecv && !inheritedRecv->returnTypeName.empty()){
+                TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
+                synth->name = inheritedRecv->returnTypeName;
+                if(!inheritedRecv->returnTypeArgName.empty()){
+                    TypeRef* valType = AllocateAstNode<TypeRef>(m_arena);
+                    valType->name = inheritedRecv->returnTypeArgName;
+                    TypeArg valArg;
+                    valArg.type = valType;
+                    synth->templateArgs.push_back(valArg);
+                }
+                if(!inheritedRecv->returnErrorTypeName.empty()){
+                    TypeRef* errType = AllocateAstNode<TypeRef>(m_arena);
+                    errType->name = inheritedRecv->returnErrorTypeName;
+                    TypeArg errArg;
+                    errArg.type = errType;
+                    synth->templateArgs.push_back(errArg);
+                }
+                return synth;
             }
         }
         else if(expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
@@ -471,17 +536,53 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
                     if(const TypeRef* uft = m_symbols.unwrapTypeAlias(ft); uft && uft->isFuncType && uft->funcReturnType)
                         return m_symbols.unwrapTypeAlias(uft->funcReturnType);
                 }
-                if(!cls->assetTypeName.empty() || !cls->subsystemTypeName.empty() || !cls->componentAssetTypeName.empty()){
-                    if(const BuiltinReceiverMethodInfo* recvMethod = FindBuiltinReceiverMethod("IAsset", mName); recvMethod && !recvMethod->returnTypeName.empty()){
+                const BuiltinReceiverMethodInfo* inheritedRecv = nullptr;
+                if(!cls->assetTypeName.empty() || !cls->subsystemTypeName.empty())
+                    inheritedRecv = FindBuiltinReceiverMethod("IAsset", mName);
+                else if(!cls->systemTypeName.empty())
+                    inheritedRecv = FindBuiltinReceiverMethod("ISystem", mName);
+                if(!inheritedRecv){
+                    for(const TypeRef* iface : cls->implementedInterfaces){
+                        if(!iface)
+                            continue;
+                        const MStringView ifaceName = m_symbols.resolveBaseTypeName(iface->name);
+                        if(!m_symbols.findInterface(ifaceName)){
+                            inheritedRecv = FindBuiltinReceiverMethod(ifaceName, mName);
+                            if(inheritedRecv)
+                                break;
+                        }
+                    }
+                }
+                if(inheritedRecv && !inheritedRecv->returnTypeName.empty()){
+                    TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
+                    synth->name = inheritedRecv->returnTypeName;
+                    if(!inheritedRecv->returnTypeArgName.empty()){
+                        TypeRef* valType = AllocateAstNode<TypeRef>(m_arena);
+                        valType->name = inheritedRecv->returnTypeArgName;
+                        TypeArg valArg;
+                        valArg.type = valType;
+                        synth->templateArgs.push_back(valArg);
+                    }
+                    if(!inheritedRecv->returnErrorTypeName.empty()){
+                        TypeRef* errType = AllocateAstNode<TypeRef>(m_arena);
+                        errType->name = inheritedRecv->returnErrorTypeName;
+                        TypeArg errArg;
+                        errArg.type = errType;
+                        synth->templateArgs.push_back(errArg);
+                    }
+                    return synth;
+                }
+            }
+            else if(const InterfaceDecl* ifaceDecl = recvTypeRef ? m_symbols.findInterface(lhsType) : nullptr){
+                if(const MethodDecl* m = m_symbols.findInterfaceMethod(*recvTypeRef, mName, &callArgCount, 0u, argTypeHints, argIsMutHints); m && m->returnType)
+                    return m_symbols.unwrapTypeAlias(m->returnType);
+                if(!ifaceDecl->assetTypeName.empty()){
+                    if(const BuiltinReceiverMethodInfo* inheritedRecv = FindBuiltinReceiverMethod("IAsset", mName); inheritedRecv && !inheritedRecv->returnTypeName.empty()){
                         TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
-                        synth->name = recvMethod->returnTypeName;
+                        synth->name = inheritedRecv->returnTypeName;
                         return synth;
                     }
                 }
-            }
-            else if(recvTypeRef && m_symbols.findInterface(lhsType)){
-                if(const MethodDecl* m = m_symbols.findInterfaceMethod(*recvTypeRef, mName, &callArgCount, 0u, argTypeHints, argIsMutHints); m && m->returnType)
-                    return m_symbols.unwrapTypeAlias(m->returnType);
             }
             else if(const TemplateParamDecl* tp = FindTemplateParam(ownerClass, method, lhsType)){
                 for(const TypeRef* boundRef : tp->interfaceBounds){
@@ -493,6 +594,8 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
             }
             else if(!m_symbols.hasTypeSymbol(lhsType)){
                 if(const BuiltinReceiverMethodInfo* recvMethod = FindBuiltinReceiverMethod(lhsType, mName); recvMethod && recvMethod->synthesizeTypeRef){
+                    if(recvMethod->returnTypeName.empty() && !expr.callTemplateArgs.empty() && expr.callTemplateArgs[0].type)
+                        return m_symbols.unwrapTypeAlias(expr.callTemplateArgs[0].type);
                     TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
                     synth->name = recvMethod->returnTypeName;
                     if(!recvMethod->returnTypeArgName.empty()){

@@ -20,11 +20,11 @@ native{
 #endif
 
 namespace NWB::Tests::Smoke{
-[[nodiscard]] NWB_INLINE AStringView StressTestProjectName()noexcept{
+[[nodiscard]] FOUNDATION_INLINE AStringView StressTestProjectName()noexcept{
     return "StressTestSmokeProject";
 }
 
-[[nodiscard]] NWB_INLINE AStringView StressCpuTimingOwnerName()noexcept{
+[[nodiscard]] FOUNDATION_INLINE AStringView StressCpuTimingOwnerName()noexcept{
     return "stress";
 }
 
@@ -610,11 +610,11 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{
 #if defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)
-    return NWB_TEXT("NWB Hardware Shadow Boundary Benchmark");
+    return FOUNDATION_TEXT("NWB Hardware Shadow Boundary Benchmark");
 #elif defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
-    return NWB_TEXT("NWB Async Shadow M4 Benchmark");
+    return FOUNDATION_TEXT("NWB Async Shadow M4 Benchmark");
 #else
-    return NWB_TEXT("NWB Stress Test Smoke");
+    return FOUNDATION_TEXT("NWB Stress Test Smoke");
 #endif
 }
 

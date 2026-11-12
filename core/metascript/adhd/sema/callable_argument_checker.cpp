@@ -64,6 +64,26 @@ b8 CallableArgumentChecker::check(
                 expectedParamTypeRef = subParamType;
                 expectedParamType = m_checker.m_symbols.resolveBaseTypeName(subParamType->name);
                 LambdaCaptureAnalyzer(scope, m_checker.m_symbols).propagateFuncCaptureBytes(targetCallable->params[i].type, arg);
+                if(targetOwnerCls){
+                    if(const TypeRef* paramFunc = TypeResolver(m_checker.m_symbols).extractUnderlyingFuncType(targetCallable->params[i].type); paramFunc && paramFunc->inferredCaptureBytes > 0u){
+                        for(FieldDecl* clsField : targetOwnerCls->fields){
+                            if(!clsField || !clsField->type)
+                                continue;
+                            if(TypeRef* fieldFunc = TypeResolver(m_checker.m_symbols).extractUnderlyingFuncType(clsField->type); fieldFunc && fieldFunc->inferredCaptureBytes < paramFunc->inferredCaptureBytes)
+                                fieldFunc->inferredCaptureBytes = paramFunc->inferredCaptureBytes;
+                        }
+                        for(MethodDecl* clsMethod : targetOwnerCls->methods){
+                            if(!clsMethod || !clsMethod->isConstructor)
+                                continue;
+                            for(ParamDecl& ctorParam : clsMethod->params){
+                                if(!ctorParam.type)
+                                    continue;
+                                if(TypeRef* ctorParamFunc = TypeResolver(m_checker.m_symbols).extractUnderlyingFuncType(ctorParam.type); ctorParamFunc && ctorParamFunc->inferredCaptureBytes < paramFunc->inferredCaptureBytes)
+                                    ctorParamFunc->inferredCaptureBytes = paramFunc->inferredCaptureBytes;
+                            }
+                        }
+                    }
+                }
             }
         }
         else if(invokedFuncType && invokedFuncType->isFuncType && i < invokedFuncType->funcParams.size()){
@@ -89,11 +109,15 @@ b8 CallableArgumentChecker::check(
                 if(i == 0u && memberInfo->adaptsFirstArgToElement && recvTypeRef->templateArgs[0].type){
                     expectedParamTypeRef = recvTypeRef->templateArgs[0].type;
                     expectedParamType = m_checker.m_symbols.resolveBaseTypeName(expectedParamTypeRef->name);
+                    if(m_checker.m_symbols.resolveRefMode(expectedParamTypeRef) == ParamPassingMode::Mut)
+                        paramIsMut = true;
                     LambdaCaptureAnalyzer(scope, m_checker.m_symbols).propagateFuncCaptureBytes(expectedParamTypeRef, arg);
                 }
                 else if(i == 1u && memberInfo->adaptsSecondArgToElement && recvTypeRef->templateArgs.size() >= 2u && recvTypeRef->templateArgs[1].type){
                     expectedParamTypeRef = recvTypeRef->templateArgs[1].type;
                     expectedParamType = m_checker.m_symbols.resolveBaseTypeName(expectedParamTypeRef->name);
+                    if(m_checker.m_symbols.resolveRefMode(expectedParamTypeRef) == ParamPassingMode::Mut)
+                        paramIsMut = true;
                     LambdaCaptureAnalyzer(scope, m_checker.m_symbols).propagateFuncCaptureBytes(expectedParamTypeRef, arg);
                 }
             }
@@ -102,11 +126,18 @@ b8 CallableArgumentChecker::check(
             expectedParamType = builtinArgRule->expectedParamType;
             paramIsMut = builtinArgRule->isMut;
         }
+        const b8 wrapContainerRefElement = !targetCallable
+            && !invokedFuncType
+            && !localCallable
+            && expectedParamTypeRef
+            && m_checker.m_symbols.resolveRefMode(expectedParamTypeRef) != ParamPassingMode::None;
         arg->isMutArg = paramIsMut || IsBorrowViewType(expectedParamType);
         if(RequiresTCharAdaptation(expectedParamType))
             m_checker.markStringToPathAdaptation(ownerClass, &method, scope, *arg);
         if(!m_checker.checkExpr(ownerClass, scope, paramIsMut, method, *arg, errors))
             ok = false;
+        if(wrapContainerRefElement)
+            arg->wrapInNotNull = true;
         if(builtinFnInfo && builtinFnInfo->wrapsFormatArgs && i >= builtinFnInfo->minArity){
             const MStringView fmtArgType = m_checker.inferExprBaseType(ownerClass, &method, *arg, scope);
             if(!m_checker.m_symbols.hasTypeSymbol(fmtArgType)){

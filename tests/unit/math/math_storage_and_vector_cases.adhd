@@ -47,12 +47,12 @@ template<typename Storage, usize LogicalCount, typename Source>
         Array<u64, 4> neighbor{};
     };
     StorageRecord record{};
-    NWB_MEMSET(&record, 0xa5, sizeof(record));
+    FOUNDATION_MEMSET(&record, 0xa5, sizeof(record));
     const Array<u64, 3> poison = { 0x7ff0000000000000u, 0x7ff8000000001234u, 0xfff0000000000000u };
     const usize logicalBytes = LogicalCount * sizeof(f64);
-    NWB_MEMCPY(reinterpret_cast<u8*>(&record.value) + logicalBytes, sizeof(Storage) - logicalBytes, poison.data(), sizeof(Storage) - logicalBytes);
+    FOUNDATION_MEMCPY(reinterpret_cast<u8*>(&record.value) + logicalBytes, sizeof(Storage) - logicalBytes, poison.data(), sizeof(Storage) - logicalBytes);
     Array<u8, sizeof(StorageRecord)> original{};
-    NWB_MEMCPY(original.data(), original.size(), &record, sizeof(record));
+    FOUNDATION_MEMCPY(original.data(), original.size(), &record, sizeof(record));
     if(stream){
         StreamDouble(source, record.value);
         StreamDoubleFence();
@@ -71,8 +71,8 @@ template<typename Storage, usize LogicalCount, typename Source>
 template<typename Storage, usize LogicalCount>
 void PoisonDoubleStoragePadding(Storage& lhs, Storage& rhs)noexcept{
     const usize logicalBytes = LogicalCount * sizeof(f64);
-    NWB_MEMSET(reinterpret_cast<u8*>(&lhs) + logicalBytes, 0x7f, sizeof(Storage) - logicalBytes);
-    NWB_MEMSET(reinterpret_cast<u8*>(&rhs) + logicalBytes, 0xff, sizeof(Storage) - logicalBytes);
+    FOUNDATION_MEMSET(reinterpret_cast<u8*>(&lhs) + logicalBytes, 0x7f, sizeof(Storage) - logicalBytes);
+    FOUNDATION_MEMSET(reinterpret_cast<u8*>(&rhs) + logicalBytes, 0xff, sizeof(Storage) - logicalBytes);
 }
 
 struct DoubleTransformStreamFixture{
@@ -98,25 +98,25 @@ struct DoubleTransformStreamFixture{
     Array<u8, sizeof(pairs)> pairOriginal{};
 
     DoubleTransformStreamFixture()noexcept{
-        NWB_MEMSET(aligned.data(), 0xa5, sizeof(aligned));
-        NWB_MEMSET(unaligned.data(), 0x5a, sizeof(unaligned));
+        FOUNDATION_MEMSET(aligned.data(), 0xa5, sizeof(aligned));
+        FOUNDATION_MEMSET(unaligned.data(), 0x5a, sizeof(unaligned));
         const u64 poison = 0x7ff8000000001234u;
         for(usize index = 0u; index < LengthOf(aligned); ++index){
             const f64 position = static_cast<f64>(index);
             const f64 x = 0.25 * position + (0x1p+40 + 0.25);
             const f64 y = (position - 1.0) * 0x1p-40;
             StoreDouble(VectorDoubleSet(x, y, 1.0 + 0x1p-52, Limit<f64>::s_Infinity), aligned[index].value);
-            NWB_MEMCPY(reinterpret_cast<u8*>(&aligned[index].value) + 3u * sizeof(f64), sizeof(aligned[index].value) - 3u * sizeof(f64), &poison, sizeof(poison));
+            FOUNDATION_MEMCPY(reinterpret_cast<u8*>(&aligned[index].value) + 3u * sizeof(f64), sizeof(aligned[index].value) - 3u * sizeof(f64), &poison, sizeof(poison));
         }
-        NWB_MEMCPY(alignedOriginal.data(), alignedOriginal.size(), aligned.data(), sizeof(aligned));
-        NWB_MEMCPY(unalignedOriginal.data(), unalignedOriginal.size(), unaligned.data(), sizeof(unaligned));
+        FOUNDATION_MEMCPY(alignedOriginal.data(), alignedOriginal.size(), aligned.data(), sizeof(aligned));
+        FOUNDATION_MEMCPY(unalignedOriginal.data(), unalignedOriginal.size(), unaligned.data(), sizeof(unaligned));
 
-        NWB_MEMSET(pairs.data(), 0xa5, sizeof(pairs));
+        FOUNDATION_MEMSET(pairs.data(), 0xa5, sizeof(pairs));
         for(usize index = 0u; index < LengthOf(pairs); ++index){
             StoreDouble(SIMDVectorDouble{ 0x1p+40 + 0.25, 1.0 + 0x1p-52, Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN }, pairs[index].value);
-            NWB_MEMCPY(reinterpret_cast<u8*>(&pairs[index].value) + 2u * sizeof(f64), sizeof(pairs[index].value) - 2u * sizeof(f64), &poison, sizeof(poison));
+            FOUNDATION_MEMCPY(reinterpret_cast<u8*>(&pairs[index].value) + 2u * sizeof(f64), sizeof(pairs[index].value) - 2u * sizeof(f64), &poison, sizeof(poison));
         }
-        NWB_MEMCPY(pairOriginal.data(), pairOriginal.size(), pairs.data(), sizeof(pairs));
+        FOUNDATION_MEMCPY(pairOriginal.data(), pairOriginal.size(), pairs.data(), sizeof(pairs));
     }
 
     [[nodiscard]] b8 alignedPaddingIntact(const usize index)const noexcept{
@@ -162,7 +162,7 @@ public:
 };
 
 template<typename Value, usize Count>
-NWB_NOINLINE b8 LegacyEqual(const Value& lhs, const Value& rhs)noexcept{
+FOUNDATION_NOINLINE b8 LegacyEqual(const Value& lhs, const Value& rhs)noexcept{
 #pragma STDC FENV_ACCESS ON
     for(usize lane = 0u; lane < Count; ++lane){
         if(lhs.raw[lane] != rhs.raw[lane])
@@ -173,7 +173,7 @@ NWB_NOINLINE b8 LegacyEqual(const Value& lhs, const Value& rhs)noexcept{
 
 #pragma STDC FENV_ACCESS OFF
 template<typename Value, usize Count>
-NWB_NOINLINE b8 DefaultContextLegacyEqual(const Value& lhs, const Value& rhs)noexcept{
+FOUNDATION_NOINLINE b8 DefaultContextLegacyEqual(const Value& lhs, const Value& rhs)noexcept{
     for(usize i = 0u; i < Count; ++i){
         if(lhs.raw[i] != rhs.raw[i])
             return false;
@@ -182,7 +182,7 @@ NWB_NOINLINE b8 DefaultContextLegacyEqual(const Value& lhs, const Value& rhs)noe
 }
 
 template<typename Value>
-NWB_NOINLINE b8 StorageEqual(const Value& lhs, const Value& rhs)noexcept{
+FOUNDATION_NOINLINE b8 StorageEqual(const Value& lhs, const Value& rhs)noexcept{
 #pragma STDC FENV_ACCESS ON
     return lhs == rhs;
 }
@@ -193,7 +193,7 @@ public:
     ExactFloatingPointEnvironmentGuard(ExactFloatingPointEnvironmentGuard&&) = delete;
     ~ExactFloatingPointEnvironmentGuard()noexcept{
         if(m_original && !SetFloatingPointEnvironment(*m_original))
-            NWB_ASSERT(false);
+            FOUNDATION_ASSERT(false);
     }
 
 
@@ -233,7 +233,7 @@ struct ExpectedVectorStorage{
 };
 
 template<typename Result>
-NWB_NOINLINE auto ReadExpectedVector(const Expected<Result>& result)noexcept{ return result->value; }
+FOUNDATION_NOINLINE auto ReadExpectedVector(const Expected<Result>& result)noexcept{ return result->value; }
 
 struct PageBoundaryCaseResult{
     b8 pageSizePositive = false;
@@ -261,7 +261,7 @@ struct PageBoundaryCaseResult{
 }
 
 [[nodiscard]] inline constexpr b8 HasSse2RawMxcsrSupport()noexcept{
-#if defined(NWB_HAS_SSE2)
+#if defined(FOUNDATION_HAS_SSE2)
     return true;
 #else
     return false;
@@ -301,7 +301,7 @@ template<typename Value, usize Count>
 }
 #endif
 
-[[nodiscard]] NWB_INLINE PageBoundaryCaseResult RunPageBoundaryCase([[maybe_unused]] const u32 caseIndex)noexcept{
+[[nodiscard]] FOUNDATION_INLINE PageBoundaryCaseResult RunPageBoundaryCase([[maybe_unused]] const u32 caseIndex)noexcept{
 #if defined(__linux__)
     switch(caseIndex){
     case 0u: return RunPageBoundaryTyped<RawEqualityStorage<b8, 1u>, 1u>();
@@ -337,7 +337,7 @@ void ObserveBooleanFallbackStep(const usize flipLane, b8& outInitialEqual, b8& o
     outRestoredEqual = StorageEqual(lhs, rhs);
 }
 
-NWB_INLINE void RunBooleanFallbackStepByIndex(const usize countIndex, const usize flipLane, b8& outInitialEqual, b8& outFlippedEqual, b8& outFlippedLegacy, b8& outRestoredEqual)noexcept{
+FOUNDATION_INLINE void RunBooleanFallbackStepByIndex(const usize countIndex, const usize flipLane, b8& outInitialEqual, b8& outFlippedEqual, b8& outFlippedLegacy, b8& outRestoredEqual)noexcept{
     switch(countIndex){
     case 0u: ObserveBooleanFallbackStep<1u>(flipLane, outInitialEqual, outFlippedEqual, outFlippedLegacy, outRestoredEqual); break;
     case 1u: ObserveBooleanFallbackStep<2u>(flipLane, outInitialEqual, outFlippedEqual, outFlippedLegacy, outRestoredEqual); break;
@@ -352,12 +352,12 @@ class MxcsrEqualityEnvironmentGuard final : NoCopy{
 public:
     MxcsrEqualityEnvironmentGuard()noexcept
         : m_original(GetFloatingPointEnvironment())
-#if defined(NWB_HAS_SSE2)
+#if defined(FOUNDATION_HAS_SSE2)
         , m_originalMxcsr(_mm_getcsr())
 #endif
         , m_held(HoldFloatingPointExceptions())
     {
-#if defined(NWB_HAS_SSE2)
+#if defined(FOUNDATION_HAS_SSE2)
         m_heldMxcsr = _mm_getcsr();
 #endif
     }
@@ -366,8 +366,8 @@ public:
 
     ~MxcsrEqualityEnvironmentGuard()noexcept{
         if(m_original && !SetFloatingPointEnvironment(*m_original))
-            NWB_ASSERT(false);
-#if defined(NWB_HAS_SSE2)
+            FOUNDATION_ASSERT(false);
+#if defined(FOUNDATION_HAS_SSE2)
         if(m_original)
             _mm_setcsr(m_originalMxcsr);
 #endif
@@ -378,7 +378,7 @@ public:
     [[nodiscard]] b8 valid()const noexcept{ return m_original.has_value() && m_held.has_value(); }
 
     void applyMode([[maybe_unused]] const u32 mode)const noexcept{
-#if defined(NWB_HAS_SSE2)
+#if defined(FOUNDATION_HAS_SSE2)
         _mm_setcsr((m_heldMxcsr & ~(0x8040u | 0x3Fu)) | mode);
 #endif
     }
@@ -386,14 +386,14 @@ public:
 
 private:
     Expected<FloatingPointEnvironment> m_original;
-#if defined(NWB_HAS_SSE2)
+#if defined(FOUNDATION_HAS_SSE2)
     u32 m_originalMxcsr = 0u;
     u32 m_heldMxcsr = 0u;
 #endif
     Expected<FloatingPointEnvironment> m_held;
 };
 
-#if defined(NWB_HAS_SSE2)
+#if defined(FOUNDATION_HAS_SSE2)
 template<typename Value, typename Compare>
 [[nodiscard]] Expected<NWB::Tests::MathCases::EqualityObservation> ObserveEquality(const Value& lhs, const Value& rhs, Compare compare)noexcept(noexcept(DeclVal<void(*)(b8)noexcept>()(compare(lhs, rhs))) && IsNothrowDestructible_V<Compare>){
 #pragma STDC FENV_ACCESS ON
@@ -732,7 +732,7 @@ void VerifyMath_DoubleTransformStreamsPreservePaddedStridesDuringAlignedUnaligne
         using AlignedRecord = DoubleTransformStreamFixture::AlignedRecord;
         using UnalignedRecord = DoubleTransformStreamFixture::UnalignedRecord;
         firstStreamPtrMatch = VectorDouble3TransformCoordStream(MakeNotNull(&fixture.unaligned[0].value), sizeof(UnalignedRecord), MakeNotNull<const Double3*>(&fixture.aligned[0].value), sizeof(AlignedRecord), 3u, matrix).get() == &fixture.unaligned[0].value;
-        sourceUnchangedCmp = NWB_MEMCMP(fixture.aligned.data(), fixture.alignedOriginal.data(), sizeof(fixture.aligned));
+        sourceUnchangedCmp = FOUNDATION_MEMCMP(fixture.aligned.data(), fixture.alignedOriginal.data(), sizeof(fixture.aligned));
     }
     EXPECT_TRUE(firstStreamPtrMatch);
     EXPECT_EQ(sourceUnchangedCmp, 0);
@@ -1170,7 +1170,7 @@ void VerifyMath_StorageEqualityPreservesSubnormalNaNAndSkippedLaneMxcsrFlags(){
                         EqualityObservation actualDefaultObs = EqualityObservation();
                         b8 ok = false;
                         native(in bits, in exceptionalLane, in mismatch, in compareWithZero, mut strictObs, mut actualObs, mut defaultObs, mut actualDefaultObs, mut ok){
-#if defined(NWB_HAS_SSE2)
+#if defined(FOUNDATION_HAS_SSE2)
                             ok = MathStorageCasesDetail::ObserveMxcsrEqualityFourWay<Float4U, 4u>(bits, exceptionalLane, mismatch, compareWithZero, strictObs, actualObs, defaultObs, actualDefaultObs);
 #endif
                         }
@@ -1191,7 +1191,7 @@ void VerifyMath_StorageEqualityPreservesSubnormalNaNAndSkippedLaneMxcsrFlags(){
                         EqualityObservation actualDefaultObs = EqualityObservation();
                         b8 ok = false;
                         native(in bits, in exceptionalLane, in mismatch, in compareWithZero, mut strictObs, mut actualObs, mut defaultObs, mut actualDefaultObs, mut ok){
-#if defined(NWB_HAS_SSE2)
+#if defined(FOUNDATION_HAS_SSE2)
                             ok = MathStorageCasesDetail::ObserveMxcsrEqualityFourWay<Float33U, 9u>(bits, exceptionalLane, mismatch, compareWithZero, strictObs, actualObs, defaultObs, actualDefaultObs);
 #endif
                         }

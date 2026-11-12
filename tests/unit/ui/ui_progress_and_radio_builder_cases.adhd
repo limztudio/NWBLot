@@ -334,15 +334,15 @@ public:
     mutable b8 nestedSucceeded = true;
 };
 
-[[nodiscard]] NWB_INLINE Expected<RadioGroupChoices> ReconcileUiRadioGroupChoices(const IListDataSource& source, RadioGroupState& state, RadioGroupResult& result){
+[[nodiscard]] FOUNDATION_INLINE Expected<RadioGroupChoices> ReconcileUiRadioGroupChoices(const IListDataSource& source, RadioGroupState& state, RadioGroupResult& result){
     return RadioGroupBehavior::Reconcile(source, nullptr, state, result);
 }
 
-[[nodiscard]] NWB_INLINE Expected<RadioGroupChoices> ReconcileUiRadioGroupChoicesGuarded(const IListDataSource& source, const IRadioGroupReconcileGuard& guard, RadioGroupState& state, RadioGroupResult& result){
+[[nodiscard]] FOUNDATION_INLINE Expected<RadioGroupChoices> ReconcileUiRadioGroupChoicesGuarded(const IListDataSource& source, const IRadioGroupReconcileGuard& guard, RadioGroupState& state, RadioGroupResult& result){
     return RadioGroupBehavior::Reconcile(source, &guard, state, result);
 }
 
-[[nodiscard]] NWB_INLINE b8 ApplyUiRadioGroupAction(const RadioGroupChoices& choices, const RadioGroupOptions& options, const ControlAction& action, RadioGroupState& state, RadioGroupResult& result){
+[[nodiscard]] FOUNDATION_INLINE b8 ApplyUiRadioGroupAction(const RadioGroupChoices& choices, const RadioGroupOptions& options, const ControlAction& action, RadioGroupState& state, RadioGroupResult& result){
     return RadioGroupBehavior::Apply(choices, options, action, state, result);
 }
 

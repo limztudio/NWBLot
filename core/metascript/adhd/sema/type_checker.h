@@ -104,7 +104,7 @@ private:
     [[nodiscard]] b8 interfaceInheritsFrom(const TypeRef& ifaceRef, const TypeRef& requiredIface, u32 depth = 0u)const noexcept;
     [[nodiscard]] b8 classImplementsInterface(const ClassDecl& cls, const TypeRef* implClassRef, const TypeRef& requiredIface)const noexcept;
     [[nodiscard]] b8 checkTemplateArgBounds(Span<const TemplateParamDecl> params, Span<const TypeArg> args, const ClassDecl* enclosingClass, const MethodDecl* enclosingMethod, SourceSpan span, MVector<ParseError>& errors);
-    [[nodiscard]] b8 checkTemplateArgTypes(Span<const TypeArg> templateArgs, const ClassDecl* enclosingClass, const MethodDecl* enclosingMethod, SourceSpan fallbackSpan, MVector<ParseError>& errors);
+    [[nodiscard]] b8 checkTemplateArgTypes(Span<const TypeArg> templateArgs, const ClassDecl* enclosingClass, const MethodDecl* enclosingMethod, SourceSpan fallbackSpan, MVector<ParseError>& errors, b8 allowFirstVoidArg = false);
     [[nodiscard]] b8 checkTypeRef(const TypeRef& typeRef, const ClassDecl* enclosingClass, const MethodDecl* enclosingMethod, b8 allowVoid, MVector<ParseError>& errors);
     [[nodiscard]] b8 checkTypeRef(const TypeRef& typeRef, const ClassDecl* enclosingClass, const MethodDecl* enclosingMethod, MVector<ParseError>& errors){ return checkTypeRef(typeRef, enclosingClass, enclosingMethod, false, errors); }
     [[nodiscard]] b8 checkReturnTypeRef(const TypeRef& returnType, const ClassDecl* enclosingClass, const MethodDecl* enclosingMethod, SourceSpan errorSpan, MVector<ParseError>& errors);

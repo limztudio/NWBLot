@@ -113,6 +113,8 @@ b8 TypeChecker::interfaceInheritsFrom(const TypeRef& ifaceRef, const TypeRef& re
     }
 
     if(const InterfaceDecl* ifaceDecl = m_symbols.findInterface(cleanIface.name)){
+        if(!ifaceDecl->assetTypeName.empty() && m_symbols.resolveBaseTypeName(cleanReq.name) == "IAsset")
+            return true;
         for(const TypeRef* rawBase : ifaceDecl->baseInterfaces){
             if(!rawBase)
                 continue;
@@ -128,6 +130,12 @@ b8 TypeChecker::classImplementsInterface(const ClassDecl& cls, const TypeRef* im
     const TypeRef* unwrappedReq = m_symbols.unwrapTypeAlias(&requiredIface);
     if(!unwrappedReq)
         return false;
+
+    const MStringView reqBaseName = m_symbols.resolveBaseTypeName(unwrappedReq->name);
+    if((!cls.assetTypeName.empty() || !cls.subsystemTypeName.empty()) && reqBaseName == "IAsset")
+        return true;
+    if(!cls.systemTypeName.empty() && reqBaseName == "ISystem")
+        return true;
 
     const TypeRef* unwrappedImplCls = implClassRef ? m_symbols.unwrapTypeAlias(implClassRef) : nullptr;
     for(const TypeRef* rawImpl : cls.implementedInterfaces){
@@ -228,15 +236,17 @@ b8 TypeChecker::checkTemplateArgBounds(const Span<const TemplateParamDecl> param
     return ok;
 }
 
-b8 TypeChecker::checkTemplateArgTypes(const Span<const TypeArg> templateArgs, const ClassDecl* enclosingClass, const MethodDecl* enclosingMethod, const SourceSpan fallbackSpan, MVector<ParseError>& errors){
+b8 TypeChecker::checkTemplateArgTypes(const Span<const TypeArg> templateArgs, const ClassDecl* enclosingClass, const MethodDecl* enclosingMethod, const SourceSpan fallbackSpan, MVector<ParseError>& errors, const b8 allowFirstVoidArg){
     b8 ok = true;
-    for(const TypeArg& targ : templateArgs){
+    for(usize i = 0u; i < templateArgs.size(); ++i){
+        const TypeArg& targ = templateArgs[i];
         if(targ.type){
-            if(!checkTypeRef(*targ.type, enclosingClass, enclosingMethod, errors))
+            if(!checkTypeRef(*targ.type, enclosingClass, enclosingMethod, allowFirstVoidArg && i == 0u, errors))
                 ok = false;
             const ParamPassingMode::Enum argRefMode = m_symbols.resolveRefMode(targ.type);
             const MStringView argBaseName = m_symbols.resolveBaseTypeName(targ.type->name);
-            if(argRefMode == ParamPassingMode::None && (m_symbols.findInterface(argBaseName) || m_symbols.isAbstractBuiltinType(argBaseName))){
+            const InterfaceDecl* argIface = m_symbols.findInterface(argBaseName);
+            if(argRefMode == ParamPassingMode::None && ((argIface && argIface->assetTypeName.empty()) || m_symbols.isAbstractBuiltinType(argBaseName))){
                 reportError(errors, targ.type->span.line > 0u ? targ.type->span : fallbackSpan, "template type argument of 'interface' type must specify 'in' or 'mut'; interfaces cannot be stored or instantiated by value");
                 ok = false;
             }
@@ -363,7 +373,9 @@ b8 TypeChecker::checkTypeRef(const TypeRef& typeRef, const ClassDecl* enclosingC
         }
     }
 
-    if(!checkTemplateArgTypes(typeRef.templateArgs, enclosingClass, enclosingMethod, typeRef.span, errors))
+    const BuiltinGenericTypeInfo* outerGenericInfo = m_symbols.hasTypeSymbol(typeRef.name) ? nullptr : FindBuiltinGenericType(typeRef.name);
+    const b8 allowFirstVoidArg = outerGenericInfo && outerGenericInfo->inlineLayoutKind == InlineLayoutKind::Expected;
+    if(!checkTemplateArgTypes(typeRef.templateArgs, enclosingClass, enclosingMethod, typeRef.span, errors, allowFirstVoidArg))
         ok = false;
     if(!typeRef.templateArgs.empty()){
         const BuiltinGenericTypeInfo* genericInfo = m_symbols.hasTypeSymbol(typeRef.name) ? nullptr : FindBuiltinGenericType(typeRef.name);

@@ -39,7 +39,7 @@ InputRoutingResult SendUiPointerInput(InputRouter& router, const PointerInput& i
 void ClickUiInputRouter(InputRouter& router, const Point& position)noexcept;
 void SendUiKeyTap(InputRouter& router, const KeyEnum& value, b8 shift)noexcept;
 
-[[nodiscard]] NWB_INLINE const HitTarget* FindHitTarget(const Span<const HitTarget> targets, const WidgetId widget)noexcept{
+[[nodiscard]] FOUNDATION_INLINE const HitTarget* FindHitTarget(const Span<const HitTarget> targets, const WidgetId widget)noexcept{
     for(const auto& target : targets){
         if(target.id == widget)
             return &target;

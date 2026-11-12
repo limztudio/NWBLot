@@ -66,6 +66,15 @@ class ComponentAssetBinaryCodec{
         return payload;
     }
 
+    public b8 loadBinary(in Span<u8> binary, mut IComponent outComponent)const{
+        const Expected<Span<u8>> payload = this.unpackEnvelope(binary, outComponent.assetType());
+        if(!payload.has_value())
+            return false;
+        if(!outComponent.loadComponentPayload(payload.value()))
+            return false;
+        return outComponent.validatePayload();
+    }
+
     public b8 serializeTransform(in TransformComponent component, mut Vector<u8> outPayload)const{
         const TransformComponentPayloadBinary binaryPayload = PackTransformComponentPayloadBinary(component);
         outPayload.clear();

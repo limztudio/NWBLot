@@ -62,7 +62,7 @@ using Impl::s_MeshletTriangleIndexCount;
 inline constexpr auto s_ReportOnly = Core::Common::LoggerBreakPolicy::ReportOnly;
 inline constexpr auto s_OutputAssetSkeleton = FbxToNwb::OutputAssetType::Skeleton;
 inline constexpr auto s_OutputAssetMesh = FbxToNwb::OutputAssetType::Mesh;
-inline constexpr b8 s_OccurWarning = NWB_OCCUR_WARNING != 0;
+inline constexpr b8 s_OccurWarning = FOUNDATION_OCCUR_WARNING != 0;
 inline constexpr f64 s_QuietNaNF64 = Limit<f64>::s_QuietNaN;
 inline constexpr f64 s_InfinityF64 = Limit<f64>::s_Infinity;
 inline constexpr f64 s_UnitPlusUlpF64 = 1.0 + 0x1p-52;

@@ -267,7 +267,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE Expected<AvboitPassUploadResult> AvboitPassUploadHelper::gather(
+FOUNDATION_INLINE Expected<AvboitPassUploadResult> AvboitPassUploadHelper::gather(
     const AvboitPassUploadInputs& inputs,
     MaterialPassDrawItemPartitions& drawItems,
     InstanceGpuDataVector& instanceData,

@@ -104,9 +104,21 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
         }
         const FieldDecl* field = SymbolTable::FindClassField(*ownerClass, expr.text);
         const MethodDecl* memberMethod = m_symbols.findClassMethod(*ownerClass, expr.text);
-        const b8 isInheritedAssetMethod = (!ownerClass->assetTypeName.empty() || !ownerClass->subsystemTypeName.empty() || !ownerClass->componentAssetTypeName.empty())
-            && FindBuiltinReceiverMethod("IAsset", expr.text) != nullptr;
-        if(!field && !memberMethod && !isInheritedAssetMethod){
+        b8 isInheritedBuiltinMethod = ((!ownerClass->assetTypeName.empty() || !ownerClass->subsystemTypeName.empty())
+            && FindBuiltinReceiverMethod("IAsset", expr.text) != nullptr)
+            || (!ownerClass->systemTypeName.empty() && FindBuiltinReceiverMethod("ISystem", expr.text) != nullptr);
+        if(!isInheritedBuiltinMethod){
+            for(const TypeRef* iface : ownerClass->implementedInterfaces){
+                if(!iface)
+                    continue;
+                const MStringView ifaceName = m_symbols.resolveBaseTypeName(iface->name);
+                if(!m_symbols.findInterface(ifaceName) && FindBuiltinReceiverMethod(ifaceName, expr.text) != nullptr){
+                    isInheritedBuiltinMethod = true;
+                    break;
+                }
+            }
+        }
+        if(!field && !memberMethod && !isInheritedBuiltinMethod){
             reportError(errors, expr.span, "unknown member on 'this'");
             ok = false;
             break;
@@ -116,7 +128,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
             expr.derefNotNull = true;
 
         if(isMutationTarget){
-            if(isConstThis){
+            if(isConstThis && fieldRefMode != ParamPassingMode::Mut){
                 reportError(errors, expr.span, "cannot mutate 'this.member' inside a 'const' method or 'in this' lambda");
                 ok = false;
             }
@@ -230,6 +242,24 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                 recordRequiredHeader(scopedFn->requiredHeader);
             }
             else if(
+                const ClassDecl* scopedCls = (!hadVarOrMemberLhs && expr.scopeChain.size() == 2u)
+                    ? m_symbols.findClass(m_symbols.resolveBaseTypeName(expr.scopeChain[0]))
+                    : nullptr;
+                scopedCls && (
+                    (!scopedCls->assetTypeName.empty() && (expr.scopeChain[1] == "AssetTypeName" || expr.scopeChain[1] == "s_AssetTypeName" || expr.scopeChain[1] == "s_AssetTypeText"))
+                    || (!scopedCls->systemTypeName.empty() && (expr.scopeChain[1] == "SystemTypeName" || expr.scopeChain[1] == "s_SystemTypeName" || expr.scopeChain[1] == "s_SystemTypeText"))
+                    || (!scopedCls->componentTypeName.empty() && (expr.scopeChain[1] == "ComponentTypeName" || expr.scopeChain[1] == "s_ComponentTypeName" || expr.scopeChain[1] == "s_ComponentTypeText"))
+                )
+            ){
+            }
+            else if(
+                const InterfaceDecl* scopedIface = (!hadVarOrMemberLhs && expr.scopeChain.size() == 2u)
+                    ? m_symbols.findInterface(m_symbols.resolveBaseTypeName(expr.scopeChain[0]))
+                    : nullptr;
+                scopedIface && !scopedIface->assetTypeName.empty() && (expr.scopeChain[1] == "AssetTypeName" || expr.scopeChain[1] == "s_AssetTypeName" || expr.scopeChain[1] == "s_AssetTypeText")
+            ){
+            }
+            else if(
                 !m_hasTopLevelNativeBlocks
                 || hadVarOrMemberLhs
                 || expr.scopeChain.size() != 2u
@@ -314,9 +344,21 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
             else if(const ClassDecl* targetCls = m_symbols.findClass(baseType)){
                 const FieldDecl* field = SymbolTable::FindClassField(*targetCls, expr.text);
                 const MethodDecl* memberMethod = m_symbols.findClassMethod(*targetCls, expr.text);
-                const b8 isInheritedAssetMethod = (!targetCls->assetTypeName.empty() || !targetCls->subsystemTypeName.empty() || !targetCls->componentAssetTypeName.empty())
-                    && FindBuiltinReceiverMethod("IAsset", expr.text) != nullptr;
-                if(!field && !memberMethod && !isInheritedAssetMethod){
+                b8 isInheritedBuiltinMethod = ((!targetCls->assetTypeName.empty() || !targetCls->subsystemTypeName.empty())
+                    && FindBuiltinReceiverMethod("IAsset", expr.text) != nullptr)
+                    || (!targetCls->systemTypeName.empty() && FindBuiltinReceiverMethod("ISystem", expr.text) != nullptr);
+                if(!isInheritedBuiltinMethod){
+                    for(const TypeRef* iface : targetCls->implementedInterfaces){
+                        if(!iface)
+                            continue;
+                        const MStringView ifaceName = m_symbols.resolveBaseTypeName(iface->name);
+                        if(!m_symbols.findInterface(ifaceName) && FindBuiltinReceiverMethod(ifaceName, expr.text) != nullptr){
+                            isInheritedBuiltinMethod = true;
+                            break;
+                        }
+                    }
+                }
+                if(!field && !memberMethod && !isInheritedBuiltinMethod){
                     reportError(errors, expr.span, "unknown member on class");
                     ok = false;
                 }
@@ -357,7 +399,9 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
     }
     case ExprKind::Index:{
         const u32 savedParallelDepth = m_parallelDepth;
-        b8 lhsNeedsMut = isMutationTarget;
+        const TypeRef* indexedElemType = inferExprTypeRef(ownerClass, &method, expr, scope);
+        const ParamPassingMode::Enum elemRefMode = m_symbols.resolveRefMode(indexedElemType);
+        b8 lhsNeedsMut = isMutationTarget && elemRefMode != ParamPassingMode::Mut;
         b8 rhsNeedsMut = false;
         const TypeRef* containerTypeRef = nullptr;
         const MStringView lhsBaseType = expr.lhs
@@ -419,8 +463,6 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
         if(expr.rhs && !checkExpr(ownerClass, scope, rhsNeedsMut, method, *expr.rhs, errors))
             ok = false;
 
-        const TypeRef* indexedElemType = inferExprTypeRef(ownerClass, &method, expr, scope);
-        const ParamPassingMode::Enum elemRefMode = m_symbols.resolveRefMode(indexedElemType);
         if(!customOpIdx && elemRefMode != ParamPassingMode::None)
             expr.derefNotNull = true;
         if(!customOpIdx && genericInfo && genericInfo->isReflectedMap && !recvIsConst)

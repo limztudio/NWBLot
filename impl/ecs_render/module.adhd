@@ -55,47 +55,9 @@ NWB_IMPL_BEGIN
 class ActiveSceneSubsystems;
 class RendererFramePipeline;
 
+using ActiveSceneSubsystemsConstPtr = const ActiveSceneSubsystems*;
 using RendererShaderPathResolveCallback = Function< Expected<Name>(const Name& shaderName, AStringView variantName, const Name& stageName) >;
-
-class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass, public Core::Telemetry::IFrameGraphContributor{
-private:
-    using PipelineOwner = Core::GlobalUniquePtr<RendererFramePipeline>;
-
-
-public:
-    RendererSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, RendererShaderPathResolveCallback shaderPathResolver);
-    virtual ~RendererSystem()noexcept override;
-
-
-public:
-    virtual b8 validateResources(u32 width, u32 height, u32 sampleCount)override;
-    virtual void invalidateResources()override;
-
-    [[nodiscard]] virtual Expected<void, Core::CpuTaskAdmissionError::Enum> update(Core::ECS::World& world, f32 delta)noexcept override;
-
-    virtual b8 prepareResources(Core::Framebuffer* framebuffer)override;
-    virtual void render(Core::Framebuffer* framebuffer)override;
-    virtual b8 appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder)override;
-
-    void setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept;
-    void setRefractionEnabled(b8 enabled)noexcept;
-    void setRefractionHardwareTracingEnabled(b8 enabled)noexcept;
-    void setRefractionDiagnosticsEnabled(b8 enabled)noexcept;
-    [[nodiscard]] Expected<RefractionStatistics> tryGetLatestRefractionStatistics()const noexcept;
-    [[nodiscard]] b8 setCausticQualitySettings(const CausticQualitySettings& settings)noexcept;
-    [[nodiscard]] b8 setSurfelGiQualitySettings(const SurfelGiQualitySettings& settings)noexcept;
-    [[nodiscard]] b8 setSoftwareShadowSettings(const SoftwareShadowSettings& settings)noexcept;
-    [[nodiscard]] b8 setShadowQualitySettings(const ShadowQualitySettings& settings)noexcept;
-    [[nodiscard]] b8 setReflectionSettings(const ReflectionSettings& settings)noexcept;
-    [[nodiscard]] Expected<ReflectionStatistics> tryGetLatestReflectionStatistics()const noexcept;
-    [[nodiscard]] b8 setPresentationSettings(const PresentationSettings& settings)noexcept;
-    void setFrameLaggedAsyncLightingEnabled(b8 enabled)noexcept;
-    [[nodiscard]] Core::GpuTaskGraphRuntimeStatistics deferredTaskGraphRuntimeStatistics()const noexcept;
-
-
-private:
-    NotNullUniquePtr<RendererFramePipeline, PipelineOwner::deleter_type> m_pipeline;
-};
+using RendererFramePipelineOwner = NotNullUniquePtr<RendererFramePipeline, Core::GlobalUniquePtr<RendererFramePipeline>::deleter_type>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -107,6 +69,42 @@ NWB_IMPL_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[arena, system("renderer")]
+class RendererSystem : IRenderPass, IFrameGraphContributor{
+    private RendererFramePipelineOwner m_pipeline;
+
+    public RendererSystem(mut World world, mut GraphicsRuntime graphics, mut AssetManager assetManager, in RendererShaderPathResolveCallback shaderPathResolver);
+    public ~RendererSystem();
+
+    public b8 validateResources(in u32 width, in u32 height, in u32 sampleCount)override;
+    public void invalidateResources()override;
+
+    public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta)override;
+
+    public b8 prepareResources(in FramebufferPtr framebuffer)override;
+    public void render(in FramebufferPtr framebuffer)override;
+    public b8 appendFrameGraph(mut FrameGraphBuilder builder)override;
+
+    public void setActiveSceneSubsystems(in ActiveSceneSubsystemsConstPtr subsystems);
+    public void setRefractionEnabled(in b8 enabled);
+    public void setRefractionHardwareTracingEnabled(in b8 enabled);
+    public void setRefractionDiagnosticsEnabled(in b8 enabled);
+    public Expected<RefractionStatistics> tryGetLatestRefractionStatistics()const;
+    public b8 setCausticQualitySettings(in CausticQualitySettings settings);
+    public b8 setSurfelGiQualitySettings(in SurfelGiQualitySettings settings);
+    public b8 setSoftwareShadowSettings(in SoftwareShadowSettings settings);
+    public b8 setShadowQualitySettings(in ShadowQualitySettings settings);
+    public b8 setReflectionSettings(in ReflectionSettings settings);
+    public Expected<ReflectionStatistics> tryGetLatestReflectionStatistics()const;
+    public b8 setPresentationSettings(in PresentationSettings settings);
+    public void setFrameLaggedAsyncLightingEnabled(in b8 enabled);
+    public GpuTaskGraphRuntimeStatistics deferredTaskGraphRuntimeStatistics()const;
 }
 
 

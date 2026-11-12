@@ -524,7 +524,7 @@ static ScratchPath NormalizeDependencyRootAliasPath(const ScratchPath& source){
 static Expected<ScratchString> BuildCanonicalDependencyPath(const Path& dependency, const Span<const NormalizedDependencyRootAlias> normalizedRootAliases, const b8 allowUnaliasedPath, Core::Alloc::ScratchArena& scratchArena){
     const auto normalizedDependencyResult = AbsolutePath(ScratchPath(scratchArena, dependency));
     if(!normalizedDependencyResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve dependency path '{}' : {}"), PathToString<tchar>(dependency), ConvertString(normalizedDependencyResult.error().message()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to resolve dependency path '{}' : {}"), PathToString<tchar>(dependency), ConvertString(normalizedDependencyResult.error().message()));
         return MakeUnexpected(Failure{});
     }
     const ScratchPath normalizedDependency = normalizedDependencyResult->lexicallyNormal();
@@ -538,7 +538,7 @@ static Expected<ScratchString> BuildCanonicalDependencyPath(const Path& dependen
     }
     if(!bestRootAlias){
         if(!allowUnaliasedPath){
-            NWB_LOGGER_ERROR(NWB_TEXT("Dependency checksum path '{}' is outside the declared dependency root aliases"), PathToString<tchar>(dependency));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Dependency checksum path '{}' is outside the declared dependency root aliases"), PathToString<tchar>(dependency));
             return MakeUnexpected(Failure{});
         }
         const ScratchString absolutePathText = PathToString(scratchArena, normalizedDependency);
@@ -591,7 +591,7 @@ Expected<ShaderBinaryPayload::DependencyChecksum> ShaderCook::ComputeDependencyC
         __hidden_shader_cook_checksum::NormalizedDependencyRootAlias normalizedAlias{scratchArena};
         const auto rootPath = AbsolutePath(__hidden_shader_cook_checksum::ScratchPath(scratchArena, rootAlias.root));
         if(!rootPath){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve dependency root alias '{}' : {}"), PathToString<tchar>(rootAlias.root), ConvertString(rootPath.error().message()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to resolve dependency root alias '{}' : {}"), PathToString<tchar>(rootAlias.root), ConvertString(rootPath.error().message()));
             return MakeUnexpected(Failure{});
         }
 
@@ -633,10 +633,10 @@ Expected<ShaderBinaryPayload::DependencyChecksum> ShaderCook::ComputeDependencyC
         auto readBinaryFileResult = ReadBinaryFile(*item.path, dependencyBytes);
         if(!readBinaryFileResult){
             if(readBinaryFileResult.error()){
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to read dependency file '{}' : {}"), PathToString<tchar>(*item.path), ConvertString(readBinaryFileResult.error().message()));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to read dependency file '{}' : {}"), PathToString<tchar>(*item.path), ConvertString(readBinaryFileResult.error().message()));
             }
             else{
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to read dependency file '{}'"), PathToString<tchar>(*item.path));
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Failed to read dependency file '{}'"), PathToString<tchar>(*item.path));
             }
             return MakeUnexpected(Failure{});
         }
@@ -693,7 +693,7 @@ void ShaderDefinePlanner::mergeInheritedDefines(
     b8 canReserveDefineValues = true;
     for(const Path& dep : dependencies){
         Core::Assets::ScratchString depKey = PathToString(scratchArena, dep);
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         CanonicalizeTextInPlace(depKey);
 #endif
         const auto found = includeMetadata.find(AStringView(depKey));
@@ -734,12 +734,12 @@ b8 ShaderDefinePlanner::expandDefineCombinations(
         copy.reserve(defineValues.size());
         for(const auto& [sourceName, sourceValue] : source){
             if(!copy.try_emplace(sourceName, sourceValue).second){
-                NWB_ASSERT(false);
+                FOUNDATION_ASSERT(false);
                 return MakeUnexpected(Failure{});
             }
         }
         if(!copy.try_emplace(defineName, defineValue).second){
-            NWB_ASSERT(false);
+            FOUNDATION_ASSERT(false);
             return MakeUnexpected(Failure{});
         }
         return copy;
@@ -758,7 +758,7 @@ b8 ShaderDefinePlanner::expandDefineCombinations(
             for(ShaderCook::DefineCombo& combo : outCombinations){
                 combo.reserve(defineValues.size());
                 if(!combo.try_emplace(defineName, value).second){
-                    NWB_ASSERT(false);
+                    FOUNDATION_ASSERT(false);
                     outCombinations.clear();
                     return false;
                 }
@@ -788,7 +788,7 @@ b8 ShaderDefinePlanner::expandDefineCombinations(
 
             combo.reserve(defineValues.size());
             if(!combo.try_emplace(defineName, AStringView(values.back())).second){
-                NWB_ASSERT(false);
+                FOUNDATION_ASSERT(false);
                 outCombinations.clear();
                 return false;
             }

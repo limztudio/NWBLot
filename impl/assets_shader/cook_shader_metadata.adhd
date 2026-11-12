@@ -110,13 +110,13 @@ static const Array<SlangStageMapping, 14u> s_StageMappings = {{
     if(!includeName.empty() && includePath.isAbsolute()){
         const auto absoluteIncludePath = AbsolutePath(includePath);
         if(!absoluteIncludePath){
-            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to resolve planned macro include '{}': {}:{}"), PathToString<tchar>(includePath), ConvertString(absoluteIncludePath.error().category().name()), absoluteIncludePath.error().value());
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("ShaderCook: failed to resolve planned macro include '{}': {}:{}"), PathToString<tchar>(includePath), ConvertString(absoluteIncludePath.error().category().name()), absoluteIncludePath.error().value());
             return MakeUnexpected(Failure{});
         }
         const ScratchPath normalizedIncludePath = absoluteIncludePath->lexicallyNormal();
         const auto overlayIncludePath = SlangCompilerWorkspace::BuildCompilerOverlayPath(overlayRoot, normalizedIncludePath, scratchArena);
         if(!SlangCompilerWorkspace::IsCompilerDependency(request.dependencies, normalizedIncludePath) || !overlayIncludePath){
-            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: planned macro include '{}' is not a mapped compiler dependency"), ConvertString(includeName));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("ShaderCook: planned macro include '{}' is not a mapped compiler dependency"), ConvertString(includeName));
             return MakeUnexpected(Failure{});
         }
         overlayIncludePathText = SlangCompilerWorkspace::BuildCompilerPathText(*overlayIncludePath, scratchArena);
@@ -150,7 +150,7 @@ static Expected<ShaderCook::CookMap<ShaderCook::CookString, ShaderCook::DefineEn
         return defines;
 
     if(!definesVal->isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': defines must be a map"), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Meta '{}': defines must be a map"), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
 
@@ -161,17 +161,17 @@ static Expected<ShaderCook::CookMap<ShaderCook::CookString, ShaderCook::DefineEn
         ShaderCook::CookString defineName(key.data(), key.size(), arena);
         const ShaderDefineNameStatus::Enum nameStatus = ClassifyShaderDefineName(AStringView(defineName));
         if(nameStatus == ShaderDefineNameStatus::Reserved){
-            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' is an engine transport feature selected in shader source"), PathToString<tchar>(nwbFilePath), ConvertString(defineName));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Meta '{}': define '{}' is an engine transport feature selected in shader source"), PathToString<tchar>(nwbFilePath), ConvertString(defineName));
             return MakeUnexpected(Failure{});
         }
         if(nameStatus == ShaderDefineNameStatus::Invalid){
-            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' must be an ASCII shader identifier"), PathToString<tchar>(nwbFilePath), ConvertString(defineName));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Meta '{}': define '{}' must be an ASCII shader identifier"), PathToString<tchar>(nwbFilePath), ConvertString(defineName));
             return MakeUnexpected(Failure{});
         }
 
         ShaderCook::CookVector<ShaderCook::CookString> defineValues(arena);
         if(!val.copyStringList(defineValues)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' values must be a list of strings"), PathToString<tchar>(nwbFilePath), ConvertString(defineName));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Meta '{}': define '{}' values must be a list of strings"), PathToString<tchar>(nwbFilePath), ConvertString(defineName));
             return MakeUnexpected(Failure{});
         }
         ShaderCook::CookVector<AStringView> defineValueViews(arena);
@@ -305,23 +305,23 @@ b8 SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest& 
         return false;
     const auto exitCode = ::RunProcessRedirectedToFile(scratchArena, arguments, AStringView(*diagnosticsPathText));
     if(!exitCode || *exitCode != 0){
-        const TStringView failureStage = exitCode ? NWB_TEXT("compiler exit code") : NWB_TEXT("process execution failure");
+        const TStringView failureStage = exitCode ? FOUNDATION_TEXT("compiler exit code") : FOUNDATION_TEXT("process execution failure");
         const i64 failureCode = exitCode ? static_cast<i64>(*exitCode) : static_cast<i64>(exitCode.error());
         ScratchString diagnostics{scratchArena};
         const auto diagnosticsRead = ReadBinaryFile(diagnosticsPath, diagnostics);
         if(!diagnosticsRead)
-            NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}'): {} {}; diagnostics read '{}' failed: {}:{}"), ConvertString(request.shaderName), ConvertString(request.variantName), failureStage, failureCode, PathToString<tchar>(diagnosticsPath), ConvertString(diagnosticsRead.error().category().name()), diagnosticsRead.error().value());
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Shader compile failed for '{}' (variant '{}'): {} {}; diagnostics read '{}' failed: {}:{}"), ConvertString(request.shaderName), ConvertString(request.variantName), failureStage, failureCode, PathToString<tchar>(diagnosticsPath), ConvertString(diagnosticsRead.error().category().name()), diagnosticsRead.error().value());
         else if(!diagnostics.empty())
-            NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}'): {} {} :\n{}"), ConvertString(request.shaderName), ConvertString(request.variantName), failureStage, failureCode, ConvertString(diagnostics));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Shader compile failed for '{}' (variant '{}'): {} {} :\n{}"), ConvertString(request.shaderName), ConvertString(request.variantName), failureStage, failureCode, ConvertString(diagnostics));
         else
-            NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}'): {} {}"), ConvertString(request.shaderName), ConvertString(request.variantName), failureStage, failureCode);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Shader compile failed for '{}' (variant '{}'): {} {}"), ConvertString(request.shaderName), ConvertString(request.variantName), failureStage, failureCode);
         return false;
     }
 
     ScratchString diagnostics{scratchArena};
     const auto diagnosticsRead = ReadBinaryFile(diagnosticsPath, diagnostics);
     if(!diagnosticsRead){
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to read compiler diagnostics '{}' for '{}' (variant '{}'): {}:{}"), PathToString<tchar>(diagnosticsPath), ConvertString(request.shaderName), ConvertString(request.variantName), ConvertString(diagnosticsRead.error().category().name()), diagnosticsRead.error().value());
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("ShaderCook: failed to read compiler diagnostics '{}' for '{}' (variant '{}'): {}:{}"), PathToString<tchar>(diagnosticsPath), ConvertString(request.shaderName), ConvertString(request.variantName), ConvertString(diagnosticsRead.error().category().name()), diagnosticsRead.error().value());
         return false;
     }
     if(!ValidateUnexpectedCompilerDiagnosticsEmpty(request.shaderName, request.variantName, AStringView(diagnostics)))
@@ -330,9 +330,9 @@ b8 SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest& 
     auto readBinaryFileResult = ReadBinaryFile(compilerOutputPath, outBytecode);
     if(!readBinaryFileResult){
         if(readBinaryFileResult.error())
-            NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') : failed to read output '{}' : {}"), ConvertString(request.shaderName), ConvertString(request.variantName), PathToString<tchar>(compilerOutputPath), ConvertString(readBinaryFileResult.error().message()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Shader compile failed for '{}' (variant '{}') : failed to read output '{}' : {}"), ConvertString(request.shaderName), ConvertString(request.variantName), PathToString<tchar>(compilerOutputPath), ConvertString(readBinaryFileResult.error().message()));
         else
-            NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') : failed to read output '{}'"), ConvertString(request.shaderName), ConvertString(request.variantName), PathToString<tchar>(compilerOutputPath));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Shader compile failed for '{}' (variant '{}') : failed to read output '{}'"), ConvertString(request.shaderName), ConvertString(request.variantName), PathToString<tchar>(compilerOutputPath));
         return false;
     }
 
@@ -354,11 +354,11 @@ b8 SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest& 
         if(
             ReadBinaryFile(request.outputPath, publishedBytecode)
             && publishedBytecode.size() == outBytecode.size()
-            && NWB_MEMCMP(publishedBytecode.data(), outBytecode.data(), outBytecode.size()) == 0
+            && FOUNDATION_MEMCMP(publishedBytecode.data(), outBytecode.data(), outBytecode.size()) == 0
             && Core::ResolveSpirvEntryPointName(BinaryByteView{ publishedBytecode.data(), publishedBytecode.size() }, request.entryPoint, Core::ShaderType::ToMask(shaderType))
         )
             return true;
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to publish verified bytecode cache '{}' : {}"), PathToString<tchar>(request.outputPath), ConvertString(renamePathResult.error().message()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("ShaderCook: failed to publish verified bytecode cache '{}' : {}"), PathToString<tchar>(request.outputPath), ConvertString(renamePathResult.error().message()));
         outBytecode.clear();
         return false;
     }
@@ -414,13 +414,13 @@ Expected<ShaderCook::ShaderEntry> ShaderCook::parseShaderMeta(const Path& nwbFil
 
     const auto* assetDeclaration = doc.findDeclaration(Core::Assets::s_MetadataAssetVariable);
     if(!assetDeclaration){
-        NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': missing asset declaration '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(Core::Assets::s_MetadataAssetVariable));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Shader meta '{}': missing asset declaration '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(Core::Assets::s_MetadataAssetVariable));
         return MakeUnexpected(Failure{});
     }
     const AStringView assetTypeText(assetDeclaration->type.data(), assetDeclaration->type.size());
     const Core::ShaderType::Enum shaderType = ShaderAssetTypes::ShaderTypeFromAssetTypeText(assetTypeText);
     if(shaderType == Core::ShaderType::Invalid){
-        NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': unsupported shader asset type '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(assetTypeText));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Shader meta '{}': unsupported shader asset type '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(assetTypeText));
         return MakeUnexpected(Failure{});
     }
 
@@ -453,7 +453,7 @@ Expected<ShaderCook::ShaderEntry> ShaderCook::parseShaderMeta(const Path& nwbFil
     if(optimizationLevelText->present){
         const auto optimizationLevel = TryParseShaderOptimizationLevelText(optimizationLevelText->text);
         if(!optimizationLevel){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': unsupported optimization_level '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(optimizationLevelText->text));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Shader meta '{}': unsupported optimization_level '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(optimizationLevelText->text));
             return MakeUnexpected(Failure{});
         }
         entry.optimizationLevel = *optimizationLevel;
@@ -470,7 +470,7 @@ Expected<ShaderCook::ShaderEntry> ShaderCook::parseShaderMeta(const Path& nwbFil
 
     if(const auto* includeRootsVal = asset.findField(s_ShaderIncludeRootsField)){
         if(!includeRootsVal->copyStringList(entry.includeRoots)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': include_roots must be a list of strings"), PathToString<tchar>(nwbFilePath));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Shader meta '{}': include_roots must be a list of strings"), PathToString<tchar>(nwbFilePath));
             return MakeUnexpected(Failure{});
         }
         Vector<AStringView, Core::Alloc::ScratchArena> includeRootViews(scratchArena);
@@ -496,7 +496,7 @@ Expected<ShaderCook::IncludeEntry> ShaderCook::parseIncludeMeta(const Path& nwbF
 
     const auto* assetDeclaration = doc.findDeclaration(Core::Assets::s_MetadataAssetVariable);
     if(!assetDeclaration){
-        NWB_LOGGER_ERROR(NWB_TEXT("Include meta '{}': missing asset declaration '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(Core::Assets::s_MetadataAssetVariable));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Include meta '{}': missing asset declaration '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(Core::Assets::s_MetadataAssetVariable));
         return MakeUnexpected(Failure{});
     }
     const ACompactString assetType(AStringView(assetDeclaration->type.data(), assetDeclaration->type.size()));

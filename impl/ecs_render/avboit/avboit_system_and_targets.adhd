@@ -51,7 +51,7 @@ b8 RendererAvboitSystem::createAvboitSampler(){
     auto& device = m_graphics.getDevice();
 
     if(!ECSRenderDetail::CreateClampSampler(device, true, m_avboitState.m_linearSampler)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create linear sampler for AVBOIT"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create linear sampler for AVBOIT"));
         return false;
     }
 
@@ -82,17 +82,17 @@ b8 RendererAvboitSystem::createAvboitPipelines(){
     auto& device = m_graphics.getDevice();
     const auto materialPassBindingLayout = m_materialSystem.prepareMaterialPassBindingLayout();
     if(!materialPassBindingLayout){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT requires the shared material-pass push-constant layout"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: AVBOIT requires the shared material-pass push-constant layout"));
         return false;
     }
 
     if(!m_avboitState.m_depthWarpPipeline && !RendererComputePipelineDetail::CreateHeapComputePipeline(device, m_avboitState.m_depthWarpComputeShader, *materialPassBindingLayout, false, m_avboitState.m_depthWarpPipeline)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT depth-warp pipeline"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create AVBOIT depth-warp pipeline"));
         return false;
     }
 
     if(!m_avboitState.m_integratePipeline && !RendererComputePipelineDetail::CreateHeapComputePipeline(device, m_avboitState.m_integrateComputeShader, *materialPassBindingLayout, false, m_avboitState.m_integratePipeline)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT integration pipeline"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create AVBOIT integration pipeline"));
         return false;
     }
 
@@ -329,13 +329,13 @@ b8 RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& createdT
         accumExtinctionFormat != Core::Format::UNKNOWN,
         transmittanceFormat != Core::Format::UNKNOWN
     )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to find supported AVBOIT framebuffer formats"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to find supported AVBOIT framebuffer formats"));
         return false;
     }
 
     const Expected<AvboitTargetLayout> layoutResult = TryResolveAvboitTargetLayout(createdTargets.width, createdTargets.height, NWB_REFRACTION_GROUP_SIZE);
     if(!layoutResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: invalid AVBOIT target layout dimensions"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: invalid AVBOIT target layout dimensions"));
         return false;
     }
     const AvboitTargetLayout& layout = *layoutResult;
@@ -355,21 +355,21 @@ b8 RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& createdT
     const Core::Color transparentBlack(0.f, 0.f, 0.f, 0.f);
     auto lowRasterTargetResult = AvboitTargetFactory::CreateRenderTarget(m_graphics, avboitTargets.lowWidth, avboitTargets.lowHeight, avboitTargets.lowRasterFormat, "engine/avboit/low_raster", transparentBlack);
     if(!lowRasterTargetResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT low-resolution raster target"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create AVBOIT low-resolution raster target"));
         return false;
     }
     avboitTargets.lowRasterTarget = Move(*lowRasterTargetResult);
 
     auto accumColorResult = AvboitTargetFactory::CreateRenderTarget(m_graphics, avboitTargets.fullWidth, avboitTargets.fullHeight, avboitTargets.accumColorFormat, "engine/avboit/accum_color", transparentBlack, true);
     if(!accumColorResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT accumulated color target"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create AVBOIT accumulated color target"));
         return false;
     }
     avboitTargets.accumColor = Move(*accumColorResult);
 
     auto accumExtinctionResult = AvboitTargetFactory::CreateRenderTarget(m_graphics, avboitTargets.fullWidth, avboitTargets.fullHeight, avboitTargets.accumExtinctionFormat, "engine/avboit/accum_extinction", transparentBlack, true);
     if(!accumExtinctionResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT accumulated extinction target"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create AVBOIT accumulated extinction target"));
         return false;
     }
     avboitTargets.accumExtinction = Move(*accumExtinctionResult);
@@ -386,7 +386,7 @@ b8 RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& createdT
     else
         avboitTargets.lowFramebuffer.reset();
     if(!lowFramebufferResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT low-resolution framebuffer"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create AVBOIT low-resolution framebuffer"));
         return false;
     }
 
@@ -406,7 +406,7 @@ b8 RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& createdT
     else
         avboitTargets.accumulationFramebuffer.reset();
     if(!accumulationFramebufferResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT accumulation framebuffer"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create AVBOIT accumulation framebuffer"));
         return false;
     }
 
@@ -414,42 +414,42 @@ b8 RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& createdT
 
     auto coverageBufferResult = AvboitTargetFactory::CreateU32Buffer(m_graphics, allocationBytes.coverageBytes, "engine/avboit/depth_coverage");
     if(!coverageBufferResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT coverage buffer"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create AVBOIT coverage buffer"));
         return false;
     }
     avboitTargets.coverageBuffer = Move(*coverageBufferResult);
 
     auto depthWarpBufferResult = AvboitTargetFactory::CreateU32Buffer(m_graphics, allocationBytes.depthWarpBytes, "engine/avboit/depth_warp_lut");
     if(!depthWarpBufferResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT depth warp buffer"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create AVBOIT depth warp buffer"));
         return false;
     }
     avboitTargets.depthWarpBuffer = Move(*depthWarpBufferResult);
 
     auto controlBufferResult = AvboitTargetFactory::CreateU32Buffer(m_graphics, allocationBytes.controlBytes, "engine/avboit/control");
     if(!controlBufferResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT control buffer"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create AVBOIT control buffer"));
         return false;
     }
     avboitTargets.controlBuffer = Move(*controlBufferResult);
 
     auto extinctionBufferResult = AvboitTargetFactory::CreateU32Buffer(m_graphics, allocationBytes.extinctionBytes, "engine/avboit/packed_extinction_volume");
     if(!extinctionBufferResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT extinction volume"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create AVBOIT extinction volume"));
         return false;
     }
     avboitTargets.extinctionBuffer = Move(*extinctionBufferResult);
 
     auto extinctionOverflowBufferResult = AvboitTargetFactory::CreateU32Buffer(m_graphics, allocationBytes.extinctionOverflowBytes, "engine/avboit/extinction_overflow_depth");
     if(!extinctionOverflowBufferResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT extinction overflow buffer"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create AVBOIT extinction overflow buffer"));
         return false;
     }
     avboitTargets.extinctionOverflowBuffer = Move(*extinctionOverflowBufferResult);
 
     auto transmittanceTextureResult = AvboitTargetFactory::CreateTransmittanceVolume(m_graphics, avboitTargets.lowWidth, avboitTargets.lowHeight, avboitTargets.physicalSliceCount, avboitTargets.transmittanceFormat);
     if(!transmittanceTextureResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT transmittance volume"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create AVBOIT transmittance volume"));
         return false;
     }
     avboitTargets.transmittanceTexture = Move(*transmittanceTextureResult);
@@ -467,28 +467,28 @@ b8 RendererAvboitSystem::registerAvboitFrameTargetDescriptors(DeferredFrameTarge
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT target bindings require the descriptor-buffer global heap"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: AVBOIT target bindings require the descriptor-buffer global heap"));
         return false;
     }
-    NWB_ASSERT(createdTargets.bindless.slotsBufferDescriptor.valid());
-    NWB_ASSERT(createdTargets.bindless.slotsBufferDescriptor.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer);
-    NWB_ASSERT(!createdTargets.bindless.slotsUploaded);
-    NWB_ASSERT(avboitTargets.coverageBuffer);
-    NWB_ASSERT(avboitTargets.depthWarpBuffer);
-    NWB_ASSERT(avboitTargets.controlBuffer);
-    NWB_ASSERT(avboitTargets.extinctionBuffer);
-    NWB_ASSERT(avboitTargets.extinctionOverflowBuffer);
-    NWB_ASSERT(avboitTargets.transmittanceTexture);
-    NWB_ASSERT(avboitTargets.refractionTileList);
-    NWB_ASSERT(avboitTargets.refractionTileArguments);
-    NWB_ASSERT(!avboitTargets.coverageBufferDescriptor.valid());
-    NWB_ASSERT(!avboitTargets.depthWarpBufferDescriptor.valid());
-    NWB_ASSERT(!avboitTargets.controlBufferDescriptor.valid());
-    NWB_ASSERT(!avboitTargets.extinctionBufferDescriptor.valid());
-    NWB_ASSERT(!avboitTargets.extinctionOverflowBufferDescriptor.valid());
-    NWB_ASSERT(!avboitTargets.transmittanceTextureStorageDescriptor.valid());
-    NWB_ASSERT(!avboitTargets.refractionTileListDescriptor.valid());
-    NWB_ASSERT(!avboitTargets.refractionTileArgumentsDescriptor.valid());
+    FOUNDATION_ASSERT(createdTargets.bindless.slotsBufferDescriptor.valid());
+    FOUNDATION_ASSERT(createdTargets.bindless.slotsBufferDescriptor.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer);
+    FOUNDATION_ASSERT(!createdTargets.bindless.slotsUploaded);
+    FOUNDATION_ASSERT(avboitTargets.coverageBuffer);
+    FOUNDATION_ASSERT(avboitTargets.depthWarpBuffer);
+    FOUNDATION_ASSERT(avboitTargets.controlBuffer);
+    FOUNDATION_ASSERT(avboitTargets.extinctionBuffer);
+    FOUNDATION_ASSERT(avboitTargets.extinctionOverflowBuffer);
+    FOUNDATION_ASSERT(avboitTargets.transmittanceTexture);
+    FOUNDATION_ASSERT(avboitTargets.refractionTileList);
+    FOUNDATION_ASSERT(avboitTargets.refractionTileArguments);
+    FOUNDATION_ASSERT(!avboitTargets.coverageBufferDescriptor.valid());
+    FOUNDATION_ASSERT(!avboitTargets.depthWarpBufferDescriptor.valid());
+    FOUNDATION_ASSERT(!avboitTargets.controlBufferDescriptor.valid());
+    FOUNDATION_ASSERT(!avboitTargets.extinctionBufferDescriptor.valid());
+    FOUNDATION_ASSERT(!avboitTargets.extinctionOverflowBufferDescriptor.valid());
+    FOUNDATION_ASSERT(!avboitTargets.transmittanceTextureStorageDescriptor.valid());
+    FOUNDATION_ASSERT(!avboitTargets.refractionTileListDescriptor.valid());
+    FOUNDATION_ASSERT(!avboitTargets.refractionTileArgumentsDescriptor.valid());
 
     const b8 targetResourcesRegistered =
         RendererDescriptorRegisterDetail::AssignStructuredBufferUav(heap, *avboitTargets.coverageBuffer, avboitTargets.coverageBufferDescriptor)
@@ -507,7 +507,7 @@ b8 RendererAvboitSystem::registerAvboitFrameTargetDescriptors(DeferredFrameTarge
     ;
     if(!targetResourcesRegistered){
         __hidden_avboit_system_and_targets::RetireTargetDescriptors(heap, avboitTargets);
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register AVBOIT work resources in the descriptor heap"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register AVBOIT work resources in the descriptor heap"));
         return false;
     }
 
@@ -524,7 +524,7 @@ b8 RendererAvboitSystem::registerAvboitFrameTargetDescriptors(DeferredFrameTarge
 }
 
 Core::Sampler& RendererAvboitSystem::linearSampler()const noexcept{
-    NWB_ASSERT(m_avboitState.m_linearSampler);
+    FOUNDATION_ASSERT(m_avboitState.m_linearSampler);
     return *m_avboitState.m_linearSampler;
 }
 

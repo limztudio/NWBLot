@@ -129,12 +129,12 @@ native{
 #include <GFSDK_Aftermath_GpuCrashDumpDecoding.h>
 #endif
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 #include <global/process_capture.h>
 #include <global/process_execution.h>
 #endif
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <windows.h>
 #include <dbghelp.h>
 #endif
@@ -277,7 +277,7 @@ static void AppendRadeonGpuDetectiveSummary(const CrashScratchPath& packageDirec
     const CrashScratchPath rgdCapture = packageDirectory / CrashNames::s_GpuDetectiveCaptureFileName;
     const auto regularCapture = IsRegularFile(rgdCapture);
     if(!regularCapture){
-        NWB_LOGGER_WARNING(NWB_TEXT("Log server: failed to inspect Radeon GPU Detective capture '{}': {}"), PathToString<tchar>(rgdCapture), ConvertString(regularCapture.error().message()));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Log server: failed to inspect Radeon GPU Detective capture '{}': {}"), PathToString<tchar>(rgdCapture), ConvertString(regularCapture.error().message()));
         outReport += s_CrashSymbolicateRgdGpuDetectiveSectionHeader;
         outReport += s_RgdInspectFailedStatusLine;
         return;
@@ -437,7 +437,7 @@ static void AppendAftermathGpuDumpSummary(const CrashScratchPath& packageDirecto
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 namespace __hidden_linux_frame_symbol_resolver{
 
 
@@ -473,7 +473,7 @@ public:
     const auto captured = CaptureProcessOutput(output, arena, arguments);
     if(!captured){
         const ProcessCaptureFailure& failure = captured.error();
-        NWB_LOGGER_INFO(NWB_TEXT("Linux symbolizer capture failed: phase {}, native {}, completion {}, exit {}, signal {}, truncated {}")
+        NWB_LOGGER_INFO(FOUNDATION_TEXT("Linux symbolizer capture failed: phase {}, native {}, completion {}, exit {}, signal {}, truncated {}")
             , static_cast<u32>(failure.kind)
             , static_cast<i32>(failure.nativeError)
             , static_cast<i32>(failure.completionError)
@@ -535,7 +535,7 @@ public:
     CrashScratchPath modulePath(arena, modulePathText);
     const auto regularModule = IsRegularFile(modulePath);
     if(!regularModule){
-        NWB_LOGGER_WARNING(NWB_TEXT("Log server: failed to inspect Linux symbol module '{}': {}"), PathToString<tchar>(modulePath), ConvertString(regularModule.error().message()));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Log server: failed to inspect Linux symbol module '{}': {}"), PathToString<tchar>(modulePath), ConvertString(regularModule.error().message()));
         return MakeUnexpected(Failure{});
     }
     if(*regularModule)
@@ -552,7 +552,7 @@ public:
     CrashScratchPath symbolStoreCandidate = symbolStoreDirectory / moduleFileName;
     const auto regularCandidate = IsRegularFile(symbolStoreCandidate);
     if(!regularCandidate){
-        NWB_LOGGER_WARNING(NWB_TEXT("Log server: failed to inspect Linux symbol-store candidate '{}': {}"), PathToString<tchar>(symbolStoreCandidate), ConvertString(regularCandidate.error().message()));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Log server: failed to inspect Linux symbol-store candidate '{}': {}"), PathToString<tchar>(symbolStoreCandidate), ConvertString(regularCandidate.error().message()));
         return MakeUnexpected(Failure{});
     }
     if(*regularCandidate)
@@ -637,7 +637,7 @@ public:
 static void AppendLinuxClientCallstack(const AStringView callstackText, const LinuxProcessMemoryMapTable* const procMaps, [[maybe_unused]] const CrashSymbolicationConfig& config, [[maybe_unused]] Core::Alloc::ScratchArena& arena, CrashReportText& outReport){
     outReport += s_CallstackSectionHeader;
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
     __hidden_linux_frame_symbol_resolver::LinuxFrameSymbolResolver symbolResolver(config, arena, CountTextNewlinesPlusOne(callstackText));
 #endif
 
@@ -658,7 +658,7 @@ static void AppendLinuxClientCallstack(const AStringView callstackText, const Li
                 outReport += " ";
                 outReport.append(modulePath.data(), modulePath.size());
                 outReport += "+";
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
                 const auto symbolOffset = AddNoOverflow(moduleOffset, mapEntry->fileOffset);
                 AppendCrashHexAddress(moduleOffset, outReport);
                 if(symbolOffset){
@@ -690,7 +690,7 @@ static void AppendLinuxArtifactSummary(const CrashScratchPath& packageDirectory,
     const auto corePath = packageDirectory / CrashNames::s_LinuxCoreFileName;
     const auto corePresent = IsRegularFile(corePath);
     if(!corePresent){
-        NWB_LOGGER_WARNING(NWB_TEXT("Log server: failed to inspect Linux core artifact '{}': {}"), PathToString<tchar>(corePath), ConvertString(corePresent.error().message()));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Log server: failed to inspect Linux core artifact '{}': {}"), PathToString<tchar>(corePath), ConvertString(corePresent.error().message()));
         outReport += s_LinuxCoreInspectFailedLine;
     }
     else
@@ -748,7 +748,7 @@ static void AppendLinuxArtifactSummary(const CrashScratchPath& packageDirectory,
     outReport.append(modulePath.data(), modulePath.size());
     outReport += "\nmodule_relative_ip=";
     AppendCrashHexAddress(*instructionPointer - instructionMapEntry->begin, outReport);
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
     outReport += "\nsymbolication_relative_ip=";
     const auto symbolOffset = AddNoOverflow(*instructionPointer - instructionMapEntry->begin, instructionMapEntry->fileOffset);
     if(symbolOffset)
@@ -765,7 +765,7 @@ static void AppendLinuxArtifactSummary(const CrashScratchPath& packageDirectory,
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 template<typename T>
 struct MinidumpRecords{
     NotNull<const u8*> bytes;
@@ -775,9 +775,9 @@ struct MinidumpRecords{
 public:
     [[nodiscard]] T record(const usize index)const noexcept{
         static_assert(IsTriviallyCopyable_V<T> && IsNothrowConstructible_V<T> && IsNothrowMoveConstructible_V<T>);
-        NWB_ASSERT(index < count);
+        FOUNDATION_ASSERT(index < count);
         T value;
-        NWB_MEMCPY(&value, sizeof(value), bytes.get() + index * sizeof(T), sizeof(value));
+        FOUNDATION_MEMCPY(&value, sizeof(value), bytes.get() + index * sizeof(T), sizeof(value));
         return value;
     }
 };
@@ -801,7 +801,7 @@ public:
         if(!source)
             return MakeUnexpected(Failure{});
         T value;
-        NWB_MEMCPY(&value, sizeof(value), source, sizeof(value));
+        FOUNDATION_MEMCPY(&value, sizeof(value), source, sizeof(value));
         return value;
     }
 
@@ -821,7 +821,7 @@ public:
         WString<Core::Alloc::ScratchArena> text(scratchArena);
         text.resize(static_cast<usize>(*textByteCount / sizeof(wchar)));
         if(*textByteCount != 0u)
-            NWB_MEMCPY(text.data(), *textByteCount, textBytes, *textByteCount);
+            FOUNDATION_MEMCPY(text.data(), *textByteCount, textBytes, *textByteCount);
         return text;
     }
 
@@ -1004,7 +1004,7 @@ static BOOL CALLBACK ReadProcessMemoryFromDump([[maybe_unused]] HANDLE process, 
         if(match == DumpMemoryRangeMatch::PartialOverflow)
             return FALSE;
 
-        NWB_MEMCPY(buffer, static_cast<usize>(size), range.bytes.get() + offset, static_cast<usize>(size));
+        FOUNDATION_MEMCPY(buffer, static_cast<usize>(size), range.bytes.get() + offset, static_cast<usize>(size));
         if(bytesRead)
             *bytesRead = size;
         return TRUE;
@@ -1313,7 +1313,7 @@ CrashReportText BuildCrashSymbolicationReport(const CrashScratchPath& packageDir
     LoggerCrashSymbolicateDetail::AppendEventSummary(summary, detailReport);
 
     if(summary.platform == Core::Crash::s_WindowsPlatformName){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         const auto decoded = LoggerCrashSymbolicateDetail::AppendWindowsMinidumpStack(packageDirectory, summary, config, scratchArena, detailReport);
         if(!decoded)
             LoggerCrashSymbolicateDetail::AppendNativeFailure(decoded.error(), detailReport);

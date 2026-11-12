@@ -148,22 +148,22 @@ b8 AcceptUiRadioGroupPopupFamily(UiRadioGroupPopupTests& self, u64 generation)no
 };
 
 namespace __hidden_ui_radio_group_popup_tests{
-NWB_INLINE WidgetId UiRadioGroupPopupTests::parentHost()const{
+FOUNDATION_INLINE WidgetId UiRadioGroupPopupTests::parentHost()const{
     return ::__hidden_ui_glyph_sdf_tests::GetUiRadioGroupPopupParentHost(*this);
 }
-NWB_INLINE b8 UiRadioGroupPopupTests::beginParent(const u64 generation){
+FOUNDATION_INLINE b8 UiRadioGroupPopupTests::beginParent(const u64 generation){
     return ::__hidden_ui_glyph_sdf_tests::BeginUiRadioGroupPopupParent(*this, generation);
 }
-NWB_INLINE b8 UiRadioGroupPopupTests::declareFamily(const u64 generation){
+FOUNDATION_INLINE b8 UiRadioGroupPopupTests::declareFamily(const u64 generation){
     return ::__hidden_ui_glyph_sdf_tests::DeclareUiRadioGroupPopupFamily(*this, generation);
 }
-NWB_INLINE b8 UiRadioGroupPopupTests::finishParent(){
+FOUNDATION_INLINE b8 UiRadioGroupPopupTests::finishParent(){
     return ::__hidden_ui_glyph_sdf_tests::FinishUiRadioGroupPopupParent(*this);
 }
-NWB_INLINE b8 UiRadioGroupPopupTests::acceptParent(const u64 generation){
+FOUNDATION_INLINE b8 UiRadioGroupPopupTests::acceptParent(const u64 generation){
     return ::__hidden_ui_glyph_sdf_tests::AcceptUiRadioGroupPopupParent(*this, generation);
 }
-NWB_INLINE b8 UiRadioGroupPopupTests::acceptFamily(const u64 generation){
+FOUNDATION_INLINE b8 UiRadioGroupPopupTests::acceptFamily(const u64 generation){
     return ::__hidden_ui_glyph_sdf_tests::AcceptUiRadioGroupPopupFamily(*this, generation);
 }
 };

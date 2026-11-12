@@ -140,7 +140,7 @@ namespace __hidden_material_pipeline{
 Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRendererPipeline(const MaterialSurfaceInfo& materialInfo, const MaterialPipelineKey& pipelineKey, Core::Framebuffer& framebuffer){
     const Name& materialKey = materialInfo.materialName;
     const MaterialPipelinePass::Enum pass = pipelineKey.pass;
-    NWB_ASSERT(materialKey);
+    FOUNDATION_ASSERT(materialKey);
 
     auto [it, inserted] = m_materialState.m_pipelines.try_emplace(pipelineKey);
     MaterialPipelineResources& resources = it.value();
@@ -156,7 +156,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
         return MakeUnexpected(Failure{});
     };
 
-    NWB_ASSERT(!materialInfo.shaderVariant.empty());
+    FOUNDATION_ASSERT(!materialInfo.shaderVariant.empty());
     const AStringView shaderVariant(materialInfo.shaderVariant.data(), materialInfo.shaderVariant.size());
     Core::GraphicsString csgShaderVariant(m_arena);
     Core::GraphicsString avboitCsgShaderVariant(m_arena);
@@ -185,7 +185,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
     if(csgClipPipeline && !avboitCsgClipPipeline){
         auto variant = CsgShaderVariantBuilder().buildVariant(m_arena, shaderVariant, Core::ShaderArchive::s_DefaultVariant, materialProjectEvaluatorModuleAssignmentToAdd);
         if(!variant){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to build CSG shader variant for material '{}'"), ConvertString(materialKey.resolvedText()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to build CSG shader variant for material '{}'"), ConvertString(materialKey.resolvedText()));
             return failMaterialPipeline();
         }
         csgShaderVariant.assign(AStringView(*variant));
@@ -194,7 +194,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
     if(avboitCsgClipPipeline){
         auto variant = CsgShaderVariantBuilder().buildVariant(m_arena, shaderVariant, Core::ShaderArchive::s_DefaultVariant, materialProjectEvaluatorModuleAssignmentToAdd);
         if(!variant){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to build AVBOIT CSG mesh shader variant for material '{}'"), ConvertString(materialKey.resolvedText()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to build AVBOIT CSG mesh shader variant for material '{}'"), ConvertString(materialKey.resolvedText()));
             return failMaterialPipeline();
         }
         csgShaderVariant.assign(AStringView(*variant));
@@ -203,7 +203,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
     if(avboitCsgClipPipeline){
         auto variant = CsgShaderVariantBuilder().buildVariant(m_arena, Core::ShaderArchive::s_DefaultVariant, Core::ShaderArchive::s_DefaultVariant, avboitProjectEvaluatorModuleAssignmentToAdd);
         if(!variant){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to build AVBOIT CSG pixel shader variant for material '{}'"), ConvertString(materialKey.resolvedText()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to build AVBOIT CSG pixel shader variant for material '{}'"), ConvertString(materialKey.resolvedText()));
             return failMaterialPipeline();
         }
         avboitCsgShaderVariant.assign(AStringView(*variant));
@@ -225,7 +225,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
             materialInfo.avboitExtinctionPixelShader,
             materialInfo.avboitAccumulatePixelShader
         );
-        NWB_ASSERT(!materialInfo.transparent || avboitPixelShaderSelection.materialDriven());
+        FOUNDATION_ASSERT(!materialInfo.transparent || avboitPixelShaderSelection.materialDriven());
     }
     switch(pass){
     case MaterialPipelinePass::Opaque:
@@ -246,7 +246,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
     const Core::RenderState renderState = ECSRenderDetail::BuildRenderStateForPass(pass, pipelineKey.twoSided);
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material geometry pipeline requires the global descriptor heap"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: material geometry pipeline requires the global descriptor heap"));
         return failMaterialPipeline();
     }
     const auto materialPassBindingLayout = prepareMaterialPassBindingLayout();
@@ -279,12 +279,12 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
 
     const b8 meshSupported = m_graphics.queryFeatureSupport(Core::Feature::Meshlets);
     // Surface info admission already requires the mesh shader and the opaque pixel shader.
-    NWB_ASSERT(pass != MaterialPipelinePass::Opaque || materialInfo.pixelShader.valid());
-    NWB_ASSERT(materialInfo.meshShader.valid());
+    FOUNDATION_ASSERT(pass != MaterialPipelinePass::Opaque || materialInfo.pixelShader.valid());
+    FOUNDATION_ASSERT(materialInfo.meshShader.valid());
 
     if(meshSupported){
         if(!pipelineBuilder.buildMesh()){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create the required mesh rendering path for material '{}' on a mesh-capable device"), ConvertString(materialKey.resolvedText()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create the required mesh rendering path for material '{}' on a mesh-capable device"), ConvertString(materialKey.resolvedText()));
             return failMaterialPipeline();
         }
 
@@ -300,7 +300,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
             return failMaterialPipeline();
     }
     else if(!pipelineBuilder.buildCompute()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation rendering path for material '{}' from its mesh shader"), ConvertString(materialKey.resolvedText()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create compute-emulation rendering path for material '{}' from its mesh shader"), ConvertString(materialKey.resolvedText()));
         return failMaterialPipeline();
     }
 
@@ -374,7 +374,7 @@ b8 MaterialPipelineBuilder::buildMesh(){
     else
         m_inputs.resources.meshletPipeline.reset();
     if(!meshletPipelineResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create meshlet pipeline for material '{}'"), ConvertString(m_inputs.materialKey.resolvedText()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create meshlet pipeline for material '{}'"), ConvertString(m_inputs.materialKey.resolvedText()));
         return false;
     }
 
@@ -403,7 +403,7 @@ b8 MaterialPipelineBuilder::buildIndexed(){
     else
         m_inputs.resources.indexedPipeline.reset();
     if(!indexedPipelineResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create indexed object geometry pipeline for material '{}'"), ConvertString(m_inputs.materialKey.resolvedText()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create indexed object geometry pipeline for material '{}'"), ConvertString(m_inputs.materialKey.resolvedText()));
         return false;
     }
     m_inputs.resources.renderPath = RenderPath::VertexIndexed;
@@ -413,9 +413,9 @@ b8 MaterialPipelineBuilder::buildIndexed(){
 b8 MaterialPipelineBuilder::buildCompute(){
     if(!m_inputs.system.createComputeEmulationResources())
         return false;
-    NWB_ASSERT(m_inputs.materialState.m_computeBindingLayout);
-    NWB_ASSERT(m_inputs.materialState.m_emulationVertexShader);
-    NWB_ASSERT(m_inputs.materialState.m_emulationInputLayout);
+    FOUNDATION_ASSERT(m_inputs.materialState.m_computeBindingLayout);
+    FOUNDATION_ASSERT(m_inputs.materialState.m_emulationVertexShader);
+    FOUNDATION_ASSERT(m_inputs.materialState.m_emulationInputLayout);
     const Name& meshComputeArchiveStageName = ShaderBinaryPayload::s_MeshComputeArchiveStageName;
     if(!m_inputs.shaderSystem.loadShader<ComputeShader>(m_inputs.materialInfo.meshShader.name(), m_inputs.meshShaderVariant, s_RendererCsDebugName, &meshComputeArchiveStageName, m_inputs.resources.computeShader))
         return false;
@@ -423,7 +423,7 @@ b8 MaterialPipelineBuilder::buildCompute(){
         return false;
     // The compute-emulation mesh stage shares the mesh-shader source-stream runtime, so it needs the persistent tables too.
     if(!RendererComputePipelineDetail::CreateHeapComputePipeline(m_inputs.device, m_inputs.resources.computeShader, m_inputs.materialState.m_computeBindingLayout, false, m_inputs.resources.computePipeline)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute pipeline for material '{}'"), ConvertString(m_inputs.materialKey.resolvedText()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create compute pipeline for material '{}'"), ConvertString(m_inputs.materialKey.resolvedText()));
         return false;
     }
 
@@ -440,7 +440,7 @@ b8 MaterialPipelineBuilder::buildCompute(){
     else
         m_inputs.resources.emulationPipeline.reset();
     if(!emulationPipelineResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create emulation graphics pipeline for material '{}'"), ConvertString(m_inputs.materialKey.resolvedText()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create emulation graphics pipeline for material '{}'"), ConvertString(m_inputs.materialKey.resolvedText()));
         m_inputs.resources.computePipeline.reset();
         return false;
     }

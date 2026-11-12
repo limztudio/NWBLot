@@ -49,6 +49,10 @@ b8 BorrowLifetimeAnalyzer::isTemporaryOwnerExpr(const ClassDecl* ownerClass, con
             if(IsContainerOrWrapperValueAccessMethod(recvBase, mName, true)){
                 return isTemporaryOwnerExpr(ownerClass, method, *expr.lhs->lhs, scope);
             }
+            if(!m_checker.m_symbols.hasTypeSymbol(recvBase)){
+                if(const BuiltinReceiverMethodInfo* recvMethod = FindBuiltinReceiverMethod(recvBase, mName); recvMethod && recvMethod->synthesizeTypeRef && recvMethod->returnTypeName.empty())
+                    return false;
+            }
             if(IsBorrowViewType(recvBase)){
                 const BuiltinMemberMethodInfo* memberInfo = FindBuiltinMemberMethod(mName);
                 if((memberInfo && !memberInfo->isMutating && memberInfo->returnRule == BuiltinMemberReturnRule::FirstTypeArg) || IsStringByteAccessorMethod(recvBase, mName))

@@ -63,12 +63,12 @@ namespace ReflectionStatisticsTestHelpers{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE NWB::Impl::ReflectionSceneContentStamp Stamp()noexcept{
+[[nodiscard]] FOUNDATION_INLINE NWB::Impl::ReflectionSceneContentStamp Stamp()noexcept{
     return NWB::Impl::ReflectionSceneContentStamp{ 1u, 2u, 3u, 4u, true };
 }
 
 template<u16 DefaultDeviceGeneration = 1u, u64 DefaultValue = 20u>
-[[nodiscard]] NWB_INLINE NWB::Core::QueueSubmissionToken Token(const u64 value = DefaultValue)noexcept{
+[[nodiscard]] FOUNDATION_INLINE NWB::Core::QueueSubmissionToken Token(const u64 value = DefaultValue)noexcept{
     return NWB::Core::QueueSubmissionToken{ .value = value, .physicalQueueIndex = 0u, .deviceGeneration = DefaultDeviceGeneration, .queue = NWB::Core::CommandQueue::Graphics, };
 }
 
@@ -92,7 +92,7 @@ public:
 };
 
 template<typename StateT, typename PlanT>
-NWB_INLINE void Accept(const PlanT& plan, StateT& state, const b8 hardwareReady = true){
+FOUNDATION_INLINE void Accept(const PlanT& plan, StateT& state, const b8 hardwareReady = true){
     ASSERT_TRUE(state.reserve(plan));
     if constexpr(IsSame_V<decltype(state.accept(plan, Token(plan.sequence), hardwareReady)), b8>)
         ASSERT_TRUE(state.accept(plan, Token(plan.sequence), hardwareReady));
@@ -157,7 +157,7 @@ public:
     }
 };
 
-[[nodiscard]] NWB_INLINE CoincidentOpticalVolumeCandidate MakeOpticalCandidate(const u32 entityIndex)noexcept{
+[[nodiscard]] FOUNDATION_INLINE CoincidentOpticalVolumeCandidate MakeOpticalCandidate(const u32 entityIndex)noexcept{
     CoincidentOpticalVolumeCandidate candidate;
     candidate.entity = Core::ECS::EntityID(entityIndex, 0u);
     candidate.mesh = Core::Assets::AssetRef<Mesh>("tests/coincident_optical_volumes/mesh");
@@ -194,17 +194,17 @@ struct AvboitValidatorContext{
     return nullptr;
 }
 
-[[nodiscard]] NWB_INLINE const Core::GpuPhysicalQueueInfo* AddressOfSuitePhysicalQueueInfo(const Core::GpuPhysicalQueueInfo& info)noexcept{
+[[nodiscard]] FOUNDATION_INLINE const Core::GpuPhysicalQueueInfo* AddressOfSuitePhysicalQueueInfo(const Core::GpuPhysicalQueueInfo& info)noexcept{
     return &info;
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuPhysicalQueueInfo MakeSuiteGraphicsPhysicalQueueInfo()noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::GpuPhysicalQueueInfo MakeSuiteGraphicsPhysicalQueueInfo()noexcept{
     Core::GpuPhysicalQueueInfo info{};
     info.queueClass = Core::CommandQueue::Graphics;
     return info;
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuTaskId MakeSuiteGpuTaskId(const u32 generation, const u32 index)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::GpuTaskId MakeSuiteGpuTaskId(const u32 generation, const u32 index)noexcept{
     return Core::GpuTaskId{ .generation = generation, .index = index };
 }
 
@@ -217,24 +217,21 @@ inline constexpr i32 s_FrameCacheBindingFailure = 43;
 struct FrameCacheRuntimeProvider final : IRuntimeMeshProvider{
     Core::ECS::EntityID receiver = Core::ECS::s_InvalidEntityId;
     b8 attached = false;
-    b8 throwOnQuery = false;
 
 
 public:
     [[nodiscard]] virtual Expected<RuntimeMeshDesc> resolveRuntimeMesh(Core::ECS::EntityID)noexcept override{ return MakeUnexpected(Failure{}); }
 
-    [[nodiscard]] virtual b8 hasRuntimeMeshBinding(const Core::ECS::EntityID entity)const override{
-        if(throwOnQuery)
-            throw s_FrameCacheBindingFailure;
+    [[nodiscard]] virtual b8 hasRuntimeMeshBinding(const Core::ECS::EntityID entity)const noexcept override{
         return attached && entity == receiver;
     }
 
     virtual void markLiveRuntimeMeshes(RuntimeMeshRequestSet&)noexcept override{}
 };
 
-NWB_INLINE void SetCsgCutterParameters(const Float4& parameter, CsgCutterComponent& cutter){
+FOUNDATION_INLINE void SetCsgCutterParameters(const Float4& parameter, CsgCutterComponent& cutter){
     cutter.parameterBytes.resize(sizeof(parameter));
-    NWB_MEMCPY(cutter.parameterBytes.data(), cutter.parameterBytes.size(), &parameter, sizeof(parameter));
+    FOUNDATION_MEMCPY(cutter.parameterBytes.data(), cutter.parameterBytes.size(), &parameter, sizeof(parameter));
 }
 
 struct CsgShadowSnapshotContext{
@@ -282,7 +279,7 @@ public:
     }
 };
 
-[[nodiscard]] NWB_INLINE CsgShadowReceiverInput MakeCsgReceiverInput(const Core::ECS::EntityID entity)noexcept{
+[[nodiscard]] FOUNDATION_INLINE CsgShadowReceiverInput MakeCsgReceiverInput(const Core::ECS::EntityID entity)noexcept{
     CsgShadowReceiverInput input;
     input.entity = entity;
     input.worldMin = Float3U(-2.0f, -2.0f, -2.0f);
@@ -291,7 +288,7 @@ public:
     return input;
 }
 
-[[nodiscard]] NWB_INLINE Expected<CsgShapeBounds> CustomCsgShapeBounds(const SIMDMatrix& shapeToWorld, const Span<const u8> parameters)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Expected<CsgShapeBounds> CustomCsgShapeBounds(const SIMDMatrix& shapeToWorld, const Span<const u8> parameters)noexcept{
     if(!parameters.empty())
         return MakeUnexpected(Failure{});
     const auto bounds = AabbTests::Transform(shapeToWorld, VectorReplicate(-1.0f), VectorReplicate(1.0f));
@@ -300,7 +297,7 @@ public:
     return CsgShapeBounds{ bounds->minBounds, bounds->maxBounds, true };
 }
 
-[[nodiscard]] NWB_INLINE b8 RegisterCustomCsgShape(CsgShadowSnapshotContext& context, const Name name = s_CsgShadowCustomShape){
+[[nodiscard]] FOUNDATION_INLINE b8 RegisterCustomCsgShape(CsgShadowSnapshotContext& context, const Name name = s_CsgShadowCustomShape){
     CsgShapeTypeDesc description(context.testWorld.arena);
     description.name = name;
     description.shaderModule = NWB::Tests::EcsGraphicsCases::s_EcsCaseTestsCsgShadowEvaluator;
@@ -309,7 +306,7 @@ public:
     return context.registry.registerShapeType(description).has_value();
 }
 
-NWB_INLINE void AppendIdentityLightSpaceCsgReceiver(
+FOUNDATION_INLINE void AppendIdentityLightSpaceCsgReceiver(
     LightSpaceCsgState& state,
     const Core::ECS::EntityID receiver,
     const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh
@@ -326,7 +323,7 @@ NWB_INLINE void AppendIdentityLightSpaceCsgReceiver(
     );
 }
 
-NWB_INLINE void AppendTranslatedXLightSpaceCsgReceiver(
+FOUNDATION_INLINE void AppendTranslatedXLightSpaceCsgReceiver(
     LightSpaceCsgState& state,
     const Core::ECS::EntityID receiver,
     const f32 x,
@@ -345,12 +342,12 @@ NWB_INLINE void AppendTranslatedXLightSpaceCsgReceiver(
     );
 }
 
-NWB_INLINE void SetSuiteInstancePitchAndX(const f32 x, InstanceGpuData& instance)noexcept{
+FOUNDATION_INLINE void SetSuiteInstancePitchAndX(const f32 x, InstanceGpuData& instance)noexcept{
     instance.translation.x = x;
     StoreFloat(QuaternionRotationRollPitchYaw(0.0f, x, 0.0f), instance.rotation);
 }
 
-[[nodiscard]] NWB_INLINE u64 BuildSuiteLightSpaceCsgCaptureIdentity(
+[[nodiscard]] FOUNDATION_INLINE u64 BuildSuiteLightSpaceCsgCaptureIdentity(
     const LightSpaceCsgState& state,
     const Span<const NwbRtInstanceMaterialGpu> materials,
     const Span<const InstanceGpuData> instances,
@@ -359,7 +356,7 @@ NWB_INLINE void SetSuiteInstancePitchAndX(const f32 x, InstanceGpuData& instance
     return BuildLightSpaceCsgCaptureIdentity(state, materials, instances, materialBytes, Span<const Core::TextureHandle>{});
 }
 
-[[nodiscard]] NWB_INLINE u64 BuildSuiteLightSpaceCsgCaptureIdentityEmptyBytes(
+[[nodiscard]] FOUNDATION_INLINE u64 BuildSuiteLightSpaceCsgCaptureIdentityEmptyBytes(
     const LightSpaceCsgState& state,
     const Span<const NwbRtInstanceMaterialGpu> materials,
     const Span<const InstanceGpuData> instances
@@ -367,15 +364,15 @@ NWB_INLINE void SetSuiteInstancePitchAndX(const f32 x, InstanceGpuData& instance
     return BuildLightSpaceCsgCaptureIdentity(state, materials, instances, Span<const u8>{}, Span<const Core::TextureHandle>{});
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuDescriptorHandle MakeSuiteStorageBufferDescriptor(const u32 slot)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::GpuDescriptorHandle MakeSuiteStorageBufferDescriptor(const u32 slot)noexcept{
     return Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, slot);
 }
 
-[[nodiscard]] NWB_INLINE Span<const u32> EmptySuiteU32Span()noexcept{
+[[nodiscard]] FOUNDATION_INLINE Span<const u32> EmptySuiteU32Span()noexcept{
     return Span<const u32>{};
 }
 
-[[nodiscard]] NWB_INLINE b8 ResolveSuiteCsgBoxWorkBounds(
+[[nodiscard]] FOUNDATION_INLINE b8 ResolveSuiteCsgBoxWorkBounds(
     const CsgShapeRegistry& registry,
     const CsgShapeTypeInfo& shape,
     const SIMDMatrix& shapeToWorld,
@@ -387,7 +384,7 @@ NWB_INLINE void SetSuiteInstancePitchAndX(const f32 x, InstanceGpuData& instance
     return ResolveCsgClipWorkBounds(registry, shape, shapeToWorld, parameterBytes, receiver, outWork);
 }
 
-[[nodiscard]] NWB_INLINE b8 ResolveSuiteCsgTranslatedBoxWorkBounds(
+[[nodiscard]] FOUNDATION_INLINE b8 ResolveSuiteCsgTranslatedBoxWorkBounds(
     const CsgShapeRegistry& registry,
     const CsgShapeTypeInfo& shape,
     const f32 tx,
@@ -401,7 +398,7 @@ NWB_INLINE void SetSuiteInstancePitchAndX(const f32 x, InstanceGpuData& instance
     return ResolveCsgClipWorkBounds(registry, shape, MatrixTranslation(tx, ty, tz), parameterBytes, receiver, outWork);
 }
 
-NWB_INLINE void ExpandSuitePerspectiveWorldBounds(
+FOUNDATION_INLINE void ExpandSuitePerspectiveWorldBounds(
     CsgFrameWorkRegion& region,
     const SIMDVectorSingle minBounds,
     const SIMDVectorSingle maxBounds,
@@ -411,7 +408,7 @@ NWB_INLINE void ExpandSuitePerspectiveWorldBounds(
     region.expandWorldBounds(MatrixPerspectiveFovLH(s_PIDIV2, 1.0f, 0.1f, 100.0f), minBounds, maxBounds, width, height);
 }
 
-[[nodiscard]] NWB_INLINE b8 ResolveSuiteCsgEmptyWorkBounds(
+[[nodiscard]] FOUNDATION_INLINE b8 ResolveSuiteCsgEmptyWorkBounds(
     const CsgShapeRegistry& registry,
     const CsgShapeTypeInfo& shape,
     const SIMDMatrix& shapeToWorld,
@@ -1774,12 +1771,6 @@ void VerifyCsgShadowSnapshot_FrameCacheRejectsPendingRuntimeAttachmentWithUnchan
         ASSERT_TRUE(restored.has_value());
         EXPECT_EQ(original.value(), restored.value());
 
-        provider.throwOnQuery = true;
-        EXPECT_THROW({ const auto throwingSignature = CsgFrameCacheDetail::BuildSignature(context.testWorld.world, context.registry, meshSystem); EXPECT_FALSE(throwingSignature.has_value()); }, i32);
-        provider.throwOnQuery = false;
-        const auto afterFailure = CsgFrameCacheDetail::BuildSignature(context.testWorld.world, context.registry, meshSystem);
-        ASSERT_TRUE(afterFailure.has_value());
-        EXPECT_EQ(original.value(), afterFailure.value());
         meshSystem.unregisterRuntimeMeshProvider(provider);
     }
 }

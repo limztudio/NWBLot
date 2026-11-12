@@ -169,6 +169,7 @@ struct Expr{
     b8 isStringByteConstRef = false;
     b8 isStringByteMutRef = false;
     b8 wrapInSimdResult = false;
+    b8 wrapInNotNull = false;
     b8 unwrapSimdResultValue = false;
     u8 formatArgWrapKind = 0u;
     const TypeRef* wrapInFuncType = nullptr;

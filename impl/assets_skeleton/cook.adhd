@@ -215,7 +215,7 @@ Expected<SkeletonJointMatrix> AssetsSkeletonCookDetail::ParseSkeletonJointMatrix
 
 
 b8 SkeletonAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, NWB_TEXT("SkeletonAssetCodec::serialize")))
+    if(!checkSerializeAssetType(asset, FOUNDATION_TEXT("SkeletonAssetCodec::serialize")))
         return false;
 
     const Skeleton& skeleton = *MakeNotNull(checked_cast<const Skeleton*>(&asset));

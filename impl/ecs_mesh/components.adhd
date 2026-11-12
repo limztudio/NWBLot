@@ -8,12 +8,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[reflect]
+[arena, component("mesh")]
 class MeshComponent{
     public AssetRef<Mesh> mesh;
 }
 
-[reflect]
+[arena, component("skinned_mesh_binding")]
 class SkinnedMeshBindingComponent{
     public AssetRef<Skin> skin;
     public EntityID skeletonEntity = s_InvalidEntityId;

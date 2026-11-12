@@ -89,40 +89,40 @@ inline constexpr f32 s_QuietNaNF32 = Limit<f32>::s_QuietNaN;
     return GpuGraphResourceId{ .generation = generation, .index = index };
 }
 
-[[nodiscard]] NWB_INLINE Span<const MeshSkinningGraphDispatchPlan> FirstDispatchPlan(const Span<const MeshSkinningGraphDispatchPlan> plans)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Span<const MeshSkinningGraphDispatchPlan> FirstDispatchPlan(const Span<const MeshSkinningGraphDispatchPlan> plans)noexcept{
     return Span<const MeshSkinningGraphDispatchPlan>(plans.data(), 1u);
 }
 
 template<typename ScratchT>
-[[nodiscard]] NWB_INLINE SkinningStateHandoff CreateEmptySkinningStateHandoff(GpuPersistentResourceStateCache& cache, ScratchT&& scratch){
+[[nodiscard]] FOUNDATION_INLINE SkinningStateHandoff CreateEmptySkinningStateHandoff(GpuPersistentResourceStateCache& cache, ScratchT&& scratch){
     return SkinningStateHandoff(cache, scratch, {});
 }
 
-[[nodiscard]] NWB_INLINE b8 PrepareNullSkinningStateHandoff(){
+[[nodiscard]] FOUNDATION_INLINE b8 PrepareNullSkinningStateHandoff(){
     return SkinningStateHandoff::Prepare(nullptr, nullptr);
 }
 
-[[nodiscard]] NWB_INLINE b8 PrepareSkinningStateHandoffWithoutState(SkinningStateHandoff& handoff){
+[[nodiscard]] FOUNDATION_INLINE b8 PrepareSkinningStateHandoffWithoutState(SkinningStateHandoff& handoff){
     return SkinningStateHandoff::Prepare(&handoff, nullptr);
 }
 
-[[nodiscard]] NWB_INLINE b8 AcceptNullSkinningStateHandoff()noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 AcceptNullSkinningStateHandoff()noexcept{
     return SkinningStateHandoff::Accept(nullptr, {});
 }
 
-[[nodiscard]] NWB_INLINE b8 AcceptSkinningStateHandoff(SkinningStateHandoff& handoff)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 AcceptSkinningStateHandoff(SkinningStateHandoff& handoff)noexcept{
     return SkinningStateHandoff::Accept(&handoff, {});
 }
 
-[[nodiscard]] NWB_INLINE MeshSkinningRuntimeInstance MakeRuntimeInstance(){
+[[nodiscard]] FOUNDATION_INLINE MeshSkinningRuntimeInstance MakeRuntimeInstance(){
     return MeshSkinningRuntimeInstance(Tests::TestDetail::Arena());
 }
 
-[[nodiscard]] NWB_INLINE b8 BuildRuntimeSkinPayloadFromNone(const MeshSkinningRuntimeInstance& instance, RuntimeSkinPayloadScratch& payload){
+[[nodiscard]] FOUNDATION_INLINE b8 BuildRuntimeSkinPayloadFromNone(const MeshSkinningRuntimeInstance& instance, RuntimeSkinPayloadScratch& payload){
     return BuildRuntimeSkinPayload(instance, nullptr, nullptr, payload);
 }
 
-[[nodiscard]] NWB_INLINE b8 BuildRuntimeSkinPayloadFromPalette(
+[[nodiscard]] FOUNDATION_INLINE b8 BuildRuntimeSkinPayloadFromPalette(
     const MeshSkinningRuntimeInstance& instance,
     const SkeletonJointPaletteComponent& palette,
     RuntimeSkinPayloadScratch& payload
@@ -130,7 +130,7 @@ template<typename ScratchT>
     return BuildRuntimeSkinPayload(instance, &palette, nullptr, payload);
 }
 
-[[nodiscard]] NWB_INLINE b8 BuildRuntimeSkinPayloadFromPose(
+[[nodiscard]] FOUNDATION_INLINE b8 BuildRuntimeSkinPayloadFromPose(
     const MeshSkinningRuntimeInstance& instance,
     const SkeletonJointPaletteComponent& palette,
     const SkeletonPoseComponent& pose,
@@ -139,12 +139,12 @@ template<typename ScratchT>
     return BuildRuntimeSkinPayload(instance, &palette, &pose, payload);
 }
 
-[[nodiscard]] NWB_INLINE b8 SharesJointMatrixStorage(const Span<const SkeletonJointMatrix> upload, const RuntimeSkinPayloadScratch& payload)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 SharesJointMatrixStorage(const Span<const SkeletonJointMatrix> upload, const RuntimeSkinPayloadScratch& payload)noexcept{
     return upload.data() == payload.jointMatrices.data();
 }
 
 template<typename ScratchT, typename VertexVectorT>
-[[nodiscard]] NWB_INLINE Expected<TangentFrameRebuildResult> RebuildTangentFramesForVertices(
+[[nodiscard]] FOUNDATION_INLINE Expected<TangentFrameRebuildResult> RebuildTangentFramesForVertices(
     ScratchT&& scratchArena,
     const Span<const u32> indices,
     VertexVectorT& vertices

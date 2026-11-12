@@ -31,7 +31,7 @@ NWB_IMPL_BEGIN
     usize positionCount,
     Core::Alloc::ScratchArena& scratchArena
 );
-[[nodiscard]] NWB_INLINE Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildMeshletTriangleIndices(const Mesh& payload, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] FOUNDATION_INLINE Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildMeshletTriangleIndices(const Mesh& payload, Core::Alloc::ScratchArena& scratchArena){
     return BuildMeshletTriangleIndices(payload.meshlets(), payload.meshletLocalVertexRefs(), payload.meshletPositionRefDeltas(), payload.meshletPrimitiveIndices(), payload.positionStream().size(), scratchArena);
 }
 

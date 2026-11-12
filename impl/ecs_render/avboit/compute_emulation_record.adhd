@@ -191,7 +191,7 @@ public:
 [[nodiscard]] b8 RecordAvboitSharedComputeEmulation(const AvboitSharedComputeEmulationTaskPayload& inputs, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait);
 
 template<typename RenderPassMethod>
-[[nodiscard]] NWB_INLINE b8 RecordAvboitRasterPassFromPayload(
+[[nodiscard]] FOUNDATION_INLINE b8 RecordAvboitRasterPassFromPayload(
     const AvboitRasterPassTaskPayload& payload,
     Core::CommandList& commandList,
     const RenderPassMethod renderPass

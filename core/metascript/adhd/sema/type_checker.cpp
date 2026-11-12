@@ -267,7 +267,7 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
         for(usize pass = 0u; pass < maxArenaPasses; ++pass){
             b8 changed = false;
             for(ClassDecl* cls : unit.classes){
-                if(!cls || cls->isSerialize || !cls->subsystemTypeName.empty() || !cls->componentAssetTypeName.empty() || cls->needsClassArena)
+                if(!cls || cls->isSerialize || !cls->subsystemTypeName.empty() || cls->needsClassArena)
                     continue;
                 for(const FieldDecl* field : cls->fields){
                     if(field && field->type && preLayoutAnalyzer.requiresMotherArena(*field->type)){

@@ -142,6 +142,60 @@ b8 SceneAsset::loadBinary(in Span<u8> binary){
     return true;
 }
 
+b8 TransformComponentAsset::loadBinary(in Span<u8> binary){
+    return ComponentAssetBinaryCodec().loadBinary(binary, this);
+}
+
+b8 TransformComponentAsset::loadComponentPayload(in Span<u8> payload){
+    return ComponentAssetBinaryCodec().deserializeTransform(payload, this.component);
+}
+
+b8 TransformComponentAsset::validatePayload()const{
+    if(!this.checkVirtualPath("TransformComponentAsset::validatePayload"))
+        return false;
+    return ValidateTransformComponentAssetPayload(this.component, this.virtualPath());
+}
+
+b8 TransformComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
+    return ComponentAssetBinaryCodec().serializeTransform(this.component, outPayload);
+}
+
+b8 CameraComponentAsset::loadBinary(in Span<u8> binary){
+    return ComponentAssetBinaryCodec().loadBinary(binary, this);
+}
+
+b8 CameraComponentAsset::loadComponentPayload(in Span<u8> payload){
+    return ComponentAssetBinaryCodec().deserializeCamera(payload, this.component);
+}
+
+b8 CameraComponentAsset::validatePayload()const{
+    if(!this.checkVirtualPath("CameraComponentAsset::validatePayload"))
+        return false;
+    return ValidateCameraComponentAssetPayload(this.component, this.virtualPath());
+}
+
+b8 CameraComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
+    return ComponentAssetBinaryCodec().serializeCamera(this.component, outPayload);
+}
+
+b8 LightComponentAsset::loadBinary(in Span<u8> binary){
+    return ComponentAssetBinaryCodec().loadBinary(binary, this);
+}
+
+b8 LightComponentAsset::loadComponentPayload(in Span<u8> payload){
+    return ComponentAssetBinaryCodec().deserializeLight(payload, this.component);
+}
+
+b8 LightComponentAsset::validatePayload()const{
+    if(!this.checkVirtualPath("LightComponentAsset::validatePayload"))
+        return false;
+    return ValidateLightComponentAssetPayload(this.component, this.virtualPath());
+}
+
+b8 LightComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
+    return ComponentAssetBinaryCodec().serializeLight(this.component, outPayload);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -201,38 +255,7 @@ namespace __hidden_active_scene_subsystems{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_ActiveSceneSubsystemsOwner = NWB_TEXT("ActiveSceneSubsystems");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-IComponent::~IComponent()noexcept = default;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ComponentAssetRuntime{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 LoadBinary(const Span<const u8> binary, IComponent& outComponent){
-    const auto payload = ComponentAssetBinaryCodec().unpackEnvelope(binary, outComponent.assetType());
-    if(!payload)
-        return false;
-    if(!outComponent.loadComponentPayload(*payload))
-        return false;
-    return outComponent.validatePayload();
-}
+inline constexpr TStringView s_ActiveSceneSubsystemsOwner = FOUNDATION_TEXT("ActiveSceneSubsystems");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -251,51 +274,9 @@ Expected<UniquePtr<Core::Assets::IAsset>> ComponentAssetCodec::deserialize(const
         s_ComponentMagic,
         s_ComponentLoadBinaryContext,
         s_ComponentAssetKindLabel,
-        NWB_TEXT("ComponentAssetCodec::deserialize"),
+        FOUNDATION_TEXT("ComponentAssetCodec::deserialize"),
         arena
     );
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 TransformComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    return ComponentAssetBinaryCodec().deserializeTransform(payload, component);
-}
-
-b8 TransformComponentAsset::validatePayload()const{
-    if(!checkVirtualPath(NWB_TEXT("TransformComponentAsset::validatePayload")))
-        return false;
-    return ValidateTransformComponentAssetPayload(component, virtualPath());
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 CameraComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    return ComponentAssetBinaryCodec().deserializeCamera(payload, component);
-}
-
-b8 CameraComponentAsset::validatePayload()const{
-    if(!checkVirtualPath(NWB_TEXT("CameraComponentAsset::validatePayload")))
-        return false;
-    return ValidateCameraComponentAssetPayload(component, virtualPath());
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 LightComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    return ComponentAssetBinaryCodec().deserializeLight(payload, component);
-}
-
-b8 LightComponentAsset::validatePayload()const{
-    if(!checkVirtualPath(NWB_TEXT("LightComponentAsset::validatePayload")))
-        return false;
-    return ValidateLightComponentAssetPayload(component, virtualPath());
 }
 
 
@@ -322,7 +303,7 @@ b8 ActiveSceneSubsystems::loadScene(const SceneRef& scene, Core::Assets::AssetMa
     nextSceneAssets.reserve(sceneAsset.assets().size());
     for(const auto& [nickname, asset] : sceneAsset.assets()){
         if(!nextSceneAssets.emplace(nickname, asset).second){
-            NWB_ASSERT(false);
+            FOUNDATION_ASSERT(false);
             return false;
         }
     }

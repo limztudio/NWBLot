@@ -166,7 +166,7 @@ public:
     void clear();
 
 
-private:
+public:
     template<typename T, typename... Args>
     T& addComponent(EntityID entityId, Args&&... args){
         FOUNDATION_ASSERT(m_entityManager.alive(entityId));
@@ -212,6 +212,8 @@ private:
 
     b8 alive(EntityID entityId)const noexcept{ return m_entityManager.alive(entityId); }
 
+
+private:
     template<typename T>
     ComponentPool<T>* getPool()noexcept{
         const auto typeId = ComponentType<T>();

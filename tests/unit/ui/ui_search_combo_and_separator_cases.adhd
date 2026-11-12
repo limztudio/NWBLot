@@ -544,27 +544,27 @@ using InputEvent = ::NWB::Impl::Ui::InputEvent;
 namespace InputEventType = ::NWB::Impl::Ui::InputEventType;
 namespace UiSearchComboKey = ::NWB::Core::Key;
 
-[[nodiscard]] NWB_INLINE b8 UiSearchComboReconcileCombo(::NWB::Impl::Ui::ComboState& state, const ::NWB::Impl::Ui::IListDataSource& source){
+[[nodiscard]] FOUNDATION_INLINE b8 UiSearchComboReconcileCombo(::NWB::Impl::Ui::ComboState& state, const ::NWB::Impl::Ui::IListDataSource& source){
     return ::NWB::Impl::Ui::ComboBehavior::Reconcile(state, source);
 }
 
-[[nodiscard]] NWB_INLINE b8 UiSearchComboFilterState(::NWB::Impl::Ui::SearchComboState& state, ::NWB::Impl::Ui::ISearchableListDataSource& source){
+[[nodiscard]] FOUNDATION_INLINE b8 UiSearchComboFilterState(::NWB::Impl::Ui::SearchComboState& state, ::NWB::Impl::Ui::ISearchableListDataSource& source){
     return ::NWB::Impl::Ui::SearchComboBehavior::Filter(state, source);
 }
 
-[[nodiscard]] NWB_INLINE b8 UiSearchComboReconcilePreview(::NWB::Impl::Ui::SearchComboState& state, const ::NWB::Impl::Ui::IListDataSource& source){
+[[nodiscard]] FOUNDATION_INLINE b8 UiSearchComboReconcilePreview(::NWB::Impl::Ui::SearchComboState& state, const ::NWB::Impl::Ui::IListDataSource& source){
     return ::NWB::Impl::Ui::ListBehavior::Reconcile(::NWB::Impl::Ui::ComboBehavior::Preview(state.combo()), source);
 }
 
-NWB_INLINE void UiSearchComboSelectPreview(::NWB::Impl::Ui::SearchComboState& state, const u64 keyValue)noexcept{
+FOUNDATION_INLINE void UiSearchComboSelectPreview(::NWB::Impl::Ui::SearchComboState& state, const u64 keyValue)noexcept{
     ::NWB::Impl::Ui::ComboBehavior::Preview(state.combo()).select(keyValue);
 }
 
-[[nodiscard]] NWB_INLINE b8 UiSearchComboScrollPreview(::NWB::Impl::Ui::SearchComboState& state, const f64 offset)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 UiSearchComboScrollPreview(::NWB::Impl::Ui::SearchComboState& state, const f64 offset)noexcept{
     return ::NWB::Impl::Ui::ComboBehavior::Preview(state.combo()).scrollTo(offset);
 }
 
-[[nodiscard]] NWB_INLINE SearchComboOptions UiSearchComboFixtureOptions()noexcept{
+[[nodiscard]] FOUNDATION_INLINE SearchComboOptions UiSearchComboFixtureOptions()noexcept{
     return ::NWB::UiSearchComboTests::SearchFixture::Options();
 }
 
@@ -573,7 +573,7 @@ b8 DeclareUiSearchSelectionEpoch(UiSearchSelectionEpochTests& self, u64 generati
 
 NWB_BEGIN
 namespace __hidden_ui_search_selection_epoch_tests{
-NWB_INLINE b8 UiSearchSelectionEpochTests::declareEpochSearch(const u64 generation){
+FOUNDATION_INLINE b8 UiSearchSelectionEpochTests::declareEpochSearch(const u64 generation){
     return ::__hidden_ui_glyph_sdf_tests::DeclareUiSearchSelectionEpoch(*this, generation);
 }
 };

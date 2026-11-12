@@ -124,13 +124,13 @@ public:
     }
 };
 
-[[nodiscard]] NWB_INLINE Core::GpuTaskExternalStateSource MakeGpuPacketExternalStateSource(
+[[nodiscard]] FOUNDATION_INLINE Core::GpuTaskExternalStateSource MakeGpuPacketExternalStateSource(
     const Core::CommandListResourceStateHandoff& stateHandoff
 )noexcept{
     return Core::GpuTaskExternalStateSource{ .states = &stateHandoff };
 }
 
-[[nodiscard]] NWB_INLINE Expected<Core::GpuTaskId> AddPacketLifecycleDiscardTask(
+[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuTaskId> AddPacketLifecycleDiscardTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     u32& discardedCount
@@ -138,7 +138,7 @@ public:
     return graph.addTask<PacketLifecycleTask>(desc, PacketLifecycleTask::Payload{ .discardedCount = &discardedCount });
 }
 
-[[nodiscard]] NWB_INLINE Expected<Core::GpuTaskId> AddPacketLifecycleTask(
+[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuTaskId> AddPacketLifecycleTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     u32& acceptedCount,
@@ -150,7 +150,7 @@ public:
     );
 }
 
-[[nodiscard]] NWB_INLINE Expected<Core::GpuTaskId> AddMalformedLifecycleTask(
+[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuTaskId> AddMalformedLifecycleTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     u32& recordCount,
@@ -163,7 +163,7 @@ public:
     );
 }
 
-[[nodiscard]] NWB_INLINE Expected<Core::GpuTaskId> AddThrowingResetTask(
+[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuTaskId> AddThrowingResetTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     u32& destructionCount,
@@ -175,7 +175,7 @@ public:
     );
 }
 
-[[nodiscard]] NWB_INLINE Expected<Core::GpuTaskId> AddBorrowedPayloadLifetimeTask(
+[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuTaskId> AddBorrowedPayloadLifetimeTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     b8& ownerAlive,
@@ -190,7 +190,7 @@ public:
     );
 }
 
-[[nodiscard]] NWB_INLINE b8 ResetThrowsDiscardFailure(Core::GpuTaskGraph& graph){
+[[nodiscard]] FOUNDATION_INLINE b8 ResetThrowsDiscardFailure(Core::GpuTaskGraph& graph){
     try{
         graph.reset();
         return false;
@@ -200,7 +200,7 @@ public:
     }
 }
 
-[[nodiscard]] NWB_INLINE b8 UnwindWithScopeExitResetPreservesOriginalFailure(Core::GpuTaskGraph& graph){
+[[nodiscard]] FOUNDATION_INLINE b8 UnwindWithScopeExitResetPreservesOriginalFailure(Core::GpuTaskGraph& graph){
     try{
         ScopeExit resetOnUnwind([&]()noexcept{ graph.reset(); });
         throw GpuPacketResetOriginalFailure{};
@@ -210,7 +210,7 @@ public:
     }
 }
 
-[[nodiscard]] NWB_INLINE b8 RetireTwoBorrowedPayloadsCatchesDiscardFailure(
+[[nodiscard]] FOUNDATION_INLINE b8 RetireTwoBorrowedPayloadsCatchesDiscardFailure(
     Core::GpuGraphSubmissionTransaction& transaction,
     Core::GpuTaskGraph& graph,
     Core::GpuCompiledGraph& compiledGraph,
@@ -238,7 +238,7 @@ public:
     return false;
 }
 
-[[nodiscard]] NWB_INLINE b8 UnwindBorrowedPayloadLifetimeCatchesOriginalFailure(
+[[nodiscard]] FOUNDATION_INLINE b8 UnwindBorrowedPayloadLifetimeCatchesOriginalFailure(
     Core::GpuGraphSubmissionTransaction& transaction,
     Core::GpuTaskGraph& graph,
     Core::GpuCompiledGraph& compiledGraph,
@@ -261,43 +261,43 @@ public:
     }
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuCopyBufferTaskDesc MakeCopyBufferDescWithToken(Core::QueueSubmissionToken& token)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::GpuCopyBufferTaskDesc MakeCopyBufferDescWithToken(Core::QueueSubmissionToken& token)noexcept{
     Core::GpuCopyBufferTaskDesc desc{};
     desc.acceptedToken = &token;
     return desc;
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuCopyTextureTaskDesc MakeCopyTextureDescWithToken(Core::QueueSubmissionToken& token)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::GpuCopyTextureTaskDesc MakeCopyTextureDescWithToken(Core::QueueSubmissionToken& token)noexcept{
     Core::GpuCopyTextureTaskDesc desc{};
     desc.acceptedToken = &token;
     return desc;
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuResolveTextureTaskDesc MakeResolveTextureDescWithToken(Core::QueueSubmissionToken& token)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::GpuResolveTextureTaskDesc MakeResolveTextureDescWithToken(Core::QueueSubmissionToken& token)noexcept{
     Core::GpuResolveTextureTaskDesc desc{};
     desc.acceptedToken = &token;
     return desc;
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuClearBufferTaskDesc MakeClearBufferDescWithToken(Core::QueueSubmissionToken& token)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::GpuClearBufferTaskDesc MakeClearBufferDescWithToken(Core::QueueSubmissionToken& token)noexcept{
     Core::GpuClearBufferTaskDesc desc{};
     desc.acceptedToken = &token;
     return desc;
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuClearTextureTaskDesc MakeClearTextureDescWithToken(Core::QueueSubmissionToken& token)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::GpuClearTextureTaskDesc MakeClearTextureDescWithToken(Core::QueueSubmissionToken& token)noexcept{
     Core::GpuClearTextureTaskDesc desc{};
     desc.acceptedToken = &token;
     return desc;
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuClearTextureRectUIntTaskDesc MakeClearTextureRectDescWithToken(Core::QueueSubmissionToken& token)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::GpuClearTextureRectUIntTaskDesc MakeClearTextureRectDescWithToken(Core::QueueSubmissionToken& token)noexcept{
     Core::GpuClearTextureRectUIntTaskDesc desc{};
     desc.acceptedToken = &token;
     return desc;
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuCopyBufferTaskDesc MakeCopyBufferDescWithRegions(const Span<const Core::GpuCopyBufferTaskRegion> regions)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::GpuCopyBufferTaskDesc MakeCopyBufferDescWithRegions(const Span<const Core::GpuCopyBufferTaskRegion> regions)noexcept{
     Core::GpuCopyBufferTaskDesc desc{};
     desc.regions = regions.data();
     desc.regionCount = regions.size();

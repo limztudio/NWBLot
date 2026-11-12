@@ -36,7 +36,7 @@ namespace __hidden_simd_memory_tests{
 
 using NWB::Tests::ExitOnAbort;
 using NWB::Tests::GuardAddress;
-#if defined(NWB_PLATFORM_WINDOWS) || defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_WINDOWS) || defined(FOUNDATION_PLATFORM_LINUX)
 using NWB::Tests::GuardedBytes;
 #endif
 using NWB::Tests::PatternByte;
@@ -79,8 +79,8 @@ public:
     return 0xDEADBEEF80000000ull ^ (static_cast<u64>(packetIndex + 1u) << 32u) ^ (static_cast<u64>(laneIndex + 1u) * 0x01020304ull);
 }
 
-#if defined(NWB_PLATFORM_WINDOWS) || defined(NWB_PLATFORM_LINUX)
-NWB_INLINE void ExpectRejectedCopy(void* destination, const usize capacity, const void* source, const usize count){
+#if defined(FOUNDATION_PLATFORM_WINDOWS) || defined(FOUNDATION_PLATFORM_LINUX)
+FOUNDATION_INLINE void ExpectRejectedCopy(void* destination, const usize capacity, const void* source, const usize count){
     // An access violation cannot satisfy this predicate, so rejection must happen before either range is accessed.
     EXPECT_EXIT({
         if(signal(SIGABRT, ExitOnAbort) == SIG_ERR)
@@ -124,23 +124,23 @@ void VerifySIMDMemory_AlignedCacheLineOffsetsAndVectorBoundaryTailsPreserveExact
         for(const usize count : s_Lengths){
             for(usize sourceOffset = 0u; sourceOffset < 128u; sourceOffset += s_SIMDMemoryCopyAlignment){
                 for(usize destinationOffset = 0u; destinationOffset < 128u; destinationOffset += s_SIMDMemoryCopyAlignment){
-                    NWB_MEMSET(destination.data(), s_Poison, destination.size());
-                    NWB_MEMSET(expected.data(), s_Poison, expected.size());
+                    FOUNDATION_MEMSET(destination.data(), s_Poison, destination.size());
+                    FOUNDATION_MEMSET(expected.data(), s_Poison, expected.size());
                     const usize sourceStart = s_GuardBytes + sourceOffset;
                     const usize destinationStart = s_GuardBytes + destinationOffset;
                     for(usize index = 0u; index < count; ++index)
                         expected[destinationStart + index] = original[sourceStart + index];
                     volatile usize runtimeCount = count;
-                    NWB_SIMD_MEMCPY(destination.data() + destinationStart, count, source.data() + sourceStart, runtimeCount);
+                    FOUNDATION_SIMD_MEMCPY(destination.data() + destinationStart, count, source.data() + sourceStart, runtimeCount);
                     ++testedCombinations;
-                    if(NWB_MEMCMP(destination.data(), expected.data(), destination.size()) != 0){
+                    if(FOUNDATION_MEMCMP(destination.data(), expected.data(), destination.size()) != 0){
                         ++rangeMismatches;
                         ADD_FAILURE() << count << ':' << sourceOffset << ':' << destinationOffset;
                     }
                 }
             }
         }
-        sourceUnmodified = NWB_MEMCMP(source.data(), original.data(), source.size()) == 0;
+        sourceUnmodified = FOUNDATION_MEMCMP(source.data(), original.data(), source.size()) == 0;
     }
     EXPECT_EQ(testedCombinations, 34u * 8u * 8u);
     EXPECT_EQ(rangeMismatches, 0u);
@@ -237,7 +237,7 @@ void VerifySIMDMemory_AdjacentRangesInOneLiveByteArrayAreAcceptedWithoutClobberi
                     expected[destinationStart + index] = PatternByte(sourceStart + index);
                 volatile usize runtimeCount = count;
                 SIMDMemoryCopy(bytes.data() + destinationStart, count, bytes.data() + sourceStart, runtimeCount);
-                matched = NWB_MEMCMP(bytes.data(), expected.data(), bytes.size()) == 0;
+                matched = FOUNDATION_MEMCMP(bytes.data(), expected.data(), bytes.size()) == 0;
             }
             EXPECT_TRUE(matched);
         }
@@ -254,7 +254,7 @@ void VerifySIMDMemory_ProtectedPageEdgesRejectOverreadsUnderreadsAndOutOfRangeSt
     usize sourceMutationCount = 0u;
 
     native(mut supported, mut guardsAllocated, mut sourceAccessible, mut destinationAccessible, mut maxTestLength, mut mismatchCount, mut sourceMutationCount){
-#if defined(NWB_PLATFORM_WINDOWS) || defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_WINDOWS) || defined(FOUNDATION_PLATFORM_LINUX)
         using namespace __hidden_simd_memory_tests;
         supported = true;
         maxTestLength = s_Lengths[s_Lengths.size() - 1u];
@@ -271,7 +271,7 @@ void VerifySIMDMemory_ProtectedPageEdgesRejectOverreadsUnderreadsAndOutOfRangeSt
                 const usize count = lengthIndex == s_Lengths.size() ? source.accessibleBytes : s_Lengths[lengthIndex];
                 for(const b8 sourceAtEnd : { false, true }){
                     for(const b8 destinationAtEnd : { false, true }){
-                        NWB_MEMSET(destination.data, s_Poison, destination.accessibleBytes);
+                        FOUNDATION_MEMSET(destination.data, s_Poison, destination.accessibleBytes);
                         // Nonmultiple tails leave less than one vector of poison before the upper guard to keep both starts aligned.
                         const usize sourceStart = sourceAtEnd ? (source.accessibleBytes - count) & ~(s_SIMDMemoryCopyAlignment - 1u) : 0u;
                         const usize destinationStart = destinationAtEnd ? (destination.accessibleBytes - count) & ~(s_SIMDMemoryCopyAlignment - 1u) : 0u;
@@ -317,14 +317,14 @@ void VerifySIMDMemory_ZeroLengthAllowsNullOnePastAndInaccessiblePointersWithoutA
         alignas(16) Array<u8, 3> bytes = { 0x12u, 0x34u, 0x56u };
         volatile usize zero = 0u;
         SIMDMemoryCopy(nullptr, 0u, nullptr, zero);
-        NWB_SIMD_MEMCPY(bytes.data() + bytes.size(), 0u, nullptr, zero);
+        FOUNDATION_SIMD_MEMCPY(bytes.data() + bytes.size(), 0u, nullptr, zero);
         SIMDMemoryCopy(nullptr, Limit<usize>::s_Max, bytes.data() + bytes.size(), zero);
         SIMDMemoryCopy(bytes.data(), 0u, bytes.data(), zero);
-#if defined(NWB_PLATFORM_WINDOWS) || defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_WINDOWS) || defined(FOUNDATION_PLATFORM_LINUX)
         GuardedBytes guarded;
         guardsAllocated = guarded.data != nullptr;
         if(guardsAllocated){
-            NWB_SIMD_MEMCPY(guarded.mapping, 0u, guarded.data + guarded.accessibleBytes, zero);
+            FOUNDATION_SIMD_MEMCPY(guarded.mapping, 0u, guarded.data + guarded.accessibleBytes, zero);
             SIMDMemoryCopy(guarded.data + guarded.accessibleBytes, Limit<usize>::s_Max, guarded.mapping, zero);
             SIMDMemoryCopy(GuardAddress(guarded.mapping, 1u), 0u, GuardAddress(guarded.data, guarded.accessibleBytes + 8u), zero);
         }
@@ -344,7 +344,7 @@ void VerifySIMDMemory_InvalidCapacityNullAlignmentHugeCountsAndOverlapAbortBefor
     b8 guardsAllocated = false;
     usize unalignedOffsetCount = 0u;
     native(mut supported, mut guardsAllocated, mut unalignedOffsetCount){
-#if defined(NWB_PLATFORM_WINDOWS) || defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_WINDOWS) || defined(FOUNDATION_PLATFORM_LINUX)
         using namespace __hidden_simd_memory_tests;
         supported = true;
         GuardedBytes guarded;

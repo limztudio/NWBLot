@@ -23,11 +23,11 @@ namespace NWB::Tests::Smoke{
 namespace ReflectionGpuTimingScope = Impl::ReflectionGpuTimingScope;
 inline constexpr u32 s_ReflectionMaxDepthMipsCap = NWB_REFLECTION_MAX_DEPTH_MIPS;
 
-[[nodiscard]] NWB_INLINE AStringView ReflectionSmokeProjectName()noexcept{
+[[nodiscard]] FOUNDATION_INLINE AStringView ReflectionSmokeProjectName()noexcept{
     return "ReflectionSmokeProject";
 }
 
-[[nodiscard]] NWB_INLINE AStringView ReflectionCpuTimingOwnerLabel()noexcept{
+[[nodiscard]] FOUNDATION_INLINE AStringView ReflectionCpuTimingOwnerLabel()noexcept{
     return "reflection";
 }
 };
@@ -1263,7 +1263,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{
-    return NWB_TEXT("NWB Reflection Smoke");
+    return FOUNDATION_TEXT("NWB Reflection Smoke");
 }
 
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){

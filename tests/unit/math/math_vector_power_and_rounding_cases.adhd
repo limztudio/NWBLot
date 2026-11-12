@@ -43,7 +43,7 @@ public:
         : m_originalError(errno)
         , m_originalEnvironment(HoldFloatingPointExceptions())
     {
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
         __asm__ __volatile__("mrs %0, fpsr" : "=r"(m_originalNativeStatus));
 #endif
     }
@@ -55,7 +55,7 @@ public:
             return;
         if(!SetFloatingPointEnvironment(*m_originalEnvironment))
             __builtin_trap();
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
         __asm__ __volatile__("msr fpsr, %0" : : "r"(m_originalNativeStatus));
 #endif
         errno = m_originalError;
@@ -68,7 +68,7 @@ public:
 
 private:
     i32 m_originalError = 0;
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
     u64 m_originalNativeStatus = 0u;
 #endif
     Expected<FloatingPointEnvironment> m_originalEnvironment;
@@ -77,14 +77,14 @@ private:
 class MxcsrEnvironmentGuard final : NoCopy{
 public:
     MxcsrEnvironmentGuard()noexcept
-#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_AVX)
+#if defined(FOUNDATION_HAS_SSE2) || defined(FOUNDATION_HAS_AVX)
         : m_originalControl(_mm_getcsr())
         , m_originalEnvironment(HoldFloatingPointExceptions())
 #else
         : m_originalEnvironment(HoldFloatingPointExceptions())
 #endif
     {
-#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_AVX)
+#if defined(FOUNDATION_HAS_SSE2) || defined(FOUNDATION_HAS_AVX)
         m_heldControl = _mm_getcsr();
 #endif
     }
@@ -93,8 +93,8 @@ public:
 
     ~MxcsrEnvironmentGuard()noexcept{
         if(m_originalEnvironment && !SetFloatingPointEnvironment(*m_originalEnvironment))
-            NWB_ASSERT(false);
-#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_AVX)
+            FOUNDATION_ASSERT(false);
+#if defined(FOUNDATION_HAS_SSE2) || defined(FOUNDATION_HAS_AVX)
         _mm_setcsr(m_originalControl);
 #endif
     }
@@ -104,21 +104,21 @@ public:
     [[nodiscard]] b8 valid()const noexcept{ return m_originalEnvironment.has_value(); }
 
     void applyMode([[maybe_unused]] const u32 mode)const noexcept{
-#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_AVX)
+#if defined(FOUNDATION_HAS_SSE2) || defined(FOUNDATION_HAS_AVX)
         _mm_setcsr((m_heldControl & ~(0x8040u | 0x3fu)) | mode);
 #endif
     }
 
 
 private:
-#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_AVX)
+#if defined(FOUNDATION_HAS_SSE2) || defined(FOUNDATION_HAS_AVX)
     u32 m_originalControl = 0u;
     u32 m_heldControl = 0u;
 #endif
     Expected<FloatingPointEnvironment> m_originalEnvironment;
 };
 
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
 inline constexpr Array<u32, 2u> s_PowerDenormalModes = { _DN_SAVE, _DN_FLUSH };
 inline constexpr Array<u64, 4u> s_PowerNativeSeeds = { 0u, 0x80u, 0x08000000u, 0x08000080u };
 #else
@@ -127,14 +127,14 @@ inline constexpr Array<u64, 1u> s_PowerNativeSeeds = { 0u };
 #endif
 inline constexpr Array<i32, 2u> s_PowerInitialFlags = { 0, FE_INEXACT };
 
-#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_AVX)
+#if defined(FOUNDATION_HAS_SSE2) || defined(FOUNDATION_HAS_AVX)
 inline constexpr Array<u32, 4u> s_OrderedClampModes = { 0u, 0x40u, 0x8000u, 0x8040u };
 #else
 inline constexpr Array<u32, 1u> s_OrderedClampModes = { 0u };
 #endif
 
 [[nodiscard]] inline constexpr b8 ShouldSkipNeon32SqrtCase()noexcept{
-#if defined(NWB_HAS_NEON) && !defined(NWB_HAS_NEON64)
+#if defined(FOUNDATION_HAS_NEON) && !defined(FOUNDATION_HAS_NEON64)
     return true;
 #else
     return false;
@@ -142,7 +142,7 @@ inline constexpr Array<u32, 1u> s_OrderedClampModes = { 0u };
 }
 
 [[nodiscard]] inline constexpr b8 HasDoubleFmaResidual()noexcept{
-#if defined(NWB_HAS_FMA3) || defined(NWB_HAS_NEON)
+#if defined(FOUNDATION_HAS_FMA3) || defined(FOUNDATION_HAS_NEON)
     return true;
 #else
     return false;
@@ -150,15 +150,15 @@ inline constexpr Array<u32, 1u> s_OrderedClampModes = { 0u };
 }
 
 [[nodiscard]] inline constexpr b8 HasSingleFmaResidual()noexcept{
-#if defined(NWB_HAS_FMA3) || defined(NWB_HAS_NEON64)
+#if defined(FOUNDATION_HAS_FMA3) || defined(FOUNDATION_HAS_NEON64)
     return true;
 #else
     return false;
 #endif
 }
 
-[[nodiscard]] NWB_INLINE b8 ConfigurePowerDenormalMode([[maybe_unused]] const u32 denormalMode, [[maybe_unused]] const b8 unmaskInvalid)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+[[nodiscard]] FOUNDATION_INLINE b8 ConfigurePowerDenormalMode([[maybe_unused]] const u32 denormalMode, [[maybe_unused]] const b8 unmaskInvalid)noexcept{
+#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
     u32 control = 0u;
     if(_controlfp_s(&control, denormalMode, _MCW_DN) != 0)
         return false;
@@ -170,17 +170,17 @@ inline constexpr Array<u32, 1u> s_OrderedClampModes = { 0u };
     return true;
 }
 
-NWB_NOINLINE SIMDVectorSingle FrozenPower(SIMDVectorSingle x, SIMDVectorSingle y)noexcept;
-NWB_NOINLINE SIMDVectorSingle CurrentPower(SIMDVectorSingle x, SIMDVectorSingle y)noexcept;
+FOUNDATION_NOINLINE SIMDVectorSingle FrozenPower(SIMDVectorSingle x, SIMDVectorSingle y)noexcept;
+FOUNDATION_NOINLINE SIMDVectorSingle CurrentPower(SIMDVectorSingle x, SIMDVectorSingle y)noexcept;
 [[nodiscard]] Expected<PowerObservation> ObserveFrozenPower(SIMDVectorSingle x, SIMDVectorSingle y, i32 initialFlags, u64 initialNativeFlags)noexcept;
 [[nodiscard]] Expected<PowerObservation> ObserveCurrentPower(SIMDVectorSingle x, SIMDVectorSingle y, i32 initialFlags, u64 initialNativeFlags)noexcept;
 
-NWB_NOINLINE f32 LegacyMultiplyAddExpression(f32 first, f32 second, f32 addend)noexcept;
-NWB_NOINLINE f64 LegacyDoubleMultiplyAddExpression(f64 first, f64 second, f64 addend)noexcept;
-NWB_NOINLINE f32 LegacyNegativeMultiplySubtractExpression(f32 first, f32 second, f32 addend)noexcept;
-NWB_NOINLINE f64 LegacyDoubleMultiplyThenAdd(f64 first, f64 second, f64 addend)noexcept;
-NWB_NOINLINE SIMDVectorDouble DoubleMultiplyAddExpression(SIMDVectorDouble first, SIMDVectorDouble second, SIMDVectorDouble addend)noexcept;
-NWB_NOINLINE SIMDVectorDouble DoubleMultiplyThenAdd(SIMDVectorDouble first, SIMDVectorDouble second, SIMDVectorDouble addend)noexcept;
+FOUNDATION_NOINLINE f32 LegacyMultiplyAddExpression(f32 first, f32 second, f32 addend)noexcept;
+FOUNDATION_NOINLINE f64 LegacyDoubleMultiplyAddExpression(f64 first, f64 second, f64 addend)noexcept;
+FOUNDATION_NOINLINE f32 LegacyNegativeMultiplySubtractExpression(f32 first, f32 second, f32 addend)noexcept;
+FOUNDATION_NOINLINE f64 LegacyDoubleMultiplyThenAdd(f64 first, f64 second, f64 addend)noexcept;
+FOUNDATION_NOINLINE SIMDVectorDouble DoubleMultiplyAddExpression(SIMDVectorDouble first, SIMDVectorDouble second, SIMDVectorDouble addend)noexcept;
+FOUNDATION_NOINLINE SIMDVectorDouble DoubleMultiplyThenAdd(SIMDVectorDouble first, SIMDVectorDouble second, SIMDVectorDouble addend)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -742,16 +742,16 @@ using PowerEvaluate = SIMDVectorSingle(*)(SIMDVectorSingle, SIMDVectorSingle)noe
 
 [[nodiscard]] static Expected<PowerObservation> ObservePowerImpl(const NotNull<PowerEvaluate> evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y, const i32 initialFlags, [[maybe_unused]] const u64 initialNativeFlags)noexcept{
 #pragma STDC FENV_ACCESS ON
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
     const u64 clearNativeStatus = 0u;
     __asm__ __volatile__("msr fpsr, %0" : : "r"(clearNativeStatus));
 #endif
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     _clearfp();
 #endif
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT) || !RaiseFloatingPointExceptions(initialFlags))
         return MakeUnexpected(Failure{});
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
     u64 seededNativeStatus{};
     __asm__ __volatile__("mrs %0, fpsr" : "=r"(seededNativeStatus));
     seededNativeStatus |= initialNativeFlags;
@@ -762,21 +762,21 @@ using PowerEvaluate = SIMDVectorSingle(*)(SIMDVectorSingle, SIMDVectorSingle)noe
     const i32 errCode = errno;
     const i32 flags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
     u32 nativeStatus = 0u;
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     nativeStatus = _statusfp();
 #endif
     u64 rawNativeStatus{};
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
     __asm__ __volatile__("mrs %0, fpsr" : "=r"(rawNativeStatus));
 #endif
     return PowerObservation{ value, rawNativeStatus, flags, errCode, nativeStatus };
 }
 
-NWB_NOINLINE SIMDVectorSingle FrozenPower(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
+FOUNDATION_NOINLINE SIMDVectorSingle FrozenPower(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
     return VectorSet(Pow(VectorGetX(x), VectorGetX(y)), Pow(VectorGetY(x), VectorGetY(y)), Pow(VectorGetZ(x), VectorGetZ(y)), Pow(VectorGetW(x), VectorGetW(y)));
 }
 
-NWB_NOINLINE SIMDVectorSingle CurrentPower(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
+FOUNDATION_NOINLINE SIMDVectorSingle CurrentPower(const SIMDVectorSingle x, const SIMDVectorSingle y)noexcept{
     return VectorPow(x, y);
 }
 
@@ -789,28 +789,28 @@ Expected<PowerObservation> ObserveCurrentPower(const SIMDVectorSingle x, const S
 }
 
 #pragma STDC FENV_ACCESS OFF
-NWB_NOINLINE f32 LegacyMultiplyAddExpression(const f32 first, const f32 second, const f32 addend)noexcept{
+FOUNDATION_NOINLINE f32 LegacyMultiplyAddExpression(const f32 first, const f32 second, const f32 addend)noexcept{
     return first * second + addend;
 }
 
-NWB_NOINLINE f64 LegacyDoubleMultiplyAddExpression(const f64 first, const f64 second, const f64 addend)noexcept{
+FOUNDATION_NOINLINE f64 LegacyDoubleMultiplyAddExpression(const f64 first, const f64 second, const f64 addend)noexcept{
     return first * second + addend;
 }
 
-NWB_NOINLINE f32 LegacyNegativeMultiplySubtractExpression(const f32 first, const f32 second, const f32 addend)noexcept{
+FOUNDATION_NOINLINE f32 LegacyNegativeMultiplySubtractExpression(const f32 first, const f32 second, const f32 addend)noexcept{
     return addend - first * second;
 }
 
-NWB_NOINLINE f64 LegacyDoubleMultiplyThenAdd(const f64 first, const f64 second, const f64 addend)noexcept{
+FOUNDATION_NOINLINE f64 LegacyDoubleMultiplyThenAdd(const f64 first, const f64 second, const f64 addend)noexcept{
     const f64 product = first * second;
     return product + addend;
 }
 
-NWB_NOINLINE SIMDVectorDouble DoubleMultiplyAddExpression(const SIMDVectorDouble first, const SIMDVectorDouble second, const SIMDVectorDouble addend)noexcept{
+FOUNDATION_NOINLINE SIMDVectorDouble DoubleMultiplyAddExpression(const SIMDVectorDouble first, const SIMDVectorDouble second, const SIMDVectorDouble addend)noexcept{
     return first * second + addend;
 }
 
-NWB_NOINLINE SIMDVectorDouble DoubleMultiplyThenAdd(const SIMDVectorDouble first, const SIMDVectorDouble second, const SIMDVectorDouble addend)noexcept{
+FOUNDATION_NOINLINE SIMDVectorDouble DoubleMultiplyThenAdd(const SIMDVectorDouble first, const SIMDVectorDouble second, const SIMDVectorDouble addend)noexcept{
     const SIMDVectorDouble product = first * second;
     return product + addend;
 }
@@ -825,7 +825,7 @@ NWB_NOINLINE SIMDVectorDouble DoubleMultiplyThenAdd(const SIMDVectorDouble first
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
+#if defined(FOUNDATION_PLATFORM_WINDOWS) && defined(FOUNDATION_HAS_NEON64) && !defined(_M_ARM64EC)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -33,12 +33,12 @@ using Impl::s_CsgPlaneShapeName;
 using Impl::s_CsgBoxShapeName;
 
 template<typename ParameterT>
-NWB_INLINE void AssignCsgCutterParameters(const ParameterT& parameters, Impl::CsgCutterComponent& cutter){
+FOUNDATION_INLINE void AssignCsgCutterParameters(const ParameterT& parameters, Impl::CsgCutterComponent& cutter){
     cutter.parameterBytes.resize(sizeof(ParameterT));
     FOUNDATION_MEMCPY(cutter.parameterBytes.data(), cutter.parameterBytes.size(), &parameters, sizeof(ParameterT));
 }
 
-NWB_INLINE Core::ECS::EntityID CreateSmokeCsgBoxCutter(
+FOUNDATION_INLINE Core::ECS::EntityID CreateSmokeCsgBoxCutter(
     const Name receiverGroup,
     const Name shapeType,
     const b8 active,
@@ -63,7 +63,7 @@ NWB_INLINE Core::ECS::EntityID CreateSmokeCsgBoxCutter(
     return entity.id();
 }
 
-NWB_INLINE Core::ECS::EntityID CreateSmokeCsgPlaneCutter(
+FOUNDATION_INLINE Core::ECS::EntityID CreateSmokeCsgPlaneCutter(
     const Name receiverGroup,
     const Name shapeType,
     const b8 active,
@@ -88,7 +88,7 @@ NWB_INLINE Core::ECS::EntityID CreateSmokeCsgPlaneCutter(
     return entity.id();
 }
 
-NWB_INLINE Core::ECS::EntityID CreateSmokeCsgPlaneCutter(
+FOUNDATION_INLINE Core::ECS::EntityID CreateSmokeCsgPlaneCutter(
     const Name receiverGroup,
     const Name shapeType,
     const b8 active,
@@ -98,7 +98,7 @@ NWB_INLINE Core::ECS::EntityID CreateSmokeCsgPlaneCutter(
     return CreateSmokeCsgPlaneCutter(receiverGroup, shapeType, active, normalDistance, VectorZero(), QuaternionIdentity(), world);
 }
 
-NWB_INLINE b8 SetSmokeCsgCutterTransform(
+FOUNDATION_INLINE b8 SetSmokeCsgCutterTransform(
     const Core::ECS::EntityID cutterEntity,
     const SIMDVectorSingle center,
     const SIMDVectorSingle rotation,
@@ -115,7 +115,7 @@ NWB_INLINE b8 SetSmokeCsgCutterTransform(
     return false;
 }
 
-NWB_INLINE void SetSmokeCsgCutterActive(const Core::ECS::EntityID cutterEntity, const b8 active, Core::ECS::World& world){
+FOUNDATION_INLINE void SetSmokeCsgCutterActive(const Core::ECS::EntityID cutterEntity, const b8 active, Core::ECS::World& world){
     auto& cutter = *MakeNotNull(world.tryGetComponent<Impl::CsgCutterComponent>(cutterEntity));
     cutter.active = active;
 }

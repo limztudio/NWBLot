@@ -77,8 +77,9 @@ void HeaderPreambleEmitter::Emit(MString& out, const TranslationUnit& unit, cons
     };
 
     b8 hasAssetDecl = false;
+    b8 hasSystemDecl = false;
     b8 hasSubsystemDecl = false;
-    b8 hasComponentAssetDecl = false;
+    b8 hasComponentDecl = false;
     b8 hasHeaderTaskScope = false;
     b8 hasHeaderDiagnostic = false;
     for(const InterfaceDecl* ifaceDecl : unit.interfaces){
@@ -102,17 +103,21 @@ void HeaderPreambleEmitter::Emit(MString& out, const TranslationUnit& unit, cons
             continue;
         if(!classDecl->assetTypeName.empty())
             hasAssetDecl = true;
+        if(!classDecl->systemTypeName.empty())
+            hasSystemDecl = true;
         if(!classDecl->subsystemTypeName.empty())
             hasSubsystemDecl = true;
-        if(!classDecl->componentAssetTypeName.empty())
-            hasComponentAssetDecl = true;
+        if(!classDecl->componentTypeName.empty())
+            hasComponentDecl = true;
     }
     if(hasAssetDecl)
         out.append("#include <core/assets/module.h>\r\n");
+    if(hasSystemDecl)
+        out.append("#include <core/ecs/system.h>\r\n");
     if(hasSubsystemDecl)
         out.append("#include <impl/assets_subsystem/asset.adhd.h>\r\n");
-    if(hasComponentAssetDecl)
-        out.append("#include <impl/assets_scene/components.adhd.h>\r\n");
+    if(hasComponentDecl)
+        out.append("#include <core/ecs/component.h>\r\n");
     for(const MethodDecl* fn : unit.freeFunctions){
         if(fn && !fn->isImported && fn->hasBody && (fn->isInline || !fn->templateParams.empty() || fn->hasSynthesizedArenaParams)){
             if(fn->usesTaskScope)

@@ -67,7 +67,7 @@ public:
         m_mode = mode;
     }
 
-    virtual Expected<Impl::RuntimeMeshDesc> resolveRuntimeMesh(const Core::ECS::EntityID entity)override{
+    virtual Expected<Impl::RuntimeMeshDesc> resolveRuntimeMesh(const Core::ECS::EntityID entity)noexcept override{
         if(!m_meshSkinningSystem)
             return MakeUnexpected(Failure{});
         auto mesh = m_meshSkinningSystem->resolveRuntimeMesh(entity);
@@ -91,12 +91,12 @@ public:
         return mesh;
     }
 
-    virtual void markLiveRuntimeMeshes(Impl::RuntimeMeshRequestSet& requests)override{
+    virtual void markLiveRuntimeMeshes(Impl::RuntimeMeshRequestSet& requests)noexcept override{
         if(m_meshSkinningSystem)
             m_meshSkinningSystem->markLiveRuntimeMeshes(requests);
     }
 
-    virtual b8 hasRuntimeMeshBinding(const Core::ECS::EntityID entity)const override{
+    virtual b8 hasRuntimeMeshBinding(const Core::ECS::EntityID entity)const noexcept override{
         return m_meshSkinningSystem && m_meshSkinningSystem->hasRuntimeMeshBinding(entity);
     }
 
@@ -530,7 +530,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{
-    return NWB_TEXT("NWB Skinning Culling Benchmark");
+    return FOUNDATION_TEXT("NWB Skinning Culling Benchmark");
 }
 
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){

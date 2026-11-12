@@ -94,7 +94,7 @@ namespace __hidden_runtime_cache_storage{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr TStringView s_AssetLoadContext = NWB_TEXT("MeshSkinningRuntimeCache");
+static constexpr TStringView s_AssetLoadContext = FOUNDATION_TEXT("MeshSkinningRuntimeCache");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -140,7 +140,7 @@ static constexpr TStringView s_AssetLoadContext = NWB_TEXT("MeshSkinningRuntimeC
         return false;
 
     if(!EncodeMeshletRefDeltas(runtimePositionRefs, runtimeAttributeRefs, true, [&](const usize meshletIndex, const TStringView reason){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime meshlet {} {}"), meshletIndex, reason);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningRuntimeCache: runtime meshlet {} {}"), meshletIndex, reason);
         return false;
     }, instance.meshlets, instance.meshletPositionRefDeltas, instance.meshletAttributeRefDeltas
     ))
@@ -170,13 +170,13 @@ static constexpr TStringView s_AssetLoadContext = NWB_TEXT("MeshSkinningRuntimeC
     ))
         return false;
     // Skin::loadBinary already admitted the copied skin and inverse bind data.
-    NWB_ASSERT(instance.skeletonJointCount > 0u && instance.skeletonJointCount <= static_cast<u32>(Limit<u16>::s_Max) + 1u);
-    NWB_ASSERT(ValidInverseBindMatrixCount(instance.inverseBindMatrices.size(), instance.skeletonJointCount));
+    FOUNDATION_ASSERT(instance.skeletonJointCount > 0u && instance.skeletonJointCount <= static_cast<u32>(Limit<u16>::s_Max) + 1u);
+    FOUNDATION_ASSERT(ValidInverseBindMatrixCount(instance.inverseBindMatrices.size(), instance.skeletonJointCount));
 #if defined(NWB_DEBUG)
     for(const SkeletonJointMatrix& storedInverseBind : instance.inverseBindMatrices)
-        NWB_ASSERT(MatrixIsInvertibleAffine(LoadFloat(storedInverseBind), s_SkinValidationEpsilon, s_SkinValidationEpsilon));
+        FOUNDATION_ASSERT(MatrixIsInvertibleAffine(LoadFloat(storedInverseBind), s_SkinValidationEpsilon, s_SkinValidationEpsilon));
     for(const SkinInfluence4& skin : instance.skin)
-        NWB_ASSERT(ValidSkinInfluenceWeights(LoadFloat(skin.weight)) && SkinInfluenceFitsSkeleton(skin, instance.skeletonJointCount));
+        FOUNDATION_ASSERT(ValidSkinInfluenceWeights(LoadFloat(skin.weight)) && SkinInfluenceFitsSkeleton(skin, instance.skeletonJointCount));
 #endif
     return true;
 }
@@ -386,7 +386,7 @@ b8 MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Core:
 
     if(!instance.valid()){
         eraseUnusedSource(sourceName);
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: prepared runtime mesh is incomplete"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningRuntimeCache: prepared runtime mesh is incomplete"));
         return false;
     }
 
@@ -394,7 +394,7 @@ b8 MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Core:
     auto [storedInstance, instanceInserted] = m_instances.try_emplace(entity, Move(instance));
     if(!instanceInserted){
         eraseUnusedSource(sourceName);
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime instance identity was already registered"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningRuntimeCache: runtime instance identity was already registered"));
         return false;
     }
     ScopeExit discardInstance([&]()noexcept{ m_instances.erase(storedInstance); });
@@ -403,7 +403,7 @@ b8 MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Core:
         m_instances.erase(storedInstance);
         discardInstance.release();
         eraseUnusedSource(sourceName);
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh handle was already registered"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningRuntimeCache: runtime mesh handle was already registered"));
         return false;
     }
 
@@ -414,7 +414,7 @@ b8 MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Core:
 }
 
 Expected<NotNull<MeshSkinningRuntimeCache::MeshSkinningSource*>> MeshSkinningRuntimeCache::ensureSourceLoaded(const Core::Assets::AssetRef<Skin>& skinAsset){
-    NWB_ASSERT(skinAsset.valid());
+    FOUNDATION_ASSERT(skinAsset.valid());
 
     const Name& sourceName = skinAsset.name();
     const auto foundSource = m_sources.find(sourceName);
@@ -437,7 +437,7 @@ Expected<NotNull<MeshSkinningRuntimeCache::MeshSkinningSource*>> MeshSkinningRun
 
     auto [stored, inserted] = m_sources.try_emplace(sourceName, Move(source));
     if(!inserted){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: source identity was already registered"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningRuntimeCache: source identity was already registered"));
         return MakeUnexpected(Failure{});
     }
     MeshSkinningSource& storedSource = stored.value();
@@ -543,21 +543,21 @@ b8 CreateMeshSkinningLocalBoundsBuffers(Core::GraphicsRuntime& graphics, MeshSki
     const auto partialName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, s_MeshletLocalBoundsSuffix);
     const auto outputName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, s_LocalBoundsSuffix);
     if(!partialName || !outputName){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to derive runtime local bounds buffer names"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to derive runtime local bounds buffer names"));
         return false;
     }
     Core::BufferDesc desc;
     desc.setByteSize(ComputeMeshletLocalBoundsByteSize(instance.meshlets.size(), NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE)).setCanHaveUAVs(true).setCanHaveRawViews(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(partialName);
     auto partialsResult = graphics.createBuffer(desc);
     if(!partialsResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create runtime local bounds partials"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to create runtime local bounds partials"));
         return false;
     }
     Core::BufferHandle partials = Move(*partialsResult);
     desc.setByteSize(NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE).setDebugName(outputName);
     auto outputResult = graphics.createBuffer(desc);
     if(!outputResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create runtime local bounds output"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to create runtime local bounds output"));
         return false;
     }
     Core::BufferHandle output = Move(*outputResult);

@@ -26,7 +26,7 @@ native{
 
 #include <gtest/gtest.h>
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <core/os/win32/text_input.h>
 #include <core/os/win32/text_input_context.h>
 #include <windows.h>
@@ -45,7 +45,7 @@ namespace __hidden_os_win32_text_input_support{
 
 using namespace NWB::Core;
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 inline constexpr WStringView s_Win32ClassName = L"NWBTextInputUnitTest";
 inline constexpr u32 s_Win32UnicodeNoChar = static_cast<u32>(UNICODE_NOCHAR);
 inline constexpr isize s_Win32TrueResult = static_cast<isize>(TRUE);
@@ -189,7 +189,7 @@ void VerifyWin32TextInputFixture_RepeatedExplicitContextReleasePreservesActiveNa
     b8 firstRelease = false;
     b8 secondRelease = false;
     native(mut self, mut hasNativeContext, mut firstRelease, mut secondRelease){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         const HIMC nativeContext = ImmGetContext(self.m_window);
         hasNativeContext = nativeContext != nullptr;
         if(hasNativeContext){
@@ -214,7 +214,7 @@ void VerifyWin32TextInputFixture_ContextScopeUnwindPreservesOriginalThrownMarker
     b8 hasNativeContext = false;
     b8 caughtOriginal = false;
     native(mut self, mut hasNativeContext, mut caughtOriginal){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         struct UnwindMarker final{};
         try{
             const HIMC nativeContext = ImmGetContext(self.m_window);
@@ -317,8 +317,8 @@ void VerifyWin32TextInputFixture_IsolatedLowSurrogateCancelsWithExplicitFailure(
 
     b8 warningOk = true;
     native(in self, mut warningOk){
-#if defined(NWB_PLATFORM_WINDOWS) && NWB_OCCUR_WARNING
-        warningOk = self.m_logger.sawMessageContaining(NWB_TEXT("Text input: native delivery rejected"))
+#if defined(FOUNDATION_PLATFORM_WINDOWS) && FOUNDATION_OCCUR_WARNING
+        warningOk = self.m_logger.sawMessageContaining(FOUNDATION_TEXT("Text input: native delivery rejected"))
             && self.m_logger.lastType() == NWB::Core::Common::LogType::Warning;
 #endif
     }
@@ -408,7 +408,7 @@ void VerifyWin32TextInputFixture_BridgeRejectsUnsupportedForeignServiceBeforeDow
     b8 foreignContext = true;
     b8 mouseContext = true;
     native(mut self, mut createdUnsupported, mut foreignDispatch, mut mouseDispatch, mut foreignContext, mut mouseContext){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         auto unsupportedResult = NWB::Core::CreateTextInputService(self.m_arena.arena, nullptr);
         createdUnsupported = unsupportedResult.has_value();
         if(unsupportedResult){
@@ -550,7 +550,7 @@ void VerifyWin32TextInputFixture_SceneFallbackSurrogateStateIsPerServiceAndValid
     b8 secondFocused = false;
     b8 secondDecoded = true;
     native(mut self, mut secondCreated, mut secondFocused, mut secondDecoded){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         auto secondResult = NWB::Core::CreateTextInputService(self.m_arena.arena, self.m_window);
         if(secondResult && secondResult->get() != nullptr){
             secondCreated = true;
@@ -585,7 +585,7 @@ void VerifyWin32TextInputFixture_SceneFallbackBridgeRejectsForeignServiceAndWron
     b8 wrongThreadDecode = true;
     b8 wrongThreadReset = true;
     native(mut self, mut unsupportedCreated, mut unsupportedDecode, mut unsupportedReset, mut wrongThreadDecode, mut wrongThreadReset){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         auto unsupportedResult = NWB::Core::CreateTextInputService(self.m_arena.arena, nullptr);
         unsupportedCreated = unsupportedResult.has_value();
         if(unsupportedResult){
@@ -716,7 +716,7 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

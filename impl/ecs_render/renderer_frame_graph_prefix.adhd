@@ -255,7 +255,7 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
             .sceneShadingSetupReady = m_graphicsPrefixSceneShadingSetupReady,
         });
     if(!prefixSceneUploadResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graphics-prefix scene uploads"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare graphics-prefix scene uploads"));
         return MakeUnexpected(Failure{});
     }
     m_graphicsPrefixMeshViewSetupTask = prefixSceneUploadResult->meshViewSetupTask;
@@ -281,7 +281,7 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
     const auto graphicsPrefixDeferredClearTaskResult = context.graph.addClearTextureTask(deferredClearDesc, opaqueColorClearDesc);
     if(!graphicsPrefixDeferredClearTaskResult){
         m_graphicsPrefixDeferredClearTask = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred-clear task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare deferred-clear task"));
         return MakeUnexpected(Failure{});
     }
     m_graphicsPrefixDeferredClearTask = *graphicsPrefixDeferredClearTaskResult;
@@ -349,7 +349,7 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
             .dependencyTask = m_graphicsPrefixDeferredClearTask,
         });
     if(!opaqueUploadChainResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque upload chain"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare opaque upload chain"));
         return MakeUnexpected(Failure{});
     }
     const Core::GpuTaskId csgFrameUploadTask = opaqueUploadChainResult->csgUploadTask;
@@ -405,7 +405,7 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
         csgIntervalClearTimingState
     );
     if(!opaqueCsgIntervalClearResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque CSG interval clears"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare opaque CSG interval clears"));
         return MakeUnexpected(Failure{});
     }
     m_graphicsPrefixCsgIntervalClearFirstTask = opaqueCsgIntervalClearResult->clearFirstTask;
@@ -559,7 +559,7 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
     const auto graphicsPrefixGbufferTaskResult = context.graph.addTask<ECSRenderDetail::GbufferGraphTask>(gbufferDesc, Move(gbufferPayload));
     if(!graphicsPrefixGbufferTaskResult){
         m_graphicsPrefixGbufferTask = {};
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque G-buffer task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare opaque G-buffer task"));
         return MakeUnexpected(Failure{});
     }
     m_graphicsPrefixGbufferTask = *graphicsPrefixGbufferTaskResult;

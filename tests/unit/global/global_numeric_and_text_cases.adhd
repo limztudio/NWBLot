@@ -51,10 +51,10 @@ native{
 #include <global/unicode/grapheme.h>
 #include <global/utf8_text.h>
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <windows.h>
 #endif
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 #include <sched.h>
 #endif
 
@@ -172,7 +172,7 @@ public:
     operator usize()const noexcept{ return value; }
 };
 
-[[nodiscard]] NWB_INLINE const ThrowingReplacementComparison& operator>(const ReplacementOffset lhs, const ReplacementOffset rhs)noexcept{
+[[nodiscard]] FOUNDATION_INLINE const ThrowingReplacementComparison& operator>(const ReplacementOffset lhs, const ReplacementOffset rhs)noexcept{
     static const ThrowingReplacementComparison s_True(true);
     static const ThrowingReplacementComparison s_False(false);
     return lhs.value > rhs.value ? s_True : s_False;
@@ -340,7 +340,7 @@ void VerifyCpuTopologyTests_InvalidPlacementFailsWithoutMutatingTheCallingThread
 void VerifyCpuTopologyTests_DiscoveryHonorsAProcessAffinityRestriction(){
     b8 windowsSupported = false;
     native(mut windowsSupported){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         windowsSupported = true;
         ASSERT_EXIT({
             auto placements = QueryCpuWorkerPlacements();
@@ -374,7 +374,7 @@ void VerifyCpuTopologyTests_DiscoveryHonorsAProcessAffinityRestriction(){
 void VerifyCpuTopologyTests_DiscoveryHonorsProcessDefaultCpuSets(){
     b8 windowsSupported = false;
     native(mut windowsSupported){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         windowsSupported = true;
         ASSERT_EXIT({
             auto placements = QueryCpuWorkerPlacements();
@@ -437,7 +437,7 @@ void VerifyCpuTopologyTests_DiscoveryHonorsInheritedLinuxAffinityIncludingHighPr
         mut usableCount,
         mut affinityIsAny
     ){
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
         linuxSupported = true;
         auto placements = QueryCpuWorkerPlacements();
         queriedInitial = placements.has_value();
@@ -1030,7 +1030,7 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 TEST(CpuTopologyTests, DiscoveryHonorsAProcessAffinityRestriction){
     VerifyCpuTopologyTests_DiscoveryHonorsAProcessAffinityRestriction();
 }
@@ -1040,7 +1040,7 @@ TEST(CpuTopologyTests, DiscoveryHonorsProcessDefaultCpuSets){
 }
 #endif
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 TEST(CpuTopologyTests, DiscoveryHonorsInheritedLinuxAffinityIncludingHighProcessorIndices){
     VerifyCpuTopologyTests_DiscoveryHonorsInheritedLinuxAffinityIncludingHighProcessorIndices();
 }

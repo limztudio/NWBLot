@@ -9,7 +9,19 @@
 #include "type_id.h"
 
 #include <global/expected.h>
+#include <global/name.h>
 #include <global/scope_exit.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#define NWB_DEFINE_COMPONENT_TYPE(componentTypeLiteral) \
+    static constexpr ::AStringView s_ComponentTypeText = componentTypeLiteral; \
+    inline static constexpr ::Name s_ComponentTypeName = ::Name(componentTypeLiteral); \
+    [[nodiscard]] static constexpr const ::Name& ComponentTypeName()noexcept{ \
+        return s_ComponentTypeName; \
+    }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

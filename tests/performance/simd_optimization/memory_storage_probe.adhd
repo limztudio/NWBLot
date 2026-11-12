@@ -23,30 +23,30 @@ native{
 #include <global/text_utils.h>
 #include <global/timer.h>
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 #include <sys/wait.h>
 #endif
 
 namespace SimdOptimizationBenchmark{
 using NWB::Tests::PatternByte;
 
-NWB_INLINE void WriteProbeStdout(const AStringView text){
-    NWB_COUT << text;
+FOUNDATION_INLINE void WriteProbeStdout(const AStringView text){
+    FOUNDATION_COUT << text;
 }
 
-NWB_INLINE void WriteProbeStdoutFlush(const AStringView text){
-    NWB_COUT << text;
-    NWB_COUT.flush();
+FOUNDATION_INLINE void WriteProbeStdoutFlush(const AStringView text){
+    FOUNDATION_COUT << text;
+    FOUNDATION_COUT.flush();
 }
 
-NWB_INLINE void WriteProbeStderr(const AStringView text){
-    NWB_CERR << text;
+FOUNDATION_INLINE void WriteProbeStderr(const AStringView text){
+    FOUNDATION_CERR << text;
 }
 
 namespace MemoryProbeKernels{
 
 using NWB::Tests::ExitOnAbort;
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 using NWB::Tests::GuardedBytes;
 #endif
 using NWB::Tests::PatternByte;
@@ -55,7 +55,7 @@ using NWB::Tests::s_SIMDMemoryHandlerFailureExitCode;
 using NWB::Tests::s_SIMDMemoryReturnedExitCode;
 
 inline constexpr usize s_Alignment = 64u;
-NWB_INLINE volatile u64 g_Checksum = 0u;
+FOUNDATION_INLINE volatile u64 g_Checksum = 0u;
 
 struct AlignedBytes final{
     NotNull<void*> storage;
@@ -72,8 +72,8 @@ public:
 };
 
 // Candidate changes only the internal AVX alignment choice.
-NWB_INLINE void CandidateCopy(const void* source, usize count, const usize capacity, void* destination)noexcept{
-#if defined(NWB_HAS_AVX)
+FOUNDATION_INLINE void CandidateCopy(const void* source, usize count, const usize capacity, void* destination)noexcept{
+#if defined(FOUNDATION_HAS_AVX)
     if(count == 0u)
         return;
     if(count > capacity || destination == nullptr || source == nullptr)
@@ -141,8 +141,8 @@ NWB_INLINE void CandidateCopy(const void* source, usize count, const usize capac
 #endif
 }
 
-NWB_INLINE b8 CandidateEqual(const NotNull<const u64*> lhs, const NotNull<const u64*> rhs)noexcept{
-#if defined(NWB_HAS_AVX)
+FOUNDATION_INLINE b8 CandidateEqual(const NotNull<const u64*> lhs, const NotNull<const u64*> rhs)noexcept{
+#if defined(FOUNDATION_HAS_AVX)
     const __m256i left = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(lhs.get()));
     const __m256i right = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(rhs.get()));
     const __m256 difference = _mm256_xor_ps(_mm256_castsi256_ps(left), _mm256_castsi256_ps(right));
@@ -155,14 +155,14 @@ NWB_INLINE b8 CandidateEqual(const NotNull<const u64*> lhs, const NotNull<const 
 }
 
 // Preserve an inexpensive first-word rejection before the full-width exact-bit reduction.
-NWB_INLINE b8 CandidateEqualFirstWord(const NotNull<const u64*> lhs, const NotNull<const u64*> rhs)noexcept{
+FOUNDATION_INLINE b8 CandidateEqualFirstWord(const NotNull<const u64*> lhs, const NotNull<const u64*> rhs)noexcept{
     if(lhs.get()[0] != rhs.get()[0])
         return false;
     return CandidateEqual(lhs, rhs);
 }
 
-#if defined(NWB_PLATFORM_LINUX)
-[[nodiscard]] NWB_INLINE b8 RejectedBeforeAccess(const void* source, const usize count, const usize capacity, void* destination)noexcept{
+#if defined(FOUNDATION_PLATFORM_LINUX)
+[[nodiscard]] FOUNDATION_INLINE b8 RejectedBeforeAccess(const void* source, const usize count, const usize capacity, void* destination)noexcept{
     const pid_t child = fork();
     if(child < 0)
         return false;
@@ -179,7 +179,7 @@ NWB_INLINE b8 CandidateEqualFirstWord(const NotNull<const u64*> lhs, const NotNu
 
 // Hot operations inline into the batch so per-call vzeroupper/ABI overhead does not substitute for the production callsite behavior.
 template<b8 Candidate, usize FixedCount = 0u>
-NWB_NOINLINE void CopyBatch(const u8* source, const usize slots, const usize stride, const usize bytes, const usize iterations, u8* destination)noexcept{
+FOUNDATION_NOINLINE void CopyBatch(const u8* source, const usize slots, const usize stride, const usize bytes, const usize iterations, u8* destination)noexcept{
     usize slot = 0u;
     for(usize iteration = 0u; iteration < iterations; ++iteration){
         AtomicSignalFence(MemoryOrder::seq_cst);
@@ -194,7 +194,7 @@ NWB_NOINLINE void CopyBatch(const u8* source, const usize slots, const usize str
 }
 
 template<b8 Candidate, b8 FirstWord = false>
-NWB_NOINLINE u64 EqualityBatch(const u64* lhs, const u64* rhs, const usize slots, const usize stride, const usize iterations)noexcept{
+FOUNDATION_NOINLINE u64 EqualityBatch(const u64* lhs, const u64* rhs, const usize slots, const usize stride, const usize iterations)noexcept{
     usize slot = 0u;
     u64 total = 0u;
     for(usize iteration = 0u; iteration < iterations; ++iteration){
@@ -216,7 +216,7 @@ NWB_NOINLINE u64 EqualityBatch(const u64* lhs, const u64* rhs, const usize slots
 using CopyBatchFunction = void(*)(const u8*, usize, usize, usize, usize, u8*)noexcept;
 using EqualityBatchFunction = u64(*)(const u64*, const u64*, usize, usize, usize)noexcept;
 
-[[nodiscard]] NWB_INLINE f64 TimeCopy(const NotNull<CopyBatchFunction> function, const NotNull<const u8*> source, const usize slots, const usize stride, const usize bytes, const usize iterations, const NotNull<u8*> destination)noexcept{
+[[nodiscard]] FOUNDATION_INLINE f64 TimeCopy(const NotNull<CopyBatchFunction> function, const NotNull<const u8*> source, const usize slots, const usize stride, const usize bytes, const usize iterations, const NotNull<u8*> destination)noexcept{
     const Timer start = TimerNow();
     function.get()(source.get(), slots, stride, bytes, iterations, destination.get());
     const Timer end = TimerNow();
@@ -224,7 +224,7 @@ using EqualityBatchFunction = u64(*)(const u64*, const u64*, usize, usize, usize
     return DurationInNS<f64>(end, start) / static_cast<f64>(iterations);
 }
 
-[[nodiscard]] NWB_INLINE f64 TimeEquality(const NotNull<EqualityBatchFunction> function, const u64* lhs, const u64* rhs, const usize slots, const usize stride, const usize iterations)noexcept{
+[[nodiscard]] FOUNDATION_INLINE f64 TimeEquality(const NotNull<EqualityBatchFunction> function, const u64* lhs, const u64* rhs, const usize slots, const usize stride, const usize iterations)noexcept{
     const Timer start = TimerNow();
     const u64 result = function.get()(lhs, rhs, slots, stride, iterations);
     const Timer end = TimerNow();
@@ -232,7 +232,7 @@ using EqualityBatchFunction = u64(*)(const u64*, const u64*, usize, usize, usize
     return DurationInNS<f64>(end, start) / static_cast<f64>(iterations);
 }
 
-[[nodiscard]] NWB_INLINE b8 VerifyCopiedBytes(const Span<const u8> bytes, const usize start, const usize count, const usize sourceStart, const u8 poisonByte)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 VerifyCopiedBytes(const Span<const u8> bytes, const usize start, const usize count, const usize sourceStart, const u8 poisonByte)noexcept{
     for(usize index = 0u; index < bytes.size(); ++index){
         const u8 expected = (index >= start && index - start < count) ? PatternByte(sourceStart + index - start) : poisonByte;
         if(bytes[index] != expected)
@@ -243,7 +243,7 @@ using EqualityBatchFunction = u64(*)(const u64*, const u64*, usize, usize, usize
 
 }
 
-[[nodiscard]] NWB_INLINE b8 QualifyCopyBytesKernel(const Span<const usize> lengths, const u8 poisonByte)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 QualifyCopyBytesKernel(const Span<const usize> lengths, const u8 poisonByte)noexcept{
     constexpr usize s_Bytes = 16640u;
     MemoryProbeKernels::AlignedBytes source(s_Bytes), destination(s_Bytes);
     for(usize index = 0u; index < s_Bytes; ++index)
@@ -253,7 +253,7 @@ using EqualityBatchFunction = u64(*)(const u64*, const u64*, usize, usize, usize
         const usize count = lengths[lenIndex];
         for(usize sourceOffset = 0u; sourceOffset < 128u && valid; sourceOffset += 16u){
             for(usize destinationOffset = 0u; destinationOffset < 128u && valid; destinationOffset += 16u){
-                NWB_MEMSET(destination.data.get(), poisonByte, s_Bytes);
+                FOUNDATION_MEMSET(destination.data.get(), poisonByte, s_Bytes);
                 MemoryProbeKernels::CandidateCopy(source.data.get() + sourceOffset, count, count, destination.data.get() + destinationOffset);
                 if(!MemoryProbeKernels::VerifyCopiedBytes(Span<const u8>(destination.data.get(), s_Bytes), destinationOffset, count, sourceOffset, poisonByte))
                     valid = false;
@@ -285,9 +285,9 @@ using EqualityBatchFunction = u64(*)(const u64*, const u64*, usize, usize, usize
     return valid;
 }
 
-[[nodiscard]] NWB_INLINE b8 QualifyProtectedRangesKernel([[maybe_unused]] const Span<const usize> lengths, [[maybe_unused]] const u8 poisonByte)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 QualifyProtectedRangesKernel([[maybe_unused]] const Span<const usize> lengths, [[maybe_unused]] const u8 poisonByte)noexcept{
     b8 valid = true;
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
     MemoryProbeKernels::GuardedBytes source, destination;
     if(source.data == nullptr || destination.data == nullptr || lengths.empty() || source.accessibleBytes < lengths[lengths.size() - 1u]){
         valid = false;
@@ -299,7 +299,7 @@ using EqualityBatchFunction = u64(*)(const u64*, const u64*, usize, usize, usize
             const usize count = lengths[lenIndex];
             for(const b8 sourceAtEnd : { false, true }){
                 for(const b8 destinationAtEnd : { false, true }){
-                    NWB_MEMSET(destination.data, poisonByte, destination.accessibleBytes);
+                    FOUNDATION_MEMSET(destination.data, poisonByte, destination.accessibleBytes);
                     const usize sourceStart = sourceAtEnd ? (source.accessibleBytes - count) & ~usize{ 15u } : 0u;
                     const usize destinationStart = destinationAtEnd ? (destination.accessibleBytes - count) & ~usize{ 15u } : 0u;
                     MemoryProbeKernels::CandidateCopy(source.data + sourceStart, count, count, destination.data + destinationStart);
@@ -344,7 +344,7 @@ using EqualityBatchFunction = u64(*)(const u64*, const u64*, usize, usize, usize
     return valid;
 }
 
-[[nodiscard]] NWB_INLINE b8 QualifyEqualityKernel()noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 QualifyEqualityKernel()noexcept{
 #pragma STDC FENV_ACCESS ON
     const auto original = HoldFloatingPointExceptions();
     if(!original)
@@ -400,7 +400,7 @@ public:
         const usize totalBytes = slots * stride + 128u;
         for(usize index = 0u; index < totalBytes; ++index)
             m_source.data.get()[index] = MemoryProbeKernels::PatternByte(index);
-        NWB_MEMSET(m_destination.data.get(), poisonByte, totalBytes);
+        FOUNDATION_MEMSET(m_destination.data.get(), poisonByte, totalBytes);
     }
 
 public:
@@ -459,7 +459,7 @@ public:
         const u64 candidateWarmup = candidate.get()(m_lhs.get() + offset, m_rhs.get() + offset, m_slots, 8u, s_EqualityWarmupIterations);
         const u64 expectedWarmup = comparisonCase == 0u ? s_EqualityWarmupIterations : 0u;
         if(baselineWarmup != expectedWarmup || candidateWarmup != expectedWarmup){
-            NWB_CERR << "equality warm-up produced an incorrect result\n";
+            FOUNDATION_CERR << "equality warm-up produced an incorrect result\n";
             ::abort();
         }
         MemoryProbeKernels::g_Checksum = MemoryProbeKernels::g_Checksum + baselineWarmup + candidateWarmup;

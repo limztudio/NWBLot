@@ -34,7 +34,7 @@ public:
 
     template<typename ArenaT>
         requires (!IsSame_V<ArenaT, LogArena>)
-    [[nodiscard]] static NWB_INLINE AString<ArenaT> BuildOrderedCrashReport(const CrashPackageSummary& summary, Core::Alloc::ScratchArena& scratchArena, AString<ArenaT>&& detailReport){
+    [[nodiscard]] static inline AString<ArenaT> BuildOrderedCrashReport(const CrashPackageSummary& summary, Core::Alloc::ScratchArena& scratchArena, AString<ArenaT>&& detailReport){
         ArenaT& outArena = detailReport.get_allocator().arena();
         const AString<ArenaT> sourceReport(Move(detailReport));
         LogArena tempArena(scratchArena.allocationLog());

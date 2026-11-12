@@ -2,10 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[arena, component("publication_position")]
 class PublicationPositionComponent{
     public i32 x = 0;
 }
 
+[arena, component("publication_velocity")]
 class PublicationVelocityComponent{
     public i32 x = 0;
 }

@@ -63,13 +63,13 @@ public:
 
 template<typename FileArenaT>
     requires (!IsSame_V<FileArenaT, Core::Alloc::GlobalArena>)
-[[nodiscard]] NWB_INLINE Expected<TextureCookEntry> ParseTextureCookMetadata(const Name virtualPath, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] FOUNDATION_INLINE Expected<TextureCookEntry> ParseTextureCookMetadata(const Name virtualPath, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     return ParseTextureCookMetadata(virtualPath, Path(arena, nwbFilePath), asset, arena, scratchArena);
 }
 
 template<typename RootArenaT, typename FileArenaT>
     requires (!IsSame_V<RootArenaT, Core::Alloc::GlobalArena> || !IsSame_V<FileArenaT, Core::Alloc::GlobalArena>)
-[[nodiscard]] NWB_INLINE Expected<TextureCookEntry> ParseTextureCookMetadata(const ::Path<RootArenaT>& assetRoot, const AStringView virtualRoot, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] FOUNDATION_INLINE Expected<TextureCookEntry> ParseTextureCookMetadata(const ::Path<RootArenaT>& assetRoot, const AStringView virtualRoot, const ::Path<FileArenaT>& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     return ParseTextureCookMetadata(Path(arena, assetRoot), virtualRoot, Path(arena, nwbFilePath), doc, arena, scratchArena);
 }
 [[nodiscard]] Expected<Texture> BuildTextureAsset(const TextureCookEntry& textureEntry, Core::Assets::AssetArena& arena);
@@ -389,7 +389,7 @@ Expected<TextureCookEntry> ParseTextureCookMetadata(const Name virtualPath, cons
     dataPath.replaceExtension(TextureFormat::s_TextureDataExtension);
     const auto readResult = ReadBinaryFile(dataPath, entry.payloadBytes);
     if(!readResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': failed to read raw texture sidecar '{}': {}"), ConvertString(s_TextureDiagnosticPrefix), PathToString<tchar>(nwbFilePath), PathToString<tchar>(dataPath), ConvertString(readResult.error().message()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': failed to read raw texture sidecar '{}': {}"), ConvertString(s_TextureDiagnosticPrefix), PathToString<tchar>(nwbFilePath), PathToString<tchar>(dataPath), ConvertString(readResult.error().message()));
         return MakeUnexpected(Failure{});
     }
     return entry;
@@ -404,7 +404,7 @@ Expected<TextureCookEntry> ParseTextureCookMetadata(const Path& assetRoot, const
 
 
 b8 TextureAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, NWB_TEXT("TextureAssetCodec::serialize")))
+    if(!checkSerializeAssetType(asset, FOUNDATION_TEXT("TextureAssetCodec::serialize")))
         return false;
 
     const Texture& texture = static_cast<const Texture&>(asset);

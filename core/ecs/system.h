@@ -10,11 +10,25 @@
 
 #include <core/task/cpu/scheduler.h>
 
+#include <global/name.h>
+#include <global/span.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_ECS_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#define NWB_DEFINE_SYSTEM_TYPE(systemTypeLiteral) \
+    static constexpr ::AStringView s_SystemTypeText = systemTypeLiteral; \
+    inline static constexpr ::Name s_SystemTypeName = ::Name(systemTypeLiteral); \
+    [[nodiscard]] static constexpr const ::Name& SystemTypeName()noexcept{ \
+        return s_SystemTypeName; \
+    }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -48,13 +62,15 @@ class ISystem : public NoCopy{
 
 
 public:
-    explicit ISystem(Alloc::GlobalArena& arena)noexcept
+    explicit ISystem(::ArenaBase& arena)noexcept
         : m_access(arena)
     {}
     virtual ~ISystem()noexcept = default;
 
 
 public:
+    [[nodiscard]] virtual const Name& systemType()const noexcept{ return s_NameNone; }
+
     virtual void prepare([[maybe_unused]] World& world){}
 
     // The scheduler keeps this task incomplete until update and its submitted descendants finish.
@@ -62,6 +78,10 @@ public:
 
     [[nodiscard]] virtual CpuTaskOptions taskOptions()const noexcept{
         return { .cost = CpuTaskCost::Heavy };
+    }
+
+    [[nodiscard]] Span<const ComponentAccess> accesses()const noexcept{
+        return Span<const ComponentAccess>(m_access.data(), m_access.size());
     }
 
 
@@ -80,7 +100,7 @@ protected:
 
 
 private:
-    Vector<ComponentAccess, Alloc::GlobalArena> m_access;
+    Vector<ComponentAccess, ::ArenaBase> m_access;
 };
 
 

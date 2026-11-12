@@ -28,7 +28,7 @@ NWB_IMPL_UI_BEGIN
 
 
 // The loaded asset is temporary; the returned version retains only texture data copied into the caller's arena.
-[[nodiscard]] NWB_INLINE Expected<SharedImageSource> LoadImageSource(Core::Alloc::GlobalArena& arena, const Core::Assets::AssetManager& assets, const Core::Assets::AssetRef<Texture>& identity){
+[[nodiscard]] FOUNDATION_INLINE Expected<SharedImageSource> LoadImageSource(Core::Alloc::GlobalArena& arena, const Core::Assets::AssetManager& assets, const Core::Assets::AssetRef<Texture>& identity){
     if(!ValidateImageSourceLoadIdentity(identity.valid(), Name{}, Name{}))
         return MakeUnexpected(Failure{});
     auto loadedAsset = assets.loadTypedSync<Texture>(identity.name(), FOUNDATION_TEXT("LoadImageSource"));

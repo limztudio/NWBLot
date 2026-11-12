@@ -146,27 +146,27 @@ public:
     TextureGpuResource m_texture;
 };
 
-NWB_INLINE GpuImageCache::GpuImageCache(Core::Alloc::GlobalArena& arena)
+FOUNDATION_INLINE GpuImageCache::GpuImageCache(Core::Alloc::GlobalArena& arena)
     : m_glyphCache(arena)
     , m_sdfCache(arena)
     , m_textureCache(arena)
 {}
 
-NWB_INLINE GpuImageCache::~GpuImageCache()noexcept = default;
+FOUNDATION_INLINE GpuImageCache::~GpuImageCache()noexcept = default;
 
-NWB_INLINE void GpuImageCache::reserve(){
+FOUNDATION_INLINE void GpuImageCache::reserve(){
     m_glyphCache.reserve(s_PaintMaxImages);
     m_sdfCache.reserve(s_PaintMaxImages);
     m_textureCache.reserve(s_PaintMaxImages);
 }
 
-NWB_INLINE void GpuImageCache::clear()noexcept{
+FOUNDATION_INLINE void GpuImageCache::clear()noexcept{
     m_glyphCache.clear();
     m_sdfCache.clear();
     m_textureCache.clear();
 }
 
-NWB_INLINE void GpuImageCache::trim(const DrawSnapshot& snapshot){
+FOUNDATION_INLINE void GpuImageCache::trim(const DrawSnapshot& snapshot){
     const auto sameGlyphKey = [](const GpuVersion<GpuGlyphVersion>& cached, const SharedGlyphPage& page)noexcept{
         return SameGlyphPageKey(cached->m_page->binding(), page->binding());
     };
@@ -195,7 +195,7 @@ NWB_INLINE void GpuImageCache::trim(const DrawSnapshot& snapshot){
     retainReferenced(snapshot.textureImages(), sameTextureKey, m_textureCache);
 }
 
-NWB_INLINE void GpuImageCache::evict()noexcept{
+FOUNDATION_INLINE void GpuImageCache::evict()noexcept{
     // Pending and in-flight frames keep their own strong version references after cache ownership is removed.
     if(!m_glyphCache.empty())
         m_glyphCache.erase(m_glyphCache.begin());

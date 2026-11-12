@@ -30,7 +30,7 @@ NWB_IMPL_UI_BEGIN
 // CRLF becomes one space.
 // Other line breaks and tabs become spaces; NUL and other ASCII controls are rejected.
 // UTF8 and normalized byte length are checked before allocation.
-[[nodiscard]] NWB_INLINE Expected<AString<Core::Alloc::GlobalArena>, EditTextStatus::Enum> NormalizeSingleLineText(Core::Alloc::GlobalArena& arena, const AStringView source, const usize maxBytes){
+[[nodiscard]] FOUNDATION_INLINE Expected<AString<Core::Alloc::GlobalArena>, EditTextStatus::Enum> NormalizeSingleLineText(Core::Alloc::GlobalArena& arena, const AStringView source, const usize maxBytes){
     AString<Core::Alloc::GlobalArena> candidate(arena);
     const auto status = NormalizeSingleLineTextInto(source, maxBytes, candidate);
     if(!status)
@@ -39,7 +39,7 @@ NWB_IMPL_UI_BEGIN
 }
 
 // CRLF/CR/NEL/LS/PS become LF, and each tab becomes one space.
-[[nodiscard]] NWB_INLINE Expected<AString<Core::Alloc::GlobalArena>, EditTextStatus::Enum> NormalizeMultilineText(Core::Alloc::GlobalArena& arena, const AStringView source, const usize maxBytes){
+[[nodiscard]] FOUNDATION_INLINE Expected<AString<Core::Alloc::GlobalArena>, EditTextStatus::Enum> NormalizeMultilineText(Core::Alloc::GlobalArena& arena, const AStringView source, const usize maxBytes){
     AString<Core::Alloc::GlobalArena> candidate(arena);
     const auto status = NormalizeMultilineTextInto(source, maxBytes, candidate);
     if(!status)

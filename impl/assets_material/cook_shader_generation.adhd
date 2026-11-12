@@ -82,7 +82,7 @@ Expected<MaterialBindInterfaceLookup> BuildMaterialBindInterfaceLookup(const Spa
         if(!interfaceName)
             return MakeUnexpected(Failure{});
         if(!lookup.emplace(*interfaceName, MakeNotNull(&bindEntry)).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind interface '{}' is duplicated"), ConvertString(AStringView(bindEntry.virtualPath)));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind interface '{}' is duplicated"), ConvertString(AStringView(bindEntry.virtualPath)));
             return MakeUnexpected(Failure{});
         }
     }
@@ -191,7 +191,7 @@ static Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitPass
     const ScratchPath generatedRoot = ScratchPath(scratchArena, cacheDirectory) / configurationSafeName / s_GeneratedCacheDirectory / spec.generatedDirectoryLeaf;
     auto removeAllIfExistsResult2 = RemoveAllIfExists(generatedRoot);
     if(!removeAllIfExistsResult2){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material AVBOIT {} pixel shader generation: failed to clear generated directory '{}': {}"), ConvertString(spec.passLabel), PathToString<tchar>(generatedRoot), ConvertString(removeAllIfExistsResult2.error().message()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material AVBOIT {} pixel shader generation: failed to clear generated directory '{}': {}"), ConvertString(spec.passLabel), PathToString<tchar>(generatedRoot), ConvertString(removeAllIfExistsResult2.error().message()));
         return MakeUnexpected(Failure{});
     }
 
@@ -211,11 +211,11 @@ static Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitPass
         const ScratchPath outputPath = generatedRoot / AStringView(relativeFile);
         auto ensureDirectoriesResult2 = EnsureDirectories(outputPath.parentPath());
         if(!ensureDirectoriesResult2){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material AVBOIT {} pixel shader generation: failed to create generated parent '{}': {}"), ConvertString(spec.passLabel), PathToString<tchar>(outputPath.parentPathView()), ConvertString(ensureDirectoriesResult2.error().message()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material AVBOIT {} pixel shader generation: failed to create generated parent '{}': {}"), ConvertString(spec.passLabel), PathToString<tchar>(outputPath.parentPathView()), ConvertString(ensureDirectoriesResult2.error().message()));
             return MakeUnexpected(Failure{});
         }
         if(!WriteTextFile(outputPath, AStringView(generatedSource))){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material AVBOIT {} pixel shader generation: failed to write generated pixel shader '{}'"), ConvertString(spec.passLabel), PathToString<tchar>(outputPath));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material AVBOIT {} pixel shader generation: failed to write generated pixel shader '{}'"), ConvertString(spec.passLabel), PathToString<tchar>(outputPath));
             return MakeUnexpected(Failure{});
         }
 
@@ -226,7 +226,7 @@ static Expected<CookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitPass
 
         const auto pixelShaderName = ToName(AStringView(generated.name));
         if(!pixelShaderName || !*pixelShaderName){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: generated AVBOIT {} pixel shader name is invalid for material '{}'"), ConvertString(spec.passLabel), ConvertString(AStringView(entry.virtualPath)));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material cook: generated AVBOIT {} pixel shader name is invalid for material '{}'"), ConvertString(spec.passLabel), ConvertString(AStringView(entry.virtualPath)));
             return MakeUnexpected(Failure{});
         }
 
@@ -311,7 +311,7 @@ Expected<Path> EmitMaterialBindIncludes(const Path& cacheDirectory, const AStrin
             return MakeUnexpected(Failure{});
         ScratchString includePath = Move(*includePathResult);
         if(!seenIncludePaths.insert(includePath).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include generation: duplicate material bind include path '{}'"), ConvertString(includePath));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind include generation: duplicate material bind include path '{}'"), ConvertString(includePath));
             return MakeUnexpected(Failure{});
         }
 
@@ -323,12 +323,12 @@ Expected<Path> EmitMaterialBindIncludes(const Path& cacheDirectory, const AStrin
         const ScratchPath outputPath = ScratchPath(scratchArena, includeRoot) / AStringView(includePath);
         auto ensureDirectoriesResult = EnsureDirectories(outputPath.parentPath());
         if(!ensureDirectoriesResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include generation: failed to create generated include parent '{}': {}"), PathToString<tchar>(outputPath.parentPathView()), ConvertString(ensureDirectoriesResult.error().message()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind include generation: failed to create generated include parent '{}': {}"), PathToString<tchar>(outputPath.parentPathView()), ConvertString(ensureDirectoriesResult.error().message()));
             return MakeUnexpected(Failure{});
         }
 
         if(!WriteTextFile(outputPath, AStringView(generatedSource))){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include generation: failed to write generated include '{}'"), PathToString<tchar>(outputPath));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material bind include generation: failed to write generated include '{}'"), PathToString<tchar>(outputPath));
             return MakeUnexpected(Failure{});
         }
     }
@@ -360,7 +360,7 @@ b8 AssignMaterialShadingModelIds(const Span<MaterialCookEntry> materialEntries, 
     for(MaterialCookEntry& entry : materialEntries){
         const AStringView source(entry.bxdfSource);
         const auto sourceIt = LowerBound(uniqueSources.begin(), uniqueSources.end(), source);
-        NWB_ASSERT(sourceIt != uniqueSources.end() && *sourceIt == source);
+        FOUNDATION_ASSERT(sourceIt != uniqueSources.end() && *sourceIt == source);
         entry.shadingModelId = static_cast<u32>(static_cast<usize>(sourceIt - uniqueSources.begin()));
     }
 
@@ -385,7 +385,7 @@ b8 AssignMaterialShadingModelIds(const Span<MaterialCookEntry> materialEntries, 
 
         const AStringView surface(entry.surfaceSource);
         const auto surfaceIt = LowerBound(uniqueSurfaces.begin(), uniqueSurfaces.end(), surface);
-        NWB_ASSERT(surfaceIt != uniqueSurfaces.end() && *surfaceIt == surface);
+        FOUNDATION_ASSERT(surfaceIt != uniqueSurfaces.end() && *surfaceIt == surface);
         entry.surfaceDispatchId = static_cast<u32>(static_cast<usize>(surfaceIt - uniqueSurfaces.begin()));
     }
     return true;
@@ -428,11 +428,11 @@ Expected<Path> EmitDeferredBxdfDispatchModule(const Path& cacheDirectory, const 
     const ScratchPath outputPath = ScratchPath(scratchArena, includeRoot) / s_DeferredBxdfModuleSubPath;
     auto ensureDirectoriesResult = EnsureDirectories(outputPath.parentPath());
     if(!ensureDirectoriesResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deferred bxdf dispatch: failed to create generated include parent '{}': {}"), PathToString<tchar>(outputPath.parentPathView()), ConvertString(ensureDirectoriesResult.error().message()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Deferred bxdf dispatch: failed to create generated include parent '{}': {}"), PathToString<tchar>(outputPath.parentPathView()), ConvertString(ensureDirectoriesResult.error().message()));
         return MakeUnexpected(Failure{});
     }
     if(!WriteTextFile(outputPath, AStringView(source))){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deferred bxdf dispatch: failed to write generated include '{}'"), PathToString<tchar>(outputPath));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Deferred bxdf dispatch: failed to write generated include '{}'"), PathToString<tchar>(outputPath));
         return MakeUnexpected(Failure{});
     }
     return includeRoot;
@@ -466,7 +466,7 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShad
     const ScratchPath generatedRoot = ScratchPath(scratchArena, cacheDirectory) / configurationSafeName / s_GeneratedCacheDirectory / s_MaterialGeneratedPixelShaderDirLeaf;
     auto removeAllIfExistsResult = RemoveAllIfExists(generatedRoot);
     if(!removeAllIfExistsResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material pixel shader generation: failed to clear generated directory '{}': {}"), PathToString<tchar>(generatedRoot), ConvertString(removeAllIfExistsResult.error().message()));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material pixel shader generation: failed to clear generated directory '{}': {}"), PathToString<tchar>(generatedRoot), ConvertString(removeAllIfExistsResult.error().message()));
         return MakeUnexpected(Failure{});
     }
 
@@ -488,11 +488,11 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShad
         const ScratchPath outputPath = generatedRoot / AStringView(relativeFile);
         auto ensureDirectoriesResult = EnsureDirectories(outputPath.parentPath());
         if(!ensureDirectoriesResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material pixel shader generation: failed to create generated parent '{}': {}"), PathToString<tchar>(outputPath.parentPathView()), ConvertString(ensureDirectoriesResult.error().message()));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material pixel shader generation: failed to create generated parent '{}': {}"), PathToString<tchar>(outputPath.parentPathView()), ConvertString(ensureDirectoriesResult.error().message()));
             return MakeUnexpected(Failure{});
         }
         if(!WriteTextFile(outputPath, AStringView(generatedSource))){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material pixel shader generation: failed to write generated pixel shader '{}'"), PathToString<tchar>(outputPath));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material pixel shader generation: failed to write generated pixel shader '{}'"), PathToString<tchar>(outputPath));
             return MakeUnexpected(Failure{});
         }
 
@@ -503,7 +503,7 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShad
 
         const auto pixelShaderName = ToName(AStringView(generated.name));
         if(!pixelShaderName || !*pixelShaderName){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: generated pixel shader name is invalid for material '{}'"), ConvertString(AStringView(entry.virtualPath)));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material cook: generated pixel shader name is invalid for material '{}'"), ConvertString(AStringView(entry.virtualPath)));
             return MakeUnexpected(Failure{});
         }
 
@@ -512,7 +512,7 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShad
         Core::Assets::AssetRef<IShader> meshShaderRef;
         meshShaderRef.virtualPath = sharedMeshShaderName;
         if(!entry.stageShaders.emplace(Core::ShaderType::PixelStage, pixelShaderRef).second || !entry.stageShaders.emplace(Core::ShaderType::MeshStage, meshShaderRef).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: failed to assign generated stage shaders for material '{}'"), ConvertString(AStringView(entry.virtualPath)));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Material cook: failed to assign generated stage shaders for material '{}'"), ConvertString(AStringView(entry.virtualPath)));
             return MakeUnexpected(Failure{});
         }
 
@@ -590,13 +590,13 @@ Expected<Path> ShadowSurfaceDispatchGenerator::emit(
 
         const auto interfaceNameResult = Name::FromText(interfaceById[id]);
         if(!interfaceNameResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: model id {} references unknown material interface '{}'"), id, ConvertString(interfaceById[id]));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Shadow surface dispatch: model id {} references unknown material interface '{}'"), id, ConvertString(interfaceById[id]));
             return MakeUnexpected(Failure{});
         }
         const Name interfaceName = *interfaceNameResult;
         const auto bindEntryIt = bindEntryLookup->find(interfaceName);
         if(bindEntryIt == bindEntryLookup->end()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: model id {} references unknown material interface '{}'"), id, ConvertString(interfaceById[id]));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Shadow surface dispatch: model id {} references unknown material interface '{}'"), id, ConvertString(interfaceById[id]));
             return MakeUnexpected(Failure{});
         }
         bindEntryById[id] = bindEntryIt.value().get();
@@ -605,7 +605,7 @@ Expected<Path> ShadowSurfaceDispatchGenerator::emit(
         if(namespaceIt == bindNamespaceLookup.end()){
             bindNamespaceIdById[id] = static_cast<u32>(id);
             if(!bindNamespaceLookup.emplace(interfaceName, static_cast<u32>(id)).second){
-                NWB_ASSERT(false);
+                FOUNDATION_ASSERT(false);
                 return MakeUnexpected(Failure{});
             }
         }

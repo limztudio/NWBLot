@@ -95,7 +95,7 @@ using namespace NWB::Impl::Ui;
 
 constexpr AStringView s_ActionKey = "action";
 
-[[nodiscard]] NWB_INLINE HitTarget MakeButtonTarget(const Rect& rectangle = { 10.0f, 20.0f, 30.0f, 20.0f })noexcept{
+[[nodiscard]] FOUNDATION_INLINE HitTarget MakeButtonTarget(const Rect& rectangle = { 10.0f, 20.0f, 30.0f, 20.0f })noexcept{
     HitTarget target;
     target.rectangle = rectangle;
     target.clip = { 0.0f, 0.0f, 200.0f, 100.0f };
@@ -233,18 +233,18 @@ using CoreKeyEnum = ::NWB::Core::Key::Enum;
 using ::NWB::Impl::Ui::s_InputMaxContextMenuActions;
 using ::NWB::Impl::Ui::s_WidgetMaxStates;
 
-[[nodiscard]] NWB_INLINE f32 UiContextMenuInfinityF32()noexcept{ return ::Limit<f32>::s_Infinity; }
-[[nodiscard]] NWB_INLINE f32 UiContextMenuQuietNaNF32()noexcept{ return ::Limit<f32>::s_QuietNaN; }
-[[nodiscard]] NWB_INLINE CoreKeyEnum MakeUiContextMenuOutOfBoundsKey()noexcept{
+[[nodiscard]] FOUNDATION_INLINE f32 UiContextMenuInfinityF32()noexcept{ return ::Limit<f32>::s_Infinity; }
+[[nodiscard]] FOUNDATION_INLINE f32 UiContextMenuQuietNaNF32()noexcept{ return ::Limit<f32>::s_QuietNaN; }
+[[nodiscard]] FOUNDATION_INLINE CoreKeyEnum MakeUiContextMenuOutOfBoundsKey()noexcept{
     return static_cast<CoreKeyEnum>(static_cast<i32>(::NWB::Core::Key::Menu) + 1);
 }
-[[nodiscard]] NWB_INLINE InputEvent MakeUiContextMenuPointer(const InputEventTypeEnum type, const Point position = { 15.0f, 15.0f })noexcept{
+[[nodiscard]] FOUNDATION_INLINE InputEvent MakeUiContextMenuPointer(const InputEventTypeEnum type, const Point position = { 15.0f, 15.0f })noexcept{
     return ::UiTestSupport::Pointer(type, position);
 }
-[[nodiscard]] NWB_INLINE InputEvent MakeUiContextMenuKey(const CoreKeyEnum key, const b8 shift = false, const b8 control = false, const b8 alt = false, const b8 repeat = false)noexcept{
+[[nodiscard]] FOUNDATION_INLINE InputEvent MakeUiContextMenuKey(const CoreKeyEnum key, const b8 shift = false, const b8 control = false, const b8 alt = false, const b8 repeat = false)noexcept{
     return ::UiTestSupport::Key(key, shift, control, alt, repeat);
 }
-[[nodiscard]] NWB_INLINE AStringView MakeUiWidgetIdEmbeddedNulKey()noexcept{
+[[nodiscard]] FOUNDATION_INLINE AStringView MakeUiWidgetIdEmbeddedNulKey()noexcept{
     return AStringView("a\0b", 3u);
 }
 };

@@ -65,25 +65,25 @@ public:
 protected:
     virtual void startNativeRequest(const ClipboardRequestToken token, ClipboardOperation::Enum, ClipboardChannel::Enum, AStringView)noexcept override{
         const b8 completed = completeNativeRequest(token, ClipboardStatus::Unsupported);
-        NWB_FATAL_ASSERT(completed);
+        FOUNDATION_FATAL_ASSERT(completed);
     }
 };
 
-NWB_INLINE void WriteUiBenchmarkStdout(const AStringView text){
-    NWB_COUT << text;
+FOUNDATION_INLINE void WriteUiBenchmarkStdout(const AStringView text){
+    FOUNDATION_COUT << text;
 }
 
-NWB_INLINE void ConfigureEmptySkinAtlas(GlobalArena& arena, UiSkin& skin, const Name textureName){
+FOUNDATION_INLINE void ConfigureEmptySkinAtlas(GlobalArena& arena, UiSkin& skin, const Name textureName){
     UiSkin::RegionVector regions(arena);
     skin.setAtlas(AssetRef<Texture>(textureName), 8u, 8u, 1.0f, Move(regions));
 }
 
-NWB_INLINE b8 AdoptBuiltTextLayout(TextLayoutBuilder& layoutBuilder, const ShapeRequest& request, EditBoxView& view){
+FOUNDATION_INLINE b8 AdoptBuiltTextLayout(TextLayoutBuilder& layoutBuilder, const ShapeRequest& request, EditBoxView& view){
     auto layout = layoutBuilder.layout(request);
     return layout && view.adoptLayout(Move(*layout));
 }
 
-NWB_INLINE b8 TryDeclareEditBoxWidget(Context& context, const AStringView id, WidgetState& outWidget){
+FOUNDATION_INLINE b8 TryDeclareEditBoxWidget(Context& context, const AStringView id, WidgetState& outWidget){
     const auto widget = context.declare(id, WidgetKind::EditBox);
     if(!widget)
         return false;
@@ -91,7 +91,7 @@ NWB_INLINE b8 TryDeclareEditBoxWidget(Context& context, const AStringView id, Wi
     return true;
 }
 
-NWB_INLINE b8 HasCommittedTargetWithWidth(const Context& context, const WidgetId id, const u64 declarationGeneration, const f32 expectedWidth){
+FOUNDATION_INLINE b8 HasCommittedTargetWithWidth(const Context& context, const WidgetId id, const u64 declarationGeneration, const f32 expectedWidth){
     const HitTarget* const target = context.input().findTarget(id, declarationGeneration);
     return target != nullptr && target->rectangle.width == expectedWidth;
 }
@@ -847,11 +847,11 @@ namespace UiInputBenchmark{
 static int EntryPoint(const isize, tchar**, void*){
     NWB::Core::Common::InitializerGuard initializer;
     if(!initializer.initialize()){
-        NWB_CERR << "UI input benchmark common initialization failed\n";
+        FOUNDATION_CERR << "UI input benchmark common initialization failed\n";
         return 1;
     }
     if(!NWB::Tests::UiInputBenchmarkCases::RunAllUiInputBenchmarks()){
-        NWB_CERR << "UI input benchmark workload validation failed\n";
+        FOUNDATION_CERR << "UI input benchmark workload validation failed\n";
         return 1;
     }
     return 0;

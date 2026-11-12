@@ -38,7 +38,7 @@ using RendererComponent = Impl::RendererComponent;
 using MaterialInstanceComponent = Impl::MaterialInstanceComponent;
 using MaterialInstanceParameter = Impl::MaterialInstanceParameter;
 
-[[nodiscard]] NWB_INLINE usize MaterialInstanceComponentAddress(const World& world, const Core::ECS::EntityID entity)noexcept{
+[[nodiscard]] FOUNDATION_INLINE usize MaterialInstanceComponentAddress(const World& world, const Core::ECS::EntityID entity)noexcept{
     return reinterpret_cast<usize>(world.tryGetComponent<MaterialInstanceComponent>(entity));
 }
 

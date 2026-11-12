@@ -394,48 +394,48 @@ b8 StartUiTextAreaScrollThumb(UiTextAreaScrollLifetimeTests& self, const WidgetI
 b8 PrepareUiTextAreaViewDense(UiTextAreaViewTests& self)noexcept;
 b8 ArrangeUiTextAreaViewManual(UiTextAreaViewTests& self, const Point& scroll, f32 width, f32 height)noexcept;
 
-NWB_INLINE void ExpectUiMultilineViewPlacement(const ::NWB::Impl::Ui::EditBoxPlacement& actual, const ::NWB::Impl::Ui::EditBoxPlacement& expected){
+FOUNDATION_INLINE void ExpectUiMultilineViewPlacement(const ::NWB::Impl::Ui::EditBoxPlacement& actual, const ::NWB::Impl::Ui::EditBoxPlacement& expected){
     ::NWB::UiMultilineViewTests::ExpectPlacement(actual, expected);
 }
 
-[[nodiscard]] NWB_INLINE AStringView UiTextScrollPublicationText(const ::NWB::UiTextAreaTests::AreaPublication& item)noexcept{
+[[nodiscard]] FOUNDATION_INLINE AStringView UiTextScrollPublicationText(const ::NWB::UiTextAreaTests::AreaPublication& item)noexcept{
     return AStringView(item.text.data(), item.text.size());
 }
 
-[[nodiscard]] NWB_INLINE AStringView UiTextScrollActionText(const AString<::NWB::Core::Alloc::GlobalArena>& text)noexcept{
+[[nodiscard]] FOUNDATION_INLINE AStringView UiTextScrollActionText(const AString<::NWB::Core::Alloc::GlobalArena>& text)noexcept{
     return AStringView(text.data(), text.size());
 }
 };
 
 namespace __hidden_ui_text_area_scroll_lifetime_tests{
-NWB_INLINE TextAreaOptions UiTextAreaScrollLifetimeTests::SmallOptions()noexcept{
+FOUNDATION_INLINE TextAreaOptions UiTextAreaScrollLifetimeTests::SmallOptions()noexcept{
     return ::__hidden_ui_glyph_sdf_tests::UiTextAreaScrollLifetimeSmallOptions();
 }
-NWB_INLINE b8 UiTextAreaScrollLifetimeTests::seedModel(){
+FOUNDATION_INLINE b8 UiTextAreaScrollLifetimeTests::seedModel(){
     return ::__hidden_ui_glyph_sdf_tests::SeedUiTextAreaScrollLifetimeModel(*this);
 }
-NWB_INLINE b8 UiTextAreaScrollLifetimeTests::prepareOverflow(const u64 generation, const TextAreaOptions& options, const Rect& bounds){
+FOUNDATION_INLINE b8 UiTextAreaScrollLifetimeTests::prepareOverflow(const u64 generation, const TextAreaOptions& options, const Rect& bounds){
     return ::__hidden_ui_glyph_sdf_tests::PrepareUiTextAreaScrollOverflow(*this, generation, options, bounds);
 }
-NWB_INLINE WidgetId UiTextAreaScrollLifetimeTests::popupArea()const{
+FOUNDATION_INLINE WidgetId UiTextAreaScrollLifetimeTests::popupArea()const{
     return ::__hidden_ui_glyph_sdf_tests::GetUiTextAreaScrollPopupArea(*this);
 }
-NWB_INLINE b8 UiTextAreaScrollLifetimeTests::popupFrame(const u64 generation){
+FOUNDATION_INLINE b8 UiTextAreaScrollLifetimeTests::popupFrame(const u64 generation){
     return ::__hidden_ui_glyph_sdf_tests::RunUiTextAreaScrollPopupFrame(*this, generation);
 }
-NWB_INLINE b8 UiTextAreaScrollLifetimeTests::wheel(const f64 delta){
+FOUNDATION_INLINE b8 UiTextAreaScrollLifetimeTests::wheel(const f64 delta){
     return ::__hidden_ui_glyph_sdf_tests::SendUiTextAreaScrollWheel(*this, delta);
 }
-NWB_INLINE b8 UiTextAreaScrollLifetimeTests::startThumb(const WidgetId area){
+FOUNDATION_INLINE b8 UiTextAreaScrollLifetimeTests::startThumb(const WidgetId area){
     return ::__hidden_ui_glyph_sdf_tests::StartUiTextAreaScrollThumb(*this, area);
 }
 };
 
 namespace __hidden_ui_text_area_view_tests{
-NWB_INLINE b8 UiTextAreaViewTests::prepareDense(){
+FOUNDATION_INLINE b8 UiTextAreaViewTests::prepareDense(){
     return ::__hidden_ui_glyph_sdf_tests::PrepareUiTextAreaViewDense(*this);
 }
-NWB_INLINE b8 UiTextAreaViewTests::manualPlace(const Point scroll, const f32 width, const f32 height)noexcept{
+FOUNDATION_INLINE b8 UiTextAreaViewTests::manualPlace(const Point scroll, const f32 width, const f32 height)noexcept{
     return ::__hidden_ui_glyph_sdf_tests::ArrangeUiTextAreaViewManual(*this, scroll, width, height);
 }
 };

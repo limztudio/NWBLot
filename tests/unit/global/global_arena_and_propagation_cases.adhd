@@ -649,7 +649,7 @@ void VerifyGlobal_AutoRegistrationQueueDeduplicatesAndSnapshots(){
 void VerifyGlobal_GenericPathKeepsNativeFilenameCharacters(){
     b8 windowsPlatform = false;
     native(mut windowsPlatform){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         windowsPlatform = true;
 #endif
     }
@@ -672,11 +672,11 @@ void VerifyGlobal_BoundedRuntimeWrappersTerminateTruncatedText(){
 #if !defined(_MSC_VER)
         supported = true;
         Array<char, 4u> truncatedText = {};
-        strcpyStatus = NWB_STRCPY(truncatedText.data(), sizeof(truncatedText), "abcdef");
+        strcpyStatus = FOUNDATION_STRCPY(truncatedText.data(), sizeof(truncatedText), "abcdef");
         truncatedCopy.assign(AStringView(truncatedText.data()));
 
         Array<char, 4u> nullTerminatedText = { 'a', 'b', 'c', 'd' };
-        strcatStatus = NWB_STRCAT(nullTerminatedText.data(), sizeof(nullTerminatedText), "e");
+        strcatStatus = FOUNDATION_STRCAT(nullTerminatedText.data(), sizeof(nullTerminatedText), "e");
         finalByte = static_cast<u8>(nullTerminatedText[sizeof(nullTerminatedText) - 1u]);
 #endif
     }

@@ -55,7 +55,7 @@ inline constexpr usize s_RefractionCounterWordCount = NWB_REFRACTION_DIAGNOSTIC_
 using ReflectionCounterArray = Array<u32, s_ReflectionCounterWordCount>;
 using RefractionCounterArray = Array<u32, s_RefractionCounterWordCount>;
 
-[[nodiscard]] NWB_INLINE ReflectionCounterArray MakeSampleReflectionCounters()noexcept{
+[[nodiscard]] FOUNDATION_INLINE ReflectionCounterArray MakeSampleReflectionCounters()noexcept{
     constexpr ReflectionCounterArray s_Counters = {
         100u, 64u, 30u, 80u, 20u, 50u, 90u, 20u, 98u, 42u, 12u, 2u, 1u, 3u, 4u, 5u, 123u, 25u, 70u, 2u, 17u, 3u, 6u, 19u, 31u,
     };
@@ -63,7 +63,7 @@ using RefractionCounterArray = Array<u32, s_RefractionCounterWordCount>;
     return s_Counters;
 }
 
-[[nodiscard]] NWB_INLINE RefractionCounterArray MakeSampleRefractionCounters()noexcept{
+[[nodiscard]] FOUNDATION_INLINE RefractionCounterArray MakeSampleRefractionCounters()noexcept{
     constexpr RefractionCounterArray s_Counters = {
         23u, 41u, 2u, 3u, 5u, 7u, 11u, 43u, 13u, 17u, 19u, 29u, 31u, 47u, 37u, 53u,
         59u, 61u, 67u, 71u, 73u, 79u, 83u, 89u, 97u, 101u, 103u, 107u, 1u,
@@ -71,7 +71,7 @@ using RefractionCounterArray = Array<u32, s_RefractionCounterWordCount>;
     return s_Counters;
 }
 
-NWB_INLINE void ExpectRefractionDiagnosticCountersMatch(const RefractionStatistics& statistics, const RefractionCounterArray& counters){
+FOUNDATION_INLINE void ExpectRefractionDiagnosticCountersMatch(const RefractionStatistics& statistics, const RefractionCounterArray& counters){
 #define NWB_CHECK_REFRACTION_COUNTER(field, byteOffset) EXPECT_EQ(statistics.field, counters[(byteOffset) / NWB_REFRACTION_DIAGNOSTIC_WORD_BYTES]);
     NWB_REFRACTION_DIAGNOSTIC_COUNTER_FIELDS(NWB_CHECK_REFRACTION_COUNTER)
 #undef NWB_CHECK_REFRACTION_COUNTER
@@ -200,7 +200,7 @@ public:
     }
 };
 
-[[nodiscard]] NWB_INLINE Name MakeVariantPruningName(const usize index)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Name MakeVariantPruningName(const usize index)noexcept{
     NameHash hash = ComputeNameHash(MakeNotNull("tests/runtime_mesh_pruning/full_identity"));
     hash.qwords[s_NameHashLaneCount - 1u] ^= index + 1u;
     return Name(hash);

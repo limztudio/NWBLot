@@ -67,11 +67,11 @@ public:
     }
 };
 
-[[nodiscard]] NWB_INLINE Expected<Core::GpuCommandIrOwnerAnchor> MakeOwnerReleaseProbeAnchor(TestArena& ownerArena, u32& releases)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuCommandIrOwnerAnchor> MakeOwnerReleaseProbeAnchor(TestArena& ownerArena, u32& releases)noexcept{
     return Core::MakeGpuCommandIrOwnerAnchor(ownerArena.arena, GpuCmdIrOwnerReleaseProbe(releases));
 }
 
-[[nodiscard]] NWB_INLINE Expected<Core::GpuUploadBlobId> CopyU32AlignedUploadBytes(Core::GpuTaskGraph& graph, const GraphicsBytes& caller){
+[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuUploadBlobId> CopyU32AlignedUploadBytes(Core::GpuTaskGraph& graph, const GraphicsBytes& caller){
     return graph.copyUploadData(caller.data(), caller.size(), alignof(u32));
 }
 

@@ -59,18 +59,18 @@ public:
     }
 };
 
-[[nodiscard]] NWB_INLINE GpuHazardResourcePointerKey MakeNonNullBufferPointerKey()noexcept{
+[[nodiscard]] FOUNDATION_INLINE GpuHazardResourcePointerKey MakeNonNullBufferPointerKey()noexcept{
     return GpuHazardResourcePointerKey{ reinterpret_cast<const void*>(1u), Core::GpuGraphResourceType::Buffer };
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuTaskGraphDetail::ResourceImportMatch FindNullIdentityResourceImportMatch(
+[[nodiscard]] FOUNDATION_INLINE Core::GpuTaskGraphDetail::ResourceImportMatch FindNullIdentityResourceImportMatch(
     const GpuHazardImportIndexRig& rig,
     const GpuHazardResourcePointerKey& pointer
 )noexcept{
     return rig.index.findResourceImportMatch(rig.resources, nullptr, pointer);
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuGraphInitialOwnerHandoffSourceDesc MakeHandoffSourceWithState(
+[[nodiscard]] FOUNDATION_INLINE Core::GpuGraphInitialOwnerHandoffSourceDesc MakeHandoffSourceWithState(
     const Core::GpuTaskResourceRange& range,
     const Core::GpuPhysicalQueueId& sourceQueue,
     const Core::GpuPhysicalQueueId& destinationQueue,
@@ -88,7 +88,7 @@ public:
     };
 }
 
-[[nodiscard]] NWB_INLINE Expected<Core::GpuTaskId> AddNativeRecordProbeTask(
+[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuTaskId> AddNativeRecordProbeTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     u32& recordCount
@@ -96,7 +96,7 @@ public:
     return graph.addTask<NativeRecordProbeTask>(desc, NativeRecordProbeTask::Payload{ .recordCount = &recordCount });
 }
 
-[[nodiscard]] NWB_INLINE Expected<Core::GpuTaskId> AddPacketLifecycleTask(
+[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuTaskId> AddPacketLifecycleTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     const Core::GpuQueueCapability::Mask requiredCapabilities

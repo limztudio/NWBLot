@@ -191,7 +191,7 @@ void VerifyFilesystemVolumeTest_SegmentProbePreservesInspectionErrors(mut Filesy
 
     DiskPath invalidPath(self.m_arena);
     native(mut self, mut invalidPath){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         invalidPath = DiskPath(self.m_arena, "invalid|volume");
 #else
         TString<GlobalArena> longName(self.m_arena);
@@ -610,7 +610,7 @@ void VerifyFilesystemVolumeTest_CompactionPreservesExistingRecoveryDirectories(m
 void VerifyFilesystemVolumeTest_IncompleteCompactionRollbackUnmountsTheVolume(mut FilesystemVolumeTest self){
     b8 windowsSupported = false;
     native(mut windowsSupported){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         windowsSupported = true;
 #endif
     }
@@ -640,7 +640,7 @@ void VerifyFilesystemVolumeTest_IncompleteCompactionRollbackUnmountsTheVolume(mu
     b8 loggerBlocked = false;
     b8 backupMatchedOriginal = false;
     native(mut self, mut filesystem, mut scratchArena, mut handleOpened, mut compactSucceeded, mut loggerBlocked, mut backupMatchedOriginal){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         const auto first = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 0u);
         const auto second = MakeVolumeSegmentPath(self.m_directory, self.m_desc.volumeName.view(), 1u);
         Vector<u8, ScratchArena> original(scratchArena);
@@ -659,7 +659,7 @@ void VerifyFilesystemVolumeTest_IncompleteCompactionRollbackUnmountsTheVolume(mu
             loggerBlocked = logger.blocked();
             Vector<u8, ScratchArena> loaded(scratchArena);
             if(ReadBinaryFile(backup, loaded) && loaded.size() == original.size())
-                backupMatchedOriginal = NWB_MEMCMP(loaded.data(), original.data(), original.size()) == 0;
+                backupMatchedOriginal = FOUNDATION_MEMCMP(loaded.data(), original.data(), original.size()) == 0;
         }
 #else
         static_cast<void>(self);
@@ -717,7 +717,7 @@ void VerifyFilesystemVolumeTest_FailedCompactionPreservesOverlappingSourcePayloa
         Vector<u8, ScratchArena> loaded(scratchArena);
         ASSERT_TRUE(filesystem.readFile(s_FilesystemNameProjectTestsCompactTarget, loaded));
         ASSERT_EQ(loaded.size(), payload.size());
-        EXPECT_EQ(NWB_MEMCMP(loaded.data(), payload.data(), payload.size()), 0);
+        EXPECT_EQ(FOUNDATION_MEMCMP(loaded.data(), payload.data(), payload.size()), 0);
     }
 
     ASSERT_TRUE(filesystem.unmount());
@@ -726,7 +726,7 @@ void VerifyFilesystemVolumeTest_FailedCompactionPreservesOverlappingSourcePayloa
 void VerifyFilesystemVolumeTest_ImmediateMutationUnwindPreservesIndexedPayloadsAndMembership(mut FilesystemVolumeTest self){
     b8 warningsEnabled = false;
     native(mut warningsEnabled){
-#if NWB_OCCUR_WARNING
+#if FOUNDATION_OCCUR_WARNING
         warningsEnabled = true;
 #endif
     }
@@ -764,7 +764,7 @@ void VerifyFilesystemVolumeTest_ImmediateMutationUnwindPreservesIndexedPayloadsA
     for(u32 operation = 0u; operation < 3u; ++operation){
         b8 restored = false;
         native(in operation, in replacement, mut self, mut filesystem, mut scratchArena, mut restored){
-#if NWB_OCCUR_WARNING
+#if FOUNDATION_OCCUR_WARNING
             const ::Path<ScratchArena> directory(scratchArena, self.m_directory);
             const auto metadataSegment = MakeVolumeSegmentPath(directory, self.m_desc.volumeName.view(), 0u);
             auto backupSegment = metadataSegment;
@@ -873,10 +873,10 @@ void VerifyFilesystemVolumeTest_RejectsInvalidPathHashFromMetadataIndex(mut File
         ASSERT_TRUE(ReadBinaryFile(segmentPath, bytes));
         ASSERT_GE(bytes.size(), sizeof(VolumeHeaderDisk) + sizeof(VolumeIndexEntryDisk));
         VolumeIndexEntryDisk entry{};
-        NWB_MEMCPY(&entry, sizeof(entry), bytes.data() + sizeof(VolumeHeaderDisk), sizeof(entry));
+        FOUNDATION_MEMCPY(&entry, sizeof(entry), bytes.data() + sizeof(VolumeHeaderDisk), sizeof(entry));
         ASSERT_TRUE(Name(entry.hash));
         entry.hash = NameHash{};
-        NWB_MEMCPY(bytes.data() + sizeof(VolumeHeaderDisk), sizeof(entry), &entry, sizeof(entry));
+        FOUNDATION_MEMCPY(bytes.data() + sizeof(VolumeHeaderDisk), sizeof(entry), &entry, sizeof(entry));
         ASSERT_TRUE(WriteBinaryFile(segmentPath, bytes));
     }
 
@@ -932,7 +932,7 @@ void VerifyFilesystemVolumeTest_MetadataImagePreservesCompleteHashesAndClearsRem
             expected.insert(expected.end(), payload.begin(), payload.end());
             ASSERT_TRUE(ReadBinaryFile(segmentPath, actual));
             ASSERT_EQ(actual.size(), expected.size());
-            EXPECT_EQ(NWB_MEMCMP(actual.data(), expected.data(), expected.size()), 0);
+            EXPECT_EQ(FOUNDATION_MEMCMP(actual.data(), expected.data(), expected.size()), 0);
         };
         verifyImage(0u);
         ASSERT_TRUE(filesystem.get().unmount());
@@ -946,7 +946,7 @@ void VerifyFilesystemVolumeTest_MetadataImagePreservesCompleteHashesAndClearsRem
                 EXPECT_TRUE(loaded.empty());
             else{
                 ASSERT_EQ(loaded.size(), payload.size());
-                EXPECT_EQ(NWB_MEMCMP(loaded.data(), payload.data(), payload.size()), 0);
+                EXPECT_EQ(FOUNDATION_MEMCMP(loaded.data(), payload.data(), payload.size()), 0);
             }
         }
         ASSERT_TRUE(filesystem.get().unmount());
@@ -1042,7 +1042,7 @@ void VerifyFilesystemVolumeTest_IncompletePublicationRollbackPreservesRecoveryFi
         Vector<u8, ScratchArena> loaded(scratchArena);
         ASSERT_TRUE(ReadBinaryFile(backup, loaded));
         ASSERT_EQ(loaded.size(), oldBytes.size());
-        EXPECT_EQ(NWB_MEMCMP(loaded.data(), oldBytes.data(), oldBytes.size()), 0);
+        EXPECT_EQ(FOUNDATION_MEMCMP(loaded.data(), oldBytes.data(), oldBytes.size()), 0);
         const auto stageExists = IsDirectory(paths.stageDirectory);
         ASSERT_TRUE(stageExists);
         EXPECT_TRUE(*stageExists);
@@ -1080,7 +1080,7 @@ void VerifyFilesystemVolumeTest_ThrowingDiagnosticStillRetainsIncompleteRollback
         Vector<u8, ScratchArena> loaded(scratchArena);
         ASSERT_TRUE(ReadBinaryFile(backup, loaded));
         ASSERT_EQ(loaded.size(), oldBytes.size());
-        EXPECT_EQ(NWB_MEMCMP(loaded.data(), oldBytes.data(), oldBytes.size()), 0);
+        EXPECT_EQ(FOUNDATION_MEMCMP(loaded.data(), oldBytes.data(), oldBytes.size()), 0);
         const auto stageExists = IsDirectory(paths.stageDirectory);
         ASSERT_TRUE(stageExists);
         EXPECT_TRUE(*stageExists);
@@ -1262,7 +1262,7 @@ NWB_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1280,7 +1280,7 @@ TEST_F(FilesystemVolumeTest, IncompleteCompactionRollbackUnmountsTheVolume){ Ver
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if NWB_OCCUR_WARNING
+#if FOUNDATION_OCCUR_WARNING
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

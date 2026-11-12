@@ -27,11 +27,11 @@ namespace SkeletonRuntime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE Expected<u32> BuildStoredJointPaletteFromSkeletonPose(const SkeletonPoseComponent& pose, Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena>& outJointPalette)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Expected<u32> BuildStoredJointPaletteFromSkeletonPose(const SkeletonPoseComponent& pose, Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena>& outJointPalette)noexcept{
     return TryBuildStoredJointPaletteVectorFromSkeletonPose(pose, outJointPalette);
 }
 
-[[nodiscard]] NWB_INLINE Expected<u32> BuildStoredJointPaletteFromSkeletonPose(const SkeletonPoseComponent& pose, Vector<SkeletonJointMatrix, Core::Alloc::ScratchArena>& outJointPalette)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Expected<u32> BuildStoredJointPaletteFromSkeletonPose(const SkeletonPoseComponent& pose, Vector<SkeletonJointMatrix, Core::Alloc::ScratchArena>& outJointPalette)noexcept{
     outJointPalette.clear();
     if(!HasSkeletonPoseData(pose))
         return static_cast<u32>(SkeletonSkinningMode::LinearBlend);

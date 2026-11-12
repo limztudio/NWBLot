@@ -28,7 +28,7 @@ native{
 
 #include <gtest/gtest.h>
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 #include <core/os/linux/pipe_io.h>
 #include <core/os/linux/x11/clipboard.h>
 #include <core/os/linux/x11/x11_checked.h>
@@ -90,23 +90,23 @@ struct WaylandStateContext{
     {}
 };
 
-[[nodiscard]] NWB_INLINE TextInputSessionToken MakeSessionToken(const u64 service, const u64 generation)noexcept{
+[[nodiscard]] FOUNDATION_INLINE TextInputSessionToken MakeSessionToken(const u64 service, const u64 generation)noexcept{
     return TextInputSessionToken{ service, generation };
 }
 
-[[nodiscard]] NWB_INLINE WaylandTextInputProvenance MakeWaylandProvenance(const TextInputSessionToken token, const u64 revision, const b8 revisionKnown)noexcept{
+[[nodiscard]] FOUNDATION_INLINE WaylandTextInputProvenance MakeWaylandProvenance(const TextInputSessionToken token, const u64 revision, const b8 revisionKnown)noexcept{
     return WaylandTextInputProvenance{ token, revision, revisionKnown };
 }
 
-NWB_INLINE void AppendGlobalString(GlobalString& target, const AStringView text){
+FOUNDATION_INLINE void AppendGlobalString(GlobalString& target, const AStringView text){
     target.append(text.data(), text.size());
 }
 
-NWB_INLINE void ReplaceGlobalString(GlobalString& target, const usize pos, const usize count, const AStringView text){
+FOUNDATION_INLINE void ReplaceGlobalString(GlobalString& target, const usize pos, const usize count, const AStringView text){
     target.replace(pos, count, text.data(), text.size());
 }
 
-NWB_INLINE void ClearAndShrinkGlobalString(GlobalString& target){
+FOUNDATION_INLINE void ClearAndShrinkGlobalString(GlobalString& target){
     target.clear();
     target.shrink_to_fit();
 }
@@ -115,7 +115,7 @@ NWB_INLINE void ClearAndShrinkGlobalString(GlobalString& target){
     return X11PreeditBuffer::s_MaxBytes;
 }
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 inline constexpr u32 s_SelectionChangeTimeoutMS = 3000u;
 inline constexpr u32 s_ClipboardCompletionTimeoutMS = 6000u;
 inline constexpr u32 s_PollIntervalMS = 1u;
@@ -266,7 +266,7 @@ public:
 };
 
 namespace NWB::Tests::OS{
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 using NWB::Core::ClipboardPipeReadFailure;
 #else
 using __hidden_os_platform_cases_support::ClipboardPipeReadFailure;
@@ -958,7 +958,7 @@ void VerifyClipboardPipe_ClosedReaderFailsWithoutSigpipeOrChangingThreadMask(){
     i32 beforeStatus = -1;
     i32 beforeSigpipe = -1;
     native(mut beforeStatus, mut beforeSigpipe){
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
         sigset_t before;
         beforeStatus = static_cast<i32>(pthread_sigmask(SIG_BLOCK, nullptr, &before));
         if(beforeStatus == 0)
@@ -973,7 +973,7 @@ void VerifyClipboardPipe_ClosedReaderFailsWithoutSigpipeOrChangingThreadMask(){
     i32 afterStatus = -1;
     i32 afterSigpipe = -2;
     native(mut afterStatus, mut afterSigpipe){
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
         sigset_t after;
         afterStatus = static_cast<i32>(pthread_sigmask(SIG_BLOCK, nullptr, &after));
         if(afterStatus == 0)
@@ -1031,7 +1031,7 @@ void VerifyX11ClipboardFixture_PropertyAbsenceAndRetiredWindowPreserveDifferentN
     u8 failedErrorCode = 0u;
     u8 expectedBadWindow = 1u;
     native(mut self, mut createdOk, mut retiredNonZero, mut absentOk, mut absentType, mut absentCount, mut destroyedOk, mut failedHasValue, mut failedErrorCode, mut expectedBadWindow){
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
         expectedBadWindow = static_cast<u8>(BadWindow);
         Window retired = 0u;
         {
@@ -1107,7 +1107,7 @@ void VerifyX11ClipboardFixture_IncrementalReadRetainsSnapshotAfterOwnerLosesSele
     u64 replacementWindow = 0u;
     b8 ownerReplaced = false;
     native(mut self, mut replacementWindow, mut ownerReplaced){
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
         using namespace __hidden_os_platform_cases_support;
         const Window replacement = XCreateSimpleWindow(self.m_displays[1], DefaultRootWindow(self.m_displays[1]), 0, 0, 1, 1, 0, 0, 0);
         replacementWindow = static_cast<u64>(replacement);
@@ -1128,7 +1128,7 @@ void VerifyX11ClipboardFixture_IncrementalReadRetainsSnapshotAfterOwnerLosesSele
     EXPECT_EQ(out.completion.text, originalView);
 
     native(mut self, in replacementWindow){
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
         XDestroyWindow(self.m_displays[1], static_cast<Window>(replacementWindow));
         XSync(self.m_displays[1], False);
 #endif
@@ -1171,7 +1171,7 @@ void VerifyX11ClipboardFixture_QueuedOwnershipLossCannotClearNewlyReacquiredText
     b8 ownerMovedAway = false;
     b8 lossDispatched = false;
     native(mut self, in writeToken, mut out, mut temporaryWindow, mut temporaryOwned, mut queuedLoss, mut selectionMatched, mut reacquiredOk, mut ownerMovedAway, mut lossDispatched){
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
         using namespace __hidden_os_platform_cases_support;
         const Atom clipboard = XInternAtom(self.m_displays[1], s_ClipboardAtomName.data(), False);
         const Window temporaryOwner = XCreateSimpleWindow(self.m_displays[1], DefaultRootWindow(self.m_displays[1]), 0, 0, 1, 1, 0, 0, 0);
@@ -1214,7 +1214,7 @@ void VerifyX11ClipboardFixture_QueuedOwnershipLossCannotClearNewlyReacquiredText
     EXPECT_EQ(out.completion.text, "after reacquisition");
 
     native(mut self, in temporaryWindow){
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
         XDestroyWindow(self.m_displays[1], static_cast<Window>(temporaryWindow));
         XSync(self.m_displays[1], False);
 #endif
@@ -1281,7 +1281,7 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

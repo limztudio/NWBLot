@@ -18,7 +18,7 @@ native{
 #include <loader/project_entry.adhd.h>
 
 namespace NWB::Tests::Smoke{
-[[nodiscard]] NWB_INLINE AStringView GiTestProjectName()noexcept{
+[[nodiscard]] FOUNDATION_INLINE AStringView GiTestProjectName()noexcept{
     return "GiTestSmokeProject";
 }
 };
@@ -363,7 +363,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{
-    return NWB_TEXT("NWB GI Test");
+    return FOUNDATION_TEXT("NWB GI Test");
 }
 
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){

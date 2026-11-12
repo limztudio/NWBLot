@@ -46,7 +46,7 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE u32 ResolveSceneLights(Core::ECS::World& world, const Span<SceneLightGpuData> outLights, const Span<f32> outCausticImportance)noexcept{
+[[nodiscard]] FOUNDATION_INLINE u32 ResolveSceneLights(Core::ECS::World& world, const Span<SceneLightGpuData> outLights, const Span<f32> outCausticImportance)noexcept{
     const usize maxLightCount = Min(outLights.size(), outCausticImportance.size());
     if(maxLightCount == 0u)
         return 0u;
@@ -86,7 +86,7 @@ namespace ECSRenderDetail{
     return static_cast<u32>(gatheredCount);
 }
 
-[[nodiscard]] NWB_INLINE SceneShadingGpuData ResolveSceneShadingState(const f32 fallbackAspectRatio, const u32 lightCount, Core::ECS::World& world)noexcept{
+[[nodiscard]] FOUNDATION_INLINE SceneShadingGpuData ResolveSceneShadingState(const f32 fallbackAspectRatio, const u32 lightCount, Core::ECS::World& world)noexcept{
     const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(world, fallbackAspectRatio);
     if(cameraView.valid())
         return MakeSceneShadingGpuData(LoadFloat(cameraView.transform->position), lightCount);

@@ -46,7 +46,7 @@ using namespace Impl::Ui;
 inline constexpr AStringView s_PaintTextSkinPath = "tests/ui/skin";
 inline constexpr AStringView s_PaintTextFontPath = "tests/ui/font";
 
-[[nodiscard]] NWB_INLINE Expected<SharedGlyphPage> MakeTestGlyphPage(Core::Alloc::GlobalArena& arena, const u64 atlasIdentity, const u64 generation = 1u, const u32 index = 0u){
+[[nodiscard]] FOUNDATION_INLINE Expected<SharedGlyphPage> MakeTestGlyphPage(Core::Alloc::GlobalArena& arena, const u64 atlasIdentity, const u64 generation = 1u, const u32 index = 0u){
     GlyphPage::Pixels pixels(arena);
     pixels.resize(64u, 0u);
     pixels[0] = 64u;
@@ -56,7 +56,7 @@ inline constexpr AStringView s_PaintTextFontPath = "tests/ui/font";
     return CreateGlyphPage(arena, binding, Move(pixels));
 }
 
-[[nodiscard]] NWB_INLINE Expected<SharedSdfAtlasPage> MakeTestSdfAtlasPage(Core::Alloc::GlobalArena& arena, const u64 atlasIdentity, const u64 generation = 1u, const u32 index = 0u, const u8 interior = 255u){
+[[nodiscard]] FOUNDATION_INLINE Expected<SharedSdfAtlasPage> MakeTestSdfAtlasPage(Core::Alloc::GlobalArena& arena, const u64 atlasIdentity, const u64 generation = 1u, const u32 index = 0u, const u8 interior = 255u){
     SdfAtlasPage::Pixels pixels(arena);
     pixels.resize(8u * 8u * 4u, 0u);
     pixels[0u] = 32u;
@@ -316,26 +316,26 @@ void BeginTextVisibleFixturePaint(TextVisibleFixture& self, u64 generation, cons
 
 NWB_BEGIN
 namespace UiPaintImageTests{
-NWB_INLINE void ExpectSameImagePaint(const DrawSnapshot& actual, const DrawSnapshot& expected){
+FOUNDATION_INLINE void ExpectSameImagePaint(const DrawSnapshot& actual, const DrawSnapshot& expected){
     ::__hidden_ui_glyph_sdf_tests::ExpectUiSameImagePaintSnapshots(actual, expected);
 }
-NWB_INLINE void PaintImageFixture::beginPaint(PaintBuilder& builder, const u64 generation){
+FOUNDATION_INLINE void PaintImageFixture::beginPaint(PaintBuilder& builder, const u64 generation){
     ::__hidden_ui_glyph_sdf_tests::BeginPaintImageFixture(*this, builder, generation);
 }
 };
 namespace UiPaintTextTests{
-NWB_INLINE void PaintTextFixture::ExpectClippedQuad(const DrawSnapshot& snapshot){
+FOUNDATION_INLINE void PaintTextFixture::ExpectClippedQuad(const DrawSnapshot& snapshot){
     ::__hidden_ui_glyph_sdf_tests::ExpectClippedPaintTextQuad(snapshot);
 }
-NWB_INLINE void PaintTextFixture::begin(const u64 generation){
+FOUNDATION_INLINE void PaintTextFixture::begin(const u64 generation){
     ::__hidden_ui_glyph_sdf_tests::BeginPaintTextFixture(*this, generation);
 }
 };
 namespace UiTextVisibleTests{
-NWB_INLINE Rect TextVisibleFixture::OutlineRectangle(const PlacedGlyph& glyph, const Point origin)noexcept{
+FOUNDATION_INLINE Rect TextVisibleFixture::OutlineRectangle(const PlacedGlyph& glyph, const Point origin)noexcept{
     return ::__hidden_ui_glyph_sdf_tests::ComputePlacedGlyphOutlineRect(glyph, origin);
 }
-NWB_INLINE void TextVisibleFixture::beginPaint(const u64 generation, const DisplayMetrics& display){
+FOUNDATION_INLINE void TextVisibleFixture::beginPaint(const u64 generation, const DisplayMetrics& display){
     ::__hidden_ui_glyph_sdf_tests::BeginTextVisibleFixturePaint(*this, generation, display);
 }
 };

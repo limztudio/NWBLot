@@ -78,43 +78,43 @@ public:
 };
 using float3 = ShaderFloat3;
 
-[[nodiscard]] NWB_INLINE ShaderFloat3 operator+(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
+[[nodiscard]] FOUNDATION_INLINE ShaderFloat3 operator+(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
     const SIMDVectorDouble sum = VectorDoubleAdd(VectorDoubleSet(a.x, a.y, a.z, 0.0), VectorDoubleSet(b.x, b.y, b.z, 0.0));
     return { VectorDoubleGetX(sum), VectorDoubleGetY(sum), VectorDoubleGetZ(sum) };
 }
 
-[[nodiscard]] NWB_INLINE ShaderFloat3 operator*(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
+[[nodiscard]] FOUNDATION_INLINE ShaderFloat3 operator*(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
     const SIMDVectorDouble product = VectorDoubleMultiply(VectorDoubleSet(a.x, a.y, a.z, 0.0), VectorDoubleSet(b.x, b.y, b.z, 0.0));
     return { VectorDoubleGetX(product), VectorDoubleGetY(product), VectorDoubleGetZ(product) };
 }
 
-[[nodiscard]] NWB_INLINE ShaderFloat3 operator/(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
+[[nodiscard]] FOUNDATION_INLINE ShaderFloat3 operator/(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
     const SIMDVectorDouble quotient = VectorDoubleDivide(VectorDoubleSet(a.x, a.y, a.z, 0.0), VectorDoubleSet(b.x, b.y, b.z, 1.0));
     return { VectorDoubleGetX(quotient), VectorDoubleGetY(quotient), VectorDoubleGetZ(quotient) };
 }
 
 // Sum lanes in scalar left-to-right order.
-[[nodiscard]] NWB_INLINE f64 dot(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
+[[nodiscard]] FOUNDATION_INLINE f64 dot(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
     return (a.x * b.x + a.y * b.y) + a.z * b.z;
 }
 
-[[nodiscard]] NWB_INLINE ShaderFloat3 max(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
+[[nodiscard]] FOUNDATION_INLINE ShaderFloat3 max(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
     const SIMDVectorDouble larger = VectorDoubleMax(VectorDoubleSet(a.x, a.y, a.z, 0.0), VectorDoubleSet(b.x, b.y, b.z, 0.0));
     return { VectorDoubleGetX(larger), VectorDoubleGetY(larger), VectorDoubleGetZ(larger) };
 }
 
-[[nodiscard]] NWB_INLINE f32 saturate(const f32 a)noexcept{
+[[nodiscard]] FOUNDATION_INLINE f32 saturate(const f32 a)noexcept{
     return a > 0.0f ? Min(1.0f, a) : 0.0f;
 }
 
-[[nodiscard]] NWB_INLINE ShaderFloat3 saturate(const ShaderFloat3 a)noexcept{
+[[nodiscard]] FOUNDATION_INLINE ShaderFloat3 saturate(const ShaderFloat3 a)noexcept{
     // Max then min in this operand order maps NaN and -0 to +0.
     const SIMDVectorDouble lower = VectorDoubleMax(VectorDoubleSet(a.x, a.y, a.z, 0.0), VectorDoubleZero());
     const SIMDVectorDouble saturated = VectorDoubleMin(VectorDoubleSplatOne(), lower);
     return { VectorDoubleGetX(saturated), VectorDoubleGetY(saturated), VectorDoubleGetZ(saturated) };
 }
 
-[[nodiscard]] NWB_INLINE ShaderFloat3 pow(const ShaderFloat3 a, const f64 b)noexcept{
+[[nodiscard]] FOUNDATION_INLINE ShaderFloat3 pow(const ShaderFloat3 a, const f64 b)noexcept{
     // VectorDoublePow calls Pow per lane, so the bits match.
     const SIMDVectorDouble power = VectorDoublePow(VectorDoubleSet(a.x, a.y, a.z, 1.0), VectorDoubleReplicate(b));
     return { VectorDoubleGetX(power), VectorDoubleGetY(power), VectorDoubleGetZ(power) };
@@ -175,7 +175,7 @@ struct OpaqueCsgClearContext{
     Core::GpuTaskGraph graph{ testArena.arena };
 };
 
-[[nodiscard]] NWB_INLINE Expected<OpaqueCsgIntervalClearResult> DeclareOpaqueCsgIntervalClear(
+[[nodiscard]] FOUNDATION_INLINE Expected<OpaqueCsgIntervalClearResult> DeclareOpaqueCsgIntervalClear(
     Core::GpuTaskGraph& graph,
     DeferredFrameTargets& targets,
     const Core::GpuTaskId dependency,
@@ -195,7 +195,7 @@ struct OpaqueCsgClearContext{
     return builder.declare(inputs, clearTimingState);
 }
 
-[[nodiscard]] NWB_INLINE Vector<Core::GpuTaskResourceUse> CollectSparseCsgOpaqueGbufferResourceUses(
+[[nodiscard]] FOUNDATION_INLINE Vector<Core::GpuTaskResourceUse, ::ArenaBase> CollectSparseCsgOpaqueGbufferResourceUses(
     const DeferredGraphResourceImportResult& resources,
     const Core::TextureSubresourceSet& peel,
     const Core::TextureSubresourceSet& events,
@@ -217,22 +217,22 @@ struct OpaqueCsgClearContext{
     };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> scratchUses{ scratch };
     OpaqueGbufferResourceUseBuilder::Append(inputs, scratchUses);
-    Vector<Core::GpuTaskResourceUse> uses(NWB::Tests::TestDetail::Arena());
+    Vector<Core::GpuTaskResourceUse, ::ArenaBase> uses(NWB::Tests::TestDetail::Arena());
     uses.assign(scratchUses.begin(), scratchUses.end());
     return uses;
 }
 
-[[nodiscard]] NWB_INLINE u32 ReadCopiedU32(const Span<const u8> bytes, const usize offset)noexcept{
+[[nodiscard]] FOUNDATION_INLINE u32 ReadCopiedU32(const Span<const u8> bytes, const usize offset)noexcept{
     u32 value = 0u;
-    NWB_MEMCPY(&value, sizeof(value), bytes.data() + offset, sizeof(u32));
+    FOUNDATION_MEMCPY(&value, sizeof(value), bytes.data() + offset, sizeof(u32));
     return value;
 }
 
-NWB_INLINE void AcceptNullOutputLayer(const u64 frameGeneration, const Core::QueueSubmissionToken& token)noexcept{
+FOUNDATION_INLINE void AcceptNullOutputLayer(const u64 frameGeneration, const Core::QueueSubmissionToken& token)noexcept{
     RendererTaskGraphDetail::DeferredPresentGraphTask::AcceptOutputLayer(nullptr, frameGeneration, token);
 }
 
-NWB_INLINE void AcceptRecordingOutputLayer(RecordingLayerContributor& contributor, const u64 frameGeneration, const Core::QueueSubmissionToken& token)noexcept{
+FOUNDATION_INLINE void AcceptRecordingOutputLayer(RecordingLayerContributor& contributor, const u64 frameGeneration, const Core::QueueSubmissionToken& token)noexcept{
     RendererTaskGraphDetail::DeferredPresentGraphTask::AcceptOutputLayer(&contributor, frameGeneration, token);
 }
 
@@ -248,7 +248,7 @@ struct RaySceneGraphReadsContext{
     Core::GpuTaskGraph graph{ testArena.arena };
 };
 
-[[nodiscard]] NWB_INLINE Float34U MakeZeroFloat34U()noexcept{
+[[nodiscard]] FOUNDATION_INLINE Float34U MakeZeroFloat34U()noexcept{
     return Float34U{};
 }
 
@@ -313,7 +313,7 @@ using Impl::OpticalUploadByteSizeFits;
 using Impl::OpticalRuntimeInputCountFits;
 using Impl::OpticalSceneInstanceCountFits;
 using Impl::ComputeOpticalWorldBounds;
-#if defined(NWB_HAS_FMA3) || defined(NWB_HAS_NEON64)
+#if defined(FOUNDATION_HAS_FMA3) || defined(FOUNDATION_HAS_NEON64)
 inline constexpr f64 s_ExpectedOpticalCancellationX = 0x1.fffffcp-1;
 #else
 inline constexpr f64 s_ExpectedOpticalCancellationX = 0.0;

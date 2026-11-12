@@ -184,14 +184,14 @@ public:
     }
 };
 
-[[nodiscard]] NWB_INLINE Core::GpuTimingSampleListener MakeSubscriptionListener(GpuTimingSubscriptionCapture& capture)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::GpuTimingSampleListener MakeSubscriptionListener(GpuTimingSubscriptionCapture& capture)noexcept{
     return Core::GpuTimingSampleListener{
         .context = &capture,
         .invoke = &GpuTimingSubscriptionCapture::Invoke,
     };
 }
 
-[[nodiscard]] NWB_INLINE Expected<Name> DeriveIndexedScopeName(const Name& prefix, const usize scopeIndex)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Expected<Name> DeriveIndexedScopeName(const Name& prefix, const usize scopeIndex)noexcept{
     Array<char, 32u> scopeIndexBuffer = {};
     return DeriveName(prefix, FormatDecimal(scopeIndex, scopeIndexBuffer));
 }

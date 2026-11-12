@@ -25,20 +25,20 @@ using NWB::Tests::FloatingPointEnvironmentGuard;
 
 namespace SimdBaselineKernels{
 // The references use the same floating-point environment as the candidates.
-[[nodiscard]] NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL Dot2(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+[[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL Dot2(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
 #pragma STDC FENV_ACCESS ON
     const SIMDVectorDouble product = VectorDoubleMultiply(VectorDoubleAndInt(lhs, s_DoubleSIMDMaskXY), VectorDoubleAndInt(rhs, s_DoubleSIMDMaskXY));
     return VectorDoubleAdd(VectorDoubleSplatX(product), VectorDoubleSplatY(product));
 }
 
-[[nodiscard]] NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL Dot3(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+[[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL Dot3(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
 #pragma STDC FENV_ACCESS ON
     const SIMDVectorDouble product = VectorDoubleMultiply(VectorDoubleAndInt(lhs, s_DoubleSIMDMask3), VectorDoubleAndInt(rhs, s_DoubleSIMDMask3));
     const SIMDVectorDouble xy = VectorDoubleAdd(VectorDoubleSplatX(product), VectorDoubleSplatY(product));
     return VectorDoubleAdd(xy, VectorDoubleSplatZ(product));
 }
 
-[[nodiscard]] NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL Dot4(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+[[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL Dot4(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
 #pragma STDC FENV_ACCESS ON
     const SIMDVectorDouble product = VectorDoubleMultiply(lhs, rhs);
     const SIMDVectorDouble xy = VectorDoubleAdd(VectorDoubleSplatX(product), VectorDoubleSplatY(product));
@@ -46,7 +46,7 @@ namespace SimdBaselineKernels{
     return VectorDoubleAdd(xyz, VectorDoubleSplatW(product));
 }
 
-[[nodiscard]] NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL Sum(const SIMDVectorDouble value)noexcept{
+[[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL Sum(const SIMDVectorDouble value)noexcept{
 #pragma STDC FENV_ACCESS ON
     const SIMDVectorDouble xy = VectorDoubleAdd(VectorDoubleSplatX(value), VectorDoubleSplatY(value));
     const SIMDVectorDouble xyz = VectorDoubleAdd(xy, VectorDoubleSplatZ(value));
@@ -54,39 +54,39 @@ namespace SimdBaselineKernels{
 }
 }
 
-NWB_INLINE void WriteBenchmarkStdout(const AStringView text){
-    NWB_COUT << text;
+FOUNDATION_INLINE void WriteBenchmarkStdout(const AStringView text){
+    FOUNDATION_COUT << text;
 }
 
-NWB_INLINE void WriteBenchmarkStderr(const AStringView text){
-    NWB_CERR << text;
+FOUNDATION_INLINE void WriteBenchmarkStderr(const AStringView text){
+    FOUNDATION_CERR << text;
 }
 
-[[nodiscard]] NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL SimdBaselineDot2(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+[[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL SimdBaselineDot2(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
     return SimdBaselineKernels::Dot2(lhs, rhs);
 }
 
-[[nodiscard]] NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL SimdBaselineDot3(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+[[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL SimdBaselineDot3(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
     return SimdBaselineKernels::Dot3(lhs, rhs);
 }
 
-[[nodiscard]] NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL SimdBaselineDot4(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+[[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL SimdBaselineDot4(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
     return SimdBaselineKernels::Dot4(lhs, rhs);
 }
 
-[[nodiscard]] NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL SimdBaselineSum(const SIMDVectorDouble value)noexcept{
+[[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL SimdBaselineSum(const SIMDVectorDouble value)noexcept{
     return SimdBaselineKernels::Sum(value);
 }
 
-[[nodiscard]] NWB_INLINE u64 NWB_SIMD_CALL SimdGetDoubleLaneBits(const SIMDVectorDouble value, const usize lane)noexcept{
+[[nodiscard]] FOUNDATION_INLINE u64 FOUNDATION_SIMD_CALL SimdGetDoubleLaneBits(const SIMDVectorDouble value, const usize lane)noexcept{
     return VectorDoubleGetIntByIndex(value, lane);
 }
 
-[[nodiscard]] NWB_INLINE u32 NWB_SIMD_CALL SimdGetSingleLaneBits(const SIMDVectorSingle value, const usize lane)noexcept{
+[[nodiscard]] FOUNDATION_INLINE u32 FOUNDATION_SIMD_CALL SimdGetSingleLaneBits(const SIMDVectorSingle value, const usize lane)noexcept{
     return VectorGetIntByIndex(value, lane);
 }
 
-[[nodiscard]] NWB_INLINE f32 NWB_SIMD_CALL SimdGetSingleLane(const SIMDVectorSingle value, const usize lane)noexcept{
+[[nodiscard]] FOUNDATION_INLINE f32 FOUNDATION_SIMD_CALL SimdGetSingleLane(const SIMDVectorSingle value, const usize lane)noexcept{
     return VectorGetByIndex(value, lane);
 }
 
@@ -96,7 +96,7 @@ NWB_INLINE void WriteBenchmarkStderr(const AStringView text){
 }
 
 template<typename EvalT>
-[[nodiscard]] NWB_INLINE b8 ObserveBinaryEvaluation(const EvalT& evaluator, const SIMDVectorDouble lhs, const SIMDVectorDouble rhs, Array<u64, 4>& outBits, i32& outFlags, i32& outError)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 ObserveBinaryEvaluation(const EvalT& evaluator, const SIMDVectorDouble lhs, const SIMDVectorDouble rhs, Array<u64, 4>& outBits, i32& outFlags, i32& outError)noexcept{
 #pragma STDC FENV_ACCESS ON
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
         return false;
@@ -110,7 +110,7 @@ template<typename EvalT>
 }
 
 template<usize LanesPerIteration, typename DatasetT, typename ReduceFn>
-NWB_NOINLINE SIMDVectorDouble ThroughputWorkload(const DatasetT& data, const usize dataCount, const usize iterations, ReduceFn&& reduce)noexcept{
+FOUNDATION_NOINLINE SIMDVectorDouble ThroughputWorkload(const DatasetT& data, const usize dataCount, const usize iterations, ReduceFn&& reduce)noexcept{
     alignas(SIMDVectorDouble) Array<SIMDVectorDouble, 8> accumulators = {};
     for(usize lane = 0u; lane < 8u; ++lane)
         accumulators[lane] = VectorDoubleSet(0.125, 0.25, 0.5, 1.0);

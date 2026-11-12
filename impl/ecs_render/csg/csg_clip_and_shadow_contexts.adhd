@@ -316,8 +316,8 @@ Expected<CsgReceiverRangeGpuData> RendererCsgSystem::appendCsgReceiverClipData(
         [&](const __hidden_csg_clip_and_shadow_contexts::CsgResolvedClipCutter& resolvedCutter){
             if(csgFrameData.cutters.size() >= static_cast<usize>(Limit<u32>::s_Max))
                 return false;
-            NWB_ASSERT(resolvedCutter.parameterBytes.size() == static_cast<usize>(resolvedCutter.shapeType.desc.parameterByteSize));
-            NWB_ASSERT(resolvedCutter.parameterBytes.empty() || resolvedCutter.parameterBytes.data());
+            FOUNDATION_ASSERT(resolvedCutter.parameterBytes.size() == static_cast<usize>(resolvedCutter.shapeType.desc.parameterByteSize));
+            FOUNDATION_ASSERT(resolvedCutter.parameterBytes.empty() || resolvedCutter.parameterBytes.data());
             const CsgCutterGpuData cutterGpuData = BuildCsgReceiverCutterGpuDataAndExpandWorkRegion(
                 resolvedCutter.shapeType.id,
                 LoadFloat(resolvedCutter.worldToShape),
@@ -370,7 +370,7 @@ void RendererRayTracingSystem::confirmRayTraceContextReadSubmission(const Core::
         return;
     // Every physical reader protects the next upload, including accepted prefixes of partially rejected graphs.
     auto& readTokens = m_rayTracingState.m_rayTraceContextReadSubmissionTokens;
-    NWB_ASSERT(token.hasPhysicalQueueIdentity() && token.physicalQueueIndex < readTokens.size());
+    FOUNDATION_ASSERT(token.hasPhysicalQueueIdentity() && token.physicalQueueIndex < readTokens.size());
     auto& previous = readTokens[token.physicalQueueIndex];
     if(ShouldAdvanceRayTraceReadToken(previous.valid(), previous.matchesPhysicalQueue(token.physicalQueueIndex, token.deviceGeneration), token.value, previous.value))
         previous = token;

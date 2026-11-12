@@ -10,7 +10,7 @@
 
 
 // Stores one static, scalable SFNT face from a prepared font source; shaping and glyph atlases stay outside this asset.
-[asset("font")]
+[arena, asset("font")]
 class Font{
     private Vector<u8> m_fontBytes;
     private u32 m_faceIndex = 0u;

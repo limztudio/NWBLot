@@ -377,7 +377,7 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
     if(!hasSurfelWork())
         return true;
 
-    NWB_ASSERT(targets.bindless.valid());
+    FOUNDATION_ASSERT(targets.bindless.valid());
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
@@ -399,7 +399,7 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
         static_cast<b8>(m_rayTracingState.m_surfelUpsamplePipeline),
         static_cast<b8>(m_rayTracingState.m_surfelTraceBuildArgsPipeline)
     )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: active surfel GI phase pipeline is missing"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: active surfel GI phase pipeline is missing"));
         return false;
     }
 
@@ -425,7 +425,7 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
         || !RayTracingDetail::IsHeapHandle(targets.bindless.surfelIrradianceStorage, Core::GpuDescriptorClass::StorageImage)
         || (useHwTrace && (!m_rayTracingState.m_tlas || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_tlasHeapHandle, Core::GpuDescriptorClass::AccelStruct)))
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel GI heap registration is incomplete"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: surfel GI heap registration is incomplete"));
         return false;
     }
 
@@ -528,7 +528,7 @@ b8 RendererRayTracingSystem::renderSurfelGiPhases(
         commandList.setComputeState(state);
         // Hardware trace additionally selects the TLAS generation at set 2.
         if(m_rayTracingState.m_surfelUseHwTrace && !m_rayTracingState.m_tlasHeapHandle.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cannot dispatch surfel HW GI without the descriptor-heap TLAS handle"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: cannot dispatch surfel HW GI without the descriptor-heap TLAS handle"));
             return false;
         }
         const Core::GpuDescriptorHandle tlasHeapHandle = m_rayTracingState.m_surfelUseHwTrace ? m_rayTracingState.m_tlasHeapHandle : Core::GpuDescriptorHandle::Invalid();

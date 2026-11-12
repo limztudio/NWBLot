@@ -98,7 +98,7 @@ private:
 };
 
 // Copies a validated static 2D texture and internally assigns a fresh process-wide generation.
-[[nodiscard]] NWB_INLINE Expected<SharedImageSource> MakeImageSource(Core::Alloc::GlobalArena& arena, const Texture& texture){
+[[nodiscard]] FOUNDATION_INLINE Expected<SharedImageSource> MakeImageSource(Core::Alloc::GlobalArena& arena, const Texture& texture){
     if(!ValidateImageSourceTextureDimension(texture.virtualPath(), texture.dimension() == TextureDimension::Texture2D, texture.depth()))
         return MakeUnexpected(Failure{});
     if(!texture.validatePayload())

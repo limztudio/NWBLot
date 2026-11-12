@@ -76,7 +76,7 @@ using MetaArena = Core::Metascript::MetaArena;
 using Core::Metascript::Adhd::Compiler::Compile;
 using Core::Metascript::Adhd::Compiler::DeriveNamespaceFromPath;
 
-[[nodiscard]] NWB_INLINE b8 CompileWithResolver(
+[[nodiscard]] FOUNDATION_INLINE b8 CompileWithResolver(
     const MStringView source,
     const MStringView virtualFilePath,
     Core::Metascript::IIncludeResolver& resolver,
@@ -86,83 +86,83 @@ using Core::Metascript::Adhd::Compiler::DeriveNamespaceFromPath;
     return Compile(source, virtualFilePath, &resolver, arena, outResult);
 }
 
-[[nodiscard]] NWB_INLINE AStringView GeneratedHeaderView(const CompileResult& result)noexcept{
+[[nodiscard]] FOUNDATION_INLINE AStringView GeneratedHeaderView(const CompileResult& result)noexcept{
     return AStringView(result.generatedHeader.data(), result.generatedHeader.size());
 }
 
-[[nodiscard]] NWB_INLINE AStringView GeneratedSourceView(const CompileResult& result)noexcept{
+[[nodiscard]] FOUNDATION_INLINE AStringView GeneratedSourceView(const CompileResult& result)noexcept{
     return AStringView(result.generatedSource.data(), result.generatedSource.size());
 }
 
-[[nodiscard]] NWB_INLINE AStringView FirstErrorMessage(const CompileResult& result)noexcept{
+[[nodiscard]] FOUNDATION_INLINE AStringView FirstErrorMessage(const CompileResult& result)noexcept{
     return AStringView(result.errors[0u].message);
 }
 
-[[nodiscard]] NWB_INLINE AStringView MStringAsView(const MString& text)noexcept{
+[[nodiscard]] FOUNDATION_INLINE AStringView MStringAsView(const MString& text)noexcept{
     return AStringView(text.data(), text.size());
 }
 
-[[nodiscard]] NWB_INLINE usize UnitClassCount(const CompileResult& result)noexcept{
+[[nodiscard]] FOUNDATION_INLINE usize UnitClassCount(const CompileResult& result)noexcept{
     return result.unit.classes.size();
 }
 
-[[nodiscard]] NWB_INLINE b8 UnitClassIsSerialize(const CompileResult& result, const usize classIdx)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 UnitClassIsSerialize(const CompileResult& result, const usize classIdx)noexcept{
     return result.unit.classes[classIdx]->isSerialize;
 }
 
-[[nodiscard]] NWB_INLINE usize UnitClassTotalAlign(const CompileResult& result, const usize classIdx)noexcept{
+[[nodiscard]] FOUNDATION_INLINE usize UnitClassTotalAlign(const CompileResult& result, const usize classIdx)noexcept{
     return result.unit.classes[classIdx]->totalAlign;
 }
 
-[[nodiscard]] NWB_INLINE usize UnitClassTotalSize(const CompileResult& result, const usize classIdx)noexcept{
+[[nodiscard]] FOUNDATION_INLINE usize UnitClassTotalSize(const CompileResult& result, const usize classIdx)noexcept{
     return result.unit.classes[classIdx]->totalSize;
 }
 
-[[nodiscard]] NWB_INLINE AStringView UnitClassName(const CompileResult& result, const usize classIdx)noexcept{
+[[nodiscard]] FOUNDATION_INLINE AStringView UnitClassName(const CompileResult& result, const usize classIdx)noexcept{
     return AStringView(result.unit.classes[classIdx]->name);
 }
 
-[[nodiscard]] NWB_INLINE usize UnitClassOrderedFieldCount(const CompileResult& result, const usize classIdx)noexcept{
+[[nodiscard]] FOUNDATION_INLINE usize UnitClassOrderedFieldCount(const CompileResult& result, const usize classIdx)noexcept{
     return result.unit.classes[classIdx]->orderedFields.size();
 }
 
-[[nodiscard]] NWB_INLINE AStringView UnitClassOrderedFieldName(const CompileResult& result, const usize classIdx, const usize fieldIdx)noexcept{
+[[nodiscard]] FOUNDATION_INLINE AStringView UnitClassOrderedFieldName(const CompileResult& result, const usize classIdx, const usize fieldIdx)noexcept{
     return AStringView(result.unit.classes[classIdx]->orderedFields[fieldIdx]->name);
 }
 
-[[nodiscard]] NWB_INLINE usize UnitClassOrderedFieldAlign(const CompileResult& result, const usize classIdx, const usize fieldIdx)noexcept{
+[[nodiscard]] FOUNDATION_INLINE usize UnitClassOrderedFieldAlign(const CompileResult& result, const usize classIdx, const usize fieldIdx)noexcept{
     return result.unit.classes[classIdx]->orderedFields[fieldIdx]->resolvedAlign;
 }
 
-[[nodiscard]] NWB_INLINE usize UnitClassOrderedFieldOffset(const CompileResult& result, const usize classIdx, const usize fieldIdx)noexcept{
+[[nodiscard]] FOUNDATION_INLINE usize UnitClassOrderedFieldOffset(const CompileResult& result, const usize classIdx, const usize fieldIdx)noexcept{
     return result.unit.classes[classIdx]->orderedFields[fieldIdx]->resolvedOffset;
 }
 
-[[nodiscard]] NWB_INLINE usize UnitTemplateInstCount(const CompileResult& result)noexcept{
+[[nodiscard]] FOUNDATION_INLINE usize UnitTemplateInstCount(const CompileResult& result)noexcept{
     return result.unit.templateInstantiations.size();
 }
 
-[[nodiscard]] NWB_INLINE usize UnitTemplateInstOrderedFieldCount(const CompileResult& result, const usize instIdx)noexcept{
+[[nodiscard]] FOUNDATION_INLINE usize UnitTemplateInstOrderedFieldCount(const CompileResult& result, const usize instIdx)noexcept{
     return result.unit.templateInstantiations[instIdx]->orderedFields.size();
 }
 
-[[nodiscard]] NWB_INLINE AStringView UnitTemplateInstOrderedFieldName(const CompileResult& result, const usize instIdx, const usize fieldIdx)noexcept{
+[[nodiscard]] FOUNDATION_INLINE AStringView UnitTemplateInstOrderedFieldName(const CompileResult& result, const usize instIdx, const usize fieldIdx)noexcept{
     return AStringView(result.unit.templateInstantiations[instIdx]->orderedFields[fieldIdx]->name);
 }
 
-[[nodiscard]] NWB_INLINE usize UnitIncludedAdhdFileCount(const CompileResult& result)noexcept{
+[[nodiscard]] FOUNDATION_INLINE usize UnitIncludedAdhdFileCount(const CompileResult& result)noexcept{
     return result.unit.includedAdhdFiles.size();
 }
 
-[[nodiscard]] NWB_INLINE AStringView UnitIncludedAdhdFileView(const CompileResult& result, const usize idx)noexcept{
+[[nodiscard]] FOUNDATION_INLINE AStringView UnitIncludedAdhdFileView(const CompileResult& result, const usize idx)noexcept{
     return AStringView(result.unit.includedAdhdFiles[idx].data(), result.unit.includedAdhdFiles[idx].size());
 }
 
-[[nodiscard]] NWB_INLINE usize UnitResolvedIncludedFileCount(const CompileResult& result)noexcept{
+[[nodiscard]] FOUNDATION_INLINE usize UnitResolvedIncludedFileCount(const CompileResult& result)noexcept{
     return result.unit.resolvedIncludedFiles.size();
 }
 
-[[nodiscard]] NWB_INLINE AStringView UnitResolvedIncludedFileView(const CompileResult& result, const usize idx)noexcept{
+[[nodiscard]] FOUNDATION_INLINE AStringView UnitResolvedIncludedFileView(const CompileResult& result, const usize idx)noexcept{
     return AStringView(result.unit.resolvedIncludedFiles[idx].data(), result.unit.resolvedIncludedFiles[idx].size());
 }
 
@@ -954,12 +954,16 @@ void VerifyAdhdCompiler_RejectsFlagBitWidthOverflowInvalidSwitchCtorAndAttribute
     ExpectCompileFails(arena, "[noinline]\r\nvoid BadNoInlineAttr() {}\r\n", "impl/bad_noinline_attr.adhd");
     ExpectCompileFails(arena, "inline void BadInlineKeyword() {}\r\n", "impl/bad_inline_kw.adhd");
     ExpectCompileFails(arena, "noinline void BadNoInlineKeyword() {}\r\n", "impl/bad_noinline_kw.adhd");
-    ExpectCompileFails(arena, "[serialize, asset(\"bad_asset\")]\r\nclass BadSerializeAsset { public u32 v = 0u; }\r\n", "impl/bad_serialize_asset.adhd");
-    ExpectCompileFails(arena, "[arena, asset(\"bad_asset\")]\r\nclass BadArenaAsset { public Vector<u8> bytes; }\r\n", "impl/bad_arena_asset.adhd");
-    ExpectCompileFails(arena, "[asset(\"bad_asset\")]\r\nclass BadTemplateAsset<T> { public T v; }\r\n", "impl/bad_template_asset.adhd");
+    ExpectCompileFails(arena, "[arena, serialize, asset(\"bad_asset\")]\r\nclass BadSerializeAsset { public u32 v = 0u; }\r\n", "impl/bad_serialize_asset.adhd");
+    ExpectCompileFails(arena, "[asset(\"bad_asset\")]\r\nclass BadNoArenaAsset { public Vector<u8> bytes; }\r\n", "impl/bad_no_arena_asset.adhd");
+    ExpectCompileFails(arena, "[arena, asset(\"bad_asset\")]\r\nclass BadTemplateAsset<T> { public T v; }\r\n", "impl/bad_template_asset.adhd");
+    ExpectCompileFails(arena, "[arena, serialize, system(\"bad_sys\")]\r\nclass BadSerializeSystem { public u32 v = 0u; }\r\n", "impl/bad_serialize_system.adhd");
+    ExpectCompileFails(arena, "[system(\"bad_sys\")]\r\nclass BadNoArenaSystem { public u32 v = 0u; }\r\n", "impl/bad_no_arena_system.adhd");
+    ExpectCompileFails(arena, "[arena, system(\"bad_sys\")]\r\nclass BadTemplateSystem<T> { public T v; }\r\n", "impl/bad_template_system.adhd");
+    ExpectCompileFails(arena, "[arena, component(\"comp\"), system(\"bad_sys\")]\r\nclass BadComponentSystem { public u32 v = 0u; }\r\n", "impl/bad_component_system.adhd");
 
     CompileResult assetRes = CompileResult(arena.arena);
-    ASSERT_TRUE(Compile("[asset(\"sample_blob\")]\r\nclass SampleBlob {\r\n    private Vector<u8> m_bytes;\r\n    public in Vector<u8> bytes()const { return this.m_bytes; }\r\n    public b8 loadBinary(in Span<u8> binary) { return this.checkVirtualPath(\"SampleBlob::loadBinary\") && !this.virtualPath().empty() && !binary.empty(); }\r\n}\r\n", "impl/assets_sample/asset.adhd", arena.arena, assetRes));
+    ASSERT_TRUE(Compile("[arena, asset(\"sample_blob\")]\r\nclass SampleBlob {\r\n    private Vector<u8> m_bytes;\r\n    public in Vector<u8> bytes()const { return this.m_bytes; }\r\n    public b8 loadBinary(in Span<u8> binary) { return this.checkVirtualPath(\"SampleBlob::loadBinary\") && !this.virtualPath().empty() && !binary.empty(); }\r\n}\r\n", "impl/assets_sample/asset.adhd", arena.arena, assetRes));
     const StringView assetHdr = GeneratedHeaderView(assetRes);
     const StringView assetCpp = GeneratedSourceView(assetRes);
     EXPECT_NE(assetHdr.find("#include <core/assets/module.h>"), usize.max);
@@ -968,6 +972,20 @@ void VerifyAdhdCompiler_RejectsFlagBitWidthOverflowInvalidSwitchCtorAndAttribute
     EXPECT_NE(assetHdr.find("const Vector<u8, ::ArenaBase>& bytes()const noexcept"), usize.max);
     EXPECT_NE(assetHdr.find("NWB_DEFINE_ASSET_CODEC(SampleBlobAssetCodec, SampleBlob);"), usize.max);
     EXPECT_NE(assetCpp.find("__adhd_asset_codec_registrar_SampleBlob(&::NWB::Core::Assets::CreateAssetCodec<SampleBlobAssetCodec>);"), usize.max);
+
+    CompileResult systemRes = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile("[arena, component(\"pos\")]\r\nclass PosComp {\r\n    public i32 x = 0;\r\n}\r\n[arena, system(\"sample_sys\")]\r\nclass SampleSystem {\r\n    public u32 ticks = 0u;\r\n    public SampleSystem() {\r\n        this.writeAccess<PosComp>();\r\n    }\r\n    public void prepare(mut World world) {\r\n        ++this.ticks;\r\n    }\r\n    public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta) {\r\n        return Expected<void, CpuTaskAdmissionError>();\r\n    }\r\n    public Name currentType()const {\r\n        return SampleSystem::SystemTypeName();\r\n    }\r\n}\r\n", "impl/ecs_sample/system.adhd", arena.arena, systemRes));
+    const StringView sysHdr = GeneratedHeaderView(systemRes);
+    const StringView sysCpp = GeneratedSourceView(systemRes);
+    EXPECT_NE(sysHdr.find("#include <core/ecs/component.h>"), usize.max);
+    EXPECT_NE(sysHdr.find("NWB_DEFINE_COMPONENT_TYPE(\"pos\")"), usize.max);
+    EXPECT_NE(sysHdr.find("#include <core/ecs/system.h>"), usize.max);
+    EXPECT_NE(sysHdr.find("class SampleSystem final : public ::NWB::Core::ECS::ISystem"), usize.max);
+    EXPECT_NE(sysHdr.find("NWB_DEFINE_SYSTEM_TYPE(\"sample_sys\")"), usize.max);
+    EXPECT_NE(sysHdr.find("[[nodiscard]] virtual const ::Name& systemType()const noexcept override{ return s_SystemTypeName; }"), usize.max);
+    EXPECT_NE(sysHdr.find("virtual void prepare(::NWB::Core::ECS::World& world)noexcept override"), usize.max);
+    EXPECT_NE(sysHdr.find("virtual Expected<void, ::NWB::Core::CpuTaskAdmissionError::Enum> update(::NWB::Core::ECS::World& world, const f32 delta)noexcept override"), usize.max);
+    EXPECT_NE(sysCpp.find(": ::NWB::Core::ECS::ISystem(__adhd_mother_arena)"), usize.max);
 }
 
 void VerifyAdhdCompiler_RejectsMalformedHexMacroParamsCastsDanglingRefsAndEarlyReturnCtors(){
@@ -1327,9 +1345,9 @@ void VerifyAdhdCompiler_EnforcesArenaAttributeConflictsAndPropagatesMotherArenaA
     EXPECT_NE(moveOnlySlice.find("MoveOnlyChild(MoveOnlyChild&&)noexcept = default;"), usize.max);
 
     ExpectCompileFails(arena, "[arena, serialize]\r\nclass BadArenaSer {\r\n    public u32 x = 0u;\r\n}\r\n", "impl/sim/bad_arena_ser.adhd");
-    ExpectCompileFails(arena, "[asset(\"tex\")]\r\nclass TexAsset {\r\n    public u32 w = 0u;\r\n}\r\n[arena, subsystem(\"bad_sub\")]\r\nclass BadArenaSub {\r\n    public AssetRef<TexAsset> tex;\r\n}\r\n", "impl/sim/bad_arena_sub.adhd");
-    ExpectCompileFails(arena, "[arena]\r\nclass RootComp {\r\n    public String tag = \"ok\";\r\n}\r\n[arena, component_asset(\"bad_comp\")]\r\nclass BadArenaCompAsset {\r\n    public RootComp component;\r\n}\r\n", "impl/sim/bad_arena_comp_asset.adhd");
-    ExpectCompileFails(arena, "class UnrootedComp {\r\n    public String tag = \"bad\";\r\n}\r\n[component_asset(\"unrooted_comp\")]\r\nclass BadUnrootedCompAsset {\r\n    public UnrootedComp component;\r\n}\r\n", "impl/sim/bad_unrooted_comp_asset.adhd");
+    ExpectCompileFails(arena, "[arena, asset(\"tex\")]\r\nclass TexAsset {\r\n    public u32 w = 0u;\r\n}\r\n[subsystem(\"bad_sub\")]\r\nclass BadNoArenaSub {\r\n    public AssetRef<TexAsset> tex;\r\n}\r\n", "impl/sim/bad_no_arena_sub.adhd");
+    ExpectCompileFails(arena, "[component(\"bad_comp\")]\r\nclass BadNoArenaComp {\r\n    public String tag = \"bad\";\r\n}\r\n", "impl/sim/bad_no_arena_comp.adhd");
+    ExpectCompileFails(arena, "[arena, component_asset(\"retired_comp\")]\r\nclass BadRetiredCompAsset {\r\n    public u32 x = 0u;\r\n}\r\n", "impl/sim/bad_retired_comp_asset.adhd");
 }
 
 void VerifyAdhdCompiler_ResolvesCoreAndGlobalExportsShadowingAbstractInterfacesMatrixPackingAndHeaderOrder(){

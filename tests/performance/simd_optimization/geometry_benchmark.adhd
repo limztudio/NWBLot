@@ -20,23 +20,23 @@ native{
 #include <global/simd/collision_triangle.h>
 #include <global/span.h>
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 #include <sys/wait.h>
 #endif
 
 namespace SimdOptimizationBenchmark{
 namespace GeometryKernels{
 
-using Intersection = b8 (NWB_SIMD_CALL *)(SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble)noexcept;
+using Intersection = b8 (FOUNDATION_SIMD_CALL *)(SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble)noexcept;
 
 struct TrianglePairVectors{
     alignas(SIMDVectorDouble) Array<SIMDVectorDouble, 3> first{};
     alignas(SIMDVectorDouble) Array<SIMDVectorDouble, 3> second{};
 };
 
-NWB_INLINE volatile u64 s_ChecksumSink = 0u;
+FOUNDATION_INLINE volatile u64 s_ChecksumSink = 0u;
 
-NWB_NOINLINE b8 NWB_SIMD_CALL Baseline(const SIMDVectorDouble a0, const SIMDVectorDouble a1, const SIMDVectorDouble a2, const SIMDVectorDouble b0, const SIMDVectorDouble b1, const SIMDVectorDouble b2)noexcept{
+FOUNDATION_NOINLINE b8 FOUNDATION_SIMD_CALL Baseline(const SIMDVectorDouble a0, const SIMDVectorDouble a1, const SIMDVectorDouble a2, const SIMDVectorDouble b0, const SIMDVectorDouble b1, const SIMDVectorDouble b2)noexcept{
     const SIMDVectorDouble first0 = VectorDoubleAndInt(a0, s_DoubleSIMDMask3), first1 = VectorDoubleAndInt(a1, s_DoubleSIMDMask3), first2 = VectorDoubleAndInt(a2, s_DoubleSIMDMask3);
     const SIMDVectorDouble second0 = VectorDoubleAndInt(b0, s_DoubleSIMDMask3), second1 = VectorDoubleAndInt(b1, s_DoubleSIMDMask3), second2 = VectorDoubleAndInt(b2, s_DoubleSIMDMask3);
     const SIMDVectorDouble minA = VectorDoubleMin(first0, VectorDoubleMin(first1, first2)), maxA = VectorDoubleMax(first0, VectorDoubleMax(first1, first2));
@@ -107,7 +107,7 @@ NWB_NOINLINE b8 NWB_SIMD_CALL Baseline(const SIMDVectorDouble a0, const SIMDVect
     return !secondEdgeSeparated(edgeB0) && !secondEdgeSeparated(edgeB1) && !secondEdgeSeparated(edgeB2);
 }
 
-NWB_NOINLINE b8 NWB_SIMD_CALL CurrentDot3Baseline(const SIMDVectorDouble a0, const SIMDVectorDouble a1, const SIMDVectorDouble a2, const SIMDVectorDouble b0, const SIMDVectorDouble b1, const SIMDVectorDouble b2)noexcept{
+FOUNDATION_NOINLINE b8 FOUNDATION_SIMD_CALL CurrentDot3Baseline(const SIMDVectorDouble a0, const SIMDVectorDouble a1, const SIMDVectorDouble a2, const SIMDVectorDouble b0, const SIMDVectorDouble b1, const SIMDVectorDouble b2)noexcept{
     const SIMDVectorDouble first0 = VectorDoubleAndInt(a0, s_DoubleSIMDMask3), first1 = VectorDoubleAndInt(a1, s_DoubleSIMDMask3), first2 = VectorDoubleAndInt(a2, s_DoubleSIMDMask3);
     const SIMDVectorDouble second0 = VectorDoubleAndInt(b0, s_DoubleSIMDMask3), second1 = VectorDoubleAndInt(b1, s_DoubleSIMDMask3), second2 = VectorDoubleAndInt(b2, s_DoubleSIMDMask3);
     const SIMDVectorDouble minA = VectorDoubleMin(first0, VectorDoubleMin(first1, first2)), maxA = VectorDoubleMax(first0, VectorDoubleMax(first1, first2));
@@ -173,7 +173,7 @@ NWB_NOINLINE b8 NWB_SIMD_CALL CurrentDot3Baseline(const SIMDVectorDouble a0, con
     return !secondEdgeSeparated(edgeB0) && !secondEdgeSeparated(edgeB1) && !secondEdgeSeparated(edgeB2);
 }
 
-NWB_NOINLINE b8 NWB_SIMD_CALL ZeroAxis(const SIMDVectorDouble a0, const SIMDVectorDouble a1, const SIMDVectorDouble a2, const SIMDVectorDouble b0, const SIMDVectorDouble b1, const SIMDVectorDouble b2)noexcept{
+FOUNDATION_NOINLINE b8 FOUNDATION_SIMD_CALL ZeroAxis(const SIMDVectorDouble a0, const SIMDVectorDouble a1, const SIMDVectorDouble a2, const SIMDVectorDouble b0, const SIMDVectorDouble b1, const SIMDVectorDouble b2)noexcept{
     const SIMDVectorDouble first0 = VectorDoubleAndInt(a0, s_DoubleSIMDMask3), first1 = VectorDoubleAndInt(a1, s_DoubleSIMDMask3), first2 = VectorDoubleAndInt(a2, s_DoubleSIMDMask3);
     const SIMDVectorDouble second0 = VectorDoubleAndInt(b0, s_DoubleSIMDMask3), second1 = VectorDoubleAndInt(b1, s_DoubleSIMDMask3), second2 = VectorDoubleAndInt(b2, s_DoubleSIMDMask3);
     const SIMDVectorDouble minA = VectorDoubleMin(first0, VectorDoubleMin(first1, first2)), maxA = VectorDoubleMax(first0, VectorDoubleMax(first1, first2));
@@ -241,7 +241,7 @@ NWB_NOINLINE b8 NWB_SIMD_CALL ZeroAxis(const SIMDVectorDouble a0, const SIMDVect
     return !secondEdgeSeparated(edgeB0) && !secondEdgeSeparated(edgeB1) && !secondEdgeSeparated(edgeB2);
 }
 
-NWB_NOINLINE b8 NWB_SIMD_CALL AbsHoisted(const SIMDVectorDouble a0, const SIMDVectorDouble a1, const SIMDVectorDouble a2, const SIMDVectorDouble b0, const SIMDVectorDouble b1, const SIMDVectorDouble b2)noexcept{
+FOUNDATION_NOINLINE b8 FOUNDATION_SIMD_CALL AbsHoisted(const SIMDVectorDouble a0, const SIMDVectorDouble a1, const SIMDVectorDouble a2, const SIMDVectorDouble b0, const SIMDVectorDouble b1, const SIMDVectorDouble b2)noexcept{
     const SIMDVectorDouble first0 = VectorDoubleAndInt(a0, s_DoubleSIMDMask3), first1 = VectorDoubleAndInt(a1, s_DoubleSIMDMask3), first2 = VectorDoubleAndInt(a2, s_DoubleSIMDMask3);
     const SIMDVectorDouble second0 = VectorDoubleAndInt(b0, s_DoubleSIMDMask3), second1 = VectorDoubleAndInt(b1, s_DoubleSIMDMask3), second2 = VectorDoubleAndInt(b2, s_DoubleSIMDMask3);
     const SIMDVectorDouble minA = VectorDoubleMin(first0, VectorDoubleMin(first1, first2)), maxA = VectorDoubleMax(first0, VectorDoubleMax(first1, first2));
@@ -312,7 +312,7 @@ NWB_NOINLINE b8 NWB_SIMD_CALL AbsHoisted(const SIMDVectorDouble a0, const SIMDVe
     return !secondEdgeSeparated(edgeB0) && !secondEdgeSeparated(edgeB1) && !secondEdgeSeparated(edgeB2);
 }
 
-[[nodiscard]] NWB_INLINE Intersection SelectImplementation(const u32 implId)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Intersection SelectImplementation(const u32 implId)noexcept{
     switch(implId){
     case 0u: return Baseline;
     case 1u: return CurrentDot3Baseline;
@@ -323,7 +323,7 @@ NWB_NOINLINE b8 NWB_SIMD_CALL AbsHoisted(const SIMDVectorDouble a0, const SIMDVe
 }
 
 template<typename PairT>
-NWB_NOINLINE u64 RunBatch(const u32 implId, const Span<const PairT> pairs, const u32 passes)noexcept{
+FOUNDATION_NOINLINE u64 RunBatch(const u32 implId, const Span<const PairT> pairs, const u32 passes)noexcept{
     const NotNull<Intersection> implementation = MakeNotNull<Intersection>(SelectImplementation(implId));
     u64 result = 0u;
     for(u32 pass = 0u; pass < passes; ++pass){
@@ -335,11 +335,11 @@ NWB_NOINLINE u64 RunBatch(const u32 implId, const Span<const PairT> pairs, const
 }
 
 template<typename PairT>
-[[nodiscard]] NWB_INLINE TrianglePairVectors LoadTrianglePair(const PairT& pair)noexcept{
+[[nodiscard]] FOUNDATION_INLINE TrianglePairVectors LoadTrianglePair(const PairT& pair)noexcept{
     return { { LoadDouble(pair.first[0]), LoadDouble(pair.first[1]), LoadDouble(pair.first[2]) }, { LoadDouble(pair.second[0]), LoadDouble(pair.second[1]), LoadDouble(pair.second[2]) } };
 }
 
-[[nodiscard]] NWB_INLINE b8 CheckExceptionEquivalence(const TrianglePairVectors& pair)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 CheckExceptionEquivalence(const TrianglePairVectors& pair)noexcept{
 #pragma STDC FENV_ACCESS ON
     const auto originalEnvironment = HoldFloatingPointExceptions();
     if(!originalEnvironment)
@@ -362,12 +362,12 @@ template<typename PairT>
     return original == reference && reference == hoisted && hoisted == production && originalFlags == referenceFlags && referenceFlags == hoistedFlags && hoistedFlags == productionFlags;
 }
 
-#if defined(NWB_PLATFORM_LINUX)
-NWB_INLINE void TrapHandler([[maybe_unused]] const i32 signalNumber, siginfo_t* information, [[maybe_unused]] void* context)noexcept{
+#if defined(FOUNDATION_PLATFORM_LINUX)
+FOUNDATION_INLINE void TrapHandler([[maybe_unused]] const i32 signalNumber, siginfo_t* information, [[maybe_unused]] void* context)noexcept{
     _exit(32 + information->si_code);
 }
 
-[[nodiscard]] NWB_INLINE Expected<i32, ErrorCode> TrapResult(const NotNull<Intersection> implementation, const TrianglePairVectors& pair, const i32 mask)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Expected<i32, ErrorCode> TrapResult(const NotNull<Intersection> implementation, const TrianglePairVectors& pair, const i32 mask)noexcept{
     const pid_t child = fork();
     if(child < 0)
         return MakeUnexpected(MakeErrorCode(static_cast<ErrorCondition>(errno)));
@@ -392,8 +392,8 @@ NWB_INLINE void TrapHandler([[maybe_unused]] const i32 signalNumber, siginfo_t* 
 }
 #endif
 
-[[nodiscard]] NWB_INLINE b8 CheckTrapEquivalence(const TrianglePairVectors& pair)noexcept{
-#if defined(NWB_PLATFORM_LINUX)
+[[nodiscard]] FOUNDATION_INLINE b8 CheckTrapEquivalence(const TrianglePairVectors& pair)noexcept{
+#if defined(FOUNDATION_PLATFORM_LINUX)
     const auto production = MakeNotNull<Intersection>(TriangleDoubleTests::Intersects);
     for(const i32 mask : { FE_INVALID, FE_OVERFLOW, FE_INVALID | FE_OVERFLOW, FE_INVALID | FE_OVERFLOW | FE_UNDERFLOW | FE_INEXACT }){
         const auto original = TrapResult(MakeNotNull<Intersection>(Baseline), pair, mask);
@@ -412,7 +412,7 @@ NWB_INLINE void TrapHandler([[maybe_unused]] const i32 signalNumber, siginfo_t* 
     return true;
 }
 
-[[nodiscard]] NWB_INLINE u64 NextGeometryVerifySeed(u64& state)noexcept{
+[[nodiscard]] FOUNDATION_INLINE u64 NextGeometryVerifySeed(u64& state)noexcept{
     state ^= state << 13u;
     state ^= state >> 7u;
     state ^= state << 17u;
@@ -422,7 +422,7 @@ NWB_INLINE void TrapHandler([[maybe_unused]] const i32 signalNumber, siginfo_t* 
 }
 
 template<typename PairT>
-[[nodiscard]] NWB_INLINE b8 CheckTrianglePairPermutationsKernel(const PairT& pair, const b8 expected)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 CheckTrianglePairPermutationsKernel(const PairT& pair, const b8 expected)noexcept{
     const GeometryKernels::TrianglePairVectors vectors = GeometryKernels::LoadTrianglePair(pair);
     constexpr Array<Array<u32, 3>, 6> s_Permutations = {
         Array<u32, 3>{ 0u, 1u, 2u },
@@ -453,7 +453,7 @@ template<typename PairT>
 }
 
 template<typename PairT>
-[[nodiscard]] NWB_INLINE b8 ValidateGeometryContainmentAndTrapsKernel(const PairT& fixture0, const PairT& fixture3)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 ValidateGeometryContainmentAndTrapsKernel(const PairT& fixture0, const PairT& fixture3)noexcept{
 #pragma STDC FENV_ACCESS ON
     constexpr u64 s_VerifyInitialState = 0x4f1bbcdc6762c13fu;
     constexpr u32 s_ContainedSampleCount = 200000u;
@@ -576,7 +576,7 @@ template<typename PairT>
 }
 
 template<typename PairT, usize PairCount>
-[[nodiscard]] NWB_INLINE u64 RunGeometryBatchKernel(const u32 implId, const Array<PairT, PairCount>& pairs, const u32 passes)noexcept{
+[[nodiscard]] FOUNDATION_INLINE u64 RunGeometryBatchKernel(const u32 implId, const Array<PairT, PairCount>& pairs, const u32 passes)noexcept{
     return GeometryKernels::RunBatch(implId, Span<const PairT>(pairs.data(), pairs.size()), passes);
 }
 };

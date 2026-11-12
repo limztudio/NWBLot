@@ -35,20 +35,20 @@ using ModelObjectKindEnum = Impl::ModelObjectKind::Enum;
 namespace ModelObjectKind = Impl::ModelObjectKind;
 using SkeletonJointMatrixVector = Vector<Impl::SkeletonJointMatrix, Core::Alloc::GlobalArena>;
 
-[[nodiscard]] NWB_INLINE Impl::MeshSkinningSystem& SmokeMeshSkinningSystemRef(Core::ECS::World& world)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Impl::MeshSkinningSystem& SmokeMeshSkinningSystemRef(Core::ECS::World& world)noexcept{
     return *MakeNotNull(world.getSystem<Impl::MeshSkinningSystem>());
 }
 
-[[nodiscard]] NWB_INLINE b8 HasSmokeMeshSkinningSystem(Core::ECS::World& world)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 HasSmokeMeshSkinningSystem(Core::ECS::World& world)noexcept{
     return world.getSystem<Impl::MeshSkinningSystem>() != nullptr;
 }
 
-[[nodiscard]] NWB_INLINE AStringView DefaultSmokeSkinnedLabel()noexcept{
+[[nodiscard]] FOUNDATION_INLINE AStringView DefaultSmokeSkinnedLabel()noexcept{
     return "SmokeSkinnedScene";
 }
 
 template<typename JointContainerT>
-[[nodiscard]] NWB_INLINE b8 SetSmokeSkeletonLocalJoints(
+[[nodiscard]] FOUNDATION_INLINE b8 SetSmokeSkeletonLocalJoints(
     const Core::ECS::EntityID entity,
     const JointContainerT& joints,
     Core::ECS::World& world
@@ -132,7 +132,7 @@ Expected<SkeletonJointMatrixVector> LoadSmokeSkeletonBindJoints(
             failedModelLoad = true;
         }
         else{
-            NWB_ASSERT(*loadedModelAsset);
+            FOUNDATION_ASSERT(*loadedModelAsset);
             const auto* model = Core::Assets::CastAsset<Impl::Model>(loadedModelAsset->get());
             if(!model){
                 failedModelType = true;
@@ -158,7 +158,7 @@ Expected<SkeletonJointMatrixVector> LoadSmokeSkeletonBindJoints(
                         failedSkeletonLoad = true;
                     }
                     else{
-                        NWB_ASSERT(*loadedSkeletonAsset);
+                        FOUNDATION_ASSERT(*loadedSkeletonAsset);
                         const auto* skeleton = Core::Assets::CastAsset<Impl::Skeleton>(loadedSkeletonAsset->get());
                         if(!skeleton){
                             failedSkeletonType = true;

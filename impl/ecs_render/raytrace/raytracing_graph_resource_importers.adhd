@@ -108,7 +108,7 @@ Expected<FrameGraphSoftwareBvhBuildStateResult> FrameGraphSoftwareBvhBuildStateI
         };
         for(const ECSRenderDetail::MeshSoftwareBvhParentBuildState& state : *meshSoftwareBvhParentBuildStates){
             if(!appendSoftwareBvhBuildState(state.buffer, state.identity, "Software BVH Parent")){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import software BVH parent build state"));
+                NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import software BVH parent build state"));
                 return MakeUnexpected(Failure{});
             }
         }
@@ -120,7 +120,7 @@ Expected<FrameGraphSoftwareBvhBuildStateResult> FrameGraphSoftwareBvhBuildStateI
             || !appendSoftwareBvhBuildState(rayTracingShadowResources.bvhSortPayloadBuffer, Name(s_RenderNameRenderShadowTraceSwBvhSortPayload), "Software BVH Sort Payload")
             || !appendSoftwareBvhBuildState(rayTracingShadowResources.bvhVisitCounterBuffer, Name(s_RenderNameRenderShadowTraceSwBvhVisitCounter), "Software BVH Visit Counter")
         ){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import shared software BVH build state"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import shared software BVH build state"));
             return MakeUnexpected(Failure{});
         }
     }
@@ -138,7 +138,7 @@ Expected<FrameGraphTraceGeometryResult> FrameGraphTraceGeometryImporter::declare
 
     // Preflight froze the mesh tables; import each buffer once and fan out IDs.
     if(!m_raytracingSystem.freezePreparedShadowTraceGeometryBuffers(scratchArena)){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain preflighted shadow-trace geometry buffers"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not retain preflighted shadow-trace geometry buffers"));
         return MakeUnexpected(Failure{});
     }
     const Span<const PreparedShadowTraceGeometryBuffer> preparedTraceGeometry = m_raytracingSystem.preparedShadowTraceGeometryBuffers();
@@ -153,7 +153,7 @@ Expected<FrameGraphTraceGeometryResult> FrameGraphTraceGeometryImporter::declare
         desc.setInitialState(preparedBuffer.initialState);
         const auto resourceResult = m_graph.importBuffer(preparedBuffer.buffer, desc);
         if(!resourceResult){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import preflighted shadow-trace geometry buffer"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import preflighted shadow-trace geometry buffer"));
             return MakeUnexpected(Failure{});
         }
         const Core::GpuGraphResourceId resource = *resourceResult;
@@ -168,13 +168,13 @@ Expected<FrameGraphTraceGeometryResult> FrameGraphTraceGeometryImporter::declare
     if(!traceMaterialSampledTextureResources){
         switch(traceMaterialSampledTextureResources.error()){
         case SampledTextureImportFailure::GraphUnavailable:
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared trace material texture graph was unavailable"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: prepared trace material texture graph was unavailable"));
             return MakeUnexpected(Failure{});
         case SampledTextureImportFailure::MissingIdentity:
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared trace material texture has no stable identity"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: prepared trace material texture has no stable identity"));
             return MakeUnexpected(Failure{});
         case SampledTextureImportFailure::ImportFailed:
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import prepared trace material sampled texture"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import prepared trace material sampled texture"));
             return MakeUnexpected(Failure{});
         }
     }
@@ -185,7 +185,7 @@ Expected<FrameGraphTraceGeometryResult> FrameGraphTraceGeometryImporter::declare
             Core::GpuGraphResourceSetDesc{}.setIdentity(Name(s_RenderNameRenderTraceMaterialSampledTextures)).setMarkerLabel("Trace Material Sampled Textures").setMembers(*traceMaterialSampledTextureResources)
         );
         if(!traceMaterialSampledTextureSetResult){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared trace material sampled textures"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare prepared trace material sampled textures"));
             return MakeUnexpected(Failure{});
         }
         result.traceMaterialSampledTextureSet = *traceMaterialSampledTextureSetResult;
@@ -199,7 +199,7 @@ Expected<FrameGraphTraceGeometryResult> FrameGraphTraceGeometryImporter::declare
         scratchArena
     );
     if(!softwareBvhBuildStateResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import shared software BVH build state"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not import shared software BVH build state"));
         return MakeUnexpected(Failure{});
     }
     result.softwareBvhBuildState = Move(softwareBvhBuildStateResult->buildStateResources);

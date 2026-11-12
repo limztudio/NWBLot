@@ -25,7 +25,7 @@ native{
 #include <global/termination.h>
 #include <global/thread.h>
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <windows.h>
 #endif
 
@@ -45,8 +45,8 @@ namespace FrameLifecycleTestsDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_ClampMessage = NWB_TEXT("Frame Win32 client size clamped");
-inline constexpr TStringView s_FrameClassName = NWB_TEXT("NWB_FRAME");
+inline constexpr TStringView s_ClampMessage = FOUNDATION_TEXT("Frame Win32 client size clamped");
+inline constexpr TStringView s_FrameClassName = FOUNDATION_TEXT("NWB_FRAME");
 
 struct ClampObserverFailure final{};
 
@@ -132,7 +132,7 @@ struct LoopCallbackState{
 
 b8 RequestQuitOnUpdate(void* userData, f32 delta);
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 void DrainQuitMessages()noexcept;
 #endif
 
@@ -165,7 +165,7 @@ using LoopLogger = FrameLifecycleTestsDetail::LoopLogger;
 using ThrowingClampLogger = FrameLifecycleTestsDetail::ThrowingClampLogger;
 using Core::FrameDetail::LogicalDimensionForPixels;
 
-[[nodiscard]] NWB_INLINE b8 IsSameRenderPass(const NotNull<Core::IRenderPass*> ptr, const Core::IRenderPass& pass)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 IsSameRenderPass(const NotNull<Core::IRenderPass*> ptr, const Core::IRenderPass& pass)noexcept{
     return ptr.get() == &pass;
 }
 
@@ -243,7 +243,7 @@ void CheckInactiveLoop(in b8 renderUnfocused){
         (void)renderUnfocused;
         (void)heapAbi;
         (void)cpuTasks;
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         FrameLifecycleTestsDetail::DrainQuitMessages();
         ScopeExit drainQuit([]()noexcept{ FrameLifecycleTestsDetail::DrainQuitMessages(); });
         const i32 screenWidth = GetSystemMetrics(SM_CXSCREEN);
@@ -322,7 +322,7 @@ void VerifyFrameWin32Lifecycle_ThrowingClampObserverReleasesNativeClassBeforeLat
 
     native(in cpuTasks){
         (void)cpuTasks;
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
         const i32 screenWidth = GetSystemMetrics(SM_CXSCREEN);
         const i32 screenHeight = GetSystemMetrics(SM_CYSCREEN);
         if(screenWidth <= 0 || screenHeight <= 0 || screenWidth >= static_cast<i32>(s_MaxU16) || screenHeight >= static_cast<i32>(s_MaxU16))
@@ -402,7 +402,7 @@ void ThrowingClampLogger::record(const TStringView text){
 
 void LoopLogger::Record(const Core::Common::LogString& text, const Core::Common::LogType::Enum type){
     if(type >= Core::Common::LogType::Warning)
-        NWB_TCERR << text.data() << NWB_TEXT("\n");
+        FOUNDATION_TCERR << text.data() << FOUNDATION_TEXT("\n");
 }
 
 b8 CollectionTestPass::validateResources(u32, u32, u32){
@@ -417,7 +417,7 @@ b8 RequestQuitOnUpdate(void* userData, [[maybe_unused]] const f32 delta){
     return true;
 }
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 void DrainQuitMessages()noexcept{
     MSG message{};
     while(PeekMessage(&message, nullptr, WM_QUIT, WM_QUIT, PM_REMOVE)){}
@@ -436,7 +436,7 @@ void DrainQuitMessages()noexcept{
 
 NWB_END
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 TEST(FrameWin32Lifecycle, ThrowingClampObserverReleasesNativeClassBeforeLaterInitialization){ NWB::Tests::FrameCases::VerifyFrameWin32Lifecycle_ThrowingClampObserverReleasesNativeClassBeforeLaterInitialization(); }
 TEST(FrameWin32Lifecycle, InactiveWindowRunsAnUpdateForAnUnfocusedRenderPass){ NWB::Tests::FrameCases::VerifyFrameWin32Lifecycle_InactiveWindowRunsAnUpdateForAnUnfocusedRenderPass(); }
 TEST(FrameWin32Lifecycle, InactiveWindowWithoutUnfocusedRenderPassWaitsForQuit){ NWB::Tests::FrameCases::VerifyFrameWin32Lifecycle_InactiveWindowWithoutUnfocusedRenderPassWaitsForQuit(); }

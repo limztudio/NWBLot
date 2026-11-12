@@ -262,26 +262,16 @@ b8 TypeChecker::hasFieldInlineOrAutoDefault(const ClassDecl& classDecl, const Fi
 b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors){
     b8 ok = checkTemplateParamBounds(classDecl.templateParams, &classDecl, nullptr, errors);
 
-    if(classDecl.isArenaOwner){
-        if(classDecl.isSerialize){
-            reportError(errors, classDecl.span, "'[arena]' class cannot be marked '[serialize]' (binary-serialized structs cannot own an arena)");
-            ok = false;
-        }
-        if(!classDecl.subsystemTypeName.empty()){
-            reportError(errors, classDecl.span, "'[arena]' cannot be combined with '[subsystem(\"...\")]' (subsystems already inherit TypedSubsystem arena)");
-            ok = false;
-        }
-        if(!classDecl.componentAssetTypeName.empty()){
-            reportError(errors, classDecl.span, "'[arena]' cannot be combined with '[component_asset(\"...\")]'; mark the underlying component class '[arena]' instead");
-            ok = false;
-        }
-        if(!classDecl.assetTypeName.empty()){
-            reportError(errors, classDecl.span, "'[arena]' cannot be combined with '[asset(\"...\")]' (assets receive their arena from the asset loader)");
-            ok = false;
-        }
+    if(classDecl.isArenaOwner && classDecl.isSerialize){
+        reportError(errors, classDecl.span, "'[arena]' class cannot be marked '[serialize]' (binary-serialized structs cannot own an arena)");
+        ok = false;
     }
 
     if(!classDecl.assetTypeName.empty()){
+        if(!classDecl.isArenaOwner){
+            reportError(errors, classDecl.span, "'[asset(\"...\")]' class must be marked '[arena, asset(\"...\")]'");
+            ok = false;
+        }
         if(classDecl.isSerialize){
             reportError(errors, classDecl.span, "'[asset(\"...\")]' class cannot be marked '[serialize]' (assets implement 'TypedAsset<T>' with 'loadBinary')");
             ok = false;
@@ -292,8 +282,31 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
         }
     }
 
+    if(!classDecl.systemTypeName.empty()){
+        if(!classDecl.isArenaOwner){
+            reportError(errors, classDecl.span, "'[system(\"...\")]' class must be marked '[arena, system(\"...\")]'");
+            ok = false;
+        }
+        if(classDecl.isSerialize){
+            reportError(errors, classDecl.span, "'[system(\"...\")]' class cannot be marked '[serialize]' (systems implement 'ISystem')");
+            ok = false;
+        }
+        if(!classDecl.assetTypeName.empty() || !classDecl.subsystemTypeName.empty() || !classDecl.componentTypeName.empty()){
+            reportError(errors, classDecl.span, "'[system(\"...\")]' cannot be combined with asset, subsystem, or component attributes");
+            ok = false;
+        }
+        if(!classDecl.templateParams.empty()){
+            reportError(errors, classDecl.span, "'[system(\"...\")]' class cannot be a template");
+            ok = false;
+        }
+    }
+
     if(!classDecl.subsystemTypeName.empty()){
-        if(classDecl.isSerialize || !classDecl.assetTypeName.empty() || !classDecl.componentAssetTypeName.empty() || !classDecl.templateParams.empty() || !classDecl.implementedInterfaces.empty() || !classDecl.methods.empty()){
+        if(!classDecl.isArenaOwner){
+            reportError(errors, classDecl.span, "'[subsystem(\"...\")]' class must be marked '[arena, subsystem(\"...\")]'");
+            ok = false;
+        }
+        if(classDecl.isSerialize || !classDecl.assetTypeName.empty() || !classDecl.componentTypeName.empty() || !classDecl.templateParams.empty() || !classDecl.implementedInterfaces.empty() || !classDecl.methods.empty()){
             reportError(errors, classDecl.span, "'[subsystem(\"...\")]' class may only declare 'public' AssetRef<T> or Vector<AssetRef<T>> fields");
             ok = false;
         }
@@ -318,17 +331,13 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
         }
     }
 
-    if(!classDecl.componentAssetTypeName.empty()){
-        if(classDecl.isSerialize || !classDecl.assetTypeName.empty() || !classDecl.subsystemTypeName.empty() || !classDecl.templateParams.empty() || !classDecl.implementedInterfaces.empty() || !classDecl.methods.empty()){
-            reportError(errors, classDecl.span, "'[component_asset(\"...\")]' class may only declare a single 'public' component field");
+    if(!classDecl.componentTypeName.empty()){
+        if(!classDecl.isArenaOwner){
+            reportError(errors, classDecl.span, "'[component(\"...\")]' class must be marked '[arena, component(\"...\")]'");
             ok = false;
         }
-        if(classDecl.fields.size() != 1u || !classDecl.fields[0] || classDecl.fields[0]->access != AccessSpecifier::Public || classDecl.fields[0]->name != "component" || classDecl.fields[0]->defaultExpr || classDecl.fields[0]->hasCtorInit){
-            reportError(errors, classDecl.span, "'[component_asset(\"...\")]' class must declare exactly one 'public <ComponentType> component;' field");
-            ok = false;
-        }
-        else if(classDecl.fields[0]->type && TypeLayoutAnalyzer(m_symbols).isNonRootMotherArenaType(*classDecl.fields[0]->type)){
-            reportError(errors, classDecl.fields[0]->span, "'[component_asset(\"...\")]' component class uses arena-backed storage and must be marked '[arena]'");
+        if(classDecl.isSerialize || !classDecl.assetTypeName.empty() || !classDecl.subsystemTypeName.empty() || !classDecl.systemTypeName.empty()){
+            reportError(errors, classDecl.span, "'[component(\"...\")]' cannot be combined with '[serialize]', '[asset(\"...\")]', '[subsystem(\"...\")]', or '[system(\"...\")]'");
             ok = false;
         }
     }
@@ -445,6 +454,15 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
     }
 
     for(MethodDecl* m : classDecl.methods){
+        if(
+            !classDecl.systemTypeName.empty()
+            && !m->isConstructor
+            && !m->isDestructor
+            && m->templateParams.empty()
+            && (m->name == "prepare" || m->name == "update" || m->name == "taskOptions")
+        ){
+            m->isOverride = true;
+        }
         if(m->isOverride){
             if(!m->templateParams.empty()){
                 reportError(errors, m->span, "templated methods cannot be marked 'override'");
@@ -457,6 +475,9 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
                     matchesInterface = true;
                     break;
                 }
+            }
+            if(!matchesInterface && !classDecl.systemTypeName.empty() && FindBuiltinReceiverMethod("ISystem", m->name)){
+                matchesInterface = true;
             }
             if(!matchesInterface){
                 for(const TypeRef* ifaceType : classDecl.implementedInterfaces){
@@ -577,7 +598,7 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
         if(!checkCallableSignature(&classDecl, *m, errors))
             ok = false;
         if(!m->hasBody){
-            if(!classDecl.isImported && classDecl.assetTypeName.empty()){
+            if(!classDecl.isImported && classDecl.assetTypeName.empty() && classDecl.systemTypeName.empty()){
                 reportError(errors, m->span, "declared class method has no implementation body");
                 ok = false;
             }

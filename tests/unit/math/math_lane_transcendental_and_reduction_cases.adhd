@@ -19,7 +19,7 @@ native{
 #include <global/compile.h>
 #include <global/process.h>
 
-#if defined(NWB_PLATFORM_LINUX) && defined(NWB_HAS_AVX2)
+#if defined(FOUNDATION_PLATFORM_LINUX) && defined(FOUNDATION_HAS_AVX2)
 #include <sys/wait.h>
 #include <unistd.h>
 #endif
@@ -34,10 +34,10 @@ namespace NWB::Tests::MathLaneReductionDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_NOINLINE b8 BaselineCompareDouble3(SIMDVectorDouble left, SIMDVectorDouble right)noexcept;
+FOUNDATION_NOINLINE b8 BaselineCompareDouble3(SIMDVectorDouble left, SIMDVectorDouble right)noexcept;
 
 template<b8 Integer, u32 Dimension>
-NWB_NOINLINE b8 CompareDouble(SIMDVectorDouble left, SIMDVectorDouble right)noexcept{
+FOUNDATION_NOINLINE b8 CompareDouble(SIMDVectorDouble left, SIMDVectorDouble right)noexcept{
 #pragma STDC FENV_ACCESS ON
     if constexpr(Integer){
         if constexpr(Dimension == 3u)
@@ -54,7 +54,7 @@ NWB_NOINLINE b8 CompareDouble(SIMDVectorDouble left, SIMDVectorDouble right)noex
 }
 
 template<b8 Integer>
-NWB_NOINLINE b8 CompareSingle(SIMDVectorSingle left, SIMDVectorSingle right)noexcept{
+FOUNDATION_NOINLINE b8 CompareSingle(SIMDVectorSingle left, SIMDVectorSingle right)noexcept{
 #pragma STDC FENV_ACCESS ON
     if constexpr(Integer)
         return Vector4EqualInt(left, right);
@@ -62,7 +62,7 @@ NWB_NOINLINE b8 CompareSingle(SIMDVectorSingle left, SIMDVectorSingle right)noex
         return Vector4Equal(left, right);
 }
 
-NWB_NOINLINE u32 ExtractMask(SIMDVectorDouble value)noexcept;
+FOUNDATION_NOINLINE u32 ExtractMask(SIMDVectorDouble value)noexcept;
 
 namespace Reduction{
 enum Enum : u32{
@@ -74,7 +74,7 @@ enum Enum : u32{
 };
 
 template<Reduction::Enum Kind>
-NWB_NOINLINE SIMDVectorDouble OriginalReduction(SIMDVectorDouble lhs, SIMDVectorDouble rhs)noexcept{
+FOUNDATION_NOINLINE SIMDVectorDouble OriginalReduction(SIMDVectorDouble lhs, SIMDVectorDouble rhs)noexcept{
 #pragma STDC FENV_ACCESS ON
     if constexpr(Kind == Reduction::Dot2){
         lhs = VectorDoubleAndInt(lhs, s_DoubleSIMDMaskXY);
@@ -95,7 +95,7 @@ NWB_NOINLINE SIMDVectorDouble OriginalReduction(SIMDVectorDouble lhs, SIMDVector
 }
 
 template<Reduction::Enum Kind>
-NWB_NOINLINE SIMDVectorDouble CurrentReduction(SIMDVectorDouble lhs, SIMDVectorDouble rhs)noexcept{
+FOUNDATION_NOINLINE SIMDVectorDouble CurrentReduction(SIMDVectorDouble lhs, SIMDVectorDouble rhs)noexcept{
 #pragma STDC FENV_ACCESS ON
     if constexpr(Kind == Reduction::Dot2)
         return VectorDouble2Dot(lhs, rhs);
@@ -121,7 +121,7 @@ template<Reduction::Enum Kind>
     return true;
 }
 
-[[nodiscard]] NWB_INLINE b8 ObserveReductionByIndex(const u32 kindIndex, const SIMDVectorDouble input, const SIMDVectorDouble multiplier, SIMDVectorDouble& outExpected, i32& outExpectedFlags, SIMDVectorDouble& outActual, i32& outActualFlags)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 ObserveReductionByIndex(const u32 kindIndex, const SIMDVectorDouble input, const SIMDVectorDouble multiplier, SIMDVectorDouble& outExpected, i32& outExpectedFlags, SIMDVectorDouble& outActual, i32& outActualFlags)noexcept{
     switch(kindIndex){
     case 0u: return ObserveReductionKind<Reduction::Dot2>(input, multiplier, outExpected, outExpectedFlags, outActual, outActualFlags);
     case 1u: return ObserveReductionKind<Reduction::Dot3>(input, multiplier, outExpected, outExpectedFlags, outActual, outActualFlags);
@@ -131,7 +131,7 @@ template<Reduction::Enum Kind>
 }
 
 template<u32 Dimension>
-NWB_NOINLINE SIMDVectorDouble OriginalReciprocalLength(SIMDVectorDouble value)noexcept{
+FOUNDATION_NOINLINE SIMDVectorDouble OriginalReciprocalLength(SIMDVectorDouble value)noexcept{
 #pragma STDC FENV_ACCESS ON
     if constexpr(Dimension == 2u)
         return VectorDoubleReciprocalSqrt(VectorDouble2LengthSq(value));
@@ -142,7 +142,7 @@ NWB_NOINLINE SIMDVectorDouble OriginalReciprocalLength(SIMDVectorDouble value)no
 }
 
 template<u32 Dimension, b8 Estimate>
-NWB_NOINLINE SIMDVectorDouble CurrentReciprocalLength(SIMDVectorDouble value)noexcept{
+FOUNDATION_NOINLINE SIMDVectorDouble CurrentReciprocalLength(SIMDVectorDouble value)noexcept{
 #pragma STDC FENV_ACCESS ON
     if constexpr(Dimension == 2u){
         if constexpr(Estimate)
@@ -182,7 +182,7 @@ template<u32 Dimension>
     return true;
 }
 
-[[nodiscard]] NWB_INLINE b8 ObserveReciprocalLengthByDim(const u32 dimension, const SIMDVectorDouble input, SIMDVectorDouble& outExpected, i32& outExpectedFlags, SIMDVectorDouble& outActual, i32& outActualFlags, SIMDVectorDouble& outEstimate, i32& outEstimateFlags)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 ObserveReciprocalLengthByDim(const u32 dimension, const SIMDVectorDouble input, SIMDVectorDouble& outExpected, i32& outExpectedFlags, SIMDVectorDouble& outActual, i32& outActualFlags, SIMDVectorDouble& outEstimate, i32& outEstimateFlags)noexcept{
     switch(dimension){
     case 2u: return ObserveReciprocalLengthDim<2u>(input, outExpected, outExpectedFlags, outActual, outActualFlags, outEstimate, outEstimateFlags);
     case 3u: return ObserveReciprocalLengthDim<3u>(input, outExpected, outExpectedFlags, outActual, outActualFlags, outEstimate, outEstimateFlags);
@@ -197,7 +197,7 @@ struct PackedDot3ForkResult{
     i32 exitStatus = -1;
 };
 
-#if defined(NWB_PLATFORM_LINUX) && defined(NWB_HAS_AVX2)
+#if defined(FOUNDATION_PLATFORM_LINUX) && defined(FOUNDATION_HAS_AVX2)
 void TrapPriorityHandler(i32 signalNumber, siginfo_t* information, void* context)noexcept;
 #endif
 
@@ -732,10 +732,10 @@ namespace NWB::Tests::MathLaneReductionDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_NOINLINE b8 BaselineCompareDouble3(const SIMDVectorDouble left, const SIMDVectorDouble right)noexcept{
+FOUNDATION_NOINLINE b8 BaselineCompareDouble3(const SIMDVectorDouble left, const SIMDVectorDouble right)noexcept{
 #pragma STDC FENV_ACCESS ON
     const SIMDVectorDouble comparison = VectorDoubleEqual(left, right);
-#if defined(NWB_HAS_NEON64)
+#if defined(FOUNDATION_HAS_NEON64)
     const uint64x2_t low = vshrq_n_u64(SIMDVectorDoubleDetail::GetLowBits(comparison), 63u);
     const uint64x2_t high = vshrq_n_u64(SIMDVectorDoubleDetail::GetHighBits(comparison), 63u);
     const u32 mask = static_cast<u32>(vgetq_lane_u64(low, 0) | (vgetq_lane_u64(low, 1) << 1u) | (vgetq_lane_u64(high, 0) << 2u) | (vgetq_lane_u64(high, 1) << 3u));
@@ -745,12 +745,12 @@ NWB_NOINLINE b8 BaselineCompareDouble3(const SIMDVectorDouble left, const SIMDVe
     return (mask & VectorDoubleComponentMask::s_DoubleXYZ) == VectorDoubleComponentMask::s_DoubleXYZ;
 }
 
-NWB_NOINLINE u32 ExtractMask(const SIMDVectorDouble value)noexcept{
+FOUNDATION_NOINLINE u32 ExtractMask(const SIMDVectorDouble value)noexcept{
 #pragma STDC FENV_ACCESS ON
     return VectorDoubleMoveMask(value);
 }
 
-#if defined(NWB_PLATFORM_LINUX) && defined(NWB_HAS_AVX2)
+#if defined(FOUNDATION_PLATFORM_LINUX) && defined(FOUNDATION_HAS_AVX2)
 void TrapPriorityHandler(const i32, siginfo_t* const information, void*)noexcept{
     _exit(information != nullptr && information->si_code == FPE_FLTINV ? 0 : 1);
 }
@@ -758,7 +758,7 @@ void TrapPriorityHandler(const i32, siginfo_t* const information, void*)noexcept
 
 PackedDot3ForkResult RunPackedDot3InvalidPriorityForkChild()noexcept{
     PackedDot3ForkResult out{};
-#if defined(NWB_PLATFORM_LINUX) && defined(NWB_HAS_AVX2)
+#if defined(FOUNDATION_PLATFORM_LINUX) && defined(FOUNDATION_HAS_AVX2)
     const pid_t child = fork();
     out.childPid = static_cast<i32>(child);
     if(child < 0)
@@ -796,7 +796,7 @@ PackedDot3ForkResult RunPackedDot3InvalidPriorityForkChild()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_LINUX) && defined(NWB_HAS_AVX2)
+#if defined(FOUNDATION_PLATFORM_LINUX) && defined(FOUNDATION_HAS_AVX2)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

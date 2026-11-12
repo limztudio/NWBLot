@@ -145,7 +145,7 @@ static void ResolveSkeletonComponents(Core::ECS::World& world, const Core::ECS::
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 MeshSkinningSystem::FrameResourceImports::import(const MeshSkinningRuntimeInstance& instance, const RuntimeResources& resources, MeshSkinningGraphDispatchPlan& plan){
+b8 MeshSkinningFrameResourceImports::import(const MeshSkinningRuntimeInstance& instance, const MeshSkinningRuntimeResources& resources, MeshSkinningGraphDispatchPlan& plan){
     const b8 hasActiveSkin = plan.hasActiveSkin;
     const b8 copiesRestStreams = plan.copiedRestStreams;
     const b8 updatesMeshletBounds = plan.updatesMeshletBounds;
@@ -240,7 +240,7 @@ b8 MeshSkinningSystem::FrameResourceImports::import(const MeshSkinningRuntimeIns
         attributeResourceResult.has_value(),
         repackPipelineResult.has_value()
     )){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' has no graph-importable dispatch resource"), instance.handle.value);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: runtime mesh '{}' has no graph-importable dispatch resource"), instance.handle.value);
         return false;
     }
 
@@ -278,7 +278,7 @@ b8 MeshSkinningSystem::FrameResourceImports::import(const MeshSkinningRuntimeIns
     return true;
 }
 
-Expected<Core::GpuGraphResourceId> MeshSkinningSystem::FrameResourceImports::importBuffer(const Core::BufferHandle& buffer, const AStringView label){
+Expected<Core::GpuGraphResourceId> MeshSkinningFrameResourceImports::importBuffer(const Core::BufferHandle& buffer, const AStringView label){
     if(!buffer)
         return MakeUnexpected(Failure{});
     const Core::BufferDesc& description = buffer->getCreationDescription();
@@ -290,7 +290,7 @@ Expected<Core::GpuGraphResourceId> MeshSkinningSystem::FrameResourceImports::imp
     );
 }
 
-Expected<Core::GpuGraphPipelineId> MeshSkinningSystem::FrameResourceImports::importComputePipeline(const Core::ComputePipelineHandle& pipeline, const Name identity, const AStringView label){
+Expected<Core::GpuGraphPipelineId> MeshSkinningFrameResourceImports::importComputePipeline(const Core::ComputePipelineHandle& pipeline, const Name identity, const AStringView label){
     return m_graph.importComputePipeline(pipeline, Core::GpuGraphPipelineDesc{}.setIdentity(identity).setMarkerLabel(label).setType(Core::GpuGraphPipelineType::Compute));
 }
 
@@ -298,17 +298,17 @@ Expected<Core::GpuGraphPipelineId> MeshSkinningSystem::FrameResourceImports::imp
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 MeshSkinningSystem::FramePlanBuilder::declare(const Core::ECS::EntityID entity, SkinnedMeshBindingComponent& binding){
+b8 MeshSkinningFramePlanBuilder::declare(const Core::ECS::EntityID entity, SkinnedMeshBindingComponent& binding){
     if(!binding.runtimeMesh.valid())
         return true;
 
     MeshSkinningRuntimeInstance* const instance = m_system.m_runtimeMeshCache.findInstance(binding.runtimeMesh);
     if(!instance)
         return true;
-    NWB_ASSERT(instance->valid());
+    FOUNDATION_ASSERT(instance->valid());
     const SkeletonJointPaletteComponent* jointPalette = nullptr;
     const SkeletonPoseComponent* skeletonPose = nullptr;
-    __hidden_skinning_frame_plan_and_dispatch::ResolveSkeletonComponents(m_system.m_world, entity, binding.skeletonEntity, jointPalette, skeletonPose);
+    __hidden_skinning_frame_plan_and_dispatch::ResolveSkeletonComponents(*m_system.m_world, entity, binding.skeletonEntity, jointPalette, skeletonPose);
     const auto foundResources = m_system.m_runtimeResources.find(instance->handle.value);
     RuntimeSkinPayloadScratch payload{ m_scratchArena };
     // Preserve the direct path's per-mesh retry semantics: an invalid pose never prevents another ready mesh from declaring its immutable packet plan.
@@ -322,7 +322,7 @@ b8 MeshSkinningSystem::FramePlanBuilder::declare(const Core::ECS::EntityID entit
     if(hasActiveSkin){
         const auto upload = MeshSkinningPayload::ResolveGpuJointPalette(*instance, payload);
         if(!upload){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: current joint palette does not match Skin upload bounds for runtime mesh '{}'"), instance->handle.value);
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: current joint palette does not match Skin upload bounds for runtime mesh '{}'"), instance->handle.value);
             return false;
         }
         jointPaletteUpload = *upload;
@@ -333,10 +333,10 @@ b8 MeshSkinningSystem::FramePlanBuilder::declare(const Core::ECS::EntityID entit
         return true;
 
     if(foundResources == m_system.m_runtimeResources.end()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' has no prepared graph resources"), instance->handle.value);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: runtime mesh '{}' has no prepared graph resources"), instance->handle.value);
         return false;
     }
-    const RuntimeResources& resources = foundResources.value();
+    const MeshSkinningRuntimeResources& resources = foundResources.value();
     const MeshSkinningDeformationInputs deformationInputs{ .resourceSlotsBuffer = resources.bindlessResourceSlotsBuffer, .editRevision = instance->editRevision, .skinningMode = payload.resolvedSkinningMode, };
     instance->deformationState.refreshCurrent(deformationInputs, payload.jointMatrices, skinningInputDirty || meshletBoundsDirty);
     const SkinningFramePlanFlags planFlags = BuildSkinningFramePlanFlags(hasActiveSkin, instance->deformationState.contentRevision(), instance->attributeBuffer != nullptr);
@@ -372,7 +372,7 @@ b8 MeshSkinningSystem::FramePlanBuilder::declare(const Core::ECS::EntityID entit
     plan.bindlessResourceSlotsDescriptor = resources.bindlessHeapHandles.resourceSlots;
     plan.bindlessResourceSlotsPayload = resources.bindlessResourceSlots;
 
-    if(!FrameResourceImports(m_system, m_graph).import(*instance, resources, plan))
+    if(!MeshSkinningFrameResourceImports(m_system, m_graph).import(*instance, resources, plan))
         return false;
     if(!resources.bindlessResourceSlotsUploaded && !declareBindlessSlotsUpload(*instance, resources, plan))
         return false;
@@ -389,7 +389,7 @@ b8 MeshSkinningSystem::FramePlanBuilder::declare(const Core::ECS::EntityID entit
     return true;
 }
 
-b8 MeshSkinningSystem::FramePlanBuilder::declareUploadTask(
+b8 MeshSkinningFramePlanBuilder::declareUploadTask(
     const MeshSkinningRuntimeInstance& instance,
     const AStringView identitySuffix,
     const AStringView markerLabel,
@@ -403,7 +403,7 @@ b8 MeshSkinningSystem::FramePlanBuilder::declareUploadTask(
     const auto uploadIdentity = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, identitySuffix);
     const auto uploadSourceResult = m_graph.copyUploadData(data.data(), data.size(), dataAlignment);
     if(!uploadIdentity || !uploadSourceResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to retain {} for runtime mesh '{}'"), retainErrorLabel, instance.handle.value);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to retain {} for runtime mesh '{}'"), retainErrorLabel, instance.handle.value);
         return false;
     }
 
@@ -414,14 +414,14 @@ b8 MeshSkinningSystem::FramePlanBuilder::declareUploadTask(
 
     const auto uploadTaskResult = m_graph.addUploadBufferTask(uploadDesc, Core::GpuUploadBufferTaskDesc{ .source = *uploadSourceResult, .destination = destination, .finalState = finalState, });
     if(!uploadTaskResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare {} for runtime mesh '{}'"), declareErrorLabel, instance.handle.value);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to declare {} for runtime mesh '{}'"), declareErrorLabel, instance.handle.value);
         return false;
     }
     m_terminalTask = *uploadTaskResult;
     return true;
 }
 
-b8 MeshSkinningSystem::FramePlanBuilder::declareBindlessSlotsUpload(const MeshSkinningRuntimeInstance& instance, const RuntimeResources& resources, MeshSkinningGraphDispatchPlan& plan){
+b8 MeshSkinningFramePlanBuilder::declareBindlessSlotsUpload(const MeshSkinningRuntimeInstance& instance, const MeshSkinningRuntimeResources& resources, MeshSkinningGraphDispatchPlan& plan){
     // The following graph-owned compute task declares the descriptor-visible ConstantBuffer state.
     if(!declareUploadTask(
         instance,
@@ -431,8 +431,8 @@ b8 MeshSkinningSystem::FramePlanBuilder::declareBindlessSlotsUpload(const MeshSk
         alignof(MeshSkinningBindlessResourceSlots),
         plan.bindlessResourceSlotsResource,
         Core::ResourceStates::Common,
-        NWB_TEXT("graph-owned bindless slots"),
-        NWB_TEXT("graph-owned bindless slots")
+        FOUNDATION_TEXT("graph-owned bindless slots"),
+        FOUNDATION_TEXT("graph-owned bindless slots")
     ))
         return false;
 
@@ -440,10 +440,10 @@ b8 MeshSkinningSystem::FramePlanBuilder::declareBindlessSlotsUpload(const MeshSk
     return true;
 }
 
-b8 MeshSkinningSystem::FramePlanBuilder::declareRestToSkinnedCopy(const MeshSkinningRuntimeInstance& instance, const MeshSkinningGraphDispatchPlan& plan){
+b8 MeshSkinningFramePlanBuilder::declareRestToSkinnedCopy(const MeshSkinningRuntimeInstance& instance, const MeshSkinningGraphDispatchPlan& plan){
     const Expected<MeshSkinningRestToSkinnedCopyByteCounts> copyByteCounts = TryResolveMeshSkinningRestToSkinnedCopyByteCounts(instance.restPositions.size(), instance.restNormals.size(), instance.restTangents.size());
     if(!copyByteCounts){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to resolve rest-to-skinned copy sizes for runtime mesh '{}'"), instance.handle.value);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to resolve rest-to-skinned copy sizes for runtime mesh '{}'"), instance.handle.value);
         return false;
     }
 
@@ -455,7 +455,7 @@ b8 MeshSkinningSystem::FramePlanBuilder::declareRestToSkinnedCopy(const MeshSkin
     Core::GpuTaskDesc copyDesc;
     const auto copyDescIdentity = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, s_RestToSkinnedCopySuffix);
     if(!copyDescIdentity){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to derive graph identity for rest-to-skinned copy"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to derive graph identity for rest-to-skinned copy"));
         return false;
     }
     copyDesc.setIdentity(copyDescIdentity).setMarkerLabel(s_RestToSkinnedCopyLabel).setScheduling(MeshSkinningGraphDetail::JointPaletteUploadScheduling());
@@ -464,17 +464,17 @@ b8 MeshSkinningSystem::FramePlanBuilder::declareRestToSkinnedCopy(const MeshSkin
 
     const auto copyTaskResult = m_graph.addCopyBufferTask(copyDesc, Core::GpuCopyBufferTaskDesc{ .regions = copyRegions.data(), .regionCount = copyRegions.size(), });
     if(!copyTaskResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare graph-owned rest-to-skinned copy for runtime mesh '{}'"), instance.handle.value);
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: failed to declare graph-owned rest-to-skinned copy for runtime mesh '{}'"), instance.handle.value);
         return false;
     }
     m_terminalTask = *copyTaskResult;
     return true;
 }
 
-b8 MeshSkinningSystem::FramePlanBuilder::declareJointPaletteUpload(const MeshSkinningRuntimeInstance& instance, const Span<const SkeletonJointMatrix> jointPaletteUpload, const MeshSkinningGraphDispatchPlan& plan){
+b8 MeshSkinningFramePlanBuilder::declareJointPaletteUpload(const MeshSkinningRuntimeInstance& instance, const Span<const SkeletonJointMatrix> jointPaletteUpload, const MeshSkinningGraphDispatchPlan& plan){
     const auto jointPaletteBytes = TryComputeRuntimeMeshBufferByteCount(jointPaletteUpload.size(), sizeof(SkeletonJointMatrix));
     if(!jointPaletteBytes || *jointPaletteBytes == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: joint palette payload byte size overflows"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("MeshSkinningSystem: joint palette payload byte size overflows"));
         return false;
     }
     return declareUploadTask(
@@ -485,8 +485,8 @@ b8 MeshSkinningSystem::FramePlanBuilder::declareJointPaletteUpload(const MeshSki
         alignof(SkeletonJointMatrix),
         plan.jointPaletteResource,
         Core::ResourceStates::ShaderResource,
-        NWB_TEXT("graph-owned joint palette data"),
-        NWB_TEXT("graph-owned joint palette upload")
+        FOUNDATION_TEXT("graph-owned joint palette data"),
+        FOUNDATION_TEXT("graph-owned joint palette upload")
     );
 }
 
@@ -494,7 +494,7 @@ b8 MeshSkinningSystem::FramePlanBuilder::declareJointPaletteUpload(const MeshSki
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 MeshSkinningSystem::recordGraphOwnedSkinningDeformation(const MeshSkinningGraphDispatchPlan& plan, const Core::GpuTaskRecordContext& context, Core::CommandList& commandList){
+b8 MeshSkinningSystem::recordGraphOwnedSkinningDeformation(const MeshSkinningGraphDispatchPlan& plan, const Core::GpuTaskRecordContext& context, Core::CommandList& commandList)noexcept{
     if(!plan.hasActiveSkin)
         return false;
 
@@ -516,7 +516,7 @@ b8 MeshSkinningSystem::recordGraphOwnedSkinningDeformation(const MeshSkinningGra
     if(!bindlessResourceSlots || !skinnedPosition || !restPosition || !restNormal || !restTangent || !skinnedNormal || !skinnedTangent || !meshletDesc || !meshletPositionRefDeltas || !meshletAttributeRefDeltas || !attributeSkins || !skinInfluences || !jointPalette || !skinningPipeline)
         return false;
 
-    auto& device = m_graphics.getDevice();
+    auto& device = m_graphics->getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
@@ -530,7 +530,7 @@ b8 MeshSkinningSystem::recordGraphOwnedSkinningDeformation(const MeshSkinningGra
     const MeshSkinningPushConstants pushConstants = MakeMeshSkinningPushConstants(plan.meshletCount, plan.skinCount, plan.jointCount, plan.skinningMode, plan.bindlessResourceSlots);
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     {
-        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), MeshSkinningGpuTimingScope::s_Skinning, device, commandList);
+        Core::GpuTimingMeasure timing(m_graphics->gpuTiming(), MeshSkinningGpuTimingScope::s_Skinning, device, commandList);
 
         commandList.dispatch(pushConstants.meshletCount, 1u, 1u);
     }
@@ -538,7 +538,7 @@ b8 MeshSkinningSystem::recordGraphOwnedSkinningDeformation(const MeshSkinningGra
     return true;
 }
 
-b8 MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(const MeshSkinningGraphDispatchPlan& plan, const Core::GpuTaskRecordContext& context, Core::CommandList& commandList){
+b8 MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(const MeshSkinningGraphDispatchPlan& plan, const Core::GpuTaskRecordContext& context, Core::CommandList& commandList)noexcept{
     if(!plan.updatesMeshletBounds)
         return false;
 
@@ -555,7 +555,7 @@ b8 MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(const MeshSkinningGr
     if(!bindlessResourceSlots || !skinnedPosition || !meshletDesc || !meshletPositionRefDeltas || !meshletLocalVertexRefs || !meshletPrimitiveIndices || !meshletBounds || !meshletLocalBounds || !boundsPipeline)
         return false;
 
-    auto& device = m_graphics.getDevice();
+    auto& device = m_graphics->getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
@@ -569,7 +569,7 @@ b8 MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(const MeshSkinningGr
     const MeshletBoundsPushConstants boundsPushConstants = MakeMeshletBoundsPushConstants(plan.meshletCount, plan.bindlessResourceSlots);
     commandList.setPushConstants(&boundsPushConstants, sizeof(boundsPushConstants));
     {
-        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), MeshSkinningGpuTimingScope::s_MeshletBounds, device, commandList);
+        Core::GpuTimingMeasure timing(m_graphics->gpuTiming(), MeshSkinningGpuTimingScope::s_MeshletBounds, device, commandList);
 
         commandList.dispatch(boundsPushConstants.meshletCount, 1u, 1u);
     }
@@ -589,7 +589,7 @@ b8 MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(const MeshSkinningGr
 
         commandList.setPushConstants(&boundsPushConstants, sizeof(boundsPushConstants));
         {
-            Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), MeshSkinningGpuTimingScope::s_RepackNormals, device, commandList);
+            Core::GpuTimingMeasure timing(m_graphics->gpuTiming(), MeshSkinningGpuTimingScope::s_RepackNormals, device, commandList);
 
             commandList.dispatch(boundsPushConstants.meshletCount, 1u, 1u);
         }
@@ -605,7 +605,7 @@ void MeshSkinningSystem::confirmGraphOwnedSkinningDispatch(const MeshSkinningGra
     const auto foundResources = m_runtimeResources.find(plan.handle.value);
     if(foundResources == m_runtimeResources.end())
         return;
-    RuntimeResources& resources = foundResources.value();
+    MeshSkinningRuntimeResources& resources = foundResources.value();
     if(!CanConfirmGraphOwnedSkinningDispatch(
         plan.updatesMeshletBounds,
         plan.localBoundsResource.valid(),

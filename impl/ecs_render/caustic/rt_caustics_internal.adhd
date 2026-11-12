@@ -35,8 +35,8 @@ class RendererShaderSystem;
 struct DeferredFrameTargets;
 struct RtCausticState;
 
-NWB_INLINE void AssertCausticEmissionTargetStorageDescriptor(const Core::GpuDescriptorHandle& handle)noexcept{
-    NWB_ASSERT(handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer);
+FOUNDATION_INLINE void AssertCausticEmissionTargetStorageDescriptor(const Core::GpuDescriptorHandle& handle)noexcept{
+    FOUNDATION_ASSERT(handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer);
 }
 
 [[nodiscard]] b8 EnsureCausticEmissionTargetBufferStorage(

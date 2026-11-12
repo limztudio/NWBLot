@@ -38,7 +38,7 @@ using ScratchPlacementGroups = Vector<Core::GpuTaskGraphCompilerDetail::GpuTaskQ
 
 inline constexpr usize s_DenseReachabilityTaskMetadataBytes = sizeof(u32) + 2u * sizeof(usize);
 
-[[nodiscard]] NWB_INLINE usize ScratchEmptyVectorBookkeepingBytes()noexcept{
+[[nodiscard]] FOUNDATION_INLINE usize ScratchEmptyVectorBookkeepingBytes()noexcept{
     Core::Alloc::ScratchArena bookkeepingScratch(s_TaskGraphScratchArena);
     const Vector<u64, Core::Alloc::ScratchArena> emptyVector(bookkeepingScratch);
     return bookkeepingScratch.memoryStats().usedBytes;

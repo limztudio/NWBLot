@@ -31,19 +31,19 @@ namespace RendererTaskGraphDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE Core::GpuGraphResourceDesc TextureResourceDesc(const Name& identity, const AStringView label)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::GpuGraphResourceDesc TextureResourceDesc(const Name& identity, const AStringView label)noexcept{
     Core::GpuGraphResourceDesc desc;
     desc.setIdentity(identity).setMarkerLabel(label).setType(Core::GpuGraphResourceType::Texture);
     return desc;
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuGraphResourceDesc BufferResourceDesc(const Name& identity, const AStringView label)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::GpuGraphResourceDesc BufferResourceDesc(const Name& identity, const AStringView label)noexcept{
     Core::GpuGraphResourceDesc desc;
     desc.setIdentity(identity).setMarkerLabel(label).setType(Core::GpuGraphResourceType::Buffer);
     return desc;
 }
 
-[[nodiscard]] NWB_INLINE Expected<Core::GpuGraphResourceId> ImportExternalTexture(
+[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuGraphResourceId> ImportExternalTexture(
     Core::GpuTaskGraph& graph,
     const Core::TextureHandle& texture,
     const Name& identity,
@@ -59,7 +59,7 @@ namespace RendererTaskGraphDetail{
     return graph.importTexture(texture, desc);
 }
 
-[[nodiscard]] NWB_INLINE Expected<Core::GpuGraphResourceId> ImportExternalBuffer(
+[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuGraphResourceId> ImportExternalBuffer(
     Core::GpuTaskGraph& graph,
     const Core::BufferHandle& buffer,
     const Name& identity,
@@ -75,7 +75,7 @@ namespace RendererTaskGraphDetail{
     return graph.importBuffer(buffer, desc);
 }
 
-[[nodiscard]] NWB_INLINE Expected<Core::GpuGraphResourceId> FindOrImportTexture(
+[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuGraphResourceId> FindOrImportTexture(
     Core::GpuTaskGraph& graph,
     const Core::TextureHandle& texture,
     const AStringView resourceLabel,
@@ -97,7 +97,7 @@ namespace RendererTaskGraphDetail{
     return graph.importTexture(texture, desc);
 }
 
-[[nodiscard]] NWB_INLINE Expected<Core::GpuGraphResourceId> FindOrImportBuffer(
+[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuGraphResourceId> FindOrImportBuffer(
     Core::GpuTaskGraph& graph,
     const Core::BufferHandle& buffer,
     const AStringView resourceLabel
@@ -119,7 +119,7 @@ namespace RendererTaskGraphDetail{
 }
 
 template<typename Plan>
-[[nodiscard]] NWB_INLINE Expected<Core::GpuGraphResourceSetId> GatherImportedOutputBufferResourceSet(Core::GpuTaskGraph& graph, const Plan& plan, Core::Alloc::ScratchArena& scratchArena, const Name& identity, const AStringView label){
+[[nodiscard]] FOUNDATION_INLINE Expected<Core::GpuGraphResourceSetId> GatherImportedOutputBufferResourceSet(Core::GpuTaskGraph& graph, const Plan& plan, Core::Alloc::ScratchArena& scratchArena, const Name& identity, const AStringView label){
     if(!plan.captured || plan.outputBuffers.empty())
         return MakeUnexpected(Failure{});
 
@@ -138,17 +138,17 @@ template<typename Plan>
     return result;
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuGraphResourceDesc HazardDomainDesc(const Name& identity, const AStringView label)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::GpuGraphResourceDesc HazardDomainDesc(const Name& identity, const AStringView label)noexcept{
     Core::GpuGraphResourceDesc desc;
     desc.setIdentity(identity).setMarkerLabel(label).setType(Core::GpuGraphResourceType::HazardDomain);
     return desc;
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuTaskResourceUse ReadUse(const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state = Core::ResourceStates::ShaderResource, const b8 hasIndependentStateSource = false)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::GpuTaskResourceUse ReadUse(const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state = Core::ResourceStates::ShaderResource, const b8 hasIndependentStateSource = false)noexcept{
     return Core::GpuTaskResourceUse{ .resource = resource, .range = {}, .requiredState = state, .access = Core::GpuTaskResourceAccess::Read, .hasIndependentStateSource = hasIndependentStateSource, };
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuTaskResourceUse ReadBufferUse(
+[[nodiscard]] FOUNDATION_INLINE Core::GpuTaskResourceUse ReadBufferUse(
     const Core::GpuGraphResourceId resource,
     const Core::BufferRange& range,
     const Core::ResourceStates::Mask state = Core::ResourceStates::ShaderResource,
@@ -159,7 +159,7 @@ template<typename Plan>
     return result;
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuTaskResourceUse ReadTextureUse(
+[[nodiscard]] FOUNDATION_INLINE Core::GpuTaskResourceUse ReadTextureUse(
     const Core::GpuGraphResourceId resource,
     const Core::TextureSubresourceSet& subresources,
     const Core::ResourceStates::Mask state = Core::ResourceStates::ShaderResource,
@@ -170,33 +170,33 @@ template<typename Plan>
     return result;
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuTaskResourceUse WriteUse(const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::GpuTaskResourceUse WriteUse(const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state)noexcept{
     return Core::GpuTaskResourceUse{ .resource = resource, .range = {}, .requiredState = state, .access = Core::GpuTaskResourceAccess::Write, };
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuTaskResourceUse WriteTextureUse(const Core::GpuGraphResourceId resource, const Core::TextureSubresourceSet& subresources, const Core::ResourceStates::Mask state)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::GpuTaskResourceUse WriteTextureUse(const Core::GpuGraphResourceId resource, const Core::TextureSubresourceSet& subresources, const Core::ResourceStates::Mask state)noexcept{
     Core::GpuTaskResourceUse result = WriteUse(resource, state);
     result.range.textureSubresources = subresources;
     return result;
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuGraphResourceDesc AccelStructResourceDesc(const Name& identity, const AStringView label)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::GpuGraphResourceDesc AccelStructResourceDesc(const Name& identity, const AStringView label)noexcept{
     Core::GpuGraphResourceDesc desc;
     desc.setIdentity(identity).setMarkerLabel(label).setType(Core::GpuGraphResourceType::AccelStruct);
     return desc;
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuTaskResourceUse ReadWriteUse(const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::GpuTaskResourceUse ReadWriteUse(const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state)noexcept{
     return Core::GpuTaskResourceUse{ .resource = resource, .range = {}, .requiredState = state, .access = Core::GpuTaskResourceAccess::ReadWrite, };
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuTaskResourceUse ReadWriteTextureUse(const Core::GpuGraphResourceId resource, const Core::TextureSubresourceSet& subresources, const Core::ResourceStates::Mask state)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::GpuTaskResourceUse ReadWriteTextureUse(const Core::GpuGraphResourceId resource, const Core::TextureSubresourceSet& subresources, const Core::ResourceStates::Mask state)noexcept{
     Core::GpuTaskResourceUse result = ReadWriteUse(resource, state);
     result.range.textureSubresources = subresources;
     return result;
 }
 
-[[nodiscard]] NWB_INLINE Core::GpuTaskDesc TaskDesc(const Name& identity, const AStringView label, const Core::GpuTaskId& dependency = {})noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::GpuTaskDesc TaskDesc(const Name& identity, const AStringView label, const Core::GpuTaskId& dependency = {})noexcept{
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Tiny;
     scheduling.forceSubmissionBoundary = false;

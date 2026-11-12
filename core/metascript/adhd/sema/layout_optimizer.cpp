@@ -219,7 +219,7 @@ b8 LayoutOptimizer::optimizeTranslationUnit(TranslationUnit& unit, MVector<Parse
                 if(clonedField && clonedField->type)
                     markFieldArenaUsage(*clonedField->type, *clonedField, *inst->templateDecl, inst->needsClassArena);
             }
-            const b8 hasMotherArenaPointer = !inst->templateDecl->isSerialize && !inst->templateDecl->isArenaOwner && inst->templateDecl->subsystemTypeName.empty() && inst->templateDecl->componentAssetTypeName.empty() && inst->needsClassArena;
+            const b8 hasMotherArenaPointer = !inst->templateDecl->isSerialize && !inst->templateDecl->usesStaticClassArena() && inst->templateDecl->subsystemTypeName.empty() && inst->needsClassArena;
             finalizeClassFieldLayouts(inst->templateDecl->isSerialize, !inst->templateDecl->implementedInterfaces.empty(), hasMotherArenaPointer, inst->orderedFields, inst->totalSize, inst->totalAlign);
             if(inst->totalSize != prevSize || inst->totalAlign != prevAlign || inst->needsClassArena != prevArena)
                 changed = true;
@@ -357,7 +357,7 @@ void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, const u32 dep
 }
 
 void LayoutOptimizer::markFieldArenaUsage(const TypeRef& fieldType, FieldDecl& field, const ClassDecl& classDecl, b8& inOutNeedsClassArena)const noexcept{
-    if(classDecl.isSerialize || !classDecl.subsystemTypeName.empty() || !classDecl.componentAssetTypeName.empty())
+    if(classDecl.isSerialize || !classDecl.subsystemTypeName.empty())
         return;
     if(m_symbols.resolveRefMode(&fieldType) == ParamPassingMode::None){
         const TypeRef* unwrapped = m_symbols.unwrapTypeAlias(&fieldType);
@@ -390,6 +390,9 @@ b8 LayoutOptimizer::computeClassLayout(ClassDecl& classDecl, MVector<ParseError>
         return false;
     }
 
+    if(!classDecl.systemTypeName.empty())
+        classDecl.needsClassArena = true;
+
     classDecl.orderedFields.clear();
     classDecl.orderedFields.reserve(classDecl.fields.size());
 
@@ -415,8 +418,8 @@ b8 LayoutOptimizer::computeClassLayout(ClassDecl& classDecl, MVector<ParseError>
         classDecl.orderedFields.push_back(field);
     }
 
-    const b8 hasMotherArenaPointer = !classDecl.isSerialize && !classDecl.isArenaOwner && classDecl.subsystemTypeName.empty() && classDecl.componentAssetTypeName.empty() && classDecl.needsClassArena;
-    finalizeClassFieldLayouts(classDecl.isSerialize, !classDecl.implementedInterfaces.empty() || !classDecl.assetTypeName.empty(), hasMotherArenaPointer, classDecl.orderedFields, classDecl.totalSize, classDecl.totalAlign);
+    const b8 hasMotherArenaPointer = !classDecl.isSerialize && !classDecl.usesStaticClassArena() && classDecl.subsystemTypeName.empty() && classDecl.needsClassArena;
+    finalizeClassFieldLayouts(classDecl.isSerialize, !classDecl.implementedInterfaces.empty() || !classDecl.assetTypeName.empty() || !classDecl.systemTypeName.empty(), hasMotherArenaPointer, classDecl.orderedFields, classDecl.totalSize, classDecl.totalAlign);
     return true;
 }
 

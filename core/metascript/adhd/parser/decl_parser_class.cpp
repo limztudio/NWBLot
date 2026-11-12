@@ -49,7 +49,7 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const Span<const Pa
 #undef NWB_ADHD_EXPORT_CLASS_STRING_ATTRIBUTE
 #undef NWB_ADHD_EXPORT_CLASS_FLAG_ATTRIBUTE
         if(!matchedAttr){
-            m_cursor.error(attr.line, attr.column, "unsupported attribute on class; expected 'serialize', 'reflect', 'asset(\"...\")', 'subsystem(\"...\")', or 'component_asset(\"...\")'");
+            m_cursor.error(attr.line, attr.column, "unsupported attribute on class; expected 'serialize', 'reflect', 'arena', 'asset(\"...\")', 'system(\"...\")', 'subsystem(\"...\")', or 'component(\"...\")'");
             return nullptr;
         }
     }

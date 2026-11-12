@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[subsystem("mesh_subsystem")]
+[arena, subsystem("mesh_subsystem")]
 class MeshSubsystem{
     public AssetRef<VertexShader> emulationVs;
     public AssetRef<ComputeShader> objectDecodeCs;

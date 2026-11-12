@@ -181,14 +181,14 @@ namespace __hidden_tex_conv_prepared_decode{
 int Run(const int argc, char** argv){
     using namespace NWB::Tests::TextureDecodeCases;
     NWB::Log::ClientStandalone logger;
-    if(!logger.init(NWB_TEXT("tex_conv_prepared_decode"))){
-        NWB_TCERR << NWB_TEXT("[tex_conv_prepared_decode] logger.init() failed\n");
+    if(!logger.init(FOUNDATION_TEXT("tex_conv_prepared_decode"))){
+        FOUNDATION_TCERR << FOUNDATION_TEXT("[tex_conv_prepared_decode] logger.init() failed\n");
         return 1;
     }
     NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
     constexpr int s_ExpectedArgCount = 4;
     if(argc != s_ExpectedArgCount || !Decode(argv[1], argv[2], argv[3])){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv_prepared_decode: expected valid texture metadata with its paired raw sidecar, output filename, and mip index."));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("tex_conv_prepared_decode: expected valid texture metadata with its paired raw sidecar, output filename, and mip index."));
         return 1;
     }
     return 0;

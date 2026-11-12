@@ -16,7 +16,7 @@
 
 
 template<typename TargetT, typename SrcT>
-[[nodiscard]] NWB_INLINE TargetT AdhdRebindConstruct(::ArenaBase& targetArena, SrcT&& src);
+[[nodiscard]] FOUNDATION_INLINE TargetT AdhdRebindConstruct(::ArenaBase& targetArena, SrcT&& src);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -62,7 +62,7 @@ template<typename E>
 struct IsStdUnexpected<std::unexpected<E>> : TrueType{};
 
 template<typename TargetT, typename SrcT, usize... Indices>
-[[nodiscard]] NWB_INLINE TargetT RebindConstructFixedArrayImpl(::ArenaBase& targetArena, SrcT&& src, std::index_sequence<Indices...>){
+[[nodiscard]] FOUNDATION_INLINE TargetT RebindConstructFixedArrayImpl(::ArenaBase& targetArena, SrcT&& src, std::index_sequence<Indices...>){
     using Elem = typename IsFixedArray<TargetT>::Element;
     if constexpr(IsLValueReference_V<SrcT>)
         return TargetT{ ::AdhdRebindConstruct<Elem>(targetArena, src[Indices])... };
@@ -81,7 +81,7 @@ template<typename TargetT, typename SrcT, usize... Indices>
 
 
 template<typename TargetT, typename SrcT>
-[[nodiscard]] NWB_INLINE TargetT AdhdRebindConstruct(::ArenaBase& targetArena, SrcT&& src){
+[[nodiscard]] FOUNDATION_INLINE TargetT AdhdRebindConstruct(::ArenaBase& targetArena, SrcT&& src){
     if constexpr(::LeadingArenaConstructible<TargetT> && IsConstructible_V<TargetT, ::ArenaBase&, SrcT>){
         return TargetT(targetArena, Forward<SrcT>(src));
     }
@@ -229,7 +229,7 @@ template<typename TargetT, typename SrcT>
 }
 
 template<typename TargetT>
-[[nodiscard]] NWB_INLINE TargetT AdhdDefaultConstructInArena(::ArenaBase& targetArena){
+[[nodiscard]] FOUNDATION_INLINE TargetT AdhdDefaultConstructInArena(::ArenaBase& targetArena){
     if constexpr(::LeadingArenaConstructible<TargetT> && IsConstructible_V<TargetT, ::ArenaBase&>){
         return TargetT(targetArena);
     }
@@ -262,7 +262,7 @@ template<typename TargetT>
 }
 
 template<typename LhsT, typename RhsT>
-NWB_INLINE LhsT& AdhdAssign(LhsT& lhs, RhsT&& rhs){
+FOUNDATION_INLINE LhsT& AdhdAssign(LhsT& lhs, RhsT&& rhs){
     using RhsRaw = RemoveCVRef_T<RhsT>;
     if constexpr(
         requires{ typename LhsT::traits_type; lhs.get_allocator().arenaPtr(); lhs.assign(rhs.data(), rhs.size()); }
@@ -345,13 +345,13 @@ NWB_INLINE LhsT& AdhdAssign(LhsT& lhs, RhsT&& rhs){
 }
 
 template<typename LhsT, typename RhsT>
-NWB_INLINE LhsT& AdhdAssignLocked(::Futex& mutex, LhsT& lhs, RhsT&& rhs){
+FOUNDATION_INLINE LhsT& AdhdAssignLocked(::Futex& mutex, LhsT& lhs, RhsT&& rhs){
     const ::NothrowScopedLock lock(mutex);
     return AdhdAssign(lhs, Forward<RhsT>(rhs));
 }
 
 template<typename InnerT, typename RhsT>
-NWB_INLINE Optional<InnerT>& AdhdAssignOptional(::ArenaBase& targetArena, Optional<InnerT>& lhs, RhsT&& rhs){
+FOUNDATION_INLINE Optional<InnerT>& AdhdAssignOptional(::ArenaBase& targetArena, Optional<InnerT>& lhs, RhsT&& rhs){
     using RhsRaw = RemoveCVRef_T<RhsT>;
     if constexpr(IsSame_V<RhsRaw, std::nullopt_t>){
         lhs.reset();
@@ -390,13 +390,13 @@ NWB_INLINE Optional<InnerT>& AdhdAssignOptional(::ArenaBase& targetArena, Option
 }
 
 template<typename InnerT, typename RhsT>
-NWB_INLINE Optional<InnerT>& AdhdAssignOptionalLocked(::Futex& mutex, ::ArenaBase& targetArena, Optional<InnerT>& lhs, RhsT&& rhs){
+FOUNDATION_INLINE Optional<InnerT>& AdhdAssignOptionalLocked(::Futex& mutex, ::ArenaBase& targetArena, Optional<InnerT>& lhs, RhsT&& rhs){
     const ::NothrowScopedLock lock(mutex);
     return AdhdAssignOptional(targetArena, lhs, Forward<RhsT>(rhs));
 }
 
 template<typename MapT, typename KeyT>
-[[nodiscard]] NWB_INLINE typename MapT::mapped_type& AdhdMapIndex(MapT& map, KeyT&& key){
+[[nodiscard]] FOUNDATION_INLINE typename MapT::mapped_type& AdhdMapIndex(MapT& map, KeyT&& key){
     using MappedT = typename MapT::mapped_type;
     ::ArenaBase& mapArena = map.get_allocator().arena();
     if constexpr(::LeadingArenaConstructible<MappedT> && IsConstructible_V<MappedT, ::ArenaBase&>){

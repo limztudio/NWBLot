@@ -36,6 +36,10 @@ namespace SpirvEntryPointLookupResult{
 // Byte backing may be unaligned; the result borrows the original module bytes.
 [[nodiscard]] Expected<AStringView, SpirvEntryPointLookupResult::Enum> ResolveSpirvEntryPointName(BinaryByteView bytecode, AStringView entryName, ShaderType::Mask shaderType)noexcept;
 
+[[nodiscard]] inline Expected<AStringView, SpirvEntryPointLookupResult::Enum> ResolveSpirvEntryPointName(const Span<const u8> bytecode, const AStringView entryName, const ShaderType::Mask shaderType)noexcept{
+    return ResolveSpirvEntryPointName(BinaryByteView{ bytecode.data(), bytecode.size() }, entryName, shaderType);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -156,7 +156,7 @@ void OpaqueComputeEmulationPlanner::capture(
             m_regularOutputSet = *opaqueComputeEmulationOutputSetResult;
     }
     if(opaqueComputeEmulationPlanCaptured && !m_regularOutputOwned)
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned opaque compute-emulation output states"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare graph-owned opaque compute-emulation output states"));
     gbufferPayload.regularComputeEmulationOutputStatesGraphOwned = m_regularOutputOwned;
 
     // A persistent generated-vertex buffer is normally a local dispatch/raster bridge.
@@ -179,7 +179,7 @@ void OpaqueComputeEmulationPlanner::capture(
             m_sharedOutput = *opaqueSharedComputeEmulationOutputResult;
     }
     if(opaqueSharedComputeEmulationPlanCaptured && !m_sharedOutputOwned)
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned shared opaque compute-emulation output state"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare graph-owned shared opaque compute-emulation output state"));
     gbufferPayload.regularSharedComputeEmulationDrawsGraphOwned = m_sharedOutputOwned;
     gbufferPayload.regularSharedComputeEmulationTiming = m_sharedOutputOwned ? &opaqueRegularSharedComputeEmulationTiming : nullptr;
 
@@ -207,7 +207,7 @@ void OpaqueComputeEmulationPlanner::capture(
             m_csgOutputSet = *opaqueCsgReceiverComputeEmulationOutputSetResult;
     }
     if(opaqueCsgReceiverComputeEmulationPlanCaptured && !m_csgOutputOwned)
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned opaque CSG receiver compute-emulation output states"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare graph-owned opaque CSG receiver compute-emulation output states"));
     gbufferPayload.csgReceiverComputeEmulationOutputStatesGraphOwned = m_csgOutputOwned;
 }
 
@@ -259,7 +259,7 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareRegular(
     ;
     const auto taskResult = m_graph.addTask< ECSRenderDetail::OpaqueRegularComputeEmulationGraphTask >(opaqueComputeEmulationDesc, Move(payload));
     if(!taskResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque compute-emulation producer"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare opaque compute-emulation producer"));
         return MakeUnexpected(Failure{});
     }
     return *taskResult;
@@ -318,7 +318,7 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareCsgRecei
     ;
     const auto taskResult = m_graph.addTask< ECSRenderDetail::OpaqueCsgReceiverComputeEmulationGraphTask >(opaqueCsgReceiverComputeEmulationDesc, Move(payload));
     if(!taskResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque CSG receiver compute-emulation producer"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare opaque CSG receiver compute-emulation producer"));
         return MakeUnexpected(Failure{});
     }
     return *taskResult;
@@ -361,7 +361,7 @@ Expected<OpaqueSharedComputeEmulationChainResult> OpaqueSharedComputeEmulationCh
     NWB_DEFINE_SHARED_COMPUTE_EMULATION_PHASE_TABLES("render.graphics_prefix.opaque", "Opaque");
     const usize phaseCount = SharedComputeEmulationPhaseCountForDrawCount(inputs.plan.drawCount);
     if(!IsSupportedSharedComputeEmulationPhaseCount(phaseCount) || phaseCount > tasks.size()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: invalid shared opaque compute-emulation phase count"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: invalid shared opaque compute-emulation phase count"));
         return MakeUnexpected(Failure{});
     }
     Core::GpuTaskId dependency = inputs.gbufferTask;
@@ -381,7 +381,7 @@ Expected<OpaqueSharedComputeEmulationChainResult> OpaqueSharedComputeEmulationCh
         );
         if(!phaseTask){
             tasks[phaseIndex] = {};
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shared opaque compute-emulation phase"));
+            NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare shared opaque compute-emulation phase"));
             return MakeUnexpected(Failure{});
         }
         tasks[phaseIndex] = *phaseTask;
@@ -587,7 +587,7 @@ Expected<Core::GpuTaskId> PostGbufferNormalizeBuilder::declare(const PostGbuffer
         }
     );
     if(!graphicsPrefixTaskResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare post-G-buffer normalization task"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("RendererSystem: could not declare post-G-buffer normalization task"));
         return MakeUnexpected(Failure{});
     }
     return *graphicsPrefixTaskResult;

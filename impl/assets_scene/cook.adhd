@@ -101,7 +101,7 @@ namespace SceneAssetCook{
 
 
 template<typename AssetT, typename EntryT>
-[[nodiscard]] NWB_INLINE Expected<AssetT> BuildComponentAssetFromEntry(const EntryT& entry, Core::Assets::AssetArena& arena){
+[[nodiscard]] FOUNDATION_INLINE Expected<AssetT> BuildComponentAssetFromEntry(const EntryT& entry, Core::Assets::AssetArena& arena){
     AssetT asset(arena, entry.virtualPath);
     asset.component = entry.component;
     if(!asset.validatePayload())
@@ -114,9 +114,9 @@ template<
     typename AssetT,
     Core::Assets::ParseMetadataValueFn<EntryT> ParseValFn,
     const AStringView& DiagnosticPrefix,
-    typename CodecT = typename AssetT::AssetCodecType
+    typename CodecT = TypedComponentAssetCodec<AssetT>
 >
-[[nodiscard]] NWB_INLINE b8 RegisterComponentCookEntry(Core::Assets::CookEntryRegistry& registry){
+[[nodiscard]] FOUNDATION_INLINE b8 RegisterComponentCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<EntryT, AssetT, CodecT>(
         s_ComponentAssetKindLabel,
         [](const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
@@ -134,7 +134,7 @@ template<
 }
 
 template<typename EntryT, Core::Assets::ParseMetadataValueFn<EntryT> ParseValFn, const AStringView& DiagnosticPrefix>
-[[nodiscard]] NWB_INLINE b8 ExtractLeafComponentDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector&){
+[[nodiscard]] FOUNDATION_INLINE b8 ExtractLeafComponentDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector&){
     return Core::Assets::ParseCookDependencyEntry<EntryT, ParseValFn>(context, DiagnosticPrefix).has_value();
 }
 
@@ -422,7 +422,7 @@ b8 Serialize(const IComponent& component, Core::Assets::AssetBytes& outBinary){
         return false;
 
     auto& assetArena = outBinary.get_allocator().arena();
-    Core::Assets::AssetBytes payload(assetArena);
+    Vector<u8, ::ArenaBase> payload(assetArena);
     if(!component.serializeComponentPayload(payload))
         return false;
 
@@ -435,22 +435,6 @@ b8 Serialize(const IComponent& component, Core::Assets::AssetBytes& outBinary){
 
 
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 TransformComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
-    return ComponentAssetBinaryCodec().serializeTransform(component, outPayload);
-}
-
-b8 CameraComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
-    return ComponentAssetBinaryCodec().serializeCamera(component, outPayload);
-}
-
-b8 LightComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
-    return ComponentAssetBinaryCodec().serializeLight(component, outPayload);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

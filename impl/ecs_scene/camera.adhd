@@ -60,7 +60,7 @@ public:
     }
 };
 
-[[nodiscard]] NWB_INLINE SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, const f32 fallbackAspectRatio = s_CameraFallbackAspectRatio)noexcept{
+[[nodiscard]] FOUNDATION_INLINE SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, const f32 fallbackAspectRatio = s_CameraFallbackAspectRatio)noexcept{
     const auto tryBuildSceneCameraView = [fallbackAspectRatio](const Core::ECS::EntityID entity, TransformComponent& transform, CameraComponent& camera)noexcept -> Expected<SceneCameraView>{
         const auto projection = TryResolveCameraComponentProjection(transform, camera, fallbackAspectRatio);
         if(!projection)
@@ -97,7 +97,7 @@ public:
     return {};
 }
 
-[[nodiscard]] NWB_INLINE Core::ECS::EntityID CreateSceneCameraEntity(Core::ECS::World& world, const Float4& position){
+[[nodiscard]] FOUNDATION_INLINE Core::ECS::EntityID CreateSceneCameraEntity(Core::ECS::World& world, const Float4& position){
     auto cameraEntity = world.createEntity();
     cameraEntity.addComponent<TransformComponent>() = MakePositionTransformComponent(LoadFloat(position));
     cameraEntity.addComponent<CameraComponent>();

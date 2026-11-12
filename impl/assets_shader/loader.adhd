@@ -47,8 +47,8 @@ template<typename ShaderT, typename ShaderPathResolver>
     const Name* archiveStageName,
     Core::ShaderHandle& outShader
 ){
-    static_assert(Core::ShaderType::IsValid(ShaderT::s_Stage));
-    constexpr Core::ShaderType::Mask s_ShaderType = Core::ShaderType::ToMask(ShaderT::s_Stage);
+    static_assert(Core::ShaderType::IsValid(ShaderAssetTypes::s_StageForShader<ShaderT>));
+    constexpr Core::ShaderType::Mask s_ShaderType = Core::ShaderType::ToMask(ShaderAssetTypes::s_StageForShader<ShaderT>);
 
     if(outShader)
         return true;
@@ -87,7 +87,7 @@ template<typename ShaderT, typename ShaderPathResolver>
         return false;
 
     const ShaderT& shaderAsset = **loadedAsset;
-    const Core::Assets::AssetBytes& shaderBinary = shaderAsset.bytecode();
+    const auto& shaderBinary = shaderAsset.bytecode();
     FOUNDATION_ASSERT(!shaderAsset.entryPoint().empty() && !shaderBinary.empty() && (shaderBinary.size() & ShaderBinaryPayload::s_SpvWordByteMask) == 0u);
 
     Core::ShaderDesc shaderDesc;

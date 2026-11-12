@@ -259,7 +259,7 @@ void VerifyLoggerServerCrash_LinuxAssertCrashProducesObservableLoggerReport(mut 
     const Path archivePath = ArchivePath(group, stem);
     b8 externalSymbolizerAvailable = false;
     native(in spoolDirectory, in pendingDirectory, in archiveInputDirectory, in archivePath, mut testArena, mut externalSymbolizerAvailable){
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
         auto& arena = testArena.arena;
         const AStringView expectedAssertCategory(LinuxObservableAssertCategory());
         const pid_t childPid = fork();
@@ -354,7 +354,7 @@ void VerifyLoggerServerCrash_RecoverableErrorDiagnosticProducesObservableLoggerR
     const Path archivePath = ArchivePath(group, stem);
     b8 externalSymbolizerAvailable = false;
     native(in spoolDirectory, in pendingDirectory, in archiveInputDirectory, in archivePath, in errorMessage, mut testArena, mut externalSymbolizerAvailable){
-#if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
+#if defined(FOUNDATION_PLATFORM_WINDOWS) || (defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID))
         auto& arena = testArena.arena;
         PersistentArena installArena(s_RecoverableErrorInstallArena, PersistentArena::StructureAlignedSize(64u * 1024u));
         Core::Crash::CrashConfigT<PersistentArena> crashConfig(installArena);
@@ -383,7 +383,7 @@ void VerifyLoggerServerCrash_RecoverableErrorDiagnosticProducesObservableLoggerR
         ASSERT_TRUE(archive);
         ASSERT_TRUE(EnsureDirectories(archiveInputDirectory));
         EXPECT_TRUE(WriteBinaryFile(archivePath, *archive));
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
         const auto externalSymbolizer = LinuxExternalSymbolizerAvailable(arena);
         ASSERT_TRUE(externalSymbolizer);
         externalSymbolizerAvailable = *externalSymbolizer;
@@ -776,7 +776,7 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -784,11 +784,11 @@ native{
 
 namespace NWB::Tests::LoggerCrashCases{
 
-NWB_NOINLINE void LinuxForceAssertFalseForCrashObservation(){
-#if NWB_OCCUR_ASSERT
-    NWB_ASSERT(false);
+FOUNDATION_NOINLINE void LinuxForceAssertFalseForCrashObservation(){
+#if FOUNDATION_OCCUR_ASSERT
+    FOUNDATION_ASSERT(false);
 #else
-    NWB_FATAL_ASSERT(false);
+    FOUNDATION_FATAL_ASSERT(false);
 #endif
     _exit(120);
 }

@@ -185,7 +185,7 @@ b8 ShadowVisibilityTargetBuilder::build(DeferredFrameTargets& targets){
         // The lagged-history copy may run on Transfer after producers finish. Keep all three transports shareable.
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
     ;
-    if(!createShadowTarget(visibilityDesc, s_ShadowVisibilityTargetName, NWB_TEXT("RendererSystem: failed to create shadow visibility target"), targets.shadowVisibility))
+    if(!createShadowTarget(visibilityDesc, s_ShadowVisibilityTargetName, FOUNDATION_TEXT("RendererSystem: failed to create shadow visibility target"), targets.shadowVisibility))
         return false;
 
     const ShadowTargetGridExtents targetGridExtents = ResolveShadowTargetGridExtents(
@@ -207,7 +207,7 @@ b8 ShadowVisibilityTargetBuilder::build(DeferredFrameTargets& targets){
         .setIsUAV(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
     ;
-    if(!createShadowTarget(coarseDesc, s_ShadowCoarseTransmittanceTargetName, NWB_TEXT("RendererSystem: failed to create shadow coarse transmittance target"), targets.shadowCoarseTransmittance))
+    if(!createShadowTarget(coarseDesc, s_ShadowCoarseTransmittanceTargetName, FOUNDATION_TEXT("RendererSystem: failed to create shadow coarse transmittance target"), targets.shadowCoarseTransmittance))
         return false;
 
     // Ping-pong half-resolution soft visibility and geometry cache.
@@ -237,14 +237,14 @@ b8 ShadowVisibilityTargetBuilder::build(DeferredFrameTargets& targets){
 
     // Recreated history must not reproject through the previous target's matrix.
     if(
-        !createShadowTarget(softHalfDesc, s_ShadowSoftHalfATargetName, NWB_TEXT("RendererSystem: failed to create soft shadow half-A target"), targets.shadowSoftHalfA)
-        || !createShadowTarget(softHalfDesc, s_ShadowSoftHalfBTargetName, NWB_TEXT("RendererSystem: failed to create soft shadow half-B target"), targets.shadowSoftHalfB)
-        || !createShadowTarget(softGeometryDesc, s_ShadowSoftGeometryTargetName, NWB_TEXT("RendererSystem: failed to create soft shadow geometry cache target"), targets.shadowSoftGeometry)
-        || !createShadowTarget(softHalfDesc, s_ShadowHistATargetName, NWB_TEXT("RendererSystem: failed to create soft shadow temporal history-A target"), targets.shadowHistA)
-        || !createShadowTarget(softHalfDesc, s_ShadowHistBTargetName, NWB_TEXT("RendererSystem: failed to create soft shadow temporal history-B target"), targets.shadowHistB)
-        || !createShadowTarget(softHalfDesc, s_ShadowMomentsATargetName, NWB_TEXT("RendererSystem: failed to create soft shadow temporal moments-A target"), targets.shadowMomentsA)
-        || !createShadowTarget(softHalfDesc, s_ShadowMomentsBTargetName, NWB_TEXT("RendererSystem: failed to create soft shadow temporal moments-B target"), targets.shadowMomentsB)
-        || !createShadowTarget(softGeometryDesc, s_ShadowSoftGeometryPrevTargetName, NWB_TEXT("RendererSystem: failed to create soft shadow previous-frame geometry cache target"), targets.shadowSoftGeometryPrev)
+        !createShadowTarget(softHalfDesc, s_ShadowSoftHalfATargetName, FOUNDATION_TEXT("RendererSystem: failed to create soft shadow half-A target"), targets.shadowSoftHalfA)
+        || !createShadowTarget(softHalfDesc, s_ShadowSoftHalfBTargetName, FOUNDATION_TEXT("RendererSystem: failed to create soft shadow half-B target"), targets.shadowSoftHalfB)
+        || !createShadowTarget(softGeometryDesc, s_ShadowSoftGeometryTargetName, FOUNDATION_TEXT("RendererSystem: failed to create soft shadow geometry cache target"), targets.shadowSoftGeometry)
+        || !createShadowTarget(softHalfDesc, s_ShadowHistATargetName, FOUNDATION_TEXT("RendererSystem: failed to create soft shadow temporal history-A target"), targets.shadowHistA)
+        || !createShadowTarget(softHalfDesc, s_ShadowHistBTargetName, FOUNDATION_TEXT("RendererSystem: failed to create soft shadow temporal history-B target"), targets.shadowHistB)
+        || !createShadowTarget(softHalfDesc, s_ShadowMomentsATargetName, FOUNDATION_TEXT("RendererSystem: failed to create soft shadow temporal moments-A target"), targets.shadowMomentsA)
+        || !createShadowTarget(softHalfDesc, s_ShadowMomentsBTargetName, FOUNDATION_TEXT("RendererSystem: failed to create soft shadow temporal moments-B target"), targets.shadowMomentsB)
+        || !createShadowTarget(softGeometryDesc, s_ShadowSoftGeometryPrevTargetName, FOUNDATION_TEXT("RendererSystem: failed to create soft shadow previous-frame geometry cache target"), targets.shadowSoftGeometryPrev)
     )
         return false;
 
@@ -259,11 +259,11 @@ b8 ShadowVisibilityTargetBuilder::build(DeferredFrameTargets& targets){
 
     // Transparent temporal history shares geometry and the opaque history selector.
     if(
-        !createShadowTarget(softHalfDesc, s_TransparentSoftHalfTargetName, NWB_TEXT("RendererSystem: failed to create soft transparent shadow half target"), targets.transparentSoftHalf)
-        || !createShadowTarget(softHalfDesc, s_TransparentHistATargetName, NWB_TEXT("RendererSystem: failed to create soft transparent shadow history-A target"), targets.transparentHistA)
-        || !createShadowTarget(softHalfDesc, s_TransparentHistBTargetName, NWB_TEXT("RendererSystem: failed to create soft transparent shadow history-B target"), targets.transparentHistB)
-        || !createShadowTarget(softHalfDesc, s_TransparentMomentsATargetName, NWB_TEXT("RendererSystem: failed to create soft transparent shadow moments-A target"), targets.transparentMomentsA)
-        || !createShadowTarget(softHalfDesc, s_TransparentMomentsBTargetName, NWB_TEXT("RendererSystem: failed to create soft transparent shadow moments-B target"), targets.transparentMomentsB)
+        !createShadowTarget(softHalfDesc, s_TransparentSoftHalfTargetName, FOUNDATION_TEXT("RendererSystem: failed to create soft transparent shadow half target"), targets.transparentSoftHalf)
+        || !createShadowTarget(softHalfDesc, s_TransparentHistATargetName, FOUNDATION_TEXT("RendererSystem: failed to create soft transparent shadow history-A target"), targets.transparentHistA)
+        || !createShadowTarget(softHalfDesc, s_TransparentHistBTargetName, FOUNDATION_TEXT("RendererSystem: failed to create soft transparent shadow history-B target"), targets.transparentHistB)
+        || !createShadowTarget(softHalfDesc, s_TransparentMomentsATargetName, FOUNDATION_TEXT("RendererSystem: failed to create soft transparent shadow moments-A target"), targets.transparentMomentsA)
+        || !createShadowTarget(softHalfDesc, s_TransparentMomentsBTargetName, FOUNDATION_TEXT("RendererSystem: failed to create soft transparent shadow moments-B target"), targets.transparentMomentsB)
     )
         return false;
 
@@ -280,7 +280,7 @@ b8 ShadowVisibilityTargetBuilder::build(DeferredFrameTargets& targets){
             .transparentOutput = targets.shadowSoftHalfA.get(),
         };
         if(!waveletInputs.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: soft-shadow target allocation produced aliased resolve resources"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: soft-shadow target allocation produced aliased resolve resources"));
             return false;
         }
     }
@@ -301,7 +301,7 @@ b8 ShadowVisibilityTargetBuilder::build(DeferredFrameTargets& targets){
     ;
     auto edgeListBufferResult = m_graphics.createBuffer(edgeListDesc);
     if(!edgeListBufferResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create SW shadow edge-list buffer"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create SW shadow edge-list buffer"));
         m_rayTracingState.m_swShadowEdgeListCapacity = 0u;
         return false;
     }
@@ -309,7 +309,7 @@ b8 ShadowVisibilityTargetBuilder::build(DeferredFrameTargets& targets){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || !RayTracingDetail::ReplaceHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, true, heap, *edgeListBuffer.get(), m_rayTracingState.m_swShadowEdgeListHeapHandle)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register SW shadow edge-list buffer in the descriptor heap"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register SW shadow edge-list buffer in the descriptor heap"));
         m_rayTracingState.m_swShadowEdgeListCapacity = 0u;
         return false;
     }
@@ -442,7 +442,7 @@ void SoftShadowTemporalMergeRecorder::record(
     const b8 graphOwnsMergeTemporalEntryStates
 )const{
     const u32 historyValid = EncodeShadowHistoryValidFlag(m_historyReadable);
-    NWB_ASSERT(resources.softTrace && resources.historyIn && resources.momentsIn && resources.historyOut && resources.momentsOut);
+    FOUNDATION_ASSERT(resources.softTrace && resources.historyIn && resources.momentsIn && resources.historyOut && resources.momentsOut);
     if(!graphOwnsSoftTraceInputState)
         m_commandList.setTextureState(resources.softTrace, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
     if(!graphOwnsMergeTemporalEntryStates){

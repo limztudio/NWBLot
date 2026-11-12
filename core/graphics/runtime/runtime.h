@@ -77,7 +77,7 @@ public:
     b8 setSwapChainReadbackEnabled(b8 enabled)noexcept;
     b8 setBindlessHeapAbi(const GpuDescriptorHeapAbi& abi)noexcept;
     template<typename ArenaT>
-    NWB_INLINE void setPipelineCacheDirectory(const ::Path<ArenaT>& directory){ m_deviceCreationParams.pipelineCacheDirectory = directory; }
+    FOUNDATION_INLINE void setPipelineCacheDirectory(const ::Path<ArenaT>& directory){ m_deviceCreationParams.pipelineCacheDirectory = directory; }
     b8 setFilesystemFactory(const Filesystem::FilesystemFactory& factory);
     // Holds the update/event loop while runFrame records nothing, so an external capture can sample the last finished frame.
     void setFrameSubmissionSuspended(b8 suspended)noexcept{ m_frameSubmissionSuspended = suspended; }

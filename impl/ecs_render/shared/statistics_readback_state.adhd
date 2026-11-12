@@ -183,7 +183,7 @@ template<typename StateT>
 using StatisticsControlHandle = RefCountPtr< RefCounter<StateT>, ArenaRefDeleter<RefCounter<StateT>, Core::Alloc::GlobalArena> >;
 
 template<typename ControlT>
-[[nodiscard]] NWB_INLINE Expected<RefCountPtr<ControlT, ArenaRefDeleter<ControlT, Core::Alloc::GlobalArena>>> CreateStatisticsControl(Core::Alloc::GlobalArena& arena, const u16 deviceGeneration)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Expected<RefCountPtr<ControlT, ArenaRefDeleter<ControlT, Core::Alloc::GlobalArena>>> CreateStatisticsControl(Core::Alloc::GlobalArena& arena, const u16 deviceGeneration)noexcept{
     using HandleT = RefCountPtr<ControlT, ArenaRefDeleter<ControlT, Core::Alloc::GlobalArena>>;
     auto control = HandleT(NewArenaObject<ControlT>(arena, deviceGeneration), ArenaRefDeleter<ControlT, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
     if(!control)

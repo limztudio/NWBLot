@@ -19,7 +19,7 @@ namespace SimdOptimizationBenchmark{
 namespace VectorKernels{
 
 template<b8 Candidate>
-NWB_INLINE SIMDMatrixDouble RotationX(const f64 angle)noexcept{
+FOUNDATION_INLINE SIMDMatrixDouble RotationX(const f64 angle)noexcept{
     if constexpr(Candidate)
         return MatrixDoubleRotationX(angle);
     SIMDVectorDouble sine{}, cosine{};
@@ -33,7 +33,7 @@ NWB_INLINE SIMDMatrixDouble RotationX(const f64 angle)noexcept{
 }
 
 template<b8 Candidate>
-NWB_INLINE SIMDMatrixDouble PerspectiveFov(const f64 angle)noexcept{
+FOUNDATION_INLINE SIMDMatrixDouble PerspectiveFov(const f64 angle)noexcept{
     if constexpr(Candidate)
         return MatrixDoublePerspectiveFovLH(angle, 1.75, 0.125, 100.0);
     SIMDVectorDouble sine{}, cosine{};
@@ -51,7 +51,7 @@ NWB_INLINE SIMDMatrixDouble PerspectiveFov(const f64 angle)noexcept{
 }
 
 template<b8 Candidate>
-NWB_INLINE SIMDVectorDouble QuaternionNormal(const f64 angle, const SIMDVectorDouble normal = VectorDoubleSet(0.25, -0.5, 0.75, 0.0))noexcept{
+FOUNDATION_INLINE SIMDVectorDouble QuaternionNormal(const f64 angle, const SIMDVectorDouble normal = VectorDoubleSet(0.25, -0.5, 0.75, 0.0))noexcept{
     if constexpr(Candidate)
         return QuaternionDoubleRotationNormal(normal, angle);
     const SIMDVectorDouble n = VectorDoubleSelect(s_DoubleSIMDIdentityR3, normal, s_DoubleSIMDSelect1110);
@@ -61,7 +61,7 @@ NWB_INLINE SIMDVectorDouble QuaternionNormal(const f64 angle, const SIMDVectorDo
 }
 
 template<u32 KindIndex, b8 Candidate>
-NWB_INLINE SIMDVectorDouble Reduce(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+FOUNDATION_INLINE SIMDVectorDouble Reduce(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
     if constexpr(KindIndex == 0u){
         if constexpr(Candidate)
             return VectorDouble2Dot(lhs, rhs);
@@ -89,13 +89,13 @@ NWB_INLINE SIMDVectorDouble Reduce(const SIMDVectorDouble lhs, const SIMDVectorD
 }
 
 template<u32 KindIndex, b8 Candidate>
-NWB_NOINLINE SIMDVectorDouble Evaluate(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+FOUNDATION_NOINLINE SIMDVectorDouble Evaluate(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
 #pragma STDC FENV_ACCESS ON
     return Reduce<KindIndex, Candidate>(lhs, rhs);
 }
 
 template<u32 KindIndex, b8 Candidate>
-NWB_NOINLINE SIMDMatrixDouble EvaluateFactory(const f64 angle)noexcept{
+FOUNDATION_NOINLINE SIMDMatrixDouble EvaluateFactory(const f64 angle)noexcept{
 #pragma STDC FENV_ACCESS ON
     if constexpr(KindIndex == 4u)
         return RotationX<Candidate>(angle);
@@ -109,13 +109,13 @@ NWB_NOINLINE SIMDMatrixDouble EvaluateFactory(const f64 angle)noexcept{
 }
 
 template<b8 Candidate>
-NWB_NOINLINE SIMDVectorDouble EvaluateQuaternionAxis(const SIMDVectorDouble axis, const f64 angle)noexcept{
+FOUNDATION_NOINLINE SIMDVectorDouble EvaluateQuaternionAxis(const SIMDVectorDouble axis, const f64 angle)noexcept{
 #pragma STDC FENV_ACCESS ON
     return QuaternionNormal<Candidate>(angle, axis);
 }
 
 template<u32 KindIndex, b8 Candidate, typename DatasetT>
-NWB_NOINLINE SIMDVectorDouble RunWorkload(const DatasetT& data, const usize dataCount, const usize iterations, const b8 latency)noexcept{
+FOUNDATION_NOINLINE SIMDVectorDouble RunWorkload(const DatasetT& data, const usize dataCount, const usize iterations, const b8 latency)noexcept{
     if constexpr(KindIndex <= 3u){
         if(!latency){
             return ThroughputWorkload<8u>(
@@ -153,7 +153,7 @@ NWB_NOINLINE SIMDVectorDouble RunWorkload(const DatasetT& data, const usize data
 namespace VectorKernels{
 
 template<b8 Candidate, u32 Index = 0u>
-[[nodiscard]] NWB_INLINE SIMDVectorDouble DispatchEvaluate(const u32 kindIndex, const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
+[[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble DispatchEvaluate(const u32 kindIndex, const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
     if(kindIndex == Index)
         return Evaluate<Index, Candidate>(lhs, rhs);
     if constexpr(Index + 1u < 4u)
@@ -163,7 +163,7 @@ template<b8 Candidate, u32 Index = 0u>
 }
 
 template<b8 Candidate, typename DatasetT, u32 Index = 0u>
-[[nodiscard]] NWB_INLINE SIMDVectorDouble DispatchWorkload(const u32 kindIndex, const DatasetT& data, const usize dataCount, const usize iterations, const b8 latency)noexcept{
+[[nodiscard]] FOUNDATION_INLINE SIMDVectorDouble DispatchWorkload(const u32 kindIndex, const DatasetT& data, const usize dataCount, const usize iterations, const b8 latency)noexcept{
     if(kindIndex == Index)
         return RunWorkload<Index, Candidate>(data, dataCount, iterations, latency);
     if constexpr(Index + 1u < 7u)
@@ -174,7 +174,7 @@ template<b8 Candidate, typename DatasetT, u32 Index = 0u>
 
 }
 
-NWB_INLINE void EvaluateVectorKernel(const u32 kindIndex, const b8 candidate, const SIMDVectorDouble lhs, const SIMDVectorDouble rhs, UInt64x4& outBits)noexcept{
+FOUNDATION_INLINE void EvaluateVectorKernel(const u32 kindIndex, const b8 candidate, const SIMDVectorDouble lhs, const SIMDVectorDouble rhs, UInt64x4& outBits)noexcept{
     const SIMDVectorDouble result = candidate
         ? VectorKernels::DispatchEvaluate<true>(kindIndex, lhs, rhs)
         : VectorKernels::DispatchEvaluate<false>(kindIndex, lhs, rhs);
@@ -182,7 +182,7 @@ NWB_INLINE void EvaluateVectorKernel(const u32 kindIndex, const b8 candidate, co
 }
 
 template<typename DatasetT>
-NWB_INLINE void RunVectorWorkloadKernel(const u32 kindIndex, const b8 candidate, const DatasetT& data, const usize dataCount, const usize iterations, const b8 latency, UInt64x4& outBits)noexcept{
+FOUNDATION_INLINE void RunVectorWorkloadKernel(const u32 kindIndex, const b8 candidate, const DatasetT& data, const usize dataCount, const usize iterations, const b8 latency, UInt64x4& outBits)noexcept{
     const SIMDVectorDouble result = candidate
         ? VectorKernels::DispatchWorkload<true>(kindIndex, data, dataCount, iterations, latency)
         : VectorKernels::DispatchWorkload<false>(kindIndex, data, dataCount, iterations, latency);
@@ -190,7 +190,7 @@ NWB_INLINE void RunVectorWorkloadKernel(const u32 kindIndex, const b8 candidate,
 }
 
 template<u32 KindIndex>
-[[nodiscard]] NWB_INLINE b8 CompareVectorFactoryPairImpl(const u64 angleBits, b8& outMatch, i32& outExpectedFlags, i32& outActualFlags, i32& outExpectedErrno, i32& outActualErrno)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 CompareVectorFactoryPairImpl(const u64 angleBits, b8& outMatch, i32& outExpectedFlags, i32& outActualFlags, i32& outExpectedErrno, i32& outActualErrno)noexcept{
 #pragma STDC FENV_ACCESS ON
     const f64 angle = BitCast<f64>(angleBits);
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
@@ -214,7 +214,7 @@ template<u32 KindIndex>
     return true;
 }
 
-[[nodiscard]] NWB_INLINE b8 CompareVectorFactoryPair(const u32 kindIndex, const u64 angleBits, b8& outMatch, i32& outExpectedFlags, i32& outActualFlags, i32& outExpectedErrno, i32& outActualErrno)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 CompareVectorFactoryPair(const u32 kindIndex, const u64 angleBits, b8& outMatch, i32& outExpectedFlags, i32& outActualFlags, i32& outExpectedErrno, i32& outActualErrno)noexcept{
     if(kindIndex == 4u)
         return CompareVectorFactoryPairImpl<4u>(angleBits, outMatch, outExpectedFlags, outActualFlags, outExpectedErrno, outActualErrno);
     if(kindIndex == 5u)
@@ -222,7 +222,7 @@ template<u32 KindIndex>
     return CompareVectorFactoryPairImpl<6u>(angleBits, outMatch, outExpectedFlags, outActualFlags, outExpectedErrno, outActualErrno);
 }
 
-[[nodiscard]] NWB_INLINE b8 CompareQuaternionAxisPair(const SIMDVectorDouble axis, const u64 angleBits, b8& outMatch, i32& outExpectedFlags, i32& outActualFlags, i32& outExpectedErrno, i32& outActualErrno)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 CompareQuaternionAxisPair(const SIMDVectorDouble axis, const u64 angleBits, b8& outMatch, i32& outExpectedFlags, i32& outActualFlags, i32& outExpectedErrno, i32& outActualErrno)noexcept{
 #pragma STDC FENV_ACCESS ON
     const f64 angle = BitCast<f64>(angleBits);
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))

@@ -39,7 +39,7 @@ namespace ECSRenderDetail{
 
 
 template<typename Result, typename Statistics>
-[[nodiscard]] NWB_INLINE Result TranslateFrameGraphSubmissionStatistics(const Statistics& submissionStatistics)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Result TranslateFrameGraphSubmissionStatistics(const Statistics& submissionStatistics)noexcept{
     return {
         .acceptedPacketCount = static_cast<u64>(submissionStatistics.acceptedPacketCount),
         .acceptedTaskCount = static_cast<u64>(submissionStatistics.acceptedTaskCount),
@@ -60,7 +60,7 @@ template<typename Result, typename Statistics>
 }
 
 template<typename Result, typename Statistics>
-[[nodiscard]] NWB_INLINE Result TranslateFrameGraphRecordingStatistics(const Statistics& recordingStatistics)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Result TranslateFrameGraphRecordingStatistics(const Statistics& recordingStatistics)noexcept{
     Result result{
         .packetCount = static_cast<u64>(recordingStatistics.packetCount),
         .taskCount = static_cast<u64>(recordingStatistics.taskCount),
@@ -82,7 +82,7 @@ template<typename Result, typename Statistics>
     return result;
 }
 
-[[nodiscard]] NWB_INLINE Core::Telemetry::FrameGraphRuntimeStatistics BuildFrameGraphRuntimeStatistics(const Core::GpuTaskGraphRuntimeStatistics& statistics, const u64 captureFrameIndex, const u64 sourceFrameIndex)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::Telemetry::FrameGraphRuntimeStatistics BuildFrameGraphRuntimeStatistics(const Core::GpuTaskGraphRuntimeStatistics& statistics, const u64 captureFrameIndex, const u64 sourceFrameIndex)noexcept{
     if(!statistics.valid() || captureFrameIndex != sourceFrameIndex)
         return {};
 
@@ -149,7 +149,7 @@ template<typename Result, typename Statistics>
     return result;
 }
 
-[[nodiscard]] NWB_INLINE Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord BuildFrameGraphPacketSubmissionStatistics(const Core::GpuTaskGraphPacketSubmissionStatistics& statistics, const u32 ownerNodeIndex)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord BuildFrameGraphPacketSubmissionStatistics(const Core::GpuTaskGraphPacketSubmissionStatistics& statistics, const u32 ownerNodeIndex)noexcept{
     if(!CanBuildPacketSubmissionTelemetry(statistics.valid(), ownerNodeIndex))
         return {};
 
@@ -179,7 +179,7 @@ template<typename Result, typename Statistics>
     return result;
 }
 
-[[nodiscard]] NWB_INLINE Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics BuildFrameGraphPhysicalQueueRuntimeStatistics(
+[[nodiscard]] FOUNDATION_INLINE Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics BuildFrameGraphPhysicalQueueRuntimeStatistics(
     const Core::GpuTaskGraphPhysicalQueueCompileStatistics& compileStatistics,
     const Core::GpuTaskGraphPhysicalQueueRecordingStatistics& recordingStatistics,
     const Core::GpuTaskGraphPhysicalQueueSubmissionStatistics& submissionStatistics

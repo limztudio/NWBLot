@@ -180,7 +180,7 @@ public:
     }
 };
 
-NWB_INLINE MeshSkinningResourceBuffers CaptureMeshSkinningResourceBuffers(const MeshSkinningRuntimeInstance& instance)noexcept{
+FOUNDATION_INLINE MeshSkinningResourceBuffers CaptureMeshSkinningResourceBuffers(const MeshSkinningRuntimeInstance& instance)noexcept{
     return {
         instance.restPositionBuffer,
         instance.restNormalBuffer,

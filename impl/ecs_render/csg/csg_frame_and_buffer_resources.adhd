@@ -363,7 +363,7 @@ CsgFrameState RendererCsgSystem::buildFrameState(Core::Alloc::ScratchArena& scra
 b8 RendererCsgSystem::createCsgClipResources(){
     auto& device = m_graphics.getDevice();
     if(!RendererComputePipelineDetail::EnsurePushConstantBindingLayout(m_arena, device, sizeof(ShaderDrivenPushConstants), Core::ShaderType::Mesh | Core::ShaderType::Compute | Core::ShaderType::Pixel, m_csgState.m_clipBindingLayout)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG clip binding layout"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create CSG clip binding layout"));
         return false;
     }
 
@@ -378,7 +378,7 @@ b8 RendererCsgSystem::createCsgClipResources(){
         else
             m_csgState.m_clipContextSlotsBuffer.reset();
         if(!clipContextSlotsBufferResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG clip-context slot buffer"));
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create CSG clip-context slot buffer"));
             return false;
         }
     }
@@ -412,7 +412,7 @@ b8 RendererCsgSystem::createCsgIntervalSampleStateBuffer(){
     else
         m_csgState.m_intervalSampleStateBuffer.reset();
     if(!intervalSampleStateBufferResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG interval sample state buffer"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create CSG interval sample state buffer"));
         return false;
     }
 
@@ -422,12 +422,12 @@ b8 RendererCsgSystem::createCsgIntervalSampleStateBuffer(){
 b8 RendererCsgSystem::reserveCsgReceiverRangeBufferCapacity(const usize rangeCount){
     const usize oldCapacity = m_csgState.m_receiverRangeBufferCapacity;
     if(!__hidden_csg_frame_and_buffer_resources::ReserveCsgStructuredBuffer(rangeCount, sizeof(CsgReceiverRangeGpuData), s_CsgReceiverRangeBufferName, m_graphics, m_csgState.m_receiverRangeBuffer, m_csgState.m_receiverRangeBufferCapacity)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG receiver range buffer"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create CSG receiver range buffer"));
         return false;
     }
 
     if(m_csgState.m_receiverRangeBufferCapacity != oldCapacity && !__hidden_csg_frame_and_buffer_resources::ReplaceCsgStorageBufferHeapHandle(m_graphics.getDevice(), *m_csgState.m_receiverRangeBuffer.get(), m_csgState.m_receiverRangeBufferHeapHandle)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register replacement CSG receiver range buffer in the descriptor heap"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register replacement CSG receiver range buffer in the descriptor heap"));
         return false;
     }
     return true;
@@ -436,12 +436,12 @@ b8 RendererCsgSystem::reserveCsgReceiverRangeBufferCapacity(const usize rangeCou
 b8 RendererCsgSystem::reserveCsgCutterBufferCapacity(const usize cutterCount){
     const usize oldCapacity = m_csgState.m_cutterBufferCapacity;
     if(!__hidden_csg_frame_and_buffer_resources::ReserveCsgStructuredBuffer(cutterCount, sizeof(CsgCutterGpuData), s_CsgCutterBufferName, m_graphics, m_csgState.m_cutterBuffer, m_csgState.m_cutterBufferCapacity)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG cutter buffer"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to create CSG cutter buffer"));
         return false;
     }
 
     if(m_csgState.m_cutterBufferCapacity != oldCapacity && !__hidden_csg_frame_and_buffer_resources::ReplaceCsgStorageBufferHeapHandle(m_graphics.getDevice(), *m_csgState.m_cutterBuffer.get(), m_csgState.m_cutterBufferHeapHandle)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register replacement CSG cutter buffer in the descriptor heap"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: failed to register replacement CSG cutter buffer in the descriptor heap"));
         return false;
     }
     return true;
@@ -450,8 +450,8 @@ b8 RendererCsgSystem::reserveCsgCutterBufferCapacity(const usize cutterCount){
 b8 RendererCsgSystem::prepareCsgFrameResources(const usize receiverRangeCount, const usize cutterCount){
     if(receiverRangeCount == 0u || cutterCount == 0u)
         return true;
-    NWB_ASSERT(receiverRangeCount <= static_cast<usize>(Limit<u32>::s_Max));
-    NWB_ASSERT(cutterCount <= static_cast<usize>(Limit<u32>::s_Max));
+    FOUNDATION_ASSERT(receiverRangeCount <= static_cast<usize>(Limit<u32>::s_Max));
+    FOUNDATION_ASSERT(cutterCount <= static_cast<usize>(Limit<u32>::s_Max));
     if(!reserveCsgReceiverRangeBufferCapacity(receiverRangeCount) || !reserveCsgCutterBufferCapacity(cutterCount))
         return false;
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
@@ -462,19 +462,19 @@ b8 RendererCsgSystem::prepareCsgFrameResources(const usize receiverRangeCount, c
         || !m_csgState.m_clipContextSlotsBuffer || !m_csgState.m_clipContextSlotsHeapHandle.valid()
         || !m_csgState.m_intervalSampleStateBuffer || !m_csgState.m_intervalSampleStateHeapHandle.valid()
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG clip context heap registration is incomplete"));
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("RendererSystem: CSG clip context heap registration is incomplete"));
         return false;
     }
     if(!m_csgState.m_clipBindingLayout)
         return false;
 
     // Draw paths consume these handles only via a graph snapshot.
-    NWB_ASSERT(m_csgState.m_receiverRangeBufferCapacity >= receiverRangeCount);
-    NWB_ASSERT(m_csgState.m_cutterBufferCapacity >= cutterCount);
-    NWB_ASSERT(m_csgState.m_receiverRangeBufferHeapHandle.valid());
-    NWB_ASSERT(m_csgState.m_cutterBufferHeapHandle.valid());
-    NWB_ASSERT(m_csgState.m_clipContextSlotsHeapHandle.valid());
-    NWB_ASSERT(m_csgState.m_intervalSampleStateHeapHandle.valid());
+    FOUNDATION_ASSERT(m_csgState.m_receiverRangeBufferCapacity >= receiverRangeCount);
+    FOUNDATION_ASSERT(m_csgState.m_cutterBufferCapacity >= cutterCount);
+    FOUNDATION_ASSERT(m_csgState.m_receiverRangeBufferHeapHandle.valid());
+    FOUNDATION_ASSERT(m_csgState.m_cutterBufferHeapHandle.valid());
+    FOUNDATION_ASSERT(m_csgState.m_clipContextSlotsHeapHandle.valid());
+    FOUNDATION_ASSERT(m_csgState.m_intervalSampleStateHeapHandle.valid());
     return true;
 }
 

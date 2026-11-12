@@ -46,7 +46,7 @@ NWB_LOG_BEGIN
 
 
 class Frame{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     using NativeFrameData = Core::Common::WinFrame;
 #else
     using NativeFrameData = Core::Common::FrameData;
@@ -70,7 +70,7 @@ public:
 
 public:
     template<typename T>
-    NWB_INLINE T& data()noexcept{ return static_cast<T&>(m_data); }
+    inline T& data()noexcept{ return static_cast<T&>(m_data); }
 
 
 private:
@@ -239,12 +239,12 @@ native{
 #include <global/thread.h>
 #include <global/unique_ptr.h>
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #endif
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <windows.h>
 #endif
 
@@ -258,7 +258,7 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_LINUX)
 namespace FrameDetail{
 
 
@@ -281,7 +281,7 @@ static void SignalHandler(i32)noexcept{
 void Frame::Print(BasicStringView<tchar> str, Core::Common::LogType::Enum type){
     ScopedLock lock(FrameDetail::s_PrintMutex);
 
-    auto& stream = Log::MessageTypeWritesToErrorStream(type) ? NWB_TCERR : NWB_TCOUT;
+    auto& stream = Log::MessageTypeWritesToErrorStream(type) ? FOUNDATION_TCERR : FOUNDATION_TCOUT;
     stream << str << static_cast<tchar>('\n');
     stream.flush();
 }
@@ -303,7 +303,7 @@ b8 Frame::init()noexcept{
 }
 
 void Frame::showFrame(){
-    NWB_COUT << s_LinuxConsoleStartupBanner << '\n';
+    FOUNDATION_COUT << s_LinuxConsoleStartupBanner << '\n';
 }
 
 b8 Frame::mainLoop()noexcept{
@@ -318,7 +318,7 @@ b8 Frame::mainLoop()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 namespace FrameDetail{
 
 
@@ -477,11 +477,11 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
         case WM_CREATE:
         {
-            s_Font = CreateFont(LogRowPainter::s_FontHeight, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, NWB_TEXT("Terminal"));
+            s_Font = CreateFont(LogRowPainter::s_FontHeight, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, FOUNDATION_TEXT("Terminal"));
             if(!s_Font)
                 CaptureDiagnosticEvent(s_LogServerValueFrameWinLifecycleDiagnosticCategory, "Log server: failed to create its font; using the system font", __FILE__, __LINE__);
 
-            const HWND listHwnd = CreateWindowEx(0, NWB_TEXT("LISTBOX"), nullptr, WS_CHILD | WS_VISIBLE | LBS_OWNERDRAWVARIABLE | WS_VSCROLL | LBS_NOTIFY, 0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(1), frame->data<Core::Common::WinFrame>().instance(), nullptr);
+            const HWND listHwnd = CreateWindowEx(0, FOUNDATION_TEXT("LISTBOX"), nullptr, WS_CHILD | WS_VISIBLE | LBS_OWNERDRAWVARIABLE | WS_VSCROLL | LBS_NOTIFY, 0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(1), frame->data<Core::Common::WinFrame>().instance(), nullptr);
             if(!listHwnd){
                 CaptureDiagnosticEvent(s_LogServerValueFrameWinLifecycleDiagnosticCategory, "Log server: failed to create its message list", __FILE__, __LINE__);
                 return -1;
@@ -624,8 +624,8 @@ Frame::~Frame()noexcept{
 }
 
 b8 Frame::init(){
-    static constexpr TStringView s_WindowClassName = NWB_TEXT("NWB_LOGGER");
-    static constexpr TStringView s_WindowTitle = NWB_TEXT("NWBLogger");
+    static constexpr TStringView s_WindowClassName = FOUNDATION_TEXT("NWB_LOGGER");
+    static constexpr TStringView s_WindowTitle = FOUNDATION_TEXT("NWBLogger");
     constexpr DWORD s_WindowExtendedStyle = 0;
     constexpr DWORD s_WindowStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SIZEBOX;
 
@@ -795,7 +795,7 @@ public:
         if(!reserve(requiredSize))
             return false;
 
-        NWB_MEMCPY(buffer + size, appendSize, uploadData.data(), appendSize);
+        FOUNDATION_MEMCPY(buffer + size, appendSize, uploadData.data(), appendSize);
         size = requiredSize;
         return true;
     }
@@ -848,12 +848,12 @@ public:
     }
 };
 
-inline constexpr TStringView s_ServerName = NWB_TEXT("Server");
+inline constexpr TStringView s_ServerName = FOUNDATION_TEXT("Server");
 
 static void DestroyConnectionInfo(ConnectionInfo*& info, void*& connectionContext)noexcept;
 
 static void EnqueueServerMessage(Server& server, const TStringView message, const Core::Common::LogType::Enum type){
-    server.enqueue(StringFormat(server.arena(), NWB_TEXT("{} on {}"), message, s_ServerName), type);
+    server.enqueue(StringFormat(server.arena(), FOUNDATION_TEXT("{} on {}"), message, s_ServerName), type);
 }
 
 [[nodiscard]] static MHD_Result QueueEmptyResponse(Server& server, MHD_Connection& connection, const unsigned int statusCode = MHD_HTTP_OK){
@@ -861,7 +861,7 @@ static void EnqueueServerMessage(Server& server, const TStringView message, cons
 
     auto* response = MHD_create_response_from_buffer(0, s_EmptyResponse, MHD_RESPMEM_PERSISTENT);
     if(!response){
-        EnqueueServerMessage(server, NWB_TEXT("Failed to create a response"), Core::Common::LogType::Fatal);
+        EnqueueServerMessage(server, FOUNDATION_TEXT("Failed to create a response"), Core::Common::LogType::Fatal);
         return MHD_NO;
     }
 
@@ -885,7 +885,7 @@ static void EnqueueServerMessage(Server& server, const TStringView message, cons
 
     const auto timeResult = GetLocalTime();
     if(!timeResult)
-        NWB_LOGGER_WARNING(NWB_TEXT("Failed to read local time for crash package name"));
+        NWB_LOGGER_WARNING(FOUNDATION_TEXT("Failed to read local time for crash package name"));
     const LocalTime localTime = timeResult ? *timeResult : LocalTime{};
 
     const u64 counter = s_CrashPackageCounter.fetch_add(1u, MemoryOrder::relaxed);
@@ -1007,14 +1007,14 @@ MHD_Result ServerHttpHandler::RequestCallback(void* serverContext, MHD_Connectio
 
     if(!connectionContext){
         if(isCrashUpload && !handler->crashUploadAuthorized(*connection)){
-            LoggerServerImpl::EnqueueServerMessage(*thisPtr, NWB_TEXT("Rejected unauthorized crash upload"), Core::Common::LogType::Warning);
+            LoggerServerImpl::EnqueueServerMessage(*thisPtr, FOUNDATION_TEXT("Rejected unauthorized crash upload"), Core::Common::LogType::Warning);
             return LoggerServerImpl::QueueEmptyResponse(*thisPtr, *connection, MHD_HTTP_UNAUTHORIZED);
         }
 
         const auto info = LoggerServerImpl::CreateConnectionInfo(*thisPtr, uploadKind);
         if(!info){
             thisPtr->enqueue(
-                StringFormat(thisPtr->arena(), NWB_TEXT("Failed to initialize connection upload state: [{}] {} on {}"), info.error().value(), ConvertString(info.error().message()), LoggerServerImpl::s_ServerName),
+                StringFormat(thisPtr->arena(), FOUNDATION_TEXT("Failed to initialize connection upload state: [{}] {} on {}"), info.error().value(), ConvertString(info.error().message()), LoggerServerImpl::s_ServerName),
                 Core::Common::LogType::Error
             );
             return LoggerServerImpl::QueueEmptyResponse(*thisPtr, *connection, MHD_HTTP_SERVICE_UNAVAILABLE);
@@ -1032,7 +1032,7 @@ MHD_Result ServerHttpHandler::RequestCallback(void* serverContext, MHD_Connectio
             return MHD_YES;
         }
         if(!uploadData){
-            LoggerServerImpl::EnqueueServerMessage(*thisPtr, NWB_TEXT("Received a malformed upload chunk"), Core::Common::LogType::Error);
+            LoggerServerImpl::EnqueueServerMessage(*thisPtr, FOUNDATION_TEXT("Received a malformed upload chunk"), Core::Common::LogType::Error);
             info->discardCrashUpload();
             info->rejectionStatus = MHD_HTTP_BAD_REQUEST;
             uploadDataSize = 0u;
@@ -1041,7 +1041,7 @@ MHD_Result ServerHttpHandler::RequestCallback(void* serverContext, MHD_Connectio
 
         const usize uploadSizeLimit = SelectServerUploadSizeLimit(info->uploadKind, s_MaxTelemetryUploadBytes, s_MaxLogMessageUploadBytes);
         if(ExceedsServerUploadBudget(info->size, static_cast<usize>(uploadDataSize), uploadSizeLimit)){
-            LoggerServerImpl::EnqueueServerMessage(*thisPtr, NWB_TEXT("Received an oversized message"), Core::Common::LogType::Error);
+            LoggerServerImpl::EnqueueServerMessage(*thisPtr, FOUNDATION_TEXT("Received an oversized message"), Core::Common::LogType::Error);
             info->discardCrashUpload();
             info->rejectionStatus = MHD_HTTP_CONTENT_TOO_LARGE;
             uploadDataSize = 0u;
@@ -1050,7 +1050,7 @@ MHD_Result ServerHttpHandler::RequestCallback(void* serverContext, MHD_Connectio
 
         const usize appendSize = static_cast<usize>(uploadDataSize);
         if(!info->append(BinaryByteView(reinterpret_cast<const u8*>(uploadData), appendSize))){
-            LoggerServerImpl::EnqueueServerMessage(*thisPtr, NWB_TEXT("Failed to store upload chunk"), Core::Common::LogType::Fatal);
+            LoggerServerImpl::EnqueueServerMessage(*thisPtr, FOUNDATION_TEXT("Failed to store upload chunk"), Core::Common::LogType::Fatal);
             info->discardCrashUpload();
             info->rejectionStatus = MHD_HTTP_SERVICE_UNAVAILABLE;
             uploadDataSize = 0u;
@@ -1071,18 +1071,18 @@ MHD_Result ServerHttpHandler::RequestCallback(void* serverContext, MHD_Connectio
             const Path& storedPath = info->crashUploadPath;
             if(thisPtr->enqueueCrashUpload(storedPath, scratchArena)){
                 info->crashUploadOwned = false;
-                thisPtr->enqueue(StringFormat(thisPtr->arena(), NWB_TEXT("Crash upload queued for ingest at '{}'"), PathToString<tchar>(storedPath)), Core::Common::LogType::EssentialInfo);
+                thisPtr->enqueue(StringFormat(thisPtr->arena(), FOUNDATION_TEXT("Crash upload queued for ingest at '{}'"), PathToString<tchar>(storedPath)), Core::Common::LogType::EssentialInfo);
             }
             else{
                 info->crashUploadOwned = false;
                 responseStatus = MHD_HTTP_SERVICE_UNAVAILABLE;
-                thisPtr->enqueue(StringFormat(thisPtr->arena(), NWB_TEXT("Crash upload could not be queued and was retained at '{}'"), PathToString<tchar>(storedPath)), Core::Common::LogType::Error);
+                thisPtr->enqueue(StringFormat(thisPtr->arena(), FOUNDATION_TEXT("Crash upload could not be queued and was retained at '{}'"), PathToString<tchar>(storedPath)), Core::Common::LogType::Error);
             }
         }
         else{
             info->crashUploadOwned = false;
             responseStatus = MHD_HTTP_SERVICE_UNAVAILABLE;
-            thisPtr->enqueue(StringFormat(thisPtr->arena(), NWB_TEXT("Crash upload could not be closed and was retained at '{}'"), PathToString<tchar>(info->crashUploadPath)), Core::Common::LogType::Error);
+            thisPtr->enqueue(StringFormat(thisPtr->arena(), FOUNDATION_TEXT("Crash upload could not be closed and was retained at '{}'"), PathToString<tchar>(info->crashUploadPath)), Core::Common::LogType::Error);
         }
     }
     else if(info->uploadKind == ServerUploadKind::Telemetry){
@@ -1090,7 +1090,7 @@ MHD_Result ServerHttpHandler::RequestCallback(void* serverContext, MHD_Connectio
         if(!result.storedRaw)
             responseStatus = info->size == 0u ? MHD_HTTP_BAD_REQUEST : MHD_HTTP_SERVICE_UNAVAILABLE;
         if(result.rawCleanupError){
-            thisPtr->enqueue(StringFormat(thisPtr->arena(), NWB_TEXT("Telemetry raw stream was stored but staging cleanup failed: raw='{}' staging_retained={} error={}"), PathToString<tchar>(result.rawPath), result.rawStagingRetained, result.rawCleanupError.value()), Core::Common::LogType::Error);
+            thisPtr->enqueue(StringFormat(thisPtr->arena(), FOUNDATION_TEXT("Telemetry raw stream was stored but staging cleanup failed: raw='{}' staging_retained={} error={}"), PathToString<tchar>(result.rawPath), result.rawStagingRetained, result.rawCleanupError.value()), Core::Common::LogType::Error);
         }
         thisPtr->enqueue(Move(result.message), result.type);
     }
@@ -1187,10 +1187,10 @@ b8 Server::internalInit(u16 port, BasicStringView<tchar> logFileNameBase, AStrin
     else{
         const Core::Common::NameSymbols::DefaultFileLoadFailure& failure = nameSymbolLoad.error();
         loadedNameSymbols = failure.loadedAny;
-        enqueue(StringFormat(BaseType::arena(), NWB_TEXT("Log server: startup name-symbol filesystem load failed: [{}] {}"), failure.code.value(), ConvertString(failure.code.message())), Core::Common::LogType::Warning);
+        enqueue(StringFormat(BaseType::arena(), FOUNDATION_TEXT("Log server: startup name-symbol filesystem load failed: [{}] {}"), failure.code.value(), ConvertString(failure.code.message())), Core::Common::LogType::Warning);
     }
     if(loadedNameSymbols)
-        enqueue(BasicStringView<tchar>(NWB_TEXT("Log server: loaded startup name-symbol mappings")), Core::Common::LogType::Info);
+        enqueue(BasicStringView<tchar>(FOUNDATION_TEXT("Log server: loaded startup name-symbol mappings")), Core::Common::LogType::Info);
 
     if(logFileNameBase.empty()){
         if(!m_processedMessageFile.openByExecutableName())
@@ -1217,10 +1217,10 @@ b8 Server::internalUpdate(){
 
         Frame::Print(formattedMessage, type);
         if(!m_processedMessageFile.writeLine(formattedMessage)){
-            constexpr TStringView s_WriteFailure = NWB_TEXT("Log server: failed to write processed message to file.");
+            constexpr TStringView s_WriteFailure = FOUNDATION_TEXT("Log server: failed to write processed message to file.");
             Frame::Print(s_WriteFailure, Core::Common::LogType::Error);
-#if defined(NWB_PLATFORM_WINDOWS)
-            NWB_TCERR << s_WriteFailure << static_cast<tchar>('\n');
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
+            FOUNDATION_TCERR << s_WriteFailure << static_cast<tchar>('\n');
 #endif
         }
     }
@@ -1231,7 +1231,7 @@ b8 Server::internalUpdate(){
 b8 Server::enqueueCrashUpload(const Path& path, Core::Alloc::ScratchArena& scratchArena){
     if(m_crashIngestWorker.enqueue(path, scratchArena))
         return true;
-    enqueue(BasicStringView<tchar>(NWB_TEXT("Crash upload path exceeds queue capacity")), Core::Common::LogType::Error);
+    enqueue(BasicStringView<tchar>(FOUNDATION_TEXT("Crash upload path exceeds queue capacity")), Core::Common::LogType::Error);
     return false;
 }
 

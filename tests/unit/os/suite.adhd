@@ -367,39 +367,39 @@ struct EncodedCodePointBuffer{
     }
 };
 
-[[nodiscard]] NWB_INLINE TextInputSessionDesc MakeEmptySessionDesc()noexcept{
+[[nodiscard]] FOUNDATION_INLINE TextInputSessionDesc MakeEmptySessionDesc()noexcept{
     return TextInputSessionDesc{};
 }
 
-[[nodiscard]] NWB_INLINE TextInputSessionDesc MakeSessionDesc(const AStringView surrounding, const usize anchorByte, const usize caretByte)noexcept{
+[[nodiscard]] FOUNDATION_INLINE TextInputSessionDesc MakeSessionDesc(const AStringView surrounding, const usize anchorByte, const usize caretByte)noexcept{
     return TextInputSessionDesc{ {}, surrounding, anchorByte, caretByte };
 }
 
-[[nodiscard]] NWB_INLINE TextInputRect MakeTextInputRect(const i32 x, const i32 y, const i32 width, const i32 height)noexcept{
+[[nodiscard]] FOUNDATION_INLINE TextInputRect MakeTextInputRect(const i32 x, const i32 y, const i32 width, const i32 height)noexcept{
     return TextInputRect{ x, y, width, height };
 }
 
-[[nodiscard]] NWB_INLINE TextInputDeletionBasis::Enum MakeInvalidDeletionBasis()noexcept{
+[[nodiscard]] FOUNDATION_INLINE TextInputDeletionBasis::Enum MakeInvalidDeletionBasis()noexcept{
     return static_cast<TextInputDeletionBasis::Enum>(255u);
 }
 
-[[nodiscard]] NWB_INLINE TextInputChangeCause::Enum MakeInvalidChangeCause()noexcept{
+[[nodiscard]] FOUNDATION_INLINE TextInputChangeCause::Enum MakeInvalidChangeCause()noexcept{
     return static_cast<TextInputChangeCause::Enum>(255u);
 }
 
-NWB_INLINE void FillGlobalString(GlobalString& target, const usize count, const u8 byteValue){
+FOUNDATION_INLINE void FillGlobalString(GlobalString& target, const usize count, const u8 byteValue){
     target.assign(count, static_cast<char>(byteValue));
 }
 
-NWB_INLINE void AssignGlobalString(GlobalString& target, const AStringView value){
+FOUNDATION_INLINE void AssignGlobalString(GlobalString& target, const AStringView value){
     target.assign(value.data(), value.size());
 }
 
-NWB_INLINE void AppendByteGlobalString(GlobalString& target, const u8 byteValue){
+FOUNDATION_INLINE void AppendByteGlobalString(GlobalString& target, const u8 byteValue){
     target.push_back(static_cast<char>(byteValue));
 }
 
-[[nodiscard]] NWB_INLINE AStringView ViewGlobalString(const GlobalString& source)noexcept{
+[[nodiscard]] FOUNDATION_INLINE AStringView ViewGlobalString(const GlobalString& source)noexcept{
     return AStringView(source);
 }
 

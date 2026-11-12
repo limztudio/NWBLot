@@ -38,12 +38,12 @@ namespace GraphemeSegmentation{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE b8 Validate(const AStringView text, const b8 singleLine = false)noexcept{
+[[nodiscard]] FOUNDATION_INLINE b8 Validate(const AStringView text, const b8 singleLine = false)noexcept{
     return ValidateGraphemeText(text, singleLine);
 }
 
 // General segmentation accepts controls; single-line editing rejects line breaks and NUL.
-[[nodiscard]] NWB_INLINE Expected<EditBoundaryVector> Build(Core::Alloc::GlobalArena& arena, const AStringView text, const b8 singleLine = false){
+[[nodiscard]] FOUNDATION_INLINE Expected<EditBoundaryVector> Build(Core::Alloc::GlobalArena& arena, const AStringView text, const b8 singleLine = false){
     if(!Validate(text, singleLine) || text.size() == Limit<usize>::s_Max)
         return MakeUnexpected(Failure{});
     EditBoundaryVector boundaries(arena);

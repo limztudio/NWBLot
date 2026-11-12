@@ -22,9 +22,9 @@ native{
 #include <global/process.h>
 #include <global/simd/memory.h>
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <Windows.h>
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(FOUNDATION_PLATFORM_LINUX)
 #include <sys/mman.h>
 #include <unistd.h>
 #endif
@@ -33,7 +33,7 @@ NWB_BEGIN
 
 namespace Tests{
 
-#if defined(NWB_PLATFORM_WINDOWS) || defined(NWB_PLATFORM_LINUX)
+#if defined(FOUNDATION_PLATFORM_WINDOWS) || defined(FOUNDATION_PLATFORM_LINUX)
 struct GuardedBytes final : NoCopy{
     void* mapping = nullptr;
     u8* data = nullptr;
@@ -49,8 +49,8 @@ public:
     ~GuardedBytes()noexcept;
 };
 
-NWB_INLINE GuardedBytes::GuardedBytes()noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+FOUNDATION_INLINE GuardedBytes::GuardedBytes()noexcept{
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     SYSTEM_INFO systemInfo{};
     GetSystemInfo(&systemInfo);
     pageBytes = static_cast<usize>(systemInfo.dwPageSize);
@@ -64,7 +64,7 @@ NWB_INLINE GuardedBytes::GuardedBytes()noexcept{
         return;
     accessibleBytes = pageBytes * 4u;
     mappingBytes = pageBytes * 6u;
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     mapping = VirtualAlloc(nullptr, mappingBytes, MEM_RESERVE, PAGE_NOACCESS);
     if(mapping == nullptr)
         return;
@@ -85,10 +85,10 @@ NWB_INLINE GuardedBytes::GuardedBytes()noexcept{
     upperGuard = data + accessibleBytes;
 }
 
-NWB_INLINE GuardedBytes::~GuardedBytes()noexcept{
+FOUNDATION_INLINE GuardedBytes::~GuardedBytes()noexcept{
     if(mapping == nullptr)
         return;
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(FOUNDATION_PLATFORM_WINDOWS)
     if(VirtualFree(mapping, 0u, MEM_RELEASE) == 0)
         abort();
 #else
@@ -97,11 +97,11 @@ NWB_INLINE GuardedBytes::~GuardedBytes()noexcept{
 #endif
 }
 
-[[nodiscard]] NWB_INLINE u8* GuardAddress(const void* base, const usize byteOffset)noexcept{
+[[nodiscard]] FOUNDATION_INLINE u8* GuardAddress(const void* base, const usize byteOffset)noexcept{
     return reinterpret_cast<u8*>(reinterpret_cast<usize>(base) + byteOffset);
 }
 
-NWB_INLINE void ExitOnAbort([[maybe_unused]] const int signalNumber)noexcept{
+FOUNDATION_INLINE void ExitOnAbort([[maybe_unused]] const int signalNumber)noexcept{
     _exit(s_SIMDMemoryAbortExitCode);
 }
 #endif

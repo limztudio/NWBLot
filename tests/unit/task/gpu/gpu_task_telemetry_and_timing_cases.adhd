@@ -36,13 +36,13 @@ namespace TaskGraphTestUtils{
 
 inline constexpr u32 s_GpuTelemetryNameHashLaneCount = s_NameHashLaneCount;
 
-[[nodiscard]] NWB_INLINE Name MakeGpuTelemetryFlippedHashName(const Name& base, const u32 lane)noexcept{
+[[nodiscard]] FOUNDATION_INLINE Name MakeGpuTelemetryFlippedHashName(const Name& base, const u32 lane)noexcept{
     NameHash hash = base.hash();
     hash.qwords[lane] ^= 1u;
     return Name(hash);
 }
 
-[[nodiscard]] NWB_INLINE Optional<Core::GpuPhysicalQueueInfo> FindTimingFeedbackQueueValue(
+[[nodiscard]] FOUNDATION_INLINE Optional<Core::GpuPhysicalQueueInfo> FindTimingFeedbackQueueValue(
     const Core::GpuTaskGraph::DeclarationReadView& declarations,
     const Core::GpuTaskGraphAnalysis& analysis,
     const AssignmentGraphicsVector& assignments,
@@ -76,7 +76,7 @@ inline constexpr u32 s_GpuTelemetryNameHashLaneCount = s_NameHashLaneCount;
     return {};
 }
 
-[[nodiscard]] NWB_INLINE Optional<Core::GpuTaskTimingHistory> FindStoreTimingHistoryValue(
+[[nodiscard]] FOUNDATION_INLINE Optional<Core::GpuTaskTimingHistory> FindStoreTimingHistoryValue(
     const Core::GpuTaskTimingHistoryStore& store,
     const Core::GpuTaskTimingKey& key,
     const Core::GpuPhysicalQueueId& queue
@@ -86,7 +86,7 @@ inline constexpr u32 s_GpuTelemetryNameHashLaneCount = s_NameHashLaneCount;
     return {};
 }
 
-[[nodiscard]] NWB_INLINE Optional<Core::GpuTaskTimingAssignmentState> FindStoreTimingAssignmentValue(
+[[nodiscard]] FOUNDATION_INLINE Optional<Core::GpuTaskTimingAssignmentState> FindStoreTimingAssignmentValue(
     const Core::GpuTaskTimingHistoryStore& store,
     const Core::GpuTaskTimingAssignmentKey& key
 )noexcept{
@@ -95,7 +95,7 @@ inline constexpr u32 s_GpuTelemetryNameHashLaneCount = s_NameHashLaneCount;
     return {};
 }
 
-[[nodiscard]] NWB_INLINE Optional<Core::GpuTaskTimingHistory> FindSnapshotTimingHistoryValue(
+[[nodiscard]] FOUNDATION_INLINE Optional<Core::GpuTaskTimingHistory> FindSnapshotTimingHistoryValue(
     const Core::GpuTaskTimingHistorySnapshot& snapshot,
     const Core::GpuTaskTimingKey& key,
     const Core::GpuPhysicalQueueId& queue
@@ -105,7 +105,7 @@ inline constexpr u32 s_GpuTelemetryNameHashLaneCount = s_NameHashLaneCount;
     return {};
 }
 
-[[nodiscard]] NWB_INLINE Optional<Core::GpuTaskTimingAssignmentState> FindSnapshotTimingAssignmentValue(
+[[nodiscard]] FOUNDATION_INLINE Optional<Core::GpuTaskTimingAssignmentState> FindSnapshotTimingAssignmentValue(
     const Core::GpuTaskTimingHistorySnapshot& snapshot,
     const Core::GpuTaskTimingAssignmentKey& key
 )noexcept{

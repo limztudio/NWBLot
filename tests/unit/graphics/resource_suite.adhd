@@ -110,15 +110,15 @@ struct EmbeddedNullMarkerHashes{
     usize nestedHash = 0u;
 };
 
-[[nodiscard]] NWB_INLINE auto ResolveImplicitOpacityMicromapIndexFormat(){
+[[nodiscard]] FOUNDATION_INLINE auto ResolveImplicitOpacityMicromapIndexFormat(){
     return Core::GraphicsBackend::VulkanDetail::BlasOpacityMicromapPolicy::ResolveOpacityMicromapIndexFormat(Core::Format::UNKNOWN, {});
 }
 
-[[nodiscard]] NWB_INLINE auto ValidateDefaultTextureCreateDesc(const Core::TextureDesc& desc){
+[[nodiscard]] FOUNDATION_INLINE auto ValidateDefaultTextureCreateDesc(const Core::TextureDesc& desc){
     return Core::GraphicsBackend::VulkanTextureDetail::TextureImagePolicy::ValidateTextureCreateDesc(desc, {}, false);
 }
 
-[[nodiscard]] NWB_INLINE b8 IsConcurrentTextureImageConsistent(
+[[nodiscard]] FOUNDATION_INLINE b8 IsConcurrentTextureImageConsistent(
     const Core::TextureDesc& desc,
     VkImageCreateInfo imageInfo,
     const Span<const u32> families,
@@ -213,7 +213,7 @@ namespace CommandQueue = Core::CommandQueue;
 using StandaloneGraphWorkspacePool = Core::GraphicsModuleDetail::StandaloneGraphWorkspacePool;
 using StandaloneGraphWorkspaceLease = Core::GraphicsModuleDetail::StandaloneGraphWorkspacePool::Lease;
 
-[[nodiscard]] NWB_INLINE usize WorkspaceAddress(const StandaloneGraphWorkspaceLease& lease)noexcept{
+[[nodiscard]] FOUNDATION_INLINE usize WorkspaceAddress(const StandaloneGraphWorkspaceLease& lease)noexcept{
     return reinterpret_cast<usize>(lease.workspace());
 }
 
@@ -843,7 +843,7 @@ CalibratedTimestampProbeResult RunCalibratedTimestampProbe(const b8 retryFirstCo
 
 ClusterOperationCopyInspection InspectClusterOperationCopy(const Core::RayTracingClusterOperationParams& params){
     ClusterOperationCopyInspection result{};
-    const auto built = Core::GraphicsBackend::VulkanDetail::ClusterOperationInput::Build(params, NWB_TEXT("test cluster input"));
+    const auto built = Core::GraphicsBackend::VulkanDetail::ClusterOperationInput::Build(params, FOUNDATION_TEXT("test cluster input"));
     result.builtOk = built.has_value();
     if(built){
         auto copied = *built;

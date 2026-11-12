@@ -62,11 +62,11 @@ struct C1Sandwich{
     }
 };
 
-[[nodiscard]] NWB_INLINE AsciiSandwich MakeAsciiSandwich(const u32 scalar)noexcept{
+[[nodiscard]] FOUNDATION_INLINE AsciiSandwich MakeAsciiSandwich(const u32 scalar)noexcept{
     return { { 'a', static_cast<char>(scalar), 'b' } };
 }
 
-[[nodiscard]] NWB_INLINE C1Sandwich MakeC1Sandwich(const u32 leadByte, const u32 scalar)noexcept{
+[[nodiscard]] FOUNDATION_INLINE C1Sandwich MakeC1Sandwich(const u32 leadByte, const u32 scalar)noexcept{
     return { { 'a', static_cast<char>(leadByte), static_cast<char>(scalar), 'b' } };
 }
 
@@ -412,35 +412,35 @@ inline constexpr AStringView s_UiMultilineTextEmbeddedNulBorrowed = __hidden_ui_
 inline constexpr AStringView s_UiMultilineTextEmbeddedNulShort = __hidden_ui_multiline_text_tests::s_EmbeddedNulShort;
 inline constexpr AStringView s_UiMultilineTextEmbeddedNulTail = __hidden_ui_multiline_text_tests::s_EmbeddedNulTail;
 
-[[nodiscard]] NWB_INLINE UiMultilineTextAsciiSandwich MakeUiMultilineTextAsciiSandwich(const u32 scalar)noexcept{
+[[nodiscard]] FOUNDATION_INLINE UiMultilineTextAsciiSandwich MakeUiMultilineTextAsciiSandwich(const u32 scalar)noexcept{
     return __hidden_ui_multiline_text_tests::MakeAsciiSandwich(scalar);
 }
-[[nodiscard]] NWB_INLINE UiMultilineTextC1Sandwich MakeUiMultilineTextC1Sandwich(const u32 leadByte, const u32 scalar)noexcept{
+[[nodiscard]] FOUNDATION_INLINE UiMultilineTextC1Sandwich MakeUiMultilineTextC1Sandwich(const u32 leadByte, const u32 scalar)noexcept{
     return __hidden_ui_multiline_text_tests::MakeC1Sandwich(leadByte, scalar);
 }
-[[nodiscard]] NWB_INLINE usize UiMultilineTextStorageAddress(const UiMultilineTextGlobalString& text)noexcept{
+[[nodiscard]] FOUNDATION_INLINE usize UiMultilineTextStorageAddress(const UiMultilineTextGlobalString& text)noexcept{
     return reinterpret_cast<usize>(text.data());
 }
-NWB_INLINE void UiMultilineTextTakeNormalized(
+FOUNDATION_INLINE void UiMultilineTextTakeNormalized(
     UiMultilineTextGlobalString& dst,
     ::Expected<UiMultilineTextGlobalString, EditTextStatusEnum>& src
 )noexcept{
     dst = ::Move(*src);
 }
-NWB_INLINE void UiMultilineTextTakeNormalized(
+FOUNDATION_INLINE void UiMultilineTextTakeNormalized(
     UiMultilineTextGlobalString& dst,
     ::Expected<UiMultilineTextGlobalString, EditTextStatusEnum>&& src
 )noexcept{
     dst = ::Move(*src);
 }
 
-[[nodiscard]] NWB_INLINE f32 UiMultilineViewQuietNaN()noexcept{
+[[nodiscard]] FOUNDATION_INLINE f32 UiMultilineViewQuietNaN()noexcept{
     return ::Limit<f32>::s_QuietNaN;
 }
-NWB_INLINE void ExpectUiMultilineViewPlacement(const EditBoxPlacement& actual, const EditBoxPlacement& expected){
+FOUNDATION_INLINE void ExpectUiMultilineViewPlacement(const EditBoxPlacement& actual, const EditBoxPlacement& expected){
     ::NWB::UiMultilineViewTests::ExpectPlacement(actual, expected);
 }
-NWB_INLINE void CollectUiMultilineViewSolidRects(const DrawSnapshot& snapshot, const Color& color, UiMultilineViewRectVector& output){
+FOUNDATION_INLINE void CollectUiMultilineViewSolidRects(const DrawSnapshot& snapshot, const Color& color, UiMultilineViewRectVector& output){
     ::NWB::UiMultilineViewTests::CollectSolidRects(snapshot, color, output);
 }
 
@@ -460,49 +460,49 @@ void ExpectUiNestedPopupLifetimeParentControls(const UiNestedPopupLifetimeTests&
 };
 
 namespace __hidden_ui_nested_popup_builder_tests{
-NWB_INLINE WidgetOptions UiNestedPopupBuilderTests::Control(const f32 width)noexcept{
+FOUNDATION_INLINE WidgetOptions UiNestedPopupBuilderTests::Control(const f32 width)noexcept{
     return ::__hidden_ui_glyph_sdf_tests::MakeUiNestedPopupControlOptions(width);
 }
-NWB_INLINE b8 UiNestedPopupBuilderTests::beginParent(const u64 generation){
+FOUNDATION_INLINE b8 UiNestedPopupBuilderTests::beginParent(const u64 generation){
     return ::__hidden_ui_glyph_sdf_tests::BeginUiNestedPopupBuilderParent(*this, generation);
 }
-NWB_INLINE b8 UiNestedPopupBuilderTests::prepareButtons(const u64 generation){
+FOUNDATION_INLINE b8 UiNestedPopupBuilderTests::prepareButtons(const u64 generation){
     return ::__hidden_ui_glyph_sdf_tests::PrepareUiNestedPopupBuilderButtons(*this, generation);
 }
-NWB_INLINE b8 UiNestedPopupBuilderTests::acceptButtons(const u64 generation){
+FOUNDATION_INLINE b8 UiNestedPopupBuilderTests::acceptButtons(const u64 generation){
     return ::__hidden_ui_glyph_sdf_tests::AcceptUiNestedPopupBuilderButtons(*this, generation);
 }
 };
 
 namespace __hidden_ui_nested_popup_context_tests{
-NWB_INLINE b8 UiNestedPopupContextTests::publish(const PopupDeclaration& popup){
+FOUNDATION_INLINE b8 UiNestedPopupContextTests::publish(const PopupDeclaration& popup){
     return ::__hidden_ui_glyph_sdf_tests::PublishUiNestedPopupDeclaration(*this, popup);
 }
 };
 
 namespace __hidden_ui_nested_popup_lifetime_tests{
-NWB_INLINE b8 UiNestedPopupLifetimeTests::beginParent(const u64 generation){
+FOUNDATION_INLINE b8 UiNestedPopupLifetimeTests::beginParent(const u64 generation){
     return ::__hidden_ui_glyph_sdf_tests::BeginUiNestedPopupLifetimeParent(*this, generation);
 }
-NWB_INLINE b8 UiNestedPopupLifetimeTests::finishParent(const u64 generation){
+FOUNDATION_INLINE b8 UiNestedPopupLifetimeTests::finishParent(const u64 generation){
     return ::__hidden_ui_glyph_sdf_tests::FinishUiNestedPopupLifetimeParent(*this, generation);
 }
-NWB_INLINE b8 UiNestedPopupLifetimeTests::acceptPlain(const u64 generation){
+FOUNDATION_INLINE b8 UiNestedPopupLifetimeTests::acceptPlain(const u64 generation){
     return ::__hidden_ui_glyph_sdf_tests::AcceptUiNestedPopupLifetimePlain(*this, generation);
 }
-NWB_INLINE b8 UiNestedPopupLifetimeTests::acceptCombo(const u64 generation){
+FOUNDATION_INLINE b8 UiNestedPopupLifetimeTests::acceptCombo(const u64 generation){
     return ::__hidden_ui_glyph_sdf_tests::AcceptUiNestedPopupLifetimeCombo(*this, generation);
 }
-NWB_INLINE b8 UiNestedPopupLifetimeTests::acceptSearch(const u64 generation){
+FOUNDATION_INLINE b8 UiNestedPopupLifetimeTests::acceptSearch(const u64 generation){
     return ::__hidden_ui_glyph_sdf_tests::AcceptUiNestedPopupLifetimeSearch(*this, generation);
 }
-NWB_INLINE b8 UiNestedPopupLifetimeTests::acceptMenu(const u64 generation){
+FOUNDATION_INLINE b8 UiNestedPopupLifetimeTests::acceptMenu(const u64 generation){
     return ::__hidden_ui_glyph_sdf_tests::AcceptUiNestedPopupLifetimeMenu(*this, generation);
 }
-NWB_INLINE b8 UiNestedPopupLifetimeTests::declareReserved(const u64 generation, const b8 overflow){
+FOUNDATION_INLINE b8 UiNestedPopupLifetimeTests::declareReserved(const u64 generation, const b8 overflow){
     return ::__hidden_ui_glyph_sdf_tests::DeclareUiNestedPopupLifetimeReserved(*this, generation, overflow);
 }
-NWB_INLINE void UiNestedPopupLifetimeTests::expectParentControls()const{
+FOUNDATION_INLINE void UiNestedPopupLifetimeTests::expectParentControls()const{
     ::__hidden_ui_glyph_sdf_tests::ExpectUiNestedPopupLifetimeParentControls(*this);
 }
 };

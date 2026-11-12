@@ -165,8 +165,9 @@ struct ClassDecl{
     MVector<FieldDecl*> orderedFields;
     MVector<MethodDecl*> methods;
     MStringView assetTypeName;
+    MStringView systemTypeName;
     MStringView subsystemTypeName;
-    MStringView componentAssetTypeName;
+    MStringView componentTypeName;
     SourceSpan span;
     usize totalSize = 1u;
     usize totalAlign = 1u;
@@ -185,6 +186,13 @@ public:
         , orderedFields(arena)
         , methods(arena)
     {}
+
+    [[nodiscard]] constexpr b8 usesStaticClassArena()const noexcept{
+        return isArenaOwner
+            && assetTypeName.empty()
+            && systemTypeName.empty()
+            && subsystemTypeName.empty();
+    }
 };
 
 

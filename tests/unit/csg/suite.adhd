@@ -44,7 +44,7 @@ struct TestCsgVisibilityFilter{
     Core::ECS::EntityID hiddenEntity = Core::ECS::s_InvalidEntityId;
 };
 
-[[nodiscard]] NWB_INLINE b8 TestCsgReceiverVisible(
+[[nodiscard]] FOUNDATION_INLINE b8 TestCsgReceiverVisible(
     [[maybe_unused]] Core::ECS::World& world,
     const Core::ECS::EntityID entity,
     [[maybe_unused]] const Impl::CsgReceiverKind::Enum receiverKind,
@@ -55,7 +55,7 @@ struct TestCsgVisibilityFilter{
     return !filter || entity != filter->hiddenEntity;
 }
 
-[[nodiscard]] NWB_INLINE Impl::CsgFrameState BuildFilteredCsgFrameState(
+[[nodiscard]] FOUNDATION_INLINE Impl::CsgFrameState BuildFilteredCsgFrameState(
     Core::ECS::World& world,
     Core::Alloc::ScratchArena& scratchArena,
     const Core::ECS::EntityID hiddenEntity
@@ -69,7 +69,7 @@ struct TestCsgVisibilityFilter{
     return Impl::BuildCsgFrameState(world, scratchArena, desc);
 }
 
-[[nodiscard]] NWB_INLINE Expected<Impl::CsgDeformStats, Impl::CsgDeformFailure> PreviewDeformWithoutRegistry(
+[[nodiscard]] FOUNDATION_INLINE Expected<Impl::CsgDeformStats, Impl::CsgDeformFailure> PreviewDeformWithoutRegistry(
     Core::Alloc::ScratchArena& scratchArena,
     const Span<const Impl::CsgDeformVertex> inputVertices,
     const Span<const Impl::CsgDeformTriangle> inputTriangles,
@@ -82,7 +82,7 @@ struct TestCsgVisibilityFilter{
 }
 
 template<typename CommitArenaT>
-[[nodiscard]] NWB_INLINE Expected<Impl::CsgDeformStats, Impl::CsgDeformFailure> CommitDeformWithoutRegistry(
+[[nodiscard]] FOUNDATION_INLINE Expected<Impl::CsgDeformStats, Impl::CsgDeformFailure> CommitDeformWithoutRegistry(
     Core::Alloc::ScratchArena& scratchArena,
     CommitArenaT& commitArena,
     const Span<const Impl::CsgDeformVertex> inputVertices,
@@ -96,7 +96,7 @@ template<typename CommitArenaT>
 }
 
 template<typename CommitArenaT>
-[[nodiscard]] NWB_INLINE Expected<Impl::CsgDeformStats, Impl::CsgDeformFailure> CommitDeformWithRegistry(
+[[nodiscard]] FOUNDATION_INLINE Expected<Impl::CsgDeformStats, Impl::CsgDeformFailure> CommitDeformWithRegistry(
     Core::Alloc::ScratchArena& scratchArena,
     CommitArenaT& commitArena,
     const Span<const Impl::CsgDeformVertex> inputVertices,
@@ -110,7 +110,7 @@ template<typename CommitArenaT>
     return Impl::CommitCsgDeformCuts(scratchArena, commitArena, inputVertices, inputTriangles, cuts, options, &registry, outVertices, outTriangles);
 }
 
-[[nodiscard]] NWB_INLINE Impl::CsgDeformViability CheckDeformViabilityWithRegistry(
+[[nodiscard]] FOUNDATION_INLINE Impl::CsgDeformViability CheckDeformViabilityWithRegistry(
     Core::Alloc::ScratchArena& scratchArena,
     const Span<const Impl::CsgDeformVertex> inputVertices,
     const Span<const Impl::CsgDeformTriangle> inputTriangles,
@@ -121,11 +121,11 @@ template<typename CommitArenaT>
     return Impl::CheckCsgDeformCutsViability(scratchArena, inputVertices, inputTriangles, cuts, options, &registry);
 }
 
-[[nodiscard]] NWB_INLINE f32 CsgWorldBoundsMinX(const Impl::CsgShapeBounds& bounds)noexcept{
+[[nodiscard]] FOUNDATION_INLINE f32 CsgWorldBoundsMinX(const Impl::CsgShapeBounds& bounds)noexcept{
     return VectorGetX(bounds.minBounds);
 }
 
-[[nodiscard]] NWB_INLINE f32 CsgWorldBoundsMaxX(const Impl::CsgShapeBounds& bounds)noexcept{
+[[nodiscard]] FOUNDATION_INLINE f32 CsgWorldBoundsMaxX(const Impl::CsgShapeBounds& bounds)noexcept{
     return VectorGetX(bounds.maxBounds);
 }
 

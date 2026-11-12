@@ -114,6 +114,9 @@ template<typename T>
 const T* AddressOf(const T&&) = delete;
 
 template<typename T>
+[[nodiscard]] constexpr b8 SameAddress(const T& lhs, const T& rhs)noexcept{ return AddressOf(lhs) == AddressOf(rhs); }
+
+template<typename T>
 [[nodiscard]] auto DeclVal()noexcept->decltype(std::declval<T>());
 
 template<typename T>

@@ -2,12 +2,81 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_graphics/components.adhd>
+#include <impl/assets_graphics/graphics_component_binary_codec.adhd>
+#include <impl/assets_scene/component_asset_binary_codec.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const StringView s_ModelComponentLoadPayloadContext = "ModelComponentAsset::loadComponentPayload";
 const StringView s_ModelComponentValidatePayloadContext = "ModelComponentAsset::validatePayload";
 const StringView s_ModelComponentKindLabel = "model_component";
 const StringView s_MeshComponentLoadPayloadContext = "MeshComponentAsset::loadComponentPayload";
 const StringView s_MeshComponentValidatePayloadContext = "MeshComponentAsset::validatePayload";
 const StringView s_MeshComponentKindLabel = "mesh_component";
+
+b8 ValidateSingleAssetRefComponentPayload(
+    in IComponent componentAsset,
+    in b8 validAssetRef,
+    in StringView context,
+    in StringView kindLabel
+){
+    if(!componentAsset.checkVirtualPath(context))
+        return false;
+    return GraphicsComponentBinaryCodec().validateAssetRef(validAssetRef, componentAsset.virtualPath(), context, kindLabel);
+}
+
+b8 ModelComponentAsset::loadBinary(in Span<u8> binary){
+    return ComponentAssetBinaryCodec().loadBinary(binary, this);
+}
+
+b8 ModelComponentAsset::loadComponentPayload(in Span<u8> payload){
+    return GraphicsComponentBinaryCodec().deserializeAssetRef(payload, s_ModelComponentLoadPayloadContext, this.component.model.virtualPath);
+}
+
+b8 ModelComponentAsset::validatePayload()const{
+    return ValidateSingleAssetRefComponentPayload(this, this.component.model.valid(), s_ModelComponentValidatePayloadContext, s_ModelComponentKindLabel);
+}
+
+b8 ModelComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
+    return GraphicsComponentBinaryCodec().serializeAssetRef(this.component.model.name(), outPayload);
+}
+
+b8 MeshComponentAsset::loadBinary(in Span<u8> binary){
+    return ComponentAssetBinaryCodec().loadBinary(binary, this);
+}
+
+b8 MeshComponentAsset::loadComponentPayload(in Span<u8> payload){
+    return GraphicsComponentBinaryCodec().deserializeAssetRef(payload, s_MeshComponentLoadPayloadContext, this.component.mesh.virtualPath);
+}
+
+b8 MeshComponentAsset::validatePayload()const{
+    return ValidateSingleAssetRefComponentPayload(this, this.component.mesh.valid(), s_MeshComponentValidatePayloadContext, s_MeshComponentKindLabel);
+}
+
+b8 MeshComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
+    return GraphicsComponentBinaryCodec().serializeAssetRef(this.component.mesh.name(), outPayload);
+}
+
+b8 RendererComponentAsset::loadBinary(in Span<u8> binary){
+    return ComponentAssetBinaryCodec().loadBinary(binary, this);
+}
+
+b8 RendererComponentAsset::loadComponentPayload(in Span<u8> payload){
+    return GraphicsComponentBinaryCodec().deserializeRenderer(payload, this.component);
+}
+
+b8 RendererComponentAsset::validatePayload()const{
+    if(!this.checkVirtualPath("RendererComponentAsset::validatePayload"))
+        return false;
+    return GraphicsComponentBinaryCodec().validateRenderer(this.component, this.virtualPath());
+}
+
+b8 RendererComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
+    return GraphicsComponentBinaryCodec().serializeRenderer(this.component, outPayload);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -30,11 +99,6 @@ native{
 #include <impl/assets_graphics/renderer_subsystem.adhd.h>
 #include <impl/assets_graphics/shadow_subsystem.adhd.h>
 #include <impl/assets_graphics/transparent_subsystem.adhd.h>
-#include <impl/assets_graphics/components.adhd.h>
-
-#include <impl/assets_graphics/graphics_component_binary_codec.adhd.h>
-
-#include <core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -66,56 +130,11 @@ NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_ModelComponentAssetAutoRegistrar, ModelCo
 NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_MeshComponentAssetAutoRegistrar, MeshComponentAsset);
 NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_RendererComponentAssetAutoRegistrar, RendererComponentAsset);
 
-template<typename ComponentAssetT, typename TAsset>
-[[nodiscard]] static b8 ValidateSingleAssetRefComponentPayload(const ComponentAssetT& componentAsset, const Core::Assets::AssetRef<TAsset>& assetRef, const TStringView context, const AStringView contextAscii, const AStringView kindLabel){
-    if(!componentAsset.checkVirtualPath(context))
-        return false;
-    return GraphicsComponentBinaryCodec{}.validateAssetRef(assetRef.valid(), componentAsset.virtualPath(), contextAscii, kindLabel);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ModelComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    return GraphicsComponentBinaryCodec{}.deserializeAssetRef(payload, s_ModelComponentLoadPayloadContext, component.model.virtualPath);
-}
-
-b8 ModelComponentAsset::validatePayload()const{
-    return __hidden_assets_graphics_runtime_components::ValidateSingleAssetRefComponentPayload(*this, component.model, NWB_TEXT("ModelComponentAsset::validatePayload"), s_ModelComponentValidatePayloadContext, s_ModelComponentKindLabel);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 MeshComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    return GraphicsComponentBinaryCodec{}.deserializeAssetRef(payload, s_MeshComponentLoadPayloadContext, component.mesh.virtualPath);
-}
-
-b8 MeshComponentAsset::validatePayload()const{
-    return __hidden_assets_graphics_runtime_components::ValidateSingleAssetRefComponentPayload(*this, component.mesh, NWB_TEXT("MeshComponentAsset::validatePayload"), s_MeshComponentValidatePayloadContext, s_MeshComponentKindLabel);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 RendererComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    return GraphicsComponentBinaryCodec{}.deserializeRenderer(payload, component);
-}
-
-b8 RendererComponentAsset::validatePayload()const{
-    if(!checkVirtualPath(NWB_TEXT("RendererComponentAsset::validatePayload")))
-        return false;
-    return GraphicsComponentBinaryCodec{}.validateRenderer(component, virtualPath());
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

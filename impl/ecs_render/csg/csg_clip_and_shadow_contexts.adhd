@@ -98,13 +98,13 @@ struct CsgResolvedClipCutter{
     Span<const u8> parameterBytes;
 };
 
-[[nodiscard]] static CsgClipWorkBounds LoadCsgReceiverWorldBounds(const CsgReceiverCpuBounds& receiverBounds, const Scene::TransformComponent* const transform)noexcept{
+[[nodiscard]] static CsgClipWorkBounds LoadCsgReceiverWorldBounds(const CsgReceiverCpuBounds& receiverBounds, const b8 hasTransform, const SIMDVectorSingle position, const SIMDVectorSingle rotation, const SIMDVectorSingle scale)noexcept{
     return LoadCsgReceiverWorldBoundsFromTransform(
         receiverBounds,
-        transform != nullptr,
-        transform ? LoadFloat(transform->position) : VectorZero(),
-        transform ? LoadFloat(transform->rotation) : VectorZero(),
-        transform ? LoadFloat(transform->scale) : VectorZero()
+        hasTransform,
+        position,
+        rotation,
+        scale
     );
 }
 
@@ -249,7 +249,10 @@ Expected<CsgReceiverClipDrawInfo> RendererCsgSystem::resolveCsgReceiverClipDrawI
     const Scene::TransformComponent* transform
 )const{
     CsgReceiverClipDrawInfo info;
-    const CsgClipWorkBounds receiverWorldBounds = __hidden_csg_clip_and_shadow_contexts::LoadCsgReceiverWorldBounds(receiverBounds, transform);
+    const SIMDVectorSingle receiverPosition = transform ? LoadFloat(transform->position) : VectorZero();
+    const SIMDVectorSingle receiverRotation = transform ? LoadFloat(transform->rotation) : VectorZero();
+    const SIMDVectorSingle receiverScale = transform ? LoadFloat(transform->scale) : VectorZero();
+    const CsgClipWorkBounds receiverWorldBounds = __hidden_csg_clip_and_shadow_contexts::LoadCsgReceiverWorldBounds(receiverBounds, transform != nullptr, receiverPosition, receiverRotation, receiverScale);
 
     const b8 resolved = __hidden_csg_clip_and_shadow_contexts::ForEachReceiverClipCutter(
         m_csgShapeRegistry,
@@ -280,7 +283,10 @@ Expected<CsgReceiverRangeGpuData> RendererCsgSystem::appendCsgReceiverClipData(
 
     if(!receiverBounds.valid())
         return MakeUnexpected(Failure{});
-    const CsgClipWorkBounds receiverWorldBounds = __hidden_csg_clip_and_shadow_contexts::LoadCsgReceiverWorldBounds(receiverBounds, transform);
+    const SIMDVectorSingle receiverPosition = transform ? LoadFloat(transform->position) : VectorZero();
+    const SIMDVectorSingle receiverRotation = transform ? LoadFloat(transform->rotation) : VectorZero();
+    const SIMDVectorSingle receiverScale = transform ? LoadFloat(transform->scale) : VectorZero();
+    const CsgClipWorkBounds receiverWorldBounds = __hidden_csg_clip_and_shadow_contexts::LoadCsgReceiverWorldBounds(receiverBounds, transform != nullptr, receiverPosition, receiverRotation, receiverScale);
 
     const auto worldToReceiver = TryBuildCsgReceiverWorldToLocal(
         transform != nullptr,

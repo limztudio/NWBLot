@@ -37,13 +37,16 @@ static_assert(alignof(Expected<CsgShapeBounds>) >= alignof(CsgShapeBounds));
 using CsgShapeBoundsCallback = Expected<CsgShapeBounds>(*)(const SIMDMatrix& shapeToWorld, Span<const u8> parameterBytes)noexcept;
 using CsgShapeSignedDistanceCallback = Expected<f32>(*)(SIMDVectorSingle shapePosition, const CsgShapeInlineParameters& parameters)noexcept;
 
-[[nodiscard]] FOUNDATION_INLINE Expected<CsgShapeBounds> BuildCsgShapeWorldBoundsFromLocal(const SIMDMatrix& shapeToWorld, const CsgShapeLocalBounds& localBounds)noexcept{
-    const Expected<CsgShapeLocalBounds> worldBounds = TryTransformCsgShapeLocalBounds(shapeToWorld, localBounds);
-    if(!worldBounds)
-        return MakeUnexpected(Failure{});
-    if(!worldBounds->finiteBounds)
+[[nodiscard]] FOUNDATION_INLINE Expected<CsgShapeBounds> LoadCsgShapeWorldBoundsFromLocal(const SIMDMatrix& shapeToWorld, const CsgShapeLocalBounds& localBounds)noexcept{
+    if(!localBounds.finiteBounds)
         return CsgShapeBounds{};
-    return CsgShapeBounds{ LoadFloat(worldBounds->minBounds), LoadFloat(worldBounds->maxBounds), true };
+    const SIMDVectorSingle localMin = LoadFloat(localBounds.minBounds);
+    const SIMDVectorSingle localMax = LoadFloat(localBounds.maxBounds);
+    SIMDVectorSingle worldMin = VectorZero();
+    SIMDVectorSingle worldMax = VectorZero();
+    if(!TryTransformAabb(shapeToWorld, localMin, localMax, worldMin, worldMax))
+        return MakeUnexpected(Failure{});
+    return CsgShapeBounds{ worldMin, worldMax, true };
 }
 
 template<typename ShapeT>
@@ -54,7 +57,7 @@ template<typename ShapeT>
     const Expected<CsgShapeLocalBounds> localBounds = ComputeCsgShapeLocalBoundsFromBytes(shape, parameterBytes);
     if(!localBounds)
         return MakeUnexpected(Failure{});
-    return BuildCsgShapeWorldBoundsFromLocal(shapeToWorld, *localBounds);
+    return LoadCsgShapeWorldBoundsFromLocal(shapeToWorld, *localBounds);
 }
 
 template<typename ShapeT>

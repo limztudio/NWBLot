@@ -16,7 +16,7 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/metascript/adhd/ast/global.h>
+#include <core/metascript/adhd/ast/ast_common.h>
 #include <core/metascript/adhd/ast/builtin_type_semantics.h>
 
 

@@ -51,7 +51,7 @@ static b8 ExtractUiSkinDependencies(const Core::Assets::CookDependencyItemContex
 static b8 RegisterUiSkinCookEntry(Core::Assets::CookEntryRegistry& registry){
     return
         Core::Assets::RegisterDocumentValueCookEntry<UiSkinCookEntry, UiSkin, UiSkinAssetCodec>(
-            s_UiSkinAssetKindLabel,
+            FOUNDATION_TEXT("UI skin"),
             [](const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
                 return ParseUiSkinCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
             },

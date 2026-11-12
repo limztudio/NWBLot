@@ -416,7 +416,7 @@ b8 LayoutOptimizer::computeClassLayout(ClassDecl& classDecl, MVector<ParseError>
     }
 
     const b8 hasMotherArenaPointer = !classDecl.isSerialize && !classDecl.isArenaOwner && classDecl.subsystemTypeName.empty() && classDecl.componentAssetTypeName.empty() && classDecl.needsClassArena;
-    finalizeClassFieldLayouts(classDecl.isSerialize, !classDecl.implementedInterfaces.empty(), hasMotherArenaPointer, classDecl.orderedFields, classDecl.totalSize, classDecl.totalAlign);
+    finalizeClassFieldLayouts(classDecl.isSerialize, !classDecl.implementedInterfaces.empty() || !classDecl.assetTypeName.empty(), hasMotherArenaPointer, classDecl.orderedFields, classDecl.totalSize, classDecl.totalAlign);
     return true;
 }
 

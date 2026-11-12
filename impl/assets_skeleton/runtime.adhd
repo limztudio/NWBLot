@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_skeleton/asset.adhd>
 #include <impl/assets_skeleton/joint_validation.adhd>
 
 
@@ -12,86 +13,33 @@ b8 ValidateSkeletonRuntimePayload(
     in b8 hasValidVirtualPath,
     in Span<SkeletonJoint> joints,
     in HashMap<Name, u32> jointIndices,
-    mut Span<u8> scratchNamedJoints
+    mut Vector<u8> scratchNamedJoints
 ){
     if(!hasValidVirtualPath)
         return false;
     return ValidateSkeletonPayloadData(joints, jointIndices, scratchNamedJoints);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_skeleton/asset.adhd.h>
-
-#include <core/assets/auto_registration.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_skeleton_runtime{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SkeletonAssetCodecAutoRegistrar, SkeletonAssetCodec);
-static_assert(sizeof(SkeletonHeaderBinary) == s_SkeletonHeaderBinaryBytes, "SkeletonHeaderBinary layout drifted");
-static_assert(sizeof(SkeletonJointBinary) == s_SkeletonJointBinaryBytes, "SkeletonJointBinary layout drifted");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 Skeleton::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
-    Vector<u8, Core::Alloc::ScratchArena> namedJoints(m_joints.size(), 0u, scratchArena);
-    return ValidateSkeletonRuntimePayload(checkVirtualPath(NWB_TEXT("Skeleton::validatePayload")), m_joints, m_jointIndices, Span<u8>(namedJoints.data(), namedJoints.size()));
+b8 Skeleton::validatePayload(mut ScratchArena scratchArena)const{
+    Vector<u8> namedJoints(this.m_joints.size(), 0u);
+    return ValidateSkeletonRuntimePayload(
+        this.checkVirtualPath("Skeleton::validatePayload"),
+        Span<SkeletonJoint>(this.m_joints),
+        this.m_jointIndices,
+        namedJoints
+    );
 }
 
-b8 Skeleton::loadBinary(const Span<const u8> binary){
-    Core::Alloc::ScratchArena scratchArena(s_AssetsSkeletonLoadBinaryArena);
-    Skeleton candidate(m_joints.get_allocator().arena(), virtualPath());
+b8 Skeleton::loadBinary(in Span<u8> binary){
+    ScratchArena scratchArena(s_AssetsSkeletonLoadBinaryArena);
+    Skeleton candidate(this.virtualPath());
     if(!DeserializeSkeletonBinaryPayload(binary, candidate.m_joints, candidate.m_jointIndices))
         return false;
     if(!candidate.validatePayload(scratchArena))
         return false;
-    *this = Move(candidate);
+    this = candidate;
     return true;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -31,26 +31,26 @@ inline constexpr TStringView s_UnnamedAssetPathText = FOUNDATION_TEXT("<unnamed>
 
 
 #define NWB_DEFINE_ASSET_TYPE(assetTypeLiteral) \
-    static constexpr AStringView s_AssetTypeText = assetTypeLiteral; \
-    inline static constexpr Name s_AssetTypeName = Name(assetTypeLiteral); \
-    [[nodiscard]] static constexpr const Name& AssetTypeName()noexcept{ \
+    static constexpr ::AStringView s_AssetTypeText = assetTypeLiteral; \
+    inline static constexpr ::Name s_AssetTypeName = ::Name(assetTypeLiteral); \
+    [[nodiscard]] static constexpr const ::Name& AssetTypeName()noexcept{ \
         return s_AssetTypeName; \
     }
 
 #define NWB_DEFINE_ASSET_CODEC_REGISTRAR(codecVariable, codecType) \
-    Core::Assets::AssetCodecAutoRegistrar codecVariable(&Core::Assets::CreateAssetCodec<codecType>)
+    ::NWB::Core::Assets::AssetCodecAutoRegistrar codecVariable(&::NWB::Core::Assets::CreateAssetCodec<codecType>)
 
 #if defined(NWB_COOK)
 #define NWB_ASSET_CODEC_SERIALIZE_DECL() \
 public: \
-    virtual b8 serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override;
+    virtual ::b8 serialize(const ::NWB::Core::Assets::IAsset& asset, ::NWB::Core::Assets::AssetBytes& outBinary)const override;
 #else
 #define NWB_ASSET_CODEC_SERIALIZE_DECL()
 #endif
 #define NWB_DEFINE_ASSET_CODEC(codecType, assetType) \
-    class codecType final : public Core::Assets::AssetCodec<assetType>{ \
+    class codecType final : public ::NWB::Core::Assets::AssetCodec<assetType>{ \
     public: \
-        codecType()noexcept(noexcept(DeclVal<void(*)(const Name&)noexcept>()(assetType::AssetTypeName()))) = default; \
+        codecType()noexcept(noexcept(::DeclVal<void(*)(const ::Name&)noexcept>()(assetType::AssetTypeName()))) = default; \
         \
         \
         NWB_ASSET_CODEC_SERIALIZE_DECL() \
@@ -81,6 +81,11 @@ public:
 
 public:
     [[nodiscard]] b8 checkVirtualPath(TStringView failureContext)const;
+#if defined(NWB_UNICODE)
+    [[nodiscard]] b8 checkVirtualPath(const AStringView failureContext)const{
+        return checkVirtualPath(ConvertString(failureContext));
+    }
+#endif
 
 
 private:

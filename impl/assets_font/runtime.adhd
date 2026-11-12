@@ -2,6 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_font/asset.adhd>
+#include <impl/assets_font/font_binary_codec.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const i64 s_AdmittedFontFaceCount = 1;
 
 b8 IsAdmittedStaticScalableFontFace(
@@ -38,6 +45,16 @@ void LogPreparedFontReadFailure(in Path path, in StringView reason){
     error("Prepared font '{}': {}", PathToString(path), reason);
 }
 
+b8 Font::loadBinary(in Span<u8> binary){
+    Font candidate(this.virtualPath());
+    if(!FontBinaryCodec().deserialize(binary, candidate.m_fontBytes, candidate.m_faceIndex))
+        return false;
+    if(!candidate.validatePayload())
+        return false;
+    this = candidate;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -58,7 +75,6 @@ native{
 #include FT_SYSTEM_H
 #include <impl/assets_font/font_binary_codec.adhd.h>
 #include <impl/assets_font/prepared_font_binary_codec.adhd.h>
-#include <core/assets/auto_registration.h>
 #include <global/binary_little_endian.h>
 
 
@@ -76,13 +92,13 @@ private:
     [[nodiscard]] static void* Allocate(FT_Memory memory, const FT_Long size)noexcept{
         if(size <= 0)
             return nullptr;
-        auto& arena = *MakeNotNull(static_cast<Core::Assets::AssetArena*>(memory->user));
+        auto& arena = *MakeNotNull(static_cast<::ArenaBase*>(memory->user));
         return arena.allocate(alignof(MaxAlign), static_cast<usize>(size));
     }
 
     static void Release(FT_Memory memory, void* block)noexcept{
         if(block){
-            auto& arena = *MakeNotNull(static_cast<Core::Assets::AssetArena*>(memory->user));
+            auto& arena = *MakeNotNull(static_cast<::ArenaBase*>(memory->user));
             arena.deallocate(block, alignof(MaxAlign), 0u);
         }
     }
@@ -92,13 +108,13 @@ private:
             Release(memory, block);
             return nullptr;
         }
-        auto& arena = *MakeNotNull(static_cast<Core::Assets::AssetArena*>(memory->user));
+        auto& arena = *MakeNotNull(static_cast<::ArenaBase*>(memory->user));
         return arena.reallocate(block, alignof(MaxAlign), static_cast<usize>(newSize));
     }
 
 
 public:
-    explicit FreeTypeMemoryFace(Core::Assets::AssetArena& arena)noexcept{
+    explicit FreeTypeMemoryFace(::ArenaBase& arena)noexcept{
         m_memory.user = &arena;
         m_memory.alloc = &Allocate;
         m_memory.free = &Release;
@@ -176,12 +192,6 @@ namespace __hidden_font_runtime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_FontAssetCodecAutoRegistrar, FontAssetCodec);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 template<typename PathArenaT>
 [[nodiscard]] static Unexpected<AStringView> ReadFailure(const ::Path<PathArenaT>& path, const AStringView reason){
     LogPreparedFontReadFailure(path, reason);
@@ -213,7 +223,7 @@ template<typename PathArenaT>
 
     PreparedFontSource candidate(arena);
     candidate.faceIndex = faceIndex;
-    NWB_MEMCPY(candidate.fontSha256.bytes, sizeof(candidate.fontSha256.bytes), header.data() + s_PreparedFontHeaderFontSha256Offset, sizeof(candidate.fontSha256.bytes));
+    FOUNDATION_MEMCPY(candidate.fontSha256.bytes, sizeof(candidate.fontSha256.bytes), header.data() + s_PreparedFontHeaderFontSha256Offset, sizeof(candidate.fontSha256.bytes));
     candidate.groups.reserve(groupCount);
     Array<u32, s_PreparedFontMaxGroupCount> groupByteCounts{};
     u64 pixelByteCount = 0u;
@@ -232,7 +242,7 @@ template<typename PathArenaT>
         );
         if(!groupDecode)
             return ReadFailure(path, groupDecode.error());
-        NWB_MEMCPY(group.sha256.bytes, sizeof(group.sha256.bytes), groupHeader.data() + s_PreparedFontGroupSha256Offset, sizeof(group.sha256.bytes));
+        FOUNDATION_MEMCPY(group.sha256.bytes, sizeof(group.sha256.bytes), groupHeader.data() + s_PreparedFontGroupSha256Offset, sizeof(group.sha256.bytes));
         candidate.groups.push_back(Move(group));
     }
 
@@ -280,14 +290,13 @@ b8 ValidateFontSource(const Core::Assets::AssetBytes& bytes, const u32 faceIndex
     return validator.openAndValidate(Span<const u8>(bytes), faceIndex);
 }
 
-b8 Font::loadBinary(const Span<const u8> binary){
-    Font candidate(m_fontBytes.get_allocator().arena(), virtualPath());
-    if(!FontBinaryCodec{}.deserialize(binary, candidate.m_fontBytes, candidate.m_faceIndex))
-        return false;
-    if(!candidate.validatePayload())
-        return false;
-    *this = Move(candidate);
-    return true;
+b8 ValidateFontSource(const Vector<u8, ::ArenaBase>& bytes, const u32 faceIndex){
+    FreeTypeMemoryFace validator(bytes.get_allocator().arena());
+    return validator.openAndValidate(Span<const u8>(bytes), faceIndex);
+}
+
+b8 Font::validatePayload()const noexcept{
+    return checkVirtualPath(FOUNDATION_TEXT("Font::validatePayload")) && ValidateFontSource(m_fontBytes, m_faceIndex);
 }
 
 Expected<Core::Assets::AssetBytes, AStringView> SerializePreparedFontSource(const BinaryByteView sfnt, const u32 faceIndex, const Span<const PreparedFontImageView> groups, Core::Assets::AssetArena& arena){

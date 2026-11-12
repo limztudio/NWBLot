@@ -333,8 +333,11 @@ b8 Builder::addItemNode(const LayoutNodeDesc& description, Item& item){
 const UiSkinRegion* Builder::region(const Name& preferred, const Name& fallback)const noexcept{
     if(!m_skin)
         return nullptr;
-    const UiSkinRegion* found = m_skin->findRegion(preferred);
-    return found ? found : m_skin->findRegion(fallback);
+    const auto preferredIdx = m_skin->findRegionIndex(preferred);
+    if(preferredIdx)
+        return &m_skin->regions()[*preferredIdx];
+    const auto fallbackIdx = m_skin->findRegionIndex(fallback);
+    return fallbackIdx ? &m_skin->regions()[*fallbackIdx] : nullptr;
 }
 
 Insets Builder::resolveRegionsPadding(const Insets& initial, const Span<const Name> names, const Name& fallback)const noexcept{

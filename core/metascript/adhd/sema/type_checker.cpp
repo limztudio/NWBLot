@@ -405,7 +405,7 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
             ok = false;
         for(MethodDecl* m : classDecl->methods){
             if(m)
-                m->isInline = __hidden_adhd_type_checker::ShouldAutoInlineCallable(*m);
+                m->isInline = (!classDecl->assetTypeName.empty() && m->hasBody && !m->isOutOfLine) || __hidden_adhd_type_checker::ShouldAutoInlineCallable(*m);
         }
     }
 

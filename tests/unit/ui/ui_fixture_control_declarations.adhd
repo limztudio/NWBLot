@@ -861,8 +861,8 @@ NWB_INLINE Point RadioGroupFixture::choicePoint(const u64 keyValue)const noexcep
     return ::__hidden_ui_glyph_sdf_tests::ComputeRadioGroupChoicePoint(keyValue, m_state);
 }
 NWB_INLINE usize RadioGroupFixture::regionQuads(const DrawSnapshot& snapshot, const Name& name)const noexcept{
-    const UiSkinRegion* region = m_skin.findRegion(name);
-    return region ? ::__hidden_ui_glyph_sdf_tests::CountUiSkinRegionQuads(*region, m_skin.atlasWidth(), snapshot) : 0u;
+    UiSkinRegion region{};
+    return m_skin.tryFindRegion(name, region) ? ::__hidden_ui_glyph_sdf_tests::CountUiSkinRegionQuads(region, m_skin.atlasWidth(), snapshot) : 0u;
 }
 };
 namespace UiSearchComboTests{

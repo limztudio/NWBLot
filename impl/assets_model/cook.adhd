@@ -174,8 +174,8 @@ using namespace Core::Metascript;
 }
 
 template<typename ObjectT, typename ParseObjectFn>
-[[nodiscard]] Expected<Core::Assets::AssetVector<ObjectT>> ParseObjectMap(const AStringView filePathText, const Value& asset, const AStringView fieldName, const AStringView objectKind, ParseObjectFn&& parseObject, Core::Assets::AssetArena& arena){
-    Core::Assets::AssetVector<ObjectT> objects(arena);
+[[nodiscard]] Expected<Vector<ObjectT, ::ArenaBase>> ParseObjectMap(const AStringView filePathText, const Value& asset, const AStringView fieldName, const AStringView objectKind, ParseObjectFn&& parseObject, Core::Assets::AssetArena& arena){
+    Vector<ObjectT, ::ArenaBase> objects(arena);
 
     const Value* fieldValue = asset.findField(fieldName);
     if(!fieldValue)

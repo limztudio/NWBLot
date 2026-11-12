@@ -370,7 +370,7 @@ void TemplateInstantiationCollector::instantiateClassTemplate(const ClassDecl& t
     }
 
     const b8 hasMotherArenaPointer = !templateDecl.isSerialize && !templateDecl.isArenaOwner && templateDecl.subsystemTypeName.empty() && templateDecl.componentAssetTypeName.empty() && inst->needsClassArena;
-    m_optimizer.finalizeClassFieldLayouts(templateDecl.isSerialize, !templateDecl.implementedInterfaces.empty(), hasMotherArenaPointer, inst->orderedFields, inst->totalSize, inst->totalAlign);
+    m_optimizer.finalizeClassFieldLayouts(templateDecl.isSerialize, !templateDecl.implementedInterfaces.empty() || !templateDecl.assetTypeName.empty(), hasMotherArenaPointer, inst->orderedFields, inst->totalSize, inst->totalAlign);
     unit.templateInstantiations.push_back(inst);
 
     for(const TypeRef* implIface : templateDecl.implementedInterfaces){

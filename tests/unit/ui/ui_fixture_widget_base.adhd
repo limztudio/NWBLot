@@ -750,10 +750,10 @@ void WidgetFixture::press(const Core::Key::Enum value, const b8 repeat, const b8
 }
 
 Expected<SkinPaintSample> WidgetFixture::sampleSkinPaint(const DrawSnapshot& snapshot, const Name& name)const noexcept{
-    const UiSkinRegion* region = m_skin.findRegion(name);
-    if(!region)
+    UiSkinRegion region{};
+    if(!m_skin.tryFindRegion(name, region))
         return MakeUnexpected(Failure{});
-    return ::__hidden_ui_glyph_sdf_tests::SampleUiSkinRegionPaint(*region, m_skin.atlasWidth(), m_skin.atlasHeight(), snapshot);
+    return ::__hidden_ui_glyph_sdf_tests::SampleUiSkinRegionPaint(region, m_skin.atlasWidth(), m_skin.atlasHeight(), snapshot);
 }
 
 b8 WidgetFixture::installKoreanFallback(){

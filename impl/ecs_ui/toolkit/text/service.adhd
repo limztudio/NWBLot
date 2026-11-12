@@ -324,7 +324,7 @@ public:
 
 private:
     void initialize(Core::Alloc::ScratchArena& scratchArena, Core::Alloc::GlobalArena& arena, const FontSource& source){
-        const Core::Assets::AssetBytes& sourceBytes = source.font.fontBytes();
+        const auto& sourceBytes = source.font.fontBytes();
         m_bytes.assign(sourceBytes.begin(), sourceBytes.end());
         m_memory.user = &arena;
         m_memory.alloc = &Allocate;

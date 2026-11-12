@@ -37,7 +37,7 @@ namespace __hidden_assets_sampler_volume_entry{
 
 static b8 RegisterSamplerCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<SamplerCookEntry, Sampler, SamplerAssetCodec>(
-        SamplerBinaryPayload::s_SamplerAssetKindLabel,
+        FOUNDATION_TEXT("sampler"),
         [](const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
             return ParseSamplerCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
         },

@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_model/asset.adhd>
 #include <impl/assets_model/model_binary_codec.adhd>
 
 
@@ -18,91 +19,24 @@ b8 DeserializeModelBinaryPayload(
     return codec.deserialize(binary, outSkeletonObjects, outStaticMeshObjects, outSkinnedMeshObjects);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_model/asset.adhd.h>
-
-#include <core/assets/auto_registration.h>
-#include <core/assets/binary_payload_io.h>
-#include <core/common/log.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_model_runtime{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_ModelAssetCodecAutoRegistrar, ModelAssetCodec);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 Model::validatePayload(Core::Alloc::ScratchArena&)const{
-    if(!checkVirtualPath(NWB_TEXT("Model::validatePayload")))
+b8 Model::validatePayload()const{
+    if(!this.checkVirtualPath("Model::validatePayload"))
         return false;
 
-    return ValidateModelPayloadObjects(m_skeletonObjects, m_staticMeshObjects, m_skinnedMeshObjects);
+    return ValidateModelPayloadObjects(this.m_skeletonObjects, this.m_staticMeshObjects, this.m_skinnedMeshObjects);
 }
 
-b8 Model::loadBinary(const Span<const u8> binary){
-    Core::Alloc::ScratchArena scratchArena(s_AssetsModelLoadBinaryArena);
-    Model candidate(m_skeletonObjects.get_allocator().arena(), virtualPath());
-    if(!DeserializeModelBinaryPayload(binary, candidate.m_skeletonObjects, candidate.m_staticMeshObjects, candidate.m_skinnedMeshObjects) || !candidate.validatePayload(scratchArena))
+b8 Model::validatePayload(mut ScratchArena scratchArena)const{
+    return this.validatePayload();
+}
+
+b8 Model::loadBinary(in Span<u8> binary){
+    Model candidate(this.virtualPath());
+    if(!DeserializeModelBinaryPayload(binary, candidate.m_skeletonObjects, candidate.m_staticMeshObjects, candidate.m_skinnedMeshObjects) || !candidate.validatePayload())
         return false;
-    *this = Move(candidate);
+    this = candidate;
     return true;
 }
 
-void Model::setObjects(SkeletonObjectVector&& skeletonObjects, StaticMeshObjectVector&& staticMeshObjects, SkinnedMeshObjectVector&& skinnedMeshObjects)noexcept{
-    m_skeletonObjects = Move(skeletonObjects);
-    m_staticMeshObjects = Move(staticMeshObjects);
-    m_skinnedMeshObjects = Move(skinnedMeshObjects);
-}
-
-void Model::takeObjects(SkeletonObjectVector& outSkeletonObjects, StaticMeshObjectVector& outStaticMeshObjects, SkinnedMeshObjectVector& outSkinnedMeshObjects)noexcept{
-    outSkeletonObjects = Move(m_skeletonObjects);
-    outStaticMeshObjects = Move(m_staticMeshObjects);
-    outSkinnedMeshObjects = Move(m_skinnedMeshObjects);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

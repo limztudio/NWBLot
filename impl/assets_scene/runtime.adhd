@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_scene/asset.adhd>
 #include <impl/assets_scene/component_asset_binary_codec.adhd>
 #include <impl/assets_scene/scene_asset_binary_codec.adhd>
 
@@ -74,6 +75,73 @@ b8 ValidateCreatedSceneEcsEntity(in EntityID entityId, in Name entityName){
     return false;
 }
 
+b8 EntityAsset::validatePayload()const{
+    if(!this.checkVirtualPath("EntityAsset::validatePayload"))
+        return false;
+    if(!ValidateEntityAssetComponentCount(this.m_components.size()))
+        return false;
+    if(!ValidateUniqueAssetRefs(Span<ComponentRef>(this.m_components), "EntityAsset::validatePayload", "component"))
+        return false;
+    return true;
+}
+
+b8 EntityAsset::validatePayload(mut ScratchArena scratchArena)const{
+    return this.validatePayload();
+}
+
+b8 EntityAsset::loadBinary(in Span<u8> binary){
+    EntityAsset candidate(this.virtualPath());
+    if(!SceneAssetBinaryCodec().deserializeEntity(binary, candidate.m_components))
+        return false;
+    if(!candidate.validatePayload())
+        return false;
+    this = candidate;
+    return true;
+}
+
+b8 ProjectAsset::validatePayload()const{
+    if(!this.checkVirtualPath("ProjectAsset::validatePayload"))
+        return false;
+    return ValidateProjectAssetPayload(this.m_startScene.valid());
+}
+
+b8 ProjectAsset::loadBinary(in Span<u8> binary){
+    Name startScenePath;
+    if(!SceneAssetBinaryCodec().deserializeProject(binary, startScenePath))
+        return false;
+    this.m_startScene = SceneRef(startScenePath);
+    return this.validatePayload();
+}
+
+b8 SceneAsset::validatePayload()const{
+    if(!this.checkVirtualPath("SceneAsset::validatePayload"))
+        return false;
+    if(!ValidateSceneAssetSubsystemCount(this.m_subsystems.size()))
+        return false;
+    if(!ValidateUniqueAssetRefs(Span<SubsystemRef>(this.m_subsystems), "SceneAsset::validatePayload", "subsystem"))
+        return false;
+    if(!ValidateUniqueAssetRefs(Span<EntityRef>(this.m_entities), "SceneAsset::validatePayload", "entity"))
+        return false;
+    if(!ValidateSceneAssetMap(this.m_assets))
+        return false;
+    return true;
+}
+
+b8 SceneAsset::validatePayload(mut ScratchArena scratchArena)const{
+    return this.validatePayload();
+}
+
+b8 SceneAsset::loadBinary(in Span<u8> binary){
+    SceneAsset candidate(this.virtualPath());
+    if(!SceneAssetBinaryCodec().deserializeScene(binary, candidate.m_subsystems, candidate.m_entities, candidate.m_assets))
+        return false;
+    DeduplicateSubsystemRefs(candidate.m_subsystems);
+    if(!candidate.validatePayload())
+        return false;
+    this = candidate;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -112,9 +180,6 @@ namespace __hidden_scene_runtime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_EntityAssetCodecAutoRegistrar, EntityAssetCodec);
-NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_ProjectAssetCodecAutoRegistrar, ProjectAssetCodec);
-NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SceneAssetCodecAutoRegistrar, SceneAssetCodec);
 NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_ComponentAssetCodecAutoRegistrar, ComponentAssetCodec);
 NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_TransformComponentAssetAutoRegistrar, TransformComponentAsset);
 NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_CameraComponentAssetAutoRegistrar, CameraComponentAsset);
@@ -231,94 +296,6 @@ b8 LightComponentAsset::validatePayload()const{
     if(!checkVirtualPath(NWB_TEXT("LightComponentAsset::validatePayload")))
         return false;
     return ValidateLightComponentAssetPayload(component, virtualPath());
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 EntityAsset::validatePayload(Core::Alloc::ScratchArena&)const{
-    if(!checkVirtualPath(NWB_TEXT("EntityAsset::validatePayload")))
-        return false;
-    if(!ValidateEntityAssetComponentCount(m_components.size()))
-        return false;
-    if(!ValidateUniqueAssetRefs(Span<const ComponentRef>(m_components), "EntityAsset::validatePayload", "component"))
-        return false;
-    return true;
-}
-
-b8 EntityAsset::loadBinary(const Span<const u8> binary){
-    Core::Alloc::ScratchArena scratchArena(s_EntityLoadBinaryArena);
-    auto& assetArena = m_components.get_allocator().arena();
-    EntityAsset candidate(assetArena, virtualPath());
-    if(!SceneAssetBinaryCodec().deserializeEntity(binary, candidate.m_components))
-        return false;
-
-    if(!candidate.validatePayload(scratchArena))
-        return false;
-    *this = Move(candidate);
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ProjectAsset::validatePayload()const{
-    if(!checkVirtualPath(NWB_TEXT("ProjectAsset::validatePayload")))
-        return false;
-    return ValidateProjectAssetPayload(m_startScene.valid());
-}
-
-b8 ProjectAsset::loadBinary(const Span<const u8> binary){
-    if(!SceneAssetBinaryCodec().deserializeProject(binary, m_startScene.virtualPath))
-        return false;
-    return validatePayload();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 SceneAsset::validatePayload(Core::Alloc::ScratchArena&)const{
-    if(!checkVirtualPath(NWB_TEXT("SceneAsset::validatePayload")))
-        return false;
-    if(!ValidateSceneAssetSubsystemCount(m_subsystems.size()))
-        return false;
-    if(!ValidateUniqueAssetRefs(Span<const SubsystemRef>(m_subsystems), "SceneAsset::validatePayload", "subsystem"))
-        return false;
-    if(!ValidateUniqueAssetRefs(Span<const EntityRef>(m_entities), "SceneAsset::validatePayload", "entity"))
-        return false;
-    if(!ValidateSceneAssetMap(m_assets))
-        return false;
-    return true;
-}
-
-b8 SceneAsset::loadBinary(const Span<const u8> binary){
-    Core::Alloc::ScratchArena scratchArena(s_SceneLoadBinaryArena);
-    auto& assetArena = m_subsystems.get_allocator().arena();
-    SceneAsset candidate(assetArena, virtualPath());
-    if(!SceneAssetBinaryCodec().deserializeScene(binary, candidate.m_subsystems, candidate.m_entities, candidate.m_assets))
-        return false;
-    DeduplicateSubsystemRefs(candidate.m_subsystems);
-
-    if(!candidate.validatePayload(scratchArena))
-        return false;
-    *this = Move(candidate);
-    return true;
-}
-
-void SceneAsset::setContents(SubsystemRefVector&& subsystems, AssetMap&& assets, EntityRefVector&& entities)noexcept{
-    m_subsystems = Move(subsystems);
-    DeduplicateSubsystemRefs(m_subsystems);
-    m_entities = Move(entities);
-    m_assets = Move(assets);
-}
-
-void SceneAsset::takeContents(SubsystemRefVector& outSubsystems, AssetMap& outAssets, EntityRefVector& outEntities)noexcept{
-    outSubsystems = Move(m_subsystems);
-    outAssets = Move(m_assets);
-    outEntities = Move(m_entities);
 }
 
 
@@ -462,4 +439,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

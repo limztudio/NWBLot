@@ -2072,6 +2072,7 @@ NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("AssetCodecAutoRegistrar", "finalize", "void
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("AssetCodecAutoRegistrar", "initialize", "b8", "", "", true, true)
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("AssetRegistry", "unregisterCodec", "b8", "", "", true, true)
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("IAsset", "assetType", "Name", "", "", true, false)
+NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("IAsset", "checkVirtualPath", "b8", "", "", true, false)
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("IAsset", "virtualPath", "Name", "", "", true, false)
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("IAssetBinarySource", "readAssetBinary", "b8", "", "", true, false)
 NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT("IAssetCodec", "assetType", "Name", "", "", true, false)

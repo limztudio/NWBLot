@@ -70,17 +70,60 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
     out.append(decl.name.data(), decl.name.size());
     out.append(" final");
 
-    if(!decl.implementedInterfaces.empty()){
+    const b8 isAssetClass = !decl.assetTypeName.empty();
+    if(isAssetClass || !decl.implementedInterfaces.empty()){
         out.append(" : ");
+        b8 firstBase = true;
+        if(isAssetClass){
+            out.append("public ::NWB::Core::Assets::TypedAsset<");
+            out.append(decl.name.data(), decl.name.size());
+            out.push_back('>');
+            firstBase = false;
+        }
         for(usize i = 0u; i < decl.implementedInterfaces.size(); ++i){
-            if(i > 0u)
+            if(!firstBase)
                 out.append(", ");
+            firstBase = false;
             out.append("public ");
             if(decl.implementedInterfaces[i])
                 m_typeEmitter.emitTypeCpp(out, *decl.implementedInterfaces[i]);
         }
     }
     out.append("{\r\n");
+    if(isAssetClass){
+        out.append("public:\r\n");
+        MVector<MStringView> emittedAliases(m_arena);
+        const auto emitAlias = [&](const TypeRef& aliasRef){
+            for(const MStringView existing : emittedAliases){
+                if(existing == aliasRef.name)
+                    return;
+            }
+            emittedAliases.push_back(aliasRef.name);
+            out.append("    using ");
+            out.append(aliasRef.name.data(), aliasRef.name.size());
+            out.append(" = ");
+            m_typeEmitter.emitTypeCpp(out, aliasRef);
+            out.append(";\r\n");
+        };
+        for(usize i = 0u; i < decl.fields.size(); ++i){
+            const FieldDecl* field = decl.fields[i];
+            if(!field || !field->type)
+                continue;
+            const TypeAliasDecl* aliasDecl = m_symbols.findTypeAlias(field->type->name);
+            if(!aliasDecl)
+                continue;
+            if(aliasDecl->aliasedType){
+                for(const TypeArg& targ : aliasDecl->aliasedType->templateArgs){
+                    if(targ.type && m_symbols.findTypeAlias(targ.type->name))
+                        emitAlias(*targ.type);
+                }
+            }
+            emitAlias(*field->type);
+        }
+        out.append("    NWB_DEFINE_ASSET_TYPE(\"");
+        out.append(decl.assetTypeName.data(), decl.assetTypeName.size());
+        out.append("\")\r\n\r\n");
+    }
 
     const ClassDecl* prevOwnerClass = m_sourceEmitter.activeOwnerClass();
     const b8 prevOwnerNeedsArena = m_sourceEmitter.activeOwnerNeedsArena();
@@ -95,7 +138,7 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
 
     if(decl.isSerialize || decl.isReflect || !decl.assetTypeName.empty()){
         out.append("\r\n");
-        if(decl.templateParams.empty())
+        if(decl.templateParams.empty() && decl.assetTypeName.empty())
             reflectionEmitter.emitClassReflectionDeclarations(out, decl);
         else
             reflectionEmitter.emitInlineClassReflection(out, decl, decl.orderedFields, decl.needsClassArena);
@@ -107,6 +150,23 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
 
     if(packClass)
         out.append("#pragma pack(pop)\r\n");
+
+    if(isAssetClass){
+        b8 hasLoadBinary = false;
+        for(const MethodDecl* method : decl.methods){
+            if(method && !method->isConstructor && !method->isDestructor && !method->isOperator && method->name == "loadBinary" && method->params.size() == 1u){
+                hasLoadBinary = true;
+                break;
+            }
+        }
+        if(hasLoadBinary){
+            out.append("\r\nNWB_DEFINE_ASSET_CODEC(");
+            out.append(decl.name.data(), decl.name.size());
+            out.append(decl.name.ends_with("Asset") ? "Codec, " : "AssetCodec, ");
+            out.append(decl.name.data(), decl.name.size());
+            out.append(");\r\n");
+        }
+    }
 
     out.append("\r\n");
 }
@@ -238,6 +298,13 @@ void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, con
                 out.append("    explicit ");
                 out.append(decl.name.data(), decl.name.size());
                 out.append("(::ArenaBase& __adhd_mother_arena)noexcept : __adhd_arena(::MakeNotNull(&__adhd_mother_arena)){}\r\n");
+                if(!decl.assetTypeName.empty()){
+                    out.append("    ");
+                    out.append(decl.name.data(), decl.name.size());
+                    out.append("(::ArenaBase& __adhd_mother_arena, const ::Name& __adhd_virtual_path)noexcept : ::NWB::Core::Assets::TypedAsset<");
+                    out.append(decl.name.data(), decl.name.size());
+                    out.append(">(__adhd_virtual_path), __adhd_arena(::MakeNotNull(&__adhd_mother_arena)){}\r\n");
+                }
             }
             if(canCopy || canMove){
                 out.append("    ");
@@ -261,7 +328,13 @@ void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, con
                     if(!isMove)
                         out.append("const ");
                     out.append(decl.name.data(), decl.name.size());
-                    out.append(isMove ? "&& __adhd_rhs)noexcept : __adhd_arena(::MakeNotNull(&__adhd_mother_arena))" : "& __adhd_rhs)noexcept : __adhd_arena(::MakeNotNull(&__adhd_mother_arena))");
+                    out.append(isMove ? "&& __adhd_rhs)noexcept : " : "& __adhd_rhs)noexcept : ");
+                    if(!decl.assetTypeName.empty()){
+                        out.append("::NWB::Core::Assets::TypedAsset<");
+                        out.append(decl.name.data(), decl.name.size());
+                        out.append(">(__adhd_rhs.virtualPath()), ");
+                    }
+                    out.append("__adhd_arena(::MakeNotNull(&__adhd_mother_arena))");
                     for(const FieldDecl* field : orderedFields){
                         if(!field || !field->type)
                             continue;
@@ -302,8 +375,10 @@ void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, con
                         out.append("const ");
                     out.append(decl.name.data(), decl.name.size());
                     out.append(isMove ? "&& __adhd_rhs)noexcept{\r\n" : "& __adhd_rhs)noexcept{\r\n");
-                    if(!orderedFields.empty()){
+                    if(!orderedFields.empty() || !decl.assetTypeName.empty()){
                         out.append("        if(this != &__adhd_rhs){\r\n");
+                        if(!decl.assetTypeName.empty())
+                            out.append("            static_cast<::NWB::Core::Assets::IAsset&>(*this) = __adhd_rhs;\r\n");
                         for(const FieldDecl* field : orderedFields){
                             if(!field || !field->type)
                                 continue;
@@ -356,6 +431,36 @@ void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, con
                 if(canMoveAssign)
                     emitAssignOp(true);
             }
+            if(!decl.methods.empty())
+                out.append("\r\n");
+        }
+    }
+    else if(!decl.assetTypeName.empty()){
+        b8 hasUserConstructor = false;
+        for(const MethodDecl* m : decl.methods){
+            if(m && m->isConstructor){
+                hasUserConstructor = true;
+                break;
+            }
+        }
+        if(!hasUserConstructor){
+            out.append("public:\r\n");
+            out.append("    ");
+            out.append(decl.name.data(), decl.name.size());
+            out.append("()noexcept = default;\r\n");
+            out.append("    explicit ");
+            out.append(decl.name.data(), decl.name.size());
+            out.append("(const ::Name& __adhd_virtual_path)noexcept : ::NWB::Core::Assets::TypedAsset<");
+            out.append(decl.name.data(), decl.name.size());
+            out.append(">(__adhd_virtual_path){}\r\n");
+            out.append("    explicit ");
+            out.append(decl.name.data(), decl.name.size());
+            out.append("(::ArenaBase& __adhd_mother_arena)noexcept{ (void)__adhd_mother_arena; }\r\n");
+            out.append("    ");
+            out.append(decl.name.data(), decl.name.size());
+            out.append("(::ArenaBase& __adhd_mother_arena, const ::Name& __adhd_virtual_path)noexcept : ::NWB::Core::Assets::TypedAsset<");
+            out.append(decl.name.data(), decl.name.size());
+            out.append(">(__adhd_virtual_path){ (void)__adhd_mother_arena; }\r\n");
             if(!decl.methods.empty())
                 out.append("\r\n");
         }

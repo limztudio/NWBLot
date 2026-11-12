@@ -76,10 +76,15 @@ void HeaderPreambleEmitter::Emit(MString& out, const TranslationUnit& unit, cons
         return false;
     };
 
+    b8 hasAssetDecl = false;
     b8 hasSubsystemDecl = false;
     b8 hasComponentAssetDecl = false;
     b8 hasHeaderTaskScope = false;
     b8 hasHeaderDiagnostic = false;
+    for(const InterfaceDecl* ifaceDecl : unit.interfaces){
+        if(ifaceDecl && !ifaceDecl->isImported && !ifaceDecl->assetTypeName.empty())
+            hasAssetDecl = true;
+    }
     for(const ClassDecl* classDecl : unit.classes){
         if(!classDecl)
             continue;
@@ -95,11 +100,15 @@ void HeaderPreambleEmitter::Emit(MString& out, const TranslationUnit& unit, cons
         }
         if(classDecl->isImported)
             continue;
+        if(!classDecl->assetTypeName.empty())
+            hasAssetDecl = true;
         if(!classDecl->subsystemTypeName.empty())
             hasSubsystemDecl = true;
         if(!classDecl->componentAssetTypeName.empty())
             hasComponentAssetDecl = true;
     }
+    if(hasAssetDecl)
+        out.append("#include <core/assets/module.h>\r\n");
     if(hasSubsystemDecl)
         out.append("#include <impl/assets_subsystem/asset.adhd.h>\r\n");
     if(hasComponentAssetDecl)

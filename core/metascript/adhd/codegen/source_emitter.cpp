@@ -326,6 +326,35 @@ MString SourceEmitter::emitSource(const TranslationUnit& unit, const MStringView
 
     ReflectionEmitter reflectionEmitter(m_symbols);
 
+    const auto needsAutoCodecRegistrar = [&](const ClassDecl& classDecl)noexcept -> b8{
+        if(classDecl.assetTypeName.empty())
+            return false;
+        b8 hasLocalLoadBinaryDef = false;
+        for(const MethodDecl* method : classDecl.methods){
+            if(method && !method->isImported && method->hasBody && !method->isConstructor && !method->isDestructor && !method->isOperator && method->name == "loadBinary" && method->params.size() == 1u){
+                hasLocalLoadBinaryDef = true;
+                break;
+            }
+        }
+        if(!hasLocalLoadBinaryDef)
+            return false;
+        MString codecName(m_arena);
+        codecName.append(classDecl.name.data(), classDecl.name.size());
+        codecName.append(classDecl.name.ends_with("Asset") ? "Codec" : "AssetCodec");
+        for(const MStringView& rawBlock : unit.sourceNativeBlocks){
+            if(rawBlock.find(codecName) != MStringView::npos)
+                return false;
+        }
+        return true;
+    };
+    b8 hasAutoCodecRegistrar = false;
+    for(const ClassDecl* classDecl : unit.classes){
+        if(classDecl && needsAutoCodecRegistrar(*classDecl)){
+            hasAutoCodecRegistrar = true;
+            break;
+        }
+    }
+
     out.append(s_AdhdGeneratedFileBanner.data(), s_AdhdGeneratedFileBanner.size());
     out.append("////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\r\n\r\n\r\n");
     out.append("#include \"");
@@ -335,6 +364,8 @@ MString SourceEmitter::emitSource(const TranslationUnit& unit, const MStringView
         out.append("\r\n#include <global/assert.h>\r\n");
         out.append("#include <core/common/log.h>\r\n");
         out.append("#include <core/task/cpu/scheduler.h>\r\n");
+        if(hasAutoCodecRegistrar)
+            out.append("#include <core/assets/auto_registration.h>\r\n");
     }
     out.append("\r\n\r\n");
     out.append("////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\r\n\r\n\r\n");
@@ -361,8 +392,15 @@ MString SourceEmitter::emitSource(const TranslationUnit& unit, const MStringView
             }
         }
 
-        if(!classDecl->isImported && classDecl->templateParams.empty() && (classDecl->isSerialize || classDecl->isReflect || !classDecl->assetTypeName.empty()))
+        if(!classDecl->isImported && classDecl->templateParams.empty() && classDecl->assetTypeName.empty() && (classDecl->isSerialize || classDecl->isReflect))
             reflectionEmitter.emitClassReflectionDefinitions(out, *classDecl);
+        if(needsAutoCodecRegistrar(*classDecl)){
+            out.append("static ::NWB::Core::Assets::AssetCodecAutoRegistrar __adhd_asset_codec_registrar_");
+            out.append(classDecl->name.data(), classDecl->name.size());
+            out.append("(&::NWB::Core::Assets::CreateAssetCodec<");
+            out.append(classDecl->name.data(), classDecl->name.size());
+            out.append(classDecl->name.ends_with("Asset") ? "Codec>);\r\n\r\n" : "AssetCodec>);\r\n\r\n");
+        }
     }
 
     for(const MethodDecl* fn : unit.freeFunctions){

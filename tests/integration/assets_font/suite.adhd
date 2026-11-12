@@ -212,7 +212,7 @@ usize FindTableRecord(in AssetBytes bytes, in u32 tag){
     return 0u;
 }
 
-AssetBytes CopyAssetBytes(in AssetBytes source, mut AssetArena arena){
+AssetBytes CopyAssetBytes(in Span<u8> source, mut AssetArena arena){
     AssetBytes copy(arena);
     copy.resize(source.size());
     for(usize index = 0u; index < source.size(); ++index)

@@ -2,12 +2,46 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_font_atlas/asset.adhd>
+#include <impl/global.adhd>
+#include <impl/assets_font/asset.adhd>
 #include <impl/assets_font_atlas/types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+class FontAtlasGroup{
+    public Sha256Digest sha256 = Sha256Digest();
+    public Vector<u8> pixels;
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 channelCount = s_FontAtlasMaxChannelCount;
+}
+
+// Exact source positioning tables preserve GPOS classes, script/language selection and lookup order without expansion.
+class FontAtlasPositioningTable{
+    public Sha256Digest sha256 = Sha256Digest();
+    public Vector<u8> bytes;
+    public u32 tag = 0u;
+}
+
+class FontAtlasPayload{
+    public AssetRef<Font> font = AssetRef<Font>();
+    public Sha256Digest fontSha256 = Sha256Digest();
+    public u32 faceIndex = 0u;
+    public u32 unitsPerEm = 0u;
+    public u32 sourceGlyphCount = 0u;
+    public u32 bakePpem = s_FontAtlasDefaultBakePpem;
+    public u32 spreadPixels = s_FontAtlasDefaultSpreadPixels;
+    public u32 guardTexels = s_FontAtlasDefaultGuardTexels;
+    public FontAtlasRasterMode rasterMode = FontAtlasRasterMode::Bitmap;
+    public f32 ascenderUnits = 0.0f;
+    public f32 descenderUnits = 0.0f;
+    public f32 lineGapUnits = 0.0f;
+    public Vector<FontAtlasGlyph> glyphs;
+    public Vector<FontAtlasGroup> groups;
+    public Vector<FontAtlasPositioningTable> positioningTables;
+}
 
 b8 HasFontAtlasPositioningTables(in usize tableCount){
     return tableCount > 0u;
@@ -15,4 +49,3 @@ b8 HasFontAtlasPositioningTables(in usize tableCount){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -511,9 +511,9 @@ public:
         const Texture& copied = source->texture();
         EXPECT_EQ(copied.primaryPayloadByteCount(), 144u);
         ASSERT_EQ(copied.payloadBytes().size(), 288u);
-        ASSERT_NE(copied.alphaUastcBlocks(), nullptr);
-        EXPECT_EQ(copied.alphaUastcBlocks(), copied.payloadBytes().data() + 144u);
-        EXPECT_NE(copied.alphaUastcBlocks(), original.alphaUastcBlocks());
+        ASSERT_FALSE(copied.alphaUastcBlocks().empty());
+        EXPECT_EQ(copied.alphaUastcBlocks().data(), copied.payloadBytes().data() + 144u);
+        EXPECT_NE(copied.alphaUastcBlocks().data(), original.alphaUastcBlocks().data());
         EXPECT_EQ(copied.alphaUastcBlocks()[143u], static_cast<u8>(37u + 287u * 17u));
     }
 

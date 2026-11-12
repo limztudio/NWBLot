@@ -2,52 +2,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/assets_sampler/types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/assets_sampler/types.adhd.h>
-
-#include <core/assets/module.h>
-#include <core/graphics/rhi/pipeline_state.h>
+const StringView s_SamplerValidatePayloadContext = "Sampler::validatePayload";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace SamplerBinaryPayload{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr TStringView s_SamplerAssetKindLabel = FOUNDATION_TEXT("sampler");
-inline constexpr TStringView s_SamplerLoadBinaryContext = FOUNDATION_TEXT("Sampler::loadBinary");
-
-static_assert(sizeof(SamplerBinaryHeader) == s_SamplerHeaderBinaryByteSize, "Sampler header layout drifted");
-static_assert(alignof(SamplerBinaryHeader) == s_SamplerPackedAlignBytes, "Sampler header must stay packed");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] NWB_INLINE b8 IsValidSamplerDescription(const Core::SamplerDesc& description)noexcept{
+b8 IsValidSamplerDescription(in SamplerDesc description){
     return IsValidSamplerDescriptionParameters(
         description.borderColor.r,
         description.borderColor.g,
@@ -55,10 +22,10 @@ static_assert(alignof(SamplerBinaryHeader) == s_SamplerPackedAlignBytes, "Sample
         description.borderColor.a,
         description.maxAnisotropy,
         description.mipBias,
-        static_cast<u32>(description.addressU),
-        static_cast<u32>(description.addressV),
-        static_cast<u32>(description.addressW),
-        static_cast<u32>(description.reductionType)
+        cast<u32>(description.addressU),
+        cast<u32>(description.addressV),
+        cast<u32>(description.addressW),
+        cast<u32>(description.reductionType)
     );
 }
 
@@ -66,51 +33,22 @@ static_assert(alignof(SamplerBinaryHeader) == s_SamplerPackedAlignBytes, "Sample
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Sampler final : public Core::Assets::TypedAsset<Sampler>{
-public:
-    NWB_DEFINE_ASSET_TYPE("sampler")
+[asset("sampler")]
+class Sampler{
+    private SamplerDesc m_description;
 
 
-public:
-    explicit Sampler(Core::Assets::AssetArena&)noexcept{}
-    Sampler(Core::Assets::AssetArena&, const Name& virtualPath)noexcept
-        : Core::Assets::TypedAsset<Sampler>(virtualPath)
-    {}
+    public b8 validatePayload()const;
+    public b8 loadBinary(in Span<u8> binary);
 
+    public void setDescription(in SamplerDesc description){
+        this.m_description = description;
+    }
 
-public:
-    [[nodiscard]] b8 validatePayload()const;
-    b8 loadBinary(Span<const u8> binary);
-
-    void setDescription(const Core::SamplerDesc& description)noexcept{ m_description = description; }
-
-
-public:
-    [[nodiscard]] const Core::SamplerDesc& description()const noexcept{ return m_description; }
-
-
-private:
-    Core::SamplerDesc m_description;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_DEFINE_ASSET_CODEC(SamplerAssetCodec, Sampler);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public in SamplerDesc description()const{
+        return this.m_description;
+    }
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

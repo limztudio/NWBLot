@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_mesh/asset.adhd>
+#include <impl/assets_mesh/skin_asset.adhd>
 #include <impl/assets_mesh/mesh_binary_codec.adhd>
 #include <impl/assets_mesh/skin_binary_codec.adhd>
 
@@ -53,6 +55,76 @@ b8 DeserializeSkinBinaryPayload(
     return codec.deserialize(binary, outMesh, outSkeleton, outInfluences, outInverseBindMatrices);
 }
 
+b8 Mesh::validatePayload()const{
+    return ValidateMeshAssetPayload(
+        this.virtualPath(),
+        this.m_positionStream,
+        this.m_normalStream,
+        this.m_tangentStream,
+        this.m_uv0Stream,
+        this.m_colorStream,
+        this.m_meshlets,
+        this.m_meshletBounds,
+        this.m_meshletPositionRefDeltas,
+        this.m_meshletAttributeRefDeltas,
+        this.m_meshletLocalVertexRefs,
+        this.m_meshletPrimitiveIndices,
+        this.m_solidTriangleWords
+    );
+}
+
+b8 Mesh::validatePayload(mut ScratchArena scratchArena)const{
+    return this.validatePayload();
+}
+
+b8 Mesh::loadBinary(in Span<u8> binary){
+    if(!this.checkVirtualPath("Mesh::loadBinary"))
+        return false;
+
+    Mesh candidate(this.virtualPath());
+    if(!DeserializeMeshBinaryPayload(
+        binary,
+        candidate.m_positionStream,
+        candidate.m_normalStream,
+        candidate.m_tangentStream,
+        candidate.m_uv0Stream,
+        candidate.m_colorStream,
+        candidate.m_meshlets,
+        candidate.m_meshletBounds,
+        candidate.m_meshletPositionRefDeltas,
+        candidate.m_meshletAttributeRefDeltas,
+        candidate.m_meshletLocalVertexRefs,
+        candidate.m_meshletPrimitiveIndices,
+        candidate.m_solidTriangleWords
+    ))
+        return false;
+
+    if(!candidate.validatePayload())
+        return false;
+    this = candidate;
+    return true;
+}
+
+b8 Skin::loadBinary(in Span<u8> binary){
+    Skin candidate(this.virtualPath());
+    Name meshPath;
+    Name skeletonPath;
+    if(!DeserializeSkinBinaryPayload(binary, meshPath, skeletonPath, candidate.m_influences, candidate.m_inverseBindMatrices))
+        return false;
+    candidate.setMesh(AssetRef<Mesh>(meshPath));
+    candidate.setSkeleton(AssetRef<Skeleton>(skeletonPath));
+    if(!candidate.validatePayload())
+        return false;
+    this = candidate;
+    return true;
+}
+
+b8 Skin::validatePayload()const{
+    if(!this.checkVirtualPath("Skin::validatePayload"))
+        return false;
+    return ValidateSkinAssetPayload(this.m_mesh.valid(), this.m_skeleton.valid(), this.m_influences, this.m_inverseBindMatrices);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -88,19 +160,12 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_MeshAssetCodecAutoRegistrar, MeshAssetCodec);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace __hidden_skin_runtime{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SkinAssetCodecAutoRegistrar, SkinAssetCodec);
 NWB_DEFINE_SUBSYSTEM_ASSET_REGISTRAR(s_SkinningSubsystemAssetAutoRegistrar, SkinningSubsystem);
 
 
@@ -108,120 +173,6 @@ NWB_DEFINE_SUBSYSTEM_ASSET_REGISTRAR(s_SkinningSubsystemAssetAutoRegistrar, Skin
 
 
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 Mesh::loadBinary(const Span<const u8> binary){
-    if(!checkVirtualPath(MeshBinaryPayload::s_MeshLoadBinaryContext))
-        return false;
-
-    Mesh candidate(m_positionStream.get_allocator().arena(), virtualPath());
-    if(!DeserializeMeshBinaryPayload(
-        binary,
-        candidate.m_positionStream,
-        candidate.m_normalStream,
-        candidate.m_tangentStream,
-        candidate.m_uv0Stream,
-        candidate.m_colorStream,
-        candidate.m_meshlets,
-        candidate.m_meshletBounds,
-        candidate.m_meshletPositionRefDeltas,
-        candidate.m_meshletAttributeRefDeltas,
-        candidate.m_meshletLocalVertexRefs,
-        candidate.m_meshletPrimitiveIndices,
-        candidate.m_solidTriangleWords
-    ))
-        return false;
-
-    Core::Alloc::ScratchArena scratchArena(s_MeshValidatePayloadArena);
-    if(!candidate.validatePayload(scratchArena))
-        return false;
-    *this = Move(candidate);
-    return true;
-}
-
-b8 Mesh::validatePayload([[maybe_unused]] Core::Alloc::ScratchArena& scratchArena)const{
-    return ValidateMeshAssetPayload(
-        virtualPath(),
-        m_positionStream,
-        m_normalStream,
-        m_tangentStream,
-        m_uv0Stream,
-        m_colorStream,
-        m_meshlets,
-        m_meshletBounds,
-        m_meshletPositionRefDeltas,
-        m_meshletAttributeRefDeltas,
-        m_meshletLocalVertexRefs,
-        m_meshletPrimitiveIndices,
-        m_solidTriangleWords
-    );
-}
-
-void Mesh::setPayload(
-    Core::Assets::AssetVector<Float3U>&& positions,
-    Core::Assets::AssetVector<Half4U>&& normals,
-    Core::Assets::AssetVector<Half4U>&& tangents,
-    Core::Assets::AssetVector<Float2U>&& uv0,
-    Core::Assets::AssetVector<Half4U>&& colors,
-    Core::Assets::AssetVector<MeshletDesc>&& meshlets,
-    Core::Assets::AssetVector<MeshletBounds>&& meshletBounds,
-    Core::Assets::AssetVector<u8>&& meshletPositionRefDeltas,
-    Core::Assets::AssetVector<u8>&& meshletAttributeRefDeltas,
-    Core::Assets::AssetVector<MeshletLocalVertexRef>&& meshletLocalVertexRefs,
-    Core::Assets::AssetVector<u8>&& meshletPrimitiveIndices,
-    Core::Assets::AssetVector<u32>&& solidTriangleWords
-)noexcept{
-    m_positionStream = Move(positions);
-    m_normalStream = Move(normals);
-    m_tangentStream = Move(tangents);
-    m_uv0Stream = Move(uv0);
-    m_colorStream = Move(colors);
-    m_meshlets = Move(meshlets);
-    m_meshletBounds = Move(meshletBounds);
-    m_meshletPositionRefDeltas = Move(meshletPositionRefDeltas);
-    m_meshletAttributeRefDeltas = Move(meshletAttributeRefDeltas);
-    m_meshletLocalVertexRefs = Move(meshletLocalVertexRefs);
-    m_meshletPrimitiveIndices = Move(meshletPrimitiveIndices);
-    m_solidTriangleWords = Move(solidTriangleWords);
-}
-
-b8 Mesh::hasIncompleteGeometryPayload()const noexcept{
-    return HasIncompleteMeshGeometryPayload(
-        m_positionStream,
-        m_normalStream,
-        m_tangentStream,
-        m_uv0Stream,
-        m_colorStream,
-        m_meshlets,
-        m_meshletBounds,
-        m_meshletPositionRefDeltas,
-        m_meshletAttributeRefDeltas,
-        m_meshletLocalVertexRefs,
-        m_meshletPrimitiveIndices,
-        m_solidTriangleWords
-    );
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 Skin::loadBinary(const Span<const u8> binary){
-    Skin candidate(m_influences.get_allocator().arena(), virtualPath());
-    if(!DeserializeSkinBinaryPayload(binary, candidate.m_mesh.virtualPath, candidate.m_skeleton.virtualPath, candidate.m_influences, candidate.m_inverseBindMatrices) || !candidate.validatePayload())
-        return false;
-    *this = Move(candidate);
-    return true;
-}
-
-b8 Skin::validatePayload()const{
-    if(!checkVirtualPath(FOUNDATION_TEXT("Skin::validatePayload")))
-        return false;
-    return ValidateSkinAssetPayload(m_mesh.valid(), m_skeleton.valid(), m_influences, m_inverseBindMatrices);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -270,4 +221,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -43,7 +43,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
     MVector<u8> argIsMutHints(m_arena);
     buildCallArgHints(ownerClass, &method, expr.arguments, scope, argTypeHints, argIsMutHints);
     auto injectActiveArena = [&]()noexcept{
-        if(m_inClassArenaContext && ownerClass){
+        if((m_inClassArenaContext || (ownerClass && !ownerClass->assetTypeName.empty())) && ownerClass){
             expr.injectClassArena = true;
             ownerClass->needsClassArena = true;
         }
@@ -90,8 +90,22 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                 TypeRef constructedRef(m_arena);
                 constructedRef.name = expr.lhs->text;
                 constructedRef.templateArgs = expr.callTemplateArgs;
-                if(TypeLayoutAnalyzer(m_symbols).isNonRootMotherArenaType(constructedRef))
-                    injectActiveArena();
+                if(TypeLayoutAnalyzer(m_symbols).isNonRootMotherArenaType(constructedRef)){
+                    b8 callerPassedArena = false;
+                    if(!targetCallable){
+                        if(!ctorCls->assetTypeName.empty()){
+                            if(callArgCount >= 2u)
+                                callerPassedArena = true;
+                            else if(callArgCount == 1u && !argTypeHints.empty() && argTypeHints[0] != "Name" && !IsStringLikeType(argTypeHints[0]) && argTypeHints[0] != baseCallee)
+                                callerPassedArena = true;
+                        }
+                        else if(callArgCount >= 2u || (callArgCount == 1u && !argTypeHints.empty() && argTypeHints[0] != baseCallee)){
+                            callerPassedArena = true;
+                        }
+                    }
+                    if(!callerPassedArena)
+                        injectActiveArena();
+                }
             }
             else if(!m_symbols.hasTypeSymbol(baseCallee) && FindBuiltinFunction(expr.lhs->text) != nullptr){
                 const BuiltinFunctionInfo* fnInfo = FindBuiltinFunction(expr.lhs->text);
@@ -157,6 +171,17 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
             targetOwnerCls = ownerClass;
             targetCallable = m_symbols.findClassMethod(*ownerClass, expr.lhs->text, &callArgCount, isConstThis, false, argTypeHints, argIsMutHints);
             if(!targetCallable){
+                if(!ownerClass->assetTypeName.empty() || !ownerClass->subsystemTypeName.empty() || !ownerClass->componentAssetTypeName.empty()){
+                    if(const BuiltinReceiverMethodInfo* assetRecvInfo = FindBuiltinReceiverMethod("IAsset", expr.lhs->text)){
+                        recordBuiltinTypeHeader(assetRecvInfo->returnTypeName);
+                        recordBuiltinTypeHeader(assetRecvInfo->returnTypeArgName);
+                        recordBuiltinTypeHeader(assetRecvInfo->returnErrorTypeName);
+                        if(isConstThis && assetRecvInfo->isMutating){
+                            reportError(errors, expr.span, "cannot call non-'const' method on 'this' inside a 'const' method or 'in this' lambda");
+                            ok = false;
+                        }
+                    }
+                }
                 if(const FieldDecl* field = SymbolTable::FindClassField(*ownerClass, expr.lhs->text)){
                     invokedFuncType = m_symbols.unwrapTypeAlias(field->type);
                     if(field->type && (!invokedFuncType || !invokedFuncType->isFuncType) && !FindTemplateParam(ownerClass, &method, field->type->name)){
@@ -175,8 +200,12 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
             const MStringView mName = expr.lhs->text;
             calledMemberName = mName;
             const b8 recvIsConst = isReceiverConst(ownerClass, method, *expr.lhs->lhs, scope);
+            const ClassDecl* targetCls = m_symbols.findClass(objType);
+            const b8 isAssetClassObj = targetCls && (!targetCls->assetTypeName.empty() || !targetCls->subsystemTypeName.empty() || !targetCls->componentAssetTypeName.empty());
             const b8 isUserObjType = m_symbols.hasTypeSymbol(objType) || FindTemplateParam(ownerClass, &method, objType) != nullptr;
-            const BuiltinReceiverMethodInfo* builtinRecvInfo = isUserObjType ? nullptr : FindBuiltinReceiverMethod(objType, mName);
+            const BuiltinReceiverMethodInfo* builtinRecvInfo = !isUserObjType
+                ? FindBuiltinReceiverMethod(objType, mName)
+                : (isAssetClassObj ? FindBuiltinReceiverMethod("IAsset", mName) : nullptr);
             const BuiltinMemberMethodInfo* builtinMemberInfo = isUserObjType ? nullptr : FindBuiltinMemberMethod(mName);
             const b8 isMutatingContainerOp = builtinRecvInfo ? builtinRecvInfo->isMutating : (builtinMemberInfo && builtinMemberInfo->isMutating);
             if(builtinRecvInfo){
@@ -184,7 +213,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                 recordBuiltinTypeHeader(builtinRecvInfo->returnTypeArgName);
                 recordBuiltinTypeHeader(builtinRecvInfo->returnErrorTypeName);
             }
-            if(const ClassDecl* targetCls = m_symbols.findClass(objType)){
+            if(targetCls){
                 targetOwnerCls = targetCls;
                 targetCallable = m_symbols.findClassMethod(*targetCls, mName, &callArgCount, recvIsConst, ownerClass != targetCls, argTypeHints, argIsMutHints);
                 if(targetCallable){
@@ -366,8 +395,6 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
     }
 
     const ParamPassingMode::Enum callRetRefMode = m_symbols.resolveRefMode(callReturnType);
-    if(callRetRefMode != ParamPassingMode::None)
-        expr.derefNotNull = true;
 
     if(isMutationTarget){
         const b8 isCtorOrTypeConstruction = (targetCallable && targetCallable->isConstructor)

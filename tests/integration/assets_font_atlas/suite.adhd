@@ -265,14 +265,7 @@ b8 BuildAtlasInto(in FontAtlasCookEntry entry, mut AssetArena arena, mut Scratch
 }
 
 b8 TryGetAtlasGlyph(in FontAtlas atlas, in u32 glyphId, mut FontAtlasGlyph outGlyph){
-    b8 found = false;
-    native(in atlas, in glyphId, mut outGlyph, mut found){
-        if(const FontAtlasGlyph* const glyph = atlas.glyph(glyphId)){
-            outGlyph = *glyph;
-            found = true;
-        }
-    }
-    return found;
+    return atlas.tryGlyph(glyphId, outGlyph);
 }
 
 b8 CopyDocumentVariable(in MetascriptDocument document, in StringView name, mut MetascriptValue outValue){

@@ -2,17 +2,47 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/global.adhd>
+#include <impl/assets_font/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Stores one static, scalable SFNT face from a prepared font source; shaping and glyph atlases stay outside this asset.
+[asset("font")]
+class Font{
+    private Vector<u8> m_fontBytes;
+    private u32 m_faceIndex = 0u;
+
+    public b8 loadBinary(in Span<u8> binary);
+    public b8 validatePayload()const;
+
+    public void setFontBytes(in Vector<u8> bytes, in u32 faceIndex){
+        this.m_fontBytes = bytes;
+        this.m_faceIndex = faceIndex;
+    }
+
+    public void setFontBytes(in Vector<u8> bytes){
+        this.m_fontBytes = bytes;
+        this.m_faceIndex = 0u;
+    }
+
+    public in Vector<u8> fontBytes()const{ return this.m_fontBytes; }
+
+    public u32 faceIndex()const{ return this.m_faceIndex; }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-#include <impl/global.adhd.h>
-#include <impl/assets_font/types.adhd.h>
-
-#include <core/assets/module.h>
 
 #include <global/filesystem.h>
 #include <global/sha256.h>
@@ -89,54 +119,7 @@ public:
 
 // Uses the source buffer's caller-owned arena for native validation allocations.
 [[nodiscard]] b8 ValidateFontSource(const Core::Assets::AssetBytes& bytes, u32 faceIndex = 0u);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Stores one static, scalable SFNT face from a prepared font source; shaping and glyph atlases stay outside this asset.
-class Font final : public Core::Assets::TypedAsset<Font>{
-public:
-    NWB_DEFINE_ASSET_TYPE("font")
-
-
-public:
-    explicit Font(Core::Assets::AssetArena& arena)noexcept
-        : m_fontBytes(arena)
-    {}
-    Font(Core::Assets::AssetArena& arena, const Name& virtualPath)noexcept
-        : Core::Assets::TypedAsset<Font>(virtualPath)
-        , m_fontBytes(arena)
-    {}
-
-
-public:
-    b8 loadBinary(Span<const u8> binary);
-    [[nodiscard]] b8 validatePayload()const{
-        return checkVirtualPath(FOUNDATION_TEXT("Font::validatePayload")) && ValidateFontSource(m_fontBytes, m_faceIndex);
-    }
-    void setFontBytes(Core::Assets::AssetBytes&& bytes, const u32 faceIndex = 0u)noexcept{
-        m_fontBytes = Move(bytes);
-        m_faceIndex = faceIndex;
-    }
-
-
-public:
-    [[nodiscard]] const Core::Assets::AssetBytes& fontBytes()const noexcept{ return m_fontBytes; }
-
-    [[nodiscard]] u32 faceIndex()const noexcept{ return m_faceIndex; }
-
-
-private:
-    Core::Assets::AssetBytes m_fontBytes;
-    u32 m_faceIndex = 0u;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_DEFINE_ASSET_CODEC(FontAssetCodec, Font);
+[[nodiscard]] b8 ValidateFontSource(const Vector<u8, ::ArenaBase>& bytes, u32 faceIndex = 0u);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

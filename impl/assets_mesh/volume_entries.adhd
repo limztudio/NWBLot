@@ -68,7 +68,7 @@ static b8 RegisterMeshCookEntries(Core::Assets::CookEntryRegistry& registry){
             registry
         )
         && Core::Assets::RegisterDocumentValueCookEntry<SkinCookEntry, Skin, SkinAssetCodec>(
-            s_SkinAssetKindLabel,
+            FOUNDATION_TEXT("skin"),
             [](const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
                 return ParseSkinCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
             },
@@ -123,4 +123,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

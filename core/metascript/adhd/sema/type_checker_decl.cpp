@@ -275,6 +275,21 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
             reportError(errors, classDecl.span, "'[arena]' cannot be combined with '[component_asset(\"...\")]'; mark the underlying component class '[arena]' instead");
             ok = false;
         }
+        if(!classDecl.assetTypeName.empty()){
+            reportError(errors, classDecl.span, "'[arena]' cannot be combined with '[asset(\"...\")]' (assets receive their arena from the asset loader)");
+            ok = false;
+        }
+    }
+
+    if(!classDecl.assetTypeName.empty()){
+        if(classDecl.isSerialize){
+            reportError(errors, classDecl.span, "'[asset(\"...\")]' class cannot be marked '[serialize]' (assets implement 'TypedAsset<T>' with 'loadBinary')");
+            ok = false;
+        }
+        if(!classDecl.templateParams.empty()){
+            reportError(errors, classDecl.span, "'[asset(\"...\")]' class cannot be a template");
+            ok = false;
+        }
     }
 
     if(!classDecl.subsystemTypeName.empty()){
@@ -562,7 +577,7 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
         if(!checkCallableSignature(&classDecl, *m, errors))
             ok = false;
         if(!m->hasBody){
-            if(!classDecl.isImported){
+            if(!classDecl.isImported && classDecl.assetTypeName.empty()){
                 reportError(errors, m->span, "declared class method has no implementation body");
                 ok = false;
             }
@@ -570,10 +585,13 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
         }
         if(m->isImported)
             continue;
+        const b8 prevRecordHeaders = m_recordGlobalHeaders;
+        m_recordGlobalHeaders = true;
         if(!m_parallelValidator.validateMethod(*m, errors))
             ok = false;
         if(!checkMethodBody(&classDecl, *m, errors))
             ok = false;
+        m_recordGlobalHeaders = prevRecordHeaders;
     }
 
     return ok;

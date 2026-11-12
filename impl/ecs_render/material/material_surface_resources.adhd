@@ -121,8 +121,8 @@ Expected<NotNull<MaterialSurfaceInfo*>> RendererMaterialSystem::createMaterialSu
     NWB_ASSERT(!material.shaderVariant().empty());
     NWB_ASSERT(material.materialInterface());
 
-    const auto pixelShader = material.findShader<PixelShader>();
-    const auto meshShader = material.findShader<MeshShader>();
+    const auto pixelShader = material.findPixelShader();
+    const auto meshShader = material.findMeshShader();
     const b8 hasPixelShader = pixelShader.has_value();
     const b8 hasMeshShader = meshShader.has_value();
     if(pixelShader)

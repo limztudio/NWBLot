@@ -85,7 +85,7 @@ void CppTypeEmitter::emitTypeCpp(MString& out, const TypeRef& type)const{
         AppendUnsignedDecimal(out, type.inferredCaptureBytes);
         out.append("u, ");
         if(type.funcReturnType)
-            emitTypeCpp(out, *type.funcReturnType);
+            emitReturnTypeCpp(out, *type.funcReturnType);
         else
             out.append("void");
         out.push_back('(');
@@ -160,6 +160,21 @@ void CppTypeEmitter::emitTypeCpp(MString& out, const TypeRef& type)const{
     out.append(name.data(), name.size());
     if(!type.templateArgs.empty())
         emitTypeArgListCpp(out, type.templateArgs);
+}
+
+void CppTypeEmitter::emitReturnTypeCpp(MString& out, const TypeRef& type)const{
+    const ParamPassingMode::Enum refMode = m_symbols.resolveRefMode(&type);
+    if(refMode != ParamPassingMode::None){
+        if(refMode == ParamPassingMode::In)
+            out.append("const ");
+        const TypeRef* unwrapped = type.refMode != ParamPassingMode::None ? &type : m_symbols.unwrapTypeAlias(&type);
+        TypeRef innerType = unwrapped ? *unwrapped : type;
+        innerType.refMode = ParamPassingMode::None;
+        emitTypeCpp(out, innerType);
+        out.push_back('&');
+        return;
+    }
+    emitTypeCpp(out, type);
 }
 
 void CppTypeEmitter::emitTypeWithCustomArenaCpp(MString& out, const TypeRef& type, const MStringView arenaExpr)const{
@@ -340,7 +355,7 @@ void CppTypeEmitter::emitMethodSignature(MString& out, const ClassDecl* ownerCla
 }
 
 void CppTypeEmitter::emitMethodSignature(MString& out, const ClassDecl* ownerClass, const MethodDecl& method, const b8 isDeclarationInClass, const b8 ownerNeedsMotherArena)const{
-    const b8 isOverrideDestructor = method.isDestructor && ownerClass && !ownerClass->implementedInterfaces.empty();
+    const b8 isOverrideDestructor = method.isDestructor && ownerClass && (!ownerClass->implementedInterfaces.empty() || !ownerClass->assetTypeName.empty());
     const b8 prependMotherArena = method.isConstructor
         && ownerClass
         && !ownerClass->isArenaOwner
@@ -354,7 +369,7 @@ void CppTypeEmitter::emitMethodSignature(MString& out, const ClassDecl* ownerCla
         if(isDeclarationInClass && method.isOverride)
             out.append("virtual ");
         if(method.returnType)
-            emitTypeCpp(out, *method.returnType);
+            emitReturnTypeCpp(out, *method.returnType);
         else
             out.append("void");
         out.push_back(' ');

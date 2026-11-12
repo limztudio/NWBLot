@@ -72,7 +72,7 @@ static b8 ExtractModelDependencies(const Core::Assets::CookDependencyItemContext
 
 static b8 RegisterModelCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<ModelCookEntry, Model, ModelAssetCodec>(
-        s_ModelAssetKindLabel,
+        FOUNDATION_TEXT("model"),
         [](const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
             return ParseModelCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
         },
@@ -122,4 +122,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

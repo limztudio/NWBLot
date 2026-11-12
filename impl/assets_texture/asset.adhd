@@ -2,127 +2,73 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/global.adhd>
+#include <impl/assets_texture/validation.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
+const u8 s_TextureOpaqueAlphaUnorm8 = 255u;
 
-#include <impl/assets_texture/validation.adhd.h>
-
-#include <core/assets/module.h>
-
-#include <global/texture_payload.h>
+type MipLevelVector = Vector<TextureMipLevel>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_BEGIN
+[asset("texture")]
+class Texture{
+    private u32 m_width = 0u;
+    private u32 m_height = 0u;
+    private u32 m_depth = 1u;
 
+    private TexturePayloadDimension m_dimension = TexturePayloadDimension::Texture2D;
+    private TexturePayloadFormat m_payloadFormat = TexturePayloadFormat::UastcLdr4x4;
+    private TextureAlphaMode m_alphaMode = TextureAlphaMode::Opaque;
+    private u8 m_alphaConstantUnorm8 = s_TextureOpaqueAlphaUnorm8;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    private MipLevelVector m_mipLevels;
+    private Vector<u8> m_payloadBytes;
 
+    public b8 validatePayload()const;
+    public b8 loadBinary(in Span<u8> binary);
 
-static_assert(IsStandardLayout_V<TextureMipLevel>, "Texture mip level must stay binary-serializable");
-static_assert(IsTriviallyCopyable_V<TextureMipLevel>, "Texture mip level must stay binary-serializable");
-
-inline constexpr TStringView s_TextureAssetKindLabel = FOUNDATION_TEXT("texture");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class Texture final : public Core::Assets::TypedAsset<Texture>{
-public:
-    using MipLevelVector = Core::Assets::AssetVector<TextureMipLevel>;
-
-
-public:
-    NWB_DEFINE_ASSET_TYPE("texture")
-
-
-public:
-    explicit Texture(Core::Assets::AssetArena& arena)noexcept
-        : m_mipLevels(arena)
-        , m_payloadBytes(arena)
-    {}
-    Texture(Core::Assets::AssetArena& arena, const Name& virtualPath)noexcept
-        : Core::Assets::TypedAsset<Texture>(virtualPath)
-        , m_mipLevels(arena)
-        , m_payloadBytes(arena)
-    {}
-
-
-public:
-    [[nodiscard]] b8 validatePayload()const;
-    [[nodiscard]] b8 loadBinary(Span<const u8> binary);
-
-
-public:
     // Cooked RGB values use the engine's linear working space; alpha is linear coverage.
-    void setPayload(
-        u32 width,
-        u32 height,
-        MipLevelVector&& mipLevels,
-        Core::Assets::AssetBytes&& payloadBytes,
-        TextureDimension::Enum dimension,
-        u32 depth,
-        TexturePayloadFormat::Enum payloadFormat,
-        TextureAlphaMode::Enum alphaMode,
-        u8 alphaConstantUnorm8
-    )noexcept;
+    public void setPayload(
+        in u32 width,
+        in u32 height,
+        in MipLevelVector mipLevels,
+        in Vector<u8> payloadBytes,
+        in TexturePayloadDimension dimension,
+        in u32 depth,
+        in TexturePayloadFormat payloadFormat,
+        in TextureAlphaMode alphaMode,
+        in u8 alphaConstantUnorm8
+    ){
+        this.m_width = width;
+        this.m_height = height;
+        this.m_dimension = dimension;
+        this.m_depth = depth;
+        this.m_payloadFormat = payloadFormat;
+        this.m_alphaMode = alphaMode;
+        this.m_alphaConstantUnorm8 = alphaConstantUnorm8;
+        this.m_mipLevels = mipLevels;
+        this.m_payloadBytes = payloadBytes;
+    }
 
-
-public:
-    [[nodiscard]] u32 width()const noexcept{ return m_width; }
-    [[nodiscard]] u32 height()const noexcept{ return m_height; }
-    [[nodiscard]] TextureDimension::Enum dimension()const noexcept{ return m_dimension; }
-    [[nodiscard]] u32 depth()const noexcept{ return m_depth; }
-    [[nodiscard]] TexturePayloadFormat::Enum payloadFormat()const noexcept{ return m_payloadFormat; }
-    [[nodiscard]] TextureAlphaMode::Enum alphaMode()const noexcept{ return m_alphaMode; }
-    [[nodiscard]] u8 alphaConstantUnorm8()const noexcept{ return m_alphaConstantUnorm8; }
-    [[nodiscard]] const MipLevelVector& mipLevels()const noexcept{ return m_mipLevels; }
-    [[nodiscard]] const Core::Assets::AssetBytes& payloadBytes()const noexcept{ return m_payloadBytes; }
-    [[nodiscard]] u64 primaryPayloadByteCount()const noexcept;
-    [[nodiscard]] const u8* alphaUastcBlocks()const noexcept;
-
-
-private:
-    u32 m_width = 0u;
-    u32 m_height = 0u;
-    u32 m_depth = 1u;
-
-    TextureDimension::Enum m_dimension = TextureDimension::Texture2D;
-    TexturePayloadFormat::Enum m_payloadFormat = TexturePayloadFormat::UastcLdr4x4;
-    TextureAlphaMode::Enum m_alphaMode = TextureAlphaMode::Opaque;
-    u8 m_alphaConstantUnorm8 = TextureFormat::s_OpaqueAlphaUnorm8;
-
-    MipLevelVector m_mipLevels;
-    Core::Assets::AssetBytes m_payloadBytes;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_DEFINE_ASSET_CODEC(TextureAssetCodec, Texture);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public u32 width()const{ return this.m_width; }
+    public u32 height()const{ return this.m_height; }
+    public TexturePayloadDimension dimension()const{ return this.m_dimension; }
+    public u32 depth()const{ return this.m_depth; }
+    public TexturePayloadFormat payloadFormat()const{ return this.m_payloadFormat; }
+    public TextureAlphaMode alphaMode()const{ return this.m_alphaMode; }
+    public u8 alphaConstantUnorm8()const{ return this.m_alphaConstantUnorm8; }
+    public in MipLevelVector mipLevels()const{ return this.m_mipLevels; }
+    public in Vector<u8> payloadBytes()const{ return this.m_payloadBytes; }
+    public u64 primaryPayloadByteCount()const;
+    public Span<u8> alphaUastcBlocks()const;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

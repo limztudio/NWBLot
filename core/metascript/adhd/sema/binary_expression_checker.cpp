@@ -86,11 +86,7 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
     const ScopedVarInfo* lhsLocal = nullptr;
     const TypeRef* lhsMemberOrIndexTypeRef = nullptr;
     if(expr.op == TokenType::Equal && expr.lhs){
-        if(expr.lhs->kind == ExprKind::ThisMember && ownerClass){
-            if(expr.lhs->text.empty()){
-                m_checker.reportError(errors, expr.lhs->span, "cannot assign to 'this'");
-                ok = false;
-            }
+        if(expr.lhs->kind == ExprKind::ThisMember && ownerClass && !expr.lhs->text.empty()){
             lhsThisField = SymbolTable::FindClassField(*ownerClass, expr.lhs->text);
             if(lhsThisField && lhsThisField->type){
                 const MStringView baseFieldTypeName = m_checker.m_symbols.resolveBaseTypeName(lhsThisField->type->name);
@@ -232,6 +228,10 @@ b8 BinaryExpressionChecker::check(ClassDecl* ownerClass, const Span<const Scoped
             }
         }
         else if(expr.op == TokenType::Equal){
+            if(expr.lhs->kind == ExprKind::ThisMember && expr.lhs->text.empty() && !lhsType.empty() && !rhsType.empty() && lhsType != rhsType){
+                m_checker.reportError(errors, expr.span, "cannot assign incompatible type to 'this'");
+                ok = false;
+            }
             if(const TypeRef* lhsTargetTypeRef = m_checker.inferExprTypeRef(ownerClass, &method, *expr.lhs, scope)){
                 if(!lhsTargetTypeRef->templateArgs.empty() && lhsTargetTypeRef->templateArgs[0].type){
                     if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(lhsType); genericInfo && (genericInfo->inlineLayoutKind == InlineLayoutKind::Expected || genericInfo->inlineLayoutKind == InlineLayoutKind::Optional)){

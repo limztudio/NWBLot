@@ -104,7 +104,9 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
         }
         const FieldDecl* field = SymbolTable::FindClassField(*ownerClass, expr.text);
         const MethodDecl* memberMethod = m_symbols.findClassMethod(*ownerClass, expr.text);
-        if(!field && !memberMethod){
+        const b8 isInheritedAssetMethod = (!ownerClass->assetTypeName.empty() || !ownerClass->subsystemTypeName.empty() || !ownerClass->componentAssetTypeName.empty())
+            && FindBuiltinReceiverMethod("IAsset", expr.text) != nullptr;
+        if(!field && !memberMethod && !isInheritedAssetMethod){
             reportError(errors, expr.span, "unknown member on 'this'");
             ok = false;
             break;
@@ -312,7 +314,9 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
             else if(const ClassDecl* targetCls = m_symbols.findClass(baseType)){
                 const FieldDecl* field = SymbolTable::FindClassField(*targetCls, expr.text);
                 const MethodDecl* memberMethod = m_symbols.findClassMethod(*targetCls, expr.text);
-                if(!field && !memberMethod){
+                const b8 isInheritedAssetMethod = (!targetCls->assetTypeName.empty() || !targetCls->subsystemTypeName.empty() || !targetCls->componentAssetTypeName.empty())
+                    && FindBuiltinReceiverMethod("IAsset", expr.text) != nullptr;
+                if(!field && !memberMethod && !isInheritedAssetMethod){
                     reportError(errors, expr.span, "unknown member on class");
                     ok = false;
                 }
@@ -417,7 +421,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
 
         const TypeRef* indexedElemType = inferExprTypeRef(ownerClass, &method, expr, scope);
         const ParamPassingMode::Enum elemRefMode = m_symbols.resolveRefMode(indexedElemType);
-        if(elemRefMode != ParamPassingMode::None)
+        if(!customOpIdx && elemRefMode != ParamPassingMode::None)
             expr.derefNotNull = true;
         if(!customOpIdx && genericInfo && genericInfo->isReflectedMap && !recvIsConst)
             expr.useAdhdMapIndex = true;
@@ -515,8 +519,6 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
         }
         const TypeRef* unaryRetType = inferExprTypeRef(ownerClass, &method, expr, scope);
         const ParamPassingMode::Enum unaryRetRefMode = m_symbols.resolveRefMode(unaryRetType);
-        if(unaryRetRefMode != ParamPassingMode::None)
-            expr.derefNotNull = true;
         if(isMutationTarget && unaryRetRefMode != ParamPassingMode::Mut){
             reportError(errors, expr.span, "cannot pass unary expression result to a 'mut' target");
             ok = false;

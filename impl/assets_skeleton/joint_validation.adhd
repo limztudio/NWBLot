@@ -82,7 +82,7 @@ b8 ValidateSkeletonJointLookupEntry(in Name jointName, in u32 jointIndex, in usi
 b8 ValidateSkeletonPayloadData(
     in Span<SkeletonJoint> joints,
     in HashMap<Name, u32> jointIndices,
-    mut Span<u8> namedJoints
+    mut Vector<u8> namedJoints
 ){
     if(!ValidateSkeletonJointCounts(joints.size(), jointIndices.size()))
         return false;

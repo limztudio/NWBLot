@@ -201,7 +201,7 @@ inline constexpr MStringView s_SuiteReorderFieldsSource =
     "}\r\n";
 
 inline constexpr MStringView s_SuiteBinaryHeaderSource =
-    "[serialize, asset(\"mesh_header\")]\r\n"
+    "[serialize]\r\n"
     "class BinaryHeader {\r\n"
     "    public u8 magic = 1;\r\n"
     "    public u32 version = 2;\r\n"
@@ -954,6 +954,20 @@ void VerifyAdhdCompiler_RejectsFlagBitWidthOverflowInvalidSwitchCtorAndAttribute
     ExpectCompileFails(arena, "[noinline]\r\nvoid BadNoInlineAttr() {}\r\n", "impl/bad_noinline_attr.adhd");
     ExpectCompileFails(arena, "inline void BadInlineKeyword() {}\r\n", "impl/bad_inline_kw.adhd");
     ExpectCompileFails(arena, "noinline void BadNoInlineKeyword() {}\r\n", "impl/bad_noinline_kw.adhd");
+    ExpectCompileFails(arena, "[serialize, asset(\"bad_asset\")]\r\nclass BadSerializeAsset { public u32 v = 0u; }\r\n", "impl/bad_serialize_asset.adhd");
+    ExpectCompileFails(arena, "[arena, asset(\"bad_asset\")]\r\nclass BadArenaAsset { public Vector<u8> bytes; }\r\n", "impl/bad_arena_asset.adhd");
+    ExpectCompileFails(arena, "[asset(\"bad_asset\")]\r\nclass BadTemplateAsset<T> { public T v; }\r\n", "impl/bad_template_asset.adhd");
+
+    CompileResult assetRes = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile("[asset(\"sample_blob\")]\r\nclass SampleBlob {\r\n    private Vector<u8> m_bytes;\r\n    public in Vector<u8> bytes()const { return this.m_bytes; }\r\n    public b8 loadBinary(in Span<u8> binary) { return this.checkVirtualPath(\"SampleBlob::loadBinary\") && !this.virtualPath().empty() && !binary.empty(); }\r\n}\r\n", "impl/assets_sample/asset.adhd", arena.arena, assetRes));
+    const StringView assetHdr = GeneratedHeaderView(assetRes);
+    const StringView assetCpp = GeneratedSourceView(assetRes);
+    EXPECT_NE(assetHdr.find("#include <core/assets/module.h>"), usize.max);
+    EXPECT_NE(assetHdr.find("class SampleBlob final : public ::NWB::Core::Assets::TypedAsset<SampleBlob>"), usize.max);
+    EXPECT_NE(assetHdr.find("NWB_DEFINE_ASSET_TYPE(\"sample_blob\")"), usize.max);
+    EXPECT_NE(assetHdr.find("const Vector<u8, ::ArenaBase>& bytes()const noexcept"), usize.max);
+    EXPECT_NE(assetHdr.find("NWB_DEFINE_ASSET_CODEC(SampleBlobAssetCodec, SampleBlob);"), usize.max);
+    EXPECT_NE(assetCpp.find("__adhd_asset_codec_registrar_SampleBlob(&::NWB::Core::Assets::CreateAssetCodec<SampleBlobAssetCodec>);"), usize.max);
 }
 
 void VerifyAdhdCompiler_RejectsMalformedHexMacroParamsCastsDanglingRefsAndEarlyReturnCtors(){

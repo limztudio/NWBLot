@@ -2,149 +2,90 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/global.adhd>
+#include <impl/assets_mesh/payload_validation.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/assets_mesh/payload_validation.adhd.h>
+[asset("mesh")]
+class Mesh{
+    private Vector<f32x3u> m_positionStream;
+    private Vector<f16x4u> m_normalStream;
+    private Vector<f16x4u> m_tangentStream;
+    private Vector<f32x2u> m_uv0Stream;
+    private Vector<f16x4u> m_colorStream;
+    private Vector<MeshletDesc> m_meshlets;
+    private Vector<MeshletBounds> m_meshletBounds;
+    private Vector<u8> m_meshletPositionRefDeltas;
+    private Vector<u8> m_meshletAttributeRefDeltas;
+    private Vector<MeshletLocalVertexRef> m_meshletLocalVertexRefs;
+    private Vector<u8> m_meshletPrimitiveIndices;
+    private Vector<u32> m_solidTriangleWords;
 
-#include <core/alloc/scratch.h>
-#include <core/assets/module.h>
+    private b8 hasIncompleteGeometryPayload()const{
+        return HasIncompleteMeshGeometryPayload(
+            this.m_positionStream,
+            this.m_normalStream,
+            this.m_tangentStream,
+            this.m_uv0Stream,
+            this.m_colorStream,
+            this.m_meshlets,
+            this.m_meshletBounds,
+            this.m_meshletPositionRefDeltas,
+            this.m_meshletAttributeRefDeltas,
+            this.m_meshletLocalVertexRefs,
+            this.m_meshletPrimitiveIndices,
+            this.m_solidTriangleWords
+        );
+    }
 
+    public b8 loadBinary(in Span<u8> binary);
+    public b8 validatePayload()const;
+    public b8 validatePayload(mut ScratchArena scratchArena)const;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public void setPayload(
+        in Vector<f32x3u> positions,
+        in Vector<f16x4u> normals,
+        in Vector<f16x4u> tangents,
+        in Vector<f32x2u> uv0,
+        in Vector<f16x4u> colors,
+        in Vector<MeshletDesc> meshlets,
+        in Vector<MeshletBounds> meshletBounds,
+        in Vector<u8> meshletPositionRefDeltas,
+        in Vector<u8> meshletAttributeRefDeltas,
+        in Vector<MeshletLocalVertexRef> meshletLocalVertexRefs,
+        in Vector<u8> meshletPrimitiveIndices,
+        in Vector<u32> solidTriangleWords
+    ){
+        this.m_positionStream = positions;
+        this.m_normalStream = normals;
+        this.m_tangentStream = tangents;
+        this.m_uv0Stream = uv0;
+        this.m_colorStream = colors;
+        this.m_meshlets = meshlets;
+        this.m_meshletBounds = meshletBounds;
+        this.m_meshletPositionRefDeltas = meshletPositionRefDeltas;
+        this.m_meshletAttributeRefDeltas = meshletAttributeRefDeltas;
+        this.m_meshletLocalVertexRefs = meshletLocalVertexRefs;
+        this.m_meshletPrimitiveIndices = meshletPrimitiveIndices;
+        this.m_solidTriangleWords = solidTriangleWords;
+    }
 
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class Mesh final : public Core::Assets::TypedAsset<Mesh>{
-public:
-    NWB_DEFINE_ASSET_TYPE("mesh")
-
-
-public:
-    explicit Mesh(Core::Assets::AssetArena& arena)noexcept
-        : m_positionStream(arena)
-        , m_normalStream(arena)
-        , m_tangentStream(arena)
-        , m_uv0Stream(arena)
-        , m_colorStream(arena)
-        , m_meshlets(arena)
-        , m_meshletBounds(arena)
-        , m_meshletPositionRefDeltas(arena)
-        , m_meshletAttributeRefDeltas(arena)
-        , m_meshletLocalVertexRefs(arena)
-        , m_meshletPrimitiveIndices(arena)
-        , m_solidTriangleWords(arena)
-    {}
-    Mesh(Core::Assets::AssetArena& arena, const Name& virtualPath)noexcept
-        : Core::Assets::TypedAsset<Mesh>(virtualPath)
-        , m_positionStream(arena)
-        , m_normalStream(arena)
-        , m_tangentStream(arena)
-        , m_uv0Stream(arena)
-        , m_colorStream(arena)
-        , m_meshlets(arena)
-        , m_meshletBounds(arena)
-        , m_meshletPositionRefDeltas(arena)
-        , m_meshletAttributeRefDeltas(arena)
-        , m_meshletLocalVertexRefs(arena)
-        , m_meshletPrimitiveIndices(arena)
-        , m_solidTriangleWords(arena)
-    {}
-
-
-public:
-    b8 loadBinary(Span<const u8> binary);
-    [[nodiscard]] b8 validatePayload(Core::Alloc::ScratchArena& scratchArena)const;
-
-    void setPayload(
-        Core::Assets::AssetVector<Float3U>&& positions,
-        Core::Assets::AssetVector<Half4U>&& normals,
-        Core::Assets::AssetVector<Half4U>&& tangents,
-        Core::Assets::AssetVector<Float2U>&& uv0,
-        Core::Assets::AssetVector<Half4U>&& colors,
-        Core::Assets::AssetVector<MeshletDesc>&& meshlets,
-        Core::Assets::AssetVector<MeshletBounds>&& meshletBounds,
-        Core::Assets::AssetVector<u8>&& meshletPositionRefDeltas,
-        Core::Assets::AssetVector<u8>&& meshletAttributeRefDeltas,
-        Core::Assets::AssetVector<MeshletLocalVertexRef>&& meshletLocalVertexRefs,
-        Core::Assets::AssetVector<u8>&& meshletPrimitiveIndices,
-        Core::Assets::AssetVector<u32>&& solidTriangleWords
-    )noexcept;
-
-
-public:
-    [[nodiscard]] const Core::Assets::AssetVector<Float3U>& positionStream()const noexcept{ return m_positionStream; }
-
-    [[nodiscard]] const Core::Assets::AssetVector<Half4U>& normalStream()const noexcept{ return m_normalStream; }
-
-    [[nodiscard]] const Core::Assets::AssetVector<Half4U>& tangentStream()const noexcept{ return m_tangentStream; }
-
-    [[nodiscard]] const Core::Assets::AssetVector<Float2U>& uv0Stream()const noexcept{ return m_uv0Stream; }
-
-    [[nodiscard]] const Core::Assets::AssetVector<Half4U>& colorStream()const noexcept{ return m_colorStream; }
-
-    [[nodiscard]] const Core::Assets::AssetVector<MeshletDesc>& meshlets()const noexcept{ return m_meshlets; }
-
-    [[nodiscard]] const Core::Assets::AssetVector<MeshletBounds>& meshletBounds()const noexcept{ return m_meshletBounds; }
-
-    [[nodiscard]] const Core::Assets::AssetVector<u8>& meshletPositionRefDeltas()const noexcept{ return m_meshletPositionRefDeltas; }
-
-    [[nodiscard]] const Core::Assets::AssetVector<u8>& meshletAttributeRefDeltas()const noexcept{ return m_meshletAttributeRefDeltas; }
-
-    [[nodiscard]] const Core::Assets::AssetVector<MeshletLocalVertexRef>& meshletLocalVertexRefs()const noexcept{ return m_meshletLocalVertexRefs; }
-
-    [[nodiscard]] const Core::Assets::AssetVector<u8>& meshletPrimitiveIndices()const noexcept{ return m_meshletPrimitiveIndices; }
-
-    [[nodiscard]] const Core::Assets::AssetVector<u32>& solidTriangleWords()const noexcept{ return m_solidTriangleWords; }
-
-
-private:
-    [[nodiscard]] b8 hasIncompleteGeometryPayload()const noexcept;
-
-
-private:
-    Core::Assets::AssetVector<Float3U> m_positionStream;
-    Core::Assets::AssetVector<Half4U> m_normalStream;
-    Core::Assets::AssetVector<Half4U> m_tangentStream;
-    Core::Assets::AssetVector<Float2U> m_uv0Stream;
-    Core::Assets::AssetVector<Half4U> m_colorStream;
-    Core::Assets::AssetVector<MeshletDesc> m_meshlets;
-    Core::Assets::AssetVector<MeshletBounds> m_meshletBounds;
-    Core::Assets::AssetVector<u8> m_meshletPositionRefDeltas;
-    Core::Assets::AssetVector<u8> m_meshletAttributeRefDeltas;
-    Core::Assets::AssetVector<MeshletLocalVertexRef> m_meshletLocalVertexRefs;
-    Core::Assets::AssetVector<u8> m_meshletPrimitiveIndices;
-    Core::Assets::AssetVector<u32> m_solidTriangleWords;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_DEFINE_ASSET_CODEC(MeshAssetCodec, Mesh);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+    public in Vector<f32x3u> positionStream()const{ return this.m_positionStream; }
+    public in Vector<f16x4u> normalStream()const{ return this.m_normalStream; }
+    public in Vector<f16x4u> tangentStream()const{ return this.m_tangentStream; }
+    public in Vector<f32x2u> uv0Stream()const{ return this.m_uv0Stream; }
+    public in Vector<f16x4u> colorStream()const{ return this.m_colorStream; }
+    public in Vector<MeshletDesc> meshlets()const{ return this.m_meshlets; }
+    public in Vector<MeshletBounds> meshletBounds()const{ return this.m_meshletBounds; }
+    public in Vector<u8> meshletPositionRefDeltas()const{ return this.m_meshletPositionRefDeltas; }
+    public in Vector<u8> meshletAttributeRefDeltas()const{ return this.m_meshletAttributeRefDeltas; }
+    public in Vector<MeshletLocalVertexRef> meshletLocalVertexRefs()const{ return this.m_meshletLocalVertexRefs; }
+    public in Vector<u8> meshletPrimitiveIndices()const{ return this.m_meshletPrimitiveIndices; }
+    public in Vector<u32> solidTriangleWords()const{ return this.m_solidTriangleWords; }
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

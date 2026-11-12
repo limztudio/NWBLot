@@ -72,6 +72,9 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
             : rawVarType;
         const b8 varUsesScratch = stmt.usesScratchArena
             || (!m_activeTemplateParams.empty() && effectiveVarType && TypeLayoutAnalyzer(m_symbols).requiresMotherArena(*effectiveVarType));
+        const MStringView varInjectedArena = (m_activeOwnerClass && !m_activeOwnerClass->assetTypeName.empty() && m_activeOwnerNeedsArena)
+            ? MStringView("*this->__adhd_arena")
+            : MStringView("__adhd_scratch");
         emitIndent(out, indent);
         if(stmt.isConst)
             out.append("const ");
@@ -95,7 +98,7 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
                 out,
                 baseVarType,
                 stmt.arguments,
-                varUsesScratch ? MStringView("__adhd_scratch") : MStringView{},
+                varUsesScratch ? varInjectedArena : MStringView{},
                 false,
                 true
             );
@@ -105,25 +108,31 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
             const MStringView effectiveBaseType = effectiveVarType ? m_symbols.resolveBaseTypeName(effectiveVarType->name) : MStringView{};
             if(varUsesScratch && stmt.expr->kind == ExprKind::StringLiteral && !effectiveBaseType.empty() && SymbolTable::IsArenaBackedContainer(effectiveBaseType)){
                 if(stmt.arenaFirstInit || IsArenaFirstCtorType(effectiveBaseType)){
-                    out.append("(__adhd_scratch, ");
+                    out.push_back('(');
+                    out.append(varInjectedArena.data(), varInjectedArena.size());
+                    out.append(", ");
                     emitExpr(out, *stmt.expr);
                     out.append(");\r\n");
                 }
                 else{
                     out.push_back('(');
                     emitExpr(out, *stmt.expr);
-                    out.append(", __adhd_scratch);\r\n");
+                    out.append(", ");
+                    out.append(varInjectedArena.data(), varInjectedArena.size());
+                    out.append(");\r\n");
                 }
             }
             else if(
                 varUsesScratch
                 && effectiveVarType
                 && !stmt.expr->wrapInSimdResult
-                && !(stmt.expr->kind == ExprKind::Call && stmt.expr->injectScratchArena)
+                && !(stmt.expr->kind == ExprKind::Call && (stmt.expr->injectScratchArena || stmt.expr->injectClassArena))
             ){
                 out.append(" = ::AdhdRebindConstruct<");
                 m_typeEmitter.emitTypeCpp(out, *effectiveVarType);
-                out.append(">(__adhd_scratch, ");
+                out.append(">(");
+                out.append(varInjectedArena.data(), varInjectedArena.size());
+                out.append(", ");
                 emitExpr(out, *stmt.expr);
                 out.append(");\r\n");
             }
@@ -137,10 +146,14 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
             if(effectiveVarType && TypeLayoutAnalyzer(m_symbols).isFixedArrayNeedingArenaDefaultInit(*effectiveVarType)){
                 out.append(" = ::AdhdDefaultConstructInArena<");
                 m_typeEmitter.emitTypeCpp(out, *effectiveVarType);
-                out.append(">(__adhd_scratch);\r\n");
+                out.append(">(");
+                out.append(varInjectedArena.data(), varInjectedArena.size());
+                out.append(");\r\n");
             }
             else{
-                out.append("(__adhd_scratch);\r\n");
+                out.push_back('(');
+                out.append(varInjectedArena.data(), varInjectedArena.size());
+                out.append(");\r\n");
             }
         }
         else{

@@ -117,7 +117,7 @@ static_assert(s_NameHashLaneCount == s_FontAtlasIdentityLaneCount);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<FontAtlasPayload> Deserialize(const Span<const u8> bytes, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] static Expected<FontAtlasPayload> Deserialize(const Span<const u8> bytes, ::ArenaBase& arena, Core::Alloc::ScratchArena& scratchArena){
     usize cursor = 0u;
     FontAtlasPayload payload(arena);
     NameHash identity;
@@ -264,7 +264,7 @@ Expected<Core::Assets::AssetBytes> SerializeFontAtlasPayload(const FontAtlasPayl
     return binary;
 }
 
-Expected<FontAtlasPayload> DeserializeFontAtlasPayload(const Span<const u8> binary, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+Expected<FontAtlasPayload> DeserializeFontAtlasPayload(const Span<const u8> binary, ::ArenaBase& arena, Core::Alloc::ScratchArena& scratchArena){
     auto payload = __hidden_font_atlas_binary::Deserialize(binary, arena, scratchArena);
     if(!payload){
         LogFontAtlasBinaryDeserializeFailed();
@@ -334,7 +334,7 @@ b8 ValidateFontAtlasPayload(const FontAtlasPayload& payload, Core::Alloc::Scratc
 }
 
 b8 ValidateFontAtlasSourceMatch(const FontAtlasPayload& payload, const Font& font){
-    const Core::Assets::AssetBytes& source = font.fontBytes();
+    const auto& source = font.fontBytes();
     FontSfntDirectory directory;
     if(!ValidateFontAtlasSourceHeaderAndMetrics(
         payload.font.name(),
@@ -372,14 +372,14 @@ b8 ValidateFontAtlasSourceMatch(const FontAtlasPayload& payload, const Font& fon
     return true;
 }
 
-Expected<Core::Assets::AssetVector<FontAtlasPositioningTable>> CopyFontAtlasPositioningTables(const Span<const u8> fontBytes, const u32 faceIndex, const u32 sourceGlyphCount, Core::Assets::AssetArena& arena){
+Expected<Vector<FontAtlasPositioningTable, ::ArenaBase>> CopyFontAtlasPositioningTables(const Span<const u8> fontBytes, const u32 faceIndex, const u32 sourceGlyphCount, ::ArenaBase& arena){
     if(faceIndex != 0u)
         return MakeUnexpected(Failure{});
     const Expected<FontSfntDirectory> directory = ReadFontSfntDirectory(fontBytes);
     if(!directory)
         return MakeUnexpected(Failure{});
     static constexpr Array<u32, s_FontAtlasMaxPositioningTableCount> s_Tags = { s_FontAtlasGdefTag, s_FontAtlasGposTag, s_FontAtlasKernTag };
-    Core::Assets::AssetVector<FontAtlasPositioningTable> tables(arena);
+    Vector<FontAtlasPositioningTable, ::ArenaBase> tables(arena);
     tables.reserve(s_FontAtlasMaxPositioningTableCount);
     u64 totalBytes = 0u;
     for(const u32 tag : s_Tags){
@@ -401,29 +401,21 @@ Expected<Core::Assets::AssetVector<FontAtlasPositioningTable>> CopyFontAtlasPosi
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 FontAtlas::loadBinary(const Span<const u8> binary){
-    if(!checkVirtualPath(NWB_TEXT("FontAtlas::loadBinary")))
+b8 FontAtlas::loadBinary(const Span<const u8> binary)noexcept{
+    if(!checkVirtualPath(FOUNDATION_TEXT("FontAtlas::loadBinary")))
         return false;
     Core::Alloc::ScratchArena scratchArena(s_AssetsFontAtlasLoadBinaryArena);
-    auto payload = DeserializeFontAtlasPayload(binary, m_payload.glyphs.get_allocator().arena(), scratchArena);
+    auto payload = DeserializeFontAtlasPayload(binary, *__adhd_arena, scratchArena);
     if(!payload)
         return false;
-    FontAtlas candidate(m_payload.glyphs.get_allocator().arena(), virtualPath());
+    FontAtlas candidate(*__adhd_arena, virtualPath());
     candidate.m_payload = Move(*payload);
     *this = Move(candidate);
     return true;
 }
 
-b8 FontAtlas::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
+b8 FontAtlas::validatePayload(Core::Alloc::ScratchArena& scratchArena)const noexcept{
     return checkVirtualPath(s_FontAtlasValidatePayloadContext) && ValidateFontAtlasPayload(m_payload, scratchArena);
-}
-
-void FontAtlas::setPayload(FontAtlasPayload&& payload)noexcept{
-    m_payload = Move(payload);
-}
-
-const FontAtlasGlyph* FontAtlas::glyph(const u32 glyphId)const noexcept{
-    return IsFontAtlasGlyphIndexInBounds(glyphId, m_payload.glyphs.size()) ? &m_payload.glyphs[glyphId] : nullptr;
 }
 
 

@@ -2,6 +2,110 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_scene/components.adhd>
+#include <impl/assets_scene/scene_assets.adhd>
+#include <impl/assets_subsystem/asset.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+type ComponentRef = AssetRef<IComponent>;
+type ComponentRefVector = Vector<ComponentRef>;
+type SceneRef = AssetRef<SceneAsset>;
+type SubsystemRef = AssetRef<ISubsystem>;
+type EntityRef = AssetRef<EntityAsset>;
+type SceneAssetRef = AssetRef<IAsset>;
+type SubsystemRefVector = Vector<SubsystemRef>;
+type EntityRefVector = Vector<EntityRef>;
+type AssetMap = HashMap<Name, SceneAssetRef>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[asset("entity")]
+class EntityAsset{
+    private ComponentRefVector m_components;
+
+    public b8 validatePayload()const;
+    public b8 validatePayload(mut ScratchArena scratchArena)const;
+    public b8 loadBinary(in Span<u8> binary);
+
+    public void setComponents(in ComponentRefVector components){
+        this.m_components = components;
+    }
+
+    public ComponentRefVector takeComponents(){
+        ComponentRefVector result = this.m_components;
+        this.m_components.clear();
+        return result;
+    }
+
+    public in ComponentRefVector components()const{
+        return this.m_components;
+    }
+}
+
+[asset("project")]
+class ProjectAsset{
+    private SceneRef m_startScene;
+
+    public b8 validatePayload()const;
+    public b8 loadBinary(in Span<u8> binary);
+
+    public void setStartScene(in SceneRef startScene){
+        this.m_startScene = startScene;
+    }
+
+    public in SceneRef startScene()const{
+        return this.m_startScene;
+    }
+}
+
+[asset("scene")]
+class SceneAsset{
+    private SubsystemRefVector m_subsystems;
+    private EntityRefVector m_entities;
+    private AssetMap m_assets;
+
+    public b8 validatePayload()const;
+    public b8 validatePayload(mut ScratchArena scratchArena)const;
+    public b8 loadBinary(in Span<u8> binary);
+
+    public void setContents(
+        in SubsystemRefVector subsystems,
+        in AssetMap assets,
+        in EntityRefVector entities
+    ){
+        this.m_subsystems = subsystems;
+        DeduplicateSubsystemRefs(this.m_subsystems);
+        this.m_entities = entities;
+        this.m_assets = assets;
+    }
+
+    public void takeContents(
+        mut SubsystemRefVector outSubsystems,
+        mut AssetMap outAssets,
+        mut EntityRefVector outEntities
+    ){
+        outSubsystems = this.m_subsystems;
+        this.m_subsystems.clear();
+        outAssets = this.m_assets;
+        this.m_assets.clear();
+        outEntities = this.m_entities;
+        this.m_entities.clear();
+    }
+
+    public in SubsystemRefVector subsystems()const{ return this.m_subsystems; }
+    public in EntityRefVector entities()const{ return this.m_entities; }
+    public in AssetMap assets()const{ return this.m_assets; }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [header]
 native{
 
@@ -10,7 +114,6 @@ native{
 
 
 #include <impl/assets_scene/components.adhd.h>
-
 #include <impl/assets_scene/scene_assets.adhd.h>
 #include <impl/assets_subsystem/asset.adhd.h>
 
@@ -68,151 +171,14 @@ inline constexpr Core::Assets::AssetRef<ProjectAsset> s_DefaultProjectRef(s_Defa
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class EntityAsset final : public Core::Assets::TypedAsset<EntityAsset>{
-public:
-    using ComponentRef = Core::Assets::AssetRef<IComponent>;
-    using ComponentRefVector = Core::Assets::AssetVector<ComponentRef>;
-
-
-public:
-    NWB_DEFINE_ASSET_TYPE("entity")
-
-
-public:
-    explicit EntityAsset(Core::Assets::AssetArena& arena)noexcept
-        : m_components(arena)
-    {}
-    EntityAsset(Core::Assets::AssetArena& arena, const Name& virtualPath)noexcept
-        : Core::Assets::TypedAsset<EntityAsset>(virtualPath)
-        , m_components(arena)
-    {}
-
-
-public:
-    [[nodiscard]] b8 validatePayload(Core::Alloc::ScratchArena& scratchArena)const;
-    b8 loadBinary(Span<const u8> binary);
-
-    void setComponents(ComponentRefVector&& components)noexcept{ m_components = Move(components); }
-    [[nodiscard]] ComponentRefVector takeComponents()noexcept{ return Move(m_components); }
-    [[nodiscard]] const ComponentRefVector& components()const noexcept{ return m_components; }
-
-
-private:
-    ComponentRefVector m_components;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_DEFINE_ASSET_CODEC(EntityAssetCodec, EntityAsset);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class ProjectAsset final : public Core::Assets::TypedAsset<ProjectAsset>{
-public:
-    using SceneRef = Core::Assets::AssetRef<SceneAsset>;
-
-
-public:
-    NWB_DEFINE_ASSET_TYPE("project")
-
-
-public:
-    explicit ProjectAsset(Core::Assets::AssetArena&)noexcept{}
-    ProjectAsset(Core::Assets::AssetArena&, const Name& virtualPath)noexcept
-        : Core::Assets::TypedAsset<ProjectAsset>(virtualPath)
-    {}
-
-
-public:
-    [[nodiscard]] b8 validatePayload()const;
-    b8 loadBinary(Span<const u8> binary);
-
-    void setStartScene(const SceneRef& startScene)noexcept{ m_startScene = startScene; }
-    [[nodiscard]] const SceneRef& startScene()const noexcept{ return m_startScene; }
-
-
-private:
-    SceneRef m_startScene;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_DEFINE_ASSET_CODEC(ProjectAssetCodec, ProjectAsset);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class SceneAsset final : public Core::Assets::TypedAsset<SceneAsset>{
-public:
-    using SubsystemRef = ISubsystem::SubsystemRef;
-    using EntityRef = Core::Assets::AssetRef<EntityAsset>;
-    using AssetRef = Core::Assets::AssetRef<Core::Assets::IAsset>;
-    using SubsystemRefVector = ISubsystem::SubsystemRefVector;
-    using EntityRefVector = Core::Assets::AssetVector<EntityRef>;
-    using AssetMap = HashMap<Name, AssetRef, Core::Assets::AssetArena, Hasher<Name>, EqualTo<Name>>;
-
-
-public:
-    NWB_DEFINE_ASSET_TYPE("scene")
-
-
-public:
-    explicit SceneAsset(Core::Assets::AssetArena& arena)noexcept
-        : m_subsystems(arena)
-        , m_entities(arena)
-        , m_assets(0, Hasher<Name>(), EqualTo<Name>(), arena)
-    {}
-    SceneAsset(Core::Assets::AssetArena& arena, const Name& virtualPath)noexcept
-        : Core::Assets::TypedAsset<SceneAsset>(virtualPath)
-        , m_subsystems(arena)
-        , m_entities(arena)
-        , m_assets(0, Hasher<Name>(), EqualTo<Name>(), arena)
-    {}
-
-
-public:
-    [[nodiscard]] b8 validatePayload(Core::Alloc::ScratchArena& scratchArena)const;
-    b8 loadBinary(Span<const u8> binary);
-
-    void setContents(SubsystemRefVector&& subsystems, AssetMap&& assets, EntityRefVector&& entities)noexcept;
-    void takeContents(SubsystemRefVector& outSubsystems, AssetMap& outAssets, EntityRefVector& outEntities)noexcept;
-
-    [[nodiscard]] const SubsystemRefVector& subsystems()const noexcept{ return m_subsystems; }
-    [[nodiscard]] const EntityRefVector& entities()const noexcept{ return m_entities; }
-    [[nodiscard]] const AssetMap& assets()const noexcept{ return m_assets; }
-
-
-private:
-    SubsystemRefVector m_subsystems;
-    EntityRefVector m_entities;
-    AssetMap m_assets;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_DEFINE_ASSET_CODEC(SceneAssetCodec, SceneAsset);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class ActiveSceneSubsystems final{
 public:
     using ProjectRef = Core::Assets::AssetRef<ProjectAsset>;
-    using SceneRef = ProjectAsset::SceneRef;
-    using SubsystemRef = SceneAsset::SubsystemRef;
-    using EntityRef = SceneAsset::EntityRef;
-    using ComponentRef = EntityAsset::ComponentRef;
-    using AssetMap = SceneAsset::AssetMap;
+    using SceneRef = Core::Assets::AssetRef<SceneAsset>;
+    using SubsystemRef = ISubsystem::SubsystemRef;
+    using EntityRef = Core::Assets::AssetRef<EntityAsset>;
+    using ComponentRef = Core::Assets::AssetRef<IComponent>;
+    using AssetMap = HashMap<Name, Core::Assets::AssetRef<Core::Assets::IAsset>, ::ArenaBase>;
     using LoadedSubsystemVector = Vector<UniquePtr<ISubsystem>, Core::Alloc::GlobalArena>;
     using LoadedComponentVector = Vector<UniquePtr<IComponent>, Core::Alloc::GlobalArena>;
 
@@ -300,4 +266,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

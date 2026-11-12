@@ -60,11 +60,67 @@ b8 LocalVariableChecker::check(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
             const b8 isNonRootClass = !isArenaContainer && layoutAnalyzer.isNonRootMotherArenaType(*stmt.varType);
             const b8 isArenaDefaultArray = !stmt.expr && !stmt.isCtorInit && layoutAnalyzer.isFixedArrayNeedingArenaDefaultInit(*stmt.varType);
             const b8 isReboundValueInit = (stmt.expr != nullptr) && !stmt.varType->isAuto && layoutAnalyzer.requiresMotherArena(*stmt.varType);
-            if(isArenaContainer || isNonRootClass || isArenaDefaultArray || isReboundValueInit){
+            b8 callerPassedArena = false;
+            if(stmt.isCtorInit && !stmt.arguments.empty()){
+                auto isExplicitArenaArg = [](const Expr& argExpr, const MStringView inferredType)noexcept -> b8{
+                    if(inferredType == "ArenaBase" || inferredType == "GlobalArena" || inferredType == "ScratchArena" || inferredType == "PersistentArena" || inferredType == "AssetArena" || inferredType == "CookArena")
+                        return true;
+                    if(!inferredType.empty())
+                        return false;
+                    if((argExpr.kind == ExprKind::MemberAccess || argExpr.kind == ExprKind::ThisMember) && (argExpr.text == "arena" || argExpr.text == "scratchArena"))
+                        return true;
+                    if(argExpr.kind == ExprKind::Identifier && (argExpr.text == "arena" || argExpr.text == "m_arena" || argExpr.text == "m_inputArena" || argExpr.text == "scratchArena" || argExpr.text == "m_scratchArena" || argExpr.text == "assetArena" || argExpr.text == "outputArena" || argExpr.text == "resultArena"))
+                        return true;
+                    return false;
+                };
+                if(isNonRootClass){
+                    const ClassDecl* ctorCls = m_checker.m_symbols.findClass(baseVarTypeName);
+                    b8 hasUserCtor = false;
+                    if(ctorCls){
+                        for(const MethodDecl* m : ctorCls->methods){
+                            if(m && m->isConstructor){
+                                hasUserCtor = true;
+                                break;
+                            }
+                        }
+                    }
+                    if(ctorCls && !hasUserCtor){
+                        if(!ctorCls->assetTypeName.empty()){
+                            if(stmt.arguments.size() >= 2u){
+                                callerPassedArena = true;
+                            }
+                            else if(stmt.arguments.size() == 1u && stmt.arguments[0]){
+                                const MStringView arg0Type = m_checker.inferExprBaseType(ownerClass, &method, *stmt.arguments[0], scope);
+                                if(arg0Type != "Name" && !IsStringLikeType(arg0Type) && arg0Type != baseVarTypeName)
+                                    callerPassedArena = true;
+                            }
+                        }
+                        else if(stmt.arguments.size() >= 2u){
+                            callerPassedArena = true;
+                        }
+                        else if(stmt.arguments.size() == 1u && stmt.arguments[0]){
+                            const MStringView arg0Type = m_checker.inferExprBaseType(ownerClass, &method, *stmt.arguments[0], scope);
+                            if(arg0Type != baseVarTypeName)
+                                callerPassedArena = true;
+                        }
+                    }
+                }
+                else if(isArenaContainer && baseVarTypeName != "Path" && stmt.arguments.size() == 1u && stmt.arguments[0]){
+                    const MStringView arg0Type = m_checker.inferExprBaseType(ownerClass, &method, *stmt.arguments[0], scope);
+                    if(isExplicitArenaArg(*stmt.arguments[0], arg0Type))
+                        callerPassedArena = true;
+                }
+            }
+            if(!callerPassedArena && (isArenaContainer || isNonRootClass || isArenaDefaultArray || isReboundValueInit)){
                 stmt.usesScratchArena = true;
                 stmt.arenaFirstInit = (!m_checker.m_symbols.hasTypeSymbol(baseVarTypeName) && IsArenaFirstCtorType(baseVarTypeName)) || isNonRootClass;
-                method.usesScratchArena = true;
-                m_checker.m_activeParallelBlockUsesScratch = true;
+                if(ownerClass && !ownerClass->assetTypeName.empty()){
+                    ownerClass->needsClassArena = true;
+                }
+                else{
+                    method.usesScratchArena = true;
+                    m_checker.m_activeParallelBlockUsesScratch = true;
+                }
             }
         }
         LambdaCaptureAnalyzer(scope, m_checker.m_symbols).propagateFuncCaptureBytes(stmt.varType, stmt.expr);

@@ -46,7 +46,7 @@ public:
 
 
 [[nodiscard]] Expected<u32> ReadFontAtlasMetadataU32(const Path& path, const Core::Metascript::Value& map, AStringView diagnosticPrefix, AStringView field, u32 minimum, u32 maximum);
-[[nodiscard]] Expected<Core::Assets::AssetVector<FontAtlasGlyph>> ParseFontAtlasGlyphMetadata(const Path& nwbFilePath, const Core::Metascript::Value& asset, const FontAtlasPayload& payload);
+[[nodiscard]] Expected<Vector<FontAtlasGlyph, ::ArenaBase>> ParseFontAtlasGlyphMetadata(const Path& nwbFilePath, const Core::Metascript::Value& asset, const FontAtlasPayload& payload);
 [[nodiscard]] Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
 
@@ -313,7 +313,7 @@ static void CopySourceGroups(PreparedFontSource& source, FontAtlasPayload& paylo
         group.height = prepared.height;
         group.channelCount = prepared.channelCount;
         group.sha256 = prepared.sha256;
-        group.pixels = Move(prepared.pixels);
+        ::AdhdAssign(group.pixels, Move(prepared.pixels));
         payload.groups.push_back(Move(group));
     }
 }
@@ -346,14 +346,14 @@ b8 FontAtlasAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asset
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<Core::Assets::AssetVector<FontAtlasGlyph>> ParseFontAtlasGlyphMetadata(const Path& nwbFilePath, const Core::Metascript::Value& asset, const FontAtlasPayload& payload){
+Expected<Vector<FontAtlasGlyph, ::ArenaBase>> ParseFontAtlasGlyphMetadata(const Path& nwbFilePath, const Core::Metascript::Value& asset, const FontAtlasPayload& payload){
     using namespace __hidden_font_atlas_cook_glyph_metadata;
     const auto glyphs = Core::Assets::FindMetadataListField(nwbFilePath, asset, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphsField);
     if(!glyphs)
         return MakeUnexpected(glyphs.error());
     if(!ValidateFontAtlasSourceGlyphListCount(nwbFilePath, payload.sourceGlyphCount, s_FontAtlasMaxGlyphCount, (*glyphs)->asList().size()))
         return MakeUnexpected(Failure{});
-    Core::Assets::AssetVector<FontAtlasGlyph> candidate(payload.glyphs.get_allocator().arena());
+    Vector<FontAtlasGlyph, ::ArenaBase> candidate(payload.glyphs.get_allocator().arena());
     candidate.reserve(payload.sourceGlyphCount);
     const f32 unitsPerPixel = ComputeFontAtlasUnitsPerPixel(payload.unitsPerEm, payload.bakePpem);
     for(u32 index = 0u; index < payload.sourceGlyphCount; ++index){

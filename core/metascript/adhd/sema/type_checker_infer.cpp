@@ -435,6 +435,13 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
                 if(const TypeRef* ft = m_symbols.unwrapTypeAlias(field->type); ft && ft->isFuncType && ft->funcReturnType)
                     return m_symbols.unwrapTypeAlias(ft->funcReturnType);
             }
+            if(!ownerClass->assetTypeName.empty() || !ownerClass->subsystemTypeName.empty() || !ownerClass->componentAssetTypeName.empty()){
+                if(const BuiltinReceiverMethodInfo* recvMethod = FindBuiltinReceiverMethod("IAsset", expr.lhs->text); recvMethod && !recvMethod->returnTypeName.empty()){
+                    TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
+                    synth->name = recvMethod->returnTypeName;
+                    return synth;
+                }
+            }
         }
         else if(expr.lhs->kind == ExprKind::MemberAccess && expr.lhs->lhs){
             const TypeRef* recvTypeRef = nullptr;
@@ -463,6 +470,13 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
                     const TypeRef* ft = m_symbols.substituteTypeParams(field->type, cls->templateParams, recvTypeRef);
                     if(const TypeRef* uft = m_symbols.unwrapTypeAlias(ft); uft && uft->isFuncType && uft->funcReturnType)
                         return m_symbols.unwrapTypeAlias(uft->funcReturnType);
+                }
+                if(!cls->assetTypeName.empty() || !cls->subsystemTypeName.empty() || !cls->componentAssetTypeName.empty()){
+                    if(const BuiltinReceiverMethodInfo* recvMethod = FindBuiltinReceiverMethod("IAsset", mName); recvMethod && !recvMethod->returnTypeName.empty()){
+                        TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
+                        synth->name = recvMethod->returnTypeName;
+                        return synth;
+                    }
                 }
             }
             else if(recvTypeRef && m_symbols.findInterface(lhsType)){

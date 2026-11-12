@@ -225,6 +225,12 @@ inline void ReserveAdditionalCapacity(Container& container, const usize addition
     ReserveGrowingCapacity(container, currentSize + additionalCount);
 }
 
+template<typename T, typename LhsArenaT, typename RhsArenaT>
+    requires(!IsSame_V<LhsArenaT, RhsArenaT>)
+[[nodiscard]] inline b8 operator==(const Vector<T, LhsArenaT>& lhs, const Vector<T, RhsArenaT>& rhs)noexcept(noexcept(lhs.size() == rhs.size() && std::equal(lhs.begin(), lhs.end(), rhs.begin()))){
+    return lhs.size() == rhs.size() && std::equal(lhs.begin(), lhs.end(), rhs.begin());
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

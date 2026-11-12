@@ -37,6 +37,7 @@ public:
 
 public:
     void emitTypeCpp(MString& out, const TypeRef& type)const;
+    void emitReturnTypeCpp(MString& out, const TypeRef& type)const;
     void emitTypeWithCustomArenaCpp(MString& out, const TypeRef& type, MStringView arenaExpr)const;
     void emitTypeArgListCpp(MString& out, Span<const TypeArg> args)const;
     void emitParamTypeCpp(MString& out, ParamPassingMode::Enum mode, const TypeRef& type, b8 topLevelConst = true)const;

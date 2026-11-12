@@ -202,7 +202,6 @@ void ReflectionEmitter::emitClassReflectionMembers(MString& out, const ClassDecl
     using namespace __hidden_adhd_reflection_emitter;
 
     out.append("public:\r\n");
-    EmitAssetTypeNameDecl(out, decl.assetTypeName);
 
     if(decl.isSerialize){
         const BinarySerializationEmitter binaryEmitter(m_symbols);

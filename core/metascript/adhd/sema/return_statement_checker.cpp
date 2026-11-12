@@ -34,7 +34,6 @@ b8 ReturnStatementChecker::check(ClassDecl* ownerClass, const Span<const ScopedV
         if(RequiresTCharAdaptation(baseRetTypeName))
             m_checker.markStringToPathAdaptation(ownerClass, &method, scope, *stmt.expr);
         if(retRefMode != ParamPassingMode::None){
-            stmt.wrapReturnNotNull = true;
             b8 isDanglingReturn = false;
             if(stmt.expr->kind == ExprKind::Identifier){
                 const ScopedVarInfo* local = m_checker.FindScopedVar(scope, stmt.expr->text);

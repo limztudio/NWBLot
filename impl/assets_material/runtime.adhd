@@ -2,6 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_material/asset.adhd>
+#include <impl/assets_material/material_binary_reader.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 CanAssignMaterialStageShader(in b8 isSupportedStage, in b8 isShaderValid){
     return isSupportedStage && isShaderValid;
 }
@@ -12,58 +19,11 @@ u32 NextMaterialStageShaderCount(in u32 currentCount, in b8 hadExistingStageShad
     return currentCount + 1u;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_material/asset.adhd.h>
-
-#include <impl/assets_material/material_binary_reader.adhd.h>
-
-#include <core/assets/auto_registration.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_assets_material_runtime{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr TStringView s_MaterialLoadBinaryContext = FOUNDATION_TEXT("Material::loadBinary");
-
-NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_MaterialAssetCodecAutoRegistrar, MaterialAssetCodec);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 Material::loadBinary(const Span<const u8> binary){
-    if(!checkVirtualPath(__hidden_assets_material_runtime::s_MaterialLoadBinaryContext))
+b8 Material::loadBinary(in Span<u8> binary){
+    if(!this.checkVirtualPath("Material::loadBinary"))
         return false;
 
-    Material candidate(m_shaderVariant.get_allocator().arena(), virtualPath());
+    Material candidate(this.virtualPath());
     if(!MaterialBinaryReader().deserialize(
         binary,
         candidate.m_shaderVariant,
@@ -86,61 +46,69 @@ b8 Material::loadBinary(const Span<const u8> binary){
     ))
         return false;
 
-    *this = Move(candidate);
+    this = candidate;
     return true;
 }
 
-b8 Material::validatePayload(const TStringView failureContext, const AStringView failureContextText)const{
-    if(!checkVirtualPath(failureContext))
+b8 Material::validatePayload(in StringView failureContext, in StringView failureContextText)const{
+    if(!this.checkVirtualPath(failureContext))
         return false;
     return ValidateMaterialPayloadData(
-        m_stageShaderCount,
-        m_materialInterface,
-        AStringView(m_shaderVariant),
-        m_transparent,
-        m_avboitAccumulatePixelShader,
-        m_avboitOccupancyPixelShader,
-        m_avboitExtinctionPixelShader,
-        m_typedLayoutHash,
-        m_typedLayoutBlocks,
-        m_typedLayoutFields,
-        m_typedBlockBytes,
-        m_resourceReferences,
+        this.m_stageShaderCount,
+        this.m_materialInterface,
+        StringView(this.m_shaderVariant),
+        this.m_transparent,
+        this.m_avboitAccumulatePixelShader,
+        this.m_avboitOccupancyPixelShader,
+        this.m_avboitExtinctionPixelShader,
+        this.m_typedLayoutHash,
+        this.m_typedLayoutBlocks,
+        this.m_typedLayoutFields,
+        this.m_typedBlockBytes,
+        this.m_resourceReferences,
         failureContextText
     );
 }
 
-void Material::setTypedLayout(const u64 layoutHash, const Span<const MaterialTypedLayoutBlock> blocks, const Span<const MaterialTypedLayoutField> fields, const Span<const u8> blockBytes){
-    AssignMaterialTypedLayoutPayload(layoutHash, blocks, fields, blockBytes, m_typedLayoutHash, m_typedLayoutBlocks, m_typedLayoutFields, m_typedBlockBytes);
+b8 Material::validatePayload(in StringView failureContext)const{
+    return this.validatePayload(failureContext, failureContext);
 }
 
-void Material::setResourceReferences(const Span<const MaterialResourceReference> resourceReferences){
-    AssignMaterialResourceReferencesPayload(resourceReferences, m_resourceReferences);
+b8 Material::validatePayload()const{
+    return this.validatePayload(s_MaterialValidatePayloadContextText, s_MaterialValidatePayloadContextText);
 }
 
-b8 Material::setShaderForStage(const Core::ShaderType::Enum shaderType, const Core::Assets::AssetRef<IShader>& shaderAsset)noexcept{
+void Material::setTypedLayout(
+    in u64 layoutHash,
+    in Span<MaterialTypedLayoutBlock> blocks,
+    in Span<MaterialTypedLayoutField> fields,
+    in Span<u8> blockBytes
+){
+    AssignMaterialTypedLayoutPayload(
+        layoutHash,
+        blocks,
+        fields,
+        blockBytes,
+        this.m_typedLayoutHash,
+        this.m_typedLayoutBlocks,
+        this.m_typedLayoutFields,
+        this.m_typedBlockBytes
+    );
+}
+
+void Material::setResourceReferences(in Span<MaterialResourceReference> resourceReferences){
+    AssignMaterialResourceReferencesPayload(resourceReferences, this.m_resourceReferences);
+}
+
+b8 Material::setShaderForStage(in ShaderType shaderType, in AssetRef<IShader> shaderAsset){
     if(!CanAssignMaterialStageShader(IsSupportedMaterialShaderStage(shaderType), shaderAsset.valid()))
         return false;
 
-    Core::Assets::AssetRef<IShader>& storedShader = m_stageShaders[Core::ShaderType::ToIndex(shaderType)];
-    m_stageShaderCount = NextMaterialStageShaderCount(m_stageShaderCount, storedShader.valid());
-
-    storedShader = shaderAsset;
+    const usize stageIndex = cast<usize>(shaderType);
+    this.m_stageShaderCount = NextMaterialStageShaderCount(this.m_stageShaderCount, this.m_stageShaders[stageIndex].valid());
+    this.m_stageShaders[stageIndex] = shaderAsset;
     return true;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

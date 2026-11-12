@@ -544,7 +544,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
         m_typeEmitter.emitParamListCpp(out, expr.lambdaParams, expr.lambdaInjectsCallerArena);
         out.append("noexcept -> ");
         if(expr.lambdaReturnType)
-            m_typeEmitter.emitTypeCpp(out, *expr.lambdaReturnType);
+            m_typeEmitter.emitReturnTypeCpp(out, *expr.lambdaReturnType);
         else
             out.append("void");
         out.append("{\r\n");

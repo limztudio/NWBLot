@@ -2,106 +2,54 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_sampler/asset.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 IsSamplerFilterFlagEnabled(in u32 filterFlag){
     return filterFlag != 0u;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[source]
-native{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/assets_sampler/asset.adhd.h>
-
-#include <core/assets/auto_registration.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_sampler_runtime{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr TStringView s_SamplerValidatePayloadContext = FOUNDATION_TEXT("Sampler::validatePayload");
-
-NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SamplerAssetCodecAutoRegistrar, SamplerAssetCodec);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 Sampler::validatePayload()const{
-    if(!checkVirtualPath(__hidden_sampler_runtime::s_SamplerValidatePayloadContext))
+    if(!this.checkVirtualPath(s_SamplerValidatePayloadContext))
         return false;
     return ValidateSamplerDescriptionPayload(
-        virtualPath(),
-        m_description.borderColor.r,
-        m_description.borderColor.g,
-        m_description.borderColor.b,
-        m_description.borderColor.a,
-        m_description.maxAnisotropy,
-        m_description.mipBias,
-        static_cast<u32>(m_description.addressU),
-        static_cast<u32>(m_description.addressV),
-        static_cast<u32>(m_description.addressW),
-        static_cast<u32>(m_description.reductionType)
+        this.virtualPath(),
+        this.m_description.borderColor.r,
+        this.m_description.borderColor.g,
+        this.m_description.borderColor.b,
+        this.m_description.borderColor.a,
+        this.m_description.maxAnisotropy,
+        this.m_description.mipBias,
+        cast<u32>(this.m_description.addressU),
+        cast<u32>(this.m_description.addressV),
+        cast<u32>(this.m_description.addressW),
+        cast<u32>(this.m_description.reductionType)
     );
 }
 
-b8 Sampler::loadBinary(const Span<const u8> binary){
+b8 Sampler::loadBinary(in Span<u8> binary){
     const Expected<SamplerBinaryHeader> headerResult = DeserializeSamplerBinaryHeader(binary);
-    if(!headerResult)
+    if(!headerResult.has_value())
         return false;
-    if(!checkVirtualPath(__hidden_sampler_runtime::s_SamplerValidatePayloadContext))
+    if(!this.checkVirtualPath(s_SamplerValidatePayloadContext))
         return false;
 
-    const SamplerBinaryHeader& header = *headerResult;
-    m_description.borderColor = Core::Color(header.borderColorR, header.borderColorG, header.borderColorB, header.borderColorA);
-    m_description.maxAnisotropy = header.maxAnisotropy;
-    m_description.mipBias = header.mipBias;
-    m_description.minFilter = IsSamplerFilterFlagEnabled(header.minFilter);
-    m_description.magFilter = IsSamplerFilterFlagEnabled(header.magFilter);
-    m_description.mipFilter = IsSamplerFilterFlagEnabled(header.mipFilter);
-    m_description.addressU = static_cast<Core::SamplerAddressMode::Enum>(header.addressU);
-    m_description.addressV = static_cast<Core::SamplerAddressMode::Enum>(header.addressV);
-    m_description.addressW = static_cast<Core::SamplerAddressMode::Enum>(header.addressW);
-    m_description.reductionType = static_cast<Core::SamplerReductionType::Enum>(header.reductionType);
+    in SamplerBinaryHeader header = headerResult.value();
+    this.m_description.borderColor = Color(header.borderColorR, header.borderColorG, header.borderColorB, header.borderColorA);
+    this.m_description.maxAnisotropy = header.maxAnisotropy;
+    this.m_description.mipBias = header.mipBias;
+    this.m_description.minFilter = IsSamplerFilterFlagEnabled(header.minFilter);
+    this.m_description.magFilter = IsSamplerFilterFlagEnabled(header.magFilter);
+    this.m_description.mipFilter = IsSamplerFilterFlagEnabled(header.mipFilter);
+    this.m_description.addressU = cast<SamplerAddressMode>(header.addressU);
+    this.m_description.addressV = cast<SamplerAddressMode>(header.addressV);
+    this.m_description.addressW = cast<SamplerAddressMode>(header.addressW);
+    this.m_description.reductionType = cast<SamplerReductionType>(header.reductionType);
     return true;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

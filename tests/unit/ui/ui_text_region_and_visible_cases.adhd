@@ -380,7 +380,7 @@ public:
         m_layout = Move(*layout);
         FontAtlasPayload payload(m_arena);
         payload.font = Core::Assets::AssetRef<Font>(s_TestLatinFontPath);
-        const Core::Assets::AssetBytes& bytes = m_latin.fontBytes();
+        const auto& bytes = m_latin.fontBytes();
         payload.fontSha256 = ComputeSha256({ bytes.data(), bytes.size() });
         UiFixtureSupport::PopulateBakedFontTables(bytes, m_arena, payload);
         payload.bakePpem = 32u;
@@ -505,7 +505,7 @@ public:
     [[nodiscard]] b8 installMeasuredSdfAtlas(const u32 targetGlyphId){
         FontAtlasPayload payload(m_arena);
         payload.font = Core::Assets::AssetRef<Font>(s_TestLatinFontPath);
-        const Core::Assets::AssetBytes& bytes = m_latin.fontBytes();
+        const auto& bytes = m_latin.fontBytes();
         payload.fontSha256 = ComputeSha256({ bytes.data(), bytes.size() });
         UiFixtureSupport::PopulateBakedFontTables(bytes, m_arena, payload);
         payload.bakePpem = 32u;

@@ -2,125 +2,89 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[header]
-native{
+#include <impl/global.adhd>
+#include <impl/assets_texture/asset.adhd>
+#include <impl/assets_ui_skin/validation.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/global.adhd.h>
-#include <impl/assets_ui_skin/validation.adhd.h>
+const StringView s_UiSkinAssetKindLabel = "UI skin";
+const StringView s_UiSkinLoadBinaryContext = "UiSkin::loadBinary";
 
-#include <core/assets/module.h>
-#include <core/assets/ref.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_BEGIN
+type RegionVector = Vector<UiSkinRegion>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Texture;
+[asset("ui_skin")]
+class UiSkin{
+    private RegionVector m_regions;
+    private Vector<u32> m_regionIndex;
+    private AssetRef<Texture> m_texture = AssetRef<Texture>();
+    private u32 m_atlasWidth = 0u;
+    private u32 m_atlasHeight = 0u;
+    private f32 m_referenceDensity = 1.0f;
+    private UiSkinPalette m_palette = UiSkinPalette();
+    private UiSkinTypography m_typography = UiSkinTypography();
 
-inline constexpr TStringView s_UiSkinAssetKindLabel = FOUNDATION_TEXT("UI skin");
-inline constexpr TStringView s_UiSkinLoadBinaryContext = FOUNDATION_TEXT("UiSkin::loadBinary");
+    public b8 loadBinary(in Span<u8> binary);
+    public b8 validatePayload()const;
+    public b8 validateTexture(in Texture texture)const;
 
+    public void setAtlas(in AssetRef<Texture> texture, in u32 width, in u32 height, in f32 referenceDensity, in RegionVector regions){
+        this.m_regions = regions;
+        ResetUiSkinAtlasFields(
+            texture,
+            width,
+            height,
+            referenceDensity,
+            this.m_regions,
+            this.m_regionIndex,
+            this.m_texture,
+            this.m_atlasWidth,
+            this.m_atlasHeight,
+            this.m_referenceDensity,
+            this.m_palette,
+            this.m_typography
+        );
+    }
+    public void setPalette(in UiSkinPalette palette){ this.m_palette = palette; }
+    public void setTypography(in UiSkinTypography typography){ this.m_typography = typography; }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class UiSkin final : public Core::Assets::TypedAsset<UiSkin>{
-public:
-    using RegionVector = Core::Assets::AssetVector<UiSkinRegion>;
-
-
-public:
-    NWB_DEFINE_ASSET_TYPE("ui_skin")
-
-
-public:
-    explicit UiSkin(Core::Assets::AssetArena& arena)noexcept
-        : m_regions(arena)
-        , m_regionIndex(arena)
-    {}
-    UiSkin(Core::Assets::AssetArena& arena, const Name& virtualPath)noexcept
-        : Core::Assets::TypedAsset<UiSkin>(virtualPath)
-        , m_regions(arena)
-        , m_regionIndex(arena)
-    {}
-
-
-public:
-    b8 loadBinary(Span<const u8> binary);
-    [[nodiscard]] b8 validatePayload()const;
-    [[nodiscard]] b8 validateTexture(const Texture& texture)const;
-
-    void setAtlas(Core::Assets::AssetRef<Texture> texture, u32 width, u32 height, f32 referenceDensity, RegionVector&& regions);
-    void setPalette(const UiSkinPalette& palette)noexcept{ m_palette = palette; }
-    void setTypography(const UiSkinTypography& typography)noexcept{ m_typography = typography; }
-
-
-public:
-    [[nodiscard]] const Core::Assets::AssetRef<Texture>& texture()const noexcept{ return m_texture; }
-    [[nodiscard]] u32 atlasWidth()const noexcept{ return m_atlasWidth; }
-    [[nodiscard]] u32 atlasHeight()const noexcept{ return m_atlasHeight; }
-    [[nodiscard]] f32 referenceDensity()const noexcept{ return m_referenceDensity; }
-    [[nodiscard]] const RegionVector& regions()const noexcept{ return m_regions; }
-    [[nodiscard]] Span<const u32> regionIndex()const noexcept{ return m_regionIndex; }
-    [[nodiscard]] const UiSkinPalette& palette()const noexcept{ return m_palette; }
-    [[nodiscard]] const UiSkinTypography& typography()const noexcept{ return m_typography; }
-    [[nodiscard]] const UiSkinRegion* findRegion(const Name& name)const noexcept;
-    [[nodiscard]] b8 hasRegion(const Name& name)const noexcept{ return findRegion(name) != nullptr; }
-    [[nodiscard]] b8 tryFindRegion(const Name& name, UiSkinRegion& outRegion)const noexcept{
-        const UiSkinRegion* const region = findRegion(name);
-        if(!region)
+    public in AssetRef<Texture> texture()const{ return this.m_texture; }
+    public u32 atlasWidth()const{ return this.m_atlasWidth; }
+    public u32 atlasHeight()const{ return this.m_atlasHeight; }
+    public f32 referenceDensity()const{ return this.m_referenceDensity; }
+    public in RegionVector regions()const{ return this.m_regions; }
+    public Span<u32> regionIndex()const{ return Span<u32>(this.m_regionIndex); }
+    public in UiSkinPalette palette()const{ return this.m_palette; }
+    public in UiSkinTypography typography()const{ return this.m_typography; }
+    public Expected<usize> findRegionIndex(in Name name)const{
+        return TryFindUiSkinRegionIndex(Span<UiSkinRegion>(this.m_regions), Span<u32>(this.m_regionIndex), name);
+    }
+    public b8 hasRegion(in Name name)const{ return this.findRegionIndex(name).has_value(); }
+    public b8 tryFindRegion(in Name name, mut UiSkinRegion outRegion)const{
+        Expected<usize> regionPosition = this.findRegionIndex(name);
+        if(!regionPosition.has_value())
             return false;
-        outRegion = *region;
+        outRegion = this.m_regions[regionPosition.value()];
         return true;
     }
 
-
-private:
-    void rebuildRegionIndex();
-
-
-private:
-    RegionVector m_regions;
-    Core::Assets::AssetVector<u32> m_regionIndex;
-    Core::Assets::AssetRef<Texture> m_texture;
-    u32 m_atlasWidth = 0u;
-    u32 m_atlasHeight = 0u;
-    f32 m_referenceDensity = 1.0f;
-    UiSkinPalette m_palette;
-    UiSkinTypography m_typography;
-};
+    private void rebuildRegionIndex(){
+        RebuildUiSkinRegionIndex(this.m_regions, this.m_regionIndex);
+    }
+}
 
 // The stock widget styles use this fixed region contract. Generic UiSkin assets may contain fewer regions.
-[[nodiscard]] b8 ValidateUiSkinToolkitContract(const UiSkin& skin);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_DEFINE_ASSET_CODEC(UiSkinAssetCodec, UiSkin);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+b8 ValidateUiSkinToolkitContract(in UiSkin skin){
+    if(!skin.validatePayload())
+        return false;
+    return ValidateUiSkinToolkitRegions(Span<UiSkinRegion>(skin.regions()), skin.regionIndex());
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -45,7 +45,7 @@ inline constexpr TStringView s_SubsystemAssetsPayloadLabel = FOUNDATION_TEXT("as
 template<typename TAsset>
 using SubsystemAssetRefVector = Core::Assets::AssetVector<Core::Assets::AssetRef<TAsset>>;
 
-interface ISubsystem : Core::Assets::IAsset{
+class ISubsystem : public Core::Assets::IAsset{
 public:
     using SubsystemRef = Core::Assets::AssetRef<ISubsystem>;
     using SubsystemRefVector = SubsystemAssetRefVector<ISubsystem>;

@@ -671,7 +671,7 @@ Expected<EntityCookEntry> ParseEntityCookMetadata(const Name virtualPath, const 
     candidate.setComponents(Move(*components));
     if(!candidate.validatePayload(scratchArena))
         return MakeUnexpected(Failure{});
-    entry.components = candidate.takeComponents();
+    entry.components = candidate.takeComponents(arena);
 
     return entry;
 }
@@ -746,13 +746,13 @@ Expected<SceneCookEntry> ParseSceneCookMetadata(const Name virtualPath, const Pa
     if(!subsystems)
         return MakeUnexpected(Failure{});
     DeduplicateSubsystemRefs(*subsystems);
-    entry.subsystems = Move(*subsystems);
+    entry.subsystems.assign(subsystems->begin(), subsystems->end());
 
     if(const Core::Metascript::Value* entitiesValue = asset.findField(s_SceneEntitiesField)){
         auto entities = Core::Assets::ReservedAssetRefParser::ParseList<EntityAsset>(nwbFilePath, s_SceneDiagnosticPrefix, *entitiesValue, s_SceneEntitiesField, arena, scratchArena);
         if(!entities)
             return MakeUnexpected(Failure{});
-        entry.entities = Move(*entities);
+        entry.entities.assign(entities->begin(), entities->end());
     }
 
     if(const Core::Metascript::Value* assetsValue = asset.findField(s_SceneAssetsField)){

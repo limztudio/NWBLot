@@ -220,7 +220,8 @@ Name RegionName(in u32 index){
 usize FindRegionAddress(in UiSkin skin, in Name name){
     usize address = 0u;
     native(in skin, in name, mut address){
-        address = reinterpret_cast<usize>(skin.findRegion(name));
+        const auto idx = skin.findRegionIndex(name);
+        address = idx ? reinterpret_cast<usize>(&skin.regions()[*idx]) : 0u;
     }
     return address;
 }
@@ -470,21 +471,21 @@ void VerifyAssetsUiSkinRegionIndex_ReplacementMovesAndCopiesDoNotRetainStaleRegi
     replacement.push_back(MakeRegion(s_UiTestOther, 2u));
     SetRegions(source, replacement);
     native(mut firstOwner, mut secondOwner, mut source){
-        EXPECT_EQ(&source.regions().get_allocator().arena(), &secondOwner.arena);
-        EXPECT_EQ(source.findRegion(s_UiLookupNameOld), nullptr);
+        EXPECT_EQ(&source.regions().get_allocator().arena(), &firstOwner.arena);
+        EXPECT_FALSE(source.findRegionIndex(s_UiLookupNameOld).has_value());
         UiSkin moved(Move(source));
-        EXPECT_EQ(moved.findRegion(s_UiLookupNameNew), &moved.regions()[0u]);
+        EXPECT_EQ(moved.findRegionIndex(s_UiLookupNameNew).value_or(Limit<usize>::s_Max), 0u);
         UiSkin copied(moved);
-        EXPECT_EQ(copied.findRegion(s_UiLookupNameOther), &copied.regions()[1u]);
-        EXPECT_NE(copied.findRegion(s_UiLookupNameOther), moved.findRegion(s_UiLookupNameOther));
+        EXPECT_EQ(copied.findRegionIndex(s_UiLookupNameOther).value_or(Limit<usize>::s_Max), 1u);
+        EXPECT_NE(&copied.regions()[1u], &moved.regions()[1u]);
         UiSkin assigned(firstOwner.arena, s_UiTestDestination);
         assigned = Move(moved);
-        EXPECT_EQ(assigned.findRegion(s_UiLookupNameNew), &assigned.regions()[0u]);
-        EXPECT_EQ(assigned.findRegion(s_UiLookupNameOld), nullptr);
+        EXPECT_EQ(assigned.findRegionIndex(s_UiLookupNameNew).value_or(Limit<usize>::s_Max), 0u);
+        EXPECT_FALSE(assigned.findRegionIndex(s_UiLookupNameOld).has_value());
         RegionVector empty(secondOwner.arena);
         assigned.setAtlas(Core::Assets::AssetRef<Texture>("test/skin/texture"), 8192u, 1u, 1.0f, Move(empty));
-        EXPECT_EQ(assigned.findRegion(s_UiLookupNameNew), nullptr);
-        EXPECT_EQ(copied.findRegion(s_UiLookupNameNew), &copied.regions()[0u]);
+        EXPECT_FALSE(assigned.findRegionIndex(s_UiLookupNameNew).has_value());
+        EXPECT_EQ(copied.findRegionIndex(s_UiLookupNameNew).value_or(Limit<usize>::s_Max), 0u);
     }
 }
 

@@ -448,7 +448,7 @@ static void StoreHdrAlpha(const usize texelIndex, const u8 alphaUnorm8, const Sp
     const auto alphaSource = TryGetSeparateAlphaUastcSlice(
         textureAsset.payloadBytes(),
         textureAsset.primaryPayloadByteCount(),
-        textureAsset.alphaMode() == TextureAlphaMode::SeparateUastcLdr4x4 && textureAsset.alphaUastcBlocks() != nullptr,
+        textureAsset.alphaMode() == TextureAlphaMode::SeparateUastcLdr4x4 && !textureAsset.alphaUastcBlocks().empty(),
         mip,
         sliceIndex
     );

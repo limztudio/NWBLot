@@ -37,7 +37,7 @@ namespace __hidden_assets_skeleton_volume_entry{
 
 static b8 RegisterSkeletonCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<SkeletonCookEntry, Skeleton, SkeletonAssetCodec>(
-        s_SkeletonAssetKindLabel,
+        FOUNDATION_TEXT("skeleton"),
         [](const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
             return ParseSkeletonCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
         },

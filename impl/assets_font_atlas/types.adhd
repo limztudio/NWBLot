@@ -79,24 +79,37 @@ b8 IsValidNondrawableFontAtlasGlyph(in FontAtlasGlyph glyph){
 }
 
 f32 ComputeFontAtlasUnitsPerPixel(in u32 unitsPerEm, in u32 bakePpem){
-    return cast<f32>(unitsPerEm) / cast<f32>(bakePpem);
+    const VectorSingle ratio = VectorSingle(cast<f32>(unitsPerEm)) / VectorSingle(cast<f32>(bakePpem));
+    return ratio.x;
 }
 
 void ComputeFontAtlasGlyphPlaneBounds(in f32 unitsPerPixel, mut FontAtlasGlyph inOutGlyph){
-    inOutGlyph.planeRight = inOutGlyph.planeLeft + cast<f32>(inOutGlyph.width) * unitsPerPixel;
-    inOutGlyph.planeBottom = inOutGlyph.planeTop + cast<f32>(inOutGlyph.height) * unitsPerPixel;
+    const f32 width = cast<f32>(inOutGlyph.width);
+    const f32 height = cast<f32>(inOutGlyph.height);
+    const VectorSingle origin(inOutGlyph.planeLeft, inOutGlyph.planeTop, inOutGlyph.planeLeft, inOutGlyph.planeTop);
+    const VectorSingle size(width, height, width, height);
+    const VectorSingle planeEnd = VectorMultiplyAddExpression(size, VectorSingle(unitsPerPixel), origin);
+    inOutGlyph.planeRight = planeEnd.x;
+    inOutGlyph.planeBottom = planeEnd.y;
     inOutGlyph.drawable = 1u;
 }
 
 b8 IsValidFontAtlasGlyphPlaneBounds(in FontAtlasGlyph glyph, in f32 unitsPerPixel){
-    const f32 expectedWidth = cast<f32>(glyph.width) * unitsPerPixel;
-    const f32 expectedHeight = cast<f32>(glyph.height) * unitsPerPixel;
-    const f32 planeWidth = glyph.planeRight - glyph.planeLeft;
-    const f32 planeHeight = glyph.planeBottom - glyph.planeTop;
-    return
-        Abs(planeWidth - expectedWidth) <= expectedWidth * s_FontAtlasGlyphPlaneSizeRelativeTolerance
-        && Abs(planeHeight - expectedHeight) <= expectedHeight * s_FontAtlasGlyphPlaneSizeRelativeTolerance
-    ;
+    const f32 width = cast<f32>(glyph.width);
+    const f32 height = cast<f32>(glyph.height);
+    const VectorSingle expectedSize = VectorSingle(width, height, width, height) * unitsPerPixel;
+    const VectorSingle planeEnd(glyph.planeRight, glyph.planeBottom, glyph.planeRight, glyph.planeBottom);
+    const VectorSingle planeStart(glyph.planeLeft, glyph.planeTop, glyph.planeLeft, glyph.planeTop);
+    const VectorSingle planeSize = planeEnd - planeStart;
+    const VectorSingle differenceX = planeSize.xxxx - expectedSize.xxxx;
+    const VectorSingle magnitudeX = VectorSelect(differenceX, -differenceX, VectorLess(differenceX, VectorSingle(0.0f)));
+    const VectorSingle toleranceX = expectedSize.xxxx * s_FontAtlasGlyphPlaneSizeRelativeTolerance;
+    if(!(magnitudeX.x <= toleranceX.x))
+        return false;
+    const VectorSingle differenceY = planeSize.yyyy - expectedSize.yyyy;
+    const VectorSingle magnitudeY = VectorSelect(differenceY, -differenceY, VectorLess(differenceY, VectorSingle(0.0f)));
+    const VectorSingle toleranceY = expectedSize.yyyy * s_FontAtlasGlyphPlaneSizeRelativeTolerance;
+    return magnitudeY.x <= toleranceY.x;
 }
 
 b8 IsValidFontAtlasGroupDimensions(in u32 width, in u32 height, in u32 channelCount){

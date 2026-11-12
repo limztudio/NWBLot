@@ -22,16 +22,13 @@ VectorSingle NormalizeSceneVector3Or(in VectorSingle value, in VectorSingle fall
 
 // Calculation rows are right, up, forward, and position/depth bias; never retained as scene storage.
 MatrixSingle BuildDefaultSceneViewBasis(){
-    const f32 sinYaw = Sin(s_DefaultSceneViewYaw);
-    const f32 cosYaw = Cos(s_DefaultSceneViewYaw);
-    const f32 sinPitch = Sin(s_DefaultSceneViewPitch);
-    const f32 cosPitch = Cos(s_DefaultSceneViewPitch);
-    return MatrixSingle(
-        cosYaw, 0.0f, sinYaw, 0.0f,
-        sinYaw * sinPitch, cosPitch, -cosYaw * sinPitch, 0.0f,
-        -sinYaw * cosPitch, sinPitch, cosYaw * cosPitch, 0.0f,
-        0.0f, 0.0f, 0.0f, s_DefaultSceneViewDepthOffset
-    );
+    const VectorSingle angles(s_DefaultSceneViewYaw, s_DefaultSceneViewPitch, s_DefaultSceneViewYaw, s_DefaultSceneViewPitch);
+    const VectorSingle sinAngles = Sin(angles);
+    const VectorSingle cosAngles = Cos(angles);
+    const VectorSingle right(cosAngles.x, 0.0f, sinAngles.x, 0.0f);
+    const VectorSingle up = VectorSingle(sinAngles.x, cosAngles.y, -cosAngles.x, 0.0f) * VectorSingle(sinAngles.y, 1.0f, sinAngles.y, 0.0f);
+    const VectorSingle forward = VectorSingle(-sinAngles.x, sinAngles.y, cosAngles.x, 0.0f) * VectorSingle(cosAngles.y, 1.0f, cosAngles.y, 0.0f);
+    return MatrixSingle(right, up, forward, VectorSingle(0.0f, 0.0f, 0.0f, s_DefaultSceneViewDepthOffset));
 }
 
 MatrixSingle BuildSceneViewBasis(in VectorSingle position, in VectorSingle rotation){

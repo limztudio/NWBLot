@@ -21,50 +21,36 @@ b8 CanAddLayoutTreeNode(in Span<LayoutTreeNode> nodes, in u32 maxNodes, in b8 bu
 Expected<Point> MeasureLayoutTreeNode(in Span<LayoutTreeNode> nodes, in Span<LayoutTreeWork> work, in u32 index){
     const LayoutTreeNode node = nodes[cast<usize>(index)];
     const LayoutNodeDesc description = node.description;
-    f64 extentX = 0.0;
-    f64 extentY = 0.0;
+    VectorDouble extent(0.0, 0.0, 0.0, 0.0);
     u32 childCount = 0u;
     for(u32 child = node.firstChild; child != s_LayoutNoParent; child = nodes[cast<usize>(child)].nextSibling){
         const Point measured = work[cast<usize>(child)].box.measuredSize;
-        const f64 candidateX = cast<f64>(measured.x);
-        const f64 candidateY = cast<f64>(measured.y);
-        f64 maxX = candidateX;
-        if(extentX > candidateX)
-            maxX = extentX;
-        f64 maxY = candidateY;
-        if(extentY > candidateY)
-            maxY = extentY;
+        const VectorDouble candidate(cast<f64>(measured.x), cast<f64>(measured.y), 0.0, 0.0);
+        const VectorDouble maximum = Max(extent, candidate);
         if(description.direction == LayoutDirection::Row){
-            extentX = extentX + candidateX;
-            extentY = maxY;
+            const VectorDouble accumulated = VectorDouble(extent.x) + VectorDouble(candidate.x);
+            extent = VectorDouble(accumulated.x, maximum.y, 0.0, 0.0);
         }
         else if(description.direction == LayoutDirection::Column){
-            extentX = maxX;
-            extentY = extentY + candidateY;
+            const VectorDouble accumulated = VectorDouble(extent.y) + VectorDouble(candidate.y);
+            extent = VectorDouble(maximum.x, accumulated.y, 0.0, 0.0);
         }
-        else{
-            extentX = maxX;
-            extentY = maxY;
-        }
+        else
+            extent = maximum;
         ++childCount;
     }
     if(childCount > 1u){
         const f64 spacing = cast<f64>(description.gap) * cast<f64>(childCount - 1u);
         if(description.direction == LayoutDirection::Row)
-            extentX += spacing;
+            extent.x = (extent.xxxx + VectorDouble(spacing)).x;
         else if(description.direction == LayoutDirection::Column)
-            extentY += spacing;
+            extent.y = (extent.yyyy + VectorDouble(spacing)).x;
     }
-    const f64 intrinsicX = cast<f64>(description.intrinsicSize.x);
-    const f64 intrinsicY = cast<f64>(description.intrinsicSize.y);
-    f64 maxX = intrinsicX;
-    if(extentX > intrinsicX)
-        maxX = extentX;
-    f64 maxY = intrinsicY;
-    if(extentY > intrinsicY)
-        maxY = extentY;
-    const f64 width = (maxX + cast<f64>(description.padding.left)) + cast<f64>(description.padding.right);
-    const f64 height = (maxY + cast<f64>(description.padding.top)) + cast<f64>(description.padding.bottom);
+    const VectorDouble intrinsic(cast<f64>(description.intrinsicSize.x), cast<f64>(description.intrinsicSize.y), 0.0, 0.0);
+    const VectorDouble maximum = Max(extent, intrinsic);
+    const VectorDouble padded = (maximum + VectorDouble(cast<f64>(description.padding.left), cast<f64>(description.padding.top), 0.0, 0.0)) + VectorDouble(cast<f64>(description.padding.right), cast<f64>(description.padding.bottom), 0.0, 0.0);
+    const f64 width = padded.x;
+    const f64 height = padded.y;
     if(width > s_UiMaxFloatF64 || height > s_UiMaxFloatF64)
         return MakeUnexpected(Failure());
     f32 resolvedWidth = cast<f32>(width);

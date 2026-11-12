@@ -246,8 +246,11 @@ Expected<ScrollPlacement> ListLayoutPreparer::measureListPlacement(ListFrame& fr
         if(height == frame.rowHeight){
             frame.scrollOffset = candidate->offset;
             // Another declaration can share this state with a different sizing context.
-            if(state.m_measureKey == frame.measureKey)
-                state.m_rowHeight = Max(state.m_rowHeight, frame.rowHeight);
+            if(state.m_measureKey == frame.measureKey){
+                const SIMDVectorSingle current = VectorReplicate(state.m_rowHeight);
+                const SIMDVectorSingle candidate = VectorReplicate(frame.rowHeight);
+                state.m_rowHeight = VectorGetX(VectorSelect(candidate, current, VectorGreater(current, candidate)));
+            }
             return *candidate;
         }
         // Retain the first visible row and its pixel offset at the inherited clip edge while the uniform estimate grows.

@@ -4,6 +4,8 @@
 
 #include "value.h"
 
+#include <global/simd/vector_arithmetic.h>
+
 #include "operation_validator.h"
 
 #include <global/allocation_size.h>
@@ -138,7 +140,7 @@ Value Value::operator+(const Value& rhs)const{
     }
 
     if(isNumeric() && rhs.isNumeric())
-        return Value(toDouble() + rhs.toDouble(), m_arena);
+        return Value(VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(toDouble()), VectorDoubleReplicate(rhs.toDouble()))), m_arena);
 
     if(m_type == ValueType::String && rhs.m_type == ValueType::String){
         const auto lsv = asString();
@@ -187,7 +189,7 @@ Value Value::operator-(const Value& rhs)const noexcept{
         rhs,
         [](const i64 a, const i64 b)noexcept{ return SubtractOverflows<i64>(a, b); },
         [](const i64 a, const i64 b)noexcept{ return a - b; },
-        [](const f64 a, const f64 b)noexcept{ return a - b; },
+        [](const f64 a, const f64 b)noexcept{ return VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleReplicate(a), VectorDoubleReplicate(b))); },
         FOUNDATION_TEXT("invalid operand types for operator-")
     );
     return out;
@@ -201,7 +203,7 @@ Value Value::operator*(const Value& rhs)const noexcept{
         rhs,
         [](const i64 a, const i64 b)noexcept{ return MultiplyOverflows<i64>(a, b); },
         [](const i64 a, const i64 b)noexcept{ return a * b; },
-        [](const f64 a, const f64 b)noexcept{ return a * b; },
+        [](const f64 a, const f64 b)noexcept{ return VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(a), VectorDoubleReplicate(b))); },
         FOUNDATION_TEXT("invalid operand types for operator*")
     );
     return out;
@@ -215,7 +217,7 @@ Value Value::operator/(const Value& rhs)const noexcept{
         rhs,
         [](const i64 a, const i64 b)noexcept{ return DivideOverflows<i64>(a, b); },
         [](const i64 a, const i64 b)noexcept{ return a / b; },
-        [](const f64 a, const f64 b)noexcept{ return a / b; },
+        [](const f64 a, const f64 b)noexcept{ return VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(a), VectorDoubleReplicate(b))); },
         FOUNDATION_TEXT("invalid operand types for operator/"),
         true
     );
@@ -233,7 +235,7 @@ Value& Value::operator+=(const Value& rhs){
     }
 
     if(isNumeric() && rhs.isNumeric()){
-        setDouble(toDouble() + rhs.toDouble());
+        setDouble(VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(toDouble()), VectorDoubleReplicate(rhs.toDouble()))));
         return *this;
     }
 
@@ -286,7 +288,7 @@ Value& Value::operator-=(const Value& rhs)noexcept{
         rhs,
         [](const i64 a, const i64 b)noexcept{ return SubtractOverflows<i64>(a, b); },
         [](const i64 a, const i64 b)noexcept{ return a - b; },
-        [](const f64 a, const f64 b)noexcept{ return a - b; },
+        [](const f64 a, const f64 b)noexcept{ return VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleReplicate(a), VectorDoubleReplicate(b))); },
         FOUNDATION_TEXT("invalid operand types for operator-=")
     );
     return *this;
@@ -299,7 +301,7 @@ Value& Value::operator*=(const Value& rhs)noexcept{
         rhs,
         [](const i64 a, const i64 b)noexcept{ return MultiplyOverflows<i64>(a, b); },
         [](const i64 a, const i64 b)noexcept{ return a * b; },
-        [](const f64 a, const f64 b)noexcept{ return a * b; },
+        [](const f64 a, const f64 b)noexcept{ return VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(a), VectorDoubleReplicate(b))); },
         FOUNDATION_TEXT("invalid operand types for operator*=")
     );
     return *this;
@@ -312,7 +314,7 @@ Value& Value::operator/=(const Value& rhs)noexcept{
         rhs,
         [](const i64 a, const i64 b)noexcept{ return DivideOverflows<i64>(a, b); },
         [](const i64 a, const i64 b)noexcept{ return a / b; },
-        [](const f64 a, const f64 b)noexcept{ return a / b; },
+        [](const f64 a, const f64 b)noexcept{ return VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(a), VectorDoubleReplicate(b))); },
         FOUNDATION_TEXT("invalid operand types for operator/="),
         true
     );

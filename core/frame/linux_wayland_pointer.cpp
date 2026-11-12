@@ -135,9 +135,9 @@ void WaylandPointerInput::OnPointerAxis(void* data, [[maybe_unused]] wl_pointer*
 
     const f64 delta = wl_fixed_to_double(value);
     if(axis == WL_POINTER_AXIS_HORIZONTAL_SCROLL)
-        pointerInput.m_scrollX += delta;
+        pointerInput.m_scrollX = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(pointerInput.m_scrollX), VectorDoubleReplicate(delta)));
     else if(axis == WL_POINTER_AXIS_VERTICAL_SCROLL)
-        pointerInput.m_scrollY += delta;
+        pointerInput.m_scrollY = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(pointerInput.m_scrollY), VectorDoubleReplicate(delta)));
 
     if(pointerInput.m_seatVersion < s_WaylandPointerFrameSeatVersion)
         pointerInput.dispatchScroll();

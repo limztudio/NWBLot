@@ -33,16 +33,18 @@ const StringView s_ColorsStreamLabelText = "colors";
 b8 IsValidMeshDirectionVector(in VectorSingle direction){
     if(!IsFinite(direction.xyz))
         return false;
-    return Abs(LengthSq(direction.xyz) - 1.0f) <= s_DirectionLengthTolerance;
+    const VectorSingle difference = Vector3LengthSq(direction) - VectorSingle(1.0f);
+    return Abs(difference).x <= s_DirectionLengthTolerance;
 }
 
 b8 IsValidMeshTangentVector(in VectorSingle tangent){
     if(!IsFinite(tangent))
         return false;
-    return
-        Abs(LengthSq(tangent.xyz) - 1.0f) <= s_DirectionLengthTolerance
-        && Abs(Abs(tangent.w) - 1.0f) <= s_TangentHandednessTolerance
-    ;
+    const VectorSingle lengthDifference = Vector3LengthSq(tangent) - VectorSingle(1.0f);
+    if(!(Abs(lengthDifference).x <= s_DirectionLengthTolerance))
+        return false;
+    const VectorSingle handednessDifference = Abs(tangent.wwww) - VectorSingle(1.0f);
+    return Abs(handednessDifference).x <= s_TangentHandednessTolerance;
 }
 
 b8 IsValidMeshletBoundsSphere(in MeshletBounds bounds){

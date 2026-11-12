@@ -1,0 +1,360 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/gtest_macros.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <global/floating_point_environment.h>
+#include <tests/common/floating_point_environment_guard.adhd.h>
+#include <tests/unit/metascript/generated/simd_ieee.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Metascript{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(AdhdCompiler, SimdArithmeticPreservesExceptionalValuesRoundingAndContraction){
+#pragma STDC FENV_ACCESS ON
+    const auto originalEnvironment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(originalEnvironment);
+    ::NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
+    volatile u32 values32[] = { 0u, 0x80000000u, 0x3f800001u, 0xbf800000u, 0x7f800000u, 0xff800000u, 0x7f800123u, 0x7fc00123u, 1u, 0x7f7fffffu };
+    volatile u64 values64[] = { 0ull, 0x8000000000000000ull, 0x3ff0000000000001ull, 0xbff0000000000000ull, 0x7ff0000000000000ull, 0xfff0000000000000ull, 0x7ff0000000000123ull, 0x7ff8000000000123ull, 1ull, 0x7fefffffffffffffull };
+    for(const i32 rounding : { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO }){
+        ASSERT_TRUE(SetFloatingPointRoundingMode(rounding));
+        for(usize sample = 0u; sample < 10u; ++sample){
+            const SIMDVectorSingle a32 = VectorSetInt(values32[sample], values32[sample], values32[sample], values32[sample]);
+            const SIMDVectorDouble a64 = VectorDoubleSetInt(values64[sample], values64[sample], values64[sample], values64[sample]);
+            const SIMDVectorSingle b32 = VectorSetInt(0x3f7ffffeu, 0xbf800000u, 0x7f800123u, 0u);
+            const SIMDVectorDouble b64 = VectorDoubleSetInt(0x3feffffffffffffeull, 0xbff0000000000000ull, 0x7ff0000000000123ull, 0ull);
+            const auto apply32 = [&](const u32 operation, const b8 reference)noexcept -> SIMDVectorSingle{
+                const SIMDVectorSingle a = a32;
+                const SIMDVectorSingle b = b32;
+                switch(operation){
+                case 0u: return reference ? VectorMultiply(a, VectorReplicate(1.0)) : ::NWB::Tests::IeeeMulOneSingle(a, b);
+                case 1u: return reference ? VectorMultiply(VectorReplicate(1.0), a) : ::NWB::Tests::IeeeOneMulSingle(a, b);
+                case 2u: return reference ? VectorMultiply(a, VectorNegate(VectorReplicate(1.0))) : ::NWB::Tests::IeeeMulNegativeOneSingle(a, b);
+                case 3u: return reference ? VectorMultiply(VectorNegate(VectorReplicate(1.0)), a) : ::NWB::Tests::IeeeNegativeOneMulSingle(a, b);
+                case 4u: return reference ? VectorDivide(a, VectorReplicate(1.0)) : ::NWB::Tests::IeeeDivideOneSingle(a, b);
+                case 5u: return reference ? VectorDivide(a, VectorNegate(VectorReplicate(1.0))) : ::NWB::Tests::IeeeDivideNegativeOneSingle(a, b);
+                case 6u: return reference ? VectorNegate(VectorMultiply(a, VectorNegate(VectorReplicate(1.0)))) : ::NWB::Tests::IeeeNestedMulSingle(a, b);
+                case 7u: return reference ? VectorNegate(VectorDivide(a, VectorNegate(VectorReplicate(1.0)))) : ::NWB::Tests::IeeeNestedDivideSingle(a, b);
+                case 8u: return reference ? VectorAdd(VectorMultiply(a, b), VectorNegate(VectorReplicate(1.0))) : ::NWB::Tests::IeeeSeparateProductSingle(a, b);
+                case 9u: return reference ? VectorLerp(a, b, 0.0) : ::NWB::Tests::IeeeLerpZeroSingle(a, b);
+                case 10u: return reference ? VectorLerp(a, b, 1.0) : ::NWB::Tests::IeeeLerpOneSingle(a, b);
+                case 11u: return reference ? VectorMin(VectorMax(a, VectorZero()), VectorReplicate(1.0)) : ::NWB::Tests::IeeeMinMaxSingle(a, b);
+                case 12u: return reference ? VectorMin(VectorReplicate(1.0), VectorMax(VectorZero(), a)) : ::NWB::Tests::IeeeOrderedMinMaxSingle(a, b);
+                case 13u: return reference ? VectorMax(VectorMin(a, VectorReplicate(1.0)), VectorZero()) : ::NWB::Tests::IeeeMaxMinSingle(a, b);
+                case 14u: return reference ? VectorMax(VectorZero(), VectorMin(VectorReplicate(1.0), a)) : ::NWB::Tests::IeeeOrderedMaxMinSingle(a, b);
+                case 15u: return reference ? VectorClamp(a, VectorNegate(VectorZero()), VectorReplicate(1.0)) : ::NWB::Tests::IeeeNegativeZeroClampSingle(a, b);
+                case 16u: return reference ? VectorSet(VectorGetX(a) / VectorGetX(b), VectorGetY(a) / VectorGetY(b), 0.0, 0.0) : ::NWB::Tests::IeeePartialDivideSingle(a, b);
+                case 17u: return reference ? VectorSet(VectorGetX(a) + VectorGetX(b), VectorGetY(a) - VectorGetY(b), VectorGetZ(a) + VectorGetZ(b), VectorGetW(a) - VectorGetW(b)) : ::NWB::Tests::IeeeMixedAddSubSingle(a, b);
+                case 18u: return reference ? Vector4Dot(a, VectorSet(1.0, 1.0, 1.0, 0.0)) : ::NWB::Tests::IeeeDotZeroTailSingle(a, b);
+                default: return a;
+                }
+            };
+            const auto apply64 = [&](const u32 operation, const b8 reference)noexcept -> SIMDVectorDouble{
+                const SIMDVectorDouble a = a64;
+                const SIMDVectorDouble b = b64;
+                switch(operation){
+                case 0u: return reference ? VectorDoubleMultiply(a, VectorDoubleReplicate(1.0)) : ::NWB::Tests::IeeeMulOneDouble(a, b);
+                case 1u: return reference ? VectorDoubleMultiply(VectorDoubleReplicate(1.0), a) : ::NWB::Tests::IeeeOneMulDouble(a, b);
+                case 2u: return reference ? VectorDoubleMultiply(a, VectorDoubleNegate(VectorDoubleReplicate(1.0))) : ::NWB::Tests::IeeeMulNegativeOneDouble(a, b);
+                case 3u: return reference ? VectorDoubleMultiply(VectorDoubleNegate(VectorDoubleReplicate(1.0)), a) : ::NWB::Tests::IeeeNegativeOneMulDouble(a, b);
+                case 4u: return reference ? VectorDoubleDivide(a, VectorDoubleReplicate(1.0)) : ::NWB::Tests::IeeeDivideOneDouble(a, b);
+                case 5u: return reference ? VectorDoubleDivide(a, VectorDoubleNegate(VectorDoubleReplicate(1.0))) : ::NWB::Tests::IeeeDivideNegativeOneDouble(a, b);
+                case 6u: return reference ? VectorDoubleNegate(VectorDoubleMultiply(a, VectorDoubleNegate(VectorDoubleReplicate(1.0)))) : ::NWB::Tests::IeeeNestedMulDouble(a, b);
+                case 7u: return reference ? VectorDoubleNegate(VectorDoubleDivide(a, VectorDoubleNegate(VectorDoubleReplicate(1.0)))) : ::NWB::Tests::IeeeNestedDivideDouble(a, b);
+                case 8u: return reference ? VectorDoubleAdd(VectorDoubleMultiply(a, b), VectorDoubleNegate(VectorDoubleReplicate(1.0))) : ::NWB::Tests::IeeeSeparateProductDouble(a, b);
+                case 9u: return reference ? VectorDoubleLerp(a, b, 0.0) : ::NWB::Tests::IeeeLerpZeroDouble(a, b);
+                case 10u: return reference ? VectorDoubleLerp(a, b, 1.0) : ::NWB::Tests::IeeeLerpOneDouble(a, b);
+                case 11u: return reference ? VectorDoubleMin(VectorDoubleMax(a, VectorDoubleZero()), VectorDoubleReplicate(1.0)) : ::NWB::Tests::IeeeMinMaxDouble(a, b);
+                case 12u: return reference ? VectorDoubleMin(VectorDoubleReplicate(1.0), VectorDoubleMax(VectorDoubleZero(), a)) : ::NWB::Tests::IeeeOrderedMinMaxDouble(a, b);
+                case 13u: return reference ? VectorDoubleMax(VectorDoubleMin(a, VectorDoubleReplicate(1.0)), VectorDoubleZero()) : ::NWB::Tests::IeeeMaxMinDouble(a, b);
+                case 14u: return reference ? VectorDoubleMax(VectorDoubleZero(), VectorDoubleMin(VectorDoubleReplicate(1.0), a)) : ::NWB::Tests::IeeeOrderedMaxMinDouble(a, b);
+                case 15u: return reference ? VectorDoubleClamp(a, VectorDoubleNegate(VectorDoubleZero()), VectorDoubleReplicate(1.0)) : ::NWB::Tests::IeeeNegativeZeroClampDouble(a, b);
+                case 16u: return reference ? VectorDoubleSet(VectorDoubleGetX(a) / VectorDoubleGetX(b), VectorDoubleGetY(a) / VectorDoubleGetY(b), 0.0, 0.0) : ::NWB::Tests::IeeePartialDivideDouble(a, b);
+                case 17u: return reference ? VectorDoubleSet(VectorDoubleGetX(a) + VectorDoubleGetX(b), VectorDoubleGetY(a) - VectorDoubleGetY(b), VectorDoubleGetZ(a) + VectorDoubleGetZ(b), VectorDoubleGetW(a) - VectorDoubleGetW(b)) : ::NWB::Tests::IeeeMixedAddSubDouble(a, b);
+                case 18u: return reference ? VectorDouble4Dot(a, VectorDoubleSet(1.0, 1.0, 1.0, 0.0)) : ::NWB::Tests::IeeeDotZeroTailDouble(a, b);
+                default: return a;
+                }
+            };
+            for(u32 operation = 0u; operation < 19u; ++operation){
+                SCOPED_TRACE(operation);
+                SCOPED_TRACE(sample);
+                SCOPED_TRACE(rounding);
+                ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+                const auto expected32 = apply32(operation, true);
+                const i32 expectedFlags32 = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+                ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+                const auto actual32 = apply32(operation, false);
+                const i32 actualFlags32 = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+                for(usize lane = 0u; lane < 4u; ++lane)
+                    EXPECT_EQ(VectorGetIntByIndex(actual32, lane), VectorGetIntByIndex(expected32, lane));
+                EXPECT_EQ(actualFlags32, expectedFlags32);
+                ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+                const auto expected64 = apply64(operation, true);
+                const i32 expectedFlags64 = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+                ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+                const auto actual64 = apply64(operation, false);
+                const i32 actualFlags64 = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+                for(usize lane = 0u; lane < 4u; ++lane)
+                    EXPECT_EQ(VectorDoubleGetIntByIndex(actual64, lane), VectorDoubleGetIntByIndex(expected64, lane));
+                EXPECT_EQ(actualFlags64, expectedFlags64);
+            }
+            ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+            EXPECT_EQ(VectorGetIntW(::NWB::Tests::IeeeZeroTailSingle(a32)), 0u);
+            EXPECT_EQ(VectorDoubleGetIntW(::NWB::Tests::IeeeZeroTailDouble(a64)), 0ull);
+        }
+    }
+}
+
+TEST(AdhdCompiler, ScalarSimdArithmeticRetainsPromotionsAssignmentResultsAndExceptionFlags){
+#pragma STDC FENV_ACCESS ON
+    EXPECT_EQ(::NWB::Tests::IeeeScalarGeneratedNameIsolation(2.0f, 4.0f), 6.0f);
+    Array<f32, 2> targets{ 100.0f, 10.0f };
+    u32 targetIndex = 0u;
+    EXPECT_EQ(::NWB::Tests::IeeeScalarAssignmentTargetOrder(targets, targetIndex, 5.0f), 15.0f);
+    EXPECT_EQ(targetIndex, 2u);
+    EXPECT_EQ(targets[0], 100.0f);
+    EXPECT_EQ(targets[1], 15.0f);
+    const auto originalEnvironment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(originalEnvironment);
+    ::NWB::Tests::FloatingPointEnvironmentGuard restore(*originalEnvironment);
+    volatile u32 values32[] = { 0u, 0x80000000u, 0x3f800001u, 0xbf800000u, 0x7f800000u, 0xff800000u, 0x7f800123u, 0x7fc00123u, 1u, 0x7f7fffffu };
+    volatile u64 values64[] = { 0ull, 0x8000000000000000ull, 0x3ff0000000000001ull, 0xbff0000000000000ull, 0x7ff0000000000000ull, 0xfff0000000000000ull, 0x7ff0000000000123ull, 0x7ff8000000000123ull, 1ull, 0x7fefffffffffffffull };
+    for(const i32 rounding : { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO }){
+        ASSERT_TRUE(SetFloatingPointRoundingMode(rounding));
+        for(usize sample = 0u; sample < 10u; ++sample){
+            volatile f32 a32 = BitCast<f32>(values32[sample]);
+            volatile f32 b32 = BitCast<f32>(sample == 0u ? 0x80000000u : (sample == 1u ? 0u : ((sample == 6u || sample == 7u) ? 0x7fc00456u : values32[(sample + 3u) % 10u])));
+            volatile f64 wider = 16777216.0;
+            volatile f64 a64 = BitCast<f64>(values64[sample]);
+            volatile f64 b64 = BitCast<f64>(sample == 0u ? 0x8000000000000000ull : (sample == 1u ? 0ull : ((sample == 6u || sample == 7u) ? 0x7ff8000000000456ull : values64[(sample + 3u) % 10u])));
+            const auto reference32 = [&](const u32 operation)noexcept -> f32{
+                f32 value = a32;
+                switch(operation){
+                case 0u: return a32 + b32;
+                case 1u: return a32 - b32;
+                case 2u: return a32 * b32;
+                case 3u: return a32 / b32;
+                case 4u: return a32 * b32 + 1.0f;
+                case 5u: return -a32;
+                case 6u: return static_cast<f32>(a32 + wider);
+                case 7u: return static_cast<f32>((a32 + wider) - wider);
+                case 8u: value += b32; return value;
+                case 9u: value -= b32; return value;
+                case 10u: value *= b32; return value;
+                case 11u: value /= b32; return value;
+                case 12u: value += wider; return value;
+                case 13u: return value++;
+                case 14u: return ++value;
+                case 15u: return value--;
+                case 16u: return --value;
+                case 17u: return ::Min<f32>(static_cast<f32>(a32), static_cast<f32>(b32));
+                case 18u: return ::Max<f32>(static_cast<f32>(a32), static_cast<f32>(b32));
+                case 19u: return ::Abs<f32>(a32);
+                case 20u: return ::Clamp<f32>(a32, -0.0f, b32);
+                case 21u: return ::Saturate<f32>(a32);
+                case 22u: return a32 + ((b32 - a32) * 0.0f);
+                case 23u: return a32 + ((b32 - a32) * 1.0f);
+                case 24u: return static_cast<f32>(a32 + ((b32 - a32) * wider));
+                case 25u: return 1.0f / ::Sqrt<f32>(a32);
+                case 26u: return static_cast<f32>(::Min<f64>(static_cast<f64>(a32), static_cast<f64>(wider)));
+                case 27u: return static_cast<f32>((a32 + ((wider - a32) * b32)) - wider);
+                case 28u:{ const auto temporary = a32 + wider; return static_cast<f32>(temporary - wider); }
+                default:{ const auto temporary = a32 + ((wider - a32) * b32); return static_cast<f32>(temporary - wider); }
+                }
+            };
+            const auto reference64 = [&](const u32 operation)noexcept -> f64{
+                f64 value = a64;
+                switch(operation){
+                case 0u: return a64 + b64;
+                case 1u: return a64 - b64;
+                case 2u: return a64 * b64;
+                case 3u: return a64 / b64;
+                case 4u: return a64 * b64 + 1.0;
+                case 5u: return -a64;
+                case 6u: value += b64; return value;
+                case 7u: value -= b64; return value;
+                case 8u: value *= b64; return value;
+                case 9u: value /= b64; return value;
+                case 10u: return value++;
+                case 11u: return ++value;
+                case 12u: return value--;
+                case 13u: return --value;
+                case 14u: return ::Min<f64>(static_cast<f64>(a64), static_cast<f64>(b64));
+                case 15u: return ::Max<f64>(static_cast<f64>(a64), static_cast<f64>(b64));
+                case 16u: return ::Abs<f64>(a64);
+                case 17u: return ::Clamp<f64>(a64, -0.0, b64);
+                case 18u: return ::Saturate<f64>(a64);
+                case 19u: return a64 + ((b64 - a64) * 0.0);
+                case 20u: return a64 + ((b64 - a64) * 1.0);
+                default: return 1.0 / ::Sqrt<f64>(a64);
+                }
+            };
+            for(u32 operation = 0u; operation < 30u; ++operation){
+                SCOPED_TRACE(rounding);
+                SCOPED_TRACE(sample);
+                SCOPED_TRACE(operation);
+                ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+                const f32 expected = reference32(operation);
+                const i32 flags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+                ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+                const f32 actual = ::NWB::Tests::IeeeScalarArithmeticSingle(a32, b32, wider, operation);
+                const u32 actualBits = BitCast<u32>(actual);
+                const u32 expectedBits = BitCast<u32>(expected);
+                const b8 arithmetic = operation != 5u && operation != 13u && operation != 15u && !(operation >= 17u && operation <= 21u) && operation != 26u;
+                if(arithmetic && (actualBits & 0x7fffffffu) > 0x7f800000u && (expectedBits & 0x7fffffffu) > 0x7f800000u){
+                    EXPECT_NE(actualBits & 0x00400000u, 0u);
+                    EXPECT_NE(expectedBits & 0x00400000u, 0u);
+                }
+                else
+                    EXPECT_EQ(actualBits, expectedBits);
+                EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), flags);
+            }
+            for(u32 operation = 0u; operation < 22u; ++operation){
+                SCOPED_TRACE(rounding);
+                SCOPED_TRACE(sample);
+                SCOPED_TRACE(operation);
+                ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+                const f64 expected = reference64(operation);
+                const i32 flags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+                ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+                const f64 actual = ::NWB::Tests::IeeeScalarArithmeticDouble(a64, b64, operation);
+                const u64 actualBits = BitCast<u64>(actual);
+                const u64 expectedBits = BitCast<u64>(expected);
+                const b8 arithmetic = operation != 5u && operation != 10u && operation != 12u && !(operation >= 14u && operation <= 18u);
+                if(arithmetic && (actualBits & 0x7fffffffffffffffull) > 0x7ff0000000000000ull && (expectedBits & 0x7fffffffffffffffull) > 0x7ff0000000000000ull){
+                    EXPECT_NE(actualBits & 0x0008000000000000ull, 0ull);
+                    EXPECT_NE(expectedBits & 0x0008000000000000ull, 0ull);
+                }
+                else
+                    EXPECT_EQ(actualBits, expectedBits);
+                EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), flags);
+            }
+        }
+    }
+}
+
+TEST(AdhdCompiler, SimdLanePackingPreservesIntegerAndWiderScalarArithmetic){
+#pragma STDC FENV_ACCESS ON
+    volatile i32 numerator = 3;
+    volatile i32 denominator = 2;
+    EXPECT_EQ(VectorGetX(::NWB::Tests::IeeeIntegerQuotient(numerator, denominator)), 1.0f);
+    volatile f64 wider = 16777217.0;
+    const SIMDVectorSingle value = VectorReplicate(-16777216.0f);
+    const SIMDVectorSingle result = ::NWB::Tests::IeeeWiderCancellation(value, wider);
+    for(usize lane = 0u; lane < 4u; ++lane)
+        EXPECT_EQ(VectorGetByIndex(result, lane), 1.0f);
+}
+
+TEST(AdhdCompiler, SimdNegativeZeroProductTailDoesNotReplaceAuthoredPositiveZero){
+#pragma STDC FENV_ACCESS ON
+    const auto originalEnvironment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(originalEnvironment);
+    ::NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
+    for(const i32 rounding : { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO }){
+        ASSERT_TRUE(SetFloatingPointRoundingMode(rounding));
+        EXPECT_EQ(VectorGetIntW(::NWB::Tests::IeeeNegativeZeroTailSingle(VectorReplicate(1.0f))), 0u);
+        EXPECT_EQ(VectorDoubleGetIntW(::NWB::Tests::IeeeNegativeZeroTailDouble(VectorDoubleReplicate(1.0))), 0ull);
+    }
+}
+
+TEST(AdhdCompiler, SimdNarrowingDoesNotEvaluateUnselectedExceptionalLanes){
+#pragma STDC FENV_ACCESS ON
+    const auto originalEnvironment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(originalEnvironment);
+    ::NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
+    volatile u64 hidden[] = { 0x7ff0000000000123ull, 0x7fefffffffffffffull };
+    for(const u64 bits : hidden){
+        const SIMDVectorDouble value = VectorDoubleSetInt(0x3ff0000000000000ull, 0x4000000000000000ull, 0x4008000000000000ull, bits);
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+        const SIMDVectorSingle partial = ::NWB::Tests::IeeeNarrowPartial(value);
+        EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0);
+        EXPECT_EQ(VectorGetIntX(partial), 0x3f800000u);
+        EXPECT_EQ(VectorGetIntY(partial), 0x40000000u);
+        EXPECT_EQ(VectorGetIntZ(partial), 0u);
+        EXPECT_EQ(VectorGetIntW(partial), 0u);
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+        const SIMDVectorSingle swizzled = ::NWB::Tests::IeeeNarrowSwizzle(value);
+        EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0);
+        EXPECT_EQ(VectorGetIntX(swizzled), 0x40400000u);
+        EXPECT_EQ(VectorGetIntW(swizzled), 0x40400000u);
+    }
+}
+
+TEST(AdhdCompiler, SimdIdentityTransformRetainsExceptionalMatrixArithmetic){
+#pragma STDC FENV_ACCESS ON
+    const auto originalEnvironment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(originalEnvironment);
+    ::NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
+    volatile u32 signalingNan = 0x7f800123u;
+    SIMDMatrix matrix = MatrixIdentity();
+    matrix.v[3] = VectorSetInt(signalingNan, signalingNan, signalingNan, signalingNan);
+    ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+    const SIMDVectorSingle expected = Vector4Transform(VectorSet(1.0f, 0.0f, 0.0f, 0.0f), MatrixTranspose(matrix));
+    const i32 expectedFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+    ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+    const SIMDVectorSingle actual = ::NWB::Tests::IeeeIdentityRow(matrix);
+    EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), expectedFlags);
+    for(usize lane = 0u; lane < 4u; ++lane)
+        EXPECT_EQ(VectorGetIntByIndex(actual, lane), VectorGetIntByIndex(expected, lane));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

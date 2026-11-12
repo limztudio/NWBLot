@@ -114,7 +114,8 @@ class ControlStyleMetrics{
             const Expected<UiSkinRegion> skinRegion = TryResolveSelectableStateRegion(skin, name, style.fallback);
             if(!skinRegion.has_value())
                 return false;
-            minimumSize = Point(Max(minimumSize.x, skinRegion.value().minimumWidth), Max(minimumSize.y, skinRegion.value().minimumHeight));
+            const VectorSingle minimum = Max(VectorSingle(minimumSize.x, minimumSize.y, minimumSize.x, minimumSize.y), VectorSingle(skinRegion.value().minimumWidth, skinRegion.value().minimumHeight, skinRegion.value().minimumWidth, skinRegion.value().minimumHeight));
+            minimumSize = Point(minimum.x, minimum.y);
         }
         const Expected<UiSkinRegion> arrow = TryResolveSelectableStateRegion(skin, style.arrow, style.arrowFallback);
         if(!arrow.has_value())
@@ -188,7 +189,8 @@ class ControlStyleMetrics{
         const Expected<Point> minimum = TryResolveSkinRegionMinimumSize(thumb, referenceDensity);
         if(!minimum.has_value())
             return false;
-        inOutThumbExtent = Point(Max(inOutThumbExtent.x, minimum.value().x), Max(inOutThumbExtent.y, minimum.value().y));
+        const VectorSingle extent = Max(VectorSingle(inOutThumbExtent.x, inOutThumbExtent.y, inOutThumbExtent.x, inOutThumbExtent.y), VectorSingle(minimum.value().x, minimum.value().y, minimum.value().x, minimum.value().y));
+        inOutThumbExtent = Point(extent.x, extent.y);
         return true;
     }
 
@@ -210,7 +212,8 @@ class ControlStyleMetrics{
         if(!trackMinimum.has_value() || !normalMinimum.has_value())
             return false;
         inOutStyle.trackHeight = Max(inOutStyle.trackHeight, trackMinimum.value().y);
-        Point thumbExtent = Point(Max(inOutStyle.thumbExtent.x, normalMinimum.value().x), Max(inOutStyle.thumbExtent.y, normalMinimum.value().y));
+        const VectorSingle extent = Max(VectorSingle(inOutStyle.thumbExtent.x, inOutStyle.thumbExtent.y, inOutStyle.thumbExtent.x, inOutStyle.thumbExtent.y), VectorSingle(normalMinimum.value().x, normalMinimum.value().y, normalMinimum.value().x, normalMinimum.value().y));
+        Point thumbExtent = Point(extent.x, extent.y);
         if(
             !this.accumulateSliderThumb(skin, inOutStyle.hover, referenceDensity, thumbExtent)
             || !this.accumulateSliderThumb(skin, inOutStyle.pressed, referenceDensity, thumbExtent)

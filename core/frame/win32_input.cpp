@@ -340,13 +340,15 @@ Optional<LRESULT> Win32FrameInput::handleMessage(const UINT message, const WPARA
 
     case WM_MOUSEWHEEL: {
         dispatchScreenMousePosition(lParam);
-        m_frame.input().mouseScrollUpdate(0.0, static_cast<f64>(GET_WHEEL_DELTA_WPARAM(wParam)) / static_cast<f64>(WHEEL_DELTA));
+        const SIMDVectorDouble scroll = VectorDoubleDivide(VectorDoubleSet(0.0, static_cast<f64>(GET_WHEEL_DELTA_WPARAM(wParam)), 0.0, 0.0), VectorDoubleReplicate(static_cast<f64>(WHEEL_DELTA)));
+        m_frame.input().mouseScrollUpdate(VectorDoubleGetX(scroll), VectorDoubleGetY(scroll));
     }
     return LRESULT{ 0 };
 
     case WM_MOUSEHWHEEL: {
         dispatchScreenMousePosition(lParam);
-        m_frame.input().mouseScrollUpdate(static_cast<f64>(GET_WHEEL_DELTA_WPARAM(wParam)) / static_cast<f64>(WHEEL_DELTA), 0.0);
+        const SIMDVectorDouble scroll = VectorDoubleDivide(VectorDoubleSet(static_cast<f64>(GET_WHEEL_DELTA_WPARAM(wParam)), 0.0, 0.0, 0.0), VectorDoubleReplicate(static_cast<f64>(WHEEL_DELTA)));
+        m_frame.input().mouseScrollUpdate(VectorDoubleGetX(scroll), VectorDoubleGetY(scroll));
     }
     return LRESULT{ 0 };
 

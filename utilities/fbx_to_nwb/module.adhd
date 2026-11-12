@@ -671,16 +671,16 @@ template<typename WriteBodyFn>
     const Span<ufbx_node* const> joints,
     const Span<const JointMatrix> bindPoseMatrices,
     Core::Alloc::ScratchArena& scratchArena,
-    AString<>& out
+    AString<::ArenaBase>& out
 ){
     out.append(variableName);
     out.append(".joints = [\n");
 
-    Vector<AString<::ArenaBase>> jointNames(QueryUtilityGlobalArena<s_UtilityArena>());
+    Vector<AString<::ArenaBase>, Core::Alloc::ScratchArena> jointNames(scratchArena);
     jointNames.reserve(joints.size());
     for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
         const AString<::ArenaBase> baseName = FormatFbxJointBaseName(scratchArena, joints[jointIndex] ? UfbxStringView(joints[jointIndex]->name) : AStringView{}, jointIndex);
-        jointNames.push_back(MakeUniqueFbxJointName(QueryUtilityGlobalArena<s_UtilityArena>(), AStringView(baseName), jointNames));
+        jointNames.push_back(MakeUniqueFbxJointName(scratchArena, AStringView(baseName), jointNames));
     }
 
     UtilityScratchMap<const ufbx_node*, usize> jointLookup(scratchArena);
@@ -725,7 +725,7 @@ static void AppendSkinBodyToString(
     const Span<const MeshSkinInfluence> influences,
     const Span<const JointMatrix> inverseBindMatrices,
     const b8 quoteReferences,
-    AString<>& out
+    AString<::ArenaBase>& out
 ){
     AppendSkinAssetHeaderAndInfluencesText(variableName, meshName, skeletonName, influences, quoteReferences, out);
     for(const JointMatrix& matrix : inverseBindMatrices){
@@ -763,7 +763,7 @@ static void AppendSkinBodyToString(
     Core::Alloc::ScratchArena& scratchArena
 ){
     return WriteNwbTextFile(outputPath, s_SkeletonAssetTypeText, [&](CrlfOutputFileStream& file) -> b8{
-        AString<> doc(QueryUtilityGlobalArena<s_UtilityArena>());
+        AString<::ArenaBase> doc(outputPath.arena());
         doc.reserve(256u + joints.size() * 192u);
         doc.append("skeleton asset;\n\n");
         if(!AppendSkeletonBodyToString(s_AssetVariableName, joints, bindPoseMatrices, scratchArena, doc))
@@ -785,7 +785,7 @@ static void AppendSkinBodyToString(
         return false;
     }
 
-    AString<> doc(QueryUtilityGlobalArena<s_UtilityArena>());
+    AString<::ArenaBase> doc(outputPath.arena());
     doc.reserve(256u + influences.size() * 72u + inverseBindMatrices.size() * 160u);
     doc.append("skin asset;\n\n");
     AppendSkinBodyToString(s_AssetVariableName, meshName, skeletonName, influences, inverseBindMatrices, true, doc);
@@ -827,7 +827,7 @@ static void AppendSkinBodyToString(
     Core::Alloc::ScratchArena& scratchArena
 ){
     return WriteNwbTextFile(outputPath, s_AssetBunchDisplayName, [&](CrlfOutputFileStream& file) -> b8{
-        AString<> doc(QueryUtilityGlobalArena<s_UtilityArena>());
+        AString<::ArenaBase> doc(outputPath.arena());
         doc.reserve(1024u + mesh.vertexRefs.size() * 48u + mesh.indices.size() * 8u);
         doc.append("mesh mesh;\n\n");
         AppendMeshAssetBodyText(
@@ -1942,13 +1942,13 @@ UtilityVector<MeshInstance> CollectMeshInstances(const ufbx_scene& scene, const 
     return instances;
 }
 
-void PrintMeshInstances(const Span<const MeshInstance> instances, Core::Alloc::ScratchArena&){
+void PrintMeshInstances(const Span<const MeshInstance> instances, Core::Alloc::ScratchArena& scratchArena){
     if(instances.empty()){
         NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("No mesh instances found.\n"));
         return;
     }
 
-    AString<> report(QueryUtilityGlobalArena<s_UtilityArena>());
+    AString<::ArenaBase> report(scratchArena);
     report.reserve(32u + instances.size() * 64u);
     report.append("Mesh instances:\n");
     for(const MeshInstance& instance : instances){

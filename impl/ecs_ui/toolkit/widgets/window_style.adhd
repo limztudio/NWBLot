@@ -43,8 +43,9 @@ b8 TryInitializeWindow(in WindowOptions options, in WindowMetrics metrics, mut W
     }
     if(!IsValidUiRect(candidate.bounds))
         return false;
-    candidate.bounds.width = Max(candidate.bounds.width, metrics.minimumSize.x);
-    candidate.bounds.height = Max(candidate.bounds.height, metrics.minimumSize.y);
+    const VectorSingle size = Max(VectorSingle(candidate.bounds.width, candidate.bounds.height, candidate.bounds.width, candidate.bounds.height), VectorSingle(metrics.minimumSize.x, metrics.minimumSize.y, metrics.minimumSize.x, metrics.minimumSize.y));
+    candidate.bounds.width = size.x;
+    candidate.bounds.height = size.y;
     candidate.initialized = true;
     if(!IsValidUiRect(candidate.bounds))
         return false;
@@ -61,8 +62,10 @@ b8 TryApplyWindowMove(in PointerGesture gesture, mut WindowState state){
         movement.id = gesture.id;
         movement.initialBounds = gesture.referenceRectangle;
     }
-    const f64 left = cast<f64>(movement.initialBounds.x) + displacement.value().x;
-    const f64 top = cast<f64>(movement.initialBounds.y) + displacement.value().y;
+    const VectorDouble origin(cast<f64>(movement.initialBounds.x), cast<f64>(movement.initialBounds.y), 0.0, 0.0);
+    const VectorDouble moved = origin + displacement.value();
+    const f64 left = moved.x;
+    const f64 top = moved.y;
     if(Abs(left) > s_UiMaxFloatF64 || Abs(top) > s_UiMaxFloatF64)
         return false;
     Rect candidate = state.bounds;
@@ -84,8 +87,11 @@ b8 TryApplyWindowResize(in PointerGesture gesture, in Point minimumSize, mut Win
         resizing.id = gesture.id;
         resizing.initialBounds = gesture.referenceRectangle;
     }
-    const f64 width = Max(cast<f64>(minimumSize.x), cast<f64>(resizing.initialBounds.width) + displacement.value().x);
-    const f64 height = Max(cast<f64>(minimumSize.y), cast<f64>(resizing.initialBounds.height) + displacement.value().y);
+    const VectorDouble initialSize(cast<f64>(resizing.initialBounds.width), cast<f64>(resizing.initialBounds.height), 0.0, 0.0);
+    const VectorDouble resized = initialSize + displacement.value();
+    const VectorDouble size = Max(VectorDouble(cast<f64>(minimumSize.x), cast<f64>(minimumSize.y), cast<f64>(minimumSize.x), cast<f64>(minimumSize.y)), resized);
+    const f64 width = size.x;
+    const f64 height = size.y;
     if(width > s_UiMaxFloatF64 || height > s_UiMaxFloatF64)
         return false;
     Rect candidate = state.bounds;
@@ -104,8 +110,9 @@ b8 TryConstrainWindow(in DisplayMetrics display, in f32 titleHeight, mut WindowS
     f32 height = state.bounds.height;
     if(state.collapsed)
         height = titleHeight;
-    const f32 maxX = Max(0.0f, display.logicalWidth - state.bounds.width);
-    const f32 maxY = Max(0.0f, display.logicalHeight - height);
+    const VectorSingle maximum = Max(VectorSingle(0.0f), VectorSingle(display.logicalWidth, display.logicalHeight, display.logicalWidth, display.logicalHeight) - VectorSingle(state.bounds.width, height, state.bounds.width, height));
+    const f32 maxX = maximum.x;
+    const f32 maxY = maximum.y;
     state.bounds.x = Clamp(state.bounds.x, 0.0f, maxX);
     state.bounds.y = Clamp(state.bounds.y, 0.0f, maxY);
     return true;
@@ -138,9 +145,10 @@ LayoutNodeDesc BuildWindowRootLayoutNodeDesc(
         description.height = LayoutSize(LayoutSizePolicy::Fixed, bounds.height);
     description.padding = metrics.contentPadding;
     description.gap = gap;
-    const f32 intrinsicWidth = (metrics.minimumSize.x - description.padding.left) - description.padding.right;
-    const f32 intrinsicHeight = ((metrics.minimumSize.y - metrics.titleHeight) - description.padding.top) - description.padding.bottom;
-    description.intrinsicSize = Point(Max(0.0f, intrinsicWidth), Max(0.0f, intrinsicHeight));
+    const f32 contentHeight = metrics.minimumSize.y - metrics.titleHeight;
+    const VectorSingle intrinsic = (VectorSingle(metrics.minimumSize.x, contentHeight, metrics.minimumSize.x, contentHeight) - VectorSingle(description.padding.left, description.padding.top, description.padding.left, description.padding.top)) - VectorSingle(description.padding.right, description.padding.bottom, description.padding.right, description.padding.bottom);
+    const VectorSingle size = Max(VectorSingle(0.0f), intrinsic);
+    description.intrinsicSize = Point(size.x, size.y);
     return description;
 }
 

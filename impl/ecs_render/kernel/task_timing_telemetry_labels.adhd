@@ -89,8 +89,7 @@ void AppendGraphSummaryTelemetry(
         recordingStatistics.readyFrontierElapsedSeconds,
         recordingStatistics.readyFrontierWorkerBusySeconds
     ) * millisecondsScale;
-    const f64 frontierCapacityMs = recordingStatistics.readyFrontierWorkerCapacitySeconds * s_MillisecondsPerSecondTelemetry;
-    const f64 frontierUtilizationPercent = recordingStatistics.readyFrontierWorkerUtilization() * s_PercentScaleTelemetry;
+    const VectorDouble frontierSummary = VectorDouble(recordingStatistics.readyFrontierWorkerCapacitySeconds, recordingStatistics.readyFrontierWorkerUtilization(), 0.0, 0.0) * VectorDouble(s_MillisecondsPerSecondTelemetry, s_PercentScaleTelemetry, 0.0, 0.0);
     StringAppendFormat(
         label,
         "Renderer Frame\nTask graph: tasks={} resources={} resource versions={} version edges={} packets={} deps={} transitions={}\nDeclarations: resource sets={} resource-set members={} direct uses={} declared set uses={} expanded set-member uses={} materialized uses={}\nData: payload objects={} payload object bytes={} upload blobs={} upload blob bytes={}\nRaw barriers: transitions={} UAV={} ownership releases={} ownership acquires={} state exports={}\nLogical ownership transfers: records={} signatures={} repeated signatures={} concurrent-sharing candidate records={} advised repeated resources={} route records internal/import/export={}/{}/{}\nRecording: packets={} tasks={} command lists={} barriers={} worker-routed={} overlapped={}\nSubmission: accepted packets={} accepted tasks={} rejected packets={} rejected tasks={} submissions={} accepted frontier={} recovery submissions={} command lists={} waits={} inherited wait elisions={} failed submissions={}\nCPU: declaration={:.3f} ms compile={:.3f} ms native recording elapsed={:.3f} ms submit={:.3f} ms\nCPU compile phases: analysis={:.3f} ms queue assignment={:.3f} ms planning={:.3f} ms\nCPU analysis detail: validation={:.3f} ms dependencies={:.3f} ms hazards={:.3f} ms cycles/topology={:.3f} ms\nCPU planning detail: packetization={:.3f} ms resource states/barriers={:.3f} ms packet dependencies={:.3f} ms\nCPU recording summed spans: packet={:.3f} ms command-list acquisition={:.3f} ms graph barrier lowering={:.3f} ms task={:.3f} ms\nReady-frontier recording: elapsed={:.3f} ms logical-worker busy={:.3f} ms logical-worker capacity={:.3f} ms utilization={:.1f}%",
@@ -161,8 +160,8 @@ void AppendGraphSummaryTelemetry(
         recordingFrontierTimingMs.y,
         recordingFrontierTimingMs.z,
         recordingFrontierTimingMs.w,
-        frontierCapacityMs,
-        frontierUtilizationPercent
+        frontierSummary.x,
+        frontierSummary.y
     );
 }
 
@@ -176,13 +175,12 @@ void AppendPhysicalQueueSummaryTelemetry(
     mut String label
 ){
     const VectorDouble millisecondsScale = VectorDouble(s_MillisecondsPerSecondTelemetry);
-    const f64 queueSubmissionMs = queueStatistics.submissionSeconds * s_MillisecondsPerSecondTelemetry;
-    const f64 queueRecordingMs = queueRecordingStatistics.recordingSeconds * s_MillisecondsPerSecondTelemetry;
+    const VectorDouble queueSubmissionMs = VectorDouble(queueStatistics.submissionSeconds) * millisecondsScale;
     const VectorDouble queueRecordingBreakdownMs = VectorDouble(
         queueRecordingStatistics.commandListAcquisitionSeconds,
         queueRecordingStatistics.graphBarrierRecordingSeconds,
         queueRecordingStatistics.taskRecordSeconds,
-        0.0
+        queueRecordingStatistics.recordingSeconds
     ) * millisecondsScale;
     StringAppendFormat(
         label,
@@ -207,7 +205,7 @@ void AppendPhysicalQueueSummaryTelemetry(
         queueStatistics.inheritedTimelineWaitElisionCount,
         queueStatistics.acceptedFrontierSubmissionCount,
         queueStatistics.recoverySubmissionCount,
-        queueSubmissionMs,
+        queueSubmissionMs.x,
         queueCompileStatistics.taskCount,
         queueCompileStatistics.packetCount,
         queueCompileStatistics.mergedTaskCount,
@@ -231,7 +229,7 @@ void AppendPhysicalQueueSummaryTelemetry(
         queueRecordingBreakdownMs.x,
         queueRecordingBreakdownMs.y,
         queueRecordingBreakdownMs.z,
-        queueRecordingMs,
+        queueRecordingBreakdownMs.w,
         commandArenaStatistics.workerArenaCount,
         commandArenaStatistics.commandPoolEpochCount,
         commandArenaStatistics.pendingCommandPoolEpochCount,

@@ -3,6 +3,7 @@
 
 
 #include "avboit_integration_and_refraction_tile_probes.adhd"
+#include "optical_bounds_runtime_probe.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -434,7 +435,7 @@ b8 RunDepthWarpProbeProjectUpdate(
     }
     if(!batchesOk)
         return false;
-    if(!RunAvboitIntegrationProbe(sceneSubsystems, context) || !RunRefractionTileProbe(sceneSubsystems, context))
+    if(!RunAvboitIntegrationProbe(sceneSubsystems, context) || !RunRefractionTileProbe(sceneSubsystems, context) || !RunOpticalBoundsProbe(sceneSubsystems, context))
         return false;
     outCompleted = true;
     [essential] info("AvboitDepthWarpProbe: passed {} cases with full LUT/control comparison and sentinel tails", s_AvboitTotalCaseCount);

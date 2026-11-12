@@ -81,7 +81,10 @@ b8 IsValidTransformComponentParameters(in TransformComponent component){
         return false;
 
     const f32 rotationLengthSq = LengthSq(VectorSingle(component.rotation));
-    return IsFinite(rotationLengthSq) && Abs(rotationLengthSq - 1.0f) <= s_TransformRotationUnitLengthSquaredTolerance;
+    if(!IsFinite(rotationLengthSq))
+        return false;
+    const VectorSingle difference = VectorSingle(rotationLengthSq) - VectorSingle(1.0f);
+    return Abs(difference).x <= s_TransformRotationUnitLengthSquaredTolerance;
 }
 
 b8 ValidateTransformComponentAssetPayload(in TransformComponent component, in Name virtualPath){

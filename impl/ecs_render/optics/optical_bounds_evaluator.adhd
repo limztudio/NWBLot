@@ -8,85 +8,242 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const f64 s_OpticalUnitRoundoff = 1.0 / 16777216.0;
-const f64 s_OpticalTransformError = (8.0 * s_OpticalUnitRoundoff) / (1.0 - 8.0 * s_OpticalUnitRoundoff);
-const f64 s_OpticalUnderflowMargin = 9.40395480657830006375e-38;
-const u32 s_OpticalBoxCornerCount = 8u;
-const u32 s_CornerMaxXBit = 1u;
-const u32 s_CornerMaxYBit = 2u;
-const u32 s_CornerMaxZBit = 4u;
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_OpticalBoundsSignBit = 0x80000000u;
+const u32 s_OpticalBoundsMagnitudeMask = 0x7fffffffu;
+const u32 s_OpticalBoundsFractionMask = 0x007fffffu;
+const u32 s_OpticalBoundsHiddenBit = 0x00800000u;
+const u32 s_OpticalBoundsMantissaBits = 23u;
+const i32 s_OpticalBoundsExponentBias = 127;
+const u32 s_OpticalBoundsOneBits = 0x3f800000u;
+const i32 s_OpticalBoundsMinInputExponent = -100;
+const i32 s_OpticalBoundsMaxInputExponent = 124;
+const i32 s_OpticalBoundsMaxMagnitudeExponent = 125;
+const i32 s_OpticalBoundsZeroExponent = -256;
+const i32 s_OpticalBoundsFixedBits = 24;
+const i32 s_OpticalBoundsRelativeMarginShift = 19;
+const i32 s_OpticalBoundsMinMarginExponent = -120;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 class OpticalBoundsEvaluator{
-    public b8 computeWorldBounds(
-        in MatrixSingle objectToWorld,
-        in VectorSingle localMin,
-        in VectorSingle localMax,
-        mut VectorSingle outMinimum,
-        mut VectorSingle outMaximum
-    )const{
-        const VectorSingle localMin3 = VectorSingle(localMin.x, localMin.y, localMin.z, 0.0f);
-        const VectorSingle localMax3 = VectorSingle(localMax.x, localMax.y, localMax.z, 0.0f);
-        if(
-            !IsFinite(localMin.xyz)
-            || !IsFinite(localMax.xyz)
-            || localMin.x > localMax.x
-            || localMin.y > localMax.y
-            || localMin.z > localMax.z
-        )
-            return false;
+    private b8 admitted(in u32 bits)const{
+        u32 magnitude = bits & s_OpticalBoundsMagnitudeMask;
+        if(magnitude == 0u)
+            return true;
+        i32 exponent = cast<i32>(magnitude >> s_OpticalBoundsMantissaBits) - s_OpticalBoundsExponentBias;
+        return exponent >= s_OpticalBoundsMinInputExponent && exponent <= s_OpticalBoundsMaxInputExponent;
+    }
 
-        const VectorSingle row0 = objectToWorld[0u];
-        const VectorSingle row1 = objectToWorld[1u];
-        const VectorSingle row2 = objectToWorld[2u];
-        if(!IsFinite(row0) || !IsFinite(row1) || !IsFinite(row2))
-            return false;
+    private u32 ordered(in u32 bits)const{
+        if((bits & s_OpticalBoundsMagnitudeMask) == 0u)
+            return s_OpticalBoundsSignBit;
+        if((bits & s_OpticalBoundsSignBit) != 0u)
+            return ~bits;
+        return bits ^ s_OpticalBoundsSignBit;
+    }
 
-        const MatrixSingle columns = Transpose(MatrixSingle(row0, row1, row2, VectorSingle(0.0f, 0.0f, 0.0f, 0.0f)));
-        VectorSingle laneMin(0.0f, 0.0f, 0.0f, 0.0f);
-        VectorSingle laneMax(0.0f, 0.0f, 0.0f, 0.0f);
-        VectorSingle laneMagnitude(0.0f, 0.0f, 0.0f, 0.0f);
-        for(u32 corner = 0u; corner < s_OpticalBoxCornerCount; ++corner){
-            f32 px = localMin3.x;
-            if((corner & s_CornerMaxXBit) != 0u)
-                px = localMax3.x;
-            f32 py = localMin3.y;
-            if((corner & s_CornerMaxYBit) != 0u)
-                py = localMax3.y;
-            f32 pz = localMin3.z;
-            if((corner & s_CornerMaxZBit) != 0u)
-                pz = localMax3.z;
-            const VectorSingle x(px, px, px, px);
-            const VectorSingle y(py, py, py, py);
-            const VectorSingle z(pz, pz, pz, pz);
-            VectorSingle cornerVec = columns[0u] * x;
-            cornerVec = columns[1u] * y + cornerVec;
-            cornerVec = columns[2u] * z + cornerVec;
-            cornerVec = cornerVec + columns[3u];
-            if(!IsFinite(cornerVec.xyz))
-                return false;
-            if(corner == 0u){
-                laneMin = cornerVec;
-                laneMax = cornerVec;
+    private i32 ceilingExponent(in u32 magnitude)const{
+        i32 exponent = cast<i32>(magnitude >> s_OpticalBoundsMantissaBits) - s_OpticalBoundsExponentBias;
+        if((magnitude & s_OpticalBoundsFractionMask) != 0u)
+            ++exponent;
+        return exponent;
+    }
+
+    private Expected<i32> magnitudeExponent(in VectorSingle row, in VectorSingle localMagnitude)const{
+        i32 largest = s_OpticalBoundsZeroExponent;
+        u32 count = 0u;
+        for(u32 lane = 0u; lane < 4u; ++lane){
+            u32 coefficient = bit_cast<u32>(row[lane]);
+            if(!this.admitted(coefficient))
+                return MakeUnexpected(Failure());
+            coefficient &= s_OpticalBoundsMagnitudeMask;
+            u32 coordinate = s_OpticalBoundsOneBits;
+            if(lane < 3u)
+                coordinate = bit_cast<u32>(localMagnitude[lane]);
+            if(coefficient != 0u && coordinate != 0u){
+                largest = Max(largest, this.ceilingExponent(coefficient) + this.ceilingExponent(coordinate));
+                ++count;
             }
-            else{
-                laneMin = Min(laneMin, cornerVec);
-                laneMax = Max(laneMax, cornerVec);
-            }
-            laneMagnitude = Max(laneMagnitude, Abs(cornerVec));
         }
+        if(count == 0u)
+            return s_OpticalBoundsZeroExponent;
+        if(count > 2u)
+            largest += 2;
+        else if(count > 1u)
+            ++largest;
+        if(largest > s_OpticalBoundsMaxMagnitudeExponent)
+            return MakeUnexpected(Failure());
+        return largest;
+    }
 
-        const f32 magnitudeSum = (laneMagnitude.x + laneMagnitude.y) + laneMagnitude.z;
-        const f32 margin = cast<f32>(s_OpticalTransformError) * magnitudeSum + cast<f32>(s_OpticalUnderflowMargin);
-        const VectorSingle marginVec(margin, margin, margin, margin);
-        const VectorSingle minimum = laneMin - marginVec;
-        const VectorSingle maximum = laneMax + marginVec;
-        if(!IsFinite(minimum.xyz) || !IsFinite(maximum.xyz))
-            return false;
-        outMinimum = VectorSingle(minimum.x, minimum.y, minimum.z, 0.0f);
-        outMaximum = VectorSingle(maximum.x, maximum.y, maximum.z, 0.0f);
+    private u32 fixedBits(in i32 value, in i32 exponent)const{
+        if(value == 0)
+            return 0u;
+        u32 sign = 0u;
+        u32 magnitude = cast<u32>(value);
+        if(value < 0){
+            sign = s_OpticalBoundsSignBit;
+            magnitude = cast<u32>(-value);
+        }
+        u32 scan = magnitude;
+        i32 highest = 0;
+        while(scan > 1u){
+            scan >>= 1u;
+            ++highest;
+        }
+        i32 resultExponent = exponent - s_OpticalBoundsFixedBits + highest;
+        if(resultExponent < -126)
+            return 0u;
+        u32 significand = magnitude;
+        if(highest > 23)
+            significand >>= cast<u32>(highest - 23);
+        else
+            significand <<= cast<u32>(23 - highest);
+        return sign | (cast<u32>(resultExponent + s_OpticalBoundsExponentBias) << s_OpticalBoundsMantissaBits) | (significand & s_OpticalBoundsFractionMask);
+    }
+
+    private u32 endpoint(in VectorSingle row, in VectorSingle localMin, in VectorSingle localMax, in i32 exponent, in b8 upper)const{
+        Array<u32, 4> coefficients = Array<u32, 4>();
+        Array<u32, 4> coordinates = Array<u32, 4>();
+        Array<u32, 4> coefficientMantissas = Array<u32, 4>();
+        Array<u32, 4> coordinateMantissas = Array<u32, 4>();
+        for(u32 lane = 0u; lane < 4u; ++lane){
+            coefficients[lane] = bit_cast<u32>(row[lane]);
+            coordinates[lane] = s_OpticalBoundsOneBits;
+            if(lane < 3u){
+                coordinates[lane] = bit_cast<u32>(localMin[lane]);
+                if(upper != ((coefficients[lane] & s_OpticalBoundsSignBit) != 0u))
+                    coordinates[lane] = bit_cast<u32>(localMax[lane]);
+            }
+            coefficientMantissas[lane] = 0u;
+            coordinateMantissas[lane] = 0u;
+            if((coefficients[lane] & s_OpticalBoundsMagnitudeMask) != 0u)
+                coefficientMantissas[lane] = (coefficients[lane] & s_OpticalBoundsFractionMask) | s_OpticalBoundsHiddenBit;
+            if((coordinates[lane] & s_OpticalBoundsMagnitudeMask) != 0u)
+                coordinateMantissas[lane] = (coordinates[lane] & s_OpticalBoundsFractionMask) | s_OpticalBoundsHiddenBit;
+        }
+        VectorSingle a = VectorSetInt(coefficientMantissas[0u], coefficientMantissas[1u], coefficientMantissas[2u], coefficientMantissas[3u]);
+        VectorSingle b = VectorSetInt(coordinateMantissas[0u], coordinateMantissas[1u], coordinateMantissas[2u], coordinateMantissas[3u]);
+        VectorDouble products = VectorMultiplyUInt32Wide(a, b);
+        i32 total = 0;
+        for(u32 lane = 0u; lane < 4u; ++lane){
+            u64 product = VectorDoubleGetIntByIndex(products, lane);
+            if(product == 0u)
+                continue;
+            i32 aExponent = cast<i32>((coefficients[lane] & s_OpticalBoundsMagnitudeMask) >> s_OpticalBoundsMantissaBits);
+            i32 bExponent = cast<i32>((coordinates[lane] & s_OpticalBoundsMagnitudeMask) >> s_OpticalBoundsMantissaBits);
+            i32 shift = exponent + 2 * (s_OpticalBoundsExponentBias + cast<i32>(s_OpticalBoundsMantissaBits)) - s_OpticalBoundsFixedBits - aExponent - bExponent;
+            if(shift < 64){
+                i32 scaled = cast<i32>(product >> cast<u32>(shift));
+                if(((coefficients[lane] ^ coordinates[lane]) & s_OpticalBoundsSignBit) != 0u)
+                    total -= scaled;
+                else
+                    total += scaled;
+            }
+        }
+        return this.fixedBits(total, exponent);
+    }
+
+    private u32 expanded(in u32 bits, in i32 exponent, in b8 upper)const{
+        i32 marginExponent = Max(exponent - s_OpticalBoundsRelativeMarginShift, s_OpticalBoundsMinMarginExponent);
+        u32 twiceMargin = cast<u32>(marginExponent + 1 + s_OpticalBoundsExponentBias) << s_OpticalBoundsMantissaBits;
+        u32 magnitude = bits & s_OpticalBoundsMagnitudeMask;
+        if(magnitude < twiceMargin){
+            u32 result = cast<u32>(marginExponent + 2 + s_OpticalBoundsExponentBias) << s_OpticalBoundsMantissaBits;
+            if(!upper)
+                result |= s_OpticalBoundsSignBit;
+            return result;
+        }
+        i32 valueExponent = cast<i32>(magnitude >> s_OpticalBoundsMantissaBits) - s_OpticalBoundsExponentBias;
+        u32 step = 1u << cast<u32>(Max(0, marginExponent - valueExponent + 24));
+        if(upper != ((bits & s_OpticalBoundsSignBit) != 0u))
+            magnitude += step;
+        else
+            magnitude -= step;
+        return (bits & s_OpticalBoundsSignBit) | magnitude;
+    }
+
+    public b8 computeWorldBounds(in MatrixSingle objectToWorld, in VectorSingle localMin, in VectorSingle localMax, mut VectorSingle outMinimum, mut VectorSingle outMaximum)const{
+        Array<u32, 4> magnitude = Array<u32, 4>();
+        magnitude[3u] = s_OpticalBoundsOneBits;
+        for(u32 lane = 0u; lane < 3u; ++lane){
+            u32 low = bit_cast<u32>(localMin[lane]);
+            u32 high = bit_cast<u32>(localMax[lane]);
+            if(!this.admitted(low) || !this.admitted(high) || this.ordered(low) > this.ordered(high))
+                return false;
+            magnitude[lane] = Max(low & s_OpticalBoundsMagnitudeMask, high & s_OpticalBoundsMagnitudeMask);
+        }
+        VectorSingle localMagnitude = VectorSetInt(magnitude[0u], magnitude[1u], magnitude[2u], magnitude[3u]);
+        Array<i32, 3> exponents = Array<i32, 3>();
+        for(u32 row = 0u; row < 3u; ++row){
+            Expected<i32> exponent = this.magnitudeExponent(objectToWorld[row], localMagnitude);
+            if(!exponent.has_value())
+                return false;
+            exponents[row] = exponent.value();
+        }
+        Array<u32, 3> minimum = Array<u32, 3>();
+        Array<u32, 3> maximum = Array<u32, 3>();
+        for(u32 row = 0u; row < 3u; ++row){
+            minimum[row] = this.expanded(this.endpoint(objectToWorld[row], localMin, localMax, exponents[row], false), exponents[row], false);
+            maximum[row] = this.expanded(this.endpoint(objectToWorld[row], localMin, localMax, exponents[row], true), exponents[row], true);
+        }
+        outMinimum = VectorSetInt(minimum[0u], minimum[1u], minimum[2u], 0u);
+        outMaximum = VectorSetInt(maximum[0u], maximum[1u], maximum[2u], 0u);
         return true;
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static_assert(::NWB::Impl::s_OpticalBoundsSignBit == NWB_OPTICAL_BOUNDS_SIGN_BIT);
+static_assert(::NWB::Impl::s_OpticalBoundsMagnitudeMask == NWB_OPTICAL_BOUNDS_MAGNITUDE_MASK);
+static_assert(::NWB::Impl::s_OpticalBoundsFractionMask == NWB_OPTICAL_BOUNDS_FRACTION_MASK);
+static_assert(::NWB::Impl::s_OpticalBoundsHiddenBit == NWB_OPTICAL_BOUNDS_HIDDEN_BIT);
+static_assert(::NWB::Impl::s_OpticalBoundsMantissaBits == NWB_OPTICAL_BOUNDS_MANTISSA_BITS);
+static_assert(::NWB::Impl::s_OpticalBoundsExponentBias == NWB_OPTICAL_BOUNDS_EXPONENT_BIAS);
+static_assert(::NWB::Impl::s_OpticalBoundsOneBits == NWB_OPTICAL_BOUNDS_ONE_BITS);
+static_assert(::NWB::Impl::s_OpticalBoundsMinInputExponent == NWB_OPTICAL_BOUNDS_MIN_INPUT_EXPONENT);
+static_assert(::NWB::Impl::s_OpticalBoundsMaxInputExponent == NWB_OPTICAL_BOUNDS_MAX_INPUT_EXPONENT);
+static_assert(::NWB::Impl::s_OpticalBoundsMaxMagnitudeExponent == NWB_OPTICAL_BOUNDS_MAX_MAGNITUDE_EXPONENT);
+static_assert(::NWB::Impl::s_OpticalBoundsZeroExponent == NWB_OPTICAL_BOUNDS_ZERO_EXPONENT);
+static_assert(::NWB::Impl::s_OpticalBoundsFixedBits == NWB_OPTICAL_BOUNDS_FIXED_BITS);
+static_assert(::NWB::Impl::s_OpticalBoundsRelativeMarginShift == NWB_OPTICAL_BOUNDS_RELATIVE_MARGIN_SHIFT);
+static_assert(::NWB::Impl::s_OpticalBoundsMinMarginExponent == NWB_OPTICAL_BOUNDS_MIN_MARGIN_EXPONENT);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }
 
 

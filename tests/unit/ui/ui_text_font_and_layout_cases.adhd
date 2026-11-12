@@ -16,6 +16,7 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/floating_point_environment_guard.adhd.h>
 #include <tests/common/font_fixture.adhd.h>
 #include <tests/unit/ui/fixture_text_shaping.adhd.h>
 #include <tests/unit/ui/name_cases.adhd.h>
@@ -23,6 +24,7 @@ native{
 #include <impl/ecs_ui/toolkit/text/atlas.adhd.h>
 #include <impl/ecs_ui/toolkit/text/glyph_visibility.adhd.h>
 #include <impl/ecs_ui/toolkit/text/layout.adhd.h>
+#include <impl/ecs_ui/toolkit/text/layout_types.adhd.h>
 #include <impl/ecs_ui/toolkit/text/layout_measurement.adhd.h>
 #include <impl/ecs_ui/toolkit/text/service.adhd.h>
 
@@ -1346,6 +1348,71 @@ NWB_ADHD_GTEST_F(TextLayoutTests, RtlVisualOrderReversesLogicalClusterEdgesAndPr
 NWB_ADHD_GTEST_F(TextLayoutTests, FailedLaterLineAndSourceMutationPreserveCommittedLayout, VerifyTextLayoutTests_FailedLaterLineAndSourceMutationPreserveCommittedLayout)
 NWB_ADHD_GTEST_F(TextLayoutTests, EmptyTextHasOneTypographicLineAndNoInk, VerifyTextLayoutTests_EmptyTextHasOneTypographicLineAndNoInk)
 NWB_ADHD_GTEST_F(TextLayoutTests, StrictUtf8AndHorizontalRequestValidationAreFailureAtomic, VerifyTextLayoutTests_StrictUtf8AndHorizontalRequestValidationAreFailureAtomic)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_text_snap_fenv_tests{
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+
+
+TEST(TextGlyphVisibility, CoverageSnapMatchesScalarAtHalfPixelsAndDirectedRounding){
+#pragma STDC FENV_ACCESS ON
+    const auto originalEnvironment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(originalEnvironment);
+    Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
+    volatile f32 rasterInput = 3.0f;
+    volatile f32 pixelXInput = 0.75f;
+    volatile f32 pixelYInput = 1.5f;
+    volatile f32 topXInput = -1.0f;
+    for(const i32 rounding : { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO }){
+        ASSERT_TRUE(SetFloatingPointRoundingMode(rounding));
+        const f32 raster = rasterInput;
+        const Point glyphPosition{ 0.0f, 0.0f };
+        const Point topLeft{ topXInput, 0.0f };
+        const Point pixelScale{ pixelXInput, pixelYInput };
+        const Rect pixels{ 0.0f, 0.0f, 1.0f, 1.0f };
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+        const f64 posX = (static_cast<f64>(topLeft.x) + static_cast<f64>(glyphPosition.x)) + (1.0 / static_cast<f64>(raster));
+        const f64 posY = (static_cast<f64>(topLeft.y) + static_cast<f64>(glyphPosition.y)) - (1.0 / static_cast<f64>(raster));
+        const f64 alignedX = Floor((posX * static_cast<f64>(pixelScale.x)) + 0.5) / static_cast<f64>(pixelScale.x);
+        const f64 alignedY = Floor((posY * static_cast<f64>(pixelScale.y)) + 0.5) / static_cast<f64>(pixelScale.y);
+        const f64 width = static_cast<f64>(pixels.width) / static_cast<f64>(raster);
+        const f64 height = static_cast<f64>(pixels.height) / static_cast<f64>(raster);
+        const auto expected = TryMakeUiRect(alignedX, alignedY, width, height, UiRectPrecision::BoundedEndpoints);
+        const i32 expectedFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+        ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+        const auto actual = TryResolveGlyphCoverageRectangle(glyphPosition, 0u, pixels, 1, 1, raster, topLeft, pixelScale);
+        const i32 actualFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+        ASSERT_TRUE(expected.has_value());
+        ASSERT_TRUE(actual.has_value());
+        EXPECT_EQ(BitCast<u32>(actual->x), BitCast<u32>(expected->x));
+        EXPECT_EQ(BitCast<u32>(actual->y), BitCast<u32>(expected->y));
+        EXPECT_EQ(BitCast<u32>(actual->width), BitCast<u32>(expected->width));
+        EXPECT_EQ(BitCast<u32>(actual->height), BitCast<u32>(expected->height));
+        EXPECT_EQ(actualFlags, expectedFlags);
+    }
+}
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

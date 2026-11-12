@@ -2,9 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "simd_expression_analysis.h"
+
 #include <core/metascript/adhd/ast/operator_semantics.h>
 
-#include "simd_expression_analysis.h"
 #include "simd_codegen_utils.h"
 
 
@@ -16,24 +17,6 @@ NWB_ADHD_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] b8 SimdExpressionAnalysis::IsSimdMulExpr(const Expr*& outMulA, const Expr*& outMulB, const Expr* expr, const SymbolTable* const symbols)noexcept{
-    if(!expr || expr->kind != ExprKind::Binary || expr->op != TokenType::Star || !expr->lhs || !expr->rhs)
-        return false;
-    const BuiltinSimdVectorInfo* vecInfo = FindBuiltinSimdVectorType(expr->resolvedSimdType);
-    if(!vecInfo || !vecInfo->isFloatReg)
-        return false;
-    const auto isUnitOrNegUnitOperand = [&](const Expr& op)noexcept -> b8{
-        return SimdConstantAnalysis::IsSimdZeroFloatVectorExpr(op, vecInfo->isDoubleReg, symbols)
-            || SimdConstantAnalysis::IsSimdUnitFloatVectorExpr(op, vecInfo->isDoubleReg, symbols)
-            || SimdConstantAnalysis::IsSimdNegativeUnitFloatVectorExpr(op, vecInfo->isDoubleReg, symbols);
-    };
-    if(isUnitOrNegUnitOperand(*expr->lhs) || isUnitOrNegUnitOperand(*expr->rhs))
-        return false;
-    outMulA = expr->lhs;
-    outMulB = expr->rhs;
-    return true;
-}
 
 [[nodiscard]] const Expr* SimdExpressionAnalysis::TryUnwrapSimdSplatScalarArg(const Expr& expr, const SymbolTable& symbols)noexcept{
     if(expr.kind != ExprKind::Call || !expr.lhs || expr.lhs->kind != ExprKind::Identifier || expr.arguments.size() != 1u || !expr.arguments[0])
@@ -204,98 +187,6 @@ NWB_ADHD_BEGIN
     if(symbols.resolveBaseTypeName(expr->targetType->name) != expectedScalarType)
         return false;
     return SimdExpressionAnalysis::TryMatchSingleLaneAccess(expr->lhs, outBase, outLane);
-}
-
-[[nodiscard]] b8 SimdExpressionAnalysis::TryMatchSimdMaxComponentReduction(
-    const Expr& expr,
-    const Expr*& outBaseVec,
-    b8& outIsDouble,
-    u32& outLanes,
-    b8& outIsAbs
-)noexcept{
-    if(
-        expr.kind != ExprKind::Call
-        || !expr.isBuiltinCall
-        || !expr.lhs
-        || expr.lhs->kind != ExprKind::Identifier
-        || expr.lhs->text != "Max"
-        || expr.arguments.size() != 2u
-        || !expr.arguments[0]
-        || !expr.arguments[1]
-        || !expr.resolvedSimdType.empty()
-        || !expr.resolvedUnalignedType.empty()
-    ){
-        return false;
-    }
-
-    const Expr* firstBase = nullptr;
-    b8 baseIsDouble = false;
-    u32 baseZeroedAbove = 4u;
-    b8 firstIsAbs = false;
-    u8 laneMask = 0u;
-
-    const auto visitNode = [&](auto& self, const Expr* node)noexcept -> b8{
-        if(!node || !node->resolvedSimdType.empty() || !node->resolvedUnalignedType.empty())
-            return false;
-        if(
-            node->kind == ExprKind::Call
-            && node->isBuiltinCall
-            && node->lhs
-            && node->lhs->kind == ExprKind::Identifier
-            && node->lhs->text == "Max"
-            && node->arguments.size() == 2u
-            && node->arguments[0]
-            && node->arguments[1]
-        ){
-            return self(self, node->arguments[0]) && self(self, node->arguments[1]);
-        }
-
-        const Expr* leafBase = nullptr;
-        u32 leafLane = 0u;
-        b8 leafIsAbs = false;
-        if(
-            node->kind == ExprKind::Call
-            && node->isBuiltinCall
-            && node->lhs
-            && node->lhs->kind == ExprKind::Identifier
-            && node->lhs->text == "Abs"
-            && node->arguments.size() == 1u
-            && node->arguments[0]
-        ){
-            if(!SimdExpressionAnalysis::TryMatchSingleLaneAccess(node->arguments[0], leafBase, leafLane) || !leafBase)
-                return false;
-            leafIsAbs = true;
-        }
-        else if(!SimdExpressionAnalysis::TryMatchSingleLaneAccess(node, leafBase, leafLane) || !leafBase){
-            return false;
-        }
-
-        if(!firstBase){
-            MStringView regType;
-            MStringView loadFn;
-            if(!SimdVectorSourceAnalysis::TryGetAnyFloatVectorSourceInfo(*leafBase, baseIsDouble, regType, loadFn, baseZeroedAbove))
-                return false;
-            firstBase = leafBase;
-            firstIsAbs = leafIsAbs;
-        }
-        else if(leafIsAbs != firstIsAbs || !SimdExpressionAnalysis::AreSamePureSimdExpr(*firstBase, *leafBase)){
-            return false;
-        }
-
-        if(leafLane >= baseZeroedAbove || leafLane >= 4u)
-            return false;
-        laneMask |= static_cast<u8>(1u << leafLane);
-        return true;
-    };
-
-    if(!visitNode(visitNode, &expr) || !firstBase || (laneMask != 0x7u && laneMask != 0xFu))
-        return false;
-
-    outBaseVec = firstBase;
-    outIsDouble = baseIsDouble;
-    outLanes = (laneMask == 0x7u) ? 3u : 4u;
-    outIsAbs = firstIsAbs;
-    return true;
 }
 
 [[nodiscard]] MStringView SimdExpressionAnalysis::ResolveLocalVarDeclSimdType(const Stmt& stmt, const SymbolTable& symbols)noexcept{

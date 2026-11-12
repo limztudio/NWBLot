@@ -3,6 +3,8 @@
 
 
 #include "runtime.h"
+
+#include <global/simd/vector_arithmetic.h>
 #include "runtime_internal.h"
 #include "runtime_frame_timing_reset.h"
 #include "runtime_standalone_graph.h"
@@ -79,7 +81,7 @@ public:
 
         for(u32 index = 0u; index < m_phaseCount; ++index){
             if(m_phases[index].scope.index == scope.index && m_phases[index].scope.generation == scope.generation){
-                m_phases[index].seconds += seconds;
+                m_phases[index].seconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_phases[index].seconds), VectorDoubleReplicate(seconds)));
                 return;
             }
         }

@@ -2,6 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "const_eval.h"
+#include "type_utils.h"
+
 #include <core/metascript/literal_decoder.h>
 
 #include <core/metascript/adhd/ast/keyword_semantics.h>
@@ -9,8 +12,6 @@
 #include <core/metascript/adhd/ast/builtin_type_semantics.h>
 
 #include <core/metascript/adhd/ast/operator_semantics.h>
-
-#include "const_eval.h"
 
 #include <global/source_text.h>
 

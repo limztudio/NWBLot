@@ -7,6 +7,8 @@
 
 #include "global.h"
 
+#include <global/simd/vector_arithmetic.h>
+
 #include <global/filesystem/executable_paths.h>
 #include <global/binary.h>
 #include <global/filesystem/operations.h>
@@ -114,10 +116,6 @@ inline constexpr TStringView s_UnknownLogLevelName = FOUNDATION_TEXT("UNKNOWN");
 }
 
 
-
-
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -211,10 +209,10 @@ private:
             const f32 elapsedSeconds = DurationInSeconds<f32>(currentTime, self.m_lastUpdateTime);
             if(elapsedSeconds < UpdateIntervalSeconds){
                 // Sleep until the next update deadline; the cadence bounds message and shutdown latency.
-                const f32 remainingSeconds = UpdateIntervalSeconds - elapsedSeconds;
+                const f32 remainingSeconds = VectorGetX(VectorSubtract(VectorReplicate(UpdateIntervalSeconds), VectorReplicate(elapsedSeconds)));
                 static constexpr f32 s_MillisecondsPerSecondF = 1000.0f;
                 static constexpr u32 s_MinSleepMilliseconds = 1u;
-                const u32 sleepMilliseconds = Max<u32>(s_MinSleepMilliseconds, static_cast<u32>(Ceil(remainingSeconds * s_MillisecondsPerSecondF)));
+                const u32 sleepMilliseconds = Max<u32>(s_MinSleepMilliseconds, static_cast<u32>(Ceil(VectorGetX(VectorMultiply(VectorReplicate(remainingSeconds), VectorReplicate(s_MillisecondsPerSecondF))))));
                 SleepMS(sleepMilliseconds);
                 continue;
             }

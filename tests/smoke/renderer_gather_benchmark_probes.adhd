@@ -510,7 +510,7 @@ class RendererGatherBenchmarkProbe{
             out.append("}\n");
         }
         for(usize index = 0u; index < this.m_gpu.size(); index += 2u){
-            const usize count = Min(2u, this.m_gpu.size() - index);
+            const usize count = Min(cast<usize>(2u), this.m_gpu.size() - index);
             f64 secondSeconds = 0.0;
             if(count > 1u)
                 secondSeconds = this.m_gpu[index + 1u].timing.seconds;

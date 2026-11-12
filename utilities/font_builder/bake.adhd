@@ -21,6 +21,7 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_font_atlas/glyph_validation.adhd.h>
 #include <impl/assets_font_atlas/model.adhd.h>
 
 
@@ -71,14 +72,15 @@ using Impl::FontAtlasGroupCompactBounds;
 using Impl::ComputeFontAtlasGroupCompactBounds;
 using Impl::OffsetFontAtlasGroupGlyph;
 using Core::Assets::AssetBytes;
+using AtlasGroupBytes = Vector<u8, ::ArenaBase>;
 
 [[nodiscard]] b8 ValidateOptions(const BakeOptions& options);
 // Options must already pass ValidateOptions.
 [[nodiscard]] Expected<Impl::FontAtlasPayload> Bake(const BakeOptions& options, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratch, Core::Assets::AssetBytes& outSourceFontBytes);
 [[nodiscard]] b8 PackGlyphs(const BakeOptions& options, Span<const RasterGlyph> glyphs, Core::Alloc::ScratchArena& scratch, Impl::FontAtlasPayload& outPayload);
-[[nodiscard]] Expected<Core::Assets::AssetBytes, AStringView> BuildPreparedFont(Span<const u8> sourceFontBytes, const Impl::FontAtlasPayload& atlas, Core::Alloc::ScratchArena& scratch);
+[[nodiscard]] Expected<Core::Assets::AssetBytes, AStringView> BuildPreparedFont(Span<const u8> sourceFontBytes, const Impl::FontAtlasPayload& atlas, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratch);
 [[nodiscard]] Expected<Core::Assets::AssetBytes, AStringView> ReadFontSourceInput(const Path& path, Core::Assets::AssetArena& arena);
-[[nodiscard]] b8 WriteOutputs(const BakeOptions& options, Span<const u8> sourceFontBytes, const Impl::FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratch);
+[[nodiscard]] b8 WriteOutputs(const BakeOptions& options, Span<const u8> sourceFontBytes, const Impl::FontAtlasPayload& payload, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratch);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -116,7 +118,7 @@ void CompactAtlasGroups(mut FontAtlasPayload payload){
         if(bounds.unchanged)
             continue;
 
-        AssetBytes compactPixels(group.pixels.get_allocator().arena());
+        AtlasGroupBytes compactPixels(group.pixels.get_allocator().arena());
         FontAtlasPacker().compactGroupPixels(bounds, group.width, group.channelCount, group.pixels, compactPixels);
         for(usize glyphIndex = 0u; glyphIndex < payload.glyphs.size(); ++glyphIndex)
             OffsetFontAtlasGroupGlyph(cast<u32>(groupIndex), bounds.firstX, bounds.firstY, payload.glyphs[glyphIndex]);
@@ -434,7 +436,7 @@ private:
 }
 
 [[nodiscard]] static b8 ExportPositioning(const FontSource& font, Impl::FontAtlasPayload& payload){
-    Core::Assets::AssetArena& arena = payload.positioningTables.get_allocator().arena();
+    ::ArenaBase& arena = payload.positioningTables.get_allocator().arena();
     auto tables = Impl::CopyFontAtlasPositioningTables(font.bytes(), payload.faceIndex, payload.sourceGlyphCount, arena);
     if(!tables)
         return false;
@@ -526,7 +528,7 @@ Expected<Impl::FontAtlasPayload> Bake(const BakeOptions& options, Core::Assets::
     using namespace __hidden_font_builder_bake;
 
     Impl::FontAtlasPayload candidate(arena);
-    FontSource source(candidate.glyphs.get_allocator().arena());
+    FontSource source(arena);
     if(!source.open(options, scratch, candidate))
         return MakeUnexpected(Failure{});
     auto glyphs = Rasterize(options, source);
@@ -538,8 +540,7 @@ Expected<Impl::FontAtlasPayload> Bake(const BakeOptions& options, Core::Assets::
     return candidate;
 }
 
-Expected<Core::Assets::AssetBytes, AStringView> BuildPreparedFont(const Span<const u8> sourceFontBytes, const Impl::FontAtlasPayload& atlas, Core::Alloc::ScratchArena& scratch){
-    Core::Assets::AssetArena& arena = atlas.glyphs.get_allocator().arena();
+Expected<Core::Assets::AssetBytes, AStringView> BuildPreparedFont(const Span<const u8> sourceFontBytes, const Impl::FontAtlasPayload& atlas, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratch){
     if(ComputeSha256({ sourceFontBytes.data(), sourceFontBytes.size() }) != atlas.fontSha256){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: source changed during bake"));
         return MakeUnexpected(AStringView("source changed during bake"));
@@ -553,8 +554,8 @@ Expected<Core::Assets::AssetBytes, AStringView> BuildPreparedFont(const Span<con
     return Impl::SerializePreparedFontSource({ sourceFontBytes.data(), sourceFontBytes.size() }, atlas.faceIndex, images, arena);
 }
 
-b8 WriteOutputs(const BakeOptions& options, const Span<const u8> sourceFontBytes, const Impl::FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratch){
-    auto fontBinary = BuildPreparedFont(sourceFontBytes, payload, scratch);
+b8 WriteOutputs(const BakeOptions& options, const Span<const u8> sourceFontBytes, const Impl::FontAtlasPayload& payload, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratch){
+    auto fontBinary = BuildPreparedFont(sourceFontBytes, payload, arena, scratch);
     MetadataString metadata(scratch);
     if(!fontBinary){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("font_builder: prepared font failed: {}"), ConvertString(fontBinary.error()));

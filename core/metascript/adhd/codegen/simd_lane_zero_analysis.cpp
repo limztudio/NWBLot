@@ -119,7 +119,7 @@ namespace __hidden_simd_lane_zero_analysis{
     };
     if(expr.resolvedSimdType.empty() && expr.resolvedUnalignedType.empty())
         return matchesScalar(expr);
-    if(SimdConstantAnalysis::IsSimdUnitFloatVectorExpr(expr, isDouble, symbols) || (allowZero && SimdConstantAnalysis::IsSimdZeroFloatVectorExpr(expr, isDouble, symbols)))
+    if(SimdConstantAnalysis::IsSimdUnitFloatVectorExpr(expr, isDouble, symbols))
         return true;
     if(symbols){
         if(const Expr* splatScalar = SimdExpressionAnalysis::TryUnwrapSimdSplatScalarArg(expr, *symbols))
@@ -216,7 +216,7 @@ namespace __hidden_simd_lane_zero_analysis{
     }
 
     if(expr.kind == ExprKind::Binary && expr.lhs && expr.rhs){
-        if(expr.op == TokenType::Plus || expr.op == TokenType::Minus){
+        if(expr.op == TokenType::Plus){
             const u32 z0 = InferSimdRegZeroedAboveLaneImpl(*expr.lhs, isDouble, symbols, localVarDecls, depth + 1u);
             const u32 z1 = InferSimdRegZeroedAboveLaneImpl(*expr.rhs, isDouble, symbols, localVarDecls, depth + 1u);
             return z0 > z1 ? z0 : z1;

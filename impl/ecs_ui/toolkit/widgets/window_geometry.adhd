@@ -84,9 +84,10 @@ Rect ResolveWindowCollapseBounds(in WindowState state, in WindowMetrics metrics)
 
 Rect ResolveWindowResizeBounds(in WindowState state, in WindowMetrics metrics){
     const f32 extent = Min(metrics.resizeExtent, Min(state.bounds.width, state.bounds.height - metrics.titleHeight));
-    const f32 endX = state.bounds.x + state.bounds.width;
-    const f32 endY = state.bounds.y + state.bounds.height;
-    return Rect(endX - extent, endY - extent, extent, extent);
+    const VectorSingle origin(state.bounds.x, state.bounds.y, state.bounds.x, state.bounds.y);
+    const VectorSingle size(state.bounds.width, state.bounds.height, state.bounds.width, state.bounds.height);
+    const VectorSingle start = (origin + size) - VectorSingle(extent);
+    return Rect(start.x, start.y, extent, extent);
 }
 
 void ResolveWindowResizeGripBars(in Rect corner, mut Rect outHorizontal, mut Rect outVertical){
@@ -119,19 +120,21 @@ Expected<WindowMetrics> MeasureWindow(in UiSkinRegion frame, in UiSkinRegion tit
     if(options.collapsible)
         metrics.collapseExtent = ResolveUiSkinSquareExtent(style.windowCollapseExtent, collapse, density);
     metrics.resizeExtent = ResolveUiSkinSquareExtent(style.windowResizeExtent, resize, density);
-    const f32 titleContentX = titleSize.x;
     const f32 titleContentY = Max(titleSize.y, metrics.collapseExtent);
-    const f32 titlePaddedX = (titleContentX + metrics.titlePadding.left) + metrics.titlePadding.right;
-    const f32 titlePaddedY = (titleContentY + metrics.titlePadding.top) + metrics.titlePadding.bottom;
+    const VectorSingle titleContent(titleSize.x, titleContentY, titleSize.x, titleContentY);
+    const VectorSingle leadingPadding(metrics.titlePadding.left, metrics.titlePadding.top, metrics.titlePadding.left, metrics.titlePadding.top);
+    const VectorSingle trailingPadding(metrics.titlePadding.right, metrics.titlePadding.bottom, metrics.titlePadding.right, metrics.titlePadding.bottom);
+    const VectorSingle titlePadded = (titleContent + leadingPadding) + trailingPadding;
+    const f32 titlePaddedX = titlePadded.x;
+    const f32 titlePaddedY = titlePadded.y;
     metrics.titleHeight = Max(title.minimumHeight, titlePaddedY);
     f32 collapseWidth = 0.0f;
     if(options.collapsible)
         collapseWidth = metrics.collapseExtent + style.gap;
     const f32 titleMinX = Max(title.minimumWidth, titlePaddedX + collapseWidth);
     const f32 contentMinY = (metrics.titleHeight + metrics.contentPadding.top) + metrics.contentPadding.bottom;
-    const f32 minX = Max(options.minimumSize.x, Max(frame.minimumWidth, titleMinX));
-    const f32 minY = Max(options.minimumSize.y, Max(frame.minimumHeight, contentMinY));
-    metrics.minimumSize = Point(minX, minY);
+    const VectorSingle minimum = Max(VectorSingle(options.minimumSize.x, options.minimumSize.y, options.minimumSize.x, options.minimumSize.y), Max(VectorSingle(frame.minimumWidth, frame.minimumHeight, frame.minimumWidth, frame.minimumHeight), VectorSingle(titleMinX, contentMinY, titleMinX, contentMinY)));
+    metrics.minimumSize = Point(minimum.x, minimum.y);
     if(!IsFinite(metrics.titleHeight) || !IsFinite(metrics.minimumSize.x) || !IsFinite(metrics.minimumSize.y) || metrics.titleHeight <= 0.0f || metrics.minimumSize.x <= 0.0f || metrics.minimumSize.y <= 0.0f)
         return MakeUnexpected(Failure());
     return metrics;

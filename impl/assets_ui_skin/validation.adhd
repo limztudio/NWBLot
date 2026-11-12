@@ -78,10 +78,12 @@ b8 IsValidUiSkinRegionRectAndSlices(in UiSkinRegion region, in u32 atlasWidth, i
 }
 
 b8 IsValidUiSkinPaletteColor(in UiSkinColor color){
-    return IsFinite(color.r) && IsValidUiSkinPaletteChannelValue(color.r, 0u)
-        && IsFinite(color.g) && IsValidUiSkinPaletteChannelValue(color.g, 1u)
-        && IsFinite(color.b) && IsValidUiSkinPaletteChannelValue(color.b, 2u)
-        && IsFinite(color.a) && IsValidUiSkinPaletteChannelValue(color.a, s_UiSkinAlphaComponentIndex)
+    const VectorSingle rgba(color.r, color.g, color.b, color.a);
+    return IsFinite(rgba)
+        && IsValidUiSkinPaletteChannelValue(color.r, 0u)
+        && IsValidUiSkinPaletteChannelValue(color.g, 1u)
+        && IsValidUiSkinPaletteChannelValue(color.b, 2u)
+        && IsValidUiSkinPaletteChannelValue(color.a, s_UiSkinAlphaComponentIndex)
     ;
 }
 
@@ -92,25 +94,23 @@ b8 IsValidUiSkinRegion(in UiSkinRegion region, in u32 atlasWidth, in u32 atlasHe
         return false;
 
     const UiSkinInsets padding = region.padding;
-    if(
-        !IsFinite(padding.left) || padding.left < 0.0f
-        || !IsFinite(padding.top) || padding.top < 0.0f
-        || !IsFinite(padding.right) || padding.right < 0.0f
-        || !IsFinite(padding.bottom) || padding.bottom < 0.0f
-    )
+    const VectorSingle paddingValues(padding.left, padding.top, padding.right, padding.bottom);
+    if(!IsFinite(paddingValues) || padding.left < 0.0f || padding.top < 0.0f || padding.right < 0.0f || padding.bottom < 0.0f)
         return false;
 
-    const f32 paddingHorizontal = padding.left + padding.right;
-    const f32 paddingVertical = padding.top + padding.bottom;
-    return IsFinite(paddingHorizontal)
-        && IsFinite(paddingVertical)
-        && IsFinite(region.minimumWidth) && region.minimumWidth >= 0.0f
-        && IsFinite(region.minimumHeight) && region.minimumHeight >= 0.0f
+    const VectorSingle paddingExtents = VectorSingle(padding.left, padding.top, padding.left, padding.top)
+        + VectorSingle(padding.right, padding.bottom, padding.right, padding.bottom);
+    const VectorSingle minimumSize(region.minimumWidth, region.minimumHeight, region.minimumWidth, region.minimumHeight);
+    return IsFinite(paddingExtents.xy)
+        && IsFinite(minimumSize.xy)
+        && region.minimumWidth >= 0.0f
+        && region.minimumHeight >= 0.0f
     ;
 }
 
 Expected<VectorSingle> TryLoadUiSkinMinimumSize(in UiSkinRegion region, in VectorDouble sliceExtents, in VectorDouble density){
-    if(!IsFinite(region.minimumWidth) || region.minimumWidth < 0.0f || !IsFinite(region.minimumHeight) || region.minimumHeight < 0.0f)
+    const VectorSingle rawMinimum(region.minimumWidth, region.minimumHeight, region.minimumWidth, region.minimumHeight);
+    if(!IsFinite(rawMinimum.xy) || region.minimumWidth < 0.0f || region.minimumHeight < 0.0f)
         return MakeUnexpected(Failure());
     const f64 maxFloatF64 = cast<f64>(f32.max);
     const VectorDouble minimumSize(cast<f64>(region.minimumWidth), cast<f64>(region.minimumHeight), 0.0, 0.0);
@@ -146,7 +146,7 @@ b8 ValidateUiSkinPayloadData(
         !texture.valid() || texture.name() == Name("")
         || atlasWidth == 0u || atlasHeight == 0u
         || !IsFinite(referenceDensity) || referenceDensity <= 0.0f
-        || !(IsFinite(cast<f32>(atlasWidth) / referenceDensity) && IsFinite(cast<f32>(atlasHeight) / referenceDensity))
+        || !IsFinite((VectorSingle(cast<f32>(atlasWidth), cast<f32>(atlasHeight), cast<f32>(atlasWidth), cast<f32>(atlasHeight)) / VectorSingle(referenceDensity)).xy)
         || regions.empty()
     ){
         error("UiSkin::validatePayload failed: texture reference, atlas extent, reference density, or region count is invalid");

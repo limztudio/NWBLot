@@ -74,7 +74,8 @@ class TextRasterMetrics{
 
 Expected<TextRasterMetrics> TryResolveTextRasterMetrics(in f32 fontSize, in DisplayMetrics display){
     TextRasterMetrics outMetrics;
-    if(!IsValidTextFontSize(fontSize) || !IsFinite(display.pixelScaleX) || !IsFinite(display.pixelScaleY) || display.pixelScaleX <= 0.0f || display.pixelScaleY <= 0.0f)
+    const VectorSingle pixelScale(display.pixelScaleX, display.pixelScaleY, display.pixelScaleX, display.pixelScaleY);
+    if(!IsValidTextFontSize(fontSize) || !IsFinite(pixelScale.xy) || display.pixelScaleX <= 0.0f || display.pixelScaleY <= 0.0f)
         return MakeUnexpected(Failure());
     const f32 physicalSize = fontSize * Max(display.pixelScaleX, display.pixelScaleY);
     const f32 rasterPpem = Ceil(physicalSize);
@@ -88,8 +89,9 @@ Expected<TextRasterMetrics> TryResolveTextRasterMetrics(in f32 fontSize, in Disp
 }
 
 Expected<Rect> TryMakeMeasuredTextRect(in f64 left, in f64 top, in f64 right, in f64 bottom){
+    const VectorDouble bounds(left, top, right, bottom);
     if(
-        !IsFinite(left) || !IsFinite(top) || !IsFinite(right) || !IsFinite(bottom)
+        !IsFinite(bounds)
         || left < -s_TextMaxCoordinateF64 || top < -s_TextMaxCoordinateF64
         || right > s_TextMaxCoordinateF64 || bottom > s_TextMaxCoordinateF64
         || right < left || bottom < top
@@ -97,24 +99,22 @@ Expected<Rect> TryMakeMeasuredTextRect(in f64 left, in f64 top, in f64 right, in
         return MakeUnexpected(Failure());
     const f32 x = RoundF64ToF32Bound(left, false);
     const f32 y = RoundF64ToF32Bound(top, false);
-    const f64 width = cast<f64>(RoundF64ToF32Bound(right, true)) - cast<f64>(x);
-    const f64 height = cast<f64>(RoundF64ToF32Bound(bottom, true)) - cast<f64>(y);
-    if(width > s_TextMaxCoordinateF64 || height > s_TextMaxCoordinateF64)
+    const VectorDouble extent = VectorDouble(cast<f64>(RoundF64ToF32Bound(right, true)), cast<f64>(RoundF64ToF32Bound(bottom, true)), 0.0, 0.0) - VectorDouble(cast<f64>(x), cast<f64>(y), 0.0, 0.0);
+    if(extent.x > s_TextMaxCoordinateF64 || extent.y > s_TextMaxCoordinateF64)
         return MakeUnexpected(Failure());
-    const f32 roundedWidth = RoundF64ToF32Bound(width, true);
-    const f32 roundedHeight = RoundF64ToF32Bound(height, true);
-    if(
-        !IsFinite(roundedWidth) || roundedWidth < 0.0f
-        || !IsFinite(roundedHeight) || roundedHeight < 0.0f
-        || !IsFinite(x + roundedWidth) || !IsFinite(y + roundedHeight)
-    )
+    const f32 roundedWidth = RoundF64ToF32Bound(extent.x, true);
+    const f32 roundedHeight = RoundF64ToF32Bound(extent.y, true);
+    const VectorSingle roundedSize(roundedWidth, roundedHeight, roundedWidth, roundedHeight);
+    if(!IsFinite(roundedSize.xy) || roundedWidth < 0.0f || roundedHeight < 0.0f)
+        return MakeUnexpected(Failure());
+    if(!IsFinite(x + roundedWidth) || !IsFinite(y + roundedHeight))
         return MakeUnexpected(Failure());
     return Rect(x, y, roundedWidth, roundedHeight);
 }
 
 TextHit HitTestTextLayout(in Span<TextLine> lines, in Span<TextCluster> clusters, in Point point){
     TextHit hit;
-    if(lines.empty() || !IsFinite(point.x) || !IsFinite(point.y))
+    if(lines.empty() || !IsFinite(VectorSingle(point.x, point.y, point.x, point.y).xy))
         return hit;
     usize lineIndex = lines.size() - 1u;
     for(usize index = 0u; index < lines.size(); ++index){
@@ -127,11 +127,13 @@ TextHit HitTestTextLayout(in Span<TextLine> lines, in Span<TextCluster> clusters
     hit.byteOffset = line.byteBegin;
     if(line.clusterCount == 0u)
         return hit;
+    const VectorSingle queryX(point.x);
     f32 nearest = s_TextMaxCoordinateF32;
     for(u32 index = line.firstCluster; index < line.firstCluster + line.clusterCount; ++index){
         const TextCluster cluster = clusters[cast<usize>(index)];
-        const f32 leadingDistance = Abs(point.x - cluster.leadingX);
-        const f32 trailingDistance = Abs(point.x - cluster.trailingX);
+        const VectorSingle distances = Abs(queryX - VectorSingle(cluster.leadingX, cluster.trailingX, cluster.leadingX, cluster.trailingX));
+        const f32 leadingDistance = distances.x;
+        const f32 trailingDistance = distances.y;
         if(leadingDistance <= nearest){
             nearest = leadingDistance;
             hit.byteOffset = cluster.byteBegin;

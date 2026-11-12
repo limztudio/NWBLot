@@ -57,12 +57,15 @@ b8 IsValidProgressMetrics(in ProgressMetrics metrics){
         || !IsValidUiExtent(metrics.contentSize)
     )
         return false;
-    const f64 padW = cast<f64>(metrics.padding.left) + cast<f64>(metrics.padding.right);
-    const f64 padH = cast<f64>(metrics.padding.top) + cast<f64>(metrics.padding.bottom);
-    if(padW > s_UiMaxFloatF64 || padH > s_UiMaxFloatF64)
+    const VectorDouble leading(cast<f64>(metrics.padding.left), cast<f64>(metrics.padding.top), cast<f64>(metrics.padding.left), cast<f64>(metrics.padding.top));
+    const VectorDouble trailing(cast<f64>(metrics.padding.right), cast<f64>(metrics.padding.bottom), cast<f64>(metrics.padding.right), cast<f64>(metrics.padding.bottom));
+    const VectorDouble padding = leading + trailing;
+    if(padding.x > s_UiMaxFloatF64 || padding.y > s_UiMaxFloatF64)
         return false;
-    const f64 width = padW + cast<f64>(metrics.fillMinimum.x);
-    const f64 height = padH + cast<f64>(metrics.fillMinimum.y);
+    const VectorDouble fillSize(cast<f64>(metrics.fillMinimum.x), cast<f64>(metrics.fillMinimum.y), cast<f64>(metrics.fillMinimum.x), cast<f64>(metrics.fillMinimum.y));
+    const VectorDouble size = padding + fillSize;
+    const f64 width = size.x;
+    const f64 height = size.y;
     return width <= s_UiMaxFloatF64
         && height <= s_UiMaxFloatF64
         && cast<f64>(metrics.contentSize.x) >= cast<f64>(cast<f32>(width))
@@ -91,10 +94,13 @@ Expected<ProgressMetrics> MeasureProgress(in ProgressOptions options, in Progres
     ProgressMetrics candidate;
     candidate.padding = MaxUiPadding(style.padding, track.padding);
     candidate.fillMinimum = Point(fillMin.value().x, fillMin.value().y);
-    const f64 innerW = (cast<f64>(candidate.padding.left) + cast<f64>(candidate.padding.right)) + cast<f64>(fillMin.value().x);
-    const f64 innerH = (cast<f64>(candidate.padding.top) + cast<f64>(candidate.padding.bottom)) + cast<f64>(fillMin.value().y);
-    const f64 width = Max(cast<f64>(trackMin.value().x), innerW);
-    const f64 height = Max(cast<f64>(options.height), Max(cast<f64>(trackMin.value().y), innerH));
+    const VectorDouble leading(cast<f64>(candidate.padding.left), cast<f64>(candidate.padding.top), cast<f64>(candidate.padding.left), cast<f64>(candidate.padding.top));
+    const VectorDouble trailing(cast<f64>(candidate.padding.right), cast<f64>(candidate.padding.bottom), cast<f64>(candidate.padding.right), cast<f64>(candidate.padding.bottom));
+    const VectorDouble fillSize(cast<f64>(fillMin.value().x), cast<f64>(fillMin.value().y), cast<f64>(fillMin.value().x), cast<f64>(fillMin.value().y));
+    const VectorDouble inner = (leading + trailing) + fillSize;
+    const VectorDouble size = Max(VectorDouble(cast<f64>(trackMin.value().x), cast<f64>(trackMin.value().y), cast<f64>(trackMin.value().x), cast<f64>(trackMin.value().y)), inner);
+    const f64 width = size.x;
+    const f64 height = Max(cast<f64>(options.height), size.y);
     if(!IsFinite(width) || width > s_UiMaxFloatF64 || !IsFinite(height) || height > s_UiMaxFloatF64)
         return MakeUnexpected(Failure());
     candidate.contentSize = Point(cast<f32>(width), cast<f32>(height));

@@ -3,6 +3,8 @@
 
 
 #include "packet_runtime_internal.h"
+
+#include <global/simd/vector_arithmetic.h>
 #include "task_graph.h"
 
 #include <core/graphics/backend_selection/backend.h>
@@ -280,15 +282,15 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
             const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
             const GpuRecordedPacket* const recordedPacket = outRecordedGraph.findWithinArtifactOperation(packet, artifactOperation);
             if(recordedPacket)
-                workerBusySeconds += recordedPacket->recordingSeconds;
+                workerBusySeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(workerBusySeconds), VectorDoubleReplicate(recordedPacket->recordingSeconds)));
         }
 
         // CpuTaskScheduler workers and its calling thread are all callable logical recording slots.
         // Keeping the entire successful ready-frontier operation in the denominator exposes serial fallbacks and underfilled frontiers.
         const f64 workerCount = static_cast<f64>(cpuScheduler.workerThreadCount());
-        const f64 logicalWorkerSlotCount = workerCount + 1.0;
+        const f64 logicalWorkerSlotCount = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(workerCount), VectorDoubleReplicate(1.0)));
         outRecordedGraph.addRecordingElapsedSeconds(elapsedSeconds, artifactOperation);
-        const f64 availableWorkerSeconds = elapsedSeconds * logicalWorkerSlotCount;
+        const f64 availableWorkerSeconds = VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(elapsedSeconds), VectorDoubleReplicate(logicalWorkerSlotCount)));
         outRecordedGraph.addReadyFrontierStatistics(elapsedSeconds, workerBusySeconds, availableWorkerSeconds, artifactOperation);
     };
 

@@ -56,7 +56,10 @@ b8 ValidSkinInfluenceWeights(in VectorSingle weights){
     )
         return false;
     const f32 sum = Dot(weights, VectorSingle(1.0f));
-    return IsFinite(sum) && Abs(sum - 1.0f) <= s_SkinWeightSumEpsilon;
+    if(!IsFinite(sum))
+        return false;
+    const VectorSingle difference = VectorSingle(sum) - VectorSingle(1.0f);
+    return Abs(difference).x <= s_SkinWeightSumEpsilon;
 }
 
 Expected<usize> TryFindOutOfRangeSkinInfluenceJoint(in SkinInfluence4 skin, in u32 skeletonJointCount){
@@ -142,7 +145,9 @@ b8 IsValidSkinInverseBindMatrix(in MatrixSingle matrix){
     )
         return false;
     const f32 determinant = Dot(matrix[0u].xyz, Cross(matrix[1u].xyz, matrix[2u].xyz));
-    return IsFinite(determinant) && Abs(determinant) > s_SkinValidationEpsilon;
+    if(!IsFinite(determinant))
+        return false;
+    return Abs(VectorSingle(determinant)).x > s_SkinValidationEpsilon;
 }
 
 b8 ValidateSkinInverseBindMatrixAt(in MatrixSingle matrix, in usize index){

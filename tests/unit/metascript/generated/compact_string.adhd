@@ -200,6 +200,62 @@ usize BorrowLocalStringAcrossValueCall(){
     return consumed + view.size();
 }
 
+VectorSingle AddNegativeZeroRightSingle(in VectorSingle value){ return value + -VectorSingle(0.0f); }
+
+VectorSingle AddNegativeZeroLeftSingle(in VectorSingle value){ return -VectorSingle(0.0f) + value; }
+
+VectorDouble AddNegativeZeroRightDouble(in VectorDouble value){ return value + -VectorDouble(0.0); }
+
+VectorDouble AddNegativeZeroLeftDouble(in VectorDouble value){ return -VectorDouble(0.0) + value; }
+
+VectorSingle NegateZeroSingle(){ return -VectorSingle(0.0f); }
+
+VectorSingle NegateNegativeZeroSingle(){ return -VectorSingle(-0.0f); }
+
+VectorSingle DoubleNegateZeroSingle(){ return -(-VectorSingle(0.0f)); }
+
+VectorSingle TripleNegateZeroSingle(){ return -(-(-VectorSingle(0.0f))); }
+
+VectorDouble NegateZeroDouble(){ return -VectorDouble(0.0); }
+
+VectorDouble NegateNegativeZeroDouble(){ return -VectorDouble(-0.0); }
+
+VectorDouble DoubleNegateZeroDouble(){ return -(-VectorDouble(0.0)); }
+
+VectorDouble TripleNegateZeroDouble(){ return -(-(-VectorDouble(0.0))); }
+
+VectorSingle SubZeroRightSingle(in VectorSingle value){ return value - VectorSingle(0.0f); }
+VectorSingle SubZeroLeftSingle(in VectorSingle value){ return VectorSingle(0.0f) - value; }
+VectorSingle MulZeroRightSingle(in VectorSingle value){ return value * VectorSingle(0.0f); }
+VectorSingle MulZeroLeftSingle(in VectorSingle value){ return VectorSingle(0.0f) * value; }
+VectorSingle ZeroDivideSingle(in VectorSingle value){ return VectorSingle(0.0f) / value; }
+VectorSingle NestedZeroSubSingle(in VectorSingle a, in VectorSingle b){ return (VectorSingle(0.0f) - a) + (b - VectorSingle(0.0f)); }
+VectorSingle NegateZeroSubSingle(in VectorSingle value){ return -(VectorSingle(0.0f) - value); }
+
+VectorDouble SubZeroRightDouble(in VectorDouble value){ return value - VectorDouble(0.0); }
+VectorDouble SubZeroLeftDouble(in VectorDouble value){ return VectorDouble(0.0) - value; }
+VectorDouble MulZeroRightDouble(in VectorDouble value){ return value * VectorDouble(0.0); }
+VectorDouble MulZeroLeftDouble(in VectorDouble value){ return VectorDouble(0.0) * value; }
+VectorDouble ZeroDivideDouble(in VectorDouble value){ return VectorDouble(0.0) / value; }
+VectorDouble NestedZeroSubDouble(in VectorDouble a, in VectorDouble b){ return (VectorDouble(0.0) - a) + (b - VectorDouble(0.0)); }
+VectorDouble NegateZeroSubDouble(in VectorDouble value){ return -(VectorDouble(0.0) - value); }
+
+VectorSingle AddZeroRightSingle(in VectorSingle value){ return value + VectorSingle(0.0f); }
+
+VectorSingle AddZeroLeftSingle(in VectorSingle value){ return VectorSingle(0.0f) + value; }
+
+VectorDouble AddZeroRightDouble(in VectorDouble value){ return value + VectorDouble(0.0); }
+
+VectorDouble AddZeroLeftDouble(in VectorDouble value){ return VectorDouble(0.0) + value; }
+
+VectorSingle AddProductZeroRightSingle(in VectorSingle value, in VectorSingle factor){ return (value * factor) + VectorSingle(0.0f); }
+
+VectorSingle AddProductZeroLeftSingle(in VectorSingle value, in VectorSingle factor){ return VectorSingle(0.0f) + (value * factor); }
+
+VectorDouble AddProductZeroRightDouble(in VectorDouble value, in VectorDouble factor){ return (value * factor) + VectorDouble(0.0); }
+
+VectorDouble AddProductZeroLeftDouble(in VectorDouble value, in VectorDouble factor){ return VectorDouble(0.0) + (value * factor); }
+
 b8 AnyLaneGreater3Single(in VectorSingle lhs, in VectorSingle rhs){
     return lhs.x > rhs.x || lhs.y > rhs.y || lhs.z > rhs.z;
 }

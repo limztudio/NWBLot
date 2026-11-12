@@ -64,7 +64,7 @@ static i32 Run(const i32 argc, char** argv){
                 return s_FontBuilderExitFailure;
             Core::Assets::AssetBytes sourceFontBytes(arena);
             auto payload = Bake(options, arena, scratch, sourceFontBytes);
-            if(!payload || !WriteOutputs(options, sourceFontBytes, *payload, scratch))
+            if(!payload || !WriteOutputs(options, sourceFontBytes, *payload, arena, scratch))
                 return s_FontBuilderExitFailure;
             LogFontBuilderPublishedSummary(options.output, payload->glyphs.size(), payload->groups.size());
             return s_FontBuilderExitSuccess;

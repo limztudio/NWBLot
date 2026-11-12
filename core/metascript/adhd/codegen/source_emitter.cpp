@@ -2,12 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "source_emitter.h"
 #include "constructor_argument_emitter.h"
 #include "parallel_statement_emitter.h"
 #include "simd_expression_analysis.h"
-#include "source_emitter.h"
 
 #include "reflection_emitter.h"
+#include <core/metascript/adhd/ast/builtin_type_semantics.h>
 #include <core/metascript/adhd/sema/type_layout_analyzer.h>
 
 
@@ -44,6 +45,12 @@ namespace __hidden_adhd_source_emitter{
 [[nodiscard]] b8 ExprNeedsSimdFloatingPointEnv(const Expr* const expr, const SymbolTable& symbols, const b8 hasSimdScalarLocal)noexcept{
     if(!expr)
         return false;
+    if(!expr->resolvedSimdType.empty() && !IsIntSimdType(expr->resolvedSimdType))
+        return true;
+    if((expr->resolvedScalarType == "f32" || expr->resolvedScalarType == "f64") && (expr->kind == ExprKind::Binary || expr->kind == ExprKind::Unary || expr->kind == ExprKind::Call))
+        return true;
+    if(const BuiltinUnalignedVectorInfo* info = FindBuiltinUnalignedVectorType(expr->resolvedUnalignedType); info && (info->isHalfFloat || BuiltinTypeSemantics::IsFloatScalarType(info->laneScalarType)))
+        return true;
     if(expr->kind == ExprKind::Binary && IsComparisonOp(expr->op)){
         if((hasSimdScalarLocal && !IsNonFloatLiteralExpr(expr->lhs) && !IsNonFloatLiteralExpr(expr->rhs))
             || SimdExpressionAnalysis::ExprContainsSimdMath(expr->lhs, symbols)
@@ -543,6 +550,8 @@ void SourceEmitter::emitMethodBodyBlock(MString& out, const MethodDecl& method, 
     if(method.usesTaskScope)
         ParallelStatementEmitter(*this).emitTaskScopePrologue(out, indent);
 
+    const b8 prevScalarSimd = m_emittingScalarSimd;
+    m_emittingScalarSimd = true;
     const TypeRef* prevCallerReturnType = m_activeCallerArenaReturnType;
     const u32 prevParallelWorkerDepth = m_parallelWorkerDepth;
     const u32 prevSwitchBreakLabel = m_activeSwitchBreakLabelLine;
@@ -557,6 +566,7 @@ void SourceEmitter::emitMethodBodyBlock(MString& out, const MethodDecl& method, 
     m_activeSwitchBreakLabelLine = prevSwitchBreakLabel;
     m_parallelWorkerDepth = prevParallelWorkerDepth;
     m_activeCallerArenaReturnType = prevCallerReturnType;
+    m_emittingScalarSimd = prevScalarSimd;
     m_skippedCtorAssignExprs = nullptr;
 }
 

@@ -16,6 +16,8 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/floating_point_environment_guard.adhd.h>
+
 #include <tests/unit/ui/glyph_shader_case_types.adhd.h>
 #include <tests/unit/ui/native_input.adhd.h>
 #include <tests/unit/ui/name_cases.adhd.h>
@@ -1013,6 +1015,60 @@ NWB_ADHD_GTEST_F(UiWindowTests, NewResizeAnchorsDisplayedSizeWhenHostModelIsAhea
 NWB_ADHD_GTEST_F(UiWindowTests, MissingResizeFallbackRejectsAdmissionBeforeChangingHostState, VerifyUiWindowTests_MissingResizeFallbackRejectsAdmissionBeforeChangingHostState)
 NWB_ADHD_GTEST_F(UiWindowTests, MissingRequiredSkinKeepsPreviousAcceptedTargets, VerifyUiWindowTests_MissingRequiredSkinKeepsPreviousAcceptedTargets)
 NWB_ADHD_GTEST_F(UiWindowTests, InvalidOptionsAndWrongEndRejectCandidatePublication, VerifyUiWindowTests_InvalidOptionsAndWrongEndRejectCandidatePublication)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_window_fenv_tests{
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+
+
+TEST(UiWindowBehaviorTests, PairedGeometryPreservesSignedZeroAndFloatingPointExceptions){
+#pragma STDC FENV_ACCESS ON
+    const auto originalEnvironment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(originalEnvironment);
+    Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
+    ASSERT_TRUE(SetFloatingPointRoundingMode(FE_TONEAREST));
+    const f32 negativeZero = BitCast<f32>(u32{ 0x80000000u });
+    const f32 infinity = BitCast<f32>(u32{ 0x7f800000u });
+    ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+    const Point measured = ResolvePaddedIntrinsicSize({ infinity, negativeZero }, { -infinity, negativeZero, 0.0f, negativeZero }, { 0.0f, negativeZero });
+    const i32 invalidExceptions = TestFloatingPointExceptions(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW);
+    EXPECT_TRUE(IsNaN(measured.x));
+    EXPECT_TRUE(SignBit(measured.y));
+    EXPECT_EQ(invalidExceptions, FE_INVALID);
+
+    WindowState state;
+    state.bounds = { Limit<f32>::s_Max, negativeZero, Limit<f32>::s_Max, negativeZero };
+    WindowMetrics metrics;
+    metrics.resizeExtent = negativeZero;
+    ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+    const Rect corner = ResolveWindowResizeBounds(state, metrics);
+    const i32 overflowExceptions = TestFloatingPointExceptions(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW);
+    EXPECT_FALSE(IsFinite(corner.x));
+    EXPECT_FALSE(SignBit(corner.y));
+    EXPECT_EQ(overflowExceptions, FE_OVERFLOW);
+}
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

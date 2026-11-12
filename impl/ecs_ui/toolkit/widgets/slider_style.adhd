@@ -161,10 +161,11 @@ b8 IsValidSliderMetrics(in SliderMetrics metrics){
         || !IsValidUiExtent(metrics.contentSize)
     )
         return false;
-    const f64 padW = cast<f64>(metrics.padding.left) + cast<f64>(metrics.padding.right);
-    const f64 padH = cast<f64>(metrics.padding.top) + cast<f64>(metrics.padding.bottom);
-    const f64 width = padW + cast<f64>(metrics.thumbExtent.x);
-    const f64 height = padH + Max(cast<f64>(metrics.thumbExtent.y), cast<f64>(metrics.trackHeight));
+    const VectorDouble paddingSize = VectorDouble(cast<f64>(metrics.padding.left), cast<f64>(metrics.padding.top), cast<f64>(metrics.padding.left), cast<f64>(metrics.padding.top)) + VectorDouble(cast<f64>(metrics.padding.right), cast<f64>(metrics.padding.bottom), cast<f64>(metrics.padding.right), cast<f64>(metrics.padding.bottom));
+    const f64 thumbHeight = Max(cast<f64>(metrics.thumbExtent.y), cast<f64>(metrics.trackHeight));
+    const VectorDouble size = paddingSize + VectorDouble(cast<f64>(metrics.thumbExtent.x), thumbHeight, cast<f64>(metrics.thumbExtent.x), thumbHeight);
+    const f64 width = size.x;
+    const f64 height = size.y;
     return width <= s_UiMaxFloatF64
         && height <= s_UiMaxFloatF64
         && cast<f64>(metrics.contentSize.x) >= cast<f64>(cast<f32>(width))
@@ -185,10 +186,11 @@ Expected<SliderMetrics> MeasureSlider(in SliderOptions options, in SliderStyle s
     candidate.padding = style.padding;
     candidate.thumbExtent = style.thumbExtent;
     candidate.trackHeight = style.trackHeight;
-    const f64 padW = cast<f64>(style.padding.left) + cast<f64>(style.padding.right);
-    const f64 padH = cast<f64>(style.padding.top) + cast<f64>(style.padding.bottom);
-    const f64 width = padW + cast<f64>(style.thumbExtent.x);
-    const f64 intrinsicH = padH + Max(cast<f64>(style.thumbExtent.y), cast<f64>(style.trackHeight));
+    const VectorDouble paddingSize = VectorDouble(cast<f64>(style.padding.left), cast<f64>(style.padding.top), cast<f64>(style.padding.left), cast<f64>(style.padding.top)) + VectorDouble(cast<f64>(style.padding.right), cast<f64>(style.padding.bottom), cast<f64>(style.padding.right), cast<f64>(style.padding.bottom));
+    const f64 thumbHeight = Max(cast<f64>(style.thumbExtent.y), cast<f64>(style.trackHeight));
+    const VectorDouble size = paddingSize + VectorDouble(cast<f64>(style.thumbExtent.x), thumbHeight, cast<f64>(style.thumbExtent.x), thumbHeight);
+    const f64 width = size.x;
+    const f64 intrinsicH = size.y;
     const f64 height = Max(intrinsicH, cast<f64>(options.height));
     if(!IsFinite(width) || width > s_UiMaxFloatF64 || !IsFinite(height) || height > s_UiMaxFloatF64)
         return MakeUnexpected(Failure());
@@ -231,8 +233,9 @@ Expected<SliderPlacement> PlaceSlider(in Rect bounds, in Rect clip, in SliderMet
     if(!centerTravel.has_value())
         return MakeUnexpected(Failure());
     candidate.centerTravel = centerTravel.value();
-    const f64 trackY = y + (h - trackH) * 0.5;
-    const f64 thumbY = y + (h - thumbH) * 0.5;
+    const VectorDouble centeredY = VectorDoubleMultiplyAddExpression(VectorDouble(h) - VectorDouble(trackH, thumbH, trackH, thumbH), VectorDouble(0.5), VectorDouble(y));
+    const f64 trackY = centeredY.x;
+    const f64 thumbY = centeredY.y;
     const Expected<Rect> track = TryMakeUiRect(centerStartX, trackY, travelW, trackH, UiRectPrecision::PreciseExtents);
     if(!track.has_value())
         return MakeUnexpected(Failure());

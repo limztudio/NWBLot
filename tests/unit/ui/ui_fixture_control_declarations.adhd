@@ -1048,10 +1048,8 @@ ListOptions MakeSliderSiblingListOptions(){
 }
 
 Point ComputeSliderTrackPoint(in SliderPlacement placement, in f64 normalized){
-    Point point = Point();
-    point.x = placement.centerTravel.x + (cast<f32>(normalized) * placement.centerTravel.width);
-    point.y = placement.track.y + (placement.track.height * 0.5f);
-    return point;
+    const VectorSingle point = VectorMultiplyAddExpression(VectorSingle(cast<f32>(normalized), placement.track.height, cast<f32>(normalized), placement.track.height), VectorSingle(placement.centerTravel.width, 0.5f, placement.centerTravel.width, 0.5f), VectorSingle(placement.centerTravel.x, placement.track.y, placement.centerTravel.x, placement.track.y));
+    return Point(point.x, point.y);
 }
 
 SearchComboOptions MakeSearchComboFixtureOptions(){

@@ -70,19 +70,8 @@ b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
             u32 effLanes = SimdConstantAnalysis::InferEffectiveSimdLanes(*expr.arguments[0], &m_emitter.m_symbols);
             if(expr.arguments.size() == 2u && expr.arguments[1]){
                 const u32 effLanes1 = SimdConstantAnalysis::InferEffectiveSimdLanes(*expr.arguments[1], &m_emitter.m_symbols);
-                if(effLanes1 < effLanes)
+                if(effLanes1 > effLanes)
                     effLanes = effLanes1;
-            }
-            if(callee == "Dot" && effLanes == 4u && !IsIntSimdType(argSimd) && expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
-                const Expr* sumArg = SimdConstantAnalysis::IsSimdUnitFloatVectorExpr(*expr.arguments[1], isDouble, &m_emitter.m_symbols)
-                    ? expr.arguments[0]
-                    : (SimdConstantAnalysis::IsSimdUnitFloatVectorExpr(*expr.arguments[0], isDouble, &m_emitter.m_symbols) ? expr.arguments[1] : nullptr);
-                if(sumArg){
-                    out.append(isDouble ? "::VectorDoubleGetX(::VectorDoubleSum(" : "::VectorGetX(::VectorSum(");
-                    m_emitter.emitSimdRegExpr(out, *sumArg, argSimd);
-                    out.append("))");
-                    return true;
-                }
             }
             out.append(isDouble ? "::VectorDoubleGetX(" : "::VectorGetX(");
             AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes, scalarReductionSuffix);
@@ -110,21 +99,6 @@ b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
             m_emitter.emitExpr(out, *expr.arguments[0]);
             out.append(")>(1) / ::Sqrt(");
             m_emitter.emitExpr(out, *expr.arguments[0]);
-            out.append("))");
-            return true;
-        }
-        const Expr* maxBaseVec = nullptr;
-        b8 maxIsDouble = false;
-        u32 maxLanes = 0u;
-        b8 maxIsAbs = false;
-        if(callee == "Max" && SimdExpressionAnalysis::TryMatchSimdMaxComponentReduction(expr, maxBaseVec, maxIsDouble, maxLanes, maxIsAbs) && maxBaseVec){
-            out.append(maxIsDouble ? "::VectorDoubleGetX(" : "::VectorGetX(");
-            AppendSimdLaneCountIntrinsicPrefix(out, maxIsDouble, maxLanes, "MaxComponent");
-            if(maxIsAbs)
-                out.append(maxIsDouble ? "::VectorDoubleAbs(" : "::VectorAbs(");
-            m_emitter.emitSimdRegExpr(out, *maxBaseVec, maxIsDouble ? "VectorDouble" : "VectorSingle");
-            if(maxIsAbs)
-                out.push_back(')');
             out.append("))");
             return true;
         }

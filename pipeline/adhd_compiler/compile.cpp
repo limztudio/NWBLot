@@ -156,6 +156,14 @@ public:
                 NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to resolve include '{}' from '{}': {}"), ConvertString(includePath), PathToString<tchar>(baseDir), ConvertString(candidate.error().message()));
                 return ResolveResult::Error;
             }
+            const auto directory = IsDirectory(*candidate);
+            if(!directory || *directory){
+                const ErrorCode error = directory ? MakeErrorCode(ErrorCondition::is_a_directory) : directory.error();
+                if(IsMissingPathError(error))
+                    return ResolveResult::Missing;
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to read include '{}': {}"), PathToString<tchar>(*candidate), ConvertString(error.message()));
+                return ResolveResult::Error;
+            }
             const auto read = ReadTextFile(*candidate, outContent);
             if(!read){
                 if(IsMissingPathError(read.error()))

@@ -51,7 +51,7 @@ MeshletBounds BuildMeshletBounds(
         const VectorSingle delta = VectorSingle(positions[cast<usize>(localPositionIndex)]) - center;
         radiusSquaredLanes = Max(radiusSquaredLanes, VectorSingle(LengthSq(delta.xyz)));
     }
-    const f32 radius = Sqrt(radiusSquaredLanes.x);
+    const VectorSingle radius = Sqrt(radiusSquaredLanes);
 
     VectorSingle areaWeightedNormal(0.0f, 0.0f, 0.0f, 0.0f);
     u32 validFaceNormalCount = 0u;
@@ -89,15 +89,19 @@ MeshletBounds BuildMeshletBounds(
             const VectorSingle p1(positions[cast<usize>(ref1.localDeformedPosition)]);
             const VectorSingle p2(positions[cast<usize>(ref2.localDeformedPosition)]);
             const VectorSingle faceNormal = NormalizeMeshletDirection3OrZero(Cross((p1 - p0).xyz, (p2 - p0).xyz));
-            if(IsValidMeshletDirection3(faceNormal))
-                coneCutoff = Min(coneCutoff, Dot(coneAxis.xyz, faceNormal.xyz));
+            if(IsValidMeshletDirection3(faceNormal)){
+                const VectorSingle current(coneCutoff);
+                const VectorSingle candidate = Vector3Dot(coneAxis, faceNormal);
+                coneCutoff = VectorSelect(candidate, current, VectorLess(current, candidate)).x;
+            }
         }
         if(coneCutoff <= 0.0f)
             coneCutoff = -1.0f;
     }
 
     MeshletBounds bounds;
-    bounds.sphere = f32x4u(center, radius * s_MeshletBoundsRadiusInflation);
+    const VectorSingle inflatedRadius = radius * s_MeshletBoundsRadiusInflation;
+    bounds.sphere = f32x4u(center, inflatedRadius.x);
     bounds.conePacked = PackMeshletCone(coneAxis, coneCutoff);
     return bounds;
 }

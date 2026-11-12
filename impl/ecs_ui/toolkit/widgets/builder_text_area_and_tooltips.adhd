@@ -294,7 +294,7 @@ b8 TextAreaCoordinator::paintTextArea(const Item& item, const LayoutBox& box){
         return false;
     TextAreaState& state = *frame.state;
     const Rect clip = m_builder.visibleClip(box.clip);
-    const f32 caretWidth = 1.0f / m_builder.m_paint.displayMetrics().pixelScaleX;
+    const f32 caretWidth = VectorGetX(VectorDivide(VectorReplicate(1.0f), VectorReplicate(m_builder.m_paint.displayMetrics().pixelScaleX)));
     const Rect& visualBounds = item.editView.visualBounds();
     const auto viewport = CalculateScrollViewportPlacement(box.rectangle, clip, item.padding, { visualBounds.width, visualBounds.height }, caretWidth, state.scroll(), item.scrollbarStyle.thickness, item.scrollbarStyle.minimumThumb);
     if(!viewport)

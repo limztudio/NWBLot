@@ -38,7 +38,8 @@ class UiEditGeometry{
             || (textMode == EditTextMode::SingleLine && lines.size() != 1u)
         )
             return MakeUnexpected(Failure());
-        return Point(position.x - placement.textOrigin.x, position.y - placement.textOrigin.y);
+        const VectorSingle local = VectorSingle(position.x, position.y, position.x, position.y) - VectorSingle(placement.textOrigin.x, placement.textOrigin.y, placement.textOrigin.x, placement.textOrigin.y);
+        return Point(local.x, local.y);
     }
 
     public Expected<usize> hitCaret(

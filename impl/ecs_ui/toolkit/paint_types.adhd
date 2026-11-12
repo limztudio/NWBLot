@@ -48,8 +48,7 @@ b8 SameSkinBinding<TUiSkin, TTexture>(in SkinBindingRecord<TUiSkin, TTexture> lh
 
 b8 IsValidDisplayMetricsForGpuSubmit(in DisplayMetrics display){
     return
-        IsFinite(display.logicalWidth) && IsFinite(display.logicalHeight)
-        && IsFinite(display.pixelScaleX) && IsFinite(display.pixelScaleY)
+        IsFinite(VectorSingle(display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY))
         && display.logicalWidth > 0.0f && display.logicalHeight > 0.0f
         && display.pixelScaleX > 0.0f && display.pixelScaleY > 0.0f
     ;
@@ -161,9 +160,8 @@ Rect ResolveSkinRegionUv(in UiSkinRect pixels, in u32 atlasWidth, in u32 atlasHe
 }
 
 VectorSingle ResolveQuadTextureCoords(in Rect rectangle, in Rect visible, in Rect uv){
-    const f32 visibleRight = visible.x + visible.width;
-    const f32 visibleBottom = visible.y + visible.height;
-    const VectorSingle coordinates(visible.x, visible.y, visibleRight, visibleBottom);
+    const VectorSingle visibleEnd = VectorSingle(visible.x, visible.y, visible.x, visible.y) + VectorSingle(visible.width, visible.height, visible.width, visible.height);
+    const VectorSingle coordinates(visible.x, visible.y, visibleEnd.x, visibleEnd.y);
     const VectorSingle delta = coordinates - VectorSingle(rectangle.x, rectangle.y, rectangle.x, rectangle.y);
     const VectorSingle fraction = delta / VectorSingle(rectangle.width, rectangle.height, rectangle.width, rectangle.height);
     const VectorSingle textureScale(uv.width, uv.height, uv.width, uv.height);
@@ -196,19 +194,24 @@ void ResolveNineSliceCoordinates(
     const f32 borderRight = normalizedBorders.y;
     const f32 borderTop = normalizedBorders.z;
     const f32 borderBottom = normalizedBorders.w;
-    const f32 borderExtentX = borderLeft + borderRight;
-    const f32 borderExtentY = borderTop + borderBottom;
-    const f32 endX = rectangle.x + rectangle.width;
-    const f32 endY = rectangle.y + rectangle.height;
-    f32 firstX = rectangle.x + borderLeft;
-    f32 secondX = endX - borderRight;
+    const VectorSingle borderExtent = VectorSingle(borderLeft, borderTop, borderLeft, borderTop) + VectorSingle(borderRight, borderBottom, borderRight, borderBottom);
+    const f32 borderExtentX = borderExtent.x;
+    const f32 borderExtentY = borderExtent.y;
+    const VectorSingle rectOrigin(rectangle.x, rectangle.y, rectangle.x, rectangle.y);
+    const VectorSingle end = rectOrigin + VectorSingle(rectangle.width, rectangle.height, rectangle.width, rectangle.height);
+    const f32 endX = end.x;
+    const f32 endY = end.y;
+    const VectorSingle first = rectOrigin + VectorSingle(borderLeft, borderTop, borderLeft, borderTop);
+    const VectorSingle second = end - VectorSingle(borderRight, borderBottom, borderRight, borderBottom);
+    f32 firstX = first.x;
+    f32 secondX = second.x;
     if(rectangle.width < borderExtentX){
         // Do not evaluate the division outside this branch.
         firstX = rectangle.x + rectangle.width * (borderLeft / borderExtentX);
         secondX = firstX;
     }
-    f32 firstY = rectangle.y + borderTop;
-    f32 secondY = endY - borderBottom;
+    f32 firstY = first.y;
+    f32 secondY = second.y;
     if(rectangle.height < borderExtentY){
         firstY = rectangle.y + rectangle.height * (borderTop / borderExtentY);
         secondY = firstY;

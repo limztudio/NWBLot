@@ -1,0 +1,336 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/gtest_macros.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/optics/optical_scene.adhd.h>
+#include <global/floating_point_environment.h>
+#if defined(__x86_64__) || defined(__i386__) || defined(_M_IX86) || (defined(_M_X64) && !defined(_M_ARM64EC))
+#include <xmmintrin.h>
+#endif
+#include <tests/common/floating_point_environment_guard.adhd.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::OpticalBoundsCases{
+namespace __hidden_optical_bounds_cases{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Every finite binary32 product is an integer multiple of 2^-298.
+struct Dyadic{
+    Array<u64, 10> words{};
+    b8 negative = false;
+
+    [[nodiscard]] i32 compareMagnitude(const Dyadic& other)const noexcept{
+        for(usize i = words.size(); i > 0u; --i){
+            if(words[i - 1u] != other.words[i - 1u])
+                return words[i - 1u] < other.words[i - 1u] ? -1 : 1;
+        }
+        return 0;
+    }
+
+    void addMagnitude(const Dyadic& other)noexcept{
+        u64 carry = 0u;
+        for(usize i = 0u; i < words.size(); ++i){
+            const u64 first = words[i] + other.words[i];
+            const u64 next = first + carry;
+            carry = (first < words[i]) | (next < first);
+            words[i] = next;
+        }
+    }
+
+    void subtractMagnitude(const Dyadic& other)noexcept{
+        u64 borrow = 0u;
+        for(usize i = 0u; i < words.size(); ++i){
+            const u64 first = words[i] - other.words[i];
+            const u64 next = first - borrow;
+            borrow = (words[i] < other.words[i]) | (first < borrow);
+            words[i] = next;
+        }
+    }
+
+    void add(const Dyadic& other)noexcept{
+        if(negative == other.negative){
+            addMagnitude(other);
+            return;
+        }
+        if(compareMagnitude(other) >= 0)
+            subtractMagnitude(other);
+        else{
+            Dyadic next = other;
+            next.subtractMagnitude(*this);
+            *this = next;
+        }
+        b8 zero = true;
+        for(const u64 word : words)
+            zero = zero && word == 0u;
+        if(zero)
+            negative = false;
+    }
+
+    [[nodiscard]] i32 compare(const Dyadic& other)const noexcept{
+        if(negative != other.negative)
+            return negative ? -1 : 1;
+        const i32 result = compareMagnitude(other);
+        return negative ? -result : result;
+    }
+};
+
+[[nodiscard]] Dyadic Product(const u32 a, const u32 b)noexcept{
+    const u32 aExponent = (a >> 23u) & 255u;
+    const u32 bExponent = (b >> 23u) & 255u;
+    const u64 aSignificand = (a & 0x7fffffu) | (aExponent ? 0x800000u : 0u);
+    const u64 bSignificand = (b & 0x7fffffu) | (bExponent ? 0x800000u : 0u);
+    const u64 significand = aSignificand * bSignificand;
+    const i32 shift = (aExponent ? static_cast<i32>(aExponent) - 150 : -149) + (bExponent ? static_cast<i32>(bExponent) - 150 : -149) + 298;
+    Dyadic result;
+    if(significand == 0u)
+        return result;
+    const usize word = static_cast<usize>(shift) / 64u;
+    const u32 bits = static_cast<u32>(shift) % 64u;
+    result.words[word] = significand << bits;
+    if(bits != 0u)
+        result.words[word + 1u] = significand >> (64u - bits);
+    result.negative = ((a ^ b) & 0x80000000u) != 0u;
+    return result;
+}
+
+[[nodiscard]] Dyadic Value(const u32 bits)noexcept{ return Product(bits, 0x3f800000u); }
+
+struct Input{
+    Float34U transform{};
+    Float4U low{};
+    Float4U high{};
+    b8 accepted = true;
+};
+
+[[nodiscard]] u32 Next(u32& state)noexcept{ state = state * 1664525u + 1013904223u; return state; }
+
+[[nodiscard]] u32 Normal(u32& state)noexcept{
+    const u32 exponent = 67u + Next(state) % 121u;
+    return (Next(state) & 0x807fffffu) | (exponent << 23u);
+}
+
+[[nodiscard]] Input Cancellation(const u32 axis)noexcept{
+    Input input;
+    input.transform.m[axis][0] = BitCast<f32>(0x4b800001u);
+    input.transform.m[axis][1] = BitCast<f32>(0xcb800000u);
+    input.low = Float4U(BitCast<f32>(0x3f7fffffu), 1.0f, 0.0f, 0.0f);
+    input.high = input.low;
+    return input;
+}
+
+[[nodiscard]] Dyadic Corner(const Input& input, const u32 corner, const usize row)noexcept{
+    Dyadic value = Value(BitCast<u32>(input.transform.m[row][3]));
+    for(usize column = 0u; column < 3u; ++column){
+        const u32 coordinate = BitCast<u32>((corner & (1u << column)) ? input.high.raw[column] : input.low.raw[column]);
+        value.add(Product(BitCast<u32>(input.transform.m[row][column]), coordinate));
+    }
+    return value;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(OpticalSceneInteger, CancellationAndExtremeExponentBoxesEncloseExactDyadicCornersInEveryCpuMode){
+#pragma STDC FENV_ACCESS ON
+    using namespace __hidden_optical_bounds_cases;
+    const auto environment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(environment);
+    ::NWB::Tests::FloatingPointEnvironmentGuard restore(*environment);
+    Array<Input, 76> cases{};
+    cases[0] = Cancellation(0u);
+    cases[1] = Cancellation(1u);
+    cases[2] = Cancellation(2u);
+    u32 state = 0x81931a5u;
+    for(usize i = 3u; i < cases.size(); ++i){
+        for(usize row = 0u; row < 3u; ++row){
+            for(usize column = 0u; column < 4u; ++column)
+                cases[i].transform.m[row][column] = BitCast<f32>(Normal(state));
+        }
+        for(usize axis = 0u; axis < 3u; ++axis){
+            cases[i].low.raw[axis] = -BitCast<f32>(Normal(state) & 0x7fffffffu);
+            cases[i].high.raw[axis] = BitCast<f32>(Normal(state) & 0x7fffffffu);
+        }
+    }
+    cases[3] = Input{};
+    cases[3].transform._11 = BitCast<f32>(27u << 23u);
+    cases[3].low.x = BitCast<f32>(27u << 23u);
+    cases[3].high = cases[3].low;
+    for(usize i = 68u; i < cases.size(); ++i)
+        cases[i] = Input{};
+    cases[68].transform._11 = BitCast<f32>(251u << 23u);
+    cases[68].low.x = 2.0f;
+    cases[68].high = cases[68].low;
+    cases[69] = cases[68];
+    cases[69].transform._11 = BitCast<f32>(0x80000000u | (251u << 23u));
+    cases[70].transform._11 = BitCast<f32>(251u << 23u);
+    cases[70].transform._12 = BitCast<f32>(0x80000000u | (251u << 23u));
+    cases[70].low.x = 1.0f;
+    cases[70].low.y = 1.0f;
+    cases[70].high = cases[70].low;
+    for(usize i = 71u; i < 75u; ++i){
+        cases[i].transform._11 = BitCast<f32>(((67u << 23u) - static_cast<u32>(i % 2u)) | (i >= 73u ? 0x80000000u : 0u));
+        cases[i].low.x = BitCast<f32>(68u << 23u);
+        cases[i].high = cases[i].low;
+    }
+    cases[75].transform._11 = BitCast<f32>(0x80000000u);
+    cases[75].low.x = BitCast<f32>(0x80000000u);
+    cases[75].high = cases[75].low;
+#if defined(__x86_64__) || defined(__i386__) || defined(_M_IX86) || (defined(_M_X64) && !defined(_M_ARM64EC))
+    const u32 originalControl = _mm_getcsr();
+    constexpr u32 s_FlushBits = (1u << 15u) | (1u << 6u);
+    constexpr u32 s_FlushModeCount = 4u;
+#else
+    constexpr u32 s_FlushModeCount = 1u;
+#endif
+    for(const i32 rounding : { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO }){
+        ASSERT_TRUE(SetFloatingPointRoundingMode(rounding));
+        for(u32 flush = 0u; flush < s_FlushModeCount; ++flush){
+#if defined(__x86_64__) || defined(__i386__) || defined(_M_IX86) || (defined(_M_X64) && !defined(_M_ARM64EC))
+            const u32 current = _mm_getcsr();
+            _mm_setcsr((current & ~s_FlushBits) | ((flush & 1u) ? 1u << 15u : 0u) | ((flush & 2u) ? 1u << 6u : 0u));
+#endif
+            for(usize index = 0u; index < cases.size(); ++index){
+                SCOPED_TRACE(index);
+                SCOPED_TRACE(rounding);
+                SCOPED_TRACE(flush);
+                const Input& input = cases[index];
+                SIMDMatrix matrix = LoadFloat(input.transform);
+                matrix.v[3] = VectorSetInt(0x7f800123u, 0x7f800123u, 0x7f800123u, 0x7f800123u);
+                const SIMDVectorSingle low = VectorSetW(LoadFloat(input.low), BitCast<f32>(0x7f800123u));
+                const SIMDVectorSingle high = VectorSetW(LoadFloat(input.high), BitCast<f32>(0x7f800123u));
+                ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+                ASSERT_TRUE(RaiseFloatingPointExceptions(FE_DIVBYZERO));
+                const i32 before = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+                const auto bounds = ::NWB::Impl::ComputeOpticalWorldBounds(matrix, low, high);
+                EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), before);
+                ASSERT_TRUE(bounds);
+                EXPECT_EQ(VectorGetIntW(bounds->minimum), 0u);
+                EXPECT_EQ(VectorGetIntW(bounds->maximum), 0u);
+                for(u32 corner = 0u; corner < 8u; ++corner){
+                    for(usize row = 0u; row < 3u; ++row){
+                        const Dyadic exact = Corner(input, corner, row);
+                        EXPECT_LE(Value(VectorGetIntByIndex(bounds->minimum, row)).compare(exact), 0);
+                        EXPECT_GE(Value(VectorGetIntByIndex(bounds->maximum, row)).compare(exact), 0);
+                    }
+                }
+            }
+        }
+    }
+#if defined(__x86_64__) || defined(__i386__) || defined(_M_IX86) || (defined(_M_X64) && !defined(_M_ARM64EC))
+    _mm_setcsr(originalControl);
+#endif
+}
+
+TEST(OpticalSceneInteger, SubnormalNonfiniteAndOverflowingAffineInputsNeverPublishAProof){
+#pragma STDC FENV_ACCESS ON
+    using namespace __hidden_optical_bounds_cases;
+    const auto environment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(environment);
+    ::NWB::Tests::FloatingPointEnvironmentGuard restore(*environment);
+    Array<Input, 11> cases{};
+    for(Input& input : cases){
+        input = Cancellation(0u);
+        input.accepted = false;
+    }
+    cases[0].transform._11 = BitCast<f32>(0x00400000u);
+    cases[0].low.x = BitCast<f32>(0x7f000000u);
+    cases[0].high = cases[0].low;
+    cases[1].low.x = BitCast<f32>(1u);
+    cases[2].transform._14 = BitCast<f32>(0x80000001u);
+    cases[3].transform._11 = BitCast<f32>(0x7f7fffffu);
+    cases[3].low.x = 2.0f;
+    cases[3].high = cases[3].low;
+    cases[4].transform._11 = 0.0f;
+    cases[4].low.x = BitCast<f32>(0x7f800123u);
+    cases[5].transform._11 = BitCast<f32>(0x7f000000u);
+    cases[5].low.x = BitCast<f32>(0x7f000000u);
+    cases[5].high = cases[5].low;
+    cases[6].low.x = 2.0f;
+    cases[6].high.x = 1.0f;
+    cases[7].transform._11 = BitCast<f32>(26u << 23u);
+    cases[8].low.x = BitCast<f32>(252u << 23u);
+    cases[8].high = cases[8].low;
+    cases[9].transform._11 = BitCast<f32>(251u << 23u);
+    cases[9].low.x = 4.0f;
+    cases[9].high = cases[9].low;
+    cases[10].transform._11 = 0.0f;
+    cases[10].low.x = BitCast<f32>(0x80000001u);
+    for(const i32 rounding : { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO }){
+        ASSERT_TRUE(SetFloatingPointRoundingMode(rounding));
+        for(usize index = 0u; index < cases.size(); ++index){
+            SCOPED_TRACE(index);
+            SCOPED_TRACE(rounding);
+            ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+            const auto bounds = ::NWB::Impl::ComputeOpticalWorldBounds(LoadFloat(cases[index].transform), LoadFloat(cases[index].low), LoadFloat(cases[index].high));
+            EXPECT_FALSE(bounds);
+            EXPECT_EQ(TestFloatingPointExceptions(FE_ALL_EXCEPT), 0);
+        }
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

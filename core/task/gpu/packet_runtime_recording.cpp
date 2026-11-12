@@ -3,6 +3,8 @@
 
 
 #include "packet_runtime_internal.h"
+
+#include <global/simd/vector_arithmetic.h>
 #include "packet_recording_helpers.h"
 #include "task_graph.h"
 
@@ -326,7 +328,7 @@ b8 GpuNativePacketRecorder::recordPacket(
             recorded = graph.seedTaskRetainedResourceStates(compiledGraph, planAccess, recordingAccess, task, *commandList);
         if(recorded)
             commandList->commitBarriers();
-        graphBarrierRecordingSeconds += DurationInSeconds<f64>(TimerNow(), graphPrologueRecordingBegin);
+        graphBarrierRecordingSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(graphBarrierRecordingSeconds), VectorDoubleReplicate(DurationInSeconds<f64>(TimerNow(), graphPrologueRecordingBegin))));
         const u64 taskRecordingLeaseSerial = commandList->recordingLeaseSerial();
         b8 taskRecordingLeaseIntact = commandList->matchesRecordingLease(taskRecordingLeaseSerial);
         if(recorded && (!taskRecordingLeaseIntact || commandList->commandRecordingFailed())){
@@ -360,7 +362,7 @@ b8 GpuNativePacketRecorder::recordPacket(
             const auto taskRecorded = graph.recordTask(task, *commandList, context, recordingLease);
             recorded = static_cast<b8>(taskRecorded);
             const b8 recordThunkInvoked = !taskRecorded && taskRecorded.error().recordThunkInvoked;
-            taskRecordSeconds += DurationInSeconds<f64>(TimerNow(), taskRecordBegin);
+            taskRecordSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(taskRecordSeconds), VectorDoubleReplicate(DurationInSeconds<f64>(TimerNow(), taskRecordBegin))));
             taskRecordingLeaseIntact = commandList->matchesRecordingLease(taskRecordingLeaseSerial);
             if(!taskRecordingLeaseIntact){
                 NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Gpu task graph: rejecting task '{}' because its record thunk closed or replaced the native command buffer"), ConvertString(taskView.markerLabel));
@@ -438,7 +440,7 @@ b8 GpuNativePacketRecorder::recordPacket(
         barrierCount += compiledTask->epilogueBarrierCount;
         if(recorded)
             commandList->commitBarriers();
-        graphBarrierRecordingSeconds += DurationInSeconds<f64>(TimerNow(), graphEpilogueRecordingBegin);
+        graphBarrierRecordingSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(graphBarrierRecordingSeconds), VectorDoubleReplicate(DurationInSeconds<f64>(TimerNow(), graphEpilogueRecordingBegin))));
     }
     packetRecordingLeaseIntact = commandList->matchesRecordingLease(packetRecordingLeaseSerial);
     if(recorded && (!packetRecordingLeaseIntact || commandList->commandRecordingFailed()))

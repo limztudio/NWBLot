@@ -110,12 +110,15 @@ Expected<Point> TryResolveSkinRegionMinimumSize(in UiSkinRegion region, in f32 d
 }
 
 Point ResolveCenteredTextOrigin(in Rect bounds, in f32 xInset, in f32 lineHeight){
-    return Point(bounds.x + xInset, bounds.y + Max(bounds.height - lineHeight, 0.0f) * s_RectCenterFraction);
+    const f32 verticalOffset = Max(bounds.height - lineHeight, 0.0f) * s_RectCenterFraction;
+    const VectorSingle origin = VectorSingle(bounds.x, bounds.y, bounds.x, bounds.y) + VectorSingle(xInset, verticalOffset, xInset, verticalOffset);
+    return Point(origin.x, origin.y);
 }
 
 Point ResolveCenteredTextOrigin(in Rect bounds, in f32 xInset, in Rect textBounds){
     const Point origin = ResolveCenteredTextOrigin(bounds, xInset, textBounds.height);
-    return Point(origin.x - textBounds.x, origin.y - textBounds.y);
+    const VectorSingle position = VectorSingle(origin.x, origin.y, origin.x, origin.y) - VectorSingle(textBounds.x, textBounds.y, textBounds.x, textBounds.y);
+    return Point(position.x, position.y);
 }
 
 Name ResolveButtonPreferredName(in WidgetStyle style, in b8 enabled, in b8 pressed, in b8 hover){
@@ -157,7 +160,8 @@ void ResolveCheckboxPlacement(
     outSquare = Rect(bounds.x, bounds.y + squareOffsetY, checkboxExtent, checkboxExtent);
     const f32 inset = checkboxExtent * s_CheckmarkInsetFraction;
     const f32 markExtent = checkboxExtent - (s_CheckmarkInsetSides * inset);
-    outMark = Rect(outSquare.x + inset, outSquare.y + inset, markExtent, markExtent);
+    const VectorSingle markOrigin = VectorSingle(outSquare.x, outSquare.y, outSquare.x, outSquare.y) + VectorSingle(inset);
+    outMark = Rect(markOrigin.x, markOrigin.y, markExtent, markExtent);
     const f32 textOffsetX = checkboxExtent + gap;
     outOrigin = ResolveCenteredTextOrigin(bounds, textOffsetX, measured.y);
     const f32 clipWidth = Max(0.0f, bounds.width - textOffsetX);
@@ -165,14 +169,16 @@ void ResolveCheckboxPlacement(
 }
 
 void AccumulateButtonRegionMetrics(in UiSkinRegion skinRegion, mut Point inOutMinimum, mut Insets inOutPadding){
-    inOutMinimum.x = Max(inOutMinimum.x, skinRegion.minimumWidth);
-    inOutMinimum.y = Max(inOutMinimum.y, skinRegion.minimumHeight);
+    const VectorSingle minimum = Max(VectorSingle(inOutMinimum.x, inOutMinimum.y, inOutMinimum.x, inOutMinimum.y), VectorSingle(skinRegion.minimumWidth, skinRegion.minimumHeight, skinRegion.minimumWidth, skinRegion.minimumHeight));
+    inOutMinimum.x = minimum.x;
+    inOutMinimum.y = minimum.y;
     inOutPadding = MaxUiPadding(inOutPadding, skinRegion.padding);
 }
 
 void AccumulateEditRegionMinimumSize(in UiSkinRegion skinRegion, mut Point inOutMinimum){
-    inOutMinimum.x = Max(inOutMinimum.x, skinRegion.minimumWidth);
-    inOutMinimum.y = Max(inOutMinimum.y, skinRegion.minimumHeight);
+    const VectorSingle minimum = Max(VectorSingle(inOutMinimum.x, inOutMinimum.y, inOutMinimum.x, inOutMinimum.y), VectorSingle(skinRegion.minimumWidth, skinRegion.minimumHeight, skinRegion.minimumWidth, skinRegion.minimumHeight));
+    inOutMinimum.x = minimum.x;
+    inOutMinimum.y = minimum.y;
 }
 
 Point ResolveEditIntrinsicSize(in Point minimum, in f32 visualHeight, in Insets padding){
@@ -181,9 +187,12 @@ Point ResolveEditIntrinsicSize(in Point minimum, in f32 visualHeight, in Insets 
 }
 
 Point ResolvePaddedIntrinsicSize(in Point textBounds, in Insets padding, in Point minimum){
-    const f32 measuredX = textBounds.x + padding.left + padding.right;
-    const f32 measuredY = textBounds.y + padding.top + padding.bottom;
-    return Point(Max(minimum.x, measuredX), Max(minimum.y, measuredY));
+    const VectorSingle textSize(textBounds.x, textBounds.y, textBounds.x, textBounds.y);
+    const VectorSingle leadingPadding(padding.left, padding.top, padding.left, padding.top);
+    const VectorSingle trailingPadding(padding.right, padding.bottom, padding.right, padding.bottom);
+    const VectorSingle measured = (textSize + leadingPadding) + trailingPadding;
+    const VectorSingle extent = Max(VectorSingle(minimum.x, minimum.y, minimum.x, minimum.y), VectorSingle(measured.x, measured.y, measured.x, measured.y));
+    return Point(extent.x, extent.y);
 }
 
 Point ResolveCheckboxIntrinsicSize(in Point textBounds, in f32 checkboxExtent, in f32 gap){

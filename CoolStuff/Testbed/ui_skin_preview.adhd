@@ -28,24 +28,27 @@ void RestoreBuilderGap(mut Builder ui, in f32 previousGap){
     ui.style().gap = previousGap;
 }
 
+b8 DrawOffsetSkinRegion(mut PaintBuilder paint, in Name region, in VectorSingle origin, in VectorSingle offset, in f32 width, in f32 height){
+    const VectorSingle position = origin + offset;
+    return paint.drawRegion(region, Rect(position.x, position.y, width, height));
+}
+
 b8 DrawSkinGallery(mut PaintBuilder paint, in f32 originX, in f32 originY, in f32 captionHeight){
-    const f32 leftColumnX = originX + s_LeftColumnX;
-    const f32 rightColumnX = originX + s_RightColumnX;
-    const f32 buttonTopY = originY + s_ButtonTopY;
-    const f32 buttonBottomY = originY + s_ButtonBottomY;
+    const VectorSingle origin(originX, originY, originX, originY);
+    const VectorSingle columnsAndButtons = origin + VectorSingle(s_LeftColumnX, s_ButtonTopY, s_RightColumnX, s_ButtonBottomY);
     return
         paint.drawRegion(s_Panel, Rect(originX, originY, s_OrdinaryGalleryWidth, s_PanelBaseHeight + captionHeight))
-        && paint.drawRegion(s_ButtonNormal, Rect(leftColumnX, buttonTopY, s_ButtonWidth, s_ButtonHeight))
-        && paint.drawRegion(s_ButtonHover, Rect(rightColumnX, buttonTopY, s_ButtonWidth, s_ButtonHeight))
-        && paint.drawRegion(s_ButtonPressed, Rect(leftColumnX, buttonBottomY, s_ButtonWidth, s_ButtonHeight))
-        && paint.drawRegion(s_ButtonDisabled, Rect(rightColumnX, buttonBottomY, s_ButtonWidth, s_ButtonHeight))
-        && paint.drawRegion(s_EditFocused, Rect(leftColumnX, originY + s_EditFocusedY, s_EditFocusedWidth, s_EditFocusedHeight))
-        && paint.drawRegion(s_ComboArrow, Rect(originX + s_ComboArrowX, originY + s_ComboArrowY, s_ComboArrowSize, s_ComboArrowSize))
-        && paint.drawRegion(s_Checkbox, Rect(originX + s_CheckboxX, originY + s_CheckboxY, s_CheckboxSize, s_CheckboxSize))
-        && paint.drawRegion(s_CheckboxMark, Rect(originX + s_CheckboxMarkX, originY + s_CheckboxMarkY, s_CheckboxMarkSize, s_CheckboxMarkSize))
-        && paint.drawRegion(s_ProgressTrack, Rect(leftColumnX, originY + s_ProgressTrackY, s_ProgressTrackWidth, s_ProgressTrackHeight))
-        && paint.drawRegion(s_ProgressFill, Rect(originX + s_ProgressFillX, originY + s_ProgressFillY, s_ProgressFillWidth, s_ProgressFillHeight))
-        && paint.drawRegion(s_EditNormal, Rect(leftColumnX, originY + s_EditNormalY, s_EditNormalWidth, captionHeight))
+        && paint.drawRegion(s_ButtonNormal, Rect(columnsAndButtons.x, columnsAndButtons.y, s_ButtonWidth, s_ButtonHeight))
+        && paint.drawRegion(s_ButtonHover, Rect(columnsAndButtons.z, columnsAndButtons.y, s_ButtonWidth, s_ButtonHeight))
+        && paint.drawRegion(s_ButtonPressed, Rect(columnsAndButtons.x, columnsAndButtons.w, s_ButtonWidth, s_ButtonHeight))
+        && paint.drawRegion(s_ButtonDisabled, Rect(columnsAndButtons.z, columnsAndButtons.w, s_ButtonWidth, s_ButtonHeight))
+        && paint.drawRegion(s_EditFocused, Rect(columnsAndButtons.x, originY + s_EditFocusedY, s_EditFocusedWidth, s_EditFocusedHeight))
+        && DrawOffsetSkinRegion(paint, s_ComboArrow, origin, VectorSingle(s_ComboArrowX, s_ComboArrowY, s_ComboArrowX, s_ComboArrowY), s_ComboArrowSize, s_ComboArrowSize)
+        && DrawOffsetSkinRegion(paint, s_Checkbox, origin, VectorSingle(s_CheckboxX, s_CheckboxY, s_CheckboxX, s_CheckboxY), s_CheckboxSize, s_CheckboxSize)
+        && DrawOffsetSkinRegion(paint, s_CheckboxMark, origin, VectorSingle(s_CheckboxMarkX, s_CheckboxMarkY, s_CheckboxMarkX, s_CheckboxMarkY), s_CheckboxMarkSize, s_CheckboxMarkSize)
+        && paint.drawRegion(s_ProgressTrack, Rect(columnsAndButtons.x, originY + s_ProgressTrackY, s_ProgressTrackWidth, s_ProgressTrackHeight))
+        && DrawOffsetSkinRegion(paint, s_ProgressFill, origin, VectorSingle(s_ProgressFillX, s_ProgressFillY, s_ProgressFillX, s_ProgressFillY), s_ProgressFillWidth, s_ProgressFillHeight)
+        && paint.drawRegion(s_EditNormal, Rect(columnsAndButtons.x, originY + s_EditNormalY, s_EditNormalWidth, captionHeight))
     ;
 }
 
@@ -718,27 +721,26 @@ class UiSkinPreview{
             return;
         }
 
-        const f32 captionX = originX + s_CaptionX;
-        const f32 captionY = originY + s_CaptionY;
-        const f32 leftTextX = originX + s_LeftTextX;
-        const f32 rightTextX = originX + s_RightTextX;
-        const f32 normalY = ResolveSkinGalleryCenteredTextY(originY, s_ButtonTopY, s_ButtonHeight, normal.value().height);
-        const f32 hoverY = ResolveSkinGalleryCenteredTextY(originY, s_ButtonTopY, s_ButtonHeight, hover.value().height);
-        const f32 pressedY = ResolveSkinGalleryCenteredTextY(originY, s_ButtonBottomY, s_ButtonHeight, pressed.value().height);
-        const f32 disabledY = ResolveSkinGalleryCenteredTextY(originY, s_ButtonBottomY, s_ButtonHeight, disabled.value().height);
+        const VectorSingle textCoords = VectorSingle(originX, originY, originX, originX)
+            + VectorSingle(s_CaptionX, s_CaptionY, s_LeftTextX, s_RightTextX);
+        const VectorSingle buttonHeights(normal.value().height, hover.value().height, pressed.value().height, disabled.value().height);
+        const VectorSingle buttonOffsets = (VectorSingle(s_ButtonHeight) - buttonHeights) * 0.5f;
+        const VectorSingle buttonYs = VectorSingle(originY)
+            + VectorSingle(s_ButtonTopY, s_ButtonTopY, s_ButtonBottomY, s_ButtonBottomY)
+            + buttonOffsets;
         const f32 editY = ResolveSkinGalleryCenteredTextY(originY, s_EditFocusedY, s_EditFocusedHeight, edit.value().height);
-        const b8 captionPainted = this.m_caption.paint(context.text, context.paint, Rect(captionX, captionY, s_CaptionWidth, caption.value().height))
-            && this.m_korean.paint(context.text, context.paint, Rect(captionX, captionY + caption.value().height, s_CaptionWidth, korean.value().height));
+        const b8 captionPainted = this.m_caption.paint(context.text, context.paint, Rect(textCoords.x, textCoords.y, s_CaptionWidth, caption.value().height))
+            && this.m_korean.paint(context.text, context.paint, Rect(textCoords.x, textCoords.y + caption.value().height, s_CaptionWidth, korean.value().height));
         if(!captionPainted){
             error("Testbed: custom UI caption shaping or rasterization failed");
             return;
         }
         if(
-            !this.m_normal.paint(context.text, context.paint, Rect(leftTextX, normalY, s_ButtonTextWidth, normal.value().height), s_LabelTextColor)
-            || !this.m_hover.paint(context.text, context.paint, Rect(rightTextX, hoverY, s_ButtonTextWidth, hover.value().height), s_LabelTextColor)
-            || !this.m_pressed.paint(context.text, context.paint, Rect(leftTextX, pressedY, s_ButtonTextWidth, pressed.value().height), s_LabelTextColor)
-            || !this.m_disabled.paint(context.text, context.paint, Rect(rightTextX, disabledY, s_ButtonTextWidth, disabled.value().height), s_DisabledLabelTextColor)
-            || !this.m_edit.paint(context.text, context.paint, Rect(leftTextX, editY, s_EditTextWidth, edit.value().height), s_LabelTextColor)
+            !this.m_normal.paint(context.text, context.paint, Rect(textCoords.z, buttonYs.x, s_ButtonTextWidth, normal.value().height), s_LabelTextColor)
+            || !this.m_hover.paint(context.text, context.paint, Rect(textCoords.w, buttonYs.y, s_ButtonTextWidth, hover.value().height), s_LabelTextColor)
+            || !this.m_pressed.paint(context.text, context.paint, Rect(textCoords.z, buttonYs.z, s_ButtonTextWidth, pressed.value().height), s_LabelTextColor)
+            || !this.m_disabled.paint(context.text, context.paint, Rect(textCoords.w, buttonYs.w, s_ButtonTextWidth, disabled.value().height), s_DisabledLabelTextColor)
+            || !this.m_edit.paint(context.text, context.paint, Rect(textCoords.z, editY, s_EditTextWidth, edit.value().height), s_LabelTextColor)
         )
             error("Testbed: custom UI label shaping or rasterization failed");
     }

@@ -32,6 +32,7 @@ b8 TryBuildSceneLightVectors(
         return false;
 
     const VectorSingle rotation(transform.rotation);
+    const VectorSingle position(transform.position);
     switch(light.type){
     case LightType::Directional:{
         if(!IsValidSceneLightRotation(rotation))
@@ -43,26 +44,26 @@ b8 TryBuildSceneLightVectors(
         return true;
     }
     case LightType::Point:{
-        if(!IsFinite(transform.position.x) || !IsFinite(transform.position.y) || !IsFinite(transform.position.z))
+        if(!IsFinite(position.xyz))
             return false;
         if(!IsFinite(light.range) || light.range <= 0.0f)
             return false;
 
-        outPosition = VectorSingle(transform.position, 1.0f);
+        outPosition = VectorSingle(position, 1.0f);
         outDirection = VectorSingle(0.0f, 0.0f, -1.0f, 1.0f);
         return true;
     }
     case LightType::Spot:{
         if(!IsValidSceneLightRotation(rotation))
             return false;
-        if(!IsFinite(transform.position.x) || !IsFinite(transform.position.y) || !IsFinite(transform.position.z))
+        if(!IsFinite(position.xyz))
             return false;
         if(!IsFinite(light.range) || light.range <= 0.0f)
             return false;
         if(!IsValidLightCone(light.innerConeCos, light.outerConeCos))
             return false;
 
-        outPosition = VectorSingle(transform.position, light.innerConeCos);
+        outPosition = VectorSingle(position, light.innerConeCos);
         const VectorSingle rotated = RotateSceneVector3(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), rotation);
         const VectorSingle normalized = NormalizeSceneVector3Or(rotated, VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), s_NormalizeLengthSquaredEpsilon);
         outDirection = VectorSingle(normalized, light.outerConeCos);
@@ -82,7 +83,7 @@ Expected<SceneLight> TryBuildSceneLight(in TransformComponent transform, in Ligh
 }
 
 SceneLight MakeDefaultSceneLightFromForward(in VectorSingle defaultForward){
-    const VectorSingle negatedForward(-defaultForward.x, -defaultForward.y, -defaultForward.z, 0.0f);
+    const VectorSingle negatedForward = VectorSingle(-defaultForward, 0.0f);
     const VectorSingle direction = NormalizeSceneVector3Or(
         negatedForward,
         VectorSingle(0.0f, 0.0f, -1.0f, 0.0f),

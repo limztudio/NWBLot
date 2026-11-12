@@ -9,7 +9,7 @@
 
 
 b8 HasValidUiRectDimensions(in Rect rectangle){
-    return IsFinite(rectangle.x) && IsFinite(rectangle.y) && IsFinite(rectangle.width) && rectangle.width >= 0.0f && IsFinite(rectangle.height) && rectangle.height >= 0.0f;
+    return IsFinite(VectorSingle(rectangle.x, rectangle.y, rectangle.width, rectangle.height)) && rectangle.width >= 0.0f && rectangle.height >= 0.0f;
 }
 
 // Inputs may be unchecked here, so the bottom sum runs only after the right sum is finite.
@@ -25,9 +25,8 @@ b8 HasPreciseUiRectEndpoints(in Rect rectangle){
 b8 IsValidUiRect(in Rect rectangle){
     if(!HasValidUiRectDimensions(rectangle))
         return false;
-    const f32 right = rectangle.x + rectangle.width;
-    const f32 bottom = rectangle.y + rectangle.height;
-    return IsFinite(right) && IsFinite(bottom);
+    const VectorSingle end = VectorSingle(rectangle.x, rectangle.y, rectangle.x, rectangle.y) + VectorSingle(rectangle.width, rectangle.height, rectangle.width, rectangle.height);
+    return IsFinite(end.xy);
 }
 
 b8 HasUiRectArea(in Rect rectangle){
@@ -66,7 +65,7 @@ b8 UiRectContainsPoint(in Rect rectangle, in Point position){
 }
 
 b8 IsValidUiPadding(in Insets padding){
-    return IsFinite(padding.left) && padding.left >= 0.0f && IsFinite(padding.top) && padding.top >= 0.0f && IsFinite(padding.right) && padding.right >= 0.0f && IsFinite(padding.bottom) && padding.bottom >= 0.0f;
+    return IsFinite(VectorSingle(padding.left, padding.top, padding.right, padding.bottom)) && padding.left >= 0.0f && padding.top >= 0.0f && padding.right >= 0.0f && padding.bottom >= 0.0f;
 }
 
 b8 IsBoundedUiPadding(in Insets padding){
@@ -87,15 +86,15 @@ b8 IsBoundedUiPadding(in UiSkinInsets padding){
 }
 
 b8 IsValidUiColor(in Color color){
-    return IsFinite(color.r) && color.r >= 0.0f && IsFinite(color.g) && color.g >= 0.0f && IsFinite(color.b) && color.b >= 0.0f && IsFinite(color.a) && color.a >= 0.0f && color.a <= 1.0f;
+    return IsFinite(VectorSingle(color.r, color.g, color.b, color.a)) && color.r >= 0.0f && color.g >= 0.0f && color.b >= 0.0f && color.a >= 0.0f && color.a <= 1.0f;
 }
 
 b8 IsValidPaintColor(in Color color){
-    return IsFinite(color.r) && IsFinite(color.g) && IsFinite(color.b) && IsFinite(color.a) && color.a >= 0.0f && color.a <= 1.0f;
+    return IsFinite(VectorSingle(color.r, color.g, color.b, color.a)) && color.a >= 0.0f && color.a <= 1.0f;
 }
 
 b8 IsValidUiExtent(in Point point){
-    return IsFinite(point.x) && point.x >= 0.0f && IsFinite(point.y) && point.y >= 0.0f;
+    return IsFinite(VectorSingle(point.x, point.y, point.x, point.y).xy) && point.x >= 0.0f && point.y >= 0.0f;
 }
 
 b8 IsValidLayoutSize(in LayoutSize size){
@@ -112,24 +111,26 @@ b8 IsValidLayoutNodeDesc(in LayoutNodeDesc description){
 }
 
 Expected<Rect> TryMakeUiRect(in f64 x, in f64 y, in f64 width, in f64 height, in UiRectPrecision precision){
+    const VectorDouble rectangle(x, y, width, height);
     if(
-        !IsFinite(x) || x < -s_UiMaxFloatF64 || x > s_UiMaxFloatF64
-        || !IsFinite(y) || y < -s_UiMaxFloatF64 || y > s_UiMaxFloatF64
-        || !IsFinite(width) || width < 0.0 || width > s_UiMaxFloatF64
-        || !IsFinite(height) || height < 0.0 || height > s_UiMaxFloatF64
+        !IsFinite(rectangle)
+        || x < -s_UiMaxFloatF64 || x > s_UiMaxFloatF64
+        || y < -s_UiMaxFloatF64 || y > s_UiMaxFloatF64
+        || width < 0.0 || width > s_UiMaxFloatF64
+        || height < 0.0 || height > s_UiMaxFloatF64
     )
         return MakeUnexpected(Failure());
     if(precision != UiRectPrecision::RoundedEndpoints){
-        const f64 endX = x + width;
-        const f64 endY = y + height;
-        if(endX < -s_UiMaxFloatF64 || endX > s_UiMaxFloatF64 || endY < -s_UiMaxFloatF64 || endY > s_UiMaxFloatF64)
+        const VectorDouble end = VectorDouble(x, y, x, y) + VectorDouble(width, height, width, height);
+        if(end.x < -s_UiMaxFloatF64 || end.x > s_UiMaxFloatF64 || end.y < -s_UiMaxFloatF64 || end.y > s_UiMaxFloatF64)
             return MakeUnexpected(Failure());
     }
     Rect candidate(cast<f32>(x), cast<f32>(y), cast<f32>(width), cast<f32>(height));
     if(precision == UiRectPrecision::EmptyPaint){
-        if(candidate.width > 0.0f && candidate.x + candidate.width <= candidate.x)
+        const VectorSingle end = VectorSingle(candidate.x, candidate.y, candidate.x, candidate.y) + VectorSingle(candidate.width, candidate.height, candidate.width, candidate.height);
+        if(candidate.width > 0.0f && end.x <= candidate.x)
             candidate.width = 0.0f;
-        if(candidate.height > 0.0f && candidate.y + candidate.height <= candidate.y)
+        if(candidate.height > 0.0f && end.y <= candidate.y)
             candidate.height = 0.0f;
         if(!IsBoundedUiRect(candidate))
             return MakeUnexpected(Failure());
@@ -138,7 +139,8 @@ Expected<Rect> TryMakeUiRect(in f64 x, in f64 y, in f64 width, in f64 height, in
         if(!IsValidUiRect(candidate))
             return MakeUnexpected(Failure());
         if(precision == UiRectPrecision::PreciseExtents){
-            if((width > 0.0 && candidate.x + candidate.width <= candidate.x) || (height > 0.0 && candidate.y + candidate.height <= candidate.y))
+            const VectorSingle end = VectorSingle(candidate.x, candidate.y, candidate.x, candidate.y) + VectorSingle(candidate.width, candidate.height, candidate.width, candidate.height);
+            if((width > 0.0 && end.x <= candidate.x) || (height > 0.0 && end.y <= candidate.y))
                 return MakeUnexpected(Failure());
         }
     }
@@ -146,15 +148,13 @@ Expected<Rect> TryMakeUiRect(in f64 x, in f64 y, in f64 width, in f64 height, in
 }
 
 VectorDouble ComputeInsetUiRectBounds(in Rect bounds, in Insets padding){
-    const f64 boundsW = cast<f64>(bounds.width);
-    const f64 boundsH = cast<f64>(bounds.height);
-    const f64 firstW = Min(cast<f64>(padding.left), boundsW);
-    const f64 firstH = Min(cast<f64>(padding.top), boundsH);
-    const f64 remW = boundsW - firstW;
-    const f64 remH = boundsH - firstH;
-    const f64 lastW = Min(cast<f64>(padding.right), remW);
-    const f64 lastH = Min(cast<f64>(padding.bottom), remH);
-    return VectorDouble(cast<f64>(bounds.x) + firstW, cast<f64>(bounds.y) + firstH, remW - lastW, remH - lastH);
+    const VectorDouble boundsSize(cast<f64>(bounds.width), cast<f64>(bounds.height), cast<f64>(bounds.width), cast<f64>(bounds.height));
+    const VectorDouble first = Min(VectorDouble(cast<f64>(padding.left), cast<f64>(padding.top), cast<f64>(padding.left), cast<f64>(padding.top)), boundsSize);
+    const VectorDouble remaining = boundsSize - first;
+    const VectorDouble last = Min(VectorDouble(cast<f64>(padding.right), cast<f64>(padding.bottom), cast<f64>(padding.right), cast<f64>(padding.bottom)), remaining);
+    const VectorDouble origin = VectorDouble(cast<f64>(bounds.x), cast<f64>(bounds.y), cast<f64>(bounds.x), cast<f64>(bounds.y)) + first;
+    const VectorDouble size = remaining - last;
+    return VectorDouble(origin.x, origin.y, size.x, size.y);
 }
 
 Expected<Rect> TryInsetUiRect(in Rect bounds, in Insets padding, in UiRectPrecision precision){
@@ -163,17 +163,14 @@ Expected<Rect> TryInsetUiRect(in Rect bounds, in Insets padding, in UiRectPrecis
 }
 
 Expected<Rect> TryIntersectUiRects(in Rect lhs, in Rect rhs, in UiRectPrecision precision){
-    const f64 lhsX = cast<f64>(lhs.x);
-    const f64 lhsY = cast<f64>(lhs.y);
-    const f64 rhsX = cast<f64>(rhs.x);
-    const f64 rhsY = cast<f64>(rhs.y);
-    const f64 originX = Max(lhsX, rhsX);
-    const f64 originY = Max(lhsY, rhsY);
-    const f64 endX = Min(lhsX + cast<f64>(lhs.width), rhsX + cast<f64>(rhs.width));
-    const f64 endY = Min(lhsY + cast<f64>(lhs.height), rhsY + cast<f64>(rhs.height));
-    const f64 width = Max(0.0, endX - originX);
-    const f64 height = Max(0.0, endY - originY);
-    return TryMakeUiRect(originX, originY, width, height, precision);
+    const VectorDouble lhsOrigin(cast<f64>(lhs.x), cast<f64>(lhs.y), cast<f64>(lhs.x), cast<f64>(lhs.y));
+    const VectorDouble rhsOrigin(cast<f64>(rhs.x), cast<f64>(rhs.y), cast<f64>(rhs.x), cast<f64>(rhs.y));
+    const VectorDouble origin = Max(lhsOrigin, rhsOrigin);
+    const VectorDouble lhsEnd = lhsOrigin + VectorDouble(cast<f64>(lhs.width), cast<f64>(lhs.height), cast<f64>(lhs.width), cast<f64>(lhs.height));
+    const VectorDouble rhsEnd = rhsOrigin + VectorDouble(cast<f64>(rhs.width), cast<f64>(rhs.height), cast<f64>(rhs.width), cast<f64>(rhs.height));
+    const VectorDouble end = Min(lhsEnd, rhsEnd);
+    const VectorDouble size = Max(VectorDouble(0.0, 0.0, 0.0, 0.0), end - origin);
+    return TryMakeUiRect(origin.x, origin.y, size.x, size.y, precision);
 }
 
 Rect IntersectUiRectsBounds(in Rect lhs, in Rect rhs){

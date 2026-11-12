@@ -50,12 +50,15 @@ void EmitPaintNineSlice(
     v[1u] = vVec.y;
     v[2u] = vVec.z;
     v[3u] = vVec.w;
-    const f32 width = cast<f32>(atlasWidth);
-    const f32 height = cast<f32>(atlasHeight);
+    const VectorSingle atlasExtent(cast<f32>(atlasWidth), cast<f32>(atlasHeight), cast<f32>(atlasWidth), cast<f32>(atlasHeight));
     for(u32 row = 0u; row < s_PaintNineSliceAxisCells; ++row){
         for(u32 column = 0u; column < s_PaintNineSliceAxisCells; ++column){
-            const Rect target(x[cast<usize>(column)], y[cast<usize>(row)], x[cast<usize>(column + 1u)] - x[cast<usize>(column)], y[cast<usize>(row + 1u)] - y[cast<usize>(row)]);
-            const Rect uv(u[cast<usize>(column)] / width, v[cast<usize>(row)] / height, (u[cast<usize>(column + 1u)] - u[cast<usize>(column)]) / width, (v[cast<usize>(row + 1u)] - v[cast<usize>(row)]) / height);
+            const usize colIdx = cast<usize>(column);
+            const usize rowIdx = cast<usize>(row);
+            const VectorSingle cellDeltas = VectorSingle(x[colIdx + 1u], y[rowIdx + 1u], u[colIdx + 1u], v[rowIdx + 1u]) - VectorSingle(x[colIdx], y[rowIdx], u[colIdx], v[rowIdx]);
+            const Rect target(x[colIdx], y[rowIdx], cellDeltas.x, cellDeltas.y);
+            const VectorSingle uvVec = VectorSingle(u[colIdx], v[rowIdx], cellDeltas.z, cellDeltas.w) / atlasExtent;
+            const Rect uv(uvVec.x, uvVec.y, uvVec.z, uvVec.w);
             EmitPaintQuad(
                 recording,
                 clip,
@@ -171,10 +174,8 @@ void BeginPaintBuilderRecording(
     mut b8 outCommandsOrdered,
     mut b8 outRecording
 ){
-    assert(IsFinite(metrics.logicalWidth) && metrics.logicalWidth >= 0.0f);
-    assert(IsFinite(metrics.logicalHeight) && metrics.logicalHeight >= 0.0f);
-    assert(IsFinite(metrics.pixelScaleX) && metrics.pixelScaleX > 0.0f);
-    assert(IsFinite(metrics.pixelScaleY) && metrics.pixelScaleY > 0.0f);
+    assert(IsFinite(VectorSingle(metrics.logicalWidth, metrics.logicalHeight, metrics.pixelScaleX, metrics.pixelScaleY)));
+    assert(metrics.logicalWidth >= 0.0f && metrics.logicalHeight >= 0.0f && metrics.pixelScaleX > 0.0f && metrics.pixelScaleY > 0.0f);
     outVertices.clear();
     outIndices.clear();
     outCommands.clear();

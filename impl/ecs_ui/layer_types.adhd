@@ -53,11 +53,15 @@ class UiLiveRoot{
 
 
 b8 ValidUiMouseCoordinate(in f64 xpos, in f64 ypos){
-    return IsFinite(xpos) && IsFinite(ypos) && Abs(xpos) <= s_MaxUiFrameDeltaSeconds && Abs(ypos) <= s_MaxUiFrameDeltaSeconds;
+    const VectorDouble position(xpos, ypos, xpos, ypos);
+    if(!IsFinite(position.xy))
+        return false;
+    const VectorDouble magnitude = Abs(position);
+    return magnitude.x <= s_MaxUiFrameDeltaSeconds && magnitude.y <= s_MaxUiFrameDeltaSeconds;
 }
 
 b8 ValidUiMouseScroll(in f64 xoffset, in f64 yoffset){
-    return IsFinite(xoffset) && IsFinite(yoffset);
+    return IsFinite(VectorDouble(xoffset, yoffset, xoffset, yoffset).xy);
 }
 
 usize ResolveUiNativeKeySlot(in i32 key){

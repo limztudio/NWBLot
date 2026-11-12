@@ -238,8 +238,9 @@ void PlaceEditPreeditUnderline(in Point textOrigin, in f32 caretWidth, mut Rect 
     if(segment.width > 0.0f){
         const f32 thickness = Min(caretWidth, segment.height);
         const f32 verticalOffset = textOrigin.y + Max(0.0f, segment.height - thickness);
-        segment.x += textOrigin.x;
-        segment.y += verticalOffset;
+        const VectorSingle shifted = VectorSingle(segment.x, segment.y, segment.x, segment.y) + VectorSingle(textOrigin.x, verticalOffset, textOrigin.x, verticalOffset);
+        segment.x = shifted.x;
+        segment.y = shifted.y;
         segment.height = thickness;
     }
 }
@@ -247,11 +248,12 @@ void PlaceEditPreeditUnderline(in Point textOrigin, in f32 caretWidth, mut Rect 
 Expected<Rect> TryComputeEditBoxViewport(in Rect bounds, in Insets padding, in Rect clip, in Point previousScroll, in f32 caretWidth){
     if(!IsValidUiRect(bounds) || !IsValidUiRect(clip) || !IsValidUiPadding(padding) || !IsValidUiExtent(previousScroll) || !IsFinite(caretWidth) || caretWidth <= 0.0f)
         return MakeUnexpected(Failure());
-    const f32 firstX = bounds.x + Min(padding.left, bounds.width);
-    const f32 firstY = bounds.y + Min(padding.top, bounds.height);
-    const f32 lastX = (bounds.x + bounds.width) - Min(padding.right, bounds.width);
-    const f32 lastY = (bounds.y + bounds.height) - Min(padding.bottom, bounds.height);
-    return Rect(firstX, firstY, Max(lastX, firstX) - firstX, Max(lastY, firstY) - firstY);
+    const VectorSingle origin(bounds.x, bounds.y, bounds.x, bounds.y);
+    const VectorSingle size(bounds.width, bounds.height, bounds.width, bounds.height);
+    const VectorSingle first = origin + Min(VectorSingle(padding.left, padding.top, padding.left, padding.top), size);
+    const VectorSingle last = (origin + size) - Min(VectorSingle(padding.right, padding.bottom, padding.right, padding.bottom), size);
+    const VectorSingle extent = Max(last, first) - first;
+    return Rect(first.x, first.y, extent.x, extent.y);
 }
 
 b8 ValidateEditBoxViewportArrangeInputs(in Rect bounds, in Rect viewport, in Rect clip, in Point previousScroll, in f32 caretWidth){

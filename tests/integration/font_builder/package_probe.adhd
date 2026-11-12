@@ -78,12 +78,12 @@ b8 WriteAtlasHeaderBinary(in Path directory, in FontAtlasPayload payload, mut As
     return binary.has_value() && WriteBinaryFile(directory / "atlas.bin", binary.value());
 }
 
-b8 WriteGroupPixelsFile(in Path directory, in usize index, in AssetBytes pixels){
+b8 WriteGroupPixelsFile(in Path directory, in usize index, in Span<u8> pixels){
     const String name = StringFormat("group_{}.pixels", index);
     return WriteBinaryFile(directory / name, pixels);
 }
 
-b8 WritePositioningTableFile(in Path directory, in StringView tag, in AssetBytes bytes){
+b8 WritePositioningTableFile(in Path directory, in StringView tag, in Span<u8> bytes){
     const String name = StringFormat("table_{}.bin", tag);
     return WriteBinaryFile(directory / name, bytes);
 }

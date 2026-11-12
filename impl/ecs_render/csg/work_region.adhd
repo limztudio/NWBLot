@@ -84,8 +84,8 @@ class CsgFrameWorkRegion{
     public void expandWorldBounds(in MatrixSingle worldToClip, in VectorSingle minBounds, in VectorSingle maxBounds, in u32 frameWidth, in u32 frameHeight){
         if(
             frameWidth == 0u || frameHeight == 0u
-            || !IsFinite(minBounds.x) || !IsFinite(minBounds.y) || !IsFinite(minBounds.z)
-            || !IsFinite(maxBounds.x) || !IsFinite(maxBounds.y) || !IsFinite(maxBounds.z)
+            || !IsFinite(minBounds.xyz)
+            || !IsFinite(maxBounds.xyz)
             || minBounds.x > maxBounds.x || minBounds.y > maxBounds.y || minBounds.z > maxBounds.z
         ){
             this.expandFull();
@@ -94,10 +94,9 @@ class CsgFrameWorkRegion{
 
         const f32 widthFloat = cast<f32>(frameWidth);
         const f32 heightFloat = cast<f32>(frameHeight);
-        f32 minPixelX = widthFloat;
-        f32 minPixelY = heightFloat;
-        f32 maxPixelX = 0.0f;
-        f32 maxPixelY = 0.0f;
+        const VectorSingle frameSize(widthFloat, heightFloat, widthFloat, heightFloat);
+        VectorSingle minPixel = frameSize;
+        VectorSingle maxPixel(0.0f);
         for(u32 corner = 0u; corner < s_BoxCornerCount; ++corner){
             f32 wx = minBounds.x;
             if((corner & 1u) != 0u)
@@ -116,38 +115,32 @@ class CsgFrameWorkRegion{
                 return;
             }
 
-            const f32 ndcX = clipPosition.x / clipW;
-            const f32 ndcY = clipPosition.y / clipW;
-            if(!IsFinite(ndcX) || !IsFinite(ndcY)){
+            const VectorSingle ndc = VectorSingle(clipPosition.x, clipPosition.y, clipPosition.x, clipPosition.y) / VectorSingle(clipW);
+            if(!IsFinite(ndc.xy)){
                 this.expandFull();
                 return;
             }
 
-            const f32 normX = ndcX * 0.5f + 0.5f;
-            const f32 normY = 1.0f - (ndcY * 0.5f + 0.5f);
-            const f32 pixelX = normX * widthFloat;
-            const f32 pixelY = normY * heightFloat;
-            if(!IsFinite(pixelX) || !IsFinite(pixelY)){
+            const VectorSingle halfNdc = ndc * 0.5f + VectorSingle(0.5f);
+            const VectorSingle norm(halfNdc.x, 1.0f - halfNdc.y, halfNdc.x, 1.0f - halfNdc.y);
+            const VectorSingle pixel = norm * frameSize;
+            if(!IsFinite(pixel.xy)){
                 this.expandFull();
                 return;
             }
-            minPixelX = Min(minPixelX, pixelX);
-            minPixelY = Min(minPixelY, pixelY);
-            maxPixelX = Max(maxPixelX, pixelX);
-            maxPixelY = Max(maxPixelY, pixelY);
+            minPixel = Min(minPixel, pixel);
+            maxPixel = Max(maxPixel, pixel);
         }
 
-        if(maxPixelX < 0.0f || maxPixelY < 0.0f || minPixelX > widthFloat || minPixelY > heightFloat)
+        if(maxPixel.x < 0.0f || maxPixel.y < 0.0f || minPixel.x > widthFloat || minPixel.y > heightFloat)
             return;
 
-        const f32 workMinX = Max(minPixelX, 0.0f);
-        const f32 workMinY = Max(minPixelY, 0.0f);
-        const f32 workMaxX = Min(maxPixelX, widthFloat);
-        const f32 workMaxY = Min(maxPixelY, heightFloat);
-        const i32 paddedMinX = cast<i32>(Floor(workMinX)) - s_WorkRegionPixelPadding;
-        const i32 paddedMaxX = cast<i32>(Ceil(workMaxX)) + s_WorkRegionPixelPadding;
-        const i32 paddedMinY = cast<i32>(Floor(workMinY)) - s_WorkRegionPixelPadding;
-        const i32 paddedMaxY = cast<i32>(Ceil(workMaxY)) + s_WorkRegionPixelPadding;
+        const VectorSingle workMin = Floor(Max(minPixel, VectorSingle(0.0f)));
+        const VectorSingle workMax = Ceil(Min(maxPixel, frameSize));
+        const i32 paddedMinX = cast<i32>(workMin.x) - s_WorkRegionPixelPadding;
+        const i32 paddedMaxX = cast<i32>(workMax.x) + s_WorkRegionPixelPadding;
+        const i32 paddedMinY = cast<i32>(workMin.y) - s_WorkRegionPixelPadding;
+        const i32 paddedMaxY = cast<i32>(workMax.y) + s_WorkRegionPixelPadding;
         this.expandClamped(paddedMinX, paddedMaxX, paddedMinY, paddedMaxY, frameWidth, frameHeight);
     }
 

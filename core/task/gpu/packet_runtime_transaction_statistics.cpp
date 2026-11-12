@@ -3,6 +3,8 @@
 
 
 #include "packet_runtime.h"
+
+#include <global/simd/vector_arithmetic.h>
 #include "scheduler.h"
 #include "task_graph.h"
 
@@ -121,7 +123,7 @@ GpuTaskGraphPhysicalQueueSubmissionStatistics GpuGraphSubmissionTransaction::phy
             statistics.timelineWaitCount += runtime.timelineWaitCount;
             statistics.mergedTimelineWaitCount += runtime.mergedTimelineWaitCount;
             statistics.inheritedTimelineWaitElisionCount += runtime.inheritedTimelineWaitElisionCount;
-            submissionSeconds += runtime.submissionSeconds;
+            submissionSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(submissionSeconds), VectorDoubleReplicate(runtime.submissionSeconds)));
             if(packet.joinsAcceptedQueueFrontier)
                 ++statistics.acceptedFrontierSubmissionCount;
             if(packet.isRecoverySubmission)

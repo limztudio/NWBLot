@@ -942,6 +942,166 @@ TEST(AdhdCompiler, TrimViewBorrowsLocalCompactString){ VerifyAdhdCompiler_TrimVi
 TEST(AdhdCompiler, StringAndCompactSubstrPreserveOwnershipAndSingleEvaluation){ VerifyAdhdCompiler_StringAndCompactSubstrPreserveOwnershipAndSingleEvaluation(); }
 TEST(AdhdCompiler, HighByteFrontBackAndIndexMaintainUnsignedSemanticsAndMutation){ VerifyAdhdCompiler_HighByteFrontBackAndIndexMaintainUnsignedSemanticsAndMutation(); }
 TEST(AdhdCompiler, SimdLaneComparisonAndFiniteChecksIgnoreInactiveAndShortCircuitedSignalingNaNs){ VerifyAdhdCompiler_SimdLaneComparisonAndFiniteChecksIgnoreInactiveAndShortCircuitedSignalingNaNs(); }
+
+TEST(AdhdCompiler, SimdZeroAdditionPreservesSignedZeroAndSignalingNan){
+#pragma STDC FENV_ACCESS ON
+    const auto originalEnvironment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(originalEnvironment);
+    ::NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
+    volatile u32 values32[] = { 0x80000000u, 0x7f800123u };
+    volatile u64 values64[] = { 0x8000000000000000ull, 0x7ff0000000000123ull };
+    for(const i32 rounding : { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO }){
+        ASSERT_TRUE(SetFloatingPointRoundingMode(rounding));
+        for(usize i = 0u; i < 2u; ++i){
+            const SIMDVectorSingle value32 = VectorSetInt(values32[i], values32[i], values32[i], values32[i]);
+            const SIMDVectorDouble value64 = VectorDoubleSetInt(values64[i], values64[i], values64[i], values64[i]);
+            for(u32 left = 0u; left < 2u; ++left){
+                ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+                const SIMDVectorSingle expected32 = left ? VectorAdd(VectorZero(), value32) : VectorAdd(value32, VectorZero());
+                const i32 expectedFlags32 = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+                ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+                const SIMDVectorSingle actual32 = left ? ::NWB::Tests::AddZeroLeftSingle(value32) : ::NWB::Tests::AddZeroRightSingle(value32);
+                const i32 actualFlags32 = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+                EXPECT_EQ(VectorGetIntX(actual32), VectorGetIntX(expected32));
+                EXPECT_EQ(actualFlags32, expectedFlags32);
+
+                ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+                const SIMDVectorDouble expected64 = left ? VectorDoubleAdd(VectorDoubleZero(), value64) : VectorDoubleAdd(value64, VectorDoubleZero());
+                const i32 expectedFlags64 = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+                ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+                const SIMDVectorDouble actual64 = left ? ::NWB::Tests::AddZeroLeftDouble(value64) : ::NWB::Tests::AddZeroRightDouble(value64);
+                const i32 actualFlags64 = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+                EXPECT_EQ(VectorDoubleGetIntX(actual64), VectorDoubleGetIntX(expected64));
+                EXPECT_EQ(actualFlags64, expectedFlags64);
+            }
+        }
+    }
+}
+
+TEST(AdhdCompiler, SimdNegatedZeroPreservesSignAndAdditionFlags){
+#pragma STDC FENV_ACCESS ON
+    const auto originalEnvironment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(originalEnvironment);
+    ::NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
+    EXPECT_EQ(VectorGetIntX(::NWB::Tests::NegateZeroSingle()), 0x80000000u);
+    EXPECT_EQ(VectorGetIntX(::NWB::Tests::NegateNegativeZeroSingle()), 0u);
+    EXPECT_EQ(VectorGetIntX(::NWB::Tests::DoubleNegateZeroSingle()), 0u);
+    EXPECT_EQ(VectorGetIntX(::NWB::Tests::TripleNegateZeroSingle()), 0x80000000u);
+    EXPECT_EQ(VectorDoubleGetIntX(::NWB::Tests::NegateZeroDouble()), 0x8000000000000000ull);
+    EXPECT_EQ(VectorDoubleGetIntX(::NWB::Tests::NegateNegativeZeroDouble()), 0ull);
+    EXPECT_EQ(VectorDoubleGetIntX(::NWB::Tests::DoubleNegateZeroDouble()), 0ull);
+    EXPECT_EQ(VectorDoubleGetIntX(::NWB::Tests::TripleNegateZeroDouble()), 0x8000000000000000ull);
+    volatile u32 values32[] = { 0u, 0x80000000u, 0x7f800123u };
+    volatile u64 values64[] = { 0ull, 0x8000000000000000ull, 0x7ff0000000000123ull };
+    for(const i32 rounding : { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO }){
+        ASSERT_TRUE(SetFloatingPointRoundingMode(rounding));
+        for(usize i = 0u; i < 3u; ++i){
+            const SIMDVectorSingle value32 = VectorSetInt(values32[i], values32[i], values32[i], values32[i]);
+            const SIMDVectorDouble value64 = VectorDoubleSetInt(values64[i], values64[i], values64[i], values64[i]);
+            const SIMDVectorSingle zero32 = VectorNegate(VectorZero());
+            const SIMDVectorDouble zero64 = VectorDoubleNegate(VectorDoubleZero());
+            for(u32 left = 0u; left < 2u; ++left){
+                ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+                const SIMDVectorSingle expected32 = left ? VectorAdd(zero32, value32) : VectorAdd(value32, zero32);
+                const i32 expectedFlags32 = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+                ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+                const SIMDVectorSingle actual32 = left ? ::NWB::Tests::AddNegativeZeroLeftSingle(value32) : ::NWB::Tests::AddNegativeZeroRightSingle(value32);
+                const i32 actualFlags32 = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+                EXPECT_EQ(VectorGetIntX(actual32), VectorGetIntX(expected32));
+                EXPECT_EQ(actualFlags32, expectedFlags32);
+
+                ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+                const SIMDVectorDouble expected64 = left ? VectorDoubleAdd(zero64, value64) : VectorDoubleAdd(value64, zero64);
+                const i32 expectedFlags64 = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+                ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+                const SIMDVectorDouble actual64 = left ? ::NWB::Tests::AddNegativeZeroLeftDouble(value64) : ::NWB::Tests::AddNegativeZeroRightDouble(value64);
+                const i32 actualFlags64 = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+                EXPECT_EQ(VectorDoubleGetIntX(actual64), VectorDoubleGetIntX(expected64));
+                EXPECT_EQ(actualFlags64, expectedFlags64);
+            }
+        }
+    }
+}
+
+TEST(AdhdCompiler, SimdZeroArithmeticPreservesExceptionalValuesAndFlags){
+#pragma STDC FENV_ACCESS ON
+    const auto originalEnvironment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(originalEnvironment);
+    ::NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
+    volatile u32 values32[] = { 0u, 0x80000000u, 0x7f800000u, 0xff800000u, 0x7f800123u, 0xbf800000u };
+    volatile u64 values64[] = { 0ull, 0x8000000000000000ull, 0x7ff0000000000000ull, 0xfff0000000000000ull, 0x7ff0000000000123ull, 0xbff0000000000000ull };
+    for(const i32 rounding : { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO }){
+        ASSERT_TRUE(SetFloatingPointRoundingMode(rounding));
+        for(usize i = 0u; i < 6u; ++i){
+            const SIMDVectorSingle value32 = VectorSetInt(values32[i], values32[i], values32[i], values32[i]);
+            const SIMDVectorDouble value64 = VectorDoubleSetInt(values64[i], values64[i], values64[i], values64[i]);
+            const SIMDVectorSingle zero32 = VectorZero();
+            const SIMDVectorDouble zero64 = VectorDoubleZero();
+            const SIMDVectorSingle negativeZero32 = VectorNegate(zero32);
+            const SIMDVectorDouble negativeZero64 = VectorDoubleNegate(zero64);
+            for(u32 operation = 0u; operation < 7u; ++operation){
+                const auto apply32 = [&](const b8 reference)noexcept -> SIMDVectorSingle{
+                    switch(operation){
+                    case 0u: return reference ? VectorSubtract(value32, zero32) : ::NWB::Tests::SubZeroRightSingle(value32);
+                    case 1u: return reference ? VectorSubtract(zero32, value32) : ::NWB::Tests::SubZeroLeftSingle(value32);
+                    case 2u: return reference ? VectorMultiply(value32, zero32) : ::NWB::Tests::MulZeroRightSingle(value32);
+                    case 3u: return reference ? VectorMultiply(zero32, value32) : ::NWB::Tests::MulZeroLeftSingle(value32);
+                    case 4u: return reference ? VectorDivide(zero32, value32) : ::NWB::Tests::ZeroDivideSingle(value32);
+                    case 5u: return reference ? VectorAdd(VectorSubtract(zero32, value32), VectorSubtract(negativeZero32, zero32)) : ::NWB::Tests::NestedZeroSubSingle(value32, negativeZero32);
+                    default: return reference ? VectorNegate(VectorSubtract(zero32, value32)) : ::NWB::Tests::NegateZeroSubSingle(value32);
+                    }
+                };
+                const auto apply64 = [&](const b8 reference)noexcept -> SIMDVectorDouble{
+                    switch(operation){
+                    case 0u: return reference ? VectorDoubleSubtract(value64, zero64) : ::NWB::Tests::SubZeroRightDouble(value64);
+                    case 1u: return reference ? VectorDoubleSubtract(zero64, value64) : ::NWB::Tests::SubZeroLeftDouble(value64);
+                    case 2u: return reference ? VectorDoubleMultiply(value64, zero64) : ::NWB::Tests::MulZeroRightDouble(value64);
+                    case 3u: return reference ? VectorDoubleMultiply(zero64, value64) : ::NWB::Tests::MulZeroLeftDouble(value64);
+                    case 4u: return reference ? VectorDoubleDivide(zero64, value64) : ::NWB::Tests::ZeroDivideDouble(value64);
+                    case 5u: return reference ? VectorDoubleAdd(VectorDoubleSubtract(zero64, value64), VectorDoubleSubtract(negativeZero64, zero64)) : ::NWB::Tests::NestedZeroSubDouble(value64, negativeZero64);
+                    default: return reference ? VectorDoubleNegate(VectorDoubleSubtract(zero64, value64)) : ::NWB::Tests::NegateZeroSubDouble(value64);
+                    }
+                };
+                ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+                const SIMDVectorSingle expected32 = apply32(true);
+                const i32 expectedFlags32 = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+                ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+                const SIMDVectorSingle actual32 = apply32(false);
+                const i32 actualFlags32 = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+                EXPECT_EQ(VectorGetIntX(actual32), VectorGetIntX(expected32)) << operation << ", " << i << ", " << rounding;
+                EXPECT_EQ(actualFlags32, expectedFlags32) << operation << ", " << i << ", " << rounding;
+
+                ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+                const SIMDVectorDouble expected64 = apply64(true);
+                const i32 expectedFlags64 = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+                ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+                const SIMDVectorDouble actual64 = apply64(false);
+                const i32 actualFlags64 = TestFloatingPointExceptions(FE_ALL_EXCEPT);
+                EXPECT_EQ(VectorDoubleGetIntX(actual64), VectorDoubleGetIntX(expected64)) << operation << ", " << i << ", " << rounding;
+                EXPECT_EQ(actualFlags64, expectedFlags64) << operation << ", " << i << ", " << rounding;
+            }
+        }
+    }
+}
+
+TEST(AdhdCompiler, SimdProductPlusZeroPreservesNegativeZeroAddition){
+#pragma STDC FENV_ACCESS ON
+    const auto originalEnvironment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(originalEnvironment);
+    ::NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
+    ASSERT_TRUE(SetFloatingPointRoundingMode(FE_TONEAREST));
+    volatile u32 negativeZero32 = 0x80000000u;
+    volatile u64 negativeZero64 = 0x8000000000000000ull;
+    const SIMDVectorSingle value32 = VectorSetInt(negativeZero32, negativeZero32, negativeZero32, negativeZero32);
+    const SIMDVectorDouble value64 = VectorDoubleSetInt(negativeZero64, negativeZero64, negativeZero64, negativeZero64);
+    const SIMDVectorSingle one32 = VectorReplicate(1.0f);
+    const SIMDVectorDouble one64 = VectorDoubleReplicate(1.0);
+    EXPECT_EQ(VectorGetIntX(::NWB::Tests::AddProductZeroRightSingle(value32, one32)), 0u);
+    EXPECT_EQ(VectorGetIntX(::NWB::Tests::AddProductZeroLeftSingle(value32, one32)), 0u);
+    EXPECT_EQ(VectorDoubleGetIntX(::NWB::Tests::AddProductZeroRightDouble(value64, one64)), 0ull);
+    EXPECT_EQ(VectorDoubleGetIntX(::NWB::Tests::AddProductZeroLeftDouble(value64, one64)), 0ull);
+}
+
 TEST(AdhdCompiler, GlobalExportArenaFirstFormattingOverflowAndHeaderTracking){ VerifyAdhdCompiler_GlobalExportArenaFirstFormattingOverflowAndHeaderTracking(); }
 TEST(AdhdCompiler, NestedMotherArenaRebindsAcrossTransientScratchDestruction){ VerifyAdhdCompiler_NestedMotherArenaRebindsAcrossTransientScratchDestruction(); }
 

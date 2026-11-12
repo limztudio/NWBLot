@@ -36,25 +36,17 @@ FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleNegate(SIMDV
 }
 
 FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorAdd(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
+#pragma STDC FENV_ACCESS ON
 #if defined(FOUNDATION_HAS_SCALAR)
     return VectorSet(VectorGetX(v0) + VectorGetX(v1), VectorGetY(v0) + VectorGetY(v1), VectorGetZ(v0) + VectorGetZ(v1), VectorGetW(v0) + VectorGetW(v1));
-#elif defined(FOUNDATION_HAS_NEON)
-    return vaddq_f32(v0, v1);
 #else
-    return _mm_add_ps(v0, v1);
+    return v0 + v1;
 #endif
 }
 
 FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleAdd(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
-#if defined(FOUNDATION_HAS_NEON64)
-    return SIMDVectorDoubleDetail::FromPairs(vaddq_f64(SIMDVectorDoubleDetail::GetLow(v0), SIMDVectorDoubleDetail::GetLow(v1)), vaddq_f64(SIMDVectorDoubleDetail::GetHigh(v0), SIMDVectorDoubleDetail::GetHigh(v1)));
-#elif defined(FOUNDATION_HAS_AVX)
-    return BitCast<SIMDVectorDouble>(_mm256_add_pd(BitCast<__m256d>(v0), BitCast<__m256d>(v1)));
-#elif defined(FOUNDATION_HAS_SSE2)
-    return SIMDVectorDoubleDetail::FromPairs(_mm_add_pd(SIMDVectorDoubleDetail::GetLow(v0), SIMDVectorDoubleDetail::GetLow(v1)), _mm_add_pd(SIMDVectorDoubleDetail::GetHigh(v0), SIMDVectorDoubleDetail::GetHigh(v1)));
-#else
+#pragma STDC FENV_ACCESS ON
     return v0 + v1;
-#endif
 }
 
 // Adds raw unsigned 32-bit lane representations with modulo arithmetic.
@@ -84,78 +76,67 @@ FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleAddInt(SIMDV
 }
 
 FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorSubtract(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
+#pragma STDC FENV_ACCESS ON
 #if defined(FOUNDATION_HAS_SCALAR)
     return VectorSet(VectorGetX(v0) - VectorGetX(v1), VectorGetY(v0) - VectorGetY(v1), VectorGetZ(v0) - VectorGetZ(v1), VectorGetW(v0) - VectorGetW(v1));
-#elif defined(FOUNDATION_HAS_NEON)
-    return vsubq_f32(v0, v1);
-#else
-    return _mm_sub_ps(v0, v1);
-#endif
-}
-
-FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleSubtract(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
-#if defined(FOUNDATION_HAS_NEON64)
-    return SIMDVectorDoubleDetail::FromPairs(vsubq_f64(SIMDVectorDoubleDetail::GetLow(v0), SIMDVectorDoubleDetail::GetLow(v1)), vsubq_f64(SIMDVectorDoubleDetail::GetHigh(v0), SIMDVectorDoubleDetail::GetHigh(v1)));
-#elif defined(FOUNDATION_HAS_AVX)
-    return BitCast<SIMDVectorDouble>(_mm256_sub_pd(BitCast<__m256d>(v0), BitCast<__m256d>(v1)));
-#elif defined(FOUNDATION_HAS_SSE2)
-    return SIMDVectorDoubleDetail::FromPairs(_mm_sub_pd(SIMDVectorDoubleDetail::GetLow(v0), SIMDVectorDoubleDetail::GetLow(v1)), _mm_sub_pd(SIMDVectorDoubleDetail::GetHigh(v0), SIMDVectorDoubleDetail::GetHigh(v1)));
 #else
     return v0 - v1;
 #endif
 }
 
-FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorMultiply(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
-#if defined(FOUNDATION_HAS_SCALAR)
-    return VectorSet(VectorGetX(v0) * VectorGetX(v1), VectorGetY(v0) * VectorGetY(v1), VectorGetZ(v0) * VectorGetZ(v1), VectorGetW(v0) * VectorGetW(v1));
-#elif defined(FOUNDATION_HAS_NEON)
-    return vmulq_f32(v0, v1);
-#else
-    return _mm_mul_ps(v0, v1);
-#endif
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleSubtract(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
+#pragma STDC FENV_ACCESS ON
+    return v0 - v1;
 }
 
-FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleMultiply(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
-#if defined(FOUNDATION_HAS_NEON64)
-    return SIMDVectorDoubleDetail::FromPairs(vmulq_f64(SIMDVectorDoubleDetail::GetLow(v0), SIMDVectorDoubleDetail::GetLow(v1)), vmulq_f64(SIMDVectorDoubleDetail::GetHigh(v0), SIMDVectorDoubleDetail::GetHigh(v1)));
-#elif defined(FOUNDATION_HAS_AVX)
-    return BitCast<SIMDVectorDouble>(_mm256_mul_pd(BitCast<__m256d>(v0), BitCast<__m256d>(v1)));
-#elif defined(FOUNDATION_HAS_SSE2)
-    return SIMDVectorDoubleDetail::FromPairs(_mm_mul_pd(SIMDVectorDoubleDetail::GetLow(v0), SIMDVectorDoubleDetail::GetLow(v1)), _mm_mul_pd(SIMDVectorDoubleDetail::GetHigh(v0), SIMDVectorDoubleDetail::GetHigh(v1)));
+FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorMultiply(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
+#pragma STDC FENV_ACCESS ON
+#if defined(FOUNDATION_HAS_SCALAR)
+    return VectorSet(VectorGetX(v0) * VectorGetX(v1), VectorGetY(v0) * VectorGetY(v1), VectorGetZ(v0) * VectorGetZ(v1), VectorGetW(v0) * VectorGetW(v1));
 #else
     return v0 * v1;
 #endif
 }
 
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleMultiply(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
+#pragma STDC FENV_ACCESS ON
+    return v0 * v1;
+}
+
+// Widen raw unsigned 32-bit lanes to full unsigned 64-bit products without floating-point operations.
+FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorMultiplyUInt32Wide(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
+#if defined(FOUNDATION_HAS_NEON64)
+    const uint32x4_t a = vreinterpretq_u32_f32(v0);
+    const uint32x4_t b = vreinterpretq_u32_f32(v1);
+    return SIMDVectorDoubleDetail::FromUIntPairs(vmull_u32(vget_low_u32(a), vget_low_u32(b)), vmull_u32(vget_high_u32(a), vget_high_u32(b)));
+#elif defined(FOUNDATION_HAS_SSE2)
+    const __m128i a = _mm_castps_si128(v0);
+    const __m128i b = _mm_castps_si128(v1);
+    const __m128i even = _mm_mul_epu32(a, b);
+    const __m128i odd = _mm_mul_epu32(_mm_srli_si128(a, 4), _mm_srli_si128(b, 4));
+    return SIMDVectorDoubleDetail::FromUIntPairs(_mm_unpacklo_epi64(even, odd), _mm_unpackhi_epi64(even, odd));
+#else
+    return VectorDoubleSetInt(
+        static_cast<u64>(VectorGetIntX(v0)) * static_cast<u64>(VectorGetIntX(v1)),
+        static_cast<u64>(VectorGetIntY(v0)) * static_cast<u64>(VectorGetIntY(v1)),
+        static_cast<u64>(VectorGetIntZ(v0)) * static_cast<u64>(VectorGetIntZ(v1)),
+        static_cast<u64>(VectorGetIntW(v0)) * static_cast<u64>(VectorGetIntW(v1))
+    );
+#endif
+}
+
 FOUNDATION_INLINE SIMDVectorSingle FOUNDATION_SIMD_CALL VectorDivide(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
+#pragma STDC FENV_ACCESS ON
 #if defined(FOUNDATION_HAS_SCALAR)
     return VectorSet(VectorGetX(v0) / VectorGetX(v1), VectorGetY(v0) / VectorGetY(v1), VectorGetZ(v0) / VectorGetZ(v1), VectorGetW(v0) / VectorGetW(v1));
-#elif defined(FOUNDATION_HAS_NEON)
-#if defined(FOUNDATION_HAS_NEON64)
-    return vdivq_f32(v0, v1);
 #else
-    float32x4_t reciprocal = vrecpeq_f32(v1);
-    float32x4_t scale = vrecpsq_f32(reciprocal, v1);
-    reciprocal = vmulq_f32(scale, reciprocal);
-    scale = vrecpsq_f32(reciprocal, v1);
-    reciprocal = vmulq_f32(scale, reciprocal);
-    return vmulq_f32(v0, reciprocal);
-#endif
-#else
-    return _mm_div_ps(v0, v1);
+    return v0 / v1;
 #endif
 }
 
 FOUNDATION_INLINE SIMDVectorDouble FOUNDATION_SIMD_CALL VectorDoubleDivide(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
-#if defined(FOUNDATION_HAS_NEON64)
-    return SIMDVectorDoubleDetail::FromPairs(vdivq_f64(SIMDVectorDoubleDetail::GetLow(v0), SIMDVectorDoubleDetail::GetLow(v1)), vdivq_f64(SIMDVectorDoubleDetail::GetHigh(v0), SIMDVectorDoubleDetail::GetHigh(v1)));
-#elif defined(FOUNDATION_HAS_AVX)
-    return BitCast<SIMDVectorDouble>(_mm256_div_pd(BitCast<__m256d>(v0), BitCast<__m256d>(v1)));
-#elif defined(FOUNDATION_HAS_SSE2)
-    return SIMDVectorDoubleDetail::FromPairs(_mm_div_pd(SIMDVectorDoubleDetail::GetLow(v0), SIMDVectorDoubleDetail::GetLow(v1)), _mm_div_pd(SIMDVectorDoubleDetail::GetHigh(v0), SIMDVectorDoubleDetail::GetHigh(v1)));
-#else
+#pragma STDC FENV_ACCESS ON
     return v0 / v1;
-#endif
 }
 
 

@@ -165,8 +165,8 @@ f32 ResolveUiSkinSquareExtent(in f32 minimumExtent, in UiSkinRegion region){
 }
 
 f32 ResolveUiSkinSquareExtent(in f32 minimumExtent, in UiSkinRegion region, in f32 density){
-    const f32 sourceExtent = cast<f32>(Max(region.rectangle.width, region.rectangle.height)) / density;
-    return Max(ResolveUiSkinSquareExtent(minimumExtent, region), sourceExtent);
+    const VectorSingle sourceExtent = VectorSingle(cast<f32>(Max(region.rectangle.width, region.rectangle.height))) / VectorSingle(density);
+    return Max(ResolveUiSkinSquareExtent(minimumExtent, region), sourceExtent.x);
 }
 
 void RebuildUiSkinRegionIndex(in Span<UiSkinRegion> regions, mut Vector<u32> outIndex){

@@ -70,7 +70,8 @@ Expected<f32> TryComputeCameraTanHalfVerticalFov(in f32 verticalFovRadians){
 }
 
 b8 CameraClipRangeValid(in f32 nearPlane, in f32 farPlane){
-    return IsFinite(nearPlane) && IsFinite(farPlane) && nearPlane > 0.0f && nearPlane < farPlane;
+    const VectorSingle clipPlanes(nearPlane, farPlane, nearPlane, farPlane);
+    return IsFinite(clipPlanes.xy) && nearPlane > 0.0f && nearPlane < farPlane;
 }
 
 f32 ResolveCameraAspectRatio(in f32 cameraAspectRatio, in f32 fallbackAspectRatio){
@@ -89,10 +90,10 @@ b8 CameraProjectionValuesValid(
     in f32 nearPlane,
     in f32 farPlane
 ){
+    const VectorSingle aspectAndTan(aspectRatio, tanHalfVerticalFov, aspectRatio, tanHalfVerticalFov);
     return
-        IsFinite(projectionParams.x) && IsFinite(projectionParams.y) && IsFinite(projectionParams.z) && IsFinite(projectionParams.w)
-        && IsFinite(aspectRatio)
-        && IsFinite(tanHalfVerticalFov)
+        IsFinite(projectionParams)
+        && IsFinite(aspectAndTan.xy)
         && aspectRatio > 0.0f
         && tanHalfVerticalFov > 0.0f
         && CameraClipRangeValid(nearPlane, farPlane)
@@ -116,16 +117,14 @@ Expected<CameraProjection> TryBuildCameraProjection(
 
     const f32 aspectRatio = ResolveCameraAspectRatio(cameraAspectRatio, fallbackAspectRatio);
     const f32 depthRange = farPlane - nearPlane;
-    const VectorSingle projectionParams(
-        1.0f / (tanHalfFov.value() * aspectRatio),
-        1.0f / tanHalfFov.value(),
-        farPlane / depthRange,
-        (-farPlane * nearPlane) / depthRange
-    );
-    if(!CameraProjectionValuesValid(projectionParams, aspectRatio, tanHalfFov.value(), nearPlane, farPlane))
+    const f32 tanHalf = tanHalfFov.value();
+    const VectorSingle numerators(1.0f, 1.0f, farPlane, -farPlane * nearPlane);
+    const VectorSingle denominators(tanHalf * aspectRatio, tanHalf, depthRange, depthRange);
+    const VectorSingle projectionParams = numerators / denominators;
+    if(!CameraProjectionValuesValid(projectionParams, aspectRatio, tanHalf, nearPlane, farPlane))
         return MakeUnexpected(Failure());
 
-    return MakeCameraProjection(projectionParams, VectorSingle(aspectRatio, tanHalfFov.value(), nearPlane, farPlane));
+    return MakeCameraProjection(projectionParams, VectorSingle(aspectRatio, tanHalf, nearPlane, farPlane));
 }
 
 CameraProjection StoreDefaultCameraProjection(in f32 fallbackAspectRatio){
@@ -147,11 +146,7 @@ CameraProjection StoreDefaultCameraProjection(){
 }
 
 b8 IsValidCameraTransformVectors(in VectorSingle position, in VectorSingle rotation, in VectorSingle scale){
-    if(
-        !IsFinite(position.x) || !IsFinite(position.y) || !IsFinite(position.z)
-        || !IsFinite(rotation.x) || !IsFinite(rotation.y) || !IsFinite(rotation.z) || !IsFinite(rotation.w)
-        || !IsFinite(scale.x) || !IsFinite(scale.y) || !IsFinite(scale.z)
-    )
+    if(!IsFinite(position.xyz) || !IsFinite(rotation) || !IsFinite(scale.xyz))
         return false;
 
     const f32 rotationLengthSquared = LengthSq(rotation);

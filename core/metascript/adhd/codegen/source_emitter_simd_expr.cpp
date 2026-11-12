@@ -104,19 +104,8 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
                         u32 effLanes = SimdConstantAnalysis::InferEffectiveSimdLanes(*expr.arguments[0], &m_symbols);
                         if(expr.arguments.size() == 2u && expr.arguments[1]){
                             const u32 effLanes1 = SimdConstantAnalysis::InferEffectiveSimdLanes(*expr.arguments[1], &m_symbols);
-                            if(effLanes1 < effLanes)
+                            if(effLanes1 > effLanes)
                                 effLanes = effLanes1;
-                        }
-                        if(callee == "Dot" && effLanes == 4u && !IsIntSimdType(argSimd) && expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
-                            const Expr* sumArg = SimdConstantAnalysis::IsSimdUnitFloatVectorExpr(*expr.arguments[1], isDouble, &m_symbols)
-                                ? expr.arguments[0]
-                                : (SimdConstantAnalysis::IsSimdUnitFloatVectorExpr(*expr.arguments[0], isDouble, &m_symbols) ? expr.arguments[1] : nullptr);
-                            if(sumArg){
-                                out.append(isDouble ? "::VectorDoubleSum(" : "::VectorSum(");
-                                emitSimdRegExpr(out, *sumArg, argSimd);
-                                out.push_back(')');
-                                return;
-                            }
                         }
                         AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes, scalarReductionSuffix);
                         for(usize i = 0u; i < expr.arguments.size(); ++i){
@@ -128,38 +117,6 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
                         out.push_back(')');
                         return;
                     }
-                }
-                if(callee == "Rsqrt" && expr.arguments.size() == 1u){
-                    if(const Expr* lenSqVec = SimdOptimizationAnalysis::TryMatchSimdLengthSqVecArg(expr.arguments[0], isDouble, m_symbols)){
-                        const u32 effLanes = SimdConstantAnalysis::InferEffectiveSimdLanes(*lenSqVec, &m_symbols);
-                        AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes, "ReciprocalLength");
-                        emitSimdRegExpr(out, *lenSqVec, lenSqVec->resolvedSimdType);
-                        out.push_back(')');
-                        return;
-                    }
-                }
-                const Expr* maxBaseVec = nullptr;
-                b8 maxIsDouble = false;
-                u32 maxLanes = 0u;
-                b8 maxIsAbs = false;
-                if(callee == "Max" && SimdExpressionAnalysis::TryMatchSimdMaxComponentReduction(expr, maxBaseVec, maxIsDouble, maxLanes, maxIsAbs) && maxIsDouble == isDouble && maxBaseVec){
-                    AppendSimdLaneCountIntrinsicPrefix(out, isDouble, maxLanes, "MaxComponent");
-                    if(maxIsAbs)
-                        out.append(isDouble ? "::VectorDoubleAbs(" : "::VectorAbs(");
-                    emitSimdRegExpr(out, *maxBaseVec, isDouble ? "VectorDouble" : "VectorSingle");
-                    if(maxIsAbs)
-                        out.push_back(')');
-                    out.push_back(')');
-                    return;
-                }
-            }
-            if(expr.kind == ExprKind::Binary && expr.op == TokenType::Slash && expr.lhs && expr.rhs && SimdConstantAnalysis::IsUnitFloatLiteral(*expr.lhs, &m_symbols)){
-                if(const Expr* lenVec = SimdOptimizationAnalysis::TryMatchSimdLengthVecArg(expr.rhs, isDouble, m_symbols)){
-                    const u32 effLanes = SimdConstantAnalysis::InferEffectiveSimdLanes(*lenVec, &m_symbols);
-                    AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes, "ReciprocalLength");
-                    emitSimdRegExpr(out, *lenVec, lenVec->resolvedSimdType);
-                    out.push_back(')');
-                    return;
                 }
             }
             if(SimdExpressionAnalysis::IsZeroScalarLiteral(expr, &m_symbols)){
@@ -269,7 +226,7 @@ void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStrin
                 }
                 if(const Expr* splatScalar = SimdExpressionAnalysis::TryUnwrapSimdSplatScalarArg(*expr.lhs, m_symbols)){
                     if(SimdExpressionAnalysis::IsZeroScalarLiteral(*splatScalar, &m_symbols)){
-                        out.append(isDouble ? "::VectorDoubleZero()" : "::VectorZero()");
+                        out.append(isDouble ? "::VectorDoubleNegate(::VectorDoubleZero())" : "::VectorNegate(::VectorZero())");
                         return;
                     }
                     if(SimdConstantAnalysis::IsUnitFloatLiteral(*splatScalar, &m_symbols)){

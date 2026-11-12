@@ -100,16 +100,18 @@ inline void FOUNDATION_SIMD_CALL Transform(
     outOrigin = VectorAdd(Vector3Rotate(VectorScale(frustumOrigin, scale), rotation), translation);
     outOrientation = QuaternionNormalize(QuaternionMultiply(rotation, frustumOrientation));
     const f32 absScale = Abs(scale);
+    const SIMDVectorSingle scaledPlanes = VectorScale(VectorSet(nearPlaneValue, farPlaneValue, nearPlaneValue, farPlaneValue), absScale);
     outRightSlope = rightSlopeValue;
     outLeftSlope = leftSlopeValue;
     outTopSlope = topSlopeValue;
     outBottomSlope = bottomSlopeValue;
-    outNearPlane = nearPlaneValue * absScale;
-    outFarPlane = farPlaneValue * absScale;
+    outNearPlane = VectorGetX(scaledPlanes);
+    outFarPlane = VectorGetY(scaledPlanes);
     if(scale < 0.0f){
         outOrientation = QuaternionNormalize(QuaternionMultiply(outOrientation, VectorSet(0.0f, 1.0f, 0.0f, 0.0f)));
-        outTopSlope = -bottomSlopeValue;
-        outBottomSlope = -topSlopeValue;
+        const SIMDVectorSingle negatedSlopes = VectorNegate(VectorSet(bottomSlopeValue, topSlopeValue, bottomSlopeValue, topSlopeValue));
+        outTopSlope = VectorGetX(negatedSlopes);
+        outBottomSlope = VectorGetY(negatedSlopes);
     }
 }
 
@@ -373,16 +375,18 @@ inline void FOUNDATION_SIMD_CALL Transform(
     outOrigin = VectorDoubleAdd(VectorDouble3Rotate(VectorDoubleScale(frustumOrigin, scale), rotation), translation);
     outOrientation = QuaternionDoubleNormalize(QuaternionDoubleMultiply(rotation, frustumOrientation));
     const f64 absScale = Abs(scale);
+    const SIMDVectorDouble scaledPlanes = VectorDoubleScale(VectorDoubleSet(nearPlaneValue, farPlaneValue, nearPlaneValue, farPlaneValue), absScale);
     outRightSlope = rightSlopeValue;
     outLeftSlope = leftSlopeValue;
     outTopSlope = topSlopeValue;
     outBottomSlope = bottomSlopeValue;
-    outNearPlane = nearPlaneValue * absScale;
-    outFarPlane = farPlaneValue * absScale;
+    outNearPlane = VectorDoubleGetX(scaledPlanes);
+    outFarPlane = VectorDoubleGetY(scaledPlanes);
     if(scale < 0.0){
         outOrientation = QuaternionDoubleNormalize(QuaternionDoubleMultiply(outOrientation, VectorDoubleSet(0.0, 1.0, 0.0, 0.0)));
-        outTopSlope = -bottomSlopeValue;
-        outBottomSlope = -topSlopeValue;
+        const SIMDVectorDouble negatedSlopes = VectorDoubleNegate(VectorDoubleSet(bottomSlopeValue, topSlopeValue, bottomSlopeValue, topSlopeValue));
+        outTopSlope = VectorDoubleGetX(negatedSlopes);
+        outBottomSlope = VectorDoubleGetY(negatedSlopes);
     }
 }
 

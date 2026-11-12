@@ -205,6 +205,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         nwb_declare_executable(nwb_avboit_depth_warp_probe_smoke)
         nwb_target_adhd_sources(nwb_avboit_depth_warp_probe_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES
             "${CMAKE_CURRENT_LIST_DIR}/avboit_integration_and_refraction_tile_probes.adhd"
+            "${CMAKE_CURRENT_LIST_DIR}/optical_bounds_runtime_probe.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/avboit_depth_warp_probe_interop.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/avboit_depth_warp_probe.adhd"
         )
@@ -213,7 +214,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         if(TARGET nwb_logserver)
             add_test(NAME nwb_avboit_depth_warp_probe_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/avboit_depth_warp_probe_smoke.py" --executable "$<TARGET_FILE:nwb_avboit_depth_warp_probe_smoke>"
                     --working-directory "${_nwb_transparent_multi_runtime_root}" --logserver-executable "$<TARGET_FILE:nwb_logserver>" --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/avboit_depth_warp_probe" CONFIGURATIONS dbg opt)
-            set_tests_properties(nwb_avboit_depth_warp_probe_smoke PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_avboit_depth_warp_probe_timeout_seconds} LABELS "avboit;gpu_validation")
+            set_tests_properties(nwb_avboit_depth_warp_probe_smoke PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_avboit_depth_warp_probe_timeout_seconds} LABELS "avboit;optical_bounds;gpu_validation")
         endif()
 
         include("${CMAKE_CURRENT_LIST_DIR}/csg_shadow_capture.cmake")

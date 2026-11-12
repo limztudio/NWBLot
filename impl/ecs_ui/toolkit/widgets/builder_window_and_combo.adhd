@@ -495,7 +495,8 @@ b8 ComboCoordinator::paintComboQuery(ComboFrame& frame, LayoutBox& content){
     if(frame.editor >= m_builder.m_scope->m_comboEditors.size() || !m_builder.comboMatches(frame))
         return false;
     const Item& item = m_builder.m_scope->m_comboEditors[frame.editor];
-    const f32 measuredHeight = (item.editView.visualBounds().height + item.padding.top) + item.padding.bottom;
+    const SIMDVectorSingle heightAndTop = VectorAdd(VectorReplicate(item.editView.visualBounds().height), VectorReplicate(item.padding.top));
+    const f32 measuredHeight = VectorGetX(VectorAdd(heightAndTop, VectorReplicate(item.padding.bottom)));
     Rect nextContentRect = content.rectangle;
     LayoutBox box = content;
     box.rectangle = ResolveComboQueryBoxAndAdvanceContent(measuredHeight, frame.queryHeight, frame.queryGap, nextContentRect);

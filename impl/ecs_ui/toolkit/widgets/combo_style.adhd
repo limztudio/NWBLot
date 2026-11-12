@@ -82,9 +82,13 @@ void ResolveComboFieldLayout(in Rect bounds, in Insets padding, in f32 arrowExte
     const Rect content = InsetUiRectBounds(bounds, padding);
     const f32 extent = Min(arrowExtent, Min(content.width, content.height));
     const f32 iconOffsetY = Max(0.0f, (content.height - extent) * s_RectCenterFraction);
-    outIcon = Rect(((bounds.x + bounds.width) - padding.right) - extent, (bounds.y + padding.top) + iconOffsetY, extent, extent);
-    const f32 textX = bounds.x + padding.left;
-    const f32 textY = bounds.y + padding.top;
+    const VectorSingle leading = VectorSingle(bounds.x, bounds.y, bounds.x, bounds.y) + VectorSingle(bounds.width, padding.top, bounds.width, padding.top);
+    const f32 iconX = (leading.x - padding.right) - extent;
+    const f32 iconY = leading.y + iconOffsetY;
+    outIcon = Rect(iconX, iconY, extent, extent);
+    const VectorSingle textOrigin = VectorSingle(bounds.x, bounds.y, bounds.x, bounds.y) + VectorSingle(padding.left, padding.top, padding.left, padding.top);
+    const f32 textX = textOrigin.x;
+    const f32 textY = textOrigin.y;
     const f32 textWidth = Max(0.0f, (outIcon.x - arrowGap) - textX);
     outTextClip = Rect(textX, textY, textWidth, content.height);
 }
@@ -99,9 +103,13 @@ b8 IsValidComboDeclarationOptions(in ComboOptions options, in ComboStyle style){
 }
 
 Point ComputeComboFieldIntrinsicSize(in Point minimumSize, in Point measured, in f32 arrowExtent, in f32 arrowGap, in Insets padding){
-    const f32 paddedWidth = ((measured.x + arrowExtent) + arrowGap) + padding.left + padding.right;
-    const f32 paddedHeight = Max(measured.y, arrowExtent) + padding.top + padding.bottom;
-    return Point(Max(minimumSize.x, paddedWidth), Max(minimumSize.y, paddedHeight));
+    const f32 textWidth = (measured.x + arrowExtent) + arrowGap;
+    const f32 textHeight = Max(measured.y, arrowExtent);
+    const VectorSingle padded = (VectorSingle(textWidth, textHeight, textWidth, textHeight) + VectorSingle(padding.left, padding.top, padding.left, padding.top)) + VectorSingle(padding.right, padding.bottom, padding.right, padding.bottom);
+    const f32 paddedWidth = padded.x;
+    const f32 paddedHeight = padded.y;
+    const VectorSingle extent = Max(VectorSingle(minimumSize.x, minimumSize.y, minimumSize.x, minimumSize.y), VectorSingle(paddedWidth, paddedHeight, paddedWidth, paddedHeight));
+    return Point(extent.x, extent.y);
 }
 
 b8 IsValidSearchComboDeclarationOptions(in SearchComboOptions options){

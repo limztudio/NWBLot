@@ -27,9 +27,9 @@ Expected<CsgReceiverCpuBounds> BuildPositionStreamBounds(in Span<f32x3u> positio
     VectorSingle minBounds(f32.max, f32.max, f32.max, 0.0f);
     VectorSingle maxBounds(-f32.max, -f32.max, -f32.max, 0.0f);
     for(in f32x3u pos : positions){
-        if(!IsFinite(pos.x) || !IsFinite(pos.y) || !IsFinite(pos.z))
-            return MakeUnexpected(Failure());
         const VectorSingle p(pos);
+        if(!IsFinite(p.xyz))
+            return MakeUnexpected(Failure());
         minBounds = Min(minBounds, p);
         maxBounds = Max(maxBounds, p);
     }
@@ -53,8 +53,9 @@ f32 ComputeWorldToShapeScaleBound(in MatrixSingle worldToShape){
     const VectorSingle row0 = Mul(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), transposed);
     const VectorSingle row1 = Mul(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), transposed);
     const VectorSingle row2 = Mul(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), transposed);
-    const f32 lengthSquared = (LengthSq(row0.xyz) + LengthSq(row1.xyz)) + LengthSq(row2.xyz);
-    return Sqrt(lengthSquared);
+    const VectorSingle rowLengthsSq(LengthSq(row0.xyz), LengthSq(row1.xyz), LengthSq(row2.xyz), 0.0f);
+    const VectorSingle lengthSquared = (rowLengthsSq.xxxx + rowLengthsSq.yyyy) + rowLengthsSq.zzzz;
+    return Sqrt(lengthSquared.x);
 }
 
 void CopyCsgCutterInlineParameters(in Span<u8> parameterBytes, mut CsgCutterGpuData inOutCutter){

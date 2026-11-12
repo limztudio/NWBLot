@@ -3,6 +3,8 @@
 
 
 #include "gpu_overlap_metric_tracker.h"
+
+#include <global/simd/vector_arithmetic.h>
 #include "gpu_timing_metric_correlator.h"
 
 #include <global/simd/vector.h>
@@ -105,7 +107,7 @@ void GpuOverlapMetricTracker::record(const Name& scopeName, const u64 frameIndex
             continue;
 
         if(const auto overlapTicks = TryComputeGpuTimestampOverlap(frame->first, frame->second)){
-            const f64 overlapSeconds = static_cast<f64>(*overlapTicks) * frame->first.secondsPerTick;
+            const f64 overlapSeconds = VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(*overlapTicks)), VectorDoubleReplicate(frame->first.secondsPerTick)));
             performanceSamples.reserve(performanceSamples.size() + 1u);
             performanceSamples.push_back(GpuTimingSinkSample{ .scope = record.outputScope, .durationSeconds = overlapSeconds, .sourceFrameIndex = frameIndex, });
         }

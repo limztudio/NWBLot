@@ -2,13 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "type_checker.h"
+
 #include <core/metascript/literal_decoder.h>
 
 #include <core/metascript/adhd/ast/builtin_type_semantics.h>
 
 #include <core/metascript/adhd/ast/operator_semantics.h>
 
-#include "type_checker.h"
 
 #include "callable_template_deduction.h"
 
@@ -158,6 +159,25 @@ MStringView TypeChecker::inferExprTypeName(const ClassDecl* ownerClass, const Me
                         if(SymbolTable::IsSimdType(argT))
                             return argT;
                     }
+                    if(expr.lhs->text == "Lerp"){
+                        MStringView promoted;
+                        b8 allScalar = true;
+                        for(const Expr* argument : expr.arguments){
+                            const MStringView type = argument ? inferExprTypeName(ownerClass, method, *argument, scope) : MStringView{};
+                            if(!BuiltinTypeSemantics::IsScalarType(type)){
+                                allScalar = false;
+                                break;
+                            }
+                            if(type == "f64")
+                                promoted = "f64";
+                            else if(type == "f32" && promoted != "f64")
+                                promoted = "f32";
+                        }
+                        if(allScalar && !promoted.empty())
+                            return promoted;
+                    }
+                    else if(expr.lhs->text != "Rsqrt" && !expr.callTemplateArgs.empty() && expr.callTemplateArgs[0].type)
+                        return m_symbols.resolveBaseTypeName(expr.callTemplateArgs[0].type->name);
                     return inferExprTypeName(ownerClass, method, *expr.arguments[0], scope);
                 }
             }
@@ -770,6 +790,13 @@ MStringView TypeChecker::inferExprBaseType(const ClassDecl* ownerClass, const Me
             return lhsT;
         if(m_symbols.findEnum(rhsT) || (!m_symbols.hasTypeSymbol(rhsT) && FindBuiltinEnum(rhsT)))
             return rhsT;
+        if(!OperatorSemantics::IsCompoundOrSimpleAssignment(expr.op)
+            && BuiltinTypeSemantics::IsScalarType(lhsT) && BuiltinTypeSemantics::IsScalarType(rhsT)){
+            if(lhsT == "f64" || rhsT == "f64")
+                return "f64";
+            if(lhsT == "f32" || rhsT == "f32")
+                return "f32";
+        }
         return !lhsT.empty() ? lhsT : rhsT;
     }
     const TypeRef* typeRef = inferExprTypeRef(ownerClass, method, expr, scope);
@@ -779,8 +806,6 @@ MStringView TypeChecker::inferExprBaseType(const ClassDecl* ownerClass, const Me
         ? m_symbols.resolveBaseTypeName(typeRef->name)
         : inferExprTypeName(ownerClass, method, expr, scope);
 }
-
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -256,7 +256,7 @@ struct GraphTimingKeyHasher{
 using GraphTimingMap = HashMap<GraphTimingKey, f64, Core::Alloc::ScratchArena, GraphTimingKeyHasher, EqualTo<GraphTimingKey>>;
 
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] AStringView FormatNameIdentityText(const Name& name, Array<char, NameHashTextCodec::s_TextLength + 1u>& outIdentityText)noexcept{
@@ -296,7 +296,7 @@ void AddTiming(const Core::Telemetry::PerfTimingPayload& payload, TelemetryRepor
         ++summary.cpuTimingEventCount;
         summary.cpuTimingSampleCount += payload.stats.sampleCount;
         if(summary.cpuTimingSecondsValid){
-            const f64 total = summary.cpuTimingSeconds + payload.stats.seconds;
+            const f64 total = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(summary.cpuTimingSeconds), VectorDoubleReplicate(payload.stats.seconds)));
             if(IsFiniteTimingSecondsTotal(total))
                 summary.cpuTimingSeconds = total;
             else
@@ -309,7 +309,7 @@ void AddTiming(const Core::Telemetry::PerfTimingPayload& payload, TelemetryRepor
         ++summary.gpuTimingEventCount;
         summary.gpuTimingSampleCount += payload.stats.sampleCount;
         if(summary.gpuTimingSecondsValid){
-            const f64 total = summary.gpuTimingSeconds + payload.stats.seconds;
+            const f64 total = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(summary.gpuTimingSeconds), VectorDoubleReplicate(payload.stats.seconds)));
             if(IsFiniteTimingSecondsTotal(total))
                 summary.gpuTimingSeconds = total;
             else
@@ -452,7 +452,7 @@ void AppendTimedGraphDot(const FrameGraphReportRecord& record, const usize graph
             timedLabel.reserve(labelView.size() + s_LogTelemetryReportDotTimedGraphDotTimingLabelExtraBytes);
             timedLabel.append(labelView.data(), labelView.size());
             timedLabel += '\n';
-            StringAppendFormat(timedLabel, "{:.3f} ms", timed.value() * s_LogTelemetryReportDotMillisecondsPerSecond);
+            StringAppendFormat(timedLabel, "{:.3f} ms", VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(timed.value()), VectorDoubleReplicate(s_LogTelemetryReportDotMillisecondsPerSecond))));
 
             AppendDotQuotedText(out, AStringView(timedLabel.data(), timedLabel.size()));
         }

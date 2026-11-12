@@ -84,24 +84,20 @@ b8 IsAffineSkeletonJointRow3(in VectorSingle row3){
         && Abs(row3.w - 1.0f) <= s_SkeletonAffineEpsilon;
 }
 
-b8 IsInvertibleSkeletonJointMatrix(in MatrixSingle matrix, in f32 determinantEpsilon){
-    return MatrixIsInvertibleAffine(matrix, s_SkeletonAffineEpsilon, determinantEpsilon);
-}
-
 Expected<MatrixSingle> TryResolveSkinningJointMatrix(
     in MatrixSingle poseJoint,
     in b8 hasInverseBind,
     in MatrixSingle inverseBind,
     in f32 inverseBindDeterminantEpsilon
 ){
-    if(!IsInvertibleSkeletonJointMatrix(poseJoint, s_SkeletonJointDeterminantEpsilon))
+    if(!MatrixIsInvertibleAffine(poseJoint, s_SkeletonAffineEpsilon, s_SkeletonJointDeterminantEpsilon))
         return MakeUnexpected(Failure());
     if(!hasInverseBind)
         return poseJoint;
-    if(!IsInvertibleSkeletonJointMatrix(inverseBind, inverseBindDeterminantEpsilon))
+    if(!MatrixIsInvertibleAffine(inverseBind, s_SkeletonAffineEpsilon, inverseBindDeterminantEpsilon))
         return MakeUnexpected(Failure());
     const MatrixSingle combined = Mul(poseJoint, inverseBind);
-    if(!IsInvertibleSkeletonJointMatrix(combined, s_SkeletonJointDeterminantEpsilon))
+    if(!MatrixIsInvertibleAffine(combined, s_SkeletonAffineEpsilon, s_SkeletonJointDeterminantEpsilon))
         return MakeUnexpected(Failure());
     return combined;
 }
@@ -111,12 +107,12 @@ Expected<MatrixSingle> TryResolveSkeletonPoseJointMatrix(
     in b8 hasParentJoint,
     in MatrixSingle parentJoint
 ){
-    if(!IsInvertibleSkeletonJointMatrix(localJoint, s_SkeletonJointDeterminantEpsilon))
+    if(!MatrixIsInvertibleAffine(localJoint, s_SkeletonAffineEpsilon, s_SkeletonJointDeterminantEpsilon))
         return MakeUnexpected(Failure());
     if(!hasParentJoint)
         return localJoint;
     const MatrixSingle combined = Mul(parentJoint, localJoint);
-    if(!IsInvertibleSkeletonJointMatrix(combined, s_SkeletonJointDeterminantEpsilon))
+    if(!MatrixIsInvertibleAffine(combined, s_SkeletonAffineEpsilon, s_SkeletonJointDeterminantEpsilon))
         return MakeUnexpected(Failure());
     return combined;
 }
@@ -126,7 +122,7 @@ Expected<MatrixSingle> TryEvaluateSkeletonPoseJointMatrix(in SkeletonPoseCompone
         return MakeUnexpected(Failure());
     const usize jointCount = pose.localJoints.size();
     for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
-        if(!IsInvertibleSkeletonJointMatrix(MatrixSingle(pose.localJoints[jointIndex]), s_SkeletonJointDeterminantEpsilon))
+        if(!MatrixIsInvertibleAffine(MatrixSingle(pose.localJoints[jointIndex]), s_SkeletonAffineEpsilon, s_SkeletonJointDeterminantEpsilon))
             return MakeUnexpected(Failure());
     }
     MatrixSingle matrix(pose.localJoints[cast<usize>(targetJointIndex)]);
@@ -134,7 +130,7 @@ Expected<MatrixSingle> TryEvaluateSkeletonPoseJointMatrix(in SkeletonPoseCompone
     while(pose.parentJoints[cast<usize>(currentJoint)] != s_SkeletonInvalidJointIndex){
         const u32 parentJoint = pose.parentJoints[cast<usize>(currentJoint)];
         matrix = Mul(MatrixSingle(pose.localJoints[cast<usize>(parentJoint)]), matrix);
-        if(!IsInvertibleSkeletonJointMatrix(matrix, s_SkeletonJointDeterminantEpsilon))
+        if(!MatrixIsInvertibleAffine(matrix, s_SkeletonAffineEpsilon, s_SkeletonJointDeterminantEpsilon))
             return MakeUnexpected(Failure());
         currentJoint = parentJoint;
     }

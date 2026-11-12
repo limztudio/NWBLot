@@ -159,6 +159,8 @@ class UiPopupToolsSmokeScene{
     private b8 m_sentinelFocused = false;
     private b8 m_enabled = true;
     private b8 m_displayChanged = false;
+    private b8 m_hoverObserved = false;
+    private b8 m_anchorHovered = false;
 
     public UiPopupToolsSmokeScene(mut GlobalArena arena);
 
@@ -1090,6 +1092,18 @@ b8 UiPopupToolsSmokeScene::paint(mut UiPaintContext context){
         ++this.m_underlying;
     if(!context.ui.endPanel())
         return false;
+    b8 anchorHovered = false;
+    native(in context, mut anchorHovered){
+        const auto& input = context.ui.input();
+        const auto* hovered = input.findTarget(input.hover());
+        anchorHovered = hovered && hovered->rectangle.x == 32.0f && hovered->rectangle.y == 64.0f
+            && hovered->rectangle.width == 220.0f && hovered->rectangle.height == 36.0f;
+    }
+    if(!this.m_hoverObserved || this.m_anchorHovered != anchorHovered){
+        this.m_hoverObserved = true;
+        this.m_anchorHovered = anchorHovered;
+        [essential] info("UiPopupToolsSmoke: anchor_hover={}", cast<u32>(anchorHovered));
+    }
     this.observeState();
     const Array<u64, 15u> markerValues = this.values();
     PaintKeyedSmokeValueMarkersDefault(markerValues, cast<u64>(this.m_sequence), 16u, 12u, context);

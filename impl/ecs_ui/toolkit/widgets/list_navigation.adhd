@@ -149,16 +149,19 @@ Expected<ListMeasureKey> TryBuildListMeasureKey(
 }
 
 Rect ResolveListProbeRect(in UiSkinRegion background, in Insets padding, in f32 scrollbarWidth, in f32 rowHeight){
-    const f32 probeWidth = Max(Max(s_StyleMinimumFieldWidth, background.minimumWidth), padding.left + padding.right + scrollbarWidth + rowHeight);
-    const f32 probeHeight = Max(background.minimumHeight, rowHeight + padding.top + padding.bottom);
+    const f32 minimumWidth = Max(s_StyleMinimumFieldWidth, background.minimumWidth);
+    const f32 paddedWidth = padding.left + padding.right + scrollbarWidth + rowHeight;
+    const f32 paddedHeight = rowHeight + padding.top + padding.bottom;
+    const VectorSingle size = Max(VectorSingle(minimumWidth, background.minimumHeight, minimumWidth, background.minimumHeight), VectorSingle(paddedWidth, paddedHeight, paddedWidth, paddedHeight));
+    const f32 probeWidth = size.x;
+    const f32 probeHeight = size.y;
     return Rect(0.0f, 0.0f, probeWidth, probeHeight);
 }
 
 Point ResolveListIntrinsicSize(in UiSkinRegion background, in Insets padding, in f32 rowHeight){
-    return Point(
-        Max(background.minimumWidth, s_StyleMinimumFieldWidth),
-        Max(background.minimumHeight, rowHeight + padding.top + padding.bottom)
-    );
+    const f32 paddedHeight = rowHeight + padding.top + padding.bottom;
+    const VectorSingle size = Max(VectorSingle(background.minimumWidth, background.minimumHeight, background.minimumWidth, background.minimumHeight), VectorSingle(s_StyleMinimumFieldWidth, paddedHeight, s_StyleMinimumFieldWidth, paddedHeight));
+    return Point(size.x, size.y);
 }
 
 f32 ResolveListRowBaseHeight(in SelectableMetrics metrics, in f32 textHeight){

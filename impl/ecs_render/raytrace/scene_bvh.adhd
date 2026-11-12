@@ -205,7 +205,9 @@ SceneBvhSahSplit SelectSceneBvhSahSplit(
 
             const f32 leftArea = ComputeSceneBvhAabbSurfaceArea(leftMin, leftMax);
             const f32 rightArea = ComputeSceneBvhAabbSurfaceArea(VectorSingle(suffixMin[kIdx]), VectorSingle(suffixMax[kIdx]));
-            const f32 cost = (parentArea * s_SceneBvhSahTraversalCost + leftArea * leftCost) + rightArea * suffixCost[kIdx];
+            const VectorSingle areas(parentArea, leftArea, rightArea, 0.0f);
+            const VectorSingle costs(s_SceneBvhSahTraversalCost, leftCost, suffixCost[kIdx], 0.0f);
+            const f32 cost = Dot(areas.xyz, costs.xyz);
             if(cost < bestCost){
                 bestCost = cost;
                 split.axis = axis;

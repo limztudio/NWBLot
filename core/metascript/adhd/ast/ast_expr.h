@@ -128,6 +128,7 @@ struct Expr{
     MStringView text;
     MStringView resolvedSimdType;
     MStringView resolvedUnalignedType;
+    MStringView resolvedScalarType;
     Expr* lhs = nullptr;
     Expr* rhs = nullptr;
     TypeRef* targetType = nullptr;

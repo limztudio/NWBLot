@@ -38,29 +38,27 @@ class FlyCameraMotion{
         mut f32 inOutPendingMouseDeltaX,
         mut f32 inOutPendingMouseDeltaY
     )const{
-        const f32 deltaX = cast<f32>(xpos - lastMouseX);
-        const f32 deltaY = cast<f32>(ypos - lastMouseY);
-        const f32 pendingDeltaX = inOutPendingMouseDeltaX + deltaX;
-        const f32 pendingDeltaY = inOutPendingMouseDeltaY + deltaY;
-        if(IsFinite(deltaX) && IsFinite(deltaY) && IsFinite(pendingDeltaX) && IsFinite(pendingDeltaY)){
-            inOutPendingMouseDeltaX = pendingDeltaX;
-            inOutPendingMouseDeltaY = pendingDeltaY;
+        const VectorDouble deltaPosition = VectorDouble(xpos, ypos, xpos, ypos) - VectorDouble(lastMouseX, lastMouseY, lastMouseX, lastMouseY);
+        const VectorSingle delta = VectorSingle(deltaPosition);
+        const VectorSingle pendingDelta = VectorSingle(inOutPendingMouseDeltaX, inOutPendingMouseDeltaY, inOutPendingMouseDeltaX, inOutPendingMouseDeltaY) + delta;
+        if(IsFinite(delta.xy) && IsFinite(pendingDelta.xy)){
+            inOutPendingMouseDeltaX = pendingDelta.x;
+            inOutPendingMouseDeltaY = pendingDelta.y;
         }
     }
 
     public VectorSingle buildMoveAxes(in b8 keyboardCaptured, in b8 moveRight, in b8 moveLeft, in b8 moveForward, in b8 moveBackward)const{
         if(keyboardCaptured)
             return VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+        const VectorSingle positive(cast<f32>(moveRight), cast<f32>(moveForward), 0.0f, 0.0f);
+        const VectorSingle negative(cast<f32>(moveLeft), cast<f32>(moveBackward), 0.0f, 0.0f);
+        const VectorSingle difference = positive - negative;
         f32 moveX = 0.0f;
-        if(moveRight)
-            moveX += 1.0f;
-        if(moveLeft)
-            moveX -= 1.0f;
+        if(moveRight || moveLeft)
+            moveX = difference.x;
         f32 moveY = 0.0f;
-        if(moveForward)
-            moveY += 1.0f;
-        if(moveBackward)
-            moveY -= 1.0f;
+        if(moveForward || moveBackward)
+            moveY = difference.y;
         return VectorSingle(moveX, moveY, 0.0f, 0.0f);
     }
 
@@ -75,7 +73,7 @@ class FlyCameraMotion{
         mut f32 inOutPendingMouseDeltaX,
         mut f32 inOutPendingMouseDeltaY
     )const{
-        if(!IsFinite(xpos) || !IsFinite(ypos) || wantsPointer || !mouseLookActive){
+        if(!IsFinite(VectorDouble(xpos, ypos, xpos, ypos).xy) || wantsPointer || !mouseLookActive){
             inOutMousePositionValid = false;
             return;
         }
@@ -156,10 +154,9 @@ class FlyCameraMotion{
         f32 deltaY = 0.0f;
         if(IsFinite(mouseDelta.y))
             deltaY = mouseDelta.y;
-        const VectorSingle sanitized = this.sanitizeAngles(
-            curYaw + deltaX * s_FlyCameraMouseSensitivityRadiansPerPixel,
-            curPitch + deltaY * s_FlyCameraMouseSensitivityRadiansPerPixel
-        );
+        const VectorSingle scaledDelta = VectorSingle(deltaX, deltaY, 0.0f, 0.0f) * s_FlyCameraMouseSensitivityRadiansPerPixel;
+        const VectorSingle updated = VectorSingle(curYaw, curPitch, 0.0f, 0.0f) + scaledDelta;
+        const VectorSingle sanitized = this.sanitizeAngles(updated.x, updated.y);
         return VectorSingle(sanitized.y, sanitized.x, 0.0f, 0.0f);
     }
 
@@ -174,13 +171,14 @@ class FlyCameraMotion{
         if(IsFinite(currentPosition.xyz))
             outPosition = currentPosition;
 
-        f32 axisX = 0.0f;
+        f32 rawAxisX = 0.0f;
         if(IsFinite(moveAxes.x))
-            axisX = Clamp(moveAxes.x, -1.0f, 1.0f);
-        f32 axisY = 0.0f;
+            rawAxisX = moveAxes.x;
+        f32 rawAxisY = 0.0f;
         if(IsFinite(moveAxes.y))
-            axisY = Clamp(moveAxes.y, -1.0f, 1.0f);
-        const f32 moveLengthSq = axisX * axisX + axisY * axisY;
+            rawAxisY = moveAxes.y;
+        const VectorSingle axes = Clamp(VectorSingle(rawAxisX, rawAxisY, 0.0f, 0.0f), VectorSingle(-1.0f), VectorSingle(1.0f));
+        const f32 moveLengthSq = LengthSq(axes.xy);
         if(!(moveLengthSq > s_CameraMoveEpsilon))
             return outPosition;
 
@@ -193,7 +191,7 @@ class FlyCameraMotion{
         if(!IsFinite(moveScale.x))
             return outPosition;
 
-        const VectorSingle localMove = VectorSingle(axisX, 0.0f, axisY, 0.0f) * moveScale;
+        const VectorSingle localMove = VectorSingle(axes.x, 0.0f, axes.y, 0.0f) * moveScale;
         const VectorSingle worldMove = this.rotateVector3(localMove, rotation);
         if(!IsFinite(worldMove.xyz))
             return outPosition;

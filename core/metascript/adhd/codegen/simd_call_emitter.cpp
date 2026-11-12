@@ -19,7 +19,6 @@ NWB_ADHD_BEGIN
 b8 SimdCallEmitter::tryEmit(MString& out, const Expr& expr, const MStringView simdType)const{
     const b8 isDouble = IsDoubleSimdType(simdType);
     const b8 isInt = IsIntSimdType(simdType);
-    const b8 isMatrix = SymbolTable::IsSimdMatrixType(simdType);
     if(expr.lhs && expr.lhs->kind == ExprKind::Identifier){
         const MStringView callee = expr.lhs->text;
         const MStringView baseCallee = m_emitter.m_symbols.resolveBaseTypeName(callee);
@@ -76,16 +75,6 @@ b8 SimdCallEmitter::tryEmit(MString& out, const Expr& expr, const MStringView si
             return true;
         }
 
-        if(!isInt && callee == "Rsqrt" && expr.arguments.size() == 1u){
-            if(const Expr* lenSqVec = SimdOptimizationAnalysis::TryMatchSimdLengthSqVecArg(expr.arguments[0], isDouble, m_emitter.m_symbols)){
-                const u32 effLanes = SimdConstantAnalysis::InferEffectiveSimdLanes(*lenSqVec, &m_emitter.m_symbols);
-                AppendSimdLaneCountIntrinsicPrefix(out, isDouble, effLanes, "ReciprocalLength");
-                m_emitter.emitSimdRegExpr(out, *lenSqVec, lenSqVec->resolvedSimdType);
-                out.push_back(')');
-                return true;
-            }
-        }
-
         auto emitSimdCallRegArgsAndClose = [&](const Span<Expr* const> callArgs){
             for(usize i = 0u; i < callArgs.size(); ++i){
                 if(i > 0u)
@@ -117,14 +106,6 @@ b8 SimdCallEmitter::tryEmit(MString& out, const Expr& expr, const MStringView si
             out.push_back(')');
             return true;
         }
-        if(!isInt && !isMatrix){
-            if(const Expr* satArg = SimdOptimizationAnalysis::TryMatchSimdSaturateCallArg(expr, simdType, isDouble, m_emitter.m_symbols)){
-                out.append(isDouble ? "::VectorDoubleSaturate(" : "::VectorSaturate(");
-                m_emitter.emitSimdRegExpr(out, *satArg, simdType);
-                out.push_back(')');
-                return true;
-            }
-        }
         const MStringView unaryIntrinsic = MapSimdUnaryFloatIntrinsic(callee, isDouble);
         if(!unaryIntrinsic.empty()){
             out.append(unaryIntrinsic.data(), unaryIntrinsic.size());
@@ -132,16 +113,6 @@ b8 SimdCallEmitter::tryEmit(MString& out, const Expr& expr, const MStringView si
             return true;
         }
         if(callee == "Lerp" && expr.arguments.size() == 3u && expr.arguments[0] && expr.arguments[1] && expr.arguments[2]){
-            if(!isInt && !isMatrix){
-                if(SimdConstantAnalysis::IsSimdZeroFloatVectorExpr(*expr.arguments[2], isDouble, &m_emitter.m_symbols) && SimdExpressionAnalysis::IsPureSimdAddressExpr(*expr.arguments[1])){
-                    m_emitter.emitSimdRegExpr(out, *expr.arguments[0], simdType);
-                    return true;
-                }
-                if(SimdConstantAnalysis::IsSimdUnitFloatVectorExpr(*expr.arguments[2], isDouble, &m_emitter.m_symbols) && SimdExpressionAnalysis::IsPureSimdAddressExpr(*expr.arguments[0])){
-                    m_emitter.emitSimdRegExpr(out, *expr.arguments[1], simdType);
-                    return true;
-                }
-            }
             const Expr* scalarT = expr.arguments[2]->resolvedSimdType.empty()
                 ? expr.arguments[2]
                 : SimdExpressionAnalysis::TryUnwrapSimdSplatScalarArg(*expr.arguments[2], m_emitter.m_symbols);
@@ -193,42 +164,6 @@ b8 SimdCallEmitter::tryEmit(MString& out, const Expr& expr, const MStringView si
             }
             const Expr& vecExpr = lhsIsMat ? *expr.arguments[1] : *expr.arguments[0];
             const Expr& matExpr = lhsIsMat ? *expr.arguments[0] : *expr.arguments[1];
-            u32 unitRowIdx = 0u;
-            if(!isInt && SimdConstantAnalysis::TryMatchIdentityRowIndex(unitRowIdx, vecExpr, m_emitter.m_symbols, m_emitter.activeLocalVarDecls())){
-                if(const Expr* transposeSrcMat = SimdOptimizationAnalysis::TryGetTransposeSourceMatrix(matExpr, m_emitter.activeLocalVarDecls())){
-                    m_emitter.emitSimdRegExpr(out, *transposeSrcMat, transposeSrcMat->resolvedSimdType);
-                    out.append(".v[");
-                    AppendUnsignedDecimal(out, unitRowIdx);
-                    out.append("u]");
-                    return true;
-                }
-            }
-            const Expr* transformBaseVec = nullptr;
-            MStringView transformRegType;
-            MStringView transformLoadFn;
-            u32 transformLanes = 3u;
-            b8 isNormalTransform = false;
-            if(!isInt && SimdOptimizationAnalysis::TryMatchSimdTransform3Arg(vecExpr, vecExpr.resolvedSimdType, m_emitter.m_symbols, transformBaseVec, transformRegType, transformLoadFn, transformLanes, isNormalTransform) && transformBaseVec){
-                if(transformLanes == 2u)
-                    out.append(isDouble ? "::VectorDouble2Transform(" : "::Vector2Transform(");
-                else if(isNormalTransform)
-                    out.append(isDouble ? "::VectorDouble3TransformNormal(" : "::Vector3TransformNormal(");
-                else
-                    out.append(isDouble ? "::VectorDouble3Transform(" : "::Vector3Transform(");
-                if(!transformRegType.empty()){
-                    m_emitter.emitSimdRegExpr(out, *transformBaseVec, transformRegType);
-                }
-                else{
-                    out.append(transformLoadFn.data(), transformLoadFn.size());
-                    out.push_back('(');
-                    m_emitter.emitExpr(out, *transformBaseVec);
-                    out.push_back(')');
-                }
-                out.append(", ");
-                m_emitter.emitSimdRegExpr(out, matExpr, matExpr.resolvedSimdType);
-                out.push_back(')');
-                return true;
-            }
             u32 effLanes = 4u;
             if(vecExpr.kind == ExprKind::MemberAccess && vecExpr.isSwizzle && vecExpr.text.size() >= 2u && vecExpr.text.size() <= 4u)
                 effLanes = static_cast<u32>(vecExpr.text.size());

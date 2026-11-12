@@ -63,13 +63,17 @@ Expected<EditBoxPlacement> TryComputeEditBoxViewportPlacement(
         else
             scrollY = 0.0f;
         placement.scrollY = scrollY;
-        placement.textOrigin = Point((left - visualBounds.x) - scrollX, (top - visualBounds.y) - scrollY);
+        const VectorSingle origin = (VectorSingle(left, top, left, top) - VectorSingle(visualBounds.x, visualBounds.y, visualBounds.x, visualBounds.y)) - VectorSingle(scrollX, scrollY, scrollX, scrollY);
+        placement.textOrigin = Point(origin.x, origin.y);
     }
     else{
         const f32 verticalOffset = Max(0.0f, (placement.content.height - visualBounds.height) * s_RectCenterFraction);
-        placement.textOrigin = Point((left - visualBounds.x) - placement.scroll, (top - visualBounds.y) + verticalOffset);
+        const VectorSingle base = VectorSingle(left, top, left, top) - VectorSingle(visualBounds.x, visualBounds.y, visualBounds.x, visualBounds.y);
+        const VectorSingle origin(base.x - placement.scroll, base.y + verticalOffset, base.z - placement.scroll, base.w + verticalOffset);
+        placement.textOrigin = Point(origin.x, origin.y);
     }
-    placement.caret = Rect(placement.textOrigin.x + caretRect.x, placement.textOrigin.y + caretRect.y, caretWidth, caretRect.height);
+    const VectorSingle caretOrigin = VectorSingle(placement.textOrigin.x, placement.textOrigin.y, placement.textOrigin.x, placement.textOrigin.y) + VectorSingle(caretRect.x, caretRect.y, caretRect.x, caretRect.y);
+    placement.caret = Rect(caretOrigin.x, caretOrigin.y, caretWidth, caretRect.height);
     return placement;
 }
 
@@ -77,8 +81,9 @@ b8 ValidateEditBoxArrangedSegments(in EditBoxPlacement placement, in f32 caretWi
     Rect selection = selectionIn;
     Rect preeditUnderline = preeditUnderlineIn;
     if(selection.width > 0.0f){
-        selection.x += placement.textOrigin.x;
-        selection.y += placement.textOrigin.y;
+        const VectorSingle selectionOrigin = VectorSingle(selection.x, selection.y, selection.x, selection.y) + VectorSingle(placement.textOrigin.x, placement.textOrigin.y, placement.textOrigin.x, placement.textOrigin.y);
+        selection.x = selectionOrigin.x;
+        selection.y = selectionOrigin.y;
     }
     if(composing)
         PlaceEditPreeditUnderline(placement.textOrigin, caretWidth, preeditUnderline);
@@ -147,8 +152,9 @@ b8 ShouldPaintEditBoxCaret(in EditBoxPaintFlags flags, in b8 composing){
 }
 
 void OffsetEditBoxSegmentOrigin(in Point textOrigin, mut Rect inOutSegment){
-    inOutSegment.x += textOrigin.x;
-    inOutSegment.y += textOrigin.y;
+    const VectorSingle origin = VectorSingle(inOutSegment.x, inOutSegment.y, inOutSegment.x, inOutSegment.y) + VectorSingle(textOrigin.x, textOrigin.y, textOrigin.x, textOrigin.y);
+    inOutSegment.x = origin.x;
+    inOutSegment.y = origin.y;
 }
 
 

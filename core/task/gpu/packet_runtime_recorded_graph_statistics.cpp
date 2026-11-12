@@ -4,6 +4,8 @@
 
 #include "packet_runtime_recorded_graph.h"
 
+#include <global/simd/vector_arithmetic.h>
+
 #include "packet_runtime.h"
 #include "packet_runtime_internal.h"
 #include "task_graph.h"
@@ -146,7 +148,7 @@ GpuTaskGraphPhysicalQueueRecordingStatistics GpuRecordedGraph::physicalQueueReco
 
 void GpuRecordedGraph::addRecordingElapsedSeconds(const f64 elapsedSeconds, const ArtifactOperation& artifactAccess)noexcept{
     if(artifactAccess.exclusiveFor(*this) && m_activeStorage && m_activeStorage->valid)
-        m_activeStorage->recordingElapsedSeconds += elapsedSeconds;
+        m_activeStorage->recordingElapsedSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_activeStorage->recordingElapsedSeconds), VectorDoubleReplicate(elapsedSeconds)));
 }
 
 void GpuRecordedGraph::addReadyFrontierStatistics(const f64 elapsedSeconds, const f64 workerBusySeconds, const f64 workerCapacitySeconds, const ArtifactOperation& artifactAccess)noexcept{

@@ -94,21 +94,6 @@ namespace __hidden_simd_constant_analysis{
     return nullptr;
 }
 
-[[nodiscard]] b8 SimdConstantAnalysis::TryMatchIdentityRowIndex(
-    u32& outRowIndex,
-    const Expr& expr,
-    const SymbolTable& symbols,
-    const Span<const Stmt* const> localVarDecls
-)noexcept{
-    for(u32 r = 0u; r < 4u; ++r){
-        if(__hidden_simd_constant_analysis::IsIdentityMatrixRowCtorExpr(expr, r, symbols, localVarDecls)){
-            outRowIndex = r;
-            return true;
-        }
-    }
-    return false;
-}
-
 [[nodiscard]] u32 SimdConstantAnalysis::InferEffectiveSimdLanes(const Expr& expr, const SymbolTable* const symbols)noexcept{
     if(expr.kind == ExprKind::MemberAccess && expr.isSwizzle && expr.text.size() >= 2u && expr.text.size() <= 4u)
         return static_cast<u32>(expr.text.size());

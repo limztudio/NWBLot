@@ -208,10 +208,8 @@ class UiFixtureAcceptedInputState<const usize Capacity>{
 }
 
 Point CenterUiRect(in Rect bounds){
-    Point center = Point();
-    center.x = bounds.x + bounds.width * 0.5f;
-    center.y = bounds.y + bounds.height * 0.5f;
-    return center;
+    const VectorSingle center = VectorMultiplyAddExpression(VectorSingle(bounds.width, bounds.height, bounds.width, bounds.height), VectorSingle(0.5f), VectorSingle(bounds.x, bounds.y, bounds.x, bounds.y));
+    return Point(center.x, center.y);
 }
 
 void ExpectUiRect(in Rect actual, in Rect expected){

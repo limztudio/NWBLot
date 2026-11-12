@@ -147,7 +147,7 @@ FOUNDATION_INLINE SIMDMatrixDouble FOUNDATION_SIMD_CALL MatrixDoublePerspectiveF
 }
 
 FOUNDATION_INLINE SIMDMatrix FOUNDATION_SIMD_CALL MatrixOrthographicOffCenterLH(f32 viewLeft, f32 viewRight, f32 viewBottom, f32 viewTop, f32 nearZ, f32 farZ)noexcept{
-    return SIMDMatrixDetail::MatrixOrthographicOffCenterImpl(viewLeft, viewRight, viewBottom, viewTop, nearZ, farZ - nearZ, -1.0f);
+    return SIMDMatrixDetail::MatrixOrthographicOffCenterImpl(viewLeft, viewRight, viewBottom, viewTop, nearZ, VectorGetX(VectorSubtract(VectorReplicate(farZ), VectorReplicate(nearZ))), -1.0f);
 }
 
 

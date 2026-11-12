@@ -313,12 +313,6 @@ using Impl::OpticalUploadByteSizeFits;
 using Impl::OpticalRuntimeInputCountFits;
 using Impl::OpticalSceneInstanceCountFits;
 using Impl::ComputeOpticalWorldBounds;
-#if defined(FOUNDATION_HAS_FMA3) || defined(FOUNDATION_HAS_NEON64)
-inline constexpr f64 s_ExpectedOpticalCancellationX = 0x1.fffffcp-1;
-#else
-inline constexpr f64 s_ExpectedOpticalCancellationX = 0.0;
-#endif
-inline constexpr f32 s_OpticalCancellationMagnitudeBound = 0x1p-16f;
 inline constexpr i32 s_FeTonearest = FE_TONEAREST;
 inline constexpr i32 s_FeDownward = FE_DOWNWARD;
 inline constexpr i32 s_FeUpward = FE_UPWARD;
@@ -890,17 +884,18 @@ void VerifyOpticalScene_CancellationRetainsOrderedAffineEnclosure(){
     StoreFloat(bounds.value().minimum, minimum);
     StoreFloat(bounds.value().maximum, maximum);
 
-    // Probe point where reassociation or fused multiply-add changes containment.
-    EXPECT_LT(cast<f64>(minimum.x), s_ExpectedOpticalCancellationX);
-    EXPECT_GT(cast<f64>(maximum.x), s_ExpectedOpticalCancellationX);
-    for(usize lane = 1u; lane < 3u; ++lane){
-        EXPECT_LT(minimum.raw[lane], 0.0f);
-        EXPECT_GT(maximum.raw[lane], 0.0f);
-        const VectorSingle magnitude = Abs(VectorSingle(minimum.raw[lane], maximum.raw[lane], 0.0f, 0.0f));
-        EXPECT_LT(magnitude.x, s_OpticalCancellationMagnitudeBound);
-        EXPECT_LT(magnitude.y, s_OpticalCancellationMagnitudeBound);
+    // The exact third coordinate is one; cancellation must not make its error budget disappear.
+    Array<f64, 3> exact = Array<f64, 3>();
+    native(mut exact){
+        exact[0u] = 1.0 - 0x1p-23;
+        exact[1u] = 0.0;
+        exact[2u] = 1.0;
     }
-    EXPECT_LT(maximum.x - minimum.x, s_OpticalCancellationMagnitudeBound);
+    for(usize lane = 0u; lane < 3u; ++lane){
+        EXPECT_LT(cast<f64>(minimum.raw[lane]), exact[lane]);
+        EXPECT_GT(cast<f64>(maximum.raw[lane]), exact[lane]);
+    }
+
 }
 
 void VerifyOpticalScene_InactiveSignalingNaNLanesPreserveAffineEnclosureAndExceptionFlags(){

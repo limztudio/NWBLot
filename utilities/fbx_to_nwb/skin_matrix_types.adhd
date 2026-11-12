@@ -133,13 +133,7 @@ Expected<MatrixSingle> TryConvertFbxBindPoseMatrix(in MatrixDouble bindPoseDoubl
 b8 NearlyEqualFbxJointMatrices(in MatrixSingle lhs, in MatrixSingle rhs){
     for(usize rowIndex = 0u; rowIndex < s_SkeletonJointMatrixRowCount; ++rowIndex){
         const VectorSingle diff = Abs(lhs[rowIndex] - rhs[rowIndex]);
-        if(
-            !IsFinite(diff)
-            || diff.x > s_JointMatrixRowEpsilon
-            || diff.y > s_JointMatrixRowEpsilon
-            || diff.z > s_JointMatrixRowEpsilon
-            || diff.w > s_JointMatrixRowEpsilon
-        )
+        if(!IsFinite(diff) || Max(Max(diff.x, diff.y), Max(diff.z, diff.w)) > s_JointMatrixRowEpsilon)
             return false;
     }
     return true;

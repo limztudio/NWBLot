@@ -26,8 +26,6 @@ const Name s_TextPaintCandidatesArena = "impl/ecs_ui/toolkit/text/paint_candidat
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
-
 class GlyphPageBindingRecord<TFont>{
     public b8 operator==(in GlyphPageBindingRecord<TFont> rhs)const{
         return this.font == rhs.font && this.fontGeneration == rhs.fontGeneration && this.atlasIdentity == rhs.atlasIdentity && this.generation == rhs.generation && this.index == rhs.index && this.width == rhs.width && this.height == rhs.height;
@@ -93,8 +91,6 @@ class SdfAtlasPageBindingRecord<TFont>{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 
 
 b8 SameGlyphPageKey<TFont>(in GlyphPageBindingRecord<TFont> first, in GlyphPageBindingRecord<TFont> second){
@@ -185,19 +181,20 @@ SdfAtlasPageBindingRecord<TFont> MakeSdfAtlasPageGroupBinding<TFont>(
 b8 CanUseBakedFontAtlasAtPhysicalSize(in u32 bakePpem, in f32 physicalSize){
     if(!IsFinite(physicalSize) || physicalSize <= 0.0f)
         return false;
-    const f32 ppem = cast<f32>(bakePpem);
-    return physicalSize >= ppem * s_BakedFontAtlasMinScale && physicalSize <= ppem * s_BakedFontAtlasMaxScale;
+    const VectorSingle sizeRange = VectorSingle(s_BakedFontAtlasMinScale, s_BakedFontAtlasMaxScale, s_BakedFontAtlasMinScale, s_BakedFontAtlasMaxScale) * cast<f32>(bakePpem);
+    return physicalSize >= sizeRange.x && physicalSize <= sizeRange.y;
 }
 
 Rect ResolveSdfGlyphUv(in FontAtlasGlyph record, in u32 atlasWidth, in u32 atlasHeight){
     const f32 width = cast<f32>(atlasWidth);
     const f32 height = cast<f32>(atlasHeight);
-    return Rect(cast<f32>(record.x) / width, cast<f32>(record.y) / height, cast<f32>(record.width) / width, cast<f32>(record.height) / height);
+    const VectorSingle uv = VectorSingle(cast<f32>(record.x), cast<f32>(record.y), cast<f32>(record.width), cast<f32>(record.height)) / VectorSingle(width, height, width, height);
+    return StoreRect(uv);
 }
 
 Rect ResolveCoverageGlyphUv(in Rect pixels){
-    const f32 extent = cast<f32>(s_GlyphAtlasPageExtent);
-    return Rect(pixels.x / extent, pixels.y / extent, pixels.width / extent, pixels.height / extent);
+    const VectorSingle uv = LoadRect(pixels) / VectorSingle(cast<f32>(s_GlyphAtlasPageExtent));
+    return StoreRect(uv);
 }
 
 void CopyGlyphBitmapToAtlasPage(

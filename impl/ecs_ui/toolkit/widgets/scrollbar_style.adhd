@@ -130,10 +130,11 @@ b8 IsValidScrollbarPlacement(in ScrollbarPlacement bar, in ScrollAxis axis){
     if(bar.contentExtent < 0.0 || bar.viewportExtent < 0.0)
         return false;
     const f64 expectedMaximum = Max(0.0, bar.contentExtent - bar.viewportExtent);
-    const f32 trackRight = trackX + trackWidth;
-    const f32 trackBottom = trackY + trackHeight;
-    const f32 thumbRight = thumbX + thumbWidth;
-    const f32 thumbBottom = thumbY + thumbHeight;
+    const VectorSingle ends = VectorSingle(trackX, trackY, thumbX, thumbY) + VectorSingle(trackWidth, trackHeight, thumbWidth, thumbHeight);
+    const f32 trackRight = ends.x;
+    const f32 trackBottom = ends.y;
+    const f32 thumbRight = ends.z;
+    const f32 thumbBottom = ends.w;
     if(
         trackWidth < 0.0f || trackHeight < 0.0f || thumbWidth < 0.0f || thumbHeight < 0.0f
         || !IsFinite(trackRight) || !IsFinite(trackBottom) || !IsFinite(thumbRight) || !IsFinite(thumbBottom)

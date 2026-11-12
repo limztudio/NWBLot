@@ -92,15 +92,25 @@ MeshletCookSummary SummarizeMeshletCookMetrics(in MeshletCookMetrics metrics){
     if(metrics.meshletCount == 0u)
         return summary;
 
-    const f64 invMeshletCount = 1.0 / cast<f64>(metrics.meshletCount);
-    summary.primitiveCountAverage = cast<f64>(metrics.primitiveCountSum) * invMeshletCount;
-    summary.vertexCountAverage = cast<f64>(metrics.vertexCountSum) * invMeshletCount;
-    summary.positionCountAverage = cast<f64>(metrics.positionCountSum) * invMeshletCount;
-    summary.attributeCountAverage = cast<f64>(metrics.attributeCountSum) * invMeshletCount;
-    summary.radiusAverage = metrics.radiusSum * invMeshletCount;
-    summary.coneDisabledPercentage = cast<f64>(metrics.coneDisabledCount) * s_MeshletPercentScale * invMeshletCount;
+    const VectorDouble invMeshletCount = VectorDouble(1.0) / VectorDouble(cast<f64>(metrics.meshletCount));
+    const VectorDouble countSums(
+        cast<f64>(metrics.primitiveCountSum),
+        cast<f64>(metrics.vertexCountSum),
+        cast<f64>(metrics.positionCountSum),
+        cast<f64>(metrics.attributeCountSum)
+    );
+    const VectorDouble countAverages = countSums * invMeshletCount;
+    const VectorDouble disabledPercentSum = VectorDouble(cast<f64>(metrics.coneDisabledCount)) * s_MeshletPercentScale;
+    const VectorDouble radiusAndDisabledAverages = VectorDouble(metrics.radiusSum, disabledPercentSum.x, metrics.radiusSum, disabledPercentSum.x) * invMeshletCount;
+    summary.primitiveCountAverage = countAverages.x;
+    summary.vertexCountAverage = countAverages.y;
+    summary.positionCountAverage = countAverages.z;
+    summary.attributeCountAverage = countAverages.w;
+    summary.radiusAverage = radiusAndDisabledAverages.x;
+    summary.coneDisabledPercentage = radiusAndDisabledAverages.y;
     if(metrics.coneEnabledCount != 0u){
-        summary.coneCutoffAverage = metrics.coneCutoffSum / cast<f64>(metrics.coneEnabledCount);
+        const VectorDouble average = VectorDouble(metrics.coneCutoffSum) / VectorDouble(cast<f64>(metrics.coneEnabledCount));
+        summary.coneCutoffAverage = average.x;
         summary.worstConeCutoff = metrics.worstConeCutoff;
     }
     return summary;

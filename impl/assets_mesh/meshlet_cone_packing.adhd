@@ -9,7 +9,8 @@
 
 
 u32 PackMeshletConeCutoffUnorm8(in f32 value){
-    return cast<u32>(Clamp(value, 0.0f, 1.0f) * s_MeshletUnorm8Max);
+    const VectorSingle scaled = VectorSingle(Clamp(value, 0.0f, 1.0f)) * s_MeshletUnorm8Max;
+    return cast<u32>(scaled.x);
 }
 
 f32 ConservativePackedMeshletConeCutoff(in VectorSingle axis, in f32 cutoff, in VectorSingle unpackedAxis){
@@ -18,13 +19,13 @@ f32 ConservativePackedMeshletConeCutoff(in VectorSingle axis, in f32 cutoff, in 
         normalizedAxis = Normalize(axis.xyz);
     const f32 axisDot = Clamp(Dot(normalizedAxis.xyz, unpackedAxis.xyz), -1.0f, 1.0f);
     const f32 safeCutoff = Clamp(cutoff, 0.0f, 1.0f);
-    const VectorSingle anglePair(safeCutoff, axisDot, 0.0f, 0.0f);
+    const VectorSingle anglePair(safeCutoff, axisDot, safeCutoff, axisDot);
     const VectorSingle oneMinusSquare = VectorSingle(1.0f) - anglePair * anglePair;
     const VectorSingle clampedSquare = Max(oneMinusSquare, VectorSingle(0.0f));
     const VectorSingle sinPair = Sqrt(clampedSquare);
-    const f32 cutoffSin = sinPair.x;
-    const f32 axisSin = sinPair.y;
-    return safeCutoff * axisDot - cutoffSin * axisSin;
+    const VectorSingle productTerms = VectorSingle(safeCutoff, sinPair.x, safeCutoff, sinPair.x) * VectorSingle(axisDot, sinPair.y, axisDot, sinPair.y);
+    const VectorSingle difference = productTerms.xxxx - productTerms.yyyy;
+    return difference.x;
 }
 
 u32 PackMeshletConeFromAxisAndCutoff(in u32 packedAxis, in f32 conservativeCutoff){
@@ -35,25 +36,34 @@ u32 PackMeshletConeFromAxisAndCutoff(in u32 packedAxis, in f32 conservativeCutof
 }
 
 u32 PackMeshletConeOct16(in VectorSingle axis){
-    const f32 l1Length = Abs(axis.x) + Abs(axis.y) + Abs(axis.z);
+    const VectorSingle maskedAxis(axis, 0.0f);
+    const VectorSingle magnitude(Abs(axis.x), Abs(axis.y), Abs(axis.z), 0.0f);
+    const VectorSingle magnitudeSum = (magnitude.xxxx + magnitude.yyyy) + magnitude.zzzz;
+    const f32 l1Length = magnitudeSum.x;
     if(!IsFinite(l1Length) || !(l1Length > s_MeshletConeAxisLengthEpsilon))
         return s_MeshletConeAxisFallback;
 
-    const f32 invL1 = 1.0f / l1Length;
-    VectorSingle octAxis = FoldOctahedralAxis(VectorSingle(axis.x * invL1, axis.y * invL1, axis.z * invL1, 0.0f));
-    const f32 encodedX = Clamp(octAxis.x * s_MeshletOctEncodeBias + s_MeshletOctEncodeBias, 0.0f, 1.0f) * s_MeshletUnorm8Max + s_MeshletUnorm8RoundingBias;
-    const f32 encodedY = Clamp(octAxis.y * s_MeshletOctEncodeBias + s_MeshletOctEncodeBias, 0.0f, 1.0f) * s_MeshletUnorm8Max + s_MeshletUnorm8RoundingBias;
-    return (cast<u32>(encodedX) << s_MeshletConeAxisXShift) | (cast<u32>(encodedY) << s_MeshletConeAxisYShift);
+    const VectorSingle invL1 = VectorSingle(1.0f) / VectorSingle(l1Length);
+    const VectorSingle octAxis = FoldOctahedralAxis(maskedAxis * invL1);
+    const VectorSingle scaledOct = VectorSingle(octAxis.x, octAxis.y, octAxis.x, octAxis.y) * s_MeshletOctEncodeBias;
+    const VectorSingle clampedOct = Saturate(scaledOct + VectorSingle(s_MeshletOctEncodeBias));
+    const VectorSingle scaledUnorm = clampedOct * s_MeshletUnorm8Max;
+    const VectorSingle encoded = scaledUnorm + VectorSingle(s_MeshletUnorm8RoundingBias);
+    return (cast<u32>(encoded.x) << s_MeshletConeAxisXShift) | (cast<u32>(encoded.y) << s_MeshletConeAxisYShift);
 }
 
 VectorSingle UnpackMeshletConeOct16Axis(in u32 conePacked){
     const f32 invUnorm8Max = 1.0f / s_MeshletUnorm8Max;
-    const f32 packedX = cast<f32>((conePacked >> s_MeshletConeAxisXShift) & s_MeshletPackedByteMask) * invUnorm8Max;
-    const f32 packedY = cast<f32>((conePacked >> s_MeshletConeAxisYShift) & s_MeshletPackedByteMask) * invUnorm8Max;
-    const f32 octX = packedX * s_MeshletOctDecodeScale - s_MeshletOctDecodeBias;
-    const f32 octY = packedY * s_MeshletOctDecodeScale - s_MeshletOctDecodeBias;
-    const f32 octZ = 1.0f - (Abs(octX) + Abs(octY));
-    const VectorSingle folded = FoldOctahedralAxis(VectorSingle(octX, octY, octZ, 0.0f));
+    const f32 rawX = cast<f32>((conePacked >> s_MeshletConeAxisXShift) & s_MeshletPackedByteMask);
+    const f32 rawY = cast<f32>((conePacked >> s_MeshletConeAxisYShift) & s_MeshletPackedByteMask);
+    const VectorSingle packed = VectorSingle(rawX, rawY, 0.0f, 0.0f) * invUnorm8Max;
+    const VectorSingle scaledOct = packed * s_MeshletOctDecodeScale;
+    const VectorSingle octXY = VectorSingle(scaledOct.x, scaledOct.y, 0.0f, 0.0f) - VectorSingle(s_MeshletOctDecodeBias, s_MeshletOctDecodeBias, 0.0f, 0.0f);
+    const VectorSingle repeatedXY(octXY.x, octXY.y, octXY.x, octXY.y);
+    const VectorSingle magnitude = VectorSelect(repeatedXY, -repeatedXY, VectorLess(repeatedXY, VectorSingle(0.0f)));
+    const VectorSingle sum = magnitude.xxxx + magnitude.yyyy;
+    const VectorSingle octZ = VectorSingle(1.0f) - sum;
+    const VectorSingle folded = FoldOctahedralAxis(VectorSingle(octXY.x, octXY.y, octZ.x, 0.0f));
     const f32 lengthSquared = LengthSq(folded.xyz);
     if(IsFinite(lengthSquared) && lengthSquared > s_MeshletConeAxisLengthSquaredEpsilon){
         const VectorSingle normalized = folded * Rsqrt(VectorSingle(lengthSquared));

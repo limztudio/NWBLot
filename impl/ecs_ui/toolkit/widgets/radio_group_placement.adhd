@@ -52,8 +52,9 @@ Expected<RadioGroupPlacement> PlaceRadioGroup(in Rect bounds, in Rect clip, in R
         if(!indicator.has_value())
             return MakeUnexpected(Failure());
         row.indicator = indicator.value();
-        const f64 markX = contentX + markInsetScalar;
-        const f64 markY = indicatorYScalar + markInsetScalar;
+        const VectorDouble markOrigin = VectorDouble(contentX, indicatorYScalar, contentX, indicatorYScalar) + VectorDouble(markInsetScalar);
+        const f64 markX = markOrigin.x;
+        const f64 markY = markOrigin.y;
         const f64 markExtent = indicatorExtentScalar - cast<f64>(s_CheckmarkInsetSides) * markInsetScalar;
         const Expected<Rect> mark = TryMakeUiRect(markX, markY, markExtent, markExtent, UiRectPrecision::PreciseExtents);
         if(!mark.has_value())

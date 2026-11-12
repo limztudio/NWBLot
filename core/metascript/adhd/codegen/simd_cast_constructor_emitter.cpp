@@ -113,28 +113,18 @@ b8 SimdCastConstructorEmitter::tryEmit()const{
                     out.push_back(')');
                     return true;
                 }
-                const MStringView maskConst = SimdInPlaceLaneMaskConstant(cInPlaceMask, isDouble);
+                const MStringView maskConst = SimdInPlaceLaneMaskConstant(cInPlaceMask, !isDouble);
                 if(!maskConst.empty()){
-                    out.append(isDouble ? "::VectorDoubleAndInt(::ConvertVectorSingleToDouble(" : "::VectorAndInt(::ConvertVectorDoubleToSingle(");
+                    out.append(isDouble ? "::ConvertVectorSingleToDouble(::VectorAndInt(" : "::ConvertVectorDoubleToSingle(::VectorDoubleAndInt(");
                     emitCastSourceVec(*cV0, cV0RegType, cV0LoadFn);
-                    out.append("), ");
+                    out.append(", ");
                     out.append(maskConst.data(), maskConst.size());
-                    out.push_back(')');
-                    return true;
-                }
-                const MStringView clearMaskConst = SimdInPlaceLaneMaskConstant(static_cast<u8>(0xFu ^ cInPlaceMask), isDouble);
-                if(!clearMaskConst.empty()){
-                    out.append(isDouble ? "::VectorDoubleAndCInt(::ConvertVectorSingleToDouble(" : "::VectorAndCInt(::ConvertVectorDoubleToSingle(");
-                    emitCastSourceVec(*cV0, cV0RegType, cV0LoadFn);
-                    out.append("), ");
-                    out.append(clearMaskConst.data(), clearMaskConst.size());
-                    out.push_back(')');
+                    out.append("))");
                     return true;
                 }
             }
             if(!cV1 && !cAllInPlaceOrZero && !cHasZeroLane){
-                if(isDouble){
-                    out.append("::ConvertVectorSingleToDouble(::VectorSwizzle<");
+                    out.append(isDouble ? "::ConvertVectorSingleToDouble(::VectorSwizzle<" : "::ConvertVectorDoubleToSingle(::VectorDoubleSwizzle<");
                     for(u32 i = 0u; i < 4u; ++i){
                         if(i > 0u)
                             out.append(", ");
@@ -144,24 +134,10 @@ b8 SimdCastConstructorEmitter::tryEmit()const{
                     out.append(">(");
                     emitCastSourceVec(*cV0, cV0RegType, cV0LoadFn);
                     out.append("))");
-                }
-                else{
-                    out.append("::VectorSwizzle<");
-                    for(u32 i = 0u; i < 4u; ++i){
-                        if(i > 0u)
-                            out.append(", ");
-                        AppendUnsignedDecimal(out, cPermIdx[i]);
-                        out.push_back('u');
-                    }
-                    out.append(">(::ConvertVectorDoubleToSingle(");
-                    emitCastSourceVec(*cV0, cV0RegType, cV0LoadFn);
-                    out.append("))");
-                }
                 return true;
             }
             if(cV1 && !cHasZeroLane){
-                if(isDouble){
-                    out.append("::ConvertVectorSingleToDouble(::VectorPermute<");
+                    out.append(isDouble ? "::ConvertVectorSingleToDouble(::VectorPermute<" : "::ConvertVectorDoubleToSingle(::VectorDoublePermute<");
                     for(u32 i = 0u; i < 4u; ++i){
                         if(i > 0u)
                             out.append(", ");
@@ -173,21 +149,6 @@ b8 SimdCastConstructorEmitter::tryEmit()const{
                     out.append(", ");
                     emitCastSourceVec(*cV1, cV1RegType, cV1LoadFn);
                     out.append("))");
-                }
-                else{
-                    out.append("::VectorPermute<");
-                    for(u32 i = 0u; i < 4u; ++i){
-                        if(i > 0u)
-                            out.append(", ");
-                        AppendUnsignedDecimal(out, cPermIdx[i]);
-                        out.push_back('u');
-                    }
-                    out.append(">(::ConvertVectorDoubleToSingle(");
-                    emitCastSourceVec(*cV0, cV0RegType, cV0LoadFn);
-                    out.append("), ::ConvertVectorDoubleToSingle(");
-                    emitCastSourceVec(*cV1, cV1RegType, cV1LoadFn);
-                    out.append("))");
-                }
                 return true;
             }
         }

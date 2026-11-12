@@ -1,0 +1,343 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+VectorSingle IeeeMulOneSingle(in VectorSingle a, in VectorSingle b){
+    return a * 1.0f;
+}
+
+VectorSingle IeeeOneMulSingle(in VectorSingle a, in VectorSingle b){
+    return 1.0f * a;
+}
+
+VectorSingle IeeeMulNegativeOneSingle(in VectorSingle a, in VectorSingle b){
+    return a * -1.0f;
+}
+
+VectorSingle IeeeNegativeOneMulSingle(in VectorSingle a, in VectorSingle b){
+    return -1.0f * a;
+}
+
+VectorSingle IeeeDivideOneSingle(in VectorSingle a, in VectorSingle b){
+    return a / 1.0f;
+}
+
+VectorSingle IeeeDivideNegativeOneSingle(in VectorSingle a, in VectorSingle b){
+    return a / -1.0f;
+}
+
+VectorSingle IeeeNestedMulSingle(in VectorSingle a, in VectorSingle b){
+    return -(a * -1.0f);
+}
+
+VectorSingle IeeeNestedDivideSingle(in VectorSingle a, in VectorSingle b){
+    return -(a / -1.0f);
+}
+
+VectorSingle IeeeSeparateProductSingle(in VectorSingle a, in VectorSingle b){
+    return a * b + VectorSingle(-1.0f);
+}
+
+VectorSingle IeeeLerpZeroSingle(in VectorSingle a, in VectorSingle b){
+    return Lerp(a, b, 0.0f);
+}
+
+VectorSingle IeeeLerpOneSingle(in VectorSingle a, in VectorSingle b){
+    return Lerp(a, b, 1.0f);
+}
+
+VectorSingle IeeeMinMaxSingle(in VectorSingle a, in VectorSingle b){
+    return Min(Max(a, 0.0f), 1.0f);
+}
+
+VectorSingle IeeeOrderedMinMaxSingle(in VectorSingle a, in VectorSingle b){
+    return Min(1.0f, Max(0.0f, a));
+}
+
+VectorSingle IeeeMaxMinSingle(in VectorSingle a, in VectorSingle b){
+    return Max(Min(a, 1.0f), 0.0f);
+}
+
+VectorSingle IeeeOrderedMaxMinSingle(in VectorSingle a, in VectorSingle b){
+    return Max(0.0f, Min(1.0f, a));
+}
+
+VectorSingle IeeeNegativeZeroClampSingle(in VectorSingle a, in VectorSingle b){
+    return Clamp(a, -0.0f, 1.0f);
+}
+
+VectorSingle IeeePartialDivideSingle(in VectorSingle a, in VectorSingle b){
+    return VectorSingle(a.x / b.x, a.y / b.y, 0.0f, 0.0f);
+}
+
+VectorSingle IeeeMixedAddSubSingle(in VectorSingle a, in VectorSingle b){
+    return VectorSingle(a.x + b.x, a.y - b.y, a.z + b.z, a.w - b.w);
+}
+
+VectorSingle IeeeDotZeroTailSingle(in VectorSingle a, in VectorSingle b){
+    return VectorSingle(Dot(a, VectorSingle(1.0f, 1.0f, 1.0f, 0.0f)));
+}
+
+VectorSingle IeeeZeroTailSingle(in VectorSingle a){
+    const VectorSingle value = VectorSingle(a.x, a.y, 0.0, 0.0) - VectorSingle(a.x, a.y, 0.0, 0.0);
+    return VectorSingle(value.x, value.y, value.z, 0.0);
+}
+
+VectorDouble IeeeMulOneDouble(in VectorDouble a, in VectorDouble b){
+    return a * 1.0;
+}
+
+VectorDouble IeeeOneMulDouble(in VectorDouble a, in VectorDouble b){
+    return 1.0 * a;
+}
+
+VectorDouble IeeeMulNegativeOneDouble(in VectorDouble a, in VectorDouble b){
+    return a * -1.0;
+}
+
+VectorDouble IeeeNegativeOneMulDouble(in VectorDouble a, in VectorDouble b){
+    return -1.0 * a;
+}
+
+VectorDouble IeeeDivideOneDouble(in VectorDouble a, in VectorDouble b){
+    return a / 1.0;
+}
+
+VectorDouble IeeeDivideNegativeOneDouble(in VectorDouble a, in VectorDouble b){
+    return a / -1.0;
+}
+
+VectorDouble IeeeNestedMulDouble(in VectorDouble a, in VectorDouble b){
+    return -(a * -1.0);
+}
+
+VectorDouble IeeeNestedDivideDouble(in VectorDouble a, in VectorDouble b){
+    return -(a / -1.0);
+}
+
+VectorDouble IeeeSeparateProductDouble(in VectorDouble a, in VectorDouble b){
+    return a * b + VectorDouble(-1.0);
+}
+
+VectorDouble IeeeLerpZeroDouble(in VectorDouble a, in VectorDouble b){
+    return Lerp(a, b, 0.0);
+}
+
+VectorDouble IeeeLerpOneDouble(in VectorDouble a, in VectorDouble b){
+    return Lerp(a, b, 1.0);
+}
+
+VectorDouble IeeeMinMaxDouble(in VectorDouble a, in VectorDouble b){
+    return Min(Max(a, 0.0), 1.0);
+}
+
+VectorDouble IeeeOrderedMinMaxDouble(in VectorDouble a, in VectorDouble b){
+    return Min(1.0, Max(0.0, a));
+}
+
+VectorDouble IeeeMaxMinDouble(in VectorDouble a, in VectorDouble b){
+    return Max(Min(a, 1.0), 0.0);
+}
+
+VectorDouble IeeeOrderedMaxMinDouble(in VectorDouble a, in VectorDouble b){
+    return Max(0.0, Min(1.0, a));
+}
+
+VectorDouble IeeeNegativeZeroClampDouble(in VectorDouble a, in VectorDouble b){
+    return Clamp(a, -0.0, 1.0);
+}
+
+VectorDouble IeeePartialDivideDouble(in VectorDouble a, in VectorDouble b){
+    return VectorDouble(a.x / b.x, a.y / b.y, 0.0, 0.0);
+}
+
+VectorDouble IeeeMixedAddSubDouble(in VectorDouble a, in VectorDouble b){
+    return VectorDouble(a.x + b.x, a.y - b.y, a.z + b.z, a.w - b.w);
+}
+
+VectorDouble IeeeDotZeroTailDouble(in VectorDouble a, in VectorDouble b){
+    return VectorDouble(Dot(a, VectorDouble(1.0, 1.0, 1.0, 0.0)));
+}
+
+VectorDouble IeeeZeroTailDouble(in VectorDouble a){
+    const VectorDouble value = VectorDouble(a.x, a.y, 0.0, 0.0) - VectorDouble(a.x, a.y, 0.0, 0.0);
+    return VectorDouble(value.x, value.y, value.z, 0.0);
+}
+
+VectorSingle IeeeNarrowPartial(in VectorDouble a){
+    return VectorSingle(cast<f32>(a.x), cast<f32>(a.y), 0.0f, 0.0f);
+}
+
+VectorSingle IeeeNarrowSwizzle(in VectorDouble a){
+    return VectorSingle(cast<f32>(a.z), cast<f32>(a.y), cast<f32>(a.x), cast<f32>(a.z));
+}
+
+VectorSingle IeeeIdentityRow(in MatrixSingle m){
+    return Mul(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), Transpose(m));
+}
+
+VectorSingle IeeeIntegerQuotient(in i32 a, in i32 b){
+    return VectorSingle(a / b, a / b, a / b, a / b);
+}
+
+VectorSingle IeeeWiderCancellation(in VectorSingle a, in f64 scalar){
+    return VectorSingle(a.x + scalar, a.y + scalar, a.z + scalar, a.w + scalar);
+}
+
+VectorSingle IeeeNegativeZeroTailSingle(in VectorSingle a){
+    const VectorSingle value = VectorSingle(a.x, a.y, 0.0f, 0.0f) * -VectorSingle(0.0f);
+    return VectorSingle(value.x, value.y, value.z, 0.0f);
+}
+
+VectorDouble IeeeNegativeZeroTailDouble(in VectorDouble a){
+    const VectorDouble value = VectorDouble(a.x, a.y, 0.0, 0.0) * -VectorDouble(0.0);
+    return VectorDouble(value.x, value.y, value.z, 0.0);
+}
+
+
+f32 IeeeScalarGeneratedNameIsolation(in f32 __rhs, in f32 __lhs){
+    f32 value = __lhs;
+    value += __rhs;
+    return value;
+}
+
+f32 IeeeScalarAdvanceTargetIndex(mut u32 index, in f32 value){
+    index = 1u;
+    return value;
+}
+
+f32 IeeeScalarAssignmentTargetOrder(mut Array<f32, 2> values, mut u32 index, in f32 rhs){
+    return values[index++] += IeeeScalarAdvanceTargetIndex(index, rhs);
+}
+
+f32 IeeeScalarArithmeticSingle(in f32 a, in f32 b, in f64 wider, in u32 operation){
+    switch(operation){
+    case 0u: return a + b;
+    case 1u: return a - b;
+    case 2u: return a * b;
+    case 3u: return a / b;
+    case 4u: return a * b + 1.0f;
+    case 5u: return -a;
+    case 6u: return cast<f32>(a + wider);
+    case 7u: return cast<f32>((a + wider) - wider);
+    case 8u:{
+        f32 value = a;
+        value += b;
+        return value;
+    }
+    case 9u:{
+        f32 value = a;
+        value -= b;
+        return value;
+    }
+    case 10u:{
+        f32 value = a;
+        value *= b;
+        return value;
+    }
+    case 11u:{
+        f32 value = a;
+        value /= b;
+        return value;
+    }
+    case 12u:{
+        f32 value = a;
+        value += wider;
+        return value;
+    }
+    case 13u:{
+        f32 value = a;
+        return value++;
+    }
+    case 14u:{
+        f32 value = a;
+        return ++value;
+    }
+    case 15u:{
+        f32 value = a;
+        return value--;
+    }
+    case 16u:{
+        f32 value = a;
+        return --value;
+    }
+    case 17u: return Min(a, b);
+    case 18u: return Max(a, b);
+    case 19u: return Abs(a);
+    case 20u: return Clamp(a, -0.0f, b);
+    case 21u: return Saturate(a);
+    case 22u: return Lerp(a, b, 0.0f);
+    case 23u: return Lerp(a, b, 1.0f);
+    case 24u: return cast<f32>(Lerp(a, b, wider));
+    case 25u: return Rsqrt(a);
+    case 26u: return cast<f32>(Min<f64>(a, wider));
+    case 27u: return cast<f32>(Lerp(a, wider, b) - wider);
+    case 28u:{
+        auto value = a + wider;
+        return cast<f32>(value - wider);
+    }
+    default:{
+        auto value = Lerp(a, wider, b);
+        return cast<f32>(value - wider);
+    }
+    }
+}
+
+f64 IeeeScalarArithmeticDouble(in f64 a, in f64 b, in u32 operation){
+    switch(operation){
+    case 0u: return a + b;
+    case 1u: return a - b;
+    case 2u: return a * b;
+    case 3u: return a / b;
+    case 4u: return a * b + 1.0;
+    case 5u: return -a;
+    case 6u:{
+        f64 value = a;
+        value += b;
+        return value;
+    }
+    case 7u:{
+        f64 value = a;
+        value -= b;
+        return value;
+    }
+    case 8u:{
+        f64 value = a;
+        value *= b;
+        return value;
+    }
+    case 9u:{
+        f64 value = a;
+        value /= b;
+        return value;
+    }
+    case 10u:{
+        f64 value = a;
+        return value++;
+    }
+    case 11u:{
+        f64 value = a;
+        return ++value;
+    }
+    case 12u:{
+        f64 value = a;
+        return value--;
+    }
+    case 13u:{
+        f64 value = a;
+        return --value;
+    }
+    case 14u: return Min(a, b);
+    case 15u: return Max(a, b);
+    case 16u: return Abs(a);
+    case 17u: return Clamp(a, -0.0, b);
+    case 18u: return Saturate(a);
+    case 19u: return Lerp(a, b, 0.0);
+    case 20u: return Lerp(a, b, 1.0);
+    default: return Rsqrt(a);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

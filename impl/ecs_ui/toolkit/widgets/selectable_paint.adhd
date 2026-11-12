@@ -29,7 +29,8 @@ b8 AccumulateSelectableStateMetrics(in UiSkin skin, in Name preferred, in Name f
     if(!IsBoundedUiPadding(padding) || !IsValidUiExtent(minimum))
         return false;
     metrics.padding = MaxUiPadding(metrics.padding, padding);
-    metrics.minimum = Point(Max(metrics.minimum.x, minimum.x), Max(metrics.minimum.y, minimum.y));
+    const VectorSingle extent = Max(VectorSingle(metrics.minimum.x, metrics.minimum.y, metrics.minimum.x, metrics.minimum.y), VectorSingle(minimum.x, minimum.y, minimum.x, minimum.y));
+    metrics.minimum = Point(extent.x, extent.y);
     return true;
 }
 

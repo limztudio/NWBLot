@@ -156,12 +156,14 @@ Expected<PopupPlacement> PlacePopup(in PopupOptions options, in DisplayMetrics d
         originX = originX - (cast<f64>(options.gap) + cast<f64>(width));
         break;
     case PopupPlacementSide::Center:
-        originX = (cast<f64>(display.logicalWidth) - cast<f64>(width)) * 0.5;
-        originY = (cast<f64>(display.logicalHeight) - cast<f64>(height)) * 0.5;
+        const VectorDouble centered = (VectorDouble(cast<f64>(display.logicalWidth), cast<f64>(display.logicalHeight), cast<f64>(display.logicalWidth), cast<f64>(display.logicalHeight)) - VectorDouble(cast<f64>(width), cast<f64>(height), cast<f64>(width), cast<f64>(height))) * 0.5;
+        originX = centered.x;
+        originY = centered.y;
         break;
     }
-    const f64 maxX = cast<f64>(display.logicalWidth) - cast<f64>(width);
-    const f64 maxY = cast<f64>(display.logicalHeight) - cast<f64>(height);
+    const VectorDouble maximum = VectorDouble(cast<f64>(display.logicalWidth), cast<f64>(display.logicalHeight), cast<f64>(display.logicalWidth), cast<f64>(display.logicalHeight)) - VectorDouble(cast<f64>(width), cast<f64>(height), cast<f64>(width), cast<f64>(height));
+    const f64 maxX = maximum.x;
+    const f64 maxY = maximum.y;
     const f32 x = cast<f32>(Clamp(originX, 0.0, maxX));
     const f32 y = cast<f32>(Clamp(originY, 0.0, maxY));
     if(!IsFinite(x + width) || !IsFinite(y + height))

@@ -19,7 +19,12 @@ native{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/floating_point_environment_guard.adhd.h>
+
 #include <impl/assets_font/cook.adhd.h>
+#include <impl/assets_font_atlas/types.adhd.h>
+
+#include <gtest/gtest.h>
 #include <impl/assets_font_atlas/asset.adhd.h>
 #include <impl/assets_font_atlas/cook.adhd.h>
 
@@ -1097,6 +1102,64 @@ NWB_ADHD_GTEST(AssetsFontMetadata, FieldlessAndEmptyFontDeclarationsRejectNonmap
 NWB_ADHD_GTEST(AssetsFontMetadata, UnsupportedAndCorruptVisibleMetadataAreRejected, VerifyAssetsFontMetadata_UnsupportedAndCorruptVisibleMetadataAreRejected)
 NWB_ADHD_GTEST(AssetsFontMetadata, IncompleteAndInvalidGlyphMappingsAreRejected, VerifyAssetsFontMetadata_IncompleteAndInvalidGlyphMappingsAreRejected)
 NWB_ADHD_GTEST(AssetsFontMetadata, MissingTruncatedCorruptAndMismatchedFontSourcesAreRejected, VerifyAssetsFontMetadata_MissingTruncatedCorruptAndMismatchedFontSourcesAreRejected)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_font_atlas_fenv_tests{
+
+
+using namespace NWB;
+using namespace NWB::Impl;
+
+
+TEST(AssetsFontAtlas, RejectedWidthDoesNotEvaluateOverflowingHeightDifference){
+#pragma STDC FENV_ACCESS ON
+    const auto originalEnvironment = HoldFloatingPointExceptions();
+    ASSERT_TRUE(originalEnvironment);
+    Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
+    ASSERT_TRUE(SetFloatingPointRoundingMode(FE_TONEAREST));
+    FontAtlasGlyph glyph{};
+    glyph.width = 1u;
+    glyph.height = 1u;
+    glyph.planeBottom = -Limit<f32>::s_Max;
+    ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
+    const b8 accepted = IsValidFontAtlasGlyphPlaneBounds(glyph, Limit<f32>::s_Max);
+    const i32 exceptions = TestFloatingPointExceptions(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW);
+    EXPECT_FALSE(accepted);
+    EXPECT_EQ(exceptions, 0);
+}
+
+
+TEST(AssetsFontAtlas, PlaneBoundsPreserveMultiplyAddContraction){
+    volatile f32 units = 1000.0f / 30.0f;
+    volatile f32 origin = -100.0f;
+    FontAtlasGlyph glyph{};
+    glyph.width = 3u;
+    glyph.height = 3u;
+    glyph.planeLeft = origin;
+    glyph.planeTop = origin;
+    const f32 expected = origin + static_cast<f32>(glyph.width) * units;
+    ComputeFontAtlasGlyphPlaneBounds(units, glyph);
+    EXPECT_EQ(BitCast<u32>(glyph.planeRight), BitCast<u32>(expected));
+    EXPECT_EQ(BitCast<u32>(glyph.planeBottom), BitCast<u32>(expected));
+}
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

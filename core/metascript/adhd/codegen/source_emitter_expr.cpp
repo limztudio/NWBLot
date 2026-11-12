@@ -2,10 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "source_emitter.h"
+
 #include <core/metascript/adhd/ast/builtin_type_semantics.h>
 #include <core/metascript/adhd/sema/type_layout_analyzer.h>
 
-#include "source_emitter.h"
 #include "constructor_argument_emitter.h"
 #include "builtin_call_emitter.h"
 #include "simd_storage_emitter.h"
@@ -107,6 +108,9 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
         emitSimdRegExpr(out, expr, expr.resolvedSimdType);
         return;
     }
+
+    if(tryEmitScalarFloatExpr(out, expr))
+        return;
 
     switch(expr.kind){
     case ExprKind::IntegerLiteral:

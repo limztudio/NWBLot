@@ -22,7 +22,8 @@ usize ComputeDecodedUastcDestinationTexelIndex(
 }
 
 f32 NormalizeTextureAlphaUnorm8(in u8 alphaUnorm8){
-    return cast<f32>(alphaUnorm8) / cast<f32>(u8.max);
+    const VectorSingle normalized = VectorSingle(cast<f32>(alphaUnorm8)) / VectorSingle(cast<f32>(u8.max));
+    return normalized.x;
 }
 
 u8 ResolveHdrUniformAlphaUnorm8(in b8 isConstantUnorm8, in u8 alphaConstantUnorm8){

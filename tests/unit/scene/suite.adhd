@@ -27,6 +27,7 @@ native{
 #include <impl/assets_scene/component_assets.adhd.h>
 #include <impl/assets_subsystem/asset.adhd.h>
 #include <impl/assets_ui_skin/types.adhd.h>
+#include <impl/ecs_scene/camera_types.adhd.h>
 #include <impl/ecs_scene/module.adhd.h>
 
 #include <core/alloc/general.h>
@@ -36,6 +37,8 @@ native{
 
 #include <global/binary.h>
 #include <global/simdmath.h>
+
+#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -679,6 +682,34 @@ NWB_ADHD_GTEST(FlyCameraInput, InvalidKeyIndicesAndClearPreserveInputBounds, Ver
 NWB_ADHD_GTEST(SceneSubsystemAssets, RejectsMismatchedSubsystemTypeTrailingBytesAndCorruptedMagic, VerifySceneSubsystemAssets_RejectsMismatchedSubsystemTypeTrailingBytesAndCorruptedMagic)
 NWB_ADHD_GTEST(SceneSubsystemAssets, RejectsEmptyProjectStartSceneAndEmptySceneSubsystems, VerifySceneSubsystemAssets_RejectsEmptyProjectStartSceneAndEmptySceneSubsystems)
 NWB_ADHD_GTEST(SceneSubsystemAssets, DeduplicatesSubsystemRefsAndPreservesPreviousSceneOnLoadFailure, VerifySceneSubsystemAssets_DeduplicatesSubsystemRefsAndPreservesPreviousSceneOnLoadFailure)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_scene_camera_fenv_tests{
+
+
+TEST(SceneCameraProjection, NearlyPiFovRetainsScalarCosineAdmission){
+    const f32 fov = BitCast<f32>(u32{ 0x40490fd2u });
+    EXPECT_TRUE(::NWB::Impl::Scene::TryComputeCameraTanHalfVerticalFov(fov).has_value());
+}
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

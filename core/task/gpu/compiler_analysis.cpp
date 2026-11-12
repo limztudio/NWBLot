@@ -3,6 +3,8 @@
 
 
 #include "accepted_queue_frontier_validator.h"
+
+#include <global/simd/vector_arithmetic.h>
 #include "compiler_analysis_internal.h"
 #include "compiler_internal.h"
 #include "dependency_pair_hash.h"
@@ -300,17 +302,17 @@ b8 GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& graph,
             outAnalysis.m_schedulingIncomingProducers
         );
     }
-    const f64 topologicalOrderSeconds = semanticTopologySeconds + DurationInSeconds<f64>(TimerNow(), finalTopologyBegin);
+    const f64 topologicalOrderSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(semanticTopologySeconds), VectorDoubleReplicate(DurationInSeconds<f64>(TimerNow(), finalTopologyBegin))));
 
     const Timer acceptedQueueFrontierValidationBegin = TimerNow();
     if(!GpuAcceptedQueueFrontierValidator::Validate(graph, outAnalysis.m_schedulingIncomingOffsets, outAnalysis.m_edges, outAnalysis.m_diagnostic))
         return false;
-    validationSeconds += DurationInSeconds<f64>(TimerNow(), acceptedQueueFrontierValidationBegin);
+    validationSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(validationSeconds), VectorDoubleReplicate(DurationInSeconds<f64>(TimerNow(), acceptedQueueFrontierValidationBegin))));
 
     const Timer presentationValidationBegin = TimerNow();
     if(!GpuPresentationEndpointValidator::Validate(graph, outAnalysis.m_topologicalOrder, outAnalysis.m_schedulingIncomingOffsets, outAnalysis.m_schedulingIncomingProducers, scratchArena, outAnalysis.m_diagnostic))
         return false;
-    validationSeconds += DurationInSeconds<f64>(TimerNow(), presentationValidationBegin);
+    validationSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(validationSeconds), VectorDoubleReplicate(DurationInSeconds<f64>(TimerNow(), presentationValidationBegin))));
 
     outAnalysis.m_validationSeconds = validationSeconds;
     outAnalysis.m_dependencyAnalysisSeconds = dependencyAnalysisSeconds;

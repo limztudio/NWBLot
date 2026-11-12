@@ -1183,6 +1183,9 @@ void VerifyMath_DoubleNormalizationRejectsDegenerateNonfiniteAndUnderflowedLengt
 }
 
 void VerifyMath_DoubleRefractionDistinguishesCriticalAngleOnEitherSideOfBinary64Threshold(){
+    ScopedHeldFloatingPointEnvironment envGuard = ScopedHeldFloatingPointEnvironment();
+    ASSERT_TRUE(envGuard.valid());
+    ASSERT_TRUE(SetFloatingPointRoundingMode(s_FloatingPointRoundingModes[0u]).has_value());
     const f64 powNeg40 = bit_cast<f64>(cast<u64>(0x3d70000000000000u));
     const VectorDouble incident = VectorDouble(1.0, 0.0, 0.0, 0.0);
     const VectorDouble normal = VectorDouble(0.0, 1.0, 0.0, 0.0);
@@ -1196,7 +1199,8 @@ void VerifyMath_DoubleRefractionDistinguishesCriticalAngleOnEitherSideOfBinary64
     EXPECT_EQ(critical.x, 1.0);
     EXPECT_EQ(critical.y, 0.0);
     EXPECT_EQ(below.x, belowIndex);
-    EXPECT_NEAR(below.y, -Sqrt(1.0 - belowIndex * belowIndex), 1.0e-20);
+    // The squared index rounds before the subtraction.
+    EXPECT_NEAR(below.y, -Sqrt(powNeg40 + powNeg40), 1.0e-20);
     EXPECT_LT(below.y, 0.0);
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(GetDoubleLaneFloat(above, lane), 0.0);

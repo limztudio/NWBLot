@@ -4,6 +4,8 @@
 
 #include "packet_runtime_recorded_graph.h"
 
+#include <global/simd/vector_arithmetic.h>
+
 #include "packet_runtime.h"
 #include "packet_runtime_internal.h"
 #include "task_graph.h"
@@ -24,7 +26,7 @@ NWB_CORE_BEGIN
 f64 GpuTaskGraphRecordingStatistics::readyFrontierWorkerUtilization()const noexcept{
     if(!(readyFrontierWorkerCapacitySeconds > 0.0))
         return 0.0;
-    return Saturate(readyFrontierWorkerBusySeconds / readyFrontierWorkerCapacitySeconds);
+    return Saturate(VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(readyFrontierWorkerBusySeconds), VectorDoubleReplicate(readyFrontierWorkerCapacitySeconds))));
 }
 
 

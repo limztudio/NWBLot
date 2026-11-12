@@ -117,8 +117,9 @@ PopupOptions BuildTooltipPopupOptions(
 ){
     PopupOptions options;
     options.anchor = anchorRect;
-    const f32 paddedWidth = Max(measured.x + padding.left + padding.right, background.minimumWidth);
-    const f32 paddedHeight = Max(measured.y + padding.top + padding.bottom, background.minimumHeight);
+    const VectorSingle padded = Max((VectorSingle(measured.x, measured.y, measured.x, measured.y) + VectorSingle(padding.left, padding.top, padding.left, padding.top)) + VectorSingle(padding.right, padding.bottom, padding.right, padding.bottom), VectorSingle(background.minimumWidth, background.minimumHeight, background.minimumWidth, background.minimumHeight));
+    const f32 paddedWidth = padded.x;
+    const f32 paddedHeight = padded.y;
     options.size = Point(Min(paddedWidth, tooltipOptions.maximumWidth), paddedHeight);
     options.gap = tooltipOptions.gap;
     options.side = tooltipOptions.side;

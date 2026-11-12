@@ -34,13 +34,17 @@ f32 EvaluateMeshletCandidateScore(
     f32 disconnectedPenalty = 0.0f;
     if(disconnected)
         disconnectedPenalty = s_MeshletScoreDisconnectedPenalty;
-    return cast<f32>(sharedVertexCount) * s_MeshletScoreSharedVertexWeight
-        - cast<f32>(missingVertexCount) * s_MeshletScoreNewVertexWeight
-        - s_MeshletScoreRadiusWeight * predictedRadiusGrowth
-        - s_MeshletScoreCentroidWeight * centroidDistance
-        + s_MeshletScoreNormalWeight * normalCoherence
-        - s_MeshletScoreConePenaltyWeight * coneWidening
-        - disconnectedPenalty;
+    const VectorSingle shapeTerms = VectorSingle(cast<f32>(sharedVertexCount), cast<f32>(missingVertexCount), s_MeshletScoreRadiusWeight, s_MeshletScoreCentroidWeight)
+        * VectorSingle(s_MeshletScoreSharedVertexWeight, s_MeshletScoreNewVertexWeight, predictedRadiusGrowth, centroidDistance);
+    const VectorSingle normalTerms = VectorSingle(s_MeshletScoreNormalWeight, s_MeshletScoreConePenaltyWeight, s_MeshletScoreNormalWeight, s_MeshletScoreConePenaltyWeight)
+        * VectorSingle(normalCoherence, coneWidening, normalCoherence, coneWidening);
+    VectorSingle score = shapeTerms.xxxx - shapeTerms.yyyy;
+    score = score - shapeTerms.zzzz;
+    score = score - shapeTerms.wwww;
+    score = score + normalTerms.xxxx;
+    score = score - normalTerms.yyyy;
+    score = score - VectorSingle(disconnectedPenalty);
+    return score.x;
 }
 
 void ResetMeshletScoreState(mut MeshletScoreState state){
@@ -86,7 +90,9 @@ void UpdateMeshletScoreConeCutoff(in VectorSingle axis, in VectorSingle triangle
     if(!IsValidMeshletDirection3(faceNormal))
         return;
     hasNormal = true;
-    coneCutoff = Min(coneCutoff, Dot(axis.xyz, faceNormal.xyz));
+    const VectorSingle current(coneCutoff);
+    const VectorSingle candidate = Vector3Dot(axis, faceNormal);
+    coneCutoff = VectorSelect(candidate, current, VectorLess(current, candidate)).x;
 }
 
 Expected<f32> TryComputeMeshletScoreConeCutoffFromCalculations(
@@ -127,7 +133,8 @@ f32 PredictMeshletScoreConeWideningFromCalculations(
     if(!predictedCutoff.has_value())
         return 1.0f;
 
-    return Max(state.coneCutoff - predictedCutoff.value(), 0.0f);
+    const VectorSingle difference = VectorSingle(state.coneCutoff) - VectorSingle(predictedCutoff.value());
+    return VectorSelect(VectorSingle(0.0f), difference, VectorGreater(difference, VectorSingle(0.0f))).x;
 }
 
 f32 ScoreMeshletCandidateFromCalculations(
@@ -142,7 +149,8 @@ f32 ScoreMeshletCandidateFromCalculations(
     const MeshletTriangleCalculation triangleCalculation = triangleCalculations[cast<usize>(triangleIndex)];
     const VectorSingle areaNormal(triangleCalculation.areaNormal);
     const f32 predictedRadius = PredictMeshletScoreRadiusFromCalculation(state, triangleCalculation);
-    const f32 predictedRadiusGrowth = Max(predictedRadius - state.radius, 0.0f);
+    const VectorSingle radiusGrowth = VectorSingle(predictedRadius) - VectorSingle(state.radius);
+    const f32 predictedRadiusGrowth = VectorSelect(VectorSingle(0.0f), radiusGrowth, VectorGreater(radiusGrowth, VectorSingle(0.0f))).x;
     const f32 centroidDistance = MeshletScoreCentroidDistance(state, VectorSingle(triangleCalculation.centroid));
     const f32 normalCoherence = MeshletScoreNormalCoherence(state, areaNormal);
     const f32 coneWidening = PredictMeshletScoreConeWideningFromCalculations(triangleCalculations, triangleIndices, state, triangleIndex, areaNormal);

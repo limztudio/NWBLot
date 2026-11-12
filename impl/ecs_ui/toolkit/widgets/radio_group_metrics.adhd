@@ -21,8 +21,7 @@ b8 IsValidRadioGroupMetrics(in RadioGroupMetrics metrics){
         || !IsFinite(metrics.markInset) || metrics.markInset < 0.0f || cast<f64>(metrics.markInset) > s_RadioGroupMaxMarkInsetF64
     )
         return false;
-    const f64 padW = cast<f64>(metrics.padding.left) + cast<f64>(metrics.padding.right);
-    const f64 padH = cast<f64>(metrics.padding.top) + cast<f64>(metrics.padding.bottom);
+    const VectorDouble paddingSize = VectorDouble(cast<f64>(metrics.padding.left), cast<f64>(metrics.padding.top), cast<f64>(metrics.padding.left), cast<f64>(metrics.padding.top)) + VectorDouble(cast<f64>(metrics.padding.right), cast<f64>(metrics.padding.bottom), cast<f64>(metrics.padding.right), cast<f64>(metrics.padding.bottom));
     u32 gapCount = 0u;
     if(metrics.count != 0u)
         gapCount = metrics.count - 1u;
@@ -30,8 +29,9 @@ b8 IsValidRadioGroupMetrics(in RadioGroupMetrics metrics){
     f64 labelW = 0.0;
     if(metrics.count != 0u)
         labelW = cast<f64>(metrics.indicatorExtent) + cast<f64>(metrics.gap);
-    const f64 minimumWidth = padW + labelW;
-    const f64 height = padH + rowsH;
+    const VectorDouble size = paddingSize + VectorDouble(labelW, rowsH, labelW, rowsH);
+    const f64 minimumWidth = size.x;
+    const f64 height = size.y;
     return height <= s_UiMaxFloatF64
         && cast<f64>(metrics.contentSize.y) == cast<f64>(cast<f32>(height))
         && minimumWidth <= s_UiMaxFloatF64
@@ -59,8 +59,7 @@ Expected<RadioGroupMetrics> MeasureRadioGroup(in u32 count, in Point maximumLabe
     candidate.markInset = style.markInset;
     candidate.padding = style.padding;
     candidate.count = count;
-    const f64 padW = cast<f64>(style.padding.left) + cast<f64>(style.padding.right);
-    const f64 padH = cast<f64>(style.padding.top) + cast<f64>(style.padding.bottom);
+    const VectorDouble paddingSize = VectorDouble(cast<f64>(style.padding.left), cast<f64>(style.padding.top), cast<f64>(style.padding.left), cast<f64>(style.padding.top)) + VectorDouble(cast<f64>(style.padding.right), cast<f64>(style.padding.bottom), cast<f64>(style.padding.right), cast<f64>(style.padding.bottom));
     u32 gapCount = 0u;
     if(count != 0u)
         gapCount = count - 1u;
@@ -68,8 +67,9 @@ Expected<RadioGroupMetrics> MeasureRadioGroup(in u32 count, in Point maximumLabe
     f64 labelW = 0.0;
     if(count != 0u)
         labelW = (cast<f64>(style.indicatorExtent) + cast<f64>(style.gap)) + cast<f64>(maximumLabel.x);
-    const f64 width = padW + labelW;
-    const f64 height = padH + rowsH;
+    const VectorDouble size = paddingSize + VectorDouble(labelW, rowsH, labelW, rowsH);
+    const f64 width = size.x;
+    const f64 height = size.y;
     if(!IsFinite(width) || width > s_UiMaxFloatF64 || !IsFinite(height) || height > s_UiMaxFloatF64)
         return MakeUnexpected(Failure());
     candidate.contentSize = Point(cast<f32>(width), cast<f32>(height));

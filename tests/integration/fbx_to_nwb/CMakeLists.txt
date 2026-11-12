@@ -26,3 +26,6 @@ nwb_target_adhd_sources(nwb_fbx_skin_test_names NAMESPACE "NWB::Tests::FbxSkinCa
 nwb_declare_gtest_executable(nwb_fbx_skin_tests)
 nwb_target_adhd_sources(nwb_fbx_skin_tests NAMESPACE "NWB::Tests::FbxSkinCases" SOURCES "${CMAKE_CURRENT_LIST_DIR}/skin_tests.adhd")
 target_link_libraries(nwb_fbx_skin_tests PRIVATE nwb_fbx_to_nwb_lib nwb_fbx_skin_test_names)
+
+# Read shared generated headers from their owning target.
+target_include_directories(nwb_fbx_skin_tests BEFORE PRIVATE "$<TARGET_PROPERTY:nwb_fbx_to_nwb_lib,INTERFACE_INCLUDE_DIRECTORIES>")

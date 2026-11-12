@@ -567,7 +567,8 @@ void PressHorizontalNavigationKey(mut HorizontalNavigationFixture self, in KeyEn
 
 void FocusHorizontalNavigationTarget(mut HorizontalNavigationFixture self, in usize index){
     const Rect rectangle = self.m_targets[index].rectangle;
-    const Point point = Point(rectangle.x + 10.0f, rectangle.y + 10.0f);
+    const VectorSingle offset = VectorSingle(rectangle.x, rectangle.y, rectangle.x, rectangle.y) + VectorSingle(10.0f);
+    const Point point = Point(offset.x, offset.y);
     InputEvent down = InputEvent();
     down.position = point;
     down.type = InputEventType::PrimaryDown;

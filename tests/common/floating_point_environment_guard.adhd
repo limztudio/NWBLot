@@ -13,7 +13,10 @@ class FloatingPointEnvironmentGuard{
     public ~FloatingPointEnvironmentGuard(){
         if(this.m_active){
             const auto restored = SetFloatingPointEnvironment(this.m_environment);
-            assert(restored.has_value(), "Failed to restore floating-point environment");
+            if(!restored.has_value()){
+                assert(false, "Failed to restore floating-point environment");
+                TerminateInvariant();
+            }
         }
     }
 

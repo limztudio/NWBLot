@@ -7,6 +7,7 @@
 
 #include "expected.h"
 #include "simplemath.h"
+#include "simd/vector_arithmetic.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -15,15 +16,15 @@
 [[nodiscard]] inline f64 StepF64Bounded(const f64 value, const f64 minimum, const f64 maximum, const f64 step, const b8 increasing)noexcept{
     const f64 current = Clamp(value, minimum, maximum);
     if(increasing){
-        const f64 distance = maximum - current;
+        const f64 distance = VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleReplicate(maximum), VectorDoubleReplicate(current)));
         if(step >= distance)
             return maximum;
-        return Clamp(current + step, minimum, maximum);
+        return Clamp(VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(current), VectorDoubleReplicate(step))), minimum, maximum);
     }
-    const f64 distance = current - minimum;
+    const f64 distance = VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleReplicate(current), VectorDoubleReplicate(minimum)));
     if(step >= distance)
         return minimum;
-    return Clamp(current - step, minimum, maximum);
+    return Clamp(VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleReplicate(current), VectorDoubleReplicate(step))), minimum, maximum);
 }
 
 [[nodiscard]] inline Expected<f64> NormalizeFiniteRange(const f64 minimum, const f64 maximum, const f64 value)noexcept{
@@ -34,14 +35,16 @@
         if(value >= maximum)
             normalizedValue = 1.0;
         else{
-            const f64 span = maximum - minimum;
+            const f64 span = VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleReplicate(maximum), VectorDoubleReplicate(minimum)));
             if(IsFinite(span))
-                normalizedValue = (value - minimum) / span;
+                normalizedValue = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleSubtract(VectorDoubleReplicate(value), VectorDoubleReplicate(minimum)), VectorDoubleReplicate(span)));
             else{
-                const f64 scaledValue = value * 0.5;
-                const f64 scaledMin = minimum * 0.5;
-                const f64 scaledMax = maximum * 0.5;
-                normalizedValue = (scaledValue - scaledMin) / (scaledMax - scaledMin);
+                const SIMDVectorDouble scaled = VectorDoubleMultiply(VectorDoubleSet(value, minimum, maximum, value), VectorDoubleReplicate(0.5));
+                const f64 scaledValue = VectorDoubleGetX(scaled);
+                const f64 scaledMin = VectorDoubleGetY(scaled);
+                const f64 scaledMax = VectorDoubleGetZ(scaled);
+                const SIMDVectorDouble differences = VectorDoubleSubtract(VectorDoubleSet(scaledValue, scaledMax, scaledValue, scaledMax), VectorDoubleReplicate(scaledMin));
+                normalizedValue = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleSplatX(differences), VectorDoubleSplatY(differences)));
             }
         }
     }
@@ -60,12 +63,13 @@
         value = maximum;
     else if(normalized > 0.0 && minimum != maximum){
         if(minimum < 0.0 && maximum > 0.0){
-            const f64 lowerWeight = 1.0 - normalized;
-            value = minimum * lowerWeight + maximum * normalized;
+            const f64 lowerWeight = VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleReplicate(1.0), VectorDoubleReplicate(normalized)));
+            const SIMDVectorDouble terms = VectorDoubleMultiply(VectorDoubleSet(minimum, maximum, minimum, maximum), VectorDoubleSet(lowerWeight, normalized, lowerWeight, normalized));
+            value = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleSplatX(terms), VectorDoubleSplatY(terms)));
         }
         else{
-            const f64 span = maximum - minimum;
-            value = minimum + span * normalized;
+            const f64 span = VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleReplicate(maximum), VectorDoubleReplicate(minimum)));
+            value = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(minimum), VectorDoubleMultiply(VectorDoubleReplicate(span), VectorDoubleReplicate(normalized))));
         }
         value = Clamp(value, minimum, maximum);
     }

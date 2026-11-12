@@ -4,6 +4,8 @@
 
 #include "frame_graph_statistics_validator.h"
 
+#include <global/simd/vector_arithmetic.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -116,7 +118,7 @@ b8 FrameGraphStatisticsValidator::AccumulatePacketSubmissionStatistics(const Fra
     ))
         return false;
 
-    total.submissionSeconds += statistics.submissionSeconds;
+    total.submissionSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(total.submissionSeconds), VectorDoubleReplicate(statistics.submissionSeconds)));
     return IsFinite(total.submissionSeconds);
 }
 
@@ -126,12 +128,12 @@ b8 FrameGraphStatisticsValidator::PacketSubmissionDurationSumsMatch(const f64 lh
     if(submissionCount == 0u)
         return false;
 
-    const f64 roundingFactor = static_cast<f64>(submissionCount) * s_DoublePrecisionEpsilon;
+    const f64 roundingFactor = VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(submissionCount)), VectorDoubleReplicate(s_DoublePrecisionEpsilon)));
     if(roundingFactor >= s_SubmissionRoundingLimit)
         return false;
     const f64 magnitude = Max(lhs, rhs);
-    const f64 difference = magnitude - Min(rhs, lhs);
-    return (difference / magnitude) <= ((s_SubmissionRoundingScale * roundingFactor) / (1.0 - roundingFactor));
+    const f64 difference = VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleReplicate(magnitude), VectorDoubleReplicate(Min(rhs, lhs))));
+    return VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(difference), VectorDoubleReplicate(magnitude))) <= VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(s_SubmissionRoundingScale), VectorDoubleReplicate(roundingFactor)))), VectorDoubleReplicate(VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleReplicate(1.0), VectorDoubleReplicate(roundingFactor))))));
 }
 
 

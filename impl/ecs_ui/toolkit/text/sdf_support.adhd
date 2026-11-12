@@ -9,19 +9,14 @@
 
 
 Expected<VectorDouble> TryTranslateTextInk(in Point position, in Rect ink){
-    const f64 originX = cast<f64>(position.x) + cast<f64>(ink.x);
-    const f64 originY = cast<f64>(position.y) + cast<f64>(ink.y);
-    const f64 endX = originX + cast<f64>(ink.width);
-    const f64 endY = originY + cast<f64>(ink.height);
-    if(!FitsTextCoordinate(originX) || !FitsTextCoordinate(originY) || !FitsTextCoordinate(endX) || !FitsTextCoordinate(endY))
+    const VectorDouble origin = VectorDouble(cast<f64>(position.x), cast<f64>(position.y), 0.0, 0.0) + VectorDouble(cast<f64>(ink.x), cast<f64>(ink.y), 0.0, 0.0);
+    const VectorDouble end = origin + VectorDouble(cast<f64>(ink.width), cast<f64>(ink.height), 0.0, 0.0);
+    if(!FitsTextCoordinates(VectorDouble(origin.x, origin.y, end.x, end.y)))
         return MakeUnexpected(Failure());
-    const f32 rectX = cast<f32>(originX);
-    const f32 rectY = cast<f32>(originY);
-    const f32 rectW = ink.width;
-    const f32 rectH = ink.height;
-    if(!IsFinite(rectX + rectW) || !IsFinite(rectY + rectH))
+    const VectorSingle rounded(cast<f32>(origin.x), cast<f32>(origin.y), ink.width, ink.height);
+    if(!(IsFinite(rounded.x + rounded.z) && IsFinite(rounded.y + rounded.w)))
         return MakeUnexpected(Failure());
-    return VectorDouble(cast<f64>(rectX), cast<f64>(rectY), cast<f64>(rectW), cast<f64>(rectH));
+    return VectorDouble(rounded);
 }
 
 b8 TryIncludeTextInk(in VectorDouble ink, mut VectorDouble inoutBounds, mut b8 inoutHasInk){
@@ -32,33 +27,19 @@ b8 TryIncludeTextInk(in VectorDouble ink, mut VectorDouble inoutBounds, mut b8 i
         inoutHasInk = true;
         return true;
     }
-    f64 originX = ink.x;
-    if(inoutBounds.x < ink.x)
-        originX = inoutBounds.x;
-    f64 originY = ink.y;
-    if(inoutBounds.y < ink.y)
-        originY = inoutBounds.y;
-    const f64 boundsEndX = inoutBounds.x + inoutBounds.z;
-    const f64 boundsEndY = inoutBounds.y + inoutBounds.w;
-    const f64 inkEndX = ink.x + ink.z;
-    const f64 inkEndY = ink.y + ink.w;
-    f64 endX = inkEndX;
-    if(boundsEndX > inkEndX)
-        endX = boundsEndX;
-    f64 endY = inkEndY;
-    if(boundsEndY > inkEndY)
-        endY = boundsEndY;
-    const f64 sizeX = endX - originX;
-    const f64 sizeY = endY - originY;
-    if(!FitsTextCoordinate(sizeX) || !FitsTextCoordinate(sizeY))
+    const VectorDouble boundsOrigin(inoutBounds.x, inoutBounds.y, inoutBounds.x, inoutBounds.y);
+    const VectorDouble inkOrigin(ink.x, ink.y, ink.x, ink.y);
+    const VectorDouble origin = Min(boundsOrigin, inkOrigin);
+    const VectorDouble boundsEnd = boundsOrigin + VectorDouble(inoutBounds.z, inoutBounds.w, inoutBounds.z, inoutBounds.w);
+    const VectorDouble inkEnd = inkOrigin + VectorDouble(ink.z, ink.w, ink.z, ink.w);
+    const VectorDouble end = Max(boundsEnd, inkEnd);
+    const VectorDouble size = end - origin;
+    if(!FitsTextCoordinate(size.x) || !FitsTextCoordinate(size.y))
         return false;
-    const f32 rectX = cast<f32>(originX);
-    const f32 rectY = cast<f32>(originY);
-    const f32 rectW = cast<f32>(sizeX);
-    const f32 rectH = cast<f32>(sizeY);
-    if(!IsFinite(rectX + rectW) || !IsFinite(rectY + rectH))
+    const VectorSingle rounded(cast<f32>(origin.x), cast<f32>(origin.y), cast<f32>(size.x), cast<f32>(size.y));
+    if(!(IsFinite(rounded.x + rounded.z) && IsFinite(rounded.y + rounded.w)))
         return false;
-    inoutBounds = VectorDouble(cast<f64>(rectX), cast<f64>(rectY), cast<f64>(rectW), cast<f64>(rectH));
+    inoutBounds = VectorDouble(rounded);
     return true;
 }
 
@@ -74,16 +55,16 @@ Expected<VectorDouble> TryLoadSdfGlyphSupport(
 ){
     if(plane.z <= 0.0 || plane.w <= 0.0)
         return plane;
-    const f64 texelSizeX = plane.z / cast<f64>(glyph.width);
-    const f64 texelSizeY = plane.w / cast<f64>(glyph.height);
-    const f64 physicalStepX = 1.0 / (texelSizeX * cast<f64>(display.pixelScaleX));
-    const f64 physicalStepY = 1.0 / (texelSizeY * cast<f64>(display.pixelScaleY));
-    if(!IsFinite(physicalStepX) || !IsFinite(physicalStepY))
+    const VectorDouble glyphExtent(cast<f64>(glyph.width), cast<f64>(glyph.height), cast<f64>(glyph.width), cast<f64>(glyph.height));
+    const VectorDouble texelSize = VectorDouble(plane.z, plane.w, plane.z, plane.w) / glyphExtent;
+    const VectorDouble pixelScale(cast<f64>(display.pixelScaleX), cast<f64>(display.pixelScaleY), cast<f64>(display.pixelScaleX), cast<f64>(display.pixelScaleY));
+    const VectorDouble physicalStep = VectorDouble(1.0) / (texelSize * pixelScale);
+    if(!IsFinite(physicalStep.xy))
         return MakeUnexpected(Failure());
-    const f64 haloCandidateX = Ceil(physicalStepX) + 1.0;
-    const f64 haloCandidateY = Ceil(physicalStepY) + 1.0;
-    const u32 haloX = cast<u32>(Min(cast<f64>(pageWidth), haloCandidateX));
-    const u32 haloY = cast<u32>(Min(cast<f64>(pageHeight), haloCandidateY));
+    const VectorDouble haloCandidate = Ceil(physicalStep) + VectorDouble(1.0);
+    const VectorDouble clampedHalo = Min(VectorDouble(cast<f64>(pageWidth), cast<f64>(pageHeight), cast<f64>(pageWidth), cast<f64>(pageHeight)), haloCandidate);
+    const u32 haloX = cast<u32>(clampedHalo.x);
+    const u32 haloY = cast<u32>(clampedHalo.y);
     u32 firstX = 0u;
     if(glyph.x > haloX)
         firstX = glyph.x - haloX;
@@ -110,15 +91,14 @@ Expected<VectorDouble> TryLoadSdfGlyphSupport(
             }
         }
     }
-    const f64 derivative = (cast<f64>(gradientX) * physicalStepX) + (cast<f64>(gradientY) * physicalStepY);
+    const VectorDouble weightedGradient = VectorDouble(cast<f64>(gradientX), cast<f64>(gradientY), 0.0, 0.0) * VectorDouble(physicalStep.x, physicalStep.y, 0.0, 0.0);
+    const f64 derivative = weightedGradient.x + weightedGradient.y;
     const f64 minimumDerivative = (s_TextSdfMinimumFilterWidth * s_TextSdfEncodedHalfRange) / cast<f64>(spreadPixels);
     const f64 halfWidth = s_TextHalfPixel * Max(derivative, minimumDerivative);
-    const f64 glyphWidthF64 = cast<f64>(glyph.width);
-    const f64 glyphHeightF64 = cast<f64>(glyph.height);
-    f64 supportMinX = glyphWidthF64;
-    f64 supportMinY = glyphHeightF64;
-    f64 supportMaxX = 0.0;
-    f64 supportMaxY = 0.0;
+    const VectorDouble zeroVec(0.0);
+    const VectorDouble halfPixelVec(s_TextHalfPixel);
+    VectorDouble supportMin = glyphExtent;
+    VectorDouble supportMax(0.0);
     b8 visible = false;
     for(u32 y = 0u; y <= glyph.height; ++y){
         u32 y0 = 0u;
@@ -137,26 +117,22 @@ Expected<VectorDouble> TryLoadSdfGlyphSupport(
             const i32 maximum = Max(Max(s00, s10), Max(s01, s11));
             if(cast<f64>(maximum) + halfWidth < s_TextSdfEncodedHalfRange)
                 continue;
-            const f64 posX = cast<f64>(x);
-            const f64 posY = cast<f64>(y);
-            const f64 firstCellX = Max(0.0, posX - s_TextHalfPixel);
-            const f64 firstCellY = Max(0.0, posY - s_TextHalfPixel);
-            const f64 lastCellX = Min(glyphWidthF64, posX + s_TextHalfPixel);
-            const f64 lastCellY = Min(glyphHeightF64, posY + s_TextHalfPixel);
-            supportMinX = Min(supportMinX, firstCellX);
-            supportMinY = Min(supportMinY, firstCellY);
-            supportMaxX = Max(supportMaxX, lastCellX);
-            supportMaxY = Max(supportMaxY, lastCellY);
+            const VectorDouble pos(cast<f64>(x), cast<f64>(y), cast<f64>(x), cast<f64>(y));
+            const VectorDouble firstCell = Max(zeroVec, pos - halfPixelVec);
+            const VectorDouble lastCell = Min(glyphExtent, pos + halfPixelVec);
+            supportMin = Min(supportMin, firstCell);
+            supportMax = Max(supportMax, lastCell);
             visible = true;
         }
     }
     if(!visible)
         return VectorDouble(0.0, 0.0, 0.0, 0.0);
-    const f64 minX = supportMinX * texelSizeX + plane.x;
-    const f64 minY = supportMinY * texelSizeY + plane.y;
-    const f64 maxX = supportMaxX * texelSizeX + plane.x;
-    const f64 maxY = supportMaxY * texelSizeY + plane.y;
-    const Expected<Rect> measured = TryMakeMeasuredTextRect(minX, minY, maxX, maxY);
+    const VectorDouble planeOrigin(plane.x, plane.y, plane.x, plane.y);
+    const VectorDouble scaledMin = supportMin * texelSize;
+    const VectorDouble scaledMax = supportMax * texelSize;
+    const VectorDouble minXY = scaledMin + planeOrigin;
+    const VectorDouble maxXY = scaledMax + planeOrigin;
+    const Expected<Rect> measured = TryMakeMeasuredTextRect(minXY.x, minXY.y, maxXY.x, maxXY.y);
     if(!measured.has_value())
         return MakeUnexpected(Failure());
     return VectorDouble(cast<f64>(measured.value().x), cast<f64>(measured.value().y), cast<f64>(measured.value().width), cast<f64>(measured.value().height));

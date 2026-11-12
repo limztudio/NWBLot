@@ -4,6 +4,8 @@
 
 #include "timing_decision.h"
 
+#include <global/simd/vector_arithmetic.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -23,10 +25,10 @@ b8 GpuTaskTimingDecision::BenefitExceedsHysteresis(const GpuTaskTimingHistory& i
     if(!policy.valid() || !incumbent.valid() || !candidate.valid() || candidate.averageSeconds >= incumbent.averageSeconds)
         return false;
 
-    const f64 benefitSeconds = incumbent.averageSeconds - candidate.averageSeconds;
+    const f64 benefitSeconds = VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleReplicate(incumbent.averageSeconds), VectorDoubleReplicate(candidate.averageSeconds)));
     if(benefitSeconds < policy.minimumAbsoluteBenefitSeconds)
         return false;
-    return (benefitSeconds / incumbent.averageSeconds) >= policy.minimumRelativeBenefit;
+    return VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(benefitSeconds), VectorDoubleReplicate(incumbent.averageSeconds))) >= policy.minimumRelativeBenefit;
 }
 
 
@@ -60,7 +62,6 @@ b8 GpuTaskTimingDecision::CanSwitch(
         && GpuTaskTimingDecision::SwitchDwellElapsed(assignment, frameIndex, policy)
     ;
 }
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

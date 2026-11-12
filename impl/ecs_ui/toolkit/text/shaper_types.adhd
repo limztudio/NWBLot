@@ -85,8 +85,9 @@ b8 SameShapeRequest(in ShapeRequest lhs, in ShapeRequest rhs){
 }
 
 b8 ValidateShapedRunMetrics(in FontMetrics metrics, in usize glyphCount){
+    const VectorSingle values(metrics.ascender, metrics.descender, metrics.lineGap, 0.0f);
     return
-        IsFinite(metrics.ascender) && IsFinite(metrics.descender) && IsFinite(metrics.lineGap)
+        IsFinite(values.xyz)
         && metrics.ascender >= 0.0f && metrics.descender >= 0.0f && metrics.lineGap >= 0.0f
         && metrics.ascender + metrics.descender > 0.0f && glyphCount <= s_TextMaxBytes
         && FitsTextCoordinate((cast<f64>(metrics.ascender) + cast<f64>(metrics.descender)) + cast<f64>(metrics.lineGap))
@@ -104,21 +105,19 @@ b8 ValidateShapedGlyph(
     in TextDirection direction,
     mut u32 inoutPreviousByteBegin
 ){
+    const VectorSingle placement(advance.x, advance.y, offset.x, offset.y);
     if(
         byteBegin >= byteEnd || !IsUtf8ScalarBoundary(text, cast<usize>(byteBegin)) || !IsUtf8ScalarBoundary(text, cast<usize>(byteEnd))
-        || !IsFinite(advance.x) || !IsFinite(advance.y) || advance.x < 0.0f || advance.y != 0.0f
-        || !IsFinite(offset.x) || !IsFinite(offset.y) || !HasValidUiRectDimensions(ink)
-        || !FitsTextCoordinate(cast<f64>(ink.x) + cast<f64>(ink.width))
-        || !FitsTextCoordinate(cast<f64>(ink.y) + cast<f64>(ink.height))
+        || !IsFinite(placement) || advance.x < 0.0f || advance.y != 0.0f || !HasValidUiRectDimensions(ink)
     )
+        return false;
+    if(!FitsTextCoordinate(cast<f64>(ink.x) + cast<f64>(ink.width)) || !FitsTextCoordinate(cast<f64>(ink.y) + cast<f64>(ink.height)))
         return false;
     if(coverage.known){
         const Rect cov = coverage.ink;
-        if(
-            !HasValidUiRectDimensions(cov)
-            || !FitsTextCoordinate(cast<f64>(cov.x) + cast<f64>(cov.width))
-            || !FitsTextCoordinate(cast<f64>(cov.y) + cast<f64>(cov.height))
-        )
+        if(!HasValidUiRectDimensions(cov))
+            return false;
+        if(!FitsTextCoordinate(cast<f64>(cov.x) + cast<f64>(cov.width)) || !FitsTextCoordinate(cast<f64>(cov.y) + cast<f64>(cov.height)))
             return false;
     }
     if(direction == TextDirection::LeftToRight){
@@ -134,10 +133,11 @@ b8 ValidateShapedGlyph(
 }
 
 FontMetrics MaxFontMetrics(in FontMetrics lhs, in FontMetrics rhs){
+    const VectorSingle maximum = Max(VectorSingle(lhs.ascender, lhs.descender, lhs.lineGap, 0.0f), VectorSingle(rhs.ascender, rhs.descender, rhs.lineGap, 0.0f));
     FontMetrics out;
-    out.ascender = Max(lhs.ascender, rhs.ascender);
-    out.descender = Max(lhs.descender, rhs.descender);
-    out.lineGap = Max(lhs.lineGap, rhs.lineGap);
+    out.ascender = maximum.x;
+    out.descender = maximum.y;
+    out.lineGap = maximum.z;
     return out;
 }
 
@@ -146,33 +146,31 @@ i32 ComputeTextFixedPointScale(in f32 fontSize){
 }
 
 GlyphCoverageBounds ComputeOutlineCoverageBounds(in i64 xMin, in i64 yMin, in i64 xMax, in i64 yMax, in f32 fontSize, in u32 unitsPerEm){
-    const f64 scale = cast<f64>(fontSize) / cast<f64>(unitsPerEm);
-    const f64 left = (cast<f64>(xMin) - s_TextOutlineBoundsMargin) * scale;
-    const f64 top = (-cast<f64>(yMax) - s_TextOutlineBoundsMargin) * scale;
-    const f64 width = ((cast<f64>(xMax) - cast<f64>(xMin)) + s_TextOutlineBoundsMarginBothSides) * scale;
-    const f64 height = ((cast<f64>(yMax) - cast<f64>(yMin)) + s_TextOutlineBoundsMarginBothSides) * scale;
-    if(
-        !IsFinite(left) || !IsFinite(top) || !IsFinite(width) || !IsFinite(height)
-        || Abs(left) > s_TextMaxCoordinateF64 || Abs(top) > s_TextMaxCoordinateF64
-        || width < 0.0 || height < 0.0 || width > s_TextMaxCoordinateF64 || height > s_TextMaxCoordinateF64
-        || Abs(left + width) > s_TextMaxCoordinateF64 || Abs(top + height) > s_TextMaxCoordinateF64
-    )
+    const VectorDouble scale(cast<f64>(fontSize) / cast<f64>(unitsPerEm));
+    const VectorDouble rawOrigin = VectorDouble(cast<f64>(xMin), -cast<f64>(yMax), 0.0, 0.0) - VectorDouble(s_TextOutlineBoundsMargin);
+    const VectorDouble rawExtent = (VectorDouble(cast<f64>(xMax), cast<f64>(yMax), 0.0, 0.0) - VectorDouble(cast<f64>(xMin), cast<f64>(yMin), 0.0, 0.0)) + VectorDouble(s_TextOutlineBoundsMarginBothSides);
+    const VectorDouble origin = rawOrigin * scale;
+    const VectorDouble extent = rawExtent * scale;
+    const VectorDouble candidate(origin.x, origin.y, extent.x, extent.y);
+    if(!IsFinite(candidate) || extent.x < 0.0 || extent.y < 0.0)
         return GlyphCoverageBounds();
-    const Rect ink(cast<f32>(left), cast<f32>(top), cast<f32>(width), cast<f32>(height));
-    if(!IsFinite(ink.x + ink.width) || !IsFinite(ink.y + ink.height))
+    if(Abs(origin.x) > s_TextMaxCoordinateF64 || Abs(origin.y) > s_TextMaxCoordinateF64 || extent.x > s_TextMaxCoordinateF64 || extent.y > s_TextMaxCoordinateF64)
         return GlyphCoverageBounds();
-    return GlyphCoverageBounds(ink, true);
+    if(Abs(origin.x + extent.x) > s_TextMaxCoordinateF64 || Abs(origin.y + extent.y) > s_TextMaxCoordinateF64)
+        return GlyphCoverageBounds();
+    const VectorSingle rounded(cast<f32>(origin.x), cast<f32>(origin.y), cast<f32>(extent.x), cast<f32>(extent.y));
+    if(!IsFinite(rounded.x + rounded.z) || !IsFinite(rounded.y + rounded.w))
+        return GlyphCoverageBounds();
+    return GlyphCoverageBounds(Rect(rounded.x, rounded.y, rounded.z, rounded.w), true);
 }
 
 Expected<FontMetrics> TryResolveFontExtentsMetrics(in i32 ascender, in i32 descender, in i32 lineGap){
+    const VectorSingle scaled = VectorSingle(cast<f32>(ascender), -cast<f32>(descender), cast<f32>(lineGap), 0.0f) * (1.0f / s_TextFixedPointScale);
+    const VectorSingle clamped = Max(VectorSingle(0.0f), scaled);
     FontMetrics outMetrics;
-    const f32 invScale = 1.0f / s_TextFixedPointScale;
-    const f32 scaledAsc = cast<f32>(ascender) * invScale;
-    const f32 scaledDesc = (-cast<f32>(descender)) * invScale;
-    const f32 scaledGap = cast<f32>(lineGap) * invScale;
-    outMetrics.ascender = Max(0.0f, scaledAsc);
-    outMetrics.descender = Max(0.0f, scaledDesc);
-    outMetrics.lineGap = Max(0.0f, scaledGap);
+    outMetrics.ascender = clamped.x;
+    outMetrics.descender = clamped.y;
+    outMetrics.lineGap = clamped.z;
     if(outMetrics.ascender + outMetrics.descender <= 0.0f)
         return MakeUnexpected(Failure());
     return outMetrics;
@@ -180,21 +178,18 @@ Expected<FontMetrics> TryResolveFontExtentsMetrics(in i32 ascender, in i32 desce
 
 Rect ResolveHbGlyphExtentsInk(in i32 xBearing, in i32 yBearing, in i32 width, in i32 height){
     const f32 scale = 1.0f / s_TextFixedPointScale;
-    const f32 originX = cast<f32>(xBearing) * scale;
-    const f32 originY = (-cast<f32>(yBearing)) * scale;
-    const f32 endX = cast<f32>(width) * scale + originX;
-    const f32 endY = originY - cast<f32>(height) * scale;
-    const f32 minX = Min(originX, endX);
-    const f32 minY = Min(originY, endY);
-    const f32 deltaX = endX - originX;
-    const f32 deltaY = endY - originY;
-    return Rect(minX, minY, Abs(deltaX), Abs(deltaY));
+    const VectorSingle origin = VectorSingle(cast<f32>(xBearing), -cast<f32>(yBearing), cast<f32>(xBearing), -cast<f32>(yBearing)) * scale;
+    const VectorSingle scaledExtent = VectorSingle(cast<f32>(width), -cast<f32>(height), cast<f32>(width), -cast<f32>(height)) * scale;
+    const VectorSingle end = origin + scaledExtent;
+    const VectorSingle minXY = Min(origin, end);
+    const VectorSingle size = Abs(end - origin);
+    return Rect(minXY.x, minXY.y, size.x, size.y);
 }
 
 void ResolveHbGlyphPlacement(in i32 xOffset, in i32 yOffset, in i32 xAdvance, in i32 yAdvance, mut Point outOffset, mut Point outAdvance){
-    const f32 scale = 1.0f / s_TextFixedPointScale;
-    outOffset = Point(cast<f32>(xOffset) * scale, (-cast<f32>(yOffset)) * scale);
-    outAdvance = Point(cast<f32>(xAdvance) * scale, (-cast<f32>(yAdvance)) * scale);
+    const VectorSingle scaled = VectorSingle(cast<f32>(xOffset), -cast<f32>(yOffset), cast<f32>(xAdvance), -cast<f32>(yAdvance)) * (1.0f / s_TextFixedPointScale);
+    outOffset = Point(scaled.x, scaled.y);
+    outAdvance = Point(scaled.z, scaled.w);
 }
 
 void AppendOrMergeTextFontSpan(in TextFontSpan span, mut Vector<TextFontSpan> inOutSpans){

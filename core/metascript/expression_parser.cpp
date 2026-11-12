@@ -97,7 +97,7 @@ Value ExpressionParser::parseUnary(){
             return Value(-val.asInteger(), m_arena);
         }
         if(val.isDouble())
-            return Value(-val.asDouble(), m_arena);
+            return Value(VectorDoubleGetX(VectorDoubleNegate(VectorDoubleReplicate(val.asDouble()))), m_arena);
 
         m_cursor.error("unary '-' requires numeric operand");
         return Value(m_arena);

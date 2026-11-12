@@ -214,9 +214,10 @@ native{
 #include <core/ecs/world.h>
 #include <core/graphics/runtime/runtime.h>
 #include <global/scope_exit.h>
+#include <global/simd/vector.h>
+#include <global/simplemath.h>
 #include <global/termination.h>
 #include <global/timer.h>
-#include <global/simplemath.h>
 #include <impl/ecs_ui/edit_box_host.adhd.h>
 #include <impl/ecs_ui/edit_geometry.adhd.h>
 #include <impl/ecs_ui/toolkit/edit/text_normalization.adhd.h>
@@ -229,6 +230,7 @@ NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 UiLayerSystem::UiLayerSystem(
     ::ArenaBase& __adhd_mother_arena,
@@ -380,9 +382,12 @@ void UiLayerSystem::render(Core::Framebuffer* framebuffer)noexcept{
 
 void UiLayerSystem::displayScaleChanged(const f32 scaleX, const f32 scaleY)noexcept{
     FOUNDATION_ASSERT(IsValidUiDisplayScale(scaleX, scaleY));
+    const SIMDVectorSingle scale = VectorSet(scaleX, scaleY, scaleX, scaleY);
     m_frameDelta.clear();
     abandonPendingFrame(true);
-    m_display = { static_cast<f32>(m_width) / scaleX, static_cast<f32>(m_height) / scaleY, scaleX, scaleY };
+    const SIMDVectorSingle extent = VectorSet(static_cast<f32>(m_width), static_cast<f32>(m_height), static_cast<f32>(m_width), static_cast<f32>(m_height));
+    const SIMDVectorSingle logicalSize = VectorDivide(extent, scale);
+    m_display = { VectorGetX(logicalSize), VectorGetY(logicalSize), scaleX, scaleY };
 }
 
 b8 UiLayerSystem::setInputBindings(const Span<const Ui::InputKeyBinding> bindings)noexcept{

@@ -511,8 +511,9 @@ b8 Builder::prepareRadioGroup(RadioGroupFrame& frame){
         const auto textBounds = m_text.measure(*label, m_paint.displayMetrics());
         if(!textBounds)
             return false;
-        maximumLabel.x = Max(maximumLabel.x, textBounds->width);
-        maximumLabel.y = Max(maximumLabel.y, textBounds->height);
+        const SIMDVectorSingle maximum = VectorMax(VectorSet(maximumLabel.x, maximumLabel.y, maximumLabel.x, maximumLabel.y), VectorSet(textBounds->width, textBounds->height, textBounds->width, textBounds->height));
+        maximumLabel.x = VectorGetX(maximum);
+        maximumLabel.y = VectorGetY(maximum);
         frame.m_labels.push_back({ Move(*label), *textBounds });
     }
     if(!m_skin || !ControlStyleMetrics().radioGroupMetrics(*m_skin, frame.m_choices.count, maximumLabel, frame.m_options, frame.m_style, frame.m_metrics))

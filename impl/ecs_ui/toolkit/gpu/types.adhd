@@ -17,13 +17,14 @@ Expected<GpuPaintPushConstants> TryInitializeGpuPaintPushConstants(in GpuRasterG
     outPush.translate.x = -1.0f;
     outPush.translate.y = 1.0f;
     outPush.samplerSlot = samplerSlot;
-    if(!IsFinite(outPush.scale.x) || !IsFinite(outPush.scale.y))
+    if(!IsFinite(projectionScale.xy))
         return MakeUnexpected(Failure());
     return outPush;
 }
 
 Expected<i32x4> TryComputeGpuScissorBounds(in GpuRasterGeometry geometry, in DrawCommand draw){
-    const VectorSingle coordinates(draw.clip.x, draw.clip.y, draw.clip.x + draw.clip.width, draw.clip.y + draw.clip.height);
+    const VectorSingle clipEnd = VectorSingle(draw.clip.x, draw.clip.y, draw.clip.x, draw.clip.y) + VectorSingle(draw.clip.width, draw.clip.height, draw.clip.width, draw.clip.height);
+    const VectorSingle coordinates(draw.clip.x, draw.clip.y, clipEnd.x, clipEnd.y);
     const VectorSingle physicalClip = coordinates * VectorSingle(geometry.pixelScale);
     const VectorSingle first = Floor(VectorSingle(physicalClip.x, physicalClip.y, 0.0f, 0.0f));
     const VectorSingle last = Ceil(VectorSingle(physicalClip.z, physicalClip.w, 0.0f, 0.0f));

@@ -355,7 +355,8 @@ Expected<usize> TryHitTestEditBoxView(
 ){
     if(!viewReady || !geometryReady || !IsFinite(point.x) || !IsFinite(point.y) || !IsFinite(placement.textOrigin.x) || !IsFinite(placement.textOrigin.y))
         return MakeUnexpected(Failure());
-    return HitEditCaretGeometry(lines, stops, Point(point.x - placement.textOrigin.x, point.y - placement.textOrigin.y));
+    const VectorSingle local = VectorSingle(point.x, point.y, point.x, point.y) - VectorSingle(placement.textOrigin.x, placement.textOrigin.y, placement.textOrigin.x, placement.textOrigin.y);
+    return HitEditCaretGeometry(lines, stops, Point(local.x, local.y));
 }
 
 Expected<Rect> TryResolveEditCaretRectWhenReady(

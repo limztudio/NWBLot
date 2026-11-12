@@ -20,6 +20,7 @@ native{
 #include <utilities/font_builder/bake.adhd.h>
 
 #include <impl/assets_font_atlas/model.adhd.h>
+#include <impl/assets_font_atlas/positioning_validation.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -32,7 +33,6 @@ namespace NWB::Tests::FontBakeCases{
 
 
 using AssetArena = Core::Assets::AssetArena;
-using AssetBytes = Core::Assets::AssetBytes;
 using ScratchArena = Core::Alloc::ScratchArena;
 using LoggerRegistrationGuard = Core::Common::LoggerRegistrationGuard;
 using Impl::FontAtlasGlyph;
@@ -69,12 +69,12 @@ inline constexpr auto s_ReportOnly = Core::Common::LoggerBreakPolicy::ReportOnly
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void Append16(in u16 value, mut AssetBytes bytes){
+void Append16(in u16 value, mut Vector<u8> bytes){
     bytes.push_back(cast<u8>(value >> 8u));
     bytes.push_back(cast<u8>(value));
 }
 
-void Append32(in u32 value, mut AssetBytes bytes){
+void Append32(in u32 value, mut Vector<u8> bytes){
     Append16(cast<u16>(value >> 16u), bytes);
     Append16(cast<u16>(value), bytes);
 }

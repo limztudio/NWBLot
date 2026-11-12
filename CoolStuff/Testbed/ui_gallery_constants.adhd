@@ -161,11 +161,13 @@ StringView SectionName(in Section section){
 
 Rect ResolveWidgetGalleryLayoutBounds(in DisplayMetrics display, in f32 preferredTop){
     const f32 height = (s_SelectorHeight + s_ContentGap) + s_ContentHeight;
-    const f32 availableX = (display.logicalWidth - s_SelectorWidth) - s_GalleryMargin;
-    const f32 availableY = (display.logicalHeight - height) - s_GalleryMargin;
-    const f32 x = Max(s_GalleryMargin, availableX);
-    const f32 y = Max(s_GalleryMargin, Min(preferredTop, availableY));
-    return Rect(x, y, s_SelectorWidth, height);
+    const VectorSingle displayExtent(display.logicalWidth, display.logicalHeight, display.logicalWidth, display.logicalHeight);
+    const VectorSingle size(s_SelectorWidth, height, s_SelectorWidth, height);
+    const VectorSingle margin(s_GalleryMargin);
+    const VectorSingle available = (displayExtent - size) - margin;
+    const VectorSingle candidate(available.x, Min(preferredTop, available.y), available.x, available.y);
+    const VectorSingle resolvedOrigin = Max(margin, candidate);
+    return Rect(resolvedOrigin.x, resolvedOrigin.y, s_SelectorWidth, height);
 }
 
 u64 ResolveImmutableListSourceKey(in u64 index, in usize labelCount){
@@ -313,34 +315,40 @@ u32 StepWidgetGalleryCounter(in u32 count){
 
 Point ResolveWidgetGalleryContentOrigin(in Rect bounds, in u32 selected){
     const f32 width = ResolveWidgetGalleryContentWidth(selected);
-    return Point(
-        bounds.x + (bounds.width - width) * 0.5f,
-        bounds.y + s_SelectorHeight + s_ContentGap
-    );
+    const f32 centeredOffsetX = (bounds.width - width) * 0.5f;
+    const VectorSingle origin = VectorSingle(bounds.x, bounds.y, bounds.x, bounds.y)
+        + VectorSingle(centeredOffsetX, s_SelectorHeight, centeredOffsetX, s_SelectorHeight);
+    return Point(origin.x, origin.y + s_ContentGap);
 }
 
 Rect ResolvePopupGalleryAnchorRect(in f32 x, in f32 y){
+    const VectorSingle origin = VectorSingle(x, y, x, y)
+        + VectorSingle(s_PopupAnchorLeft, s_PopupAnchorTop, s_PopupAnchorLeft, s_PopupAnchorTop);
     return Rect(
-        x + s_PopupAnchorLeft,
-        y + s_PopupAnchorTop,
+        origin.x,
+        origin.y,
         s_PopupMenuButtonWidth,
         s_PopupAnchorHeight
     );
 }
 
 Rect ResolveNestedPopupParentAnchorRect(in f32 x, in f32 y){
+    const VectorSingle origin = VectorSingle(x, y, x, y)
+        + VectorSingle(s_NestedPopupParentAnchorInset, s_NestedPopupParentAnchorTop, s_NestedPopupParentAnchorInset, s_NestedPopupParentAnchorTop);
     return Rect(
-        x + s_NestedPopupParentAnchorInset,
-        y + s_NestedPopupParentAnchorTop,
+        origin.x,
+        origin.y,
         s_NestedPopupParentAnchorWidth,
         s_NestedPopupParentAnchorHeight
     );
 }
 
 Rect ResolveNestedPopupChildAnchorRect(in Rect parentBounds){
+    const VectorSingle origin = VectorSingle(parentBounds.x + parentBounds.width, parentBounds.y, 0.0f, 0.0f)
+        + VectorSingle(-s_NestedPopupChildAnchorWidth, s_NestedPopupChildAnchorTop, 0.0f, 0.0f);
     return Rect(
-        (parentBounds.x + parentBounds.width) - s_NestedPopupChildAnchorWidth,
-        parentBounds.y + s_NestedPopupChildAnchorTop,
+        origin.x,
+        origin.y,
         s_NestedPopupChildAnchorWidth,
         s_NestedPopupChildAnchorHeight
     );

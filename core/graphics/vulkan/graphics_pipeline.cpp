@@ -10,6 +10,8 @@
 
 #include <core/common/log.h>
 
+#include <global/simd/vector.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -221,7 +223,8 @@ void CommandList::drawIndexedIndirect(u32 offsetBytes, u32 drawCount){
 void CommandList::setViewportState(const ViewportState& viewportState){
     if(!viewportState.viewports.empty()){
         const auto& vp = viewportState.viewports[0u];
-        const VkViewport viewport{ vp.minX, vp.maxY, vp.maxX - vp.minX, vp.minY - vp.maxY, vp.minZ, vp.maxZ };
+        const SIMDVectorSingle extent = VectorSubtract(VectorSet(vp.maxX, vp.minY, vp.maxX, vp.minY), VectorSet(vp.minX, vp.maxY, vp.minX, vp.maxY));
+        const VkViewport viewport{ vp.minX, vp.maxY, VectorGetX(extent), VectorGetY(extent), vp.minZ, vp.maxZ };
         m_context.deviceDispatch.vkCmdSetViewport(m_currentCmdBuf->m_cmdBuf, 0u, 1u, &viewport);
     }
 

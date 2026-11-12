@@ -4,6 +4,8 @@
 
 #include "gpu_timing_metric_correlator.h"
 
+#include <global/simd/vector_arithmetic.h>
+
 #include <global/simd/vector.h>
 
 
@@ -256,13 +258,13 @@ void GpuTimingMetricCorrelator::recordTimestampRange(const Name& scopeName, cons
 
         if(aggregated){
             const f64 secondsPerTick = envelopeMetrics->secondsPerTick;
-            const f64 overlapSeconds = static_cast<f64>(envelopeMetrics->queueOverlapTicks) * secondsPerTick;
+            const f64 overlapSeconds = VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(envelopeMetrics->queueOverlapTicks)), VectorDoubleReplicate(secondsPerTick)));
             performanceSamples.push_back(GpuTimingSinkSample{ .scope = it->queueOverlapScope, .durationSeconds = overlapSeconds, .sourceFrameIndex = it->sourceFrameIndex, });
             for(const GpuQueuePacketEnvelopeMetrics& queueMetric : queueMetrics){
                 for(const PacketEnvelopeMetricQueueOutputRecord& output : it->queueOutputs){
                     if(output.physicalQueue != queueMetric.physicalQueue)
                         continue;
-                    const f64 idleSeconds = static_cast<f64>(queueMetric.internalIdleTicks) * secondsPerTick;
+                    const f64 idleSeconds = VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(queueMetric.internalIdleTicks)), VectorDoubleReplicate(secondsPerTick)));
                     performanceSamples.push_back(GpuTimingSinkSample{ .scope = output.internalIdleScope, .durationSeconds = idleSeconds, .sourceFrameIndex = it->sourceFrameIndex, });
                     break;
                 }

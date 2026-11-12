@@ -12,7 +12,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static const float NWB_OPTICAL_BOUNDS_RUNTIME_EPSILON_SCALE = 16.0;
 static const uint NWB_OPTICAL_BOUNDS_RUNTIME_ROW_BYTES = 16u;
 
 
@@ -38,6 +37,123 @@ groupshared uint g_NwbOpticalInvalid[NWB_OPTICAL_BOUNDS_FINALIZE_GROUP_SIZE];
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool nwbOpticalAdmittedInput(const uint bits){
+    const uint magnitude = bits & NWB_OPTICAL_BOUNDS_MAGNITUDE_MASK;
+    if(magnitude == 0u)
+        return true;
+    const int exponent = int(magnitude >> NWB_OPTICAL_BOUNDS_MANTISSA_BITS) - NWB_OPTICAL_BOUNDS_EXPONENT_BIAS;
+    return exponent >= NWB_OPTICAL_BOUNDS_MIN_INPUT_EXPONENT && exponent <= NWB_OPTICAL_BOUNDS_MAX_INPUT_EXPONENT;
+}
+
+uint nwbOpticalOrderedBits(const uint bits){
+    if((bits & NWB_OPTICAL_BOUNDS_MAGNITUDE_MASK) == 0u)
+        return NWB_OPTICAL_BOUNDS_SIGN_BIT;
+    return (bits & NWB_OPTICAL_BOUNDS_SIGN_BIT) != 0u ? ~bits : bits ^ NWB_OPTICAL_BOUNDS_SIGN_BIT;
+}
+
+int nwbOpticalCeilingExponent(const uint magnitude){
+    const int exponent = int(magnitude >> NWB_OPTICAL_BOUNDS_MANTISSA_BITS) - NWB_OPTICAL_BOUNDS_EXPONENT_BIAS;
+    return exponent + ((magnitude & NWB_OPTICAL_BOUNDS_FRACTION_MASK) != 0u ? 1 : 0);
+}
+
+bool nwbOpticalMagnitudeExponent(const uint4 row, const uint3 localMagnitude, out int exponent){
+    exponent = NWB_OPTICAL_BOUNDS_ZERO_EXPONENT;
+    int largest = NWB_OPTICAL_BOUNDS_ZERO_EXPONENT;
+    uint count = 0u;
+    for(uint lane = 0u; lane < 4u; ++lane){
+        if(!nwbOpticalAdmittedInput(row[lane]))
+            return false;
+        const uint coefficient = row[lane] & NWB_OPTICAL_BOUNDS_MAGNITUDE_MASK;
+        uint coordinate = NWB_OPTICAL_BOUNDS_ONE_BITS;
+        if(lane < 3u)
+            coordinate = localMagnitude[lane];
+        if(coefficient != 0u && coordinate != 0u){
+            largest = max(largest, nwbOpticalCeilingExponent(coefficient) + nwbOpticalCeilingExponent(coordinate));
+            ++count;
+        }
+    }
+    exponent = NWB_OPTICAL_BOUNDS_ZERO_EXPONENT;
+    if(count == 0u)
+        return true;
+    exponent = largest + (count > 2u ? 2 : (count > 1u ? 1 : 0));
+    return exponent <= NWB_OPTICAL_BOUNDS_MAX_MAGNITUDE_EXPONENT;
+}
+
+uint nwbOpticalFixedBits(const int value, const int exponent){
+    if(value == 0)
+        return 0u;
+    const uint sign = value < 0 ? NWB_OPTICAL_BOUNDS_SIGN_BIT : 0u;
+    const uint magnitude = uint(value < 0 ? -value : value);
+    const int highest = firstbithigh(magnitude);
+    const int resultExponent = exponent - NWB_OPTICAL_BOUNDS_FIXED_BITS + highest;
+    if(resultExponent < -126)
+        return 0u;
+    const uint significand = highest > 23 ? magnitude >> (uint(highest - 23) & 31u) : magnitude << (uint(23 - highest) & 31u);
+    return sign | (uint(resultExponent + NWB_OPTICAL_BOUNDS_EXPONENT_BIAS) << NWB_OPTICAL_BOUNDS_MANTISSA_BITS) | (significand & NWB_OPTICAL_BOUNDS_FRACTION_MASK);
+}
+
+// Four 24-bit significand products, represented by low/high 32-bit words.
+void nwbOpticalMantissaProducts(const uint4 a, const uint4 b, out uint4 low, out uint4 high){
+    const uint4 aLow = a & 0xfffu;
+    const uint4 bLow = b & 0xfffu;
+    const uint4 first = aLow * bLow;
+    const uint4 middle = (first >> 12u) + (a >> 12u) * bLow + aLow * (b >> 12u);
+    const uint4 upper = (middle >> 12u) + (a >> 12u) * (b >> 12u);
+    low = (first & 0xfffu) | ((middle & 0xfffu) << 12u) | (upper << 24u);
+    high = upper >> 8u;
+}
+
+uint nwbOpticalEndpoint(const uint4 row, const uint3 localMin, const uint3 localMax, const int exponent, const bool upper){
+    uint4 point = uint4(localMin, NWB_OPTICAL_BOUNDS_ONE_BITS);
+    for(uint lane = 0u; lane < 3u; ++lane){
+        if(upper != ((row[lane] & NWB_OPTICAL_BOUNDS_SIGN_BIT) != 0u))
+            point[lane] = localMax[lane];
+    }
+    uint4 a = uint4(0u);
+    uint4 b = uint4(0u);
+    for(uint lane = 0u; lane < 4u; ++lane){
+        if((row[lane] & NWB_OPTICAL_BOUNDS_MAGNITUDE_MASK) != 0u)
+            a[lane] = (row[lane] & NWB_OPTICAL_BOUNDS_FRACTION_MASK) | NWB_OPTICAL_BOUNDS_HIDDEN_BIT;
+        if((point[lane] & NWB_OPTICAL_BOUNDS_MAGNITUDE_MASK) != 0u)
+            b[lane] = (point[lane] & NWB_OPTICAL_BOUNDS_FRACTION_MASK) | NWB_OPTICAL_BOUNDS_HIDDEN_BIT;
+    }
+    uint4 low;
+    uint4 high;
+    nwbOpticalMantissaProducts(a, b, low, high);
+    int total = 0;
+    for(uint lane = 0u; lane < 4u; ++lane){
+        if(a[lane] == 0u || b[lane] == 0u)
+            continue;
+        const int aExponent = int((row[lane] & NWB_OPTICAL_BOUNDS_MAGNITUDE_MASK) >> NWB_OPTICAL_BOUNDS_MANTISSA_BITS);
+        const int bExponent = int((point[lane] & NWB_OPTICAL_BOUNDS_MAGNITUDE_MASK) >> NWB_OPTICAL_BOUNDS_MANTISSA_BITS);
+        const int shift = exponent + 2 * (NWB_OPTICAL_BOUNDS_EXPONENT_BIAS + int(NWB_OPTICAL_BOUNDS_MANTISSA_BITS)) - NWB_OPTICAL_BOUNDS_FIXED_BITS - aExponent - bExponent;
+        if(shift < 64){
+            const uint scaled = shift >= 32 ? high[lane] >> (uint(shift - 32) & 31u) : (low[lane] >> (uint(shift) & 31u)) | (high[lane] << (uint(32 - shift) & 31u));
+            total += ((row[lane] ^ point[lane]) & NWB_OPTICAL_BOUNDS_SIGN_BIT) != 0u ? -int(scaled) : int(scaled);
+        }
+    }
+    return nwbOpticalFixedBits(total, exponent);
+}
+
+uint nwbOpticalExpandedBits(const uint bits, const int exponent, const bool upper){
+    const int marginExponent = max(exponent - NWB_OPTICAL_BOUNDS_RELATIVE_MARGIN_SHIFT, NWB_OPTICAL_BOUNDS_MIN_MARGIN_EXPONENT);
+    const uint twiceMargin = uint(marginExponent + 1 + NWB_OPTICAL_BOUNDS_EXPONENT_BIAS) << NWB_OPTICAL_BOUNDS_MANTISSA_BITS;
+    uint magnitude = bits & NWB_OPTICAL_BOUNDS_MAGNITUDE_MASK;
+    if(magnitude < twiceMargin){
+        const uint result = uint(marginExponent + 2 + NWB_OPTICAL_BOUNDS_EXPONENT_BIAS) << NWB_OPTICAL_BOUNDS_MANTISSA_BITS;
+        return upper ? result : result | NWB_OPTICAL_BOUNDS_SIGN_BIT;
+    }
+    const int valueExponent = int(magnitude >> NWB_OPTICAL_BOUNDS_MANTISSA_BITS) - NWB_OPTICAL_BOUNDS_EXPONENT_BIAS;
+    const uint step = 1u << uint(max(0, marginExponent - valueExponent + 24));
+    magnitude = upper != ((bits & NWB_OPTICAL_BOUNDS_SIGN_BIT) != 0u) ? magnitude + step : magnitude - step;
+    return (bits & NWB_OPTICAL_BOUNDS_SIGN_BIT) | magnitude;
+}
+
+bool nwbOpticalNormalBounds(const float3 value){
+    const uint3 magnitude = asuint(value) & NWB_OPTICAL_BOUNDS_MAGNITUDE_MASK;
+    return all(magnitude <= NWB_FLOAT_MAX_BITS) && all((magnitude == uint3(0u)) | (magnitude >= uint3(NWB_FLOAT_MIN_NORMAL_BITS)));
+}
+
 bool nwbOpticalTransformRuntimeBounds(const uint inputOffset, out float3 boundsMin, out float3 boundsMax){
     boundsMin = float3(0.0);
     boundsMax = float3(0.0);
@@ -48,27 +164,20 @@ bool nwbOpticalTransformRuntimeBounds(const uint inputOffset, out float3 boundsM
     const ByteAddressBuffer localBounds = nwbHeapRawBuffer(localSlot);
     if((localBounds.Load(NWB_RUNTIME_MESH_BOUNDS_FLAGS_OFFSET) & NWB_RUNTIME_MESH_BOUNDS_FLAG_VALID) == 0u)
         return false;
-    const float3 localMin = asfloat(localBounds.Load3(NWB_RUNTIME_MESH_BOUNDS_MIN_OFFSET));
-    const float3 localMax = asfloat(localBounds.Load3(NWB_RUNTIME_MESH_BOUNDS_MAX_OFFSET));
-    if(!all(isfinite(localMin)) || !all(isfinite(localMax)) || any(localMin > localMax))
-        return false;
+    const uint3 localMin = localBounds.Load3(NWB_RUNTIME_MESH_BOUNDS_MIN_OFFSET);
+    const uint3 localMax = localBounds.Load3(NWB_RUNTIME_MESH_BOUNDS_MAX_OFFSET);
+    for(uint axis = 0u; axis < 3u; ++axis){
+        if(!nwbOpticalAdmittedInput(localMin[axis]) || !nwbOpticalAdmittedInput(localMax[axis]) || nwbOpticalOrderedBits(localMin[axis]) > nwbOpticalOrderedBits(localMax[axis]))
+            return false;
+    }
+    const uint3 magnitude = max(localMin & NWB_OPTICAL_BOUNDS_MAGNITUDE_MASK, localMax & NWB_OPTICAL_BOUNDS_MAGNITUDE_MASK);
     for(uint rowIndex = 0u; rowIndex < 3u; ++rowIndex){
-        const float4 row = asfloat(inputs.Load4(inputOffset + rowIndex * NWB_OPTICAL_BOUNDS_RUNTIME_ROW_BYTES));
-        if(!all(isfinite(row)))
+        const uint4 row = inputs.Load4(inputOffset + rowIndex * NWB_OPTICAL_BOUNDS_RUNTIME_ROW_BYTES);
+        int exponent = NWB_OPTICAL_BOUNDS_ZERO_EXPONENT;
+        if(!nwbOpticalMagnitudeExponent(row, magnitude, exponent))
             return false;
-        const float3 first = row.xyz * localMin;
-        const float3 second = row.xyz * localMax;
-        const float3 low = min(first, second);
-        const float3 high = max(first, second);
-        const float3 absolute = max(abs(first), abs(second));
-        const float magnitude = abs(row.w) + absolute.x + absolute.y + absolute.z + 1.0;
-        // Enclose both the bounds arithmetic and the frozen float affine transform used by traversal.
-        // The unit floor covers flushed subnormals; any overflow leaves the entire union unproven.
-        const float margin = magnitude * (NWB_OPTICAL_BOUNDS_RUNTIME_EPSILON_SCALE * NWB_FLOAT_EPSILON);
-        boundsMin[rowIndex] = ((row.w + low.x) + low.y) + low.z - margin;
-        boundsMax[rowIndex] = ((row.w + high.x) + high.y) + high.z + margin;
-        if(!all(isfinite(first)) || !all(isfinite(second)) || !isfinite(magnitude) || !isfinite(margin) || !isfinite(boundsMin[rowIndex]) || !isfinite(boundsMax[rowIndex]))
-            return false;
+        boundsMin[rowIndex] = asfloat(nwbOpticalExpandedBits(nwbOpticalEndpoint(row, localMin, localMax, exponent, false), exponent, false));
+        boundsMax[rowIndex] = asfloat(nwbOpticalExpandedBits(nwbOpticalEndpoint(row, localMin, localMax, exponent, true), exponent, true));
     }
     return true;
 }
@@ -98,7 +207,7 @@ void main(uint3 groupThreadId : SV_GroupThreadID){
     if(lane == 0u && transparentCount > g_NwbOpticalBoundsFinalize.runtimeCount){
         minimum = asfloat(source.Load3(NWB_RT_OPTICAL_SCENE_BOUNDS_MIN_OFFSET));
         maximum = asfloat(source.Load3(NWB_RT_OPTICAL_SCENE_BOUNDS_MAX_OFFSET));
-        if(!all(isfinite(minimum)) || !all(isfinite(maximum)) || any(minimum > maximum))
+        if(!nwbOpticalNormalBounds(minimum) || !nwbOpticalNormalBounds(maximum) || any(minimum > maximum))
             invalid = 1u;
     }
     const ByteAddressBuffer inputs = nwbHeapRawBuffer(g_NwbOpticalBoundsFinalize.runtimeInputsSlot);

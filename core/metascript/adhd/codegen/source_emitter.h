@@ -98,6 +98,8 @@ private:
     [[nodiscard]] b8 tryEmitSimdReturnStmt(MString& out, const Stmt& stmt, u32 indent)const;
     void emitSimdLaneGetExpr(MString& out, const Expr& vecExpr, u32 lane, const Expr* dynamicIndexExpr)const;
     void emitSimdRegExpr(MString& out, const Expr& expr, MStringView expectedSimdType)const;
+    [[nodiscard]] b8 tryEmitScalarFloatExpr(MString& out, const Expr& expr)const;
+    [[nodiscard]] b8 tryEmitScalarFloatCall(MString& out, const Expr& expr)const;
     [[nodiscard]] b8 tryEmitFusedSimdLogicChain(MString& out, const Expr& expr, b8 omitOuterBinaryParens)const;
 
 
@@ -117,6 +119,7 @@ private:
     mutable Span<const TypeArg> m_activeTemplateArgs{};
     mutable Span<const FieldDecl* const> m_activeOrderedFields{};
     mutable b8 m_inFieldInitializer = false;
+    mutable b8 m_emittingScalarSimd = false;
     [[nodiscard]] b8 instantiatedStatementsNeedScratchArena(Span<const Stmt* const> statements)const;
     [[nodiscard]] b8 instantiatedExprNeedsScratchArena(const Expr* expr)const;
     mutable const TypeRef* m_activeCallerArenaReturnType = nullptr;

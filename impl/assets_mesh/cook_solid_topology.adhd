@@ -199,13 +199,15 @@ void FinalizeMeshSolidTriangleWords(
             origin = VectorDouble(VectorSingle(positions[cast<usize>(triangleIndices[originBase])]));
             originComponent = component;
         }
-        componentVolumes[cast<usize>(component)] += ComputeTriangleRelativeVolumeAtIndices(
+        const VectorDouble triangleVolume(ComputeTriangleRelativeVolumeAtIndices(
             positions,
             triangleIndices[base],
             triangleIndices[base + 1u],
             triangleIndices[base + 2u],
             origin
-        );
+        ));
+        const VectorDouble componentVolume = VectorDouble(componentVolumes[cast<usize>(component)]) + triangleVolume;
+        componentVolumes[cast<usize>(component)] = componentVolume.x;
     }
 
     outWords.clear();

@@ -303,8 +303,10 @@ class ControlVisualPainter{
         const Rect content = InsetUiRectBounds(bounds, padding);
         paint.pushClip(content);
         b8 painted = false;
-        if(backgroundPainted)
-            painted = text.paint(paint, layout, Point(content.x - textBounds.x, content.y - textBounds.y), textColor);
+        if(backgroundPainted){
+            const VectorSingle origin = VectorSingle(content.x, content.y, content.x, content.y) - VectorSingle(textBounds.x, textBounds.y, textBounds.x, textBounds.y);
+            painted = text.paint(paint, layout, Point(origin.x, origin.y), textColor);
+        }
         const b8 contentPopped = paint.popClip();
         const b8 popped = paint.popClip();
         const b8 ended = paint.endOverlay();

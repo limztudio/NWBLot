@@ -7,6 +7,7 @@
 
 #include "simplemath.h"
 #include "span.h"
+#include "simd/vector_arithmetic.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,7 +27,9 @@ struct OnlineF64Statistics{
     result.maximum = result.minimum;
     for(const f64 sample : samples){
         ++result.count;
-        result.average += (sample - result.average) / static_cast<f64>(result.count);
+        const SIMDVectorDouble average = VectorDoubleReplicate(result.average);
+        const SIMDVectorDouble change = VectorDoubleDivide(VectorDoubleSubtract(VectorDoubleReplicate(sample), average), VectorDoubleReplicate(static_cast<f64>(result.count)));
+        result.average = VectorDoubleGetX(VectorDoubleAdd(average, change));
         result.minimum = Min(result.minimum, sample);
         result.maximum = Max(result.maximum, sample);
     }

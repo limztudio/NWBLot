@@ -2,11 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "type_checker.h"
+
 #include <core/metascript/adhd/ast/builtin_type_semantics.h>
 
 #include <core/metascript/adhd/ast/operator_semantics.h>
 
-#include "type_checker.h"
 #include "binary_expression_checker.h"
 #include "lambda_expression_checker.h"
 
@@ -643,6 +644,45 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
         expr.resolvedSimdType = inferredType;
     else if(u32 unalignedLanes = 0u; SymbolTable::IsUnalignedVectorType(inferredType, unalignedLanes))
         expr.resolvedUnalignedType = inferredType;
+
+    expr.resolvedScalarType = {};
+    if(expr.kind == ExprKind::Binary && expr.lhs && expr.rhs && !OperatorSemantics::IsBoolReturnOperatorToken(expr.op)){
+        const MStringView lhsType = expr.lhs->resolvedScalarType;
+        const MStringView rhsType = expr.rhs->resolvedScalarType;
+        if(BuiltinTypeSemantics::IsScalarType(lhsType) && BuiltinTypeSemantics::IsScalarType(rhsType)){
+            if(OperatorSemantics::IsCompoundOrSimpleAssignment(expr.op))
+                expr.resolvedScalarType = lhsType;
+            else if(lhsType == "f64" || rhsType == "f64")
+                expr.resolvedScalarType = "f64";
+            else if(lhsType == "f32" || rhsType == "f32")
+                expr.resolvedScalarType = "f32";
+            else
+                expr.resolvedScalarType = inferredType;
+        }
+    }
+    else if(expr.kind == ExprKind::Unary && expr.lhs && !OperatorSemantics::IsBoolReturnOperatorToken(expr.op))
+        expr.resolvedScalarType = expr.lhs->resolvedScalarType;
+    else if(expr.kind == ExprKind::Call && expr.isBuiltinCall && expr.lhs && expr.lhs->kind == ExprKind::Identifier
+        && !expr.arguments.empty() && expr.arguments[0] && !expr.arguments[0]->resolvedScalarType.empty()
+        && FindBuiltinFunction(expr.lhs->text) && FindBuiltinFunction(expr.lhs->text)->returnRule == BuiltinFunctionReturnRule::PromoteSimd){
+        expr.resolvedScalarType = expr.arguments[0]->resolvedScalarType;
+        if(expr.lhs->text == "Lerp"){
+            for(const Expr* argument : expr.arguments){
+                if(!argument || !BuiltinTypeSemantics::IsScalarType(argument->resolvedScalarType)){
+                    expr.resolvedScalarType = {};
+                    break;
+                }
+                if(argument->resolvedScalarType == "f64")
+                    expr.resolvedScalarType = "f64";
+                else if(argument->resolvedScalarType == "f32" && expr.resolvedScalarType != "f64")
+                    expr.resolvedScalarType = "f32";
+            }
+        }
+        else if(expr.lhs->text != "Rsqrt" && !expr.callTemplateArgs.empty() && expr.callTemplateArgs[0].type)
+            expr.resolvedScalarType = m_symbols.resolveBaseTypeName(expr.callTemplateArgs[0].type->name);
+    }
+    else if(BuiltinTypeSemantics::IsNumericScalarType(inferredType) || inferredType == "b8")
+        expr.resolvedScalarType = inferredType;
 
     return ok;
 }

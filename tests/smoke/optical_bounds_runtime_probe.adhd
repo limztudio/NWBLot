@@ -1,0 +1,364 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "scene_types.adhd"
+#include "presentation_types.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[header]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <loader/project_entry.adhd.h>
+#include <impl/assets_graphics/transparent_subsystem.adhd.h>
+#include <impl/assets_shader/loader.adhd.h>
+#include <impl/ecs_render/optics/optical_scene.adhd.h>
+#include <impl/assets/graphics/raytrace/optical_bounds_finalize_constants.h>
+#include <impl/assets/graphics/raytrace/optical_scene_constants.h>
+#include <impl/assets/graphics/mesh/runtime_bounds_constants.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/graphics/shader_archive.h>
+#include <core/task/gpu/task_graph.h>
+#include <global/scope_exit.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::Smoke{
+[[nodiscard]] Expected<void> RunOpticalBoundsRuntimeProbe(const ActiveSceneSubsystems& scene, ProjectRuntimeContext& context);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 RunOpticalBoundsProbe(in ActiveSceneSubsystems scene, mut ProjectRuntimeContext context){
+    b8 passed = false;
+    native(in scene, mut context, mut passed){
+        const auto result = RunOpticalBoundsRuntimeProbe(scene, context);
+        if(!result)
+            return false;
+        passed = true;
+    }
+    return passed;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[source]
+native{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::Smoke{
+namespace __hidden_optical_bounds_runtime_probe{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr u32 s_Sentinel = 0xa5e0317bu;
+inline constexpr u32 s_ScenarioCount = 8u;
+inline constexpr u32 s_GuardWords = 4u;
+
+struct Scenario{
+    Vector<u32, Core::Alloc::ScratchArena> source;
+    Vector<u32, Core::Alloc::ScratchArena> inputs;
+    Vector<u32, Core::Alloc::ScratchArena> expected;
+    Array<u32, 8> local{};
+    Array<u32, 8> invalidLocal{};
+    Array<Core::BufferHandle, 6> buffers{};
+    Array<Core::GpuDescriptorHandle, 5> descriptors{};
+    u32 instanceCount = 0u;
+    u32 runtimeCount = 0u;
+    u32 staticComplete = 1u;
+    u32 ordinal = 0u;
+
+    explicit Scenario(Core::Alloc::ScratchArena& arena)
+        : source(arena)
+        , inputs(arena)
+        , expected(arena)
+    {}
+};
+
+struct ScenarioCleanup final : NoCopy{
+    Core::GraphicsRuntime& graphics;
+    Scenario& data;
+
+    ScenarioCleanup(Core::GraphicsRuntime& graphicsIn, Scenario& dataIn)noexcept
+        : graphics(graphicsIn)
+        , data(dataIn)
+    {}
+    ~ScenarioCleanup()noexcept(false){
+        if(!graphics.waitForIdle())
+            TerminateInvariant();
+        auto& heap = graphics.getDevice().getDescriptorHeap();
+        for(const auto& descriptor : data.descriptors){
+            if(descriptor.valid())
+                heap.free(descriptor);
+        }
+    }
+};
+
+[[nodiscard]] Expected<void> BuildScenario(Scenario& data){
+    const u32 ordinal = data.ordinal;
+    data.runtimeCount = ordinal < 2u ? 0u : (ordinal == 2u ? 1u : NWB_OPTICAL_BOUNDS_FINALIZE_GROUP_SIZE + 1u);
+    const u32 staticCount = ordinal == 1u || ordinal >= 3u ? 1u : 0u;
+    const u32 transparentCount = staticCount + data.runtimeCount;
+    data.instanceCount = transparentCount + 1u;
+    data.staticComplete = ordinal == 7u ? 0u : 1u;
+    const u32 sceneWords = NWB_RT_OPTICAL_SCENE_HEADER_BYTES / sizeof(u32) + data.instanceCount * NWB_RT_OPTICAL_INSTANCE_BYTES / sizeof(u32);
+    data.source.resize(sceneWords, 0u);
+    data.inputs.resize(Max(1u, data.runtimeCount) * NWB_OPTICAL_BOUNDS_RUNTIME_INPUT_BYTES / sizeof(u32), 0u);
+    data.source[NWB_RT_OPTICAL_SCENE_TRANSPARENT_COUNT_OFFSET / sizeof(u32)] = transparentCount;
+    data.source[NWB_RT_OPTICAL_SCENE_FLAGS_OFFSET / sizeof(u32)] = 0x400u | NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID;
+    for(u32 instance = 0u; instance < data.instanceCount; ++instance){
+        const u32 word = (NWB_RT_OPTICAL_SCENE_HEADER_BYTES + instance * NWB_RT_OPTICAL_INSTANCE_BYTES) / sizeof(u32);
+        data.source[word] = 0x81000000u + instance;
+        data.source[word + 1u] = 17u;
+        data.source[word + 2u] = NWB_RT_OPTICAL_BOUNDARY_CLOSED_NESTED;
+        data.source[word + 3u] = 0x40u | NWB_RT_OPTICAL_INSTANCE_FLAG_BOUNDS_VALID | (instance < transparentCount ? NWB_RT_OPTICAL_INSTANCE_FLAG_TRANSPARENT : 0u);
+    }
+    data.local = { 0x3f7fffffu, 0x3f800000u, 0u, NWB_RUNTIME_MESH_BOUNDS_FLAG_VALID, 0x3f7fffffu, 0x3f800000u, 0u, 0x7f800123u };
+    data.invalidLocal = data.local;
+    data.invalidLocal[NWB_RUNTIME_MESH_BOUNDS_FLAGS_OFFSET / sizeof(u32)] = 0u;
+    SIMDVectorSingle minimum = VectorReplicate(Limit<f32>::s_Max);
+    SIMDVectorSingle maximum = VectorReplicate(-Limit<f32>::s_Max);
+    if(staticCount){
+        const auto bounds = Impl::ComputeOpticalWorldBounds(MatrixTranslation(300.0f, 400.0f, 500.0f), VectorZero(), VectorZero());
+        if(!bounds)
+            return MakeUnexpected(Failure{});
+        minimum = bounds->minimum;
+        maximum = bounds->maximum;
+        for(u32 axis = 0u; axis < 3u; ++axis){
+            data.source[axis] = VectorGetIntByIndex(minimum, axis);
+            data.source[4u + axis] = VectorGetIntByIndex(maximum, axis);
+        }
+    }
+    data.expected.assign(data.source.begin(), data.source.end());
+    data.expected.resize(sceneWords + s_GuardWords, s_Sentinel);
+    b8 complete = data.staticComplete != 0u;
+    for(u32 runtime = 0u; runtime < data.runtimeCount; ++runtime){
+        const u32 word = runtime * NWB_OPTICAL_BOUNDS_RUNTIME_INPUT_BYTES / sizeof(u32);
+        Float34U transform{};
+        const u32 axis = runtime % 3u;
+        transform.m[axis][0] = BitCast<f32>(runtime % 2u ? 0xcb800000u : 0x4b800001u);
+        transform.m[axis][1] = BitCast<f32>(runtime % 2u ? 0x4b800001u : 0xcb800000u);
+        const b8 last = runtime + 1u == data.runtimeCount;
+        if(ordinal == 4u && last)
+            transform.m[axis][0] = BitCast<f32>(1u);
+        for(u32 row = 0u; row < 3u; ++row){
+            for(u32 column = 0u; column < 4u; ++column)
+                data.inputs[word + row * 4u + column] = BitCast<u32>(transform.m[row][column]);
+        }
+        const b8 invalidLocal = ordinal == 5u && last;
+        const u32 instance = ordinal == 6u && last ? data.instanceCount + 1u : staticCount + runtime;
+        data.inputs[word + NWB_OPTICAL_BOUNDS_RUNTIME_SLOT_OFFSET / sizeof(u32)] = data.descriptors[invalidLocal ? 4u : 3u].slot();
+        data.inputs[word + NWB_OPTICAL_BOUNDS_RUNTIME_INSTANCE_OFFSET / sizeof(u32)] = instance;
+        data.inputs[word + 14u] = 0x7f800123u;
+        data.inputs[word + 15u] = 0x7f800123u;
+        const SIMDVectorSingle point = VectorSetInt(data.local[0], data.local[1], data.local[2], 0x7f800123u);
+        const auto bounds = Impl::ComputeOpticalWorldBounds(LoadFloat(transform), point, point);
+        const b8 valid = instance < data.instanceCount && !invalidLocal && bounds.has_value();
+        if(instance < data.instanceCount){
+            const u32 flags = (NWB_RT_OPTICAL_SCENE_HEADER_BYTES + instance * NWB_RT_OPTICAL_INSTANCE_BYTES + NWB_RT_OPTICAL_INSTANCE_FLAGS_OFFSET) / sizeof(u32);
+            data.expected[flags] &= ~NWB_RT_OPTICAL_INSTANCE_FLAG_BOUNDS_VALID;
+            if(valid)
+                data.expected[flags] |= NWB_RT_OPTICAL_INSTANCE_FLAG_BOUNDS_VALID;
+        }
+        if(valid){
+            minimum = VectorMin(minimum, bounds->minimum);
+            maximum = VectorMax(maximum, bounds->maximum);
+        }
+        else
+            complete = false;
+    }
+    for(u32 axis = 0u; axis < 3u; ++axis){
+        data.expected[axis] = complete && transparentCount ? VectorGetIntByIndex(minimum, axis) : 0u;
+        data.expected[4u + axis] = complete && transparentCount ? VectorGetIntByIndex(maximum, axis) : 0u;
+    }
+    data.expected[7u] = 0x400u | (complete ? NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID : 0u);
+    return {};
+}
+
+struct Task{
+    struct Payload{
+        const Scenario& data;
+        Core::ComputePipelineHandle pipeline;
+        Core::GpuDescriptorHeap& heap;
+    };
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements{ .requiredCapabilities = Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer, .requiresPrimaryGraphicsQueue = true };
+
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext&){
+        const Scenario& data = payload.data;
+        const Array<Span<const u32>, 4> uploads{ Span<const u32>(data.source), Span<const u32>(data.inputs), Span<const u32>(data.local), Span<const u32>(data.invalidLocal) };
+        const Array<u32, 4> buffers{ 0u, 1u, 4u, 5u };
+        for(u32 i = 0u; i < uploads.size(); ++i){
+            if(!commands.tryWriteBuffer(*data.buffers[buffers[i]], uploads[i].data(), uploads[i].size_bytes()))
+                return false;
+        }
+        for(const u32 buffer : buffers)
+            commands.setBufferState(data.buffers[buffer].get(), Core::ResourceStates::ShaderResource);
+        commands.setBufferState(data.buffers[2].get(), Core::ResourceStates::UnorderedAccess);
+        commands.commitBarriers();
+        commands.clearBufferUInt(*data.buffers[2], s_Sentinel);
+        Core::ComputeState state;
+        state.setPipeline(payload.pipeline.get());
+        commands.setComputeState(state);
+        payload.heap.bindCompute(commands, *payload.pipeline);
+        Impl::OpticalBoundsFinalizePushConstants push;
+        push.sourceSceneSlot = data.descriptors[0].slot();
+        push.runtimeInputsSlot = data.descriptors[1].slot();
+        push.outputSceneSlot = data.descriptors[2].slot();
+        push.instanceCount = data.instanceCount;
+        push.runtimeCount = data.runtimeCount;
+        push.staticBoundsComplete = data.staticComplete;
+        commands.setPushConstants(&push, sizeof(push));
+        commands.dispatch(1u, 1u, 1u);
+        commands.setBufferState(data.buffers[2].get(), Core::ResourceStates::CopySource);
+        commands.commitBarriers();
+        commands.copyBuffer(*data.buffers[3], 0u, *data.buffers[2], 0u, data.expected.size() * sizeof(u32));
+        for(const Core::BufferHandle& buffer : data.buffers)
+            commands.setBufferState(buffer.get(), Core::ResourceStates::CopyDest);
+        commands.commitBarriers();
+        return !commands.commandRecordingFailed();
+    }
+};
+
+[[nodiscard]] Expected<Core::GpuTaskId> Declare(void* userData, Core::GpuTaskGraph& graph){
+    const auto& payload = *MakeNotNull(static_cast<const Task::Payload*>(userData));
+    Array<Core::GpuTaskResourceUse, 6> uses{};
+    for(u32 i = 0u; i < uses.size(); ++i){
+        const Core::BufferHandle& buffer = payload.data.buffers[i];
+        Core::GpuGraphResourceDesc description;
+        description.setIdentity(buffer->getCreationDescription().debugName).setMarkerLabel("Optical bounds probe buffer").setType(Core::GpuGraphResourceType::Buffer).setInitialState(Core::ResourceStates::CopyDest).setExternalFinalState(Core::ResourceStates::CopyDest);
+        const auto imported = graph.importBuffer(buffer, description);
+        if(!imported)
+            return MakeUnexpected(Failure{});
+        uses[i] = { .resource = *imported, .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::ReadWrite };
+    }
+    Core::GpuTaskDesc description;
+    description.setIdentity(Name("tests/optical_bounds/dispatch")).setMarkerLabel("Optical bounds boundary probe").setResourceUses(uses);
+    const auto task = graph.addTask<Task>(description, Task::Payload(payload));
+    if(!task || !task->valid())
+        return MakeUnexpected(Failure{});
+    return *task;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<void> RunOpticalBoundsRuntimeProbe(const ActiveSceneSubsystems& scene, ProjectRuntimeContext& context){
+    using namespace __hidden_optical_bounds_runtime_probe;
+    auto& graphics = context.graphics;
+    auto& device = graphics.getDevice();
+    auto& heap = device.getDescriptorHeap();
+    const Impl::TransparentSubsystem* transparent = scene.findSubsystem<Impl::TransparentSubsystem>();
+    if(!transparent || !transparent->opticalBoundsFinalizeCs.valid()){
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("OpticalBoundsProbe: production shader is unavailable"));
+        return MakeUnexpected(Failure{});
+    }
+    Core::ShaderHandle shader;
+    if(!Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(transparent->opticalBoundsFinalizeCs.name(), Core::ShaderArchive::s_DefaultVariant, Name("tests/optical_bounds/shader"), FOUNDATION_TEXT("OpticalBoundsProbe"), graphics, context.assetManager, context.shaderPathResolver, nullptr, shader))
+        return MakeUnexpected(Failure{});
+    Core::BindingLayoutDesc layoutDescription(context.objectArena);
+    layoutDescription.setVisibility(Core::ShaderType::Compute).addItem(Core::BindingLayoutItem::PushConstants(0u, NWB_OPTICAL_BOUNDS_FINALIZE_PUSH_BYTES));
+    const auto layout = device.createBindingLayout(layoutDescription);
+    if(!layout)
+        return MakeUnexpected(Failure{});
+    Core::ComputePipelineDesc pipelineDescription;
+    pipelineDescription.setComputeShader(shader).addBindingLayout(*layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
+    const auto pipeline = device.createComputePipeline(pipelineDescription);
+    if(!pipeline)
+        return MakeUnexpected(Failure{});
+    Core::Alloc::ScratchArena scratch(Name("tests/optical_bounds/runtime_scratch"));
+    for(u32 ordinal = 0u; ordinal < s_ScenarioCount; ++ordinal){
+        Scenario data(scratch);
+        data.ordinal = ordinal;
+        ScenarioCleanup cleanup(graphics, data);
+        for(auto& descriptor : data.descriptors){
+            const auto allocated = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+            if(!allocated)
+                return MakeUnexpected(Failure{});
+            descriptor = *allocated;
+        }
+        if(!BuildScenario(data))
+            return MakeUnexpected(Failure{});
+        const Array<Name, 6> bufferNames{ Name("tests/optical_bounds/source"), Name("tests/optical_bounds/inputs"), Name("tests/optical_bounds/output"), Name("tests/optical_bounds/readback"), Name("tests/optical_bounds/local_valid"), Name("tests/optical_bounds/local_invalid") };
+        const Array<u64, 6> sizes{ data.source.size() * sizeof(u32), data.inputs.size() * sizeof(u32), data.expected.size() * sizeof(u32), data.expected.size() * sizeof(u32), sizeof(data.local), sizeof(data.invalidLocal) };
+        for(u32 i = 0u; i < data.buffers.size(); ++i){
+            Core::BufferDesc description;
+            description.setDebugName(bufferNames[i]).setByteSize(sizes[i]).setStructStride(sizeof(u32)).setCanHaveUAVs(i != 3u).setCpuAccess(i == 3u ? Core::CpuAccessMode::Read : Core::CpuAccessMode::None).enableAutomaticStateTracking(Core::ResourceStates::CopyDest);
+            const auto buffer = graphics.createBuffer(description);
+            if(!buffer)
+                return MakeUnexpected(Failure{});
+            data.buffers[i] = *buffer;
+        }
+        const Array<u32, 5> descriptorBuffers{ 0u, 1u, 2u, 4u, 5u };
+        for(u32 i = 0u; i < data.descriptors.size(); ++i){
+            if(!heap.write(data.descriptors[i], Core::DescriptorWriteItem::StructuredBufferUav(0u, data.buffers[descriptorBuffers[i]].get())))
+                return MakeUnexpected(Failure{});
+        }
+        Task::Payload payload{ data, *pipeline, heap };
+        const auto token = graphics.standaloneGraph().submitStandaloneTaskGraph(&payload, Declare);
+        if(!token || !device.waitForSubmissionToken(*token)){
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("OpticalBoundsProbe: submission failed at scenario {}"), ordinal);
+            return MakeUnexpected(Failure{});
+        }
+        const auto mapped = device.mapBuffer(*data.buffers[3], Core::CpuAccessMode::Read);
+        if(!mapped)
+            return MakeUnexpected(Failure{});
+        ScopeExit unmap([&]()noexcept{ device.unmapBuffer(*data.buffers[3]); });
+        const auto words = MakeNotNull(static_cast<const u32*>(*mapped));
+        for(usize word = 0u; word < data.expected.size(); ++word){
+            if(words.get()[word] != data.expected[word]){
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("OpticalBoundsProbe: scenario {} word {} expected {} observed {}"), ordinal, word, data.expected[word], words.get()[word]);
+                return MakeUnexpected(Failure{});
+            }
+        }
+        NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("OpticalBoundsProbe: scenario {} instances {} runtime {} matched {} words"), ordinal, data.instanceCount, data.runtimeCount, data.expected.size());
+    }
+    NWB_LOGGER_ESSENTIAL_INFO(FOUNDATION_TEXT("OpticalBoundsProbe: passed 8 scenarios with exact CPU parity, mixed contributors, partial groups, rejection and sentinel checks"));
+    return {};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -150,8 +150,11 @@ void PopulateBakeGlyphRecord(
 ){
     inOutRecord.width = width;
     inOutRecord.height = rows;
-    inOutRecord.planeLeft = cast<f32>(bitmapLeft) * designPerPixel;
-    inOutRecord.planeTop = -cast<f32>(bitmapTop) * designPerPixel;
+    const f32 leftPixels = cast<f32>(bitmapLeft);
+    const f32 topPixels = -cast<f32>(bitmapTop);
+    const VectorSingle planeOrigin = VectorSingle(leftPixels, topPixels, leftPixels, topPixels) * designPerPixel;
+    inOutRecord.planeLeft = planeOrigin.x;
+    inOutRecord.planeTop = planeOrigin.y;
     ComputeFontAtlasGlyphPlaneBounds(designPerPixel, inOutRecord);
 }
 
